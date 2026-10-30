@@ -22,6 +22,7 @@
 #include "check.hpp"
 #include "golden.hpp"
 #include "mountain/air/air.hpp"
+#include "mountain/mapgen/weather.hpp"
 
 namespace {
 
@@ -113,6 +114,42 @@ TEST(the_visual_range_opens_as_the_fall_thins) {
   CHECK(ma::visibility_in(0.5) == 180);
   CHECK(ma::visibility_in(0) == 20000);
   CHECK(ma::visibility_in(0.01) == 20000);
+}
+
+// A storm picked by hand: laid off the map's seed (the same twice, none without thunder), its
+// first cell over the mountain's middle `kOverhead` s in, where its gust front blows harder than
+// the map's own wind and its rain falls as rain under a summer's freezing level, lowered under the
+// downdraft; the placeless functions keep their bits.
+TEST(a_storm_passes_over_the_middle_with_its_gusts_and_rain) {
+  mg::Level l = sky(38, mg::WeatherKind::fair, 0, 4, 2.5);
+  l.mountain.base = {0, 1000, 0};
+  l.mountain.summit = {0, 2200, -3000};
+  CHECK(ma::storm_of(l).cells == 0);
+  mg::SkyPick pick;
+  pick.thunder = 0.7;
+  mg::with_sky(l, pick);
+  CHECK(l.weather.snowline == 2200 + mg::kSummerFreezing);
+  const ge::wind::Storm s = ma::storm_of(l), again = ma::storm_of(l);
+  CHECK(s.cells > 1 && s.cells == again.cells);
+  CHECK_BITS(s.cell[0].x, again.cell[0].x);
+  const double mx = 0, mz = -1500;
+  const ge::wind::CellAt c = ge::wind::cell_at(s, 0, ma::kOverhead);
+  CHECK(c.stage == ge::wind::Stage::mature);
+  CHECK(std::hypot(c.x - mx, c.z - mz) < 1);
+  // The gust front's strongest air somewhere in the first quarter hour, over the map's own.
+  double most = 0;
+  for (int k = 0; k < 900; k += 5) most = std::fmax(most, ma::wind_at(l, s, k, mx, mz).speed);
+  CHECK(most > 2 * 4 + 8);
+  // Rain under the core, all of it rain at the base; the freezing level lowered there.
+  const ma::Fall wet = ma::fall_at(l, s, ma::kOverhead, mx, 1000, mz);
+  CHECK(wet.fall > 0.4 && wet.rain > 0.99);
+  CHECK(wet.visibility < 20000);
+  CHECK(ma::cooled_at(s, ma::kOverhead, mx, mz) > 0.5 * ma::kCooled * 0.7);
+  CHECK(ma::cooled_at(s, ma::kOverhead, mx + 30000, mz) < 1);
+  // Far from every cell, the storm adds next to nothing.
+  const ma::Fall dry = ma::fall_at(l, s, ma::kOverhead, mx + 60000, 1000, mz);
+  CHECK(dry.fall < 0.01);
+  CHECK_BITS(ma::wind_at(l, s, 12, mx + 60000, mz).speed, ma::wind_at(l, 12).speed);
 }
 
 TEST(every_number_keeps_its_golden) {

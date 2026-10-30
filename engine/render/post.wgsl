@@ -28,6 +28,7 @@ struct Look {
   a: vec4f,
   b: vec4f,
   c: vec4f,  // depth of field: the focus (m), the sharp share, the widest circle (of the height)
+  d: vec4f,  // the screen's blend: an sRGB-encoded colour, its share (`set_post_blend`)
 }
 @group(1) @binding(6) var<uniform> look: Look;
 // Motion blur's inputs at the render size (render/motion_blur.hpp): the motion target (rg the
@@ -287,6 +288,7 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   }
   let t = clamp(tone(c * e), vec3f(0.0), vec3f(1.0));
   var o = graded(linear_to_srgb(t));
+  o = mix(o, look.d.rgb, look.d.a);
   if (kGrain) {
     o = clamp(grained(o, in.position.xy), vec3f(0.0), vec3f(1.0));
   }

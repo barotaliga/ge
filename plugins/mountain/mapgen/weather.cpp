@@ -110,6 +110,9 @@ void with_sky(Level& level, const SkyPick& pick) {
     const double base = level.mountain.base.y;
     w.snowline = base + pick.snowline * (level.mountain.summit.y - base);
   }
+  if (pick.thunder >= 0) w.thunder = num::min(1.0, pick.thunder);
+  if (w.thunder > 0 && pick.snowline < 0 && w.snowline <= kNoSnowline)
+    w.snowline = level.mountain.summit.y + kSummerFreezing;
 }
 
 }  // namespace ge::mountain::mapgen

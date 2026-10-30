@@ -9,7 +9,9 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <exception>
 #include <optional>
 
 #include "capture/yuv.hpp"
@@ -51,8 +53,18 @@ void fit(const lab::Picture& src, int w, int h, lab::Picture& dst) {
 }  // namespace
 
 Live::~Live() {
-  std::string ignored;
-  close(ignored);
+  // A destructor must not throw: a close that throws here (a worker that cannot be joined, memory)
+  // is said on stderr and the capture's file is left as it is. close(error) before the destructor
+  // is how a caller hears of a failure.
+  try {
+    std::string ignored;
+    close(ignored);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr,
+                 "capture: closing the live capture in its destructor threw (%s); its file may "
+                 "be cut short. Call close(error) before it goes out of scope to get the error.\n",
+                 e.what());
+  }
 }
 
 bool Live::open(const LiveOptions& o, uint64_t now_ns, std::string& error) {

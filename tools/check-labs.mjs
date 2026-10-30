@@ -55,7 +55,7 @@ const fieldsAt = (text, at, want) => {
   return out;
 };
 
-const files = execFileSync("git", ["grep", "-l", "-E", "LabSpec\\s+k", "--", "*.cpp"], {
+const files = execFileSync("git", ["grep", "-l", "-E", "LabSpec[[:space:]]+k", "--", "*.cpp"], {
   cwd: ROOT,
   encoding: "utf8",
 })

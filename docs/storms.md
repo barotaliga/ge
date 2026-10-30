@@ -12,6 +12,9 @@ the numbers the engine takes from that, and how a game reads it.
 | `engine/wind/lightning.hpp` | The flash schedule, flash kinds, strokes, the light over a window, the channel |
 | `engine/wind/thunder.hpp` | Thunder's arrival, envelope and cut-off at a listener, and its sound |
 | `engine/lab/labs/storm_lab.cpp` | The `storm` lab |
+| `plugins/mountain/air/air.hpp` | A storm laid over a map (`storm_of`), its gust front in the map's wind and its rain in the map's fall |
+| `plugins/mountain/app/storm_look.hpp` | The frame's lamps and channels chosen each frame (`storm_lights`), the towers in the sky (`storm_sky`) |
+| `games/fall_line/labs/gpu_storm_pass_lab.cpp` | The `storm-pass` lab |
 
 ## The cell
 
@@ -205,6 +208,39 @@ the neighbours below black. The bloom spreads the core's glare. The main channel
 first. A flash inside the cloud shows no channel (that is sheet lightning), and neither does a
 strike's channel above the cloud's base.
 
+## Fall Line's storms
+
+A server picks a storm with `sv_storm` (its strength, 0 none, 0.5 an ordinary storm, 1 a severe
+one); R19 deals none, so a map nobody picked a storm for keeps its bits. The pick goes through
+`with_sky` like every other sky picked by hand, and a storm is a summer's: unless `sv_snowline`
+is set too, it brings a freezing level 600 m over the summit, so its rain is rain to the top.
+
+- **The storm** (`air::storm_of`) is laid off the map's seed: a multicell storm whose first cell
+  is mature at the run's start and drifts at 9 m/s the way the map's own wind blows (folded down
+  the mountain), so it passes over the mountain's middle 4 minutes in. New cells rise on its
+  forward-right flank for an hour, each further to the right, so the storm passes and moves off.
+- **The air**: with a place, `air::wind_at(level, storm, t, x, z)` adds the storm's gust front to
+  the map's wind, and `air::fall_at(level, storm, t, x, y, z)` adds its rain to the map's fall as
+  an independent chance. The rain's phase is read off the freezing level, lowered under each
+  downdraft by up to 1200 m at a severe core (`cooled_at`: the melting rain cools the air it falls
+  through), so a summit under the core gets sleet and graupel. Without a storm both give the
+  placeless functions' bits. The frame's rain, its splashes, the wet ground, the particles' drift
+  and the HUD's wind meter read them at the eye and at the skier.
+- **The sky** (`storm_sky`): towers of cumulonimbus in place of the map's own cloud, their cover
+  rising from a quarter to 0.85 with the storm's nearness (each live cell's grown tower, its share
+  halved 12 km off), and the sun and the sky's light taken under them as they close in. The towers
+  are the cloud kind's noise, not placed on the cells; the flashes light whatever cloud stands
+  where they are.
+- **The lightning** (`storm_lights`): every flash alive since the last drawn frame (a sixtieth of
+  a second on the first); the four brightest as the eye sees them (`brightest`) become the frame's
+  lamps, the open sky's flash is `sky_light`, and every strike that gives light in the window draws
+  its channel, built once and kept while its flash lasts. `r_lightning 0` draws none of it.
+- **The thunder** (`sound/route.hpp`): heard at the player's skis once a frame through
+  `hear_storm` and `play_thunder`, on the effects bus, while `s_thunder` is on. A clock gone back
+  (a restart, a rewind) starts the hearing over.
+
+The sim does not read the storm: nothing the skiers do moves with it, so the run's digests stand.
+
 ## The labs
 
 `make lab LAB=storm` (`docs/labs.md`): a cell's life cycle, a multicell storm's flashes minute by
@@ -220,3 +256,12 @@ flash, a strike at its first stroke, sheet lightning and a bolt from the blue, a
 the strike's frames at 60 a second. The lab fails when a flash's picture is no brighter than the
 same view in the dark, or when the filmstrip's brightest frame is not the one the most light fell
 in.
+
+`make lab LAB=storm-pass` passes a storm of `--storm` over a seed's mountain. Its chart follows the
+mountain's middle through the first half hour (the wind with the gust front, the fall, the rain's
+share at the base and at the summit, the freezing level's fall, and the flashes and strikes a
+minute within 15 km), and the game's own frame draws the named view as the storm comes in, as the
+gust front reaches the eye, under the rain core, at a strike near the eye and after the storm has
+gone by. It fails when the gust front blows no harder than the map's wind and 8 m/s more, the core
+rains less than 0.3 on the dial, the base's downpour is not all rain, or nothing strikes within
+10 km.

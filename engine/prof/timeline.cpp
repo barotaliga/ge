@@ -76,9 +76,11 @@ LaneBuf& this_lane() {
   return *t_lane;
 }
 
+// Called from ~Activity, which must not throw, so it never allocates: the lane is the one
+// open_slice made.
 void put(const Slice& s, uint64_t generation) {
-  if (g_generation.load(std::memory_order_acquire) != generation) return;
-  LaneBuf& l = this_lane();
+  if (g_generation.load(std::memory_order_acquire) != generation || !t_lane) return;
+  LaneBuf& l = *t_lane;
   const size_t i = l.count.load(std::memory_order_relaxed);
   if (i >= l.limit.load(std::memory_order_relaxed)) {
     l.dropped.fetch_add(1, std::memory_order_relaxed);
@@ -147,6 +149,7 @@ namespace detail {
 std::atomic<bool> g_timeline_on{false};
 
 void open_slice(OpenSlice& s, uint32_t name, Act act) {
+  this_lane();  // a thread's first slice makes its lane here, where a throw is allowed
   s.start_ns = now_ns();
   s.generation = g_generation.load(std::memory_order_acquire);
   s.name = name;

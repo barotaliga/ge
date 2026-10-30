@@ -76,6 +76,7 @@
 #include "gpu/pipeline.hpp"
 #include "mountain/app/night_lamps.hpp"
 #include "mountain/app/snow.hpp"
+#include "mountain/app/storm_look.hpp"
 #include "mountain/app/trails.hpp"
 #include "mountain/mapgen/types.hpp"
 #include "render/ao.hpp"
@@ -137,10 +138,11 @@ struct FrameOptions {
   bool trails = true;  // the tracks (mountain/app/trails.hpp); drawn only with the snow
   bool spray = true;   // the racers' spray (skier/app/spray.hpp) thrown into the particles
   ge::render::ParticleSettings particles;
-  bool precip = true;    // what falls (snow, sleet, rain), when the map's sky snows
-  bool splashes = true;  // the rain's splashes on the ground (with `precip`)
-  bool wet = true;       // the rain wets the ground: darker, mirroring, pooled on the flats
-  bool fog = true;       // the scene's fog in areas (FrameScene::fog, render/fog.hpp) drawn
+  bool precip = true;     // what falls (snow, sleet, rain), when the map's sky snows
+  bool splashes = true;   // the rain's splashes on the ground (with `precip`)
+  bool wet = true;        // the rain wets the ground: darker, mirroring, pooled on the flats
+  bool lightning = true;  // a map's thunderstorm's flashes and channels (mountain/app/storm_look)
+  bool fog = true;        // the scene's fog in areas (FrameScene::fog, render/fog.hpp) drawn
   // THE LAMPS AFTER DARK (app/lamps.hpp): the piste's floods, the street lamps, the windows'
   // spill and the racers' headlamps as local lights; `light_shadows`, the nearest and brightest
   // of them casting into the lamps' atlas (render/lamp_shadows.hpp), `lamp_tiles` of its tiles
@@ -230,6 +232,14 @@ struct GameFrame {
   double wet_time = 0;  // the last drawn frame's time_s
   bool wet_placed =
       false;  // a frame has been drawn: off, the wet ground starts at its steady state
+  // The map's thunderstorm (air::storm_of: none without `Weather::thunder`), laid once for the map
+  // it was laid over, and its lightning chosen each frame from the last drawn frame's time.
+  ge::wind::Storm storm;
+  const ge::mountain::mapgen::Level* storm_level = nullptr;
+  double storm_thunder = 0;
+  ge::mountain::app::StormLights lightning;
+  double lightning_time = 0;
+  bool lightning_placed = false;
   ge::render::CloudPass clouds;
   ge::render::Water water;       // its bodies, `add_water`'s; none: the passes draw nothing
   ge::render::Underwater under;  // the view when the eye is under a body (`under.look`)

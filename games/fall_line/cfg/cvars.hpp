@@ -6,8 +6,8 @@
 //
 //   vid_width vid_height vid_vsync      the window (A, latched: read at startup)
 //   r_taa r_scale r_occlusion r_shadowsize r_bloom r_snow r_trails r_spray r_precip
-//   r_precip_density r_splashes r_wet r_weather r_clouds r_sunsize r_moonsize r_lights
-//   r_light_shadows
+//   r_precip_density r_splashes r_wet r_lightning r_weather r_clouds r_sunsize r_moonsize
+//   r_lights r_light_shadows
 //                                       the picture (A, latched: the frame is made once)
 //   r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt r_motionblur r_ao
 //   r_ao_radius r_dof r_dof_focus
@@ -17,10 +17,11 @@
 //   cl_chasedist cl_chaseheight cl_fovspeed cl_camblend cl_motion cl_shake, and the first
 //   person's (cl_fov cl_viewheight cl_bob* cl_roll* v_kick* v_idlescale cl_landdip, read by no
 //   rung of Fall Line's)                 the camera's settings (engine/camera/cvars.hpp, A)
-//   volume s_wind s_effects s_mute      the sound's faders (A)
+//   volume s_wind s_effects s_mute s_thunder
+//                                       the sound's faders, and the storm's thunder heard (A)
 //   sv_seed sv_hour                     the run's map and hour (the server's, server info)
 //   sv_weather sv_snowfall sv_snowline sv_fog sv_wind sv_winddir sv_cover sv_clouddensity
-//   sv_skyrate sv_cloudheight sv_cloudthickness sv_cloudspeed
+//   sv_skyrate sv_cloudheight sv_cloudthickness sv_cloudspeed sv_storm
 //                                       the sky over the run, picked by hand, and how fast its
 //                                       hour runs (the server's, server info; sim/sky.hpp)
 //   sv_skytype sv_skyair sv_skydust sv_sunsize sv_sun2 sv_planet sv_planetdir sv_planetel
@@ -38,6 +39,7 @@
 // ge:keywords r_lights r_light_shadows lamps
 // ge:keywords sv_cloudthickness sv_skytype sky-type sky-knobs cl_chasedist cl_motion r_precip
 // ge:keywords r_precip_density r_splashes r_wet sv_snowline rain sv_cloudheight sv_cloudspeed
+// ge:keywords sv_storm r_lightning s_thunder thunderstorm
 // ge:keywords r_sunsize r_moonsize disc-size
 // ge:keywords sv_lethal sv_armyfire sv_helis sv_paras hunt army
 // ge:keywords r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt r_contrast
@@ -68,6 +70,7 @@ struct Settings {
   bool snow = true, trails = true, spray = true, weather = true;
   bool precip = true, splashes = true, wet = true;  // what falls, the rain's splashes, wet ground
   bool lights = true, light_shadows = true;         // the lamps after dark, their shadows
+  bool lightning = true;                            // a thunderstorm's flashes and channels drawn
   double precip_density = 1.0;                      // the share of the falling particles, 0.25..2
   double clouds = 1.0;  // the share of the cloud march's steps; 0: no layer drawn
   double disc_sun = 1.0, disc_moon = 1.0;  // r_sunsize r_moonsize: the discs drawn larger, 0.5..20
@@ -83,6 +86,7 @@ struct Settings {
   // The sound: sound/mix.hpp's Faders.
   float volume = 0.8f, wind = 1, effects = 1;
   bool mute = false;
+  bool thunder = true;  // a thunderstorm's thunder heard
   // The run.
   double seed = 38;
   double hour = -1;  // the map's own start hour when negative
@@ -90,6 +94,7 @@ struct Settings {
   std::string sky = "map";
   double fall = -1, fog = -1;
   double snowline = -1;  // the snow line, a share of the mountain's height (rain under it)
+  double storm = -1;     // a thunderstorm's strength, 0 none .. 1 severe (-1: the map's)
   double air = -1, air_from = -1;  // the mean wind, m/s at 10 m; the heading it blows from, deg
   double cover = -1;               // the broken sky's cloud cover, 0..1
   double thick = -1;               // how dense the clouds are, 0 thin .. 1 thick

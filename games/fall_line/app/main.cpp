@@ -59,6 +59,7 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -238,7 +239,7 @@ bool parse(int argc, char** argv, Args& a) {
 
 }  // namespace
 
-int main(int argc, char** argv) {
+static int run_main(int argc, char** argv) {
   out::set_output_sink(print_line);
   Args args;
   if (!parse(argc, argv, args)) {
@@ -368,6 +369,7 @@ int main(int argc, char** argv) {
   // The run's sound. The synth outlives the device that pulls it (declared first).
   ge::audio::Synth synth;
   fall_line::sound::RunSound sound = fall_line::sound::make_run_sound();
+  sound.thunder = set.thunder;
   fall_line::sound::Faders faders;
   faders.master = set.volume;
   faders.wind = set.wind;
@@ -479,9 +481,9 @@ int main(int argc, char** argv) {
         queue = script.frames[at].q;
         frame_ns = script.frames[at].t_ns;
       } else {  // past the session's end: nothing new held, the run skis on to its end
-        frame_ns =
-            script.frames.back().t_ns +
-            fall_line::controls::frame_time(static_cast<int64_t>(at - script.frames.size() + 1));
+        frame_ns = script.frames.back().t_ns +
+                   fall_line::controls::frame_time(static_cast<int64_t>(at) -
+                                                   static_cast<int64_t>(script.frames.size()) + 1);
       }
       wall = static_cast<double>(frame_ns - script_last_ns) * 1e-9;
       const int64_t due = fall_line::controls::steps_due(frame_ns);
@@ -728,4 +730,24 @@ int main(int argc, char** argv) {
                 device->errors.load());
   out::status(line);
   return device->errors.load() == 0 && !device->lost.load() ? 0 : 1;
+}
+
+// What nothing else caught ends the program here, with a line that says so, rather than in
+// std::terminate's bare abort.
+int main(int argc, char** argv) {
+  try {
+    return run_main(argc, argv);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr,
+                 "fall_line: stopped by an uncaught exception: %s. This is a bug: run the same "
+                 "command under lldb or gdb with a breakpoint on __cxa_throw to see where it "
+                 "was thrown.\n",
+                 e.what());
+  } catch (...) {
+    std::fprintf(stderr,
+                 "fall_line: stopped by an uncaught exception that is not a std::exception. This "
+                 "is a bug: run the same command under lldb or gdb with a breakpoint on "
+                 "__cxa_throw to see where it was thrown.\n");
+  }
+  return 1;
 }

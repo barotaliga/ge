@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -211,7 +212,7 @@ int run(const Flags& f) {
 
 }  // namespace
 
-int main(int argc, char** argv) {
+static int run_main(int argc, char** argv) {
   for (int i = 1; i < argc; i++)
     if (std::strcmp(argv[i], "--help") == 0) {
       std::fputs(kHelp, stdout);
@@ -225,4 +226,26 @@ int main(int argc, char** argv) {
     return 1;
   }
   return f.replay.empty() ? run(f) : replay(f);
+}
+
+// What nothing else caught ends the program here, with a line that says so, rather than in
+// std::terminate's bare abort.
+int main(int argc, char** argv) {
+  try {
+    return run_main(argc, argv);
+  } catch (const std::exception& e) {
+    std::fprintf(
+        stderr,
+        "shooters_edge_server: stopped by an uncaught exception: %s. This is a bug: run the same "
+        "command under lldb or gdb with a breakpoint on __cxa_throw to see where it "
+        "was thrown.\n",
+        e.what());
+  } catch (...) {
+    std::fprintf(
+        stderr,
+        "shooters_edge_server: stopped by an uncaught exception that is not a std::exception. This "
+        "is a bug: run the same command under lldb or gdb with a breakpoint on "
+        "__cxa_throw to see where it was thrown.\n");
+  }
+  return 1;
 }

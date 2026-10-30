@@ -132,6 +132,12 @@ void add_cvars(con::Console& c, Settings& s) {
           .help = "the nearest, brightest lamps cast shadows (needs r_lights)",
           .kind = CvarKind::boolean},
          &s.light_shadows);
+  v.bind({.name = "r_lightning",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "a thunderstorm's flashes lighting the cloud and the ground, and its bolts",
+          .kind = CvarKind::boolean},
+         &s.lightning);
   v.bind({.name = "r_weather",
           .fallback = "1",
           .flags = kStartup,
@@ -250,6 +256,12 @@ void add_cvars(con::Console& c, Settings& s) {
           .help = "no sound at all, and no audio device opened",
           .kind = CvarKind::boolean},
          &s.mute);
+  v.bind({.name = "s_thunder",
+          .fallback = "1",
+          .flags = kPlayer,
+          .help = "a thunderstorm's thunder heard, each clap when its sound reaches you",
+          .kind = CvarKind::boolean},
+         &s.thunder);
 
   v.bind({.name = "sv_seed",
           .fallback = "38",
@@ -293,6 +305,15 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = -1,
           .max = 2},
          &s.snowline);
+  v.bind({.name = "sv_storm",
+          .fallback = "-1",
+          .flags = kRun,
+          .help = "a summer thunderstorm passing over the mountain, its strength: 0 none, 0.5 an "
+                  "ordinary storm, 1 a severe one; rain to the summit unless sv_snowline is set "
+                  "(-1: the map's)",
+          .min = -1,
+          .max = 1},
+         &s.storm);
   v.bind({.name = "sv_fog",
           .fallback = "-1",
           .flags = kRun,

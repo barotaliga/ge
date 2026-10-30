@@ -16,6 +16,8 @@
 // ge:test tests/cli_commands_test.cpp
 #include <algorithm>
 #include <charconv>
+#include <cstdio>
+#include <exception>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -516,7 +518,7 @@ int hand_to_pinned(const Args& a, int argc, char** argv) {
 
 }  // namespace
 
-int main(int argc, char** argv) {
+static int run_main(int argc, char** argv) {
   const Args a = parse_args(argc, argv);
   if (const int handed = hand_to_pinned(a, argc, argv); handed >= 0) return handed;
   const bool json = has_flag(a, "json");
@@ -552,4 +554,24 @@ int main(int argc, char** argv) {
     return emit(command, o, json, std::cout);
   }
   return emit(command, run(a), json, std::cout);
+}
+
+// What nothing else caught ends the program here, with a line that says so, rather than in
+// std::terminate's bare abort.
+int main(int argc, char** argv) {
+  try {
+    return run_main(argc, argv);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr,
+                 "ge: stopped by an uncaught exception: %s. This is a bug: run the same "
+                 "command under lldb or gdb with a breakpoint on __cxa_throw to see where it "
+                 "was thrown.\n",
+                 e.what());
+  } catch (...) {
+    std::fprintf(stderr,
+                 "ge: stopped by an uncaught exception that is not a std::exception. This "
+                 "is a bug: run the same command under lldb or gdb with a breakpoint on "
+                 "__cxa_throw to see where it was thrown.\n");
+  }
+  return 1;
 }

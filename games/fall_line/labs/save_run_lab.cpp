@@ -235,17 +235,17 @@ void run(ge::lab::Lab& lab) {
         break;
       }
     }
-    scenes.push_back({"free",
-                      [&, first] {
-                        fs::GameState st = fs::create_free_ride(free, first);
-                        fs::deal_crowd(st);
-                        return fs::Driver(std::move(st), 1);
-                      },
-                      [&, first](const fs::Driver& d) -> Pilot {
-                        const fs::OutingPilot p(d.state(),
-                                                fs::outing_from(*free, *d.state().lifts, first));
-                        return [p](const fs::Driver& dr) { return p(dr.state(), 0); };
-                      }});
+    scenes.push_back(
+        {"free",
+         [&, first] {
+           fs::GameState st = fs::create_free_ride(free, first);
+           fs::deal_crowd(st);
+           return fs::Driver(std::move(st), 1);
+         },
+         [&, first](const fs::Driver& d) -> Pilot {
+           return [p = fs::OutingPilot(d.state(), fs::outing_from(*free, *d.state().lifts, first))](
+                      const fs::Driver& dr) { return p(dr.state(), 0); };
+         }});
   }
   if (free && picked("sled")) {
     scenes.push_back({"sled",
@@ -258,8 +258,8 @@ void run(ge::lab::Lab& lab) {
                         const fs::GameState& st = d.state();
                         const fs::SledSpot spot{st.sled.body.x, st.sled.body.z,
                                                 st.sled.body.heading};
-                        const fs::SledOutingPilot p(st, fs::sled_climb_run(*free, spot));
-                        return [p](const fs::Driver& dr) { return p(dr.state(), 0); };
+                        return [p = fs::SledOutingPilot(st, fs::sled_climb_run(*free, spot))](
+                                   const fs::Driver& dr) { return p(dr.state(), 0); };
                       }});
   }
   if (free && picked("heli")) {
@@ -270,15 +270,16 @@ void run(ge::lab::Lab& lab) {
                         return fs::Driver(std::move(st), 0, 0, 1);
                       },
                       [&](const fs::Driver& d) -> Pilot {
-                        const fs::HeliOutingPilot p(d.state(), fs::heli_drop_run(*free));
-                        return [p](const fs::Driver& dr) { return p(dr.state(), 0); };
+                        return [p = fs::HeliOutingPilot(d.state(), fs::heli_drop_run(*free))](
+                                   const fs::Driver& dr) { return p(dr.state(), 0); };
                       }});
   }
   if (free && picked("para")) {
     scenes.push_back({"para", [&] { return fs::Driver(fs::create_para_ride(free)); },
                       [&](const fs::Driver& d) -> Pilot {
-                        const fs::ParaOutingPilot p(d.state());
-                        return [p](const fs::Driver& dr) { return p(dr.state(), 0); };
+                        return [p = fs::ParaOutingPilot(d.state())](const fs::Driver& dr) {
+                          return p(dr.state(), 0);
+                        };
                       }});
   }
   if (scenes.empty()) {

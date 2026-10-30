@@ -434,7 +434,7 @@ void run(ge::lab::Lab& lab) {
     // The close-ups judge the disc, so they are drawn under a clear sky whatever the map's.
     frame->options.weather = options.weather && nights[i].aim != Aim::close;
     for (int n = 0; n < frames; ++n) {
-      v.frame = static_cast<uint64_t>(i * 1000 + static_cast<size_t>(n));
+      v.frame = static_cast<uint64_t>(i) * 1000 + static_cast<uint64_t>(n);
       v.time_s = static_cast<double>(n) / 60;
       fall_line::app::draw(*device, *frame, v, {}, target.view);
     }

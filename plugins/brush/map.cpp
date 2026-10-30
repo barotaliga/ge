@@ -53,6 +53,25 @@ bool cluster_sees(const Map& map, int32_t from, int32_t to) {
   return (byte >> (to % 8)) & 1;
 }
 
+uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen) {
+  const int32_t from = leaf < map.leaves.size() ? map.leaves[leaf].cluster : -1;
+  if (from < 0 || map.pvs.empty()) {
+    seen->assign(map.surfaces.size(), 1);
+    return uint32_t(map.surfaces.size());
+  }
+  seen->assign(map.surfaces.size(), 0);
+  uint32_t n = 0;
+  for (const Leaf& l : map.leaves) {
+    if (l.marks == 0 || !cluster_sees(map, from, l.cluster)) continue;
+    for (uint32_t k = l.first_mark; k < l.first_mark + l.marks; ++k) {
+      uint8_t& s = (*seen)[map.marks[k]];
+      n += s == 0;
+      s = 1;
+    }
+  }
+  return n;
+}
+
 void build_phs(Map* map) {
   Map& m = *map;
   if (!m.phs.empty() || m.pvs.empty() || m.clusters <= 0) return;
@@ -143,6 +162,19 @@ uint64_t map_digest(const Map& map) {
   for (const Model& md : map.models) mix(md.hulls, sizeof md.hulls);
   mix(map.entity_text.data(), map.entity_text.size());
   return h;
+}
+
+const BspxLump* bspx_lump(const Map& map, std::string_view name) {
+  for (const BspxLump& l : map.bspx) {
+    if (l.name.size() != name.size()) continue;
+    bool same = true;
+    for (size_t k = 0; k < name.size() && same; ++k) {
+      const auto low = [](char c) { return c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c; };
+      same = low(l.name[k]) == low(name[k]);
+    }
+    if (same) return &l;
+  }
+  return nullptr;
 }
 
 }  // namespace ge::brush

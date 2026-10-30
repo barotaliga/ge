@@ -3,7 +3,8 @@
 // buses; the listener's chase seat is the tuned one; and the route plays the player's events
 // (a gate, a landing in powder, a fall) and not a rival's, on the effects bus; and the play
 // contract's sound (play_sound.hpp) plays a run of the game into an export's synth and nothing
-// for a run of another game.
+// for a run of another game; and a thunderstorm over the map is heard at his skis while s_thunder
+// is on, and not at all off.
 //
 // ge:summary Tests for Fall Line's bank, faders, listener and event route
 // ge:keywords test sound bank route listener faders mix_of events
@@ -21,6 +22,8 @@
 #include "fall_line/sound/mix.hpp"
 #include "fall_line/sound/play_sound.hpp"
 #include "fall_line/sound/route.hpp"
+#include "mountain/air/air.hpp"
+#include "mountain/mapgen/weather.hpp"
 #include "play/game.hpp"
 
 namespace {
@@ -38,7 +41,38 @@ float loudest_after(sim::GameState& state, std::vector<sim::GameEvent> events) {
   return ge::audio::measure(out).loudest_db;
 }
 
+// The loudest of a minute of the effects bus from `from` s into a run under a storm of `thunder`,
+// with the storm heard or not.
+float storm_heard(double thunder, bool heard, double from) {
+  sim::GameState state = sim::create_game({.seed = 38, .racers = 1, .version = {}});
+  auto stormy = std::make_shared<ge::mountain::mapgen::Level>(*state.level);
+  ge::mountain::mapgen::SkyPick pick;
+  pick.thunder = thunder;
+  ge::mountain::mapgen::with_sky(*stormy, pick);
+  state.level = stormy;
+  ge::audio::Synth synth;
+  synth.bus_gain(snd::kBusWind, 0, 0);
+  snd::RunSound sound = snd::make_run_sound();
+  sound.thunder = heard;
+  std::vector<float> out(size_t{2} * 48000);
+  float loudest = -200;
+  for (int k = 0; k < 60; ++k) {
+    state.t = from + k;
+    snd::run_sound_frame(sound, synth, state, 1);
+    synth.render(out.data(), 48000);
+    loudest = std::max(loudest, ge::audio::measure(out).loudest_db);
+  }
+  return loudest;
+}
+
 }  // namespace
+
+TEST(a_storm_is_heard_at_his_skis_and_not_with_s_thunder_off) {
+  const float on = storm_heard(0.6, true, ge::mountain::air::kOverhead);
+  const float off = storm_heard(0.6, false, ge::mountain::air::kOverhead);
+  CHECK_MSG(on > -50, "no thunder heard under a storm overhead: see route.cpp's hear_thunder");
+  CHECK(on > off + 20);
+}
 
 TEST(every_bank_sound_has_a_sentence_and_its_own_id) {
   std::set<std::string> ids;

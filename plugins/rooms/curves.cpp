@@ -383,8 +383,11 @@ std::vector<Curve> find_curves(const Level& level, const BrushMesh& mesh, const 
       out.push_back(std::move(c));
     }
   }
+  // NOLINTBEGIN(clang-analyzer-cplusplus.Move): the analyzer's model of libc++'s sort compares an
+  // element it moved from; the sort itself is sound
   std::sort(out.begin(), out.end(),
             [](const Curve& a, const Curve& b) { return a.faces.front() < b.faces.front(); });
+  // NOLINTEND(clang-analyzer-cplusplus.Move)
   return out;
 }
 
