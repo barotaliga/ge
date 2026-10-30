@@ -1,1 +1,4 @@
 Status: done
+Milestone: **The frame, the sky and the ground**: `engine/render` (`FrameView` and the camera, reversed-z; the frame block, the named targets, the pass table and its check, the per-pass recorder and stats), the sky's tables by compute (transmittance, multiple scattering, sky view, the sky's light) and the aerial-perspective volume behind one haze function, the GPU-culled geometry clipmap with morphed seams and the grid mirrored past the map, the post pass (exposure from the sky, tone curve, dither, encoding); Fall Line's frame (`games/fall_line/app`: its pass table, its ground's albedo, its named views) in the window and the `world` lab
+Exit: The `world` lab's five views of seed 38 reviewed in the PR, zero GPU errors and no pipeline after load on lavapipe; GPU ms per pass in the lab's metrics; the frame's CPU half measured
+Labs: `world`

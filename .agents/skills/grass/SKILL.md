@@ -6,7 +6,7 @@ description: "Use for grass in gameengine2 or a game on it: engine/grass (kinds 
 # Grass
 
 The design and the research are [`docs/grass.md`](../../../docs/grass.md); the roadmap is
-`docs/goals.md` § M34 (one status file a row, `docs/goals/M34<x>.md`). Read the doc's section
+the rows `docs/goals/M34<x>.md` (one file a row; `docs/roadmap.md` lists them). Read the doc's section
 for the subject before the first edit.
 
 **Read this skill's lessons first**: `make lessons ARGS=grass`. Load `render` beside it for a

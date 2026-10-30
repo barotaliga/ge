@@ -5,7 +5,7 @@
 //     (id, kind, owner, subject, skill, question), and no two labs share an id;
 //   - docs/labs.md has no hand-kept table of labs.
 // Then writes docs/lab-list.md (gitignored, like docs/index.md): every lab in id order with its
-// kind, owner, subject, skill, the roadmap rows whose labs name it (docs/goals.md)
+// kind, owner, subject, skill, the roadmap rows whose labs name it (docs/goals/<row>.md)
 // and the file that registers it. The built runner says the same (`make labs`, `labs --json`).
 //
 // ge:summary Checks every LabSpec reads off its source; writes the generated docs/lab-list.md
@@ -98,8 +98,7 @@ if (errors.length) {
   process.exit(1);
 }
 
-// The rows that land each lab: the ones whose labs (docs/goals.md's `Labs it lands` cell, or a
-// row file's `Labs:` line) name it in backticks.
+// The rows that land each lab: the ones whose row file's `Labs:` line names it in backticks.
 const rowsOf = new Map();
 const lands = (row, text) => {
   for (const [, id] of text.matchAll(/`([a-z0-9-]+)`/g)) {
@@ -107,12 +106,6 @@ const lands = (row, text) => {
     rowsOf.get(id).add(row);
   }
 };
-const roadmap = readFileSync(join(ROOT, "docs/goals.md"), "utf8").split("\n");
-const head = roadmap.findIndex((l) => l.startsWith("| # | Milestone |"));
-for (let k = head + 2; head >= 0 && k < roadmap.length && roadmap[k].startsWith("| "); k++) {
-  const c = roadmap[k].split(/(?<!\\)\|/).map((s) => s.trim());
-  if (c.length >= 6) lands(c[1], c[c.length - 3]);
-}
 const goals = join(ROOT, "docs/goals");
 for (const f of existsSync(goals) ? readdirSync(goals).sort() : []) {
   if (!/^M.*\.md$/.test(f)) continue;
