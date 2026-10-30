@@ -249,8 +249,7 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.sun_size = s.disc_sun;
   o.moon_size = s.disc_moon;
   cloud_stack_of(s, o);
-  // r_quality: the ladder's picture over the rows it owns (resolution, shadows, snow, trails,
-  // spray, precip, clouds, bloom, distance); `custom` leaves the settings above as they are.
+  // r_quality: the ladder's picture over the rows it owns; `custom` leaves the settings above.
   std::string error;
   if (const auto pick = quality_pick(s.quality, s.budget_ms, static_cast<uint32_t>(s.width),
                                      static_cast<uint32_t>(s.height), error))
