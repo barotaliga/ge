@@ -55,11 +55,21 @@ Material material_of(std::string_view name);
 // A texture no one ever sees drawn (trigger volumes, clip brushes): not worth enhancing.
 bool never_drawn(std::string_view name);
 
+struct Upscaler;
+class UpscaleDevice;
+
 struct EnhanceOptions {
   int scale = 4;         // output texels a source texel, along each side (1..8)
   double sharpen = 0.3;  // the unsharp mask's amount
   double grain = 0.35;   // fine grain, as a share of the source's local contrast
   double relief = 1.0;   // the normal map's strength
+  // The trained upscaler (upscaler.hpp): when set and its factor is `scale`, the albedo is its
+  // picture (the texture wrapped round a margin so its edges tile, then cropped) in place of the
+  // kernel's, with no sharpening or grain added; the glow is still the kernel's.
+  const Upscaler* network = nullptr;
+  // Where the network runs: the CPU when null, else this device (a picture it refuses runs on the
+  // CPU).
+  UpscaleDevice* device = nullptr;
 };
 
 struct Enhanced {

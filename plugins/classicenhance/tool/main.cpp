@@ -6,8 +6,15 @@
 //
 //   verify <path>                      find the packs in <path> and say which release each is
 //   run <path> [--cache=<dir>] [--only=<stage,...>] [--force] [--scale=<n>] [--limit=<n>]
-//       [--round=<n>]
+//       [--round=<n>] [--upscaler=network|kernel] [--weights=<file>] [--device=auto|gpu|cpu]
 //                                      verify, then run the stages into the cache
+//
+// The textures (and the models' skins) are upscaled by the trained network (upscaler.hpp) at 4×:
+// its weights are fetched once with curl into the cache's `weights/` folder and checked against
+// their published SHA-256, or read from --weights. --upscaler=kernel, or another --scale, uses
+// the edge-following kernel instead and fetches nothing. The network runs on the GPU
+// (app/upscaler_gpu.hpp) when the build has one and the adapter is not a software one, else on
+// the CPU; --device picks.
 //   status [--cache=<dir>]             the cache's pack folders and the stages each has done
 //   help                               this list
 //
@@ -19,12 +26,17 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "classicenhance/cache.hpp"
 #include "classicenhance/pipeline.hpp"
 #include "classicenhance/source.hpp"
+#include "classicenhance/upscaler.hpp"
+#ifdef GE_CLASSICENHANCE_GPU
+#include "classicenhance/app/upscaler_gpu.hpp"
+#endif
 
 namespace fs = std::filesystem;
 using namespace ge::classicenhance;
@@ -39,9 +51,12 @@ constexpr const char* kHelp =
     "pak0.pak, with any later packs) and say which release each is\n"
     "  run <path> [--cache=<dir>] [--only=pack,textures,lightmaps,sounds,models,pictures] "
     "[--force] "
-    "[--scale=<1..8>] [--limit=<n>] [--round=<0..4>]\n"
+    "[--scale=<1..8>] [--limit=<n>] [--round=<0..4>] [--upscaler=network|kernel] "
+    "[--weights=<file>] [--device=auto|gpu|cpu]\n"
     "  status [--cache=<dir>]\n"
-    "The cache defaults to GE_CLASSIC_CACHE, else the platform's per-user cache folder.\n";
+    "The cache defaults to GE_CLASSIC_CACHE, else the platform's per-user cache folder.\n"
+    "The textures are upscaled by a trained network at 4x; its weights (CC0) are fetched once "
+    "into the cache's weights/ folder. --upscaler=kernel needs no download.\n";
 
 std::string esc(const std::string& s) {
   std::string out = "\"";
@@ -91,7 +106,7 @@ std::string source_json(const Source& s) {
 
 struct Flags {
   std::vector<std::string> words;
-  std::string cache, only;
+  std::string cache, only, upscaler = "network", weights, device = "auto";
   bool force = false;
   int scale = 4;
   int round = 0;
@@ -108,7 +123,9 @@ bool parse(int argc, char** argv, Flags* f, std::string* error) {
       return true;
     };
     std::string v;
-    if (value("cache", &f->cache) || value("only", &f->only)) continue;
+    if (value("cache", &f->cache) || value("only", &f->only) || value("weights", &f->weights)) {
+      continue;
+    }
     if (a == "--force") {
       f->force = true;
     } else if (value("scale", &v)) {
@@ -121,6 +138,16 @@ bool parse(int argc, char** argv, Flags* f, std::string* error) {
       f->round = std::atoi(v.c_str());
       if (f->round < 0 || f->round > 4) {
         *error = "--round takes 0 (smooth shading only) to 4 (each triangle into 16)";
+        return false;
+      }
+    } else if (value("device", &f->device)) {
+      if (f->device != "auto" && f->device != "gpu" && f->device != "cpu") {
+        *error = "--device takes auto (the GPU unless it is a software one), gpu or cpu";
+        return false;
+      }
+    } else if (value("upscaler", &f->upscaler)) {
+      if (f->upscaler != "network" && f->upscaler != "kernel") {
+        *error = "--upscaler takes network (the trained network) or kernel (no download)";
         return false;
       }
     } else if (value("limit", &v)) {
@@ -153,6 +180,42 @@ int status(const Flags& f) {
   std::printf("{\"ok\":true,\"cache\":%s,\"packs\":[%s]}\n", esc(root.string()).c_str(),
               packs.c_str());
   return 0;
+}
+
+// The trained upscaler's weights: --weights, else the cache's copy, fetched when missing.
+bool network(const Flags& f, Upscaler* out, std::string* note, std::string* error) {
+  fs::path file = f.weights;
+  if (file.empty()) {
+    const fs::path root = f.cache.empty() ? default_cache_root() : fs::path(f.cache);
+    file = root / "weights" / std::string(kUpscalerWeights.file);
+    std::error_code ec;
+    if (!fs::exists(file, ec)) {
+      fs::create_directories(file.parent_path(), ec);
+      const fs::path part = file.string() + ".part";
+      const std::string cmd = "curl -fsSL --retry 2 -o \"" + part.string() + "\" \"" +
+                              std::string(kUpscalerWeights.url) + "\"";
+      if (std::system(cmd.c_str()) != 0) {
+        fs::remove(part, ec);
+        *error = "could not fetch the upscaler's weights from " +
+                 std::string(kUpscalerWeights.url) +
+                 "; check the network and that curl is installed, give a copy with --weights, or "
+                 "run with --upscaler=kernel";
+        return false;
+      }
+      fs::rename(part, file, ec);
+    }
+  }
+  bool known = false;
+  if (!open_upscaler(file, *out, &known, *error)) return false;
+  if (f.weights.empty() && !known) {
+    std::error_code ec;
+    fs::remove(file, ec);
+    *error = "the fetched upscaler weights' SHA-256 is " + out->digest + ", not the published " +
+             std::string(kUpscalerWeights.sha256) + "; removed them, run again to fetch them again";
+    return false;
+  }
+  *note = file.string() + (known ? "" : " (not the published weights)");
+  return true;
 }
 
 }  // namespace
@@ -196,6 +259,36 @@ int main(int argc, char** argv) {
     opts.only.push_back(s);
     at = comma + 1;
   }
+  Upscaler upscaler;
+  std::string weights;
+  const bool pictures =
+      opts.only.empty() ||
+      std::find(opts.only.begin(), opts.only.end(), Stage::textures) != opts.only.end() ||
+      std::find(opts.only.begin(), opts.only.end(), Stage::models) != opts.only.end();
+  if (f.upscaler == "network" && f.scale == 4 && pictures) {
+    if (!network(f, &upscaler, &weights, &error)) return fail(error);
+    opts.textures.network = &upscaler;
+  }
+#ifdef GE_CLASSICENHANCE_GPU
+  std::unique_ptr<ge::gpu::Device> gpu_device;
+  std::unique_ptr<GpuUpscaler> gpu;
+  if (opts.textures.network && f.device != "cpu") {
+    gpu_device = ge::gpu::create_device({.label = "classicenhance"});
+    if (gpu_device && (f.device == "gpu" || !gpu_device->report.software)) {
+      gpu = GpuUpscaler::create(*gpu_device, upscaler, error);
+      if (!gpu && f.device == "gpu") return fail(error);
+    }
+    if (!gpu && f.device == "gpu") {
+      return fail("--device=gpu but no GPU adapter could be made; run with --device=cpu");
+    }
+    if (gpu) {
+      opts.textures.device = gpu.get();
+      weights += " on " + ge::gpu::adapter_line(*gpu_device);
+    }
+  }
+#else
+  if (f.device == "gpu") return fail("--device=gpu but this build has no GPU (GE_GPU off)");
+#endif
   RunReport report;
   const bool ok = run_pipeline(src, f.cache, opts, &report, &error);
   std::string stages;
@@ -206,8 +299,9 @@ int main(int argc, char** argv) {
               ",\"ran\":" + (r.ran ? "true" : "false") + ",\"files\":" + std::to_string(r.files) +
               ",\"seconds\":" + secs + ",\"note\":" + esc(r.note) + "}";
   }
-  std::printf("{\"ok\":%s,%s\"source\":%s,\"dir\":%s,\"stages\":[%s]}\n", ok ? "true" : "false",
-              ok ? "" : ("\"error\":" + esc(error) + ",").c_str(), source_json(src).c_str(),
-              esc(report.dir.string()).c_str(), stages.c_str());
+  std::printf("{\"ok\":%s,%s\"source\":%s,\"dir\":%s,\"upscaler\":%s,\"stages\":[%s]}\n",
+              ok ? "true" : "false", ok ? "" : ("\"error\":" + esc(error) + ",").c_str(),
+              source_json(src).c_str(), esc(report.dir.string()).c_str(),
+              opts.textures.network ? esc(weights).c_str() : "\"kernel\"", stages.c_str());
   return ok ? 0 : 1;
 }

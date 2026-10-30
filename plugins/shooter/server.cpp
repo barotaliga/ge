@@ -38,7 +38,8 @@ void create_server(Server& sv, const ServerSettings& set, const std::vector<Brus
   for (const BrushModel& m : models) sv.models.push_back(m);
   sv.program = program;
   sv.time = set.start_time;
-  sv.num_edicts = sv.set.maxclients + 1;
+  sv.num_edicts =
+      sv.set.first_dynamic > sv.set.maxclients ? sv.set.first_dynamic : sv.set.maxclients + 1;
 
   const BrushModel& world = sv.models[1];
   sv.area = create_area_tree(world.mins, world.maxs);
@@ -53,14 +54,23 @@ void create_server(Server& sv, const ServerSettings& set, const std::vector<Brus
 }
 
 int spawn_edict(Server& sv) {
-  for (int i = sv.set.maxclients + 1; i < sv.num_edicts; i++) {
+  const int first = sv.set.first_dynamic > 0 ? sv.set.first_dynamic : sv.set.maxclients + 1;
+  if (sv.num_edicts < first) sv.num_edicts = first;
+  for (int i = first; i < sv.num_edicts; i++) {
     const Edict& e = sv.edicts[static_cast<size_t>(i)];
     if (e.free && (e.freetime < kReuseAlways || sv.time - e.freetime > kReuseAfter)) {
       reset(sv.edicts[static_cast<size_t>(i)]);
       return i;
     }
   }
-  if (sv.num_edicts >= sv.set.max_edicts) return -1;
+  if (sv.num_edicts >= sv.set.max_edicts) {
+    if (!sv.set.full_reuses_last) return -1;
+    const int last = sv.set.max_edicts - 1;
+    sv.counts.spawns_full++;
+    unlink_edict(sv, last);
+    reset(sv.edicts[static_cast<size_t>(last)]);
+    return last;
+  }
   const int i = sv.num_edicts++;
   reset(sv.edicts[static_cast<size_t>(i)]);
   return i;

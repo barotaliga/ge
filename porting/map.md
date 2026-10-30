@@ -99,6 +99,14 @@ the row when the file moves.
 | `games/fall_line/sound/mix.hpp` | `game5/pwa/src/game/settings.ts`, `audio/bus.ts` | mixOf setAudioVolumes |
 | `games/fall_line/sound/route.cpp` | `game5/pwa/src/game/audio/route.ts` | soundForEvent soundsForStep |
 | `games/fall_line/sound/route.hpp` | `game5/pwa/src/game/audio/route.ts` | soundForEvent soundsForStep |
+| `games/shooters_edge/server/bi_message.cpp` | `porting/shooters-edge/builtins.md` (clean room) | sound stuffcmd bprint sprint dprint lightstyle particle WriteByte..WriteEntity centerprint ambientsound multicast (§ The standard numbers) |
+| `games/shooters_edge/server/bi_monster.cpp` | `porting/shooters-edge/builtins.md` (clean room) | walkmove movetogoal checkbottom changeyaw (§ The monster moves) |
+| `games/shooters_edge/server/bi_settings.cpp` | `porting/shooters-edge/builtins.md` (clean room) | error objerror precache_* cvar cvar_set localcmd changelevel logfrag infokey registercvar cvar_string calltimeofday setpause precache_vwep_model |
+| `games/shooters_edge/server/bi_world.cpp` | `porting/shooters-edge/builtins.md` (clean room) | makevectors setmodel setsize traceline tracebox checkclient find findradius droptofloor pointcontents aim nextent makestatic setspawnparms eprint |
+| `games/shooters_edge/server/catalogue.cpp` | `porting/shooters-edge/builtins.md` (clean room) | the standard numbers 1..82 and the extension builtins, checkextension (§ The standard numbers, § The extension builtins) |
+| `games/shooters_edge/server/commands.cpp` | `porting/shooters-edge/builtins.md` (clean room) | UserCmd GE_ClientCommand ChatMessage UserInfo_Changed localinfo_changed ConsoleCmd GE_PausedTic GE_ShouldPause (§ The hooks) |
+| `games/shooters_edge/server/messages.cpp` | `porting/shooters-edge/builtins.md` (clean room) | MSG_BROADCAST MSG_ONE MSG_ALL MSG_INIT MSG_MULTICAST multicast MULTICAST_* (§ The standard numbers) |
+| `games/shooters_edge/server/qc_server.cpp` | `porting/shooters-edge/builtins.md` (clean room), `progs.md`, `gameloop.md` | the hooks around the loop, SetNewParms SetChangeParms ClientConnect ClientDisconnect the spectator hooks, the extension fields (§ The hooks, § The extension fields) |
 | `plugins/helicopter/heli.cpp` | `game5/engine/game/heli.ts`, `heli-rotor.ts` | stepHeli crashHeli heliDown heliWithin freshHeli thrustMost inducedFlow |
 | `plugins/helicopter/heli.hpp` | `game5/engine/game/heli-state.ts`, `heli.ts` | HeliState HeliControls heliQuat discQuat heliPoint heliMass |
 | `plugins/helicopter/pilot.cpp` | `game5/engine/game/heli-pilot.ts` | pilotControls pilotInput |
@@ -273,6 +281,9 @@ the row when the file moves.
 | `plugins/paramotor/pilot.cpp` | `game5/engine/game/para-pilot.ts` | paraPilot |
 | `plugins/paramotor/pilot.hpp` | `game5/engine/game/para-pilot.ts` | paraPilot ParaAim |
 | `plugins/paramotor/spec.hpp` | `game5/engine/game/defs/para.ts` | PARA |
+| `plugins/progs/entity_text.cpp` | `porting/shooters-edge/builtins.md` (clean room) | the map entity keys the engine handles: angle light _-prefixed keys, typed values, spawnflags inhibit (§ Map entity keys handled by the engine) |
+| `plugins/progs/stdlib.cpp` | `porting/shooters-edge/builtins.md` (clean room) | random normalize vlen vectoyaw vectoangles ftos vtos rint floor ceil fabs stof sin cos sqrt pow min max bound randomvec tokenize argc argv strlen strcat substr strzone strunzone |
+| `plugins/progs/text.cpp` | `porting/shooters-edge/builtins.md` (clean room) | ftos vtos number formatting (§ The standard numbers) |
 | `plugins/racing/records.hpp` | `oss-game-framework/src/racing/records.ts` | splitGap noteRecord |
 | `plugins/racing/standings.hpp` | `oss-game-framework/src/racing/standings.ts` | legProgress fieldOrder placeAmong |
 | `plugins/racing/tape.cpp` | `oss-game-framework/src/racing/tape.ts` | encodeStream decodeStream |

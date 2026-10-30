@@ -16,6 +16,7 @@
 #include "classicenhance/cache.hpp"
 #include "classicenhance/lightmaps.hpp"
 #include "classicenhance/pictures.hpp"
+#include "classicenhance/upscaler.hpp"
 #include "lab/png.hpp"
 #include "vfs/pak.hpp"
 
@@ -45,13 +46,19 @@ std::string num(double v) {
   return buf;
 }
 
+// Which upscaler made the pictures: none (the kernel) keeps the key a run without one always had.
+std::string network_key(const EnhanceOptions& e) {
+  if (e.network == nullptr) return "";
+  return " network " + e.network->digest + " on " + (e.device ? e.device->name() : "cpu");
+}
+
 std::string stage_key(Stage s, const RunOptions& o) {
   std::string text = stage_name(s);
   if (s == Stage::textures) {
     const EnhanceOptions& e = o.textures;
     text += " v" + std::to_string(kTextureStageVersion) + " scale " + std::to_string(e.scale) +
             " sharpen " + num(e.sharpen) + " grain " + num(e.grain) + " relief " + num(e.relief) +
-            " limit " + std::to_string(o.texture_limit);
+            " limit " + std::to_string(o.texture_limit) + network_key(e);
   } else if (s == Stage::lightmaps) {
     text += " v" + std::to_string(kLightmapStageVersion);
   } else if (s == Stage::sounds) {
@@ -64,7 +71,8 @@ std::string stage_key(Stage s, const RunOptions& o) {
     const EnhanceOptions& e = o.textures;
     text += " v" + std::to_string(kModelStageVersion) + " scale " +
             std::to_string(o.models.skin_scale) + " round " + std::to_string(o.models.round) +
-            " sharpen " + num(e.sharpen) + " grain " + num(e.grain) + " relief " + num(e.relief);
+            " sharpen " + num(e.sharpen) + " grain " + num(e.grain) + " relief " + num(e.relief) +
+            network_key(e);
   } else if (s == Stage::pictures) {
     text += " v" + std::to_string(kPictureStageVersion);
   } else {
@@ -160,8 +168,13 @@ bool run_textures(const Source& src, const fs::path& dir, const RunOptions& o, S
     return false;
   }
   r.files++;
-  r.note = std::to_string(textures.size()) + " textures at " + std::to_string(o.textures.scale) +
-           "x, " + std::to_string(glowing) + " with glow";
+  r.note =
+      std::to_string(textures.size()) + " textures at " + std::to_string(o.textures.scale) +
+      "x by " +
+      (o.textures.network ? "the trained network on the " +
+                                (o.textures.device ? o.textures.device->name() : std::string("cpu"))
+                          : std::string("the kernel")) +
+      ", " + std::to_string(glowing) + " with glow";
   return true;
 }
 

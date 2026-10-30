@@ -77,6 +77,33 @@ fixtures we write (`tests/golden/console_*.txt`):
   a runaway alias loop stops at a depth with a message naming the alias, and a script's errors
   name the file and line.
 
+## Running your own mod
+
+The mod server (`games/shooters_edge/server`, M18p) runs a multiplayer `progs` as a compiler
+wrote it. Nothing in the tree ships a mod; a player brings his own.
+
+- **Point the game at it** with a path: `--progs=<file>` on the command line, or the `sv_progs`
+  cvar in the server's console lines (`sv_progs mods/arena/progs.dat`, or `set sv_progs ...`).
+  The path given on the command line wins, then the cvar, then the built-in test mod. Today the
+  `se-mod` lab is the front end: `make lab LAB=se-mod ARGS="--progs=<file> --bots=4
+  --timelimit=1"` plays a match against bots on the test arena and draws it. The dedicated
+  server (M18f) and the game window take the same flag and cvar when they land.
+- **Line numbers in faults**: put the line table beside the file as `<file>.lines` (a line
+  number per statement, the sidecar `ge qc` reads: `parse_lines` in `plugins/progs/file.hpp`). Without it a fault names the function and the
+  statement.
+- **What the server offers**: every standard builtin (1–82), and the extensions in
+  `server/catalogue.hpp`, each answered by `checkextension` (the maths, `tokenize`, `tracebox`,
+  `randomvec`, `registercvar`, `min`/`max`/`bound`, `cvar_string`, the string extensions and
+  `strzone`, `calltimeofday`, pausing, visible weapons, the console's `set`, client commands,
+  `items2`, the extra move types). A builtin the server does not offer faults with its number;
+  an unknown map key is skipped with a message (`x is not a field`).
+- **When it does not load**: the message says why (a refused record, a missing engine-side
+  global or field, a layout of another version) and what to do next. A mod built for the
+  single-player game, or for a server with a different field layout, is refused at load.
+- **The free maps** a mod is played on arrive with the brush plugin (M18b); until then the
+  match runs on the test arena, whose entity text (`kArenaEntities`) has the classic
+  deathmatch spawn points.
+
 ## Licensing and the clean room
 
 **The engine.** gameengine2 is under the PolyForm Noncommercial License 1.0.0 (`LICENSE`): open to
@@ -155,7 +182,7 @@ Decided with the `plugins` skill's questions; dependencies run game → plugin �
 | `plugins/brush` (new) | The brush world: BSP29 and BSP2 loading, the PVS and PHS, clip hulls and the trace through them, brush models, the entity lump's parser, the lightmap and texture data with animation sequences; `app/`: feeding the world pass | Any game on this map format (single-player, multiplayer, a mod's own game) |
 | `plugins/shooter` (new) | The first-person shooter's movement model (ground and air acceleration, friction, stepping, ducking, water, jumping, the strafe and bunny-hop behaviour players rely on), the classic game loop (the server's frame on the run clock, entities by movetype, thinking, pushers, touches, the area tree, a player's packet and commands) behind a game-program seam any program plugs into, the client's commands and prediction, hitscan and projectile helpers over a trace callback, the view's bob and roll, the bot's aim and movement hands on M16 | Any FPS on the engine, whatever its map format |
 | `plugins/progs` (built, M18c) | The QC VM: the progs loader and checker, the interpreter, entity and global memory, strings, the builtin table a game fills, errors with a QC stack trace, the profiler, the extension registry, the tests' assembler and the `qc` tool `ge qc` hands off to; later the compiler's front end (M18d) | Any game that runs QC bytecode (a single-player game, a multiplayer one, a mod's standalone game) |
-| `games/shooters_edge/` | The rules of a match as a game program on the loop's seam (`sim/`: the native program, the test arena and the scripted match, M18o2; the adapter that lets a loaded progs drive the seam, `qc_program.hpp`, M18c), the server (the multiplayer builtins, the clients), the client (prediction, interpolation, the HUD, menus, the console's commands), the protocol (native and compatible), demos, its labs, its play contract, the dedicated server executable | What makes Shooter's Edge Shooter's Edge |
+| `games/shooters_edge/` | The rules of a match as a game program on the loop's seam (`sim/`: the native program, the test arena and the scripted match, M18o2; the adapter that lets a loaded progs drive the seam, `qc_program.hpp`, M18c), the server (`server/`: the mod server, M18p: the builtins by number, the extensions, the hooks, the clients, the test mod and a match with bots; the dedicated server, M18f), the client (prediction, interpolation, the HUD, menus, the console's commands), the protocol (native and compatible), demos, its labs, its play contract, the dedicated server executable | What makes Shooter's Edge Shooter's Edge |
 
 **The one exception to C++ only.** QC is executed, never written into the engine: the VM
 runs existing mods' bytecode for compatibility, and the engine, the plugins and the game stay
@@ -349,6 +376,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `pmove` | scenario | Scripted movement on fixture maps: ground acceleration, air control, strafe jumping, bunny hopping, stairs, ramps, water; trajectories charted against the committed recordings (built, M18o1) |
 | `se-loop` | scenario | The classic loop on the test arena: two clients over latency and loss, a rocket, a bouncing grenade, a door a player blocks, a plat; the program's events and the loop's counts, paths from above and the side, the door and the plat against the clock, the prediction's corrections; the thrown entities against their recorded vectors (built, M18o2) |
 | `se-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (needs the reference program; skipped with a reason when its cache is absent) |
+| `se-mod` | scenario | A mod (the test mod, or a player's progs from `--progs`) played by bots on the test arena to its time limit: the hooks it was called on, the builtins it called, frags, every path from above, the hooks' timeline (built, M18p) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
 | `se-nav` | scenario | Where a player can go on a map by the player move's own proof: the nav graph from above to scale (the floor shaded off the point hull, every node and link by kind, what a mover closes), the quickest routes as the proofs moved a player, from above and the side; on the nav course and the test arena (built, M18r1) |
 | `se-bots` | drive | Bots against bots and against recorded people: frags, deaths, items, the paths drawn on the map, the decisions round a fight, the humanness bands; before and after a change |

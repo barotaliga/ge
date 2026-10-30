@@ -1,6 +1,6 @@
 ---
 name: classicenhance
-description: "Use for plugins/classicenhance in gameengine2: the classic packs (the shareware pack or the player's own full game) enhanced on the player's own machine. Finding the pack (the release zip and its self-extracting LHA archive, an installed folder, the pack file) the full game's later packs layered over the first, known releases reported by SHA-256 and any other pack taken unverified; the local cache and its stages (pack, textures, lightmaps, sounds, models, pictures); the texture enhancer (the edge-aware upscale, the height, normal, roughness and glow maps); the sound enhancer (noise reduction, 48 kHz, the rebuilt top band); the models as glTF and the effects the engine draws in their place; the pack's held weapons as view models (`weapons.hpp`, the `classic-weapons` lab); the lightmap stage's slot for the rebake; the `classicenhance` tool run by `ge tool`; and the line that keeps it legal: ship the pipeline, never its output."
+description: "Use for plugins/classicenhance in gameengine2: the classic packs (the shareware pack or the player's own full game) enhanced on the player's own machine. Finding the pack (the release zip and its self-extracting LHA archive, an installed folder, the pack file) the full game's later packs layered over the first, known releases reported by SHA-256 and any other pack taken unverified; the local cache and its stages (pack, textures, lightmaps, sounds, models, pictures); the texture enhancer (the trained upscaler, a dual aggregation transformer on the CPU and on the GPU through compute shaders, its weights fetched at bake time; the edge-aware kernel; the height, normal, roughness and glow maps); the sound enhancer (noise reduction, 48 kHz, the rebuilt top band); the models as glTF and the effects the engine draws in their place; the pack's held weapons as view models (`weapons.hpp`, the `classic-weapons` lab); the lightmap stage's slot for the rebake; the `classicenhance` tool run by `ge tool`; and the line that keeps it legal: ship the pipeline, never its output."
 ---
 
 # The classic-enhance plugin
@@ -43,6 +43,10 @@ maps) and `morph` (the models and sprites):
 | `classicenhance/source.hpp/.cpp` | `open_source`: a path to the release zip, an installed folder or the pack, found by every route and verified (`kKnownPacks`, `kKnownZips`); `pack_from_zip`, `verify_pack` |
 | `classicenhance/lha.hpp/.cpp` | The LHA archive the release's installer is: headers of level 0 and 1 found behind a self-extractor's program, `-lh0-` and `-lh5-` unpacked, CRC-16 checked |
 | `classicenhance/texture.hpp/.cpp` | One texture enhanced: the kernel-regression upscale with one round of back-projection, sharpening and grain; height, normal, roughness and emissive; `material_of`, `never_drawn` |
+| `classicenhance/upscaler.hpp/.cpp` | The trained texture upscaler (M41g): `kUpscalerWeights` (where the tool fetches them, their SHA-256), `load_upscaler`, `open_upscaler`, `upscale` on the CPU, `seeded_upscaler_weights` (the small network the tests and labs run), `UpscaleDevice` |
+| `classicenhance/net.hpp/.cpp` | The upscaler's CPU layers: blocked linear and 3 × 3 kernels, depthwise, layer norm, batch norm folded, GELU, softmax, pixel shuffle |
+| `classicenhance/safetensors.hpp/.cpp` | The weights file's reader and writer |
+| `classicenhance/app/upscaler_gpu.hpp/.cpp`, `app/upscaler.wgsl` | The upscaler on the GPU: the weights uploaded once, a texture's dispatches recorded and submitted at once; the tool links it when the build has a GPU |
 | `classicenhance/planes.hpp/.cpp` | The wrapping float planes the enhancer works in: blur, percentile, the sRGB tables |
 | `classicenhance/cache.hpp/.cpp` | The cache's root (`GE_CLASSIC_CACHE`, else the per-user cache folder), the per-pack layout, stage records, whole-file writes, `safe_name` |
 | `classicenhance/lightmaps.hpp/.cpp` | The lightmap stage: `light_map` writes a map's light; until the rebake (M40) lands, the map's own lightmaps shelf-packed into one picture |
@@ -65,7 +69,14 @@ ge tool classicenhance -- verify <path>      # where the pack is, its digest, wh
 ge tool classicenhance -- run <path>         # every stage into the cache
 ge tool classicenhance -- run <path> --only=textures --scale=2 --limit=20   # a quick look
 ge tool classicenhance -- status             # the cache's packs and their stages
+ge tool classicenhance -- run <path> --upscaler=kernel --device=cpu   # no download, no GPU
+make lab LAB=gpu-upscaler ARGS="--weights=<file> --limit=2"           # CPU against GPU, timed
+make lab LAB=enhance ARGS="--weights=<file>"                          # the network's column
 ```
+
+The trained upscaler's weights are fetched by the tool into the cache's `weights/` folder (never
+into the tree); in this repository's container fetch them into the scratchpad and pass
+`--weights`.
 
 `<path>` is the shareware release zip as published, an installed game folder (its `id1/pak0.pak`
 and any later packs, in any case), the pack file itself, or a folder holding the release zip. In this repository's
@@ -86,6 +97,11 @@ container the pack is fetched into the scratchpad only, never into the tree.
    must never lower it on a clean signal. Then listen: render the real set to a private page with
    before and after players. Never a per-sample `tanh` on the output: it leaves bars of
    harmonics in the rebuilt band; the look-ahead limiter does not.
+   Upscaler work: check a change against the original network on a real texture, numbers not
+   looks (the CPU path agrees within 1.2e-6; a layer wrong by a transpose or a missed fold is off
+   by tenths), then the GPU against the CPU (`gpu-upscaler` lab, `classicenhance_upscaler_gpu_test`).
+   A buffer too small for what a kernel writes shows as a wrong picture, not an error: the GPU
+   clamps the access. Size every map for the widest thing written into it.
 3. Tests: `tests/classicenhance_*_test.cpp` on fixtures made in the test (an LHA archive from a
    small `-lh5-` encoder, packs from `vfs::write_pak`, maps from `brush::write_bsp`). A test
    passes its fixture's digest as the known list; the real list stays the default.
