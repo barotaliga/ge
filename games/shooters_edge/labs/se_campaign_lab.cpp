@@ -24,6 +24,7 @@
 
 #include "arena_chart.hpp"
 #include "classicenhance/source.hpp"
+#include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
@@ -242,7 +243,9 @@ void autoaim(gl::Lab& lab, const Inputs& in) {
                       pg::global_float(vm, pg::kGlobalReturn + 1),
                       pg::global_float(vm, pg::kGlobalReturn + 2)};
   shooters_edge::sim::leave_qc(s->q);
-  const float pitch = std::atan2(aim.z, std::sqrt(aim.x * aim.x + aim.y * aim.y)) * 57.29578f;
+  const float pitch =
+      static_cast<float>(ge::core::libm::atan2(aim.z, std::sqrt(aim.x * aim.x + aim.y * aim.y))) *
+      57.29578f;
   lab.metric("autoaim.pitch", pitch, "deg");
   gl::LabTable t{"the autoaim", {"what", "value"}, {}};
   t.rows = {{"sv_aim", s->cvars.find("sv_aim")->value},
