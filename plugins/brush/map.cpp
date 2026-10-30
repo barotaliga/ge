@@ -145,4 +145,17 @@ uint64_t map_digest(const Map& map) {
   return h;
 }
 
+const BspxLump* bspx_lump(const Map& map, std::string_view name) {
+  for (const BspxLump& l : map.bspx) {
+    if (l.name.size() != name.size()) continue;
+    bool same = true;
+    for (size_t k = 0; k < name.size() && same; ++k) {
+      const auto low = [](char c) { return c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c; };
+      same = low(l.name[k]) == low(name[k]);
+    }
+    if (same) return &l;
+  }
+  return nullptr;
+}
+
 }  // namespace ge::brush
