@@ -299,7 +299,8 @@ package, and loaded through `engine/mod`. Its half of the ABI is
 Shooter's Edge itself is a **shell**: the window, the menu, the console, the HUDs, the network,
 the bots and a small free arena of its own. The fun is in loading the classic games the player
 owns into it. Each classic game is a **profile**, and a match is three independent choices,
-so the games can be mixed (one game's maps with another's movement and a third's models):
+so the games can be mixed (one game's maps with another's movement and a third's models; the
+weapons and armour are a fourth choice, § Weapons and armour):
 
 | Choice | What it picks | Today | Later |
 | --- | --- | --- | --- |
@@ -339,6 +340,35 @@ so the games can be mixed (one game's maps with another's movement and a third's
   when `sv_playermove original` is set, and the campaign with the arena move. The setting is
   sent with the server's settings, so a predicting client predicts with the same rules
   (`porting/shooters-edge/frame-move.md` has both halves and who jumps in each mix).
+
+### Weapons and armour: an arsenal of their own
+
+Weapons and armour are a **fourth choice**, beside content, program and movement, and they
+can be swapped one at a time. The classic campaign can be played with the sequel's weapons, its
+armour, or both, once the sequel's profile lands. The design makes that possible:
+
+- **An arsenal is data.** Each weapon is a row: its pickup and view models, sounds and HUD icon
+  by the content's names; its ammunition kind; its fire (hitscan, a projectile and its speed,
+  spread, splash); its damage, refire and switch order. Each armour is a row: what it absorbs,
+  its amount and its pickup. A profile ships one weapon set and one armour set, so the classic
+  game's set and the sequel's set are rows in two profiles. Nothing in our programs names a
+  weapon by a constant.
+- **Our programs read the arsenal, never their own copies.** The weapons and armour in
+  `qc/common/` (the arena and campaign variants share them) fire, pick up and absorb through the
+  arsenal's rows. The settings `sv_weapons <profile>` and `sv_armour <profile>` pick which set a
+  map's items give. They default to the content's own sets, and each can be set without the
+  other.
+- **A map's items are mapped, not rewritten.** A map names its items by the content's own class
+  names. The arsenal maps each name to a slot (the shotgun slot, the green armour slot), and the
+  chosen set fills the slot. So the classic game's maps place the sequel's weapons where the
+  classic ones stood. An item with no slot in the chosen set falls back to the content's own.
+- **What a set needs is loaded with it.** The models and sounds of a borrowed set come from its
+  own profile's packs, which must be on the search path. The check at load (M18t5) refuses a mix
+  whose arsenal cannot resolve, and names the missing pack.
+- **The classic programs keep their own.** A pack's own program builds its weapons in its own
+  code, so swapping weapons is a feature of OUR programs (and of a C++ mod that implements the
+  arsenal). The exact classic campaign stays exact. Our campaign variant plays the classic maps
+  with any arsenal.
 
 ### Single player and multiplayer as variants of our mod
 
@@ -680,7 +710,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (needs the reference program; skipped with a reason when its cache is absent) |
 | `se-baseline` | scenario | The baseline mod compiled from its sources and played by bots on the arena with its door and plat: the build's counts, frags and deaths, obituaries by weapon, pickups, every path and missile from above, the frags and the movers' heights against the clock (built, M18d) |
 | `se-mod` | scenario | A mod (the test mod, or a player's progs from `--progs`) played by bots on the test arena to its time limit: the hooks it was called on, the builtins it called, frags, every path from above, the hooks' timeline (built, M18p) |
-| `se-campaign` | scenario | A single-player program (crc 5927: the player's own from `--game`, or the test mod's single-player stub) on its layout table: the program, the layout check entry by entry, the builtins it declares against what the server installs for its form, whether the full game's packs are there; the two forms' offsets compared name by name, the autoaim on the arena from the side (built, M18s1; the campaign host M18s2 grows it) |
+| `se-campaign` | scenario | A single-player program (crc 5927: the player's own from `--game`, or the test mod's single-player stub) on its layout table: the program, the layout check entry by entry, the builtins it declares against what the server installs for its form, whether the full game's packs are there; the two forms' offsets compared name by name, the autoaim on the arena from the side; the campaign host on the campaign stub (a level change, a restart: the parms and runes carried) and, with `--game`, on the pack's own map (`--map`, `--skill`, `--then=changelevel e1m2`: the monsters and secrets counted, the faults, the player's parms) (built, M18s1 and M18s2) |
 | `mod` | scenario | The engine's own C++ mod format: the sample mod's match beside the plain match (the loader's verdict, rockets, bounces, the mod's log, both matches' missiles, the rocket's distance and the grenade's height), and the modded match replayed to the bit (built, M52a) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
 | `se-nav` | scenario | Where a player can go on a map by the player move's own proof: the nav graph from above to scale (the floor shaded off the point hull, every node and link by kind, what a mover closes), the quickest routes as the proofs moved a player, from above and the side; on the nav course and the test arena (built, M18r1) |

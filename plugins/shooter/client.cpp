@@ -201,7 +201,7 @@ MoveType move_type_of(const Edict& ed, bool old_spectator) {
   return MoveType::normal;
 }
 
-void connect_client(Server& sv, int slot, bool spectator, bool bot) {
+void connect_client(Server& sv, int slot, bool spectator, bool bot, bool new_parms) {
   ClientSlot& c = sv.clients[static_cast<size_t>(slot)];
   c = ClientSlot{};
   c.active = true;
@@ -212,7 +212,7 @@ void connect_client(Server& sv, int slot, bool spectator, bool bot) {
   const int e = slot + 1;
   ent(sv, e) = Edict{};
   ent(sv, e).free = false;
-  call_hook(sv, e, sv.program.set_new_parms);
+  if (new_parms) call_hook(sv, e, sv.program.set_new_parms);
   if (spectator) {
     call_hook(sv, e, sv.program.spectator_connect);
   } else {

@@ -120,6 +120,7 @@ TEST(the_compiler_stamps_the_form_a_program_declares) {
     CHECK_MSG(r.ok, r.diagnostics.empty() ? "" : diagnostic_text(r.diagnostics.front()));
     CHECK_MSG(r.progs.crc == form->crc,
               std::string(form->name) + ": crc " + std::to_string(r.progs.crc));
+    CHECK(r.progs.layout == form);
   }
 }
 

@@ -40,12 +40,24 @@
 // once, for the tests and the `se-campaign` lab to stand that form on the mod server with;
 // `kStubEntities` is a world for it.
 //
+// THE CAMPAIGN STUB (`build_campaign_stub`): a single-player program compiled from QC (the form's
+// declarations, `layout_declarations`, then a few functions) that walks the campaign host's
+// rules: SetNewParms gives parm1 100 and parm2 0; PutClientInServer takes health from parm1 and
+// frags (the maps played) from parm2; SetChangeParms carries health and frags + 1. On the map
+// `first` a thinker at time 1.5 takes 25 health off the player, sets serverflags bit 1 and calls
+// changelevel to `second` (twice: the second call is ignored). worldspawn notes what the map
+// started with on the world: max_health the `registered` setting, frags `skill`, armorvalue the
+// program's `deathmatch`, ammo_shells `coop`, items `serverflags`; and counts 3 monsters, one
+// killed, and 2 secrets. On `second` a `counter` thinks every 0.001 s, adding one to its frags
+// (a frame's thinks). `kStubEntities` is its world too.
+//
 // ge:summary The assembled deathmatch test mod, the test arena's entities, the single-player stub
 // ge:keywords test-mod deathmatch assembled-mod rocket missile frags timelimit spawn-points
 // ge:keywords build_test_mod karenaentities entity-text worldspawn info_player_deathmatch
-// ge:keywords build_single_player_stub single-player-stub kstubentities
+// ge:keywords build_single_player_stub single-player-stub kstubentities build_campaign_stub
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_mod_match_test.cpp tests/shooters_edge_qc_single_player_test.cpp
+// ge:test tests/shooters_edge_campaign_test.cpp
 #pragma once
 
 #include <cstdint>
@@ -66,6 +78,7 @@ extern const char* const kArenaEntities;
 
 // The single-player stub into `out`. False with `error` only if the assembler broke.
 bool build_single_player_stub(ge::progs::Progs& out, std::string& error);
+bool build_campaign_stub(ge::progs::Progs& out, std::string& error);
 extern const char* const kStubEntities;
 
 // The test mod's fire rate and rocket, for the tests and the bots.

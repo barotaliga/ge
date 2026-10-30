@@ -14,6 +14,7 @@
 #include "progs/assembler.hpp"
 #include "progs/layout.hpp"
 #include "progs/opcodes.hpp"
+#include "progs/qc_compile.hpp"
 #include "shooter/entity.hpp"
 
 namespace shooters_edge::server {
@@ -541,5 +542,87 @@ const char* const kStubEntities = R"({
 "message" "a single-player map"
 }
 )";
+
+namespace {
+
+const char* const kCampaignStub = R"(
+entity() spawn = #14;
+void(string s, ...) dprint = #25;
+float(string s) cvar = #45;
+entity(entity e) nextent = #47;
+void(string s) changelevel = #70;
+
+void() SetNewParms = { parm1 = 100; parm2 = 0; };
+void() SetChangeParms = { parm1 = self.health; parm2 = self.frags + 1; };
+void() ClientConnect = {};
+void() PutClientInServer = {
+  self.classname = "player";
+  self.health = parm1;
+  self.frags = parm2;
+};
+void() ClientDisconnect = {};
+void() ClientKill = {};
+void() PlayerPreThink = {};
+void() PlayerPostThink = {};
+void() StartFrame = {};
+void() main = {};
+
+void() leave = {
+  local entity p;
+  p = nextent(world);
+  p.health = p.health - 25;
+  serverflags = serverflags + 1;
+  changelevel("second");
+  changelevel("third");
+};
+
+void() count = {
+  self.frags = self.frags + 1;
+  self.nextthink = time + 0.001;
+};
+
+void() worldspawn = {
+  local entity t;
+  world.max_health = cvar("registered");
+  world.frags = cvar("skill");
+  world.armorvalue = deathmatch;
+  world.ammo_shells = coop;
+  world.items = serverflags;
+  total_monsters = 3;
+  killed_monsters = 1;
+  total_secrets = 2;
+  if (mapname == "first") {
+    t = spawn();
+    t.think = leave;
+    t.nextthink = 1.5;
+  }
+  if (mapname == "second") {
+    t = spawn();
+    t.classname = "counter";
+    t.think = count;
+    t.nextthink = time + 0.001;
+  }
+};
+)";
+
+}  // namespace
+
+bool build_campaign_stub(ge::progs::Progs& out, std::string& error) {
+  const std::vector<pg::QcSource> src{{"defs.qc", pg::layout_declarations(pg::kSinglePlayerLayout)},
+                                      {"campaign.qc", kCampaignStub}};
+  pg::QcResult r = pg::compile_qc(src);
+  if (!r.ok) {
+    error = "the campaign stub did not compile:";
+    for (const pg::QcDiagnostic& d : r.diagnostics) error += " " + pg::diagnostic_text(d) + ";";
+    return false;
+  }
+  if (r.progs.crc != pg::kSinglePlayerCrc) {
+    error = "the campaign stub is not of the single-player form (crc " +
+            std::to_string(r.progs.crc) + ")";
+    return false;
+  }
+  out = std::move(r.progs);
+  return true;
+}
 
 }  // namespace shooters_edge::server

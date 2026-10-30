@@ -20,9 +20,10 @@
 // same for the server's local info with localinfoChanged (self the world).
 //
 // THE CONSOLE (`server_command`): `set <name> <value>` (made when unknown), `serverinfo` and
-// `localinfo <key> <value>`, `map <name>` (the change the game makes: `pending_map`), a cvar's
-// name (with a value: set), and anything else to ConsoleCmd (self the world, the console's words
-// in the program's word list): zero, and "Unknown command" is printed.
+// `localinfo <key> <value>`, `map <name>`, `changelevel <name>` and `restart` (the change the game
+// makes: `pending_map` and `pending_change`), a cvar's name (with a value: set), and anything else
+// to ConsoleCmd (self the world, the console's words in the program's word list): zero, and
+// "Unknown command" is printed.
 //
 // PAUSING (`request_pause`): a client asks (a spectator cannot); GE_ShouldPause (self the client,
 // p0 the new state) may refuse with 0; the pause changes and every client is told. The server

@@ -13,7 +13,7 @@ is the design, `docs/goals.md` M18c, M18d and M18p the rows.
 | File | What |
 | --- | --- |
 | `progs/opcodes.hpp` | Every opcode's number, name and operand kinds (one table the checker, the VM and the disassembler read) |
-| `progs/layout.hpp` | The engine-side layouts by program form (`Layout`: multiplayer 54730, single-player 5927): each a table, its offsets resolved by name (`g`, `f`, -1 where absent); the multiplayer constants `kG*`/`kF*`; the optional fields and hooks found by name |
+| `progs/layout.hpp` | The engine-side layouts by program form (`Layout`: multiplayer 54730, single-player 5927): each a table, its offsets resolved by name (`g`, `f`, -1 where absent); the multiplayer constants `kG*`/`kF*`; the optional fields and hooks found by name; `layout_declarations` (a form's declarations as QC source, so a test program compiles to that form) |
 | `progs/file.hpp` | `load_progs`: the file read and checked; lookups by name (first match); the line table and its `.lines` sidecar |
 | `progs/vm.hpp` | The VM: memory, values, `call_function`, guards, faults (`fault_text`), strings, profile, trace hooks |
 | `progs/extensions.hpp` | The extension registry: named groups of builtins, fields and hooks; `install`, `offers` |
@@ -26,7 +26,7 @@ is the design, `docs/goals.md` M18c, M18d and M18p the rows.
 | `progs/stdlib.hpp` | The standard builtins that touch no world: math, vectors, random, text, `tokenize`/`argc`/`argv`, the string extensions, `strzone` |
 | `progs/entity_text.hpp` | The map's entity text parsed and spawned into a progs' fields (typed values, `angle`, `light`, `_` keys, the inhibit flags) |
 | `games/shooters_edge/sim/qc_program.hpp` | A loaded progs as a program on the shooter loop's seam; `before_call` / `after_call` for the server |
-| `games/shooters_edge/server/` | The mod server: `catalogue.hpp` (every builtin by number, the extensions), `bi_*.cpp` (the game's builtins), `messages.hpp` (the Write family and multicast), `commands.hpp` (client commands, chat, info, the console, pausing), `qc_server.hpp` (the hooks, clients, maps), `test_mod.hpp`, `baseline_mod.hpp` (the baseline mod compiled from source, its arena's entity text), `mod_match.hpp` (a progs played by bots), `labs/se_mod_lab.cpp`, `labs/se_baseline_lab.cpp` |
+| `games/shooters_edge/server/` | The mod server: `catalogue.hpp` (every builtin by number, the extensions), `bi_*.cpp` (the game's builtins), `messages.hpp` (the Write family and multicast), `commands.hpp` (client commands, chat, info, the console, pausing), `qc_server.hpp` (the hooks, clients, maps), `campaign.hpp` (the campaign host: a single-player program's maps in a chain, the parms and `serverflags` carried, `changelevel` / `restart` / `map`), `test_mod.hpp` (with the campaign stub, compiled from `layout_declarations`), `baseline_mod.hpp` (the baseline mod compiled from source, its arena's entity text), `mod_match.hpp` (a progs played by bots), `labs/se_mod_lab.cpp`, `labs/se_baseline_lab.cpp` |
 | `games/shooters_edge/qc/` | The baseline deathmatch mod in QC, its README the modder's guide |
 
 ## Rules

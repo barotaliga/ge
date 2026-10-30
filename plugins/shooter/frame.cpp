@@ -13,12 +13,31 @@ namespace ge::shooter {
 void server_frame(Server& sv, const Packet* packets, int count) {
   sv.sound_count = 0;
   sv.frame++;
-  sv.time = sv.set.start_time + static_cast<double>(sv.frame) * sv.set.mintic;
+  const double end = sv.base_time + static_cast<double>(sv.frame - sv.base_frame) * sv.set.mintic;
+  if (sv.set.single_player_clock)
+    sv.time = end - sv.set.mintic;
+  else
+    sv.time = end;
   for (int i = 0; i < count; i++) run_packet(sv, packets[i]);
-  const double frametime = sv.physics_started ? sv.set.mintic : sv.set.maxtic;
+  const double frametime =
+      sv.physics_started || sv.set.single_player_clock ? sv.set.mintic : sv.set.maxtic;
   sv.physics_started = true;
   sv.last_physics = sv.time;
   physics_frame(sv, frametime);
+  sv.time = end;
+}
+
+void settle_frames(Server& sv, int frames, double dt) {
+  for (int i = 0; i < frames; i++) {
+    sv.sound_count = 0;
+    sv.frame++;
+    sv.physics_started = true;
+    sv.last_physics = sv.time;
+    physics_frame(sv, dt);
+    sv.time += dt;
+  }
+  sv.base_time = sv.time;
+  sv.base_frame = sv.frame;
 }
 
 }  // namespace ge::shooter

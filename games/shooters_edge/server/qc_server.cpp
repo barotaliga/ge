@@ -29,6 +29,10 @@ void add_settings(QcServer& s) {
   s.cvars.add({"deathmatch", "1", info, "the match's rules: 0 cooperative, 1 and up deathmatch"});
   s.cvars.add({"skill", "1", srv, "the monsters' skill, 0..3"});
   s.cvars.add({"teamplay", "0", info, "team rules, as the mod reads them"});
+  s.cvars.add({"coop", "0", srv, "a single-player program's cooperative game (on: deathmatch 0)"});
+  s.cvars.add({"registered", "0", srv,
+               "1 when the packs carry the full game (a single-player program opens its "
+               "episodes); the host sets it"});
   s.cvars.add({"timelimit", "0", info, "the match's length, minutes (0 none)"});
   s.cvars.add({"fraglimit", "0", info, "frags that end the match (0 none)"});
   s.cvars.add({"samelevel", "0", info, "1: the map does not change at the end"});
@@ -81,6 +85,19 @@ void after_call(sim::QcProgram& q, sh::Func fn) {
     for (int i = 0; i < 16; i++)
       s.clients[slot].spawn_parms[i] = pg::global_float(q.vm, s.q.layout->g.parm1 + i);
   }
+}
+
+// The rules a map starts under, in the globals the program's form has: `serverflags`, and in the
+// single-player form `deathmatch`, `coop` and `teamplay` (`coop` on forces `deathmatch` 0).
+void write_rules(QcServer& s) {
+  pg::Vm& vm = s.q.vm;
+  const pg::LayoutGlobals& g = s.q.layout->g;
+  auto number = [&](const char* name) { return static_cast<float>(s.cvars.find(name)->number); };
+  const bool coop = s.cvars.find("coop")->on();
+  if (g.serverflags >= 0) pg::set_global_float(vm, g.serverflags, s.serverflags);
+  if (g.deathmatch >= 0) pg::set_global_float(vm, g.deathmatch, coop ? 0.0f : number("deathmatch"));
+  if (g.coop >= 0) pg::set_global_float(vm, g.coop, coop ? number("coop") : 0.0f);
+  if (g.teamplay >= 0) pg::set_global_float(vm, g.teamplay, number("teamplay"));
 }
 
 int32_t named(const pg::Progs& p, const char* name) {
@@ -284,6 +301,7 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
   s.stop_reason.clear();
   s.changelevel_queued = false;
   s.pending_map.clear();
+  s.pending_change = MapChange::new_game;
   s.paused = false;
   s.inhibited = 0;
   s.check_client = 0;
@@ -305,6 +323,7 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
     sim::enter_qc(s.q, s.sv);
     if (i == 0) {
       pg::set_global_int(vm, s.q.layout->g.mapname, pg::engine_string(vm, map.name.c_str()));
+      write_rules(s);
       *pg::entity_field(vm, 0, s.q.layout->f.model) =
           static_cast<uint32_t>(pg::engine_string(vm, s.models[1].c_str()));
     }
@@ -375,7 +394,8 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
   return true;
 }
 
-void connect(QcServer& s, int slot, const std::string& name, bool spectator, bool bot) {
+void connect(QcServer& s, int slot, const std::string& name, bool spectator, bool bot,
+             const float* parms) {
   ClientInfo& c = s.clients[slot];
   c = ClientInfo{};
   c.active = true;
@@ -390,7 +410,13 @@ void connect(QcServer& s, int slot, const std::string& name, bool spectator, boo
   pg::clear_entity(s.q.vm, e);
   s.q.live[static_cast<size_t>(e)] = 1;
   set_netname(s, e, name);
-  sh::connect_client(s.sv, slot, spectator, bot);
+  if (parms != nullptr) {
+    for (int k = 0; k < 16; k++) {
+      c.spawn_parms[k] = parms[k];
+      pg::set_global_float(s.q.vm, s.q.layout->g.parm1 + k, parms[k]);
+    }
+  }
+  sh::connect_client(s.sv, slot, spectator, bot, parms == nullptr);
 }
 
 void disconnect(QcServer& s, int slot) {

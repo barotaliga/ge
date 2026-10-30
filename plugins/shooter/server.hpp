@@ -62,6 +62,9 @@ struct ServerSettings {
   // A full pool: false, spawning fails (-1); true, the last entity is unlinked, cleared and
   // reused with a warning counted (`LoopCounts::spawns_full`), as a QC program's server does.
   bool full_reuses_last = false;
+  // The single-player clock (frame.hpp): a frame's packets and physics see the time the frame
+  // started at, the time advancing after them, and an entity thinks at most once a frame.
+  bool single_player_clock = false;
 };
 
 // A sound the loop or the program started this frame, for the host to play.
@@ -108,6 +111,8 @@ struct Server {
   int64_t frame = 0;        // server frames run
   double last_physics = 0;  // the server time physics last ran
   bool physics_started = false;
+  double base_time = 0;    // the time frame `base_frame` ended at (start_time, or after settling)
+  int64_t base_frame = 0;  // the frame `base_time` is counted from
   std::vector<ClientSlot> clients;  // set.maxclients
   SoundEvent sounds[kMaxSounds];
   int sound_count = 0;

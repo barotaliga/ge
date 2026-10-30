@@ -146,7 +146,10 @@ void bi_changelevel(pg::Vm& vm) {
   const char* map = pg::arg_string(vm, 0);
   if (vm.fault.set || s.changelevel_queued) return;
   s.changelevel_queued = true;
-  s.command_buffer += std::string("map ") + map + "\n";
+  // The single-player form carries the players' parms to the next map; the multiplayer server's
+  // change is a `map`.
+  const char* line = pg::vm_layout(vm).single_player ? "changelevel " : "map ";
+  s.command_buffer += std::string(line) + map + "\n";
 }
 
 void bi_logfrag(pg::Vm& vm) {
