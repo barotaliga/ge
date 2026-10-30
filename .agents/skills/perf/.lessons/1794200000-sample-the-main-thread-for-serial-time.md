@@ -2,7 +2,7 @@
 title: Sample the main thread's wall time to find what runs alone while the pool waits
 date: 2026-10-30
 scope: plugins/mountain/mapgen
-concepts: [profiling, sampling, wall-time, serial, parallel_bands, frame-pointer, callgrind, a-b, early-out, lower-bound]
+concepts: [profiling, sampling, wall-time, serial, parallel-bands, frame-pointer, callgrind, a-b, early-out, lower-bound]
 ---
 
 Once the bakes ran on threads, callgrind's instruction counts stopped ranking the map build's
