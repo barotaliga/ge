@@ -18,6 +18,8 @@
 //   shadows.near         -> shadows.maps (the near cascade: the forest, when due)
 //   shadows.far          -> shadows.maps (the far cascade, when due)
 //   shadows.figures      -> shadows.maps (the figures' atlas: the racers, the nearest amateurs)
+//   lamps.cull           -> lamps.lists (the casters of the lamps' tiles due, with light_shadows)
+//   lamps.shadows        -> lamps.atlas (each due tile of the lamps' shadow atlas drawn)
 //   fog.inject           -> fog.media (render/fog.hpp: the scene's fog lit a froxel each)
 //   fog.integrate        -> fog.volume (each column toward the eye; every haze reads it)
 //   terrain.depth        -> depth (the prepass)
@@ -68,11 +70,13 @@
 #include <string>
 #include <vector>
 
+#include "fall_line/app/lamps.hpp"
 #include "fall_line/app/scene.hpp"
 #include "fall_line/cfg/cvars.hpp"
 #include "fall_line/sim/village.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
+#include "mountain/app/night_lamps.hpp"
 #include "mountain/app/snow.hpp"
 #include "mountain/app/trails.hpp"
 #include "mountain/mapgen/types.hpp"
@@ -87,7 +91,9 @@
 #include "render/grade.hpp"
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
+#include "render/lamp_shadows.hpp"
 #include "render/lens.hpp"
+#include "render/lights.hpp"
 #include "render/motion_blur.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
@@ -137,6 +143,13 @@ struct FrameOptions {
   bool splashes = true;  // the rain's splashes on the ground (with `precip`)
   bool wet = true;       // the rain wets the ground: darker, mirroring, pooled on the flats
   bool fog = true;       // the scene's fog in areas (FrameScene::fog, render/fog.hpp) drawn
+  // THE LAMPS AFTER DARK (app/lamps.hpp): the piste's floods, the street lamps, the windows'
+  // spill and the racers' headlamps as local lights; `light_shadows`, the nearest and brightest
+  // of them casting into the lamps' atlas (render/lamp_shadows.hpp), `lamp_tiles` of its tiles
+  // (each a caster slot in every family that casts: a cost of memory).
+  bool lights = true;
+  bool light_shadows = true;
+  uint32_t lamp_tiles = 16;
   bool weather =
       true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
   double clouds = 1.0;  // the share of the cloud march's steps (0.25..1); 0: no layer drawn
@@ -255,6 +268,19 @@ struct GameFrame {
   std::vector<uint8_t> buildings_lit;
   wgpu::BindGroup instance_light;
   ge::render::SunShadows shadows;
+  // THE LAMPS (FrameOptions::lights): the light buffer and the lamps' shadow atlas, the masts and
+  // the street lamps standing (their posts drawn as two families, the masts' made with the map and
+  // the street lamps' with the village; casting into the cascades), and each frame's list.
+  ge::render::Lights lights;
+  ge::render::LampShadows lamp_shadows;
+  ge::render::InstanceFamily masts, posts;
+  std::vector<ge::mountain::app::Lamp> piste_lamps, street_lamps;
+  bool lamps_glow = false;  // the posts' glass as last written, lit or dark
+  double lamp_lux = 0;      // the last frame's: the lux the eye adapted to among the lamps
+  std::vector<ge::render::LocalLight> lamp_list;
+  std::vector<std::array<double, 4>> lamp_movers;
+  // What casts the lamps' shadows: every family made with lamp tiles.
+  std::vector<ge::render::InstanceFamily*> lamp_casters;
   const ge::mountain::mapgen::Level* level = nullptr;
   // The skinned skiers: the model (scene.hpp's `skier_model`), its rig binding, one skin and one
   // poser a racer, and the pose's scratch.
@@ -269,6 +295,7 @@ struct GameFrame {
   std::vector<ge::assets::Trs> locals;
   std::vector<ge::assets::Affine> globals, palette;
   std::vector<ge::render::Instance> staged_figures;
+  std::array<Headlamp, kMaxFigures> headlamps;  // each racer's, where his posed head is
   std::vector<std::array<double, 3>> figure_centres;
   // The crowd: a poser an amateur by id, every amateur's palette in a row, his instance.
   std::vector<ge::skier::RigPoser> crowd_posers;
@@ -293,7 +320,8 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
 // parked cars, and its traffic where each frame's `FrameScene::run_time` has it
 // (mountain/app/village_look.hpp); the frame keeps it while it draws it. Nothing for null. The
 // buildings and the parked cars cast into the cached cascades as the forest does, the traffic
-// into the figures' atlas, so a vehicle under way casts only near a figure's tile.
+// into the figures' atlas, so a vehicle under way casts only near a figure's tile. Its street
+// lamps stand along its streets (mountain/app/night_lamps.hpp), lit with the dark.
 void show_village(ge::gpu::Device& device, GameFrame& frame,
                   std::shared_ptr<const sim::Village> village);
 

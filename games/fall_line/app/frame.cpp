@@ -11,6 +11,7 @@
 #include <iterator>
 
 #include "core/output.hpp"
+#include "fall_line/app/lamps.hpp"
 #include "fall_line/app/look.hpp"
 #include "fall_line/app/scene.hpp"
 #include "fall_line/app/sky_type.hpp"
@@ -44,6 +45,8 @@ constexpr r::PassRow kPassTable[] = {
     {"shadows.near", "instances shadows.lists", "shadows.maps"},
     {"shadows.far", "instances shadows.lists", "shadows.maps"},
     {"shadows.figures", "instances figures.posed shadows.lists", "shadows.maps"},
+    {"lamps.cull", "instances", "lamps.lists"},
+    {"lamps.shadows", "instances figures.posed lamps.lists", "lamps.atlas"},
     {"fog.inject", "shadows.maps terrain.horizon sky.aerial sky.light fog.history", "fog.media"},
     {"fog.integrate", "fog.media", "fog.volume"},
     {"terrain.depth", "terrain.tiles terrain.indirect terrain.height", "depth"},
@@ -54,11 +57,11 @@ constexpr r::PassRow kPassTable[] = {
     {"ao", "depth", "ao"},
     {"terrain",
      "terrain.tiles terrain.indirect terrain.height terrain.horizon shadows.maps sky.aerial "
-     "sky.light snow.ground trails.fine trails.coarse depth fog.volume ao",
+     "sky.light snow.ground trails.fine trails.coarse depth fog.volume ao lamps.atlas",
      "hdr motion"},
     {"instances",
      "instances figures.posed instances.early instances.late terrain.horizon shadows.maps "
-     "sky.aerial sky.light depth fog.volume ao",
+     "sky.aerial sky.light depth fog.volume ao lamps.atlas",
      "hdr motion"},
     {"sky", "sky.view sky.moon_view depth fog.volume", "hdr motion"},
     {"clouds.fresh", "depth sky.aerial sky.light", "clouds.fresh"},
@@ -89,6 +92,31 @@ constexpr std::string_view kLoadInputs =
 
 constexpr int kPasses = static_cast<int>(std::size(kPassTable));
 
+// The lamps' tiles each casting family carries slots for (none without the lamps' shadows).
+int lamp_slots(const GameFrame& f) {
+  return f.options.lights && f.options.light_shadows
+             ? static_cast<int>(std::min(f.options.lamp_tiles, r::kMaxLampTiles))
+             : 0;
+}
+
+// `lamps`' posts stood as `family` (dark: `draw` lights their glass with the dark), casting into
+// the cascades with the forest; nothing for none.
+void stand_posts(ge::gpu::Device& device, GameFrame& f, r::InstanceFamily& family,
+                 std::string_view label, std::span<const ge::mountain::app::Lamp> lamps) {
+  if (lamps.empty()) return;
+  r::create_family(device, f.instancing, family, label, ge::mountain::app::lamp_post_meshes(),
+                   ge::mountain::app::lamp_post_surfaces(), static_cast<uint32_t>(lamps.size()));
+  r::create_family_casters(device, f.instancing, family, r::kCascades);
+  if (f.hiz.view) r::bind_family_hiz(device, f.instancing, family, f.hiz);
+  std::vector<r::Instance> stood;
+  stood.reserve(lamps.size());
+  for (const ge::mountain::app::Lamp& l : lamps)
+    stood.push_back(ge::mountain::app::lamp_instance(l, f.lamps_glow));
+  r::set_instances(device, family, 0, stood);
+  f.families.push_back(&family);
+  f.still.push_back(&family);
+}
+
 // The targets, the pyramid, the histories and the post pass's groups for outputs of w x h.
 void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h) {
   f.output_width = w;
@@ -103,8 +131,9 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
     r::create_ao_targets(device, f.ao, f.targets.width, f.targets.height, f.uniforms,
                          f.targets.depth_view);
   }
-  f.frame_group = r::frame_group(device, f.frame_layout, f.uniforms, f.sky, nullptr,
-                                 f.fog.volume_view, ao ? f.ao.view : nullptr);
+  f.frame_group =
+      r::frame_group(device, f.frame_layout, f.uniforms, f.sky, f.lights.buffer, f.fog.volume_view,
+                     ao ? f.ao.view : nullptr, f.lamp_shadows.atlas_view);
   for (r::InstanceFamily* family : f.families)
     r::bind_family_hiz(device, f.instancing, *family, f.hiz);
   r::bind_particle_targets(device, f.particles, f.targets);
@@ -192,6 +221,8 @@ FrameOptions frame_options(const cfg::Settings& s) {
             .motion_blur = s.motionblur};
   o.lens = {.rays = s.sunrays, .flare = s.flare};
   o.ao = {.strength = s.ao, .radius_m = s.ao_radius};
+  o.lights = s.lights;
+  o.light_shadows = s.lights && s.light_shadows;
   o.dof = {.strength = s.dof, .focus_m = s.dof_focus};
   o.grade = {.contrast = s.contrast,
              .saturation = s.saturation,
@@ -311,10 +342,16 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::set_grade(device, f->post, grade);
   r::create_skin_pipelines(device, f->pipelines, f->skinning);
   r::create_ui_pass(device, f->pipelines, f->ui, output);
+  if (options.lights && options.light_shadows) {
+    r::LampShadowSettings lamp;
+    lamp.tiles = std::min(options.lamp_tiles, r::kMaxLampTiles);
+    r::create_lamp_shadows(device, f->pipelines, f->lamp_shadows, lamp, f->frame_layout, f->sky);
+  }
   if (!f->pipelines.finish(device)) return nullptr;
   ge::gpu::end_load(device);
-  f->frame_group =
-      r::frame_group(device, f->frame_layout, f->uniforms, f->sky, nullptr, f->fog.volume_view);
+  if (options.lights) r::create_lights(device, f->lights);
+  f->frame_group = r::frame_group(device, f->frame_layout, f->uniforms, f->sky, f->lights.buffer,
+                                  f->fog.volume_view, nullptr, f->lamp_shadows.atlas_view);
   f->level = &level;
   const std::vector<r::Instance> trees = tree_instances(level);
   r::create_family(device, f->instancing, f->forest, "forest", forest_meshes(), forest_materials(),
@@ -342,9 +379,15 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::ShadowSettings shadows;
   shadows.size = options.shadow_size;
   r::create_sun_shadows(device, f->shadows, shadows, f->frame_layout, f->sky);
-  r::create_family_casters(device, f->instancing, f->forest, r::kCascades);
-  r::create_family_casters(device, f->instancing, f->figures, r::kMaxShadowFigures);
-  r::create_family_casters(device, f->instancing, f->crowd, r::kMaxShadowFigures);
+  // With the lamps' shadows, each casts into the lamps' tiles too (a slot a tile after those).
+  const int lamp_tiles = lamp_slots(*f);
+  r::create_family_casters(device, f->instancing, f->forest, r::kCascades, lamp_tiles);
+  r::create_family_casters(device, f->instancing, f->figures, r::kMaxShadowFigures, lamp_tiles);
+  r::create_family_casters(device, f->instancing, f->crowd, r::kMaxShadowFigures, lamp_tiles);
+  if (lamp_tiles > 0) f->lamp_casters = {&f->forest, &f->figures, &f->crowd};
+  // The piste's floodlight masts (mountain/app/night_lamps.hpp), standing on every map.
+  f->piste_lamps = ge::mountain::app::piste_lamps(level);
+  stand_posts(device, *f, f->masts, "lamps.masts", f->piste_lamps);
   r::bind_terrain_shadows(f->terrain, f->shadows.group);
   if (options.snow) r::bind_terrain_material(f->terrain, f->snow.group);
   r::bind_instance_shadows(f->instancing, f->shadows.group);
@@ -399,19 +442,24 @@ void show_village(ge::gpu::Device& device, GameFrame& f,
     for (const vg::Building& b : village.buildings) ma::building_instances(b, stood);
     r::create_family(device, f.instancing, f.buildings, "village.buildings", ma::building_meshes(),
                      ma::building_surfaces(), static_cast<uint32_t>(stood.size()));
-    r::create_family_casters(device, f.instancing, f.buildings, r::kCascades);
+    r::create_family_casters(device, f.instancing, f.buildings, r::kCascades, lamp_slots(f));
+    if (lamp_slots(f) > 0) f.lamp_casters.push_back(&f.buildings);
     r::bind_family_hiz(device, f.instancing, f.buildings, f.hiz);
     r::set_instances(device, f.buildings, 0, stood);
     f.buildings_lit.assign(village.buildings.size(), 0);
     f.families.push_back(&f.buildings);
     f.still.push_back(&f.buildings);
   }
+  // The street lamps along its streets.
+  f.street_lamps = ma::street_lamps(*f.level, village.streets);
+  stand_posts(device, f, f.posts, "lamps.posts", f.street_lamps);
   if (!village.traffic) return;
   const vg::TrafficPlan& plan = *village.traffic;
   if (!plan.parked.empty()) {
     r::create_family(device, f.instancing, f.parked, "village.parked", ma::vehicle_meshes(),
                      ma::village_materials(), static_cast<uint32_t>(plan.parked.size()));
-    r::create_family_casters(device, f.instancing, f.parked, r::kCascades);
+    r::create_family_casters(device, f.instancing, f.parked, r::kCascades, lamp_slots(f));
+    if (lamp_slots(f) > 0) f.lamp_casters.push_back(&f.parked);
     r::bind_family_hiz(device, f.instancing, f.parked, f.hiz);
     std::vector<r::Instance> cars;
     cars.reserve(plan.parked.size());
@@ -423,7 +471,8 @@ void show_village(ge::gpu::Device& device, GameFrame& f,
   if (!plan.vehicles.empty()) {
     r::create_family(device, f.instancing, f.traffic, "village.traffic", ma::vehicle_meshes(),
                      ma::village_materials(), static_cast<uint32_t>(plan.vehicles.size()));
-    r::create_family_casters(device, f.instancing, f.traffic, r::kMaxShadowFigures);
+    r::create_family_casters(device, f.instancing, f.traffic, r::kMaxShadowFigures, lamp_slots(f));
+    if (lamp_slots(f) > 0) f.lamp_casters.push_back(&f.traffic);
     r::bind_family_hiz(device, f.instancing, f.traffic, f.hiz);
     f.staged_traffic.assign(plan.vehicles.size(), r::Instance{});
     f.families.push_back(&f.traffic);
@@ -580,6 +629,82 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   double jitter[2] = {0, 0};
   if (f.options.taa) r::taa_jitter(view.frame, r::taa_phases(f.options.scale), jitter);
   const bool fresh = !f.history.valid;
+  // The racers posed first: their headlamps are where their heads are.
+  const size_t racers = std::min<size_t>(scene.skiers.size(), kMaxFigures);
+  {
+    GE_ZONE("frame.figures");
+    for (size_t k = 0; k < racers; ++k) {
+      // Settled: a fresh poser keeps no lag of the last frame, and the skin no motion.
+      if (scene.settle) {
+        f.posers[k] = {};
+        r::settle_skin(f.skins[k]);
+      }
+      f.posers[k].pose(scene.skiers[k], scene.dt, f.rig_pose);
+      ge::skier::rig_locals(*f.skier, f.binding, f.rig_pose, f.locals);
+      ge::assets::pose_globals(*f.skier, f.locals, f.globals);
+      ge::assets::skin_palette(*f.skier, f.globals, f.palette);
+      r::set_palette(device, f.skins[k], f.palette);
+      f.staged_figures[k] =
+          figure_instance(scene.skiers[k], *f.level, static_cast<int>(k), f.materials_per_racer);
+      // His headlamp where the posed head is.
+      f.headlamps[k] = headlamp_of(
+          ge::skier::figure_frame(scene.skiers[k], ge::skier::World{f.level, nullptr}), f.rig_pose);
+    }
+    // A slot drawn again after a gap starts settled.
+    for (size_t k = racers; k < f.skins.size(); ++k) r::settle_skin(f.skins[k]);
+    r::set_instances(device, f.figures, 0,
+                     std::span<const r::Instance>(f.staged_figures.data(), racers));
+    r::set_instance_count(f.figures, static_cast<uint32_t>(racers));
+  }
+  // THE LAMPS, on with the dark: the windows lit at the sky's hour (their glass written again
+  // only when one building's changes), then this frame's lights (app/lamps.hpp) and the light the
+  // eye adapts to among them, before the uniforms take it.
+  const double sun = view.night.moon_key ? view.night.sun_elevation : view.sun_elevation;
+  const double lit = ge::mountain::app::lamps_lit(sun);
+  if (f.shown_village != nullptr && !f.buildings_lit.empty()) {
+    GE_ZONE("frame.windows");
+    const double hour = scene.hour < 0 ? 20.0 : scene.hour;
+    const std::vector<ge::mountain::village::Building>& buildings = f.shown_village->buildings;
+    std::vector<r::Instance> stood;
+    for (size_t k = 0; k < buildings.size(); ++k) {
+      const auto on = static_cast<uint8_t>(ge::mountain::app::lights_on(buildings[k], hour, sun));
+      if (on == f.buildings_lit[k]) continue;
+      f.buildings_lit[k] = on;
+      stood.clear();
+      ge::mountain::app::building_instances(buildings[k], stood, on != 0);
+      r::set_instances(device, f.buildings, static_cast<uint32_t>(k * 2), stood);
+    }
+  }
+  if (f.options.lights) {
+    GE_ZONE("frame.lamps");
+    namespace ma = ge::mountain::app;
+    const bool shadows = f.options.light_shadows;
+    f.lamp_list.clear();
+    for (size_t k = 0; k < racers; ++k) {
+      headlamp_lights(f.headlamps[k], kHeadlampKeys + static_cast<uint32_t>(k), lit, shadows,
+                      f.lamp_list);
+    }
+    ma::lamp_lights(f.piste_lamps, lit, shadows, ma::kFloodKeys, f.lamp_list);
+    ma::lamp_lights(f.street_lamps, lit, shadows, ma::kStreetKeys, f.lamp_list);
+    if (f.shown_village != nullptr) {
+      ma::window_lights(f.shown_village->buildings, f.buildings_lit, f.lamp_list);
+    }
+    view.lamp_lux = eye_lamp_lux(f.lamp_list, view, *f.level);
+    f.lamp_lux = view.lamp_lux;
+  }
+  // The posts' glass, lit or dark with the lamps.
+  if (const bool glow = lit > 0.5; glow != f.lamps_glow) {
+    f.lamps_glow = glow;
+    std::vector<r::Instance> stood;
+    for (auto [family, lamps] :
+         {std::pair{&f.masts, &f.piste_lamps}, {&f.posts, &f.street_lamps}}) {
+      if (lamps->empty()) continue;
+      stood.clear();
+      for (const ge::mountain::app::Lamp& l : *lamps)
+        stood.push_back(ge::mountain::app::lamp_instance(l, glow));
+      r::set_instances(device, *family, 0, stood);
+    }
+  }
   r::fill_uniforms(f.staged, view, f.targets.width, f.targets.height, &f.history,
                    f.options.taa ? jitter : nullptr);
   {
@@ -647,29 +772,6 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     r::prepare_precip(device, f.precip, at);
   }
   r::prepare_bolts(device, f.bolts, scene.bolts, view, f.targets.height);
-  const size_t racers = std::min<size_t>(scene.skiers.size(), kMaxFigures);
-  {
-    GE_ZONE("frame.figures");
-    for (size_t k = 0; k < racers; ++k) {
-      // Settled: a fresh poser keeps no lag of the last frame, and the skin no motion.
-      if (scene.settle) {
-        f.posers[k] = {};
-        r::settle_skin(f.skins[k]);
-      }
-      f.posers[k].pose(scene.skiers[k], scene.dt, f.rig_pose);
-      ge::skier::rig_locals(*f.skier, f.binding, f.rig_pose, f.locals);
-      ge::assets::pose_globals(*f.skier, f.locals, f.globals);
-      ge::assets::skin_palette(*f.skier, f.globals, f.palette);
-      r::set_palette(device, f.skins[k], f.palette);
-      f.staged_figures[k] =
-          figure_instance(scene.skiers[k], *f.level, static_cast<int>(k), f.materials_per_racer);
-    }
-    // A slot drawn again after a gap starts settled.
-    for (size_t k = racers; k < f.skins.size(); ++k) r::settle_skin(f.skins[k]);
-    r::set_instances(device, f.figures, 0,
-                     std::span<const r::Instance>(f.staged_figures.data(), racers));
-    r::set_instance_count(f.figures, static_cast<uint32_t>(racers));
-  }
   if (!scene.crowd.empty()) {
     GE_ZONE("frame.crowd");
     pose_crowd(device, f, scene);
@@ -690,22 +792,6 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     if (scene.settle) r::cut_family(f.traffic);
     r::set_instances(device, f.traffic, 0, f.staged_traffic);
   }
-  if (f.shown_village != nullptr && !f.buildings_lit.empty()) {
-    GE_ZONE("frame.windows");
-    // The windows lit at the sky's hour, written again only when one building's change.
-    const double sun = view.night.moon_key ? view.night.sun_elevation : view.sun_elevation;
-    const double hour = scene.hour < 0 ? 20.0 : scene.hour;
-    const std::vector<ge::mountain::village::Building>& buildings = f.shown_village->buildings;
-    std::vector<r::Instance> stood;
-    for (size_t k = 0; k < buildings.size(); ++k) {
-      const auto lit = static_cast<uint8_t>(ge::mountain::app::lights_on(buildings[k], hour, sun));
-      if (lit == f.buildings_lit[k]) continue;
-      f.buildings_lit[k] = lit;
-      stood.clear();
-      ge::mountain::app::building_instances(buildings[k], stood, lit != 0);
-      r::set_instances(device, f.buildings, static_cast<uint32_t>(k * 2), stood);
-    }
-  }
   {
     GE_ZONE("frame.instances");
     r::SeeThrough see;
@@ -725,6 +811,22 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   {
     GE_ZONE("frame.shadows");
     r::prepare_sun_shadows(device, f.shadows, view, f.figure_centres, f.still, f.moving);
+  }
+  if (f.options.lights) {
+    GE_ZONE("frame.lights");
+    r::prepare_lights(device, f.lights, f.lamp_list, view, f.targets.width, f.targets.height);
+    if (f.options.light_shadows) {
+      // What moves through a lamp's view draws its tiles again: the figures and the traffic.
+      f.lamp_movers.clear();
+      for (const auto& c : f.figure_centres) f.lamp_movers.push_back({c[0], c[1], c[2], 1.2});
+      for (const r::Instance& car : f.staged_traffic) {
+        if (car.scale[0] > 0) {
+          f.lamp_movers.push_back({car.position[0], car.position[1], car.position[2], 3.0});
+        }
+      }
+      r::prepare_lamp_shadows(device, f.lamp_shadows, f.lights, f.lamp_list, view, f.lamp_movers,
+                              f.lamp_casters);
+    }
   }
   // Depth of field's focus: the one asked for, or how far the camera's subject is.
   if (r::dof_on(f.options.dof)) {
@@ -763,6 +865,14 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   r::encode_precip_sim(f.precip, f.pipelines, f.recorder, encoder);
   r::encode_sun_shadows(f.shadows, f.still, f.moving, f.instancing, f.pipelines, f.recorder,
                         encoder);
+  if (f.options.lights && f.options.light_shadows) {
+    r::encode_lamp_shadows(f.lamp_shadows, f.lamp_casters, f.instancing, f.pipelines, f.recorder,
+                           encoder);
+  } else {
+    // The pass table's rows run empty, so every later pass keeps its timing row.
+    f.recorder.compute(encoder, "lamps.cull").End();
+    f.recorder.compute(encoder, "lamps.shadows").End();
+  }
   r::encode_fog(f.fog, f.pipelines, f.recorder, encoder, f.frame_group);
   r::encode_terrain_depth(f.terrain, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_instances_depth(families, f.instancing, f.pipelines, f.recorder, encoder, f.targets,

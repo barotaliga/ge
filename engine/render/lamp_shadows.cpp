@@ -96,6 +96,13 @@ void fill_tile_view(FrameUniforms& u, const FrameView& view, const LocalLight& l
   u.mist[1] = l.range_m;
 }
 
+// Family `f`'s caster slot for tile `k`: its lamps' slots from `lamp_slot` on, -1 past them.
+int tile_slot(const InstanceFamily& f, uint32_t k) {
+  if (f.lamp_slot < 0) return -1;
+  const auto slot = static_cast<size_t>(f.lamp_slot) + k;
+  return slot < f.casters.size() ? static_cast<int>(slot) : -1;
+}
+
 }  // namespace
 
 void lamp_tile_view(const LampShadowSettings& set, const LocalLight& l, int face, float m[16],
@@ -207,7 +214,8 @@ void deal_lamp_tiles(LampShadows& s, LightBins& bins, std::span<const LocalLight
   }
   // Chosen while the tiles last: a lamp too big for what is left gives way to smaller ones.
   bool chosen[kMaxLights] = {};
-  uint32_t budget = kMaxLampTiles;
+  const uint32_t limit = std::min(set.tiles, kMaxLampTiles);
+  uint32_t budget = limit;
   s.unshadowed = 0;
   for (uint32_t c = 0; c < n; ++c) {
     const uint32_t cost = cost_of(lights[bins.order[cand[c].row]]);
@@ -227,7 +235,7 @@ void deal_lamp_tiles(LampShadows& s, LightBins& bins, std::span<const LocalLight
     if (!chosen[c]) continue;
     const LocalLight& l = lights[bins.order[cand[c].row]];
     const uint32_t cost = cost_of(l);
-    for (uint32_t k = 0; k + cost <= kMaxLampTiles; ++k) {
+    for (uint32_t k = 0; k + cost <= limit; ++k) {
       if (s.tiles[k].key != l.shadow || s.tiles[k].face != 0) continue;
       bool whole = true;
       for (uint32_t q = 0; q < cost; ++q) {
@@ -243,7 +251,7 @@ void deal_lamp_tiles(LampShadows& s, LightBins& bins, std::span<const LocalLight
   for (uint32_t c = 0; c < n; ++c) {
     if (!chosen[c] || first[c] != kNone) continue;
     const uint32_t cost = cost_of(lights[bins.order[cand[c].row]]);
-    for (uint32_t k = 0; k + cost <= kMaxLampTiles; ++k) {
+    for (uint32_t k = 0; k + cost <= limit; ++k) {
       bool free = true;
       for (uint32_t q = 0; q < cost; ++q) free = free && !used[k + q];
       if (!free) continue;
@@ -327,10 +335,9 @@ void prepare_lamp_shadows(gpu::Device& device, LampShadows& s, Lights& lights,
   }
   const uint32_t texels = s.settings.size / kLampTilesAcross;
   for (uint32_t k = 0; k < kMaxLampTiles; ++k) {
-    const int slot = s.settings.first_slot + static_cast<int>(k);
     if (!s.due[k]) {
       for (InstanceFamily* f : casters) {
-        if (static_cast<size_t>(slot) < f->casters.size()) {
+        if (const int slot = tile_slot(*f, k); slot >= 0) {
           f->casters[static_cast<size_t>(slot)].culled = false;
         }
       }
@@ -360,9 +367,8 @@ void prepare_lamp_shadows(gpu::Device& device, LampShadows& s, Lights& lights,
     const double at = std::max(0.25 * lamp->range_m, 1.0);
     const auto per_m = static_cast<float>(texels / (2 * tan_half * at));
     for (InstanceFamily* f : casters) {
-      if (static_cast<size_t>(slot) < f->casters.size()) {
+      if (const int slot = tile_slot(*f, k); slot >= 0)
         prepare_family_caster(device, *f, slot, per_m);
-      }
     }
   }
 }
@@ -370,7 +376,6 @@ void prepare_lamp_shadows(gpu::Device& device, LampShadows& s, Lights& lights,
 void encode_lamp_shadows(LampShadows& s, std::span<InstanceFamily* const> casters,
                          const InstancePipelines& ip, const gpu::PipelineSet& pipelines,
                          FrameRecorder& rec, wgpu::CommandEncoder& encoder) {
-  const int first = s.settings.first_slot;
   {
     wgpu::ComputePassEncoder pass = rec.compute(encoder, "lamps.cull");
     PassStat& stat = rec.current();
@@ -378,7 +383,11 @@ void encode_lamp_shadows(LampShadows& s, std::span<InstanceFamily* const> caster
     for (uint32_t k = 0; k < kMaxLampTiles; ++k) {
       if (!s.due[k]) continue;
       pass.SetBindGroup(0, s.view_groups[k]);
-      stat.dispatches += cull_shadow(pass, casters, first + static_cast<int>(k));
+      for (InstanceFamily* f : casters) {
+        if (const int slot = tile_slot(*f, k); slot >= 0) {
+          stat.dispatches += cull_shadow(pass, std::span(&f, 1), slot);
+        }
+      }
     }
     pass.End();
   }
@@ -404,7 +413,11 @@ void encode_lamp_shadows(LampShadows& s, std::span<InstanceFamily* const> caster
     pass.SetPipeline(pipelines.render(ip.p_caster));
     pass.SetBindGroup(0, s.view_groups[k]);
     pass.SetBindGroup(1, ip.empty_group);
-    stat.draws += draw_casters(pass, casters, first + static_cast<int>(k));
+    for (InstanceFamily* f : casters) {
+      if (const int slot = tile_slot(*f, k); slot >= 0) {
+        stat.draws += draw_casters(pass, std::span(&f, 1), slot);
+      }
+    }
   }
   pass.End();
   s.due = {};
