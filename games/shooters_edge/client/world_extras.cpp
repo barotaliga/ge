@@ -51,8 +51,9 @@ WorldExtrasPtr create_extras(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines
   x->weather = &weather;
   gr::create_water(d, pipelines, x->water, frame);
   gr::create_underwater(d, pipelines, x->under, frame);
-  // The pools are clear enough to see across: a third of the water's own murk.
-  x->under.look.fog = 1.0 / 3;
+  // The maps' pools are indoors: the water lit by the room, rippled, caustics on its walls and
+  // the ceiling over it.
+  gr::underwater_look("pool", x->under.look);
   gr::create_liquid(d, pipelines, x->liquids, frame);
   gr::create_flames(d, pipelines, x->flames, frame);
   gr::PrecipSettings precip;

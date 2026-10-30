@@ -502,8 +502,22 @@ digests them and a replay shows the same ones. The pass (`water.lens`) runs afte
 output's size, each drop a lens of water showing the scene behind it upside down and out of focus
 with a dark rim and a highlight; post reads its target only while the lens is wet.
 
-Not built yet (M24h3): light shafts, caustics on what is under the surface, the world above bent
-into the rim of Snell's window. The detail waves' interference shows as a regular hatch in the
+**Built (M24h3, part: the "pool" look).** Under a lit room (an indoor pool, a flooded hall) the
+water's light is read off the room seen round the eye, in half the water's hue, and the eye adapts
+to it (at most three times), so the window is a few times brighter than the water rather than a
+lamp in a black sea. The surface is rippled (three short crossing swells, `ripple` their slope):
+the window's edge wobbles with them and the world through it bends by their part of the
+refraction (the flat surface's own fisheye would reach past the frame's edges, where the copy has
+nothing). Past the window the water below is mirrored (`mirror`: total internal reflection, the
+floor and the walls seen again, fogged over their path). The caustics (`caustics`) are thin bright
+lines round dimmer cells, the edges of cells whose points wander, at two scales; they are laid on
+what stands under the surface from its face's three planes (its normal from the scene's screen
+derivatives) and fade with depth, and on the ceiling over the water seen through the window,
+fading a few metres up. Shooter's Edge's window uses it; an open lake under the day keeps the
+plain look, since every knob is 0 by default.
+
+Not built yet (M24h3): light shafts, caustics from a real surface's waves (these are a pattern),
+the world above bent into the rim of Snell's window. The detail waves' interference shows as a regular hatch in the
 glitter a few centimetres under an eye at the surface; the GPU detail FFT (M24g2) replaces them.
 
 **Under water**, the plan: one `UnderwaterLook`, derived from the body's optics and open to
