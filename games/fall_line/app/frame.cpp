@@ -398,10 +398,11 @@ void show_village(ge::gpu::Device& device, GameFrame& f,
     stood.reserve(village.buildings.size() * 2);
     for (const vg::Building& b : village.buildings) ma::building_instances(b, stood);
     r::create_family(device, f.instancing, f.buildings, "village.buildings", ma::building_meshes(),
-                     ma::building_materials(), static_cast<uint32_t>(stood.size()));
+                     ma::building_surfaces(), static_cast<uint32_t>(stood.size()));
     r::create_family_casters(device, f.instancing, f.buildings, r::kCascades);
     r::bind_family_hiz(device, f.instancing, f.buildings, f.hiz);
     r::set_instances(device, f.buildings, 0, stood);
+    f.buildings_lit.assign(village.buildings.size(), 0);
     f.families.push_back(&f.buildings);
     f.still.push_back(&f.buildings);
   }
@@ -687,6 +688,22 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     }
     if (scene.settle) r::cut_family(f.traffic);
     r::set_instances(device, f.traffic, 0, f.staged_traffic);
+  }
+  if (f.shown_village != nullptr && !f.buildings_lit.empty()) {
+    GE_ZONE("frame.windows");
+    // The windows lit at the sky's hour, written again only when one building's change.
+    const double sun = view.night.moon_key ? view.night.sun_elevation : view.sun_elevation;
+    const double hour = scene.hour < 0 ? 20.0 : scene.hour;
+    const std::vector<ge::mountain::village::Building>& buildings = f.shown_village->buildings;
+    std::vector<r::Instance> stood;
+    for (size_t k = 0; k < buildings.size(); ++k) {
+      const auto lit = static_cast<uint8_t>(ge::mountain::app::lights_on(buildings[k], hour, sun));
+      if (lit == f.buildings_lit[k]) continue;
+      f.buildings_lit[k] = lit;
+      stood.clear();
+      ge::mountain::app::building_instances(buildings[k], stood, lit != 0);
+      r::set_instances(device, f.buildings, static_cast<uint32_t>(k * 2), stood);
+    }
   }
   {
     GE_ZONE("frame.instances");

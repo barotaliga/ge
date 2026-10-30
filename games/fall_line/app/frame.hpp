@@ -188,6 +188,9 @@ struct FrameScene {
   // The lightning's channels this frame (render/bolts.hpp), drawn before the resolve; their light
   // is FrameView::flashes. Empty: none.
   std::span<const ge::render::BoltSegment> bolts = {};
+  // The sky's solar hour (sim/sky.hpp's `sky_hour`): which of the village's windows are lit
+  // once it is dark. Negative: the evening's (20:00).
+  double hour = -1;
 };
 
 struct GameFrame {
@@ -248,6 +251,8 @@ struct GameFrame {
   // The cloud layers the last frame drew (each one's base and top over the sea), for a caption.
   ge::render::Clouds drawn_clouds;
   std::vector<ge::render::Instance> staged_traffic;
+  // Each building's windows as last written, lit or dark (building_look.hpp's `lights_on`).
+  std::vector<uint8_t> buildings_lit;
   wgpu::BindGroup instance_light;
   ge::render::SunShadows shadows;
   const ge::mountain::mapgen::Level* level = nullptr;
