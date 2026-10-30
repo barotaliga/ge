@@ -93,6 +93,7 @@ ge texture check <file.tex>...   # a texture recipe's mistakes, each at its line
 ge texture bake <file.tex> --ref="seed=12 wear=0.8"   # one variant to PNG maps in build/textures
 ge check                         # the whole gate: format, doctor, build, tests
 ge lint [--base=<ref>] [<file>...]  # clang-tidy's bug-finding checks over what the change reaches
+ge lint --like-ci                   # as CI's lint job: release, the shaders, a file this build skips an error
 ge precheck [--preset=<p>]       # what CI runs, both presets: ge check, the pilot, the replays
 ge ci [<pr>] [--log=<file>]      # a red CI job's log as findings (through gh; --log: a saved one)
 ge ci <pr> --merge               # squash-merge once every check passed and it merges cleanly (on a merge-queue base it arms auto-merge, and the queue merges it)

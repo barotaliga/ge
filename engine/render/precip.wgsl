@@ -5,8 +5,8 @@
 //   long, a drop's over 1/30 s (the eye smears a drop into a line), each widened to a pixel and a
 //   half where it is thinner and thinned as much, faded out toward the box's faces (the wrap is
 //   never seen) and right at the lens, softened against the depth. A flake is lit white by the sun
-//   past the ground's horizon and the sky; a drop is clear water, a faint grey line that takes the
-//   sky's light and catches the sun.
+//   past the ground's horizon, the sky and the lamps; a drop is clear water, a faint grey line that
+//   takes the sky's light and catches the sun and the lamps it passes before.
 // - A SPLASH is a drop landing: each instance a crown that lives `splash.y` s, rising and spreading
 //   from a spot drawn afresh each life out of the screen and set on the surface under it off the
 //   depth (so it lands on any ground, a roof or a deck alike), kept where the surface faces up and
@@ -268,14 +268,18 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // A flake (and a splash's spray) is white ice lit by the sun and the sky. Seen in the near air
   // it scatters toward the eye the light of the whole sky ahead, so against a fog's or a fall's
   // grey veil it is never lost: kept well brighter than the veil.
-  var c = max(0.9 / PI * (sun + sky), veil_luminance() * 1.6);
+  // The lamps through the fall: a flake glitters every way round them, a drop flashes as it
+  // passes in front of one (the streaks of rain in a street lamp's cone, bright against the dark).
+  let v = normalize(in.rel);
+  var c = max(0.9 / PI * (sun + sky), veil_luminance() * 1.6) +
+          0.9 / PI * lamps_through(in.rel, v, in.position.xyz, 0.5, 0.5);
   if (kind > 0.5 && kind < 1.5) {
     // A drop is a lens: it bends most of the sky toward the eye (brighter than the ground it
     // falls past) and catches the sun along it.
-    let v = normalize(in.rel);
     let toward = max(dot(v, frame.sun.xyz), 0.0);
     c = max(1.15 / PI * sky + sun * (0.1 + 0.8 * pow(toward, 12.0)) / PI,
-            veil_luminance() * 1.25);
+            veil_luminance() * 1.25) +
+        lamps_through(in.rel, v, in.position.xyz, 0.85, 0.8) / PI;
   }
   let hazed = haze(c, in.position.xy * frame.size.zw, length(in.rel));
   var out: FragmentOut;

@@ -147,6 +147,10 @@ TEST(the_picture_cvars_tune_the_modern_look_and_leave_the_classic) {
   ge::console::Console con;
   lk::Picture pic;
   lk::add_cvars(con, pic);
+  CHECK(lk::look_of(pic) == lk::Look::modern);  // the window opens on the modern look
+  CHECK(pic.ce.water && pic.ce.flames);         // and every enhancement on
+  con.execute("ce_water 0; r_look classic");
+  CHECK(!pic.ce.water && pic.ce.flames && lk::look_of(pic) == lk::Look::classic);
   con.execute(
       "r_look modern; r_fx_lights 0.8; r_fx_glow 9; r_bloom 0.1; r_lava_glow 0; r_slime_glow 2");
   CHECK(lk::look_of(pic) == lk::Look::modern);
@@ -157,5 +161,5 @@ TEST(the_picture_cvars_tune_the_modern_look_and_leave_the_classic) {
   CHECK(lk::world_options(lk::Look::classic, {}, pic).dynamic_strength == 1);
   CHECK(lk::post_settings(lk::Look::classic, pic).bloom == 0);
   con.execute("r_look retro");
-  CHECK(lk::look_of(pic) == lk::Look::classic);
+  CHECK(lk::look_of(pic) == lk::Look::modern);
 }

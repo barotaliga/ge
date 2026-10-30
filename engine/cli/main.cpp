@@ -302,7 +302,8 @@ Outcome run(const Args& a) {
     l.files = a.words;
     l.base = flag_value(a, "base", "origin/main");
     l.all = has_flag(a, "all");
-    return run_lint(build_options(a), l);
+    l.like_ci = has_flag(a, "like-ci");
+    return run_lint(build_options(a, l.like_ci ? "release" : "debug"), l);  // CI lints release
   }
   if (name == "digest") {
     DigestOptions d;

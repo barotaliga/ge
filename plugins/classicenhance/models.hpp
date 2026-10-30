@@ -30,7 +30,7 @@
 namespace ge::classicenhance {
 
 // The stage's version: a rerun redoes the stage when it moves.
-inline constexpr int kModelStageVersion = 1;
+inline constexpr int kModelStageVersion = 2;  // 2: each skin also as models/<name>/skin<k>.png
 
 struct ModelOptions {
   // Called with done 0 and the file count before the first file, then after each file with its

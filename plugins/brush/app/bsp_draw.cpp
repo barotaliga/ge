@@ -651,7 +651,10 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
     pass.SetIndexBuffer(culled ? d.cull.dst : d.indices, wgpu::IndexFormat::Uint32);
     const Kind drawn[] = {kSolid, kSky, kWarp, kTele, kWater, kSlime, kLava};
     for (Kind k : drawn) {
-      if (v2 && (k == kWater || k == kSlime || k == kLava)) continue;
+      const bool own = (k == kWater && !d.options.warped_water) ||
+                       (k == kSlime && !d.options.warped_slime) ||
+                       (k == kLava && !d.options.warped_lava);
+      if (v2 && own) continue;
       if (d.range[k][1] == 0) continue;
       if (culled)
         pass.DrawIndexedIndirect(d.cull.args, cull_args_at(phase, k));
