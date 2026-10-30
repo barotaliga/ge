@@ -38,6 +38,8 @@ void add_settings(QcServer& s) {
   s.cvars.add({"sv_specprint", "0", srv,
                "bits: 1 spectators get a copy of a tracked player's centerprints, 2 sprints"});
   s.cvars.add({"sv_longfraglog", "0", srv, "1: the frag log's long lines (teams and the date)"});
+  s.cvars.add({"sv_aim", "0.93", srv,
+               "a single-player program's autoaim: the least cosine a target is aimed at (1 off)"});
   s.cvars.add({"sv_progs", "", srv, "the path of the progs to run (empty: the built-in test mod)",
                con::CvarKind::text});
   s.cvars.add({"hostname", "unnamed", info, "the server's name", con::CvarKind::text});
@@ -77,7 +79,7 @@ void after_call(sim::QcProgram& q, sh::Func fn) {
   const int slot = client_slot_of(s, self);
   if ((fn == h.set_new_parms || fn == h.set_change_parms) && slot >= 0) {
     for (int i = 0; i < 16; i++)
-      s.clients[slot].spawn_parms[i] = pg::global_float(q.vm, pg::kGParm1 + i);
+      s.clients[slot].spawn_parms[i] = pg::global_float(q.vm, s.q.layout->g.parm1 + i);
   }
 }
 
@@ -187,7 +189,7 @@ int client_slot_of(const QcServer& s, int entity) {
 void console_print(QcServer& s, const std::string& line) { s.console.push_back(line); }
 
 void set_netname(QcServer& s, int e, const std::string& name) {
-  *pg::entity_field(s.q.vm, e, pg::kFNetname) =
+  *pg::entity_field(s.q.vm, e, s.q.layout->f.netname) =
       static_cast<uint32_t>(pg::engine_string(s.q.vm, name.c_str()));
 }
 
@@ -302,8 +304,8 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
     s.sv.g.time = static_cast<float>(s.sv.time);
     sim::enter_qc(s.q, s.sv);
     if (i == 0) {
-      pg::set_global_int(vm, pg::kGMapname, pg::engine_string(vm, map.name.c_str()));
-      *pg::entity_field(vm, 0, pg::kFModel) =
+      pg::set_global_int(vm, s.q.layout->g.mapname, pg::engine_string(vm, map.name.c_str()));
+      *pg::entity_field(vm, 0, s.q.layout->f.model) =
           static_cast<uint32_t>(pg::engine_string(vm, s.models[1].c_str()));
     }
     int e = 0;
@@ -327,7 +329,8 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
     }
     bool keep = true;
     if (e > 0) {
-      const int flags = static_cast<int>(pg::as_float(*pg::entity_field(vm, e, pg::kFSpawnflags)));
+      const int flags =
+          static_cast<int>(pg::as_float(*pg::entity_field(vm, e, s.q.layout->f.spawnflags)));
       const int skip = deathmatch   ? kNotInDeathmatch
                        : skill <= 0 ? kNotEasy
                        : skill == 1 ? kNotMedium
@@ -339,7 +342,7 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
     }
     int32_t fn = -1;
     const char* classname =
-        pg::vm_string(vm, static_cast<int32_t>(*pg::entity_field(vm, e, pg::kFClassname)));
+        pg::vm_string(vm, static_cast<int32_t>(*pg::entity_field(vm, e, s.q.layout->f.classname)));
     if (keep && (classname == nullptr || classname[0] == 0)) {
       s.map_messages.push_back("no classname for entity " + std::to_string(e));
       keep = false;
@@ -356,9 +359,9 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
       sim::leave_qc(s.q);
       continue;
     }
-    pg::set_global_int(vm, pg::kGSelf, pg::entity_value(vm, e));
-    pg::set_global_int(vm, pg::kGOther, 0);
-    pg::set_global_float(vm, pg::kGTime, static_cast<float>(s.sv.time));
+    pg::set_global_int(vm, s.q.layout->g.self, pg::entity_value(vm, e));
+    pg::set_global_int(vm, s.q.layout->g.other, 0);
+    pg::set_global_float(vm, s.q.layout->g.time, static_cast<float>(s.sv.time));
     note_hook(s, HookId::spawn_function, e);
     sim::run_qc(s.q, fn);
     sim::leave_qc(s.q);
@@ -402,7 +405,7 @@ void save_change_parms(QcServer& s) {
     if (!s.clients[i].active) continue;
     call_hook(s, HookId::set_change_parms, s.q.hooks.set_change_parms, i + 1, {});
     for (int k = 0; k < 16; k++)
-      s.clients[i].spawn_parms[k] = pg::global_float(s.q.vm, pg::kGParm1 + k);
+      s.clients[i].spawn_parms[k] = pg::global_float(s.q.vm, s.q.layout->g.parm1 + k);
   }
 }
 

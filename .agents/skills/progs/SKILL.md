@@ -13,7 +13,7 @@ is the design, `docs/goals.md` M18c, M18d and M18p the rows.
 | File | What |
 | --- | --- |
 | `progs/opcodes.hpp` | Every opcode's number, name and operand kinds (one table the checker, the VM and the disassembler read) |
-| `progs/layout.hpp` | The classic multiplayer engine-side layout: the global and field offsets, counted from the tables at compile time; the optional fields and hooks found by name |
+| `progs/layout.hpp` | The engine-side layouts by program form (`Layout`: multiplayer 54730, single-player 5927): each a table, its offsets resolved by name (`g`, `f`, -1 where absent); the multiplayer constants `kG*`/`kF*`; the optional fields and hooks found by name |
 | `progs/file.hpp` | `load_progs`: the file read and checked; lookups by name (first match); the line table and its `.lines` sidecar |
 | `progs/vm.hpp` | The VM: memory, values, `call_function`, guards, faults (`fault_text`), strings, profile, trace hooks |
 | `progs/extensions.hpp` | The extension registry: named groups of builtins, fields and hooks; `install`, `offers` |
@@ -80,6 +80,11 @@ is the design, `docs/goals.md` M18c, M18d and M18p the rows.
   call, so recursion keeps them); temporaries free at the start of each statement. A field after
   `.` is looked up at file scope, so a parameter named like a field does not hide it. `&&` and
   `||` evaluate both sides; a call evaluates every argument, then fills the PARMs.
+- **Game code reads the program's form, never the constants.** Every engine global and field the
+  adapter, the server's builtins, the network and the bots touch is `q.layout->g` / `->f` (or
+  `vm_layout(vm)` in a builtin): the single-player form shifts most offsets. The `kG*`/`kF*`
+  constants are the multiplayer form's, for the test mod and the tests that build multiplayer
+  programs. A third form is a third table in `layout.cpp` (`kLayouts`), and nothing else moves.
 - **The layout decides the crc.** The engine-side globals and fields are checked by name, type
   and offset; crc 54730 is written only when they all match (a program that declares
   `end_sys_fields` and does not match gets a warning). The globals end with 2 spare words,

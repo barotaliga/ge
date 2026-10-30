@@ -443,6 +443,11 @@ bool execute(Vm& vm, int32_t fn) {
 
 void create_vm(Vm& vm, const Progs& progs, const VmLimits& limits) {
   vm.progs = &progs;
+  if (const Layout* l = progs.layout) {
+    vm.slots = {l->g.self, l->g.time, l->f.nextthink, l->f.frame, l->f.think};
+  } else {
+    vm.slots = {};
+  }
   vm.globals = progs.globals;
   vm.entityfields = progs.entityfields;
   vm.entity_bytes = progs.entityfields * 4;

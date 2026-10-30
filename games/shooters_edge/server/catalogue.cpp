@@ -148,7 +148,10 @@ bool install_catalogue(QcServer& s, std::string& error) {
               "; raise sim::kQcBuiltins";
       return false;
     }
-    if (r.extension[0] == 0) pg::set_builtin(s.q.vm, r.number, resolve(r), r.name);
+    if (r.extension[0] != 0) continue;
+    // The multiplayer server's own numbers are absent from a single-player program's table.
+    if (s.q.layout->single_player && r.number >= 79 && r.number <= 82) continue;
+    pg::set_builtin(s.q.vm, r.number, resolve(r), r.name);
   }
   s.extensions = {};
   for (int k = 0; k < kExtensionCount; k++) {

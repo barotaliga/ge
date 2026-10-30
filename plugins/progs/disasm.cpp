@@ -31,7 +31,8 @@ std::string operand(const Progs& p, int index, int v, Operand kind) {
   }
   const char* name = global_name(p, v);
   if (name[0] != 0) return name;
-  if (v >= kEngineGlobalsEnd && static_cast<size_t>(v) < p.globals.size()) {
+  const int own = p.layout != nullptr ? p.layout->globals_end : kEngineGlobalsEnd;
+  if (v >= own && static_cast<size_t>(v) < p.globals.size()) {
     const uint32_t w = p.globals[static_cast<size_t>(v)];
     if (w != 0) {
       std::snprintf(b, sizeof b, "@%d(#%.9g|%d)", v, static_cast<double>(std::bit_cast<float>(w)),

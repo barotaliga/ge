@@ -45,36 +45,36 @@ float int_float(int v) { return static_cast<float>(v); }
 
 void mirror_in(QcProgram& q, int e) {
   const sh::Edict& d = q.sv->edicts[static_cast<size_t>(e)];
-  put_f(q, e, pg::kFModelindex, int_float(d.modelindex));
-  put_v(q, e, pg::kFAbsmin, d.absmin);
-  put_v(q, e, pg::kFAbsmax, d.absmax);
-  put_f(q, e, pg::kFLtime, d.ltime);
-  put_f(q, e, pg::kFMovetype, int_float(d.movetype));
-  put_f(q, e, pg::kFSolid, int_float(d.solid));
-  put_v(q, e, pg::kFOrigin, d.origin);
-  put_v(q, e, pg::kFVelocity, d.velocity);
-  put_v(q, e, pg::kFAngles, d.angles);
-  put_v(q, e, pg::kFAvelocity, d.avelocity);
-  put_v(q, e, pg::kFMins, d.mins);
-  put_v(q, e, pg::kFMaxs, d.maxs);
-  put_v(q, e, pg::kFSize, d.size);
-  put_i(q, e, pg::kFTouch, d.touch);
-  put_i(q, e, pg::kFThink, d.think);
-  put_i(q, e, pg::kFBlocked, d.blocked);
-  put_f(q, e, pg::kFNextthink, d.nextthink);
-  put_e(q, e, pg::kFGroundentity, d.groundentity);
-  put_f(q, e, pg::kFHealth, d.health);
-  put_f(q, e, pg::kFButton0, d.button0);
-  put_f(q, e, pg::kFButton1, d.button1);
-  put_f(q, e, pg::kFButton2, d.button2);
-  put_f(q, e, pg::kFImpulse, d.impulse);
-  put_f(q, e, pg::kFFixangle, d.fixangle ? 1.0f : 0.0f);
-  put_v(q, e, pg::kFVAngle, d.v_angle);
-  put_f(q, e, pg::kFFlags, int_float(d.flags));
-  put_f(q, e, pg::kFTeleportTime, d.teleport_time);
-  put_f(q, e, pg::kFWaterlevel, int_float(d.waterlevel));
-  put_f(q, e, pg::kFWatertype, int_float(d.watertype));
-  put_e(q, e, pg::kFOwner, d.owner);
+  put_f(q, e, q.layout->f.modelindex, int_float(d.modelindex));
+  put_v(q, e, q.layout->f.absmin, d.absmin);
+  put_v(q, e, q.layout->f.absmax, d.absmax);
+  put_f(q, e, q.layout->f.ltime, d.ltime);
+  put_f(q, e, q.layout->f.movetype, int_float(d.movetype));
+  put_f(q, e, q.layout->f.solid, int_float(d.solid));
+  put_v(q, e, q.layout->f.origin, d.origin);
+  put_v(q, e, q.layout->f.velocity, d.velocity);
+  put_v(q, e, q.layout->f.angles, d.angles);
+  put_v(q, e, q.layout->f.avelocity, d.avelocity);
+  put_v(q, e, q.layout->f.mins, d.mins);
+  put_v(q, e, q.layout->f.maxs, d.maxs);
+  put_v(q, e, q.layout->f.size, d.size);
+  put_i(q, e, q.layout->f.touch, d.touch);
+  put_i(q, e, q.layout->f.think, d.think);
+  put_i(q, e, q.layout->f.blocked, d.blocked);
+  put_f(q, e, q.layout->f.nextthink, d.nextthink);
+  put_e(q, e, q.layout->f.groundentity, d.groundentity);
+  put_f(q, e, q.layout->f.health, d.health);
+  put_f(q, e, q.layout->f.button0, d.button0);
+  put_f(q, e, q.layout->f.button1, d.button1);
+  put_f(q, e, q.layout->f.button2, d.button2);
+  put_f(q, e, q.layout->f.impulse, d.impulse);
+  put_f(q, e, q.layout->f.fixangle, d.fixangle ? 1.0f : 0.0f);
+  put_v(q, e, q.layout->f.v_angle, d.v_angle);
+  put_f(q, e, q.layout->f.flags, int_float(d.flags));
+  put_f(q, e, q.layout->f.teleport_time, d.teleport_time);
+  put_f(q, e, q.layout->f.waterlevel, int_float(d.waterlevel));
+  put_f(q, e, q.layout->f.watertype, int_float(d.watertype));
+  put_e(q, e, q.layout->f.owner, d.owner);
   if (q.fields.gravity >= 0) put_f(q, e, q.fields.gravity, d.gravity);
   if (q.fields.maxspeed >= 0) put_f(q, e, q.fields.maxspeed, d.maxspeed);
   if (q.fields.movement >= 0) put_v(q, e, q.fields.movement, d.movement);
@@ -83,47 +83,48 @@ void mirror_in(QcProgram& q, int e) {
 // The loop's own (absmin, absmax: link_edict's) are not read back.
 void mirror_out(QcProgram& q, int e) {
   sh::Edict& d = q.sv->edicts[static_cast<size_t>(e)];
-  d.modelindex = float_int(get_f(q, e, pg::kFModelindex));
-  d.ltime = get_f(q, e, pg::kFLtime);
-  d.movetype = float_int(get_f(q, e, pg::kFMovetype));
-  d.solid = float_int(get_f(q, e, pg::kFSolid));
-  d.origin = get_v(q, e, pg::kFOrigin);
-  d.velocity = get_v(q, e, pg::kFVelocity);
-  d.angles = get_v(q, e, pg::kFAngles);
-  d.avelocity = get_v(q, e, pg::kFAvelocity);
-  d.mins = get_v(q, e, pg::kFMins);
-  d.maxs = get_v(q, e, pg::kFMaxs);
-  d.size = get_v(q, e, pg::kFSize);
-  d.touch = get_i(q, e, pg::kFTouch);
-  d.think = get_i(q, e, pg::kFThink);
-  d.blocked = get_i(q, e, pg::kFBlocked);
-  d.nextthink = get_f(q, e, pg::kFNextthink);
-  d.groundentity = get_e(q, e, pg::kFGroundentity);
-  d.health = get_f(q, e, pg::kFHealth);
-  d.button0 = get_f(q, e, pg::kFButton0);
-  d.button1 = get_f(q, e, pg::kFButton1);
-  d.button2 = get_f(q, e, pg::kFButton2);
-  d.impulse = get_f(q, e, pg::kFImpulse);
-  d.fixangle = get_f(q, e, pg::kFFixangle) != 0;
-  d.v_angle = get_v(q, e, pg::kFVAngle);
-  d.flags = float_int(get_f(q, e, pg::kFFlags));
-  d.teleport_time = get_f(q, e, pg::kFTeleportTime);
-  d.waterlevel = float_int(get_f(q, e, pg::kFWaterlevel));
-  d.watertype = float_int(get_f(q, e, pg::kFWatertype));
-  d.owner = get_e(q, e, pg::kFOwner);
+  d.modelindex = float_int(get_f(q, e, q.layout->f.modelindex));
+  d.ltime = get_f(q, e, q.layout->f.ltime);
+  d.movetype = float_int(get_f(q, e, q.layout->f.movetype));
+  d.solid = float_int(get_f(q, e, q.layout->f.solid));
+  d.origin = get_v(q, e, q.layout->f.origin);
+  d.velocity = get_v(q, e, q.layout->f.velocity);
+  d.angles = get_v(q, e, q.layout->f.angles);
+  d.avelocity = get_v(q, e, q.layout->f.avelocity);
+  d.mins = get_v(q, e, q.layout->f.mins);
+  d.maxs = get_v(q, e, q.layout->f.maxs);
+  d.size = get_v(q, e, q.layout->f.size);
+  d.touch = get_i(q, e, q.layout->f.touch);
+  d.think = get_i(q, e, q.layout->f.think);
+  d.blocked = get_i(q, e, q.layout->f.blocked);
+  d.nextthink = get_f(q, e, q.layout->f.nextthink);
+  d.groundentity = get_e(q, e, q.layout->f.groundentity);
+  d.health = get_f(q, e, q.layout->f.health);
+  d.button0 = get_f(q, e, q.layout->f.button0);
+  d.button1 = get_f(q, e, q.layout->f.button1);
+  d.button2 = get_f(q, e, q.layout->f.button2);
+  d.impulse = get_f(q, e, q.layout->f.impulse);
+  d.fixangle = get_f(q, e, q.layout->f.fixangle) != 0;
+  d.v_angle = get_v(q, e, q.layout->f.v_angle);
+  d.flags = float_int(get_f(q, e, q.layout->f.flags));
+  d.teleport_time = get_f(q, e, q.layout->f.teleport_time);
+  d.waterlevel = float_int(get_f(q, e, q.layout->f.waterlevel));
+  d.watertype = float_int(get_f(q, e, q.layout->f.watertype));
+  d.owner = get_e(q, e, q.layout->f.owner);
   if (q.fields.gravity >= 0) d.gravity = get_f(q, e, q.fields.gravity);
   if (q.fields.maxspeed >= 0) d.maxspeed = get_f(q, e, q.fields.maxspeed);
 }
 
 // The progs' free rule on the VM's record: these cleared, nextthink -1, the rest kept.
 void free_rule(QcProgram& q, int e) {
-  for (int f : {pg::kFModel, pg::kFTakedamage, pg::kFModelindex, pg::kFColormap, pg::kFSkin,
-                pg::kFFrame, pg::kFHealth, pg::kFClassname, pg::kFSolid}) {
+  for (int f : {q.layout->f.model, q.layout->f.takedamage, q.layout->f.modelindex,
+                q.layout->f.colormap, q.layout->f.skin, q.layout->f.frame, q.layout->f.health,
+                q.layout->f.classname, q.layout->f.solid}) {
     *field(q, e, f) = 0;
   }
-  put_v(q, e, pg::kFOrigin, {});
-  put_v(q, e, pg::kFAngles, {});
-  put_f(q, e, pg::kFNextthink, -1);
+  put_v(q, e, q.layout->f.origin, {});
+  put_v(q, e, q.layout->f.angles, {});
+  put_f(q, e, q.layout->f.nextthink, -1);
 }
 
 // Every entity in use into the VM: one the loop allocated since is cleared first, one it freed
@@ -144,13 +145,15 @@ void sync_entities_in(QcProgram& q) {
 void sync_in(QcProgram& q) {
   sh::Server& sv = *q.sv;
   sync_entities_in(q);
-  pg::set_global_int(q.vm, pg::kGSelf, pg::entity_value(q.vm, sv.g.self));
-  pg::set_global_int(q.vm, pg::kGOther, pg::entity_value(q.vm, sv.g.other));
-  pg::set_global_int(q.vm, pg::kGWorld, 0);
-  pg::set_global_float(q.vm, pg::kGTime, sv.g.time);
-  pg::set_global_float(q.vm, pg::kGFrametime, sv.g.frametime);
-  pg::set_global_int(q.vm, pg::kGNewmis, pg::entity_value(q.vm, sv.g.newmis));
-  pg::set_global_float(q.vm, pg::kGForceRetouch, sv.g.force_retouch);
+  pg::set_global_int(q.vm, q.layout->g.self, pg::entity_value(q.vm, sv.g.self));
+  pg::set_global_int(q.vm, q.layout->g.other, pg::entity_value(q.vm, sv.g.other));
+  pg::set_global_int(q.vm, q.layout->g.world, 0);
+  pg::set_global_float(q.vm, q.layout->g.time, sv.g.time);
+  pg::set_global_float(q.vm, q.layout->g.frametime, sv.g.frametime);
+  if (q.layout->g.newmis >= 0) {  // the single-player form has none
+    pg::set_global_int(q.vm, q.layout->g.newmis, pg::entity_value(q.vm, sv.g.newmis));
+  }
+  pg::set_global_float(q.vm, q.layout->g.force_retouch, sv.g.force_retouch);
 }
 
 int global_entity(QcProgram& q, int ofs) {
@@ -165,10 +168,10 @@ void sync_out(QcProgram& q) {
       mirror_out(q, e);
     }
   }
-  sv.g.self = global_entity(q, pg::kGSelf);
-  sv.g.other = global_entity(q, pg::kGOther);
-  sv.g.newmis = global_entity(q, pg::kGNewmis);
-  sv.g.force_retouch = pg::global_float(q.vm, pg::kGForceRetouch);
+  sv.g.self = global_entity(q, q.layout->g.self);
+  sv.g.other = global_entity(q, q.layout->g.other);
+  sv.g.newmis = q.layout->g.newmis >= 0 ? global_entity(q, q.layout->g.newmis) : 0;
+  sv.g.force_retouch = pg::global_float(q.vm, q.layout->g.force_retouch);
 }
 
 void call(void* ctx, sh::Server& sv, sh::Func fn) {
@@ -268,9 +271,9 @@ void qc_setorigin(pg::Vm& vm) {
   const sh::Vec3f o{pg::as_float(w[0]), pg::as_float(w[1]), pg::as_float(w[2])};
   if (e != 0 && q.live[static_cast<size_t>(e)] != 0) mirror_out(q, e);
   sh::set_origin(*q.sv, e, o);
-  put_v(q, e, pg::kFOrigin, o);
-  put_v(q, e, pg::kFAbsmin, q.sv->edicts[static_cast<size_t>(e)].absmin);
-  put_v(q, e, pg::kFAbsmax, q.sv->edicts[static_cast<size_t>(e)].absmax);
+  put_v(q, e, q.layout->f.origin, o);
+  put_v(q, e, q.layout->f.absmin, q.sv->edicts[static_cast<size_t>(e)].absmin);
+  put_v(q, e, q.layout->f.absmax, q.sv->edicts[static_cast<size_t>(e)].absmax);
 }
 
 namespace {
@@ -302,6 +305,7 @@ bool create_qc_program(QcProgram& q, const pg::Progs& progs, int max_edicts, std
   limits.max_builtins = kQcBuiltins;
   pg::create_vm(q.vm, progs, limits);
   q.vm.user = &q;
+  q.layout = progs.layout != nullptr ? progs.layout : &pg::kMultiplayerLayout;
   q.live.assign(static_cast<size_t>(max_edicts), 0);
   OptionalFields& f = q.fields;
   f.items2 = optional_field(progs, "items2");
@@ -316,15 +320,15 @@ bool create_qc_program(QcProgram& q, const pg::Progs& progs, int max_edicts, std
   f.teleported = optional_field(progs, "teleported");
   sh::Program& h = q.hooks;
   h = {};
-  h.start_frame = hook_global(progs, pg::kGStartFrame);
-  h.player_pre_think = hook_global(progs, pg::kGPlayerPreThink);
-  h.player_post_think = hook_global(progs, pg::kGPlayerPostThink);
-  h.client_kill = hook_global(progs, pg::kGClientKill);
-  h.client_connect = hook_global(progs, pg::kGClientConnect);
-  h.put_client_in_server = hook_global(progs, pg::kGPutClientInServer);
-  h.client_disconnect = hook_global(progs, pg::kGClientDisconnect);
-  h.set_new_parms = hook_global(progs, pg::kGSetNewParms);
-  h.set_change_parms = hook_global(progs, pg::kGSetChangeParms);
+  h.start_frame = hook_global(progs, q.layout->g.start_frame);
+  h.player_pre_think = hook_global(progs, q.layout->g.player_pre_think);
+  h.player_post_think = hook_global(progs, q.layout->g.player_post_think);
+  h.client_kill = hook_global(progs, q.layout->g.client_kill);
+  h.client_connect = hook_global(progs, q.layout->g.client_connect);
+  h.put_client_in_server = hook_global(progs, q.layout->g.put_client_in_server);
+  h.client_disconnect = hook_global(progs, q.layout->g.client_disconnect);
+  h.set_new_parms = hook_global(progs, q.layout->g.set_new_parms);
+  h.set_change_parms = hook_global(progs, q.layout->g.set_change_parms);
   h.spectator_connect = optional_hook(progs, "SpectatorConnect");
   h.spectator_think = optional_hook(progs, "SpectatorThink");
   h.spectator_disconnect = optional_hook(progs, "SpectatorDisconnect");
