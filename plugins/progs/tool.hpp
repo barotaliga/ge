@@ -1,5 +1,6 @@
-// THE `qc` TOOL: what `ge qc` runs (the executable `build/<preset>/progs`, plugins/progs/tool/main.cpp,
-// is `qc_main` alone). Every command reads a progs file, checks it with the loader, and answers:
+// THE `qc` TOOL: what `ge qc` runs (the executable `build/<preset>/progs`,
+// plugins/progs/tool/main.cpp, is `qc_main` alone). Every command reads a progs file, checks it
+// with the loader, and answers:
 //
 //   qc disasm <progs> [--function=<name>]   the file's counts, then every function (or one) as
 //       statements with named operands (disasm.hpp)

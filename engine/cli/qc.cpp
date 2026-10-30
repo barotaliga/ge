@@ -84,9 +84,9 @@ Outcome run_qc(const BuildOptions& o, const std::string& command, const std::str
   if (!build_targets(o, out, "progs")) return out;
   std::error_code ec;
   if (!fs::is_regular_file(qc_exe(o), ec)) {
-    out.findings.push_back({Severity::error, "this build made no `progs` executable",
-                            rel_path(o.repo, qc_exe(o)),
-                            "the progs plugin builds it (plugins/progs/tool/main.cpp); skill: progs"});
+    out.findings.push_back(
+        {Severity::error, "this build made no `progs` executable", rel_path(o.repo, qc_exe(o)),
+         "the progs plugin builds it (plugins/progs/tool/main.cpp); skill: progs"});
     return out;
   }
   std::string cmd = quoted(qc_exe(o).string()) + " " + command + " " + quoted(file);
