@@ -311,7 +311,7 @@ void run(gl::Lab& lab) {
       if (box) c = {c.x + 16, c.y + 16, c.z};
       float ce[3], rgb[3] = {0, 0, 0};
       const bool figure = k >= kPlayer;
-      if (!eye_for(c, figure ? 96 : 56, figure ? 24 : 32, ce)) continue;
+      if (!eye_for(c, figure ? 96.0f : 56.0f, figure ? 24.0f : 32.0f, ce)) continue;
       const float above[3] = {c.x, c.y, c.z + 8};
       shooters_edge::models::light_under(probe, world, above, rgb);
       const float lum = rgb[0] + rgb[1] + rgb[2];
