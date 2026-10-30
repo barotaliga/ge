@@ -19,6 +19,22 @@ bool held(const ge::input::InputState& in, uint16_t k) { return ge::input::key_h
 
 }  // namespace
 
+void add_cvars(ge::console::Console& con, ControlSettings& c) {
+  con.cvars().bind({.name = "sensitivity",
+                    .fallback = "0.066",
+                    .flags = ge::console::kArchive,
+                    .help = "the mouse's turn, degrees a count",
+                    .min = 0.001,
+                    .max = 2},
+                   &c.sensitivity);
+  con.cvars().bind({.name = "m_invert",
+                    .fallback = "0",
+                    .flags = ge::console::kArchive,
+                    .help = "the mouse's pitch upside down (0 or 1)",
+                    .kind = ge::console::CvarKind::boolean},
+                   &c.invert);
+}
+
 void turn_view(const ge::input::InputState& in, const ControlSettings& c,
                ge::shooter::Vec3f& view) {
   const double dy = in.mouse.dy * c.sensitivity * (c.invert ? -1 : 1);

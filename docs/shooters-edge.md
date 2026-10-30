@@ -114,10 +114,13 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   quits after N frames.
 - **The keys**: W A S D move, SPACE jumps, the left button fires, 1 to 8 pick a weapon (7 the
   rocket launcher), the wheel the next one. The mouse looks while the window has it (raw
-  counts, captured); ESCAPE lets it go and a click takes it back; closing the window quits.
+  counts, captured); a click takes it back after the console; closing the window quits.
+- **The main menu** (ESCAPE; ESCAPE again goes back, and out of it at its root): the classic
+  game's pages (§ The main menu), every row the game can do working and the rest dimmed.
 - **The console** (the key under ESCAPE): `map <name>` changes the map, `sv <line>` runs a line on
   the server's console (`sv timelimit 10`, `sv fraglimit 20`, `sv sv_gravity 600`),
-  `sensitivity <degrees a mouse count>` (0.066 by default), `m_invert 1`, `r_look modern` (our
+  `sensitivity <degrees a mouse count>` (0.066 by default), `m_invert 1` (both cvars, saved
+  with the player's settings), `menu_look auto|classic|modern`, `togglemenu`, `r_look modern` (our
   sky, filtered textures and real-time lights; `classic` is the default) with the picture's other
   cvars (`r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`; the bloom's from
   the next map) and `quit`.
@@ -130,9 +133,10 @@ and sky) over the engine's sky, from the first-person rig (the view height off t
 offset, stairs smoothed, a landing's dip); the game's effects (`client/world_fx.hpp`: a rocket's
 trail and glow, an explosion's sparks, smoke and light on the walls, the red flash of a hit and
 the tint under water, slime or lava); the HUD (`hud_style classic|modern|compact`); the console.
-Not yet: the other players' and items' models, the weapon in hand, sounds, menus, and the
+Not yet: the other players' and items' models, the weapon in hand, sounds, and the
 network (the rest of M18h, M18i).
 
+<<<<<<< HEAD
 ### Benchmarking a demo
 
 `benchmark <demo>` in the console, or `-benchmark <demo>` on the command line (which quits with
@@ -166,6 +170,42 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 - **Headless**: `make lab LAB=se-timedemo` runs the same loop into an offscreen target, on a
   demo written in code round the fixture halls (`--format=client` for the other format), or on
   a real one with `ARGS="--basedir=<dir> --demo=demo1"`, and charts every frame's time.
+=======
+### The main menu
+
+`games/shooters_edge/menu/` (M18k2) is the menu ESCAPE opens over the running game (the listen
+server's frames go on under it). Its pages are the classic game's:
+
+| Page | Rows |
+| --- | --- |
+| main | SINGLE PLAYER, MULTIPLAYER, OPTIONS, HELP, QUIT |
+| SINGLE PLAYER | NEW GAME (`map start`), LOAD, SAVE |
+| MULTIPLAYER | JOIN A GAME, NEW GAME (the rules, then START), SETUP (name, shirt and pants colours) |
+| NEW GAME | MAX PLAYERS, GAME TYPE (`deathmatch`), TEAMPLAY, SKILL, FRAG LIMIT, TIME LIMIT, MAP, START |
+| OPTIONS | CUSTOMIZE CONTROLS, GO TO CONSOLE, RESET TO DEFAULTS, SCREEN SIZE, BRIGHTNESS, MOUSE SPEED (`sensitivity`), MUSIC VOLUME, SOUND VOLUME, ALWAYS RUN, INVERT MOUSE (`m_invert`), LOOKSPRING, LOOKSTRAFE, VIDEO OPTIONS, CLASSIC ENHANCE |
+| VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN |
+| HELP | the keys (in the classic look, the pack's help pages) |
+| QUIT | YES (`quit`), NO |
+
+- **Every row is the console's.** A setting reads its cvar when the menu opens and writes it with
+  a console line when it changes, so the console, a config and the menu are one setting; NEW
+  GAME's rules are the listen server's cvars, run as `sv <cvar> <value>` by START before its
+  `map`. An action is a console line.
+- **What the game cannot do yet is dimmed**, shown and skipped by the focus. A row names the cvar
+  or command it needs (`kEntries` in `menu/main_menu.cpp`) and lights up by itself the day the
+  console has it (`load`, `connect`, `volume`, `viewsize` ...); TEAMPLAY and SKILL stay dimmed
+  while the baseline mod reads neither.
+- **Two looks** (`menu_look`): with `auto` (the default) the menu is drawn in the pack's own
+  pictures whenever the packs on the search path carry them (`gfx/mainmenu.lmp` and the rest,
+  coloured by `gfx/palette.lmp`, the glyphs from `gfx.wad`): the plaque, the titles, the strips
+  with the spinning cursor, the glyph rows, the help pages and the quit box on the classic
+  320 x 200 screen at a whole-number scale. Without them, or with `menu_look modern`, it is the
+  engine's menu view over the darkened game. Nothing of the pack is copied or committed.
+- **OPTIONS ▸ CLASSIC ENHANCE** opens classic-enhance's own menu in its place: the pack (the packs
+  on the search path), ENHANCE into the local cache watched stage by stage, every `ce_` switch.
+- `togglemenu`, `menu_main`, `menu_options` and `menu_quit` open it from the console or a bind.
+  The `se-menu` lab pictures every page in both looks.
+>>>>>>> origin/main
 
 ## Running your own mod
 
@@ -554,6 +594,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
 | `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost and the effects thrown (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
+| `se-menu` | picture | The main menu's pages in the modern look and in the classic look (the fixture's pictures, or the player's pack with `--pack`), every row the game cannot do yet dimmed, classic-enhance's menu under OPTIONS; at desktop, wide and phone sizes (built, M18k2) |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
 | `se-viewmodel` | picture | The game's eight free weapons in first person on the engine's corridor stage: every one held at rest, each fired in the dark lit by its own muzzle light, the shotgun switched to the rocket launcher, and the player's view-model cvars; each weapon's share of the picture, its muzzle on the screen, its flash's lift and the switch's time (built, M48d) |
 | `se-ambient` | sim | A walk through rooms under sky and by water: the ambience by leaf charted, mixed and written as WAV (built, M18j2) |
