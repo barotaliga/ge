@@ -193,7 +193,9 @@ view; the models stage (`plugins/classicenhance/models.hpp`) writes each as one 
   purpose, and smooth shading alone reads better.
 - **Frames** are morph targets, one a frame in the file's order, and the frames play as clips of
   morph weights (a frame group at its own intervals, a run of frames sharing a name stem at
-  10 a second). Units are metres, the same as a map's.
+  10 a second). Units are metres, the same as a map's. The engine's glTF loader reads the targets
+  and the weight clips back (`assets/pose.hpp`'s `sample_weights` and `morph_mesh`), so
+  `labs models --model=<cache>/models/<name>.glb` draws a cached model's clips frame by frame.
 - **Replaced effects**: `replaced.txt` lists the files the engine draws its own effect in place of
   (`plugins/classicenhance/replace.hpp`): the explosion, flare and bubble sprites, and the torches'
   painted flames, which become the brush renderer's fire. A torch model keeps its stick and cage
