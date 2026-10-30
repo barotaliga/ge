@@ -397,5 +397,28 @@ cached by CI). `GE_PLATFORM` and `GE_GPU` switch the platform layer and the GPU 
 `GE_ENCODERS` the export's encoders (off for the published package and a consumer); the
 simulation, the plugins and their tests never need either, and `GE_GPU` defaults off where
 Dawn publishes no archive (Linux arm64). `Makefile` names the everyday commands. CI (`.github/workflows/ci.yml`) runs format,
-agents-check, lint and the test matrix, with ctest in parallel, ccache on the Linux and macOS
-rows and, on a pull request, lint over only what the change reaches (the `build` skill § CI).
+agents-check, lint and the test matrix, with ctest in parallel, ccache on every row and, on a
+pull request, lint over only what the change reaches (the `build` skill § CI).
+
+**The compiler cache.** Every compile goes through ccache (or sccache) when one is on PATH
+(`cmake/CompilerCache.cmake`; `-DGE_CCACHE=OFF` turns it off, a launcher already set wins), so
+a rebuild of anything built before, in any checkout or build directory, takes its objects from the
+cache. `tools/setup-macos.sh` and `tools/setup-ubuntu.sh` install it, and `choco install ccache` on
+Windows, where MSVC's debug configurations then embed their debug information (/Z7) so a cache
+can store it. CI keeps one cache per row, restored on every run and saved from main
+(the packaging jobs read the release rows'). A cloud session's container starts with an empty
+disk, so `tools/ccache-share.sh` keeps the cache as one archive in the session's shared project
+folder: `make build`, `make test` and `make precheck` restore it into a new container before
+their first compile, and a good precheck or session-start build saves it back, at most every
+half hour. On Linux every link goes through mold or LLD when one is installed
+(`cmake/Linker.cmake`, `-DGE_FAST_LINKER=OFF` for the default): with the compiles cached,
+linking the tree's 500-odd executables is most of a rebuild. Measured in the cloud container
+(4 cores, the debug preset, a fresh build directory each time):
+
+| Build | Time |
+| --- | --- |
+| No cache, GNU ld (before) | 18 min 5 s (configure 89 s with the deps, compile and link 16 min 36 s) |
+| Empty cache (filling it) | 18 min 6 s (configure 24 s, compile and link 17 min 42 s, +7%) |
+| Full cache, GNU ld | 2 min 10 s (configure 26 s, link 1 min 45 s) |
+| Full cache, LLD | 1 min 41 s (configure 27 s, link 1 min 14 s) |
+| A new container: `make build` restoring the shared archive (544 MB, 2 s) | 1 min 37 s |
