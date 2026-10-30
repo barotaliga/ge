@@ -9,6 +9,7 @@
 #include "shooters_edge/client/timedemo.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -75,7 +76,8 @@ BenchStats bench_stats(std::span<const double> frame_s) {
   s.low1_fps = low_fps(sorted, 0.01);
   s.low01_fps = low_fps(sorted, 0.001);
   const auto pct = [&](double q) {  // the frame that q of the frames are no longer than
-    const size_t k = static_cast<size_t>((1 - q) * static_cast<double>(sorted.size() - 1) + 0.5);
+    const size_t k =
+        static_cast<size_t>(std::lround((1 - q) * static_cast<double>(sorted.size() - 1)));
     return sorted[std::min(k, sorted.size() - 1)] * 1e3;
   };
   s.p50_ms = pct(0.5);

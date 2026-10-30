@@ -236,9 +236,9 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   m.i32();  // the spawn count
   m.str();  // the game folder
   const int slot = m.u8();
-  s.player = slot & 127;  // bit 7: the recorder was a spectator
-  m.str();                // the level's title
-  m.skip(10 * 4);         // the movement settings
+  s.player = slot & 127;   // bit 7: the recorder was a spectator
+  m.str();                 // the level's title
+  m.skip(size_t{10} * 4);  // the movement settings
   s.levels++;
   s.map.clear();
   s.models.assign(1, "");

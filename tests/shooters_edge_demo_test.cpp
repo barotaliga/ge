@@ -159,9 +159,9 @@ TEST(the_search_path_finds_a_demo_with_or_without_its_extension) {
 }
 
 TEST(the_report_s_lows_are_the_slowest_frames_rate) {
-  std::vector<double> f(1000, 0.004);                                  // 250 fps
-  for (int i = 0; i < 10; i++) f[static_cast<size_t>(i * 97)] = 0.02;  // 1% at 50 fps
-  f[500] = 0.05;                                                       // one hitch, 20 fps
+  std::vector<double> f(1000, 0.004);                // 250 fps
+  for (size_t i = 0; i < 10; i++) f[i * 97] = 0.02;  // 1% at 50 fps
+  f[500] = 0.05;                                     // one hitch, 20 fps
   const cl::BenchStats s = cl::bench_stats(f);
   CHECK(s.frames == 1000);
   CHECK(near(static_cast<float>(s.max_fps), 250, 0.01f));

@@ -351,7 +351,7 @@ int main(int argc, char** argv) {
       if (!cl::timedemo_start(files, bench_ask, bench, error)) {
         console.print("benchmark: " + error);
         if (quit_after) {
-          out::error("shooters_edge: " + error);
+          out::error("shooters_edge: the benchmark did not start: " + error);
           return 2;
         }
       } else {

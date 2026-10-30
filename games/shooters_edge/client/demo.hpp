@@ -48,7 +48,7 @@ enum class DemoFormat : uint8_t { single, client };
 
 // The stats a frame carries (the single-player `clientdata`, the multiplayer `updatestat`): the
 // classic stat numbers, so the HUD reads one table for both.
-enum DemoStat : int {
+enum DemoStat : uint8_t {
   kStatHealth = 0,
   kStatAmmo = 3,
   kStatArmour = 4,

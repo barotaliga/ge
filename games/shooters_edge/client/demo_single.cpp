@@ -13,6 +13,7 @@
 // ge:keywords spawnbaseline spawnstatic temp-entity svc read_single_messages
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
+#include <cstdint>
 #include <string>
 
 #include "shooters_edge/client/demo.hpp"
@@ -22,7 +23,7 @@ namespace shooters_edge::client {
 namespace {
 
 // Message ids.
-enum : int {
+enum : uint8_t {
   kBad = 0,
   kNop = 1,
   kDisconnect = 2,
@@ -61,7 +62,7 @@ enum : int {
 };
 
 // An entity update's flags: the first byte's low 7 bits, then a second byte when kMoreBits.
-enum : int {
+enum : uint16_t {
   kMoreBits = 1 << 0,
   kOrigin1 = 1 << 1,
   kOrigin2 = 1 << 2,
@@ -78,7 +79,7 @@ enum : int {
 };
 
 // clientdata's flags.
-enum : int {
+enum : uint16_t {
   kViewHeight = 1 << 0,
   kIdealPitch = 1 << 1,
   kPunch1 = 1 << 2,
@@ -270,9 +271,6 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           ok = server_info(d, m, error);
           break;
         case kLightStyle:
-          m.u8();
-          m.str();
-          break;
         case kUpdateName:
           m.u8();
           m.str();
