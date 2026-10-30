@@ -7,8 +7,10 @@
 // ge:test tests/mountain_building_look_test.cpp
 #include "mountain/app/building_look.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <span>
 #include <utility>
 
 namespace ge::mountain::app {
@@ -57,6 +59,61 @@ constexpr std::array<Look, kBuildingLooks> kLooks{{
 }};
 constexpr uint32_t kGarageLook = 5;
 constexpr uint32_t kChurchLook = 6;
+// A lamp-lit room seen through the glass, linear rgb (tinted by kWindowNits).
+constexpr Rgb kLitRoomRgb{1.0f, 0.68f, 0.38f};
+
+// THE LIGHTS BY THE HOUR: the share of a kind's buildings lit at each hour of the solar day,
+// linear between the points, from 0 to 24.
+struct Lights {
+  double hour;
+  double share;
+};
+// Homes: up before the lifts open, home from the slopes at dusk, in bed by midnight.
+constexpr Lights kHomes[] = {{0, 0.10},  {5, 0.06},  {6.5, 0.40},  {8.5, 0.15}, {16, 0.35},
+                             {18, 0.75}, {21, 0.85}, {22.5, 0.55}, {24, 0.10}};
+// The lodge: breakfast to the restaurant's closing.
+constexpr Lights kLodge[] = {{0, 0.05},  {6.5, 0.05}, {7.5, 0.9},
+                             {22, 0.95}, {23, 0.10},  {24, 0.05}};
+// The hotels: the rooms in the evening, the night porter's after.
+constexpr Lights kHotel[] = {{0, 0.20},  {6, 0.25},  {7.5, 0.60},  {9, 0.30}, {16, 0.40},
+                             {18, 0.80}, {22, 0.75}, {23.5, 0.30}, {24, 0.20}};
+// The ticket office, the rental, the school and the shops: open to the evening, shut after.
+constexpr Lights kShops[] = {{0, 0},       {7.5, 0}, {8, 0.9}, {18.5, 0.9},
+                             {19.5, 0.25}, {21, 0},  {24, 0}};
+// First aid: the patrol's hours, then a light kept on.
+constexpr Lights kFirstAid[] = {{0, 0.3}, {8, 0.9}, {17, 0.9}, {18, 0.3}, {24, 0.3}};
+// The garage: the groomers go out after the lifts close and work into the night.
+constexpr Lights kGarage[] = {{0, 0.8}, {4, 0.8}, {6, 0.2}, {17, 0.2}, {17.5, 0.8}, {24, 0.8}};
+// The pump house: the snow guns' night shift.
+constexpr Lights kPumps[] = {{0, 0.5}, {6, 0.5}, {7, 0.1}, {18, 0.1}, {19, 0.5}, {24, 0.5}};
+// The church: the evening's service and the hours after it.
+constexpr Lights kChurch[] = {{0, 0}, {16, 0}, {16.5, 0.9}, {21, 0.9}, {21.5, 0}, {24, 0}};
+
+std::span<const Lights> schedule(BuildingKind kind) {
+  switch (kind) {
+    case BuildingKind::house:
+    case BuildingKind::flats:
+      return kHomes;
+    case BuildingKind::lodge:
+      return kLodge;
+    case BuildingKind::hotel:
+      return kHotel;
+    case BuildingKind::ticket:
+    case BuildingKind::rental:
+    case BuildingKind::school:
+    case BuildingKind::shop:
+      return kShops;
+    case BuildingKind::first_aid:
+      return kFirstAid;
+    case BuildingKind::garage:
+      return kGarage;
+    case BuildingKind::pump_house:
+      return kPumps;
+    case BuildingKind::church:
+      return kChurch;
+  }
+  return kHomes;
+}
 
 void box(render::MeshData& m, float cx, float cy, float cz, float hx, float hy, float hz,
          uint8_t part) {
@@ -554,11 +611,27 @@ std::vector<render::MeshSource> building_meshes() {
   return out;
 }
 
-std::vector<float> building_materials() {
-  std::vector<float> out;
-  out.reserve(static_cast<size_t>(kBuildingLooks) * kBuildingParts * 3);
-  for (const Look& look : kLooks) {
-    for (const Rgb& c : look) out.insert(out.end(), c.begin(), c.end());
+std::vector<render::Surface> building_surfaces() {
+  std::vector<render::Surface> out;
+  out.reserve(static_cast<size_t>(kLitSets) * 2);
+  for (const bool lit : {false, true}) {
+    for (const Look& look : kLooks) {
+      for (int part = 0; part < kBuildingParts; ++part) {
+        render::Surface s = render::matte_surface(look[static_cast<size_t>(part)].data());
+        if (part == kPane) {
+          // Glass: a glint of the sky by day; lit, a warm room behind it.
+          s.rough = 0.08f;
+          s.spec = 0.5f;
+          if (lit) {
+            const Rgb room = kLitRoomRgb;
+            std::copy(room.begin(), room.end(), s.albedo);
+            s.rough = 0.3f;
+            s.emissive_nits = kWindowNits;
+          }
+        }
+        out.push_back(s);
+      }
+    }
   }
   return out;
 }
@@ -589,10 +662,30 @@ uint32_t building_material(const vg::Building& b) {
   return look * kBuildingParts;
 }
 
-void building_instances(const vg::Building& b, std::vector<render::Instance>& out) {
+double lights_share(BuildingKind kind, double hour) {
+  const std::span<const Lights> day = schedule(kind);
+  const double h = hour - 24.0 * std::floor(hour / 24.0);
+  for (size_t i = 1; i < day.size(); ++i) {
+    if (h <= day[i].hour) {
+      const Lights& a = day[i - 1];
+      const Lights& b = day[i];
+      return a.share + (b.share - a.share) * (h - a.hour) / (b.hour - a.hour);
+    }
+  }
+  return day.back().share;
+}
+
+bool lights_on(const vg::Building& b, double hour, double sun_elevation) {
+  if (sun_elevation > kLightsOnElevation) return false;
+  // Each building's own draw, fixed, so the village goes dark one building at a time.
+  const uint32_t draw = mix(static_cast<uint32_t>(b.id) * 0x85ebca6bu + 0x7f4au) & 0xffffu;
+  return static_cast<double>(draw) / 65536.0 < lights_share(b.kind, hour);
+}
+
+void building_instances(const vg::Building& b, std::vector<render::Instance>& out, bool lit) {
   render::Instance in;
   in.mesh = static_cast<uint32_t>(b.kind);
-  in.material = building_material(b);
+  in.material = building_material(b) + (lit ? kLitSets : 0);
   in.position[0] = b.x;
   in.position[1] = b.y;
   in.position[2] = b.z;

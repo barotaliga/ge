@@ -1,6 +1,6 @@
 ---
 name: vfs
-description: "Use for engine/vfs in gameengine2: content files and archives, today the pack archive (pak: its checked directory, a file as a view into the archive, the fixture writer); later search paths, zip archives (pk3), directories and palette pictures (docs/goals.md M18a). Load it to read a file out of an archive, add an archive kind, or when a pack is refused."
+description: "Use for engine/vfs in gameengine2: content files and archives, the pack archive (pak: its checked directory, a file as a view into the archive, the fixture writer) and zip archives (stored and deflated, CRC-checked); later search paths, pk3 game directories, directories and palette pictures (docs/goals.md M18a). Load it to read a file out of an archive, add an archive kind, or when a pack is refused."
 ---
 
 # Content files
@@ -13,6 +13,7 @@ whose status file (`docs/goals/M18a.md`) says what has landed.
 | File | What |
 | --- | --- |
 | `vfs/pak.hpp/.cpp` | The pack archive: `read_pak` (the directory, every entry checked), `pak_find`, `pak_file` (a view into the archive, never a copy), `write_pak` (fixtures) |
+| `vfs/zip.hpp/.cpp` | Zip archives: `read_zip` (the end record and central directory, every entry checked against its local header), `zip_find`, `zip_unpack` (stored or deflated through `assets::inflate_raw`, CRC-32 checked), `write_stored_zip` (fixtures) |
 
 ## Rules
 
@@ -28,5 +29,5 @@ whose status file (`docs/goals/M18a.md`) says what has landed.
 
 ## Tests and labs
 
-`tests/vfs_pak_test.cpp` (a round trip, every damage refused). The `bsp` lab's `--pak` reads its
+`tests/vfs_pak_test.cpp` and `tests/vfs_zip_test.cpp` (a round trip, every damage refused). The `bsp` lab's `--pak` reads its
 maps and the palette out of a pack (`brush` skill).
