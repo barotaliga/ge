@@ -245,7 +245,9 @@ jobs:
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_BASEDIR: ${{ github.workspace }}
-      CCACHE_MAXSIZE: 500M
+      # The debug preset's ASan objects fill about 1.1 GB; at 500 MB the row evicted most of what
+      # main saved and hit 20%.
+      CCACHE_MAXSIZE: ${{ matrix.preset == 'debug' && '1500M' || '800M' }}
     steps:
       - uses: actions/checkout@v5
       - name: Install Ninja and ccache (macOS)
@@ -314,7 +316,7 @@ jobs:
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_BASEDIR: ${{ github.workspace }}
-      CCACHE_MAXSIZE: 500M
+      CCACHE_MAXSIZE: 800M
     steps:
       - uses: actions/checkout@v5
       - name: The week, for the apt cache's key
@@ -356,7 +358,11 @@ jobs:
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_BASEDIR: ${{ github.workspace }}
-      CCACHE_MAXSIZE: 500M
+      CCACHE_MAXSIZE: 800M
+      # Depend mode: a miss takes its headers from MSVC's /showIncludes (Ninja asks for it anyway)
+      # instead of running the preprocessor first, which made the first, empty-cache build take
+      # 34 minutes against 19 with no cache.
+      CCACHE_DEPEND: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/cache@v4
@@ -406,7 +412,7 @@ jobs:
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_BASEDIR: ${{ github.workspace }}
-      CCACHE_MAXSIZE: 500M
+      CCACHE_MAXSIZE: 800M
     steps:
       - uses: actions/checkout@v5
         with:

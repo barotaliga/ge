@@ -43,7 +43,8 @@ jobs:
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_BASEDIR: ${{ github.workspace }}
-      CCACHE_MAXSIZE: 500M
+      CCACHE_MAXSIZE: 800M
+      CCACHE_DEPEND: ${{ matrix.os == 'windows-2025' && 'true' || 'false' }}
       CACHE_ROW: ${{ matrix.os == 'windows-2025' && 'windows-2025-msvc' || (matrix.os == 'macos-latest' && 'macos-15-clang++' || 'ubuntu-24.04-g++') }}
     steps:
       - uses: actions/checkout@v7
