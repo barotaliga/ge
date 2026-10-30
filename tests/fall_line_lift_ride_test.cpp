@@ -37,7 +37,7 @@ namespace {
 namespace fs = fall_line::sim;
 namespace mg = ge::mountain::mapgen;
 namespace ml = ge::mountain::lifts;
-constexpr const char* kGolden = "tests/golden/fall_line_outing.txt";
+[[maybe_unused]] constexpr const char* kGolden = "tests/golden/fall_line_outing.txt";
 constexpr double kSeed = 38;
 constexpr int kVersion = 10;
 

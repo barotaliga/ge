@@ -307,7 +307,7 @@ std::optional<LaneRoute> route_lane(const ge::core::Heightfield& ground, const N
     const size_t k = p * M + size_t(m);
     if (base + step < cost[k]) {
       cost[k] = base + step;
-      from[k] = int64_t(o * M + size_t(m0));
+      from[k] = int64_t(o) * int64_t(M) + int64_t(m0);
     }
   };
   for (int r = 0; r <= rows; r++) {

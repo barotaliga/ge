@@ -76,11 +76,24 @@ fi
 files=("${kept[@]}")
 
 (( ${#files[@]} )) || { echo "lint: nothing to lint."; exit 0; }
+
+# On macOS the compile database is Apple Clang's, which names no SDK and reads the SDK's own libc++,
+# newer than clang-tidy 18 can parse: give clang-tidy the SDK for the C headers and its own
+# install's libc++ (llvm@18's, tools/setup-macos.sh) for the C++ ones.
+extra=()
+if [[ "$(uname -s)" == Darwin ]]; then
+  libcxx="$(dirname "$(realpath "$(command -v clang-tidy)")")/../include/c++/v1"
+  [[ -d "$libcxx" ]] ||
+    { echo "lint: no libc++ headers beside clang-tidy ($libcxx); run tools/setup-macos.sh for llvm@18's." >&2; exit 2; }
+  extra=(--extra-arg=-isysroot "--extra-arg=$(xcrun --show-sdk-path)" --extra-arg=-nostdinc++
+    --extra-arg=-isystem "--extra-arg=$libcxx")
+fi
+
 echo "lint: clang-tidy over ${#files[@]} files, $jobs at a time."
 # xargs exits non-zero when any clang-tidy did. Its progress and "N warnings generated" lines
 # (the suppressed ones, from system headers) are dropped, so only findings are printed.
 set +e
-printf '%s\n' "${files[@]}" | xargs -P "$jobs" -n 4 clang-tidy -p "$build" --quiet 2>&1 |
+printf '%s\n' "${files[@]}" | xargs -P "$jobs" -n 4 clang-tidy -p "$build" --quiet ${extra[@]+"${extra[@]}"} 2>&1 |
   grep -vE '^[0-9]+ warnings? (and [0-9]+ errors? )?generated\.$|^\[[0-9]+/[0-9]+\] Processing file |^Suppressed [0-9]+ warnings|^Use -header-filter|^\.?$'
 status=${PIPESTATUS[1]}
 set -e

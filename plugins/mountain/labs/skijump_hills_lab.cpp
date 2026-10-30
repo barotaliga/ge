@@ -234,8 +234,11 @@ void run(ge::lab::Lab& lab) {
       }
     }
   }
+  // NOLINTBEGIN(clang-analyzer-cplusplus.Move): the analyzer's model of libc++'s sort compares an
+  // element it moved from; the sort itself is sound
   std::sort(rows.begin(), rows.end(),
             [](const auto& a, const auto& b) { return std::stod(a[7]) < std::stod(b[7]); });
+  // NOLINTEND(clang-analyzer-cplusplus.Move)
   lab.table({"the hills, least earth moved first (m)",
              {"map.hill", "heading", "tower", "raised", "dig", "fill", "cut", "rms", "arena",
               "drop", "design gate", "digest"},
