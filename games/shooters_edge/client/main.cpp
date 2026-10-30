@@ -187,6 +187,9 @@ static int run_main(int argc, char** argv) {
   se::add_cvars(console, hud);
   se::HudArt art = se::free_art();
   art.finish();
+  // The HUD's feed shows the game's messages (hud.notify, below), so the console's own lines at
+  // the top of the screen would show each a second time; a cfg or a + word can turn them back on.
+  console.cvars().set("con_notifylines", "0", ge::console::Source::code);
   ge::console::start(console, args.plus);
   console.cvars().apply_latched();
 
