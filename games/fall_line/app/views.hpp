@@ -10,7 +10,8 @@
 // ge:summary Fall Line's named camera views over a map and the map's day for the renderer
 // ge:keywords fall-line views named-views camera-rig start piste vista lookback aerial sun day
 // ge:keywords wood sunlit-wood tree-shadows corduroy powder glitter snow-close snow_spot
-// ge:keywords view_names make_view day_view chase_view chase-camera run-moment
+// ge:keywords view_names make_view day_view chase_view chase-camera run-moment look-at-sun
+// ge:keywords look-at-moon aim_at
 // ge:skill render
 #pragma once
 
@@ -32,8 +33,9 @@ std::span<const std::string_view> view_names();
 
 // The view's camera over `level`, under the map's own day (`out`'s sun is read: `wood` finds the
 // wood that sun lights best). `<view>@<deg>[:<pitch deg>[:<lens deg>]]` turns a named view
-// clockwise by so much (and sets its pitch), so a lab can look round from its eye. False for an
-// unknown name.
+// clockwise by so much (and sets its pitch), so a lab can look round from its eye;
+// `<view>@sun[:<lens deg>]` and `<view>@moon[:<lens deg>]` aim the eye at the sun or the moon at
+// the map's hour (so `day_view` first). False for an unknown name.
 bool make_view(const ge::mountain::mapgen::Level& level, std::string_view name,
                ge::render::FrameView& out);
 

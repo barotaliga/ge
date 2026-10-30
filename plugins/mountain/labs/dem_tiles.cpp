@@ -17,7 +17,7 @@
 #include <iterator>
 #include <span>
 
-#include "assets/inflate.hpp"
+#include "core/inflate.hpp"
 #include "mountain/labs/fetch.hpp"
 
 namespace ge::mountain::labs {
@@ -87,7 +87,7 @@ struct DemTile {
       error = "a block runs past the file's end";
       return nullptr;
     }
-    const auto raw = ge::assets::inflate_zlib(
+    const auto raw = ge::core::inflate_zlib(
         std::span<const uint8_t>(file.data() + offsets[i], size_t(counts[i])));
     const size_t row_bytes = size_t(tw) * 4;
     if (!raw || raw->size() < row_bytes * size_t(th)) {

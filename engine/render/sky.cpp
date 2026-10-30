@@ -40,7 +40,7 @@ wgpu::BindGroupLayout frame_layout(gpu::Device& device) {
       device, "render.frame",
       {Slot::uniform, Slot::sampler, Slot::texture, Slot::texture, Slot::texture, Slot::texture_3d,
        Slot::storage_read, Slot::texture, Slot::texture_3d, Slot::sampler, Slot::storage_shade,
-       Slot::texture_3d, Slot::texture},
+       Slot::texture_3d, Slot::texture, Slot::depth, Slot::compare},
       wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment | wgpu::ShaderStage::Compute);
 }
 
@@ -82,6 +82,19 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   // Zeroed at creation: no light.
   sky.no_lights =
       make_buffer(device, "sky.no_lights", kRefsOffset + 16, wgpu::BufferUsage::Storage);
+  // Zeroed at creation too: nothing cast (no light reads it while its shadow slot is -1).
+  sky.no_lamp_atlas =
+      make_texture(device, "sky.no_lamp_atlas", 1, 1, 1, kDepthFormat, TU::TextureBinding);
+  sky.no_lamp_atlas_view = sky.no_lamp_atlas.CreateView();
+  {
+    wgpu::SamplerDescriptor cd{};
+    cd.label = "render.lamp_compare";
+    cd.magFilter = cd.minFilter = wgpu::FilterMode::Linear;
+    cd.addressModeU = cd.addressModeV = wgpu::AddressMode::ClampToEdge;
+    // Lit where the receiver is at least as near the lamp as the atlas's caster (reversed z).
+    cd.compare = wgpu::CompareFunction::GreaterEqual;
+    sky.lamp_compare = device.device.CreateSampler(&cd);
+  }
 
   wgpu::SamplerDescriptor sd{};
   sd.label = "render.linear_clamp";
@@ -200,12 +213,13 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
 wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
                             const wgpu::Buffer& uniforms, const Sky& sky,
                             const wgpu::Buffer& lights, const wgpu::TextureView& fog,
-                            const wgpu::TextureView& ao) {
+                            const wgpu::TextureView& ao, const wgpu::TextureView& lamp_atlas) {
   return make_group(
       device, "render.frame", layout,
       {uniforms, sky.sampler, sky.transmittance_view, sky.multiscatter_view, sky.sky_view_view,
        sky.aerial_view, sky.light, sky.moon_view_view, sky.cloud.view, sky.cloud.sampler,
-       lights ? lights : sky.no_lights, fog ? fog : sky.no_fog_view, ao ? ao : sky.blank_view});
+       lights ? lights : sky.no_lights, fog ? fog : sky.no_fog_view, ao ? ao : sky.blank_view,
+       lamp_atlas ? lamp_atlas : sky.no_lamp_atlas_view, sky.lamp_compare});
 }
 
 void prepare_sky(Sky& sky, const FrameView& view) {

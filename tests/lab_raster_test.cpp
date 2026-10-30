@@ -9,8 +9,8 @@
 #include <string>
 #include <vector>
 
-#include "assets/inflate.hpp"
 #include "check.hpp"
+#include "core/inflate.hpp"
 #include "lab/png.hpp"
 #include "lab/raster.hpp"
 
@@ -95,7 +95,7 @@ TEST(inflate_reads_every_block_kind) {
   const std::vector<uint8_t> fixed{120, 218, 43,  201, 72,  85,  40,  206, 203, 47,  215,
                                    81,  40,  193, 96,  41,  228, 231, 129, 217, 185, 249,
                                    165, 121, 37,  137, 153, 121, 0,   96,  221, 15,  250};
-  const auto a = ge::assets::inflate_zlib(fixed);
+  const auto a = ge::core::inflate_zlib(fixed);
   CHECK(a && std::string(a->begin(), a->end()) == "the snow, the snow, the snow on the mountain");
   const std::vector<uint8_t> dynamic{
       120, 218, 213, 139, 219, 9,   128, 48,  16,  4,   91,  217, 2,   196, 6,   172, 38,  144,
@@ -106,19 +106,19 @@ TEST(inflate_reads_every_block_kind) {
   std::string want;
   for (int i = 0; i < 6; i++) want += "ridge and valley, spur and gully; ";
   want += "the fall line runs down the map from the summit to the floor.";
-  const auto b = ge::assets::inflate_zlib(dynamic);
+  const auto b = ge::core::inflate_zlib(dynamic);
   CHECK(b && std::string(b->begin(), b->end()) == want);
   // A torn stream, and one whose checksum is off, are refused.
-  CHECK(!ge::assets::inflate_zlib(std::span(dynamic).first(40)));
+  CHECK(!ge::core::inflate_zlib(std::span(dynamic).first(40)));
   std::vector<uint8_t> bad = fixed;
   bad.back() ^= 1;
-  CHECK(!ge::assets::inflate_zlib(bad));
+  CHECK(!ge::core::inflate_zlib(bad));
   // The same blocks with no zlib wrapper, as a zip entry stores them: read to the size the
   // container states, and refused at any other size.
   const std::span<const uint8_t> raw = std::span(dynamic).subspan(2, dynamic.size() - 6);
-  const auto c = ge::assets::inflate_raw(raw, want.size());
+  const auto c = ge::core::inflate_raw(raw, want.size());
   CHECK(c && std::string(c->begin(), c->end()) == want);
-  CHECK(!ge::assets::inflate_raw(raw, want.size() + 1));
+  CHECK(!ge::core::inflate_raw(raw, want.size() + 1));
   // Stored blocks: the PNG writer's image data back to its filtered rows.
   ge::lab::Picture pic = ge::lab::create_picture(300, 200, {10, 20, 30});
   const std::vector<uint8_t> png = ge::lab::encode_png(pic);
@@ -132,7 +132,7 @@ TEST(inflate_reads_every_block_kind) {
     }
     at += 12 + len;
   }
-  const auto rows = ge::assets::inflate_zlib(idat);
+  const auto rows = ge::core::inflate_zlib(idat);
   CHECK(rows && rows->size() == size_t(200) * (1 + 300 * 4));
   CHECK(rows && (*rows)[1] == 10 && (*rows)[2] == 20 && (*rows)[3] == 30);
 }

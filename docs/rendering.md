@@ -474,6 +474,13 @@ stretch it. `raster.hpp` is the CPU reference every lab draws with (`viewmodel`,
 corridor and its six named lights). The GPU pass (`render/viewmodel.hpp`, M48c) draws the same
 light per pixel and is held to that reference.
 
+**A game's own set** sits on top of these three answers. Shooter's Edge's (`games/shooters_edge/view`,
+M48d) is its eight free models, each with its own mount (held length, grip), offset from the eye,
+kick, refire and muzzle light. Its hand switches weapons by putting one away and raising the
+next, and lights the muzzle on every shot. The player moves it with `r_drawviewmodel`,
+`r_viewmodel_fov`, `cl_gunx`/`cl_guny`/`cl_gunz` and `cl_gunsway`. The `se-viewmodel` lab
+pictures every weapon held, fired in the dark, switched and moved by the cvars.
+
 **The GPU pass** ("viewmodel") draws after the world and its transparent effects and before the TAA
 and post, so the HUD lands over it.
 
@@ -686,7 +693,7 @@ based model (§ Materials).
 
 ### Local lights
 
-**As built (M39a)** (`render/lights.hpp`, `wgsl/lights.wgsl`). A game keeps its own list of
+**As built (M39a, M39c)** (`render/lights.hpp`, `render/lamp_shadows.hpp`, `wgsl/lights.wgsl`). A game keeps its own list of
 `LocalLight`s and hands it to `prepare_lights` each frame; nothing about a light is stored
 between frames.
 
@@ -722,8 +729,45 @@ between frames.
   point, and a game picks where its eye adapts (the `gpu-lights` lab takes the geometric mean
   of a few points of what it looks at). Metering it off the picture is the eye adaptation row's.
 
-**Not yet**: local lights' shadows (a shadow atlas of spot and cube faces, cached for lamps that
-stand still: M39c), and the lamps on particles and water.
+**Shadows (M39c)** (`render/lamp_shadows.hpp`). One depth atlas (2048² by default) of 8 × 8
+square tiles, each a perspective view from a lamp: a spot's one round its axis (as wide as its
+outer cone, at most 80°), a point light's six, a cube's faces in a run (+x, −x, +y, −y, +z, −z),
+each 6 % wider than 90° so the filter's taps near a face's edge still read that face. Depth is
+reversed (near / the distance along the view, cleared to 0 where nothing casts), so the
+instances' caster pipeline and the sun's comparison (lit where the receiver is at least as near)
+serve unchanged.
+
+- **The deal.** A light casts only if the game gives it a `shadow` key, nonzero and the same from
+  frame to frame. `deal_lamp_tiles` (CPU, deterministic) ranks the keyed lights the bins kept by
+  the light they put on the eye, candela × level / (d² + 1 m²), so near, bright and in view wins
+  and a lamp outside the view is not in the running at all; a lamp already holding tiles counts
+  1.5 times, so two lamps of a like score do not trade tiles every frame. Each takes its run
+  while the 64 tiles last (a held lamp keeps its own run in place); the rest light unshadowed.
+  A light's GPU row's shadow slot is its first tile, and the tiles' matrices and atlas corners
+  sit in the light buffer after the lights.
+- **The cache.** A tile is redrawn only when it is due: new, its lamp moved or turned, or a
+  mover (a sphere the game names each frame: a figure, a door, a thrown crate) touches its view
+  within the lamp's range. The atlas is loaded, not cleared; a due tile is cleared by one
+  triangle writing depth 0 over its viewport and its casters drawn after. A still lamp that sees
+  nothing move costs nothing a frame; the `gpu-lights` lab holds a still frame to redrawing no
+  tile and a shoved crate to redrawing only the tiles that see it. A muzzle flash is a lamp like
+  any other with its shot's key: its six tiles are drawn the frame it fires and kept for the
+  few frames it lasts.
+- **The casters** are the instance families made with caster slots `first_slot` onward (one a
+  tile, `create_family_casters`); tile k culls into its slot by its view's planes and the lamp's
+  range and draws at a LOD picked by its texels a metre a quarter of the range out. A family
+  made without them casts no lamp's shadow, which is how a lamp's own bulb or flame stays out of
+  its tiles. The terrain casts none (the ground under a lamp only receives).
+- **The receivers.** `local_lights` multiplies each lamp's light by `lamp_shadow`: a point
+  light's face is the one the way to the pixel leaves by, the point is moved off its surface by a
+  texel and a half of the tile at its distance and drawn 0.4 % nearer the lamp, and four rotated
+  taps (each a hardware 2 × 2 comparison, turned per pixel by interleaved gradient noise and per
+  frame, so the TAA averages them) are held inside the tile. The atlas is group 0's binding 13
+  and its comparison sampler 14 (`frame_group`'s `lamp_atlas`; without one, the sky's empty 1 × 1
+  atlas, never read while every slot is −1).
+
+**Not yet**: the lamps' shadows in the air (`light_inscatter`, the fog's light shafts), a brush
+map's world casting into the atlas, and the lamps on particles and water.
 
 ### Materials
 
@@ -1640,6 +1684,13 @@ drain and dry by the wind and the sun). The picture reads the same numbers:
   rotated by a hash of the position break it into spots, so a fall scatters out from where the
   slant puts it instead of landing as the window's square. A particle is kept by its open share
   against a hash of its own, so the edge thins rather than fades.
+- THE RAIN ON WATER (M36d): `Weather::rain` (mm/h of liquid) rides in the frame's `mist.zw` as
+  the drops of 2 mm and more landing a square metre a second (`wind::drops_per_m2s`) and their
+  mean size (`wind::mean_drop_over`); `water.wgsl`'s `rain_rings` deals them to cells and rings
+  the water under each body's open sky, and hands the crests too fine for a pixel to the
+  glitter's roughness, so a lake far off in a downpour is a dull grey (`docs/water.md` § Rain
+  on the water). The rain's sound by its rate is `engine/water/rain.hpp` (the `rain-audition`
+  lab).
 
 **The weather on a BSP map (M36e).** `plugins/brush/app/bsp_weather.hpp` turns twelve cvars
 (`sv_weather`, `sv_precip`, `sv_rain`, `sv_wind`, `sv_winddir`, `sv_gust` the server's;

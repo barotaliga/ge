@@ -101,6 +101,21 @@ TEST(a_drop_falls_near_ten_metres_a_second_and_a_flake_near_one) {
   CHECK(gw::fall_speed({0.5, 0.5}) > 1 && gw::fall_speed({0.5, 0.5}) < gw::fall_speed(rain(0.5)));
 }
 
+TEST(a_heavier_rain_lands_more_drops_and_more_big_ones) {
+  CHECK(gw::drops_per_m2s(0, 0.5) == 0);
+  // About a thousand drops a square metre a second at 1 mm/h, most of them under a millimetre.
+  CHECK(gw::drops_per_m2s(1, 0) > 1000 && gw::drops_per_m2s(1, 0) < 1600);
+  CHECK(gw::drops_per_m2s(1, 1) > 100 && gw::drops_per_m2s(1, 1) < 200);
+  double last = 0;
+  for (const double rate : {0.3, 1.0, 3.0, 10.0, 50.0, 150.0}) {
+    const double n = gw::drops_per_m2s(rate, 1);
+    CHECK(n > last);
+    CHECK(gw::drops_per_m2s(rate, 0.5) > n);
+    CHECK(gw::mean_drop_over(rate, 2) > 2.1 && gw::mean_drop_over(rate, 2) < 3);
+    last = n;
+  }
+}
+
 TEST(snow_hides_more_than_rain_and_a_heavier_fall_more) {
   CHECK(gw::visibility_of(rain(0)) == 20000);
   CHECK(gw::visibility_of(rain(0.9)) < 1000);
@@ -197,6 +212,11 @@ TEST(every_number_keeps_its_golden) {
   for (const double y : {900.0, 1250.0, 1400.0, 1600.0}) {
     got.push_back({ge::test::bits(gw::rain_share_at(y, 1500))});
   }
+  for (const double rate : {0.3, 2.5, 25.0}) {
+    got.push_back({ge::test::bits(gw::drops_per_m2s(rate, 0.5)),
+                   ge::test::bits(gw::drops_per_m2s(rate, 1)),
+                   ge::test::bits(gw::mean_drop_over(rate, 2))});
+  }
   gw::Wet w;
   for (const double rate : {3.0, 3.0, 0.0, 12.0, 0.0}) {
     w = gw::step_wet(w, rate, gw::dry_rate(4, 0.5), 900);
@@ -218,7 +238,9 @@ TEST(every_number_keeps_its_golden) {
   }
   if (write) {
     std::ofstream out(ge::test::root_path(kGolden));
-    out << "# rate, fall speed, visibility, tier per fall; rain share per height; the wet ground, "
+    out << "# rate, fall speed, visibility, tier per fall; rain share per height; the drops "
+           "landing "
+           "per rate; the wet ground, "
            "the snow's cover per step; a storm's flash per time "
            "(wind_precip_test)\n";
     for (const auto& row : got) {

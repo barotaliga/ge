@@ -1,6 +1,7 @@
 // LAB `gpu-water`: THE WATER'S SURFACE DRAWN (render/water.hpp), on the software adapter, over
 // two scenes: a lake in a bowl of hills (its shore shelving from the sand to 25 m) and a sea off
-// a beach. Named views: the calm lake and the same lake in a fresh wind; the sea under a light
+// a beach. Named views: the calm lake and the same lake in a fresh wind; the lake in a light and a
+// heavy rain (its drops' rings); the sea under a light
 // air, a fresh breeze and a gale; the sea at sunset into the sun's path; the shallows from above
 // in six looks (the colour from what is in the water, water/optics.hpp); and a slow fly-out
 // over the sea, every distance's band in one strip. It holds the GPU's crest to the
@@ -10,7 +11,7 @@
 //
 // ge:summary Lab: the water's surface drawn: lake, sea by wind, sunset, looks, the fly-out
 // ge:keywords lab gpu water surface lake sea sunset glitter fresnel refraction looks fly-out
-// ge:keywords crest detail-waves picture software-adapter
+// ge:keywords crest detail-waves picture software-adapter rain rain-rings
 // ge:skill render water labs
 // ge:test tests/render_water_test.cpp
 #include <algorithm>
@@ -20,6 +21,7 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "core/heightfield.hpp"
@@ -39,6 +41,7 @@
 #include "water/float.hpp"
 #include "water/world.hpp"
 #include "wind/field.hpp"
+#include "wind/precip.hpp"
 
 namespace {
 
@@ -183,10 +186,11 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    placeholders(lab,
-                 {"lake-calm", "lake-fresh", "wake", "wake-high", "rings", "looks", "sea-light",
-                  "sea-fresh", "sea-gale", "sunset", "fly-out", "river", "waterfall"},
-                 w, h);
+    placeholders(
+        lab,
+        {"lake-calm", "lake-fresh", "wake", "wake-high", "rings", "rain-light", "rain-heavy",
+         "looks", "sea-light", "sea-fresh", "sea-gale", "sunset", "fly-out", "river", "waterfall"},
+        w, h);
     return;
   }
   std::vector<std::unique_ptr<ge::gpu::Device>> devices;
@@ -315,6 +319,53 @@ void run(gl::Lab& lab) {
              draw(d, lake, near), Det::measured);
     gr::set_water_wakes(d, lake.water, 0, gw::Wakes{}, 0);
     gr::clear_particles(d, lake.particles);
+  }
+
+  // THE RAIN on the calm lake: its drops' rings (water.wgsl's `rain_rings`), from a jetty 1.5 m
+  // over the water, looking down at it from two metres out to the far shore, under an overcast.
+  // A ring's crests are centimetres, so a narrow picture keeps only the nearest: each view fails
+  // under its own share of the picture changed (the smoke's 256 px keeps a few light rings).
+  {
+    gw::World world = lake_world(0.5, "nordic-clear");
+    gr::set_water_body(d, lake.water, 0, world.bodies[0]);
+    gr::FrameView jetty =
+        view_at(kLakeX - 290, kLakeLevel + 1.5, kLakeZ - 40, 1.2, -0.5, 0.5, 2.4, 12.0);
+    jetty.weather.cover = 0.9;
+    jetty.weather.sun_pass = 0.25;
+    jetty.weather.deck_light = 0.7;
+    const gl::Picture dry = draw(d, lake, jetty);
+    for (const auto& [id, rate, least, title, look] :
+         {std::tuple{"rain-light", 2.5, 0.001, "A LIGHT RAIN ON THE LAKE",
+                     "rings scattered over the near water, each a few crests running out from "
+                     "where a drop went in, the mirror between them still; farther off the "
+                     "reflection only a little dulled"},
+          std::tuple{"rain-heavy", 25.0, 0.02, "A HEAVY RAIN ON THE LAKE",
+                     "the near water crowded with rings over one another, the reflection broken "
+                     "up into a grey sheen; far off the lake a dull, even grey"}}) {
+      gr::FrameView v = jetty;
+      v.weather.rain = rate;
+      const gl::Picture pic = draw(d, lake, v);
+      const double share = changed(pic, dry);
+      lab.metric(std::string(id) + ".drops", ge::wind::drops_per_m2s(rate, 2.0), "/m2/s",
+                 Det::measured);
+      lab.metric(std::string(id) + ".ringed-share", share, "", Det::measured);
+      if (share < least) {
+        lab.fail(std::string("the ") + id + " view shows no rings (" + fixed(share * 100, 1) +
+                     "% changed by the rain)",
+                 "Check the frame's mist.z (render/frame.cpp) and rain_rings "
+                 "(engine/render/water.wgsl). Skill: render.");
+      }
+      lab.shot({id,
+                title,
+                "The calm lake from a jetty 1.5 m over the water, looking down at it from two "
+                "metres out to the far shore under an overcast, the rain at " +
+                    fixed(rate, 1) + " mm/h: " + fixed(ge::wind::drops_per_m2s(rate, 2.0), 0) +
+                    " drops of 2 mm and more a square metre a second, each setting off a "
+                    "ring that runs out at 0.25 m/s for about a second.",
+                look,
+                {{"rain", fixed(rate, 1) + " mm/h"}, {"wind", "0.5 m/s"}}},
+               pic, Det::measured);
+    }
   }
 
   // THE LOOKS: the shallows from above, a sandy shelf from 0 to 6 m deep.
@@ -548,8 +599,8 @@ const gl::LabSpec kSpec{
     "engine",
     "engine/render/water.hpp",
     "render",
-    "Does the water's surface draw a lake and a sea by their wind, at sunset, in every look and "
-    "at every distance, with the simulation's crest?",
+    "Does the water's surface draw a lake and a sea by their wind, the rain's rings by its rate, "
+    "at sunset, in every look and at every distance, with the simulation's crest?",
     {{"width", "640", "a view's width, px (16:9)"}},
     "--width=256",
     run};
