@@ -42,6 +42,20 @@ void add_cvars(con::Console& c, Settings& s) {
           .kind = CvarKind::boolean},
          &s.vsync);
 
+  v.bind({.name = "r_quality",
+          .fallback = "custom",
+          .flags = kStartup,
+          .help = "the picture's quality: custom (each r_ setting as set), low, medium, high, top, "
+                  "auto (the best inside r_budget) or 0..1 (cheapest to best, by measured cost)",
+          .kind = CvarKind::text},
+         &s.quality);
+  v.bind({.name = "r_budget",
+          .fallback = "8.3",
+          .flags = kStartup,
+          .help = "the GPU time a frame may take with r_quality auto, ms (8.3: 120 Hz)",
+          .min = 1,
+          .max = 100},
+         &s.budget_ms);
   v.bind({.name = "r_taa",
           .fallback = "1",
           .flags = kStartup,

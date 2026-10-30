@@ -6,10 +6,11 @@ predicted move), as rules and numbers in our words (README.md, the rules). The p
 reads this note, never the existing implementations.
 
 **Where each fact came from.** A research session (2026-10-30) read the 1996 source release's
-single-player server and the single-player game program's QC. Nothing was measured yet: like
-M18o1, the parity target will be recorded vectors (`vectors/framemove.txt`, written by a research
-session that builds the original move outside this tree and drives it over the scenes of
-`movement.md` § Test vectors). Until then, every number here is `verify`.
+single-player server and the single-player game program's QC, then built the original move on
+its own outside this tree (the server's player step and the program's jump, water drag and water
+jump, over the world's hulls), drove it with scripted inputs over the scenes of `movement.md`
+§ Test vectors, and recorded what came out: `vectors/framemove.txt` (§ Test vectors below).
+Those recordings are measurements and the parity target, as M18o1's were.
 
 ## The movement setting
 
@@ -73,7 +74,7 @@ frame):
    pitch and its yaw the aim view's yaw. Its roll is 4 × the view roll the velocity gives: the
    velocity's component along the body's right vector, its sign kept; below `cl_rollspeed` the
    roll is that speed × `cl_rollangle` / `cl_rollspeed`, at or above it `cl_rollangle`; the
-   right vector's sign decides left or right. `verify` the sign.
+   right vector's sign decides left or right (the `side_run_roll` vectors hold it).
 4. **The wish.** forward, right from the BODY's angles (not the view's): so the body's pitch
    (a third of the view's) and roll tilt them. The wish velocity = forward × the forward axis +
    right × the side axis, its z replaced by 0 for walk (the up axis for fly and swim). While
@@ -159,7 +160,8 @@ The numbers the campaign's program uses, done by the engine before the move:
   vertical velocity gains 270, `onground` is cleared and the jump is marked held (no pogo until
   the button is released).
 - **A jump out of water** (checked when the water level is 2): from 8 above the origin, a point
-  trace 24 ahead along the body's horizontal forward; when it hits, the same trace from eye level
+  trace 24 ahead along the body's forward with its z set to 0 and NOT renormalised (so it reaches
+  a little less than 24 when the body is pitched); when it hits, the same trace from eye level
   (the box's top − 8 higher); when that one is clear: `FL_WATERJUMP` set, `movedir` = the first
   hit's plane normal × −50, vertical velocity 225, the jump marked held, `teleport_time` = now
   + 2.
@@ -174,7 +176,7 @@ everything once per host frame:
 - **The host frame**: at most 72 a second (a frame waits until 1/72 s has passed);
   `frametime` = the real time since the last, clamped to 0.001..0.1 (`host_framerate` above 0
   forces it). We run a fixed step instead (the engine's run clock at 72 Hz, `docs/architecture.md`):
-  the original's variable frame is not reproduced; `verify` the vectors at a fixed 1/72.
+  the original's variable frame is not reproduced, and the vectors are recorded at a fixed 1/72.
 - In order: (1) read each client's packets, keeping its latest command (a command persists
   until a newer one arrives), and run step 1–4 of § One step for each spawned client with that
   command; (2) the physics: `StartFrame`, then every entity in number order: players run step
@@ -188,3 +190,40 @@ everything once per host frame:
   runs in the same frame when the loop reaches it.
 - Toss, bounce, fly and step entities move by the same rules as `gameloop.md` § Tossing and
   § Step.
+
+## Test vectors
+
+`vectors/framemove.txt` holds the measurements. Its `scene` lines name scenes of
+`vectors/pmove.txt` (the brushes, and the hulls built from them exactly as `movement.md`
+§ Test vectors says); only the world's hulls are used (no other solids). Each `scenario` gives
+its settings, then `start` (origin, velocity and the step length `dt`: 1/72 s in float, or 0.05
+or 0.1 for the coarse runs), then one `frame` line a step: the view (pitch, yaw), the movement
+axes (forward, side, up), the jump button, and the state after the step: origin, velocity, on
+the ground, water level and type, the jump released, water-jumping, `teleport_time`, and the
+walk move's result (`clip`: the slide's blocked bits, with 256 added when the step up was
+tried).
+
+**How they were run**, which ours must match for the comparison to hold:
+
+- Each frame is § One step 1–4 (no punch; health 100) and then 5–6, then the server's time
+  advances by `dt`. The server's time starts at 1.0; `teleport_time` is compared with it.
+- The player starts with the jump released, not on the ground, at the given origin, with
+  `oldorigin` = the origin and the water level taken once before the first frame; the eye
+  (`view_ofs`) is 22 up.
+- The program's part is only its movement: the water drag, the jump out of water at level 2,
+  and the jump or swim-up while the button is held (marking the jump released when it is not).
+  Nothing hurts the player (no fall, slime or lava damage).
+- Arithmetic is C's on a 64-bit x86 with SSE: floats stay floats, a double literal (0.7, the
+  angle factor 2π/360) promotes its expression to double, and the result rounds to float when
+  stored; `sin`, `cos` and `sqrt` in double. No fused multiply-add.
+
+They cover: running and stopping at 72, 20 and 10 steps a second, the view pitched down and up
+(a walk slowed by a third of the pitch), diagonal and sideways runs (the roll), the held jump,
+a running jump, bunny hops, a strafe jump and a turn in the air, a fall, a wall met head-on, at
+a glance and with the view angled (the wall friction), a jump into a wall, stairs walked and
+jumped (no step up mid-air) and at 10 steps a second, a 30° ramp up and down and jumps down it
+and down a 10° ramp, sliding down and trying to climb a 50° ramp, running off a ledge and the
+edge friction, sinking, swimming up (by the view and by the up axis) and jumping out, the water
+jump onto the bank, walking into a pool, and jumping in slime and lava.
+
+**Tolerance**: as `movement.md`'s (0.01 unit, 0.05 unit/s, the discrete fields equal).

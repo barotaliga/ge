@@ -67,17 +67,31 @@ bool Surface::create(Device& device, const platform::NativeWindow& w) {
   return true;
 }
 
+void Surface::configure_unlocked(Device& device, uint32_t width, uint32_t height) {
+  unlocked_ = true;
+  configure(device, width, height, false);
+}
+
+const char* Surface::present_mode() const {
+  return mode_ == wgpu::PresentMode::Immediate ? "immediate"
+         : mode_ == wgpu::PresentMode::Mailbox ? "mailbox"
+                                               : "fifo";
+}
+
 void Surface::configure(Device& device, uint32_t width, uint32_t height, bool vsync) {
   width_ = width;
   height_ = height;
+  if (vsync) unlocked_ = false;  // vsync on ends an unlocked run
   vsync_ = vsync;
   if (width == 0 || height == 0) return;  // minimised: nothing to present to
   mode_ = wgpu::PresentMode::Fifo;
   if (!vsync) {
     wgpu::SurfaceCapabilities caps;
     surface_.GetCapabilities(device.adapter, &caps);
-    for (const wgpu::PresentMode want :
-         {wgpu::PresentMode::Mailbox, wgpu::PresentMode::Immediate}) {
+    const wgpu::PresentMode order[2] = {
+        unlocked_ ? wgpu::PresentMode::Immediate : wgpu::PresentMode::Mailbox,
+        unlocked_ ? wgpu::PresentMode::Mailbox : wgpu::PresentMode::Immediate};
+    for (const wgpu::PresentMode want : order) {
       bool has = false;
       for (size_t i = 0; i < caps.presentModeCount; ++i) has = has || caps.presentModes[i] == want;
       if (has) {

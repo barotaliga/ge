@@ -27,6 +27,12 @@ class Surface {
   bool create(Device& device, const platform::NativeWindow& window);
   // (Re)configure to a pixel size. `vsync` false prefers mailbox, then immediate.
   void configure(Device& device, uint32_t width, uint32_t height, bool vsync = true);
+  // (Re)configure UNLOCKED: immediate first, then mailbox, then the vsync it must fall back to.
+  // For a benchmark: a mailbox present still waits on the display on some platforms (Metal's
+  // layer keeps its display sync under mailbox), so only immediate frees the frame rate.
+  void configure_unlocked(Device& device, uint32_t width, uint32_t height);
+  // The present mode in use: "fifo", "mailbox", "immediate" (for a report).
+  const char* present_mode() const;
 
   // This frame's texture to draw into; null when the frame must be skipped (the surface was
   // stale and has been reconfigured, or the window has no area).
@@ -46,6 +52,7 @@ class Surface {
   wgpu::PresentMode mode_ = wgpu::PresentMode::Fifo;
   uint32_t width_ = 0, height_ = 0;
   bool vsync_ = true;
+  bool unlocked_ = false;  // configure_unlocked's order: immediate first
 };
 
 }  // namespace ge::gpu

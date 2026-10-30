@@ -4,16 +4,18 @@
 // window reads the keys and the raw mouse (controls.hpp), steps the server by the frames the wall
 // time makes due, and draws the map from the player's eyes (engine/camera's first-person rig:
 // the view height, the stairs smoothed, the landing's dip) with the game's effects (world_fx.hpp:
-// rocket trails, explosions and their light, the screen's blend), the HUD (hud/layout.hpp) and the
-// console.
+// rocket trails, explosions and their light, the screen's blend), the weapon in hand (held.hpp:
+// switched, kicked and flashing as the mod fires it), the HUD (hud/layout.hpp) and the console.
 //
-//   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [--frames=N] [--size=WxH]
-//                 [+<command> ...]
+//   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>]
+//                 [-benchmark <demo>] [--frames=N] [--size=WxH] [+<command> ...]
 //
 // `-basedir` is the folder that holds the game folder (`id1` unless `-game` names another) with
 // its `pak0.pak`, `pak1.pak` ...; a leading `~` is the home folder, and a path with spaces is one
-// argument when quoted. `-progs` runs a mod's progs file in place of the baseline mod. The `+`
-// words are console lines run at start: `+map dm6` loads that map
+// argument when quoted. `-progs` runs a mod's progs file in place of the baseline mod, and
+// `-models` names the held weapons' folder (by default the tree's
+// `games/shooters_edge/content/models/view`, from where the game runs or where it was built). The
+// `+` words are console lines run at start: `+map dm6` loads that map
 // (`map arena` is the built-in test arena); with none, the map `start` when the packs have it,
 // else the arena.
 //
@@ -25,11 +27,18 @@
 // <line>` is a line for the server's console (`sv timelimit 10`), `sensitivity <deg a count>`
 // and `m_invert 0|1` set the look, `r_look classic|modern` and the other picture cvars
 // (app/look.hpp: `r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`) the world's
-// look, and `quit` quits.
+// look, the view-model cvars (view/hand.hpp: `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`,
+// `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, and `quit` quits.
+//
+// THE BENCHMARK: `benchmark <demo>` in the console (or `-benchmark <demo>` on the command line,
+// which quits when it is done) plays a recorded game (`demo1` from the packs, or a file's path)
+// with vsync off, one demo frame a drawn frame, at the window's settings, and prints the average,
+// max, min, 1% low and 0.1% low frame rates (client/timedemo.hpp); the listen server waits.
 //
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console
 // ge:keywords relative-mouse mouse-look hud first-person effects r_look quit shooters-edge
+// ge:keywords benchmark timedemo demo vsync-off fps
 // ge:keywords main-menu escape
 // ge:skill platform input camera render ui shooter
 #include <cstdio>
@@ -50,8 +59,10 @@
 #include "platform/window.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -59,6 +70,7 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/view/weapons.hpp"
 #include "ui/console.hpp"
 #include "ui/console_keys.hpp"
 #include "ui/draw.hpp"
@@ -77,8 +89,10 @@ void print_line(const out::LogLine& line, void*) {
 struct Args {
   std::string basedir = ".";
   std::string game = "id1";
-  std::string progs;  // a mod's progs file ("": the baseline mod)
-  long frames = 0;    // 0: until quit
+  std::string progs;      // a mod's progs file ("": the baseline mod)
+  std::string models;     // the held weapons' folder ("": the tree's)
+  std::string benchmark;  // a demo to benchmark, then quit ("": none)
+  long frames = 0;        // 0: until quit
   int width = 1280, height = 720;
   std::vector<std::string> plus;  // the command line from the first `+` word on
 };
@@ -103,6 +117,10 @@ bool parse(int argc, char** argv, Args& a) {
       a.basedir = expand_home(argv[++i]);
     } else if ((arg == "-progs" || arg == "--progs") && i + 1 < argc) {
       a.progs = expand_home(argv[++i]);
+    } else if ((arg == "-models" || arg == "--models") && i + 1 < argc) {
+      a.models = expand_home(argv[++i]);
+    } else if ((arg == "-benchmark" || arg == "--benchmark") && i + 1 < argc) {
+      a.benchmark = expand_home(argv[++i]);
     } else if ((arg == "-game" || arg == "--game") && i + 1 < argc) {
       a.game = argv[++i];
     } else if (arg.rfind("--frames=", 0) == 0) {
@@ -128,8 +146,8 @@ static int run_main(int argc, char** argv) {
   if (!parse(argc, argv, args)) {
     out::error(
         "shooters_edge: unknown flag. Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
-        "[-progs <file>] [--frames=N] [--size=WxH] [+<command> ...]; next: rerun with those flags "
-        "only.");
+        "[-progs <file>] [-models <dir>] [-benchmark <demo>] [--frames=N] [--size=WxH] "
+        "[+<command> ...]; next: rerun with those flags only.");
     return 2;
   }
 
@@ -162,7 +180,17 @@ static int run_main(int argc, char** argv) {
                       });
   cl::add_cvars(console, controls);
   shooters_edge::look::add_cvars(console, picture);
+  shooters_edge::view::ViewSettings view_settings;
+  shooters_edge::view::add_view_cvars(console.cvars(), view_settings);
   console.add_command("quit", "quit the game", [&](Con&, const CArgs&) { quit = true; });
+  std::string bench_ask;  // a demo the console asked to benchmark
+  console.add_command("benchmark", "benchmark <demo>: play a demo flat out and report its fps",
+                      [&](Con& c, const CArgs& a) {
+                        if (a.size() < 2)
+                          c.print("benchmark: name a demo (benchmark demo1)");
+                        else
+                          bench_ask = expand_home(a[1]);
+                      });
   se::Hud hud = se::make_hud();
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
@@ -221,6 +249,23 @@ static int run_main(int argc, char** argv) {
   }
   next_map.clear();
 
+  // The held weapons: the folder given, else the tree's from here, else from where it was built.
+  std::vector<ge::viewmodel::HeldModel> weapons;
+  {
+    std::vector<std::string> dirs;
+    if (!args.models.empty()) dirs.push_back(args.models);
+    dirs.emplace_back("games/shooters_edge/content/models/view");
+#ifdef SE_MODELS_DIR
+    dirs.emplace_back(SE_MODELS_DIR);
+#endif
+    std::string why;
+    for (const std::string& dir : dirs)
+      if (shooters_edge::view::load_weapon_models(dir, weapons, &why)) break;
+    if (weapons.empty())
+      out::status("shooters_edge: no weapon is drawn: " + why +
+                  "; next: pass -models <the tree's games/shooters_edge/content/models/view>");
+  }
+
   auto window = ge::platform::open_window(
       {.title = "Shooter's Edge", .width = args.width, .height = args.height});
   if (!window) return 1;
@@ -236,7 +281,7 @@ static int run_main(int argc, char** argv) {
   surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), true);
   cl::WorldDrawPtr world =
       cl::create_world_draw(*device, files, *listen.map, static_cast<uint32_t>(w),
-                            static_cast<uint32_t>(h), surface.format(), picture, error);
+                            static_cast<uint32_t>(h), surface.format(), picture, weapons, error);
   if (!world) {
     out::error("shooters_edge: the world draw did not load: " + error + "; see docs/rendering.md");
     return 1;
@@ -245,6 +290,45 @@ static int run_main(int argc, char** argv) {
   if (!devices) return 1;
   ge::platform::set_relative_mouse(*window, true);
   bool captured = true;
+  bool vsync = true;
+  cl::Timedemo bench;
+  std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
+  if (!args.benchmark.empty()) bench_ask = args.benchmark;
+  // The world's frame for `map`, or false with the error said.
+  const auto rebuild_world = [&](const cl::LoadedMap& map) {
+    world.reset();
+    world =
+        cl::create_world_draw(*device, files, map, static_cast<uint32_t>(w),
+                              static_cast<uint32_t>(h), surface.format(), picture, weapons, error);
+    if (!world)
+      out::error("shooters_edge: the world draw did not load: " + error +
+                 "; see docs/rendering.md");
+    return world != nullptr;
+  };
+  // The benchmark over: its report, vsync back, the listen server's world again.
+  int bench_failed = 0;
+  const auto end_bench = [&](const std::string& why, double now_s) {
+    const std::string setup = std::to_string(w) + "x" + std::to_string(h) + ", present " +
+                              surface.present_mode() + ", r_look " + picture.look + ", " +
+                              device->report.name + " on " + device->report.backend;
+    // A run stopped before a frame was timed has no report, only its reason.
+    if (why.empty() || !bench.frame_s.empty())
+      for (const std::string& line :
+           cl::bench_report(bench.name, setup, cl::bench_stats(bench.frame_s))) {
+        console.print(line);
+        hud.notify.push(line, se::hud_style().ink, now_s);
+      }
+    if (!why.empty()) {
+      console.print("benchmark: stopped early: " + why);
+      bench_failed = 1;
+    }
+    bench.active = false;
+    bench_map.reset();
+    vsync = true;
+    surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync);
+    if (bench.quit_after) quit = true;
+    return rebuild_world(*listen.map);
+  };
 
   ge::input::Queue queue;
   ge::input::InputState held;
@@ -257,6 +341,7 @@ static int run_main(int argc, char** argv) {
   ge::ui::Vec2 last_pointer;
   cl::FxState fx_state;
   cl::FxFrame fx;
+  cl::HeldState in_hand;
   size_t printed = 0;
   const uint64_t first_ns = ge::platform::now_ns();
   uint64_t last = first_ns;
@@ -295,8 +380,10 @@ static int run_main(int argc, char** argv) {
         mi.click = held.mouse.buttons.went_up(0);
       }
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
-      game_menu.update(mi, !con_keys.held && !was_open && input.tapped(Key::escape), menu_host,
-                       wall);
+      // A benchmark's Escape stops the run (below) and opens nothing.
+      game_menu.update(mi,
+                       !con_keys.held && !was_open && !bench.active && input.tapped(Key::escape),
+                       menu_host, wall);
     }
     // The mouse is the look's while captured: the console, the menu or the focus lost lets it go;
     // the menu closing or a click in the window takes it again.
@@ -313,7 +400,7 @@ static int run_main(int argc, char** argv) {
     if (input.resized) {
       w = input.width_px;
       h = input.height_px;
-      surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), true);
+      surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync);
       cl::resize_world(*device, *world, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
     }
 
@@ -332,7 +419,8 @@ static int run_main(int argc, char** argv) {
       } else {
         world.reset();
         world = cl::create_world_draw(*device, files, *listen.map, static_cast<uint32_t>(w),
-                                      static_cast<uint32_t>(h), surface.format(), picture, error);
+                                      static_cast<uint32_t>(h), surface.format(), picture, weapons,
+                                      error);
         if (!world) {
           out::error("shooters_edge: the new world draw did not load: " + error +
                      "; see docs/rendering.md");
@@ -340,7 +428,61 @@ static int run_main(int argc, char** argv) {
         }
         shown = {};
         fx_state = {};
+        in_hand = {};
       }
+    }
+
+    // A benchmark asked for: vsync off, the listen server waits until it is done.
+    if (!bench_ask.empty()) {
+      const bool quit_after = bench_ask == args.benchmark;
+      if (!cl::timedemo_start(files, bench_ask, bench, error)) {
+        console.print("benchmark: " + error);
+        if (quit_after) {
+          out::error("shooters_edge: the benchmark did not start: " + error +
+                     "; see docs/shooters-edge.md § Benchmarking a demo");
+          return 2;
+        }
+      } else {
+        bench.quit_after = quit_after;
+        console.print("benchmark: " + bench.found);
+        con_view.set_open(false);
+        vsync = false;  // and unlocked: immediate present, where the platform has it
+        surface.configure_unlocked(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+      }
+      args.benchmark.clear();
+      bench_ask.clear();
+    }
+    if (bench.active && input.tapped(ge::platform::Key::escape)) {
+      if (!end_bench("Escape pressed", t)) return 1;
+      continue;
+    }
+    if (bench.active) {
+      const cl::TimedemoStep step = cl::timedemo_step(bench, error);
+      if (step == cl::TimedemoStep::new_level) {
+        bench_map = cl::load_named_map(files, bench.demo.state.map, error);
+        if (!bench_map) {
+          if (!end_bench("the demo's map " + bench.demo.state.map + ": " + error, t)) return 1;
+          continue;
+        }
+        if (!rebuild_world(*bench_map)) return 1;
+      } else if (step != cl::TimedemoStep::frame) {
+        if (!end_bench(step == cl::TimedemoStep::error ? error : "", t)) return 1;
+        continue;
+      }
+      ge::render::FrameView view =
+          cl::demo_view(bench.demo.state, ge::camera::FirstPersonRow{}.fov_y, t);
+      view.frame = static_cast<uint64_t>(presented);
+      overlay.begin(w, h);
+      se::fill_hud(hud, cl::demo_status(bench.demo.state, t), art);
+      hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style());
+      wgpu::TextureView target = surface.acquire(*device);
+      if (!target) continue;
+      // The demo's effects are not read yet: the world's frame with none of its own.
+      cl::draw_world(*device, *world, view, cl::FxFrame{}, nullptr, wall, overlay, target);
+      surface.present();
+      cl::timedemo_mark(bench, ge::platform::now_ns());
+      ++presented;
+      continue;
     }
 
     // The player's hands, then the server's frames.
@@ -357,6 +499,10 @@ static int run_main(int argc, char** argv) {
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
     view.frame = static_cast<uint64_t>(presented);
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
+    const shooters_edge::view::HandFrame hand =
+        cl::step_held(listen, shown, in_hand, view_settings, weapons, t, wall);
+    if (hand.flashing)
+      fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
     overlay.begin(w, h);
     se::fill_hud(hud, cl::status_of(listen, t), art);
     const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
@@ -367,7 +513,7 @@ static int run_main(int argc, char** argv) {
 
     wgpu::TextureView target = surface.acquire(*device);
     if (!target) continue;
-    cl::draw_world(*device, *world, view, fx, wall, overlay, target);
+    cl::draw_world(*device, *world, view, fx, &hand, wall, overlay, target);
     surface.present();
     ++presented;
   }
@@ -378,7 +524,7 @@ static int run_main(int argc, char** argv) {
                 seconds, presented ? seconds * 1e3 / static_cast<double>(presented) : 0.0,
                 device->errors.load());
   out::status(line);
-  return device->errors.load() == 0 && !device->lost.load() ? 0 : 1;
+  return device->errors.load() == 0 && !device->lost.load() && bench_failed == 0 ? 0 : 1;
 }
 
 // What nothing else caught ends the program here, with a line that says so, rather than in

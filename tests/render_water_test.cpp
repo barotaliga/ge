@@ -40,17 +40,22 @@ gw::World sea(double wind) {
 }  // namespace
 
 TEST(the_underwater_presets_are_named_and_differ_where_they_should) {
-  r::UnderwaterLook open, mask, murky, classic, kept;
+  r::UnderwaterLook open, mask, murky, classic, pool, kept;
   CHECK(r::underwater_look("eyes-open", open));
   CHECK(r::underwater_look("mask", mask));
   CHECK(r::underwater_look("murky", murky));
   CHECK(r::underwater_look("classic", classic));
+  CHECK(r::underwater_look("pool", pool));
   kept.fog = 7;
   CHECK(!r::underwater_look("no-such-look", kept));
   CHECK(kept.fog == 7);                                // an unknown name leaves it alone
   CHECK(mask.blur < open.blur && mask.magnify > 1.3);  // a mask: sharp and a third larger
   CHECK(murky.fog > open.fog);                         // murky: the view closes in
   CHECK(classic.window == 0 && classic.tint_mix > 0);  // classic: no window, a flat tint
+  // A pool under a lit room: lit by the room, rippled, mirrored, with caustics; the open look
+  // keeps none of it.
+  CHECK(pool.ambient > 0 && pool.ripple > 0 && pool.mirror > 0 && pool.caustics > 0);
+  CHECK(open.ambient == 0 && open.ripple == 0 && open.mirror == 0 && open.caustics == 0);
 }
 
 TEST(the_detail_band_carries_the_spectrum_past_the_simulations_waves) {

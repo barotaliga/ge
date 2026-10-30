@@ -145,6 +145,8 @@ constexpr FlagSpec kGoalsClaimFlags[] = {
     {"under", "<row>",
      "claim the next letter under this milestone (M17: M17e) instead of a number"},
     {"base", "<ref>", "the roadmap rows are already taken on (default origin/main)"},
+    {"exit", "<text>", "the row's exit criterion, written in its file (else \"to be written\")"},
+    {"labs", "<lab,...>", "the labs the row lands, written in its file as its Labs cell"},
     kRepo};
 constexpr FlagSpec kGoldenDiffFlags[] = {
     {"base", "<ref>", "the git ref to compare with (default HEAD)"}, kRepo};
@@ -506,7 +508,8 @@ const CommandSpec kCommands[] = {
     {"goals claim", "<what>", 1, -1, "learn",
      "the next free row reserved and pushed to this branch at once, then checked against every "
      "branch: an earlier claim on the same row keeps it, and this one moves to the next",
-     kGoalsClaimFlags, "ge goals claim \"Lava and slime\"", "commit"},
+     kGoalsClaimFlags,
+     "ge goals claim \"Lava and slime\" --exit=\"lava hurts\" --labs=lava,lava-flow", "commit"},
     {"texture match", "<dir>", 1, 1, "see",
      "match a converted map's textures to recipes in a texture map an agent steers: scores, "
      "nearest recipes, sheets",
