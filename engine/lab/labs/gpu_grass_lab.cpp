@@ -2,14 +2,16 @@
 // ground 512 m across painted under its cover with each kind's far colour: a meadow with a path
 // and stands of long grass in a breeze; every preset from the same eye; long grass in a calm, a
 // breeze, a fresh wind and a gale; six moments of its sway; a low sun behind long grass; the
-// field from eye height out to the reach, where the blades thin into the painted ground; a gust
-// crossing it from above; a walker's path and two wheel tracks through it, pressed flat and
-// standing back up over the kind's spring; and lawn on a terraced slope's treads and none on its
-// risers (a mesh's floors, the way a level's grass material is grown). It fails on a GPU error, a
-// pipeline made after the load, or a view the grass does not change.
+// meadow at night under a street lamp, off and on; the field from eye height out to the reach,
+// where the blades thin into the painted ground; a gust crossing it from above; a walker's path
+// and two wheel tracks through it, pressed flat and standing back up over the kind's spring; and
+// lawn on a terraced slope's treads and none on its risers (a mesh's floors, the way a level's
+// grass material is grown). It fails on a GPU error, a pipeline made after the load, a lamp that
+// lights nothing, or a view the grass does not change.
 //
-// ge:summary Lab: the grass drawn: meadow, kinds, wind, sway, backlight, reach, trampled, floors
+// ge:summary Lab: the grass drawn: meadow, kinds, wind, sway, backlight, a lamp, reach, floors
 // ge:keywords lab gpu grass meadow kinds wind sway backlight translucency reach thinning terrace
+// ge:keywords street-lamp night lamps
 // ge:keywords picture software-adapter blades trample path wheel-track flowers seed-heads
 // ge:skill grass render labs
 // ge:test tests/render_grass_test.cpp
@@ -17,6 +19,7 @@
 #include <cmath>
 #include <cstring>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -35,6 +38,8 @@
 #include "lab/raster.hpp"
 #include "render/frame.hpp"
 #include "render/grass.hpp"
+#include "render/lights.hpp"
+#include "render/night.hpp"
 #include "render/post.hpp"
 #include "render/sky.hpp"
 #include "render/terrain.hpp"
@@ -93,6 +98,8 @@ struct Scene {
   gr::Sky sky;
   gr::Terrain terrain;
   gr::Grass grass;
+  gr::Lights lights;  // the lamps a view sets (`lamps`), none by default
+  std::vector<gr::LocalLight> lamps;
   gr::Post post;
   gr::FrameRecorder rec;
   ge::core::Heightfield field;
@@ -147,7 +154,8 @@ bool make_scene(ge::gpu::Device& d, Scene& s, uint32_t w, uint32_t h, const gr::
   gr::create_post(d, s.pipelines, s.post, s.layout, wgpu::TextureFormat::RGBA8Unorm);
   if (!s.pipelines.finish(d)) return false;
   ge::gpu::end_load(d);
-  s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky);
+  gr::create_lights(d, s.lights);
+  s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky, s.lights.buffer);
   s.post_group = gr::post_group(d, s.post, s.targets.hdr_view);
   s.rec.init(d, "gpu-grass.timer", 12);
   s.out = ge::gpu::create_target(d, "gpu-grass.final", w, h);
@@ -220,6 +228,7 @@ gl::Picture draw(ge::gpu::Device& d, Scene& s, const gr::FrameView& v, const gg:
   gg::GrassAir ground_air = air;
   ground_air.ground = &s.field;
   gr::prepare_grass(d, s.grass, v, ground_air, t);
+  gr::prepare_lights(d, s.lights, s.lamps, v, s.w, s.h);
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   gr::encode_sky_tables(s.sky, s.pipelines, s.rec, e);
   gr::encode_terrain_cull(s.terrain, s.pipelines, s.rec, e, s.frame);
@@ -286,8 +295,9 @@ void run(gl::Lab& lab) {
   const uint32_t w = static_cast<uint32_t>(lab.arg_num("width"));
   const uint32_t h = w * 9 / 16;
   auto device = ge::gpu::create_device({.label = "gpu-grass", .validation = 1});
-  const std::vector<std::string> ids = {"meadow",  "kinds", "heads",      "wind",     "sway",
-                                        "backlit", "reach", "from-above", "trampled", "floors"};
+  const std::vector<std::string> ids = {"meadow", "kinds",      "heads",          "wind",
+                                        "sway",   "backlit",    "lamp-night-off", "lamp-night",
+                                        "reach",  "from-above", "trampled",       "floors"};
   if (!device) {
     if (gpu_required()) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
@@ -435,6 +445,60 @@ void run(gl::Lab& lab) {
            draw(d, s, view_at(ex, eye_y - 0.2, ez, 0.25, -0.1, 0.14, 0.6, 0),
                 air_of(4, 1.5 * kPi)->air, 3, true),
            gl::Det::measured);
+
+  // THE LAMP AT NIGHT (render/lights.hpp on the blades): the meadow on a moonless night beside
+  // the path, a street lamp of 1000 cd on a 5 m post at the path's edge 8 m ahead, the eye adapted
+  // to a fiftieth of the light under it; drawn with the lamp off and on.
+  {
+    gr::FrameView night = view_at(ex, eye_y, ez, 0.25, -0.18, -0.35, 2.4, 0);
+    gr::Moon none{-0.8, 1.0, 0.0, 384400};
+    gr::set_night(night, none, 46, 120);
+    const double ax = lm::sin(0.25), az = lm::cos(0.25);
+    gr::LocalLight lamp;
+    lamp.position[0] = ex + 8 * ax + 1.5 * az;
+    lamp.position[2] = ez + 8 * az - 1.5 * ax;
+    lamp.position[1] = ge::core::sample_field(s.field, lamp.position[0], lamp.position[2]) + 5;
+    lamp.colour[0] = 1.0f;
+    lamp.colour[1] = 0.86f;
+    lamp.colour[2] = 0.66f;
+    lamp.candela = 1000;
+    lamp.inner_deg = 40;
+    lamp.outer_deg = 72;
+    lamp.range_m = 25;
+    lamp.radius_m = 0.15f;
+    const double under[3] = {lamp.position[0], lamp.position[1] - 5, lamp.position[2]};
+    night.lamp_lux = 0.02 * gr::lamp_lux_at(std::span(&lamp, 1), under, 0);
+    s.lamps.clear();
+    const gl::Picture off = draw(d, s, night, breeze->air, 10, true);
+    s.lamps.push_back(lamp);
+    const gl::Picture on = draw(d, s, night, breeze->air, 10, true);
+    const gl::Picture ground = draw(d, s, night, breeze->air, 10, false);
+    s.lamps.clear();
+    lab.metric("lamp-night.lit-share", changed(off, on), "share", gl::Det::measured);
+    lab.metric("lamp-night.blades-share", changed(ground, on), "share", gl::Det::measured);
+    if (changed(off, on) < 0.02) {
+      lab.fail("the street lamp lights none of the night meadow",
+               "Check grass.wgsl's lamps and that the scene's frame_group binds Lights::buffer. "
+               "Skill: render.");
+    }
+    const std::string caption =
+        "The meadow beside the path on a moonless night in a 5 m/s breeze, a street lamp of "
+        "1000 cd on a 5 m post at the path's edge 8 m ahead, its cone straight down; the eye "
+        "adapted to a fiftieth of the light under it.";
+    lab.shot({"lamp-night-off",
+              "THE MEADOW AT NIGHT, THE LAMP OFF",
+              caption,
+              "the field all but black under the stars",
+              {}},
+             off, gl::Det::measured);
+    lab.shot({"lamp-night",
+              "THE MEADOW AT NIGHT UNDER A STREET LAMP",
+              caption,
+              "a warm pool of lit blades under the lamp, each blade lit on its face and glowing "
+              "through from behind past the pool's middle, falling off into the dark field",
+              {{"lamp", "1000 cd"}}},
+             on, gl::Det::measured);
+  }
 
   // THE REACH: the meadow out to the blades' reach and the painted ground past it.
   gr::set_grass_cover(d, s.grass, meadow_cover(s, {meadow, tall}, ex, ez + 60, half + 20, false));

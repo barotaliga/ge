@@ -6,9 +6,10 @@
 // threads). Lit two-sided: the sun past the ground's horizon and the shadow maps on the face
 // toward the eye, dimmed by the canopy the sun crosses to reach it (`canopy_sun`), the sun
 // through the blade from behind (translucency, strongest at the tips), the sky's light dimmed
-// toward the root (a dense field shades its own floor), and a faint sheen. Hazed. A blade pressed
-// underfoot (grass_common.wgsl's `press_at`) lies along the press's way, on top of the field, so
-// it is lit to its root and shows its paler back; the fine blades' motion vectors carry their own
+// toward the root (a dense field shades its own floor), a faint sheen, and the lamps on the
+// blades and through them (render/lights.hpp). Hazed. A blade pressed underfoot
+// (grass_common.wgsl's `press_at`) lies along the press's way, on top of the field, so it is lit
+// to its root and shows its paler back; the fine blades' motion vectors carry their own
 // sway since the last frame, so temporal anti-aliasing keeps a waving field sharp. Some blades
 // end in a flower or a seed head (`blade_head`).
 #include "render/wgsl/frame.wgsl"
@@ -197,7 +198,21 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let facing = max(dot(n, l), 0.0) * in.sunlit;
   let through = max(dot(-n, l), 0.0) * 0.55 * mix(0.4, 1.0, in.along) * sqrt(in.sunlit);
   let sheen = pow(max(dot(reflect(-l, n), to_eye), 0.0), 18.0) * 0.06 * in.along;
-  let c = albedo / PI * (sun * (facing + through) + sky_irradiance(n) * floor_shade) +
+  // THE LAMPS on the blades as the sun is, on their faces and through them from behind; a lamp
+  // stands over the field rather than past its canopy, so only the floor's shade dims it.
+  var lamps = vec3f(0.0);
+  if (light_grid.info.x != 0u) {
+    let cell = light_grid.cells[cluster_index(in.position.xyz)];
+    for (var k = 0u; k < cell.y; k++) {
+      var ll: vec3f;
+      let i = light_grid.refs[cell.x + k];
+      let e = lamp_irradiance(i, in.rel, &ll);
+      let lf = max(dot(n, ll), 0.0) + max(dot(-n, ll), 0.0) * 0.55 * mix(0.4, 1.0, in.along);
+      lamps += e * (lf * lamp_shadow(i, in.rel, n, in.position.xyz));
+    }
+  }
+  let c = albedo / PI * (sun * (facing + through) + sky_irradiance(n) * floor_shade +
+                         lamps * mix(0.5, 1.0, floor_shade)) +
           sun * sheen * in.sunlit;
   var out: FragmentOut;
   out.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);
