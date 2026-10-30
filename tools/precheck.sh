@@ -69,8 +69,10 @@ gate release python3 tools/release.py check || true
 # tools, .gitignore) stops at the gates above: building 10 GB to test it proves nothing more.
 merge_base="$(git merge-base "$base" HEAD 2>/dev/null || echo HEAD)"
 gate_only='^(docs/|\.agents/|\.changes/|porting/.*\.md$|[^/]*\.md$|LICENSE$|\.gitignore$|tools/[^/]*\.(mjs|py)$)'
-if ! { git diff --name-only "$merge_base" --; git ls-files --others --exclude-standard; } |
-  grep -Evq "$gate_only"; then
+# The list is taken whole before it is searched: `grep -q` stops at its first match, and under
+# pipefail the writer it leaves behind dies of SIGPIPE, which would read as "nothing matched".
+changed="$(git diff --name-only "$merge_base" --; git ls-files --others --exclude-standard)"
+if ! grep -Evq "$gate_only" <<<"$changed"; then
   if ((${#failed[@]})); then
     echo "precheck: red: ${failed[*]} (each above; every gate's output in $log). Fix them, then" \
       "make precheck again." >&2
