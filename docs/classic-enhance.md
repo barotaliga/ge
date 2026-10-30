@@ -126,3 +126,16 @@ pictures. They are written unscaled, because a HUD draws them at a whole number 
 a pixel, sampled nearest; an upscale would soften the edges the art is drawn to. Index 255 is
 see-through in a picture and index 0 in the font sheet. Shooter's Edge's classic HUD look reads
 them by their lump names in place of its own art.
+
+## The air
+
+Every classic level is played in the evening or at night, in a wind and under low cloud. The air
+over each is a `wind::Climate` (`docs/climate.md`), held per level in `climate.hpp`:
+`level_airs()` lists the pack's levels in the order they are played, each with what the level is
+(a base by cold water, a castle, a cave, a hall by lava), its solar hour, its mean temperature,
+swing and humidity, and its pools' water temperature. So its pools steam in the cold, the breath
+shows in its cold halls, and what falls over its open yards is snow or rain by the wet bulb.
+`level_air(map)` looks a map up by name in any case; a map the table does not hold (a level of the
+full game, a player's own map) is played under `fallback_air()`. `lava_warmth` is the warmth a
+lava pool adds to the air near its edge (`Site::warmth`). The `classic-climate` lab draws every
+level's air and fog by the hour.

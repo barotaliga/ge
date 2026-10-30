@@ -20,6 +20,7 @@
 namespace fall_line::hud::words {
 
 inline constexpr const char* kSpeedUnit = "KM/H";
+inline constexpr const char* kWindUnit = "M/S";
 inline constexpr const char* kEdge = "EDGE";
 inline constexpr const char* kTuck = "TUCK";
 inline constexpr const char* kSeed = "SEED";

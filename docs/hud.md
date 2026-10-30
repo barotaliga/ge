@@ -24,7 +24,7 @@ each; built in M10d, `engine/hud/layout.hpp`):
 | Field | What it is |
 | --- | --- |
 | `id` | A short lower-case name, used in its cvars: `speed`, `map`, `health`. |
-| `kind` | The widget that draws it: `readout`, `big`, `bar`, `pips`, `banner`, `feed` today; `dial`, `wind`, `compass`, `minimap` as M10f and M10g land. |
+| `kind` | The widget that draws it: `readout`, `big`, `bar`, `pips`, `banner`, `feed`, and the instruments `dial`, `wind`, `compass` (M10f); `minimap` as M10g lands. |
 | `anchor`, `x`, `y`, `scale`, `alpha`, `show` | Its default place: one of the nine points of the safe area, an offset as a share of the safe area, a size and an opacity. |
 | A kind's shape | A bar's length and ticks, the pips' symbol and size, the feed's column. |
 | `under_corners`, `under` | The two clearance rules (below). |
@@ -47,8 +47,10 @@ shows now, its words (value, caption, unit), its level (a bar's 0..1, or -1..1 c
 (count, lit, blinking off), its colour, and for a feed the feed and the clock. Nothing is looked
 up by name in a frame. The HUD never reads the game's state. That split (a pure snapshot in,
 pixels out) is what lets a lab, a test or a replay draw the HUD with no game running. Fall Line's
-`fill_hud` writes its content from the M10a `HudSnapshot`. The instruments (M10f) and the
-minimap (M10g) add the numbers their kinds read (a speed, a heading, a pose).
+`fill_hud` writes its content from the M10a `HudSnapshot`. The instruments (M10f) read
+numbers of their own from the content: a dial's `number` (its `value` is the figure in the face),
+the `heading` a wind meter and a compass turn by, the felt and the weather's winds, and a compass's
+`marks`. The minimap (M10g) will add a pose.
 
 ### The layout is cvars
 
@@ -64,7 +66,7 @@ set writes the field directly, so the draw reads its own struct and never asks t
 | `hud_<id>_scale` | Its size, times the HUD's (0.25..4). |
 | `hud_<id>_alpha` | Its opacity (0..1): every command it drew, faded. |
 | `hud_<id>_skin` | Its skin (below; M10e). |
-| `hud_<id>_…` | A kind's own settings as the kinds land: `hud_map_span` (metres across), `hud_map_shape` (`round`/`square`), `hud_speedo_max`, `hud_speedo_style` (`dial`/`number`). |
+| `hud_<id>_…` | A game's own settings beside its elements: Fall Line's `hud_speedo_style` (`dial`/`number`) and `hud_speedo_max` (km/h at the dial's end, M10f); `hud_map_span` (metres across) and `hud_map_shape` (`round`/`square`) with M10g. |
 | `hud_scale`, `hud_alpha`, `hud_margin` | The whole HUD: its scale over the frame's, its opacity, and the margin (reference px) from the screen's safe edge. `hud_face` (its type) comes with the skins. |
 | `hud_reset [<id>]` | A command: one element (or the whole HUD) back to the game's place. |
 | `hud_edit` | 1 opens the edit mode (M10h). |
@@ -101,23 +103,33 @@ texture recipe (M31), baked once and cached like any other texture.
 
 ## The instruments
 
-These are four new kinds that are **drawn** rather than printed. Each reads the numbers in its content and draws
-itself. None of them reads a game.
+These are kinds that are **drawn** rather than printed (`engine/hud/instruments.hpp`, built in
+M10f but the minimap). Each reads the numbers in its content and draws itself. None of them reads a
+game.
 
 - **`dial`: a speedometer, a tachometer or any needle gauge.** It has a range, an optional
   **knee** that squeezes the low end into the first part of the sweep, so the band the player
   spends the run in gets most of the dial, and an optional **red band**. It has ticks and
-  figures on a ring, a needle, and the figure in digits in the face's lower half. The needle
-  is eased toward its value in the view (critically damped, about 0.1 s), so a bumpy reading
-  does not make it jitter. This is drawing only, and it never touches the simulation.
+  figures on a ring, a needle, and the figure in digits in the gap the sweep leaves at the bottom
+  (the sweep runs 126 degrees either side of the top). The needle is eased toward its value in
+  the view by a critically damped spring solved in closed form over each frame, settling in about
+  0.1 s, so a bumpy reading does not make it jitter, it never overshoots, and the same clock draws
+  the same needle however the frames cut it; a clock that went back or a gap over half a second
+  jumps it. This is drawing only, and it never touches the simulation. Fall Line's speedometer
+  runs to 140 km/h with its knee at 30 and red from 110.
 - **`wind`: which way the air moves, turned heading-up.** The top of the dial is the way the
   player faces. The bold arrow through the middle is the wind he **feels**: the air where he
   is, less his own velocity, so at speed in still air it points straight back at him. A small
   mark on the rim stands on the side the **weather's** wind blows from and points inward, so the
-  two never cross. The figure under it is the felt wind. Past a gale it turns the alarm colour,
-  and under a calm floor no arrow is drawn.
-- **`compass`: a strip of headings across the top.** The current heading is centred and the
-  cardinal points are marked. A game can add its own marks (an objective, a teammate).
+  two never cross. The figure under it is the felt wind. When the weather's wind is past a gale
+  the arrow and the figure turn the alarm colour (the felt wind's speed is used only when a game
+  gives no weather, since a skier's own speed always makes a gale of the felt air), and under a
+  calm floor no arrow is drawn. Fall Line asks for the air at his body's middle, 1.2 m over the
+  snow, from the mountain's wind field, less his velocity.
+- **`compass`: a strip of headings across the top.** The current heading is centred under a
+  notch, ticks hang from the top and the cardinal points are lettered under them. A game can add
+  its own marks (an objective, a teammate); a mark off the strip waits at its edge. Fall Line's
+  is hidden until the player shows it (`hud_compass_show 1`).
 - **`minimap`**: below.
 
 Drawing these needs four primitives the 2D layer lacks today: **lines** of a width (with round
