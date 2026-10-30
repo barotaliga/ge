@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "brush/app/bsp_draw.hpp"
+#include "brush/app/bsp_flames.hpp"
 #include "brush/app/bsp_liquids.hpp"
 #include "brush/app/bsp_sky.hpp"
 #include "brush/app/draw_data.hpp"
@@ -37,6 +38,7 @@
 #include "lab/raster.hpp"
 #include "render/bloom.hpp"
 #include "render/clouds.hpp"
+#include "render/flame.hpp"
 #include "render/frame.hpp"
 #include "render/liquid.hpp"
 #include "render/post.hpp"
@@ -61,6 +63,8 @@ struct MapState {
   gr::Liquids liquids;
   ba::LiquidWorld world;
   ba::LiquidRows rows;
+  gr::Flames flames;  // the fires' gas (bsp_flames.hpp), in v2
+  std::vector<gr::Flame> fires;
   ba::SkyPick sky;  // the map's sky: picked by its sky texture, or --sky's type over that
 };
 
@@ -125,12 +129,16 @@ gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, const gr::FrameView&
   ba::light_rooms(m.water, m.liquids, m.rows, o.minlight, o.brightness);
   gr::prepare_water(d, m.water, v);
   gr::prepare_liquid(d, m.liquids, v);
+  m.fires.clear();
+  if (v2) ba::bsp_fires(m.scene, v.time_s, o.brightness, m.fires);
+  gr::prepare_flames(d, m.flames, m.fires, v);
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   gr::encode_sky_tables(f.sky, f.pipelines, f.rec, e);
   ba::encode_bsp(m.bsp, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_sky(f.sky, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_clouds(f.clouds, f.pipelines, f.rec, e, f.targets, f.frame, v, f.staged);
   ba::encode_bsp_veil(m.bsp, f.pipelines, f.rec, e, f.targets);
+  gr::encode_flames(m.flames, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_water(m.water, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_liquid(m.liquids, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);
@@ -692,6 +700,7 @@ void run(gl::Lab& lab) {
     ba::create_bsp(d, f.pipelines, m->bsp, m->scene, f.layout);
     gr::create_water(d, f.pipelines, m->water, f.layout);
     gr::create_liquid(d, f.pipelines, m->liquids, f.layout);
+    gr::create_flames(d, f.pipelines, m->flames, f.layout);
     m->world = ba::liquid_world(m->scene, rows);
     ba::add_bsp_liquids(d, m->water, m->liquids, m->world, rows);
   }
@@ -712,6 +721,7 @@ void run(gl::Lab& lab) {
     ba::create_bsp_targets(d, m->bsp, f.targets);
     gr::create_water_targets(d, m->water, f.targets);
     gr::create_liquid_targets(d, m->liquids, f.targets);
+    gr::bind_flame_targets(d, m->flames, f.targets);
   }
 
   // ── The views, three ways each, side by side ──
