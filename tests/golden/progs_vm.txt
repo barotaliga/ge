@@ -1,0 +1,5 @@
+# n, run(n)'s checksum, FNV-1a of the globals and of the entities after it, statements run; written by tests/progs_vm_test.cpp with GE_GOLDEN_WRITE=1
+3f800000 424482ac 4ef50c121f4688bd 979fb5588b1ec834 e8
+40a00000 42667abc 3ba5d11f30ab91cc 979fb5588b1ec834 18a
+41200000 42da225c 75293c14d9ea6ee0 979fb5588b1ec834 648
+41700000 442901b1 f4c326334dea5422 979fb5588b1ec834 37b4

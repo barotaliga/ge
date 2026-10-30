@@ -304,6 +304,7 @@ characters.
 | `plugins/morph/` | Classic vertex-animated models and sprites (`ge::morph`): skins, the seam split, every frame a morph target, refused when damaged; fixture writers; smooth normals and optional rounding | `morph` |
 | `plugins/rooms/` | The engine's own level format (`ge::rooms`, `docs/levels.md`): rooms, openings and solids in a few bytes, the .gelv bytes and text form, rooms grown from seeds | `rooms` |
 | `plugins/shooter/` | The first-person shooter's simulation (`ge::shooter`): the classic player move in floats, clip hulls and their trace, hulls from brushes, the recorded scenarios | `shooter` |
+| `plugins/progs/` | The QC VM (`ge::progs`): the progs loader and checker, the interpreter, strings, the builtin table and extensions, the profiler, the assembler, the `qc` tool | `progs` |
 | `games/fall_line/sim/` | Fall Line's own simulation (`fall_line_sim`): the state, the step, the course, the free ride and lifts, the bot and the field, the headless run, the hunt, the play contract | `sim` |
 | `games/fall_line/cfg/` | Fall Line's cvars (`fall_line_cfg`): every setting a cfg may change, bound to the Settings its app reads | `console` |
 | `games/fall_line/sound/` | Fall Line's sound (`fall_line_sound`, no GPU): the bank, the route, the listener, the mix | `audio`, `sim` |
@@ -400,6 +401,7 @@ and the directories agree.
 | `brush` | `plugins/brush`: maps in the classic BSP families (version 29, BSP2, 38, 46) read into one view (surfaces, lightmaps, tree, clusters, visibility, entities, 46's patches tessellated), refusing damage; the fixture writers; the `bsp` lab |
 | `morph` | `plugins/morph`: classic vertex-animated models and sprites read into one view (skins and groups, the seam split, frames as morph targets), refusing damage; the fixture writers; per-frame smooth normals and the optional rounding; the `morph` lab |
 | `rooms` | `plugins/rooms`: the engine's own level format (rooms, openings, solids, materials with a texture reference and a relief), its bytes (.gelv) and text form, growing rooms from their seeds (rock, crag, stones, ashlar, tiles, planks, corrugated, dents; caves by surface nets), the `rooms` lab |
+| `progs` | `plugins/progs`: the QC VM (`call_function`, every opcode on 32-bit floats, the call convention and its guards, faults with QC stack traces, the profile), the progs loader and checker, the classic engine-side layout, strings, the builtin table and the extension registry, the assembler and the sample program, `ge qc` and the `qc` lab; the M18c row |
 | `shooter` | `plugins/shooter`: the classic player move in 32-bit floats (`player_move`, `run_command`, every move type and server setting), clip hulls and the line trace, hulls from brushes, the move's solids, the recorded scenarios and the `pmove` lab; the M18o rows |
 | `sim` | `games/fall_line/sim`: `create_game`, the step, the bot, the headless sim CLI, the run clock |
 | `platform` | `engine/platform`: SDL3, the window, input, the gamepad, the audio device, files |

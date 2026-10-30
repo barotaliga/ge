@@ -353,7 +353,7 @@ double lamp_lux_at(std::span<const LocalLight> lights, const double at[3], doubl
     if (d2 >= r2) continue;
     const double win = 1 - (d2 * d2) / (r2 * r2);
     double k = win * win * l.candela * flicker_level(l, t_s) /
-               std::max(d2, static_cast<double>(l.radius_m) * l.radius_m);
+               (d2 + static_cast<double>(l.radius_m) * l.radius_m);
     if (l.outer_deg > 0) {
       const double d = std::sqrt(std::max(d2, 1e-12));
       const double dl =
