@@ -13,7 +13,8 @@ namespace ge::brush::app {
 double fire_light_lift(const PointLight& l) {
   if (l.fire == Fire::none) return 0;
   const bool torch = l.fire == Fire::wall_torch;
-  return ((torch ? kTorchBase : kLargeBase) + 0.35 * (torch ? kTorchHeight : kLargeHeight)) * kUnitM;
+  return ((torch ? kTorchBase : kLargeBase) + 0.35 * (torch ? kTorchHeight : kLargeHeight)) *
+         kUnitM;
 }
 
 double fire_light_size(const PointLight& l) {
@@ -27,7 +28,8 @@ void bsp_fires(const Scene& scene, double t_s, double brightness, std::vector<re
     if (l.fire == Fire::none) continue;
     const bool torch = l.fire == Fire::wall_torch;
     double base[3] = {l.pos[0], l.pos[1] + (torch ? kTorchBase : kLargeBase) * kUnitM, l.pos[2]};
-    render::Flame f = torch ? render::torch_flame(base, l.seed) : render::brazier_flame(base, l.seed);
+    render::Flame f =
+        torch ? render::torch_flame(base, l.seed) : render::brazier_flame(base, l.seed);
     const double h = (torch ? kTorchHeight : kLargeHeight) * kUnitM;
     f.radius_m = static_cast<float>(f.radius_m * h / f.height_m);
     f.height_m = static_cast<float>(h);

@@ -11,8 +11,8 @@
 #include <cstring>
 
 #include "brush/app/bsp.wgsl.hpp"
-#include "brush/app/bsp_flames.hpp"
 #include "brush/app/bsp_fix.wgsl.hpp"
+#include "brush/app/bsp_flames.hpp"
 #include "brush/app/bsp_shadow.wgsl.hpp"
 #include "render/view.hpp"
 #include "water/glow.hpp"

@@ -94,10 +94,10 @@ struct PointLight {
   double reach = 7.5;         // m: where its light ends (value / wait map units)
   double colour[3] = {1, 1, 1};
   Flicker flicker = Flicker::steady;
-  uint32_t seed = 0;      // the flicker's phase
-  bool flame = false;     // a torch or a flame (warmer)
+  uint32_t seed = 0;       // the flicker's phase
+  bool flame = false;      // a torch or a flame (warmer)
   Fire fire = Fire::none;  // the fire drawn at it (bsp_flames.hpp)
-  bool physical = false;  // `value` is a luminous intensity, cd (a glowing liquid's light)
+  bool physical = false;   // `value` is a luminous intensity, cd (a glowing liquid's light)
 };
 // The light's share of its brightness at time t, s.
 double flicker_at(const PointLight& light, double t);
