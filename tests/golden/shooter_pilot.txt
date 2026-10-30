@@ -1,0 +1,2 @@
+# plugins/shooter/pilot.hpp on the nav course's routes, human hands seed 7: every command's origin and velocity folded (tests/shooter_pilot_test.cpp)
+6c736a76b32c9cd6
