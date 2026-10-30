@@ -87,6 +87,21 @@ double median_drop(double rate) {
   return 3.67 / (4.1 * lm::pow(rate, -0.21));
 }
 
+double drops_per_m2s(double rate, double smallest) {
+  if (rate <= 0) return 0;
+  // N0 e^(-L D) (9.65 - 10.3 e^(-0.6 D)) integrated from `smallest` up, per m^3 times m/s.
+  constexpr double kN0 = 8000;  // per m^3 per mm
+  const double l = 4.1 * lm::pow(rate, -0.21);
+  const double d = std::max(0.0, smallest);
+  const double flux = 9.65 / l - 10.3 * lm::exp(-0.6 * d) / (l + 0.6);
+  return std::max(0.0, kN0 * lm::exp(-l * d) * flux);
+}
+
+double mean_drop_over(double rate, double smallest) {
+  if (rate <= 0) return 0;
+  return std::max(0.0, smallest) + 1 / (4.1 * lm::pow(rate, -0.21));
+}
+
 double fall_speed(const Precip& p) {
   constexpr double kFlake = 1.0;  // m/s
   const double rain = clamp01(p.rain);

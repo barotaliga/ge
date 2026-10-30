@@ -16,6 +16,7 @@
 #include "render/clouds.hpp"
 #include "render/night.hpp"
 #include "render/valley_fog.hpp"
+#include "wind/precip.hpp"
 
 namespace ge::render {
 
@@ -131,6 +132,9 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   // THE REACH: the mist closes every surface into the sky from half the reach to all of it.
   u.mist[0] = static_cast<float>(view.reach_m * kMistBegins);
   u.mist[1] = static_cast<float>(view.reach_m);
+  // THE RAIN's drops that ring a water body, and their mean size.
+  u.mist[2] = static_cast<float>(wind::drops_per_m2s(w.rain, 2.0));
+  u.mist[3] = static_cast<float>(wind::mean_drop_over(w.rain, 2.0));
   // THE WET GROUND, the snow's cover and a flash of lightning.
   u.wet[0] = unit(w.wet);
   u.wet[1] = unit(w.puddles);

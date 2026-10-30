@@ -43,6 +43,8 @@ struct CommandSpec {
 
 // Every command, in the order `ge help` lists them.
 std::span<const CommandSpec> commands();
+// The flags every command takes (--json, --help).
+std::span<const FlagSpec> global_flags();
 
 // A command line split up: the command's words matched, its positional words, its flags, and the
 // words after a bare `--`.
