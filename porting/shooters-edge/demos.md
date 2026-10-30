@@ -20,7 +20,7 @@ it are marked **verify**.
 | Point of view | the recording player's, exactly the packets he received | every player's at once, a spectator chooses whose |
 | Contains | the server's packets as received, the client's moves | the server's messages to all, one-player and multi-player streams, stats per player |
 | Seeking | play from the start, fast | play from the start, fast |
-| Extension | `.qwd` (`.qwz` is a compressed QWD made by an external tool: not supported) | `.mvd` (`.mvd.gz` and similar: not supported in M18h) |
+| Extension | `.qwd` (`.qwz` is a compressed QWD made by an external tool: not supported) | `.mvd`; `.mvd.gz` is the same file run through plain gzip (measured: § 3.9) |
 
 Neither has a file header: a file is a run of records from its first byte. A file ends at its
 last complete record (a truncated record is ignored), or at a disconnect message.
@@ -56,8 +56,12 @@ last complete record (a truncated record is ignored), or at a disconnect message
 
 ## 3. MVD
 
-1. **A record**: byte milliseconds since the previous record (a gap under 2 ms is written as 0;
-   gaps over 255 ms are split, verify), byte type and target, then:
+1. **A record**: byte milliseconds since the previous record, byte type and target, then the
+   body below. The milliseconds (research session that read source; the recording in § 3.9
+   agrees): the writer takes the whole milliseconds since its own last mark, moves its mark on by
+   all of them, then writes 0 for a gap under 2 ms and 255 for a gap over 255. A gap is never
+   split across records, so a reader that sums the bytes loses each cut gap's excess and up to
+   1 ms whenever a 1 ms gap is written as 0; a frame's later records carry 0.
 
    | Type | Id (low 3 bits) | Target (high 5 bits) | Body |
    | --- | --- | --- | --- |
@@ -71,11 +75,26 @@ last complete record (a truncated record is ignored), or at a disconnect message
 
 2. **Frames**: the server writes at `sv_demofps` (default 77) a second, dropping to
    `sv_demoIdlefps` (default 10) when nothing happens; pings every `sv_demopings` (default 3)
-   seconds.
-3. **The start**: the same signon as a client gets, except the server data's player number is
+   seconds. One frame is, in order (research session that read source): the stats records of
+   the players whose stats changed, an `all` record holding the players' playerinfo and the
+   packetentities, then an `all` record holding what was multicast to everyone that frame
+   (sounds, temporary entities, prints). The writer keeps up to about five frames in hand before
+   writing, so it can interpolate each player to the frame's time (item 4).
+3. **Entities** (research session that read source): the demo is written as if to one more
+   client that sees everything: no visibility culling, and the larger per-packet entity limit.
+   Each frame's packetentities is a delta (`svc_deltapacketentities`, the from byte the previous
+   frame's sequence & 255) against the frame written just before it; the first frame after the
+   signon is a full `svc_packetentities`. A reader therefore needs only the last frame's entity
+   list, keyed by that byte.
+4. **The start**: the same signon as a client gets, except the server data's player number is
    replaced by a float (the server time) and the MVD hidden-messages bit is always set in the
-   extension pairs. Lists are chunked as in a live signon (`protocol.md` § 5).
-4. **Players** are written each frame as playerinfo (42) with the MVD flag set (instead of the
+   extension pairs. Lists are chunked as in a live signon (`protocol.md` § 5). The extension pairs
+   (`<long tag><long bits>`) come before the protocol version; a reader must honour every bit
+   that changes a message's layout, since a recording made on a modern server carries several
+   (§ 3.9: alpha, the model and entity number extensions, the second static spawn, colour tint
+   and 256 packet entities in the first family; a bit 0x1 in the second family that the
+   protocol's public header leaves undefined, ignorable; hidden messages in the MVD family).
+5. **Players** are written each frame as playerinfo (42) with the MVD flag set (instead of the
    live flags):
 
    | Bit | Meaning |
@@ -91,16 +110,45 @@ last complete record (a truncated record is ignored), or at a disconnect message
 
    Body: byte player, short flags, byte frame, then the fields present in the order: the three
    origins, the three angles, model, skin, effects, weapon frame. Missing fields keep the previous
-   frame's value (a delta against the last record). The pitch written is −3 × the real pitch
-   (the player model's convention; a reader divides by −3, verify) and roll is 0. Positions are
-   the server's interpolation to the frame time, so a player between commands is still smooth.
-5. **Stats** go in stats records (5) to the player they belong to.
-6. **Hidden messages**: a multiple record with mask 0 that no client sees, holding blocks of
+   frame's value (a delta against the last record). Positions are the server's interpolation to
+   the frame time, so a player between commands is still smooth; it does not interpolate across
+   a teleport or a respawn (that frame's value is used as it is).
+
+   Research session that read source, replacing the earlier "verify":
+   - **Pitch**: the recorder multiplies the player entity's pitch by −3. The game keeps a player
+     entity's pitch at −⅓ of the view pitch, so **the pitch read is the player's view pitch**: a
+     reader uses it as it is, it does not divide. Roll is always 0. A dead player is written
+     with pitch 0 (the yaw of his body, roll 0), so a corpse does not look around.
+   - **Dead and gib** (256, 512) are set every frame from the player's state, not as changes:
+     dead while health ≤ 0, gib while the entity's lowest bound is not −24 (the head left by a
+     gib). Spectators are never written as players.
+   - **What "missing" is measured against**: the writer leaves a field out when the value it is
+     about to write equals the previous frame's value *before* interpolation, while what it wrote
+     was interpolated. A reader keeping its last decoded value can so be off by up to one
+     frame's interpolation step while a player slows to a stop; small, and nothing to correct.
+6. **Stats** go in stats records (5) to the player they belong to.
+7. **Hidden messages**: a multiple record with mask 0 that no client sees, holding blocks of
    `<long length><u16 type>` (type 0xFFFF means a further u16 type follows). Types: 0 antilag
    positions, 1 a player's usercmd, 2 weapon choice, 3 demo info, 4..6 commentary, 7 damage done,
    8 server-side weapon, 9 weapon instruction, 0xA paused duration, 0xB start time (u64 Unix ms).
-   A player of ours may skip them all; `ge demo` should list them.
-7. **The end**: a disconnect (2) carrying the string "EndOfDemo".
+   A player of ours may skip them all; `ge demo` should list them. A paused frame's own
+   milliseconds byte is 0; the real time paused is the paused-duration block (0xA, one byte of
+   milliseconds), and the server sends that block to live relays, not to a file on disk
+   (research session that read source).
+8. **The end**: a disconnect (2) carrying the string "EndOfDemo".
+9. **A measured recording** (this round's facts above, checked against a real file): a 4-player
+   game on a modern server, 8,216,131 bytes unpacked (3,613,938 as `.mvd.gz`; SHA-256
+   of the unpacked file `e325d2f318678d911a5d0e1083794dcf2fef7a782e41eb2f2a97d9e1710c1d09`, the
+   name it is published under, so the hash names the MVD, not the gzip). Read with the record
+   layout of item 1 it is 141,590 records ending exactly at the last byte: 86,298 `all`, 45,879
+   `multiple` (every one of them hidden, mask 0), 4,712 `single`, 4,701 `stats`, none of `cmd`,
+   `read` or `set`. Milliseconds bytes: 99,770 zeros, never 1, at most 26, mostly 13 to 16 (77
+   frames a second); they sum to 621.2 s. Single and stats targets: players 0, 1, 2 and 4.
+   Hidden blocks, all ending flush with their records: 136,727 of type 0x1 (a player's usercmd),
+   777 of 0x7 (damage done), 2 of 0x3 (demo info), 1 of 0xB (the start time). The first `all`
+   record opens with server data (11), then the pairs `FTEX` 0x01487008, `FTE2` 0x1, `MVD1`
+   0x20, then protocol 28. It ends with a disconnect carrying "EndOfDemo". The recording is not
+   committed; its URL is in the PR that added this item.
 
 ## 4. Playback and seeking
 
