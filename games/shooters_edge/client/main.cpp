@@ -17,8 +17,10 @@
 // else the arena.
 //
 // THE KEYS: W A S D move, SPACE jumps, the left button fires, 1..8 pick a weapon, the wheel the
-// next one; the mouse looks (captured while the window has it; ESCAPE lets it go, a click takes
-// it back); the key under ESCAPE drops the console, where `map <name>` changes the map, `sv
+// next one; the mouse looks (captured while the window has it; a click takes it back); ESCAPE
+// opens the main menu (menu/game_menu.hpp: drawn in the pack's own pictures when the packs carry
+// them, the rows the game cannot do yet dimmed), and ESCAPE again goes back out of it; the key
+// under ESCAPE drops the console, where `map <name>` changes the map, `sv
 // <line>` is a line for the server's console (`sv timelimit 10`), `sensitivity <deg a count>`
 // and `m_invert 0|1` set the look, `r_bspmode classic|v2` the world's look (at the next map),
 // and `quit` quits.
@@ -26,6 +28,7 @@
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console
 // ge:keywords relative-mouse mouse-look hud first-person markers rockets quit shooters-edge
+// ge:keywords main-menu escape
 // ge:skill platform input camera render ui shooter
 #include <cstdio>
 #include <cstdlib>
@@ -49,6 +52,7 @@
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/hud/layout.hpp"
+#include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "ui/console.hpp"
@@ -152,18 +156,14 @@ int main(int argc, char** argv) {
                         if (listen.server)
                           shooters_edge::server::server_command(*listen.server, a.rest(0));
                       });
-  console.add_command("sensitivity", "sensitivity <degrees a mouse count>",
-                      [&](Con& c, const CArgs& a) {
-                        if (a.size() > 1) controls.sensitivity = std::atof(a[1].c_str());
-                        c.print("sensitivity " + std::to_string(controls.sensitivity));
-                      });
-  console.add_command("m_invert", "m_invert 0|1: the mouse's pitch upside down",
-                      [&](Con&, const CArgs& a) { controls.invert = a.size() > 1 && a[1] == "1"; });
+  cl::add_cvars(console, controls);
   console.add_command("r_bspmode", "r_bspmode classic|v2: the world's look, from the next map",
                       [&](Con&, const CArgs& a) { look.v2 = a.size() > 1 && a[1] == "v2"; });
   console.add_command("quit", "quit the game", [&](Con&, const CArgs&) { quit = true; });
   se::Hud hud = se::make_hud();
   se::add_cvars(console, hud);
+  shooters_edge::menu::GameMenu game_menu;
+  game_menu.add_cvars(console);
   se::HudArt art = se::free_art();
   art.finish();
   ge::console::start(console, args.plus);
@@ -178,6 +178,22 @@ int main(int argc, char** argv) {
   } else {
     out::status("shooters_edge: " + std::to_string(files.archives.size()) + " packs in " +
                 files.folder);
+  }
+  // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
+  // enhance offers.
+  shooters_edge::menu::Host menu_host{.console = &console, .maps = cl::map_names(files)};
+  menu_host.maps.emplace_back("arena");
+  {
+    shooters_edge::menu::ClassicArt menu_art;
+    const auto find = [&files](std::string_view p, std::vector<uint8_t>& store) {
+      return cl::find_file(files, p, store);
+    };
+    if (shooters_edge::menu::load_classic_art(find, &menu_art, &error))
+      game_menu.set_art(std::move(menu_art));
+    std::vector<std::string> packs;
+    packs.reserve(files.archives.size());
+    for (const cl::SearchPath::Archive& a : files.archives) packs.push_back(a.path);
+    game_menu.set_packs(std::move(packs));
   }
   if (next_map.empty()) {
     std::vector<uint8_t> store;
@@ -208,6 +224,9 @@ int main(int argc, char** argv) {
   if (!surface.create(*device, window->native())) return 1;
   int w = 0, h = 0;
   window->pixel_size(w, h);
+  // The pointer comes in the window's logical units; the menu is laid out in pixels.
+  const float px_per_unit =
+      args.width > 0 ? static_cast<float>(w) / static_cast<float>(args.width) : 1;
   surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), true);
   cl::WorldDrawPtr world =
       cl::create_world_draw(*device, files, *listen.map, static_cast<uint32_t>(w),
@@ -229,6 +248,7 @@ int main(int argc, char** argv) {
   ge::ui::DrawList overlay;
   ge::platform::InputSnapshot input;
   cl::ViewState shown;
+  ge::ui::Vec2 last_pointer;
   size_t printed = 0;
   const uint64_t first_ns = ge::platform::now_ns();
   uint64_t last = first_ns;
@@ -247,18 +267,41 @@ int main(int argc, char** argv) {
       text_on = con_view.open();
       ge::platform::set_text_input(*window, text_on);
     }
-    // The mouse is the look's while captured: the console, Escape or the focus lost lets it go,
-    // a click in the window takes it again.
-    const bool release = con_view.open() || input.focus_lost ||
-                         (!con_keys.held && input.tapped(ge::platform::Key::escape));
+    // The main menu: Escape opens it and goes back out of it; while it is up it has the keys and
+    // the pointer.
+    const bool was_open = game_menu.open();
+    {
+      using ge::platform::Key;
+      ge::ui::MenuInput mi;
+      if (!con_keys.held && was_open) {
+        mi.up = input.tapped(Key::up) || input.tapped(Key::w);
+        mi.down = input.tapped(Key::down) || input.tapped(Key::s);
+        mi.left = input.tapped(Key::left) || input.tapped(Key::a);
+        mi.right = input.tapped(Key::right) || input.tapped(Key::d);
+        mi.accept = input.tapped(Key::enter) || input.tapped(Key::space);
+        mi.back = input.tapped(Key::escape);
+        mi.pointer_x = input.pointer_x * px_per_unit;
+        mi.pointer_y = input.pointer_y * px_per_unit;
+        mi.pointer_moved = mi.pointer_x != last_pointer.x || mi.pointer_y != last_pointer.y;
+        last_pointer = {mi.pointer_x, mi.pointer_y};
+        mi.click = held.mouse.buttons.went_up(0);
+      }
+      menu_host.server = listen.server ? &listen.server->cvars : nullptr;
+      game_menu.update(mi, !con_keys.held && !was_open && input.tapped(Key::escape), menu_host,
+                       wall);
+    }
+    // The mouse is the look's while captured: the console, the menu or the focus lost lets it go;
+    // the menu closing or a click in the window takes it again.
+    const bool release = con_view.open() || input.focus_lost || game_menu.open();
     if (captured && release) {
       captured = false;
       ge::platform::set_relative_mouse(*window, false);
-    } else if (!captured && !con_view.open() && held.mouse.buttons.went_down(0)) {
+    } else if (!captured && !con_view.open() && !game_menu.open() &&
+               (was_open || held.mouse.buttons.went_down(0))) {
       captured = true;
       ge::platform::set_relative_mouse(*window, true);
     }
-    const ge::input::InputState& played = con_keys.held || !captured ? idle : held;
+    const ge::input::InputState& played = con_keys.held || !captured || was_open ? idle : held;
     if (input.resized) {
       w = input.width_px;
       h = input.height_px;
@@ -309,6 +352,7 @@ int main(int argc, char** argv) {
     se::fill_hud(hud, cl::status_of(listen, t), art);
     const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
     hud.layout.draw(overlay, hf, se::hud_style());
+    game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);
     ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
 
