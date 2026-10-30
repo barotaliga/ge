@@ -65,7 +65,8 @@ Line Fall Line is in `games/fall_line/` (G8).
 - A general-purpose editor, a scripting language, or plugins loaded at run time (shared
   libraries, scripts). Plugins are compile-time modules linked by the game (G8). The one exception is
   Shooter's Edge's QC VM (`plugins/progs`, M18c), which executes existing mods' bytecode for
-  compatibility; the engine and its games stay C++.
+  compatibility, and the game's own QC (its baseline deathmatch mod and its test mod, compiled
+  by the tree's QC compiler, M18d); the engine and its games stay C++.
 - Any physics, renderer or audio middleware the game does not need. The skier's physics
   is the game's own.
 - Music. Fall Line has none by design: its sound is its effects.

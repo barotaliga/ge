@@ -17,6 +17,7 @@ edges. `docs/shooters-edge.md` is the design;
 | `shooter/vec.hpp/.cpp` | `Vec3f` in float: `dot`, `length` (root in double), `normalize`, `angle_vectors` (radians rounded to float, sines through `core/libm`) |
 | `shooter/hull.hpp/.cpp` | Clip hulls: `Plane`, `ClipNode`, `Hull`, `point_contents`, `trace_hull`, `make_box_hull` |
 | `shooter/brush_hull.hpp/.cpp` | Hulls from convex brushes as a plane chain: `build_point_hull`, `build_box_hull`, the player's box |
+| `shooter/bsp_world.hpp/.cpp` | A read brush map (29, BSP2) as the server's brush models: hull 0 from the node tree, hulls 1 and 2 from the clip nodes |
 | `shooter/world.hpp/.cpp` | A move's solids (`MoveWorld`): `player_trace`, `box_free`, `water_contents`, `brush_contents` |
 | `shooter/pmove.hpp/.cpp` | The move: `MoveCmd`, `MoveSettings`, `MoveState`, `player_move`, `run_command` (the 50 ms split) |
 | `shooter/slide.hpp/.cpp` | The slide along planes, the step-slide up stairs, `clip_velocity` |

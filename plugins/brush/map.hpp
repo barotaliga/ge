@@ -19,12 +19,21 @@
 //   nothing and is seen by nothing). `ambient` is how loud each of the four ambient sounds is
 //   there, as the map's compiler measured it (29 and BSP2 store it; 38 and 46 read as silence).
 // - **Children**: a node's child `c >= 0` is a node, `c < 0` the leaf `-(c + 1)`.
+// - **Clip hulls** (29 and BSP2): the trees a box is swept through, each the world's solids grown
+//   by one box (hull 1 the player's, hull 2 a large one; the point hull is the node tree). A
+//   `ClipNode`'s child `c >= 0` is a clip node, `c < 0` the contents number itself (29's codes).
+//   `Model::hulls[h - 1]` is hull h's first clip node. 38 and 46 sweep through brushes instead,
+//   which the view does not keep yet: their `clip_nodes` are empty.
+// - **The PHS** (potentially hearable set): a cluster hears every cluster any cluster it sees can
+//   see. Built on request (`build_phs`), since the server alone asks it and it costs a pass over
+//   the PVS.
 //
 // Everything is checked when it is read (read.hpp), so every index here is in range.
 //
 // ge:summary The classic BSP families read into one view: surfaces, lightmaps, tree, PVS, entities
 // ge:keywords bsp brush map family v29 bsp2 v38 v46 surface lightmap leaf cluster pvs visibility
-// ge:keywords node plane entity model patch to_engine ambient ambient-level
+// ge:keywords node plane entity model patch to_engine ambient ambient-level clip-hull clipnode
+// ge:keywords phs hearable build_phs cluster_hears hull_contents
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #pragma once
@@ -82,6 +91,11 @@ struct Node {
   int32_t child[2] = {};  // [0] in front (n·p − d >= 0), [1] behind
 };
 
+struct ClipNode {
+  uint32_t plane = 0;
+  int32_t child[2] = {};  // [0] in front, [1] behind: a clip node, or a contents number (< 0)
+};
+
 struct Leaf {
   int32_t contents = 0;
   int32_t cluster = -1;
@@ -98,6 +112,7 @@ struct Model {
   float mins[3] = {}, maxs[3] = {};
   uint32_t first_surface = 0, surface_count = 0;
   int32_t head_node = 0;
+  int32_t hulls[3] = {};  // hulls 1..3: the first clip node (29 and BSP2)
 };
 
 struct Entity {
@@ -126,13 +141,16 @@ struct Map {
   int32_t clusters = 0;
   uint32_t row_bytes = 0;    // a cluster's row: one bit a cluster
   std::vector<uint8_t> pvs;  // clusters × row_bytes, decompressed
+  std::vector<uint8_t> phs;  // the same shape; empty until build_phs
+
+  std::vector<ClipNode> clip_nodes;  // every clip hull of every model (29 and BSP2)
 
   std::string entity_text;
   std::vector<Entity> entities;
 
-  // What was read but has no place in the view yet (clip hulls, brushes, light grid): counts, so
-  // a lab can say it is there.
-  uint32_t clipnodes = 0, brushes = 0, patches = 0, billboards = 0;
+  // What was read but has no place in the view yet (brushes, light grid): counts, so a lab can say
+  // it is there.
+  uint32_t brushes = 0, patches = 0, billboards = 0;
 
   size_t triangles() const { return indices.size() / 3; }
 };
@@ -142,6 +160,14 @@ uint32_t leaf_at(const Map& map, const float p[3], uint32_t model = 0);
 // Whether cluster `from` can see cluster `to`; a cluster of −1 sees nothing. No visibility data:
 // everything sees everything.
 bool cluster_sees(const Map& map, int32_t from, int32_t to);
+// Fills `map->phs` from the PVS (nothing to do when it is already built or there is no PVS).
+void build_phs(Map* map);
+// Whether a sound in cluster `to` can be heard from cluster `from`; like cluster_sees, over the
+// PHS (build_phs first: without one, everything hears everything).
+bool cluster_hears(const Map& map, int32_t from, int32_t to);
+// The contents number at `p` (file coordinates) in model `model`'s clip hull `hull` (1..3), or
+// in its point tree for hull 0 (a leaf's contents). 38 and 46 have no clip hulls: hull 0 only.
+int32_t hull_contents(const Map& map, const float p[3], uint32_t model, int hull);
 // `p` in file units to the engine's frame in metres.
 void to_engine(const float p[3], double out[3]);
 // An FNV-1a 64 digest of the whole view (geometry, lightmaps, tree, visibility, entities).

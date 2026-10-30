@@ -2,7 +2,8 @@
 // function with named operands and lines, run returns fib's value, trace shows each call with its
 // arguments and return, profile counts statements and calls, a fault is an error finding with the
 // stack trace, and every usage error is refused with exit 2. The protocol lines `ge qc` reads are
-// checked here too.
+// checked here too. `build` compiles a project (progs.src) to a progs that runs, and names a
+// mistake at its file and line.
 //
 // ge:summary Tests: the qc tool's disasm, run, trace and profile and its answer lines
 // ge:keywords test progs qc tool disasm run trace profile fault finding protocol usage
@@ -126,4 +127,23 @@ TEST(usage_errors_exit_two) {
   CHECK(missing.code == 1 && has(missing, "cannot read"));
   const Ran nofn = qc({"run", sample_file(), "--function=nothing"});
   CHECK(nofn.code == 1 && has(nofn, "no function named 'nothing'"));
+}
+
+TEST(build_compiles_a_project_and_names_each_mistake) {
+  const auto dir = std::filesystem::temp_directory_path() / "progs_tool_test_build";
+  std::filesystem::create_directories(dir);
+  std::ofstream(dir / "progs.src") << "out.dat\na.qc\n";
+  std::ofstream(dir / "a.qc") << "void(string s) print = #5;\nfloat(float n) twice = {\n"
+                                 "  return n * 2;\n};\n";
+  const Ran ok = qc({"build", (dir / "progs.src").string()});
+  CHECK_MSG(ok.code == 0, ok.out);
+  CHECK(has(ok, "@qc summary"));
+  CHECK(std::filesystem::exists(dir / "out.dat"));
+  CHECK(std::filesystem::exists(dir / "out.dat.lines"));
+  const Ran ran = qc({"run", (dir / "out.dat").string(), "--function=twice", "--args=21"});
+  CHECK_MSG(has(ran, "42"), ran.out);
+  std::ofstream(dir / "a.qc") << "float(float n) twice = {\n  return m * 2;\n};\n";
+  const Ran bad = qc({"build", (dir / "progs.src").string()});
+  CHECK(bad.code == 1);
+  CHECK_MSG(has(bad, "@qc finding error") && has(bad, "a.qc:2"), bad.out);
 }
