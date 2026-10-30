@@ -2,7 +2,7 @@
 #   ge_<module>  one per engine/<module>/module.cmake (cmake/Modules.cmake), each file saying what
 #                its module is: ge_core (engine/core and engine/loop), ge_audio, ge_assets, ge_net,
 #                ge_console, ge_services, ge_snow, ge_input, ge_wind, ge_water, ge_grass, ge_move, ge_camera, ge_charset, ge_viewmodel, ge_bake,
-#                ge_lab, ge_ai, ge_prof and ge_prof_alloc, ge_play (with engine/capture), ge_replay; and, when their layer is built,
+#                ge_mod, ge_lab, ge_ai, ge_prof and ge_prof_alloc, ge_play (with engine/capture), ge_replay; and, when their layer is built,
 #                ge_platform (GE_PLATFORM), ge_gpu and ge_render (GE_GPU)
 #   ge_cli, ge   the ge command line (engine/cli, cmake/Cli.cmake)
 #   ge_<plugin>  one per plugins/<plugin>/ (cmake/Plugins.cmake): ge_racing, ge_mountain, ...
@@ -30,33 +30,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(GE_WERROR "Treat warnings as errors" ON)
 option(GE_SANITIZE "Build with address + undefined sanitizers" OFF)
 
-# Two flag sets. ge_fp is the floating-point half of the DETERMINISM CONTRACT
-# and travels with ge_core into an installed package, so a game built against
-# a release computes the same bits as the engine's tests. Its flags are
-# generator expressions so a package picks them by the CONSUMER's compiler.
-# ge_flags is this tree's own hygiene (warnings, -Werror, sanitizers) and
-# never leaves it.
-add_library(ge_fp INTERFACE)
-target_compile_options(ge_fp INTERFACE
-  # Determinism: no fused multiply-add contraction, no fast-math reassociation.
-  "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-ffp-contract=off;-fno-fast-math>"
-  "$<$<CXX_COMPILER_ID:GNU>:-fexcess-precision=standard>"
-  "$<$<CXX_COMPILER_ID:MSVC>:/fp:strict>")
-
-# The instruction-set baseline. On x86-64 the engine requires AVX2 (x86-64-v3: AVX2, FMA, BMI2,
-# every desktop x86 CPU since 2013), so the compiler vectorises with 256-bit registers; ARM64's
-# baseline already has NEON. It changes no bits: ge_fp keeps contraction off, so the FMA
-# instructions it allows are never formed from a*b+c. It travels with ge_core, so a game is
-# built for the same CPUs as the engine it links.
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64)$")
-  set(GE_ISA_X86 ON)
-endif()
-add_library(ge_isa INTERFACE)
-if(GE_ISA_X86)
-  target_compile_options(ge_isa INTERFACE
-    "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-march=x86-64-v3>"
-    "$<$<CXX_COMPILER_ID:MSVC>:/arch:AVX2>")
-endif()
+# Two flag sets. ge_fp and ge_isa (cmake/Fp.cmake) are the floating-point half of the
+# DETERMINISM CONTRACT and the instruction-set baseline, and travel with ge_core into an installed
+# package, so a game built against a release computes the same bits as the engine's tests.
+# ge_flags is this tree's own hygiene (warnings, -Werror, sanitizers) and never leaves it.
+include(cmake/Fp.cmake)
 
 add_library(ge_flags INTERFACE)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -148,6 +126,13 @@ if(PROJECT_IS_TOP_LEVEL)
   add_executable(labs engine/lab/main.cpp ${GE_LAB_SOURCES})
   target_link_libraries(labs PRIVATE ${GE_MODULE_TARGETS} ${GE_PLUGIN_TARGETS} ${GE_GAME_TARGETS}
     ${GE_LAB_EXTRA})
+  # The C++ mods built in this tree (cmake/Mods.cmake: the sample mod) are packages the `mod` lab
+  # loads from GE_MOD_DIR.
+  get_property(GE_MOD_TARGETS GLOBAL PROPERTY GE_MOD_TARGETS)
+  if(GE_MOD_TARGETS)
+    add_dependencies(labs ${GE_MOD_TARGETS})
+  endif()
+  target_compile_definitions(labs PRIVATE GE_MOD_DIR="${PROJECT_BINARY_DIR}/mods")
   if(GE_GPU)
     # A GPU lab's own shader (the eye lab's hall, drawn over its frame).
     ge_embed_wgsl(labs engine/lab/labs/gpu_eye_hall.wgsl)

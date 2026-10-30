@@ -318,41 +318,48 @@ constexpr FlagSpec kSourceSearchFlags[] = {
     {"refresh", "", "read the source's listing again instead of the cached one"},
     {"cache", "<dir>", "where packs are kept (default GE_ASSET_CACHE, else ~/.cache/ge/sources)"}};
 constexpr FlagSpec kQcFunction{"function", "<name>", "the function to run (its name in the progs)"};
-constexpr FlagSpec kQcRun[] = {
-    {"function", "<name>", "the function to run (its name in the progs)"},
-    {"args", "<n,...>", "numbers for its parameters in order, three for a vector"},
-    {"builtins", "<sample>", "install the sample program's builtins (a game's come with the game)"},
-    {"entities", "<n>", "entities in use before the call (default 1: the world)"},
-    kPreset,
-    kEngine,
-    kRepo};
+constexpr FlagSpec kQcArgs{"args", "<n,...>",
+                           "numbers for its parameters in order, three for a vector"};
+constexpr FlagSpec kQcBuiltins{
+    "builtins", "<sample>", "install the sample program's builtins (a game's come with the game)"};
+constexpr FlagSpec kQcEntities{"entities", "<n>",
+                               "entities in use before the call (default 1: the world)"};
+constexpr FlagSpec kQcRun[] = {kQcFunction, kQcArgs, kQcBuiltins, kQcEntities,
+                               kPreset,     kEngine, kRepo};
 constexpr FlagSpec kQcDisasm[] = {
     {"function", "<name>", "only this function (default: every one)"}, kPreset, kEngine, kRepo};
-constexpr FlagSpec kQcTrace[] = {
-    kQcFunction,
-    {"args", "<n,...>", "numbers for its parameters in order, three for a vector"},
-    {"builtins", "<sample>", "install the sample program's builtins (a game's come with the game)"},
-    {"entities", "<n>", "entities in use before the call (default 1: the world)"},
-    {"statements", "", "every statement too, not only the calls"},
-    kPreset,
-    kEngine,
-    kRepo};
-constexpr FlagSpec kQcProfile[] = {
-    kQcFunction,
-    {"args", "<n,...>", "numbers for its parameters in order, three for a vector"},
-    {"builtins", "<sample>", "install the sample program's builtins (a game's come with the game)"},
-    {"entities", "<n>", "entities in use before the call (default 1: the world)"},
-    {"repeat", "<n>", "run it n times (default 1)"},
-    {"top", "<n>", "the most functions to list (default 10)"},
-    kPreset,
-    kEngine,
-    kRepo};
+constexpr FlagSpec kQcTrace[] = {kQcFunction,
+                                 kQcArgs,
+                                 kQcBuiltins,
+                                 kQcEntities,
+                                 {"statements", "", "every statement too, not only the calls"},
+                                 kPreset,
+                                 kEngine,
+                                 kRepo};
+constexpr FlagSpec kQcProfile[] = {kQcFunction,
+                                   kQcArgs,
+                                   kQcBuiltins,
+                                   kQcEntities,
+                                   {"repeat", "<n>", "run it n times (default 1)"},
+                                   {"top", "<n>", "the most functions to list (default 10)"},
+                                   kPreset,
+                                   kEngine,
+                                   kRepo};
 constexpr FlagSpec kContentScanFlags[] = {
     {"assetmap", "<file>", "the game's asset map the set is held to"},
     {"registry", "<dir>", "the directory of the game's sounds.tsv and models.tsv"},
     kPreset,
     kEngine,
     kRepo};
+constexpr FlagSpec kModNewFlags[] = {
+    {"game", "<id>", "the game the mod is for (shooters_edge)"},
+    {"name", "<kebab>", "the mod's name (default: the directory's)"},
+    kEngine};
+constexpr FlagSpec kModBuildFlags[] = {kEngine};
+constexpr FlagSpec kModCheckFlags[] = {
+    {"game", "<id>", "check it against this game (default: the game its manifest names)"}};
+constexpr FlagSpec kModPackFlags[] = {
+    {"out", "<dir>", "where the package goes (default dist/<name>-<version>)"}};
 constexpr FlagSpec kSnowShowFlags[] = {
     {"out", "<dir>", "where the PNGs go (default: snow/ beside the file)"}};
 constexpr FlagSpec kSnowColumnFlags[] = {{"at", "<x,z>", "the point, m (required)"}};
@@ -593,6 +600,22 @@ const CommandSpec kCommands[] = {
      kQcProfile,
      "ge qc profile previews/qc/sample.dat --function=run --args=12 --builtins=sample --repeat=20",
      "progs"},
+    {"mod new", "<dir>", 1, 1, "create",
+     "a C++ mod repo for a game that offers mods: its CMakeLists.txt over the engine's "
+     "cmake/Mods.cmake and a working mod in src/mod.cpp",
+     kModNewFlags, "ge mod new faster-rockets --game=shooters_edge", "mod"},
+    {"mod build", "[<dir>]", 0, 1, "build",
+     "the mod built (Release) into its package, build/mods/<name>/ (the library and its "
+     "mod.manifest), then checked as the game's loader would; errors come back as findings",
+     kModBuildFlags, "ge mod build faster-rockets", "mod"},
+    {"mod check", "<package>", 1, 1, "build",
+     "a mod package (a directory or its mod.manifest) through the engine's loader: the manifest, "
+     "the ABI, the game and its API, the library's hash, the entry table",
+     kModCheckFlags, "ge mod check faster-rockets/build/mods/faster-rockets", "mod"},
+    {"mod pack", "<package>...", 1, -1, "build",
+     "one package from several platforms' builds of one mod: manifests merged, libraries copied, "
+     "the result checked",
+     kModPackFlags, "ge mod pack linux/faster-rockets windows/faster-rockets --out=dist/fr", "mod"},
     {"snow show", "<file.snow>", 1, 1, "see",
      "a saved snow layer read without its game: its tiles and memory, the samples pressed, the "
      "deepest drop and the densest snow, the mass held, and depth, density and state maps",
@@ -865,34 +888,6 @@ const CommandSpec* find_command(std::string_view name) {
   return nullptr;
 }
 
-Args parse_args(int argc, const char* const* argv) {
-  Args a;
-  bool rest = false;
-  for (int i = 1; i < argc; i++) {
-    const std::string arg = argv[i];
-    if (rest) {
-      a.passthrough.push_back(arg);
-    } else if (arg == "--") {
-      rest = true;
-    } else if (arg.starts_with("--")) {
-      const size_t eq = arg.find('=');
-      a.flags.emplace_back(arg.substr(2, eq == std::string::npos ? std::string::npos : eq - 2),
-                           eq == std::string::npos ? "" : arg.substr(eq + 1));
-    } else {
-      a.words.push_back(arg);
-    }
-  }
-  // The longest command name the leading words spell: "skills sync" before "skills".
-  if (a.words.size() >= 2) a.command = find_command(a.words[0] + " " + a.words[1]);
-  if (a.command) {
-    a.words.erase(a.words.begin(), a.words.begin() + 2);
-  } else if (!a.words.empty()) {
-    a.command = find_command(a.words[0]);
-    if (a.command) a.words.erase(a.words.begin());
-  }
-  return a;
-}
-
 std::optional<std::string> check_args(const Args& a) {
   if (!a.command) return "no such command";
   const CommandSpec& c = *a.command;
@@ -928,18 +923,6 @@ std::optional<std::string> check_args(const Args& a) {
            "leaks and load pass words after --";
   }
   return std::nullopt;
-}
-
-bool has_flag(const Args& a, std::string_view name) {
-  return std::any_of(a.flags.begin(), a.flags.end(),
-                     [&](const auto& f) { return f.first == name; });
-}
-
-std::string flag_value(const Args& a, std::string_view name, std::string_view fallback) {
-  for (const auto& [n, v] : a.flags) {
-    if (n == name) return v;
-  }
-  return std::string(fallback);
 }
 
 std::string help_text(const CommandSpec* one) {

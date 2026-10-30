@@ -104,6 +104,28 @@ wrote it. Nothing in the tree ships a mod; a player brings his own.
   match runs on the test arena, whose entity text (`kArenaEntities`) has the classic
   deathmatch spawn points.
 
+## C++ mods
+
+Beside the classic game's mods, Shooter's Edge is the first game to offer the engine's own mod
+format (M52a, [`docs/mods.md`](mods.md)): a mod written in C++, built by `ge mod build` into a
+package, and loaded through `engine/mod`. Its half of the ABI is
+`games/shooters_edge/sim/mod_api.hpp` (`SE_MOD_API` 1):
+
+- **The hooks are the game-program seam's**: match start, start frame, a player's pre- and
+  post-think, connect, put in server, disconnect. The game's own rules run each first and the
+  mod's hook after (`sim/mod_host.hpp`'s composite program), so a mod sees and may change what the
+  game just did. A mod's own functions are numbered by `function(k)` and stored in an entity's
+  think, touch or blocked; `call_function` runs the game's too.
+- **The services** read and change entities by number and fields by `SE_FIELD_*` id, spawn,
+  remove, size an entity and start a sound. Every argument is checked; a bad one is refused and
+  counted, and the match goes on.
+- **Determinism**: the mod's state block, its random stream (seeded from the match,
+  `MatchOptions::mod_seed`) and its counts are `ModRun`, copied by a snapshot and folded into
+  every frame's hash. A match without a mod keeps every hash it had.
+- **The sample** is `games/shooters_edge/mods/rocket_bounce/` (rockets half as fast again, a
+  grenade's third bounce lights its fuse), built by the tree; `make lab LAB=mod` plays the match
+  with it beside the match without it. `ge mod new my-mod --game=shooters_edge` starts a new one.
+
 ## Licensing and the clean room
 
 **The engine.** gameengine2 is under the PolyForm Noncommercial License 1.0.0 (`LICENSE`): open to
@@ -377,6 +399,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-loop` | scenario | The classic loop on the test arena: two clients over latency and loss, a rocket, a bouncing grenade, a door a player blocks, a plat; the program's events and the loop's counts, paths from above and the side, the door and the plat against the clock, the prediction's corrections; the thrown entities against their recorded vectors (built, M18o2) |
 | `se-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (needs the reference program; skipped with a reason when its cache is absent) |
 | `se-mod` | scenario | A mod (the test mod, or a player's progs from `--progs`) played by bots on the test arena to its time limit: the hooks it was called on, the builtins it called, frags, every path from above, the hooks' timeline (built, M18p) |
+| `mod` | scenario | The engine's own C++ mod format: the sample mod's match beside the plain match (the loader's verdict, rockets, bounces, the mod's log, both matches' missiles, the rocket's distance and the grenade's height), and the modded match replayed to the bit (built, M52a) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
 | `se-nav` | scenario | Where a player can go on a map by the player move's own proof: the nav graph from above to scale (the floor shaded off the point hull, every node and link by kind, what a mover closes), the quickest routes as the proofs moved a player, from above and the side; on the nav course and the test arena (built, M18r1) |
 | `se-bots` | drive | Bots against bots and against recorded people: frags, deaths, items, the paths drawn on the map, the decisions round a fight, the humanness bands; before and after a change |

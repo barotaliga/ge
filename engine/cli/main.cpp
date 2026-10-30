@@ -10,7 +10,7 @@
 // ge:summary The ge executable: parses the command line against the catalog and runs each command
 // ge:keywords cli ge main command-line usage dispatch help version new find explain use add
 // ge:keywords build test check precheck ci digest golden lab graph shot upgrade doctor skills net
-// ge:keywords snow qc progs
+// ge:keywords snow qc progs mod mods
 // ge:keywords lessons json bench profile mem leaks asset blender
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
@@ -36,6 +36,7 @@
 #include "cli/index.hpp"
 #include "cli/json.hpp"
 #include "cli/lint.hpp"
+#include "cli/mod.hpp"
 #include "cli/model.hpp"
 #include "cli/net.hpp"
 #include "cli/outcome.hpp"
@@ -428,6 +429,19 @@ Outcome run(const Args& a) {
       flags.push_back(std::move(f));
     }
     return run_qc(build_options(a), std::string(name.substr(3)), a.words[0], flags);
+  }
+  if (name.starts_with("mod ")) {
+    ModOptions m;
+    m.dir = a.words.empty() ? fs::current_path() : fs::path(a.words[0]);
+    m.game = flag_value(a, "game");
+    m.engine = flag_value(a, "engine");
+    m.name = flag_value(a, "name");
+    m.out = flag_value(a, "out");
+    for (const std::string& w : a.words) m.packages.emplace_back(w);
+    if (name == "mod new") return run_mod_new(m);
+    if (name == "mod build") return run_mod_build(m);
+    if (name == "mod check") return run_mod_check(m);
+    return run_mod_pack(m);
   }
   if (name == "snow show") return run_snow_show(a.words[0], flag_value(a, "out"));
   if (name == "snow column") return run_snow_column(a.words[0], flag_value(a, "at"));

@@ -7,8 +7,9 @@ description: "Use for CMake, presets, the Makefile, compiler flags, adding a dep
 
 ## Layout
 
-- Root `CMakeLists.txt`: the project, `ge_fp` (the **determinism flags**, linked by
-  `ge_core` and published as `ge::fp`), `ge_flags` (warnings, `-Werror`, sanitizers;
+- Root `CMakeLists.txt`: the project, `ge_fp` and `ge_isa` (the **determinism flags**, in
+  `cmake/Fp.cmake`, which `cmake/Mods.cmake` includes too; linked by `ge_core` and published as
+  `ge::fp`), `ge_flags` (warnings, `-Werror`, sanitizers;
   this tree only, never published), the modules, the plugins and the games, `add_subdirectory(tests)`
   when top-level, and `include(cmake/Packaging.cmake)` (the installed package, `release` skill).
 - **An engine module builds itself**: `engine/<module>/module.cmake` defines its target (linking
@@ -61,7 +62,7 @@ webgpu only by `ge_gpu`.
   target to work around something; fix the code.
 - Never add `-ffast-math`, `-Ofast` or `-march=native` (they break cross-platform bits; see the
   `determinism` skill).
-- **The instruction-set baseline** is `ge_isa` (root `CMakeLists.txt`), linked by `ge_core` and
+- **The instruction-set baseline** is `ge_isa` (`cmake/Fp.cmake`), linked by `ge_core` and
   published as `ge::isa`: on x86-64, `-march=x86-64-v3` (MSVC `/arch:AVX2`), so AVX2 is
   required; on ARM64, the compiler's default (NEON is baseline). It moves no bits because
   `ge_fp` keeps contraction off. Raising it is a decision for the maintainer: it drops CPUs.
