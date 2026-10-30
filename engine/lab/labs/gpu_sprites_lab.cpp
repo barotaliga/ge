@@ -6,19 +6,21 @@
 // them on a yard by day; the same from high above, where each facing rule shows (the bush and
 // the flame stay upright, the fireball and the bubbles tilt with the camera, the sign keeps its
 // place); sharp beside smooth up close; the fireball's frames as a filmstrip at dusk; the yard
-// at dusk with only the glowing sprites bright. Checks: the glowing sprites outshine the lit ones
-// at dusk, the cutout keeps the ground between its leaves, no GPU error, no pipeline after the
-// load. Measured: the pass's GPU time for 2000 sprites. Without an adapter it notes that, with
-// grey cards.
+// at dusk with only the glowing sprites bright; the yard at night under a lamp, off and on.
+// Checks: the glowing sprites outshine the lit ones at dusk, the lamp lights the near bush, the
+// cutout keeps the ground between its leaves, no GPU error, no pipeline after the load. Measured:
+// the pass's GPU time for 2000 sprites. Without an adapter it notes that, with grey cards.
 //
-// ge:summary Lab: sprites by facing rule and blend, sharp and smooth, an animation, the cost
+// ge:summary Lab: sprites by facing rule and blend, sharp and smooth, animated, a lamp, the cost
 // ge:keywords lab gpu sprites sprite billboard facing parallel upright oriented cutout additive
 // ge:keywords premultiplied glow fireball flame bush sign frames animation picture
+// ge:keywords night lamps street-lamp
 // ge:skill render labs
 // ge:test tests/render_sprites_test.cpp
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -30,6 +32,8 @@
 #include "lab/labs/water_scene.hpp"
 #include "lab/raster.hpp"
 #include "render/frame.hpp"
+#include "render/lights.hpp"
+#include "render/night.hpp"
 #include "render/post.hpp"
 #include "render/sky.hpp"
 #include "render/sprites.hpp"
@@ -211,6 +215,8 @@ struct Scene {
   gr::Sky sky;
   gr::Terrain terrain;
   gr::Sprites sprites;
+  gr::Lights lights;  // the lamps a view sets (`lamps`), none by default
+  std::vector<gr::LocalLight> lamps;
   gr::Post post;
   gr::FrameRecorder rec;
   ge::core::Heightfield field;
@@ -249,7 +255,8 @@ bool make_scene(ge::gpu::Device& d, Scene& s, uint32_t w, uint32_t h,
   gr::create_post(d, s.pipelines, s.post, s.layout, wgpu::TextureFormat::RGBA8Unorm);
   if (!s.pipelines.finish(d)) return false;
   ge::gpu::end_load(d);
-  s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky);
+  gr::create_lights(d, s.lights);
+  s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky, s.lights.buffer);
   s.post_group = gr::post_group(d, s.post, s.targets.hdr_view);
   s.rec.init(d, "gpu-sprites.timer", 8);
   s.out = ge::gpu::create_target(d, "gpu-sprites.final", w, h);
@@ -269,6 +276,7 @@ Timed draw(ge::gpu::Device& d, Scene& s, const gr::FrameView& v,
   gr::prepare_sky(s.sky, v);
   gr::prepare_terrain(d, s.terrain, v);
   gr::prepare_sprites(d, s.sprites, draws, v);
+  gr::prepare_lights(d, s.lights, s.lamps, v, s.w, s.h);
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   gr::encode_sky_tables(s.sky, s.pipelines, s.rec, e);
   gr::encode_terrain_cull(s.terrain, s.pipelines, s.rec, e, s.frame);
@@ -382,7 +390,10 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    placeholders(lab, {"yard", "from-above", "sharp-smooth", "fireball", "dusk"}, w, h);
+    placeholders(
+        lab,
+        {"yard", "from-above", "sharp-smooth", "fireball", "dusk", "lamp-night-off", "lamp-night"},
+        w, h);
     return;
   }
   Scene s;
@@ -480,6 +491,70 @@ void run(gl::Lab& lab) {
   if (glow_dusk <= lit_dusk) {
     lab.fail("at dusk the glowing fireball is no brighter than the lit bush",
              "Check fs_blend's glow term in engine/render/sprites.wgsl. Skill: render.");
+  }
+
+  {
+    // THE LAMP AT NIGHT (render/lights.hpp on the cards): the yard on a moonless night under a
+    // lamp of 400 cd on a 4 m post between the bushes, the eye adapted to a fiftieth of the light
+    // under it; drawn with the lamp off and on.
+    gr::FrameView night = eye(0, 1.4, 0, 0, -0.02, -0.35);
+    gr::Moon none{-0.8, 1.0, 0.0, 384400};
+    gr::set_night(night, none, 46, 120);
+    gr::LocalLight lamp;
+    lamp.position[0] = 0.2;
+    lamp.position[1] = 4;
+    lamp.position[2] = 6;
+    lamp.colour[0] = 1.0f;
+    lamp.colour[1] = 0.86f;
+    lamp.colour[2] = 0.66f;
+    lamp.candela = 400;
+    lamp.inner_deg = 40;
+    lamp.outer_deg = 72;
+    lamp.range_m = 12;
+    lamp.radius_m = 0.1f;
+    const double under[3] = {0.2, 0, 6};
+    night.lamp_lux = 0.02 * gr::lamp_lux_at(std::span(&lamp, 1), under, 0);
+    s.lamps.clear();
+    const gl::Picture off = draw(*device, s, night, yard(0.3)).pic;
+    s.lamps.push_back(lamp);
+    const gl::Picture on = draw(*device, s, night, yard(0.3)).pic;
+    const gl::Picture ground = draw(*device, s, night, {}).pic;
+    s.lamps.clear();
+    auto at_bush = [&](const gl::Picture& p) {
+      const gr::CameraMatrices m = gr::camera_matrices(night, static_cast<double>(w) / h);
+      const float rel[4] = {-2.2f, static_cast<float>(0.6 - 1.4), 6, 1};
+      float clip[4];
+      gr::transform(m.view_proj, rel, clip);
+      const int px = static_cast<int>((clip[0] / clip[3] * 0.5 + 0.5) * w);
+      const int py = static_cast<int>((0.5 - clip[1] / clip[3] * 0.5) * h);
+      return mean_luma(p, px - 1, py - 1, px + 2, py + 2);
+    };
+    const double bush_off = at_bush(off), bush_on = at_bush(on);
+    lab.metric("lamp-night.bush-off", bush_off, "level", Det::measured);
+    lab.metric("lamp-night.bush-on", bush_on, "level", Det::measured);
+    lab.metric("lamp-night.ground-under", at_bush(ground), "level", Det::measured);
+    if (bush_on <= bush_off + 4) {
+      lab.fail("the lamp lights none of the near bush",
+               "Check sprites.wgsl's lamps_on_card and that the scene's frame_group binds "
+               "Lights::buffer. Skill: render.");
+    }
+    const std::string caption =
+        "The yard on a moonless night, a lamp of 400 cd on a 4 m post between the bushes, its "
+        "cone straight down; the eye adapted to a fiftieth of the light under it.";
+    lab.shot({"lamp-night-off",
+              "THE YARD AT NIGHT, THE LAMP OFF",
+              caption,
+              "the bushes and the sign black against the dark ground; only the flames, the "
+              "fireball and the spark bright",
+              {}},
+             off, Det::measured);
+    lab.shot({"lamp-night",
+              "THE YARD AT NIGHT UNDER A LAMP",
+              caption,
+              "the bushes and the sign lit warm like the ground in the lamp's pool, brightest "
+              "nearest the post",
+              {{"lamp", "400 cd"}}},
+             on, Det::measured);
   }
 
   {

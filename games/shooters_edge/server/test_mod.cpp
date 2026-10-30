@@ -526,4 +526,20 @@ const char* const kArenaEntities = R"({
 }
 )";
 
+bool build_single_player_stub(ge::progs::Progs& out, std::string& error) {
+  pg::Assembler a(pg::kSinglePlayerLayout);
+  for (const char* name : {"worldspawn", "target"}) {
+    a.begin_function(name, {}, 0, "stub.qc");
+    a.emit(pg::kOpDone);
+    a.end_function();
+  }
+  return a.build(out, error);
+}
+
+const char* const kStubEntities = R"({
+"classname" "worldspawn"
+"message" "a single-player map"
+}
+)";
+
 }  // namespace shooters_edge::server

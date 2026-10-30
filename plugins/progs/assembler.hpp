@@ -1,9 +1,9 @@
 // THE ASSEMBLER: builds a progs in memory, statement by statement, so the tests, the `qc` lab and
 // the sample program have bytecode without a compiler (none is in the tree until M18d, and none
 // from outside may be used). It writes exactly the file the loader reads (file.hpp): a new
-// assembler already holds the reserved globals, the classic engine-side layout's globals and
-// fields with their definitions (layout.hpp), the null function and statement 0, so what it
-// builds loads with the classic CRC.
+// assembler already holds the reserved globals, one program form's engine-side globals and fields
+// with their definitions (layout.hpp: the multiplayer form unless it is made with another), the
+// null function and statement 0, so what it builds loads with that form's crc.
 //
 // HOW CODE IS LAID OUT. A function's parameters and locals are one contiguous range of globals
 // (`begin_function` reserves it); everything else (constants, a program's own globals, the
@@ -34,7 +34,7 @@
 namespace ge::progs {
 
 struct Assembler {
-  Assembler();
+  explicit Assembler(const Layout& layout = kMultiplayerLayout);
 
   // A string in the table (deduplicated); its offset.
   int32_t string(const char* text);
@@ -93,6 +93,7 @@ struct Assembler {
   std::vector<char> strings;
   std::vector<uint32_t> globals;
   int32_t entityfields = kEngineFields;
+  const Layout* layout;  // the form it lays out and stamps
 
  private:
   int alloc(int words);

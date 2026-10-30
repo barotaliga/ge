@@ -512,7 +512,8 @@ std::string status_text(const ClassicServer& s, int opt) {
     if (c.state == ConnState::free) continue;
     int frags = 0;
     if (c.qc_active)
-      frags = static_cast<int>(pg::as_float(*pg::entity_field(s.qc->q.vm, i + 1, pg::kFFrags)));
+      frags = static_cast<int>(
+          pg::as_float(*pg::entity_field(s.qc->q.vm, i + 1, s.qc->q.layout->f.frags)));
     const int ping = c.state != ConnState::spawned ? 999
                      : c.ping_samples == 0         ? 9999
                                                    : static_cast<int>(c.ping_s * 1000);
@@ -556,11 +557,11 @@ EntityState entity_state(const ClassicServer& s, int e) {
   const pg::Vm& vm = s.qc->q.vm;
   auto f = [&](int field) { return pg::as_float(*pg::entity_field(vm, e, field)); };
   const sh::Edict& ed = s.qc->sv.edicts[static_cast<size_t>(e)];
-  st.modelindex = static_cast<int>(f(pg::kFModelindex));
-  st.frame = static_cast<int>(f(pg::kFFrame));
-  st.colormap = static_cast<int>(f(pg::kFColormap));
-  st.skin = static_cast<int>(f(pg::kFSkin));
-  st.effects = static_cast<int>(f(pg::kFEffects));
+  st.modelindex = static_cast<int>(f(s.qc->q.layout->f.modelindex));
+  st.frame = static_cast<int>(f(s.qc->q.layout->f.frame));
+  st.colormap = static_cast<int>(f(s.qc->q.layout->f.colormap));
+  st.skin = static_cast<int>(f(s.qc->q.layout->f.skin));
+  st.effects = static_cast<int>(f(s.qc->q.layout->f.effects));
   st.origin = ed.origin;
   st.angles = ed.angles;
   if (static_cast<size_t>(e) < s.qc->extras.size() &&

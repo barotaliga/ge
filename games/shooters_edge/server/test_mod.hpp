@@ -35,11 +35,17 @@
 // no field, and a `_comment` ignored), four spawn points, a health box that is not in deathmatch
 // (spawnflags 2048: inhibited) and a light with no spawn function (skipped with a message).
 //
-// ge:summary The assembled deathmatch test mod and the test arena's entity text for it
+// THE SINGLE-PLAYER STUB (`build_single_player_stub`): a program of the single-player form (crc
+// 5927) whose only functions are the spawn functions `worldspawn` and `target`, each returning at
+// once, for the tests and the `se-campaign` lab to stand that form on the mod server with;
+// `kStubEntities` is a world for it.
+//
+// ge:summary The assembled deathmatch test mod, the test arena's entities, the single-player stub
 // ge:keywords test-mod deathmatch assembled-mod rocket missile frags timelimit spawn-points
 // ge:keywords build_test_mod karenaentities entity-text worldspawn info_player_deathmatch
+// ge:keywords build_single_player_stub single-player-stub kstubentities
 // ge:skill progs shooter
-// ge:test tests/shooters_edge_mod_match_test.cpp
+// ge:test tests/shooters_edge_mod_match_test.cpp tests/shooters_edge_qc_single_player_test.cpp
 #pragma once
 
 #include <cstdint>
@@ -57,6 +63,10 @@ bool build_test_mod(ge::progs::Progs& out, std::string& error);
 std::vector<uint8_t> test_mod_bytes(std::vector<int32_t>& lines);
 
 extern const char* const kArenaEntities;
+
+// The single-player stub into `out`. False with `error` only if the assembler broke.
+bool build_single_player_stub(ge::progs::Progs& out, std::string& error);
+extern const char* const kStubEntities;
 
 // The test mod's fire rate and rocket, for the tests and the bots.
 constexpr float kRefire = 0.8f;       // s between shots

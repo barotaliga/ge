@@ -824,8 +824,18 @@ Pictured:
 
 **Not yet**: the lamps' shadows in the air (`light_inscatter`, the fog's light shafts), a brush
 map's world casting into the atlas, the brush map's own surfaces (they keep their baked light and
-their own torches), the grass and the sprites, the lift stations' lamps (the stations are not
-drawn yet) and fires in the free ride (nothing there burns yet).
+their own torches), the lift stations' lamps (the stations are not drawn yet) and fires in the
+free ride (nothing there burns yet).
+
+**As built (M39h): the lamps on the grass and the sprites.** A blade reads its cluster as the sun
+does: lit on the face turned to the lamp and through it from behind, the share through rising
+toward its tip (`grass.wgsl`), each lamp's shadow taken, and what reaches the floor of a deep stand
+darkened as its sky is. A sprite is a thin card turned to the eye: `lamps_on_card` lights it as the
+sun lights it, half through and full on, whatever its outdoor share (a lamp lights a card indoors
+too). An added sprite (a flame, a fireball) is light of its own and takes none. Pictured:
+`gpu-grass`'s `lamp-night` (the meadow beside the path under a 1000 cd street lamp) and
+`gpu-sprites`'s `lamp-night` (the yard's bushes and sign under a 400 cd lamp), each with `-off`
+beside it.
 
 ### Materials
 
