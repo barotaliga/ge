@@ -29,6 +29,7 @@
 // ge:skill platform input camera render ui shooter
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -114,7 +115,7 @@ bool parse(int argc, char** argv, Args& a) {
 
 }  // namespace
 
-int main(int argc, char** argv) {
+static int run_main(int argc, char** argv) {
   out::set_output_sink(print_line);
   Args args;
   if (!parse(argc, argv, args)) {
@@ -326,4 +327,25 @@ int main(int argc, char** argv) {
                 device->errors.load());
   out::status(line);
   return device->errors.load() == 0 && !device->lost.load() ? 0 : 1;
+}
+
+// What nothing else caught ends the program here, with a line that says so, rather than in
+// std::terminate's bare abort.
+int main(int argc, char** argv) {
+  try {
+    return run_main(argc, argv);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr,
+                 "shooters_edge: stopped by an uncaught exception: %s. This is a bug: run the same "
+                 "command under lldb or gdb with a breakpoint on __cxa_throw to see where it "
+                 "was thrown.\n",
+                 e.what());
+  } catch (...) {
+    std::fprintf(
+        stderr,
+        "shooters_edge: stopped by an uncaught exception that is not a std::exception. This "
+        "is a bug: run the same command under lldb or gdb with a breakpoint on "
+        "__cxa_throw to see where it was thrown.\n");
+  }
+  return 1;
 }
