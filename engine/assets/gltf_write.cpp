@@ -124,6 +124,7 @@ std::vector<uint8_t> write_glb(const Model& model) {
   for (size_t j = 0; j < joints; ++j) {
     if (model.joints[j].parent < 0) roots.push_back(std::to_string(j));
   }
+  std::vector<size_t> node_of_mesh;
   for (const Mesh& mesh : model.meshes) {
     // One primitive a material, with the vertices its triangles use (in their order in the
     // mesh) as accessors of its own: a vertex's part is its material, so no vertex is shared
@@ -176,9 +177,43 @@ std::vector<uint8_t> write_glb(const Model& model) {
           ",\"NORMAL\":" + std::to_string(a_nrm) + ",\"JOINTS_0\":" + std::to_string(a_jnt) +
           ",\"WEIGHTS_0\":" + std::to_string(a_wgt) + "},\"indices\":" + std::to_string(a_idx);
       if (part < model.materials.size()) prim += ",\"material\":" + std::to_string(part);
+      // Each target's offsets for the primitive's vertices, mirrored like the positions.
+      std::vector<std::string> targets;
+      for (const MorphTarget& t : mesh.targets) {
+        std::vector<float> dp, dn;
+        for (uint32_t v = 0; v < mesh.vertex_count(); ++v) {
+          if (remap[v] < 0) continue;
+          const float* p = &t.positions[size_t{v} * 3];
+          const float* q = &t.normals[size_t{v} * 3];
+          dp.insert(dp.end(), {0.0f - p[0], p[1], p[2]});
+          dn.insert(dn.end(), {0.0f - q[0], q[1], q[2]});
+        }
+        float dlo[3] = {dp[0], dp[1], dp[2]}, dhi[3] = {dp[0], dp[1], dp[2]};
+        for (size_t i = 0; i < dp.size(); ++i) {
+          dlo[i % 3] = std::min(dlo[i % 3], dp[i]);
+          dhi[i % 3] = std::max(dhi[i % 3], dp[i]);
+        }
+        const int a_dp = out.add(dp.data(), dp.size() * 4, kFloat, "VEC3", n,
+                                 ",\"min\":" + list(dlo, 3) + ",\"max\":" + list(dhi, 3));
+        const int a_dn = out.add(dn.data(), dn.size() * 4, kFloat, "VEC3", n);
+        targets.push_back("{\"POSITION\":" + std::to_string(a_dp) +
+                          ",\"NORMAL\":" + std::to_string(a_dn) + "}");
+      }
+      if (!targets.empty()) prim += ",\"targets\":[" + join(targets) + "]";
       prims.push_back(prim + "}");
     }
-    meshes.push_back("{\"name\":" + quoted(mesh.name) + ",\"primitives\":[" + join(prims) + "]}");
+    std::string extra;
+    if (!mesh.targets.empty()) {
+      std::vector<std::string> names;
+      names.reserve(mesh.targets.size());
+      for (const MorphTarget& t : mesh.targets) names.push_back(quoted(t.name));
+      extra = ",\"weights\":" +
+              list(mesh.target_weights.data(), static_cast<int>(mesh.target_weights.size())) +
+              ",\"extras\":{\"targetNames\":[" + join(names) + "]}";
+    }
+    meshes.push_back("{\"name\":" + quoted(mesh.name) + ",\"primitives\":[" + join(prims) + "]" +
+                     extra + "}");
+    node_of_mesh.push_back(nodes.size());
     roots.push_back(std::to_string(nodes.size()));
     nodes.push_back("{\"name\":" + quoted(mesh.name) +
                     ",\"mesh\":" + std::to_string(meshes.size() - 1) + ",\"skin\":0}");
@@ -213,6 +248,19 @@ std::vector<uint8_t> write_glb(const Model& model) {
                            ",\"target\":{\"node\":" + std::to_string(j) + ",\"path\":\"" + path +
                            "\"}}");
       }
+    }
+    for (const MorphTrack& track : clip.morphs) {
+      if (track.mesh < 0 || static_cast<size_t>(track.mesh) >= model.meshes.size()) continue;
+      const size_t n = model.meshes[static_cast<size_t>(track.mesh)].targets.size();
+      if (n == 0 || track.weights.size() < size_t{clip.frames} * n) continue;
+      const int a_val = out.add(track.weights.data(), size_t{clip.frames} * n * 4, kFloat, "SCALAR",
+                                size_t{clip.frames} * n);
+      samplers.push_back("{\"input\":" + std::to_string(a_time) +
+                         ",\"output\":" + std::to_string(a_val) + ",\"interpolation\":\"LINEAR\"}");
+      channels.push_back(
+          "{\"sampler\":" + std::to_string(samplers.size() - 1) +
+          ",\"target\":{\"node\":" + std::to_string(node_of_mesh[static_cast<size_t>(track.mesh)]) +
+          ",\"path\":\"weights\"}}");
     }
     animations.push_back("{\"name\":" + quoted(clip.name) + ",\"samplers\":[" + join(samplers) +
                          "],\"channels\":[" + join(channels) + "]}");
