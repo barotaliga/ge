@@ -1,7 +1,8 @@
 // THE PARTICLES DRAWN (render/particles.hpp): one quad a slot, instanced. A live particle is a
 // streak along its motion over `streak` s, at least `size` long and `size` wide, laid in the plane
 // facing the eye; a dead one folds to a point off the screen. Lit as the instances are (the sun
-// past the ground's horizon and the shadow maps, the sky) with a forward lobe toward the sun,
+// past the ground's horizon and the shadow maps, the sky, the lamps) with a forward lobe toward the
+// sun and each lamp,
 // hazed, faded in and out over its life, thinned by its length, and softened against the depth
 // behind it; a glowing one adds its blackbody light at the heat it has cooled to. Premultiplied over
 // the picture; the motion target's reactive channel only.
@@ -123,6 +124,9 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // bright as the snow it came off facing the sun.
   let lobe = mix(1.0, forward_lobe(dot(-to_eye, frame.sun.xyz), 0.6), 0.6);
   var c = in.look.x / PI * (sun_light(y, xz) * lit * lobe + sky_irradiance(vec3f(0.0, 1.0, 0.0)));
+  // The lamps lit through the cloud the same way: a headlamp's beam in the spray, a floodlight's
+  // haloed by the snow thrown under it.
+  c += in.look.x / PI * lamps_through(in.rel, -to_eye, in.position.xyz, 0.6, 0.6);
   if (in.kelvin > 0.0) {
     c += glow_light(in.kelvin);
   }

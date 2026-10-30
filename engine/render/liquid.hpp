@@ -21,14 +21,24 @@
 //   swell and burst into a ring, a scum of patches drifting with the surface, a thin oily film's
 //   interference colours (the sheen on tar), a gloss of its own and a glow of its own.
 //
+// - ITS LIGHT ROUND IT (`liquid_lamps`): a glowing body (lava, a slime with a glow of its own)
+//   handed to the frame's lamps (render/lights.hpp) as a few point lights over its plan, one a
+//   cell of a grid laid on its box, each as bright as its cell of surface: a flat face of luminance
+//   L and area A sends L A cos(theta) cd at theta off its normal, taken at 60 degrees (the walls
+//   and the banks round a lake see it low), so L A / 2; lifted over the surface by its cell's
+//   radius and softened by it (an area's light, not a point's), its colour the glow's own. Lava's L
+//   is the share of open melt at the core's glow and the crust's at a share of its young skin's
+//   (the cracks and the plates still hot). Steady: the melt changes slower than a frame.
+//
 // Not yet (docs/liquids.md § Not built yet): reflections of the scene (the sky's alone now), the
-// heat shimmer over lava and its light on the walls round it, a flow region's surface.
+// heat shimmer over lava, a flow region's surface.
 //
 // ge:summary Lava and slime drawn: crust plates, cracks and blackbody glow; turbid slime, bubbles
 // ge:keywords render liquid lava slime crust plates cracks voronoi flow-map blackbody glow
 // ge:keywords incandescence pahoehoe ropes kubelka-munk turbid bubbles scum iridescence
 // ge:keywords thin-film sheen toxic gel mucus sludge tar create_liquid add_liquid_body
-// ge:keywords lava_look slime_look liquid_look prepare_liquid encode_liquid
+// ge:keywords lava_look slime_look liquid_look prepare_liquid encode_liquid liquid_lamps
+// ge:keywords glowing-body lava-light area-light
 // ge:skill render water
 // ge:test tests/render_liquid_test.cpp
 #pragma once
@@ -41,6 +51,7 @@
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "render/frame.hpp"
+#include "render/lights.hpp"
 #include "water/optics.hpp"
 #include "water/world.hpp"
 
@@ -142,6 +153,21 @@ struct Liquids {
 // it higher (1.5 holds it orange, as a photograph exposed for the lava does). 0 for a look that
 // does not glow.
 double adapt_for(const LiquidLook& look, double key);
+
+// The share of a crust's young skin's glow its whole face sends, the cracks and the plates still
+// hot over the cold ones (`liquid_lamps`).
+inline constexpr double kCrustGlowShare = 0.2;
+// The most lamps a body hands the frame (a grid of at most this many cells over its box).
+inline constexpr int kLiquidLampsMost = 16;
+inline constexpr double kLiquidLampReach = 150;  // m: the most a body's lamp reaches
+
+// The mean luminance a body in `look` sends off its face, cd/m^2 (linear sRGB, luminance in it):
+// 0 for a look that does not glow.
+water::Rgb liquid_glow(const LiquidLook& look);
+// Append the lamps `body` in `look` lights its surroundings with: a cell of `cell_m` (fewer and
+// larger past kLiquidLampsMost) a lamp; none for a look that does not glow.
+void liquid_lamps(const water::Body& body, const LiquidLook& look, std::vector<LocalLight>& out,
+                  double cell_m = 10);
 
 // The pipelines into the manifest.
 void create_liquid(gpu::Device& device, gpu::PipelineSet& pipelines, Liquids& liquids,

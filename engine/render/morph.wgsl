@@ -143,6 +143,8 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   }
   let light = outdoor * (sun + sky_irradiance(n)) + own;
   var c = s.rgb / PI * light + s.rgb * (s.w * d.blends.z * white_luminance());
+  // The lamps on its skin (a torch carried past, a muzzle's flash), on a matte face.
+  c += local_lights(matte(s.rgb), in.rel, n, -normalize(in.rel), in.position.xyz);
   var out: FragmentOut;
   out.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);
   out.motion = vec4f(screen_motion(frame, vec4f(in.last_rel, 1.0), in.position.xy), 0.0, 0.0);

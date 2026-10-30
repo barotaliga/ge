@@ -116,7 +116,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     // Aerated water scatters light every way: lit as a face tipped well up toward the sky, so a
     // curtain the sun is behind still reads white.
     let lit = normalize(geo + vec3f(0.0, 1.5, 0.0));
-    c = shade_water(lit, in.rel, in.xz, in.position.xy, in.rel.y + frame.eye.y, 0.02, 0.02, o,
+    c = shade_water(lit, in.rel, in.xz, in.position.xyz, in.rel.y + frame.eye.y, 0.02, 0.02, o,
                     0.7 + 0.3 * thick);
   } else {
     let speed = length(in.flow);
@@ -130,7 +130,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let slope = r.xy * rough;
     let n = normalize(vec3f(geo.x / geo.y - slope.x, 1.0, geo.z / geo.y - slope.y));
     let lace = smoothstep(1.0 - in.foam, 1.0 - in.foam + 0.18, r.z) * step(0.02, in.foam);
-    c = shade_water(n, in.rel, in.xz, in.position.xy, in.rel.y + frame.eye.y, 0.01 * rough,
+    c = shade_water(n, in.rel, in.xz, in.position.xyz, in.rel.y + frame.eye.y, 0.01 * rough,
                     0.04, o, lace);
   }
   var out: FragmentOut;
