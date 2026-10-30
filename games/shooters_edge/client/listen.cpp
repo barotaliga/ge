@@ -10,6 +10,7 @@
 #include <cstring>
 #include <string_view>
 
+#include "core/num.hpp"
 #include "progs/layout.hpp"
 #include "progs/qc_compile.hpp"
 #include "progs/vm.hpp"
@@ -157,7 +158,7 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
 
 void listen_frame(Listen& l, sh::MoveCmd cmd) {
   sv::QcServer& s = *l.server;
-  cmd.msec = static_cast<uint8_t>(s.sv.set.mintic * 1000 + 0.5);
+  cmd.msec = static_cast<uint8_t>(ge::core::num::round(s.sv.set.mintic * 1000));
   cmd.angles = l.view;
   if (l.impulse != 0) {
     cmd.impulse = static_cast<uint8_t>(l.impulse);

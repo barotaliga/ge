@@ -172,7 +172,8 @@ int main(int argc, char** argv) {
   cl::SearchPath files;
   std::string error;
   if (!cl::open_game_dir(args.basedir, args.game, files, error)) {
-    out::error("shooters_edge: " + error);
+    out::error("shooters_edge: the game folder did not open: " + error +
+               "; see docs/shooters-edge.md § Playing it");
     if (next_map != "arena") return 2;
   } else {
     out::status("shooters_edge: " + std::to_string(files.archives.size()) + " packs in " +
@@ -186,12 +187,14 @@ int main(int argc, char** argv) {
   std::string source;
   if (!(args.progs.empty() ? cl::baseline_progs(progs, error)
                            : shooters_edge::server::load_mod(args.progs, progs, source, error))) {
-    out::error("shooters_edge: " + error);
+    out::error("shooters_edge: the mod did not load: " + error +
+               "; see docs/shooters-edge.md § Running your own mod");
     return 2;
   }
   std::unique_ptr<cl::LoadedMap> first = cl::load_named_map(files, next_map, error);
   if (!first || !cl::listen_start(listen, progs, std::move(first), {}, error)) {
-    out::error("shooters_edge: " + error);
+    out::error("shooters_edge: the first map did not start: " + error +
+               "; see docs/shooters-edge.md § Playing it");
     return 2;
   }
   next_map.clear();
@@ -210,7 +213,7 @@ int main(int argc, char** argv) {
       cl::create_world_draw(*device, files, *listen.map, static_cast<uint32_t>(w),
                             static_cast<uint32_t>(h), surface.format(), look, error);
   if (!world) {
-    out::error("shooters_edge: " + error);
+    out::error("shooters_edge: the world draw did not load: " + error + "; see docs/rendering.md");
     return 1;
   }
   ge::platform::DevicesPtr devices = ge::platform::open_devices();
@@ -272,14 +275,16 @@ int main(int argc, char** argv) {
         console.print("map: " + error);
         listen.pending_map.clear();
       } else if (!cl::listen_change(listen, std::move(m), error)) {
-        out::error("shooters_edge: " + error);
+        out::error("shooters_edge: the map change failed: " + error +
+                   "; see docs/shooters-edge.md § Playing it");
         return 2;
       } else {
         world.reset();
         world = cl::create_world_draw(*device, files, *listen.map, static_cast<uint32_t>(w),
                                       static_cast<uint32_t>(h), surface.format(), look, error);
         if (!world) {
-          out::error("shooters_edge: " + error);
+          out::error("shooters_edge: the new world draw did not load: " + error +
+                     "; see docs/rendering.md");
           return 1;
         }
         shown = {};
