@@ -43,13 +43,16 @@ if [[ -n "$base" ]]; then
     done
     if (( ! full )); then
       root="$PWD"
-      # Ninja's deps: "<object>: #deps ..." then one indented path per line, the source first.
-      # Print every source whose object reads a changed file.
-      affected="$(ninja -C "$build" -t deps | awk -v root="$root" -v list="$(printf '%s\n' "${changed[@]}")" '
-        BEGIN { n = split(list, c, "\n"); for (i = 1; i <= n; i++) if (c[i] != "") want[root "/" c[i]] = 1 }
-        /^[^ ]/ { src = ""; next }
-        /^    / { p = substr($0, 5); if (src == "") src = p; if (p in want) hit[src] = 1 }
-        END { for (s in hit) if (index(s, root "/") == 1) print substr(s, length(root) + 2) }')"
+      # Ninja's deps: "<object>: #deps ..." then one indented path per line. The object's source
+      # is its first .cpp in the tree (GCC lists it first; Apple Clang puts toolchain headers
+      # before it). Print every source whose object reads a changed file. The list goes through
+      # the environment: macOS's awk refuses a newline in a -v value.
+      affected="$(ninja -C "$build" -t deps | LINT_CHANGED="$(printf '%s\n' "${changed[@]}")" awk -v root="$root" '
+        function flush() { if (got && src != "") hit[src] = 1; src = ""; got = 0 }
+        BEGIN { n = split(ENVIRON["LINT_CHANGED"], c, "\n"); for (i = 1; i <= n; i++) if (c[i] != "") want[root "/" c[i]] = 1 }
+        /^[^ ]/ { flush(); next }
+        /^    / { p = substr($0, 5); if (src == "" && p ~ /\.cpp$/ && index(p, root "/") == 1) src = p; if (p in want) got = 1 }
+        END { flush(); for (s in hit) print substr(s, length(root) + 2) }')"
       files=()
       for f in "${all[@]}"; do
         if grep -qxF -- "$f" <<<"$affected" || printf '%s\n' "${changed[@]}" | grep -qxF -- "$f"; then

@@ -111,8 +111,14 @@ false`, so one row's golden failure shows alongside the others.
 - **Kept fast**: ctest runs four cases at
   once (`CTEST_PARALLEL_LEVEL`; `make test` uses every core), the labs' smoke pass is eight
   CTest cases (`labs_smoke_1`..`_8`, `labs --all --smoke --shard=I/N`) and the slow cases carry
-  a `COST` so they start first. The Linux and macOS rows compile through ccache, restored on
-  every run and saved only from main (a pull request never writes the cache). On a pull
+  a `COST` so they start first. Every row compiles through ccache (Windows' MSVC too, from
+  ccache's pinned release), restored on every run and saved only from main (a pull request never
+  writes the cache); `ccache --zero-stats` before the build makes the row's `--show-stats` that
+  run's hits. The packaging jobs restore the release row's cache of their OS and build with Ninja
+  into `build/release` like it, so the compile lines match. Locally, `cmake/CompilerCache.cmake`
+  picks ccache up from PATH, `cmake/Linker.cmake` links with mold or LLD on Linux, and
+  `tools/ccache-share.sh` carries a cloud container's cache to the next one (docs/architecture.md
+  § Build has the measurements). On a pull
   request `lint` checks only what the change reaches (`tools/lint.sh BUILD BASE`: each changed
   `.cpp`, and each `.cpp` whose object includes a changed header, read off Ninja's deps); a
   change to `.clang-tidy`, `tools/lint.sh` or the CMake lints everything (main is never linted

@@ -35,6 +35,10 @@ option(GE_SANITIZE "Build with address + undefined sanitizers" OFF)
 # package, so a game built against a release computes the same bits as the engine's tests.
 # ge_flags is this tree's own hygiene (warnings, -Werror, sanitizers) and never leaves it.
 include(cmake/Fp.cmake)
+# Every compile through ccache when it is installed (cmake/CompilerCache.cmake).
+include(cmake/CompilerCache.cmake)
+# On Linux, every link with mold or LLD when one is installed (cmake/Linker.cmake).
+include(cmake/Linker.cmake)
 
 add_library(ge_flags INTERFACE)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

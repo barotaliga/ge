@@ -16,7 +16,8 @@ namespace {
 
 namespace con = ge::console;
 
-constexpr uint16_t kGrave = 53;  // the key under the tilde
+constexpr uint16_t kGrave = 53;   // the key under the tilde
+constexpr uint16_t kNonUs = 100;  // the ISO key, the key under Escape on some Macs (binds.cpp)
 
 // The code point as UTF-8.
 std::string utf8(uint32_t cp) {
@@ -92,7 +93,8 @@ void feed_console(con::Console& c, con::ConsoleView& view, const input::Queue& q
   for (const input::Event& e : queue.events) {
     if (e.type == input::EventType::text) {
       const auto cp = static_cast<uint32_t>(e.v[0]);
-      if (view.open() && !(toggled && (cp == '`' || cp == '~'))) view.type(utf8(cp));
+      const bool own = cp == '`' || cp == '~' || cp == 0xa7 || cp == 0xbd || cp == '<' || cp == '>';
+      if (view.open() && !(toggled && own)) view.type(utf8(cp));  // § ½ < > on the ISO key
       continue;
     }
     if (e.type != input::EventType::key) continue;
@@ -106,7 +108,7 @@ void feed_console(con::Console& c, con::ConsoleView& view, const input::Queue& q
       if (const auto edit = edit_key(e.code)) view.key(*edit);
     }
     if (key.empty() || (down && e.aux != 0)) continue;  // a repeat edits; it presses no bind
-    if (down && e.code == kGrave) toggled = true;
+    if (down && (e.code == kGrave || e.code == kNonUs)) toggled = true;
     if (down) {
       c.key(spelled(key, keys), true, open ? con::BindMode::console : con::BindMode::game);
     } else {

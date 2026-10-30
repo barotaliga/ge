@@ -24,8 +24,9 @@
 # libm is the suspect.
 #
 # Speed: every ctest runs its cases in parallel (CTEST_PARALLEL_LEVEL; the labs' smoke pass is
-# cut into slices for it), the Linux and macOS rows compile through ccache (restored on every
-# run, saved only from main so pull requests do not churn the cache), and the lint checks only
+# cut into slices for it), every row compiles through ccache (Linux, macOS and Windows; restored
+# on every run, saved only from main so pull requests do not churn the cache; the packaging jobs
+# read the test rows' caches), and the lint checks only
 # what the change can reach (tools/lint.sh).
 name: ci
 
@@ -279,6 +280,7 @@ jobs:
           path: .cache/ccache
           key: ccache-${{ matrix.os }}-${{ matrix.cxx }}-${{ matrix.preset }}-${{ github.sha }}
           restore-keys: ccache-${{ matrix.os }}-${{ matrix.cxx }}-${{ matrix.preset }}-
+      - run: ccache --zero-stats
       - run: cmake --preset ${{ matrix.preset }}
       - run: cmake --build --preset ${{ matrix.preset }}
       - run: ccache --show-stats
@@ -336,6 +338,7 @@ jobs:
           path: .cache/ccache
           key: ccache-ubuntu-24.04-g++-release-${{ github.sha }}
           restore-keys: ccache-ubuntu-24.04-g++-release-
+      - run: ccache --zero-stats
       - run: cmake --preset release
       - run: cmake --build --preset release
       - run: ccache --show-stats
@@ -348,15 +351,44 @@ jobs:
     if: needs.gates.outputs.code == 'true'
     runs-on: windows-2025
     timeout-minutes: 60
+    env:
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 500M
     steps:
       - uses: actions/checkout@v5
       - uses: actions/cache@v4
         with:
           path: .cache/deps
           key: deps-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('cmake/Dawn.cmake', 'cmake/SDL.cmake', 'cmake/Codecs.cmake') }}
+      # ccache compiles MSVC too (cmake/CompilerCache.cmake). The runner's image has none: the
+      # pinned release, from ccache's own GitHub releases.
+      - name: Install ccache (Windows)
+        shell: pwsh
+        env:
+          CCACHE_VERSION: 4.10.2
+        run: |
+          $zip = "$env:RUNNER_TEMP/ccache.zip"
+          Invoke-WebRequest -Uri "https://github.com/ccache/ccache/releases/download/v$env:CCACHE_VERSION/ccache-$env:CCACHE_VERSION-windows-x86_64.zip" -OutFile $zip
+          Expand-Archive $zip -DestinationPath "$env:RUNNER_TEMP" -Force
+          "$env:RUNNER_TEMP/ccache-$env:CCACHE_VERSION-windows-x86_64" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - uses: actions/cache/restore@v4
+        with:
+          path: .cache/ccache
+          key: ccache-windows-2025-msvc-release-${{ github.sha }}
+          restore-keys: ccache-windows-2025-msvc-release-
       - uses: ilammy/msvc-dev-cmd@v1
+      - run: ccache --zero-stats
       - run: cmake --preset release
       - run: cmake --build --preset release
+      - run: ccache --show-stats
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/ccache
+          key: ccache-windows-2025-msvc-release-${{ github.sha }}
       - run: ctest --preset release
 
   # clang-tidy's bug-finding checks (.clang-tidy), in parallel, over the files the change can

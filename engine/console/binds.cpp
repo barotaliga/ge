@@ -23,7 +23,7 @@ constexpr std::string_view kNamed[] = {
     "pad_a",    "pad_b",     "pad_x",     "pad_y",    "pad_lb",    "pad_rb",   "pad_lt",
     "pad_rt",   "pad_back",  "pad_start", "pad_ls",   "pad_rs",    "pad_up",   "pad_down",
     "pad_left", "pad_right", "semicolon", "[",        "]",         ",",        ".",
-    "/",        "\\",        "'",         "-",        "=",         "`",
+    "/",        "\\",        "'",         "-",        "=",         "`",        "nonus",
 };
 
 bool numbered(std::string_view key, std::string_view prefix, int lo, int hi) {
@@ -77,6 +77,9 @@ std::string_view usage_key(uint16_t usage) {
   if (usage >= kFirstUsage && static_cast<size_t>(usage - kFirstUsage) < std::size(kUsageNames))
     return kUsageNames[usage - kFirstUsage];
   switch (usage) {
+    case 100:  // the ISO key beside the left shift; on a Mac whose ISO keyboard is not
+               // recognised as one, the key under Escape (§ on a Nordic layout)
+      return "nonus";
     case 224:
     case 228:
       return "ctrl";
