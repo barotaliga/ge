@@ -60,8 +60,9 @@ struct UiItem {
   float clip[4];  // x0, y0, x1, y1 (px)
   float uv[4];
   float ink[4];
-  float shape[4];    // radius, feather, border, opacity
-  uint32_t info[4];  // kind, paint index, a box: sliced / a polygon: first point, its count
+  float shape[4];  // radius, feather, border, opacity
+  uint32_t
+      info[4];  // kind, paint index, a box: sliced, nearest / a polygon: first point, its count
   float turn[4];
   float src[4];
   float dst[4];

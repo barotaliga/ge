@@ -243,6 +243,7 @@ bool stage(gpu::Device& device, UiPass& pass, const ui::DrawList& list) {
           it.info[2] = 1;
         }
         it.info[0] = kKindSampled;
+        it.info[3] = b.nearest ? 1 : 0;
         current = &pic.group;
         open_range(current);
       }
