@@ -74,9 +74,9 @@ constexpr int kStats = 32;
 
 struct SvcDef {
   uint8_t id;
+  bool reliable;  // always sent on the reliable stream
   const char* name;
   const char* layout;
-  bool reliable;  // always sent on the reliable stream
 };
 // The definition of an svc id; nullptr for an id the protocol has not.
 const SvcDef* svc_def(uint8_t id);

@@ -109,7 +109,7 @@ void cmd_list(ClassicServer& s, int slot, bool models, int start) {
   size_t bytes = 4;
   int last = start;
   while (last + 1 < limit) {
-    const std::string& n = names[static_cast<size_t>(last + 1)];
+    const std::string& n = names[static_cast<size_t>(last) + 1];
     if (bytes + n.size() + 1 > kPage && (last & 0xff) != 0) break;
     bytes += n.size() + 1;
     m.strings.push_back(n);
@@ -240,8 +240,7 @@ void cmd_begin(ClassicServer& s, int slot) {
 void cmd_setinfo(ClassicServer& s, int slot, const std::string& key, const std::string& value) {
   ClassicClient& c = s.clients[slot];
   if (key.empty() || key[0] == '*' || value.find("&c") != std::string::npos ||
-      value.find("&r") != std::string::npos ||
-      !info_set(c.userinfo, key, key == "name" ? value : value)) {
+      value.find("&r") != std::string::npos || !info_set(c.userinfo, key, value)) {
     client_print(s, slot, 2, "Can't set " + key + ".\n");
     return;
   }
@@ -447,7 +446,12 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
     std::vector<std::pair<std::string, std::string>> pairs;
     info_pairs(s.serverinfo, pairs);
     std::string t;
-    for (const auto& [k, v] : pairs) t += k + " " + v + "\n";
+    for (const auto& [k, v] : pairs) {
+      t += k;
+      t += ' ';
+      t += v;
+      t += '\n';
+    }
     client_print(s, slot, 2, t);
   } else if (cmd == "download") {
     cmd_download(s, slot, pg::word(w, 1));

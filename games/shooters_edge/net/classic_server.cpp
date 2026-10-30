@@ -9,7 +9,9 @@
 // ge:test tests/shooters_edge_classic_server_test.cpp
 #include "shooters_edge/net/classic_server.hpp"
 
+#include <charconv>
 #include <cstring>
+#include <iterator>
 
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
@@ -74,10 +76,13 @@ void reject(ClassicServer& s, const gn::Address& from, const std::string& why) {
   send_oob_print(s, from, why + "\n");
 }
 
-uint32_t parse_number(const std::string& t) {
-  if (t.size() > 2 && t[0] == '0' && (t[1] == 'x' || t[1] == 'X'))
-    return static_cast<uint32_t>(std::stoul(t.substr(2), nullptr, 16));
-  return static_cast<uint32_t>(std::stoul(t, nullptr, 10));
+// A decimal or 0x-prefixed hex number filling the whole word; false for anything else.
+bool parse_number(const std::string& t, uint32_t& out) {
+  const bool hex = t.size() > 2 && t[0] == '0' && (t[1] == 'x' || t[1] == 'X');
+  const char* first = t.data() + (hex ? 2 : 0);
+  const char* last = t.data() + t.size();
+  const auto [end, ec] = std::from_chars(first, last, out, hex ? 16 : 10);
+  return ec == std::errc{} && end == last && first != last;
 }
 
 // The extension lines after a connect's first line: `0x<magic> 0x<bits>` each.
@@ -89,15 +94,12 @@ bool read_ext_lines(const std::string& text, Ext& asked) {
     const std::string line = text.substr(at + 1, end == std::string::npos ? end : end - at - 1);
     pg::Words w;
     pg::tokenize_words(line.c_str(), w);
-    if (w.count >= 2) {
-      try {
-        ExtFamily f;
-        if (family_of_magic(parse_number(pg::word(w, 0)), f)) {
-          asked[f] = parse_number(pg::word(w, 1));
-          any = true;
-        }
-      } catch (...) {
-      }
+    uint32_t magic = 0, bits = 0;
+    ExtFamily f;
+    if (w.count >= 2 && parse_number(pg::word(w, 0), magic) && parse_number(pg::word(w, 1), bits) &&
+        family_of_magic(magic, f)) {
+      asked[f] = bits;
+      any = true;
     }
     at = end;
   }
@@ -455,7 +457,7 @@ bool classic_start(ClassicServer& s, sv::QcServer& qc, gn::Transport& t, const S
     qc.lag_rewind = &lag_rewind;
     qc.lag_ctx = &s;
   }
-  s.packets.reserve(sh::kMaxClients * 4);
+  s.packets.reserve(static_cast<size_t>(sh::kMaxClients) * 4);
   return true;
 }
 
@@ -472,7 +474,12 @@ void classic_drop(ClassicServer& s, int slot, const std::string& why) {
   }
   if (c.qc_active) sv::disconnect(*s.qc, slot);
   antilag_clear(s.antilag, slot);
-  s.log.push_back("drop " + std::to_string(slot) + " " + c.name + ": " + why);
+  std::string line = "drop " + std::to_string(slot);
+  line += ' ';
+  line += c.name;
+  line += ": ";
+  line += why;
+  s.log.push_back(line);
   s.counts.drops++;
   c = ClassicClient{};
   full_client_update(s, slot, -1);
@@ -484,6 +491,19 @@ int classic_count(const ClassicServer& s, ConnState at_least) {
     if (c.state != ConnState::free && static_cast<int>(c.state) >= static_cast<int>(at_least)) n++;
   return n;
 }
+
+namespace {
+
+std::string quoted(const std::string& s) {
+  std::string q;
+  q.reserve(s.size() + 2);
+  q += '"';
+  q += s;
+  q += '"';
+  return q;
+}
+
+}  // namespace
 
 std::string status_text(const ClassicServer& s, int opt) {
   std::string t = s.serverinfo + "\n";
@@ -504,14 +524,25 @@ std::string status_text(const ClassicServer& s, int opt) {
     std::string name = c.name;
     std::string fr = std::to_string(frags);
     if (c.spectator) {
-      name = "\\s\\" + name;
+      name.insert(0, "\\s\\");
       fr = (opt & 8) ? "S" : "-9999";
     }
-    t += std::to_string(c.userid) + " " + fr + " " + std::to_string(minutes) + " " +
-         std::to_string(c.spectator ? -ping : ping) + " \"" + name + "\" \"" +
-         info_get(c.userinfo, "skin") + "\" " + std::to_string(colour("topcolor")) + " " +
-         std::to_string(colour("bottomcolor"));
-    if (opt & 16) t += " \"" + info_get(c.userinfo, "team") + "\"";
+    const std::string fields[] = {std::to_string(c.userid),
+                                  fr,
+                                  std::to_string(minutes),
+                                  std::to_string(c.spectator ? -ping : ping),
+                                  quoted(name),
+                                  quoted(info_get(c.userinfo, "skin")),
+                                  std::to_string(colour("topcolor")),
+                                  std::to_string(colour("bottomcolor"))};
+    for (size_t k = 0; k < std::size(fields); k++) {
+      if (k > 0) t += ' ';
+      t += fields[k];
+    }
+    if (opt & 16) {
+      t += ' ';
+      t += quoted(info_get(c.userinfo, "team"));
+    }
     if (opt & 64) t += " \"\"";
     if (opt & 128) t += " \"h\"";
     t += "\n";

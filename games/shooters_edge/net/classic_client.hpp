@@ -80,14 +80,13 @@ struct ClassicClientEnd {
   ClientConfig cfg;
   gn::Transport* transport = nullptr;
   gn::Address server;
-  ClientStage stage = ClientStage::challenge;
   std::string refused;  // the server's reason when refused
   int32_t challenge = 0;
+  int tick = 0;
   Ext offered;  // what the challenge offered
   Ext ext;      // agreed (serverdata, and the z set)
   Channel ch;
   double now = 0, last_ask = -1;
-  int tick = 0;
 
   // Signon.
   int spawncount = 0;
@@ -96,6 +95,7 @@ struct ClassicClientEnd {
   std::vector<std::string> sounds, models;  // [0] ""
   int sound_last = 0, model_last = 0;
   int stufftexts = 0;
+  ClientStage stage = ClientStage::challenge;
   bool begun = false;
   double connected_at = -1, active_at = -1;  // the network's times, s
   std::vector<std::string> wanted_skins;     // skins left to fetch before begin
@@ -104,7 +104,6 @@ struct ClassicClientEnd {
   sh::MoveCmd cmds[3];
   std::vector<EntityState> baselines;
   ClientFrame frames[64];
-  int valid_frame = -1;  // the newest frame's sequence held (-1: none)
   PlayerState players[32];
   bool player_seen[32] = {};
   std::string userinfos[32];
@@ -112,6 +111,7 @@ struct ClassicClientEnd {
   int32_t stats[kStats] = {};
   std::vector<std::string> prints, centerprints;
   int lightstyles = 0, statics = 0, static_sounds = 0;
+  int valid_frame = -1;  // the newest frame's sequence held (-1: none)
 
   ClientDownload dl;
   std::map<std::string, std::vector<uint8_t>> downloaded;

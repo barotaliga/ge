@@ -12,6 +12,8 @@ namespace shooters_edge::net {
 namespace {
 
 const EntityState kNull{};
+// No frame to delta from: every entity comes off its baseline.
+const std::vector<EntityState> kNoFrame;
 
 float angle_grid(float a, Coords c) {
   return c == Coords::all ? angle16_from_wire(angle16_to_wire(a))
@@ -130,13 +132,13 @@ EntityRecord read_entity_record(gn::Reader& r, uint16_t word, const EntityState&
 void write_packet_entities(gn::Writer& w, const std::vector<EntityState>* from,
                            const std::vector<EntityState>& to,
                            const std::vector<EntityState>& baselines, const Ext& ext) {
+  const std::vector<EntityState>& prev = from ? *from : kNoFrame;
   size_t i = 0, j = 0;
-  const size_t nf = from ? from->size() : 0;
-  while (i < nf || j < to.size()) {
-    const int fnum = i < nf ? (*from)[i].number : 1 << 30;
+  while (i < prev.size() || j < to.size()) {
+    const int fnum = i < prev.size() ? prev[i].number : 1 << 30;
     const int tnum = j < to.size() ? to[j].number : 1 << 30;
     if (fnum == tnum) {
-      write_entity_delta(w, (*from)[i], to[j], false, ext);
+      write_entity_delta(w, prev[i], to[j], false, ext);
       i++;
       j++;
     } else if (tnum < fnum) {
@@ -157,8 +159,9 @@ bool read_packet_entities(gn::Reader& r, const std::vector<EntityState>* from,
                           const std::vector<EntityState>& baselines, const Ext& ext,
                           std::vector<EntityState>& out, std::vector<EntityRecord>* records) {
   out.clear();
+  const std::vector<EntityState>& prev = from ? *from : kNoFrame;
   size_t i = 0;
-  const size_t nf = from ? from->size() : 0;
+  const size_t nf = prev.size();
   int last = -1;
   while (true) {
     const uint16_t word = gn::read_u16(r);
@@ -182,9 +185,9 @@ bool read_packet_entities(gn::Reader& r, const std::vector<EntityState>* from,
     const int num = peek.number;
     if (num <= last) return false;  // out of order: damaged
     last = num;
-    while (i < nf && (*from)[i].number < num) out.push_back((*from)[i++]);
-    const bool have = i < nf && (*from)[i].number == num;
-    const EntityState& base = have ? (*from)[i]
+    while (i < nf && prev[i].number < num) out.push_back(prev[i++]);
+    const bool have = i < nf && prev[i].number == num;
+    const EntityState& base = have ? prev[i]
                               : static_cast<size_t>(num) < baselines.size()
                                   ? baselines[static_cast<size_t>(num)]
                                   : kNull;
@@ -194,7 +197,7 @@ bool read_packet_entities(gn::Reader& r, const std::vector<EntityState>* from,
     if (records) records->push_back(rec);
     if (!(rec.bits & kURemove)) out.push_back(rec.state);
   }
-  while (i < nf) out.push_back((*from)[i++]);
+  while (i < nf) out.push_back(prev[i++]);
   return !r.bad;
 }
 

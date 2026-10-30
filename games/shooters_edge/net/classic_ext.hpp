@@ -46,9 +46,9 @@ constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
 
 struct ExtBit {
   ExtFamily family;
+  bool first_tier;  // offered by our server
   uint32_t bit;
   const char* name;
-  bool first_tier;  // offered by our server
 };
 extern const ExtBit kExtBits[];
 extern const int kExtBitCount;

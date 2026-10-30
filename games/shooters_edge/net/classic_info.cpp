@@ -16,7 +16,12 @@ bool clean(const std::string& s) {
 
 std::string join(const std::vector<std::pair<std::string, std::string>>& pairs) {
   std::string s;
-  for (const auto& [k, v] : pairs) s += "\\" + k + "\\" + v;
+  for (const auto& [k, v] : pairs) {
+    s += '\\';
+    s += k;
+    s += '\\';
+    s += v;
+  }
   return s;
 }
 

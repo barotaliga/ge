@@ -530,7 +530,8 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
       c.dl.asked[i] = c.now;
       int held = 0;
       for (bool h : c.dl.have) held += h ? 1 : 0;
-      const int percent = static_cast<int>(100 * held / c.dl.have.size());
+      const int percent =
+          static_cast<int>(size_t{100} * static_cast<size_t>(held) / c.dl.have.size());
       write_byte(w, clc::stringcmd);
       write_string(w, "nextdl " + std::to_string(i) + " " + std::to_string(percent) + " " +
                           std::to_string(c.dl.number));
