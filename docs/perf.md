@@ -41,6 +41,7 @@ Every row kept every level digest (v10: `0b310d692fbf2dee`, v1: `4c49f555e1c4e25
 | `hypot` divides only the smaller side (the larger over itself is exactly 1); a power-of-two grid pitch multiplies by its exact inverse | about −2% | | `engine/core/math.hpp`, `heightfield.hpp` |
 | More pure per-cell passes on threads: a run's levelling of the grid, a lane's raster; the ski routes' trunks filed once a map and the kept lines threaded through the woods side by side | about −7% | | `network_stamp.cpp`, `lanes.cpp`, `ski_routes.cpp` |
 | These three, together, against the last row, side by side on one machine | 948 ms → 788 ms (−17%) | 242 ms → 223 ms (−8%) | |
+| The woods' and the cliffs' "is this on a kicker or a cliff?" passes over a kicker or a cliff whose box cannot reach the point (its distance on either axis beyond the box's longest reach plus its half-width) before working its heading's sine and cosine: a box's two extents bound the distance, so no answer changes | 1324 ms → 1234 ms (−7%; 5.1% fewer instructions on seed 38) | unchanged | `kickers.cpp`, `cliffs.cpp` |
 
 The lookups' ring walks visited every cell of every ring out to the search radius, most of
 them empty: a query far from any run read up to 90 rings of hash-map misses. Clamping each ring
@@ -58,6 +59,14 @@ instructions that take tens of cycles, so its cost shows only in wall time. A sa
 (SIGPROF over the build, the samples symbolised with `addr2line`) found it, and the A/B runs of
 the two builds back to back, three times over, are how the rows above were measured: the
 container's timings wander by ±5% from one run to the next.
+
+What approximate math is worth here was measured the same way (`docs/goals/M4e.md`). A
+polynomial sine and cosine three times cheaper than the vendored ones, and a `hypot` five times
+cheaper (a bare `sqrt(a*a + b*b)`), each built into the generator alone: the ski area took the
+same time within the container's noise, and both moved maps (every seed's digest for the
+sine, seed 38's for the `hypot`). The generator's time is in its walks over grids and indexes,
+not in its arithmetic, so a cheaper function only moves bits; the gain came from not calling
+the sine and cosine at all where the answer was already known.
 
 ## The frame on the GPU
 

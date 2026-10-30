@@ -20,6 +20,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <span>
 #include <string>
 
@@ -32,6 +33,9 @@ namespace ge::classicenhance {
 inline constexpr int kModelStageVersion = 1;
 
 struct ModelOptions {
+  // Called with done 0 and the file count before the first file, then after each file with its
+  // name; false stops the stage (its error already set by the caller). None: not called.
+  std::function<bool(const std::string& name, uint32_t done, uint32_t total)> each;
   int skin_scale = 4;  // the skins' upscale (1..8); the rest of the texture options apply
   int round = 0;       // 0: smooth shading only; n > 1: every triangle rounded into n * n
 };

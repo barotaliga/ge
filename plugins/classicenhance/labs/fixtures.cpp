@@ -8,10 +8,14 @@
 #include <algorithm>
 #include <cmath>
 
+#include "brush/write.hpp"
+#include "classicenhance/sound.hpp"
 #include "core/libm/libm.hpp"
 #include "core/noise.hpp"
 #include "morph/read.hpp"
 #include "morph/write.hpp"
+#include "vfs/pak.hpp"
+#include "vfs/wad.hpp"
 
 namespace ge::classicenhance::labs {
 
@@ -272,6 +276,30 @@ morph::Model fixture_weapon(const Palette& palette) {
   std::string error;
   if (!morph::read_model(morph::write_model(m), "fixture.mdl", &back, &error)) return m;
   return back;
+}
+
+std::vector<uint8_t> fixture_pack(const Palette& palette) {
+  const std::vector<uint8_t> pal(palette.rgb.begin(), palette.rgb.end());
+  std::vector<uint8_t> map, wad, out;
+  std::string error;
+  brush::write_bsp(brush::sample_fixture(), brush::Family::v29, &map, &error);
+  // A tone at the classic 11 025 Hz, looping from its 1000th sample.
+  Pcm tone;
+  tone.rate = 11025;
+  tone.loop_start = 1000;
+  for (int i = 0; i < 4000; i++) tone.samples.push_back(float((i % 50) - 25) / 50.0f);
+  vfs::IndexedPicture bar;
+  bar.width = 4, bar.height = 2, bar.indices = {1, 2, 255, 4, 5, 6, 7, 8};
+  vfs::write_wad({{"SBAR", vfs::kPictureLump, vfs::write_picture(bar)}}, &wad, &error);
+  vfs::write_pak({{"gfx/palette.lmp", pal},
+                  {"gfx.wad", wad},
+                  {"maps/b_hall.bsp", map},
+                  {"maps/a_copy.bsp", map},
+                  {"sound/ambience/hum1.wav", write_wav(tone)},
+                  {"progs/thing.mdl", morph::write_model(morph::sample_model())},
+                  {"progs/s_light.spr", morph::write_sprite(morph::sample_sprite())}},
+                 &out, &error);
+  return out;
 }
 
 }  // namespace ge::classicenhance::labs
