@@ -43,6 +43,7 @@
 // ge:keywords create_post post_group encode_post set_grade identity_grade set_post_look
 // ge:keywords sharpen cas contrast-adaptive-sharpening chromatic-aberration vignette film-grain
 // ge:keywords lens-dirt post-look lens-effects motion-blur shutter post-motion
+// ge:keywords screen-blend set_post_blend tint damage-flash
 // ge:skill render
 // ge:test tests/render_post_test.cpp
 #pragma once
@@ -115,6 +116,10 @@ wgpu::BindGroup post_group(gpu::Device& device, const Post& post, const wgpu::Te
                            const wgpu::TextureView& lens = nullptr, const PostReads& reads = {});
 // The strengths, live; a feature not compiled at create_post stays off whatever it is given.
 void set_post_look(gpu::Device& device, const Post& post, const PostLook& look);
+// THE SCREEN'S BLEND: the whole picture mixed toward one colour after the grade (a game's flash
+// when its player is hurt, the tint of a liquid round the eye): `rgba` an sRGB-encoded colour and
+// its share, 0..1; a share of 0 (the start) leaves the picture as it is.
+void set_post_blend(gpu::Device& device, const Post& post, const double rgba[4]);
 // Depth of field's focus, sharp share and strength (render/dof.hpp's), live: the post pass mixes
 // the gather in by each pixel's own circle under the same lens the dof pass gathered with.
 void set_post_focus(gpu::Device& device, const Post& post, const DofSettings& dof);

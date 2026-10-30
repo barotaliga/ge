@@ -10,7 +10,7 @@
 #include <cmath>
 #include <cstdlib>
 
-#include "assets/inflate.hpp"
+#include "core/inflate.hpp"
 #include "core/libm/libm.hpp"
 
 namespace ge::assets {
@@ -29,15 +29,6 @@ int paeth(int a, int b, int c) {
 }
 
 }  // namespace
-
-uint32_t crc32(const uint8_t* bytes, size_t n, uint32_t crc) {
-  crc = ~crc;
-  for (size_t i = 0; i < n; i++) {
-    crc ^= bytes[i];
-    for (int k = 0; k < 8; k++) crc = (crc >> 1) ^ (0xedb88320u & (0u - (crc & 1u)));
-  }
-  return ~crc;
-}
 
 std::optional<Image> decode_png(std::span<const uint8_t> bytes) {
   static const uint8_t kSignature[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
@@ -90,7 +81,7 @@ std::optional<Image> decode_png(std::span<const uint8_t> bytes) {
   }
   if (width == 0 || height == 0 || width > 1u << 15 || height > 1u << 15) return {};
   if (indexed && palette.empty()) return {};
-  const auto raw = inflate_zlib(z);
+  const auto raw = core::inflate_zlib(z);
   // A row's bytes: whole bytes for 8 bits a channel, packed indices below that.
   const size_t stride = (size_t{width} * static_cast<size_t>(channels) * depth + 7) / 8;
   if (!raw) return {};

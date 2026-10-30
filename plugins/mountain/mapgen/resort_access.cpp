@@ -24,8 +24,9 @@ using ge::core::sample_field;
 
 StageResult resort_access(ResortAttempt& a) {
   const ge::core::Heightfield& ground = a.ground;
-  NetHit hit;
+  // Its own answer a call: the ramps' lines are walked on several threads at once.
   const RunCover cover = [&](double x, double z, double past) {
+    NetHit hit;
     return a.net.covers(x, z, past, hit) ? hit.run : -1;
   };
   const HeightAt height = [&](double x, double z) { return sample_field(ground, x, z); };

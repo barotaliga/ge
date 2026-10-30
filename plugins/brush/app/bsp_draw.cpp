@@ -100,19 +100,13 @@ bool parse_mode(std::string_view word, Mode* out) {
   return true;
 }
 
-std::vector<PointLight> lava_lights(const Scene& scene, double core_c, double cover) {
+namespace {
+
+// A grid of lights over each pool of `kind`'s top, each its share of a glow of `rgb` cd/m^2.
+std::vector<PointLight> pool_lights(const Scene& scene, Kind kind, const double rgb[3]) {
   std::vector<PointLight> out;
-  // The pool's mean glow: the open melt's share at the core, the crust's at a dull red.
-  const water::Glow melt = water::glow_of(core_c + 273.15, 0.9);
-  const water::Glow crust = water::glow_of(core_c - 380 + 273.15, 0.9);
-  const double m[3] = {melt.colour.r, melt.colour.g, melt.colour.b};
-  const double c[3] = {crust.colour.r, crust.colour.g, crust.colour.b};
-  double rgb[3];
-  for (int k = 0; k < 3; ++k) {
-    rgb[k] = (1 - cover) * melt.luminance * m[k] + cover * crust.luminance * c[k];
-  }
   for (const LiquidPatch& p : scene.liquids) {
-    if (p.kind != kLava) continue;
+    if (p.kind != kind) continue;
     const double w = p.box[2] - p.box[0], d = p.box[3] - p.box[1];
     // A light every 2.5 m or so, at most 64 a pool.
     double step = 2.5;
@@ -138,6 +132,27 @@ std::vector<PointLight> lava_lights(const Scene& scene, double core_c, double co
   return out;
 }
 
+}  // namespace
+
+std::vector<PointLight> lava_lights(const Scene& scene, double core_c, double cover) {
+  // The pool's mean glow: the open melt's share at the core, the crust's at a dull red.
+  const water::Glow melt = water::glow_of(core_c + 273.15, 0.9);
+  const water::Glow crust = water::glow_of(core_c - 380 + 273.15, 0.9);
+  const double m[3] = {melt.colour.r, melt.colour.g, melt.colour.b};
+  const double c[3] = {crust.colour.r, crust.colour.g, crust.colour.b};
+  double rgb[3];
+  for (int k = 0; k < 3; ++k) {
+    rgb[k] = (1 - cover) * melt.luminance * m[k] + cover * crust.luminance * c[k];
+  }
+  return pool_lights(scene, kLava, rgb);
+}
+
+std::vector<PointLight> slime_lights(const Scene& scene, double luminance) {
+  // A sickly green, its luminance carried by the green.
+  const double rgb[3] = {0.35 * luminance, 1.2 * luminance, 0.25 * luminance};
+  return pool_lights(scene, kSlime, rgb);
+}
+
 std::vector<PointLight> portal_lights(const Scene& scene) {
   std::vector<PointLight> out;
   uint32_t seed = 0x5eed7e1eu;
@@ -161,14 +176,19 @@ std::vector<PointLight> portal_lights(const Scene& scene) {
 void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, const Scene& scene,
                 const wgpu::BindGroupLayout& frame) {
   d.scene = &scene;
-  // The indices by kind, so a mode draws the ranges it wants.
+  // The indices by kind, so a mode draws the ranges it wants, each kind's faces in the map's
+  // order; a face is a chunk of the cull (bsp_cull.hpp).
   std::vector<uint32_t> sorted;
   sorted.reserve(scene.indices.size());
+  std::vector<std::array<uint32_t, 4>> chunk_of;  // first, count, kind, surface
   for (int k = 0; k < kKinds; ++k) {
     d.range[k][0] = uint32_t(sorted.size());
-    for (size_t i = 0; i + 2 < scene.indices.size(); i += 3) {
-      if (scene.vertices[scene.indices[i]].kind != uint32_t(k)) continue;
-      sorted.insert(sorted.end(), {scene.indices[i], scene.indices[i + 1], scene.indices[i + 2]});
+    for (size_t f = 0; f < scene.face_runs.size(); ++f) {
+      const auto [first, count] = scene.face_runs[f];
+      if (count < 3 || scene.vertices[scene.indices[first]].kind != uint32_t(k)) continue;
+      chunk_of.push_back({uint32_t(sorted.size()), count, uint32_t(k), uint32_t(f)});
+      sorted.insert(sorted.end(), scene.indices.begin() + first,
+                    scene.indices.begin() + first + count);
     }
     d.range[k][1] = uint32_t(sorted.size()) - d.range[k][0];
   }
@@ -177,7 +197,7 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
   device.queue.WriteBuffer(d.vertices, 0, scene.vertices.data(),
                            scene.vertices.size() * sizeof(DrawVertex));
   d.indices = r::make_buffer(device, "bsp.indices", std::max<size_t>(sorted.size(), 3) * 4,
-                             wgpu::BufferUsage::Index);
+                             wgpu::BufferUsage::Index | wgpu::BufferUsage::Storage);
   if (!sorted.empty()) device.queue.WriteBuffer(d.indices, 0, sorted.data(), sorted.size() * 4);
 
   const auto sampled = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
@@ -226,6 +246,11 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     d.compare = device.device.CreateSampler(&s);
   }
   d.uniform = r::make_buffer(device, "bsp.uniform", sizeof(GpuBsp), wgpu::BufferUsage::Uniform);
+  // The animated textures' frames, or one unread stand-in.
+  d.frames = r::make_buffer(device, "bsp.frames", std::max<size_t>(scene.frames.size(), 1) * 16,
+                            wgpu::BufferUsage::Storage);
+  if (!scene.frames.empty())
+    device.queue.WriteBuffer(d.frames, 0, scene.frames.data(), scene.frames.size() * 16);
   d.lights =
       r::make_buffer(device, "bsp.lights", sizeof(GpuLight) * 512, wgpu::BufferUsage::Storage);
   d.jobs = r::make_buffer(device, "bsp.jobs", sizeof(GpuJob) * (kMaxShadowed * 6 + kOrthos),
@@ -233,34 +258,34 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
 
   using r::Slot;
   const auto both = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
-  d.layout = r::make_layout(
-      device, "bsp",
-      {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler, Slot::storage_read,
-       Slot::depth_array, Slot::compare, Slot::depth_array, Slot::texture, Slot::texture},
-      both);
+  d.layout = r::make_layout(device, "bsp",
+                            {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler,
+                             Slot::storage_read, Slot::depth_array, Slot::compare,
+                             Slot::depth_array, Slot::texture, Slot::texture, Slot::storage_read},
+                            both);
   d.group = r::make_group(device, "bsp", d.layout,
                           {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler,
                            d.lights, d.cubes_view, d.compare, d.orthos_view,
-                           d.rebake_rgb.CreateView(), d.rebake_dir.CreateView()});
+                           d.rebake_rgb.CreateView(), d.rebake_dir.CreateView(), d.frames});
   d.fix_layout = r::make_layout(device, "bsp.sky", {Slot::texture, Slot::uniform},
                                 wgpu::ShaderStage::Fragment);
   d.shadow_layout = r::make_layout(device, "bsp.shadows", {Slot::storage_read}, both);
   d.shadow_group = r::make_group(device, "bsp.shadows", d.shadow_layout, {d.jobs});
 
-  wgpu::VertexAttribute attrs[7] = {};
-  const uint64_t offsets[7] = {0, 12, 20, 28, 40, 56, 64};
-  const wgpu::VertexFormat formats[7] = {
+  wgpu::VertexAttribute attrs[9] = {};
+  const uint64_t offsets[9] = {0, 12, 20, 28, 40, 56, 64, 72, 76};
+  const wgpu::VertexFormat formats[9] = {
       wgpu::VertexFormat::Float32x3, wgpu::VertexFormat::Float32x2, wgpu::VertexFormat::Float32x2,
       wgpu::VertexFormat::Float32x3, wgpu::VertexFormat::Float32x4, wgpu::VertexFormat::Uint32,
-      wgpu::VertexFormat::Float32x2};
-  for (uint32_t i = 0; i < 7; ++i) {
+      wgpu::VertexFormat::Float32x2, wgpu::VertexFormat::Uint32,    wgpu::VertexFormat::Uint32};
+  for (uint32_t i = 0; i < 9; ++i) {
     attrs[i].shaderLocation = i;
     attrs[i].offset = offsets[i];
     attrs[i].format = formats[i];
   }
   wgpu::VertexBufferLayout vbl{};
   vbl.arrayStride = sizeof(DrawVertex);
-  vbl.attributeCount = 7;
+  vbl.attributeCount = 9;
   vbl.attributes = attrs;
   {
     const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::bsp, "bsp");
@@ -362,7 +387,9 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     desc.fragment = &fragment;
     d.p_shadow = pipelines.add_render(device, desc);
   }
+  create_bsp_cull(device, pipelines, d.cull, scene, chunk_of, d.indices, frame);
   d.lava = lava_lights(scene, 1150, 0.3);
+  d.slime = slime_lights(scene);
   d.portals = portal_lights(scene);
 }
 
@@ -372,6 +399,8 @@ void create_bsp_targets(gpu::Device& device, BspDraw& d, const r::FrameTargets& 
       wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding);
   d.mask_view = d.mask.CreateView();
   d.fix_group = r::make_group(device, "bsp.sky", d.fix_layout, {d.mask_view, d.uniform});
+  create_bsp_cull_targets(device, d.cull, targets);
+  d.culled_frames = 0;  // the new pyramid holds no frame yet
 }
 
 void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, const Options& o) {
@@ -394,12 +423,37 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       if (dist < reach + 40) picks.push_back({&l, dist - reach});
     };
     for (const PointLight& l : s.lights) consider(l);
-    if (o.lava_lights) {
-      for (const PointLight& l : d.lava) consider(l);
-    }
+    // The pools' lights at the options' strengths, copied before any is picked.
+    const auto scaled = [](const std::vector<PointLight>& from, double k,
+                           std::vector<PointLight>& to) {
+      to.clear();
+      if (k <= 0) return;
+      for (PointLight l : from) {
+        for (double& c : l.colour) c *= k;
+        to.push_back(l);
+      }
+    };
+    scaled(d.lava, o.lava_lights ? o.lava_glow : 0, d.lava_points);
+    scaled(d.slime, o.slime_glow, d.slime_points);
+    for (const PointLight& l : d.lava_points) consider(l);
+    for (const PointLight& l : d.slime_points) consider(l);
     if (o.portal_lights) {
       for (const PointLight& l : d.portals) consider(l);
     }
+    // The dynamic lights as point lights of the classic's brightness: the radius its reach.
+    d.dynamic_points.clear();
+    for (const DynamicLight& dl : d.dynamic) {
+      PointLight l;
+      for (int k = 0; k < 3; ++k) l.pos[k] = dl.pos[k];
+      // A light entity of this value reaches the radius; its colour scaled so that half way out
+      // it gives half its middle's light, as the classic's straight fall-off does.
+      l.value = std::max(dl.radius, 0.01) / kUnitM;
+      l.reach = dl.radius / 1.5;
+      for (int k = 0; k < 3; ++k)
+        l.colour[k] = 0.5 * dl.colour[k] * 256 / l.value * o.dynamic_strength;
+      d.dynamic_points.push_back(l);
+    }
+    for (const PointLight& l : d.dynamic_points) consider(l);
     std::sort(picks.begin(), picks.end(), [](const Pick& a, const Pick& b) { return a.d < b.d; });
     if (picks.size() > size_t(std::min(o.most, 512))) picks.resize(size_t(std::min(o.most, 512)));
   }
@@ -445,6 +499,18 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     d.frame_lights.push_back(g);
   }
   d.shadowed = shadowed;
+  // The classic's and v2's lightmaps: the dynamic lights added to the lightmaps' light.
+  if (!lights) {
+    for (size_t i = 0; i < d.dynamic.size() && i < size_t(kMaxDynamic); ++i) {
+      const DynamicLight& dl = d.dynamic[i];
+      GpuLight g{};
+      set4(g.pos, dl.pos[0], dl.pos[1], dl.pos[2], std::max(dl.radius, 0.01));
+      const double k = o.dynamic_strength;
+      set4(g.colour, dl.colour[0] * k, dl.colour[1] * k, dl.colour[2] * k, 0);
+      set4(g.info, -1, 0, 1, 0);
+      d.frame_lights.push_back(g);
+    }
+  }
   // The sun's map and the zenith's over the whole map.
   const double centre[3] = {(s.mins[0] + s.maxs[0]) / 2, (s.mins[1] + s.maxs[1]) / 2,
                             (s.mins[2] + s.maxs[2]) / 2};
@@ -475,6 +541,15 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   set4(d.staged.info3, o.minlight, o.lighting == Lighting::lights ? o.bounce : 0, o.sky_light,
        o.crisp ? 0 : 1);
   set4(d.staged.info4, o.bump, 0, 0, 0);
+  set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers, 0, 0);
+  if (o.cull) {
+    prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0, o.pvs);
+    ++d.culled_frames;
+  } else {
+    d.culled_frames = 0;
+  }
+  for (int k = 0; k < kLightStyles; ++k)
+    d.staged.styles[k] = float(style_level(d.light_styles[size_t(k)], view.time_s));
   const double veil = o.sky_light * o.sky_seen;
   set4(d.staged.veil, veil * o.sky_tint[0], veil * o.sky_tint[1], veil * o.sky_tint[2], 1);
   if (s.sky_texture < s.map.textures.size()) {
@@ -492,6 +567,14 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
                              d.frame_lights.size() * sizeof(GpuLight));
   }
   device.queue.WriteBuffer(d.jobs, 0, d.frame_jobs.data(), d.frame_jobs.size() * sizeof(GpuJob));
+}
+
+void set_dynamic_lights(BspDraw& d, std::span<const DynamicLight> lights) {
+  d.dynamic.assign(lights.begin(), lights.end());
+}
+
+void set_light_style(BspDraw& d, int style, std::string_view pattern) {
+  if (style >= 0 && style < kLightStyles) d.light_styles[size_t(style)] = pattern;
 }
 
 void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRecorder& rec,
@@ -537,39 +620,55 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
       shadow_pass(d.ortho_layers[2], first_ortho + 2, false);
     }
   }
-  {
+  // The map: every kind's faces, or (culled) a phase's, drawn into the targets; the late phase
+  // over what the early one drew.
+  const bool culled = d.options.cull && d.cull.chunks > 0;
+  const auto draw_pass = [&](std::string_view name, int phase) {
     wgpu::RenderPassColorAttachment colours[3]{};
     colours[0].view = targets.hdr_view;
     colours[1].view = targets.motion_view;
     colours[2].view = d.mask_view;
+    const auto load = phase == 1 ? wgpu::LoadOp::Load : wgpu::LoadOp::Clear;
     for (auto& c : colours) {
-      c.loadOp = wgpu::LoadOp::Clear;
+      c.loadOp = load;
       c.storeOp = wgpu::StoreOp::Store;
       c.clearValue = {0, 0, 0, 0};
     }
     wgpu::RenderPassDepthStencilAttachment depth{};
     depth.view = targets.depth_view;
-    depth.depthLoadOp = wgpu::LoadOp::Clear;
+    depth.depthLoadOp = load;
     depth.depthStoreOp = wgpu::StoreOp::Store;
     depth.depthClearValue = 0.0f;
     wgpu::RenderPassDescriptor desc{};
     desc.colorAttachmentCount = 3;
     desc.colorAttachments = colours;
     desc.depthStencilAttachment = &depth;
-    wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "bsp");
+    wgpu::RenderPassEncoder pass = rec.render(encoder, desc, name);
     pass.SetPipeline(pipelines.render(d.p_draw));
     pass.SetBindGroup(0, frame);
     pass.SetBindGroup(1, d.group);
     pass.SetVertexBuffer(0, d.vertices);
-    pass.SetIndexBuffer(d.indices, wgpu::IndexFormat::Uint32);
+    pass.SetIndexBuffer(culled ? d.cull.dst : d.indices, wgpu::IndexFormat::Uint32);
     const Kind drawn[] = {kSolid, kSky, kWarp, kTele, kWater, kSlime, kLava};
     for (Kind k : drawn) {
       if (v2 && (k == kWater || k == kSlime || k == kLava)) continue;
       if (d.range[k][1] == 0) continue;
-      pass.DrawIndexed(d.range[k][1], 1, d.range[k][0], 0, 0);
+      if (culled)
+        pass.DrawIndexedIndirect(d.cull.args, cull_args_at(phase, k));
+      else
+        pass.DrawIndexed(d.range[k][1], 1, d.range[k][0], 0, 0);
       ++rec.current().draws;
     }
     pass.End();
+  };
+  if (culled) {
+    encode_bsp_cull(d.cull, pipelines, rec, encoder, frame, 0);
+    draw_pass("bsp", 0);
+    r::encode_hiz(d.cull.hiz, pipelines, rec, encoder);
+    encode_bsp_cull(d.cull, pipelines, rec, encoder, frame, 1);
+    draw_pass("bsp.late", 1);
+  } else {
+    draw_pass("bsp", 0);
   }
   if (v2) {
     wgpu::RenderPassDepthStencilAttachment depth{};

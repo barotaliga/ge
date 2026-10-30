@@ -12,8 +12,9 @@
 // game's units per metre). At level 2 or more: the wish is the input's direction (the view's
 // pitch included) times the run speed times `wish_scale`; with no input it is straight down at
 // `idle_sink` (the slow sink); a friction takes `speed * friction * level * dt` off; an
-// acceleration of `accelerate * wish speed * dt` is added toward the wish, up to it; gravity is
-// not applied. At level 1 or less the game's own ground and air model has the swimmer, and the
+// acceleration of `accelerate * wish speed * dt` is added toward the wish, up to it (the speed
+// counted whole, or only along the wish with `along_wish`, which lets a turn accelerate); gravity
+// is not applied. At level 1 or less the game's own ground and air model has the swimmer, and the
 // step leaves his velocity alone.
 //
 // THE BODY REGIME (`Regime::body`, physical): forces on the swimmer as a vertical column of his
@@ -78,6 +79,7 @@ struct Garment {
 
 struct SwimSpec {
   Regime regime = Regime::body;
+  double feet = 0.01;   // m over the feet: the lowest of the three water samples
   double waist = 0.95;  // m over the feet
   double eyes = 1.62;   // m over the feet
   // The kinematic regime, in the game's units (`scale` of them a metre).
@@ -87,6 +89,8 @@ struct SwimSpec {
   double accelerate = 10;   // 1/s
   double friction = 4;      // 1/s per immersion level
   double idle_sink = 0;     // the slow sink with no input
+  bool along_wish = false;  // the acceleration's room is the wish less the speed ALONG it, not
+                            // the whole speed (a turn keeps accelerating, as on the ground)
   // The body regime, SI.
   double mass = 75;          // kg, the body
   double volume = 0.0712;    // m^3, the body less its lungs' air

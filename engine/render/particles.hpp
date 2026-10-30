@@ -72,6 +72,7 @@ void step_particle(Particle& p, float dt, const float air[3] = nullptr);
 struct ParticleSettings {
   uint32_t capacity = 16384;  // slots in the ring
   float soft_m = 0.4f;        // the depth over which a particle fades into what is behind it
+  float glow = 1;             // the glowing particles' light, a share of kSparkEmissivity's
 };
 
 struct Particles {
@@ -86,6 +87,9 @@ struct Particles {
   float dt = 0;                  // this frame's step
   float glow_table[64][4];       // render/blackbody.hpp's rows, made once
   float glow_cd = 0;             // the last row's light times kSparkEmissivity, cd/m^2
+  // A pool with no ground's stand-ins (the second `create_particles`).
+  wgpu::Buffer ground;
+  wgpu::Texture ground_height, ground_horizon;
 };
 
 // The pool, its pipelines (into `pipelines`, before the load ends) and its groups over the
@@ -93,6 +97,10 @@ struct Particles {
 void create_particles(gpu::Device& device, gpu::PipelineSet& pipelines, Particles& particles,
                       const wgpu::BindGroupLayout& frame, const Terrain& terrain,
                       const ParticleSettings& settings = {});
+// A pool over no ground (a world of brushes, rooms, the air): nothing lands, and the sun's light
+// on a particle is not shaded by a horizon.
+void create_particles(gpu::Device& device, gpu::PipelineSet& pipelines, Particles& particles,
+                      const wgpu::BindGroupLayout& frame, const ParticleSettings& settings = {});
 
 // The draw's group over a frame's depth (again after a resize), and the shadows' group.
 void bind_particle_targets(gpu::Device& device, Particles& particles, const FrameTargets& targets);

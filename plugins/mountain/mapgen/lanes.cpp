@@ -281,6 +281,10 @@ std::optional<LaneRoute> route_lane(const ge::core::Heightfield& ground, const N
   std::vector<int64_t> from(n * M, -1);
   const size_t c0 = static_cast<size_t>(num::round((x0 - left) / kCell));
   for (size_t m = 0; m < M; m++) cost[c0 * M + m] = 0;
+  // Each row's cheapest cost so far: a cost is only ever lowered, so the least written is the
+  // least standing.
+  std::vector<double> row_least(size_t(rows) + 1, kInf);
+  row_least[0] = 0;
   int64_t best = -1;
   double best_score = kInf;
   const auto relax = [&](size_t o, int m0, int m, int r, int c) {
@@ -308,6 +312,7 @@ std::optional<LaneRoute> route_lane(const ge::core::Heightfield& ground, const N
     if (base + step < cost[k]) {
       cost[k] = base + step;
       from[k] = int64_t(o) * int64_t(M) + int64_t(m0);
+      row_least[size_t(rr)] = num::min(row_least[size_t(rr)], cost[k]);
     }
   };
   for (int r = 0; r <= rows; r++) {
@@ -345,10 +350,7 @@ std::optional<LaneRoute> route_lane(const ge::core::Heightfield& ground, const N
     // from above already reaches, is cheaper than the best join, nothing further down can be.
     double cheapest = kInf;
     const int reach_row = std::min(rows, r + kDeepest);
-    const size_t k_end = size_t(reach_row + 1) * size_t(cols) * M;
-    for (size_t k = size_t(r) * size_t(cols) * M; k < k_end; k++) {
-      if (cost[k] < cheapest) cheapest = cost[k];
-    }
+    for (int q = r; q <= reach_row; q++) cheapest = num::min(cheapest, row_least[size_t(q)]);
     if (cheapest >= best_score) break;
     for (int c = 0; c < cols; c++) {
       const size_t o = size_t(r) * size_t(cols) + size_t(c);

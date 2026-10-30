@@ -289,8 +289,11 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
   const auto square = [&](double x, double z) {
     return int(std::floor(z / cell)) * n + int(std::floor(x / cell));
   };
+  // Every square's reading below is its own, so the grids are read side by side.
   std::vector<double> y(N);
-  for (int k = 0; k < big_n; k++) y[size_t(k)] = g(cx(k), cz(k));
+  ge::core::parallel_bands(N, [&](size_t lo, size_t hi) {
+    for (size_t k = lo; k < hi; k++) y[k] = g(cx(int(k)), cz(int(k)));
+  });
 
   // THE TREES on a fine grid: every two-metre square a trunk's bark comes within `route::open` of.
   constexpr double kFine = 2;
@@ -365,24 +368,26 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
   const auto fall_at = [&](double x, double z) {
     return std::pair{(g(x + b, z) - g(x - b, z)) / (2 * b), (g(x, z + b) - g(x, z - b)) / (2 * b)};
   };
-  for (int k = 0; k < big_n; k++) {
-    const double x = cx(k);
-    const double z = cz(k);
-    if (x < K::edge || z < K::edge || x > area.size - K::edge || z > area.size - K::edge) {
-      continue;
+  ge::core::parallel_bands(N, [&](size_t lo, size_t hi) {
+    for (size_t k = lo; k < hi; k++) {
+      const double x = cx(int(k));
+      const double z = cz(int(k));
+      if (x < K::edge || z < K::edge || x > area.size - K::edge || z > area.size - K::edge) {
+        continue;
+      }
+      const auto [gx, gz] = fall_at(x, z);
+      fall_x[k] = gx;
+      fall_z[k] = gz;
+      fall_m[k] = hypot(gx, gz);
+      if (under_lift(x, z)) continue;
+      if (fall_m[k] > K::cliff) {
+        crag[k] = 1;
+        continue;
+      }
+      if (!wild && in_trees(x, z)) continue;
+      open[k] = 1;
     }
-    const auto [gx, gz] = fall_at(x, z);
-    fall_x[size_t(k)] = gx;
-    fall_z[size_t(k)] = gz;
-    fall_m[size_t(k)] = hypot(gx, gz);
-    if (under_lift(x, z)) continue;
-    if (fall_m[size_t(k)] > K::cliff) {
-      crag[size_t(k)] = 1;
-      continue;
-    }
-    if (!wild && in_trees(x, z)) continue;
-    open[size_t(k)] = 1;
-  }
+  });
 
   // WHAT A WILD LINE IS DRAWN TO: the WOODS, and the EDGES (a square beside ground past the
   // cliff's pitch, or on a cliff's shelf near its edge), and over a cliff's FACE, a drop. Each
@@ -404,20 +409,23 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
         }
       }
     }
-    for (int k = 0; k < big_n; k++) {
-      if (!open[size_t(k)]) continue;
-      const int i = k % n;
-      const int j = k / n;
-      for (int dj = -1; dj <= 1 && !edge[size_t(k)]; dj++) {
-        for (int di = -1; di <= 1; di++) {
-          const int ii = i + di;
-          const int jj = j + dj;
-          if (ii >= 0 && jj >= 0 && ii < n && jj < n && crag[size_t(jj) * size_t(n) + size_t(ii)]) {
-            edge[size_t(k)] = 1;
+    ge::core::parallel_bands(N, [&](size_t lo, size_t hi) {
+      for (size_t k = lo; k < hi; k++) {
+        if (!open[k]) continue;
+        const int i = int(k) % n;
+        const int j = int(k) / n;
+        for (int dj = -1; dj <= 1 && !edge[k]; dj++) {
+          for (int di = -1; di <= 1; di++) {
+            const int ii = i + di;
+            const int jj = j + dj;
+            if (ii >= 0 && jj >= 0 && ii < n && jj < n &&
+                crag[size_t(jj) * size_t(n) + size_t(ii)]) {
+              edge[k] = 1;
+            }
           }
         }
       }
-    }
+    });
     for (const Cliff& c : area.cliffs) {
       const double fx = libm::sin(c.heading);
       const double fz = libm::cos(c.heading);
@@ -480,43 +488,17 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
     }
     return m;
   };
-  // Both searches ask it of the same steps again and again, so every downhill step's answer is
-  // walked once, by its square and its move (one of the first kSteps; a drop never asks), the
-  // squares side by side, and kept; no search asks it of any other step. The answer is a whole
-  // number of 2 m stretches, exact in a float, so keeping it changes no bits.
-  std::vector<float> felled_of(N * kSteps, 0);
-  ge::core::parallel_bands(N, [&](size_t lo, size_t hi) {
-    for (size_t k = lo; k < hi; k++) {
-      const int i = int(k) % n;
-      const int j = int(k) / n;
-      for (size_t m = 0; m < kSteps; m++) {
-        const int ii = i + kMoves[m][0];
-        const int jj = j + kMoves[m][1];
-        if (ii < 0 || jj < 0 || ii >= n || jj >= n) continue;
-        const int c = jj * n + ii;
-        const double len = unit[m] * cell;
-        if (downhill(int(k), c, len))
-          felled_of[k * kSteps + m] = float(walk_felled(int(k), c, len));
-      }
-    }
-  });
-  const auto felled = [&](int a, size_t move) {
-    return double(felled_of[size_t(a) * kSteps + move]);
-  };
   // What a step costs: its length on a straight line; on a wild one, by the squares it crosses,
   // dearer down the fall line, and dearer for every metre of trunk it fells.
-  const auto cost_of = [&](int a, int c, int di, int dj, double len, size_t move) {
+  const auto cost_of = [&](int a, int c, int di, int dj, double len, size_t move, double felled) {
     if (!wild) return len;
     const double gx = fall_x[size_t(a)];
     const double gz = fall_z[size_t(a)];
     const double m = fall_m[size_t(a)];
     const double down = m > 1e-6 ? num::max(0.0, -(gx * di + gz * dj) / (m * unit[move])) : 0.0;
     const double pull = 1 + W::fall * down * down * num::min(1.0, m / 0.3);
-    return (share[size_t(a)] + share[size_t(c)]) / 2 * pull * len + W::fell * felled(a, move);
+    return (share[size_t(a)] + share[size_t(c)]) / 2 * pull * len + W::fell * felled;
   };
-  // Whether a skier may go from square a down to square c by `move`: downhill, and on a straight
-  // line the trees clear between.
-  const auto step = [&](int a, size_t move) { return wild || felled(a, move) == 0; };
   // Whether a wild line may DROP from a over the square between to c: both open, ground past the
   // cliff's pitch between, falling no more than `wild::drop`.
   const auto drop_over = [&](int a, int c, int mid) {
@@ -525,6 +507,36 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
     return drop >= 0 && drop <= W::drop;
   };
   const size_t moves = wild ? kMoves.size() : kSteps;
+  // Both searches weigh the same steps again and again, so every step's cost is worked once, by
+  // its square and its move, the squares side by side, and kept; infinite where a skier may not
+  // take it: a step not downhill, a straight line's through the trees, a drop that is not one.
+  // The cost kept is the one the searches would have worked, so keeping it changes no bits.
+  std::vector<double> step_cost(N * moves);
+  ge::core::parallel_bands(N, [&](size_t lo, size_t hi) {
+    for (size_t k = lo; k < hi; k++) {
+      const int i = int(k) % n;
+      const int j = int(k) / n;
+      for (size_t m = 0; m < moves; m++) {
+        double& out = step_cost[k * moves + m];
+        out = kInf;
+        const int di = kMoves[m][0];
+        const int dj = kMoves[m][1];
+        const int ii = i + di;
+        const int jj = j + dj;
+        if (ii < 0 || jj < 0 || ii >= n || jj >= n) continue;
+        const int c = jj * n + ii;
+        const double len = unit[m] * cell;
+        if (drops_move[m]) {
+          if (drop_over(int(k), c, (j + dj / 2) * n + (i + di / 2))) out = len * W::huck;
+          continue;
+        }
+        if (!downhill(int(k), c, len)) continue;
+        const double felled = walk_felled(int(k), c, len);
+        if (!wild && felled != 0) continue;
+        out = cost_of(int(k), c, di, dj, len, m, felled);
+      }
+    }
+  });
 
   // The two searches read the grids above and write only their own, so they run side by side.
   // FROM THE TOPS: the cheapest way down to every square, and its top.
@@ -562,14 +574,13 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
         const int c = jj * n + ii;
         // A way off a top never crosses a run: it leaves the top on its own.
         if (run_of[size_t(c)] >= 0) continue;
-        const double len = unit[m] * cell;
+        const double step = step_cost[size_t(a) * moves + m];
+        if (step == kInf) continue;
         const bool drop = drops_move[m];
         const int mid = (j + dj / 2) * n + (i + di / 2);
         if (drop && run_of[size_t(mid)] >= 0) continue;
-        if (!drop && !downhill(a, c, len)) continue;
-        const double cost = from.cost(a) + (drop ? len * W::huck : cost_of(a, c, di, dj, len, m));
+        const double cost = from.cost(a) + step;
         if (!from.improves(c, cost)) continue;
-        if (drop ? !drop_over(a, c, mid) : !step(a, m)) continue;
         from.reach(c, cost, a);
         from_top[size_t(c)] = from_top[size_t(a)];
         dropped_in[size_t(c)] = drop ? 1 : 0;
@@ -597,15 +608,12 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
         if (ii < 0 || jj < 0 || ii >= n || jj >= n) continue;
         const int a = jj * n + ii;
         if (run_of[size_t(a)] >= 0) continue;
-        const double len = unit[m] * cell;
-        const bool drop = drops_move[m];
-        const int mid = (jj + dj / 2) * n + (ii + di / 2);
-        if (!drop && !downhill(a, c, len)) continue;
-        const double cost = to.cost(c) + (drop ? len * W::huck : cost_of(a, c, di, dj, len, m));
+        const double step = step_cost[size_t(a) * moves + m];
+        if (step == kInf) continue;
+        const double cost = to.cost(c) + step;
         if (!to.improves(a, cost)) continue;
-        if (drop ? !drop_over(a, c, mid) : !step(a, m)) continue;
         to.reach(a, cost, c);
-        drops_out[size_t(a)] = drop ? 1 : 0;
+        drops_out[size_t(a)] = drops_move[m] ? 1 : 0;
       }
     });
   };
@@ -616,19 +624,26 @@ std::vector<SkiRoute> lay_ski_routes(const RouteGround& area, bool wild) {
   // THE STEEP SQUARES a route may be skied through: its fall line falling past a black's ceiling,
   // no more than a route's, over a colour window.
   const double half = rules::track::colour_window / 2;
+  std::vector<uint8_t> is_steep(N, 0);
+  ge::core::parallel_bands(N, [&](size_t lo, size_t hi) {
+    for (size_t q = lo; q < hi; q++) {
+      const int k = int(q);
+      if (!from.reached(k) || !to.reached(k)) continue;
+      const double x = cx(k);
+      const double z = cz(k);
+      const auto [gx, gz] = fall_at(x, z);
+      const double m = hypot(gx, gz);
+      if (m < 1e-6) continue;
+      const double dx = -gx / m;
+      const double dz = -gz / m;
+      const double pitch =
+          (g(x - dx * half, z - dz * half) - g(x + dx * half, z + dz * half)) / (2 * half);
+      if (pitch > rules::track::max_grade && pitch <= K::steepest) is_steep[q] = 1;
+    }
+  });
   std::vector<int> steep;
   for (int k = 0; k < big_n; k++) {
-    if (!from.reached(k) || !to.reached(k)) continue;
-    const double x = cx(k);
-    const double z = cz(k);
-    const auto [gx, gz] = fall_at(x, z);
-    const double m = hypot(gx, gz);
-    if (m < 1e-6) continue;
-    const double dx = -gx / m;
-    const double dz = -gz / m;
-    const double pitch =
-        (g(x - dx * half, z - dz * half) - g(x + dx * half, z + dz * half)) / (2 * half);
-    if (pitch > rules::track::max_grade && pitch <= K::steepest) steep.push_back(k);
+    if (is_steep[size_t(k)]) steep.push_back(k);
   }
 
   struct Found {

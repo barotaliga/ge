@@ -150,7 +150,9 @@ std::vector<const Item*> pick(const Archive& a, const std::vector<std::string>& 
   return out;
 }
 
-std::string table(const std::vector<std::vector<std::string>>& rows) {
+}  // namespace
+
+std::string pak_table(const std::vector<std::vector<std::string>>& rows) {
   std::vector<size_t> width;
   for (const auto& r : rows) {
     if (width.size() < r.size()) width.resize(r.size(), 0);
@@ -171,9 +173,18 @@ std::string table(const std::vector<std::vector<std::string>>& rows) {
   return out;
 }
 
+namespace {
+
 Outcome pak_ls(const Args& args) {
   Outcome o;
   const std::string& file = args.words[0];
+  std::error_code ec;
+  if (fs::is_directory(file, ec)) return pak_ls_game(args);
+  if (!flag_value(args, "mods").empty() || has_flag(args, "hidden")) {
+    o.findings.push_back({Severity::error, "--mods and --hidden read a game directory", file,
+                          "name the game directory (ge pak ls <root>/<game>) instead"});
+    return o;
+  }
   Archive a;
   if (!open_archive(file, &a, &o)) return o;
   const bool sha = has_flag(args, "sha256");
@@ -211,7 +222,7 @@ Outcome pak_ls(const Args& args) {
     json.push_back(json_obj(fields));
     total += it.size;
   }
-  o.text = table(rows);
+  o.text = pak_table(rows);
   o.summary = std::to_string(a.items.size()) + " file(s), " + std::to_string(total) +
               " bytes, in a " + (a.zip ? "zip" : "pack");
   o.next = "ge pak extract " + file + " <file> --out=<dir>";

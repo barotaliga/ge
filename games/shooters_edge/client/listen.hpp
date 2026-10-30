@@ -1,0 +1,127 @@
+// THE LISTEN SERVER: Shooter's Edge as one player plays it on his own machine. The mod server
+// (server/qc_server.hpp) runs a progs (the baseline deathmatch mod, compiled at start from the
+// sources built into the game: `baseline_progs`) on a map, and the local player is client slot 0,
+// his commands handed to the server's frame directly as packets that are never lost (no network,
+// no prediction: what he sees is the server's own state after each frame).
+//
+// A MAP (`LoadedMap`): a map file from the search path (`maps/<name>.bsp`, read by
+// server/bsp_map.hpp: its hulls, its entity text, its visibility and hearing sets) or the
+// built-in test arena (`arena`, with the baseline mod's entities). The map's bytes are kept for
+// the world draw.
+//
+// THE CLOCK: the server steps in frames of `sv_mintic` (13 ms), each running the player's command
+// of that length. `listen_advance` turns the window's wall time into the frames that are due
+// (at most `kMostFrames` a call, the rest dropped, so a stall never runs the world on fast), so a
+// session of scripted commands steps the same server on any machine. An impulse (a weapon key)
+// waits until a frame takes it.
+//
+// THE VIEW: the player's angles are the client's (`Listen::view`, degrees: pitch down positive,
+// yaw counter-clockwise from +x), sent with every command; when the server turns him (a spawn, a
+// teleport: the mod's forced view) the client takes the server's angles (`forced`).
+//
+// ge:summary The listen server: the mod server and its local player in one process, no network
+// ge:keywords listen-server local-player client slot usercmd packet listen_start listen_frame
+// ge:keywords listen_advance listen_change loaded-map load_named_map baseline_progs map-change
+// ge:keywords forced-view mintic player_state missiles rocket-jump
+// ge:skill shooter progs
+// ge:test tests/shooters_edge_listen_test.cpp
+#pragma once
+
+#include <cstdint>
+#include <memory>
+#include <span>
+#include <string>
+#include <vector>
+
+#include "progs/file.hpp"
+#include "shooter/pmove.hpp"
+#include "shooters_edge/client/files.hpp"
+#include "shooters_edge/server/bsp_map.hpp"
+#include "shooters_edge/server/qc_server.hpp"
+
+namespace shooters_edge::client {
+
+namespace sh = ge::shooter;
+namespace sv = shooters_edge::server;
+
+inline constexpr int kMostFrames = 8;  // server frames a wall frame may run
+
+// The baseline mod compiled from the sources built into the game. False with every diagnostic.
+bool baseline_progs(ge::progs::Progs& out, std::string& error);
+
+// A map as the listen server plays it and the client draws it. Never copied once read: the spec's
+// models point into `bsp`.
+struct LoadedMap {
+  std::string name;
+  sv::MapSpec spec;
+  sv::BspMap bsp;
+  bool from_file = false;     // false: the built-in arena (nothing for the world draw)
+  std::vector<uint8_t> file;  // the map file's bytes
+};
+
+// `maps/<name>.bsp` read from bytes.
+std::unique_ptr<LoadedMap> map_from_bytes(std::span<const uint8_t> bytes, const std::string& name,
+                                          std::string& error);
+// `arena` (built in) or `maps/<name>.bsp` from the search path.
+std::unique_ptr<LoadedMap> load_named_map(const SearchPath& files, const std::string& name,
+                                          std::string& error);
+
+struct ListenOptions {
+  uint32_t seed = 1;
+  std::vector<std::string> console = {"deathmatch 1"};  // server lines before each map loads
+  std::string player = "player";
+};
+
+struct Listen {
+  const ge::progs::Progs* progs = nullptr;
+  ListenOptions opt;
+  std::unique_ptr<LoadedMap> map;
+  std::unique_ptr<sv::QcServer> server;
+  uint32_t sequence = 0;
+  sh::MoveCmd cmds[3];              // the three newest, oldest first
+  double owed = 0;                  // wall seconds not yet run, s
+  int64_t frames = 0;               // server frames run on this map
+  sh::Vec3f view;                   // the player's view angles, degrees
+  bool forced = false;              // the server turned the view in the last frame
+  int impulse = 0;                  // waiting for a frame
+  std::string pending_map;          // the mod or the console asked for this map
+  std::vector<std::string> prints;  // what the server printed to the player, in order
+  // Where the mod's explosions went off on this map (its temporary-entity message), map units,
+  // in order.
+  std::vector<sh::Vec3f> explosions;
+};
+
+// The server made for `progs` (which must outlive it) on `map`, the player connected.
+bool listen_start(Listen& l, const ge::progs::Progs& progs, std::unique_ptr<LoadedMap> map,
+                  const ListenOptions& opt, std::string& error);
+// The same progs on another map (the spawn parms saved first), the player connected again.
+bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error);
+
+// One server frame with the player's command `cmd` (its angles are `l.view`, its length the
+// server's frame; an impulse waiting goes with it).
+void listen_frame(Listen& l, sh::MoveCmd cmd);
+// The frames `wall_s` more wall time makes due, each with `cmd`; returns how many ran.
+int listen_advance(Listen& l, double wall_s, const sh::MoveCmd& cmd);
+
+// What the camera and the HUD read of the player, in map units.
+struct PlayerState {
+  int entity = 1;
+  sh::Vec3f origin, velocity, view_ofs, v_angle;
+  bool on_ground = false;
+  bool dead = false;
+  float health = 0;
+};
+PlayerState player_state(const Listen& l);
+
+// A missile in flight (an entity of class rocket, grenade or spike), map units.
+struct Missile {
+  int entity = 0;
+  sh::Vec3f origin;
+  bool rocket = false;  // a rocket or a grenade: something that explodes
+};
+void missiles_of(const Listen& l, std::vector<Missile>& out);
+
+// A float field of an entity by its name in the progs (0 when the progs has no such field).
+float field_named(const Listen& l, int entity, const char* name);
+
+}  // namespace shooters_edge::client

@@ -5,5 +5,5 @@
 # (our sky, our water, lava and slime, real-time lights); its lab draws maps with the labs' model view.
 ge_add_plugin(brush ENGINE core vfs bake APP render gpu water wind assets lab console)
 if(TARGET ge_brush_app)
-  ge_embed_wgsl(ge_brush_app app/bsp.wgsl app/bsp_fix.wgsl app/bsp_shadow.wgsl)
+  ge_embed_wgsl(ge_brush_app app/bsp.wgsl app/bsp_fix.wgsl app/bsp_shadow.wgsl app/bsp_cull.wgsl)
 endif()

@@ -96,6 +96,19 @@ void real_sun_direction(const FrameView& view, double out[3]) {
   }
 }
 
+void aim_at(FrameView& view, SkyBody body) {
+  if (body == SkyBody::moon) {
+    view.heading = view.night.moon_azimuth;
+    view.pitch = view.night.moon_elevation;
+  } else if (view.night.moon_key) {
+    view.heading = view.night.sun_azimuth;
+    view.pitch = view.night.sun_elevation;
+  } else {
+    view.heading = view.sun_azimuth;
+    view.pitch = view.sun_elevation;
+  }
+}
+
 CameraMatrices camera_matrices(const FrameView& view, double aspect) {
   double f[3];
   look_dir(view.heading, view.pitch, f);

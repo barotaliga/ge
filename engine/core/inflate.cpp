@@ -2,13 +2,13 @@
 //
 // ge:summary The inflater: deflate's stored, fixed and dynamic blocks decoded
 // ge:keywords inflate deflate huffman canonical-code length-distance
-// ge:skill assets labs
+// ge:skill determinism assets labs
 // ge:test tests/lab_raster_test.cpp
-#include "assets/inflate.hpp"
+#include "core/inflate.hpp"
 
 #include <array>
 
-namespace ge::assets {
+namespace ge::core {
 
 namespace {
 
@@ -219,4 +219,13 @@ std::optional<std::vector<uint8_t>> inflate_raw(std::span<const uint8_t> stream,
   return out;
 }
 
-}  // namespace ge::assets
+uint32_t crc32(const uint8_t* bytes, size_t n, uint32_t crc) {
+  crc = ~crc;
+  for (size_t i = 0; i < n; i++) {
+    crc ^= bytes[i];
+    for (int k = 0; k < 8; k++) crc = (crc >> 1) ^ (0xedb88320u & (0u - (crc & 1u)));
+  }
+  return ~crc;
+}
+
+}  // namespace ge::core

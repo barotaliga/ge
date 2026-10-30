@@ -84,6 +84,7 @@ ge model import <file> <name>    # a free kit's model packed into one .glb, load
 ge credits check [<dir>]         # every asset credited, every credit's file there, licences allowed
 ge content scan <pak|dir>        # a classic set's sounds, models and sets held to an asset map (brush)
 ge pak ls <archive> [--sha256]   # a .pak or .pk3's files: bytes, CRC-32, how stored, SHA-256
+ge pak ls <gamedir> [--mods=a,b] [--hidden]  # a game dir mounted: each file's winner and what it hides
 ge pak extract <a> [<file>...] --out=<dir>  # all files or the named ones; ge pak build <dir> --out=<a>
 ge pak convert <in> <out>        # .pak to .pk3 and back (a written .pk3 is stored, not deflated)
 ge pak sum <a> [<file>...] [--out=<sums>|--check=<sums>]  # SHA-256s kept, or held to a sums file

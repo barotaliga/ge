@@ -17,6 +17,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
+#include "core/parallel.hpp"
 
 namespace ge::mountain::mapgen {
 
@@ -393,15 +394,19 @@ RampsByLift plan_ramps(std::span<const StationPad> pads, std::span<const RampRun
                        const HeightAt& height, const RunCover& cover, const StationAt& station,
                        const BlockedAt& head, const RampFit& fit) {
   RampsByLift out;
+  // A line off the rim toward a run's point, by the run's place, the point and the rim's point.
+  struct Aim {
+    size_t own;
+    size_t k;
+    double fx, fz;
+  };
   for (const StationPad& p : pads) {
-    std::vector<SummitRamp> ramps;
-    // Every run's ramps that would stand, best first (`fit.joint`).
-    std::vector<RampChoices> choices;
+    // Every line off this pad worth walking, in the order they are weighed: each run's points
+    // and the rim's points round to them.
+    std::vector<Aim> aims;
     for (size_t own = 0; own < runs.size(); own++) {
       const RampRun& r = runs[own];
       if (r.spec->from != p.lift) continue;
-      std::optional<Candidate> best;
-      std::vector<Candidate> all;
       const std::vector<TrackPoint>& pts = *r.points;
       for (size_t k = 0; k < pts.size(); k += kAimEvery) {
         const TrackPoint& q = pts[k];
@@ -416,27 +421,50 @@ RampsByLift plan_ramps(std::span<const StationPad> pads, std::span<const RampRun
           // the middle a rider is let go on.
           if ((q.x - fx) * (fx - p.x) + (q.z - fz) * (fz - p.z) <= 0 || head(fx, fz)) continue;
           if (height(fx, fz) > p.y + kRimRise) continue;
-          std::optional<SummitRamp> ramp =
-              ramp_to(r, static_cast<int>(own), fx, fz, q, height, cover, station);
-          // Off the ramps already laid off this pad, or, where they are chosen together
-          // (`fit.joint`), off whichever are chosen.
-          if (!ramp) continue;
-          if (!fit.joint && std::any_of(ramps.begin(), ramps.end(),
-                                        [&](const SummitRamp& o) { return overlaps(o, *ramp); })) {
-            continue;
-          }
-          const double length = hypot(ramp->to.x - ramp->from.x, ramp->to.z - ramp->from.z);
-          if (length < K::least) continue;
-          const double grade = (ramp->from.y - ramp->to.y) / length;
-          // Steeper than its colour all the way down is no ramp, and nor is one a rider let go
-          // at a crawl would not glide down.
-          if (grade > steepest(*r.spec->row, fit) || grade < fit.glide) continue;
-          Candidate found{std::move(*ramp), length, grade};
-          if (fit.joint) {
-            all.push_back(std::move(found));
-          } else if (!best || better_ramp(found, *best)) {
-            best = std::move(found);
-          }
+          aims.push_back({own, k, fx, fz});
+        }
+      }
+    }
+    // Each line walked on its own (a pure function of its aim), so side by side; then weighed in
+    // the aims' order below, as one walked after another would be.
+    std::vector<std::optional<SummitRamp>> walked(aims.size());
+    ge::core::parallel_bands(aims.size(), [&](size_t lo, size_t hi) {
+      for (size_t i = lo; i < hi; i++) {
+        const Aim& m = aims[i];
+        const RampRun& r = runs[m.own];
+        walked[i] = ramp_to(r, static_cast<int>(m.own), m.fx, m.fz, (*r.points)[m.k], height, cover,
+                            station);
+      }
+    });
+    std::vector<SummitRamp> ramps;
+    // Every run's ramps that would stand, best first (`fit.joint`).
+    std::vector<RampChoices> choices;
+    size_t at = 0;
+    for (size_t own = 0; own < runs.size(); own++) {
+      const RampRun& r = runs[own];
+      if (r.spec->from != p.lift) continue;
+      std::optional<Candidate> best;
+      std::vector<Candidate> all;
+      for (; at < aims.size() && aims[at].own == own; at++) {
+        std::optional<SummitRamp>& ramp = walked[at];
+        // Off the ramps already laid off this pad, or, where they are chosen together
+        // (`fit.joint`), off whichever are chosen.
+        if (!ramp) continue;
+        if (!fit.joint && std::any_of(ramps.begin(), ramps.end(),
+                                      [&](const SummitRamp& o) { return overlaps(o, *ramp); })) {
+          continue;
+        }
+        const double length = hypot(ramp->to.x - ramp->from.x, ramp->to.z - ramp->from.z);
+        if (length < K::least) continue;
+        const double grade = (ramp->from.y - ramp->to.y) / length;
+        // Steeper than its colour all the way down is no ramp, and nor is one a rider let go
+        // at a crawl would not glide down.
+        if (grade > steepest(*r.spec->row, fit) || grade < fit.glide) continue;
+        Candidate found{std::move(*ramp), length, grade};
+        if (fit.joint) {
+          all.push_back(std::move(found));
+        } else if (!best || better_ramp(found, *best)) {
+          best = std::move(found);
         }
       }
       if (fit.joint) {

@@ -16,6 +16,8 @@
 //   head or its middle is clear of the world and every brush entity (a shut door hides; another
 //   player does not). Seen, its place is remembered (`ai::Memory`), and its velocity is taken off
 //   the last two sightings when they are a frame apart.
+// - DEAD (the protocol's flag on a player at no health): no contact; one kept is dropped, so a bot
+//   never aims at a body.
 // - HEARD when it started a sound this frame that reached the client: its place is remembered as
 //   heard (a footstep, a shot, a jump), not as seen.
 // A contact is forgotten `forget_s` after it was last seen or heard. Every change (seen, lost,
@@ -46,6 +48,7 @@ struct ViewEntity {
   int ent = 0;
   Vec3f origin, angles;
   int modelindex = 0;
+  bool dead = false;  // a player at no health (the protocol's dead flag)
 };
 
 struct ViewSound {

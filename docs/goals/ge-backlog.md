@@ -20,7 +20,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Before and after across refs
 
-- `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%; for a bench lab too: `ge ab <lab> --before=<binary> --runs=3`, the median of each metric; also `--rounds=3`, each side's best and the delta printed beside the measured noise band, the second binary built or reused off `--before=<ref>`: the approximation study) and `ge compare <ref>` (both builds, one table)
+- `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%; for a bench lab too: `ge ab <lab> --before=<binary> --runs=3`, the median of each metric; also `--rounds=3`, each side's best and the delta printed beside the measured noise band, the second binary built or reused off `--before=<ref>`: the approximation study; asked again by the map-build profiling, #307: the means and their spread) and `ge compare <ref>` (both builds, one table)
 - `ge bench --ab=<option>` (one frame option against another in the same build, interleaved rounds, the least median kept: a quality ladder priced without a bespoke loop)
 - `ge profile --compare` (per zone and per pass, GPU and CPU deltas, outliers flagged)
 - `ge lab bench <lab> --runs=N --base=main` (each metric's median and spread over N runs, this tree beside the base)
@@ -144,7 +144,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab probe <id> --at=<time>` (a lab's frame records printed around one moment, a match's say, without dumping the whole trace)
 - `ge lab diff --mask=<family>` (only the pixels one instance family covers compared, so a change to the figures is shown to touch nothing else; #78) and `ge lab diff --summary` (one line a view with its worst band, in place of the full band table; #225)
 - `ge graph <lab> --scenario=<id> --cols=a,b` (a scenario's trace read from `previews/<lab>/<id>.trace.tsv` without naming the path; #96)
-- `--look=sun|moon[:lens]` on every picture lab (a view aimed at the key light or the moon at the scene's hour, in place of a named view or a printed heading each time; #187, #217, #222)
+- `--look=sun|moon[:lens]` on every picture lab (done for every lab over Fall Line's named views as `<view>@sun[:lens]` and `<view>@moon[:lens]`, on `ge::render::aim_at`; next, the bsp lab's views, which aim after the sky is dressed; #187, #217, #222)
 - the world lab's aims: `--aim=cloud` (the nearest cloud of a layer in frame, for a sparse kind; #183), `--ski-through=<layer>` (the eye above, at the top of, inside and under a layer; #234), `--wind-across` (the wind set across a view's heading, so a sequence shows it moving; #214)
 - `ge lab shelter <map> <point>` (whether a point is open to a fall at a slant, and which face stops it; #203)
 - `ge record --gpu --modes=lit,wireframe` (several modes side by side on one contact sheet, frame for frame; #85)
@@ -158,7 +158,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 - `ge lab <gpu-lab>` printing the frame's per-pass GPU and CPU costs as a table beside its metrics
 - `ge lab sound <lab>` (a spectrogram of each WAV a lab writes, on its report page: the cut-off falling with distance seen without listening; the classic-enhance sound page's spectrogram moved into engine/lab and reused; also `ge lab listen <id> <wav>` for one WAV: its meters printed (peak, RMS, band, dropouts) and its spectrogram drawn, so an agent with no speakers checks a voice without writing a chart)
-- `ge profile --wall` (a sampling CPU profiler: wall time by inlined frame, the main thread apart from the workers, where instruction counts hide a slow call)
+- `ge profile --wall` (a sampling CPU profiler: wall time by inlined frame, the main thread apart from the workers, where instruction counts hide a slow call; also `--main-thread <lab>`, each stage split into its time inside parallel_bands and its time alone, in place of a frame-pointer build, a signal-handler sampler and an addr2line script: #307)
 - `ge profile --callgrind <lab>` (also as `ge hot <lab> [--callers=<fn>]`: the self and inclusive ranking and one function's top callers in one table; the approximation study)
 - `ge mapgen-bench --tree=<worktree>` (only the mountain plugin and core built from a worktree into a scratch directory and the generator timed, so variants are compared without rebuilding every target; the approximation study)
 - `ge lab <id> --toggle=<feature>` (a lab's passes timed with the feature on and off, one table)
@@ -169,6 +169,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge sanitize thread <tests>` (a ThreadSanitizer build of the tests that run threads)
 - `ge lab time <id> [--smoke]` (a lab's sections timed, and its smoke run, so a lab that slows CI is found by name)
 - `ge bench --preset=release <lab>` (only the labs target built in release, for a lab's release-build cost without a whole release build)
+- `ge precheck --gpu` (a GPU build configured beside the default one, lavapipe installed when missing, and what the change reaches in engine/render and a game's app built, linted and tested: a GPU-less container's precheck skips them entirely; #312)
 - a bench lab warns when the machine is loaded (load average over the cores: a concurrent ctest made thread starts look ten times slower)
 - `ge tsan <test>` (one test and its sources built with ThreadSanitizer, without a whole sanitizer preset)
 - `ge ref ephemeris <body> --from=<t> --to=<t> --site=<lat,lon,m>` (a published reference ephemeris fetched once into a test table, and a core function such as the moon's place diffed against it, worst error in arc minutes)
@@ -208,7 +209,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Shooter's Edge, the FPS port (M18: the ge tooling it needs)
 
-- `ge pak ls|extract|build|convert|sum` (done: pak and pk3 listed with CRC-32 and SHA-256, files extracted, a directory packed, pak to pk3 and back, a file's sums kept and checked; next, once engine/vfs/search.hpp lands, `ge pak ls <gamedir>` naming which archive wins each file over the search path, .pk3dir, and a deflated .pk3 when the engine has a deflate writer; asked for by the classic-enhance and weapons threads and Niclas)
+- `ge pak ls|extract|build|convert|sum` (done: pak and pk3 listed with CRC-32 and SHA-256, files extracted, a directory packed, pak to pk3 and back, a file's sums kept and checked; `ge pak ls <gamedir> [--mods=a,b] [--hidden]` done too (each file's winning source and what it hides, over engine/vfs/search.hpp, .pk3dir included); next, a deflated .pk3 when the engine has a deflate writer; asked for by the classic-enhance and weapons threads and Niclas)
 - `ge tool classicenhance -- extract <kind> <names>` (a pack's original textures or skins written at 1x as PNG to scratch, and the enhanced ones read back out of the cached glTF, in place of a throwaway pak, BSP and MDL reader per experiment)
 - `ge bsp info|ents|shot` (lumps and limits, the entity lump as text, a top-down CPU picture of the leaves, the PVS from a point, the hulls)
 - `ge progs build|disasm|run|trace|profile|diff` (the engine's own compiler for the game's VM language, and the `progs` VM inspected)

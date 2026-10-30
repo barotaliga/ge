@@ -42,6 +42,7 @@ Every row kept every level digest (v10: `0b310d692fbf2dee`, v1: `4c49f555e1c4e25
 | More pure per-cell passes on threads: a run's levelling of the grid, a lane's raster; the ski routes' trunks filed once a map and the kept lines threaded through the woods side by side | about −7% | | `network_stamp.cpp`, `lanes.cpp`, `ski_routes.cpp` |
 | These three, together, against the last row, side by side on one machine | 948 ms → 788 ms (−17%) | 242 ms → 223 ms (−8%) | |
 | The woods' and the cliffs' "is this on a kicker or a cliff?" passes over a kicker or a cliff whose box cannot reach the point (its distance on either axis beyond the box's longest reach plus its half-width) before working its heading's sine and cosine: a box's two extents bound the distance, so no answer changes | 1324 ms → 1234 ms (−7%; 5.1% fewer instructions on seed 38) | unchanged | `kickers.cpp`, `cliffs.cpp` |
+| What ran on one thread while the pool waited, found by sampling the main thread's wall time: the summit ramps' candidate lines walked side by side and weighed in their old order (the run cover answering into its own hit); the walk's heading choice passing over a heading once the look-aheads read so far, summed in the cost's own order, already make it dearer than the best (28% fewer instructions in it); the ski routes' grids read side by side and every step's cost worked once on threads for both searches; a lane's search keeping each row's cheapest cost as it is written instead of rescanning the rows | 731 ms → 665 ms (−9%, the two builds alternated three times) | unchanged | `summit_ramps.cpp`, `resort_access.cpp`, `network.cpp`, `ski_routes.cpp`, `lanes.cpp` |
 
 The lookups' ring walks visited every cell of every ring out to the search radius, most of
 them empty: a query far from any run read up to 90 rings of hash-map misses. Clamping each ring
@@ -59,6 +60,14 @@ instructions that take tens of cycles, so its cost shows only in wall time. A sa
 (SIGPROF over the build, the samples symbolised with `addr2line`) found it, and the A/B runs of
 the two builds back to back, three times over, are how the rows above were measured: the
 container's timings wander by ±5% from one run to the next.
+
+By then a ski area spent about 450 of its 750 ms on the calling thread alone, with the pool
+idle: an instruction count weighs every thread's work the same, so a pass on four threads and a
+walk on one look alike in it. A wall-clock timer aimed at the main thread (a `SIGEV_THREAD_ID`
+timer every 0.5 ms, the stack walked by frame pointers in a `-g -fno-omit-frame-pointer` build,
+the samples split by whether they were inside `parallel_bands`) gave each stage's serial time:
+the piste walk 120 ms, the woods 76 ms, the summit ramps' lines 49 ms, the links 41 ms, the
+routes 39 ms, the analysis 26 ms. The row above takes the parts of those that were pure.
 
 What approximate math is worth here was measured the same way (`docs/goals/M4e.md`). A
 polynomial sine and cosine three times cheaper than the vendored ones, and a `hypot` five times

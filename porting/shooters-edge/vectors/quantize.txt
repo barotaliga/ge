@@ -1,0 +1,30 @@
+# quantize.txt: coordinates and angles as the wire carries them.
+# Made 2026-10-30 by a research session: computed in a scratch C program from the rules in
+# protocol.md § Quantization (the rounding the modern server uses, with 32-bit float
+# arithmetic for the coordinate and double for the angles), each rule read from the modern
+# server's message writer. "read" is what a receiver reconstructs. The truncating form is the
+# 1996 release's coordinate writer, kept to show where the two differ.
+#
+# coord <float> -> <int16 hex> read <float> (truncating form <hex>)
+# angle <float> -> byte <hex> read <deg> ; angle16 <hex> read <deg>
+coord 0 -> 0000 read 0 (truncating form 0000)
+coord 0.0599999987 -> 0000 read 0 (truncating form 0000)
+coord 0.0625 -> 0001 read 0.125 (truncating form 0000)
+coord -0.0625 -> ffff read -0.125 (truncating form 0000)
+coord 1.9375 -> 0010 read 2 (truncating form 000f)
+coord 100.099998 -> 0321 read 100.125 (truncating form 0320)
+coord -100.099998 -> fcdf read -100.125 (truncating form fce0)
+coord 4095.875 -> 7fff read 4095.875 (truncating form 7fff)
+coord -4096 -> 8000 read -4096 (truncating form 8000)
+coord 3.14159012 -> 0019 read 3.125 (truncating form 0019)
+angle 0 -> byte 00 read 0 ; angle16 0000 read 0
+angle 1 -> byte 01 read 1.40625 ; angle16 00b6 read 0.999755859
+angle 1.40625 -> byte 01 read 1.40625 ; angle16 0100 read 1.40625
+angle 1.40626001 -> byte 01 read 1.40625 ; angle16 0100 read 1.40625
+angle 90 -> byte 40 read 90 ; angle16 4000 read 90
+angle 180 -> byte 80 read -180 ; angle16 8000 read -180
+angle -90 -> byte c0 read -90 ; angle16 c000 read -90
+angle 270 -> byte c0 read -90 ; angle16 c000 read -90
+angle 359.899994 -> byte 00 read 0 ; angle16 ffee read -0.0988769531
+angle -0.699999988 -> byte 00 read 0 ; angle16 ff81 read -0.697631836
+angle 45 -> byte 20 read 45 ; angle16 2000 read 45

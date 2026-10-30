@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <string>
+#include <utility>
 
 #include "core/solar.hpp"
 #include "mountain/app/night_look.hpp"
@@ -219,11 +220,23 @@ void day_view(const Level& level, double hour, ge::render::FrameView& v) {
 
 bool make_view(const Level& level, std::string_view name, ge::render::FrameView& v) {
   // A turned view, `<view>@<degrees>[:<pitch degrees>[:<lens degrees>]]`: the named view's eye,
-  // turned clockwise by so much (and pitched to, and seen through a lens so many degrees high).
+  // turned clockwise by so much (and pitched to, and seen through a lens so many degrees high);
+  // `<view>@sun` or `@moon`, with an optional `:<lens degrees>`, aims it at the body.
   if (const size_t at = name.find('@'); at != std::string_view::npos) {
     if (!make_view(level, name.substr(0, at), v)) return false;
     const std::string rest(name.substr(at + 1));
     char* end = nullptr;
+    // `<view>@sun[:<lens degrees>]` or `@moon[...]`: the eye aimed at the body at the map's hour.
+    for (const auto& [word, body] : {std::pair{"sun", ge::render::SkyBody::sun},
+                                     std::pair{"moon", ge::render::SkyBody::moon}}) {
+      const size_t n = std::char_traits<char>::length(word);
+      if (rest.compare(0, n, word) != 0 || (rest.size() > n && rest[n] != ':')) continue;
+      ge::render::aim_at(v, body);
+      if (rest.size() == n) return true;
+      const char* p = rest.c_str() + n + 1;
+      v.fov_y = std::strtod(p, &end) * kDeg;
+      return end != p && *end == '\0' && v.fov_y > 0;
+    }
     const double turn = std::strtod(rest.c_str(), &end);
     if (end == rest.c_str()) return false;
     v.heading += turn * kDeg;

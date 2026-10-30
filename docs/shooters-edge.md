@@ -77,6 +77,59 @@ fixtures we write (`tests/golden/console_*.txt`):
   a runaway alias loop stops at a depth with a message naming the alias, and a script's errors
   name the file and line.
 
+## Playing it
+
+The `shooters_edge` window (`games/shooters_edge/client/`, M18h's first slice) is the game on
+one machine: the baseline mod (compiled at start from the QC sources built into the game) runs
+as a LISTEN SERVER in the same process, and the player is its client, his commands handed to
+the server's frame with no network between. It reads the maps out of your own copy of the
+classic game's packs: point `-basedir` at the folder that holds `id1/pak0.pak` (and `pak1.pak`
+for the full game's maps). The packs are never copied or committed (§ Content and test data).
+
+**On a Mac (Apple silicon; Metal through Dawn):**
+
+```sh
+brew install cmake ninja                 # once
+make build PRESET=release                # or only the window: cmake --preset release &&
+                                         #   cmake --build --preset release --target shooters_edge
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic +map dm6
+```
+
+**On Linux (Vulkan through Dawn; `sudo tools/setup-ubuntu.sh` installs what the build needs):**
+
+```sh
+make build PRESET=release
+build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm6
+```
+
+- **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
+  with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). **`-game <folder>`**
+  picks a game folder other than `id1`. **`-progs <file>`** runs a mod's progs in place of the
+  baseline mod (§ Running your own mod). Its packs are read in order (`pak0.pak`, `pak1.pak`, ...
+  until a number is missing; any case), and a loose file in the folder (`maps/mymap.bsp`)
+  overrides the packs (`client/files.hpp`).
+- **`+<command>`**: console lines run at start. `+map dm6` loads that map; `+map arena` the
+  built-in test arena (no packs needed, only the sky drawn). With no `+map`, the map `start`
+  when the packs have it, else the arena. `--size=WxH` sets the window's size, `--frames=N`
+  quits after N frames.
+- **The keys**: W A S D move, SPACE jumps, the left button fires, 1 to 8 pick a weapon (7 the
+  rocket launcher), the wheel the next one. The mouse looks while the window has it (raw
+  counts, captured); ESCAPE lets it go and a click takes it back; closing the window quits.
+- **The console** (the key under ESCAPE): `map <name>` changes the map, `sv <line>` runs a line on
+  the server's console (`sv timelimit 10`, `sv fraglimit 20`, `sv sv_gravity 600`),
+  `sensitivity <degrees a mouse count>` (0.066 by default), `m_invert 1`, `r_bspmode v2`
+  (our sky and real-time lights from the next map; `classic` is the default) and `quit`.
+- **A rocket jump**: 7 for the launcher, look straight down, then SPACE and the left button
+  together. The blast costs about half your health and throws you about four times as high as
+  a jump (held by `tests/shooters_edge_listen_test.cpp` and the `se-client` lab).
+
+What the first slice draws: the map in its classic look (its textures, lightmaps, warped liquids
+and sky) over the engine's sky, from the first-person rig (the view height off the mod's view
+offset, stairs smoothed, a landing's dip); the HUD (`hud_style classic|modern|compact`); the
+console; a hot dot on each rocket in flight and an orange disc where one went off. Not yet:
+the other players' and items' models, the weapon in hand, sounds, the effects of the classic
+world pass, menus, and the network (the rest of M18h, M18i).
+
 ## Running your own mod
 
 The mod server (`games/shooters_edge/server`, M18p) runs a multiplayer `progs` as a compiler
@@ -91,8 +144,8 @@ the tree's own QC compiler (`plugins/progs/qc_compile.hpp`, the language in
   cvar in the server's console lines (`sv_progs mods/arena/progs.dat`, or `set sv_progs ...`).
   The path given on the command line wins, then the cvar, then the built-in test mod. Today the
   `se-mod` lab is the front end: `make lab LAB=se-mod ARGS="--progs=<file> --bots=4
-  --timelimit=1"` plays a match against bots on the test arena and draws it. The dedicated
-  server (M18f) and the game window take the same flag and cvar when they land.
+  --timelimit=1"` plays a match against bots on the test arena and draws it. The game window
+  takes it as `-progs <file>` (§ Playing it); the dedicated server (M18f) takes the same flag.
 - **Line numbers in faults**: put the line table beside the file as `<file>.lines` (a line
   number per statement, the sidecar `ge qc` reads: `parse_lines` in `plugins/progs/file.hpp`). Without it a fault names the function and the
   statement.
@@ -228,7 +281,7 @@ AGENTS.md and the non-goals in `docs/goals.md` state this exception.
 | Files and archives | Embedded blobs; the labs' inflater | `engine/vfs`, inflate shipped (M18a) |
 | A map format with visibility and collision | A heightfield world (`plugins/mountain`) | `plugins/brush` (reading: M32b; clip hulls, PHS: M18b), `plugins/shooter/bsp_world.hpp` (the hulls as the server's brush models) |
 | Scripting for mods | `plugins/progs` (M18c), the stated exception: the VM runs assembled bytecode to the bit and drives the loop's seam through `games/shooters_edge/sim/qc_program.hpp` (`qc` lab) | The builtin catalogue, the map's entity text and the allocate rules (M18p); the compiler (M18d) |
-| Player movement and weapons | `engine/move` (M28): the mover for any genre, the classic arena row among its presets, strafe jumping charted (`docs/movement.md`); `plugins/shooter` (M18o1): the classic player move in floats over clip hulls, held to its recordings on every scenario (`pmove` lab) | The weapons: `plugins/shooter` (M18e) |
+| Player movement and weapons | `engine/move` (M28): the mover for any genre, the classic arena row among its presets, strafe jumping charted (`docs/movement.md`); `plugins/shooter` (M18o1): the classic player move in floats over clip hulls, held to its recordings on every scenario (`pmove` lab); (M18e) the engine's mover and swimmer on the classic numbers (`row.hpp`) over a brush world's hulls (`hull_world.hpp`, its water, slime and lava laid as `engine/water` volumes), held to the same recordings within their own tolerance on 28 of the 35 scenarios (`pmove` lab, `docs/movement.md` § The classic row) | The weapons: `plugins/shooter` (M18e) |
 | A server with many clients | `engine/net` links, channels, sessions, NAT, the simulated network, captures; `plugins/shooter` (M18o2): the classic loop (the server's frame on the run clock, entities by movetype, thinking, pushers, touches, the area tree, a player's packet and commands) behind a game-program seam, and `games/shooters_edge/sim`'s native program playing a scripted match that replays to the bit (`se-loop` lab) | The bytecode program on that seam (M18p); the server's clients and bots (M18f); the compatible protocol (M18g); the native one on M17f's replication (M18h) |
 | Client prediction and interpolation | Planned in M17f; `plugins/shooter` (M18o2): the client's commands (rate, lengths, key shares, the protocol's grids) and its prediction from the protocol's quantized state, with error smoothing and other players run forward | M17f lands the generic layer; the game's interpolation of other entities and its client over `plugins/shooter` (M18h) |
 | Demos | The input log (`play/inputs`), recordings (`ge record`) | Client demos and MVD read and written, seek by snapshot (M18h) |
@@ -292,22 +345,41 @@ existing server program and an existing client against ours, run as black boxes 
 Built on the existing frame (`docs/rendering.md`), measured in the container on lavapipe like
 every pass, and judged by captioned screenshots:
 
-- **The world**: one static vertex buffer for the map's faces, drawn by material in a few
-  calls, culled by the PVS of the camera's leaf and then by the existing Hi-Z instance culling.
-  Lightmaps packed into atlases; up to four light styles a face, each style's brightness a
-  uniform the frame updates (the flicker and pulse strings mods set), so animated light costs
-  no re-upload. Coloured light from `.lit` files when present.
-- **Materials**: animated texture sequences, warped liquids with optional transparency, the
-  two-layer scrolling sky or a skybox, fullbright palette colours as emissive.
+- **The world** (`plugins/brush/app/bsp_draw.hpp`): one static vertex buffer for the map's
+  faces, sorted by kind and drawn a kind a call. **The cull** (`bsp_cull.hpp`, `r_cull`): the
+  potentially visible set of the eye's leaf on the CPU (a brush model's faces always in it), then
+  on the GPU each face's box against the frustum and the depth pyramid in two phases (last
+  frame's pyramid early, this frame's late), compacted in the faces' own order by a scan so a
+  frame's pixels never hang on thread order, and drawn with indirect calls. `se-world` holds it
+  to the same pixels as drawing everything. **Light styles**: every style a face stores is a
+  layer of the lightmap atlas, and the 64 styles' levels are a uniform the frame fills from their
+  letter patterns ('a' dark, 'm' as baked, ten letters a second; `set_light_style`), so animated
+  light costs no re-upload. Coloured light from `.lit` files when present (to come).
+- **Materials**: animated texture sequences ("+0" .. "+9", five frames a second, each texture
+  starting at its own frame), warped liquids, the two-layer scrolling sky (a skybox to come),
+  fullbright palette colours as emissive.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
-- **Effects**: the classic particle effects as the engine's compute particles; dynamic lights
-  from rockets, muzzle flashes and powerups as a small light list; the screen blends (damage,
-  powerups, liquids).
-- **Two looks, one renderer**: the classic look (nearest filtering, the palette and the colour
-  map applied as a post pass, so it looks like the 8-bit software renderer) and the modern
-  look (filtered true colour, the engine's shadows, bloom and TAA-U, optional higher-resolution
-  replacement textures). A lab pictures every scene in both.
+- **Effects** (`games/shooters_edge/app/effects.hpp`): our own trails and bursts on the engine's
+  particles (a pool over no ground: nothing lands): a rocket's embers and smoke, a grenade's
+  smoke, an explosion's sparks and smoke, a hit's sparks and dust, a wound's droplets (dark: the
+  pool has no colour channel yet), a teleport's column of cold light, lava thrown up. **Dynamic
+  lights** (`set_dynamic_lights`): the classic adds them to the lightmaps' light, falling off in
+  a straight line to their radius; the modern draws them as point lights. **The screen's blend**
+  (`render/post.hpp`'s `set_post_blend`): the liquid round the eye, the powers held and a hurt's
+  fading red folded into one colour and share the post pass mixes in after its grade.
+- **Two looks, one renderer** (`games/shooters_edge/app/look.hpp`): the classic look (crisp
+  texels, the lightmaps and their styles, the map's own sky, no bloom, and the post pass's grade
+  pulling every colour to the nearest of the palette's 256) and the modern look (filtered,
+  real-time lights with shadows, our sky and liquids, bloom; TAA-U and replacement textures to
+  come). The `se-world` lab pictures every named view in both. The player sets the picture with
+  cvars: `r_look` (classic or modern), and for the modern look `r_fx_lights` (the light the
+  effects throw, default 0.2 of the classic's), `r_fx_glow` (a spark's glow, default 0.15) and
+  `r_bloom` (default 0.3), `r_lava_glow` (the lava's light on the walls round it, default 0.2)
+  and `r_slime_glow` (the slime's faint green light, default 1); the modern's exposure and bloom
+  wash a room out at the classic's strengths, so its defaults turn them down. The classic keeps
+  its own, with the pools' light baked in its lightmaps. The lab takes the same cvars:
+  `make lab LAB=se-world ARGS='--cvars="r_lava_glow 0"'`.
 - **Headless**: a CPU raster view of any map from above (the leaves, the PVS of a point, the
   hulls) for the labs, like Fall Line's map views, with no GPU at all.
 
@@ -414,12 +486,14 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-nav` | scenario | Where a player can go on a map by the player move's own proof: the nav graph from above to scale (the floor shaded off the point hull, every node and link by kind, what a mover closes), the quickest routes as the proofs moved a player, from above and the side; on the nav course and the test arena (built, M18r1) |
 | `se-pilot` | scenario | Whether the pilot plays a nav route through the move as fast as the graph proved it: every course route with plain and human hands, the trails from above coloured by mode, times against proven, the strafe jump's speed on a straight, the human axes against a person's bands; on the server's arena the pilot in a bot slot through the door, up the plat and barring the door shut from the east (built, M18r2) |
 | `se-senses` | scenario | Whether a bot sees only what a player's client could and aims by its skill: on the server's arena a seer and a runner visit the goals once per aim skill; the trails from above with a sight line every quarter second it saw, the aim's error against time, how often it saw when a line joined them, the error's median and p90, the reaction and the goals kept (built, M18r3) |
-| `se-bots` | drive | Bots against bots and against recorded people: frags, deaths, items, the paths drawn on the map, the decisions round a fight, the humanness bands; before and after a change |
+| `se-bots` | scenario | Whether fighters play the baseline mod's deathmatch like players: four fighters on the arena, the trails, items and deaths from above, each one's mode through the match as a strip, the frags against time, and a table of frags, deaths, shots, pickups, switches, the share in each mode and the weapon held most (built, M18r4) |
 | `se-lobby` | sim | Clients find a hosted game on the LAN and through the rendezvous, fill the lobby, pick teams, chat, start, play and return; a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`) |
+| `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the HUD and the markers at the spawn, the blast and the top of the jump; the rise and the health it cost (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
+| `se-viewmodel` | picture | The game's eight free weapons in first person on the engine's corridor stage: every one held at rest, each fired in the dark lit by its own muzzle light, the shotgun switched to the rocket launcher, and the player's view-model cvars; each weapon's share of the picture, its muzzle on the screen, its flash's lift and the switch's time (built, M48d) |
 | `se-ambient` | sim | A walk through rooms under sky and by water: the ambience by leaf charted, mixed and written as WAV (built, M18j2) |
 | `se-demo` | sim | A demo played back, seeked and re-recorded; the digest of its frames |
 
