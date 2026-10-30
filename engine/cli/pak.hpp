@@ -4,6 +4,10 @@
 //   ge pak ls <archive> [--sha256]               every file: its path, bytes and CRC-32 (and, for
 //                                                a zip, how it is stored); --sha256 adds each
 //                                                file's SHA-256
+//   ge pak ls <gamedir> [--mods=a,b] [--hidden]  the directory mounted as the game mounts it
+//                                                (engine/vfs/search.hpp, mods over it): every
+//                                                file, the source that wins it and the ones it
+//                                                hides; --hidden only the overridden ones
 //   ge pak extract <archive> [<file>...] --out=<dir>   every file, or the ones named, written
 //                                                under <dir>; a name that would leave <dir> (an
 //                                                absolute path, a `..`) is refused and named
@@ -23,7 +27,7 @@
 //
 // ge:summary ge pak: list, extract, build, convert and checksum pak and pk3 content archives
 // ge:keywords cli ge pak pk3 pack zip archive list extract build convert unpack repack
-// ge:keywords checksum sha256 crc32 verify sums run_pak
+// ge:keywords checksum sha256 crc32 verify sums run_pak gamedir search-path winner hides
 // ge:skill agent-interface vfs
 // ge:test tests/cli_pak_test.cpp
 #pragma once
@@ -48,6 +52,11 @@ struct PakFiles {
 bool parse_sum_line(std::string_view line, std::string* hex, std::string* path);
 // Whether an archive's name may be written under a directory: relative, no `..`, no drive.
 bool safe_entry_path(std::string_view name);
+
+// `ge pak ls` over a game directory (pak_game.cpp).
+Outcome pak_ls_game(const Args& a);
+// Rows as an aligned text table, the first row the header.
+std::string pak_table(const std::vector<std::vector<std::string>>& rows);
 
 // `ge pak <ls|extract|build|convert|sum>` (`sub`), run.
 Outcome run_pak(const Args& a, const std::string& sub);

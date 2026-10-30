@@ -109,3 +109,28 @@ TEST(pak_extract_refuses_a_path_that_leaves_out) {
   CHECK(hex == std::string(64, 'a') && path == "a/b.txt");
   CHECK(!parse_sum_line("zz  a", &hex, &path));
 }
+
+TEST(pak_ls_over_a_game_directory_names_each_winner_and_what_it_hides) {
+  const fs::path root = fresh("ge_cli_pak_game_test");
+  put(root / "src/a.txt", "base a");
+  put(root / "src/b.txt", "pak b");
+  CHECK(pak({"build", (root / "src").string(), "--out=" + (root / "base/pak0.pak").string()})
+            .findings.empty());
+  fs::remove_all(root / "src");
+  put(root / "src/B.TXT", "zip b");
+  CHECK(pak({"build", (root / "src").string(), "--out=" + (root / "base/z.pk3").string()})
+            .findings.empty());
+  put(root / "base/b.txt", "loose b");
+  put(root / "mod/a.txt", "mod a");
+  const Outcome o = pak({"ls", (root / "base").string(), "--mods=mod", "--sha256"});
+  CHECK(o.findings.empty());
+  CHECK(o.result.find("\"overridden\":2") != std::string::npos);
+  // a.txt: the mod's loose file over the base pack; b.txt: the loose file over the zip and pack.
+  CHECK(o.result.find("{\"path\":\"a.txt\",\"bytes\":5,\"from\":\"mod/\",\"hides\":"
+                      "[\"base/pak0.pak\"]") != std::string::npos);
+  CHECK(o.result.find("\"from\":\"base/\",\"hides\":[\"base/pak0.pak\",\"base/z.pk3\"]") !=
+        std::string::npos);
+  const Outcome hidden = pak({"ls", (root / "base").string(), "--mods=mod", "--hidden"});
+  CHECK(hidden.result.find("\"path\":\"c.txt\"") == std::string::npos);
+  CHECK(!pak({"ls", (root / "base/pak0.pak").string(), "--hidden"}).findings.empty());
+}

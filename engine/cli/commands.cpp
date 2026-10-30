@@ -444,7 +444,11 @@ constexpr FlagSpec kNetStressFlags[] = {
     {"fuzz", "<n>", "also put this many fuzzed datagrams beside an honest session"},
     {"seed", "<n>", "the network's seed (default 1)"}};
 
-constexpr FlagSpec kPakLsFlags[] = {{"sha256", "", "each file's SHA-256 beside its CRC-32"}};
+constexpr FlagSpec kPakLsFlags[] = {
+    {"sha256", "", "each file's SHA-256 beside its CRC-32"},
+    {"mods", "<a,b>",
+     "a game directory: the mods' directories beside it, mounted over it in order"},
+    {"hidden", "", "a game directory: only the files that hide one in an earlier source"}};
 constexpr FlagSpec kPakOutFlags[] = {{"out", "<path>", "where the result is written"}};
 constexpr FlagSpec kPakSumFlags[] = {
     {"out", "<sums>", "the sums written to this file too (sha256sum's format)"},
@@ -845,9 +849,10 @@ const CommandSpec kCommands[] = {
      {},
      "ge credits check games/shooters_edge/content",
      "assets"},
-    {"pak ls", "<archive>", 1, 1, "see",
-     "a .pak or .pk3 archive's files: path, bytes, CRC-32 and how each is stored; --sha256 adds "
-     "each file's SHA-256",
+    {"pak ls", "<archive|gamedir>", 1, 1, "see",
+     "a .pak or .pk3 archive's files (path, bytes, CRC-32, how each is stored), or a game "
+     "directory mounted as the game mounts it: every file, the source that wins it and what it "
+     "hides; --sha256 adds each file's SHA-256",
      kPakLsFlags, "ge pak ls ~/classic/id1/pak0.pak --sha256", "assets"},
     {"pak extract", "<archive> [<file>...]", 1, -1, "create",
      "every file of an archive, or the ones named, written under --out; a path that would leave "
