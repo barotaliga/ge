@@ -62,7 +62,7 @@ void client_view(const Server& sv, int viewer, ClientView& out) {
     const bool player = is_player(sv, e) && sv.clients[static_cast<size_t>(e - 1)].active &&
                         !sv.clients[static_cast<size_t>(e - 1)].spectator;
     if (d.free || e == viewer || (d.modelindex == 0 && !player)) continue;
-    out.entities.push_back({e, d.origin, d.angles, d.modelindex});
+    out.entities.push_back({e, d.origin, d.angles, d.modelindex, player && d.health <= 0});
   }
   for (int i = 0; i < sv.sound_count; i++) {
     const SoundEvent& se = sv.sounds[i];
@@ -106,6 +106,18 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
   }
   for (const ViewEntity& v : view.entities) {
     if (!is_player(sv, v.ent)) continue;
+    if (v.dead) {
+      for (Contact& c : s.contacts) {
+        if (c.ent != v.ent) continue;
+        if (why) {
+          why->decide("memory");
+          why->fact("ent", c.ent);
+          why->choose("dropped", "its player is dead");
+        }
+        c.ent = -1;
+      }
+      continue;
+    }
     if (!sees_player(sv, s.set, viewer, eye, angles, v.origin)) continue;
     Contact& c = contact_for(s, v.ent);
     if (c.was_visible && ai::age(c.seen, t) <= kFrameGap_s) {
@@ -127,6 +139,9 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
   }
   for (const ViewSound& snd : view.sounds) {
     if (!is_player(sv, snd.ent) || snd.ent == viewer) continue;
+    bool dead = false;  // a death cry is no contact
+    for (const ViewEntity& v : view.entities) dead |= v.ent == snd.ent && v.dead;
+    if (dead) continue;
     Contact& c = contact_for(s, snd.ent);
     ai::see(c.heard, snd.origin.x, snd.origin.y, snd.origin.z, t);
     if (!c.visible) c.since = t;
