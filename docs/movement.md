@@ -25,7 +25,7 @@ None of these is a different system. Each is a ROW of the same knobs (`MoveSpec`
 | Home | What |
 | --- | --- |
 | `engine/move/` | The knobs (`spec.hpp`) and their names (`knobs.hpp`), the presets, the step (`step.hpp`), the world's one question (`world.hpp`), a box world for labs and prototypes (`box_world.hpp`), the strafe jumper's hands (`strafe.hpp`), the scenarios (`scenarios.hpp`), the knobs bound as cvars (`cvars.hpp`). Depends on `engine/core` and, for the binding, `engine/console` |
-| `plugins/shooter/` (M18o1, M18e) | The classic player move itself (`pmove.hpp`: one command in 32-bit floats over clip hulls, every move type and server setting, held to recordings of the classic move by `tests/shooter_recording_test.cpp` and drawn by the `pmove` lab), clip hulls and their trace (`hull.hpp`); later the server's other movetypes (toss, bounce, push, M18o2) and the weapons (M18e) |
+| `plugins/shooter/` (M18o, M18e) | The classic player move itself (`pmove.hpp`: one command in 32-bit floats over clip hulls, every move type and server setting, held to recordings of the classic move by `tests/shooter_recording_test.cpp` and drawn by the `pmove` lab), clip hulls and their trace (`hull.hpp`), the server's movetypes (`physics.hpp`); and THIS mover on the classic numbers (`row.hpp`, § The classic row) over a brush world (`hull_world.hpp`) |
 | `engine/water/swim` (M24d) | Swimming: a body in the water is handed to the swimmer, and back (§ Water) |
 | `engine/camera` (M26) | Reads the body (§ What a camera reads); never feeds it |
 | A game | Its row, its world's trace, the command from its input actions, the knobs bound to its console |
@@ -61,7 +61,8 @@ a metre). Each step, in this order (`step_move`):
    right, held to length 1), times `max_speed` and the shares in force (`back_scale`,
    `side_scale`, `walk_scale`, `sprint_scale`, `crouch_scale` on the ground).
 6. **On the ground**: the vertical speed is dropped, then **friction** takes
-   `max(speed, stop_speed) * friction * dt` off the speed (times `edge_friction` when nothing
+   `max(speed, stop_speed) * friction * dt` off the speed (on the whole velocity, a landing's
+   kept fall included, with `friction_whole`) (times `edge_friction` when nothing
    is under a point `edge_probe` ahead within a step's drop), then **acceleration** adds
    `accelerate * wish * dt` along the wish, never past `wish` along it, then the move (7).
    **In the air**: the same acceleration rule with `air_accelerate`, the speed along the wish
@@ -71,16 +72,20 @@ a metre). Each step, in this order (`step_move`):
    it lifts the plan speed past `air_max_speed` (a row that steers in the air without strafe
    jumping: the platformer's, the modern shooter's). Gravity
    (`gravity`, times `fall_gravity_scale` falling, held to `terminal_speed`) is applied by halves
-   either side of the move, so a jump's apex is `jump_speed^2 / 2g` at any step length.
+   either side of the move, so a jump's apex is `jump_speed^2 / 2g` at any step length;
+   `gravity_lead` moves that share (1: all of it before the move, the classic row's).
 7. **The move.** The hull is swept along the velocity; each surface hit takes the part of the
    velocity into it and the rest carries on, up to four surfaces a step (two at once leave the
-   crease between them; a third stops it). On the ground a move blocked by a wall is tried again
+   crease between them; a third stops it). With `clip_from_start` each surface clips the
+   velocity the move started with rather than the one the last surface left. On the ground a move blocked by a wall is tried again
    lifted by `step_height`, carried and set down, and kept when it got farther on walkable ground:
    that is climbing a step.
 8. **The ground.** A surface within `contact` under the feet whose normal's up part is at least
    `walk_normal` is ground (anything steeper is a slope slid down, a surf ramp); a body that was
    standing follows a drop of up to `ground_snap` (down stairs, over a ramp's crest); rising
-   faster than `unground_speed` is never grounded. Landing drops the speed into the ground, unless
+   faster than `unground_speed` is never grounded. Landing drops the speed into the ground (only
+   past `land_clip_speed` when the row sets one: a slower fall is kept for the next ground move
+   to drop), unless
    the surface has a `bounce` and `impact * bounce` beats `unground_speed`: then the speed into it
    comes back times `bounce` (a trampoline, `kBounced`).
 
@@ -121,6 +126,25 @@ A hit also says WHAT it touched, for the surfaces that do something: `solid` (th
 `bounce` (the share of the speed into it a landing gets back). A world with none of these leaves
 them zero and the body behaves as before. In `box_world.hpp` each brush carries a `Surface`, and
 `move_brush` moves one and sets its velocity.
+
+**A brush map** answers it through its clip hulls: `plugins/shooter/hull_world.hpp` traces the
+mover's box through a list of brush models (hull 0 for a point, hull 1 for the player's box,
+hull 2 for a larger one), turning the map's z-up axes into the engine's y-up ones.
+
+## The classic row
+
+`plugins/shooter/row.hpp` (M18e) is the classic arena shooter's movement as rows of this mover and
+of the swimmer, built from the server's settings in map units: the walk row (the ground's
+factor in the air with the wish held to 30 along it, `gravity_lead` 1, `friction_whole`,
+`clip_from_start`, `land_clip_speed` 300, the edge probe at the origin, a contact of one unit),
+the fly row and the spectator row, and the kinematic swim (`along_wish`, the feet sample one unit
+up). One classic command runs through them over the brush world, the 50 ms split, the swim-up
+and the water jump being the plugin's rules over the mover. `tests/shooter_row_recording_test.cpp`
+and the `pmove` lab hold it to the classic move's recordings within their own tolerance (0.01
+unit, 0.05 unit/s), one command at a time and as whole runs, on 28 of the 35 scenarios (3443
+lines; the worst is 1.4e-4 unit); the seven left out need what no row carries (unsticking, the old
+spectator, three server settings). `engine/move/presets.cpp`'s `classic_arena` stays a
+starting point in the same units, not this row.
 
 ## Moving ground and pushes
 
@@ -192,7 +216,10 @@ over), `kSlideStart`. A teleport is the game's to report.
 Swimming is not a mode of the mover. When the game's water query says the body is in deep
 enough (M24d's immersion levels), it hands the body to the swimmer (`engine/water/swim`), whose
 kinematic regime is the classic first-person swim; when the swimmer climbs out, the body comes
-back with its position and velocity and `MoveState::grounded` found on the next step.
+back with its position and velocity and `MoveState::grounded` found on the next step. The
+swimmer decides only the velocity: `carry_along(spec, world, state, dt, step_up)` moves the body
+through the world along it (the slide, and the step's lifted try when asked), with nothing else
+applied, so a swimmer meets walls and floors as a walker does.
 
 ## Determinism and cost
 
