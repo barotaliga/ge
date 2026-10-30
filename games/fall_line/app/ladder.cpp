@@ -9,8 +9,6 @@
 
 #include <array>
 
-#include "console/cvar.hpp"
-
 namespace fall_line::app {
 
 namespace {
@@ -63,7 +61,7 @@ constexpr int kReachLevels[] = {5, 6, 7, kGroundLevels};  // the ground's levels
 // and costs nothing; from above, the ground past 1 km is most of it. The presets measured 1.52
 // (low), 2.88 (medium), 3.79 (high) and 7.89 ms (top): the top's every-pixel cloud march is
 // most of the step from high.
-constexpr PriceTable kTable{"Apple M3 Max (Metal), 1920x1080", 1920, 1080, 1.18};
+constexpr r::PriceTable kTable{"Apple M3 Max (Metal), 1920x1080", 1920, 1080, 1.18};
 
 constexpr r::LadderStop kResolution[] = {
     {"half", 0, 0}, {"two-thirds", 1.12, 3}, {"five-sixths", 2.16, 5}, {"full", 4.10, 6}};
@@ -90,9 +88,22 @@ const std::array<r::LadderRow, kPictureRows> kRows = {{
     {"distance", kDistance},
 }};
 
+// The presets, cheapest first, a stop for each row in PictureRow's order: resolution, shadows,
+// snow, trails, spray, precip, clouds, bloom, distance. `top` is every row at its dearest.
+constexpr int kLow[] = {0, 0, 1, 1, 1, 1, 0, 0, 1};
+constexpr int kMedium[] = {1, 1, 1, 1, 1, 1, 1, 1, 2};
+constexpr int kHigh[] = {2, 1, 1, 2, 1, 2, 2, 2, 3};
+constexpr int kTop[] = {3, 2, 1, 2, 1, 2, 3, 2, 3};
+constexpr r::LadderPreset kPresets[] = {
+    {"low", kLow}, {"medium", kMedium}, {"high", kHigh}, {"top", kTop}};
+
+const r::QualityLadder kLadder{kRows, kTable, kPresets};
+
 }  // namespace
 
-const PriceTable& price_table() { return kTable; }
+const r::PriceTable& price_table() { return kTable; }
+
+const r::QualityLadder& quality_ladder() { return kLadder; }
 
 std::span<const r::LadderRow> picture_rows() { return kRows; }
 
@@ -118,63 +129,20 @@ FrameOptions apply_picture(const r::LadderPick& pick, FrameOptions o) {
   return o;
 }
 
-std::string_view preset_name(Preset p) {
-  switch (p) {
-    case Preset::low:
-      return "low";
-    case Preset::medium:
-      return "medium";
-    case Preset::high:
-      return "high";
-    case Preset::top:
-      return "top";
-  }
-  return "top";
-}
+std::string_view preset_name(Preset p) { return kPresets[static_cast<size_t>(p)].name; }
 
 r::LadderPick preset_pick(Preset p) {
-  // resolution, shadows, snow, trails, spray, precip, clouds, bloom, distance
-  switch (p) {
-    case Preset::low:
-      return {0, 0, 1, 1, 1, 1, 0, 0, 1};
-    case Preset::medium:
-      return {1, 1, 1, 1, 1, 1, 1, 1, 2};
-    case Preset::high:
-      return {2, 1, 1, 2, 1, 2, 2, 2, 3};
-    case Preset::top:
-      break;
-  }
-  r::LadderPick top(kRows.size());
-  for (size_t i = 0; i < kRows.size(); ++i) top[i] = static_cast<int>(kRows[i].stops.size()) - 1;
-  return top;
+  const r::LadderPreset& preset = kPresets[static_cast<size_t>(p)];
+  return {preset.stops.begin(), preset.stops.end()};
 }
 
 r::LadderFit auto_picture(double budget_ms, const r::LadderPick& drawn, double timed_ms) {
-  const double scale = r::machine_scale(kRows, drawn, kTable.floor_ms, timed_ms);
-  return r::fit_ladder(kRows, budget_ms, kTable.floor_ms, scale);
+  return r::auto_fit(kLadder, budget_ms, drawn, timed_ms);
 }
 
 std::optional<r::LadderPick> quality_pick(std::string_view quality, double budget_ms,
                                           uint32_t width, uint32_t height, std::string& error) {
-  if (quality.empty() || quality == "custom") return std::nullopt;
-  for (Preset p : {Preset::low, Preset::medium, Preset::high, Preset::top})
-    if (quality == preset_name(p)) return preset_pick(p);
-  // The table's prices are the reference machine's at its own size; a frame's cost is mostly its
-  // pixels', so another window scales them by its share of the table's.
-  const double pixels = static_cast<double>(width) * static_cast<double>(height);
-  const double scale =
-      pixels > 0 ? pixels / (static_cast<double>(kTable.width) * kTable.height) : 1.0;
-  if (quality == "auto") return r::fit_ladder(kRows, budget_ms, kTable.floor_ms, scale).pick;
-  double share = 0;
-  if (!ge::console::parse_number(quality, share) || !(share >= 0 && share <= 1)) {
-    error = "r_quality \"" + std::string(quality) +
-            "\" is none of custom, low, medium, high, top, auto or a number from 0 to 1; the "
-            "individual r_ settings are used";
-    return std::nullopt;
-  }
-  const double top_ms = r::ladder_cost(kRows, preset_pick(Preset::top));
-  return r::fit_ladder(kRows, (kTable.floor_ms + share * top_ms) * scale, kTable.floor_ms, scale)
-      .pick;
+  return r::quality_pick(kLadder, quality, budget_ms, width, height, error);
 }
 
 }  // namespace fall_line::app

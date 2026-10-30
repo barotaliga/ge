@@ -50,12 +50,10 @@ enum class PictureRow : uint8_t {
 inline constexpr int kPictureRows = static_cast<int>(PictureRow::count);
 
 // The reference machine the prices were measured on, and its frame with every row at its cheapest.
-struct PriceTable {
-  std::string_view machine;
-  uint32_t width = 0, height = 0;
-  double floor_ms = 0;
-};
-const PriceTable& price_table();
+const ge::render::PriceTable& price_table();
+// Fall Line's whole ladder (its rows, prices and presets) for the engine's generic quality setting
+// and fit (render/ladder.hpp): what is Fall Line's here is only its values and `apply_picture`.
+const ge::render::QualityLadder& quality_ladder();
 
 // The rows, priced, in PictureRow's order.
 std::span<const ge::render::LadderRow> picture_rows();
@@ -72,12 +70,7 @@ ge::render::LadderPick preset_pick(Preset p);
 // `drawn` in `timed_ms` at the table's size (render/ladder.hpp's fit over the table's scale).
 ge::render::LadderFit auto_picture(double budget_ms, const ge::render::LadderPick& drawn,
                                    double timed_ms);
-// THE QUALITY SETTING (`r_quality`): the picture a player's word names, for a `width` x `height`
-// window, the table's prices scaled by its pixels. `custom` (or empty): none, the individual
-// r_ settings rule. `low`, `medium`, `high`, `top`: the presets. A number from 0 to 1: the
-// picture of most worth inside a budget that many parts of the way from every row's cheapest to
-// the top. `auto`: the picture of most worth inside `budget_ms`. Anything else: none, and `error`
-// says what was wrong.
+// THE QUALITY SETTING (`r_quality`): render/ladder.hpp's quality_pick over Fall Line's ladder.
 std::optional<ge::render::LadderPick> quality_pick(std::string_view quality, double budget_ms,
                                                    uint32_t width, uint32_t height,
                                                    std::string& error);

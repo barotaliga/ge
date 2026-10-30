@@ -77,45 +77,21 @@ TEST(the_automatic_preset_lowers_the_resolution_first) {
     if (i != res) CHECK(f.pick[i] == top[i]);
 }
 
-TEST(the_quality_setting_names_a_preset_a_share_or_a_budget) {
-  const auto rows = fa::picture_rows();
-  std::string error;
-  // custom: no pick, the individual r_ settings rule.
-  CHECK(!fa::quality_pick("custom", 8.3, 1920, 1080, error) && error.empty());
-  CHECK(!fa::quality_pick("", 8.3, 1920, 1080, error) && error.empty());
-  // The presets by name.
+TEST(fall_lines_ladder_is_its_values_over_the_engines_setting) {
+  const gr::QualityLadder& ladder = fa::quality_ladder();
+  CHECK(ladder.rows.size() == fa::picture_rows().size() && ladder.table.width == 1920);
+  // The presets in order, each reachable by its name; top is every row at its dearest.
+  CHECK(ladder.presets.size() == 4);
   for (fa::Preset p : {fa::Preset::low, fa::Preset::medium, fa::Preset::high, fa::Preset::top}) {
-    const auto pick = fa::quality_pick(fa::preset_name(p), 8.3, 1920, 1080, error);
+    const auto pick = gr::preset_pick(ladder, fa::preset_name(p));
     CHECK(pick && *pick == fa::preset_pick(p));
+    if (pick) CHECK(static_cast<int>(pick->size()) == fa::kPictureRows);
   }
-  // A word it does not know: no pick, and a line that says so.
-  CHECK(!fa::quality_pick("ultra", 8.3, 1920, 1080, error) && !error.empty());
-  error.clear();
-  CHECK(!fa::quality_pick("1.5", 8.3, 1920, 1080, error) && !error.empty());
-  error.clear();
-  // 0 is every row's cheapest cost, 1 the top; the worth never falls as the share rises.
-  const auto none = fa::quality_pick("0", 8.3, 1920, 1080, error);
-  const auto all = fa::quality_pick("1", 8.3, 1920, 1080, error);
-  CHECK(none && all && error.empty());
-  if (!none || !all) return;
-  CHECK(gr::ladder_cost(rows, *none) == 0);
-  CHECK(*all == fa::preset_pick(fa::Preset::top));
-  double last = -1;
-  for (const char* share : {"0", "0.1", "0.25", "0.5", "0.75", "0.9", "1"}) {
-    const auto pick = fa::quality_pick(share, 8.3, 1920, 1080, error);
-    CHECK(pick && error.empty());
-    if (!pick) continue;
-    const double worth = gr::ladder_worth(rows, *pick);
-    CHECK(worth >= last);
-    last = worth;
-  }
-  // auto: a budget past the top's price draws the top; a smaller window fits more in the same.
-  const auto roomy = fa::quality_pick("auto", 100, 1920, 1080, error);
-  const auto tight = fa::quality_pick("auto", 3, 1920, 1080, error);
-  const auto small = fa::quality_pick("auto", 3, 1280, 720, error);
-  CHECK(roomy && tight && small);
-  if (!roomy || !tight || !small) return;
-  CHECK(*roomy == fa::preset_pick(fa::Preset::top));
-  CHECK(gr::ladder_worth(rows, *small) >= gr::ladder_worth(rows, *tight));
-  CHECK(gr::ladder_worth(rows, *tight) < gr::ladder_worth(rows, *roomy));
+  CHECK(fa::preset_pick(fa::Preset::top) == gr::top_pick(ladder.rows));
+  // The game's word for it is the engine's over this ladder.
+  std::string error;
+  const auto half = fa::quality_pick("0.5", 8.3, 2560, 1440, error);
+  const auto same = gr::quality_pick(ladder, "0.5", 8.3, 2560, 1440, error);
+  CHECK(half && same && *half == *same && error.empty());
+  CHECK(!fa::quality_pick("custom", 8.3, 2560, 1440, error));
 }

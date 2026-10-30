@@ -11,6 +11,8 @@
 #include <cmath>
 #include <cstdint>
 
+#include "console/cvar.hpp"
+
 namespace ge::render {
 
 namespace {
@@ -116,6 +118,51 @@ LadderFit fit_ladder(std::span<const LadderRow> rows, double budget_ms, double f
     b -= grains(rows[rest[k]].stops[static_cast<size_t>(s)].cost_ms * scale);
   }
   return finish(true);
+}
+
+LadderPick top_pick(std::span<const LadderRow> rows) {
+  LadderPick pick(rows.size());
+  for (size_t r = 0; r < rows.size(); ++r) pick[r] = static_cast<int>(rows[r].stops.size()) - 1;
+  return pick;
+}
+
+std::optional<LadderPick> preset_pick(const QualityLadder& ladder, std::string_view name) {
+  for (const LadderPreset& p : ladder.presets)
+    if (p.name == name) return LadderPick(p.stops.begin(), p.stops.end());
+  return std::nullopt;
+}
+
+LadderFit auto_fit(const QualityLadder& ladder, double budget_ms, const LadderPick& drawn,
+                   double timed_ms) {
+  const double scale = machine_scale(ladder.rows, drawn, ladder.table.floor_ms, timed_ms);
+  return fit_ladder(ladder.rows, budget_ms, ladder.table.floor_ms, scale);
+}
+
+std::optional<LadderPick> quality_pick(const QualityLadder& ladder, std::string_view quality,
+                                       double budget_ms, uint32_t width, uint32_t height,
+                                       std::string& error) {
+  if (quality.empty() || quality == "custom") return std::nullopt;
+  if (auto pick = preset_pick(ladder, quality)) return pick;
+  // The table's prices are the reference machine's at its own size; a frame's cost is mostly its
+  // pixels', so another window scales them by its share of the table's.
+  const double table_px = static_cast<double>(ladder.table.width) * ladder.table.height;
+  const double pixels = static_cast<double>(width) * static_cast<double>(height);
+  const double scale = pixels > 0 && table_px > 0 ? pixels / table_px : 1.0;
+  const double floor_ms = ladder.table.floor_ms;
+  if (quality == "auto") return fit_ladder(ladder.rows, budget_ms, floor_ms, scale).pick;
+  double share = 0;
+  if (!console::parse_number(quality, share) || !(share >= 0 && share <= 1)) {
+    std::string names;
+    for (const LadderPreset& p : ladder.presets) {
+      names += p.name;
+      names += ", ";
+    }
+    error = "r_quality \"" + std::string(quality) + "\" is none of custom, " + names +
+            "auto or a number from 0 to 1; the game's own settings are used";
+    return std::nullopt;
+  }
+  const double top_ms = ladder_cost(ladder.rows, top_pick(ladder.rows));
+  return fit_ladder(ladder.rows, (floor_ms + share * top_ms) * scale, floor_ms, scale).pick;
 }
 
 }  // namespace ge::render
