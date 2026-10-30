@@ -62,6 +62,10 @@ ge net stats <pcap>              # per connection: kbps, round trip, loss, resen
 ge net sim [--presets=wifi,bad]  # fake clients and a host over bad links, no game needed
 ge snow show <file.snow>         # a saved snow layer: tiles, pressed samples, mass, maps (skill: snow)
 ge snow column <file.snow> --at=x,z  # the snow's column at a point
+ge qc disasm <progs>             # a QC program's functions as statements, operands named (skill: progs)
+ge qc run <progs> --function=f   # one function run headless: its return, or its fault and QC stack
+ge qc trace <progs> --function=f # every call with its arguments and return; --statements for more
+ge qc profile <progs> --function=f  # statements and calls per function, the builtins hit
 ge cvar ls [<prefix>]            # the game's settings: value, default, range, flags, help
 ge cvar get <name>...            # the named ones (an unknown name: the nearest known)
 ge cfg check <file>... [--server]   # a cfg's problems at file:line, and names nothing reads

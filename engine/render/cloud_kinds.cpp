@@ -394,6 +394,23 @@ const std::string& cloud_kind_list() {
   return list;
 }
 
+void take_form(const CloudKind& d, double depth_m, CloudLayer& l) {
+  l.stretch = d.stretch;
+  l.dome = d.dome;
+  l.density = d.opacity / depth_m;
+  l.shadow_tau = d.shadow_tau;
+  l.anvil = d.anvil;
+  l.erode = d.erode;
+  l.fibre = d.fibre;
+  l.patch = d.patch;
+  l.drop_um = d.drop;
+  l.drop_spread = d.spread;
+  l.halo = d.halo;
+  l.deck = d.deck;
+  l.thin = d.thin;
+  l.thick_cells = d.thick_cells;
+}
+
 std::string cloud_stack_named(std::string_view names, const CloudKind* out[kCloudLayers],
                               int& count) {
   count = 0;
