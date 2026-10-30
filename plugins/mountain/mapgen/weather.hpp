@@ -54,7 +54,12 @@ struct SkyPick {
   // The snow line as a share of the mountain's height, from its base (0) to its summit (1); over
   // 1 rain falls on the summit too. Kept where negative.
   double snowline = -1;
+  // A thunderstorm's strength, 0 none .. 1 severe (`Weather::thunder`), kept where negative. A
+  // storm is a summer sky's: with no snow line picked it brings the freezing level of a summer
+  // afternoon over the summit (`kSummerFreezing`), so its rain is rain to the top.
+  double thunder = -1;
 };
+inline constexpr double kSummerFreezing = 600;  // m over the summit
 void with_sky(Level& level, const SkyPick& pick);
 
 }  // namespace ge::mountain::mapgen

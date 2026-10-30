@@ -11,6 +11,11 @@
 // meets him. The snow under a landing picks its sound (deep loose snow is the whumpf, past half the
 // legs' limit it is the hard landing), and the load scales it.
 //
+// A THUNDERSTORM over the map (mountain/air's `storm_of`, `Weather::thunder` above 0) is heard at
+// the player's skis once a frame (engine/wind/thunder_play.hpp): every flash's thunder queued at
+// the moment its first sound reaches him and started on the effects bus, unless `thunder` is off
+// (cfg's s_thunder). A clock gone back (a restart, a rewind) starts the hearing over.
+//
 // ge:summary The run's sound: events routed to the bank each step, the ride bed steered each frame
 // ge:keywords route events sound run_sound landing wipeout gate finish bed listener step frame
 // ge:skill audio sim
@@ -23,12 +28,19 @@
 #include "fall_line/sim/state.hpp"
 #include "fall_line/sound/listener.hpp"
 #include "skier/app/ride_bed.hpp"
+#include "wind/storm.hpp"
+#include "wind/thunder_play.hpp"
 
 namespace fall_line::sound {
 
 struct RunSound {
   ge::skier::RideBed bed;
   Seat seat = Seat::chase;
+  bool thunder = true;  // the storm's thunder heard
+  ge::wind::ThunderPlayer heard;
+  ge::wind::Storm storm;  // the map's, laid for `storm_level` at `storm_thunder`
+  const ge::mountain::mapgen::Level* storm_level = nullptr;
+  double storm_thunder = 0;
 };
 
 RunSound make_run_sound();
