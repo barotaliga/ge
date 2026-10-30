@@ -2,10 +2,12 @@
 //
 // ge:summary The window's world frame: the BSP map, the effects, sky, bloom, post, the overlay
 // ge:keywords world-draw bsp frame create_world_draw draw_world resize_world particles
+// ge:keywords enhanced-textures texture-cache
 // ge:skill render brush shooter
 #include "shooters_edge/client/world_draw.hpp"
 
 #include <algorithm>
+#include <filesystem>
 #include <vector>
 
 #include "brush/app/bsp_draw.hpp"
@@ -13,6 +15,7 @@
 #include "brush/app/draw_data.hpp"
 #include "brush/light_probe.hpp"
 #include "camera/pose.hpp"
+#include "classicenhance/cached.hpp"
 #include "core/output.hpp"
 #include "render/bloom.hpp"
 #include "render/clouds.hpp"
@@ -23,6 +26,7 @@
 #include "render/ui_pass.hpp"
 #include "render/viewmodel.hpp"
 #include "viewmodel/light.hpp"
+#include "shooters_edge/client/world_extras.hpp"
 
 namespace shooters_edge::client {
 
@@ -52,6 +56,7 @@ struct WorldDraw {
   ge::viewmodel::Placement last_place;  // the weapon's placement a frame ago
   bool held_fresh = true;
   ge::brush::LightProbe probe;
+  WorldExtrasPtr extras;  // the modern look's water, liquids, flames and weather (a map's only)
   gr::UiPass ui;
   gr::FrameRecorder rec;
   uint32_t w = 0, h = 0;
@@ -75,6 +80,16 @@ void make_targets(ge::gpu::Device& d, WorldDraw& f) {
     f.post_group[p] = gr::post_group(d, f.post[p], f.targets.hdr_view, f.bloom.view);
   gr::bind_particle_targets(d, f.particles, f.targets);
   if (f.has_map) ba::create_bsp_targets(d, f.bsp, f.targets);
+  if (f.extras) bind_extras_targets(d, *f.extras, f.targets);
+}
+
+// The pack's textures as classic-enhance left them in its cache (`user` the pack's cache folder):
+// upscaled, with their glow; the map's own where the cache has none.
+bool from_cache(void* user, std::string_view name, uint32_t w, uint32_t h,
+                std::span<const uint8_t> /*indexed*/, std::span<const uint8_t> /*palette*/,
+                std::vector<uint8_t>* rgba) {
+  return ge::classicenhance::cached_texture(*static_cast<const std::filesystem::path*>(user), name,
+                                            w, h, rgba);
 }
 
 // The weapon's draw this frame: its model and placement, lit by the baked light on the floor under
@@ -145,10 +160,21 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     }
     palette_copy.assign(palette.begin(), palette.end());
     if (grey.empty()) grade_palette = palette_copy;
+    // ce_textures: the enhanced textures, when this pack's were enhanced (the in-game menu's
+    // ENHANCE); the cache is keyed by the first pack's bytes.
+    std::filesystem::path cache;
+    ba::TextureSource source;
+    if (picture.ce.textures && !files.archives.empty())
+      cache = ge::classicenhance::find_cache(files.archives[0].bytes);
+    if (!cache.empty()) {
+      source.replace = from_cache;
+      source.user = &cache;
+      ge::core::output::status("shooters_edge: the enhanced textures from " + cache.string());
+    }
     ba::Pack pack;  // the map file alone, as the scene reader takes it
     pack.bytes = map.file;
     pack.files.push_back({"maps/" + map.name + ".bsp", 0, static_cast<uint32_t>(map.file.size())});
-    if (!ba::load_scene(pack, pack.files[0].name, palette_copy, &f->scene, &error)) {
+    if (!ba::load_scene(pack, pack.files[0].name, palette_copy, &f->scene, &error, source)) {
       error = "the map " + map.name + " cannot be drawn: " + error;
       return nullptr;
     }
@@ -162,7 +188,7 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
   gr::create_sky(d, f->pipelines, f->skypass, f->uniforms, f->layout);
   gr::create_clouds(d, f->pipelines, f->clouds, f->layout);
   gr::BloomSettings bs;
-  bs.strength = look::post_settings(look::Look::modern, picture).bloom;
+  bs.strength = picture.ce.bloom ? look::post_settings(look::Look::modern, picture).bloom : 0;
   gr::create_bloom_pipelines(d, f->pipelines, f->bloom, bs);
   for (int p = 0; p < 2; ++p)
     gr::create_post(
@@ -181,7 +207,10 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
   }
   if (f->has_map) f->probe = ge::brush::make_light_probe(f->scene.map);
   gr::create_ui_pass(d, f->pipelines, f->ui, format);
-  if (f->has_map) ba::create_bsp(d, f->pipelines, f->bsp, f->scene, f->layout);
+  if (f->has_map) {
+    ba::create_bsp(d, f->pipelines, f->bsp, f->scene, f->layout);
+    f->extras = create_extras(d, f->pipelines, f->layout, f->scene, picture.ce, picture.weather);
+  }
   if (!f->pipelines.finish(d)) {
     error = "the world's pipelines did not build; next: read the gpu: lines above";
     return nullptr;
@@ -209,18 +238,21 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   view.altitude_m = 100;
   view.clouds.quarter = false;
   view.clouds.spread = false;
-  f.rec.begin_frame(d);
-  gr::fill_uniforms(f.staged, view, f.w, f.h);
-  d.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
-  gr::prepare_sky(f.skypass, view);
   ba::Options o = look::world_options(lk, {}, *f.picture);
   o.sky_light = f.sky.sky_light;
   o.sky_seen = f.sky.sky_seen;
   for (int k = 0; k < 3; ++k) o.sky_tint[k] = f.sky.tint[k];
+  // The switches on the options and the weather on the view, before the uniforms take the view.
+  if (f.extras) dress_extras(*f.extras, view, o, dt);
+  f.rec.begin_frame(d);
+  gr::fill_uniforms(f.staged, view, f.w, f.h);
+  d.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
+  gr::prepare_sky(f.skypass, view);
   if (f.has_map) {
     ba::set_dynamic_lights(f.bsp, fx.lights);
     ba::prepare_bsp(d, f.bsp, view, o);
   }
+  if (f.extras) prepare_extras(d, *f.extras, f.bsp, view, o);
   gr::emit_particles(f.particles, fx.births);
   f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
   gr::prepare_particles(d, f.particles, dt, view.near_m);
@@ -235,10 +267,13 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   gr::encode_particles_sim(f.particles, f.pipelines, f.rec, e);
   gr::encode_sky_tables(f.skypass, f.pipelines, f.rec, e);
+  if (f.extras) encode_extras_sim(*f.extras, f.pipelines, f.rec, e);
   if (f.has_map) ba::encode_bsp(f.bsp, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_sky(f.skypass, f.pipelines, f.rec, e, f.targets, f.frame);
-  gr::encode_clouds(f.clouds, f.pipelines, f.rec, e, f.targets, f.frame, view, f.staged);
+  if (f.picture->ce.clouds)
+    gr::encode_clouds(f.clouds, f.pipelines, f.rec, e, f.targets, f.frame, view, f.staged);
   if (f.has_map) ba::encode_bsp_veil(f.bsp, f.pipelines, f.rec, e, f.targets);
+  if (f.extras) encode_extras(*f.extras, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_particles(f.particles, f.pipelines, f.rec, e, f.targets, f.frame);
   if (weapon) gr::encode_viewmodel(f.held, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);

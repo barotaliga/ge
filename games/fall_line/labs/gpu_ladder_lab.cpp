@@ -212,12 +212,9 @@ void price(ge::lab::Lab& lab) {
       fa::draw(*device, *frame, view, {moments[k], 2.0 / 120.0, k == 0}, target.view);
       frame->recorder.wait(*device);
       if (static_cast<int>(k) < warm) continue;
-      double total = 0;
-      const gr::FrameStats& st = frame->recorder.stats;
-      for (int i = 0; i < st.count; ++i)
-        if (std::isfinite(st.passes[static_cast<size_t>(i)].gpu_ms))
-          total += st.passes[static_cast<size_t>(i)].gpu_ms;
-      totals.push_back(total);
+      // The frame's span on the GPU, not the sum of its passes (FrameStats::gpu_span_ms).
+      const double span = frame->recorder.stats.gpu_span_ms();
+      if (std::isfinite(span)) totals.push_back(span);
     }
     if (!shot.empty()) {
       lab.shot({shot,

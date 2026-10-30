@@ -96,6 +96,9 @@ struct Options {
   // r_novis's opposite: the cull's first step, the potentially visible set; off, every face goes
   // on to the frustum and the pyramid (a map whose visibility is not conservative).
   bool pvs = true;
+  // v2 leaves the liquids' faces to the engine's water and liquid passes; these draw a kind's
+  // faces warped as the classic does instead (a game whose pass for that kind is switched off).
+  bool warped_water = false, warped_slime = false, warped_lava = false;
 };
 
 inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side

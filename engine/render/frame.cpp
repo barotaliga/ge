@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 #include "render/clouds.hpp"
@@ -266,6 +267,18 @@ uint32_t FrameStats::dispatches() const {
   uint32_t n = 0;
   for (int i = 0; i < count; ++i) n += passes[static_cast<size_t>(i)].dispatches;
   return n;
+}
+
+double FrameStats::gpu_span_ms() const {
+  double span = std::numeric_limits<double>::quiet_NaN();
+  for (int i = 0; i < count; ++i) {
+    const PassStat& p = passes[static_cast<size_t>(i)];
+    if (p.draws + p.dispatches == 0 || !std::isfinite(p.gpu_ms) || !std::isfinite(p.gpu_start_ms))
+      continue;
+    const double end = p.gpu_start_ms + p.gpu_ms;
+    span = std::isfinite(span) ? std::max(span, end) : end;
+  }
+  return span;
 }
 
 static int64_t steady_ns() {

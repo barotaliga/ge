@@ -154,11 +154,17 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
 #endif
                         : options.validation != 0;
   static constexpr const char* kNoChecks[] = {"skip_validation", "disable_robustness"};
+  // Dawn rounds every timestamp down to 2^16 ns by default (a browser's guard against timing
+  // attacks), which leaves a pass's GPU time in steps of 0.0655 ms: the engine times its own
+  // frames, so the timers keep their full precision.
+  static constexpr const char* kFullTimers[] = {"timestamp_quantization"};
   wgpu::DawnTogglesDescriptor toggles{};
   if (!dev->validation) {
     toggles.enabledToggleCount = 2;
     toggles.enabledToggles = kNoChecks;
   }
+  toggles.disabledToggleCount = 1;
+  toggles.disabledToggles = kFullTimers;
 
   const std::string label(options.label);
   wgpu::DeviceDescriptor desc{};

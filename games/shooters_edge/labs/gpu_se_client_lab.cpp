@@ -10,21 +10,30 @@
 // cost and the effects thrown are deterministic metrics; the pictures are measured (each adapter
 // rasterises its own way).
 //
+// With `--game=<folder>` (a game folder of packs, `--map=<name>` its map) the
+// lab draws that map instead, for PRIVATE pictures only: the player at the map's start looking
+// four ways, each in the classic look and in the modern look with every classic-enhance switch on
+// (the enhanced textures when the pack's cache has them); `--cvars="ce_water 0"` sets the modern
+// side's cvars as the console would.
+//
 // ge:summary Lab: the window's frame drawn headless: the halls, a rocket jump, its effects, the HUD
 // ge:keywords lab se-client listen-server window frame rocket-jump hud effects trail explosion
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "brush/write.hpp"
+#include "console/console.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/liquid_scene.hpp"
 #include "shooters_edge/client/held.hpp"
+#include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/view.hpp"
@@ -61,10 +70,123 @@ bool halls_pack(std::vector<uint8_t>& out, std::string& error) {
   return ge::vfs::write_pak({{"maps/halls.bsp", bsp}}, &out, &error);
 }
 
+// A game folder's map from its start, four ways, classic beside enhanced (private pictures).
+void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
+  const std::string folder = lab.arg("game");
+  const size_t cut = folder.find_last_of('/');
+  const std::string base = cut == std::string::npos ? "." : folder.substr(0, cut);
+  const std::string game = cut == std::string::npos ? folder : folder.substr(cut + 1);
+  std::string error;
+  cl::SearchPath files;
+  ge::progs::Progs progs;
+  cl::Listen l;
+  if (!cl::open_game_dir(base, game, files, error) || !cl::baseline_progs(progs, error)) {
+    lab.fail(error, "Read the reason above. Skill: shooter.");
+    return;
+  }
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, lab.arg("map"), error);
+  if (!map || !cl::listen_start(l, progs, std::move(map), {}, error)) {
+    lab.fail(error, "Read the reason above. Skill: shooter.");
+    return;
+  }
+  auto device = ge::gpu::create_device({.label = "se-client", .validation = 1});
+  if (!device) {
+    lab.fail("no GPU device", "Install Mesa's Vulkan drivers. Skill: gpu.");
+    return;
+  }
+  shooters_edge::look::Picture looks[2];
+  ge::console::Console con[2];
+  for (int k = 0; k < 2; ++k) shooters_edge::look::add_cvars(con[k], looks[k]);
+  con[0].execute("r_look classic");
+  con[1].execute(lab.arg("cvars"));
+  cl::WorldDrawPtr world[2];
+  for (int k = 0; k < 2; ++k) {
+    world[k] = cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
+                                     looks[k], {}, error);
+    if (!world[k]) {
+      lab.fail(error, "Read the gpu: lines above. Skill: render.");
+      return;
+    }
+  }
+  ge::gpu::Target out = ge::gpu::create_target(*device, "se-client.final", w, h);
+  cl::ViewState shown;
+  cl::FxState fx_state;
+  cl::FxFrame fx;
+  double t = 0;
+  for (int i = 0; i < 80; i++) {
+    cl::listen_frame(l, {});
+    t += 0.013;
+    cl::frame_view(l, shown, 1, t, 0.013);
+    cl::step_fx(l, shown, fx_state, t, 0.013, fx);
+  }
+  // The views: `--views` (x,y,z,yaw,pitch in the map's units and degrees, ';' between), the
+  // player stood there; else the start, four ways.
+  struct Place {
+    bool moved = false;
+    float at[3] = {0, 0, 0};
+    float yaw = 0, pitch = 0;
+  };
+  std::vector<Place> places;
+  const std::string views = lab.arg("views");
+  for (size_t a = 0; a < views.size();) {
+    const size_t b = std::min(views.find(';', a), views.size());
+    Place p;
+    p.moved = std::sscanf(views.substr(a, b - a).c_str(), "%f,%f,%f,%f,%f", &p.at[0], &p.at[1],
+                          &p.at[2], &p.yaw, &p.pitch) == 5;
+    if (p.moved) places.push_back(p);
+    a = b + 1;
+  }
+  if (places.empty()) {
+    for (int turn = 0; turn < 4; ++turn) {
+      Place p;
+      p.yaw = l.view.y + static_cast<float>(90 * turn);
+      p.pitch = l.view.x;
+      places.push_back(p);
+    }
+  }
+  const char* kLooks[2] = {"classic", "enhanced"};
+  for (size_t v = 0; v < places.size(); ++v) {
+    const Place& p = places[v];
+    auto& player = l.server->sv.edicts[1];
+    if (p.moved) {
+      player.origin = {p.at[0], p.at[1], p.at[2]};
+      player.velocity = {};
+    }
+    l.view.x = p.pitch;
+    l.view.y = p.yaw;
+    for (int i = 0; i < 4; i++) {  // the eyes and the effects settle (the screen's blend, say)
+      if (p.moved) player.origin = {p.at[0], p.at[1], p.at[2]};
+      player.velocity = {};
+      t += 0.013;
+      cl::frame_view(l, shown, 1, t, 0.013);
+      cl::step_fx(l, shown, fx_state, t, 0.013, fx);
+    }
+    fx.births.clear();
+    ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
+    for (int k = 0; k < 2; ++k) {
+      for (int f = 0; f < 30; ++f)  // the weather and the flames run a moment in
+        cl::draw_world(*device, *world[k], view, fx, nullptr, 1.0 / 30, {}, out.view);
+      const ge::gpu::Image img = ge::gpu::read_now(*device, out);
+      const std::string id = std::string(kLooks[k]) + "-" + std::to_string(v);
+      lab.shot({id,
+                id,
+                "View " + std::to_string(v) + " in the " + kLooks[k] + " look.",
+                "the map from the player's eyes",
+                {{"map", lab.arg("map")}, {"views", views}}},
+               gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+               gl::Det::measured);
+    }
+  }
+}
+
 void run(gl::Lab& lab) {
   const auto size = lab.arg_nums("size");
   const uint32_t w = size.size() > 0 ? static_cast<uint32_t>(size[0]) : 960;
   const uint32_t h = size.size() > 1 ? static_cast<uint32_t>(size[1]) : 540;
+  if (!lab.arg("game").empty()) {
+    run_game(lab, w, h);
+    return;
+  }
   std::string error;
   cl::SearchPath files;
   std::vector<uint8_t> pak;
@@ -225,7 +347,11 @@ const gl::LabSpec kSpec{
     "Does the window's frame show the map from the player's eyes with the HUD, and does a "
     "rocket jump lift him?",
     {{"size", "960,540", "the frame's width and height, px"},
-     {"models", "games/shooters_edge/content/models/view", "the held weapons' folder"}},
+     {"models", "games/shooters_edge/content/models/view", "the held weapons' folder"},
+     {"game", "", "a game folder of packs to draw instead of the halls (private pictures only)"},
+     {"map", "start", "with --game: the map's name"},
+     {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
+     {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"}},
     "--size=480,270",
     run,
 };
