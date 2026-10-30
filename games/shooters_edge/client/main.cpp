@@ -215,10 +215,9 @@ static int run_main(int argc, char** argv) {
   int w = 0, h = 0;
   window->pixel_size(w, h);
   surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), true);
-  cl::WorldDrawPtr world =
-      cl::create_world_draw(*device, files, *listen.map, static_cast<uint32_t>(w),
-                            static_cast<uint32_t>(h), surface.format(), picture, error,
-                            {listen.server->models, false});
+  cl::WorldDrawPtr world = cl::create_world_draw(
+      *device, files, *listen.map, static_cast<uint32_t>(w), static_cast<uint32_t>(h),
+      surface.format(), picture, error, {listen.server->models, false});
   if (!world) {
     out::error("shooters_edge: the world draw did not load: " + error + "; see docs/rendering.md");
     return 1;

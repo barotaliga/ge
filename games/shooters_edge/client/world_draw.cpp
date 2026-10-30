@@ -164,8 +164,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
   gr::prepare_particles(d, f.particles, dt, view.near_m);
   if (f.has_map)
-    prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight,
-                   !o.crisp);
+    prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp);
   gr::set_post_blend(d, f.post[p], fx.blend);
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   gr::encode_particles_sim(f.particles, f.pipelines, f.rec, e);

@@ -177,7 +177,8 @@ gr::MorphModel morph_from_brush(const br::Map& item, std::span<const uint8_t> pa
     for (uint32_t i = surf.first; i < surf.first + surf.count; i++) {
       const br::Vertex& v = item.vertices[item.indices[i]];
       for (int k = 0; k < 2; k++) {
-        const double st = item.st_texels ? v.st[k] : v.st[k] * double(k == 0 ? tex.width : tex.height);
+        const double st =
+            item.st_texels ? v.st[k] : v.st[k] * double(k == 0 ? tex.width : tex.height);
         lo[k] = std::min(lo[k], st);
         hi[k] = std::max(hi[k], st);
       }
@@ -209,10 +210,10 @@ gr::MorphModel morph_from_brush(const br::Map& item, std::span<const uint8_t> pa
     const br::Texture& tex = item.textures[surf.texture];
     for (uint32_t j = 0; j < p.h; j++) {
       for (uint32_t i = 0; i < p.w; i++) {
-        const int32_t sx = ((p.s0 + int32_t(i)) % int32_t(tex.width) + int32_t(tex.width)) %
-                           int32_t(tex.width);
-        const int32_t ty = ((p.t0 + int32_t(j)) % int32_t(tex.height) + int32_t(tex.height)) %
-                           int32_t(tex.height);
+        const int32_t sx =
+            ((p.s0 + int32_t(i)) % int32_t(tex.width) + int32_t(tex.width)) % int32_t(tex.width);
+        const int32_t ty =
+            ((p.t0 + int32_t(j)) % int32_t(tex.height) + int32_t(tex.height)) % int32_t(tex.height);
         const uint8_t index = tex.indexed[size_t(ty) * tex.width + size_t(sx)];
         const size_t at = size_t(p.y + j) * kSkinWidth + p.x + i;
         colour_of(palette, index, &out.skin.rgba[at * 4]);
@@ -343,7 +344,8 @@ LightProbe make_probe(const br::Map& map) {
       surface_of.push_back(int32_t(t));
       p.lightmap.push_back(surf.lightmap);
       for (int32_t y = cy0; y <= cy1; y++)
-        for (int32_t x = cx0; x <= cx1; x++) cells[size_t(y) * size_t(p.nx) + size_t(x)].push_back(id);
+        for (int32_t x = cx0; x <= cx1; x++)
+          cells[size_t(y) * size_t(p.nx) + size_t(x)].push_back(id);
     }
   }
   p.start.reserve(cells.size() + 1);

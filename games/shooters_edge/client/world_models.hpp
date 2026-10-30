@@ -81,7 +81,7 @@ struct WorldModels {
     sh::Vec3f at;
     float rgb[3] = {1, 1, 1};
   };
-  std::unordered_map<int, Lit> lit;                           // by entity
+  std::unordered_map<int, Lit> lit;                          // by entity
   std::unordered_map<int, ge::render::MorphPose> last_pose;  // by entity
   std::vector<ge::render::MorphDraw> morph_draws;
   std::vector<ge::render::SpriteDraw> sprite_draws;

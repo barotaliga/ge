@@ -10,7 +10,7 @@
 // machine. The models loaded by kind and the things placed by kind are deterministic metrics; the
 // pictures are measured (each adapter rasterises its own way).
 //
-// ge:summary Lab: the window's models on a map (armour, health, ammo, weapons, flames) in both looks
+// ge:summary Lab: the window's models on a map (armour, health, ammo, weapons, flames), both looks
 // ge:keywords lab se-models world-models items armour health ammo weapons flames torches statics
 // ge:keywords classic modern r_look pak
 // ge:skill shooter render labs
@@ -25,6 +25,7 @@
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "console/console.hpp"
+#include "core/libm/libm.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
@@ -45,6 +46,7 @@ namespace cl = shooters_edge::client;
 namespace sh = ge::shooter;
 namespace br = ge::brush;
 namespace ls = ge::lab::liquid_scene;
+namespace lm = ge::core::libm;
 
 ge::brush::Entity entity(std::initializer_list<std::pair<std::string, std::string>> pairs) {
   ge::brush::Entity e;
@@ -74,8 +76,8 @@ bool fixture_pack(std::vector<uint8_t>& out, std::string& error) {
     for (int k = 0; k < 3; ++k)
       palette[size_t(i) * 3 + size_t(k)] = uint8_t(std::min(255, v * tint[ramp][k] / 3));
   }
-  std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {
-      {"maps/halls.bsp", bsp}, {"gfx/palette.lmp", palette}};
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {{"maps/halls.bsp", bsp},
+                                                                     {"gfx/palette.lmp", palette}};
   for (const char* name : {"progs/armor.mdl", "progs/g_rock2.mdl", "progs/flame2.mdl"})
     files.push_back({name, model});
   return ge::vfs::write_pak(files, &out, &error);
@@ -184,7 +186,7 @@ void run(gl::Lab& lab) {
   cl::place_models(l, placed);
   constexpr size_t kPlayer = 7, kPowered = 8, kKindCount = 9;
   double placed_by[kKindCount] = {};
-  const char* kKinds[kKindCount] = {"armour", "health", "ammo",   "weapon",  "flame",
+  const char* kKinds[kKindCount] = {"armour", "health", "ammo",   "weapon", "flame",
                                     "quad",   "shield", "player", "powered"};
   std::vector<std::vector<const cl::Placed*>> of_kind(kKindCount);
   for (const cl::Placed& p : placed) {
@@ -257,7 +259,7 @@ void run(gl::Lab& lab) {
   const auto eye_for = [&](const sh::Vec3f& at, float dist, float up, float out_eye[3]) {
     for (int k = 0; k < 8; k++) {
       const double a = k * 0.785398163397448;
-      const sh::Vec3f e{at.x + float(dist * std::cos(a)), at.y + float(dist * std::sin(a)),
+      const sh::Vec3f e{at.x + float(dist * lm::cos(a)), at.y + float(dist * lm::sin(a)),
                         at.z + up};
       // The eye clear of the walls by a margin, its line to the thing's middle clear.
       if (open_line(e, e, 16) && open_line(e, {at.x, at.y, at.z + 16}, 0)) {
@@ -281,7 +283,10 @@ void run(gl::Lab& lab) {
       look.look = lk;
       cl::draw_world(*device, *frame, view, fx, 0, {}, out.view);
       const ge::gpu::Image img = ge::gpu::read_now(*device, out);
-      lab.shot({shot_id, title + " (" + lk + ")", caption, look_for,
+      lab.shot({shot_id,
+                title + " (" + lk + ")",
+                caption,
+                look_for,
                 {{"map", map_name}, {"look", lk}, {"size", lab.arg("size")}}},
                gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
                gl::Det::measured);
@@ -328,9 +333,10 @@ void run(gl::Lab& lab) {
       lab.metric(std::string("light.") + s.id, hit ? (rgb[0] + rgb[1] + rgb[2]) / 3 : -1,
                  "lightmap");
     }
-    lab.note(std::string(s.id) + ": eye " + std::to_string(int(e[0])) + " " + std::to_string(int(e[1])) +
-             " " + std::to_string(int(e[2])) + ", the thing at " + std::to_string(int(aim.x)) + " " +
-             std::to_string(int(aim.y)) + " " + std::to_string(int(aim.z)) + " (" + l.server->models[size_t(chosen->modelindex)] +
+    lab.note(std::string(s.id) + ": eye " + std::to_string(int(e[0])) + " " +
+             std::to_string(int(e[1])) + " " + std::to_string(int(e[2])) + ", the thing at " +
+             std::to_string(int(aim.x)) + " " + std::to_string(int(aim.y)) + " " +
+             std::to_string(int(aim.z)) + " (" + l.server->models[size_t(chosen->modelindex)] +
              " frame " + std::to_string(chosen->frame) + " skin " + std::to_string(chosen->skin) +
              " entity " + std::to_string(chosen->entity) + ")");
     if (k == kPowered) {
@@ -347,7 +353,8 @@ void run(gl::Lab& lab) {
       lab.metric("powered.effects", me.effects, "bits");
       cl::step_fx(l, shown, fx_state, t, 0, fx);
     }
-    if (k >= kPlayer) fx.models.push_back(me);  // the window never draws its own player; the lab does
+    if (k >= kPlayer)
+      fx.models.push_back(me);  // the window never draws its own player; the lab does
     ge::render::FrameView v = base;
     const float at_f[3] = {aim.x, aim.y, aim.z + (k >= kPlayer ? 0.0f : 12.0f)};
     double eye[3], at[3];
@@ -355,8 +362,8 @@ void run(gl::Lab& lab) {
     br::to_engine(at_f, at);
     for (int c = 0; c < 3; c++) v.eye[c] = eye[c];
     const double dx = at[0] - eye[0], dy = at[1] - eye[1], dz = at[2] - eye[2];
-    v.heading = std::atan2(dx, dz);
-    v.pitch = std::atan2(dy, std::sqrt(dx * dx + dz * dz));
+    v.heading = lm::atan2(dx, dz);
+    v.pitch = lm::atan2(dy, std::sqrt(dx * dx + dz * dz));
     shoot(s.id, s.title, s.caption, s.look_for, v);
   }
   if (device)

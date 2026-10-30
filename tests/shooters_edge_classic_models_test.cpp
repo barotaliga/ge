@@ -4,8 +4,10 @@
 // group; an entity's yaw turns it the way the map turns it; a sprite's origin lands where the file
 // puts it and its clear index is clear; the light under a point is read off the floor's lightmap.
 //
-// ge:summary Tests the classic models' conversion: skins, marks, winding, groups, yaw, sprites, light
-// ge:keywords test classic-models morph_from_alias sprite_frames_of frame_in rotation_of light_under
+// ge:summary Tests the classic models' conversion: skins, marks, winding, groups, yaw, sprites
+// ge:summary and the light under a point
+// ge:keywords test classic-models morph_from_alias sprite_frames_of frame_in rotation_of
+// ge:keywords light_under
 // ge:skill shooter morph
 #include <cmath>
 #include <vector>
@@ -42,10 +44,10 @@ void turn(const float q[4], const double v[3], double out[3]) {
 TEST(a_skin_keeps_the_palettes_colours_and_marks_glow_and_tints) {
   ge::morph::Model m = ge::morph::sample_model();
   ge::morph::Skin& s = m.skins[0];
-  s.indices[0] = 5;     // plain
-  s.indices[1] = 17;    // the shirt's row, step 1
-  s.indices[2] = 100;   // the pants' row, step 4
-  s.indices[3] = 230;   // fullbright
+  s.indices[0] = 5;    // plain
+  s.indices[1] = 17;   // the shirt's row, step 1
+  s.indices[2] = 100;  // the pants' row, step 4
+  s.indices[3] = 230;  // fullbright
   const gr::MorphModel out = md::morph_from_alias(m, grey_palette(), 0);
   CHECK(out.skin.width == uint32_t(s.width) && out.skin.height == uint32_t(s.height));
   CHECK(out.skin.rgba[0] == 5 && out.skin.rgba[1] == 5 && out.skin.rgba[2] == 5);
@@ -73,15 +75,15 @@ TEST(the_fronts_face_out_in_the_engines_frame) {
   const std::vector<float>& p = out.positions[0];
   int outward = 0, triangles = 0;
   for (size_t t = 0; t + 2 < out.indices.size(); t += 3, triangles++) {
-    const float* a = &p[out.indices[t] * 3];
-    const float* b = &p[out.indices[t + 1] * 3];
-    const float* c = &p[out.indices[t + 2] * 3];
+    const float* a = &p[size_t{out.indices[t]} * 3];
+    const float* b = &p[size_t{out.indices[t + 1]} * 3];
+    const float* c = &p[size_t{out.indices[t + 2]} * 3];
     const double e1[3] = {b[0] - a[0], b[1] - a[1], b[2] - a[2]};
     const double e2[3] = {c[0] - a[0], c[1] - a[1], c[2] - a[2]};
     const double n[3] = {e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2],
                          e1[0] * e2[1] - e1[1] * e2[0]};
-    const double mid = n[0] * (a[0] + b[0] + c[0]) + n[1] * (a[1] + b[1] + c[1]) +
-                       n[2] * (a[2] + b[2] + c[2]);
+    const double mid =
+        n[0] * (a[0] + b[0] + c[0]) + n[1] * (a[1] + b[1] + c[1]) + n[2] * (a[2] + b[2] + c[2]);
     if (mid > 0) outward++;
   }
   CHECK(triangles == 8);

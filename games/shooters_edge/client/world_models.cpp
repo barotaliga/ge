@@ -23,11 +23,11 @@ namespace br = ge::brush;
 
 namespace {
 
-constexpr uint32_t kSpin = 8;            // a model file's flag: the item turns
-constexpr double kSpinDegPerS = 100;     // how fast
-constexpr float kAmbientShare = 0.75f;   // of the floor's light, from every side
-constexpr float kShadeShare = 0.6f;      // and from above and ahead
-constexpr float kRelightUnits = 1;       // a move that takes the light again
+constexpr uint32_t kSpin = 8;           // a model file's flag: the item turns
+constexpr double kSpinDegPerS = 100;    // how fast
+constexpr float kAmbientShare = 0.75f;  // of the floor's light, from every side
+constexpr float kShadeShare = 0.6f;     // and from above and ahead
+constexpr float kRelightUnits = 1;      // a move that takes the light again
 
 bool ends_with(const std::string& s, const char* tail) {
   const size_t n = std::char_traits<char>::length(tail);
@@ -232,7 +232,8 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                      std::abs(lit.at.z - p.origin.z);
     if (fresh || dm > kRelightUnits) {
       const float above[3] = {p.origin.x, p.origin.y, p.origin.z + 8};
-      if (!models::light_under(m.probe, map, above, lit.rgb)) lit.rgb[0] = lit.rgb[1] = lit.rgb[2] = 1;
+      if (!models::light_under(m.probe, map, above, lit.rgb))
+        lit.rgb[0] = lit.rgb[1] = lit.rgb[2] = 1;
       lit.at = p.origin;
     }
     for (int c = 0; c < 3; c++) {

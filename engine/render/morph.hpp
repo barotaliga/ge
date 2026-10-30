@@ -25,7 +25,8 @@
 // - THE LIGHT: `outdoor` (0..1) of the frame's sun and sky (render/wgsl/frame.wgsl's), plus the
 //   draw's own AMBIENT and a SHADE from one direction: what a game samples from its world where
 //   the model stands (an indoor map's light at the model's feet), so a figure in a dark corridor
-//   is dark; in the sun's units, or in the scene's white (`light_in_white`), as a lightmap is. Glowing texels add their own colour times `glow`, whatever the light.
+//   is dark; in the sun's units, or in the scene's white (`light_in_white`), as a lightmap is.
+//   Glowing texels add their own colour times `glow`, whatever the light.
 // - THE PASS draws after the opaque world (depth tested and written, reversed z, back faces
 //   culled), one draw a model instance, at most `kMaxMorphDraws` a frame.
 //

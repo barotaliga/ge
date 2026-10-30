@@ -51,7 +51,8 @@ ge::render::TintRamps palette_ramps(std::span<const uint8_t> palette);
 ge::render::MorphModel morph_from_alias(const ge::morph::Model& model,
                                         std::span<const uint8_t> palette, int skin);
 // An item map's world model as one frame, its faces' textures in its skin.
-ge::render::MorphModel morph_from_brush(const ge::brush::Map& item, std::span<const uint8_t> palette);
+ge::render::MorphModel morph_from_brush(const ge::brush::Map& item,
+                                        std::span<const uint8_t> palette);
 // A sprite's frames, a texel a map unit.
 std::vector<ge::render::SpriteFrame> sprite_frames_of(const ge::morph::Sprite& sprite,
                                                       std::span<const uint8_t> palette);
@@ -76,14 +77,14 @@ void rotation_of(const float angles[3], bool alias, float out[4]);
 struct LightProbe {
   float cell = 64;  // map units
   int32_t x0 = 0, y0 = 0, nx = 0, ny = 0;
-  std::vector<uint32_t> start;  // nx * ny + 1 offsets into `tris`
-  std::vector<uint32_t> tris;   // the first index of a floor triangle in Map::indices
+  std::vector<uint32_t> start;    // nx * ny + 1 offsets into `tris`
+  std::vector<uint32_t> tris;     // the first index of a floor triangle in Map::indices
   std::vector<int32_t> lightmap;  // each triangle's surface's lightmap, as `tris`
 };
 LightProbe make_probe(const ge::brush::Map& map);
 // The light (lightmap units, rgb) under `p` (map units); false (and 1s) when no floor is found
 // within `depth` units below.
-bool light_under(const LightProbe& probe, const ge::brush::Map& map, const float p[3],
-                 float rgb[3], float depth = 512);
+bool light_under(const LightProbe& probe, const ge::brush::Map& map, const float p[3], float rgb[3],
+                 float depth = 512);
 
 }  // namespace shooters_edge::models
