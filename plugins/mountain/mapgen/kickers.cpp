@@ -238,6 +238,11 @@ bool on_kicker(std::span<const Kicker> kickers, double x, double z, double margi
   for (const Kicker& k : kickers) {
     const double dx = x - k.x;
     const double dz = z - k.z;
+    // |u| + |v| bounds the distance, so a point farther off on either axis than the box's
+    // longest reach plus its half-width cannot be inside it: skip the sine and cosine.
+    const double reach =
+        std::max(k.ramp, k.landing) + k.width / 2 + R::kickers::edge + 2 * margin + 1;
+    if (std::abs(dx) > reach || std::abs(dz) > reach) continue;
     const double fx = libm::sin(k.heading);
     const double fz = libm::cos(k.heading);
     const double u = dx * fx + dz * fz;

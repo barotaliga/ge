@@ -59,6 +59,40 @@ cache is `GE_CLASSIC_CACHE` when set, else the platform's cache folder (`XDG_CAC
 Each stage records a key in `stages.txt`; a file is written whole (to `.part`, then renamed), so a
 stopped run never leaves half a texture that looks finished.
 
+## The menu
+
+In the game the player does not run the tool: the classic-enhance menu (`menu.hpp`) does the same
+from a menu over the engine's own (`engine/ui`). Its root page picks the pack among those found on
+the machine, starts ENHANCE and opens the switches. ENHANCE starts an `EnhanceJob`
+(`progress.hpp`): the pipeline on its own thread, reporting every stage's start, every item and
+its end (`RunOptions::progress`), and stopping after the item it is on when cancelled
+(`RunOptions::cancel`, the stages finished kept). A `ProgressBoard` keeps what the reports say
+for the drawing thread: each stage's state (waiting, working, up to date, done, failed), its
+count and the item it is on, the run's whole fraction (each stage alike, a skipped one whole), the
+time so far and the time left at the running stage's own rate, and the last six textures, the
+pack's picture beside its enhanced albedo, shrunk to 96 texels.
+
+The enhancing page draws that board (`draw_progress`) in a panel beside the column (above it on a
+phone held upright): the head (ENHANCING, READY or STOPPED and the percent), the whole bar, the
+clock, a row a stage with its bar, then the textures and the result: READY with PLAY lit, or the
+stage that failed and how to go on. The player can leave the page; the run goes on. The
+`classic-menu` lab pictures every page at three screen sizes over a run on the lab's fixture pack.
+
+## The switches
+
+Every enhancement is a switch (`switches.hpp`), off meaning the classic original as the pack has
+it: the textures (enhanced, the trained upscaler, the relief, the glow), the light (rebaked, live
+lights, shadows), the world (round arches, bevels, rubble, clutter, decals), the liquids and the
+sky (water, lava, slime, teleporters, skies), the effects (fire, muzzle fire, explosions, flares,
+bubbles, lightning beams), the air (fog, low clouds, wind, weather), the picture (reflections,
+bloom), the models (enhanced skins, smooth shading, rounded models, lit weapons) and the sound
+(enhanced sounds, room acoustics). Each is a cvar `ce_<id>` (`bind_switches`: boolean, saved with
+the player's settings), so the console and a config set it as the menu does (`ce_decals 0`); the
+menu's `switches` pages hold a toggle a switch, a page a group, with every switch of the group on
+or off together and the defaults. Most switches change only what is drawn and played, read by
+whatever draws or plays the thing; two change the cache (`apply_bakes`: the trained upscaler off
+leaves the kernel, rounding on rounds the models) and want ENHANCE again.
+
 ## The texture enhancer
 
 Each wall texture is indexed colour on a 256-entry palette. The enhancer works in linear light:
