@@ -9,11 +9,12 @@
 // grass material is grown). It fails on a GPU error, a pipeline made after the load, a lamp that
 // lights nothing, or a view the grass does not change.
 //
-// ge:summary Lab: the grass drawn: meadow, kinds, wind, sway, backlight, a lamp at night, reach,
-// trampled, floors ge:keywords lab gpu grass meadow kinds wind sway backlight translucency reach
-// thinning terrace ge:keywords street-lamp night lamps ge:keywords picture software-adapter blades
-// trample path wheel-track flowers seed-heads ge:skill grass render labs ge:test
-// tests/render_grass_test.cpp
+// ge:summary Lab: the grass drawn: meadow, kinds, wind, sway, backlight, a lamp, reach, floors
+// ge:keywords lab gpu grass meadow kinds wind sway backlight translucency reach thinning terrace
+// ge:keywords street-lamp night lamps
+// ge:keywords picture software-adapter blades trample path wheel-track flowers seed-heads
+// ge:skill grass render labs
+// ge:test tests/render_grass_test.cpp
 #include <algorithm>
 #include <cmath>
 #include <cstring>

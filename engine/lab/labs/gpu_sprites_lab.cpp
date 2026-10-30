@@ -11,9 +11,9 @@
 // cutout keeps the ground between its leaves, no GPU error, no pipeline after the load. Measured:
 // the pass's GPU time for 2000 sprites. Without an adapter it notes that, with grey cards.
 //
-// ge:summary Lab: sprites by facing rule and blend, sharp and smooth, an animation, a lamp, the
-// cost ge:keywords lab gpu sprites sprite billboard facing parallel upright oriented cutout
-// additive ge:keywords premultiplied glow fireball flame bush sign frames animation picture
+// ge:summary Lab: sprites by facing rule and blend, sharp and smooth, animated, a lamp, the cost
+// ge:keywords lab gpu sprites sprite billboard facing parallel upright oriented cutout additive
+// ge:keywords premultiplied glow fireball flame bush sign frames animation picture
 // ge:keywords night lamps street-lamp
 // ge:skill render labs
 // ge:test tests/render_sprites_test.cpp
