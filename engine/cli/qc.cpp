@@ -43,7 +43,8 @@ Finding finding_of(std::string_view line) {
 
 }  // namespace
 
-Outcome qc_answer(const BuildOptions& o, int code, const std::string& output) {
+Outcome qc_answer(const BuildOptions& o, int code, const std::string& output,
+                  const std::string& command) {
   Outcome out;
   bool answered = false;
   size_t at = 0;
@@ -74,7 +75,10 @@ Outcome qc_answer(const BuildOptions& o, int code, const std::string& output) {
     return out;
   }
   if (code == 2) out.exit = 2;
-  if (code == 0) out.next = "ge qc trace <progs> --function=<name> (every call it makes)";
+  if (code == 0)
+    out.next = command == "build"
+                   ? "ge qc disasm <the progs written> (its functions); a game runs it as sv_progs"
+                   : "ge qc trace <progs> --function=<name> (every call it makes)";
   return out;
 }
 
@@ -94,7 +98,7 @@ Outcome run_qc(const BuildOptions& o, const std::string& command, const std::str
   const fs::path log = build_log(o, "ge-qc");
   fs::remove(log, ec);
   const Logged r = run_to_log(cmd, log);
-  return qc_answer(o, r.code, r.output);
+  return qc_answer(o, r.code, r.output, command);
 }
 
 }  // namespace ge::cli

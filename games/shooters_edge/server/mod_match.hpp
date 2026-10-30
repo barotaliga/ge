@@ -10,6 +10,10 @@
 // from `<path>.lines` beside it when there (plugins/progs/file.hpp). A file that does not load,
 // or a progs without the engine-side globals, stops the match with the reason and what to do.
 //
+// WHICH MAP: the test arena with the test mod's entity text and its doorway open, or with the
+// entity text given (`ModMatchOptions::entities`) and the arena's door and plat as its brush
+// models "*1" and "*2" (the baseline mod's, baseline_mod.hpp).
+//
 // THE CONSOLE LINES (`ModMatchOptions::console`) run on the server's console before the map
 // loads, in order (`timelimit 0.25`, `set sv_gravity 600`, `serverinfo hostname arena`, ...).
 //
@@ -19,10 +23,11 @@
 // right in spells its generator draws, backs off when close, and holds attack when its aim is
 // within 8 degrees. It sends one packet a server frame (its three newest commands), never lost.
 //
-// THE REPORT: every player's path and frags, every missile's path, the hook log and counts, the
-// builtin calls by name, the frag log, the prints, what the network builtins wrote, the faults,
-// and a digest per frame: the loop's state hash folded with every word of the program's globals
-// and entities, so a run that agrees on every frame's digest replays to the bit.
+// THE REPORT: every player's path and frags, every missile's path (an entity whose classname is
+// missile, rocket, grenade or spike), every inline-model entity's height (a door, a plat), the hook
+// log and counts, the builtin calls by name, the frag log, the prints, what the network builtins
+// wrote, the faults, and a digest per frame: the loop's state hash folded with every word of the
+// program's globals and entities, so a run that agrees on every frame's digest replays to the bit.
 //
 // ge:summary A mod (a progs from a path or the test mod) played by bots on the arena to its end
 // ge:keywords mod-match run_mod_match load_mod bots sv_progs progs-path timelimit frags
@@ -44,7 +49,11 @@ namespace shooters_edge::server {
 constexpr float kBotTurn = 540;  // degrees a second a bot's view may turn
 
 struct ModMatchOptions {
-  std::string progs;                 // a progs file's path ("" : sv_progs, else the test mod)
+  std::string progs;  // a progs file's path ("" : sv_progs, else the test mod)
+  const ge::progs::Progs* compiled = nullptr;  // a progs in memory (a compiler's), before `progs`
+  std::string compiled_name;                   // what the report calls it
+  std::string entities;  // the arena's entity text ("": the test mod's, the doorway open); a
+                         // text of its own gets the arena's door and plat as models "*1", "*2"
   std::vector<std::string> console;  // server console lines run before the map loads
   int bots = 4;                      // 1..32
   int max_frames = 4000;             // server frames of 13 ms at most
@@ -65,6 +74,14 @@ struct MissilePath {
   std::vector<sh::Vec3f> points;
 };
 
+// A brush entity that moves (a door, a plat): its inline model and its height each frame.
+struct MoverPath {
+  int ent = 0;
+  std::string model;      // "*1", "*2", ...
+  std::string classname;  // when the match began
+  std::vector<float> z;   // the origin's z, a server frame a value
+};
+
 struct BuiltinCount {
   int number = 0;
   std::string name;
@@ -80,6 +97,7 @@ struct ModMatchReport {
   bool ended = false;  // the mod changed the level (its time limit)
   std::vector<PlayerPath> players;
   std::vector<MissilePath> missiles;
+  std::vector<MoverPath> movers;  // every entity on an inline model "*n"
   std::vector<HookCall> hook_log;
   int64_t hook_counts[static_cast<int>(HookId::count)] = {};
   std::vector<BuiltinCount> builtins;  // by number, those called at least once
@@ -103,7 +121,8 @@ bool load_mod(const std::string& path, ge::progs::Progs& out, std::string& sourc
 
 ModMatchReport run_mod_match(const ModMatchOptions& opt);
 
-// The test arena's world as the map's models (one: the world, its doorway open).
-std::vector<sh::BrushModel> arena_models();
+// The test arena as the map's models: the world, its doorway open; with `movers`, the door and
+// the plat after it as "*1" and "*2".
+std::vector<sh::BrushModel> arena_models(bool movers = false);
 
 }  // namespace shooters_edge::server
