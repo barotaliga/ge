@@ -162,9 +162,12 @@ struct Scene {
 };
 
 // THE TEXTURE SOURCE: where a texture's pixels come from. The map's own (its miptex through the
-// palette) unless `replace` is set and fills `rgba` (w x h x 4, sRGB; alpha 255 a texel that
-// glows) for the texture `name` of the map's size w x h, from its own colours `indexed` (palette
-// indices) — a procedural texture picked by its likeness, say. False keeps the map's own.
+// palette) unless `replace` is set and fills `rgba` (sRGB; alpha 255 a texel that glows) for the
+// texture `name` of the map's size w x h, from its own colours `indexed` (palette indices) — a
+// procedural texture picked by its likeness, or an upscaled one. `rgba` is w x h x 4 or k times
+// as wide and tall, k 2, 4 or 8 (the atlas then keeps more mips and the faces sample it finer); the
+// frames of an animated texture ('+' names) share one k, or all keep their own. False keeps the
+// map's own.
 struct TextureSource {
   bool (*replace)(void* user, std::string_view name, uint32_t w, uint32_t h,
                   std::span<const uint8_t> indexed, std::span<const uint8_t> palette,

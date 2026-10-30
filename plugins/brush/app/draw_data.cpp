@@ -247,66 +247,111 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
   if (!read_bsp(file, &s.map, error)) return false;
   const Map& m = s.map;
 
-  // ── The texture atlas: every texture at its rectangle, rounded to 8 so four mips halve it ──
+  // ── The texture atlas: every texture at its rectangle, rounded so each mip halves it ──
+  // A source may hand a texture larger than the map's (2, 4 or 8 times across: an upscaled copy);
+  // its rectangle is that much larger and its faces' texture coordinates scaled to match. The
+  // frames of an animated sequence keep one scale, or all fall back to the map's own.
   const std::vector<Mips> mips = read_mips(file);
   struct Placed {
     uint32_t x = 0, y = 0, w = 16, h = 16;
   };
   std::vector<Placed> placed(m.textures.size());
+  std::vector<uint32_t> scale_of(m.textures.size(), 1);
+  std::vector<std::vector<uint8_t>> own(m.textures.size());
   for (size_t i = 0; i < m.textures.size(); ++i) {
     if (s.sky_texture == UINT32_MAX && m.textures[i].name.size() >= 3 &&
         lower(m.textures[i].name).rfind("sky", 0) == 0) {
       s.sky_texture = uint32_t(i);
     }
   }
+  const auto size_of = [&](size_t i) {
+    const bool ok = i < mips.size() && mips[i].width > 0;
+    return std::pair<uint32_t, uint32_t>{ok ? mips[i].width : 16, ok ? mips[i].height : 16};
+  };
+  for (size_t i = 0; i < m.textures.size() && source.replace; ++i) {
+    if (i >= mips.size() || !mips[i].level[0]) continue;
+    const auto [w, h] = size_of(i);
+    std::vector<uint8_t> rgba;
+    if (!source.replace(source.user, m.textures[i].name, w, h, {mips[i].level[0], size_t(w) * h},
+                        palette, &rgba))
+      continue;
+    for (uint32_t k : {1u, 2u, 4u, 8u}) {
+      if (rgba.size() == size_t(w) * k * h * k * 4) {
+        own[i] = std::move(rgba);
+        scale_of[i] = k;
+        break;
+      }
+    }
+  }
+  {
+    // A sequence's frames ("+0name" .. "+9name", "+aname" ..) at one scale, or none replaced.
+    std::map<std::string, std::vector<size_t>> runs;
+    for (size_t i = 0; i < m.textures.size(); ++i) {
+      const std::string& n = m.textures[i].name;
+      if (n.size() >= 3 && n[0] == '+') runs[lower(n.substr(2))].push_back(i);
+    }
+    for (const auto& [name, members] : runs) {
+      bool same = true;
+      for (size_t i : members) same = same && scale_of[i] == scale_of[members[0]];
+      if (same) continue;
+      for (size_t i : members) {
+        own[i].clear();
+        scale_of[i] = 1;
+      }
+    }
+  }
+  const bool scaled =
+      std::any_of(scale_of.begin(), scale_of.end(), [](uint32_t k) { return k > 1; });
+  s.textures.mips = scaled ? 6 : 4;
+  const uint32_t align = 1u << (s.textures.mips - 1);
   {
     std::vector<size_t> order(m.textures.size());
     std::iota(order.begin(), order.end(), size_t{0});
-    const auto size_of = [&](size_t i) {
-      const bool ok = i < mips.size() && mips[i].width > 0;
-      return std::pair<uint32_t, uint32_t>{ok ? mips[i].width : 16, ok ? mips[i].height : 16};
-    };
-    std::sort(order.begin(), order.end(),
-              [&](size_t a, size_t b) { return size_of(a).second > size_of(b).second; });
-    Shelf shelf(2048);
-    for (size_t i : order) {
-      const auto [w, h] = size_of(i);
-      placed[i].w = w;
-      placed[i].h = h;
-      shelf.place(up_to(w, 8), up_to(h, 8), &placed[i].x, &placed[i].y);
+    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) {
+      return size_of(a).second * scale_of[a] > size_of(b).second * scale_of[b];
+    });
+    // The narrowest atlas, 2048 texels and up, whose height stays in a GPU's limits.
+    uint32_t width = 2048;
+    for (;; width *= 2) {
+      Shelf shelf(width);
+      for (size_t i : order) {
+        const auto [w, h] = size_of(i);
+        placed[i].w = w * scale_of[i];
+        placed[i].h = h * scale_of[i];
+        shelf.place(up_to(placed[i].w, align), up_to(placed[i].h, align), &placed[i].x,
+                    &placed[i].y);
+      }
+      s.textures.height = up_to(std::max(shelf.height(), align), align);
+      if (s.textures.height <= 8192 || width >= 8192) break;
     }
-    s.textures.width = 2048;
-    s.textures.height = up_to(std::max(shelf.height(), 8u), 8);
-    s.textures.mips = 4;
-    // Each texture's four levels as RGBA: the map's own through the palette, or the source's.
-    std::vector<std::array<std::vector<uint8_t>, 4>> rgba(placed.size());
+    s.textures.width = width;
+    // Each texture's levels as RGBA: the map's own through the palette (its own mips where the file
+    // has them), or the source's; the levels past those halved from the one above.
+    const uint32_t levels = s.textures.mips;
+    std::vector<std::vector<std::vector<uint8_t>>> rgba(placed.size(),
+                                                        std::vector<std::vector<uint8_t>>(levels));
     for (size_t i = 0; i < placed.size(); ++i) {
       const Placed& p = placed[i];
-      const bool ok = i < mips.size() && mips[i].level[0];
-      std::vector<uint8_t> own;
-      if (ok && source.replace &&
-          source.replace(source.user, m.textures[i].name, p.w, p.h,
-                         {mips[i].level[0], size_t(p.w) * p.h}, palette, &own) &&
-          own.size() == size_t(p.w) * p.h * 4) {
-        rgba[i][0] = std::move(own);
-        for (uint32_t k = 1; k < 4; ++k) {
-          const uint32_t w = p.w >> k, h = p.h >> k, pw = p.w >> (k - 1);
-          rgba[i][k].assign(size_t(w) * h * 4, 0);
-          for (uint32_t y = 0; y < h; ++y)
-            for (uint32_t x = 0; x < w; ++x)
+      const bool replaced = !own[i].empty();
+      if (replaced) rgba[i][0] = std::move(own[i]);
+      for (uint32_t k = replaced ? 1 : 0; k < levels; ++k) {
+        const uint32_t tw = std::max(p.w >> k, 1u), th = std::max(p.h >> k, 1u);
+        rgba[i][k].assign(size_t(tw) * th * 4, 0);
+        if (replaced || k >= 4 || (p.w >> k) == 0 || (p.h >> k) == 0) {
+          const uint32_t pw = std::max(p.w >> (k - 1), 1u), ph = std::max(p.h >> (k - 1), 1u);
+          for (uint32_t y = 0; y < th; ++y)
+            for (uint32_t x = 0; x < tw; ++x)
               for (int c = 0; c < 4; ++c) {
                 int sum = 0;
-                for (uint32_t d = 0; d < 4; ++d)
-                  sum += rgba[i][k - 1][((size_t(2 * y + d / 2) * pw) + size_t(x) * 2 + d % 2) * 4 +
-                                        size_t(c)];
-                rgba[i][k][(size_t(y) * w + x) * 4 + size_t(c)] = uint8_t(sum / 4);
+                for (uint32_t d = 0; d < 4; ++d) {
+                  const uint32_t sx = std::min(2 * x + d % 2, pw - 1);
+                  const uint32_t sy = std::min(2 * y + d / 2, ph - 1);
+                  sum += rgba[i][k - 1][(size_t(sy) * pw + sx) * 4 + size_t(c)];
+                }
+                rgba[i][k][(size_t(y) * tw + x) * 4 + size_t(c)] = uint8_t(sum / 4);
               }
+          continue;
         }
-        continue;
-      }
-      for (uint32_t k = 0; k < 4; ++k) {
-        const uint32_t tw = p.w >> k, th = p.h >> k;
-        rgba[i][k].assign(size_t(tw) * th * 4, 0);
         const bool has = i < mips.size() && mips[i].level[k];
         for (uint32_t y = 0; y < th; ++y) {
           for (uint32_t x = 0; x < tw; ++x) {
@@ -325,12 +370,12 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     if (s.sky_texture < placed.size() && !rgba[s.sky_texture][0].empty())
       s.sky_colours =
           sky_colours_of(rgba[s.sky_texture][0], placed[s.sky_texture].w, placed[s.sky_texture].h);
-    for (uint32_t k = 0; k < 4; ++k) {
+    for (uint32_t k = 0; k < levels; ++k) {
       const uint32_t w = s.textures.width >> k, h = s.textures.height >> k;
       std::vector<uint8_t> level(size_t(w) * h * 4, 0);
       for (size_t i = 0; i < placed.size(); ++i) {
         const Placed& p = placed[i];
-        const uint32_t tw = p.w >> k, th = p.h >> k;
+        const uint32_t tw = std::max(p.w >> k, 1u), th = std::max(p.h >> k, 1u);
         for (uint32_t y = 0; y < th; ++y) {
           std::memcpy(&level[((size_t((p.y >> k) + y) * w) + (p.x >> k)) * 4],
                       &rgba[i][k][size_t(y) * tw * 4], size_t(tw) * 4);
@@ -465,8 +510,8 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       d.nrm[0] = x.nrm[0];
       d.nrm[1] = x.nrm[2];
       d.nrm[2] = x.nrm[1];
-      d.st[0] = x.st[0];
-      d.st[1] = x.st[1];
+      d.st[0] = x.st[0] * float(scale_of[sf.texture]);
+      d.st[1] = x.st[1] * float(scale_of[sf.texture]);
       if (lp && lmap) {
         d.lm[0] = (float(lp->x) + 1 + x.lm[0] * float(lmap->width)) / float(s.light.width);
         d.lm[1] = (float(lp->y) + 1 + x.lm[1] * float(lmap->height)) / float(s.light.height);
