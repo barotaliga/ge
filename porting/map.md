@@ -99,6 +99,17 @@ the row when the file moves.
 | `games/fall_line/sound/mix.hpp` | `game5/pwa/src/game/settings.ts`, `audio/bus.ts` | mixOf setAudioVolumes |
 | `games/fall_line/sound/route.cpp` | `game5/pwa/src/game/audio/route.ts` | soundForEvent soundsForStep |
 | `games/fall_line/sound/route.hpp` | `game5/pwa/src/game/audio/route.ts` | soundForEvent soundsForStep |
+| `games/shooters_edge/net/classic_antilag.cpp` | `porting/shooters-edge/protocol.md` (clean room) | sv_antilag the antilag ring and target time (§ Lag compensation) |
+| `games/shooters_edge/net/classic_channel.cpp` | `porting/shooters-edge/protocol.md` (clean room) | the net channel, reliable bit, qport, rate, clear time, dupe (§ The net channel) |
+| `games/shooters_edge/net/classic_checksum_table.cpp` | `porting/shooters-edge/vectors/checksum_table.txt` (a wire constant) | the move checksum key table (§ The move checksum) |
+| `games/shooters_edge/net/classic_delta.cpp` | `porting/shooters-edge/protocol.md` (clean room) | U_* PF_* packetentities deltapacketentities playerinfo (§ Entities, § Players) |
+| `games/shooters_edge/net/classic_ext.cpp` | `porting/shooters-edge/protocol.md` (clean room) | the extension families and bits, the first tier (§ Extensions) |
+| `games/shooters_edge/net/classic_frame.cpp` | `porting/shooters-edge/protocol.md` (clean room), `gameloop.md` | the frame: playerinfo, packet entities, chokecount, stats (§ The frame) |
+| `games/shooters_edge/net/classic_info.cpp` | `porting/shooters-edge/protocol.md` (clean room) | info strings, star keys, names (§ User info) |
+| `games/shooters_edge/net/classic_server.cpp` | `porting/shooters-edge/protocol.md` (clean room) | ping status getchallenge connect rejects rcon (§ Connectionless) |
+| `games/shooters_edge/net/classic_signon.cpp` | `porting/shooters-edge/protocol.md` (clean room) | new pext soundlist modellist prespawn spawn skins begin download nextdl (§ Signon, § Downloads) |
+| `games/shooters_edge/net/classic_svc.cpp` | `porting/shooters-edge/protocol.md` (clean room) | every svc and clc id and layout, temp entities (§ Messages) |
+| `games/shooters_edge/net/classic_wire.cpp` | `porting/shooters-edge/protocol.md` (clean room), `vectors/quantize.txt`, `vectors/checksum.txt` | coords angles angle16 CRC-16 the move checksum delta usercmd (§ Quantization, § The move checksum) |
 | `games/shooters_edge/server/bi_message.cpp` | `porting/shooters-edge/builtins.md` (clean room) | sound stuffcmd bprint sprint dprint lightstyle particle WriteByte..WriteEntity centerprint ambientsound multicast (§ The standard numbers) |
 | `games/shooters_edge/server/bi_monster.cpp` | `porting/shooters-edge/builtins.md` (clean room) | walkmove movetogoal checkbottom changeyaw (§ The monster moves) |
 | `games/shooters_edge/server/bi_settings.cpp` | `porting/shooters-edge/builtins.md` (clean room) | error objerror precache_* cvar cvar_set localcmd changelevel logfrag infokey registercvar cvar_string calltimeofday setpause precache_vwep_model |

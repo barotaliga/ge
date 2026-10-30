@@ -37,6 +37,15 @@ add_library(shooters_edge_bots STATIC ${SHOOTERS_EDGE_BOTS_SOURCES})
 target_link_libraries(shooters_edge_bots PUBLIC shooters_edge_server)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_bots)
 
+# The classic protocol (net/classic_*): the codec, the net channel, the classic server over the
+# QC server on engine/net's sockets, the scripted client and the measured trial (skill: net). Only
+# the classic_ files: net/host_* belong to the host's own library.
+file(GLOB SHOOTERS_EDGE_CLASSIC_SOURCES CONFIGURE_DEPENDS
+     ${CMAKE_CURRENT_SOURCE_DIR}/net/classic_*.cpp)
+add_library(shooters_edge_classic STATIC ${SHOOTERS_EDGE_CLASSIC_SOURCES})
+target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server ge_net)
+set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
+
 # The headless dedicated server (server/bin/), named `shooters_edge_server` on disk, at the build's
 # root (build/<preset>/shooters_edge_server): `--help` lists its flags.
 add_executable(shooters_edge_dedicated server/bin/main.cpp)
@@ -87,7 +96,7 @@ ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME
 # Then the `shooters_edge` window (client/main.cpp, the world drawn by client/world_draw.cpp) when
 # the GPU and the platform are built. Headers are spelled "shooters_edge/client/<file>.hpp".
 file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/client/*.cpp)
-list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX "/client/(main|world_draw)\\.cpp$")
+list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX "/client/(main|world_draw|world_fx)\\.cpp$")
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
 target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_hud ge_vfs
                                                   ge_brush ge_camera ge_input)
@@ -96,12 +105,13 @@ foreach(qc defs util combat weapons items player world)
   ge_embed_binary(shooters_edge_client se_qc_${qc} ${CMAKE_CURRENT_SOURCE_DIR}/qc/${qc}.qc)
 endforeach()
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_client)
-# The world's frame (client/world_draw.cpp) is a library of its own with the GPU, which the
-# window and the game's GPU lab (`se-client`, labs/gpu_se_client_lab.cpp) link.
+# The world's frame (client/world_draw.cpp) and the effects fed to it (client/world_fx.cpp) are a
+# library of their own with the GPU, which the window and the game's GPU lab (`se-client`,
+# labs/gpu_se_client_lab.cpp) link.
 if(GE_GPU AND TARGET ge_brush_app)
-  add_library(shooters_edge_client_gpu STATIC client/world_draw.cpp)
-  target_link_libraries(shooters_edge_client_gpu PUBLIC shooters_edge_client ge_brush_app ge_render
-                                                        ge_ui)
+  add_library(shooters_edge_client_gpu STATIC client/world_draw.cpp client/world_fx.cpp)
+  target_link_libraries(shooters_edge_client_gpu PUBLIC shooters_edge_client shooters_edge_app
+                                                        ge_brush_app ge_render ge_ui)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_client_gpu)
 endif()
 if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
