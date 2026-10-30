@@ -514,11 +514,12 @@ void Compiler::finish() {
   // RETURN copies three words whatever the type, so a float returned from the last global must
   // have two words after it: the globals end with two spare zeros.
   alloc_global(2);
-  // The layout: every engine-side global and field at its name, type and offset.
+  // The layout: every engine-side global and field of a form at its name, type and offset. The
+  // first form that matches whole stamps its crc; with none, the nearest names the first slot.
   std::string first_wrong;
   int wrong = 0;
   auto check = [&](const LayoutEntry* rows, int count, const std::vector<Def>& defs,
-                   const char* what) {
+                   const char* what, int& n, std::string& first) {
     for (int i = 0; i < count; ++i) {
       const LayoutEntry& e = rows[i];
       const Def* found = nullptr;
@@ -530,26 +531,39 @@ void Compiler::finish() {
       }
       const bool good = found && (found->type & kTypeMask) == e.type && found->offset == e.offset;
       if (good) continue;
-      if (++wrong == 1) {
-        first_wrong = std::string("engine ") + what + " '" + e.name + "' should be " +
-                      progs::type_name(e.type) + " at " + std::to_string(e.offset);
+      if (++n == 1) {
+        first = std::string("engine ") + what + " '" + e.name + "' should be " +
+                progs::type_name(e.type) + " at " + std::to_string(e.offset);
         if (found) {
-          first_wrong += ", is " + std::string(progs::type_name(found->type & kTypeMask)) + " at " +
-                         std::to_string(found->offset);
+          first += ", is " + std::string(progs::type_name(found->type & kTypeMask)) + " at " +
+                   std::to_string(found->offset);
         }
       }
     }
   };
-  int ng = 0, nf = 0;
-  const LayoutEntry* lg = layout_globals(ng);
-  const LayoutEntry* lf = layout_fields(nf);
-  check(lg, ng, prog.globaldefs, "global");
-  check(lf, nf, prog.fielddefs, "field");
-  prog.crc = wrong == 0 ? kClassicCrc : 0;
+  prog.crc = 0;
+  const Layout* nearest = nullptr;
+  for (const Layout* form : kLayouts) {
+    int n = 0;
+    std::string first;
+    check(form->globals, form->num_globals, prog.globaldefs, "global", n, first);
+    check(form->fields, form->num_fields, prog.fielddefs, "field", n, first);
+    if (n == 0) {
+      prog.crc = form->crc;
+      wrong = 0;
+      break;
+    }
+    if (nearest == nullptr || n < wrong) {
+      nearest = form;
+      wrong = n;
+      first_wrong = first;
+    }
+  }
   if (wrong && claims_layout) {
     diagnostics.push_back({file, 0, false,
                            "the engine layout does not match (" + std::to_string(wrong) +
-                               " slots), so the program is stamped crc 0 and a game refuses it; "
+                               " slots of the " + nearest->name +
+                               " form), so the program is stamped crc 0 and a game refuses it; "
                                "first: " +
                                first_wrong});
   }

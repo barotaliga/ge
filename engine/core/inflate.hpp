@@ -4,11 +4,12 @@
 // (assets/image.hpp), a zip archive's entries (vfs/zip.hpp), and a lab that bakes a tree's data off
 // a public dataset (a deflated GeoTIFF tile of an elevation model), so neither needs a compression
 // dependency. A zip archive's entries are raw deflate streams with no zlib wrapper (`inflate_raw`),
-// checked with the CRC-32 beside it (`crc32`, also PNG's chunk check). Load time only: nothing on a
-// frame's path or in the simulation.
+// checked with the CRC-32 beside it (`crc32`, also PNG's chunk check); a gzip file
+// (`inflate_gzip`, a recorded game shipped as `.gz`) is the same raw stream between its header and
+// its size-and-CRC trailer. Load time only: nothing on a frame's path or in the simulation.
 //
 // ge:summary The inflater: a zlib stream's deflate blocks back to bytes
-// ge:keywords inflate deflate zlib huffman decompress adler32 crc32 geotiff raw zip
+// ge:keywords inflate deflate zlib huffman decompress adler32 crc32 geotiff raw zip gzip gz
 // ge:skill determinism assets labs
 // ge:test tests/lab_raster_test.cpp
 #pragma once
@@ -29,5 +30,8 @@ std::optional<std::vector<uint8_t>> inflate_zlib(std::span<const uint8_t> stream
 // or nothing when it is malformed or does not come to exactly `expected_size` bytes.
 std::optional<std::vector<uint8_t>> inflate_raw(std::span<const uint8_t> stream,
                                                 size_t expected_size);
+// The bytes a gzip file holds (RFC 1952: one member, its header's optional fields skipped, the
+// size and the CRC-32 in its trailer checked), or nothing when it is not one or is damaged.
+std::optional<std::vector<uint8_t>> inflate_gzip(std::span<const uint8_t> file);
 
 }  // namespace ge::core

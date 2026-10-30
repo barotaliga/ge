@@ -7,8 +7,10 @@
 // `enter_qc` / `run_qc` / `leave_qc` and keeps the two sides in step around a builtin with
 // `flush_to_world` and `refresh_from_world`.
 //
-// - HOOKS come from the hook globals the program stored (StartFrame 81 ... SetChangeParms 89, read
-//   once when the adapter is made) and the optional ones by name (SpectatorConnect,
+// - THE FORM: every offset below is the program's form's (`layout`, progs/layout.hpp), so a
+//   multiplayer program (crc 54730) and a single-player one (5927) run on the same adapter.
+// - HOOKS come from the hook globals the program stored (StartFrame ... SetChangeParms, read once
+//   when the adapter is made) and the optional ones by name (SpectatorConnect,
 //   SpectatorThink, SpectatorDisconnect). A function number of the loop IS a QC function index.
 // - THE MIRROR: before each call every entity in use has its loop fields (origin, velocity,
 //   angles, the box, movetype, solid, flags, the functions, nextthink, health, the buttons, the
@@ -62,6 +64,9 @@ constexpr int kQcBuiltins = 1024;  // the builtin table: the extension numbers r
 
 struct QcProgram {
   ge::progs::Vm vm;
+  // The program's form: every engine global and field the adapter and the server's builtins
+  // touch is read off it (the multiplayer form for a program that names none).
+  const ge::progs::Layout* layout = &ge::progs::kMultiplayerLayout;
   sh::Server* sv = nullptr;               // the server of the call running now (null between calls)
   sh::Server* outer[kMaxQcNesting] = {};  // the server each call in progress replaced
   int nesting = 0;

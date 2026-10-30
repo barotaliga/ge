@@ -112,11 +112,6 @@ double weapon_score(const WeaponRow& w, float d) {
   }
 }
 
-int field_of(const char* name) {
-  const pg::LayoutEntry* e = pg::layout_field(name);
-  return e ? e->offset : -1;
-}
-
 float field(const server::QcServer& s, int ent, int f) {
   if (f < 0) return 0;
   return pg::as_float(
@@ -367,11 +362,10 @@ const char* fight_mode_name(FightMode m) {
 }
 
 Stats read_stats(const server::QcServer& s, int ent) {
-  static const int kHealth = pg::kFHealth, kItems = pg::kFItems;
-  static const int kArmor = field_of("armorvalue"), kType = field_of("armortype");
-  static const int kWeapon = field_of("weapon"), kShells = field_of("ammo_shells");
-  static const int kNails = field_of("ammo_nails"), kRockets = field_of("ammo_rockets");
-  static const int kCells = field_of("ammo_cells");
+  const pg::LayoutFields& f = s.q.layout->f;
+  const int kHealth = f.health, kItems = f.items, kArmor = f.armorvalue, kType = f.armortype;
+  const int kWeapon = f.weapon, kShells = f.ammo_shells, kNails = f.ammo_nails;
+  const int kRockets = f.ammo_rockets, kCells = f.ammo_cells;
   Stats st;
   st.health = field(s, ent, kHealth);
   st.armor = field(s, ent, kArmor);

@@ -180,6 +180,31 @@ TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
   }
 }
 
+TimedemoStep playdemo_step(Timedemo& t, double wall_dt_s, double speed, std::string& error) {
+  if (t.clock < 0) {  // the first frame with a map starts the clock at its time
+    const TimedemoStep first = timedemo_step(t, error);
+    if (first == TimedemoStep::frame || first == TimedemoStep::new_level)
+      t.clock = t.demo.state.time;
+    return first;
+  }
+  // A stalled frame (a level's load, a window dragged) moves the demo on by at most a tenth of a
+  // second, so the run slows over the stall rather than skipping what it would have shown.
+  t.clock += std::min(wall_dt_s, kMostPlayStep) * std::clamp(speed, 0.0, 20.0);
+  TimedemoStep out = TimedemoStep::frame;
+  // The next demo frame is read once the clock reaches the time it will carry; its time is known
+  // only after reading it, so the run reads while the last frame read is behind the clock.
+  while (t.demo.state.time < t.clock) {
+    const TimedemoStep s = timedemo_step(t, error);
+    if (s == TimedemoStep::end || s == TimedemoStep::error) return s;
+    if (s == TimedemoStep::new_level) {  // a level's clock starts over: the run's with it
+      t.clock = t.demo.state.time;
+      out = s;
+      break;
+    }
+  }
+  return out;
+}
+
 void timedemo_mark(Timedemo& t, uint64_t now_ns) {
   if (t.skip > 0) {
     t.skip--;

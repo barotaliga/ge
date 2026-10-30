@@ -98,7 +98,7 @@ void write(pg::Vm& vm, WriteKind kind) {
       buf = &s.out.unreliable;
       break;
     case 1: {
-      const int e = pg::entity_number(vm, pg::global_int(vm, pg::kGMsgEntity));
+      const int e = pg::entity_number(vm, pg::global_int(vm, pg::vm_layout(vm).g.msg_entity));
       if (e < 1 || e > sh::kMaxClients) {
         pg::vm_error(vm, "write to one client: msg_entity is not a client (1..32)");
         return;
@@ -117,13 +117,17 @@ void write(pg::Vm& vm, WriteKind kind) {
       buf = &s.out.init;
       break;
     case 4:
+      if (pg::vm_layout(vm).single_player) break;  // no multicast in the single-player form
       buf = &s.out.multicast;
       break;
-    default: {
-      const std::string m = "write: bad destination " + std::to_string(dest) + " (0..4)";
-      pg::vm_error(vm, m.c_str());
-      return;
-    }
+    default:
+      break;
+  }
+  if (buf == nullptr) {
+    const std::string m = "write: bad destination " + std::to_string(dest) +
+                          (pg::vm_layout(vm).single_player ? " (0..3)" : " (0..4)");
+    pg::vm_error(vm, m.c_str());
+    return;
   }
   encode(*buf, kind, number, text);
 }
@@ -146,7 +150,7 @@ bool hears(const QcServer& s, sh::Vec3f from, sh::Vec3f to) {
 }
 
 sh::Vec3f eye_of(const QcServer& s, int e) {
-  return vm_v(s.q.vm, e, pg::kFOrigin) + vm_v(s.q.vm, e, pg::kFViewOfs);
+  return vm_v(s.q.vm, e, s.q.layout->f.origin) + vm_v(s.q.vm, e, s.q.layout->f.view_ofs);
 }
 
 uint32_t clients_reaching(const QcServer& s, sh::Vec3f where, bool see) {
@@ -173,13 +177,14 @@ uint32_t clients_reaching(const QcServer& s, sh::Vec3f where, bool see) {
 }
 
 SavedGlobals save_globals(const pg::Vm& vm) {
-  return {vm.globals[pg::kGSelf], vm.globals[pg::kGOther], vm.globals[pg::kGTime]};
+  return {vm.globals[pg::vm_layout(vm).g.self], vm.globals[pg::vm_layout(vm).g.other],
+          vm.globals[pg::vm_layout(vm).g.time]};
 }
 
 void restore_globals(pg::Vm& vm, const SavedGlobals& g) {
-  vm.globals[pg::kGSelf] = g.self;
-  vm.globals[pg::kGOther] = g.other;
-  vm.globals[pg::kGTime] = g.time;
+  vm.globals[pg::vm_layout(vm).g.self] = g.self;
+  vm.globals[pg::vm_layout(vm).g.other] = g.other;
+  vm.globals[pg::vm_layout(vm).g.time] = g.time;
 }
 
 void bi_sound(pg::Vm& vm) {
@@ -208,11 +213,12 @@ void bi_sound(pg::Vm& vm) {
     console_print(s, std::string("no precache: ") + sample);
     return;
   }
-  sh::Vec3f at = vm_v(vm, e, pg::kFOrigin);
-  const int solid = static_cast<int>(vm_f(vm, e, pg::kFSolid));
-  const int modelindex = static_cast<int>(vm_f(vm, e, pg::kFModelindex));
+  sh::Vec3f at = vm_v(vm, e, pg::vm_layout(vm).f.origin);
+  const int solid = static_cast<int>(vm_f(vm, e, pg::vm_layout(vm).f.solid));
+  const int modelindex = static_cast<int>(vm_f(vm, e, pg::vm_layout(vm).f.modelindex));
   if (solid == sh::kSolidBsp || (solid == sh::kSolidTrigger && modelindex == 0))
-    at = at + (vm_v(vm, e, pg::kFMins) + vm_v(vm, e, pg::kFMaxs)) * 0.5f;
+    at =
+        at + (vm_v(vm, e, pg::vm_layout(vm).f.mins) + vm_v(vm, e, pg::vm_layout(vm).f.maxs)) * 0.5f;
   const bool everyone = (channel & 8) != 0 || !s.cvars.find("sv_phs")->on();
   NetEvent ev;
   ev.kind = EventKind::sound;
@@ -261,16 +267,21 @@ void bi_stuffcmd(pg::Vm& vm) {
   push(s, std::move(ev));
 }
 
+// A single-player program's prints carry no level: they are sent at the
+// high level, which every client shows.
+constexpr int kPrintHigh = 2;
+
 void bi_bprint(pg::Vm& vm) {
   QcServer& s = server_of(vm);
+  const bool solo = pg::vm_layout(vm).single_player;
   char buf[pg::kTempStringBytes];
-  pg::join_args(vm, 1, buf, sizeof buf);
+  pg::join_args(vm, solo ? 0 : 1, buf, sizeof buf);
   if (vm.fault.set) return;
   NetEvent ev;
   ev.kind = EventKind::print;
   ev.to = all_clients(s);
   ev.reliable = true;
-  ev.level = trunc_i32(pg::arg_float(vm, 0));
+  ev.level = solo ? kPrintHigh : trunc_i32(pg::arg_float(vm, 0));
   ev.text = buf;
   push(s, std::move(ev));
 }
@@ -278,8 +289,9 @@ void bi_bprint(pg::Vm& vm) {
 void bi_sprint(pg::Vm& vm) {
   QcServer& s = server_of(vm);
   const int e = pg::entity_number(vm, pg::arg_int(vm, 0));
+  const bool solo = pg::vm_layout(vm).single_player;
   char buf[pg::kTempStringBytes];
-  pg::join_args(vm, 2, buf, sizeof buf);
+  pg::join_args(vm, solo ? 1 : 2, buf, sizeof buf);
   if (vm.fault.set) return;
   if (e < 1 || e > sh::kMaxClients || !s.clients[e - 1].active) {
     console_print(s, "tried to sprint to a non-client");
@@ -290,7 +302,7 @@ void bi_sprint(pg::Vm& vm) {
   ev.to = (1u << (e - 1)) | spectator_copies(s, e, 2);
   ev.reliable = true;
   ev.ent = e;
-  ev.level = trunc_i32(pg::arg_float(vm, 1));
+  ev.level = solo ? kPrintHigh : trunc_i32(pg::arg_float(vm, 1));
   ev.text = buf;
   push(s, std::move(ev));
 }

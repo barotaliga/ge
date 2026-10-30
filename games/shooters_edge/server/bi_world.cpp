@@ -5,7 +5,7 @@
 // ge:summary Builtins over entities and the world: traces, finds, models, sizes, statics, dumps
 // ge:keywords makevectors setmodel setsize traceline tracebox checkclient find findradius
 // ge:keywords droptofloor pointcontents aim nextent makestatic setspawnparms coredump eprint
-// ge:keywords traceon traceoff trace-globals chain area-tree
+// ge:keywords traceon traceoff trace-globals chain area-tree autoaim sv_aim
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_qc_builtins_test.cpp
 #include <cstring>
@@ -49,15 +49,16 @@ bool in_use(const QcServer& s, int e) {
 
 // The trace globals from a trace (its `ent` -1 when nothing was hit: the world).
 void write_trace(pg::Vm& vm, const sh::HullTrace& tr) {
-  pg::set_global_float(vm, pg::kGTraceAllsolid, tr.allsolid ? 1.0f : 0.0f);
-  pg::set_global_float(vm, pg::kGTraceStartsolid, tr.startsolid ? 1.0f : 0.0f);
-  pg::set_global_float(vm, pg::kGTraceFraction, tr.fraction);
-  pg::set_global_float(vm, pg::kGTraceInwater, tr.inwater ? 1.0f : 0.0f);
-  pg::set_global_float(vm, pg::kGTraceInopen, tr.inopen ? 1.0f : 0.0f);
-  set_global_vec(vm, pg::kGTraceEndpos, tr.endpos);
-  set_global_vec(vm, pg::kGTracePlaneNormal, tr.plane.normal);
-  pg::set_global_float(vm, pg::kGTracePlaneDist, tr.plane.dist);
-  pg::set_global_int(vm, pg::kGTraceEnt, pg::entity_value(vm, tr.ent < 0 ? 0 : tr.ent));
+  const pg::LayoutGlobals& g = pg::vm_layout(vm).g;
+  pg::set_global_float(vm, g.trace_allsolid, tr.allsolid ? 1.0f : 0.0f);
+  pg::set_global_float(vm, g.trace_startsolid, tr.startsolid ? 1.0f : 0.0f);
+  pg::set_global_float(vm, g.trace_fraction, tr.fraction);
+  pg::set_global_float(vm, g.trace_inwater, tr.inwater ? 1.0f : 0.0f);
+  pg::set_global_float(vm, g.trace_inopen, tr.inopen ? 1.0f : 0.0f);
+  set_global_vec(vm, g.trace_endpos, tr.endpos);
+  set_global_vec(vm, g.trace_plane_normal, tr.plane.normal);
+  pg::set_global_float(vm, g.trace_plane_dist, tr.plane.dist);
+  pg::set_global_int(vm, g.trace_ent, pg::entity_value(vm, tr.ent < 0 ? 0 : tr.ent));
 }
 
 int trace_kind(float nomonsters) {
@@ -129,9 +130,10 @@ void trace_statement(void* ctx, const pg::Vm& vm, int32_t fn, int32_t statement)
 
 void bi_makevectors(pg::Vm& vm) {
   const sh::ViewAxes ax = sh::angle_vectors(vec_arg(vm, 0));
-  set_global_vec(vm, pg::kGVForward, ax.forward);
-  set_global_vec(vm, pg::kGVRight, ax.right);
-  set_global_vec(vm, pg::kGVUp, ax.up);
+  const pg::LayoutGlobals& g = pg::vm_layout(vm).g;
+  set_global_vec(vm, g.v_forward, ax.forward);
+  set_global_vec(vm, g.v_right, ax.right);
+  set_global_vec(vm, g.v_up, ax.up);
 }
 
 void bi_setmodel(pg::Vm& vm) {
@@ -151,8 +153,8 @@ void bi_setmodel(pg::Vm& vm) {
     pg::vm_error(vm, msg.c_str());
     return;
   }
-  *pg::entity_field(vm, e, pg::kFModel) = static_cast<uint32_t>(pg::arg_int(vm, 1));
-  *pg::entity_field(vm, e, pg::kFModelindex) = pg::as_word(static_cast<float>(index));
+  *pg::entity_field(vm, e, pg::vm_layout(vm).f.model) = static_cast<uint32_t>(pg::arg_int(vm, 1));
+  *pg::entity_field(vm, e, pg::vm_layout(vm).f.modelindex) = pg::as_word(static_cast<float>(index));
   if (m[0] == '*' && index < static_cast<int>(s.sv.models.size())) {
     flush_to_world(qc_of(vm));
     sh::set_brush_model(s.sv, e, index);
@@ -208,7 +210,7 @@ void bi_tracebox(pg::Vm& vm) {
 
 void bi_checkclient(pg::Vm& vm) {
   QcServer& s = server_of(vm);
-  const int self = pg::entity_number(vm, pg::global_int(vm, pg::kGSelf));
+  const int self = pg::entity_number(vm, pg::global_int(vm, pg::vm_layout(vm).g.self));
   // Every 0.1 s of server time the candidate moves on to the next client in use, alive and not
   // flagged no-target (wrapping 1..32); none: it stays.
   if (s.check_time < 0 || s.sv.time - s.check_time >= 0.1) {
@@ -217,14 +219,15 @@ void bi_checkclient(pg::Vm& vm) {
     for (int i = 0; i < sh::kMaxClients; i++) {
       c = c % sh::kMaxClients + 1;
       if (!in_use(s, c) || client_slot_of(s, c) < 0) continue;
-      if (field_f(vm, c, pg::kFHealth) <= 0) continue;
-      if ((static_cast<int>(field_f(vm, c, pg::kFFlags)) & kFlagNoTarget) != 0) continue;
+      if (field_f(vm, c, pg::vm_layout(vm).f.health) <= 0) continue;
+      if ((static_cast<int>(field_f(vm, c, pg::vm_layout(vm).f.flags)) & kFlagNoTarget) != 0)
+        continue;
       s.check_client = c;
       break;
     }
   }
   const int c = s.check_client;
-  if (c <= 0 || !in_use(s, c) || field_f(vm, c, pg::kFHealth) <= 0 || self < 0) {
+  if (c <= 0 || !in_use(s, c) || field_f(vm, c, pg::vm_layout(vm).f.health) <= 0 || self < 0) {
     pg::return_int(vm, 0);
     return;
   }
@@ -270,7 +273,7 @@ void radius_walk(const QcServer& s, pg::Vm& vm, int32_t n, sh::Vec3f lo, sh::Vec
       const sh::Vec3f c = ed.origin + (ed.mins + ed.maxs) * 0.5f;
       const sh::Vec3f d = c - org;
       if ((d.x * d.x + d.y * d.y) + d.z * d.z > rad2) continue;
-      *pg::entity_field(vm, e, pg::kFChain) = static_cast<uint32_t>(head);
+      *pg::entity_field(vm, e, pg::vm_layout(vm).f.chain) = static_cast<uint32_t>(head);
       head = pg::entity_value(vm, e);
     }
   }
@@ -295,7 +298,7 @@ void bi_findradius(pg::Vm& vm) {
 
 void bi_droptofloor(pg::Vm& vm) {
   QcServer& s = server_of(vm);
-  const int self = pg::entity_number(vm, pg::global_int(vm, pg::kGSelf));
+  const int self = pg::entity_number(vm, pg::global_int(vm, pg::vm_layout(vm).g.self));
   if (self < 0) {
     pg::vm_error(vm, "droptofloor: self is not an entity in use");
     return;
@@ -323,10 +326,73 @@ void bi_pointcontents(pg::Vm& vm) {
   pg::return_float(vm, static_cast<float>(sh::world_contents(s.sv, vec_arg(vm, 0))));
 }
 
+namespace {
+
+constexpr float kAimTakedamage = 2;  // takedamage's "aimed at" value
+constexpr float kAimEye = 20;        // the line starts this far above the shooter's origin
+constexpr float kAimRange = 2048;
+
+sh::Vec3f box_centre(const pg::Vm& vm, const pg::LayoutFields& f, int e) {
+  return field_v(vm, e, f.origin) + (field_v(vm, e, f.mins) + field_v(vm, e, f.maxs)) * 0.5f;
+}
+
+// The single-player form's autoaim: the entity straight ahead along the line of sight when it
+// takes aimed damage; else the one nearest the line of sight (a cosine of at least `sv_aim`) with
+// a clear line to it, aimed at by correcting the pitch alone; else straight ahead.
+sh::Vec3f autoaim(QcServer& s, pg::Vm& vm, int shooter, sh::Vec3f forward) {
+  const ge::console::Cvar* c = s.cvars.find("sv_aim");
+  const float least = c != nullptr ? static_cast<float>(c->number) : 0.93f;
+  if (least >= 1) return forward;
+  const pg::LayoutFields& f = pg::vm_layout(vm).f;
+  const ge::console::Cvar* tp = s.cvars.find("teamplay");
+  const bool teams = tp != nullptr && tp->on();
+  const float team = field_f(vm, shooter, f.team);
+  auto aimed_at = [&](int e) {
+    if (e <= 0 || e == shooter || !in_use(s, e)) return false;
+    if (field_f(vm, e, f.takedamage) != kAimTakedamage) return false;
+    return !(teams && team > 0 && field_f(vm, e, f.team) == team);
+  };
+  flush_to_world(qc_of(vm));
+  const sh::Vec3f start = field_v(vm, shooter, f.origin) + sh::Vec3f{0, 0, kAimEye};
+  const sh::HullTrace ahead =
+      sh::trace_move(s.sv, start, {}, {}, start + forward * kAimRange, sh::kTraceNormal, shooter);
+  if (aimed_at(ahead.ent)) return forward;
+  float best = least;
+  int target = -1;
+  for (int e = 1; e < s.sv.num_edicts; e++) {
+    if (!aimed_at(e)) continue;
+    sh::Vec3f to = box_centre(vm, f, e) - start;
+    sh::normalize(to);
+    const float cosine = sh::dot(to, forward);
+    if (cosine < best) continue;
+    const sh::HullTrace tr =
+        sh::trace_move(s.sv, start, {}, {}, box_centre(vm, f, e), sh::kTraceNormal, shooter);
+    if (tr.ent == e) {
+      best = cosine;
+      target = e;
+    }
+  }
+  if (target < 0) return forward;
+  const sh::Vec3f to = box_centre(vm, f, target) - start;
+  const float along = sh::dot(to, forward);
+  sh::Vec3f aim{forward.x * along, forward.y * along, to.z};
+  sh::normalize(aim);
+  return aim;
+}
+
+}  // namespace
+
 void bi_aim(pg::Vm& vm) {
-  pg::return_vector(vm, pg::global_float(vm, pg::kGVForward),
-                    pg::global_float(vm, pg::kGVForward + 1),
-                    pg::global_float(vm, pg::kGVForward + 2));
+  const int forward_at = pg::vm_layout(vm).g.v_forward;
+  const sh::Vec3f forward{pg::global_float(vm, forward_at), pg::global_float(vm, forward_at + 1),
+                          pg::global_float(vm, forward_at + 2)};
+  sh::Vec3f aim = forward;
+  if (pg::vm_layout(vm).single_player) {
+    const int shooter = any_entity(vm, 0, "aim");
+    if (shooter < 0) return;
+    aim = autoaim(server_of(vm), vm, shooter, forward);
+  }
+  pg::return_vector(vm, aim.x, aim.y, aim.z);
 }
 
 void bi_nextent(pg::Vm& vm) {
@@ -351,18 +417,18 @@ void bi_makestatic(pg::Vm& vm) {
     return;
   }
   const char* model =
-      pg::vm_string(vm, static_cast<int32_t>(*pg::entity_field(vm, e, pg::kFModel)));
+      pg::vm_string(vm, static_cast<int32_t>(*pg::entity_field(vm, e, pg::vm_layout(vm).f.model)));
   int index = -1;
   for (size_t i = 1; model != nullptr && model[0] != 0 && i < s.models.size(); i++)
     if (s.models[i] == model) index = static_cast<int>(i);
   if (index > 0 && static_cast<int>(s.statics.size()) < kMaxStatics) {
     StaticEntity st;
     st.modelindex = index;
-    st.frame = field_f(vm, e, pg::kFFrame);
-    st.colormap = field_f(vm, e, pg::kFColormap);
-    st.skin = field_f(vm, e, pg::kFSkin);
-    st.origin = field_v(vm, e, pg::kFOrigin);
-    st.angles = field_v(vm, e, pg::kFAngles);
+    st.frame = field_f(vm, e, pg::vm_layout(vm).f.frame);
+    st.colormap = field_f(vm, e, pg::vm_layout(vm).f.colormap);
+    st.skin = field_f(vm, e, pg::vm_layout(vm).f.skin);
+    st.origin = field_v(vm, e, pg::vm_layout(vm).f.origin);
+    st.angles = field_v(vm, e, pg::vm_layout(vm).f.angles);
     st.extras = s.extras[static_cast<size_t>(e)];
     s.statics.push_back(st);
     NetEvent ev;
@@ -389,7 +455,7 @@ void bi_setspawnparms(pg::Vm& vm) {
     return;
   }
   for (int i = 0; i < 16; i++)
-    pg::set_global_float(vm, pg::kGParm1 + i, s.clients[slot].spawn_parms[i]);
+    pg::set_global_float(vm, pg::vm_layout(vm).g.parm1 + i, s.clients[slot].spawn_parms[i]);
 }
 
 void bi_coredump(pg::Vm& vm) {

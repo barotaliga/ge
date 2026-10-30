@@ -17,6 +17,10 @@
 // 80 infokey, 81 stof, 82 multicast. Unlisted numbers (0, 5, 33, 39, 42, 50, 63..66, 71) are
 // left empty: the VM faults "builtin N is not provided by this game".
 //
+// THE SINGLE-PLAYER FORM (a program of crc 5927, the campaign's): 79..82 are left empty;
+// bprint takes no level (`(s ...)`) and sprint none (`(client, s ...)`); aim is the autoaim under
+// `sv_aim`; the Write family has no multicast destination (0..3).
+//
 // THE EXTENSIONS: DP_QC_SINCOSSQRTPOW (60 sin, 61 cos, 62 sqrt, 97 pow), ZQ_QC_TOKENIZE (84
 // tokenize, 85 argc, 86 argv), DP_QC_TRACEBOX (90), DP_QC_RANDOMVEC (91), DP_REGISTERCVAR (93),
 // DP_QC_MINMAXBOUND (94 min, 95 max, 96 bound), QSG_CVARSTRING (103 cvar_string),

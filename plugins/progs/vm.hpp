@@ -79,7 +79,8 @@ struct BuiltinSlot {
   const char* name = "";
 };
 
-// Where STATE and the world guard look: the classic layout's offsets unless a game says otherwise.
+// Where STATE and the world guard look: the program's form's offsets (`create_vm` sets them from
+// `Progs::layout`; the multiplayer form's for a standalone program).
 struct EngineSlots {
   int self = kGSelf;  // global: the entity STATE writes
   int time = kGTime;  // global: the time STATE adds 0.1 s to
@@ -210,6 +211,12 @@ inline void set_global_int(Vm& vm, int ofs, int32_t v) {
 }
 // Parameter `i`'s first word, and the return slot.
 inline int parm(int i) { return kGlobalParm0 + 3 * i; }
+// The form of the program the VM runs (the multiplayer form for a standalone program): where a
+// builtin finds the engine's globals and fields.
+inline const Layout& vm_layout(const Vm& vm) {
+  return vm.progs != nullptr && vm.progs->layout != nullptr ? *vm.progs->layout
+                                                            : kMultiplayerLayout;
+}
 
 // Entities: a value from a number and back (-1 when the value names no entity in use).
 inline int32_t entity_value(const Vm& vm, int number) { return number * vm.entity_bytes; }

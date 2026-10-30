@@ -278,6 +278,150 @@ std::vector<uint8_t> write_client_demo(const DemoScript& s, int cmd_size) {
   return file.b;
 }
 
+// --- the multiview recording ---
+
+namespace {
+
+// A record: the milliseconds, the kind and player, then (for kinds with messages) the mask of a
+// multiple, the length and the messages.
+void multiview_record(Out& file, int ms, int kind, int target, const Out& msg, uint32_t mask = 0) {
+  file.u8(ms);
+  file.u8(kind | target << 3);
+  if (kind == 3) file.i32(static_cast<int32_t>(mask));
+  file.i32(static_cast<int32_t>(msg.b.size()));
+  file.append(msg);
+}
+
+// The recorder's playerinfo: the slot, the field bits, the frame, then the fields named.
+void multiview_player(Out& m, int slot, sh::Vec3f o, sh::Vec3f a, int bits) {
+  m.u8(42);
+  m.u8(slot);
+  m.i16(bits);
+  m.u8(6);
+  const float ov[3] = {o.x, o.y, o.z}, av[3] = {a.x, a.y, a.z};
+  for (int k = 0; k < 3; k++)
+    if ((bits & (1 << k)) != 0) m.coord(ov[k]);
+  for (int k = 0; k < 3; k++)
+    if ((bits & (8 << k)) != 0) m.i16(static_cast<int>(std::lround(av[k] * 65536 / 360)));
+  if ((bits & 2048) != 0) m.u8(2);  // model
+  if ((bits & 128) != 0) m.u8(0);   // skin
+  if ((bits & 64) != 0) m.u8(0);    // effects
+  if ((bits & 1024) != 0) m.u8(0);  // weapon frame
+}
+
+void multiview_stats(Out& m, int health, int rockets, int weapon, int items) {
+  for (const std::pair<int, int>& st : {std::pair{0, health}, {8, rockets}, {10, weapon}}) {
+    m.u8(3);  // updatestat
+    m.u8(st.first);
+    m.u8(st.second);
+  }
+  m.u8(38);  // updatestatlong: the items
+  m.u8(15);
+  m.i32(items);
+}
+
+}  // namespace
+
+std::vector<uint8_t> write_multiview_demo(const DemoScript& s) {
+  Out file;
+  const size_t frames = s.origins.size();
+  constexpr int kAll = 6, kStats = 5, kSingle = 4, kMultiple = 3;
+
+  Out sign;
+  sign.u8(11);  // serverdata: the multiview family's hidden-messages bit, then the version
+  sign.i32(0x3144564D);
+  sign.i32(0x20);
+  sign.i32(28);
+  sign.i32(1);  // the spawn count
+  sign.str("baseline");
+  sign.f32(12.5f);  // the server's time where a client's slot would be
+  sign.str("The Halls");
+  for (int k = 0; k < 10; k++) sign.f32(k == 0 ? 800.0f : 320.0f);
+  multiview_record(file, 0, kAll, 0, sign);
+  Out lists;
+  lists.u8(45);  // modellist
+  lists.u8(0);
+  for (const std::string& m : {"maps/" + s.map + ".bsp", std::string("progs/player.mdl"),
+                               std::string("progs/missile.mdl")})
+    lists.str(m);
+  lists.str("");
+  lists.u8(0);
+  lists.u8(22);  // spawnbaseline: a rocket
+  lists.i16(40);
+  lists.u8(3);
+  for (int k = 0; k < 3; k++) lists.u8(0);
+  for (int k = 0; k < 3; k++) {
+    lists.coord(0);
+    lists.angle(0);
+  }
+  multiview_record(file, 0, kAll, 0, lists);
+  // Each player's stats: the scripted player's, and a second player's that are not the view's.
+  Out mine, other;
+  multiview_stats(mine, s.health, s.rockets, s.active_weapon, s.items);
+  multiview_stats(other, 37, 3, 1, 1);
+  multiview_record(file, 0, kStats, 0, mine);
+  multiview_record(file, 0, kStats, 3, other);
+
+  const int ms = std::max(2, static_cast<int>(std::lround(s.frame_s * 1000)));
+  for (size_t i = 0; i < frames; i++) {
+    const sh::Vec3f o = at(s.origins, i), a = at(s.angles, i);
+    const sh::Vec3f prev_o = at(s.origins, i == 0 ? 0 : i - 1);
+    // The frame: the players and the entity list for everyone. The scripted player in slot 0
+    // leaves out an origin that did not move; the second (slot 3) stands still after the first
+    // frame, so it writes only its frame.
+    Out m;
+    int bits = 8 | 16 | 32;
+    if (i == 0) bits |= 1 | 2 | 4 | 64 | 128 | 1024 | 2048;
+    if (i > 0 && o.x != prev_o.x) bits |= 1;
+    if (i > 0 && o.y != prev_o.y) bits |= 2;
+    if (i > 0 && o.z != prev_o.z) bits |= 4;
+    multiview_player(m, 0, o, a, bits);
+    multiview_player(m, 3, {-64, 32, 24}, {0, 90, 0}, i == 0 ? 1 | 2 | 4 | 8 | 16 | 32 | 2048 : 0);
+    if (i == 0) {
+      m.u8(47);
+    } else {
+      m.u8(48);
+      m.u8(static_cast<int>((i + 200) & 255));  // the previous frame's sequence, not a ring slot
+    }
+    m.i16(40 | 1 << 9);  // entity 40, origin x
+    m.coord(o.x + static_cast<float>(i));
+    m.i16(0);
+    multiview_record(file, i == 0 ? 0 : ms, kAll, 0, m);
+    Out fx;
+    if (i % 10 == 5) {
+      fx.u8(23);  // temp entity: an explosion
+      fx.u8(3);
+      for (int k = 0; k < 3; k++) fx.coord(o.z);
+      fx.u8(10);  // setangle, turning the second player
+      fx.u8(3);
+      for (int k = 0; k < 3; k++) fx.angle(45);
+      multiview_record(file, 0, kAll, 0, fx);
+    }
+    Out hidden;  // the recorder's own data: a block of type 1, which no reader shows
+    hidden.i32(4);
+    hidden.i16(1);
+    hidden.i32(static_cast<int32_t>(i));
+    multiview_record(file, 0, kMultiple, 0, hidden, 0);
+    if (i == frames / 2) {
+      Out to_other;  // a print to the second player alone, and his health
+      to_other.u8(8);
+      to_other.u8(2);
+      to_other.str("for slot 3\n");
+      multiview_record(file, 0, kSingle, 3, to_other);
+      Out hurt;
+      hurt.u8(3);
+      hurt.u8(0);
+      hurt.u8(12);
+      multiview_record(file, 0, kStats, 3, hurt);
+    }
+  }
+  Out end;
+  end.u8(2);  // disconnect
+  end.str("EndOfDemo");
+  multiview_record(file, ms, kAll, 0, end);
+  return file.b;
+}
+
 DemoScript loop_script(const std::string& map, sh::Vec3f centre, float radius, int frames) {
   DemoScript s;
   s.map = map;
