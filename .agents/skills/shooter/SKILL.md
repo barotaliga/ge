@@ -44,6 +44,7 @@ edges. `docs/shooters-edge.md` is the design;
 | `games/shooters_edge/labs/se_loop_lab.cpp` | The `se-loop` lab: the match's events, counts, paths and corrections; the vectors |
 | `shooter/cmd_source.hpp` | The bots' seam: a slot's command source, read-only on the server |
 | `games/shooters_edge/server/` | The server's host (slots, bots' packets, the frame), the input log and its replay, the stand-in bot, the `shooters_edge_server` binary (`bin/main.cpp`) |
+| `games/shooters_edge/client/` | The `shooters_edge` window (M18h's first slice): the search path over a game folder's packs, the listen server (the baseline mod, the player as slot 0, map changes), the keys and raw mouse as commands, the HUD's status and the camera's subject, the eyes and markers, the world's frame; `tests/shooters_edge_listen_test.cpp` (a rocket jump, golden) and the `se-client` lab |
 | `games/shooters_edge/labs/se_server_lab.cpp` | The `se-server` lab: a full server of stand-ins, its players and counts, the log replayed, the trails |
 
 ## Rules

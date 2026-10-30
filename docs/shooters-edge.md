@@ -77,6 +77,59 @@ fixtures we write (`tests/golden/console_*.txt`):
   a runaway alias loop stops at a depth with a message naming the alias, and a script's errors
   name the file and line.
 
+## Playing it
+
+The `shooters_edge` window (`games/shooters_edge/client/`, M18h's first slice) is the game on
+one machine: the baseline mod (compiled at start from the QC sources built into the game) runs
+as a LISTEN SERVER in the same process, and the player is its client, his commands handed to
+the server's frame with no network between. It reads the maps out of your own copy of the
+classic game's packs: point `-basedir` at the folder that holds `id1/pak0.pak` (and `pak1.pak`
+for the full game's maps). The packs are never copied or committed (§ Content and test data).
+
+**On a Mac (Apple silicon; Metal through Dawn):**
+
+```sh
+brew install cmake ninja                 # once
+make build PRESET=release                # or only the window: cmake --preset release &&
+                                         #   cmake --build --preset release --target shooters_edge
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic +map dm6
+```
+
+**On Linux (Vulkan through Dawn; `sudo tools/setup-ubuntu.sh` installs what the build needs):**
+
+```sh
+make build PRESET=release
+build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm6
+```
+
+- **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
+  with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). **`-game <folder>`**
+  picks a game folder other than `id1`. **`-progs <file>`** runs a mod's progs in place of the
+  baseline mod (§ Running your own mod). Its packs are read in order (`pak0.pak`, `pak1.pak`, ...
+  until a number is missing; any case), and a loose file in the folder (`maps/mymap.bsp`)
+  overrides the packs (`client/files.hpp`).
+- **`+<command>`**: console lines run at start. `+map dm6` loads that map; `+map arena` the
+  built-in test arena (no packs needed, only the sky drawn). With no `+map`, the map `start`
+  when the packs have it, else the arena. `--size=WxH` sets the window's size, `--frames=N`
+  quits after N frames.
+- **The keys**: W A S D move, SPACE jumps, the left button fires, 1 to 8 pick a weapon (7 the
+  rocket launcher), the wheel the next one. The mouse looks while the window has it (raw
+  counts, captured); ESCAPE lets it go and a click takes it back; closing the window quits.
+- **The console** (the key under ESCAPE): `map <name>` changes the map, `sv <line>` runs a line on
+  the server's console (`sv timelimit 10`, `sv fraglimit 20`, `sv sv_gravity 600`),
+  `sensitivity <degrees a mouse count>` (0.066 by default), `m_invert 1`, `r_bspmode v2`
+  (our sky and real-time lights from the next map; `classic` is the default) and `quit`.
+- **A rocket jump**: 7 for the launcher, look straight down, then SPACE and the left button
+  together. The blast costs about half your health and throws you about four times as high as
+  a jump (held by `tests/shooters_edge_listen_test.cpp` and the `se-client` lab).
+
+What the first slice draws: the map in its classic look (its textures, lightmaps, warped liquids
+and sky) over the engine's sky, from the first-person rig (the view height off the mod's view
+offset, stairs smoothed, a landing's dip); the HUD (`hud_style classic|modern|compact`); the
+console; a hot dot on each rocket in flight and an orange disc where one went off. Not yet:
+the other players' and items' models, the weapon in hand, sounds, the effects of the classic
+world pass, menus, and the network (the rest of M18h, M18i).
+
 ## Running your own mod
 
 The mod server (`games/shooters_edge/server`, M18p) runs a multiplayer `progs` as a compiler
@@ -91,8 +144,8 @@ the tree's own QC compiler (`plugins/progs/qc_compile.hpp`, the language in
   cvar in the server's console lines (`sv_progs mods/arena/progs.dat`, or `set sv_progs ...`).
   The path given on the command line wins, then the cvar, then the built-in test mod. Today the
   `se-mod` lab is the front end: `make lab LAB=se-mod ARGS="--progs=<file> --bots=4
-  --timelimit=1"` plays a match against bots on the test arena and draws it. The dedicated
-  server (M18f) and the game window take the same flag and cvar when they land.
+  --timelimit=1"` plays a match against bots on the test arena and draws it. The game window
+  takes it as `-progs <file>` (§ Playing it); the dedicated server (M18f) takes the same flag.
 - **Line numbers in faults**: put the line table beside the file as `<file>.lines` (a line
   number per statement, the sidecar `ge qc` reads: `parse_lines` in `plugins/progs/file.hpp`). Without it a fault names the function and the
   statement.
@@ -418,6 +471,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-lobby` | sim | Clients find a hosted game on the LAN and through the rendezvous, fill the lobby, pick teams, chat, start, play and return; a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`) |
+| `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the HUD and the markers at the spawn, the blast and the top of the jump; the rise and the health it cost (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
 | `se-ambient` | sim | A walk through rooms under sky and by water: the ambience by leaf charted, mixed and written as WAV (built, M18j2) |
