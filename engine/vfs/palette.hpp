@@ -16,6 +16,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -23,8 +24,8 @@
 
 namespace ge::vfs {
 
-inline constexpr int kPaletteColours = 256;
-inline constexpr int kColormapLevels = 64;
+inline constexpr size_t kPaletteColours = 256;
+inline constexpr size_t kColormapLevels = 64;
 
 struct Palette {
   std::array<uint8_t, 3 * kPaletteColours> rgb{};  // red, green, blue per index

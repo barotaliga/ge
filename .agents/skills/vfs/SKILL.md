@@ -43,5 +43,8 @@ loose files, every name answered by the source that wins it. Roadmap row M18a's 
 `tests/vfs_palette_test.cpp` (a round trip, every damage refused); `tests/vfs_search_test.cpp` (the
 order, case and slashes, views, no allocation, a damaged archive named, the golden file table);
 `tests/vfs_fuzz_test.cpp` (thousands of mutated packs, zips and wads: refused or read in range,
-never out of it, under the sanitizers). The `bsp` lab's `--pak` reads its
+never out of it, under the sanitizers). The `pak` lab (`make lab LAB=pak`) shows a search path's
+sources, winners and hidden files and draws the palette, the colour map and the pictures; its
+smoke run is a fixture tree, and `--root=<dir> --game=<name>` reads content the user points it at
+(never committed). The `bsp` lab's `--pak` reads its
 maps and the palette out of a pack (`brush` skill).
