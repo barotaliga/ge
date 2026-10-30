@@ -50,30 +50,32 @@ constexpr int kReachLevels[] = {5, 6, 7, kGroundLevels};  // the ground's levels
 // DISTANCE: the ground drawn to 1, 2 or 4 km and misted into the sky from half of it, or the
 //   whole ground to the horizon; the near mountain is the run, the far one where it lies.
 //
-// Measured on the software adapter in the cloud container (lavapipe, 1280x720, seed 38 under a
-// flurry, the `start` view raised 15 degrees so the broken sky fills its top half, the least
-// median of three rounds): its ratios are a CPU raster's, not a GPU's, and the reference
-// machine's (`needs-mac`) replace them. A stop that measured cheaper than the one under it is set
-// level with it (the low flakes). The DISTANCE row is priced where it is seen, from the `vista`
-// over the whole mountain on a clear day (`--view=vista --lift=0 --fall=0`): from the start the
-// far ground is behind the slope and costs nothing; from above, the woods past 2 km are most of it.
-// The cloud's high stop since its march was spread over frames: the full stop's price times the
-// high's share of it in one pricing run with the spread (24.84 of 59.38 ms; 32.70 of 51.84 with
-// the march whole every frame, `--spread=0`); the low stop's share did not move (0.40 either way).
-constexpr PriceTable kTable{"lavapipe (software), 1280x720", 1280, 720, 71.57};
+// Measured on the reference machine (an Apple M3 Max, Metal through Dawn, 1920x1080, seed 38
+// under a flurry, the `start` view raised 15 degrees so the broken sky fills its top half, 60
+// frames timed after 10, the least of three rounds): `labs ladder --price --width=1920
+// --height=1080 --frames=60 --warm=10 --rounds=3`. A stop that measured cheaper than the one under
+// it is set level with it. The DISTANCE row is priced where it is seen, from the `vista` over the
+// whole mountain on a clear day (`--view=vista --lift=0 --fall=0`): from the start the far ground
+// is behind the slope and costs nothing; from above, the ground past 1 km is most of it. The
+// CLOUDS row's three stops measured level (the march spread over frames, `--spread=1`): the
+// layers' price is in turning them on, not in their quality. Two readings to trust less: the
+// PRECIP row's off stop drew slower than its others (30.1 against 19.5 ms, so the row is level at
+// 0), and the RESOLUTION row's half stop slower than two-thirds (13.7 against 12.0 ms): the
+// frame's own noise at this size is about a millisecond and a half.
+constexpr PriceTable kTable{"Apple M3 Max (Metal), 1920x1080", 1920, 1080, 3.54};
 
 constexpr r::LadderStop kResolution[] = {
-    {"half", 0, 0}, {"two-thirds", 30.87, 3}, {"five-sixths", 48.23, 5}, {"full", 80.41, 6}};
-constexpr r::LadderStop kShadows[] = {{"1024", 0, 0}, {"2048", 1.77, 5}, {"4096", 13.83, 7}};
-constexpr r::LadderStop kSnow[] = {{"plain", 0, 0}, {"material", 15.07, 60}};
-constexpr r::LadderStop kTrails[] = {{"off", 0, 0}, {"low", 5.31, 30}, {"high", 8.06, 36}};
-constexpr r::LadderStop kSpray[] = {{"off", 0, 0}, {"on", 1.44, 20}};
-constexpr r::LadderStop kPrecip[] = {{"off", 0, 0}, {"low", 0, 10}, {"high", 3.93, 14}};
+    {"half", 0, 0}, {"two-thirds", 0, 3}, {"five-sixths", 1.44, 5}, {"full", 6.07, 6}};
+constexpr r::LadderStop kShadows[] = {{"1024", 0, 0}, {"2048", 0.38, 5}, {"4096", 0.51, 7}};
+constexpr r::LadderStop kSnow[] = {{"plain", 0, 0}, {"material", 0.28, 60}};
+constexpr r::LadderStop kTrails[] = {{"off", 0, 0}, {"low", 0.19, 30}, {"high", 0.19, 36}};
+constexpr r::LadderStop kSpray[] = {{"off", 0, 0}, {"on", 0.17, 20}};
+constexpr r::LadderStop kPrecip[] = {{"off", 0, 0}, {"low", 0, 10}, {"high", 0, 14}};
 constexpr r::LadderStop kClouds[] = {
-    {"off", 0, 0}, {"low", 27.59, 12}, {"high", 30.16, 15}, {"full", 72.09, 16}};
-constexpr r::LadderStop kBloomStops[] = {{"off", 0, 0}, {"on", 17.30, 4}, {"lens", 17.30, 6}};
+    {"off", 0, 0}, {"low", 14.65, 12}, {"high", 14.65, 15}, {"full", 14.65, 16}};
+constexpr r::LadderStop kBloomStops[] = {{"off", 0, 0}, {"on", 0.28, 4}, {"lens", 0.28, 6}};
 constexpr r::LadderStop kDistance[] = {
-    {"1 km", 0, 0}, {"2 km", 85.98, 10}, {"4 km", 224.85, 18}, {"full", 237.31, 22}};
+    {"1 km", 0, 0}, {"2 km", 3.17, 10}, {"4 km", 4.71, 18}, {"full", 5.99, 22}};
 
 const std::array<r::LadderRow, kPictureRows> kRows = {{
     {"resolution", kResolution, 1},
