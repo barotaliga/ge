@@ -147,7 +147,9 @@ void places(gl::Lab& lab, double seconds) {
              "Check hear_rain's driven snow by the wind. Skill: water.");
   }
   if (!(at("blizzard").rms_db > at("snow-still").rms_db + 30)) {
-    lab.fail("the blizzard is not heard over still snow", "Check hear_rain's driven snow.");
+    lab.fail("the blizzard is not 30 dB over still snow (" + fmt(at("blizzard").rms_db, 1) +
+                 " against " + fmt(at("snow-still").rms_db, 1) + " dBFS)",
+             "Check hear_rain's driven snow by the wind. Skill: water.");
   }
 }
 

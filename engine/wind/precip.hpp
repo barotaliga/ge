@@ -37,9 +37,11 @@
 // ge:keywords precip precipitation rain sleet snow drizzle downpour storm blizzard intensity rate
 // ge:keywords tier freezing-level phase drop terminal-speed marshall-palmer visibility swirl wet
 // ge:keywords puddle wetness rate_of tier_of rain_share_at drop_speed median_drop fall_speed
-// ge:keywords drops_per_m2s mean_drop_over impacts visibility_of swirl_of step_wet wet_steady
-// dry_rate cover step_cover lightning ge:keywords flash_at strokes_per_minute thunderstorm ge:skill
-// water render ge:test tests/wind_precip_test.cpp
+// ge:keywords drops_per_m2s mean_drop_over impacts visibility_of swirl_of step_wet
+// ge:keywords wet_steady dry_rate cover step_cover lightning
+// ge:keywords flash_at strokes_per_minute thunderstorm
+// ge:skill water render
+// ge:test tests/wind_precip_test.cpp
 #pragma once
 
 #include <cstdint>
