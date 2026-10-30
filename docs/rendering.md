@@ -464,8 +464,36 @@ row M48). Three questions decide how it looks, and each has one answer in one fi
 **The draw** is two passes into one target: the world, then the depth cleared and the gun drawn
 through its own lens, so it is never cut by a wall it is pushed into and a wide view does not
 stretch it. `raster.hpp` is the CPU reference every lab draws with (`viewmodel`, on the stage's
-corridor and its six named lights); the GPU pass (M48c) draws the same light per pixel over the
-clustered local lights and is held to the reference.
+corridor and its six named lights). The GPU pass (`render/viewmodel.hpp`, M48c) draws the same
+light per pixel and is held to that reference.
+
+**The GPU pass** ("viewmodel") draws after the world and its transparent effects and before the TAA
+and post, so the HUD lands over it.
+
+- **Upload.** Every frame of every held model goes up once, as the morph meshes' do: positions and
+  normals in one buffer, the triangles, the UVs or vertex colours, a flag per triangle for the
+  model's own flash, and the skins in one atlas with the glow in alpha. A frame writes only its
+  draws.
+- **Lens and depth.** The gun is projected through its own lens at the frame's aspect and TAA
+  jitter. Its depth is squeezed into [near / `guard_m`, 1] of the reversed-z buffer by the
+  viewport, so it is in front of anything farther than the guard (0.25 m by default). The depth
+  keeps it, so the effects drawn after it (a muzzle flame, the fog) know it is there. A world
+  surface nearer than the guard can still cover it; the near plane and the player's own size keep
+  the world back from that. Its motion vectors come from where its last placement put it.
+- **Light.** The light is `shade_held`'s arithmetic, in the held unit, with three more sources:
+  - **The frame's lamps**, read from the cluster the gun's pixel looks into at the gun's depth.
+  - **The frame's sun and sky**, by the draw's `outdoor` share. The sun goes through the sun's
+    shadow maps at the gun's place on its screen ray, so an awning's shadow falls on it.
+  - **The scale**: the held unit's 1 is `white_lux` on white, or, at 0, the white the eye adapted
+    to. `held_candela` and `lamp_of` turn a held light into the same lamp.
+- **The resolved twin.** `encode_viewmodel_resolved` writes the same pixels resolved to bytes as
+  `viewmodel::resolve` does.
+
+The `gpu-viewmodel` lab holds the pass to its CPU reference under the stage's six lights, first
+with the lights as the gun's own list and then as the frame's clustered lamps. The stated
+difference is a mean under 1 level of 255 and a 99th centile under 16 (where a pixel's centre falls
+across a skin texel's edge), with under 2% of coverage differing. It also draws the whole frame
+outdoors in the sun, in an awning's shadow, at night by a lamp, and against a wall.
 
 **The muzzle** is where a game stages what a shot makes (the flash, its smoke, its light). A held
 model names its tip as the centre of a few of its vertices (`muzzle_vertices`, the barrel's front
