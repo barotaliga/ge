@@ -27,6 +27,7 @@
 #include "brush/app/bsp_liquids.hpp"
 #include "brush/app/bsp_sky.hpp"
 #include "brush/app/draw_data.hpp"
+#include "brush/labs/gpu_bsp_views.hpp"
 #include "brush/rebake.hpp"
 #include "brush/write.hpp"
 #include "core/libm/libm.hpp"
@@ -52,6 +53,8 @@ namespace gl = ge::lab;
 namespace gr = ge::render;
 namespace ba = ge::brush::app;
 namespace ls = ge::lab::liquid_scene;
+using ge::brush::labs::parse_view;
+using ge::brush::labs::View;
 using gl::Det;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kDeg = kPi / 180;
@@ -82,13 +85,6 @@ struct Frame {
   gr::FrameRecorder rec;
   ge::gpu::Target out;
   uint32_t w = 0, h = 0;
-};
-
-struct View {
-  std::string id, title, caption;
-  size_t map = 0;
-  double eye[3] = {0, 0, 0};
-  double heading = 0, pitch = 0;
 };
 
 // The sky of the views: the map's picked sky (its type, its hour, its moon, its wind and its
@@ -426,29 +422,6 @@ std::vector<View> auto_views(const ba::Scene& s, size_t map, const std::string& 
   return out;
 }
 
-bool parse_view(const std::string& spec, const std::vector<std::string>& names, View* out) {
-  const size_t colon = spec.find(':');
-  if (colon == std::string::npos) return false;
-  const std::string map = spec.substr(0, colon);
-  double x, y, z, hd, pt;
-  if (std::sscanf(spec.c_str() + colon + 1, "%lf,%lf,%lf,%lf,%lf", &x, &y, &z, &hd, &pt) != 5)
-    return false;
-  for (size_t i = 0; i < names.size(); ++i) {
-    if (names[i] != map) continue;
-    out->map = i;
-    out->eye[0] = x;
-    out->eye[1] = y;
-    out->eye[2] = z;
-    out->heading = hd * kDeg;
-    out->pitch = pt * kDeg;
-    out->id = map + "-at-" + ls::fixed(x, 0) + "-" + ls::fixed(z, 0);
-    out->title = map + " at " + ls::fixed(x, 1) + ", " + ls::fixed(y, 1) + ", " + ls::fixed(z, 1);
-    out->caption = "A view picked by hand.";
-    return true;
-  }
-  return false;
-}
-
 std::vector<std::string> split(const std::string& s, char c) {
   std::vector<std::string> out;
   size_t at = 0;
@@ -556,7 +529,9 @@ void run(gl::Lab& lab) {
     if (parse_view(spec, names, &v))
       views.push_back(v);
     else
-      lab.fail("--view=" + spec + " is not <map>:x,y,z,heading,pitch with the map in --maps",
+      lab.fail("--view=" + spec +
+                   " is not <map>:x,y,z,heading,pitch or <map>:x,y,z,sun|moon[,lens] with the map "
+                   "in --maps",
                "next: write it as e.g. --view=start:20,-1,30,180,-15 and name its map in --maps.");
   }
   std::vector<std::string> ids;
@@ -802,6 +777,10 @@ void run(gl::Lab& lab) {
     fv.pitch = v.pitch;
     MapState& m = *maps[v.map];
     dress(fv, m.sky, sun, cover, m.scene.maxs[1], t);
+    if (v.aimed) {
+      gr::aim_at(fv, v.body);
+      if (v.lens > 0) fv.fov_y = v.lens;
+    }
     std::vector<gl::Picture> pics;
     pics.reserve(ways.size());
     for (const Way& way : ways) pics.push_back(draw(d, f, m, fv, way.o));
@@ -819,13 +798,17 @@ void run(gl::Lab& lab) {
               "throw shadows and the lava lights the walls.",
               {{"eye", ls::fixed(v.eye[0], 1) + "," + ls::fixed(v.eye[1], 1) + "," +
                            ls::fixed(v.eye[2], 1)},
-               {"heading", ls::fixed(v.heading / kDeg, 0)},
-               {"pitch", ls::fixed(v.pitch / kDeg, 0)}}},
+               {"heading", ls::fixed(fv.heading / kDeg, 0)},
+               {"pitch", ls::fixed(fv.pitch / kDeg, 0)}}},
              sheet, Det::measured);
     // The sequence: the same eye at each of --at's times, v2 lit in real time alone.
     for (const double at : at_times) {
       gr::FrameView tv = fv;
       dress(tv, m.sky, sun, cover, m.scene.maxs[1], at);
+      if (v.aimed) {
+        gr::aim_at(tv, v.body);
+        if (v.lens > 0) tv.fov_y = v.lens;
+      }
       if (lab.arg_bool("to-moon") && m.sky.night) {
         // Turned to the moon through a longer lens, the scud crossing it.
         tv.heading = m.sky.moon_azimuth * kDeg;
@@ -935,7 +918,9 @@ const gl::LabSpec kSpec{
     {{"width", "640", "a view's width, px (16:9)"},
      {"pak", "", "a pack file holding maps/*.bsp and gfx/palette.lmp (none: the sample fixture)"},
      {"maps", "start", "the maps in the pack, comma separated, without maps/ and .bsp"},
-     {"view", "", "more views: <map>:x,y,z,heading,pitch (m, degrees), separated by ;"},
+     {"view", "",
+      "more views: <map>:x,y,z,heading,pitch (m, degrees), or <map>:x,y,z,sun[,lens] and "
+      "<map>:x,y,z,moon[,lens] aimed at the body; separated by ;"},
      {"sun", "", "the sun's elevation and azimuth, degrees (none: each map's picked sky's)"},
      {"clouds", "", "the heaps' cover, 0..1, 0 a clear sky (none: each map's picked sky's)"},
      {"night", "1", "the classic night over every map (0: the picked sky's hour by day)"},

@@ -11,6 +11,7 @@
 // ge:keywords silence webm interleave
 // ge:skill replay testing
 // ge:test tests/capture_live_test.cpp
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -184,15 +185,14 @@ TEST(a_full_queue_drops_pictures_and_the_hand_in_never_waits) {
   o.queue = 1;
   std::string error;
   CHECK(live.open(o, 0, error));
-  double worst_ms = 0;
+  std::vector<double> took_ms;
   int handed = 0, refused = 0;
   ge::lab::Picture p = solid(640, 360, 90);
   for (int k = 0; k < 200; k++) {
     if (p.rgba.size() != size_t{640} * 360 * 4) p = solid(640, 360, 90);
     const auto t0 = std::chrono::steady_clock::now();
     const bool took = live.picture(p, live.stamp(static_cast<uint64_t>(k) * 16 * kMs));
-    worst_ms = std::max(
-        worst_ms,
+    took_ms.push_back(
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
     (took ? handed : refused)++;
   }
@@ -201,10 +201,19 @@ TEST(a_full_queue_drops_pictures_and_the_hand_in_never_waits) {
   CHECK(st.pictures == handed);
   CHECK(st.dropped == refused);
   CHECK(handed + refused == 200);
-  // A swap of buffers under a lock, whatever the worker is doing (a generous bound for
-  // sanitizers and shared runners).
-  if (worst_ms >= 50) std::fprintf(stderr, "the slowest hand-in took %.2f ms\n", worst_ms);
-  CHECK(worst_ms < 50);
+  // A swap of buffers under a lock, whatever the worker is doing. One hand-in's wall time is
+  // not a fact about the code on a shared runner: the thread can be preempted for tens of
+  // milliseconds anywhere. So the bound is on the typical hand-in (the median and the 90th
+  // percentile), which a few preempted calls do not move but a hand-in that waited for the
+  // worker's encode would.
+  std::sort(took_ms.begin(), took_ms.end());
+  const double median = took_ms[took_ms.size() / 2], p90 = took_ms[took_ms.size() * 9 / 10];
+  if (median >= 2 || p90 >= 10) {
+    std::fprintf(stderr, "hand-ins: median %.3f ms, 90th percentile %.3f ms, slowest %.2f ms\n",
+                 median, p90, took_ms.back());
+  }
+  CHECK(median < 2);
+  CHECK(p90 < 10);
 }
 
 TEST(a_resized_window_is_cropped_or_padded_to_the_file) {

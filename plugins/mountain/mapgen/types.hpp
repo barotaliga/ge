@@ -288,6 +288,10 @@ struct Weather {
   // (air::fall_at, over engine/wind/precip.hpp's melting band). R19 deals none, so a dealt map is
   // snow to the valley; only a sky picked by hand (`with_sky`) raises it.
   double snowline = kNoSnowline;
+  // A THUNDERSTORM's strength (air::storm_of lays its cells off the map's seed): 0 none, 0.3 a weak
+  // cell, 0.5 an ordinary one, 1 a severe one. R19 deals none; only a sky picked by hand
+  // (`with_sky`) brings one.
+  double thunder = 0;
 };
 
 // The day (R15).

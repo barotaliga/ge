@@ -102,10 +102,17 @@ HudSnapshot snapshot(const sim::GameState& state, const HudRun& run) {
   s.heading = sk.heading;
   if (state.level) {
     const ge::mountain::mapgen::Level& l = *state.level;
-    const ge::mountain::air::Wind open = ge::mountain::air::wind_at(l, state.t);
+    // A thunderstorm's gust front blows on top of the map's own air (none without one).
+    const ge::wind::Storm storm = ge::mountain::air::storm_of(l);
+    const ge::mountain::air::Wind open = ge::mountain::air::wind_at(l, storm, state.t, sk.x, sk.z);
     s.weather_x = open.x, s.weather_z = open.z;
-    const ge::wind::Air here =
-        ge::wind::wind_at(ge::mountain::air::field_of(l), {sk.x, sk.y, sk.z, kBodyHeight}, state.t);
+    const ge::wind::Where at{sk.x, sk.y, sk.z, kBodyHeight};
+    ge::wind::Air here = ge::wind::wind_at(ge::mountain::air::field_of(l), at, state.t);
+    if (storm.cells > 0) {
+      const ge::wind::Air out =
+          ge::wind::outflow_at(storm, at, state.t, ge::wind::kRoughness::snow);
+      here.x += out.x, here.z += out.z;
+    }
     s.felt_x = here.x - sk.vx, s.felt_z = here.z - sk.vz;
   } else {
     s.felt_x = -sk.vx, s.felt_z = -sk.vz;
