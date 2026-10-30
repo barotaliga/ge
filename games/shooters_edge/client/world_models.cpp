@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cmath>
 #include <set>
+#include <string>
+#include <string_view>
 
 #include "brush/read.hpp"
 #include "classicenhance/models.hpp"
@@ -49,6 +51,17 @@ uint32_t colour_row(const sv::ClientInfo& c, const char* key, uint32_t fallback)
 void to_world(const sh::Vec3f& p, double out[3]) {
   const float f[3] = {p.x, p.y, p.z};
   br::to_engine(f, out);
+}
+
+// Says once why a file on the model list is not drawn.
+void not_drawn(std::string_view kind, const std::string& name, const std::string& error) {
+  std::string line = "shooters_edge: ";
+  line += kind;
+  line += ' ';
+  line += name;
+  line += " not drawn: ";
+  line += error;
+  ge::core::output::status(line);
 }
 
 }  // namespace
@@ -110,8 +123,7 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
     if (ends_with(name, ".mdl")) {
       mo::Model model;
       if (!mo::read_model(bytes, name, &model, &error)) {
-        if (refused.insert(name).second)
-          ge::core::output::status("shooters_edge: model " + name + " not drawn: " + error);
+        if (refused.insert(name).second) not_drawn("model", name, error);
         continue;
       }
       k.is = ModelKind::Is::alias;
@@ -131,8 +143,7 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
     } else if (ends_with(name, ".spr")) {
       mo::Sprite sprite;
       if (!mo::read_sprite(bytes, name, &sprite, &error)) {
-        if (refused.insert(name).second)
-          ge::core::output::status("shooters_edge: sprite " + name + " not drawn: " + error);
+        if (refused.insert(name).second) not_drawn("sprite", name, error);
         continue;
       }
       k.is = ModelKind::Is::sprite;
@@ -144,8 +155,7 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
     } else if (ends_with(name, ".bsp")) {
       br::Map item;
       if (!br::read_bsp(bytes, &item, &error)) {
-        if (refused.insert(name).second)
-          ge::core::output::status("shooters_edge: item " + name + " not drawn: " + error);
+        if (refused.insert(name).second) not_drawn("item", name, error);
         continue;
       }
       gr::MorphModel mm = models::morph_from_brush(item, palette);
