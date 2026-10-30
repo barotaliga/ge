@@ -246,9 +246,12 @@ void run(ge::lab::Lab& lab) {
   storm.base = tower.base_m - storm.ground;
   storm.cell[0].x = cx;
   storm.cell[0].z = cz;
-  lab.metric("cell.x", cx, "m");
-  lab.metric("cell.z", cz, "m");
-  lab.metric("cell.column", best, "share");
+  // Where the cell stands follows the view and the clouds, which the presentation works out with
+  // the platform's own transcendentals: measured, so a machine whose libm rounds otherwise digests
+  // the same. The flashes' times are the cell's seed's alone, and hashed.
+  lab.metric("cell.x", cx, "m", Det::measured);
+  lab.metric("cell.z", cz, "m", Det::measured);
+  lab.metric("cell.column", best, "share", Det::measured);
 
   gw::Flash picked[std::size(kPicks)];
   bool found[std::size(kPicks)] = {};
@@ -272,12 +275,14 @@ void run(ge::lab::Lab& lab) {
     }
     const gw::Flash& f = picked[i];
     const std::string id = kPicks[i].id;
-    lab.metric(id + ".t", f.t0, "s");
-    lab.metric(id + ".strokes", f.strokes, "count");
+    // A flash in the cloud is picked by where it is seen, so by the view: measured.
+    const Det seen_det = f.kind == gw::FlashKind::ground ? Det::deterministic : Det::measured;
+    lab.metric(id + ".t", f.t0, "s", seen_det);
+    lab.metric(id + ".strokes", f.strokes, "count", seen_det);
     lab.metric(id + ".distance",
                ge::core::hypot(ge::core::hypot(f.ex - base.eye[0], f.ey - base.eye[1]),
                                f.ez - base.eye[2]),
-               "m");
+               "m", Det::measured);
   }
   static gw::Channel channel[std::size(kPicks)];
   for (size_t i = 0; i < std::size(kPicks); ++i) gw::build_channel(picked[i], channel[i]);
