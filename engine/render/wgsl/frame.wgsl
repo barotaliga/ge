@@ -430,22 +430,22 @@ fn haze_air(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
   return c;
 }
 
-// THE WET GROUND (render/view.hpp's `Weather::wet` and `puddles`, in `frame.mist.zw`): a wet
+// THE WET GROUND (render/view.hpp's `Weather::wet` and `puddles`, in `frame.wet.xy`): a wet
 // surface is darker, because the water filling its pores keeps the light inside it longer
 // (`wet_albedo`: a porous surface, 1, goes to half its albedo soaked; a sealed one, 0, keeps it),
 // and it mirrors the sky in its film (`wet_sheen`: Schlick's Fresnel off water, 0.02 head on, the
 // sky's light along the reflected ray and the sun's glint, the film's mirror rough and a puddle's
 // flat). `flat` is how level the surface lies (its normal's y over 0.9 .. 0.98 is a puddle's).
 fn wet_albedo(albedo: vec3f, porous: f32) -> vec3f {
-  return albedo * (1.0 - 0.5 * frame.mist.z * clamp(porous, 0.0, 1.0));
+  return albedo * (1.0 - 0.5 * frame.wet.x * clamp(porous, 0.0, 1.0));
 }
 
 fn wet_sheen(n: vec3f, v: vec3f, sun: vec3f, flat: f32) -> vec3f {
-  let wet = frame.mist.z;
+  let wet = frame.wet.x;
   if (wet <= 0.0) {
     return vec3f(0.0);
   }
-  let pool = frame.mist.w * smoothstep(0.9, 0.98, flat);
+  let pool = frame.wet.y * smoothstep(0.9, 0.98, flat);
   // A puddle lies level whatever the ground's grain under it.
   let m = normalize(mix(n, vec3f(0.0, 1.0, 0.0), pool));
   let r = reflect(-v, m);

@@ -214,9 +214,9 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
   d.cubes = depth_array(device, "bsp.cubes", kCubeSize, kMaxShadowed * 6);
   for (uint32_t k = 0; k < kMaxShadowed * 6; ++k) d.cube_layers.push_back(layer_view(d.cubes, k));
   d.cubes_view = array_view(d.cubes, kMaxShadowed * 6);
-  d.orthos = depth_array(device, "bsp.orthos", kOrthoSize, 2);
-  for (uint32_t k = 0; k < 2; ++k) d.ortho_layers[k] = layer_view(d.orthos, k);
-  d.orthos_view = array_view(d.orthos, 2);
+  d.orthos = depth_array(device, "bsp.orthos", kOrthoSize, kOrthos);
+  for (uint32_t k = 0; k < kOrthos; ++k) d.ortho_layers[k] = layer_view(d.orthos, k);
+  d.orthos_view = array_view(d.orthos, kOrthos);
   {
     wgpu::SamplerDescriptor s{};
     s.magFilter = s.minFilter = wgpu::FilterMode::Linear;
@@ -228,7 +228,7 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
   d.uniform = r::make_buffer(device, "bsp.uniform", sizeof(GpuBsp), wgpu::BufferUsage::Uniform);
   d.lights =
       r::make_buffer(device, "bsp.lights", sizeof(GpuLight) * 512, wgpu::BufferUsage::Storage);
-  d.jobs = r::make_buffer(device, "bsp.jobs", sizeof(GpuJob) * (kMaxShadowed * 6 + 2),
+  d.jobs = r::make_buffer(device, "bsp.jobs", sizeof(GpuJob) * (kMaxShadowed * 6 + kOrthos),
                           wgpu::BufferUsage::Storage);
 
   using r::Slot;
@@ -456,8 +456,15 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   const double down[3] = {0, -1, 0};
   d.staged.ortho[0] = ortho_job(toward, centre, radius, radius);
   d.staged.ortho[1] = ortho_job(down, centre, radius, radius);
-  d.frame_jobs.push_back(d.staged.ortho[0]);
-  d.frame_jobs.push_back(d.staged.ortho[1]);
+  // The fall's: along the way the rain and the snow come, kept off the level (a gale's snow
+  // driven near flat still comes from the sky).
+  double fall[3] = {o.fall[0], std::min(o.fall[1], -0.26), o.fall[2]};
+  const double fl = std::sqrt(fall[0] * fall[0] + fall[1] * fall[1] + fall[2] * fall[2]);
+  for (double& c : fall) c /= fl;
+  d.staged.ortho[2] = ortho_job(fall, centre, radius, radius);
+  for (uint32_t k = 0; k < kOrthos; ++k) d.frame_jobs.push_back(d.staged.ortho[k]);
+  set4(d.staged.weather, o.weather && o.mode == Mode::v2 ? 1 : 0, std::clamp(o.raining, 0.0, 1.0),
+       std::clamp(o.spread, 0.0, 1.0), 0);
 
   set4(d.staged.info, o.mode == Mode::v2 ? 1 : 0,
        o.lighting == Lighting::lights    ? 1
@@ -498,7 +505,8 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
     pass.DrawIndexed(d.range[kSolid][1], 1, d.range[kSolid][0], 0, instance);
   };
   rec.compute(encoder, "bsp.shadows").End();
-  if (lights) {
+  const bool weather = v2 && d.staged.weather[0] > 0.5;
+  {
     const auto shadow_pass = [&](const wgpu::TextureView& view, uint32_t job, bool sky) {
       wgpu::RenderPassDepthStencilAttachment depth{};
       depth.view = view;
@@ -516,11 +524,18 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
       if (sky) pass.DrawIndexed(d.range[kSky][1], 1, d.range[kSky][0], 0, job);
       pass.End();
     };
-    for (int k = 0; k < d.shadowed * 6; ++k)
-      shadow_pass(d.cube_layers[size_t(k)], uint32_t(k), true);
     const uint32_t first_ortho = uint32_t(d.shadowed * 6);
-    shadow_pass(d.ortho_layers[0], first_ortho, false);
-    shadow_pass(d.ortho_layers[1], first_ortho + 1, false);
+    if (lights) {
+      for (int k = 0; k < d.shadowed * 6; ++k)
+        shadow_pass(d.cube_layers[size_t(k)], uint32_t(k), true);
+      shadow_pass(d.ortho_layers[0], first_ortho, false);
+      shadow_pass(d.ortho_layers[1], first_ortho + 1, false);
+    }
+    // The fall's map, and the zenith's for the lightning, with the weather on.
+    if (weather) {
+      if (!lights) shadow_pass(d.ortho_layers[1], first_ortho + 1, false);
+      shadow_pass(d.ortho_layers[2], first_ortho + 2, false);
+    }
   }
   {
     wgpu::RenderPassColorAttachment colours[3]{};
@@ -596,6 +611,24 @@ void encode_bsp_veil(const BspDraw& d, const gpu::PipelineSet& pipelines,
   pass.Draw(3);
   ++rec.current().draws;
   pass.End();
+}
+
+r::PrecipShelter bsp_shelter(const BspDraw& d) {
+  r::PrecipShelter h;
+  h.maps = d.orthos_view;
+  h.layer = 2;
+  const GpuJob& j = d.staged.ortho[2];
+  for (int k = 0; k < 3; ++k) {
+    h.o[k] = j.o[k];
+    h.x[k] = j.x[k];
+    h.y[k] = j.y[k];
+    h.z[k] = j.z[k];
+  }
+  h.half = j.o[3];
+  h.depth = j.info[1];
+  h.size = kOrthoSize;
+  h.spread = d.staged.weather[2];
+  return h;
 }
 
 }  // namespace ge::brush::app

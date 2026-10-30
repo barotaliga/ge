@@ -30,12 +30,44 @@ struct Params {
   float fall[4];
   uint32_t info[4];
   float splash[4];
+  // The shelter's camera (PrecipShelter): o (w: half), x (w: the spread), y, z, then on, depth,
+  // layer, texel.
+  float shelter_o[4];
+  float shelter_x[4];
+  float shelter_y[4];
+  float shelter_z[4];
+  float shelter_info[4];
 };
 
-}  // namespace
+// The terrain's uniform with its horizon maps off and two 1 x 1 maps: a world with no ground.
+struct NoGround {
+  wgpu::Buffer params;
+  wgpu::TextureView h0, h1;
+};
 
-void create_precip(gpu::Device& device, gpu::PipelineSet& pipelines, Precip& sf,
-                   const wgpu::BindGroupLayout& frame, const Terrain& terrain,
+NoGround no_ground(gpu::Device& device) {
+  NoGround g;
+  g.params = make_buffer(device, "precip.no_ground", sizeof(Terrain::Params), BU::Uniform);
+  const Terrain::Params zero{};
+  device.queue.WriteBuffer(g.params, 0, &zero, sizeof zero);
+  const auto usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+  g.h0 = make_texture(device, "precip.no_horizon", 1, 1, 1, wgpu::TextureFormat::R16Float, usage)
+             .CreateView();
+  g.h1 = make_texture(device, "precip.no_horizon", 1, 1, 1, wgpu::TextureFormat::R16Float, usage)
+             .CreateView();
+  return g;
+}
+
+void make_draw_group(gpu::Device& device, Precip& sf) {
+  if (!sf.depth) return;
+  sf.draw_group =
+      make_group(device, "precip.draw", sf.draw_layout,
+                 {sf.params, sf.particles, sf.depth, sf.shelter_maps, sf.shelter_compare});
+}
+
+void create_common(gpu::Device& device, gpu::PipelineSet& pipelines, Precip& sf,
+                   const wgpu::BindGroupLayout& frame, const wgpu::Buffer& ground,
+                   const wgpu::TextureView& h0, const wgpu::TextureView& h1,
                    const PrecipSettings& settings) {
   sf.settings = settings;
   sf.settings.particles = std::max(settings.particles, kGroup);
@@ -65,10 +97,27 @@ void create_precip(gpu::Device& device, gpu::PipelineSet& pipelines, Precip& sf,
   const auto vf = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
   sf.light_layout =
       make_layout(device, "precip.light", {Slot::uniform, Slot::texture, Slot::texture}, vf);
-  sf.light_group = make_group(device, "precip.light", sf.light_layout,
-                              {terrain.params, terrain.horizon.views[0], terrain.horizon.views[1]});
-  sf.draw_layout =
-      make_layout(device, "precip.draw", {Slot::uniform, Slot::storage_read, Slot::depth}, vf);
+  sf.light_group = make_group(device, "precip.light", sf.light_layout, {ground, h0, h1});
+  sf.draw_layout = make_layout(
+      device, "precip.draw",
+      {Slot::uniform, Slot::storage_read, Slot::depth, Slot::depth_array, Slot::compare}, vf);
+  {
+    wgpu::TextureDescriptor none{};
+    none.label = "precip.no_shelter";
+    none.size = {1, 1, 1};
+    none.format = kDepthFormat;
+    none.usage = wgpu::TextureUsage::TextureBinding;
+    sf.none = device.device.CreateTexture(&none);
+    wgpu::TextureViewDescriptor view{};
+    view.dimension = wgpu::TextureViewDimension::e2DArray;
+    view.arrayLayerCount = 1;
+    sf.shelter_maps = sf.none.CreateView(&view);
+    wgpu::SamplerDescriptor cmp{};
+    cmp.magFilter = cmp.minFilter = wgpu::FilterMode::Linear;
+    cmp.addressModeU = cmp.addressModeV = wgpu::AddressMode::ClampToEdge;
+    cmp.compare = wgpu::CompareFunction::LessEqual;
+    sf.shelter_compare = device.device.CreateSampler(&cmp);
+  }
 
   const wgpu::ShaderModule draw = gpu::create_shader(device, wgsl::precip, "precip");
   wgpu::BlendState over{};
@@ -105,9 +154,39 @@ void create_precip(gpu::Device& device, gpu::PipelineSet& pipelines, Precip& sf,
   sf.p_draw = pipelines.add_render(device, desc);
 }
 
+}  // namespace
+
+void create_precip(gpu::Device& device, gpu::PipelineSet& pipelines, Precip& sf,
+                   const wgpu::BindGroupLayout& frame, const Terrain& terrain,
+                   const PrecipSettings& settings) {
+  create_common(device, pipelines, sf, frame, terrain.params, terrain.horizon.views[0],
+                terrain.horizon.views[1], settings);
+}
+
+void create_precip(gpu::Device& device, gpu::PipelineSet& pipelines, Precip& sf,
+                   const wgpu::BindGroupLayout& frame, const PrecipSettings& settings) {
+  const NoGround g = no_ground(device);
+  create_common(device, pipelines, sf, frame, g.params, g.h0, g.h1, settings);
+}
+
 void bind_precip_targets(gpu::Device& device, Precip& sf, const FrameTargets& targets) {
-  sf.draw_group = make_group(device, "precip.draw", sf.draw_layout,
-                             {sf.params, sf.particles, targets.depth_view});
+  sf.depth = targets.depth_view;
+  make_draw_group(device, sf);
+}
+
+void bind_precip_shelter(gpu::Device& device, Precip& sf, const PrecipShelter* shelter) {
+  const bool same = shelter && sf.sheltered && shelter->maps.Get() == sf.shelter_maps.Get();
+  sf.sheltered = shelter != nullptr;
+  if (shelter) {
+    sf.shelter = *shelter;
+    sf.shelter_maps = shelter->maps;
+  } else {
+    wgpu::TextureViewDescriptor view{};
+    view.dimension = wgpu::TextureViewDimension::e2DArray;
+    view.arrayLayerCount = 1;
+    sf.shelter_maps = sf.none.CreateView(&view);
+  }
+  if (!same) make_draw_group(device, sf);
 }
 
 uint32_t particles_drawn(const PrecipSettings& settings, double fall) {
@@ -145,6 +224,21 @@ void prepare_precip(gpu::Device& device, Precip& sf, const PrecipFrame& at) {
   p.splash[0] = sf.settings.splash_reach;
   p.splash[1] = sf.settings.splash_life;
   p.splash[2] = sf.settings.splash_size;
+  if (sf.sheltered) {
+    const PrecipShelter& h = sf.shelter;
+    for (int k = 0; k < 3; ++k) {
+      p.shelter_o[k] = static_cast<float>(h.o[k]);
+      p.shelter_x[k] = static_cast<float>(h.x[k]);
+      p.shelter_y[k] = static_cast<float>(h.y[k]);
+      p.shelter_z[k] = static_cast<float>(h.z[k]);
+    }
+    p.shelter_o[3] = static_cast<float>(h.half);
+    p.shelter_x[3] = static_cast<float>(h.spread);
+    p.shelter_info[0] = 1;
+    p.shelter_info[1] = static_cast<float>(h.depth);
+    p.shelter_info[2] = static_cast<float>(h.layer);
+    p.shelter_info[3] = static_cast<float>(2 * h.half / std::max<uint32_t>(h.size, 1));
+  }
   device.queue.WriteBuffer(sf.params, 0, &p, sizeof p);
 }
 

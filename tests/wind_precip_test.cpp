@@ -2,7 +2,8 @@
 // the tiers name a drizzle, a downpour, a cloudburst and a blizzard; the phase is snow above the
 // freezing level and rain under its band; a drop's pace saturates near 9.6 m/s and a flake's is
 // about 1; one sees less through snow than through rain at the same rate; the wet ground fills,
-// drains and dries toward its steady state; and every number keeps its bits in
+// drains and dries toward its steady state; snow covers and melts; lightning strikes only in heavy
+// falls, as often as said; and every number keeps its bits in
 // tests/golden/wind_precip.txt.
 //
 // A deliberate change moves the golden: rewrite it with
@@ -12,6 +13,7 @@
 // ge:summary Test: snow, sleet and rain: rate, tiers, phase, fall speed, visibility, wet; golden
 // ge:keywords test precip rain snow sleet tier rate phase drop visibility wet puddle golden
 // ge:skill water testing
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -140,6 +142,45 @@ TEST(the_wet_ground_fills_drains_and_dries_toward_its_steady_state) {
   CHECK(std::fabs(one.water - many.water) < 1e-9);
 }
 
+TEST(snow_covers_what_is_open_to_it_and_the_rain_and_the_sun_take_it) {
+  gw::Cover c;
+  // An hour of a moderate snow (0.7 of the dial, 1.9 mm/h of water) lays near two centimetres.
+  for (int k = 0; k < 60; ++k) c = gw::step_cover(c, snow(0.7), 0, 60);
+  CHECK(c.depth > 15 && c.depth < 25);
+  CHECK(c.cover > 0.9 && c.cover < 1);
+  // Rain takes it faster than the sun does.
+  gw::Cover rained = c, sunned = c;
+  for (int k = 0; k < 30; ++k) {
+    rained = gw::step_cover(rained, rain(0.5), 0, 60);
+    sunned = gw::step_cover(sunned, {}, 1, 60);
+  }
+  CHECK(rained.depth < sunned.depth && sunned.depth < c.depth);
+  CHECK(gw::step_cover({}, rain(0.9), 0, 3600).depth == 0);
+}
+
+TEST(lightning_strikes_only_in_heavy_falls_and_about_as_often_as_said) {
+  CHECK(gw::strokes_per_minute(rain(0.3), 2) == 0);
+  CHECK(gw::strokes_per_minute(rain(0.6), 2) > 0.9);
+  CHECK(gw::strokes_per_minute(rain(1), 20) > 5);
+  CHECK(gw::strokes_per_minute(snow(0.95), 20) < gw::strokes_per_minute(rain(0.95), 20));
+  int strokes = 0;
+  bool lit = false;
+  double brightest = 0;
+  for (int k = 0; k < 3600 * 50; ++k) {
+    const double f = gw::flash_at(k * 0.02, rain(1), 20);
+    brightest = std::max(brightest, f);
+    if (f > 0.3 && !lit) ++strokes;
+    lit = f > 0.3;
+    CHECK(gw::flash_at(k * 0.02, rain(0.3), 20) == 0);
+  }
+  // Six a minute, each counted once for its main stroke and some for a bright return: an hour of
+  // them is 360 strokes give or take what the draw gives.
+  CHECK(strokes > 250 && strokes < 900);
+  CHECK(brightest > 0.8 && brightest <= 1.5);
+  // A pure function of the clock.
+  CHECK(gw::flash_at(123.4, rain(1), 20) == gw::flash_at(123.4, rain(1), 20));
+}
+
 TEST(every_number_keeps_its_golden) {
   const bool write = env_set("GE_GOLDEN_WRITE");
   const auto want = ge::test::golden_rows(kGolden);
@@ -161,10 +202,25 @@ TEST(every_number_keeps_its_golden) {
     w = gw::step_wet(w, rate, gw::dry_rate(4, 0.5), 900);
     got.push_back({ge::test::bits(w.water), ge::test::bits(w.wet), ge::test::bits(w.puddles)});
   }
+  gw::Cover c;
+  for (const double i : {0.8, 0.8, 0.0, 0.5}) {
+    c = gw::step_cover(c, {i, i == 0.5 ? 1.0 : 0.0}, 0.3, 1800);
+    got.push_back({ge::test::bits(c.depth), ge::test::bits(c.cover)});
+  }
+  // The first four lit moments of a storm (a hundredth of a second apart, a second between).
+  int lit = 0;
+  for (int k = 0; k < 100000 && lit < 4; ++k) {
+    const double f = gw::flash_at(k * 0.01, {1, 1}, 20, 7);
+    if (f <= 0.2) continue;
+    got.push_back({ge::test::bits(k * 0.01), ge::test::bits(f)});
+    ++lit;
+    k += 100;
+  }
   if (write) {
     std::ofstream out(ge::test::root_path(kGolden));
-    out << "# rate, fall speed, visibility, tier per fall; rain share per height; the wet ground "
-           "per step (wind_precip_test)\n";
+    out << "# rate, fall speed, visibility, tier per fall; rain share per height; the wet ground, "
+           "the snow's cover per step; a storm's flash per time "
+           "(wind_precip_test)\n";
     for (const auto& row : got) {
       std::string line;
       for (const uint64_t word : row) {
