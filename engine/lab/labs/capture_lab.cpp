@@ -678,8 +678,9 @@ void platform(gl::Lab& lab, int64_t steps, const fs::path& dir, bool ffmpeg, int
     o.height = 720;
     std::string error;
     if (!enc.open(codec, o, error)) {
-      lab.fail("the platform's " + codec + " encoder did not open: " + error,
-               "Run tests/capture_platform_video_test.cpp on this machine (skill: replay).");
+      std::string why = "the platform's " + codec + " encoder did not open: ";
+      why += error;
+      lab.fail(why, "Run tests/capture_platform_video_test.cpp on this machine (skill: replay).");
       continue;
     }
     std::vector<gc::Packet> packets;

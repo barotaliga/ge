@@ -154,8 +154,8 @@ TEST(nv12_and_i420_round_trip_through_padded_strides) {
   std::vector<uint8_t> y(kYStride * kH, 0xEE), uv(kUvStride * (kH / 2), 0xEE);
   gc::i420_to_nv12(i420, kW, kH, y.data(), kYStride, uv.data(), kUvStride);
   // The chroma interleaved U then V, and the padding left alone.
-  const uint8_t* u = i420.data() + kW * kH;
-  const uint8_t* v = u + (kW / 2) * (kH / 2);
+  const uint8_t* u = i420.data() + static_cast<ptrdiff_t>(kW) * kH;
+  const uint8_t* v = u + static_cast<ptrdiff_t>(kW / 2) * (kH / 2);
   CHECK(uv[0] == u[0] && uv[1] == v[0] && uv[2] == u[1] && uv[3] == v[1]);
   CHECK(y[kW] == 0xEE && uv[kW] == 0xEE);
   std::vector<uint8_t> back;
