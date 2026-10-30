@@ -159,13 +159,18 @@ spread over a frame.
 **`render/wgsl/flash.wgsl`** turns a lamp into light (`frame.wgsl` includes it, so every pass can
 call it):
 
-- `flash_light(p, σ)` is the light at a point inside a medium: L / (4π r²) / (1 + 0.15 τ). The
-  channel's extent softens the near field (r² plus a quarter of the reach squared). Light that
-  scatters many times through a cloud of optical depth τ leaves it as a diffusion does, falling as
-  one over the depth rather than exponentially. Inside the cloud τ = σ·r, capped at the reach and
-  at the lamp's own depth out. The clouds' march adds it, times the scattering orders over 4π, to
-  each step's light. That is how a flash deep in a tower lights all of it, and how its base glows
-  as a sheet.
+- `flash_light(p, σ)` is the light at a point inside a medium: L / (4π r²) / (1 + 0.15 τ) ·
+  exp(−r / 1200 m). The channel's extent softens the near field (r² plus a quarter of the reach
+  squared). Light that scatters many times through a cloud of optical depth τ leaves it as a
+  diffusion does, falling as one over the depth rather than exponentially. Inside the cloud
+  τ = σ·r, capped at the reach and at the lamp's own depth out. A cloud a few kilometres deep
+  loses the light through its top, base and sides as it spreads, so it also falls off across the
+  cloud over about the cloud's depth over π (`flash_spread`, measured from the channel's half
+  reach). The clouds' march adds it, times one order of scattering over 4π, to each step's light.
+  Night photographs of strikes set both: the channel is the brightest thing in the frame, and the
+  cloud glows only in a band a kilometre or two across where the channel leaves its base, with
+  the rest of the deck dark. An in-cloud flash lights a patch of the tower round itself (sheet
+  lightning), not the whole sky.
 - `flash_on(p, n)` is the light on a face. For a strike it comes from the lamp's direction. For
   a flash in the cloud it comes as much from the base overhead as from the lamp. The ground's
   materials (the snow, the default terrain) and the instances (the trees) add it to the sky's

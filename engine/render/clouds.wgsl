@@ -49,6 +49,9 @@ const kDetailScale = 10.0;
 const kReduced = 0.15;
 // The orders of scattering past the first, summed, over the one lobe that stands for them.
 const kOrders = 3.0;
+// The orders of scattering a flash's light takes inside the cloud before it leaves toward the eye: fewer
+// than the sun's, which lights a whole face, since a flash's light leaks out of every side.
+const kFlashOrders = 1.0;
 // The 22 degree halo's peak in an ice layer, per steradian (the forward lobe is about 0.4 there).
 const kHalo = 0.5;
 // THE GLOW ROUND THE DISC: half of what a particle much larger than the light's wavelength takes
@@ -341,7 +344,7 @@ fn march(i: i32, d: vec3f, t0: f32, t1: f32, j: f32) -> LayerLook {
                   ground * ((1.0 - h) * 0.3 / (2.0 * PI));
     // THE LIGHTNING's light inside the cloud, scattered on and on (render/wgsl/flash.wgsl): what
     // makes a flash deep in the tower light it whole, and the deck's base a sheet.
-    let lit = flash_light(p, sigma) * (kOrders / (4.0 * PI));
+    let lit = flash_light(p, sigma) * (kFlashOrders / (4.0 * PI));
     let step_t = exp(-sigma * dt);
     let gain = out.through * (1.0 - step_t);
     out.light += (direct + ambient + lit) * gain;
