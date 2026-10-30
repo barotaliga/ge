@@ -173,6 +173,11 @@ struct FrameStats {
   double prepare_ms = 0;  // from begin_frame to the first pass's open: the frame's decisions
   uint32_t draws() const;
   uint32_t dispatches() const;
+  // The frame's time on the GPU: from its first pass's start to the end of the last pass that
+  // drew or dispatched; NaN when nothing was timed. Never the sum of the passes' times: on a
+  // tiled GPU one pass's vertex work runs under the last one's fragments, so the sum counts the
+  // overlap twice. An empty pass is left out, as its timestamps may not be written.
+  double gpu_span_ms() const;
 };
 
 // THE RECORDER a frame's passes are opened through: each pass gets its timestamp pair (when
