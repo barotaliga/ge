@@ -622,6 +622,6 @@ bool unzone_string(Vm& vm, int32_t value) {
   return true;
 }
 
-void clear_zone_strings(Vm& vm) { std::fill(vm.zone_used.begin(), vm.zone_used.end(), 0); }
+void clear_zone_strings(Vm& vm) { std::fill(vm.zone_used.begin(), vm.zone_used.end(), uint8_t{0}); }
 
 }  // namespace ge::progs
