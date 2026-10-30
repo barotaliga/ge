@@ -46,6 +46,7 @@ edges. `docs/shooters-edge.md` is the design;
 | `shooter/cmd_source.hpp` | The bots' seam: a slot's command source, read-only on the server |
 | `games/shooters_edge/server/` | The server's host (slots, bots' packets, the frame), the input log and its replay, the stand-in bot, the `shooters_edge_server` binary (`bin/main.cpp`) |
 | `games/shooters_edge/client/` | The `shooters_edge` window (M18h's first slice): the search path over a game folder's packs, the listen server (the baseline mod, the player as slot 0, map changes), the keys and raw mouse as commands, the HUD's status and the camera's subject, the eyes and markers, the world's frame; `tests/shooters_edge_listen_test.cpp` (a rocket jump, golden) and the `se-client` lab |
+| `games/shooters_edge/client/demo*.hpp`, `timedemo.hpp`, `labs/gpu_se_timedemo_lab.cpp` | Recorded games read frame by frame (the single-player demo, protocol 15, and the multiplayer client's recording, protocol 28, told apart by their first bytes; `demo_single.cpp`, `demo_client.cpp`), written in code for tests (`demo_write.hpp`), and the demo BENCHMARK (`benchmark <demo>`, `-benchmark <demo>`: one demo frame a drawn frame, vsync off; average, max, min, 1% and 0.1% low); `tests/shooters_edge_demo_test.cpp` and the `se-timedemo` lab |
 | `games/shooters_edge/labs/se_server_lab.cpp` | The `se-server` lab: a full server of stand-ins, its players and counts, the log replayed, the trails |
 
 ## Rules
