@@ -1,2 +1,2 @@
-# reached-bits for stars 0..5, stars, end, searching, seen, state digest (fall_line_wanted_test, the ridge hunt)
-0000000000000000 0000000000000000 0000000000000000 404e4eeeeeeeeeef 405f7f7777777777 4069300000000000 5 running 4 4 97437359c60a96f1
+# reached-bits for stars 0..5, stars, end, searching, seen, state digest, its parts (fall_line_wanted_test, the ridge hunt)
+0000000000000000 0000000000000000 0000000000000000 404e4eeeeeeeeeef 405f7f7777777777 4069300000000000 5 running 4 4 97437359c60a96f1 skiers:c1c92b0e,sleds:4fd0bfc1,heli:4fd0bfc1,para:4fd0bfc1,crowd:4fd0bfc1,wanted:c9ea7656,army:eadecc8a,gunfire:4fd0bfc1

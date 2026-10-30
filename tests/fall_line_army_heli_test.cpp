@@ -315,14 +315,15 @@ TEST(a_scripted_hunt_on_seed_38_keeps_its_golden) {
     if (st.steps % static_cast<int64_t>(30 * fs::kHz) == 0) {
       int32_t men = 0;
       for (const fs::Soldier& s : st.army.soldiers) men += s.from == fs::SoldierFrom::heli ? 1 : 0;
-      got.push_back(hex(fs::state_hash(st, 0xcbf29ce484222325ull)) + " " +
-                    std::to_string(st.army.helis.size()) + " " + std::to_string(men) + " " +
+      got.push_back(hex(fs::state_hash(st, 0xcbf29ce484222325ull)) + " " + fs::state_parts(st) +
+                    " " + std::to_string(st.army.helis.size()) + " " + std::to_string(men) + " " +
                     std::to_string(landed));
     }
   }
   if (env_set("GE_GOLDEN_WRITE")) {
     std::ofstream out(ge::test::root_path(kGolden));
-    out << "# each half minute: state digest, helicopters out, men they put down on the map, "
+    out << "# each half minute: state digest, its parts, helicopters out, men they put down on the "
+           "map, "
            "landings so far (fall_line_army_heli_test, the seed 38 hunt at three stars for 150 s, "
            "then called off for 150 s)\n";
     for (const std::string& row : got) out << row << "\n";

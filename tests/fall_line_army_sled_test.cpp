@@ -106,6 +106,7 @@ fs::Spot open_spot(const fs::GameState& st) {
 // machines did, minute by half minute.
 struct Half {
   uint64_t hash = 0;
+  std::string parts;
   int32_t out = 0;
   int32_t halted = 0;
   int32_t empty = 0;
@@ -187,6 +188,7 @@ Hunt hunt(bool lethal, double hunted, double after) {
     if (st.steps % static_cast<int64_t>(30 * fs::kHz) == 0) {
       Half x;
       x.hash = fs::state_hash(st, 0xcbf29ce484222325ull);
+      x.parts = fs::state_parts(st);
       for (const fs::ArmySled& m : st.army.sleds) {
         x.out += m.mode != fs::ArmySledMode::due ? 1 : 0;
         x.halted += m.mode == fs::ArmySledMode::halt ? 1 : 0;
@@ -316,12 +318,12 @@ TEST(a_scripted_hunt_on_seed_38_keeps_its_golden) {
   std::vector<std::string> got;
   got.reserve(h.halves.size());
   for (const Half& x : h.halves) {
-    got.push_back(hex(x.hash) + " " + std::to_string(x.out) + " " + std::to_string(x.halted) + " " +
-                  std::to_string(x.empty));
+    got.push_back(hex(x.hash) + " " + x.parts + " " + std::to_string(x.out) + " " +
+                  std::to_string(x.halted) + " " + std::to_string(x.empty));
   }
   if (env_set("GE_GOLDEN_WRITE")) {
     std::ofstream out(ge::test::root_path(kGolden));
-    out << "# each half minute: state digest, machines out, halted, empty "
+    out << "# each half minute: state digest, its parts, machines out, halted, empty "
            "(fall_line_army_sled_test, "
            "the seed 38 hunt at three stars for 150 s, then called off for 150 s)\n";
     for (const std::string& row : got) out << row << "\n";

@@ -1,11 +1,11 @@
-# each half minute: state digest, machines out, halted, empty (fall_line_army_sled_test, the seed 38 hunt at three stars for 150 s, then called off for 150 s)
-3527dd4de3964818 1 1 0
-6df84d8b5d930219 1 1 0
-8c676cd515f43991 3 1 0
-1570c8d010c187f9 3 1 0
-cff1bfaddae6d57b 3 0 0
-72fdcf3a7b600255 0 0 0
-c0b40f54bc5e2c9b 0 0 0
-4c6c0d9f8e38ca89 0 0 0
-073c31bcfa664481 0 0 0
-35ac5c36aaf2a05c 0 0 0
+# each half minute: state digest, its parts, machines out, halted, empty (fall_line_army_sled_test, the seed 38 hunt at three stars for 150 s, then called off for 150 s)
+3527dd4de3964818 skiers:7798285a,sleds:608afc26,heli:f57f78d3,para:4fd0bfc1,crowd:4fd0bfc1,wanted:ba701f1b,army:d6eb68a8,gunfire:4fd0bfc1 1 1 0
+6df84d8b5d930219 skiers:edf04301,sleds:a1ff6fa1,heli:2ff850b4,para:4fd0bfc1,crowd:4fd0bfc1,wanted:141b8c8f,army:75fe7998,gunfire:4fd0bfc1 1 1 0
+8c676cd515f43991 skiers:bb962993,sleds:45125737,heli:8ac6f1e0,para:4fd0bfc1,crowd:4fd0bfc1,wanted:85496ac7,army:623373e2,gunfire:4fd0bfc1 3 1 0
+1570c8d010c187f9 skiers:e5c4b9a1,sleds:50c28576,heli:b7950a0f,para:4fd0bfc1,crowd:4fd0bfc1,wanted:37c37969,army:7ab2ff9a,gunfire:4fd0bfc1 3 1 0
+cff1bfaddae6d57b skiers:2441b6ee,sleds:271e2e0a,heli:2109fddb,para:4fd0bfc1,crowd:4fd0bfc1,wanted:2e57da09,army:c1b381af,gunfire:4fd0bfc1 3 0 0
+72fdcf3a7b600255 skiers:9754c8ce,sleds:c0c1c4d9,heli:11a2ac8f,para:4fd0bfc1,crowd:4fd0bfc1,wanted:0762ae99,army:10b55c2a,gunfire:4fd0bfc1 0 0 0
+c0b40f54bc5e2c9b skiers:a73ddb10,sleds:52866628,heli:ab9b2b27,para:4fd0bfc1,crowd:4fd0bfc1,wanted:0762ae99,army:1d337194,gunfire:4fd0bfc1 0 0 0
+4c6c0d9f8e38ca89 skiers:3b1f4251,sleds:dc70e80b,heli:5e0679cf,para:4fd0bfc1,crowd:4fd0bfc1,wanted:0762ae99,army:1d337194,gunfire:4fd0bfc1 0 0 0
+073c31bcfa664481 skiers:cd9fcc9e,sleds:22beef36,heli:cc74789c,para:4fd0bfc1,crowd:4fd0bfc1,wanted:0762ae99,army:1d337194,gunfire:4fd0bfc1 0 0 0
+35ac5c36aaf2a05c skiers:6489bf28,sleds:df03f96f,heli:8f0ed5c9,para:4fd0bfc1,crowd:4fd0bfc1,wanted:0762ae99,army:1d337194,gunfire:4fd0bfc1 0 0 0

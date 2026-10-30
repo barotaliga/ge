@@ -63,6 +63,16 @@ bool write_model(const vfs::PakEntry& e, std::span<const uint8_t> pack, const Pa
   for (const morph::Skin& s : m.skins) {
     const Enhanced en = enhance_texture(e.path, s.indices, s.width, s.height, palette, t);
     skins.push_back({png_of(en.albedo), en.glows ? png_of(en.emissive) : std::vector<uint8_t>{}});
+    // The skin beside the model too, for a game that draws the pack's own model with it.
+    const std::string k = std::to_string(skins.size() - 1);
+    const fs::path skin = dir / "models" / name / ("skin" + k + ".png");
+    if (!write_whole(skin, skins.back().png) ||
+        (!skins.back().glow_png.empty() &&
+         !write_whole(dir / "models" / name / ("glow" + k + ".png"), skins.back().glow_png))) {
+      *error = "cannot write " + skin.string();
+      return false;
+    }
+    stats->files += skins.back().glow_png.empty() ? 1 : 2;
   }
   morph::GlbOptions g;
   g.unit_m = float(brush::kUnitM);

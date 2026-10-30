@@ -1,11 +1,11 @@
-# each half minute: state digest, helicopters out, men they put down on the map, landings so far (fall_line_army_heli_test, the seed 38 hunt at three stars for 150 s, then called off for 150 s)
-c325e3f04db56830 1 0 0
-bffc9f4e470d8a43 1 8 1
-75122748e9cf0160 1 8 1
-bb3bde786d7c9ef3 1 8 1
-a17b432ee891a339 1 8 1
-9eda297ee316d7e5 0 8 1
-d051f75b5fe81917 0 8 1
-acc9f0e71d6d8c7f 0 8 1
-5d6c4a89d6b3f16e 0 8 1
-7397ee5619db92bc 0 8 1
+# each half minute: state digest, its parts, helicopters out, men they put down on the map, landings so far (fall_line_army_heli_test, the seed 38 hunt at three stars for 150 s, then called off for 150 s)
+c325e3f04db56830 skiers:af720e0a,sleds:608afc26,heli:f57f78d3,para:4fd0bfc1,crowd:4fd0bfc1,wanted:4d611c5a,army:c4e088fd,gunfire:4fd0bfc1 1 0 0
+bffc9f4e470d8a43 skiers:92dbbe91,sleds:a1ff6fa1,heli:2ff850b4,para:4fd0bfc1,crowd:4fd0bfc1,wanted:bf4d8f6d,army:d5856da3,gunfire:4fd0bfc1 1 8 1
+75122748e9cf0160 skiers:c96ef4ce,sleds:45125737,heli:8ac6f1e0,para:4fd0bfc1,crowd:4fd0bfc1,wanted:6f079a51,army:61afdfbc,gunfire:4fd0bfc1 1 8 1
+bb3bde786d7c9ef3 skiers:b68504d6,sleds:50c28576,heli:b7950a0f,para:4fd0bfc1,crowd:4fd0bfc1,wanted:6ca16c4d,army:49650e54,gunfire:4fd0bfc1 1 8 1
+a17b432ee891a339 skiers:af0ca68f,sleds:271e2e0a,heli:2109fddb,para:4fd0bfc1,crowd:4fd0bfc1,wanted:3edfd05a,army:38f1404f,gunfire:4fd0bfc1 1 8 1
+9eda297ee316d7e5 skiers:18953879,sleds:c0c1c4d9,heli:11a2ac8f,para:4fd0bfc1,crowd:4fd0bfc1,wanted:1e8fa9cf,army:9696e429,gunfire:4fd0bfc1 0 8 1
+d051f75b5fe81917 skiers:81a6ee00,sleds:52866628,heli:ab9b2b27,para:4fd0bfc1,crowd:4fd0bfc1,wanted:1e8fa9cf,army:b1c9dc85,gunfire:4fd0bfc1 0 8 1
+acc9f0e71d6d8c7f skiers:26383303,sleds:dc70e80b,heli:5e0679cf,para:4fd0bfc1,crowd:4fd0bfc1,wanted:1e8fa9cf,army:b1c9dc85,gunfire:4fd0bfc1 0 8 1
+5d6c4a89d6b3f16e skiers:1921cc25,sleds:22beef36,heli:cc74789c,para:4fd0bfc1,crowd:4fd0bfc1,wanted:1e8fa9cf,army:b1c9dc85,gunfire:4fd0bfc1 0 8 1
+7397ee5619db92bc skiers:4471a21a,sleds:df03f96f,heli:8f0ed5c9,para:4fd0bfc1,crowd:4fd0bfc1,wanted:1e8fa9cf,army:b1c9dc85,gunfire:4fd0bfc1 0 8 1

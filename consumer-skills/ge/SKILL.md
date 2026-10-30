@@ -39,7 +39,7 @@ ge digest --diff                 # every lab, printing only the digests off the 
 ge queue                         # the merge queue in merge order, each merged onto main and the queue ahead; dirty PRs; failed queue runs
 ge pr clash <n>                  # will it merge onto main and everything queued ahead of it? the files, and who brings them in
 ge merge-main                    # main merged in: retired files take main's deletion, clashing lab digests rerun; the rest named
-ge golden diff [<test>] [--base=<ref>]   # what moved in each golden file, column by column
+ge golden diff [<test>] [--base=<ref>]   # what moved in each golden file, column by column (a parts word part by part)
 ge golden write <test>           # a test's goldens rewritten (GE_GOLDEN_WRITE=1), held, diffed
 ge sim [--seeds=1,2]             # the game's pilot plays each seed; input logs in runs/
 ge sim --human                   # ... and how human each run looks, warned where a person's band is left
