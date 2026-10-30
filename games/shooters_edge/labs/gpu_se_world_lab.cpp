@@ -55,7 +55,6 @@ namespace ls = ge::lab::liquid_scene;
 namespace fx = shooters_edge::effects;
 namespace lk = shooters_edge::look;
 using gl::Det;
-constexpr double kPi = 3.14159265358979323846;
 
 // The arena's light styles: our own patterns (draw_data.hpp's letters, 'm' the light as baked).
 constexpr int kFlicker = 1;
