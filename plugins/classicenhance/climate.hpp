@@ -17,7 +17,7 @@
 //
 // ge:summary The classic levels' air: a Climate and an hour for every level of the classic pack
 // ge:keywords climate temperature humidity level evening night wind low-cloud steam breath fog
-// ge:keywords level_air level_airs lava_warmth kMetresPerUnit
+// ge:keywords level_air level_airs lava_warmth metres-per-unit
 // ge:skill classicenhance water
 // ge:test tests/classicenhance_climate_test.cpp
 #pragma once
