@@ -524,7 +524,8 @@ fn scene_dist(uv: vec2f, z: f32) -> f32 {
 fn fs_main(in: VertexOut) -> @location(0) vec4f {
   // Seen through the fog in areas in front of it (the cloud lies beyond the volume's range).
   let z = textureLoad(scene_depth, vec2i(in.position.xy), 0);
-  return local_fog_over(cloud_at(in.uv, in.position.xy, z), in.uv, 1e30);
+  let c = valley_fog_over(cloud_at(in.uv, in.position.xy, z), in.uv, 1e30);
+  return local_fog_over(c, in.uv, 1e30);
 }
 
 // THE QUARTER PICTURE, its march: a pixel of the half-size target for each two by two of the
@@ -711,7 +712,9 @@ fn fs_upsample(in: VertexOut) -> @location(0) vec4f {
     weight += dw;
   }
   if (best > kDepthMiss) {
-    return local_fog_over(cloud_at(in.uv, in.position.xy, z), in.uv, 1e30);
+    let c = valley_fog_over(cloud_at(in.uv, in.position.xy, z), in.uv, 1e30);
+  return local_fog_over(c, in.uv, 1e30);
   }
-  return local_fog_over(kept(sum / max(weight, 1e-6)), in.uv, 1e30);
+  return local_fog_over(valley_fog_over(kept(sum / max(weight, 1e-6)), in.uv, 1e30), in.uv,
+                        1e30);
 }

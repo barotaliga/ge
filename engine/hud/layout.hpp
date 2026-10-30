@@ -46,6 +46,7 @@
 #include <cstdint>
 #include <deque>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -54,6 +55,7 @@
 #include "hud/feed.hpp"
 #include "hud/hud.hpp"
 #include "hud/pictures.hpp"
+#include "hud/instruments.hpp"
 
 namespace ge::hud {
 
@@ -69,6 +71,9 @@ enum class Kind : uint8_t {
   digits,   // a number drawn from a digit sheet, right-aligned in its cells
   strip,    // a row of picture cells: weapons, keys, powerups, counts, frag plates
   ring,     // a meter bent round a centre
+  dial,     // a needle gauge, its reading in digits in the face (instruments.hpp)
+  wind,     // the felt wind, heading-up, and the weather's mark on the rim
+  compass,  // a strip of headings, the current one centred
 };
 
 // An anchor's cvar word, and back (nullopt for a word that is none of the nine).
@@ -90,6 +95,9 @@ struct ElementSpec {
   float feed_size = 21;        // kind feed: the type, reference px
   float feed_w = 330;          // kind feed: the column's width at most, reference px
   float feed_share = 1;        // kind feed: and at most this share of the safe area's width
+  Dial dial = {};              // kind dial: its range, knee, red band, ticks, size, settling
+  WindGauge wind = {};         // kind wind: its size, the arrow's full length, gale and calm
+  Compass compass = {};        // kind compass: its size, span and tick step
   bool under_corners = false;
   std::string_view under = {};  // an element's id
   // PICTURE KINDS (picture, digits, strip): reference px per art pixel, so a 24 px icon at
@@ -139,6 +147,16 @@ struct Content {
   const Face* face = nullptr;
   float density = 1;  // the pictures' pixels per art pixel (pictures.hpp)
   ui::Color over{1, 1, 1, 1};
+  double t = 0;  // s, the frame's clock: the feed's, and the dial's needle eases by it
+  // The instruments' numbers (instruments.hpp): a dial's value (`value` is its figure), the
+  // heading (rad) a wind meter and a compass turn by, the felt and the weather's wind (world,
+  // m/s, the way the air blows to), and a compass's marks (must outlive the draw).
+  double number = 0;
+  double heading = 0;
+  double felt_x = 0, felt_z = 0;
+  bool weather = false;
+  double weather_x = 0, weather_z = 0;
+  std::span<const CompassMark> marks;
 };
 
 struct Element {
@@ -151,6 +169,8 @@ struct Element {
   // Where it was drawn last, for `under`, its children and the edit mode: its box, its scale
   // over the frame's reference size and its unit (screen px per picture pixel, or per reference
   // px for a printed kind).
+  Needle needle;   // kind dial: where its needle was drawn last
+  // Where it was drawn last, for `under` and the edit mode.
   ui::Rect drawn;
   float drawn_scale = 1, drawn_unit = 1;
   bool shown = false;

@@ -21,6 +21,7 @@
 #include "gpu/pipeline.hpp"
 #include "gpu/target.hpp"
 #include "gpu_support.hpp"
+#include "hud/instruments.hpp"
 #include "render/frame.hpp"
 #include "render/ui_pass.hpp"
 #include "ui/background.hpp"
@@ -316,6 +317,28 @@ TEST(a_menu_page_over_its_backdrop_matches_the_raster) {
   u::draw_background(list, bg, {0, 0, float{w}, float{h}}, 0, nullptr);
   view.draw(list, menu, layout, style);
   check_same(*rig, "ui_pass_menu", list, w, h);
+}
+
+TEST(the_hud_instruments_match_the_raster) {
+  auto rig = make_rig();
+  if (!rig) return;
+  constexpr int w = 640, h = 360;
+  namespace gh = ge::hud;
+  const gh::Style st;
+  const gh::Frame f = gh::frame_for(w, h, st);
+  u::DrawList list;
+  list.begin(w, h);
+  backdrop(list, w, h);
+  gh::Dial d;
+  d.max = 140, d.knee = 30, d.red = 110;
+  gh::draw(list, f, st, d, {87, "87", "KM/H", st.ink}, {20, 20, 150, 150});
+  gh::WindReading wr;
+  wr.heading = 0.6, wr.felt_x = -9, wr.felt_z = -12, wr.weather = true, wr.weather_x = 6;
+  wr.figure = "15", wr.unit = "M/S";
+  gh::draw(list, f, st, gh::WindGauge{}, wr, {220, 20, 120, 150});
+  const std::vector<gh::CompassMark> marks{{0.5, st.good}};
+  gh::draw(list, f, st, gh::Compass{}, {0.8, marks, st.ink}, {200, 250, 360, 44});
+  check_same(*rig, "ui_pass_hud_instruments", list, w, h);
 }
 
 TEST(a_list_drawn_again_uploads_nothing_and_counts_its_draws) {

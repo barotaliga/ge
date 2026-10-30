@@ -68,6 +68,8 @@ constexpr FlagSpec kLabFlags[] = {
     kEngine,
     kRepo};
 
+constexpr FlagSpec kToolFlags[] = {kPreset, kEngine, kRepo};
+
 constexpr FlagSpec kLabSweepFlags[] = {
     kPreset,
     {"set", "<name>=<a>,<b>,...",
@@ -105,6 +107,8 @@ constexpr FlagSpec kCiFlags[] = {
     {"wait", "[<minutes>]",
      "block until the checks finish, one fails or it conflicts (at most 60 minutes), then answer"},
     kRepo};
+constexpr FlagSpec kQueueFlags[] = {
+    {"base", "<ref>", "the branch the queue merges into (default origin/main)"}, kRepo};
 constexpr FlagSpec kDigestFlags[] = {
     {"write", "", "rewrite the lab's file under tests/digests/ (every lab's with no lab named)"},
     {"diff", "", "print only the labs whose digest is off the baseline; write nothing"},
@@ -494,6 +498,15 @@ const CommandSpec kCommands[] = {
      "a pull request's state: whether it conflicts with its base, and each failed job's log "
      "read back as findings (through gh, or a saved log); --merge squash-merges it once green",
      kCiFlags, "ge ci 12", "commit"},
+    {"queue", "", 0, 0, "build",
+     "the merge queue in the order it merges (queued, then armed), each merged onto main and "
+     "the queue ahead by git merge-tree; open pull requests that conflict with main; each "
+     "failed queue run's jobs",
+     kQueueFlags, "ge queue", "commit"},
+    {"pr clash", "<pr>", 1, 1, "build",
+     "a pull request merged onto main, then onto main and every pull request queued or armed "
+     "ahead of it: the files that conflict and the first one ahead that brings them in",
+     kQueueFlags, "ge pr clash 209", "commit"},
     {"digest", "[<lab>...]", 0, -1, "build",
      "the labs named (or every lab) at their smoke flags, twice: each digest beside the "
      "committed baseline; --write moves only those labs' rows; --diff prints only the labs "
@@ -511,6 +524,10 @@ const CommandSpec kCommands[] = {
      "list the labs, or run one: its metrics, tables, captioned pictures and digest; its own "
      "flags go after --",
      kLabFlags, "ge lab run --json -- --seeds=1,2", "labs"},
+    {"tool", "[<plugin>]", 0, 1, "see",
+     "list the plugins' own command-line tools, or build one and run it with the arguments "
+     "after --; its JSON answer is the result",
+     kToolFlags, "ge tool classicenhance -- verify shareware.zip", "ge"},
     {"lab sweep", "<id>", 1, 1, "see",
      "one constexpr constant of the code rewritten to each value, the labs rebuilt and the lab "
      "run at each, every metric side by side; the source is put back after",

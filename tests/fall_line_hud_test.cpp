@@ -124,7 +124,7 @@ TEST(a_players_cfg_moves_the_element_it_names_and_reset_brings_it_back) {
   fh::HudRun run;
   fh::HudLayout h = fh::hud_layout(st);
   ge::console::Console console;
-  ge::hud::add_hud_cvars(console, h.layout);
+  fh::add_hud_cvars(console, h);
   auto boxes = [&] {
     fh::fill_hud(h, st, s, run);
     const ge::hud::Frame f = h.layout.frame(1280, 720, st);
@@ -138,12 +138,12 @@ TEST(a_players_cfg_moves_the_element_it_names_and_reset_brings_it_back) {
     return ge::ui::Rect{-1, -1, 0, 0};
   };
   const auto game = boxes();
-  console.execute("seta hud_seed_x 0.2; seta hud_speed_anchor bottom_right; seta hud_news_show 0");
+  console.execute("seta hud_seed_x 0.2; seta hud_speedo_anchor bottom_right; seta hud_news_show 0");
   const auto mine = boxes();
   CHECK(at(mine, "seed").x > at(game, "seed").x);
   CHECK(at(mine, "seed").y == at(game, "seed").y);
   CHECK(at(mine, "run").x == at(game, "run").x && at(mine, "run").y == at(game, "run").y);
-  CHECK(at(mine, "speed").right() > 1000);
+  CHECK(at(mine, "speedo").right() > 1000);
   CHECK(at(mine, "news").w == 0);
   console.execute("hud_reset");
   const auto back = boxes();
@@ -152,4 +152,33 @@ TEST(a_players_cfg_moves_the_element_it_names_and_reset_brings_it_back) {
     CHECK(game[i].name == back[i].name);
     CHECK(game[i].rect.x == back[i].rect.x && game[i].rect.y == back[i].rect.y);
   }
+}
+
+TEST(the_speedometer_is_a_dial_until_the_player_asks_for_the_number) {
+  const ge::hud::Style st = fh::hud_style();
+  fh::HudSnapshot s;
+  s.speed_kmh = 88;
+  fh::HudRun run;
+  fh::HudLayout h = fh::hud_layout(st);
+  ge::console::Console console;
+  fh::add_hud_cvars(console, h);
+  auto shown = [&](const char* id) {
+    fh::fill_hud(h, st, s, run);
+    const ge::hud::Frame f = h.layout.frame(1280, 720, st);
+    ge::ui::DrawList dl;
+    dl.begin(1280, 720);
+    for (const auto& p : h.layout.draw(dl, f, st))
+      if (p.name == id) return true;
+    return false;
+  };
+  CHECK(shown("speedo") && !shown("speed"));
+  CHECK(shown("wind") && !shown("compass"));
+  console.execute("set hud_speedo_style number; set hud_compass_show 1; set hud_speedo_max 200");
+  CHECK(shown("speed") && !shown("speedo"));
+  CHECK(shown("compass"));
+  CHECK(h.layout[static_cast<size_t>(h.speedo)].spec.dial.max == 200);
+  // On a machine the figure is printed, captioned with the machine, whatever the style.
+  console.execute("set hud_speedo_style dial");
+  s.machine = fh::Machine::sled;
+  CHECK(shown("speed") && !shown("speedo"));
 }

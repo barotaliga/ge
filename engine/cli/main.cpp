@@ -41,6 +41,7 @@
 #include "cli/perf.hpp"
 #include "cli/play.hpp"
 #include "cli/publish.hpp"
+#include "cli/queue.hpp"
 #include "cli/save.hpp"
 #include "cli/scaffold.hpp"
 #include "cli/skills.hpp"
@@ -49,6 +50,7 @@
 #include "cli/source.hpp"
 #include "cli/sweep.hpp"
 #include "cli/texture.hpp"
+#include "cli/tool.hpp"
 #include "cli/upgrade.hpp"
 
 namespace {
@@ -280,6 +282,11 @@ Outcome run(const Args& a) {
     return run_ci(fs::absolute(repo_of(a)), a.words.empty() ? "" : a.words[0], flag_value(a, "log"),
                   has_flag(a, "merge"));
   }
+  if (name == "queue" || name == "pr clash") {
+    const std::string base = flag_value(a, "base", "origin/main");
+    if (name == "queue") return run_queue(fs::absolute(repo_of(a)), base);
+    return run_pr_clash(fs::absolute(repo_of(a)), a.words[0], base);
+  }
   if (name == "lint") {
     LintOptions l;
     l.files = a.words;
@@ -309,6 +316,9 @@ Outcome run(const Args& a) {
     lab.compare = flag_value(a, "compare");
     lab.passthrough = a.passthrough;
     return run_lab(build_options(a), lab);
+  }
+  if (name == "tool") {
+    return run_tool(build_options(a), a.words.empty() ? "" : a.words[0], a.passthrough);
   }
   if (name == "content scan") {
     LabOptions lab;

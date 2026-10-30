@@ -275,6 +275,29 @@ std::vector<Placed> Layout::draw(ui::DrawList& dl, const Frame& f, const Style& 
         hud::draw(dl, fe, e.spec.ring, r, box);
         break;
       }
+      case Kind::dial: {
+        const Dial& d = e.spec.dial;
+        const DialReading r{ease_needle(e.needle, c.number, c.t, d.settle), c.value, c.unit,
+                            c.color};
+        const Size z = measure(fe, d);
+        box = slot(z.w, z.h);
+        hud::draw(dl, fe, st, d, r, box);
+        break;
+      }
+      case Kind::wind: {
+        const WindReading r{c.heading,   c.felt_x, c.felt_z, c.weather, c.weather_x,
+                            c.weather_z, c.value,  c.unit,   c.color};
+        const Size z = measure(fe, st, e.spec.wind);
+        box = slot(z.w, z.h);
+        hud::draw(dl, fe, st, e.spec.wind, r, box);
+        break;
+      }
+      case Kind::compass: {
+        const Size z = measure(fe, e.spec.compass);
+        box = slot(z.w, z.h);
+        hud::draw(dl, fe, st, e.spec.compass, {c.heading, c.marks, c.color}, box);
+        break;
+      }
     }
     const float fade = static_cast<float>(e.place.alpha * alpha);
     if (fade != 1) dl.fade(mark, fade);
