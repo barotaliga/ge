@@ -6,6 +6,10 @@
 // The numbers: each texture's quarter-size copy upscaled 4× back by nearest, Catmull-Rom and the
 // enhancer, as PSNR against the full-size picture.
 //
+// `--weights=<file>` adds the trained network (upscaler.hpp) beside the kernel: a NETWORK column
+// on every sheet, its PSNR in the table and its time; the weights are the classicenhance tool's
+// fetched copy, or any file of that network.
+//
 // By default it runs on the lab's own painted fixtures (fixtures.hpp), so its pictures and digest
 // are the same everywhere and may be published. `--source=<path>` runs it on the classic pack
 // found there (source.hpp: any pack that reads); those pictures are derived from the
@@ -28,6 +32,7 @@
 #include "classicenhance/planes.hpp"
 #include "classicenhance/source.hpp"
 #include "classicenhance/texture.hpp"
+#include "classicenhance/upscaler.hpp"
 #include "core/libm/libm.hpp"
 #include "lab/lab.hpp"
 
@@ -181,22 +186,48 @@ void run(ge::lab::Lab& lab) {
 
   ce::EnhanceOptions opts;
   opts.scale = scale;
+  ce::Upscaler upscaler;
+  const std::string weights = lab.arg("weights");
+  if (!weights.empty()) {
+    std::string error;
+    if (!ce::open_upscaler(weights, upscaler, nullptr, error)) {
+      lab.fail(error,
+               "next: give --weights the upscaler's weights file (the classicenhance "
+               "tool fetches it into the cache's weights/ folder).");
+      return;
+    }
+  }
+  ce::EnhanceOptions net = opts;
+  net.network = weights.empty() ? nullptr : &upscaler;
   ge::lab::LabTable table{"each texture's quarter-size copy upscaled 4x back: PSNR, dB",
                           {"texture", "size", "material", "nearest", "catmull-rom", "enhanced"},
                           {}};
-  double sum_cubic = 0, sum_ours = 0;
+  if (net.network) table.columns.push_back("network");
+  double sum_cubic = 0, sum_ours = 0, sum_net = 0;
   int scored = 0;
-  double seconds = 0;
+  double seconds = 0, net_seconds = 0;
+  size_t texels = 0;
   std::vector<Picture> tiled;
   for (const Tex& t : textures) {
     const auto t0 = std::chrono::steady_clock::now();
     const ce::Enhanced e = ce::enhance_texture(t.name, t.indexed, t.w, t.h, palette, opts);
     seconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+    texels += size_t(t.w) * size_t(t.h);
+    ce::Enhanced n;
+    if (net.network) {
+      const auto t1 = std::chrono::steady_clock::now();
+      n = ce::enhance_texture(t.name, t.indexed, t.w, t.h, palette, net);
+      net_seconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - t1).count();
+    }
 
     std::vector<std::pair<std::string, Picture>> cols = {{"SOURCE", nearest(t, palette, scale)},
                                                          {"CATMULL-ROM", cubic(t, palette, scale)},
                                                          {"ENHANCED", pic(e.albedo)},
                                                          {"LIT", lit(e)}};
+    if (net.network) {
+      cols.push_back({"NETWORK", pic(n.albedo)});
+      cols.push_back({"NETWORK LIT", lit(n)});
+    }
     if (e.normal.width > 0) {
       cols.push_back({"NORMAL", pic(e.normal)});
       cols.push_back({"HEIGHT", pic(e.height)});
@@ -243,6 +274,14 @@ void run(ge::lab::Lab& lab) {
           pic(ce::enhance_texture(q.name, q.indexed, q.w, q.h, palette, four).albedo), t, palette);
       table.rows.push_back({t.name, std::to_string(t.w) + "x" + std::to_string(t.h),
                             ce::material_name(e.material), f2(pn), f2(pc), f2(pe)});
+      if (net.network && net.network->scale == 4) {
+        ce::EnhanceOptions nf = net;
+        nf.scale = 4;
+        const double pq = psnr(
+            pic(ce::enhance_texture(q.name, q.indexed, q.w, q.h, palette, nf).albedo), t, palette);
+        table.rows.back().push_back(f2(pq));
+        sum_net += pq;
+      }
       sum_cubic += pc;
       sum_ours += pe;
       scored++;
@@ -251,6 +290,12 @@ void run(ge::lab::Lab& lab) {
   if (scored > 0) {
     lab.metric("psnr-catmull-rom", sum_cubic / scored, "dB");
     lab.metric("psnr-enhanced", sum_ours / scored, "dB");
+    if (net.network) lab.metric("psnr-network", sum_net / scored, "dB");
+  }
+  if (net.network) {
+    lab.metric("network-seconds", net_seconds, "s", ge::lab::Det::measured);
+    lab.metric("network-seconds-per-kilotexel", net_seconds / std::max(1.0, double(texels) / 1000),
+               "s", ge::lab::Det::measured);
   }
   lab.metric("textures", double(textures.size()), "count");
   lab.metric("enhance-seconds", seconds, "s", ge::lab::Det::measured);
@@ -288,6 +333,7 @@ const ge::lab::LabSpec kSpec{
         {"source", "", "the classic pack (zip, folder or pack); empty: the lab's fixtures"},
         {"limit", "8", "with --source, how many textures (in the pack's order)"},
         {"names", "", "with --source, texture names, comma-separated, in place of --limit"},
+        {"weights", "", "the trained upscaler's weights file: adds its column; empty: kernel only"},
     },
     "--scale=2",
     run,
