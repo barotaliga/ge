@@ -14,6 +14,8 @@
 #include "fall_line/sim/lift_ride.hpp"
 #include "fall_line/sim/sled_ride.hpp"
 #include "fall_line/sim/wanted.hpp"
+#include "mountain/air/air.hpp"
+#include "wind/field.hpp"
 
 namespace fall_line::hud {
 
@@ -22,6 +24,8 @@ namespace {
 namespace mg = ge::mountain::mapgen;
 
 constexpr double kKmh = 3.6;
+// Where the wind meter asks for the air he feels: his body's middle over the snow, m.
+constexpr double kBodyHeight = 1.2;
 
 const mg::Run* run_at(const sim::GameState& state, int32_t index) {
   if (index < 0 || !state.level) return nullptr;
@@ -95,6 +99,17 @@ HudSnapshot snapshot(const sim::GameState& state, const HudRun& run) {
   s.speed_kmh = sk.speed * kKmh;
   s.edge = state.spec.edge_max > 0 ? ge::core::clamp(sk.edge / state.spec.edge_max, -1, 1) : 0;
   s.tuck = sk.tuck;
+  s.heading = sk.heading;
+  if (state.level) {
+    const ge::mountain::mapgen::Level& l = *state.level;
+    const ge::mountain::air::Wind open = ge::mountain::air::wind_at(l, state.t);
+    s.weather_x = open.x, s.weather_z = open.z;
+    const ge::wind::Air here =
+        ge::wind::wind_at(ge::mountain::air::field_of(l), {sk.x, sk.y, sk.z, kBodyHeight}, state.t);
+    s.felt_x = here.x - sk.vx, s.felt_z = here.z - sk.vz;
+  } else {
+    s.felt_x = -sk.vx, s.felt_z = -sk.vz;
+  }
   s.altitude_m = sk.y;
   s.skied_m = me.free.distance;
   s.best_air_s = run.best_air;

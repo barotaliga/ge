@@ -28,6 +28,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "core/libm/libm.hpp"
@@ -41,6 +42,7 @@
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
+#include "mountain/app/building_look.hpp"
 #include "mountain/app/village_look.hpp"
 #include "mountain/village/traffic.hpp"
 
@@ -102,6 +104,18 @@ constexpr Look kLooks[] = {
     {"town", "A HOUSE ON THE BACK STREET", "From 35 m before the first house and 12 m over it.",
      "chalets of stone and timber under deep eaves, flats among them, in a village's mix of "
      "renders; the trees felled round them, the forest behind"},
+    {"evening", "THE SQUARE AT HALF PAST SIX", "The square from the same place at 18:30.",
+     "the shops' display windows and the homes' windows lit warm against the blue snow; a few "
+     "still dark; no window lit by day's light alone",
+     18.5},
+    {"night", "THE VILLAGE AT TEN", "From 140 m over the village's middle at 22:00.",
+     "the homes and the hotels mostly lit, the shops dark, the garage lit for the groomers; the "
+     "lit windows reading as points of warm light in the dark",
+     22},
+    {"late", "THE VILLAGE AT TWO", "From 140 m over the village's middle at 02:00.",
+     "the village nearly dark: a home or two, the hotels' night porters, first aid's lamp, the "
+     "garage and the pump house working",
+     2},
 };
 
 // The first building of `kind` in the village, or null.
@@ -135,14 +149,15 @@ bool aim(const fs::GameState& st, const char* id, double t, r::FrameView& v, dou
   const ge::mountain::mapgen::Level& level = *st.level;
   // Down the valley is z of the plan's sign.
   const double valley = s.valley > 0 ? 0 : 3.14159265358979323846;
-  if (std::strcmp(id, "above") == 0) {
+  if (std::strcmp(id, "above") == 0 || std::strcmp(id, "night") == 0 ||
+      std::strcmp(id, "late") == 0) {
     look_at(level, s.centre_x, level.ground_at(s.centre_x, s.centre_z), s.centre_z, valley, 90, 140,
             v, where);
     return true;
   }
   for (const vg::VillageArea& a : s.areas) {
     const bool square = a.kind == vg::AreaKind::square;
-    if ((std::strcmp(id, "square") == 0 && square) ||
+    if (((std::strcmp(id, "square") == 0 || std::strcmp(id, "evening") == 0) && square) ||
         ((std::strcmp(id, "carpark") == 0 || std::strcmp(id, "low-sun") == 0) && !square)) {
       const double back = square ? 30 : 25, up = square ? 18 : 15;
       look_at(level, a.x, a.y, a.z, a.heading + 3.14159265358979323846, back, up, v, where);
@@ -212,6 +227,12 @@ void run(ge::lab::Lab& lab) {
   }
   const fs::Village& vil = *st.village;
   lab.metric("buildings", static_cast<double>(vil.buildings.size()), "count");
+  // The windows lit at ten and at two, the sun far down.
+  for (const auto& [name, hour] : {std::pair{"lit-at-22", 22.0}, std::pair{"lit-at-2", 2.0}}) {
+    double lit = 0;
+    for (const vg::Building& b : vil.buildings) lit += ge::mountain::app::lights_on(b, hour, -0.5);
+    lab.metric(name, lit, "buildings");
+  }
   lab.metric("felled", vil.felled_count, "trees");
   lab.metric("vehicles", vil.traffic ? static_cast<double>(vil.traffic->vehicles.size()) : 0,
              "count");
@@ -246,7 +267,7 @@ void run(ge::lab::Lab& lab) {
   }
   // The skier stood 5 m to the side of what each look is at, so the figures' atlas (where the
   // traffic casts) has a tile there.
-  auto film = [&](r::FrameView v, const double where[3]) {
+  auto film = [&](r::FrameView v, const double where[3], double hour) {
     ge::skier::SkierState skier = st.racers[0].skier;
     skier.x = where[0] + 5;
     skier.z = where[2];
@@ -254,13 +275,11 @@ void run(ge::lab::Lab& lab) {
     fall_line::app::cut(*frame);
     for (int k = 0; k < frames; ++k) {
       const double t = at + (k - frames + 1) / 60.0;
-      fall_line::app::FrameScene scene{std::span<const ge::skier::SkierState>(&skier, 1),
-                                       k == 0 ? 0.0 : 1.0 / 60,
-                                       k == 0,
-                                       {},
-                                       {},
-                                       nullptr,
-                                       t};
+      fall_line::app::FrameScene scene{.skiers = std::span<const ge::skier::SkierState>(&skier, 1),
+                                       .dt = k == 0 ? 0.0 : 1.0 / 60,
+                                       .settle = k == 0,
+                                       .run_time = t,
+                                       .hour = hour};
       v.frame = static_cast<uint64_t>(k);
       v.time_s = t;
       fall_line::app::draw(*device, *frame, v, scene, target.view);
@@ -270,9 +289,11 @@ void run(ge::lab::Lab& lab) {
   std::vector<r::FrameView> views;
   std::vector<std::array<double, 3>> wheres;
   std::vector<bool> shown;
+  std::vector<double> hours;
   for (const Look& l : kLooks) {
     r::FrameView v;
-    fall_line::app::day_view(*level, l.hour > -2 ? l.hour : lab.arg_num("hour"), v);
+    hours.push_back(l.hour > -2 ? l.hour : lab.arg_num("hour"));
+    fall_line::app::day_view(*level, hours.back(), v);
     std::array<double, 3> where{};
     shown.push_back(aim(st, l.id, at, v, where.data()));
     views.push_back(v);
@@ -280,7 +301,7 @@ void run(ge::lab::Lab& lab) {
   }
   std::vector<ge::gpu::Image> before(std::size(kLooks));
   for (size_t i = 0; i < std::size(kLooks); ++i) {
-    if (shown[i]) before[i] = film(views[i], wheres[i].data());
+    if (shown[i]) before[i] = film(views[i], wheres[i].data(), hours[i]);
   }
   fall_line::app::show_village(*device, *frame, st.village);
   for (size_t i = 0; i < std::size(kLooks); ++i) {
@@ -290,7 +311,7 @@ void run(ge::lab::Lab& lab) {
       blank(l, "NOTHING TO SHOW");
       continue;
     }
-    const ge::gpu::Image after = film(views[i], wheres[i].data());
+    const ge::gpu::Image after = film(views[i], wheres[i].data(), hours[i]);
     const std::vector<uint8_t>& was = before[i].rgba;
     size_t covered = 0;
     for (size_t p = 0; p + 3 < after.rgba.size() && p + 3 < was.size(); p += 4) {

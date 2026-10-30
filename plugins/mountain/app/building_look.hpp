@@ -25,9 +25,17 @@
 // renders and the timbers a mountain village is built in, the garage's steel, the church's
 // white); a building's set is dealt off its id among its kind's (`building_material`).
 //
+// THE LIGHTS: every look comes twice, its windows dark and then lit (`kLitSets` on: the glass a
+// warm lamp-lit room, `kWindowNits`). Once the sun is `kLightsOnElevation` under the horizon a
+// building's windows are lit while the share of its kind at home or at work at that hour
+// (`lights_share`: the houses in the evening, the lodge's restaurant to closing, the shops to
+// shutting, the garage while the groomers are out) is over its own draw (`lights_on`), so the
+// village goes dark one window set at a time, never flickering.
+//
 // ge:summary The village's buildings as drawn: a mesh a kind, the plinth, the looks
 // ge:keywords village buildings building-mesh building-meshes plinth gable roof snow-roof eaves
-// ge:keywords chalet lodge hotel church spire garage building-materials building-instances
+// ge:keywords chalet lodge hotel church spire garage building-surfaces building-instances
+// ge:keywords lit-windows lights-on lights-share night window-glow
 // ge:skill mountain render
 // ge:test tests/mountain_building_look_test.cpp
 #pragma once
@@ -39,6 +47,7 @@
 #include "mountain/village/buildings.hpp"
 #include "render/instances.hpp"
 #include "render/mesh.hpp"
+#include "render/surface.hpp"
 
 namespace ge::mountain::app {
 
@@ -53,8 +62,14 @@ enum BuildingPart : uint8_t {
   kSteel,   // the garage's cladding, an awning
 };
 inline constexpr int kBuildingParts = 7;
-// The looks a village's buildings come in (one material set each).
+// The looks a village's buildings come in (one material set each, then each again lit).
 inline constexpr int kBuildingLooks = 7;
+// Added to a set to light its windows.
+inline constexpr uint32_t kLitSets = kBuildingLooks * kBuildingParts;
+// A lit window's own light, cd/m^2: a lamp-lit room seen through its glass.
+inline constexpr float kWindowNits = 5.0f;
+// The windows are lit once the sun is this far under the horizon, rad (-2 degrees).
+inline constexpr double kLightsOnElevation = -0.035;
 // The family's meshes: a kind each in `BuildingKind` order, then the plinth.
 inline constexpr uint32_t kPlinthMesh = village::kBuildingKinds;
 // A building's far LOD below this many px of its bounding sphere's radius.
@@ -67,11 +82,16 @@ inline constexpr double kPlinthSink = 0.4;
 render::MeshData building_mesh(village::BuildingKind kind, int lod);
 // Every kind's mesh in `BuildingKind` order with its two LODs, then the plinth's.
 std::vector<render::MeshSource> building_meshes();
-// Every look's set: kBuildingParts colours a set, linear rgb.
-std::vector<float> building_materials();
-// The set building `b` wears.
+// Every look's set, dark, then every one lit: kBuildingParts surfaces a set.
+std::vector<render::Surface> building_surfaces();
+// The set building `b` wears by day.
 uint32_t building_material(const village::Building& b);
-// Building `b` as two instances: itself, then its plinth.
-void building_instances(const village::Building& b, std::vector<render::Instance>& out);
+// The share of `kind`'s buildings lit at solar `hour` (0..24) once it is dark.
+double lights_share(village::BuildingKind kind, double hour);
+// Whether building `b`'s windows are lit at solar `hour` with the sun `sun_elevation` (rad) up.
+bool lights_on(const village::Building& b, double hour, double sun_elevation);
+// Building `b` as two instances: itself (its windows lit or dark), then its plinth.
+void building_instances(const village::Building& b, std::vector<render::Instance>& out,
+                        bool lit = false);
 
 }  // namespace ge::mountain::app

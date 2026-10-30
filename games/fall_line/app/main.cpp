@@ -619,8 +619,8 @@ int main(int argc, char** argv) {
     wgpu::TextureView target = surface.acquire(*device);
     if (!target) continue;
     view.time_s = static_cast<double>(now - first) * 1e-9;
-    if (set.sky_rate > 0)
-      fall_line::app::sky_view(level, fall_line::sim::sky_hour(set, level, view.time_s), view);
+    const double hour = fall_line::sim::sky_hour(set, level, view.time_s);
+    if (set.sky_rate > 0) fall_line::app::sky_view(level, hour, view);
     view.frame = static_cast<uint64_t>(presented);
     skiers.clear();
     for (const auto& racer : shown.racers) skiers.push_back(racer.skier);
@@ -648,10 +648,15 @@ int main(int argc, char** argv) {
     con_view.frame(wall);
     ge::ui::draw_console(overlay, con_view, {}, nullptr, view.time_s);
     // The figures' lags run over the steps this frame took; a new run starts them settled.
-    fall_line::app::draw(
-        *device, *frame, view,
-        {skiers, static_cast<double>(granted) / 120.0, fresh, {}, subject, &overlay, shown.t},
-        target);
+    fall_line::app::draw(*device, *frame, view,
+                         {.skiers = skiers,
+                          .dt = static_cast<double>(granted) / 120.0,
+                          .settle = fresh,
+                          .subject = subject,
+                          .overlay = &overlay,
+                          .run_time = shown.t,
+                          .hour = hour},
+                         target);
     fresh = false;
     if (capture.is_open()) {
       // The frame copied once it is drawn and stamped as it is shown; the copies that have
