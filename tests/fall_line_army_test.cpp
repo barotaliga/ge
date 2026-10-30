@@ -338,6 +338,7 @@ namespace {
 // each minute. Shared by the tests below (built once).
 struct Minute {
   uint64_t hash;
+  std::string parts;
   int out;
   int riding;
   int holding;
@@ -374,10 +375,10 @@ const Seed38Hunt& seed38_hunt() {
       h.sent += men(events, fs::ArmyChange::squad);
       h.waves += men(events, fs::ArmyChange::wave);
       h.off += men(events, fs::ArmyChange::off);
-      h.minutes.push_back(Minute{fs::state_hash(state, 1469598103934665603ull),
-                                 static_cast<int>(state.army.soldiers.size()),
-                                 count(state, fs::SoldierMode::ride),
-                                 count(state, fs::SoldierMode::hold)});
+      h.minutes.push_back(
+          Minute{fs::state_hash(state, 1469598103934665603ull), fs::state_parts(state),
+                 static_cast<int>(state.army.soldiers.size()), count(state, fs::SoldierMode::ride),
+                 count(state, fs::SoldierMode::hold)});
     }
     for (const fs::Pursuer& ps : state.wanted.pursuers) h.written += ps.id >= ar::kPursuerBase;
     return h;
@@ -417,14 +418,15 @@ TEST(a_scripted_hunt_on_seed_38_keeps_its_golden) {
   std::vector<std::string> got;
   got.reserve(h.minutes.size() + 1);
   for (const Minute& x : h.minutes) {
-    got.push_back(hex(x.hash) + " " + std::to_string(x.out) + " " + std::to_string(x.riding) + " " +
-                  std::to_string(x.holding));
+    got.push_back(hex(x.hash) + " " + x.parts + " " + std::to_string(x.out) + " " +
+                  std::to_string(x.riding) + " " + std::to_string(x.holding));
   }
   got.push_back(std::to_string(h.lift) + " " + std::to_string(h.sent) + " " +
                 std::to_string(h.waves) + " " + std::to_string(h.off));
   if (env_set("GE_GOLDEN_WRITE")) {
     std::ofstream out(ge::test::root_path(kGolden));
-    out << "# each minute: state digest, men out, riding, holding; then the lift taken, the lifted "
+    out << "# each minute: state digest, its parts, men out, riding, holding; then the lift taken, "
+           "the lifted "
            "men sent, the waves' men, the men let off (fall_line_army_test, the seed 38 hunt)\n";
     for (const std::string& row : got) out << row << "\n";
     return;

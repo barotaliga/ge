@@ -5,6 +5,7 @@
 //
 // ge:summary Test: ge golden's column diff, its text and JSON, and the goldens a test names
 // ge:keywords test cli golden diff columns moved header double-bits goldens_named_in
+// ge:keywords parts-word
 // ge:skill testing agent-interface
 #include <string>
 
@@ -93,6 +94,40 @@ TEST(a_row_inserted_mid_table_is_one_row_added_not_every_row_after_it) {
   const GoldenDiff shrunk = diff_golden("g.txt", grown_after, before);
   CHECK(shrunk.by_key && shrunk.rows.size() == 2);
   CHECK(shrunk.rows[1].key == "dive" && shrunk.rows[1].change == "gone");
+}
+
+TEST(a_parts_word_names_each_part_a_moved_digest_moved_in) {
+  const std::string before =
+      "# digest parts stars\n"
+      "aa11 skiers:00000001,army:00000002,wanted:00000003 2\n"
+      "bb22 skiers:00000004,army:00000005,wanted:00000006 3\n";
+  const std::string after =
+      "# digest parts stars\n"
+      "aa12 skiers:00000001,army:0000000f,wanted:00000003 2\n"
+      "bb23 skiers:00000004,army:0000000e,wanted:0000000d 3\n";
+  const GoldenDiff d = diff_golden("g.txt", before, after);
+  CHECK(d.moved.size() == 3);
+  CHECK(d.moved[0] == std::make_pair(std::string("digest"), 2));
+  CHECK(d.moved[1] == std::make_pair(std::string("parts.army"), 2));
+  CHECK(d.moved[2] == std::make_pair(std::string("parts.wanted"), 1));
+  CHECK(d.rows[1].cells.size() == 3 && d.rows[1].cells[2].before == "00000006");
+  const std::string text = format_golden_diff(d, 8);
+  CHECK_MSG(has(text, "  parts.army moved in 2 rows\n") &&
+                has(text, "parts.army 00000005 -> 0000000e; parts.wanted 00000006 -> 0000000d"),
+            text);
+  // Under a prose header the digest before a parts word is named for what it is.
+  const GoldenDiff prose =
+      diff_golden("g.txt", "# each minute: digest, parts, stars\n1 c325e3f04db56830 a:1,b:2 3\n",
+                  "# each minute: digest, parts, stars\n1 c325e3f04db56831 a:1,b:3 3\n");
+  CHECK(prose.moved.size() == 2 && prose.moved[0].first == "digest" &&
+        prose.moved[1].first == "parts.b");
+  CHECK_MSG(has(format_golden_diff(prose, 8), "digest c325e3f04db56830 -> c325e3f04db56831;"),
+            format_golden_diff(prose, 8));
+  // Words that only look like parts (one part, or the names changed) are whole words.
+  const GoldenDiff one = diff_golden("g.txt", "a x:1\n", "a x:2\n");
+  CHECK(one.moved.size() == 1 && one.moved[0].first == "column 2");
+  const GoldenDiff renamed = diff_golden("g.txt", "a x:1,y:2\n", "a x:1,z:2\n");
+  CHECK(renamed.moved.size() == 1 && renamed.moved[0].first == "column 2");
 }
 
 TEST(a_tests_goldens_are_the_files_its_source_names) {

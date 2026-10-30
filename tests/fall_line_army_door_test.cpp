@@ -211,8 +211,9 @@ TEST(the_door_gunners_at_each_rule_of_fire_on_seed_38_keep_their_golden) {
       count_doors(st, doors);
       if (st.steps % static_cast<int64_t>(15 * fs::kHz) == 0) {
         got.push_back(std::to_string(stars) + " " + hex(fs::state_hash(st, 0xcbf29ce484222325ull)) +
-                      " " + std::to_string(doors.rounds) + " " + std::to_string(st.gunfire.hits) +
-                      " " + std::to_string(sk::severity_of(st.racers[0].body)) + " " +
+                      " " + fs::state_parts(st) + " " + std::to_string(doors.rounds) + " " +
+                      std::to_string(st.gunfire.hits) + " " +
+                      std::to_string(sk::severity_of(st.racers[0].body)) + " " +
                       fs::wanted_end_name(st.wanted.ended));
       }
     }
@@ -221,7 +222,8 @@ TEST(the_door_gunners_at_each_rule_of_fire_on_seed_38_keep_their_golden) {
   }
   if (env_set("GE_GOLDEN_WRITE")) {
     std::ofstream out(ge::test::root_path(kGolden));
-    out << "# each 15 s: stars, state digest, door rounds, rounds into him, his injury severity "
+    out << "# each 15 s: stars, state digest, its parts, door rounds, rounds into him, his injury "
+           "severity "
            "score, the hunt (fall_line_army_door_test, seed 38 at one, two and three stars)\n";
     for (const std::string& row : got) out << row << "\n";
     return;

@@ -2,7 +2,7 @@
 //
 // ge:summary create_game, step and state_hash's bodies
 // ge:keywords game create_game step state_hash log channel course skier field log_step wanted
-// ge:keywords army
+// ge:keywords army state_parts golden-parts
 // ge:skill sim
 // ge:test tests/fall_line_sim_test.cpp
 #include "fall_line/sim/game.hpp"
@@ -437,15 +437,20 @@ void step(GameState& state, std::span<const Controls> controls) {
   state.t = static_cast<double>(state.steps) * kDt;
 }
 
-uint64_t state_hash(const GameState& state, uint64_t h) {
-  const auto mix = [&h](double v) {
-    uint64_t u;
-    std::memcpy(&u, &v, sizeof u);
-    for (int b = 0; b < 64; b += 8) {
-      h ^= (u >> b) & 0xffu;
-      h *= 0x100000001b3ull;
-    }
-  };
+namespace {
+
+// One double's bits folded into `h`, FNV-1a 64 a byte at a time.
+void mix_into(uint64_t& h, double v) {
+  uint64_t u;
+  std::memcpy(&u, &v, sizeof u);
+  for (int b = 0; b < 64; b += 8) {
+    h ^= (u >> b) & 0xffu;
+    h *= 0x100000001b3ull;
+  }
+}
+
+uint64_t skiers_hash(const GameState& state, uint64_t h) {
+  const auto mix = [&h](double v) { mix_into(h, v); };
   mix(state.t);
   for (const Racer& r : state.racers) {
     h = sk::skier_hash(r.skier, h);
@@ -475,6 +480,11 @@ uint64_t state_hash(const GameState& state, uint64_t h) {
     mix(f.lift.since);
     mix(f.lift.ridden);
   }
+  return h;
+}
+
+uint64_t sleds_hash(const GameState& state, uint64_t h) {
+  const auto mix = [&h](double v) { mix_into(h, v); };
   for (const FreeSled* m : {&state.sled, &state.stolen}) {
     if (!m->present) continue;
     h = ge::snowmobile::sled_hash(m->body, h);
@@ -486,21 +496,69 @@ uint64_t state_hash(const GameState& state, uint64_t h) {
     mix(m->still);
     mix(m->asleep ? 1 : 0);
   }
-  if (state.heli.present) {
-    const FreeHeli& m = state.heli;
-    h = ge::helicopter::heli_hash(m.body, h);
-    mix(static_cast<double>(m.mode));
-    mix(m.rider ? 1 : 0);
-    mix(m.aboard ? 1 : 0);
-    mix(m.t);
-    mix(m.taken);
+  return h;
+}
+
+uint64_t heli_part_hash(const GameState& state, uint64_t h) {
+  if (!state.heli.present) return h;
+  const FreeHeli& m = state.heli;
+  h = ge::helicopter::heli_hash(m.body, h);
+  mix_into(h, static_cast<double>(m.mode));
+  mix_into(h, m.rider ? 1 : 0);
+  mix_into(h, m.aboard ? 1 : 0);
+  mix_into(h, m.t);
+  mix_into(h, m.taken);
+  return h;
+}
+
+uint64_t para_part_hash(const GameState& state, uint64_t h) {
+  if (!state.para.present) return h;
+  h = ge::paramotor::para_hash(state.para.body, h);
+  mix_into(h, state.para.starts);
+  return h;
+}
+
+uint64_t crowd_part_hash(const GameState& state, uint64_t h) {
+  return state.crowd.active ? crowd_hash(state.crowd, h) : h;
+}
+
+uint64_t wanted_part_hash(const GameState& state, uint64_t h) {
+  return wanted_hash(state.wanted, h);
+}
+uint64_t army_part_hash(const GameState& state, uint64_t h) { return army_hash(state.army, h); }
+uint64_t gunfire_part_hash(const GameState& state, uint64_t h) {
+  return gunfire_hash(state.gunfire, h);
+}
+
+// The parts in the order state_hash folds them.
+struct Part {
+  const char* name;
+  uint64_t (*hash)(const GameState&, uint64_t);
+};
+constexpr Part kParts[] = {{"skiers", skiers_hash},    {"sleds", sleds_hash},
+                           {"heli", heli_part_hash},   {"para", para_part_hash},
+                           {"crowd", crowd_part_hash}, {"wanted", wanted_part_hash},
+                           {"army", army_part_hash},   {"gunfire", gunfire_part_hash}};
+
+}  // namespace
+
+uint64_t state_hash(const GameState& state, uint64_t h) {
+  for (const Part& p : kParts) h = p.hash(state, h);
+  return h;
+}
+
+std::string state_parts(const GameState& state) {
+  static constexpr char kHex[] = "0123456789abcdef";
+  std::string out;
+  for (const Part& p : kParts) {
+    const uint64_t h = p.hash(state, 0xcbf29ce484222325ull);
+    const auto folded = static_cast<uint32_t>(h ^ (h >> 32));
+    if (!out.empty()) out += ',';
+    out += p.name;
+    out += ':';
+    for (int b = 28; b >= 0; b -= 4) out += kHex[(folded >> b) & 0xfu];
   }
-  if (state.para.present) {
-    h = ge::paramotor::para_hash(state.para.body, h);
-    mix(state.para.starts);
-  }
-  if (state.crowd.active) h = crowd_hash(state.crowd, h);
-  return gunfire_hash(state.gunfire, army_hash(state.army, wanted_hash(state.wanted, h)));
+  return out;
 }
 
 }  // namespace fall_line::sim
