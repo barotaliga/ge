@@ -54,8 +54,8 @@
 #include "console/console.hpp"
 #include "hud/feed.hpp"
 #include "hud/hud.hpp"
-#include "hud/pictures.hpp"
 #include "hud/instruments.hpp"
+#include "hud/pictures.hpp"
 
 namespace ge::hud {
 
@@ -136,7 +136,6 @@ struct Content {
   bool blink_off = false;
   ui::Color color{1, 1, 1, 1};
   const Feed* feed = nullptr;
-  double t = 0;  // s, the feed's clock
   // The picture kinds' art, which a game may swap (its own pictures or a player's): the picture,
   // the digit sheet (`alt`: its alternate figures), the strip's cells and its counts' face (the
   // style's value face when null), the ring's second-lap colour.
@@ -166,11 +165,10 @@ struct Element {
   ElementPlace place;
   Content content;
   int under = -1;  // the index of `spec.under`, or -1
+  Needle needle;   // kind dial: where its needle was drawn last
   // Where it was drawn last, for `under`, its children and the edit mode: its box, its scale
   // over the frame's reference size and its unit (screen px per picture pixel, or per reference
   // px for a printed kind).
-  Needle needle;   // kind dial: where its needle was drawn last
-  // Where it was drawn last, for `under` and the edit mode.
   ui::Rect drawn;
   float drawn_scale = 1, drawn_unit = 1;
   bool shown = false;
