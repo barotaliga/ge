@@ -55,17 +55,17 @@ enum class Weapon : uint8_t {
 inline constexpr int kWeapons = 8;
 
 struct WeaponLook {
-  Weapon weapon;
   std::string_view name;  // the model's file stem under content/models/view
   double length_m;        // held length along the barrel (the melee weapon: its height)
-  bool upright;           // held upright by its handle (a melee weapon), not barrel forward
   double offset_m[3];     // the grip from the eye: right, up, forward
   double kick;            // a shot's size for the placement's kick
   double refire_s;        // between shots while attack is held
-  float flash_rgb[3];     // the shot's light: colour (linear), 0 0 0 for none
+  double flash_s;         // how long the shot's light lasts, fading (0: none)
+  float flash_rgb[3];     // the shot's light: colour (linear)
   float flash_intensity;  // at 1 m, held unit
   float flash_range_m;
-  double flash_s;  // how long it lasts, fading
+  Weapon weapon;
+  bool upright;  // held upright by its handle (a melee weapon), not barrel forward
 };
 
 std::span<const WeaponLook> weapon_looks();

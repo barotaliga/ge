@@ -81,7 +81,7 @@ Picture sheet(const std::vector<Picture>& panels, const std::vector<std::string>
 double mean_level(const Picture& p) {
   double sum = 0;
   for (size_t i = 0; i < p.rgba.size(); i += 4) sum += p.rgba[i] + p.rgba[i + 1] + p.rgba[i + 2];
-  return sum / (3.0 * static_cast<double>(p.rgba.size() / 4));
+  return sum / (0.75 * static_cast<double>(p.rgba.size()));
 }
 
 // A view point on the screen (0..1 across, 0..1 down) through the lens `fov_y` (0: the view's).
