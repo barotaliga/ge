@@ -3,7 +3,7 @@
 // tile holds its whole cone; the deal gives the brightest lamps on the eye their tiles (a point
 // light six, a spot one) while they last, keeps a held lamp's run where it was, gives the slot to
 // the light's row, and redraws a tile only when it is new, its lamp moved, or a mover enters its
-// view.
+// view, and deals no more tiles than a game gives it slots for.
 //
 // ge:summary Tests for the lamps' shadows: the tiles' views, the deal, the cache and the movers
 // ge:keywords test render lamp-shadows lamp_tile_view deal_lamp_tiles cube-faces cache movers
@@ -199,4 +199,22 @@ TEST(the_deal_ranks_keeps_and_redraws_only_what_is_due) {
   r::reset_lamp_shadows(s);
   deal(s, b, list);
   CHECK(s.drawn == s.used);
+}
+TEST(a_game_short_of_slots_deals_fewer_tiles) {
+  r::LampShadows s;
+  s.settings.tiles = 8;
+  r::LightBins b;
+  r::reserve_bins(b);
+  // Two point lights (six tiles each) and three spots: one point light and two spots fit in 8.
+  std::vector<r::LocalLight> list;
+  list.push_back(lamp(-2, 6, 1, 400, false));
+  list.push_back(lamp(2, 6, 2, 300, false));
+  list.push_back(lamp(0, 5, 3, 200, true));
+  list.push_back(lamp(1, 5, 4, 100, true));
+  list.push_back(lamp(-1, 5, 5, 50, true));
+  deal(s, b, list);
+  CHECK(s.used <= 8);
+  CHECK(s.lamps == 3);
+  CHECK(s.unshadowed == 2);
+  for (uint32_t k = 8; k < r::kMaxLampTiles; ++k) CHECK(s.tiles[k].key == 0);
 }

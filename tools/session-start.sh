@@ -8,7 +8,8 @@
 # tools/setup-ubuntu.sh (the one list of Linux packages, CI's too; a no-op in well under a second
 # when nothing is missing), switching the Ubuntu archive to its HTTPS mirrors first because the
 # cloud session's proxy passes HTTPS alone, then runs `make build` into build/debug, reusing it,
-# so a second session or a resumed one rebuilds only what changed. One worker at a time (a lock); a hook fired while
+# so a second session or a resumed one rebuilds only what changed; a new container's first build
+# takes its objects from the shared compiler cache (tools/ccache-share.sh), which it then saves. One worker at a time (a lock); a hook fired while
 # one runs does nothing.
 #
 # Where to look: build/session-start.log (the whole output) and build/session-start.status
@@ -46,6 +47,7 @@ worker() {
     make build
   } >>"$LOG" 2>&1 && rc=0 || rc=$?
   if ((rc == 0)); then
+    tools/ccache-share.sh save >>"$LOG" 2>&1 || true
     echo "ok $(stamp)" >"$STATUS"
     echo "== ok $(stamp)" >>"$LOG"
   else

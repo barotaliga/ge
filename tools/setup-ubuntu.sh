@@ -25,7 +25,8 @@
 #
 # What it brings, and why:
 #   - the toolchain: GCC 13+ (the debug preset's ASan/UBSan), Clang 17+ (CI's other compiler),
-#     CMake 3.25+, Ninja, ccache (CI compiles through it), make, pkg-config, git, curl;
+#     CMake 3.25+, Ninja, ccache and LLD (every build compiles and links
+#     through them: cmake/CompilerCache.cmake, cmake/Linker.cmake), make, pkg-config, git, curl;
 #   - the gates: clang-format 18 and clang-tidy 18 (CI's major: another clang-format formats some
 #     lines differently and fails fmt-check), Node.js 18+ (tools/*.mjs, no npm packages) and
 #     Python 3.10+ (tools/release.py, standard library only); gh, the GitHub CLI;
@@ -71,6 +72,7 @@ TOOLS=(
   "clang-format 18 clang-format clang-format-18 exact"
   "clang-tidy 18 clang-tidy clang-tidy-18 exact"
   "ccache 4.0 ccache ccache"
+  "ld.lld 14 lld lld-18"
   "pkg-config 0.29 pkg-config pkg-config"
   "git 2.25 git git"
   "curl 7.68 curl curl"
@@ -259,7 +261,7 @@ if ((${#want[@]})); then
   if ((legacy)); then
     # The unversioned names CMake, the Makefile and tools/lint.sh call, at the highest priority.
     for pair in gcc:gcc-13 g++:g++-13 clang:clang-18 clang++:clang++-18 \
-      clang-format:clang-format-18 clang-tidy:clang-tidy-18; do
+      clang-format:clang-format-18 clang-tidy:clang-tidy-18 ld.lld:ld.lld-18; do
       [[ -x "/usr/bin/${pair#*:}" ]] || continue
       "${SUDO[@]}" update-alternatives --install "/usr/bin/${pair%%:*}" "${pair%%:*}" \
         "/usr/bin/${pair#*:}" 1000 >/dev/null

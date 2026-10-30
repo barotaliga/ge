@@ -7,7 +7,10 @@ SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.
 .PHONY: build test fmt fmt-check lint agents-check index find lessons labs lab sim play labs-smoke \
 	labs-digests libm-check release-check shaders-check precheck ge clean
 
+# A new cloud container first takes the shared compiler cache (tools/ccache-share.sh; a no-op
+# elsewhere and once the local cache has entries).
 build:
+	@tools/ccache-share.sh restore
 	cmake --preset $(PRESET)
 	cmake --build --preset $(PRESET)
 
@@ -15,6 +18,7 @@ build:
 # the tests it names and builds only their targets (each test is its own executable).
 T ?=
 test:
+	@tools/ccache-share.sh restore
 	cmake --preset $(PRESET)
 	@if [ -n "$(T)" ]; then \
 	  targets=$$(ctest --preset $(PRESET) -N -R "$(T)" | sed -n 's/^ *Test *#[0-9]*: *//p' | sed 's/^labs_smoke.*/labs/' | sort -u); \

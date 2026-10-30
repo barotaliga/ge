@@ -73,6 +73,16 @@ target_include_directories(shooters_edge_view PUBLIC ${PROJECT_SOURCE_DIR}/games
 target_link_libraries(shooters_edge_view PUBLIC ge_viewmodel ge_console ge_assets)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_view)
 
+# Its main menu (menu/): the classic pages wired to the console's cvars and commands, the rows the
+# game cannot do yet dimmed, drawn in the engine's menu view or in the classic pack's own pictures,
+# with classic-enhance's menu under OPTIONS. No GPU: the `se-menu` lab and the tests draw it on the
+# CPU (skill: ui). Headers are spelled "shooters_edge/menu/<file>.hpp".
+file(GLOB SHOOTERS_EDGE_MENU_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/menu/*.cpp)
+add_library(shooters_edge_menu STATIC ${SHOOTERS_EDGE_MENU_SOURCES})
+target_include_directories(shooters_edge_menu PUBLIC ${PROJECT_SOURCE_DIR}/games)
+target_link_libraries(shooters_edge_menu PUBLIC ge_ui ge_console ge_vfs ge_classicenhance)
+set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_menu)
+
 # Its app half (app/): the picture's game side over the engine's passes and the brush world's
 # renderer: the effects (trails, bursts, dynamic lights, the screen's blend) and the looks. It
 # needs the GPU; the game's GPU labs link it. Headers are spelled "shooters_edge/app/<file>.hpp".
@@ -117,8 +127,8 @@ if(GE_GPU AND TARGET ge_brush_app)
 endif()
 if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
   add_executable(shooters_edge client/main.cpp)
-  target_link_libraries(shooters_edge PRIVATE shooters_edge_client_gpu ge_platform ge_hud
-                                              ge_console)
+  target_link_libraries(shooters_edge PRIVATE shooters_edge_client_gpu shooters_edge_menu
+                                              ge_platform ge_hud ge_console)
   # The held weapons' models where the tree is, for a game run from somewhere else (-models wins).
   target_compile_definitions(shooters_edge
                              PRIVATE SE_MODELS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/content/models/view")
