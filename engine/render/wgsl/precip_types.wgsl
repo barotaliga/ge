@@ -9,6 +9,14 @@ struct PrecipParams {
   fall: vec4f,  // x: the rain share; y: a drop's fall, m/s; z: the eddies' speed, m/s; w: a drop's width, m
   info: vec4u,  // x: particles; y: particles drawn; z: splashes drawn; w: 0
   splash: vec4f,  // x: the splashes' reach, m; y: a splash's life, s; z: its size, m; w: 0
+  // THE SHELTER's orthographic camera (render/precip.hpp's PrecipShelter): o (world m; w: the
+  // half width, m), its axes x, y and z (z along the fall); info: x 1 when there is one, y the
+  // half depth (m), z the layer, w a texel (m).
+  shelter_o: vec4f,
+  shelter_x: vec4f,
+  shelter_y: vec4f,
+  shelter_z: vec4f,
+  shelter_info: vec4f,
 }
 
 // Whether particle `i` is a drop: the first `rain` share of every index's rank, so a rising rain

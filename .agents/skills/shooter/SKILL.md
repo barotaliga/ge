@@ -1,6 +1,6 @@
 ---
 name: shooter
-description: "Use for plugins/shooter in gameengine2: the first-person shooter's simulation half. The classic player move in 32-bit floats (every step in order, every move type, the server settings at the modern defaults), clip hulls (planes, clip nodes, point contents, the box hull, the line trace with its 1/32 back-off), hulls built from convex brushes, the move's list of solids and its traces, the recorded scenarios the move is held to, and the pmove lab; the classic game loop (the game-program seam, entities, the area tree, world traces, physics frames on the run clock, thinking, toss and bounce, step, pushers, touches, new missiles, a player's packet and command, the client's commands and prediction), Shooter's Edge's native program and scripted match, the thrown-entity vectors and the se-loop lab; the M18o rows. Also the bots' navigation proven by the move (nav.hpp: floor nodes off the hulls, walk, drop and jump links proven by player_move, movers tagged, routes on ai/path), the nav course and the se-nav lab; M18r1. Also the server's host, its bot slots and command sources, the input log and its replay, the stand-in bot, the shooters_edge_server binary and the se-server lab; M18f."
+description: "Use for plugins/shooter in gameengine2: the first-person shooter's simulation half. The classic player move in 32-bit floats (every step in order, every move type, the server settings at the modern defaults), clip hulls (planes, clip nodes, point contents, the box hull, the line trace with its 1/32 back-off), hulls built from convex brushes, the move's list of solids and its traces, the recorded scenarios the move is held to, and the pmove lab; the classic game loop (the game-program seam, entities, the area tree, world traces, physics frames on the run clock, thinking, toss and bounce, step, pushers, touches, new missiles, a player's packet and command, the client's commands and prediction), Shooter's Edge's native program and scripted match, the thrown-entity vectors and the se-loop lab; the M18o rows. Also the bots' navigation proven by the move (nav.hpp: floor nodes off the hulls, walk, drop and jump links proven by player_move, movers tagged, routes on ai/path), the nav course and the se-nav lab; M18r1. Also the server's host, its bot slots and command sources, the input log and its replay, the stand-in bot, the shooters_edge_server binary and the se-server lab; M18f. Also the loop's settings a QC server uses (first_dynamic, a full pool reusing the last entity, the command's movement); M18p's loop changes."
 ---
 
 # The shooter plugin
@@ -74,6 +74,11 @@ edges. `docs/shooters-edge.md` is the design;
   `tests/golden/shooters_edge_host.txt` and the `se-server` digest hold a server of eight
   stand-ins; run `make lab LAB=se-server` before and after a change to the host, the log or a
   bot.
+- **A QC program's server sets the pool's rules.** `ServerSettings::first_dynamic` (33: after all
+  32 client slots, as a mod's entity numbers expect) and `full_reuses_last` (a full pool clears
+  and reuses the last entity, counted in `spawns_full`) default off, so the native program's
+  digests do not move; the mod server (`games/shooters_edge/server`, the `progs` skill) turns
+  both on. `Edict::movement` carries the command's moves to the program before each command.
 - Still to come: the cvars bound through `engine/console` (setting `pm_airstep` sets
   `pm_pground`), a map's compiled hulls (M18b) answering `MoveWorld`, and the other entities'
   interpolation on the client (M18h).

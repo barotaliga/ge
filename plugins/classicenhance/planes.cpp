@@ -84,4 +84,9 @@ uint8_t linear_to_srgb8(float c) {
 
 float srgb8_to_linear(uint8_t c) { return to_linear_table()[c]; }
 
+float srgb_to_linear(float c) {
+  const double s = std::clamp(double(c), 0.0, 1.0);
+  return float(s <= 0.04045 ? s / 12.92 : core::libm::pow((s + 0.055) / 1.055, 2.4));
+}
+
 }  // namespace ge::classicenhance

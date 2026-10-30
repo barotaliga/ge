@@ -41,7 +41,7 @@
 
 namespace ge::shooter {
 
-constexpr int kMaxEdicts = 1024;
+constexpr int kMaxEdicts = 2048;  // the protocol's limit
 constexpr int kMaxClients = 32;
 constexpr int kMaxSounds = 256;  // sounds a frame keeps for the host (more are counted, dropped)
 
@@ -56,6 +56,12 @@ struct ServerSettings {
   int maxclients = kMaxClients;
   int max_edicts = 512;
   double start_time = 1.0;  // the server's time when the map starts, s
+  // Where a new entity is first looked for (0: right after the client slots, maxclients + 1; a
+  // QC program's server uses 33, after all 32 slots, as its entity numbers expect).
+  int first_dynamic = 0;
+  // A full pool: false, spawning fails (-1); true, the last entity is unlinked, cleared and
+  // reused with a warning counted (`LoopCounts::spawns_full`), as a QC program's server does.
+  bool full_reuses_last = false;
 };
 
 // A sound the loop or the program started this frame, for the host to play.
@@ -87,7 +93,7 @@ struct ClientSlot {
 struct LoopCounts {
   int64_t thinks = 0, trigger_touches = 0, impacts = 0, player_touches = 0;
   int64_t pushes = 0, pushes_blocked = 0, new_missiles = 0, commands = 0, commands_lost = 0;
-  int64_t speed_cuts = 0, physics_frames = 0, sounds_dropped = 0;
+  int64_t speed_cuts = 0, physics_frames = 0, sounds_dropped = 0, spawns_full = 0;
 };
 
 struct Server {
@@ -115,7 +121,8 @@ struct Server {
 void create_server(Server& sv, const ServerSettings& set, const std::vector<BrushModel>& models,
                    const Program& program);
 
-// A new entity (fields at their defaults); -1 when the pool is full.
+// A new entity (fields at their defaults), looked for from `first_dynamic`; -1 when the pool is
+// full (or its last entity again, with `full_reuses_last`).
 int spawn_edict(Server& sv);
 // Removes an entity: unlinked, its fields reset, its slot free.
 void free_edict(Server& sv, int e);

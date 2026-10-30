@@ -16,6 +16,7 @@ struct VeilBlock {
   info2: vec4f,
   sky: vec4f,
   info3: vec4f,
+  info4: vec4f,
   veil: vec4f,
 };
 @group(0) @binding(1) var<uniform> block: VeilBlock;

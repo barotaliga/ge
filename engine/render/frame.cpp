@@ -131,9 +131,11 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   // THE REACH: the mist closes every surface into the sky from half the reach to all of it.
   u.mist[0] = static_cast<float>(view.reach_m * kMistBegins);
   u.mist[1] = static_cast<float>(view.reach_m);
-  // THE WET GROUND rides in the mist's spare pair.
-  u.mist[2] = unit(w.wet);
-  u.mist[3] = unit(w.puddles);
+  // THE WET GROUND, the snow's cover and a flash of lightning.
+  u.wet[0] = unit(w.wet);
+  u.wet[1] = unit(w.puddles);
+  u.wet[2] = unit(w.snow);
+  u.wet[3] = static_cast<float>(std::max(0.0, w.flash));
   // THE SKY'S STYLE (render/sky_style.hpp), the second sun off the real one.
   real_sun_direction(view, d);
   style_rows(view.style, d, u.style);

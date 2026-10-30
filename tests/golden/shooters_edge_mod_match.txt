@@ -1,0 +1,12 @@
+# games/shooters_edge/server/mod_match.hpp's own record: frame, the digest after it (tests/shooters_edge_mod_match_test.cpp)
+63 37cc693030ea814c
+c7 d55436809cb35b0e
+12b 4740c1af32a6dfef
+18f 41627fdacdeffc68
+1f3 56af0167fee06cc0
+257 98b34edd8bc5aae9
+2bb 813556de3c4f8586
+31f 56b16bae0aef484d
+383 53bbef6ebb13fec2
+3e7 bbbaecba8235d5b1
+434 650be5cc8c01745d

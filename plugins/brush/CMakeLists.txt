@@ -3,7 +3,7 @@
 # any game on these map formats (skill: brush).
 # Its app/ half (ge_brush_app, with the GPU) is the map as drawn: the BSP renderer, classic or v2
 # (our sky, our water, lava and slime, real-time lights); its lab draws maps with the labs' model view.
-ge_add_plugin(brush ENGINE core vfs bake APP render gpu water wind assets lab)
+ge_add_plugin(brush ENGINE core vfs bake APP render gpu water wind assets lab console)
 if(TARGET ge_brush_app)
   ge_embed_wgsl(ge_brush_app app/bsp.wgsl app/bsp_fix.wgsl app/bsp_shadow.wgsl)
 endif()
