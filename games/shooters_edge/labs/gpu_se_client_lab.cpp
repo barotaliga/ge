@@ -76,10 +76,12 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   cl::SearchPath files;
   ge::progs::Progs progs;
   cl::Listen l;
-  std::unique_ptr<cl::LoadedMap> map;
-  if (!cl::open_game_dir(base, game, files, error) || !cl::baseline_progs(progs, error) ||
-      !(map = cl::load_named_map(files, lab.arg("map"), error)) ||
-      !cl::listen_start(l, progs, std::move(map), {}, error)) {
+  if (!cl::open_game_dir(base, game, files, error) || !cl::baseline_progs(progs, error)) {
+    lab.fail(error, "Read the reason above. Skill: shooter.");
+    return;
+  }
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, lab.arg("map"), error);
+  if (!map || !cl::listen_start(l, progs, std::move(map), {}, error)) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
   }

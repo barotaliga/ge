@@ -43,14 +43,14 @@ TEST(textures_and_skins_come_back_at_a_multiple_of_the_packs_size) {
   picture(dir / "textures" / "lamp" / "albedo.png", 16, 16, 90);
   {
     // The lamp's glow: its left half lit.
-    ge::lab::Picture g{16, 16, std::vector<uint8_t>(16 * 16 * 4, 0)};
+    ge::lab::Picture g{16, 16, std::vector<uint8_t>(size_t{16} * 16 * 4, 0)};
     for (int y = 0; y < 16; y++)
       for (int x = 0; x < 8; x++) g.rgba[(size_t(y) * 16 + size_t(x)) * 4] = 200;
     CHECK(ge::lab::write_png((dir / "textures" / "lamp" / "emissive.png").string(), g));
   }
   std::vector<uint8_t> rgba;
   CHECK(ce::cached_texture(dir, "WALL1", 16, 8, &rgba));  // 2x, by its folder's name
-  CHECK(rgba.size() == 32u * 16 * 4 && rgba[0] == 100 && rgba[3] == 0);
+  CHECK(rgba.size() == size_t{32} * 16 * 4 && rgba[0] == 100 && rgba[3] == 0);
   CHECK(ce::cached_texture(dir, "lamp", 4, 4, &rgba));  // 4x
   CHECK(rgba[3] == 255 && rgba[(15 * 4) + 3] == 0);
   rgba.clear();
