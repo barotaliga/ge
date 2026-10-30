@@ -1,7 +1,8 @@
 // The pipeline's stages (pipeline.hpp).
 //
-// ge:summary Runs the pack, textures, lightmaps, sounds and models stages, skipping current ones
-// ge:keywords pipeline run stage key skip textures index lightmaps sounds wav pack notice
+// ge:summary Runs the pipeline's stages, pack to pictures, skipping the ones that are current
+// ge:keywords pipeline run stage key skip textures index lightmaps sounds wav pack notice models
+// ge:keywords pictures
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #include "classicenhance/pipeline.hpp"
@@ -14,6 +15,7 @@
 #include "brush/read.hpp"
 #include "classicenhance/cache.hpp"
 #include "classicenhance/lightmaps.hpp"
+#include "classicenhance/pictures.hpp"
 #include "classicenhance/upscaler.hpp"
 #include "lab/png.hpp"
 #include "vfs/pak.hpp"
@@ -71,6 +73,8 @@ std::string stage_key(Stage s, const RunOptions& o) {
             std::to_string(o.models.skin_scale) + " round " + std::to_string(o.models.round) +
             " sharpen " + num(e.sharpen) + " grain " + num(e.grain) + " relief " + num(e.relief) +
             network_key(e);
+  } else if (s == Stage::pictures) {
+    text += " v" + std::to_string(kPictureStageVersion);
   } else {
     text += " v1";
   }
@@ -249,6 +253,31 @@ bool run_models(const Source& src, const fs::path& dir, const RunOptions& o, Sta
   return true;
 }
 
+bool run_pictures(const Source& src, const fs::path& dir, StageResult& r, std::string* error) {
+  Palette palette;
+  std::vector<PackPicture> pictures;
+  if (!pack_pictures(src.pack, &palette, &pictures, error)) return false;
+  std::string index = "# name width height transparent-index from\n";
+  for (const PackPicture& p : pictures) {
+    const fs::path at = dir / "pictures" / (p.name + ".png");
+    if (!save_png(at, picture_rgba(p.picture, palette, p.transparent))) {
+      *error = "cannot write " + at.string();
+      return false;
+    }
+    r.files++;
+    index += p.name + " " + std::to_string(p.picture.width) + " " +
+             std::to_string(p.picture.height) + " " + std::to_string(p.transparent) + " " + p.from +
+             "\n";
+  }
+  if (!write_text(dir / "pictures" / "index.txt", index)) {
+    *error = "cannot write " + (dir / "pictures" / "index.txt").string();
+    return false;
+  }
+  r.files++;
+  r.note = std::to_string(pictures.size()) + " pictures, unscaled";
+  return true;
+}
+
 }  // namespace
 
 const char* stage_name(Stage s) {
@@ -263,6 +292,8 @@ const char* stage_name(Stage s) {
       return "sounds";
     case Stage::models:
       return "models";
+    case Stage::pictures:
+      return "pictures";
   }
   return "?";
 }
@@ -349,6 +380,9 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
         break;
       case Stage::models:
         ok = run_models(source, report->dir, opts, r, error);
+        break;
+      case Stage::pictures:
+        ok = run_pictures(source, report->dir, r, error);
         break;
     }
     r.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
