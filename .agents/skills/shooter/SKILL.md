@@ -10,7 +10,7 @@ the engine moves its players with, and how its bots find their way. It depends o
 core and `ai` (`ge_add_plugin(shooter ENGINE core ai ...)`: the nav graph searches on `ai/path`).
 The axes are the map format's (x and y across, z up); a game converts to the engine's y-up at its
 edges. `docs/shooters-edge.md` is the design;
-`docs/goals.md` M18o is the row.
+`docs/goals/M18o.md` is the row.
 
 | File | What |
 | --- | --- |

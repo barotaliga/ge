@@ -55,9 +55,12 @@ env:
 # GitHub has no counting semaphore for jobs (a concurrency group holds one running and one
 # pending job and CANCELS the pending one a third arrival replaces), so the macOS and Windows
 # jobs are not capped by group: these rules keep their number down instead.
+# A push to main never cancels the run already going: main lands faster than its matrix runs, so
+# cancelling left no main run finished and nothing to open or close the `main-red` issue on. The
+# group holds the newest push pending, so main runs back to back, skipping the pushes between.
 concurrency:
   group: ci-${{ github.ref }}${{ (github.event.action == 'labeled' && github.event.label.name != 'full-ci') && format('-label-{0}', github.run_id) || '' }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   # The cheap gates, on every run, and the decision what else runs.
