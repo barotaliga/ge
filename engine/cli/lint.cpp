@@ -42,6 +42,26 @@ std::string relative(const fs::path& repo, const std::string& file) {
 
 }  // namespace
 
+std::pair<std::vector<std::string>, std::vector<std::string>> split_by_compile_db(
+    std::string_view db, const fs::path& repo, const std::vector<std::string>& files) {
+  std::pair<std::vector<std::string>, std::vector<std::string>> out;
+  for (const std::string& f : files) {
+    // A path as JSON spells it: '/' on POSIX, and on Windows either '/' or an escaped '\\'.
+    const std::string slash = (repo / f).generic_string();
+    std::string escaped;
+    for (const char c : slash) escaped += c == '/' ? std::string("\\\\") : std::string(1, c);
+    const auto has = [db](const std::string& path) {
+      std::string q = "\"";
+      q += path;
+      q += '"';
+      return db.find(q) != std::string_view::npos;
+    };
+    const bool in = has(slash) || has(escaped);
+    (in ? out.first : out.second).push_back(f);
+  }
+  return out;
+}
+
 std::string tidy_check_url(std::string_view check) {
   const size_t dash = check.find('-');
   if (check.starts_with("clang-analyzer-")) {
@@ -129,6 +149,35 @@ Outcome run_lint(const BuildOptions& o, const LintOptions& l) {
     out.summary = "nothing to lint: no .cpp is " + scope;
     return out;
   }
+  // A file the build does not compile has no flags to lint it with: named, never linted bare.
+  const auto db = read_text(build / "compile_commands.json");
+  if (!db) {
+    out.findings.push_back({Severity::error, "the build has no compile database",
+                            relative(o.repo, (build / "compile_commands.json").string()),
+                            "configure it with CMAKE_EXPORT_COMPILE_COMMANDS=ON (the presets "
+                            "set it), then `ge lint`"});
+    return out;
+  }
+  auto [kept, missing] = split_by_compile_db(*db, fs::weakly_canonical(o.repo, ec), files);
+  for (const std::string& f : missing) {
+    out.findings.push_back(
+        {l.like_ci ? Severity::error : Severity::warn,
+         "not compiled by build/" + o.preset + " (its feature is off there), so not linted", f,
+         "CI's lint build has every feature on: configure one with them (`cmake --preset " +
+             o.preset + " -DGE_GPU=ON -DGE_PLATFORM=ON`) and `ge lint` again"});
+  }
+  const size_t asked = files.size();
+  files = std::move(kept);
+  // CI's lint job checks the embedded shaders after the lint, where the build can.
+  if (l.like_ci && run_quiet("ninja -C " + quoted(build) + " -t query shaders_check") == 0 &&
+      !build_targets(o, out, "shaders_check")) {
+    return out;
+  }
+  if (files.empty()) {
+    out.summary = "nothing linted: none of the " + std::to_string(asked) + " .cpp files " + scope +
+                  " is compiled by build/" + o.preset;
+    return out;
+  }
   // A repository's own .clang-tidy, or the bug-finding set.
   const bool own = fs::is_regular_file(o.repo / ".clang-tidy", ec);
   std::string tidy = "clang-tidy -p " + quoted(build) + " --quiet";
@@ -152,8 +201,9 @@ Outcome run_lint(const BuildOptions& o, const LintOptions& l) {
       "xargs -P " + std::to_string(jobs) + " -n 4 " + tidy + " < " + quoted(list);
 #endif
   const Logged r = run_to_log(cmd, log);
-  out.findings = lint_findings(o.repo, r.output, 40);
-  if (r.code != 0 && out.findings.empty()) {
+  const std::vector<Finding> tidy_found = lint_findings(o.repo, r.output, 40);
+  out.findings.insert(out.findings.end(), tidy_found.begin(), tidy_found.end());
+  if (r.code != 0 && tidy_found.empty()) {
     out.findings.push_back({Severity::error,
                             "clang-tidy failed (exit " + std::to_string(r.code) + ")",
                             relative(o.repo, log.string()), "read the log"});
@@ -167,8 +217,12 @@ Outcome run_lint(const BuildOptions& o, const LintOptions& l) {
                 {"checks", json_str(own ? ".clang-tidy" : std::string(kDefaultTidyChecks))},
                 {"log", json_str(relative(o.repo, log.string()))}});
   out.summary = std::to_string(files.size()) + " of " + std::to_string(all.size()) +
-                " .cpp files (" + scope + ") clean under " +
+                " .cpp files (" + scope + ") linted under " +
                 (own ? std::string(".clang-tidy") : std::string("the bug-finding checks"));
+  if (!missing.empty()) {
+    out.summary += "; " + std::to_string(missing.size()) + " not compiled by build/" + o.preset;
+  }
+  if (l.like_ci) out.summary += "; as CI's lint job runs it";
   return out;
 }
 

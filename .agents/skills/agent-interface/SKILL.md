@@ -45,7 +45,7 @@ example and consumer skill); the parser, `ge help` and `ge help --json` all read
 | `ge add system\|lab\|test <name>` | A working piece from `templates/`, tags filled, formatted, refusing to write over a file | `add.hpp` |
 | `ge add water [<name>]` | A lake laid in one call (`templates/water/`: the sim's water, its picture lab, its test), `ge::water` linked and its skill synced | `add.hpp` |
 | `ge build`, `ge test`, `ge check`, `ge lab` | Configure, build, test, the whole gate, a lab: the tool's output in `build/<preset>/ge-*.log`, the answer as findings | `build.hpp` |
-| `ge test --affected`, `ge lint` | What a change reaches (git's changed files, Ninja's deps, through the headers of reached libraries' directories): its tests run, its sources linted | `reach.hpp`, `lint.hpp` |
+| `ge test --affected`, `ge lint` | What a change reaches (git's changed files, Ninja's deps, through the headers of reached libraries' directories): its tests run, its sources linted; a source the build does not compile named, never linted bare, and `--like-ci` (CI's release preset and shaders check) makes that an error | `reach.hpp`, `lint.hpp` |
 | `ge play`, `ge sim`, `ge replay`, `ge state`, `ge diverge`, `ge shot` | The game's `play` executable built and run: the protocol on the terminal, the pilot's runs and their input logs, a log replayed to its digest, the state at a step, where two runs part, a captioned still of a view at a step (`--gpu --mode=<m>`: drawn by the game's registered renderer, engine/play/game.hpp § THE GPU'S PICTURES) | `play.hpp` |
 | `ge doctor`, `ge skills sync`, `ge lessons` | The repo against the rules; the engine's skills and the lock; a skill's lessons | `doctor.hpp`, `skills.hpp` |
 

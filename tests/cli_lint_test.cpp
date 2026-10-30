@@ -1,9 +1,10 @@
 // `ge lint`'s parts that need no build (engine/cli/lint.hpp): clang-tidy's diagnostics read as
 // findings at their repository-relative file:line with the check named and its page as the next
-// step, a header's finding reported once though every includer repeats it, and the cap.
+// step, a header's finding reported once though every includer repeats it, the cap, and the files
+// a build has no compile command for kept from clang-tidy.
 //
 // ge:summary Test: ge lint's clang-tidy output read as findings, and a check's documentation url
-// ge:keywords test cli lint clang-tidy lint_findings tidy_check_url
+// ge:keywords test cli lint clang-tidy lint_findings tidy_check_url split_by_compile_db
 // ge:skill testing agent-interface
 #include <string>
 
@@ -54,4 +55,19 @@ TEST(a_checks_page_is_under_its_group) {
         "https://clang.llvm.org/extra/clang-tidy/checks/performance/for-range-copy.html");
   CHECK(tidy_check_url("clang-analyzer-core.NullDereference") ==
         "https://clang.llvm.org/extra/clang-tidy/checks/clang-analyzer/core.NullDereference.html");
+}
+
+TEST(a_file_the_build_does_not_compile_is_named_not_linted) {
+  const std::string db = R"([
+{ "directory": "/repo/build/debug", "command": "c++ -c /repo/engine/core/prng.cpp",
+  "file": "/repo/engine/core/prng.cpp", "output": "x.o" },
+{ "directory": "C:/repo/build", "file": "C:\\repo\\engine\\ui\\paint.cpp" }
+])";
+  const auto [kept, missing] =
+      split_by_compile_db(db, "/repo", {"engine/core/prng.cpp", "engine/render/sky.cpp"});
+  CHECK(kept.size() == 1 && kept[0] == "engine/core/prng.cpp");
+  CHECK(missing.size() == 1 && missing[0] == "engine/render/sky.cpp");
+  // A prefix is not a match: prng.cpp is not engine/core/prn.cpp.
+  CHECK(split_by_compile_db(db, "/repo", {"engine/core/prn.cpp"}).second.size() == 1);
+  CHECK(split_by_compile_db(db, "C:/repo", {"engine/ui/paint.cpp"}).first.size() == 1);
 }
