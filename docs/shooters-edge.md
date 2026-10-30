@@ -105,7 +105,8 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
 - **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
   with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). **`-game <folder>`**
   picks a game folder other than `id1`. **`-progs <file>`** runs a mod's progs in place of the
-  baseline mod (§ Running your own mod). Its packs are read in order (`pak0.pak`, `pak1.pak`, ...
+  baseline mod (§ Running your own mod), and **`-models <dir>`** names the held weapons' folder
+  (by default the tree's `games/shooters_edge/content/models/view`). Its packs are read in order (`pak0.pak`, `pak1.pak`, ...
   until a number is missing; any case), and a loose file in the folder (`maps/mymap.bsp`)
   overrides the packs (`client/files.hpp`).
 - **`+<command>`**: console lines run at start. `+map dm6` loads that map; `+map arena` the
@@ -135,9 +136,12 @@ What the first slice draws: the map in its classic look (its textures, lightmaps
 and sky) over the engine's sky, from the first-person rig (the view height off the mod's view
 offset, stairs smoothed, a landing's dip); the game's effects (`client/world_fx.hpp`: a rocket's
 trail and glow, an explosion's sparks, smoke and light on the walls, the red flash of a hit and
-the tint under water, slime or lava); the HUD (`hud_style classic|modern|compact`); the console.
-Not yet: the other players' and items' models, the weapon in hand, sounds, and the
-network (the rest of M18h, M18i).
+the tint under water, slime or lava); the weapon in hand (`client/held.hpp`: the game's free
+models, switched with the number keys, kicked and lit by its muzzle flash as the mod fires it,
+lit by the map's baked light under the player; `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`,
+`cl_guny`, `cl_gunz` and `cl_gunsway` in the console); the HUD (`hud_style
+classic|modern|compact`); the console; the main menu (below). Not yet: the other players' and
+items' models, sounds, and the network (the rest of M18h, M18i).
 
 <<<<<<< HEAD
 ### Benchmarking a demo
@@ -661,7 +665,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-lobby` | sim | Clients find a hosted game on the LAN and through the rendezvous, fill the lobby, pick teams, chat, start, play and return; a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections (the compatible server half built, M18g: scripted clients under every preset, bytes a second, loss, downloads, the digest) |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
-| `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost and the effects thrown (built, M18h first slice) |
+| `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the weapon in hand, the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost, the effects thrown and the shots the hand saw (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-menu` | picture | The main menu's pages in the modern look and in the classic look (the fixture's pictures, or the player's pack with `--pack`), every row the game cannot do yet dimmed, classic-enhance's menu under OPTIONS; at desktop, wide and phone sizes (built, M18k2) |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |

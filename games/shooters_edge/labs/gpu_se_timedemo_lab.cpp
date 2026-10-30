@@ -144,7 +144,7 @@ void run(gl::Lab& lab) {
       if (device) {
         world.reset();
         world = cl::create_world_draw(*device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                                      picture, error);
+                                      picture, {}, error);
         if (!world) {
           lab.fail(error, "Read the gpu: lines above. Skill: render.");
           return;
@@ -162,7 +162,7 @@ void run(gl::Lab& lab) {
       hud.layout.draw(overlay,
                       hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
                       se::hud_style());
-      cl::draw_world(*device, *world, view, cl::FxFrame{}, 0, overlay, out.view);
+      cl::draw_world(*device, *world, view, cl::FxFrame{}, nullptr, 0, overlay, out.view);
       if (shot < 3 && frame == picks[shot]) {
         const ge::gpu::Image img = ge::gpu::read_now(*device, out);
         lab.shot({ids[shot],

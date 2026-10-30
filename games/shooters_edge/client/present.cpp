@@ -32,7 +32,8 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
   v.fall_speed = player_state(l).velocity.z;
   ge::render::FrameView view;
   view.time_s = t;
-  ge::camera::to_frame_view(ge::camera::frame_first_person(v.row, s, v.eyes, dt, 1.0), view);
+  v.pose = ge::camera::frame_first_person(v.row, s, v.eyes, dt, 1.0);
+  ge::camera::to_frame_view(v.pose, view);
   return view;
 }
 
