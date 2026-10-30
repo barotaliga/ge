@@ -9,6 +9,7 @@
 // ge:test tests/progs_vm_test.cpp tests/progs_ops_test.cpp
 #include "progs/vm.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -462,6 +463,11 @@ void create_vm(Vm& vm, const Progs& progs, const VmLimits& limits) {
   vm.engine_count = 0;
   vm.engine_used = 0;
   vm.temp_next = 0;
+  vm.builtin_temps.assign(static_cast<size_t>(kBuiltinTempStrings) * kTempStringBytes, 0);
+  vm.builtin_temp_next = 0;
+  vm.zone.assign(kZoneStrings, std::string());
+  vm.zone_used.assign(kZoneStrings, 0);
+  vm.words = Words{};
   vm.profile.assign(progs.functions.size(), FunctionProfile{});
   vm.statements_run = 0;
   vm.fault = Fault{};
@@ -549,8 +555,19 @@ const char* vm_string(const Vm& vm, int32_t value) {
     return k < vm.engine_count ? vm.engine_text.data() + vm.engine_offsets[static_cast<size_t>(k)]
                                : nullptr;
   }
+  if (value <= -kZoneBase) {
+    const int64_t z = -static_cast<int64_t>(value) - kZoneBase;
+    if (z >= kZoneStrings) return nullptr;
+    // A freed slot reads as empty: a program may keep a value it unzoned, and reading it must
+    // not fault.
+    return vm.zone_used[static_cast<size_t>(z)] != 0 ? vm.zone[static_cast<size_t>(z)].c_str() : "";
+  }
   const int64_t slot = -static_cast<int64_t>(value) - kTempBase;
-  return slot < kTempStrings ? vm.temps[slot] : nullptr;
+  if (slot < kTempStrings) return vm.temps[slot];
+  const int64_t b = -static_cast<int64_t>(value) - kBuiltinTempBase;
+  if (b >= 0 && b < kBuiltinTempStrings)
+    return vm.builtin_temps.data() + static_cast<size_t>(b) * kTempStringBytes;
+  return nullptr;
 }
 
 int32_t engine_string(Vm& vm, const char* text) {
@@ -577,5 +594,34 @@ int32_t temp_string(Vm& vm, const char* text) {
   std::snprintf(vm.temps[slot], kTempStringBytes, "%s", text);
   return -(kTempBase + slot);
 }
+
+int32_t builtin_temp_string(Vm& vm, const char* text) {
+  const int slot = vm.builtin_temp_next;
+  vm.builtin_temp_next = (vm.builtin_temp_next + 1) % kBuiltinTempStrings;
+  std::snprintf(vm.builtin_temps.data() + static_cast<size_t>(slot) * kTempStringBytes,
+                kTempStringBytes, "%s", text);
+  return -(kBuiltinTempBase + slot);
+}
+
+int32_t zone_string(Vm& vm, const char* text) {
+  for (int i = 0; i < kZoneStrings; i++) {
+    if (vm.zone_used[static_cast<size_t>(i)] != 0) continue;
+    vm.zone_used[static_cast<size_t>(i)] = 1;
+    vm.zone[static_cast<size_t>(i)].assign(text);
+    return -(kZoneBase + i);
+  }
+  raise(vm, "out of string memory (all 1024 zone strings are in use; strunzone what you keep)");
+  return 0;
+}
+
+bool unzone_string(Vm& vm, int32_t value) {
+  if (value > -kZoneBase) return false;
+  const int64_t z = -static_cast<int64_t>(value) - kZoneBase;
+  if (z >= kZoneStrings) return false;
+  vm.zone_used[static_cast<size_t>(z)] = 0;
+  return true;
+}
+
+void clear_zone_strings(Vm& vm) { std::fill(vm.zone_used.begin(), vm.zone_used.end(), uint8_t{0}); }
 
 }  // namespace ge::progs

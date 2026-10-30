@@ -155,6 +155,12 @@ static_assert(field_at("waterlevel") == kFWaterlevel && field_at("watertype") ==
 static_assert(field_at("spawnflags") == kFSpawnflags && field_at("owner") == kFOwner);
 static_assert(field_at("takedamage") == kFTakedamage && field_at("colormap") == kFColormap);
 static_assert(field_at("classname") == kFClassname && field_at("model") == kFModel);
+static_assert(field_at("frags") == kFFrags && field_at("weaponmodel") == kFWeaponmodel);
+static_assert(field_at("items") == kFItems && field_at("chain") == kFChain);
+static_assert(field_at("view_ofs") == kFViewOfs && field_at("netname") == kFNetname);
+static_assert(field_at("enemy") == kFEnemy && field_at("team") == kFTeam);
+static_assert(field_at("ideal_yaw") == kFIdealYaw && field_at("yaw_speed") == kFYawSpeed);
+static_assert(field_at("goalentity") == kFGoalentity);
 
 }  // namespace
 

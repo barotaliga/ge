@@ -9,8 +9,10 @@
 // a field is its offset in words; a pointer (made only by ADDRESS) is a byte offset from the start
 // of the entity array; a function is an index into the functions (0 null); a string is 0 (empty),
 // a positive offset into the file's table, -(k + 1) for the engine's string k (held until
-// `clear_engine_strings`), or -(kTempBase + i) for slot i of the ring of 8 temporaries a builtin
-// makes (valid until 8 more are made: the ring's depth is part of the contract).
+// `clear_engine_strings`), -(kTempBase + i) for slot i of the ring of 8 temporaries the engine
+// hands a hook (valid until 8 more are made: the ring's depth is part of the contract),
+// -(kBuiltinTempBase + i) for slot i of the ring of 64 a builtin's text result lives in, or
+// -(kZoneBase + i) for zone slot i (`zone_string`, kept until `unzone_string` or the map's end).
 //
 // CALLING (`call_function`, the engine's entry; CALL0..CALL8 inside): push the caller on the call
 // stack (32 functions deep at most: "stack overflow"), save the callee's `locals` words from its
@@ -38,6 +40,7 @@
 // ge:keywords field pointer string temp-string engine-string runaway stack-overflow fault
 // ge:keywords stack-trace profile trace deterministic float32 entity-value set_builtin
 // ge:keywords create_vm reset_globals clear_entities vm_error fault_text temp_string
+// ge:keywords builtin_temp_string zone_string unzone_string strzone strunzone ring-of-64
 // ge:skill progs
 // ge:test tests/progs_vm_test.cpp tests/progs_ops_test.cpp
 #pragma once
@@ -47,18 +50,24 @@
 #include <string>
 #include <vector>
 
+#include "core/prng.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
+#include "progs/text.hpp"
 
 namespace ge::progs {
 
-constexpr int kMaxCallDepth = 32;          // functions active at once
-constexpr int kLocalStackWords = 2048;     // locals saved across all active calls
-constexpr int kRunawayLimit = 100000;      // the statement of an engine call that faults
-constexpr int kTempStrings = 8;            // the ring of temporaries
-constexpr int kTempStringBytes = 2048;     // each, NUL included
-constexpr int32_t kTempBase = 0x100000;    // a temporary's value is -(kTempBase + slot)
-constexpr int kMaxEntitiesDefault = 2048;  // the protocol's limit
+constexpr int kMaxCallDepth = 32;                     // functions active at once
+constexpr int kLocalStackWords = 2048;                // locals saved across all active calls
+constexpr int kRunawayLimit = 100000;                 // the statement of an engine call that faults
+constexpr int kTempStrings = 8;                       // the ring of temporaries
+constexpr int kTempStringBytes = 2048;                // each, NUL included
+constexpr int32_t kTempBase = 0x100000;               // a temporary's value is -(kTempBase + slot)
+constexpr int kMaxEntitiesDefault = 2048;             // the protocol's limit
+constexpr int kBuiltinTempStrings = 64;               // the ring a builtin's text result lives in
+constexpr int32_t kBuiltinTempBase = kTempBase + 16;  // a builtin temporary: -(base + slot)
+constexpr int kZoneStrings = 1024;                    // strings a program keeps (strzone)
+constexpr int32_t kZoneBase = 0x200000;               // a zone string: -(kZoneBase + slot)
 
 struct Vm;
 // A builtin: reads its arguments from the parameter slots (`vm.argc` of them), writes its result
@@ -142,6 +151,15 @@ struct Vm {
   int engine_used = 0;
   char temps[kTempStrings][kTempStringBytes] = {};
   int temp_next = 0;
+  std::vector<char> builtin_temps;  // kBuiltinTempStrings x kTempStringBytes
+  int builtin_temp_next = 0;
+  std::vector<std::string> zone;  // kZoneStrings slots; a slot keeps its capacity when freed
+  std::vector<uint8_t> zone_used;
+
+  // What the standard builtins keep (stdlib.hpp): the seeded generator random draws from (the
+  // game's, set before a call; null faults a draw) and the program's own word list (tokenize).
+  ge::core::Rng* rng = nullptr;
+  Words words;
 
   std::vector<FunctionProfile> profile;  // by function
   std::vector<int64_t> builtin_calls;    // by builtin number
@@ -213,5 +231,15 @@ int32_t engine_string(Vm& vm, const char* text);
 void clear_engine_strings(Vm& vm);
 // A temporary in the ring (cut to 2047 bytes): valid until 8 more are made.
 int32_t temp_string(Vm& vm, const char* text);
+// A builtin's text result in the ring of 64 (cut to 2047 bytes): valid until 64 more are made.
+int32_t builtin_temp_string(Vm& vm, const char* text);
+// A copy kept in a zone slot until `unzone_string` or `clear_zone_strings`; 0 and a fault ("out
+// of string memory") when all 1024 are taken. A slot's buffer is kept for reuse, so a program
+// that zones and unzones in a loop allocates only while its strings grow.
+int32_t zone_string(Vm& vm, const char* text);
+// Frees a zone string: true when `value` is one (freeing a freed slot again is allowed), false
+// when it names no zone slot (the caller's error).
+bool unzone_string(Vm& vm, int32_t value);
+void clear_zone_strings(Vm& vm);
 
 }  // namespace ge::progs

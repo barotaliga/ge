@@ -1,7 +1,7 @@
 // The QC adapter (qc_program.hpp).
 //
-// ge:summary The QC adapter: the mirror, the hooks, the seam's builtins
-// ge:keywords qc progs adapter mirror sync hooks spawn remove setorigin
+// ge:summary The QC adapter: the mirror, nested calls, the hooks, the seam's builtins
+// ge:keywords qc progs adapter mirror sync hooks spawn remove setorigin nested-call
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_qc_program_test.cpp
 #include "shooters_edge/sim/qc_program.hpp"
@@ -75,8 +75,9 @@ void mirror_in(QcProgram& q, int e) {
   put_f(q, e, pg::kFWaterlevel, int_float(d.waterlevel));
   put_f(q, e, pg::kFWatertype, int_float(d.watertype));
   put_e(q, e, pg::kFOwner, d.owner);
-  if (q.field_gravity >= 0) put_f(q, e, q.field_gravity, d.gravity);
-  if (q.field_maxspeed >= 0) put_f(q, e, q.field_maxspeed, d.maxspeed);
+  if (q.fields.gravity >= 0) put_f(q, e, q.fields.gravity, d.gravity);
+  if (q.fields.maxspeed >= 0) put_f(q, e, q.fields.maxspeed, d.maxspeed);
+  if (q.fields.movement >= 0) put_v(q, e, q.fields.movement, d.movement);
 }
 
 // The loop's own (absmin, absmax: link_edict's) are not read back.
@@ -110,8 +111,8 @@ void mirror_out(QcProgram& q, int e) {
   d.waterlevel = float_int(get_f(q, e, pg::kFWaterlevel));
   d.watertype = float_int(get_f(q, e, pg::kFWatertype));
   d.owner = get_e(q, e, pg::kFOwner);
-  if (q.field_gravity >= 0) d.gravity = get_f(q, e, q.field_gravity);
-  if (q.field_maxspeed >= 0) d.maxspeed = get_f(q, e, q.field_maxspeed);
+  if (q.fields.gravity >= 0) d.gravity = get_f(q, e, q.fields.gravity);
+  if (q.fields.maxspeed >= 0) d.maxspeed = get_f(q, e, q.fields.maxspeed);
 }
 
 // The progs' free rule on the VM's record: these cleared, nextthink -1, the rest kept.
@@ -127,7 +128,7 @@ void free_rule(QcProgram& q, int e) {
 
 // Every entity in use into the VM: one the loop allocated since is cleared first, one it freed
 // gets the free rule.
-void sync_in(QcProgram& q) {
+void sync_entities_in(QcProgram& q) {
   sh::Server& sv = *q.sv;
   q.vm.num_entities = sv.num_edicts;
   for (int e = 0; e < sv.num_edicts; e++) {
@@ -138,6 +139,11 @@ void sync_in(QcProgram& q) {
     was = used ? 1 : 0;
     if (used) mirror_in(q, e);
   }
+}
+
+void sync_in(QcProgram& q) {
+  sh::Server& sv = *q.sv;
+  sync_entities_in(q);
   pg::set_global_int(q.vm, pg::kGSelf, pg::entity_value(q.vm, sv.g.self));
   pg::set_global_int(q.vm, pg::kGOther, pg::entity_value(q.vm, sv.g.other));
   pg::set_global_int(q.vm, pg::kGWorld, 0);
@@ -167,21 +173,49 @@ void sync_out(QcProgram& q) {
 
 void call(void* ctx, sh::Server& sv, sh::Func fn) {
   auto& q = *static_cast<QcProgram*>(ctx);
-  q.sv = &sv;
-  q.calls++;
-  sync_in(q);
-  if (!pg::call_function(q.vm, fn)) {
-    q.faults++;
-    q.last_fault = pg::fault_text(q.vm);
-    pg::clear_fault(q.vm);
+  if (q.before_call != nullptr) {
+    sh::Server* const was = q.sv;
+    q.sv = &sv;  // the hook reads the server it is called under
+    q.before_call(q, fn);
+    q.sv = was;
   }
-  sync_out(q);
-  q.sv = nullptr;
+  enter_qc(q, sv);
+  run_qc(q, fn);
+  leave_qc(q);
+  if (q.after_call != nullptr) q.after_call(q, fn);
 }
 
-QcProgram& of(pg::Vm& vm) { return *static_cast<QcProgram*>(vm.user); }
+QcProgram& of(pg::Vm& vm) { return qc_of(vm); }
 
-// The parameter's entity, or -1 after faulting the call.
+}  // namespace
+
+void enter_qc(QcProgram& q, sh::Server& sv) {
+  if (q.nesting < kMaxQcNesting) q.outer[q.nesting] = q.sv;
+  q.nesting++;
+  q.sv = &sv;
+  q.calls++;
+  q.vm.rng = &q.rng;
+  sync_in(q);
+}
+
+bool run_qc(QcProgram& q, int32_t fn) {
+  if (pg::call_function(q.vm, fn)) return true;
+  q.faults++;
+  q.last_fault = pg::fault_text(q.vm);
+  pg::clear_fault(q.vm);
+  return false;
+}
+
+void leave_qc(QcProgram& q) {
+  sync_out(q);
+  q.nesting--;
+  q.sv = q.nesting < kMaxQcNesting ? q.outer[q.nesting] : nullptr;
+}
+
+void flush_to_world(QcProgram& q) { sync_out(q); }
+
+void refresh_from_world(QcProgram& q) { sync_entities_in(q); }
+
 int entity_parm(pg::Vm& vm, int i, const char* builtin) {
   const int n = pg::entity_number(vm, pg::global_int(vm, pg::parm(i)));
   if (n < 0) {
@@ -191,34 +225,42 @@ int entity_parm(pg::Vm& vm, int i, const char* builtin) {
   return n;
 }
 
-void builtin_spawn(pg::Vm& vm) {
-  QcProgram& q = of(vm);
+int qc_spawn_entity(QcProgram& q) {
   const int e = sh::spawn_edict(*q.sv);
+  if (e < 0) return -1;
+  q.vm.num_entities = q.sv->num_edicts;
+  pg::clear_entity(q.vm, e);
+  q.live[static_cast<size_t>(e)] = 1;
+  mirror_in(q, e);
+  return e;
+}
+
+void qc_free_entity(QcProgram& q, int e) {
+  sh::free_edict(*q.sv, e);
+  free_rule(q, e);
+  q.live[static_cast<size_t>(e)] = 0;
+}
+
+void qc_spawn(pg::Vm& vm) {
+  const int e = qc_spawn_entity(of(vm));
   if (e < 0) {
     pg::vm_error(vm, "spawn: no free entity (the pool is full)");
     return;
   }
-  vm.num_entities = q.sv->num_edicts;
-  pg::clear_entity(vm, e);
-  q.live[static_cast<size_t>(e)] = 1;
-  mirror_in(q, e);
   pg::set_global_int(vm, pg::kGlobalReturn, pg::entity_value(vm, e));
 }
 
-void builtin_remove(pg::Vm& vm) {
-  QcProgram& q = of(vm);
+void qc_remove(pg::Vm& vm) {
   const int e = entity_parm(vm, 0, "remove");
   if (e < 0) return;
   if (e == 0) {
     pg::vm_error(vm, "remove: the world cannot be removed");
     return;
   }
-  sh::free_edict(*q.sv, e);
-  free_rule(q, e);
-  q.live[static_cast<size_t>(e)] = 0;
+  qc_free_entity(of(vm), e);
 }
 
-void builtin_setorigin(pg::Vm& vm) {
+void qc_setorigin(pg::Vm& vm) {
   QcProgram& q = of(vm);
   const int e = entity_parm(vm, 0, "setorigin");
   if (e < 0) return;
@@ -230,6 +272,8 @@ void builtin_setorigin(pg::Vm& vm) {
   put_v(q, e, pg::kFAbsmin, q.sv->edicts[static_cast<size_t>(e)].absmin);
   put_v(q, e, pg::kFAbsmax, q.sv->edicts[static_cast<size_t>(e)].absmax);
 }
+
+namespace {
 
 sh::Func hook_global(const pg::Progs& p, int ofs) {
   return static_cast<sh::Func>(p.globals[static_cast<size_t>(ofs)]);
@@ -255,11 +299,21 @@ bool create_qc_program(QcProgram& q, const pg::Progs& progs, int max_edicts, std
   }
   pg::VmLimits limits;
   limits.max_entities = max_edicts;
+  limits.max_builtins = kQcBuiltins;
   pg::create_vm(q.vm, progs, limits);
   q.vm.user = &q;
   q.live.assign(static_cast<size_t>(max_edicts), 0);
-  q.field_gravity = optional_field(progs, "gravity");
-  q.field_maxspeed = optional_field(progs, "maxspeed");
+  OptionalFields& f = q.fields;
+  f.items2 = optional_field(progs, "items2");
+  f.maxspeed = optional_field(progs, "maxspeed");
+  f.gravity = optional_field(progs, "gravity");
+  f.movement = optional_field(progs, "movement");
+  f.vw_index = optional_field(progs, "vw_index");
+  f.hideentity = optional_field(progs, "hideentity");
+  f.trackent = optional_field(progs, "trackent");
+  f.visclients = optional_field(progs, "visclients");
+  f.hideplayers = optional_field(progs, "hideplayers");
+  f.teleported = optional_field(progs, "teleported");
   sh::Program& h = q.hooks;
   h = {};
   h.start_frame = hook_global(progs, pg::kGStartFrame);
@@ -285,12 +339,6 @@ sh::Program qc_program(QcProgram& q) {
   p.ctx = &q;
   p.call = &call;
   return p;
-}
-
-void install_seam_builtins(QcProgram& q, int spawn, int remove, int setorigin) {
-  if (spawn > 0) pg::set_builtin(q.vm, spawn, &builtin_spawn, "spawn");
-  if (remove > 0) pg::set_builtin(q.vm, remove, &builtin_remove, "remove");
-  if (setorigin > 0) pg::set_builtin(q.vm, setorigin, &builtin_setorigin, "setorigin");
 }
 
 }  // namespace shooters_edge::sim

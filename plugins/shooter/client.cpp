@@ -89,6 +89,8 @@ void run_piece(Server& sv, int slot, const MoveCmd& in) {
     ed.button2 = static_cast<float>((in.buttons & kButtonJump) >> 1);
     ed.button1 = static_cast<float>((in.buttons & kButtonUse) >> 2);
     if (in.impulse != 0) ed.impulse = in.impulse;
+    ed.movement = {static_cast<float>(in.forward), static_cast<float>(in.side),
+                   static_cast<float>(in.up)};
   }
 
   MoveCmd cmd = in;
