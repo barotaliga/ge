@@ -19,10 +19,12 @@
 //   A tile not due keeps its depth, so a still lamp that sees nothing move costs nothing a frame;
 //   `redraws` counts the tiles drawn since creation. A muzzle flash is a lamp like any other: its
 //   key is the shot's, so its tiles are drawn the frame it fires and kept for its few frames.
-// - THE CASTERS: every family handed in with caster slots `first_slot` .. `first_slot` +
-//   kMaxLampTiles - 1 (`create_family_casters`): tile k culls into slot `first_slot` + k by its
-//   own view's planes and the lamp's range. A family without them casts no lamp's shadow (a
-//   lamp's own glowing bulb or flame, which would shade everything round it).
+// - THE CASTERS: every family handed in with lamp slots (`create_family_casters`'s `lamp_tiles`,
+//   from the family's `lamp_slot` on): tile k culls into its slot `lamp_slot` + k by its own
+//   view's planes and the lamp's range. A family without them casts no lamp's shadow (a lamp's
+//   own glowing bulb or flame, which would shade everything round it), one with fewer than
+//   `tiles` casts into its first tiles only. A game short of memory deals fewer `tiles`: a big
+//   family's lamp slots cost its capacity's lists each.
 // - THE RECEIVERS read the atlas through group 0 (binding 13, `frame_group`'s `lamp_atlas`) and
 //   the tiles off the light buffer: wgsl/lights.wgsl's `lamp_shadow`, inside `local_lights`.
 //
@@ -53,13 +55,13 @@
 namespace ge::render {
 
 struct LampShadowSettings {
-  uint32_t size = 2048;       // the atlas's texels a side (a tile is size / kLampTilesAcross)
-  int first_slot = 0;         // the families' caster slot of tile 0
-  double near_m = 0.05;       // the tiles' near plane, m
-  double face_margin = 1.06;  // a cube face's half-width over 90 degrees' (tan 45 = 1)
-  double bias = 0.004;        // the receiver drawn nearer the lamp by this share of its distance
-  double keep = 1.5;          // a held lamp's score weighed up by this
-  double max_spot_deg = 80;   // a spot's tile is no wider than this off its axis
+  uint32_t size = 2048;            // the atlas's texels a side (a tile is size / kLampTilesAcross)
+  uint32_t tiles = kMaxLampTiles;  // the tiles dealt (<= kMaxLampTiles): the families' lamp slots
+  double near_m = 0.05;            // the tiles' near plane, m
+  double face_margin = 1.06;       // a cube face's half-width over 90 degrees' (tan 45 = 1)
+  double bias = 0.004;       // the receiver drawn nearer the lamp by this share of its distance
+  double keep = 1.5;         // a held lamp's score weighed up by this
+  double max_spot_deg = 80;  // a spot's tile is no wider than this off its axis
 };
 
 // A tile's lamp and where it drew from: CPU state, decided by `deal_lamp_tiles`.

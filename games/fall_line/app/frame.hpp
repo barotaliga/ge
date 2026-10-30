@@ -15,9 +15,9 @@
 //   particles.sim        -> particles (the spray thrown since the last frame, flown a frame)
 //   precip.sim           -> precip (the snow and rain round the eye, carried a frame on the wind)
 //   shadows.cull         -> shadows.lists (the casters of the maps drawn this frame)
-//   shadows.near         -> shadows.maps (the near cascade: the forest, when due)
-//   shadows.far          -> shadows.maps (the far cascade, when due)
+//   shadows.near, .far   -> shadows.maps (the two cascades: the forest, each when due)
 //   shadows.figures      -> shadows.maps (the figures' atlas: the racers, the nearest amateurs)
+//   lamps.cull, .shadows -> lamps.lists lamps.atlas (the lamps' due tiles, with light_shadows)
 //   fog.inject           -> fog.media (render/fog.hpp: the scene's fog lit a froxel each)
 //   fog.integrate        -> fog.volume (each column toward the eye; every haze reads it)
 //   terrain.depth        -> depth (the prepass)
@@ -68,11 +68,13 @@
 #include <string>
 #include <vector>
 
+#include "fall_line/app/lamps.hpp"
 #include "fall_line/app/scene.hpp"
 #include "fall_line/cfg/cvars.hpp"
 #include "fall_line/sim/village.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
+#include "mountain/app/night_lamps.hpp"
 #include "mountain/app/snow.hpp"
 #include "mountain/app/storm_look.hpp"
 #include "mountain/app/trails.hpp"
@@ -88,7 +90,9 @@
 #include "render/grade.hpp"
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
+#include "render/lamp_shadows.hpp"
 #include "render/lens.hpp"
+#include "render/lights.hpp"
 #include "render/motion_blur.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
@@ -139,6 +143,13 @@ struct FrameOptions {
   bool wet = true;        // the rain wets the ground: darker, mirroring, pooled on the flats
   bool lightning = true;  // a map's thunderstorm's flashes and channels (mountain/app/storm_look)
   bool fog = true;        // the scene's fog in areas (FrameScene::fog, render/fog.hpp) drawn
+  // THE LAMPS AFTER DARK (app/lamps.hpp): the piste's floods, the street lamps, the windows'
+  // spill and the racers' headlamps as local lights; `light_shadows`, the nearest and brightest
+  // of them casting into the lamps' atlas (render/lamp_shadows.hpp), `lamp_tiles` of its tiles
+  // (each a caster slot in every family that casts: a cost of memory).
+  bool lights = true;
+  bool light_shadows = true;
+  uint32_t lamp_tiles = 16;
   bool weather =
       true;  // the map's sky and cloud in the picture (mountain/app/cloud_field.hpp): off, clear
   double clouds = 1.0;  // the share of the cloud march's steps (0.25..1); 0: no layer drawn
@@ -219,8 +230,6 @@ struct GameFrame {
   ge::render::Bolts bolts;
   ge::wind::Wet wet;    // the water on the ground, stepped by the frames' clock
   double wet_time = 0;  // the last drawn frame's time_s
-  bool wet_placed =
-      false;  // a frame has been drawn: off, the wet ground starts at its steady state
   // The map's thunderstorm (air::storm_of: none without `Weather::thunder`), laid once for the map
   // it was laid over, and its lightning chosen each frame from the last drawn frame's time.
   ge::wind::Storm storm;
@@ -228,16 +237,18 @@ struct GameFrame {
   double storm_thunder = 0;
   ge::mountain::app::StormLights lightning;
   double lightning_time = 0;
-  bool lightning_placed = false;
   ge::render::CloudPass clouds;
   ge::render::Water water;       // its bodies, `add_water`'s; none: the passes draw nothing
   ge::render::Underwater under;  // the view when the eye is under a body (`under.look`)
   std::vector<ge::skier::SprayPen> spray_pens;  // each racer's, by his place in the scene
   std::vector<ge::skier::SprayGrain> thrown;
   std::vector<ge::render::Particle> births;
-  double spray_time = 0;      // the last drawn frame's time_s
-  bool spray_placed = false;  // a frame has been drawn since the spray was last forgotten
-  bool spray_forget = false;  // kill every particle at the next draw
+  double spray_time = 0;          // the last drawn frame's time_s
+  bool spray_placed = false;      // a frame has been drawn since the spray was last forgotten
+  bool spray_forget = false;      // kill every particle at the next draw
+  bool wet_placed = false;        // a frame has been drawn: off, the wet ground starts steady
+  bool lightning_placed = false;  // a frame has been drawn since the storm's lightning was chosen
+  bool lamps_glow = false;        // the posts' glass as last written, lit or dark
   ge::render::Hiz hiz;
   ge::render::Taa taa;
   ge::render::Bloom bloom;
@@ -265,6 +276,18 @@ struct GameFrame {
   std::vector<uint8_t> buildings_lit;
   wgpu::BindGroup instance_light;
   ge::render::SunShadows shadows;
+  // THE LAMPS (FrameOptions::lights): the light buffer and the lamps' shadow atlas, the masts and
+  // the street lamps standing (their posts drawn as two families, the masts' made with the map and
+  // the street lamps' with the village; casting into the cascades), and each frame's list.
+  ge::render::Lights lights;
+  ge::render::LampShadows lamp_shadows;
+  ge::render::InstanceFamily masts, posts;
+  std::vector<ge::mountain::app::Lamp> piste_lamps, street_lamps;
+  double lamp_lux = 0;  // the last frame's: the lux the eye adapted to among the lamps
+  std::vector<ge::render::LocalLight> lamp_list;
+  std::vector<std::array<double, 4>> lamp_movers;
+  // What casts the lamps' shadows: every family made with lamp tiles.
+  std::vector<ge::render::InstanceFamily*> lamp_casters;
   const ge::mountain::mapgen::Level* level = nullptr;
   // The skinned skiers: the model (scene.hpp's `skier_model`), its rig binding, one skin and one
   // poser a racer, and the pose's scratch.
@@ -279,6 +302,7 @@ struct GameFrame {
   std::vector<ge::assets::Trs> locals;
   std::vector<ge::assets::Affine> globals, palette;
   std::vector<ge::render::Instance> staged_figures;
+  std::array<Headlamp, kMaxFigures> headlamps;  // each racer's, where his posed head is
   std::vector<std::array<double, 3>> figure_centres;
   // The crowd: a poser an amateur by id, every amateur's palette in a row, his instance.
   std::vector<ge::skier::RigPoser> crowd_posers;
@@ -303,7 +327,8 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
 // parked cars, and its traffic where each frame's `FrameScene::run_time` has it
 // (mountain/app/village_look.hpp); the frame keeps it while it draws it. Nothing for null. The
 // buildings and the parked cars cast into the cached cascades as the forest does, the traffic
-// into the figures' atlas, so a vehicle under way casts only near a figure's tile.
+// into the figures' atlas, so a vehicle under way casts only near a figure's tile. Its street
+// lamps stand along its streets (mountain/app/night_lamps.hpp), lit with the dark.
 void show_village(ge::gpu::Device& device, GameFrame& frame,
                   std::shared_ptr<const sim::Village> village);
 

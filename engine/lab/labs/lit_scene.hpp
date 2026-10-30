@@ -150,9 +150,7 @@ inline bool make_scene(ge::gpu::Device& d, Scene& s, std::span<const gr::Surface
   gr::create_flames(d, s.pipelines, s.flames, s.layout);
   gr::create_post(d, s.pipelines, s.post, s.layout, wgpu::TextureFormat::RGBA8Unorm);
   if (shadows) {
-    gr::LampShadowSettings ls;
-    ls.first_slot = caster_maps;
-    gr::create_lamp_shadows(d, s.pipelines, s.lamp_shadows, ls, s.layout, s.sky);
+    gr::create_lamp_shadows(d, s.pipelines, s.lamp_shadows, {}, s.layout, s.sky);
   }
   if (more && !more()) return false;
   if (!s.pipelines.finish(d)) return false;
@@ -164,8 +162,10 @@ inline bool make_scene(ge::gpu::Device& d, Scene& s, std::span<const gr::Surface
   gr::bind_flame_targets(d, s.flames, s.targets);
   s.post_group = gr::post_group(d, s.post, s.targets.hdr_view);
   gr::create_family(d, s.ip, s.props, label + ".props", meshes(), surfaces, 256);
-  const int slots = caster_maps + (shadows ? static_cast<int>(gr::kMaxLampTiles) : 0);
-  if (slots > 0) gr::create_family_casters(d, s.ip, s.props, slots);
+  const int lamp_tiles = shadows ? static_cast<int>(gr::kMaxLampTiles) : 0;
+  if (caster_maps + lamp_tiles > 0) {
+    gr::create_family_casters(d, s.ip, s.props, caster_maps, lamp_tiles);
+  }
   gr::bind_family_hiz(d, s.ip, s.props, s.hiz);
   s.light = gr::instance_light_group(d, s.ip, s.terrain);
   gr::set_instances(d, s.props, 0, props);

@@ -15,9 +15,9 @@
 // pixels well over every pixel round them). The lab fails when the full moon's snow is no brighter
 // than the quarter's, the quarter's no brighter than the new moon's, the dusk does not darken,
 // the snow jumps more than a fifth as the moon takes the key, or the new moon's sky shows no
-// stars. Without an adapter it notes that and draws
-// placeholders, so the digest is the same on every row; GE_GPU_REQUIRE=1 fails instead. Built
-// only with GE_GPU.
+// stars. The lamps after dark are off (the world lab pictures them). Without an adapter it notes
+// that and draws placeholders, so the digest is the same on every row; GE_GPU_REQUIRE=1 fails
+// instead. Built only with GE_GPU.
 //
 // ge:summary Lab: a map at dusk and under a full, a quarter and a new moon: the moon, the stars
 // ge:keywords lab night moon moonlight full-moon new-moon quarter dusk twilight stars key-light
@@ -414,6 +414,9 @@ void run(ge::lab::Lab& lab) {
   }
   fall_line::app::FrameOptions options;
   options.weather = lab.arg_num("weather") != 0;
+  // The moon's and the twilight's light alone: the piste's floodlights (app/lamps.hpp, the world
+  // lab's at --hour=22) would key the picture in their place.
+  options.lights = false;
   auto frame = fall_line::app::create_frame(*device, level, static_cast<uint32_t>(width),
                                             static_cast<uint32_t>(height),
                                             wgpu::TextureFormat::RGBA8Unorm, options);

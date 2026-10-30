@@ -12,7 +12,9 @@
 //
 // Each is drawn twice from the same moment: the village shown (the shot) and the frame as it was
 // before the village was drawn (no streets, no cars, every tree standing), and the share of the
-// picture the village changes is measured. Without an adapter it notes that and draws
+// picture the village changes is measured. The evening's, the night's and the small hours' looks
+// are lit by the lamps after dark (the street lamps, the windows' spill, the skier's headlamp;
+// `--lights=0` draws them unlit, for a before). Without an adapter it notes that and draws
 // placeholders, so the digest is the same on every row; GE_GPU_REQUIRE=1 fails instead. Built
 // only with GE_GPU.
 //
@@ -258,9 +260,14 @@ void run(ge::lab::Lab& lab) {
   // One frame, as a game has it: every look filmed as it was before the village (the before),
   // then the village shown in it (show_village, after the frame's load, as the app does) and
   // every look filmed again.
+  // --lights: the lamps after dark (app/lamps.hpp: the street lamps, the windows' spill, the
+  // skier's headlamp) on or off, for a before and after.
+  fall_line::app::FrameOptions options;
+  options.lights = lab.arg_num("lights") != 0;
+  options.light_shadows = options.lights;
   auto frame = fall_line::app::create_frame(*device, *level, static_cast<uint32_t>(width),
                                             static_cast<uint32_t>(height),
-                                            wgpu::TextureFormat::RGBA8Unorm, {});
+                                            wgpu::TextureFormat::RGBA8Unorm, options);
   if (!frame) {
     lab.fail("Fall Line's frame did not build", "Read the gpu: lines above. Skill: render.");
     return;
@@ -351,6 +358,7 @@ const ge::lab::LabSpec kSpec{
         {"hour", "11", "the sun's hour (-1: the map's own)"},
         {"frames", "8", "frames drawn into each shot at 60 a second"},
         {"px", "768", "the pictures' width (16:9)"},
+        {"lights", "1", "the lamps after dark: the street lamps, the windows' spill, the headlamp"},
     },
     "--px=256 --frames=2",
     run,
