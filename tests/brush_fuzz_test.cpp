@@ -2,7 +2,8 @@
 // mutated thousands of ways (bytes flipped, the file cut short, words written over the lump
 // directory and the records) from a seeded stream, every mutant either refused with a reason and
 // a next step, or read into a view whose every index is in range and whose tree a point walk
-// leaves. The sanitizer rows make an out-of-range read a failure here.
+// leaves, and whose clip hulls a point walk ends in. The sanitizer rows make an out-of-range read
+// a failure here.
 //
 // ge:summary Test: thousands of mutated BSP maps are refused or read in range, never overrun
 // ge:keywords test brush bsp fuzz mutate damage refuse bounds sanitizer v29 bsp2 v38 v46
@@ -64,6 +65,12 @@ bool sound(const br::Map& m) {
       if (l.offset + uint64_t(l.width) * l.height * 3 > m.light_rgb.size()) return false;
     }
   }
+  for (const br::ClipNode& n : m.clip_nodes) {
+    if (n.plane >= m.planes.size()) return false;
+    for (int32_t c : n.child) {
+      if (c >= 0 && size_t(c) >= m.clip_nodes.size()) return false;
+    }
+  }
   return true;
 }
 
@@ -95,7 +102,11 @@ TEST(mutated_maps_are_refused_or_read_in_range) {
         const uint32_t leaf = br::leaf_at(m, p, uint32_t(core::pick_index(rng, m.models.size())));
         CHECK(leaf < m.leaves.size());
         br::cluster_sees(m, m.leaves[leaf].cluster, int32_t(core::int_in(rng, -2, 9)));
+        // A clip hull's walk ends (a looping hull was refused) on a contents number.
+        if (k % 3 && !m.clip_nodes.empty()) CHECK(br::hull_contents(m, p, 0, k % 3) < 0);
       }
+      br::build_phs(&m);
+      CHECK(m.phs.empty() || m.phs.size() == m.pvs.size());
     }
     // Both outcomes are exercised: a mutant often lands in pixels or luxels and still reads.
     CHECK(read > 50 && refused > 50);
