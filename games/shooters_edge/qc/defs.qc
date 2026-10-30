@@ -246,6 +246,8 @@ float IT_ARMOR1 = 8192;
 float IT_ARMOR2 = 16384;
 float IT_ARMOR3 = 32768;
 float IT_ARMOR_ALL = 57344;
+float IT_INVULNERABILITY = 1048576;
+float IT_QUAD = 4194304;
 
 // sound channels and how far a sound carries
 float CHAN_AUTO = 0;
@@ -283,6 +285,9 @@ float TE_BLOOD = 12;
 
 // effects
 float EF_MUZZLEFLASH = 2;
+float EF_DIMLIGHT = 8;  // a glow round the player (a power held)
+float EF_BLUE = 64;     // its colour: the quad's
+float EF_RED = 128;     // the shield's
 
 // --- the mod's own fields ---
 
@@ -305,6 +310,8 @@ float EF_MUZZLEFLASH = 2;
 .string deathtype;        // how a death is told
 .float respawn_time;      // an item's seconds to come back
 .float hazard_finished;   // when lava or slime next hurts
+.float super_damage_finished;  // the quad runs out
+.float invincible_finished;    // the shield runs out
 .float light_lev;         // a light's brightness (the map's "light" key)
 .float style;             // a light's style
 

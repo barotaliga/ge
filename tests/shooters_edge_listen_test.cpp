@@ -5,13 +5,15 @@
 // and fires at the floor in the same frame and rises far higher than his jump alone takes him,
 // for the rocket's health. The run is held to the bit by its golden rows. Also the keys and the
 // mouse as commands, the HUD's status off the player, and the weapon in his hand: the launcher
-// raised, one shot seen for one rocket and none for the spawn.
+// raised, one shot seen for one rocket and none for the spawn. The powers: the quad's and the
+// shield's glow round their holder, the shield taking a blast, both running out.
 //
 // ge:summary Tests: the listen server headless: a fixture map from a pack, a rocket jump, golden
 // ge:keywords test listen-server rocket-jump search-path pak baseline-mod controls hud-status
-// ge:keywords golden fixture held-weapon step_held
+// ge:keywords golden fixture held-weapon step_held quad shield powers effects
 // ge:skill shooter progs testing
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -23,6 +25,7 @@
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "golden.hpp"
+#include "progs/vm.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/held.hpp"
@@ -262,6 +265,48 @@ TEST(the_hud_reads_the_launcher_and_its_rockets) {
   CHECK(std::fabs(sub.pos.y) < 0.01);  // the feet on the floor at z 0
   CHECK(row.eye_stand_m > 1.0 && row.eye_stand_m < 1.3);
   CHECK(std::fabs(sub.look_yaw - 1.5707963) < 1e-3);  // facing east (+x) is heading pi/2
+}
+
+namespace {
+
+void set_field(cl::Listen& l, int entity, const char* name, float value) {
+  const ge::progs::Def* d = ge::progs::find_field(*l.progs, name);
+  CHECK_MSG(d != nullptr, std::string("the baseline mod has no field ") + name);
+  if (d != nullptr) {
+    *ge::progs::entity_field(l.server->q.vm, entity, d->offset) = std::bit_cast<uint32_t>(value);
+  }
+}
+
+}  // namespace
+
+TEST(the_powers_glow_round_their_holder_the_shield_takes_the_blast_and_both_run_out) {
+  cl::Listen l;
+  if (!start(l)) return;
+  for (int i = 0; i < 80; i++) cl::listen_frame(l, {});
+  l.impulse = 7;
+  for (int i = 0; i < 80; i++) cl::listen_frame(l, {});
+  const float now = static_cast<float>(l.server->sv.time);
+  set_field(l, 1, "super_damage_finished", now + 30);
+  set_field(l, 1, "invincible_finished", now + 30);
+  cl::listen_frame(l, {});
+  // EF_DIMLIGHT | EF_BLUE | EF_RED: the quad's blue and the shield's red round him.
+  CHECK(static_cast<int>(cl::field_named(l, 1, "effects")) == (8 | 64 | 128));
+  // A rocket at his own feet takes nothing off him under the shield.
+  const float health = l.server->sv.edicts[1].health;
+  l.view.x = 89;
+  sh::MoveCmd fire;
+  fire.buttons = sh::kButtonAttack;
+  for (int i = 0; i < 2; i++) cl::listen_frame(l, fire);
+  for (int i = 0; i < 60; i++) cl::listen_frame(l, {});
+  CHECK_MSG(l.server->sv.edicts[1].health == health,
+            "the shield let the blast through: health " +
+                std::to_string(l.server->sv.edicts[1].health) + " of " + std::to_string(health));
+  // Both run out: the glow goes with them.
+  const float later = static_cast<float>(l.server->sv.time);
+  set_field(l, 1, "super_damage_finished", later + 0.05f);
+  set_field(l, 1, "invincible_finished", later + 0.05f);
+  for (int i = 0; i < 10; i++) cl::listen_frame(l, {});
+  CHECK(static_cast<int>(cl::field_named(l, 1, "effects")) == 0);
 }
 
 TEST(the_hand_raises_the_launcher_and_sees_one_shot_a_rocket) {
