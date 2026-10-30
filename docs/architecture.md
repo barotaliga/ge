@@ -115,9 +115,12 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   world for labs and prototypes, the strafe jumper's best angle and the scenarios, and the knobs
   bound as console cvars (`cvars.hpp`). It depends on `engine/core`, and on `engine/console` for
   that binding alone; the step is a pure function of its inputs, so a run replays from its commands.
-- **`engine/vfs`**: content files (`ge::vfs`, M18a): the pack archive's directory checked whole
-  before anything is read, and each file handed out as a view into the archive. Search paths, zip
-  archives and directories come with the rest of M18a. It depends on `engine/core` only.
+- **`engine/vfs`**: content files (`ge::vfs`, M18a): the search path over game directories (packs
+  in number order, then pk3 zips and `.pk3dir` directories in name order, then loose files; a later
+  game directory over an earlier one), a lookup that never allocates, every archive's directory
+  checked whole before anything is read, files handed out as views where they are stored; the wad
+  and its pictures, the palette and the colour map. It depends on `engine/core` only (the inflater
+  and the CRC-32 are core's).
 - **`engine/snow`**: a layer of snow over any ground (`ge::snow`, M29; `docs/snow.md` is the
   design): the analytic cover read exactly where nothing has crossed, sparse fixed-point tiles
   of columns (depth and mass) where something has, `sample`, `press` with its mass conserved to
