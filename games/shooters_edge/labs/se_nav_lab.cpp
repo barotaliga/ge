@@ -20,6 +20,7 @@
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
+#include "nav_top.hpp"
 #include "shooter/nav.hpp"
 #include "shooters_edge/sim/arena.hpp"
 #include "shooters_edge/sim/nav_course.hpp"
@@ -30,9 +31,10 @@ namespace gl = ge::lab;
 namespace sh = ge::shooter;
 namespace se = shooters_edge::sim;
 using ge::core::num::to_fixed;
+using shooters_edge::labs::floor_picture;
+using shooters_edge::labs::kTopMargin;
+using View = shooters_edge::labs::TopView;
 using In = std::vector<std::pair<std::string, std::string>>;
-
-constexpr int kMargin = 24;  // pixels round the map, for the legend's row
 
 std::string hex64(uint64_t v) {
   char buf[17];
@@ -46,10 +48,11 @@ std::string key_of(std::string s) {
   return s;
 }
 
-const gl::Rgba kKindColour[3] = {
+const gl::Rgba kKindColour[4] = {
     {150, 150, 140, 255},  // walk
     {60, 110, 200, 255},   // drop
     {210, 40, 40, 255},    // jump
+    {40, 160, 90, 255},    // ride
 };
 const gl::Rgba kMoverColour{170, 60, 200, 255};
 const gl::Rgba kRouteColour{20, 20, 20, 255};
@@ -65,40 +68,8 @@ struct Map {
   std::vector<Route> routes;
 };
 
-// The picture's pixel for a map point (x east, y north up the picture), one pixel a unit.
-struct View {
-  sh::Vec3f lo, hi;
-  double px(double x) const { return kMargin + (x - lo.x); }
-  double py(double y) const { return kMargin + (hi.y - y); }
-};
-
-// The floor from above: a point traced down the map's own point hull per pixel, shaded by the
-// height it stops at (solid at the top: a wall, dark).
-gl::Picture floor_picture(const sh::MoveWorld& world, const View& v) {
-  const int w = static_cast<int>(v.hi.x - v.lo.x) + 2 * kMargin;
-  const int h = static_cast<int>(v.hi.y - v.lo.y) + 2 * kMargin;
-  gl::Picture p = gl::create_picture(w, h, {245, 245, 240, 255});
-  const sh::Hull& hull = world.solids[0].point_hull;
-  const float span = v.hi.z - v.lo.z;
-  for (int py = kMargin; py < h - kMargin; py++)
-    for (int px = kMargin; px < w - kMargin; px++) {
-      const float x = v.lo.x + static_cast<float>(px - kMargin) + 0.5f;
-      const float y = v.hi.y - static_cast<float>(py - kMargin) - 0.5f;
-      const sh::HullTrace tr = sh::trace_hull(hull, {x, y, v.hi.z - 1}, {x, y, v.lo.z});
-      if (tr.startsolid) {
-        gl::set_pixel(p, px, py, {70, 74, 72, 255});
-        continue;
-      }
-      const float t = (tr.endpos.z - v.lo.z) / span;  // 0 low .. 1 high
-      const auto g = static_cast<uint8_t>(150 + 95 * t);
-      gl::set_pixel(p, px, py,
-                    {static_cast<uint8_t>(g - 20), g, static_cast<uint8_t>(g - 35), 255});
-    }
-  return p;
-}
-
 void legend(gl::Picture& p) {
-  int x = kMargin;
+  int x = kTopMargin;
   const char* names[4] = {"WALK", "DROP", "JUMP", "THROUGH A MOVER"};
   for (int k = 0; k < 4; k++) {
     const gl::Rgba c = k < 3 ? kKindColour[k] : kMoverColour;
@@ -306,8 +277,14 @@ void run(gl::Lab& lab) {
     sh::map_world(a.world.model(), m.world);
     // The door's and the plat's entity numbers as the arena spawns them are the program's; the
     // lab tags them by model index, which is what it draws.
-    m.movers = {{se::kDoorModel, a.door.mins, a.door.maxs},
-                {se::kPlatModel, a.plat.mins, a.plat.maxs}};
+    // Tagged only, not ridden: the pilot's lab (`se-pilot`) rides the plat on the server.
+    m.movers.resize(2);
+    m.movers[0].ent = se::kDoorModel;
+    m.movers[0].absmin = a.door.mins;
+    m.movers[0].absmax = a.door.maxs;
+    m.movers[1].ent = se::kPlatModel;
+    m.movers[1].absmin = a.plat.mins;
+    m.movers[1].absmax = a.plat.maxs;
     m.routes = {
         {"west spawn to east room", a.spawn[0], {400, 64, 24}},
         {"east room to health", {400, -128, 24}, {a.health_origin.x, a.health_origin.y, 24}}};

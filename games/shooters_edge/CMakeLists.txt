@@ -6,7 +6,7 @@
 # (content/) is data and builds nothing. Its sound (sound/) is a second library: what the game
 # plays on the engine's synth, over the brush world's leaves. Its server (server/) is a library and
 # the headless `shooters_edge_server` executable. Its HUD (hud/) is a library
-# of its own. mods/ holds the sample C++ mod, built as a package (cmake/Mods.cmake) the tests and
+# of its own. Its bots (bots/) are a library over the server. mods/ holds the sample C++ mod, built as a package (cmake/Mods.cmake) the tests and
 # the `mod` lab load.
 file(GLOB SHOOTERS_EDGE_SIM_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sim/*.cpp)
 add_library(shooters_edge_sim STATIC ${SHOOTERS_EDGE_SIM_SOURCES})
@@ -28,6 +28,14 @@ file(GLOB SHOOTERS_EDGE_SERVER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_
 add_library(shooters_edge_server STATIC ${SHOOTERS_EDGE_SERVER_SOURCES})
 target_link_libraries(shooters_edge_server PUBLIC shooters_edge_sim)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_server)
+
+# Its bots (bots/): the pilot (plugins/shooter/pilot.hpp) played on the game's maps, on the nav
+# course through the move and on the arena through the server's bot slots, for the tests and the
+# `se-pilot` lab (skills: shooter, bots).
+file(GLOB SHOOTERS_EDGE_BOTS_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/bots/*.cpp)
+add_library(shooters_edge_bots STATIC ${SHOOTERS_EDGE_BOTS_SOURCES})
+target_link_libraries(shooters_edge_bots PUBLIC shooters_edge_server)
+set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_bots)
 
 # The headless dedicated server (server/bin/), named `shooters_edge_server` on disk, at the build's
 # root (build/<preset>/shooters_edge_server): `--help` lists its flags.
