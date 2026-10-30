@@ -7,10 +7,14 @@
 // warped water on the next frame; the classic look draws none of them.
 //
 // The switches that change the BSP renderer's own options (the shadows, the teleporters' and the
-// pools' light) are applied by `dress_extras`, with the weather's wet, puddles and fog.
+// pools' light) are applied by `dress_extras`, with the weather's wet, puddles and fog. A liquid
+// switched off is drawn by the BSP renderer as the pack's warped surface. Under the water the view
+// is the engine's (render/underwater.hpp), and the room over the surface is drawn without the
+// map's visibility, which the map's tools often worked out with the liquids opaque.
 //
 // ge:summary The modern look's water, lava, slime, flames and weather in the window, by ce_ switch
 // ge:keywords world-extras water lava slime liquids flames torches weather rain snow precip
+// ge:keywords underwater warped-liquids
 // ge:keywords classicenhance switches ce_water ce_lava ce_slime ce_flames ce_weather ce_shadows
 // ge:skill render shooter classicenhance
 #pragma once

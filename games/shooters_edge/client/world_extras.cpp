@@ -12,6 +12,7 @@
 #include "render/flame.hpp"
 #include "render/liquid.hpp"
 #include "render/precip.hpp"
+#include "render/underwater.hpp"
 #include "render/water.hpp"
 
 namespace shooters_edge::client {
@@ -26,6 +27,8 @@ struct WorldExtras {
   ba::LiquidRows rows;
   ba::LiquidWorld world;
   gr::Water water;
+  gr::Underwater under;  // the view from under the water's level
+  uint32_t height = 1;   // the targets' rows
   gr::Liquids liquids;
   std::vector<ba::Kind> liquid_kinds;  // each liquid slot's: kLava or kSlime
   gr::Flames flames;
@@ -47,6 +50,9 @@ WorldExtrasPtr create_extras(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines
   x->on = &switches;
   x->weather = &weather;
   gr::create_water(d, pipelines, x->water, frame);
+  gr::create_underwater(d, pipelines, x->under, frame);
+  // The pools are clear enough to see across: a third of the water's own murk.
+  x->under.look.fog = 1.0 / 3;
   gr::create_liquid(d, pipelines, x->liquids, frame);
   gr::create_flames(d, pipelines, x->flames, frame);
   gr::PrecipSettings precip;
@@ -66,6 +72,8 @@ WorldExtrasPtr create_extras(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines
 
 void bind_extras_targets(ge::gpu::Device& d, WorldExtras& x, const gr::FrameTargets& targets) {
   gr::create_water_targets(d, x.water, targets);
+  gr::bind_underwater(d, x.under, x.water);
+  x.height = targets.height;
   gr::create_liquid_targets(d, x.liquids, targets);
   gr::bind_flame_targets(d, x.flames, targets);
   gr::bind_precip_targets(d, x.precip, targets);
@@ -78,6 +86,13 @@ void dress_extras(WorldExtras& x, gr::FrameView& view, ba::Options& options, dou
   options.portal_lights = options.portal_lights && on.teleports;
   if (!on.lava) options.lava_glow = 0;
   if (!on.slime) options.slime_glow = 0;
+  // A liquid switched off is the pack's own warped surface, as the classic draws it.
+  options.warped_water = !on.water;
+  options.warped_slime = !on.slime;
+  options.warped_lava = !on.lava;
+  // Under the water (last frame's eye) the room over the surface must be drawn for the view up
+  // through it, and a map's visibility is often worked out with the liquids opaque.
+  if (v2 && on.water && x.water.eye_under >= 0) options.pvs = false;
   x.raining = v2 && on.weather && x.weather->on;
   if (!x.raining) return;
   x.now = ba::step_weather(*x.weather, x.state, view.eye, view.time_s, 0.2);
@@ -97,6 +112,7 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   }
   ba::light_rooms(x.water, x.liquids, x.rows, options.minlight, options.brightness);
   gr::prepare_water(d, x.water, view);
+  gr::prepare_underwater(d, x.under, x.water, view, x.height);
   gr::prepare_liquid(d, x.liquids, view);
   x.fires.clear();
   if (v2 && on.flames) ba::bsp_fires(*x.scene, view.time_s, options.brightness, x.fires);
@@ -119,6 +135,7 @@ void encode_extras(const WorldExtras& x, const ge::gpu::PipelineSet& pipelines,
                    const wgpu::BindGroup& frame) {
   gr::encode_flames(x.flames, pipelines, rec, e, targets, frame);
   gr::encode_water(x.water, pipelines, rec, e, targets, frame);
+  gr::encode_underwater(x.under, pipelines, rec, e, targets, frame);
   gr::encode_liquid(x.liquids, pipelines, rec, e, targets, frame);
   gr::encode_precip(x.precip, pipelines, rec, e, targets, frame);
 }

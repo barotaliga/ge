@@ -20,6 +20,7 @@
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
@@ -115,21 +116,60 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     cl::frame_view(l, shown, 1, t, 0.013);
     cl::step_fx(l, shown, fx_state, t, 0.013, fx);
   }
+  // The views: `--views` (x,y,z,yaw,pitch in the map's units and degrees, ';' between), the
+  // player stood there; else the start, four ways.
+  struct Place {
+    bool moved = false;
+    float at[3] = {0, 0, 0};
+    float yaw = 0, pitch = 0;
+  };
+  std::vector<Place> places;
+  const std::string views = lab.arg("views");
+  for (size_t a = 0; a < views.size();) {
+    const size_t b = std::min(views.find(';', a), views.size());
+    Place p;
+    p.moved = std::sscanf(views.substr(a, b - a).c_str(), "%f,%f,%f,%f,%f", &p.at[0], &p.at[1],
+                          &p.at[2], &p.yaw, &p.pitch) == 5;
+    if (p.moved) places.push_back(p);
+    a = b + 1;
+  }
+  if (places.empty()) {
+    for (int turn = 0; turn < 4; ++turn) {
+      Place p;
+      p.yaw = l.view.y + static_cast<float>(90 * turn);
+      p.pitch = l.view.x;
+      places.push_back(p);
+    }
+  }
   const char* kLooks[2] = {"classic", "enhanced"};
-  for (int turn = 0; turn < 4; ++turn) {
-    l.view.y += 90 * (turn > 0);
+  for (size_t v = 0; v < places.size(); ++v) {
+    const Place& p = places[v];
+    auto& player = l.server->sv.edicts[1];
+    if (p.moved) {
+      player.origin = {p.at[0], p.at[1], p.at[2]};
+      player.velocity = {};
+    }
+    l.view.x = p.pitch;
+    l.view.y = p.yaw;
+    for (int i = 0; i < 4; i++) {  // the eyes and the effects settle (the screen's blend, say)
+      if (p.moved) player.origin = {p.at[0], p.at[1], p.at[2]};
+      player.velocity = {};
+      t += 0.013;
+      cl::frame_view(l, shown, 1, t, 0.013);
+      cl::step_fx(l, shown, fx_state, t, 0.013, fx);
+    }
+    fx.births.clear();
     ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
     for (int k = 0; k < 2; ++k) {
       for (int f = 0; f < 30; ++f)  // the weather and the flames run a moment in
         cl::draw_world(*device, *world[k], view, fx, 1.0 / 30, {}, out.view);
       const ge::gpu::Image img = ge::gpu::read_now(*device, out);
-      const std::string id = std::string(kLooks[k]) + "-" + std::to_string(turn * 90);
+      const std::string id = std::string(kLooks[k]) + "-" + std::to_string(v);
       lab.shot({id,
                 id,
-                "The map's start, turned " + std::to_string(turn * 90) + " degrees, in the " +
-                    kLooks[k] + " look.",
+                "View " + std::to_string(v) + " in the " + kLooks[k] + " look.",
                 "the map from the player's eyes",
-                {{"map", lab.arg("map")}}},
+                {{"map", lab.arg("map")}, {"views", views}}},
                gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
                gl::Det::measured);
     }
@@ -298,7 +338,8 @@ const gl::LabSpec kSpec{
     {{"size", "960,540", "the frame's width and height, px"},
      {"game", "", "a game folder of packs to draw instead of the halls (private pictures only)"},
      {"map", "start", "with --game: the map's name"},
-     {"cvars", "", "with --game: the modern side's cvars, as the console takes them"}},
+     {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
+     {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"}},
     "--size=480,270",
     run,
 };
