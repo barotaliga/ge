@@ -19,15 +19,27 @@
 // - ROWS GIVEN UP FIRST, BY RULE (`LadderRow::first`): such rows step down their ladders, in their
 //   order, a stop at a time, while every other row stays at its top; only once they are all at
 //   their cheapest does the search over the other rows begin.
+// - A GAME'S LADDER (`QualityLadder`) is its rows, its price table (the reference machine, its
+//   size and its floor) and its named presets. Everything below works on any game's: the game
+//   only states its values and turns a pick into its own passes' options.
+// - THE QUALITY SETTING (`quality_pick`) is the player's one word for the picture, the same in
+//   every game (bound as `r_quality`, with `r_budget` for `auto`): `custom` (none: the game's own
+//   settings rule), a preset by name, a number from 0 to 1 (the picture of most worth inside a
+//   budget that share of the way from every row's cheapest to the top) or `auto` (the picture of
+//   most worth inside the budget). The table's prices scale by the window's pixels.
 //
 // ge:summary The quality ladder's fit: the price table, the machine's scale, the exact knapsack
 // ge:keywords render quality-ladder picture-fit preset price-table knapsack budget fit_ladder
-// ge:keywords machine_scale ladder_cost ladder_worth automatic-preset
+// ge:keywords machine_scale ladder_cost ladder_worth automatic-preset quality-setting
+// ge:keywords r_quality r_budget quality_pick quality-ladder price-table presets
 // ge:skill render perf
 // ge:test tests/render_ladder_test.cpp
 #pragma once
 
+#include <cstdint>
+#include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -68,5 +80,41 @@ struct LadderFit {
 // `floor_ms` the reference's frame at every row's cheapest.
 LadderFit fit_ladder(std::span<const LadderRow> rows, double budget_ms, double floor_ms,
                      double scale = 1.0);
+
+// The reference machine a game's prices were measured on: its name, the frame's size, and its
+// frame with every row at its cheapest.
+struct PriceTable {
+  std::string_view machine;
+  uint32_t width = 0, height = 0;
+  double floor_ms = 0;
+};
+
+// A named picture a player can choose: a stop for each row, by index, in the rows' order.
+struct LadderPreset {
+  std::string_view name;
+  std::span<const int> stops;
+};
+
+// A GAME'S LADDER: its rows (priced), its price table and its presets (cheapest first).
+struct QualityLadder {
+  std::span<const LadderRow> rows;
+  PriceTable table;
+  std::span<const LadderPreset> presets;
+};
+
+// Every row at its dearest stop.
+LadderPick top_pick(std::span<const LadderRow> rows);
+// The preset called `name`; none when the ladder has no such preset.
+std::optional<LadderPick> preset_pick(const QualityLadder& ladder, std::string_view name);
+// THE AUTOMATIC PRESET: the picture of most worth that holds `budget_ms` on a machine that drew
+// `drawn` in `timed_ms` at the table's size.
+LadderFit auto_fit(const QualityLadder& ladder, double budget_ms, const LadderPick& drawn,
+                   double timed_ms);
+// THE QUALITY SETTING: the picture a player's word names (above), for a `width` x `height`
+// window. None for `custom` (or empty), and none for a word it does not know, with `error` saying
+// what was wrong.
+std::optional<LadderPick> quality_pick(const QualityLadder& ladder, std::string_view quality,
+                                       double budget_ms, uint32_t width, uint32_t height,
+                                       std::string& error);
 
 }  // namespace ge::render

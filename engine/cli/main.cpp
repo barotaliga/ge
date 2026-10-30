@@ -200,7 +200,8 @@ Outcome run(const Args& a) {
     std::string title;
     for (const std::string& w : a.words) title += (title.empty() ? "" : " ") + w;
     return run_goals_claim(fs::absolute(repo_of(a)), title, flag_value(a, "under"),
-                           base.empty() ? "origin/main" : base);
+                           base.empty() ? "origin/main" : base, flag_value(a, "exit"),
+                           flag_value(a, "labs"));
   }
   if (name == "new") return cmd_new(a);
   if (name == "use") return run_use(repo_of(a), a.words[0]);

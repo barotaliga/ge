@@ -62,6 +62,11 @@ struct Settings {
   int32_t width = 1280, height = 720;
   bool vsync = true;
   // The picture: app/frame.hpp's FrameOptions, the player's half of it.
+  // r_quality: custom (the settings below rule), low, medium, high, top, auto or 0..1 (the
+  // quality ladder's picture, app/ladder.hpp's quality_pick, over the ladder's rows below);
+  // r_budget: the GPU ms a frame `auto` fits.
+  std::string quality = "custom";
+  double budget_ms = 8.3;
   bool taa = true;
   double scale = 1.0;
   bool occlusion = true;

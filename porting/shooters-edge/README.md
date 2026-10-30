@@ -18,7 +18,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `builtins.md` | The modern server's builtins by number, its extension builtins and list, the monster moves, the hooks and when they are called, client commands, the extension fields (M18p) |
 | `movement.md` | The player's movement at the modern server's defaults: the settings, every step of the move, the clip hulls and the trace, the test vectors' format (M18o1) |
 | `gameloop.md` | The game loop: the game program's hooks, entities, the area tree, the server frame, thinking, tossing, pushers, touching, the player's packet and command, client prediction (M18o2) |
-| `vectors/` | Measured test vectors: `pmove.txt` (the player's move in hand-built worlds) and `entity.txt` (tossed, bounced and flying entities), for `se-parity` |
+| `vectors/` | Measured test vectors: `pmove.txt` (the player's move in hand-built worlds), `framemove.txt` (the original move in the same worlds) and `entity.txt` (tossed, bounced and flying entities), for `se-parity` |
 | `protocol.md` | The classic protocol, version 28: connectionless packets, the net channel, the messages to fill with M18g |
 | `campaign.md` | The single-player program's host (M18s): its layout (crc 5927), the builtin differences, spawn parms, `serverflags`, level changes, intermission and finale, the statistics, episodes and the full game, saves |
 | `frame-move.md` | The original player move and the movement setting `sv_playermove` (M18s): who jumps in each mix of program and move, the single-player frame |
