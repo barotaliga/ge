@@ -7,17 +7,22 @@
 //   top centre    the AIR CLOCK while a flight lasts (red while it beats the run's best); on a
 //                 phone held upright it drops under the corners' columns
 //   top right     the WANTED LEVEL while the army hunts him: five stars (the lit ones blinking
-//                 while they search), the search draining under them, the survival timer
+//                 while they search), the search draining under them, the survival timer; the
+//                 WIND METER under them, heading-up (the air he feels, the weather's mark)
 //   upper centre  the PROMPT: down, stuck, waiting for a chair, dead, arrested
-//   bottom left   the SPEED in km/h (or the machine's, captioned with its name) with the EDGE
-//                 bar over it, centred: left edges fill left, right edges right
+//   bottom left   the SPEEDOMETER, a dial in km/h (`hud_speedo_style number` prints the figure
+//                 instead; on a machine its speed is always printed, captioned with its name),
+//                 with the EDGE bar over it, centred: left edges fill left, right edges right
+//   top centre    a COMPASS strip, hidden unless the player shows it (`hud_compass_show 1`)
 //   bottom right  the NEWS: a landing's air and load, a wipeout, a tree brushed, onto a run,
 //                 the top of a lift, the hunt's turns
 //
 // The HUD is DATA (engine/hud/layout.hpp): `hud_layout` declares every element above with its
 // place, `fill_hud` writes their content from the snapshot once a frame, and the player moves,
 // resizes, hides and fades any of them through its `hud_<id>_` cvars (`add_hud_cvars`). The ids:
-// seed run best_air stars search timer air lift speed edge height news prompt.
+// seed run best_air stars search timer wind compass air lift speed speedo edge height news
+// prompt; and the game's own two, `hud_speedo_style` (dial or number) and `hud_speedo_max`
+// (km/h at the dial's end), bound by this file's `add_hud_cvars`.
 //
 // Every box it draws is returned by id for the layout check (`ge::hud::layout_problems`); the
 // `hud` lab fails a HUD whose boxes overlap or leave the screen at any of the three reference
@@ -25,13 +30,16 @@
 //
 // ge:summary Fall Line's HUD drawn: the free ride's figures laid out in the game's look
 // ge:keywords hud view draw_hud hud_style layout seed air-clock wanted-stars speed edge-bar
-// ge:keywords prompt news portrait landscape hud_layout fill_hud elements cvars
+// ge:keywords prompt news portrait landscape hud_layout fill_hud elements cvars speedometer
+// ge:keywords speedo dial wind-meter compass hud_speedo_style hud_speedo_max
 // ge:skill ui
 // ge:test tests/fall_line_hud_test.cpp
 #pragma once
 
+#include <string>
 #include <vector>
 
+#include "console/console.hpp"
 #include "fall_line/hud/snapshot.hpp"
 #include "hud/hud.hpp"
 #include "hud/layout.hpp"
@@ -44,13 +52,19 @@ NewsInk news_ink(const ge::hud::Style& style);
 // Fall Line's elements, by index, in the order they are declared (and stacked).
 struct HudLayout {
   ge::hud::Layout layout;
-  int seed, run, best_air, stars, search, timer, air, lift, speed, edge, height, news, prompt;
+  int seed, run, best_air, stars, search, timer, wind, compass, air, lift, speed, speedo, edge,
+      height, news, prompt;
+  std::string speedo_style = "dial";  // hud_speedo_style: `dial` or `number`
 };
 
 // The game's HUD: every element in its default place.
 HudLayout hud_layout(const ge::hud::Style& st);
 // Each element's content from the snapshot; `run`'s feed must outlive the next draw.
 void fill_hud(HudLayout& h, const ge::hud::Style& st, const HudSnapshot& s, const HudRun& run);
+
+// The engine's hud_ cvars for every element, and the game's own: hud_speedo_style and
+// hud_speedo_max. `h` must outlive `con`.
+void add_hud_cvars(ge::console::Console& con, HudLayout& h);
 
 // A HUD in the game's default places, filled and drawn: for a lab or a test.
 std::vector<ge::hud::Placed> draw_hud(ge::ui::DrawList& dl, const ge::hud::Frame& f,

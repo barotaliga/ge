@@ -78,9 +78,14 @@ TEST(every_kind_stands_at_its_measures_with_a_smaller_far_lod) {
 }
 
 TEST(every_building_wears_a_look_and_stands_on_its_plinth) {
-  const std::vector<float> looks = mapp::building_materials();
-  CHECK(looks.size() == static_cast<size_t>(mapp::kBuildingLooks) * mapp::kBuildingParts * 3);
-  for (const float c : looks) CHECK(c >= 0 && c <= 1);
+  const std::vector<ge::render::Surface> looks = mapp::building_surfaces();
+  CHECK(looks.size() == static_cast<size_t>(mapp::kLitSets) * 2);
+  for (size_t i = 0; i < looks.size(); ++i) {
+    for (const float c : looks[i].albedo) CHECK(c >= 0 && c <= 1);
+    // Only the lit sets' glass gives light.
+    const bool glow = i >= mapp::kLitSets && i % mapp::kBuildingParts == mapp::kPane;
+    CHECK((looks[i].emissive_nits > 0) == glow);
+  }
   for (int k = 0; k < vg::kBuildingKinds; ++k) {
     for (int32_t id = 0; id < 40; ++id) {
       const auto kind = static_cast<vg::BuildingKind>(k);
@@ -107,4 +112,35 @@ TEST(every_building_wears_a_look_and_stands_on_its_plinth) {
       CHECK(out[1].scale[2] > static_cast<float>(s.depth));
     }
   }
+}
+
+TEST(the_windows_light_at_dusk_and_go_dark_one_building_at_a_time) {
+  using K = vg::BuildingKind;
+  // Every share a share, and nothing lit by day.
+  for (int k = 0; k < vg::kBuildingKinds; ++k) {
+    for (int h = 0; h <= 48; ++h) {
+      const double share = mapp::lights_share(static_cast<K>(k), h * 0.5);
+      CHECK(share >= 0 && share <= 1);
+    }
+  }
+  CHECK(mapp::lights_share(K::house, 21) > mapp::lights_share(K::house, 2));
+  CHECK(mapp::lights_share(K::shop, 23) == 0);
+  CHECK(mapp::lights_share(K::garage, 22) > 0.5);
+  // Wrapped round the day.
+  CHECK(std::fabs(mapp::lights_share(K::hotel, 25) - mapp::lights_share(K::hotel, 1)) < 1e-12);
+  int evening = 0, late = 0, day = 0;
+  for (int32_t id = 0; id < 400; ++id) {
+    const vg::Building b{id, K::house, 0, 0, 0, 0, 8, 10, 5, 9, 0, 0};
+    evening += mapp::lights_on(b, 21, -0.3);
+    late += mapp::lights_on(b, 2, -0.3);
+    day += mapp::lights_on(b, 21, 0.2);
+    // A house lit late is lit in the evening too: a fixed draw under a falling share.
+    if (mapp::lights_on(b, 2, -0.3)) CHECK(mapp::lights_on(b, 21, -0.3));
+    std::vector<ge::render::Instance> out;
+    mapp::building_instances(b, out, true);
+    CHECK(out[0].material == mapp::building_material(b) + mapp::kLitSets);
+  }
+  CHECK(evening > 300 && evening < 380);
+  CHECK(late > 15 && late < 70);
+  CHECK(day == 0);
 }
