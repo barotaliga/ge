@@ -129,9 +129,21 @@ What the first slice draws: the map in its classic look (its textures, lightmaps
 and sky) over the engine's sky, from the first-person rig (the view height off the mod's view
 offset, stairs smoothed, a landing's dip); the game's effects (`client/world_fx.hpp`: a rocket's
 trail and glow, an explosion's sparks, smoke and light on the walls, the red flash of a hit and
-the tint under water, slime or lava); the HUD (`hud_style classic|modern|compact`); the console.
-Not yet: the other players' and items' models, the weapon in hand, sounds, menus, and the
-network (the rest of M18h, M18i).
+the tint under water, slime or lava); the things standing in the map (`client/world_models.hpp`,
+M18i3: every model, sprite and brush item on the server's model list loaded from the packs once a
+map, then drawn each frame where the server's entities and its static ones stand: the weapons
+lying about, armour, health and ammo boxes, the torches and their flames, the powers, the other
+players in their own top and bottom colours; a group of frames plays at its intervals, an item
+flagged to spin turns, each lit by the lightmap on the floor under it, shaded from above, its
+fullbright texels glowing); the HUD (`hud_style classic|modern|compact`); the console.
+Not yet: the weapon in hand, sounds, menus, the map's moving brush models (doors, plats) drawn
+where they move, and the network (the rest of M18h, M18i).
+
+The baseline mod's POWERS (`qc/items.qc`): the quad (`item_artifact_super_damage`, four times
+the damage dealt) and the shield (`item_artifact_invulnerability`, no damage taken), 30 s each,
+back 60 s after they are taken. A power held glows round its holder (`effects`: blue the quad's,
+red the shield's; the window lights the walls round him and tints his own screen). The torches
+and flames (`light_torch_small_walltorch`, `light_flame_*`) are static things the clients draw.
 
 ## Running your own mod
 
@@ -520,6 +532,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
 | `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost and the effects thrown (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
+| `se-models` | picture | The things a map places, as the window draws them: the armour, a health box, an ammo box, a weapon, a torch or a flame, the quad, the shield, another player in his colours and one holding both powers, each from a clear spot near it in both looks; the things placed by kind and the light under each (built, M18i3; `--pak` and `--map` for a pack's own maps) |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
 | `se-viewmodel` | picture | The game's eight free weapons in first person on the engine's corridor stage: every one held at rest, each fired in the dark lit by its own muzzle light, the shotgun switched to the rocket launcher, and the player's view-model cvars; each weapon's share of the picture, its muzzle on the screen, its flash's lift and the switch's time (built, M48d) |
 | `se-ambient` | sim | A walk through rooms under sky and by water: the ambience by leaf charted, mixed and written as WAV (built, M18j2) |

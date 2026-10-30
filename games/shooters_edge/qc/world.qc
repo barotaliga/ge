@@ -82,10 +82,21 @@ void() info_teleport_destination = {
   if (self.targetname == "") objerror("a teleport destination needs a targetname");
 };
 
-// Lights are the map compiler's business; nothing is left of them at run time.
+// Lights are the map compiler's business; nothing is left of them at run time but the torches
+// and the flames, which the clients draw where they stand (static: the server forgets them).
 void() light = { remove(self); };
 void() light_fluoro = { remove(self); };
-void() light_torch_small_walltorch = { remove(self); };
+
+void(string mdl, float fr) flame_start = {
+  precache_model(mdl);
+  setmodel(self, mdl);
+  self.frame = fr;
+  makestatic(self);
+};
+void() light_torch_small_walltorch = { flame_start("progs/flame.mdl", 0); };
+void() light_flame_large_yellow = { flame_start("progs/flame2.mdl", 1); };
+void() light_flame_small_yellow = { flame_start("progs/flame2.mdl", 0); };
+void() light_flame_small_white = { flame_start("progs/flame2.mdl", 0); };
 
 // --- brush entities ---
 

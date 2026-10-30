@@ -137,8 +137,11 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   let y = in.rel.y + frame.eye.y;
   let outdoor = d.blends.w;
   let sun = sun_light_open(y) * max(dot(n, frame.sun.xyz), 0.0);
-  let light = outdoor * (sun + sky_irradiance(n)) + d.ambient.rgb +
-              d.shade.rgb * max(dot(n, d.shade_dir.xyz), 0.0);
+  var own = d.ambient.rgb + d.shade.rgb * max(dot(n, d.shade_dir.xyz), 0.0);
+  if (d.ambient.w > 0.5) {
+    own = own * (PI * white_luminance());  // in the scene's white (MorphDraw::light_in_white)
+  }
+  let light = outdoor * (sun + sky_irradiance(n)) + own;
   var c = s.rgb / PI * light + s.rgb * (s.w * d.blends.z * white_luminance());
   var out: FragmentOut;
   out.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);

@@ -276,6 +276,7 @@ void prepare_morph(gpu::Device& device, Morph& morph, std::span<const MorphDraw>
     g.info[1] = d.tint[0];
     g.info[2] = d.tint[1];
     g.info[3] = d.smooth ? 1 : 0;
+    g.ambient[3] = d.light_in_white ? 1.0f : 0.0f;
     for (int k = 0; k < 3; ++k) {
       g.ambient[k] = d.ambient[k];
       g.shade[k] = d.shade[k];

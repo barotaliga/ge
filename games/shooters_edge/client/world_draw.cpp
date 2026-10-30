@@ -43,6 +43,7 @@ struct WorldDraw {
   gr::Bloom bloom;
   gr::Post post[2];
   gr::Particles particles;
+  WorldModels models;
   gr::UiPass ui;
   gr::FrameRecorder rec;
   uint32_t w = 0, h = 0;
@@ -68,7 +69,8 @@ void make_targets(ge::gpu::Device& d, WorldDraw& f) {
 
 WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, const LoadedMap& map,
                                uint32_t width, uint32_t height, wgpu::TextureFormat format,
-                               const look::Picture& picture, std::string& error) {
+                               const look::Picture& picture, std::string& error,
+                               const ModelLoad& models) {
   // A map's frame is made while the map loads, the first and every later one: its pipelines are
   // the load's, not a hitch mid-run.
   d.loading = true;
@@ -116,7 +118,10 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
   gr::set_grade(d, f->post[0], look::palette_grade(grade_palette));
   gr::create_particles(d, f->pipelines, f->particles, f->layout);
   gr::create_ui_pass(d, f->pipelines, f->ui, format);
-  if (f->has_map) ba::create_bsp(d, f->pipelines, f->bsp, f->scene, f->layout);
+  if (f->has_map) {
+    ba::create_bsp(d, f->pipelines, f->bsp, f->scene, f->layout);
+    create_models(d, f->pipelines, f->models, f->layout, files, palette_copy, f->scene.map, models);
+  }
   if (!f->pipelines.finish(d)) {
     error = "the world's pipelines did not build; next: read the gpu: lines above";
     return nullptr;
@@ -158,15 +163,20 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   gr::emit_particles(f.particles, fx.births);
   f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
   gr::prepare_particles(d, f.particles, dt, view.near_m);
+  if (f.has_map)
+    prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight,
+                   !o.crisp);
   gr::set_post_blend(d, f.post[p], fx.blend);
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   gr::encode_particles_sim(f.particles, f.pipelines, f.rec, e);
   gr::encode_sky_tables(f.skypass, f.pipelines, f.rec, e);
   if (f.has_map) ba::encode_bsp(f.bsp, f.pipelines, f.rec, e, f.targets, f.frame);
+  encode_models(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_sky(f.skypass, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_clouds(f.clouds, f.pipelines, f.rec, e, f.targets, f.frame, view, f.staged);
   if (f.has_map) ba::encode_bsp_veil(f.bsp, f.pipelines, f.rec, e, f.targets);
   gr::encode_particles(f.particles, f.pipelines, f.rec, e, f.targets, f.frame);
+  encode_model_sprites(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);
   gr::encode_post(f.post[p], f.pipelines, f.rec, e, f.frame, f.post_group[p], target);
   if (overlay.size() > 0) {
