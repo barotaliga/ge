@@ -82,12 +82,12 @@ struct LampShadows {
 
   std::array<LampTileState, kMaxLampTiles> tiles{};
   std::array<bool, kMaxLampTiles> due{};
-  std::array<float, kMaxLampTiles * 16> views{};  // each tile's matrix, for its frame block
-  uint32_t lamps = 0;                             // lamps dealt tiles this frame
-  uint32_t used = 0;                              // tiles dealt this frame
-  uint32_t drawn = 0;                             // of them, redrawn this frame
-  uint32_t unshadowed = 0;                        // lamps with a key that got no tiles this frame
-  uint64_t redraws = 0;                           // tiles drawn since creation
+  std::array<float, size_t{kMaxLampTiles} * 16> views{};  // each tile's matrix, for its frame block
+  uint32_t lamps = 0;                                     // lamps dealt tiles this frame
+  uint32_t used = 0;                                      // tiles dealt this frame
+  uint32_t drawn = 0;                                     // of them, redrawn this frame
+  uint32_t unshadowed = 0;  // lamps with a key that got no tiles this frame
+  uint64_t redraws = 0;     // tiles drawn since creation
 };
 
 // The atlas, its clear pipeline (added to `pipelines` before its `finish`) and a frame block a

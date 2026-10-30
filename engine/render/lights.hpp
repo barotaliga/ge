@@ -80,12 +80,12 @@ struct LocalLight {
   float rate_hz = 10;   // a flame's waver, a buzz's or strobe's beat, the steps' letters a second
   float depth = 0.35f;  // a flame's or buzz's swing, 0..1 of its level
   uint32_t seed = 0;    // a flame's or buzz's own noise, so two torches never flicker as one
-  double born_s = 0;    // a pulse's birth, the frame's clock
-  float attack_s = 0.002f, decay_s = 0.03f;  // a pulse's rise and its fall to 1/e
-  const char* steps = nullptr;               // the steps' letters ('a'..'z', 'm' full)
   // Casts shadows under this key (render/lamp_shadows.hpp): nonzero, and the same from frame to
   // frame while it is the same lamp, so its tiles are kept; 0 casts none.
   uint32_t shadow = 0;
+  double born_s = 0;                         // a pulse's birth, the frame's clock
+  float attack_s = 0.002f, decay_s = 0.03f;  // a pulse's rise and its fall to 1/e
+  const char* steps = nullptr;               // the steps' letters ('a'..'z', 'm' full)
 };
 
 // The light's level at time `t_s` (1: its `candela`; a step's 'z' is 25/12, a pulse past its decay

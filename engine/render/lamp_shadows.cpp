@@ -299,7 +299,8 @@ void deal_lamp_tiles(LampShadows& s, LightBins& bins, std::span<const LocalLight
       double f[3], u[3], r[3], tan_half;
       tile_axes(set, l, static_cast<int>(q), f, u, r, tan_half);
       g.rect[0] = static_cast<float>(k % kLampTilesAcross) * side;
-      g.rect[1] = static_cast<float>(k / kLampTilesAcross) * side;
+      const uint32_t tile_row = k / kLampTilesAcross;
+      g.rect[1] = static_cast<float>(tile_row) * side;
       g.rect[2] = side;
       g.rect[3] = static_cast<float>(2 * tan_half / texels);
     }
