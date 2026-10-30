@@ -62,6 +62,7 @@ TEST(masts_stand_down_the_piste_off_its_edge_aimed_across_and_downhill) {
       }
     }
     CHECK(near != nullptr);
+    if (near == nullptr) return;
     CHECK(best > near->width * 0.5 + ma::kMastOut * 0.5);
     CHECK(best < near->width * 0.5 + ma::kMastOut * 2);
     // On its left, aimed to its right and downhill of square, tipped down 15 degrees or more.

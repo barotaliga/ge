@@ -75,7 +75,9 @@ std::vector<Lamp> piste_lamps(const mapgen::Level& level) {
   std::vector<Lamp> out;
   if (level.track.points.size() < 2) return out;
   const double length = level.track.length;
-  for (double s = kMastFirst; s < length - kMastFirst * 0.5; s += kMastEvery) {
+  for (int k = 0;; ++k) {
+    const double s = kMastFirst + k * kMastEvery;
+    if (s >= length - kMastFirst * 0.5) break;
     const mapgen::TrackPoint* p = track_at(level, s);
     if (p == nullptr) break;
     // On the piste's left, aimed across it to the right and downhill.
@@ -104,7 +106,9 @@ std::vector<Lamp> street_lamps(const mapgen::Level& level, const vg::Streets& pl
   for (const vg::Street& st : plan.streets) {
     if (st.kind == vg::StreetKind::aisle || st.points.size() < 2) continue;
     const double every = st.kind == vg::StreetKind::road ? kRoadEvery : kStreetEvery;
-    for (double s = every * 0.5; s < st.length; s += every) {
+    for (int k = 0;; ++k) {
+      const double s = every * (k + 0.5);
+      if (s >= st.length) break;
       // The sidewalk's side (side 0, the street's left, carries the one sidewalk a back street
       // has); the main street's both sides in turn.
       const int side = st.kind == vg::StreetKind::main ? (alternate++ & 1) : 0;
