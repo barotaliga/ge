@@ -126,13 +126,14 @@ std::string kind_word(vfs::SourceKind k) {
   return k == vfs::SourceKind::pack ? "pack" : k == vfs::SourceKind::zip ? "zip" : "directory";
 }
 
+// A source's path under the root, '/' separated on every platform (the digest hashes it).
 std::string short_path(const std::string& path, const std::string& root) {
-  if (path.rfind(root, 0) == 0) {
-    std::string s = path.substr(root.size());
-    while (!s.empty() && (s[0] == '/' || s[0] == '\\')) s.erase(0, 1);
-    return s.empty() ? "." : s;
+  std::string s = path.rfind(root, 0) == 0 ? path.substr(root.size()) : path;
+  for (char& c : s) {
+    if (c == '\\') c = '/';
   }
-  return path;
+  while (!s.empty() && s[0] == '/') s.erase(0, 1);
+  return s.empty() ? "." : s;
 }
 
 // Every folded name a source holds.
