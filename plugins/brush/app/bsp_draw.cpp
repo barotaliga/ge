@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include "brush/app/bsp.wgsl.hpp"
+#include "brush/app/bsp_flames.hpp"
 #include "brush/app/bsp_fix.wgsl.hpp"
 #include "brush/app/bsp_shadow.wgsl.hpp"
 #include "render/view.hpp"
@@ -415,17 +416,19 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       // the strength a metre off is that times the half reach squared.
       const double half = l.value * kUnitM / 2;
       const double at1 = l.value / 256.0 * half * half * o.strength * flicker_at(l, view.time_s);
-      set4(g.pos, l.pos[0], l.pos[1], l.pos[2], l.reach * 1.5);
+      set4(g.pos, l.pos[0], l.pos[1] + fire_light_lift(l), l.pos[2], l.reach * 1.5);
       set4(g.colour, l.colour[0] * at1, l.colour[1] * at1, l.colour[2] * at1, 0);
     }
-    set4(g.info, -1, 0, 0, 0);
+    // A fire lights the wall behind it from its whole flame: its light softened over its height.
+    const double soft = fire_light_size(l);
+    set4(g.info, -1, soft * soft, 0, 0);
     if (!l.physical && shadowed < d.options.shadowed) {
       g.info[0] = float(shadowed * 6);
       for (int f = 0; f < 6; ++f) {
         const int i = f / 2;
         const double sign = f % 2 ? -1.0 : 1.0;
         GpuJob j{};
-        set4(j.o, l.pos[0], l.pos[1], l.pos[2], g.pos[3]);
+        set4(j.o, g.pos[0], g.pos[1], g.pos[2], g.pos[3]);
         double ax[3] = {0, 0, 0}, ay[3] = {0, 0, 0}, az[3] = {0, 0, 0};
         ax[(i + 1) % 3] = 1;
         ay[(i + 2) % 3] = 1;

@@ -728,6 +728,16 @@ with the flame's seed), and
 its lights list. `Flame::wind` bends the flame downwind against its rise, and its light leans
 with it. The presets are a torch, a candle, a brazier and a camp fire.
 
+**In brush maps (M39g)** (`plugins/brush/app/bsp_flames.hpp`). A classic map's wall torches and
+large flames are light entities; `bsp_fires` stands a torch or a brazier flame where each one's
+model burns, scaled to the model's flame (a wall torch's from 6 to 29 units above its origin, a
+large flame's from 2 to 43), and drives its gas with the light's own `flicker_at`, so the fire and
+the wall it lights waver together. The light is lifted to the middle of the gas and softened over
+the flame's height (`fire_light_lift`, `fire_light_size`), as `flame_light` does. A brush map is
+lit in its lightmaps' units rather than the sun's, so the gas's core is set by `Flame::relative`:
+`kFireGlow` (30) times a white face under the map's own light. The `gpu-bsp` lab draws them in
+its real-time panel.
+
 **Shadows use three techniques, one for each scale:**
 
 1. **The mountain's own shadow: a horizon map.** For each texel of a grid over the

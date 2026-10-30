@@ -610,6 +610,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     l.reach = l.value / wait * kUnitM;
     l.seed = hash32(++n * 0x9e3779b1u);
     l.flame = cls.find("torch") != std::string::npos || cls.find("flame") != std::string::npos;
+    if (l.flame) l.fire = cls.find("torch") != std::string::npos ? Fire::wall_torch : Fire::large;
     const int style = int(number(e.get("style"), 0));
     switch (style) {
       case 2:

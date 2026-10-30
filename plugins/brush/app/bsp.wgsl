@@ -51,7 +51,7 @@ struct Job {
 struct Light {
   pos: vec4f,     // world m; w: its reach, m
   colour: vec4f,  // its strength (rgb, the flicker in it); w: 1 physical (cd), 0 lightmap units
-  info: vec4f,    // x: its shadow's first layer (six a light), -1 none
+  info: vec4f,    // x: its shadow's first layer (six a light), -1 none; y: its source's size^2, m^2
 };
 
 @group(1) @binding(0) var<uniform> bsp: Bsp;
@@ -428,7 +428,8 @@ fn fs_main(in: VsOut) -> FsOut {
     let r = d / reach;
     let r4 = r * r * r * r;
     let window = (1.0 - r4) * (1.0 - r4);
-    var lit = ndl * window / (d2 + 0.04);
+    // Softened near the light over its source's size (a fire's whole flame), 0.2 m at least.
+    var lit = ndl * window / (d2 + max(l.info.y, 0.04));
     if (l.info.x >= 0.0) {
       lit *= cube_shadow(q, reach, i32(l.info.x));
     }
