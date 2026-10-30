@@ -50,6 +50,11 @@ struct Frame {
   // extinction (1/m; 0 none), its edge (m), its wave (m); 1 one over the noise's tile (1/m), the
   // noise's offset at the eye (x, z), its albedo.
   valley: array<vec4f, 2>,
+  // THE LIGHTNING (render/view.hpp's `flash_rows`, read by render/wgsl/flash.wgsl): x the lamps
+  // lit; two rows a lamp: where (world m) and its reach (m); its light (4 pi candela over the
+  // sun's lux, pre-exposed) and the optical depth out of its cloud.
+  flash_info: vec4f,
+  flashes: array<vec4f, 8>,
 }
 
 // THE MOTION a surface at camera-relative `rel` (w = 1; w = 0 for a direction at infinity) made

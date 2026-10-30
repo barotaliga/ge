@@ -402,6 +402,11 @@ fn glow_below(d: vec3f) -> vec3f {
   return g.xyz * (white_luminance() * exp(-max(d.y, 0.0) / max(g.w, 1e-3)));
 }
 
+// How far the air's glow round a flash is taken along the ray, and how high over the eye a
+// deck's base lit by a flash is taken, m.
+const kFlashReach = 40000.0;
+const kDeckOver = 1500.0;
+
 @fragment
 fn fs_main(in: VertexOut) -> FragmentOut {
   let d = view_ray(frame, in.uv);
@@ -461,6 +466,15 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   }
   if (frame.style[9].w > 0.0 && dot(frame.style[9].xyz, vec3f(1.0)) > 0.0) {
     colour += glow_below(d) * (1.0 - 0.6 * frame.weather.y);
+  }
+  // THE LIGHTNING (render/wgsl/flash.wgsl): the air's glow along the ray, and a deck's base lit
+  // from inside, taken 1500 m over the eye (its light off a base of albedo 0.8, out to 40 km).
+  if (flash_count() > 0) {
+    colour += flash_air(d, kFlashReach);
+    if (frame.weather.y > 0.0 && d.y > 0.0) {
+      let q = frame.eye.xyz + d * min(kDeckOver / max(d.y, 1e-3), kFlashReach);
+      colour += frame.weather.y * 0.8 / PI * flash_light(q, 0.0);
+    }
   }
   // THE NIGHT: behind the deck's share, lost in a fog's or a fall's air, under the horizon none.
   let clear = (1.0 - frame.weather.y) * exp(-frame.weather.z * 10000.0);

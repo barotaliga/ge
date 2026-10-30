@@ -54,6 +54,10 @@ namespace ge::wind {
 inline constexpr double kSlot = 1.0;      // s, a cell's flash clock
 inline constexpr double kMaxFlash = 1.6;  // s, the longest a flash lasts from its leader
 inline constexpr int kMaxStrokes = 12;
+// The unit's luminous intensity, cd: a stroke of energy 1 seen over a 1/60 s frame lights a
+// face 1 km off with about 30 lx, one 8 km off about as a full moon does (docs/storms.md § The
+// storm drawn), so a renderer's lamp is `light_of`'s power times it.
+inline constexpr double kUnitCandela = 3e7;
 
 enum class FlashKind : uint8_t { cloud, ground };
 

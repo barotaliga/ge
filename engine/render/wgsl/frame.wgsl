@@ -85,6 +85,9 @@ fn sky_seen(at: vec4f) -> f32 {
   return 1.0 - sum / max(weights, 1e-6);
 }
 
+// The lightning's light (the frame's flash rows).
+#include "render/wgsl/flash.wgsl"
+
 // A world height (m) as a radius from the planet's centre, km.
 fn radius_at(world_y: f32) -> f32 {
   return kGroundRadius + max(frame.world.x + world_y * 1e-3, 0.0);

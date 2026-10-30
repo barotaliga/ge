@@ -161,6 +161,28 @@ struct SkyMoon {
   double lux = 0;                // its light outside the air, lx
   double phase = 0;              // its phase angle, rad (0 full)
 };
+// THE LIGHTNING a frame is lit by (render/wgsl/flash.wgsl; docs/storms.md § The storm drawn): up
+// to four flashes as lamps, each its channel's middle and its reach (half the channel's extent:
+// a light spread along a line, not a point), its luminous intensity over the frame (candela, the
+// frame's mean; engine/wind/lightning.hpp's `light_of` times `kUnitCandela`), its tint, and the
+// optical depth its light crosses to leave its own cloud (a flash inside the cloud lights the
+// cloud round it and reaches the ground and the air outside dimmed by the diffusion through it;
+// a strike's channel below the base reaches them nearly whole). The default is none.
+inline constexpr int kFlashLamps = 4;
+struct FlashLamp {
+  double at[3] = {0, 0, 0};  // world m
+  double radius_m = 0;
+  double candela = 0;
+  double tint[3] = {0.86, 0.9, 1.0};  // luminance 1: the channel's white, a little blue
+  double out_tau = 0;
+};
+struct Flashes {
+  int count = 0;
+  FlashLamp lamp[kFlashLamps];
+};
+// The frame block's rows (two a lamp: where and its reach; its light, pre-exposed, and its
+// depth out of the cloud) and the count, `pre` the frame's pre-exposure.
+void flash_rows(const Flashes& flashes, double pre, float info[4], float rows[][4]);
 
 // THE NIGHT a frame is seen under (render/night.hpp fills it from where the moon is). The
 // default is none: no moon, no stars, no dark sky's glow.
@@ -248,6 +270,7 @@ struct FrameView {
   // the sky or this, whichever is brighter, so a lava lake at night reads as a photograph of it
   // would, not blown out against a dark sky. 0: the sky's light alone.
   double adapt_cd = 0;
+  Flashes flashes{};   // the lightning's lamps; the default is none
   SkyStyle style{};    // the kind of sky (render/sky_style.hpp); the default is the Earth's
   MoonSet moons{};     // the moons over it (render/moons.hpp); the default the Earth's alone
   ValleyFog valley{};  // the sea of fog in the valleys (render/valley_fog.hpp); the default none

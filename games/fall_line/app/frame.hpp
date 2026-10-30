@@ -34,6 +34,7 @@
 //   water.under          -> hdr (the view under water, when the eye is under a body)
 //   particles            -> hdr motion (the spray, over the picture; the motion's reactive b)
 //   precip               -> hdr motion (the snow and rain round the eye, the rain's splashes)
+//   bolts                -> hdr motion (the lightning's channels, render/bolts.hpp)
 //   taa                  -> taa.history (at the output's size; with FrameOptions::taa)
 //   bloom                -> bloom (the glow's mip chain, from what post reads)
 //   lens, motion_blur.tiles -> lens (the sun's rays and flare), the motion's fastest a tile
@@ -42,7 +43,6 @@
 //
 // With TAA the frame renders at FrameOptions::scale of the output's size, jittered, and the
 // resolve brings it up; without it, at the output's size, unjittered, post reading the HDR target.
-//
 // The frame reads the game only through a FrameView (views.hpp), the map it was made for, and a
 // FrameScene: the racers' skiers this frame, drawn as skinned skiers (scene.hpp: each racer's
 // pose from skier/app/rig_pose.hpp's poser, its lags kept here between frames), laying their tracks
@@ -78,6 +78,7 @@
 #include "mountain/mapgen/types.hpp"
 #include "render/ao.hpp"
 #include "render/bloom.hpp"
+#include "render/bolts.hpp"
 #include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
 #include "render/dof.hpp"
@@ -184,6 +185,9 @@ struct FrameScene {
   double run_time = 0;
   // The fog in areas this frame (render/fog.hpp): mist, ground fog, dust; empty, none.
   std::span<const ge::render::FogVolume> fog = {};
+  // The lightning's channels this frame (render/bolts.hpp), drawn before the resolve; their light
+  // is FrameView::flashes. Empty: none.
+  std::span<const ge::render::BoltSegment> bolts = {};
   // The sky's solar hour (sim/sky.hpp's `sky_hour`): which of the village's windows are lit
   // once it is dark. Negative: the evening's (20:00).
   double hour = -1;
@@ -210,6 +214,7 @@ struct GameFrame {
   ge::render::Particles particles;
   ge::render::Precip precip;
   ge::render::Fog fog;
+  ge::render::Bolts bolts;
   ge::wind::Wet wet;    // the water on the ground, stepped by the frames' clock
   double wet_time = 0;  // the last drawn frame's time_s
   bool wet_placed =

@@ -70,6 +70,7 @@ constexpr r::PassRow kPassTable[] = {
     {"particles", "particles terrain.horizon shadows.maps sky.aerial sky.light depth fog.volume",
      "hdr motion"},
     {"precip", "precip terrain.horizon sky.aerial sky.light depth fog.volume", "hdr motion"},
+    {"bolts", "depth", "hdr motion"},
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
     {"bloom", "taa.history", "bloom"},
     {"lens", "taa.history depth sky.light", "lens"},
@@ -270,6 +271,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_particles(device, f->pipelines, f->particles, f->frame_layout, f->terrain,
                       options.particles);
   r::create_precip(device, f->pipelines, f->precip, f->frame_layout, f->terrain, options.fall);
+  r::create_bolts(device, f->pipelines, f->bolts, f->frame_layout);
   r::create_clouds(device, f->pipelines, f->clouds, f->frame_layout);
   r::create_water(device, f->pipelines, f->water, f->frame_layout);
   r::create_underwater(device, f->pipelines, f->under, f->frame_layout);
@@ -643,6 +645,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     at.near_m = view.near_m;
     r::prepare_precip(device, f.precip, at);
   }
+  r::prepare_bolts(device, f.bolts, scene.bolts, view, f.targets.height);
   const size_t racers = std::min<size_t>(scene.skiers.size(), kMaxFigures);
   {
     GE_ZONE("frame.figures");
@@ -783,6 +786,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   r::encode_underwater(f.under, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_particles(f.particles, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_precip(f.precip, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
+  r::encode_bolts(f.bolts, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   if (f.options.taa) {
     r::encode_taa(device, f.taa, f.pipelines, f.recorder, encoder, f.frame_group);
   }
