@@ -1,6 +1,6 @@
 ---
 name: brush
-description: "Use for plugins/brush in gameengine2: maps in the classic BSP families (version 29, BSP2, 38, 46) read into one view (surfaces, lightmaps, the tree, clusters, visibility and the PHS, clip hulls, entities, patches), refusing damage; the fixture writers that make test maps of each family; the content scan and asset map (`ge content scan`); the bsp and content-scan labs; the brush fuzz and read tests."
+description: "Use for plugins/brush in gameengine2: maps in the classic BSP families (version 29, BSP2, 38, 46) read into one view (surfaces, lightmaps, the tree, clusters, visibility and the PHS, clip hulls, entities, patches), refusing damage; the fixture writers that make test maps of each family; texture sequences and BSPX lumps; the `brush` tool (`ge tool brush -- info|ents|check`); the content scan and asset map (`ge content scan`); the bsp and content-scan labs; the brush fuzz and read tests."
 ---
 
 # The brush plugin
@@ -14,8 +14,10 @@ format notes (the clean-room rules there say what may be written where).
 | File | What |
 | --- | --- |
 | `map.hpp/.cpp` | The one view, `leaf_at`, `cluster_sees`, the PHS (`build_phs`, `cluster_hears`), `hull_contents`, `to_engine`, `map_digest` |
-| `read.hpp/.cpp`, `read_parts.hpp` | The front door (family by the first bytes), lumps, refusals, rle rows, polygons, extents, tree checks, entities, `.lit` |
+| `read.hpp/.cpp`, `read_parts.hpp` | The front door (family by the first bytes), lumps, refusals, rle rows, polygons, extents, tree checks, entities, `.lit` (BSPX lumps are read at the end of `read_v29.cpp`) |
 | `read_v29.cpp`, `read_v38.cpp`, `read_v46.cpp` | One reader a family (29 also reads BSP2) |
+| `anim.hpp/.cpp` | Texture sequences: `+` cycles and their alternates, `-` random sets, `texture_at` |
+| `tool.hpp/.cpp`, `tool/main.cpp` | The `brush` tool behind `ge tool brush`: `info`, `ents`, `check` over a search path, as JSON |
 | `bytes.hpp` | The little-endian cursor and writer |
 | `write.hpp`, `write_parts.hpp`, `fixture.cpp` | Fixtures: the sample, the weather's (a hall, a yard, a store), the compile every writer shares |
 | `fixture_hulls.cpp` | The fixtures' player and large-box clip hulls (29, BSP2): the box's grid of cells, split to a tree |

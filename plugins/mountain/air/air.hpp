@@ -23,6 +23,18 @@
 //   through snow), a sleet blended between in the logarithm. Above the line, or with no height,
 //   nothing moves: a dealt map's air keeps its bits.
 //
+// - A THUNDERSTORM (`storm_of`, `Weather::thunder` above 0, a sky picked by hand): engine/wind's
+//   multicell storm laid off the map's seed, its first cell mature at the run's start and drifting
+//   at `kSteer` along the map's own (folded) wind so its centre passes over the mountain's middle
+//   `kOverhead` s in, new cells rising on its forward-right flank for an hour, the cloud's base
+//   at least `kBaseOverSummit` over the summit. With a place, the
+//   storm's gust front is added to the wind (`wind_at(level, storm, t, x, z)`) and its rain to the
+//   fall (`fall_at(level, storm, t, x, y, z)`, the two as independent chances), the rain's phase
+//   read off the freezing level the map's snow line gives, LOWERED under a downdraft (the rain's
+//   melting cools the air it falls through) by up to `kCooled` m at a severe core: graupel and
+//   sleet on a summit the summer's rain otherwise reaches. Without a storm both are the
+//   placeless functions' bits.
+//
 // Readers: the frame's falling snow and the particles' drift (games/fall_line/app/frame.hpp). The
 // skier's drag against it, the sound's wind and the new snow a fall lays are later readers of the
 // same two functions.
@@ -30,12 +42,14 @@
 // ge:summary The wind and the falling snow at a moment: gusts, veer, squalls, visibility
 // ge:keywords air wind gust veer downhill_from wind_at field_of fall_at snowfall squall visibility
 // ge:keywords visibility_in weather blizzard flurries storm rain sleet snowline aloft
+// ge:keywords thunderstorm storm_of thunder gust-front outflow downdraft freezing-level cooled_at
 // ge:skill mountain
 // ge:test tests/mountain_air_test.cpp
 #pragma once
 
 #include "mountain/mapgen/types.hpp"
 #include "wind/field.hpp"
+#include "wind/storm.hpp"
 
 namespace ge::mountain::air {
 
@@ -68,6 +82,21 @@ wind::Field field_of(const mapgen::Level& level);
 Wind wind_at(const mapgen::Level& level, double t);
 // The fall at time `t` s and world height `y` m.
 Fall fall_at(const mapgen::Level& level, double t, double y = kAloft);
+
+// THE STORM over the map: `Weather::thunder`'s cells (none: `cells` 0).
+inline constexpr double kSteer = 9;             // m/s, the cells' drift
+inline constexpr double kOverhead = 240;        // s into the run, the first cell over the middle
+inline constexpr double kCooled = 1200;         // m, the freezing level's fall under a severe core
+inline constexpr double kBaseOverSummit = 300;  // m: the storm's cloud base at least this over it
+wind::Storm storm_of(const mapgen::Level& level);
+
+// The wind at 10 m over open ground at (x, z) with `storm`'s gust front added.
+Wind wind_at(const mapgen::Level& level, const wind::Storm& storm, double t, double x, double z);
+// The fall at (x, y, z) with `storm`'s rain in it.
+Fall fall_at(const mapgen::Level& level, const wind::Storm& storm, double t, double x, double y,
+             double z);
+// How far the freezing level stands under `storm`'s downdrafts at (x, z), m below the map's.
+double cooled_at(const wind::Storm& storm, double t, double x, double z);
 
 // How far one sees through a fall of `fall`, m.
 double visibility_in(double fall);

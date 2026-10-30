@@ -170,6 +170,16 @@ The view, stated once in `plugins/brush/map.hpp`:
   tree with its leaves' contents, hulls 1 and 2 the clip nodes), and Shooter's Edge's
   `server/bsp_map.hpp` hands those, the entity lump and the PVS and PHS to the mod server.
 - **Entities**: the lump parsed into `{ "key" "value" ... }` blocks.
+- **BSPX lumps** (29 and BSP2): extra named lumps a compiler appends behind a `BSPX` directory at
+  the first four-byte boundary past the fifteen. Each is kept by name (`Map::bspx`, `bspx_lump`);
+  `RGBLIGHTING` (three bytes a luxel) is read as the map's colour, as a `.lit` would be, and one of
+  the wrong size is refused. The rest wait for a reader that needs them.
+- **Texture sequences** (`anim.hpp`, 29 and BSP2): a texture named `+<frame><name>` is a frame of
+  a cycle (`0`..`9` the main one, `a`..`j` the alternate a used button or door shows) that turns at
+  five frames a second, every surface of it together; `-<frame><name>` is a random set, each
+  surface showing one frame for good, picked by its index. `texture_at` answers which texture a
+  surface shows at a moment without allocating; a set with a missing frame keeps the frames below
+  the gap and says so.
 
 **Refused, never overrun.** A reader checks every lump against the file and its record size
 before it reads it, and every index it keeps against what it points into (planes, nodes, leaves,
@@ -199,8 +209,14 @@ tree) also writes each map's textures there as PNGs, `<dir>/<map>/<name>.png` wi
 leading `*` and `anim_` for a leading `+`, and `textures.txt` naming each with its size: what the
 procedural texture matcher reads to propose the cloner's texture map (§ Cloning a classic map).
 
-Left to M18b: the BSPX lumps, animated texture sequences, `ge bsp`, and brushes for 38 and 46
-(which sweep through brushes rather than clip hulls).
+**From the command line.** `ge tool brush -- info <map>` answers a map's family, its counts, its
+texture sequences and its BSPX lumps as JSON; `ents <map> [--class=<classname>]` its entity
+blocks; `check --root=<dir> --game=<name>` reads every `.bsp` on a search path
+(`engine/vfs/search.hpp`) and names each one refused. A `<map>` is a file, or with `--root` and
+`--game` a name on the search path.
+
+Left to M18b: brushes for 38 and 46 (which sweep through brushes rather than clip hulls), and a
+picture of a map from the command line.
 
 ## Cloning a classic map
 
