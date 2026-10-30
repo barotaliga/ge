@@ -27,7 +27,7 @@
 // ge:keywords stratocumulus stratus nimbostratus altocumulus altostratus cirrus cirrostratus
 // ge:keywords cirrocumulus lenticular inversion sea-of-cloud mackerel-sky cloud_stack_named
 // ge:keywords cloud_kind_named cloud-form erode fibre patch veil corona aureole halo droplet
-// ge:keywords thickness optical-depth translucidus opacus fractus scud
+// ge:keywords thickness optical-depth translucidus opacus fractus scud take_form
 // ge:skill render
 // ge:test tests/render_cloud_kinds_test.cpp
 #pragma once
@@ -61,6 +61,11 @@ std::span<const CloudKind> cloud_kinds();
 const CloudKind* cloud_kind_named(std::string_view name);
 // Every kind's name, comma-separated (a diagnostic's list).
 const std::string& cloud_kind_list();
+
+// A layer `depth_m` deep takes the kind's FORM and LIGHT: its stretch, dome, extinction (its
+// optical depth over the depth), shadow, anvil, bite, comb, patches, particles, halo, deck and
+// thickness. Its heights, cover, cell, wind and age are the sky's to deal.
+void take_form(const CloudKind& kind, double depth_m, CloudLayer& layer);
 
 // A STACK of kinds, the names joined by '+' ("cumulus+cirrus"), at most kCloudLayers: `out` its
 // kinds in order and `count` how many. A name no kind has or one too many is what the returned
