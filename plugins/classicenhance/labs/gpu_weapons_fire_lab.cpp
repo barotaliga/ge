@@ -360,7 +360,16 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    placeholders(lab, {"fire", "swap", "stream", "variants", "day"}, w, h);
+    // The same shots in the same order as with an adapter: the stream only when a gun has
+    // several barrels and fires fast (the nailguns), as below.
+    const bool streams = std::any_of(guns.begin(), guns.end(), [](const Gun& g) {
+      return g.held.barrels.size() >= 2 && g.refire_s <= 0.15;
+    });
+    if (streams) {
+      placeholders(lab, {"fire", "swap", "stream", "variants", "day"}, w, h);
+    } else {
+      placeholders(lab, {"fire", "swap", "variants", "day"}, w, h);
+    }
     return;
   }
   es::Scene s;
