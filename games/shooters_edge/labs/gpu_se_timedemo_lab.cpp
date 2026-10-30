@@ -7,8 +7,9 @@
 // demo (`demo1`), so the same lab measures a real recording on any machine.
 //
 // What it shows: three frames of the run (its start, the middle, the end), the frame time of
-// every timed frame as a line with the median and the 99th percentile as rules, and the report
-// as metrics. The frame count and the levels are deterministic; every time is measured.
+// every timed frame as a line with the median and the 99th percentile as rules, the GPU's time
+// for each pass of the world's frame as boxes (where the timer has timestamp queries), and the
+// report as metrics. The frame count and the levels are deterministic; every time is measured.
 //
 // ge:summary Lab: the demo benchmark headless: a demo played flat out, its frames and fps chart
 // ge:keywords lab se-timedemo timedemo benchmark demo fps frame-time one-percent-low chart gpu
@@ -74,7 +75,8 @@ void run(gl::Lab& lab) {
   const std::string basedir = lab.arg("basedir");
   const std::string name = lab.arg("demo");
   std::string error;
-  const shooters_edge::look::Picture picture;  // the default look; the world reads it every frame
+  shooters_edge::look::Picture picture;  // the world reads it every frame
+  if (!lab.arg("look").empty()) picture.look = lab.arg("look");
   cl::SearchPath files;
   if (basedir.empty()) {
     std::vector<uint8_t> pak;
@@ -163,6 +165,7 @@ void run(gl::Lab& lab) {
                       hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
                       se::hud_style());
       cl::draw_world(*device, *world, view, cl::FxFrame{}, 0, overlay, out.view);
+      if (bench.skip == 0) cl::record_passes(*world, bench.passes);
       if (shot < 3 && frame == picks[shot]) {
         const ge::gpu::Image img = ge::gpu::read_now(*device, out);
         lab.shot({ids[shot],
@@ -226,6 +229,33 @@ void run(gl::Lab& lab) {
             "a flat line near the median; spikes are the frames the 1% low is made of",
             {{"demo", bench.name}, {"size", lab.arg("size")}}},
            gl::to_picture(ch.plot), gl::Det::measured);
+  // Where the GPU's time went: each pass's readings as a box, dearest first.
+  lab.note(cl::pass_report(bench.passes, 12));
+  if (!bench.passes.names.empty()) {
+    std::vector<gl::Sample> boxes;
+    for (const cl::PassCost& c : cl::pass_costs(bench.passes)) {
+      for (size_t i = 0; i < bench.passes.names.size(); i++)
+        if (bench.passes.names[i] == c.name) boxes.push_back({c.name, bench.passes.ms[i]});
+      lab.metric("gpu." + c.name, c.median_ms, "ms", gl::Det::measured);
+    }
+    boxes.insert(boxes.begin(), gl::Sample{"(frame span)", bench.passes.span_ms});
+    const gl::Chart pc =
+        gl::box_chart({"GPU time per pass, " + bench.name + ", r_look " + picture.look, setup,
+                       "GPU time (ms)", "pass"},
+                      boxes);
+    lab.note(gl::chart_text(pc, 4));
+    lab.shot(
+        {"gpu-passes",
+         "GPU BY PASS: " + bench.name,
+         "Every timed frame's GPU time for each pass of the world's frame (r_look " + picture.look +
+             "), dearest first; the top row is the frame's span on the GPU. Software "
+             "adapters' times say nothing about a real GPU.",
+         "one or two passes holding most of the span are where the frame's cost is",
+         {{"demo", bench.name}, {"size", lab.arg("size")}, {"look", picture.look}}},
+        gl::to_picture(pc.plot), gl::Det::measured);
+  } else {
+    ls::placeholders(lab, {"gpu-passes"});
+  }
   if (device)
     ls::checked(lab, static_cast<int>(device->errors.load()),
                 static_cast<int>(device->pipelines_after_load));
@@ -244,7 +274,8 @@ const gl::LabSpec kSpec{
      {"format", "single", "the written demo's format: single or client"},
      {"basedir", "", "a folder holding a game folder: play its demo instead of the fixture"},
      {"game", "id1", "the game folder under --basedir"},
-     {"demo", "demo1", "the demo to play, by name or path"}},
+     {"demo", "demo1", "the demo to play, by name or path"},
+     {"look", "", "r_look for the run: classic or modern (empty: the game's default)"}},
     "--size=320,180",
     run,
 };

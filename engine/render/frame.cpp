@@ -363,6 +363,24 @@ wgpu::RenderPassEncoder FrameRecorder::render(wgpu::CommandEncoder& encoder,
   return encoder.BeginRenderPass(&desc);
 }
 
+wgpu::RenderPassEncoder FrameRecorder::render_part(wgpu::CommandEncoder& encoder,
+                                                   wgpu::RenderPassDescriptor desc,
+                                                   std::string_view name, int part, int parts) {
+  if (part == 0) open_stat(stats, mark_ns, name);
+  const uint32_t i = static_cast<uint32_t>(stats.count - 1);
+  const wgpu::PassTimestampWrites* all = timed ? timer.writes(i) : nullptr;
+  wgpu::PassTimestampWrites w{};
+  if (all) {
+    w = *all;
+    if (part != 0) w.beginningOfPassWriteIndex = wgpu::kQuerySetIndexUndefined;
+    if (part != parts - 1) w.endOfPassWriteIndex = wgpu::kQuerySetIndexUndefined;
+  }
+  desc.label = wgpu::StringView(name.data(), name.size());
+  const bool stamps = all && (part == 0 || part == parts - 1);
+  desc.timestampWrites = stamps ? &w : nullptr;
+  return encoder.BeginRenderPass(&desc);
+}
+
 void FrameRecorder::end_frame(wgpu::CommandEncoder& encoder) {
   close_cpu(stats, mark_ns);
   if (timed) timer.resolve(encoder);
