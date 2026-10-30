@@ -127,9 +127,12 @@ ConsoleView::ConsoleView(Console& c) : c_(c) {
            .kind = CvarKind::text});
   }
 
-  // The key under the tilde opens and closes it, in the game and in the console itself.
+  // The key under the tilde opens and closes it, in the game and in the console itself, and so
+  // does the ISO key: a Mac that does not recognise its ISO keyboard reports the key under Escape
+  // (§ on a Nordic layout) as that key.
   for (BindMode m : {BindMode::game, BindMode::console})
-    if (c.binds().get(m, "`").empty()) c.binds().set(m, "`", "toggleconsole");
+    for (const char* key : {"`", "nonus"})
+      if (c.binds().get(m, key).empty()) c.binds().set(m, key, "toggleconsole");
 
   c.set_sink([this](std::string_view line) { add(LineKind::output, line); });
   c.add_command("toggleconsole", "toggleconsole: the console up or down",

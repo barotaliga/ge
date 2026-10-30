@@ -24,3 +24,8 @@ destructor that catches `std::exception` and says so on stderr (an empty catch f
 `uint64_t` are different types there, so `bugprone-misplaced-widening-cast` fires too: convert
 each operand, then compute. The analyzer's `cplusplus.Move` inside `std::sort`'s comparator is a
 false positive of its libc++ model: NOLINTBEGIN/END with that reason.
+
+Two more in `tools/lint.sh`'s changed-files path, which a change to the lint script itself skips:
+macOS's awk refuses a newline in a `-v` value (pass a list through `ENVIRON`), and Apple Clang's
+depfiles list toolchain headers before the source (take the object's first `.cpp` in the tree,
+never its first dependency).
