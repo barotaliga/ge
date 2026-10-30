@@ -32,17 +32,17 @@ namespace ge::brush {
 inline constexpr int kFramesPerSecond = 5;
 
 struct TextureSet {
-  std::string name;               // the name after the two-byte prefix, as stored
-  bool random = false;            // a '-' set (one frame a surface) rather than a '+' cycle
-  std::vector<uint32_t> frames;   // textures, frame 0 first
-  std::vector<uint32_t> alt;      // the alternate cycle's textures (a '+' cycle only)
+  std::string name;              // the name after the two-byte prefix, as stored
+  bool random = false;           // a '-' set (one frame a surface) rather than a '+' cycle
+  std::vector<uint32_t> frames;  // textures, frame 0 first
+  std::vector<uint32_t> alt;     // the alternate cycle's textures (a '+' cycle only)
 };
 
 struct TextureAnims {
-  std::vector<int32_t> set_of;    // a texture's set, or -1
-  std::vector<bool> is_alt;       // whether the texture is a frame of its set's alternate cycle
+  std::vector<int32_t> set_of;  // a texture's set, or -1
+  std::vector<bool> is_alt;     // whether the texture is a frame of its set's alternate cycle
   std::vector<TextureSet> sets;
-  std::vector<std::string> notes; // a gap or an alternate without a main cycle, named
+  std::vector<std::string> notes;  // a gap or an alternate without a main cycle, named
 };
 
 TextureAnims build_texture_anims(const Map& map);

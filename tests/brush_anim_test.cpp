@@ -38,7 +38,7 @@ TEST(a_cycle_turns_with_the_clock_and_its_alternate_when_asked) {
   CHECK(br::texture_at(a, 2, 0.4, false, 9) == 2);  // any frame asks for the whole cycle
   CHECK(br::texture_at(a, 1, 0.6, false, 0) == 1);  // wraps after three
   CHECK(br::texture_at(a, 1, 0.2, true, 0) == 5);
-  CHECK(br::texture_at(a, 4, 0.0, false, 0) == 1);  // an alternate frame asks for the main cycle
+  CHECK(br::texture_at(a, 4, 0.0, false, 0) == 1);   // an alternate frame asks for the main cycle
   CHECK(br::texture_at(a, 1, -0.1, false, 0) == 2);  // floor before zero
 }
 

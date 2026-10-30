@@ -83,8 +83,9 @@ TextureAnims build_texture_anims(const Map& map) {
     set.alt = run(s.alt, key + " (alternate)", &a.notes);
     if (set.frames.empty()) {
       if (set.alt.empty()) continue;
-      a.notes.push_back(key + ": an alternate cycle with no frame 0 of its main one; the "
-                              "alternate's frames are drawn for both");
+      a.notes.push_back(key +
+                        ": an alternate cycle with no frame 0 of its main one; the "
+                        "alternate's frames are drawn for both");
       set.frames = set.alt;
     }
     const auto k = int32_t(a.sets.size());

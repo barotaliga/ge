@@ -10,6 +10,7 @@
 // ge:skill brush testing
 #include <string>
 
+#include "brush/anim.hpp"
 #include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
@@ -69,6 +70,12 @@ bool sound(const br::Map& m) {
     if (n.plane >= m.planes.size()) return false;
     for (int32_t c : n.child) {
       if (c >= 0 && size_t(c) >= m.clip_nodes.size()) return false;
+    }
+  }
+  const br::TextureAnims anims = br::build_texture_anims(m);
+  for (uint32_t t = 0; t < m.textures.size(); ++t) {
+    for (const double at : {0.0, 0.7, 13.3}) {
+      if (br::texture_at(anims, t, at, t % 2 == 0, t) >= m.textures.size()) return false;
     }
   }
   return true;

@@ -4,7 +4,8 @@
 // records' indices to 32 bits and stores node and leaf bounds as floats.
 //
 // ge:summary Reads version 29 and BSP2 maps: polygons, miptex, grey lightmaps, leaf visibility
-// ge:keywords v29 bsp2 bspx rgblighting read faces surfedges edges texinfo miptex lighting clipnodes leafs visleafs
+// ge:keywords v29 bsp2 read faces surfedges edges texinfo miptex lighting clipnodes leafs visleafs
+// ge:keywords bspx rgblighting
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #include <algorithm>
