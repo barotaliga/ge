@@ -100,19 +100,13 @@ bool parse_mode(std::string_view word, Mode* out) {
   return true;
 }
 
-std::vector<PointLight> lava_lights(const Scene& scene, double core_c, double cover) {
+namespace {
+
+// A grid of lights over each pool of `kind`'s top, each its share of a glow of `rgb` cd/m^2.
+std::vector<PointLight> pool_lights(const Scene& scene, Kind kind, const double rgb[3]) {
   std::vector<PointLight> out;
-  // The pool's mean glow: the open melt's share at the core, the crust's at a dull red.
-  const water::Glow melt = water::glow_of(core_c + 273.15, 0.9);
-  const water::Glow crust = water::glow_of(core_c - 380 + 273.15, 0.9);
-  const double m[3] = {melt.colour.r, melt.colour.g, melt.colour.b};
-  const double c[3] = {crust.colour.r, crust.colour.g, crust.colour.b};
-  double rgb[3];
-  for (int k = 0; k < 3; ++k) {
-    rgb[k] = (1 - cover) * melt.luminance * m[k] + cover * crust.luminance * c[k];
-  }
   for (const LiquidPatch& p : scene.liquids) {
-    if (p.kind != kLava) continue;
+    if (p.kind != kind) continue;
     const double w = p.box[2] - p.box[0], d = p.box[3] - p.box[1];
     // A light every 2.5 m or so, at most 64 a pool.
     double step = 2.5;
@@ -136,6 +130,27 @@ std::vector<PointLight> lava_lights(const Scene& scene, double core_c, double co
     }
   }
   return out;
+}
+
+}  // namespace
+
+std::vector<PointLight> lava_lights(const Scene& scene, double core_c, double cover) {
+  // The pool's mean glow: the open melt's share at the core, the crust's at a dull red.
+  const water::Glow melt = water::glow_of(core_c + 273.15, 0.9);
+  const water::Glow crust = water::glow_of(core_c - 380 + 273.15, 0.9);
+  const double m[3] = {melt.colour.r, melt.colour.g, melt.colour.b};
+  const double c[3] = {crust.colour.r, crust.colour.g, crust.colour.b};
+  double rgb[3];
+  for (int k = 0; k < 3; ++k) {
+    rgb[k] = (1 - cover) * melt.luminance * m[k] + cover * crust.luminance * c[k];
+  }
+  return pool_lights(scene, kLava, rgb);
+}
+
+std::vector<PointLight> slime_lights(const Scene& scene, double luminance) {
+  // A sickly green, its luminance carried by the green.
+  const double rgb[3] = {0.35 * luminance, 1.2 * luminance, 0.25 * luminance};
+  return pool_lights(scene, kSlime, rgb);
 }
 
 std::vector<PointLight> portal_lights(const Scene& scene) {
@@ -374,6 +389,7 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
   }
   create_bsp_cull(device, pipelines, d.cull, scene, chunk_of, d.indices, frame);
   d.lava = lava_lights(scene, 1150, 0.3);
+  d.slime = slime_lights(scene);
   d.portals = portal_lights(scene);
 }
 
@@ -407,9 +423,20 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       if (dist < reach + 40) picks.push_back({&l, dist - reach});
     };
     for (const PointLight& l : s.lights) consider(l);
-    if (o.lava_lights) {
-      for (const PointLight& l : d.lava) consider(l);
-    }
+    // The pools' lights at the options' strengths, copied before any is picked.
+    const auto scaled = [](const std::vector<PointLight>& from, double k,
+                           std::vector<PointLight>& to) {
+      to.clear();
+      if (k <= 0) return;
+      for (PointLight l : from) {
+        for (double& c : l.colour) c *= k;
+        to.push_back(l);
+      }
+    };
+    scaled(d.lava, o.lava_lights ? o.lava_glow : 0, d.lava_points);
+    scaled(d.slime, o.slime_glow, d.slime_points);
+    for (const PointLight& l : d.lava_points) consider(l);
+    for (const PointLight& l : d.slime_points) consider(l);
     if (o.portal_lights) {
       for (const PointLight& l : d.portals) consider(l);
     }

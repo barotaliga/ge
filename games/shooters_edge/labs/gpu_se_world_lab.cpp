@@ -11,7 +11,8 @@
 //
 // Without `--pak` the map is the lab's own arena (the brush plugin's sample fixture with a light
 // that flickers and a wall that animates), so CI needs no game data; with `--pak=<file>` and
-// `--maps=<a>,<b>` the maps come out of a pack, for private pictures only.
+// `--maps=<a>,<b>` the maps come out of a pack, for private pictures only. `--cvars="r_lava_glow
+// 0"` sets the picture's r_ cvars (look.hpp) as the console would.
 //
 // ge:summary Lab: Shooter's Edge's world in both looks, its light styles, effects, blends and cull
 // ge:keywords lab se-world shooter world classic modern look light-style animated-texture effects
@@ -28,6 +29,7 @@
 #include "brush/app/bsp_sky.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/write.hpp"
+#include "console/console.hpp"
 #include "core/libm/libm.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
@@ -76,6 +78,7 @@ struct Frame {
   gr::FrameRecorder rec;
   ge::gpu::Target out;
   uint32_t w = 0, h = 0;
+  lk::Picture picture;  // the r_ cvars, as --cvars set them
 };
 
 struct MapState {
@@ -152,14 +155,14 @@ gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, const gr::FrameView&
   gr::fill_uniforms(f.staged, v, f.w, f.h);
   d.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
   gr::prepare_sky(f.sky, v);
-  ba::Options o = lk::world_options(look);
+  ba::Options o = lk::world_options(look, {}, f.picture);
   o.cull = cull;
   o.pvs = pvs;
   o.sky_light = m.sky.sky_light;
   o.sky_seen = m.sky.sky_seen;
   for (int k = 0; k < 3; ++k) o.sky_tint[k] = m.sky.tint[k];
   ba::prepare_bsp(d, m.bsp, v, o);
-  f.particles.settings.glow = float(lk::effects_glow(look));
+  f.particles.settings.glow = float(lk::effects_glow(look, f.picture));
   gr::prepare_particles(d, f.particles, particle_dt, v.near_m);
   const int p = look == lk::Look::classic ? 0 : 1;
   const double none[4] = {0, 0, 0, 0};
@@ -312,6 +315,12 @@ void run(gl::Lab& lab) {
   }
   ge::gpu::Device& d = *device;
   Frame f;
+  {
+    ge::console::Console con;
+    lk::add_cvars(con, f.picture);
+    con.execute(lab.arg("cvars"));
+    for (const auto& p : con.problems()) lab.note("--cvars: " + p.what);
+  }
   f.w = w;
   f.h = h;
   f.targets = gr::create_targets(d, "se-world", w, h);
@@ -321,12 +330,12 @@ void run(gl::Lab& lab) {
   gr::create_sky(d, f.pipelines, f.sky, f.uniforms, f.layout);
   gr::create_clouds(d, f.pipelines, f.clouds, f.layout);
   gr::BloomSettings bs;
-  bs.strength = lk::post_settings(lk::Look::modern).bloom;
+  bs.strength = lk::post_settings(lk::Look::modern, f.picture).bloom;
   gr::create_bloom_pipelines(d, f.pipelines, f.bloom, bs);
   for (int p = 0; p < 2; ++p) {
     const lk::Look look = p == 0 ? lk::Look::classic : lk::Look::modern;
     gr::create_post(d, f.pipelines, f.post[p], f.layout, wgpu::TextureFormat::RGBA8Unorm,
-                    lk::post_settings(look));
+                    lk::post_settings(look, f.picture));
   }
   gr::set_grade(d, f.post[0], lk::palette_grade(palette));
   gr::create_particles(d, f.pipelines, f.particles, f.layout);
@@ -539,7 +548,8 @@ const gl::LabSpec kSpec{
      {"pak", "",
       "a pack file holding maps/*.bsp and gfx/palette.lmp (none: the lab's own arena); its "
       "pictures are for a private page only"},
-     {"maps", "start", "the maps in the pack, comma separated, without maps/ and .bsp"}},
+     {"maps", "start", "the maps in the pack, comma separated, without maps/ and .bsp"},
+     {"cvars", "", "the picture's cvars, as a console line (\"r_fx_glow 0.5; r_lava_glow 0\")"}},
     "--width=160",
     run};
 GE_LAB(kSpec);

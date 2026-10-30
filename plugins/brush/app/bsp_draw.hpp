@@ -51,14 +51,16 @@ bool parse_mode(std::string_view word, Mode* out);
 struct Options {
   Mode mode = Mode::v2;  // the renderer for BSP maps; classic stays selectable (r_bspmode)
   Lighting lighting = Lighting::lights;
-  double ambient = 0.015;     // the light every face gets, the lightmaps' units
-  double brightness = 2.0;    // a lightmap's 1 against a white face under the open day
-  double strength = 1;        // the point lights' strength against the classic's
+  double ambient = 0.015;       // the light every face gets, the lightmaps' units
+  double brightness = 2.0;      // a lightmap's 1 against a white face under the open day
+  double strength = 1;          // the point lights' strength against the classic's
   double dynamic_strength = 1;  // the dynamic lights' (set_dynamic_lights) against the classic's
-  int shadowed = 32;          // the nearest lights that cast shadows
-  int most = 160;             // the lights a frame draws at most (the nearest)
-  bool lava_lights = true;    // the lava's glow lights the walls round it
-  bool portal_lights = true;  // each teleporter's panel lights its room with a slow pulse
+  int shadowed = 32;            // the nearest lights that cast shadows
+  int most = 160;               // the lights a frame draws at most (the nearest)
+  bool lava_lights = true;      // the lava's glow lights the walls round it
+  double lava_glow = 1;         // that glow's strength, 0 none
+  double slime_glow = 1;        // the slime's faint green glow on the walls round it, 0 none
+  bool portal_lights = true;    // each teleporter's panel lights its room with a slow pulse
   // r_texfilter: the map's textures filtered (between texels, between mip levels and along a
   // surface seen at a slant) or CRISP, each texel a square as the classic look draws them.
   bool crisp = false;
@@ -167,7 +169,8 @@ struct BspDraw {
   std::vector<PointLight> dynamic_points;  // the same as v2's point lights
   uint64_t culled_frames = 0;  // frames culled since the targets were made (0: no pyramid yet)
   // The scene's lava lights and teleporters' lights (made once).
-  std::vector<PointLight> lava, portals;
+  std::vector<PointLight> lava, slime, portals;
+  std::vector<PointLight> lava_points, slime_points;  // this frame's, at the options' strengths
 };
 
 void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& draw, const Scene& scene,
@@ -201,6 +204,8 @@ render::PrecipShelter bsp_shelter(const BspDraw& draw);
 // pool's glow (physical, cd), just over the surface. `core_c` the melt's temperature, `cover` the
 // share crusted.
 std::vector<PointLight> lava_lights(const Scene& scene, double core_c = 1150, double cover = 0.75);
+// The lights the scene's slime gives off: the same grid, a faint green of `luminance` cd/m^2.
+std::vector<PointLight> slime_lights(const Scene& scene, double luminance = 3);
 // The lights the teleporters give off: one half a metre before each panel, a cool grey-white,
 // breathing slowly, its brightness by the panel's area.
 std::vector<PointLight> portal_lights(const Scene& scene);

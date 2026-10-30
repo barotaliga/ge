@@ -320,8 +320,11 @@ every pass, and judged by captioned screenshots:
   come). The `se-world` lab pictures every named view in both. The player sets the picture with
   cvars: `r_look` (classic or modern), and for the modern look `r_fx_lights` (the light the
   effects throw, default 0.2 of the classic's), `r_fx_glow` (a spark's glow, default 0.15) and
-  `r_bloom` (default 0.3); the modern's exposure and bloom wash a room out at the classic's
-  strengths, so its defaults turn them down. The classic keeps its own.
+  `r_bloom` (default 0.3), `r_lava_glow` (the lava's light on the walls round it, default 0.2)
+  and `r_slime_glow` (the slime's faint green light, default 1); the modern's exposure and bloom
+  wash a room out at the classic's strengths, so its defaults turn them down. The classic keeps
+  its own, with the pools' light baked in its lightmaps. The lab takes the same cvars:
+  `make lab LAB=se-world ARGS='--cvars="r_lava_glow 0"'`.
 - **Headless**: a CPU raster view of any map from above (the leaves, the PVS of a point, the
   hulls) for the labs, like Fall Line's map views, with no GPU at all.
 

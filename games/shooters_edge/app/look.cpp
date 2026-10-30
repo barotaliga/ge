@@ -39,6 +39,19 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0,
            .max = 1},
           &picture.bloom);
+  cv.bind({.name = "r_lava_glow",
+           .fallback = "0.2",
+           .help = "how much the lava lights the walls round it in the modern look, 0 none",
+           .min = 0,
+           .max = 4},
+          &picture.lava_glow);
+  cv.bind({.name = "r_slime_glow",
+           .fallback = "1",
+           .help = "how much the slime's green glow lights the walls round it in the modern look, "
+                   "0 none",
+           .min = 0,
+           .max = 4},
+          &picture.slime_glow);
 }
 
 Look look_of(const Picture& picture) {
@@ -72,6 +85,8 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture) {
     base.lighting = ba::Lighting::lights;
     base.crisp = false;
     base.dynamic_strength = picture.fx_lights;
+    base.lava_glow = picture.lava_glow;
+    base.slime_glow = picture.slime_glow;
   }
   return base;
 }

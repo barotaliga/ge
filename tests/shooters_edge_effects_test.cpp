@@ -147,9 +147,11 @@ TEST(the_picture_cvars_tune_the_modern_look_and_leave_the_classic) {
   ge::console::Console con;
   lk::Picture pic;
   lk::add_cvars(con, pic);
-  con.execute("r_look modern; r_fx_lights 0.8; r_fx_glow 9; r_bloom 0.1");
+  con.execute(
+      "r_look modern; r_fx_lights 0.8; r_fx_glow 9; r_bloom 0.1; r_lava_glow 0; r_slime_glow 2");
   CHECK(lk::look_of(pic) == lk::Look::modern);
-  CHECK(lk::world_options(lk::look_of(pic), {}, pic).dynamic_strength == 0.8);
+  const auto o = lk::world_options(lk::look_of(pic), {}, pic);
+  CHECK(o.dynamic_strength == 0.8 && o.lava_glow == 0 && o.slime_glow == 2);
   CHECK(lk::effects_glow(lk::Look::modern, pic) == 4);  // clamped to the cvar's range
   CHECK(lk::post_settings(lk::Look::modern, pic).bloom == 0.1);
   CHECK(lk::world_options(lk::Look::classic, {}, pic).dynamic_strength == 1);
