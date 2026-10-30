@@ -11,6 +11,8 @@
 #include "brush/app/bsp_draw.hpp"
 #include "brush/app/bsp_sky.hpp"
 #include "brush/app/draw_data.hpp"
+#include "brush/light_probe.hpp"
+#include "camera/pose.hpp"
 #include "core/output.hpp"
 #include "render/bloom.hpp"
 #include "render/clouds.hpp"
@@ -19,6 +21,8 @@
 #include "render/post.hpp"
 #include "render/sky.hpp"
 #include "render/ui_pass.hpp"
+#include "render/viewmodel.hpp"
+#include "viewmodel/light.hpp"
 
 namespace shooters_edge::client {
 
@@ -43,6 +47,11 @@ struct WorldDraw {
   gr::Bloom bloom;
   gr::Post post[2];
   gr::Particles particles;
+  gr::HeldModels held;
+  bool has_held = false;
+  ge::viewmodel::Placement last_place;  // the weapon's placement a frame ago
+  bool held_fresh = true;
+  ge::brush::LightProbe probe;
   gr::UiPass ui;
   gr::FrameRecorder rec;
   uint32_t w = 0, h = 0;
@@ -51,6 +60,10 @@ struct WorldDraw {
 void WorldDrawDeleter::operator()(WorldDraw* w) const { delete w; }
 
 namespace {
+
+// The weapon's light off the floor's: the share that is all round and the share from above, and
+// the brightest the floor's light is taken as (twice the light as baked).
+constexpr float kHeldAmbient = 0.55f, kHeldDirect = 0.45f, kHeldMost = 1.6f;
 
 // Everything sized to the targets: made at create and again at a resize.
 void make_targets(ge::gpu::Device& d, WorldDraw& f) {
@@ -64,11 +77,53 @@ void make_targets(ge::gpu::Device& d, WorldDraw& f) {
   if (f.has_map) ba::create_bsp_targets(d, f.bsp, f.targets);
 }
 
+// The weapon's draw this frame: its model and placement, lit by the baked light on the floor under
+// the eye (the lightmap's 0.5 the light as baked, from above) and by its own flash.
+gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
+                       const gr::FrameView& view) {
+  namespace vm = ge::viewmodel;
+  gr::HeldDraw g;
+  g.model = static_cast<uint32_t>(h.weapon);
+  g.now = h.placement;
+  g.last = f.held_fresh ? h.placement : f.last_place;
+  f.last_place = h.placement;
+  f.held_fresh = false;
+  g.fov_y = h.placement.fov_y;
+  g.lamps = false;
+  g.hide_flame = !h.flashing;
+  vm::Probe probe;
+  float rgb[3];
+  const float at[3] = {static_cast<float>(view.eye[0] / ge::brush::kUnitM),
+                       static_cast<float>(view.eye[2] / ge::brush::kUnitM),
+                       static_cast<float>(view.eye[1] / ge::brush::kUnitM)};
+  if (f.has_map && ge::brush::light_below(f.probe, f.scene.map, at, rgb)) {
+    for (int k = 0; k < 3; ++k) {
+      const float lit = std::min(2 * rgb[k], kHeldMost);
+      probe.ambient[k] = kHeldAmbient * lit;
+      probe.direct[k] = kHeldDirect * lit;
+    }
+  }
+  ge::camera::Pose pose;
+  pose.eye = {view.eye[0], view.eye[1], view.eye[2]};
+  pose.yaw = view.heading;
+  pose.pitch = view.pitch;
+  pose.fov_y = view.fov_y;
+  pose.near_m = view.near_m;
+  const float grip[3] = {static_cast<float>(h.placement.m[3]), static_cast<float>(h.placement.m[7]),
+                         static_cast<float>(h.placement.m[11])};
+  const std::span<const vm::PointLight> lights =
+      h.flashing ? std::span<const vm::PointLight>(&h.flash, 1) : std::span<const vm::PointLight>();
+  g.light = vm::light_held(probe, lights, pose, grip);
+  return g;
+}
+
 }  // namespace
 
 WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, const LoadedMap& map,
                                uint32_t width, uint32_t height, wgpu::TextureFormat format,
-                               const look::Picture& picture, std::string& error) {
+                               const look::Picture& picture,
+                               std::span<const ge::viewmodel::HeldModel> weapons,
+                               std::string& error) {
   // A map's frame is made while the map loads, the first and every later one: its pipelines are
   // the load's, not a hitch mid-run.
   d.loading = true;
@@ -115,6 +170,16 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
         look::post_settings(p == 0 ? look::Look::classic : look::Look::modern, picture));
   gr::set_grade(d, f->post[0], look::palette_grade(grade_palette));
   gr::create_particles(d, f->pipelines, f->particles, f->layout);
+  if (!weapons.empty()) {
+    if (!gr::create_viewmodel(d, f->pipelines, f->held, f->layout, weapons)) {
+      error =
+          "the weapons did not upload (their skins do not fit the atlas); next: check "
+          "games/shooters_edge/content/models/view";
+      return nullptr;
+    }
+    f->has_held = true;
+  }
+  if (f->has_map) f->probe = ge::brush::make_light_probe(f->scene.map);
   gr::create_ui_pass(d, f->pipelines, f->ui, format);
   if (f->has_map) ba::create_bsp(d, f->pipelines, f->bsp, f->scene, f->layout);
   if (!f->pipelines.finish(d)) {
@@ -134,7 +199,8 @@ void resize_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t hei
   make_targets(d, f);
 }
 
-void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFrame& fx, double dt,
+void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFrame& fx,
+                const shooters_edge::view::HandFrame* held, double dt,
                 const ge::ui::DrawList& overlay, const wgpu::TextureView& target) {
   const look::Look lk = look::look_of(*f.picture);
   const int p = lk == look::Look::classic ? 0 : 1;
@@ -159,6 +225,13 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
   gr::prepare_particles(d, f.particles, dt, view.near_m);
   gr::set_post_blend(d, f.post[p], fx.blend);
+  const bool weapon = f.has_held && held != nullptr && held->drawn;
+  if (weapon) {
+    gr::HeldDraw draw = held_draw(f, *held, view);
+    gr::prepare_viewmodel(d, f.held, std::span<const gr::HeldDraw>(&draw, 1), view, f.w, f.h);
+  } else {
+    f.held_fresh = true;
+  }
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   gr::encode_particles_sim(f.particles, f.pipelines, f.rec, e);
   gr::encode_sky_tables(f.skypass, f.pipelines, f.rec, e);
@@ -167,6 +240,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   gr::encode_clouds(f.clouds, f.pipelines, f.rec, e, f.targets, f.frame, view, f.staged);
   if (f.has_map) ba::encode_bsp_veil(f.bsp, f.pipelines, f.rec, e, f.targets);
   gr::encode_particles(f.particles, f.pipelines, f.rec, e, f.targets, f.frame);
+  if (weapon) gr::encode_viewmodel(f.held, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);
   gr::encode_post(f.post[p], f.pipelines, f.rec, e, f.frame, f.post_group[p], target);
   if (overlay.size() > 0) {
