@@ -268,7 +268,7 @@ Played play_one(const gw::Storm& storm, const gw::Flash& f, const gw::Ear& ear, 
   player.started = true;
   player.last = f.t0 - 1e-6;
   ge::audio::Synth synth;
-  std::vector<float> out(2 * kBlock);
+  std::vector<float> out(static_cast<size_t>(2) * kBlock);
   Played p;
   gw::hear_storm(player, storm, f.t0 + 1e-3, ear);
   for (int b = 0; b * kBlock < seconds * 48000; ++b) {
@@ -322,7 +322,7 @@ void heard(gl::Lab& lab, const gw::Storm& severe, const gw::Storm& storm, const 
   ear.x = storm.vx * t0 - 3500;  // where the storm has drifted to by then, 5 km off it
   ear.z = storm.vz * t0 - 3500;
   ear.celsius = 15;
-  std::vector<float> out(2 * kBlock), all;
+  std::vector<float> out(static_cast<size_t>(2) * kBlock), all;
   int claps = 0;
   for (int b = 0; b * kBlock < listen * 48000; ++b) {
     const double t = t0 + b * 0.01;

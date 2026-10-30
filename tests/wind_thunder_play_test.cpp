@@ -37,7 +37,8 @@ gw::Storm severe() {
 // The first ground flash of `storm` after `from`.
 gw::Flash first_ground(const gw::Storm& storm, double from) {
   gw::Flash fl[128];
-  for (double t = from; t < from + 3600; t += 60) {
+  for (int k = 0; k < 60; ++k) {
+    const double t = from + 60.0 * k;
     const int n = gw::flashes_between(storm, t, t + 60, fl, 128);
     for (int i = 0; i < n && i < 128; ++i)
       if (fl[i].kind == gw::FlashKind::ground && fl[i].t0 >= t) return fl[i];
@@ -67,7 +68,7 @@ Heard listen(const gw::Storm& storm, const gw::Flash& f, const gw::Ear& ear, dou
   player.started = true;
   player.last = f.t0 - 1e-6;
   ga::Synth synth;
-  std::vector<float> out(2 * kBlock);
+  std::vector<float> out(static_cast<size_t>(2) * kBlock);
   Heard h;
   const double t0 = f.t0;
   for (int b = 0; b * kBlock < seconds * kRate; ++b) {
@@ -160,9 +161,11 @@ TEST(a_clap_is_freed_when_its_voice_ends) {
   const double at = player.waiting.front().at;
   const double seconds = player.waiting.front().pcm->seconds();
   ga::Synth synth;
-  std::vector<float> out(2 * kBlock);
+  std::vector<float> out(static_cast<size_t>(2) * kBlock);
   bool sounded = false;
-  for (double t = at - 0.05; t < at + seconds + 1.0; t += static_cast<double>(kBlock) / kRate) {
+  const double block_s = static_cast<double>(kBlock) / kRate;
+  for (int b = 0; at - 0.05 + b * block_s < at + seconds + 1.0; ++b) {
+    const double t = at - 0.05 + b * block_s;
     gw::play_thunder(player, synth, t, static_cast<double>(kBlock) / kRate);
     sounded = sounded || !player.sounding.empty();
     synth.render(out.data(), kBlock);

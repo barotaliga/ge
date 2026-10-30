@@ -99,7 +99,7 @@ void hear_storm(ThunderPlayer& player, const Storm& storm, double t, const Ear& 
     player.waiting.insert(at_place, std::move(clap));
   }
   // A flash too old to come again needs no key.
-  if (player.heard.size() > 4 * kLook)
+  if (player.heard.size() > static_cast<size_t>(4) * kLook)
     player.heard.erase(player.heard.begin(), player.heard.begin() + kLook);
 }
 
