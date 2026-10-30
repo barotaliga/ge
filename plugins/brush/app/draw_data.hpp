@@ -47,9 +47,13 @@ enum Kind : uint32_t {
 };
 inline constexpr int kKinds = 8;
 
-// One vertex: engine metres, the texture's texels, the lightmap atlas's uv, the normal, the
-// texture's rectangle in the atlas (mip 0 texels: x, y, w, h), its kind, the map vertex it was
-// made from, and its place in the rebaked atlas (rebake.hpp; −1 when there is none).
+// One vertex: engine metres, the texture's texels, the lightmap atlas's uv (its first style's
+// layer), the normal, the texture's rectangle in the atlas (mip 0 texels: x, y, w, h), its kind,
+// the map vertex it was made from, its place in the rebaked atlas (rebake.hpp; −1 when there is
+// none), its face's light styles (four bytes, the first in the low byte, 255 past the last; the
+// k-th style's lightmap is layer k of the atlas) and its texture's animation (`Scene::frames`:
+// the sequence's first frame in the low 16 bits, its frame count in the next 8, this texture's
+// own frame in the top 8; 0 a still texture).
 struct DrawVertex {
   float pos[3];
   float st[2];
@@ -59,8 +63,20 @@ struct DrawVertex {
   uint32_t kind;
   uint32_t source;
   float lm2[2];
+  uint32_t styles;
+  uint32_t anim;
 };
-static_assert(sizeof(DrawVertex) == 72);
+static_assert(sizeof(DrawVertex) == 80);
+
+// THE LIGHT STYLES: a map's faces name up to four styles each, numbers 0 .. 63 a game sets to a
+// pattern of brightness letters played at ten a second ('a' dark, 'm' the light as baked, 'z' about
+// twice it); a face's light is the sum of each style's lightmap times its style's level now.
+inline constexpr int kLightStyles = 64;
+inline constexpr double kStyleRate = 10;  // letters a second
+// The level of `pattern` at time `t` s (1 for an empty pattern: the light as baked).
+double style_level(std::string_view pattern, double t);
+// The textures' animation: frames a second (a sequence of "+0" .. "+9" textures).
+inline constexpr double kFrameRate = 5;
 
 // A liquid's top drawn by our renderer: its kind, its level (m) and its box over the plan (x0, z0,
 // x1, z1, m).
@@ -121,9 +137,17 @@ struct Scene {
   std::string name;
   Map map;
   Atlas textures;  // sRGB colours, every mip the file stores
-  Atlas light;     // the lightmaps' first style, R = the luxel, a luxel's border round each
+  // The lightmaps, a luxel's border round each, in `light_layers` layers stacked down the atlas:
+  // layer k holds every face's k-th style (a face's place the same in each).
+  Atlas light;
+  uint32_t light_layers = 1;
+  // The animated textures' frames, each one's rectangle in the atlas (x, y, w, h), a sequence's
+  // frames together in order (DrawVertex::anim).
+  std::vector<std::array<float, 4>> frames;
   std::vector<DrawVertex> vertices;
   std::vector<uint32_t> indices;
+  // Each map surface's run of `indices` (first, count; 0 0 a surface not drawn), for the cull.
+  std::vector<std::array<uint32_t, 2>> face_runs;
   std::vector<LiquidPatch> liquids;
   std::vector<Portal> portals;  // the teleporters' panels, largest first
   std::vector<PointLight> lights;

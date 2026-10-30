@@ -148,7 +148,7 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
       s.count = uint32_t(m.indices.size()) - s.first;
       for (uint8_t st : styles) {
         if (st == 255) break;
-        ++s.styles;
+        s.style[s.styles++] = st;
       }
       if (lightofs >= 0 && (t.flags & (kSky | kWarp | kNoDraw)) == 0 && s.styles > 0) {
         const detail::Extent e = detail::extent_of(m, base, uint32_t(count));
@@ -225,17 +225,40 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
     }
   }
 
+  // The leaf faces: each leaf's run of them names the faces seen from inside it.
+  if (!detail::count_of(L[kLeaffaces], 2, f, &n, err)) return false;
+  {
+    Cursor c = lump(kLeaffaces);
+    m.marks.resize(n);
+    for (size_t i = 0; i < n; ++i) {
+      m.marks[i] = c.u16();
+      if (m.marks[i] >= m.surfaces.size()) {
+        return detail::refuse(err, f,
+                              "leaf face " + std::to_string(i) + " names face " +
+                                  std::to_string(m.marks[i]) + ", not in the map",
+                              "the file is damaged: rebuild the map");
+      }
+    }
+  }
   if (!detail::count_of(L[kLeafs], 28, f, &n, err)) return false;
   {
     Cursor c = lump(kLeafs);
     m.leaves.resize(n);
-    for (Leaf& lf : m.leaves) {
+    for (size_t i = 0; i < n; ++i) {
+      Leaf& lf = m.leaves[i];
       lf.contents = c.i32();
       lf.cluster = c.i16();
       c.skip(2);
       for (float& x : lf.mins) x = float(c.i16());
       for (float& x : lf.maxs) x = float(c.i16());
-      c.skip(8);
+      lf.first_mark = c.u16();
+      lf.marks = c.u16();
+      c.skip(4);
+      if (uint64_t(lf.first_mark) + lf.marks > m.marks.size()) {
+        return detail::refuse(err, f,
+                              "leaf " + std::to_string(i) + "'s faces run past the leaf face lump",
+                              "the file is damaged: rebuild the map");
+      }
       lf.solid = (lf.contents & 1) != 0;
       if (lf.cluster < 0) lf.cluster = -1;
     }

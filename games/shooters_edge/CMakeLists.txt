@@ -6,7 +6,7 @@
 # (content/) is data and builds nothing. Its sound (sound/) is a second library: what the game
 # plays on the engine's synth, over the brush world's leaves. Its server (server/) is a library and
 # the headless `shooters_edge_server` executable. Its HUD (hud/) is a library
-# of its own, and so are its held weapons (view/). Its bots (bots/) are a library over the server. mods/ holds the sample C++ mod, built as a package (cmake/Mods.cmake) the tests and
+# of its own, and so are its held weapons (view/). Its bots (bots/) are a library over the server; its app half (app/) is the picture's game side, with the GPU. mods/ holds the sample C++ mod, built as a package (cmake/Mods.cmake) the tests and
 # the `mod` lab load.
 file(GLOB SHOOTERS_EDGE_SIM_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/sim/*.cpp)
 add_library(shooters_edge_sim STATIC ${SHOOTERS_EDGE_SIM_SOURCES})
@@ -63,6 +63,17 @@ add_library(shooters_edge_view STATIC ${SHOOTERS_EDGE_VIEW_SOURCES})
 target_include_directories(shooters_edge_view PUBLIC ${PROJECT_SOURCE_DIR}/games)
 target_link_libraries(shooters_edge_view PUBLIC ge_viewmodel ge_console ge_assets)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_view)
+
+# Its app half (app/): the picture's game side over the engine's passes and the brush world's
+# renderer: the effects (trails, bursts, dynamic lights, the screen's blend) and the looks. It
+# needs the GPU; the game's GPU labs link it. Headers are spelled "shooters_edge/app/<file>.hpp".
+if(TARGET ge_brush_app)
+  file(GLOB SHOOTERS_EDGE_APP_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/app/*.cpp)
+  add_library(shooters_edge_app STATIC ${SHOOTERS_EDGE_APP_SOURCES})
+  target_include_directories(shooters_edge_app PUBLIC ${PROJECT_SOURCE_DIR}/games)
+  target_link_libraries(shooters_edge_app PUBLIC ge_render ge_brush_app ge_console)
+  set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_app)
+endif()
 
 include(${PROJECT_SOURCE_DIR}/cmake/Mods.cmake)
 ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME shooters_edge

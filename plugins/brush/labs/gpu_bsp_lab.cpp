@@ -715,7 +715,7 @@ void run(gl::Lab& lab) {
   const wgpu::TextureView inputs[2] = {f.targets.hdr_view, f.targets.hdr_view};
   gr::create_bloom_targets(d, f.bloom, w, h, inputs);
   f.post_group = gr::post_group(d, f.post, f.targets.hdr_view, f.bloom.view);
-  f.rec.init(d, "gpu-bsp.timer", 16);
+  f.rec.init(d, "gpu-bsp.timer", 24);
   f.out = ge::gpu::create_target(d, "gpu-bsp.final", w, h);
   for (auto& m : maps) {
     ba::create_bsp_targets(d, m->bsp, f.targets);
@@ -915,6 +915,10 @@ void run(gl::Lab& lab) {
     // The lights a real-time frame drew and shadowed.
     lab.metric(v.id + ".lights", double(m.bsp.frame_lights.size()), "count", Det::measured);
     lab.metric(v.id + ".shadowed", double(m.bsp.shadowed), "count", Det::measured);
+    // The faces the last frame's cull drew (bsp_cull.hpp).
+    const ba::CullStats cs = ba::read_bsp_cull(d, m.bsp.cull);
+    lab.metric(v.id + ".faces", double(cs.chunks), "count", Det::measured);
+    lab.metric(v.id + ".faces.drawn", double(cs.early + cs.late), "count", Det::measured);
   }
   ls::checked(lab, int(d.errors.load()), int(d.pipelines_after_load));
 }

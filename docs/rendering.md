@@ -1386,7 +1386,10 @@ in tile memory):
 - exposure from the sky's brightness, not from a histogram, so it never pumps outdoors; the
   eye's adaptation (M43) opens it where the world is darker than the sky lights it;
 - bloom from a half-resolution mip chain (dual-filter down and up), cheap and stable;
-- the colour grade as a 32³ 3D lookup table the game bakes from its look;
+- the colour grade as a 32³ 3D lookup table the game bakes from its look (Shooter's Edge's
+  classic look bakes one that pulls every colour to the nearest of its palette's 256);
+- the screen's blend (`set_post_blend`): the whole picture mixed toward one colour after the
+  grade, a game's hurt flash or the liquid round the eye, a uniform the game sets each frame;
 - tone mapping, a blue-noise dither against banding, and the output transfer function.
 
 **As built (M7a)** (`render/post.hpp`): the exposure maps a white Lambertian surface under
@@ -1595,6 +1598,10 @@ point, where an acute vertex's coverage swings on the last bit of a float.
   They are drawn as camera-facing quads, softened against the depth buffer. Sorting is
   avoided by blend choice where possible; where a pool needs it, a bitonic sort in
   compute orders it.
+
+A pool over no ground (the second `create_particles`: a world of brushes or rooms) gets
+stand-ins for the terrain's heights and horizon, so nothing lands and the sun is not shaded by a
+horizon.
 
 **As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 64 bytes, a
 ring: the game hands each frame's births (`emit_particles`) and `prepare_particles` writes

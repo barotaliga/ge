@@ -64,7 +64,11 @@ struct Surface {
   uint32_t first = 0, count = 0;  // into Map::indices, three a triangle
   int32_t lightmap = -1;          // into Map::lightmaps
   SurfaceKind kind = SurfaceKind::planar;
-  uint8_t styles = 0;  // light styles stored for the face (29, 38); the first is drawn
+  uint8_t styles = 0;  // light styles stored for the face (29, 38)
+  // Each stored style's number (0 .. 254), in the order their lightmaps follow one another from
+  // `lightmap`'s offset; 255 past the last. A style's brightness is the game's (a pattern of
+  // letters a mod sets), so one face's light can be steady, flicker and pulse at once.
+  uint8_t style[4] = {255, 255, 255, 255};
 };
 
 struct Texture {
@@ -102,6 +106,9 @@ struct Leaf {
   bool solid = false;
   float mins[3] = {}, maxs[3] = {};
   uint8_t ambient[4] = {};  // the sounds near it, 0..255 (`kAmbientWater` ...): 29 and BSP2 only
+  // The surfaces marked as seen from inside it: Map::marks[first_mark, first_mark + marks), each a
+  // surface's index (29, BSP2 and 38). A cull draws a cluster's leaves' marked surfaces.
+  uint32_t first_mark = 0, marks = 0;
 };
 
 // A leaf's ambient levels, in the order a version 29 or BSP2 file stores them. The map's compiler
@@ -139,9 +146,10 @@ struct Map {
   std::vector<Model> models;  // [0] the world
 
   int32_t clusters = 0;
-  uint32_t row_bytes = 0;    // a cluster's row: one bit a cluster
-  std::vector<uint8_t> pvs;  // clusters × row_bytes, decompressed
-  std::vector<uint8_t> phs;  // the same shape; empty until build_phs
+  uint32_t row_bytes = 0;       // a cluster's row: one bit a cluster
+  std::vector<uint8_t> pvs;     // clusters × row_bytes, decompressed
+  std::vector<uint8_t> phs;     // the same shape; empty until build_phs
+  std::vector<uint32_t> marks;  // the leaves' marked surfaces (Leaf::first_mark), surface indices
 
   std::vector<ClipNode> clip_nodes;  // every clip hull of every model (29 and BSP2)
 
@@ -160,6 +168,12 @@ uint32_t leaf_at(const Map& map, const float p[3], uint32_t model = 0);
 // Whether cluster `from` can see cluster `to`; a cluster of −1 sees nothing. No visibility data:
 // everything sees everything.
 bool cluster_sees(const Map& map, int32_t from, int32_t to);
+// THE POTENTIALLY VISIBLE SET from leaf `leaf`: `seen` (one byte a surface, resized to the map's
+// surfaces) set to 1 for every surface marked in a leaf whose cluster `leaf`'s cluster sees, 0
+// elsewhere; the number set. A leaf with no cluster (the eye in solid, outside the map) sees every
+// surface, as does a map with no visibility. Only the world's own leaves mark surfaces: a brush
+// model's (a door, a lift) are the caller's to draw.
+uint32_t potentially_visible(const Map& map, uint32_t leaf, std::vector<uint8_t>* seen);
 // Fills `map->phs` from the PVS (nothing to do when it is already built or there is no PVS).
 void build_phs(Map* map);
 // Whether a sound in cluster `to` can be heard from cluster `from`; like cluster_sees, over the
