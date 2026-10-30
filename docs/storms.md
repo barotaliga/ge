@@ -188,13 +188,20 @@ carry it into the dark frames after it. A frame with a lamp, and the four after 
 quarter whole (`FrameHistory::flash_frame`).
 
 **The channel** (`render/bolts.hpp`, the `bolts` pass after the fall and before the resolve and
-the bloom). Each segment is a camera-facing ribbon two drawn widths across, with a Gaussian core.
-The width is the channel's true width, or 1.5 px at its distance if that is wider. The segment's
-light is luminous intensity per metre: the flash's candela shared along the lit segments by glow
-and length. Its luminance is that over the drawn width, so a far channel drawn wider is dimmer
-and gives the same light. The air's extinction dims it, the depth hides it behind a ridge, and it
-marks the motion target reactive so the resolve does not smear a stroke into the next frame. The
-bloom spreads its glare. The main channel is lit by every stroke and the branches only by the
+the bloom). Each segment is a camera-facing ribbon eight drawn widths across: a Gaussian core a
+drawn width wide and a soft halo round it, the light the rain and the air scatter close to the
+channel. Night photographs show every channel in such a glow and never with a hard edge, so the
+halo is capped at half of white on the screen and fades into the night however bright the core
+is. The width is the channel's true width, or 2 px at its distance if that is wider. The
+segment's light is luminous intensity per metre: the flash's candela shared along the lit
+segments by glow and length. Its luminance is that over the profile, so a far channel drawn wider
+is dimmer and gives the same light, held under what a half-float picture can store. The air's
+extinction dims it, the depth hides it behind a ridge, and it marks its whole ribbon reactive.
+A frame with a flash takes no history in the resolve at all: the last frame's dark is no history
+for a frame the flash lights anew, and beside a channel the neighbourhood's box is too wide to
+clip it away, which left dark pixels along the channel. The post's sharpening works on the
+light squashed into 0..1 for the same reason: in linear light its lobe beside a channel pulled
+the neighbours below black. The bloom spreads the core's glare. The main channel is lit by every stroke and the branches only by the
 first. A flash inside the cloud shows no channel (that is sheet lightning), and neither does a
 strike's channel above the cloud's base.
 
