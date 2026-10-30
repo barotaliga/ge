@@ -6,8 +6,10 @@
 // The file: one node a joint (its TRS) and one more a mesh (a root, named after the mesh, with
 // the skin of every joint), one primitive a material a mesh, the inverse binds, and one
 // animation a clip with a LINEAR channel for each joint's translation, rotation and scale at the
-// clip's baked frames. The loader turns each mesh node into a joint of its own, so a load has
-// the written joints first and one more a mesh after them.
+// clip's baked frames, and a LINEAR weights channel for each mesh its morph tracks move (a
+// mesh's targets are its primitives' targets, named in its `extras.targetNames`). The loader turns
+// each mesh node into a joint of its own, so a load has the written joints first and one more a
+// mesh after them.
 //
 // ge:summary A Model written as a binary glTF 2.0 file, for the tests and the labs
 // ge:keywords assets gltf glb write export writer round-trip save_glb write_glb
