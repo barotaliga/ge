@@ -24,11 +24,12 @@ constexpr uint32_t kDirtW = 480, kDirtH = 270;  // the dirt's picture: soft, so 
 
 // The strengths as the shader reads them: vec4f(sharpen, chromatic, vignette, grain),
 // vec4f(dirt, motion blur's shutter, 0, 0), vec4f(depth of field's focus (m), sharp share, widest
-// circle (a share of the height), 0).
+// circle (a share of the height), 0), vec4f(the screen's blend: sRGB-encoded rgb, its share).
 struct LookBlock {
   float a[4];
   float b[4];
   float c[4];
+  float d[4];
 };
 
 }  // namespace
@@ -136,8 +137,16 @@ void set_post_look(gpu::Device& device, const Post& post, const PostLook& look) 
   const auto f = [](double v) { return static_cast<float>(std::clamp(v, 0.0, 1.0)); };
   const LookBlock block{{f(look.sharpen), f(look.chromatic), f(look.vignette), f(look.grain)},
                         {f(look.dirt), f(look.motion_blur), 0, 0},
-                        {20, 0.15f, 0, 0}};
-  device.queue.WriteBuffer(post.look, 0, &block, sizeof block);
+                        {20, 0.15f, 0, 0},
+                        {0, 0, 0, 0}};
+  // The lens's and the film's strengths and the focus; the blend is the game's (set_post_blend).
+  device.queue.WriteBuffer(post.look, 0, &block, offsetof(LookBlock, d));
+}
+
+void set_post_blend(gpu::Device& device, const Post& post, const double rgba[4]) {
+  const auto f = [](double v) { return static_cast<float>(std::clamp(v, 0.0, 1.0)); };
+  const float d[4] = {f(rgba[0]), f(rgba[1]), f(rgba[2]), f(rgba[3])};
+  device.queue.WriteBuffer(post.look, offsetof(LookBlock, d), d, sizeof d);
 }
 
 void set_post_focus(gpu::Device& device, const Post& post, const DofSettings& dof) {

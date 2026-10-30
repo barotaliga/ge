@@ -10,6 +10,7 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <map>
 #include <numeric>
 
 #include "brush/app/draw_data.hpp"
@@ -166,6 +167,12 @@ std::span<const uint8_t> pack_file(const Pack& pack, std::string_view name) {
     if (e.name == name) return std::span<const uint8_t>(pack.bytes).subspan(e.offset, e.size);
   }
   return {};
+}
+
+double style_level(std::string_view pattern, double t) {
+  if (pattern.empty()) return 1;
+  const auto at = size_t(std::floor(std::max(t, 0.0) * kStyleRate)) % pattern.size();
+  return double(std::clamp(pattern[at], 'a', 'z') - 'a') / double('m' - 'a');
 }
 
 double heading_of(double angle_deg) {
@@ -333,7 +340,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     }
   }
 
-  // ── The lightmap atlas: each face's first style with a luxel's border ──
+  // ── The lightmap atlas: each face's styles, a layer each, with a luxel's border ──
   struct LmPlace {
     uint32_t x = 0, y = 0;
   };
@@ -343,23 +350,62 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     for (size_t i = 0; i < m.lightmaps.size(); ++i) {
       shelf.place(m.lightmaps[i].width + 2, m.lightmaps[i].height + 2, &lm_at[i].x, &lm_at[i].y);
     }
+    s.light_layers = 1;
+    for (const Surface& sf : m.surfaces) {
+      if (sf.lightmap >= 0) s.light_layers = std::max<uint32_t>(s.light_layers, sf.styles);
+    }
+    const uint32_t layer = std::max(shelf.height(), 4u);
     s.light.width = 2048;
-    s.light.height = std::max(shelf.height(), 4u);
+    s.light.height = layer * s.light_layers;
     std::vector<uint8_t> level(size_t(s.light.width) * s.light.height * 4, 0);
-    for (size_t i = 0; i < m.lightmaps.size(); ++i) {
+    for (const Surface& sf : m.surfaces) {
+      if (sf.lightmap < 0) continue;
+      const size_t i = size_t(sf.lightmap);
       const Lightmap& l = m.lightmaps[i];
-      for (uint32_t y = 0; y < l.height + 2; ++y) {
-        for (uint32_t x = 0; x < l.width + 2; ++x) {
-          const uint32_t sx = std::clamp(x, 1u, l.width) - 1, sy = std::clamp(y, 1u, l.height) - 1;
-          const size_t from = l.offset + (size_t(sy) * l.width + sx) * 3;
-          const size_t to = ((size_t(lm_at[i].y + y) * s.light.width) + lm_at[i].x + x) * 4;
-          for (int k = 0; k < 3; ++k)
-            level[to + k] = from + 2 < m.light_rgb.size() ? m.light_rgb[from + k] : 0;
-          level[to + 3] = 255;
+      const size_t one = size_t(l.width) * l.height * 3;  // one style's bytes
+      for (uint32_t k = 0; k < sf.styles; ++k) {
+        for (uint32_t y = 0; y < l.height + 2; ++y) {
+          for (uint32_t x = 0; x < l.width + 2; ++x) {
+            const uint32_t sx = std::clamp(x, 1u, l.width) - 1,
+                           sy = std::clamp(y, 1u, l.height) - 1;
+            const size_t from = l.offset + one * k + (size_t(sy) * l.width + sx) * 3;
+            const size_t to =
+                ((size_t(k * layer + lm_at[i].y + y) * s.light.width) + lm_at[i].x + x) * 4;
+            for (int c = 0; c < 3; ++c)
+              level[to + size_t(c)] = from + 2 < m.light_rgb.size() ? m.light_rgb[from + size_t(c)] : 0;
+            level[to + 3] = 255;
+          }
         }
       }
     }
     s.light.levels.push_back(std::move(level));
+  }
+
+  // ── The animated textures: "+0name" .. "+9name", each sequence's frames together ──
+  std::vector<uint32_t> anim_of(m.textures.size(), 0);
+  {
+    std::map<std::string, std::array<int32_t, 10>> sequences;
+    for (size_t i = 0; i < m.textures.size(); ++i) {
+      const std::string& n = m.textures[i].name;
+      if (n.size() < 3 || n[0] != '+' || n[1] < '0' || n[1] > '9') continue;
+      auto [it, added] = sequences.try_emplace(lower(n.substr(2)));
+      if (added) it->second.fill(-1);
+      it->second[size_t(n[1] - '0')] = int32_t(i);
+    }
+    for (const auto& [name, frames] : sequences) {
+      uint32_t count = 0;
+      while (count < 10 && frames[count] >= 0) ++count;  // frames run from +0 without a gap
+      if (count < 2) continue;
+      const uint32_t first = uint32_t(s.frames.size());
+      for (uint32_t k = 0; k < count; ++k) {
+        const Placed& p = placed[size_t(frames[k])];
+        s.frames.push_back({float(p.x), float(p.y), float(p.w), float(p.h)});
+      }
+      for (uint32_t k = 0; k < count; ++k) {
+        // Each frame starts the sequence at its own place, as the map names it.
+        anim_of[size_t(frames[k])] = first | (count << 16) | (k << 24);
+      }
+    }
   }
 
   // ── Which models are hidden (the triggers), by the entities that name them ──
@@ -386,6 +432,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
   };
   std::vector<Top> tops;
   std::vector<Portal> faces;  // the teleporters' faces, merged into panels below
+  s.face_runs.assign(m.surfaces.size(), {0, 0});
   for (size_t si = 0; si < m.surfaces.size(); ++si) {
     const Surface& sf = m.surfaces[si];
     Kind kind = kSolid;
@@ -432,6 +479,11 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       d.kind = kind;
       d.source = v;
       d.lm2[0] = d.lm2[1] = -1;
+      d.styles = 0xffffffffu;
+      if (lp) {
+        for (uint32_t k = 0; k < sf.styles; ++k) d.styles &= ~(uint32_t(255 - sf.style[k]) << (8 * k));
+      }
+      d.anim = anim_of[sf.texture];
       s.vertices.push_back(d);
       if (model_of[si] == 0) {
         for (int k = 0; k < 3; ++k)
@@ -445,6 +497,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       up = up && d.nrm[1] > 0.95f;
     }
     double area = 0;
+    s.face_runs[si] = {uint32_t(s.indices.size()), sf.count};
     for (uint32_t i = sf.first; i < sf.first + sf.count; ++i)
       s.indices.push_back(base + m.indices[i] - lo);
     for (uint32_t i = sf.first; i + 2 < sf.first + sf.count; i += 3) {

@@ -44,9 +44,14 @@ void step_particle(Particle& p, float dt, const float air[3]) {
   p.age += dt;
 }
 
-void create_particles(gpu::Device& device, gpu::PipelineSet& pipelines, Particles& ps,
-                      const wgpu::BindGroupLayout& frame, const Terrain& terrain,
-                      const ParticleSettings& settings) {
+namespace {
+
+// The pool over a ground: its heights (R32F, textureLoad) under `ground` (terrain.wgsl's
+// TerrainParams) and its two horizon maps.
+void create_pool(gpu::Device& device, gpu::PipelineSet& pipelines, Particles& ps,
+                 const wgpu::BindGroupLayout& frame, const wgpu::Buffer& ground,
+                 const wgpu::TextureView& heights, const wgpu::TextureView& horizon0,
+                 const wgpu::TextureView& horizon1, const ParticleSettings& settings) {
   ps.settings = settings;
   blackbody_table(ps.glow_table);
   ps.glow_cd = static_cast<float>(blackbody_cd(kBlackbodyHiK) * kSparkEmissivity);
@@ -68,13 +73,13 @@ void create_particles(gpu::Device& device, gpu::PipelineSet& pipelines, Particle
   cd.compute.entryPoint = "sim";
   ps.p_sim = pipelines.add_compute(device, cd);
   ps.sim_group = make_group(device, "particles.sim", ps.sim_layout,
-                            {ps.params, ps.slots, terrain.params, terrain.height.CreateView()});
+                            {ps.params, ps.slots, ground, heights});
 
   const auto vf = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
   ps.light_layout =
       make_layout(device, "particles.light", {Slot::uniform, Slot::texture, Slot::texture}, vf);
   ps.light_group = make_group(device, "particles.light", ps.light_layout,
-                              {terrain.params, terrain.horizon.views[0], terrain.horizon.views[1]});
+                              {ground, horizon0, horizon1});
   ps.draw_layout =
       make_layout(device, "particles.draw", {Slot::uniform, Slot::storage_read, Slot::depth}, vf);
   ps.shadows = no_sun_shadows(device);
@@ -114,6 +119,46 @@ void create_particles(gpu::Device& device, gpu::PipelineSet& pipelines, Particle
   desc.depthStencil = &depth;
   desc.fragment = &fragment;
   ps.p_draw = pipelines.add_render(device, desc);
+}
+
+}  // namespace
+
+void create_particles(gpu::Device& device, gpu::PipelineSet& pipelines, Particles& ps,
+                      const wgpu::BindGroupLayout& frame, const Terrain& terrain,
+                      const ParticleSettings& settings) {
+  create_pool(device, pipelines, ps, frame, terrain.params, terrain.height.CreateView(),
+              terrain.horizon.views[0], terrain.horizon.views[1], settings);
+}
+
+void create_particles(gpu::Device& device, gpu::PipelineSet& pipelines, Particles& ps,
+                      const wgpu::BindGroupLayout& frame, const ParticleSettings& settings) {
+  // No ground: one height far below anything (a particle never lands) and no horizon (the sun
+  // reaches everywhere: TerrainParams' horizon.w 0).
+  Terrain::Params none{};
+  none.field[2] = 1;
+  none.field_size[0] = none.field_size[1] = 1;
+  ps.ground = make_buffer(device, "particles.ground", sizeof none, BU::Uniform);
+  device.queue.WriteBuffer(ps.ground, 0, &none, sizeof none);
+  const auto use = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+  ps.ground_height = make_texture(device, "particles.ground.height", 1, 1, 1,
+                                  wgpu::TextureFormat::R32Float, use);
+  ps.ground_horizon = make_texture(device, "particles.ground.horizon", 1, 1, 1,
+                                   wgpu::TextureFormat::R16Float, use);
+  const float far_below = -1e9f;
+  const uint16_t flat = 0;
+  wgpu::TexelCopyTextureInfo dst{};
+  wgpu::TexelCopyBufferLayout layout{};
+  layout.bytesPerRow = 4;
+  layout.rowsPerImage = 1;
+  const wgpu::Extent3D one{1, 1, 1};
+  dst.texture = ps.ground_height;
+  device.queue.WriteTexture(&dst, &far_below, 4, &layout, &one);
+  dst.texture = ps.ground_horizon;
+  layout.bytesPerRow = 2;
+  device.queue.WriteTexture(&dst, &flat, 2, &layout, &one);
+  const wgpu::TextureView horizon = ps.ground_horizon.CreateView();
+  create_pool(device, pipelines, ps, frame, ps.ground, ps.ground_height.CreateView(), horizon,
+              horizon, settings);
 }
 
 void bind_particle_targets(gpu::Device& device, Particles& ps, const FrameTargets& targets) {

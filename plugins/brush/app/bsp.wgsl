@@ -44,6 +44,8 @@ struct Bsp {
   veil: vec4f,   // the sky faces' pixels times these (bsp_fix.wgsl's veil)
   weather: vec4f,  // the weather on (1), the rain falling now (0 .. 1), the fall's spread, 0
   ortho: array<Job, 3>,  // the sun's map, the zenith's and the fall's
+  info5: vec4f,  // a lightmap layer's height in the atlas's uv, the layers
+  styles: array<vec4f, 16>,  // the 64 light styles' levels now, four a vector
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -60,7 +62,9 @@ struct Job {
 struct Light {
   pos: vec4f,     // world m; w: its reach, m
   colour: vec4f,  // its strength (rgb, the flicker in it); w: 1 physical (cd), 0 lightmap units
-  info: vec4f,    // x: its shadow's first layer (six a light), -1 none; y: its source's size^2, m^2
+  info: vec4f,    // x: its shadow's first layer (six a light), -1 none; y: its source's size^2, m^2;
+                  // z: 1 a dynamic light added to the lightmaps (colour its middle's light, pos.w
+                  // its radius)
 };
 
 @group(1) @binding(0) var<uniform> bsp: Bsp;
@@ -73,6 +77,7 @@ struct Light {
 @group(1) @binding(7) var orthos: texture_depth_2d_array;
 @group(1) @binding(8) var rebake_rgb: texture_2d<f32>;
 @group(1) @binding(9) var rebake_dir: texture_2d<f32>;
+@group(1) @binding(10) var<storage, read> frames: array<vec4f>;  // the animated textures' frames
 
 const kSky = 1u;
 const kWater = 2u;
@@ -89,6 +94,8 @@ struct VsIn {
   @location(4) rect: vec4f,
   @location(5) kind: u32,
   @location(6) lm2: vec2f,
+  @location(7) styles: u32,
+  @location(8) anim: u32,
 };
 
 struct VsOut {
@@ -100,7 +107,15 @@ struct VsOut {
   @location(4) @interpolate(flat) rect: vec4f,
   @location(5) @interpolate(flat) kind: u32,
   @location(6) lm2: vec2f,
+  @location(7) @interpolate(flat) styles: u32,
 };
+
+// The light styles: a texture's frame played at five a second, a style's level now.
+const kFrameRate = 5.0;
+
+fn style_level(id: u32) -> f32 {
+  return bsp.styles[id >> 2u][id & 3u];
+}
 
 @vertex
 fn vs_main(v: VsIn) -> VsOut {
@@ -111,8 +126,15 @@ fn vs_main(v: VsIn) -> VsOut {
   o.lm = v.lm;
   o.nrm = v.nrm;
   o.rect = v.rect;
+  // An animated texture: the sequence's frame now, from this texture's own place in it.
+  let count = (v.anim >> 16u) & 255u;
+  if (count > 1u) {
+    let at = (u32(max(bsp.info2.x, 0.0) * kFrameRate) + (v.anim >> 24u)) % count;
+    o.rect = frames[(v.anim & 0xffffu) + at];
+  }
   o.kind = v.kind;
   o.lm2 = v.lm2;
+  o.styles = v.styles;
   return o;
 }
 
@@ -237,16 +259,44 @@ fn teleport(world: vec3f, n: vec3f, eye_dir: vec3f, t: f32) -> vec3f {
   return c * (0.85 + 0.15 * sin(1.7 * t));
 }
 
+// The dynamic lights on the lightmaps' light (the classic's and v2's lightmaps): each falls off
+// in a straight line from its middle to nothing at its radius, whichever way the face faces.
+fn dynamic_light(p: vec3f) -> vec3f {
+  var e = vec3f(0.0);
+  let count = u32(bsp.info.z);
+  for (var i = 0u; i < count; i++) {
+    let l = lights[i];
+    if (l.info.z < 0.5) {
+      continue;
+    }
+    let d = length(p - l.pos.xyz);
+    e += l.colour.rgb * max(1.0 - d / l.pos.w, 0.0);
+  }
+  return e;
+}
+
 // V2's floor: no face darker than about `m`, a lit one nearly as it was (sqrt(e^2 + m^2)).
 fn floor_light(e: vec3f, m: f32) -> vec3f {
   return sqrt(e * e + vec3f(m * m));
 }
 
-fn lightmap(lm: vec2f) -> vec3f {
+// The light the face's lightmaps give it now: each of its styles' layer times the style's level.
+fn lightmap(lm: vec2f, styles: u32) -> vec3f {
   if (lm.x < 0.0) {
     return vec3f(1.0);
   }
-  return textureSampleLevel(light_atlas, light_sampler, lm, 0.0).rgb * (255.0 / 128.0);
+  var e = vec3f(0.0);
+  for (var k = 0u; k < 4u; k++) {
+    let id = (styles >> (8u * k)) & 255u;
+    if (id == 255u) {
+      break;
+    }
+    if (id < 64u) {
+      let at = lm + vec2f(0.0, f32(k) * bsp.info5.x);
+      e += textureSampleLevel(light_atlas, light_sampler, at, 0.0).rgb * style_level(id);
+    }
+  }
+  return e * (255.0 / 128.0);
 }
 
 // THE DIRECTIONAL SHADE (engine/bake/bake.hpp, `directional_scale`, restated): the rebaked
@@ -571,7 +621,7 @@ fn fs_main(in: VsOut) -> FsOut {
   }
 
   if (classic || bsp.info.y < 0.5) {
-    var lit = lightmap(in.lm);
+    var lit = lightmap(in.lm, in.styles) + dynamic_light(in.world);
     if (classic) {
       lit = mix(lit, max(lit, vec3f(1.0)), glow);
       out.colour = vec4f(albedo * lit * white, 1.0);
@@ -618,7 +668,7 @@ fn fs_main(in: VsOut) -> FsOut {
     }
   }
   // The light bounced round the room: the map's baked light (its light probes) at a share.
-  e += lightmap(in.lm) * bsp.info3.y;
+  e += lightmap(in.lm, in.styles) * bsp.info3.y;
   e = floor_light(e, bsp.info3.x);
   e += wl.flash;
   var c = wl.albedo * e * white;

@@ -17,7 +17,8 @@
 //   while it rains, or snowed on, and the rooms behind stay dry; a lightning flash lights what
 //   is open to the sky. The same map is the fall's shelter (`bsp_shelter`).
 //
-// The passes, in a frame's order: "bsp.shadows" (v2 with lights or weather), "bsp", "bsp.sky" (v2);
+// The passes, in a frame's order: "bsp.shadows" (v2 with lights or weather), then with r_cull
+// "bsp.cull", "bsp", "hiz", "bsp.cull.late" and "bsp.late", else "bsp"; then "bsp.sky" (v2);
 // then the caller's sky, clouds, water and liquids over the frame's targets.
 //
 // ge:summary The BSP renderer: classic or v2 (our sky, our liquids, real-time lights and shadows)
@@ -26,10 +27,14 @@
 // ge:skill brush render
 #pragma once
 
+#include <array>
 #include <cstdint>
+#include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
+#include "brush/app/bsp_cull.hpp"
 #include "brush/app/draw_data.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
@@ -82,12 +87,25 @@ struct Options {
   double raining = 0;
   double spread = 0.3;  // the tangent of the spread of ways round `fall` the drops and flakes come
   double fall[3] = {0, -1, 0};
+  // r_cull: the world's faces culled by the eye's potentially visible set, the frustum and the
+  // depth pyramid in two phases (bsp_cull.hpp); off draws every face.
+  bool cull = true;
 };
 
 inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side
 inline constexpr uint32_t kOrthoSize = 2048;  // the sun's and the zenith's maps
 inline constexpr int kMaxShadowed = 48;
 inline constexpr uint32_t kOrthos = 3;  // the sun's, the zenith's and the fall's
+
+// A DYNAMIC LIGHT: one a game lights for a moment (a muzzle's flash, a rocket's glow, an
+// explosion, a glowing pickup), set each frame (`set_dynamic_lights`). The classic path adds it
+// to the lightmaps' light as the classic did, falling off in a straight line to nothing at its
+// radius; v2 lit in real time draws it as one more point light.
+struct DynamicLight {
+  double pos[3] = {0, 0, 0};       // engine metres
+  double radius = 5;               // m: where its light ends
+  double colour[3] = {1, 1, 1};    // its light at its middle, the lightmaps' units (1: as baked 'm')
+};
 
 struct GpuLight {
   float pos[4];
@@ -108,6 +126,8 @@ struct GpuBsp {
   float veil[4];     // the sky faces' pixels times these (the sky's light, seen and tinted)
   float weather[4];  // on (1), the rain falling now, the fall's spread, 0
   GpuJob ortho[kOrthos];
+  float info5[4];  // a lightmap layer's height in the atlas's uv, the layers, 0, 0
+  float styles[kLightStyles];  // each light style's level now (draw_data.hpp)
 };
 
 struct BspDraw {
@@ -135,6 +155,13 @@ struct BspDraw {
   std::vector<GpuJob> frame_jobs;  // the cube faces, then the two orthographic maps
   int shadowed = 0;
   Options options;
+  // The light styles' patterns (draw_data.hpp), empty the light as baked (set_light_style).
+  std::array<std::string, kLightStyles> light_styles;
+  wgpu::Buffer frames;  // the animated textures' frames (Scene::frames)
+  BspCull cull;
+  std::vector<DynamicLight> dynamic;   // this frame's (set_dynamic_lights)
+  std::vector<PointLight> dynamic_points;  // the same as v2's point lights
+  uint64_t culled_frames = 0;  // frames culled since the targets were made (0: no pyramid yet)
   // The scene's lava lights and teleporters' lights (made once).
   std::vector<PointLight> lava, portals;
 };
@@ -146,6 +173,12 @@ void create_bsp_targets(gpu::Device& device, BspDraw& draw, const render::FrameT
 // This frame's lights (picked round the eye, flickered at the view's time) and shadow cameras.
 void prepare_bsp(gpu::Device& device, BspDraw& draw, const render::FrameView& view,
                  const Options& options);
+// This frame's dynamic lights (before `prepare_bsp`); the classic draws at most kMaxDynamic.
+inline constexpr int kMaxDynamic = 32;
+void set_dynamic_lights(BspDraw& draw, std::span<const DynamicLight> lights);
+// Light style `style` (0 .. 63) played from now on as `pattern`: letters 'a' (dark) .. 'z', 'm'
+// the light as baked, ten a second (draw_data.hpp's `style_level`); empty for steady.
+void set_light_style(BspDraw& draw, int style, std::string_view pattern);
 // "bsp.shadows", "bsp" and "bsp.sky": the map into the cleared targets.
 void encode_bsp(const BspDraw& draw, const gpu::PipelineSet& pipelines, render::FrameRecorder& rec,
                 wgpu::CommandEncoder& encoder, const render::FrameTargets& targets,
