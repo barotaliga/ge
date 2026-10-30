@@ -59,6 +59,11 @@ struct Fixture {
 // by three doorways, four lights.
 Fixture sample_fixture();
 
+// The weather's fixture: a hall with two windows and a door onto an open courtyard (its ceiling
+// the sky), and a store room behind the hall with no way to the sky, so rain, snow and their
+// marks have somewhere to reach, somewhere to slant in and somewhere to stay dry.
+Fixture weather_fixture();
+
 // The fixture as a map of `family`; false with the reason in `*error`.
 bool write_bsp(const Fixture& fixture, Family family, std::vector<uint8_t>* out,
                std::string* error);

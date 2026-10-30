@@ -301,7 +301,7 @@ characters.
 | `plugins/snowmobile/` | The snowmobile on the snow (`ge::snowmobile`): the spec, the step, the body, the drive, the bot's hands, the scenarios | `snowmobile` |
 | `plugins/helicopter/` | The helicopter in the air and on the snow (`ge::helicopter`): the spec, the step, the bot's hands, the downwash, the scenarios | `helicopter` |
 | `plugins/paramotor/` | The powered speed wing a skier flies (`ge::paramotor`): the spec, the wing on its lines, the engine, the acro, the bot's hands, the scenarios | `paramotor` |
-| `plugins/classicenhance/` | The classic pack enhanced locally (`ge::classicenhance`): the pack found and verified, the cache and its stages, the texture enhancer, the lightmap stage; `tool/` run by `ge tool` | `classicenhance` |
+| `plugins/classicenhance/` | The classic pack enhanced locally (`ge::classicenhance`): the pack checked, the cache, its stages, textures (a trained upscaler, on the GPU in `app/`), lightmaps; `tool/` run by `ge tool` | `classicenhance` |
 | `plugins/brush/` | The classic BSP families (`ge::brush`, `docs/levels.md`): 29, BSP2, 38 and 46 read into one map view, refused when damaged; fixture writers for each | `brush` |
 | `plugins/morph/` | Classic vertex-animated models and sprites (`ge::morph`): skins, the seam split, every frame a morph target, refused when damaged; fixture writers; smooth normals and optional rounding | `morph` |
 | `plugins/rooms/` | The engine's own level format (`ge::rooms`, `docs/levels.md`): rooms, openings and solids in a few bytes, the .gelv bytes and text form, rooms grown from seeds | `rooms` |

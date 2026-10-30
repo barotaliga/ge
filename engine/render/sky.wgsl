@@ -489,6 +489,11 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // Seen through the fog's or the fall's veil, the sea of fog in the valleys, and the fog in areas
   // in front of it all.
   colour = local_fog(valley_fog(veil_sky(h, colour), in.uv, 1e30), in.uv, 1e30);
+  // A LIGHTNING FLASH (frame.wet.w): the storm's cloud lit from within, a cool white brightest
+  // overhead, over whatever the sky was.
+  if (frame.wet.w > 0.0) {
+    colour += vec3f(0.85, 0.9, 1.0) * white_luminance() * frame.wet.w * mix(0.6, 1.4, max(d.y, 0.0));
+  }
   var out: FragmentOut;
   out.colour = vec4f(min(colour, vec3f(60000.0)), 1.0);
   out.motion = vec4f(screen_motion(frame, vec4f(d, 0.0), in.position.xy), 0.0, 0.0);

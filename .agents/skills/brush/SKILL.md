@@ -17,12 +17,13 @@ format notes (the clean-room rules there say what may be written where).
 | `read.hpp/.cpp`, `read_parts.hpp` | The front door (family by the first bytes), lumps, refusals, rle rows, polygons, extents, tree checks, entities, `.lit` |
 | `read_v29.cpp`, `read_v38.cpp`, `read_v46.cpp` | One reader a family (29 also reads BSP2) |
 | `bytes.hpp` | The little-endian cursor and writer |
-| `write.hpp`, `write_parts.hpp`, `fixture.cpp` | Fixtures: the sample, the compile every writer shares |
+| `write.hpp`, `write_parts.hpp`, `fixture.cpp` | Fixtures: the sample, the weather's (a hall, a yard, a store), the compile every writer shares |
 | `write_v29.cpp`, `write_v38.cpp`, `write_v46.cpp` | One writer a family |
 | `content.hpp/.cpp` | The content scan (what a set ships, what its maps' entities name, the numbered sets they pick), the asset map's parse and the match, the fixture set |
 | `labs/content_scan_lab.cpp` | The `content-scan` lab behind `ge content scan` (skill: free-assets) |
 | `labs/bsp_lab.cpp` | The `bsp` lab (`--map`, `--lit`, `--pak`, `--textures-out`: a map's textures as PNGs for the matcher) |
 | `labs/textured_view.hpp/.cpp` | The lab's textured software view of a 29 or BSP2 map: its own pictures through a palette, its lightmaps, sky layers |
+| `app/bsp_weather.hpp/.cpp`, `labs/gpu_bsp_weather_lab.cpp` | The weather on a map by cvars (`sv_weather` …), its shelter along the fall in `bsp_draw` and `bsp.wgsl`'s `weathered`; the `gpu-bsp-weather` lab |
 
 ## Reading a new field or lump
 
@@ -48,3 +49,13 @@ format notes (the clean-room rules there say what may be written where).
   numbering), never left for a caller to branch on.
 - **Clean room.** Code, comments and docs say "version 29", "BSP2", "version 38", "version 46" and
   describe the format in our own words; no game's name and no other implementation's code.
+
+## The weather on a map
+
+- **The open sky decides.** Nothing about where it rains is authored: the renderer's third ortho
+  map looks along the fall (sky faces never block it) and everything wet, pooled, snowed on or
+  splashed reads it. A probe in `gpu-bsp-weather` that changes verdict means the fixture or the
+  fall's way moved; read the probes table before the pictures.
+- **Geometry is honest, not tidy.** At the steepest slant (75 degrees) a fall slants ten metres
+  into a hall through a window and on through a doorway in line with it; the weather fixture
+  keeps its store's door off that line rather than clamping the physics.

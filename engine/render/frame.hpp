@@ -79,7 +79,9 @@ struct FrameUniforms {
   float moon_east[4];    // toward its 0 N 90 E; w: the disc's brightest light under the shadow
   float moon_shadow[4];  // toward the Earth's shadow's axis; w: the albedo map's scale
   float mist[4];         // the reach's mist: where it begins and where it closes, m (0: none);
-                         // the wet ground: the film's share, the puddles' share
+                         // 0, 0
+  float wet[4];          // the wet ground: the film's share, the puddles' share; the snow's cover;
+                         // a lightning flash (render/view.hpp's Weather)
   // The sky's style (render/sky_style.hpp's `style_rows`): the air's scales, the sun's disc, the
   // second sun, the planet, the nebula, the glow from below, the ring's tilt and the stars by day.
   float style[kSkyStyleRows][4];
@@ -94,7 +96,7 @@ struct FrameUniforms {
   float valley[2][4];
 };
 static_assert(sizeof(FrameUniforms) ==
-                  64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 + 16 * kCloudRows * kCloudLayers + 16 * 5 +
+                  64 * 3 + 16 * 5 + 16 * 6 + 16 * 9 + 16 * kCloudRows * kCloudLayers + 16 * 6 +
                       16 * kSkyStyleRows + 16 * kMaxMoons * kMoonRows + 16 + 32,
               "match frame_types.wgsl");
 

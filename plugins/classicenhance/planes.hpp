@@ -38,5 +38,7 @@ float percentile(const Plane& p, double share);
 // Linear light (0..1) to an sRGB byte, and back.
 uint8_t linear_to_srgb8(float c);
 float srgb8_to_linear(uint8_t c);
+// A stored colour channel, 0..1, to linear light.
+float srgb_to_linear(float c);
 
 }  // namespace ge::classicenhance

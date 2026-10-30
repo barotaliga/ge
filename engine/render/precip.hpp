@@ -27,13 +27,19 @@
 //   share of them), each a drop landing that lives `splash_life` s at a spot drawn afresh each
 //   life out of the screen and set on the surface the depth shows there, kept where it faces up
 //   and within `splash_reach` m, at an even density over the ground. Off the depth, so a splash
-//   lands on any game's ground, roof or deck; nothing yet keeps one off a floor under a roof.
+//   lands on any game's ground, roof or deck.
+// - THE SHELTER (`PrecipShelter`, optional): a game's orthographic depth map looking ALONG THE
+//   FALL (down and downwind), so a particle is drawn only where nothing stands between it and the
+//   sky the way it fell, and a splash lands only where the fall reaches. Rooms stay dry, rain
+//   slants in through a window as far as the wind carries it, a colonnade's floor is wet only at
+//   its open side. Without one (a mountain's open air) everything is open.
 //
 // ge:summary What falls round the eye: snow, sleet and rain in a wrapped box, the wind and its
 // ge:summary eddies, drops as clear streaks, splashes off the depth
 // ge:keywords render precip precipitation snowfall rain sleet flakes drops splash streak box wrap
 // ge:keywords wind eddies swirl blizzard flurry downpour storm
-// ge:keywords create_precip prepare_precip encode_precip_sim encode_precip read_particles
+// ge:keywords create_precip prepare_precip encode_precip_sim encode_precip read_particles shelter
+// ge:keywords bind_precip_shelter occlusion indoor window
 // ge:skill render
 // ge:test tests/render_precip_test.cpp
 #pragma once
@@ -74,6 +80,22 @@ struct PrecipFrame {
   double near_m = 0.1;         // the camera's near plane
 };
 
+// THE SHELTER MAP a game hands the fall: a layer of a depth 2D array, an orthographic camera at
+// `o` (world m) with axes `x`, `y` and `z` (z along the fall, toward the ground), `half` m across
+// on each side and `depth` m deep each way, storing (z·(p - o) + depth) / (2 depth) of the surface
+// nearest the sky (sampled with a less-or-equal comparison: lit where a point is no deeper).
+struct PrecipShelter {
+  wgpu::TextureView maps;  // the depth 2D array, all its layers
+  uint32_t layer = 0;
+  double o[3] = {0, 0, 0};
+  double x[3] = {1, 0, 0}, y[3] = {0, 0, 1}, z[3] = {0, -1, 0};
+  double half = 1, depth = 1;
+  uint32_t size = 1;  // the map's texels a side
+  // The tangent of the spread of ways round `z` the drops and flakes come on (the gusts and the
+  // eddies): the edge of what the fall reaches widens by it with the depth below the blocker.
+  double spread = 0;
+};
+
 struct Precip {
   PrecipSettings settings;
   wgpu::Buffer particles, params;
@@ -82,6 +104,13 @@ struct Precip {
   uint32_t p_sim = 0, p_draw = 0;
   uint32_t drawn = 0;     // this frame's particles drawn
   uint32_t splashed = 0;  // this frame's splashes drawn
+  // The shelter's map (a 1-layer placeholder until a game binds one), its sampler and its camera.
+  wgpu::Texture none;
+  wgpu::TextureView shelter_maps;
+  wgpu::Sampler shelter_compare;
+  wgpu::TextureView depth;  // the frame's, kept so a shelter can be bound after the targets
+  bool sheltered = false;
+  PrecipShelter shelter;
 };
 
 // The particles (spread through the box round the origin; the first frame wraps them round the
@@ -90,6 +119,13 @@ struct Precip {
 void create_precip(gpu::Device& device, gpu::PipelineSet& pipelines, Precip& precip,
                    const wgpu::BindGroupLayout& frame, const Terrain& terrain,
                    const PrecipSettings& settings = {});
+// The same for a world with no terrain (rooms, a BSP map): no ground's shadow on the flakes.
+void create_precip(gpu::Device& device, gpu::PipelineSet& pipelines, Precip& precip,
+                   const wgpu::BindGroupLayout& frame, const PrecipSettings& settings = {});
+
+// The shelter map the fall is kept under from now on (null: none, everything open). Rebinds the
+// draw's group; the camera may move every frame by calling it again with the same maps.
+void bind_precip_shelter(gpu::Device& device, Precip& precip, const PrecipShelter* shelter);
 
 // The draw's group over a frame's depth (again after a resize).
 void bind_precip_targets(gpu::Device& device, Precip& precip, const FrameTargets& targets);
