@@ -42,8 +42,9 @@ function(ge_add_cli)
   # runs fake traffic with the engine's own network (engine/net). ge_save: `ge save inspect` reads
   # save files (engine/save/file.hpp). ge_snow: `ge snow` reads a saved snow layer
   # (engine/snow/snapshot.hpp). ge_texgen: `ge texture` parses and bakes texture recipes
-  # (engine/texgen). ge_mod: `ge mod check` runs the engine's mod loader.
-  target_link_libraries(ge_cli PUBLIC ge_core ge_play ge_lab ge_assets ge_net ge_save ge_snow ge_texgen ge_mod)
+  # (engine/texgen). ge_mod: `ge mod check` runs the engine's mod loader. ge_vfs: `ge pak` reads
+  # and writes content archives (engine/vfs).
+  target_link_libraries(ge_cli PUBLIC ge_core ge_play ge_lab ge_assets ge_net ge_save ge_snow ge_texgen ge_mod ge_vfs)
   # The tree this ge was built from: `ge find` and `ge explain` read the engine's tags there when
   # no other engine tree is found (engine/cli/index.hpp).
   target_compile_definitions(ge_cli PRIVATE GE_ENGINE_SOURCE_DIR="${root}")

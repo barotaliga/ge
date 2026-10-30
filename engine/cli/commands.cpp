@@ -1,27 +1,16 @@
-// The catalog's rows, the command-line split, and both forms of the help.
+// The catalog's rows and the command-line check; both forms of the help are commands_help.cpp.
 //
-// ge:summary The ge catalog's rows and the parser and help printers that read them
-// ge:keywords cli ge commands catalog rows parse_args check_args help_text help_json flags
+// ge:summary The ge catalog's rows and the check of a command line against them
+// ge:keywords cli ge commands catalog rows check_args find_command global_flags flags
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
 #include "cli/commands.hpp"
 
 #include <algorithm>
 
-#include "cli/embedded.hpp"
-#include "cli/json.hpp"
-
 namespace ge::cli {
 
 namespace {
-
-// A flag's value as help prints it: "=<dir>", "[=<minutes>]" for an optional one ("[<minutes>]"),
-// or nothing for a switch.
-std::string flag_value_text(std::string_view value) {
-  if (value.empty()) return "";
-  if (value[0] == '[') return "[=" + std::string(value.substr(1));
-  return "=" + std::string(value);
-}
 
 constexpr FlagSpec kRepo{"repo", "<dir>", "the game repo (default: the current directory)"};
 constexpr FlagSpec kEngine{"engine", "<dir>",
@@ -455,6 +444,12 @@ constexpr FlagSpec kNetStressFlags[] = {
     {"fuzz", "<n>", "also put this many fuzzed datagrams beside an honest session"},
     {"seed", "<n>", "the network's seed (default 1)"}};
 
+constexpr FlagSpec kPakLsFlags[] = {{"sha256", "", "each file's SHA-256 beside its CRC-32"}};
+constexpr FlagSpec kPakOutFlags[] = {{"out", "<path>", "where the result is written"}};
+constexpr FlagSpec kPakSumFlags[] = {
+    {"out", "<sums>", "the sums written to this file too (sha256sum's format)"},
+    {"check", "<sums>", "the archive held to a sums file: a changed or missing file an error"}};
+
 const CommandSpec kCommands[] = {
     {"help",
      "[<command>]",
@@ -850,6 +845,32 @@ const CommandSpec kCommands[] = {
      {},
      "ge credits check games/shooters_edge/content",
      "assets"},
+    {"pak ls", "<archive>", 1, 1, "see",
+     "a .pak or .pk3 archive's files: path, bytes, CRC-32 and how each is stored; --sha256 adds "
+     "each file's SHA-256",
+     kPakLsFlags, "ge pak ls ~/classic/id1/pak0.pak --sha256", "assets"},
+    {"pak extract", "<archive> [<file>...]", 1, -1, "create",
+     "every file of an archive, or the ones named, written under --out; a path that would leave "
+     "it is refused",
+     kPakOutFlags, "ge pak extract pak0.pak gfx/palette.lmp --out=scratch/pak0", "assets"},
+    {"pak build", "<dir>", 1, 1, "create",
+     "every file under a directory packed by path into --out, a .pak or a (stored) .pk3 by its "
+     "extension",
+     kPakOutFlags, "ge pak build scratch/pak0 --out=scratch/pak0.pk3", "assets"},
+    {"pak convert",
+     "<in> <out>",
+     2,
+     2,
+     "create",
+     "an archive rewritten as the kind <out>'s extension names (.pak or .pk3), every file and "
+     "its order kept",
+     {},
+     "ge pak convert pak0.pak pak0.pk3",
+     "assets"},
+    {"pak sum", "<archive> [<file>...]", 1, -1, "see",
+     "each file's SHA-256 in sha256sum's format (--out keeps them); --check holds the archive to "
+     "a sums file, naming every changed or missing file",
+     kPakSumFlags, "ge pak sum pak0.pk3 --check=pak0.sums", "assets"},
 };
 
 constexpr FlagSpec kGlobal[] = {
@@ -869,37 +890,11 @@ const FlagSpec* find_flag(const CommandSpec& c, std::string_view name) {
   return nullptr;
 }
 
-std::string usage_line(const CommandSpec& c) {
-  std::string line = "ge " + std::string(c.name);
-  if (!c.args.empty()) line += " " + std::string(c.args);
-  for (const FlagSpec& f : c.flags) {
-    line += " [--" + std::string(f.name) + flag_value_text(f.value) + "]";
-  }
-  return line;
-}
-
-std::string flag_json(const FlagSpec& f) {
-  return json_obj({{"name", json_str("--" + std::string(f.name))},
-                   {"value", f.value.empty() ? "null" : json_str(f.value)},
-                   {"help", json_str(f.help)}});
-}
-
-std::string command_json(const CommandSpec& c) {
-  std::vector<std::string> flags;
-  for (const FlagSpec& f : c.flags) flags.push_back(flag_json(f));
-  return json_obj({{"name", json_str(c.name)},
-                   {"usage", json_str(usage_line(c))},
-                   {"args", json_str(c.args)},
-                   {"stage", json_str(c.stage)},
-                   {"summary", json_str(c.summary)},
-                   {"flags", json_arr(flags)},
-                   {"example", json_str(c.example)},
-                   {"skill", json_str(c.skill)}});
-}
-
 }  // namespace
 
 std::span<const CommandSpec> commands() { return kCommands; }
+
+std::span<const FlagSpec> global_flags() { return kGlobal; }
 
 const CommandSpec* find_command(std::string_view name) {
   for (const CommandSpec& c : kCommands) {
@@ -943,51 +938,6 @@ std::optional<std::string> check_args(const Args& a) {
            "leaks and load pass words after --";
   }
   return std::nullopt;
-}
-
-std::string help_text(const CommandSpec* one) {
-  if (one) {
-    std::string out = usage_line(*one) + "\n  " + std::string(one->summary) + "\n";
-    for (const FlagSpec& f : one->flags) {
-      out += "  --" + std::string(f.name) + flag_value_text(f.value) + "  " + std::string(f.help) +
-             "\n";
-    }
-    out += "  --json  the answer as one JSON object\n  example: " + std::string(one->example) +
-           "\n  skill: " + std::string(one->skill) + "\n";
-    return out;
-  }
-  std::string out = "ge " + std::string(engine_version()) +
-                    ": the engine's command line, the one interface an agent makes a game "
-                    "through.\nEvery command takes --json (one JSON object: command, ok, exit, "
-                    "findings, written, result, summary, next) and --help.\nExit codes: 0 done, 1 "
-                    "the work found a problem, 2 a usage error.\n";
-  std::string_view stage;
-  for (const CommandSpec& c : kCommands) {
-    if (c.stage != stage) {
-      stage = c.stage;
-      out += "\n" + std::string(stage) + ":\n";
-    }
-    std::string head =
-        "  ge " + std::string(c.name) + (c.args.empty() ? "" : " ") + std::string(c.args);
-    if (head.size() < 34) head.resize(34, ' ');
-    out += head + "  " + std::string(c.summary) + "\n";
-  }
-  out += "\n`ge help <command>` for its flags; `ge help --json` for the whole catalog.\n";
-  return out;
-}
-
-std::string help_json(const CommandSpec* one) {
-  if (one) return command_json(*one);
-  std::vector<std::string> rows;
-  for (const CommandSpec& c : kCommands) rows.push_back(command_json(c));
-  std::vector<std::string> global;
-  for (const FlagSpec& f : kGlobal) global.push_back(flag_json(f));
-  return json_obj({{"version", json_str(engine_version())},
-                   {"exit_codes", json_obj({{"0", json_str("done")},
-                                            {"1", json_str("the work found a problem")},
-                                            {"2", json_str("a usage error")}})},
-                   {"global_flags", json_arr(global)},
-                   {"commands", json_arr(rows)}});
 }
 
 }  // namespace ge::cli
