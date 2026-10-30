@@ -1,6 +1,6 @@
 ---
 name: progs
-description: "Use for plugins/progs in gameengine2: the QC virtual machine Shooter's Edge runs mods' bytecode on. The progs loader and checker (every bound and index refused with the section, record, field and value), the classic multiplayer engine-side layout (globals 28..89, the 102 fields, crc 54730), the interpreter (every opcode on 32-bit floats, the call convention, the call depth, the local stack, the run-away guard), entity, field, pointer, function and string values, temporaries, the builtin table a game fills and the extension registry, faults with a QC stack trace and lines, the profile and trace hooks, the assembler and the sample program, the qc tool behind ge qc, the qc lab, and the bytecode program on the shooter seam (games/shooters_edge/sim/qc_program); the standard builtins (stdlib: math, vectors, ftos and vtos text, tokenize, the string extensions, strzone), the map's entity text, and the mod server (games/shooters_edge/server: the builtin catalogue by number, checkextension, the hooks, the extension fields, loading a progs from --progs or sv_progs, the assembled test mod, a match with bots, the se-mod lab); the M18c and M18p rows."
+description: "Use for plugins/progs in gameengine2: the QC virtual machine Shooter's Edge runs mods' bytecode on. The progs loader and checker (every bound and index refused with the section, record, field and value), the classic multiplayer engine-side layout (globals 28..89, the 102 fields, crc 54730), the interpreter (every opcode on 32-bit floats, the call convention, the call depth, the local stack, the run-away guard), entity, field, pointer, function and string values, temporaries, the builtin table a game fills and the extension registry, faults with a QC stack trace and lines, the profile and trace hooks, the assembler and the sample program, the QC compiler (compile_qc, ge qc build) and the language it reads, the qc tool behind ge qc, the qc lab, and the bytecode program on the shooter seam (games/shooters_edge/sim/qc_program); the standard builtins (stdlib: math, vectors, ftos and vtos text, tokenize, the string extensions, strzone), the map's entity text, and the mod server (games/shooters_edge/server: the builtin catalogue by number, checkextension, the hooks, the extension fields, loading a progs from --progs or sv_progs, the assembled test mod, a match with bots, the se-mod lab); the baseline deathmatch mod in QC (games/shooters_edge/qc, its arena, the se-baseline lab); the M18c, M18d and M18p rows."
 ---
 
 # The progs plugin
@@ -8,7 +8,7 @@ description: "Use for plugins/progs in gameengine2: the QC virtual machine Shoot
 `plugins/progs/` (`ge_progs`, namespace `ge::progs`) runs compiled QC. It depends on the engine's
 core only (`ge_add_plugin(progs ENGINE core)`); what a builtin DOES is a game's, never this
 plugin's, except the standard builtins that touch no world (`stdlib.hpp`). `docs/shooters-edge.md`
-is the design, `docs/goals.md` M18c and M18p the rows.
+is the design, `docs/goals.md` M18c, M18d and M18p the rows.
 
 | File | What |
 | --- | --- |
@@ -17,7 +17,8 @@ is the design, `docs/goals.md` M18c and M18p the rows.
 | `progs/file.hpp` | `load_progs`: the file read and checked; lookups by name (first match); the line table and its `.lines` sidecar |
 | `progs/vm.hpp` | The VM: memory, values, `call_function`, guards, faults (`fault_text`), strings, profile, trace hooks |
 | `progs/extensions.hpp` | The extension registry: named groups of builtins, fields and hooks; `install`, `offers` |
-| `progs/assembler.hpp` | Bytecode built in memory for the tests, the lab and the sample (no compiler until M18d) |
+| `progs/assembler.hpp` | Bytecode built in memory for the tests, the lab and the sample: each opcode pinned with no compiler between |
+| `progs/qc_compile.hpp` | The QC compiler: `compile_qc` (sources in order), `compile_project` (a `progs.src`); `qc_lexer`, `qc_compiler.hpp` (its state), `qc_compile.cpp` (declarations, the layout), `qc_statements.cpp`, `qc_expressions.cpp` |
 | `progs/sample.hpp` | The sample program that runs every opcode, and its five builtins |
 | `progs/disasm.hpp`, `progs/tool.hpp`, `tool/main.cpp` | The disassembler and the plugin's tool, the `progs` executable `ge qc` runs (engine/cli/qc.cpp hands to it) |
 | `labs/qc_lab.cpp` | The `qc` lab: opcode throughput, the sample's profile, a fault |
@@ -25,7 +26,8 @@ is the design, `docs/goals.md` M18c and M18p the rows.
 | `progs/stdlib.hpp` | The standard builtins that touch no world: math, vectors, random, text, `tokenize`/`argc`/`argv`, the string extensions, `strzone` |
 | `progs/entity_text.hpp` | The map's entity text parsed and spawned into a progs' fields (typed values, `angle`, `light`, `_` keys, the inhibit flags) |
 | `games/shooters_edge/sim/qc_program.hpp` | A loaded progs as a program on the shooter loop's seam; `before_call` / `after_call` for the server |
-| `games/shooters_edge/server/` | The mod server: `catalogue.hpp` (every builtin by number, the extensions), `bi_*.cpp` (the game's builtins), `messages.hpp` (the Write family and multicast), `commands.hpp` (client commands, chat, info, the console, pausing), `qc_server.hpp` (the hooks, clients, maps), `test_mod.hpp`, `mod_match.hpp` (a progs from a path played by bots), `labs/se_mod_lab.cpp` |
+| `games/shooters_edge/server/` | The mod server: `catalogue.hpp` (every builtin by number, the extensions), `bi_*.cpp` (the game's builtins), `messages.hpp` (the Write family and multicast), `commands.hpp` (client commands, chat, info, the console, pausing), `qc_server.hpp` (the hooks, clients, maps), `test_mod.hpp`, `baseline_mod.hpp` (the baseline mod compiled from source, its arena's entity text), `mod_match.hpp` (a progs played by bots), `labs/se_mod_lab.cpp`, `labs/se_baseline_lab.cpp` |
+| `games/shooters_edge/qc/` | The baseline deathmatch mod in QC, its README the modder's guide |
 
 ## Rules
 
@@ -71,6 +73,24 @@ is the design, `docs/goals.md` M18c and M18p the rows.
 - **Mirrored fields are set inside a call.** The adapter copies the loop's fields into the VM at
   every call, so a test that writes `health` or `maxspeed` between calls is overwritten: use
   `Fixture::in_call`.
+- **The language is `porting/shooters-edge/qc-language.md`**, never another compiler. The
+  compiler is one pass: a name is declared before it is used (a prototype for mutual calls).
+  Each function's parameters, locals and temporaries are one contiguous block of globals at
+  operands past `kLocalBase`, relocated when the function ends (the VM saves the block on a
+  call, so recursion keeps them); temporaries free at the start of each statement. A field after
+  `.` is looked up at file scope, so a parameter named like a field does not hide it. `&&` and
+  `||` evaluate both sides; a call evaluates every argument, then fills the PARMs.
+- **The layout decides the crc.** The engine-side globals and fields are checked by name, type
+  and offset; crc 54730 is written only when they all match (a program that declares
+  `end_sys_fields` and does not match gets a warning). The globals end with 2 spare words,
+  because RETURN reads 3. `ge qc run` takes a crc 0 program as it stands.
+- **The output is the text's alone.** No time, path or hash order reaches the bytes:
+  `tests/progs_qc_compile_test.cpp` builds twice and compares, and `tests/golden/progs_qc_compile.txt`
+  holds the listing of every construct. A deliberate change rewrites it and says why.
+- **The baseline mod is game logic, not a test fixture.** Change it as a modder would (its
+  README), keep its arena's entity text (`baseline_mod.cpp`) placing every entity it spawns, and
+  run `make lab LAB=se-baseline` before and after; `tests/shooters_edge_baseline_mod_test.cpp`
+  holds it to a clean spawn, a deathmatch, the door, the plat and a replay.
 - **Run the lab before and after** a change to the VM: `make lab LAB=qc ARGS="--tag=before"`, then
   `--compare=before`; its digest (`make ge ARGS="digest qc --write"`) holds the sample's profile.
   A change to the server or a builtin runs `make lab LAB=se-mod` the same way.

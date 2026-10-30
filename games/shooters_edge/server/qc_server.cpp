@@ -102,6 +102,20 @@ void update_visclients(QcServer& s) {
   }
 }
 
+// A forced view (`fixangle`, set by a program that turns a player: a spawn, a teleport) is sent
+// to the client once, at the end of the frame: the view becomes `angles` and the flag clears, so
+// the client's next command turns the view again. Left set, every command's angles would be
+// ignored and the player would aim along his spawn's angles forever.
+void send_forced_views(QcServer& s) {
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    if (!s.clients[i].active) continue;
+    sh::Edict& ed = s.sv.edicts[static_cast<size_t>(i) + 1];
+    if (!ed.fixangle) continue;
+    ed.v_angle = ed.angles;
+    ed.fixangle = false;
+  }
+}
+
 void run_command_buffer(QcServer& s) {
   while (!s.command_buffer.empty()) {
     const size_t nl = s.command_buffer.find('\n');
@@ -402,6 +416,7 @@ void qc_frame(QcServer& s, const sh::Packet* packets, int count) {
     sh::server_frame(s.sv, packets, count);
   }
   update_visclients(s);
+  send_forced_views(s);
   for (int i = 0; i < sh::kMaxClients; i++)
     if (s.clients[i].active && s.clients[i].drop) disconnect(s, i);
   run_command_buffer(s);
