@@ -72,8 +72,9 @@ bool Live::open(const LiveOptions& o, uint64_t now_ns, std::string& error) {
     error = "the live capture is already open";
     return false;
   }
-  if (!o.codec.empty() && o.codec != "av1") {
-    error = "no codec `" + o.codec + "`; the live capture's codecs are av1 and none (uncompressed)";
+  if (!o.codec.empty() && !video_codec_word(o.codec)) {
+    error = "no codec `" + o.codec +
+            "`; the live capture's codecs are av1, h264, hevc, auto and none (uncompressed)";
     return false;
   }
   opt_ = o;
@@ -84,23 +85,23 @@ bool Live::open(const LiveOptions& o, uint64_t now_ns, std::string& error) {
     return false;
   }
   opt_.queue = std::max(1, o.queue);
-  coded_ = o.codec == "av1";
+  coded_ = !o.codec.empty();
   MatroskaOptions m;
   VideoTrack v;
   v.width = opt_.width;
   v.height = opt_.height;
   v.fps = o.fps;
   if (coded_) {
-    Av1Options a;
+    VideoEncoderOptions a;
     a.width = opt_.width;
     a.height = opt_.height;
     a.fps = o.fps;
     a.crf = o.crf;
     a.speed = o.speed;
     a.threads = o.threads;
-    if (!av1_.open(a, error)) return false;
-    v.codec = "V_AV1";
-    v.codec_private = av1_codec_private(av1_.sequence_header());
+    if (!video_.open(o.codec, a, error)) return false;
+    v.codec = std::string(video_.matroska_codec());
+    v.codec_private = video_.codec_private();
   }
   m.video = v;
   if (o.sound) {
@@ -294,7 +295,7 @@ bool Live::encode_picture(Pending& p, std::string& error) {
   to_i420(*src, yuv_);
   if (coded_) {
     held_.fed(p.ms);
-    if (!av1_.encode(yuv_, p.ms, held_.video, error)) return false;
+    if (!video_.encode(yuv_, p.ms, held_.video, error)) return false;
   } else {
     held_.video.push_back(Packet{yuv_, p.ms, true});
   }
@@ -334,7 +335,7 @@ bool Live::close(std::string& error) {
     return false;
   }
   if (!drain_audio(true, error)) return false;
-  if (coded_ && !av1_.flush(held_.video, error)) return false;
+  if (coded_ && !video_.flush(held_.video, error)) return false;
   if (!write(true, error)) return false;
   const int64_t frame = std::llround(1000.0 / opt_.fps);
   int64_t end = newest_picture_ms_ == INT64_MIN ? 0 : newest_picture_ms_ + frame;

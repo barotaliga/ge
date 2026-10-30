@@ -12,11 +12,12 @@
 // the file interleaves the tracks by time.
 //
 // THE TRACKS: by default the video as uncompressed I420 (capture/yuv.hpp) and the sound as 32-bit
-// float stereo at the synth's rate, a `matroska` file. With `codec` "av1" the video is AV1 and the
-// sound Opus (capture/codecs.hpp), a `webm` file: then the blocks are INTERLEAVED BY TIME, since
-// an Opus packet covers 20 ms whatever the frame rate, so a picture waits until no packet still
-// to come can start before it. The game's sound comes from its `SoundSpec` (play/game.hpp); with
-// none the file has no audio track.
+// float stereo at the synth's rate, a `matroska` file. With a `codec` (capture/video.hpp: "av1", or
+// the platform's "h264" or "hevc", or "auto") the video is coded and the sound Opus
+// (capture/codecs.hpp), a `webm` file for AV1 in Matroska: then the blocks are INTERLEAVED BY TIME,
+// since an Opus packet covers 20 ms whatever the frame rate, so a picture waits until no packet
+// still to come can start before it. The game's sound comes from its `SoundSpec` (play/game.hpp);
+// with none the file has no audio track.
 //
 // ge:summary A run exported with its sound: pictures as I420, the synth rendered on the step clock
 // ge:keywords export av-export mkv matroska sound audio sync lockstep click flash frame-clock
@@ -34,6 +35,7 @@
 #include "capture/codecs.hpp"
 #include "capture/interleave.hpp"
 #include "capture/mux.hpp"
+#include "capture/video.hpp"
 #include "lab/raster.hpp"
 #include "play/game.hpp"
 
@@ -47,7 +49,7 @@ struct AvExportOptions {
   int64_t from = 0;                        // the step picture 0 shows
   const play::SoundSpec* sound = nullptr;  // null: no audio track
   uint32_t seed = 1;                       // the synth's noise
-  std::string codec;                       // "" uncompressed, "av1" AV1 and Opus
+  std::string codec;                       // "" uncompressed; av1, h264, hevc or auto (video.hpp)
   std::string container;                   // "mp4" or "mkv"; "" by the file's name (mux.hpp)
   int crf = 32;                            // av1: 0..63, lower is better and larger
   int speed = 9;                           // av1: libaom's realtime speed, 7..11
@@ -97,8 +99,8 @@ class AvExport {
   int64_t frames_ = 0;
   std::vector<uint8_t> yuv_;
   std::vector<uint8_t> pcm_;
-  bool coded_ = false;  // codec "av1"
-  Av1Encoder av1_;
+  bool coded_ = false;  // a codec named
+  VideoEncoder video_;
   OpusEncoder opus_;
   Interleave held_;  // encoded, not yet written
 };
