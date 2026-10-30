@@ -84,6 +84,7 @@ Hunt hunt(int32_t stars, double limit, bool others, bool fire, double stop, doub
   st.army.fire = fire;
   if (!others) {
     st.army.send_helis = false;
+    st.army.send_vehicles = false;
   }
   const double x = st.army.pad_x + lm::sin(st.army.pad_heading) * 400;
   const double z = st.army.pad_z + lm::cos(st.army.pad_heading) * 400;

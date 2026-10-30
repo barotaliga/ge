@@ -71,8 +71,12 @@ seed. The skier on the snow is `plugins/skier` (the `skier` skill).
    door (the free ride's helicopter becomes it, `FreeHeli::army`), rammed by his machine (theirs
    falls spinning and lies as a wreck); `army_steal.hpp`, the `army-flight` lab's `steal` and
    `ram`.
-14. Next: the free ride's other systems, a row each (M13+), and the army rows that wait on them
-   (M15d2 his answer to the machines, M15d3 the heavier machines, M15e4 the balloons).
+14. The ground waves' vehicles (M15d3a, done): the carriers, the trucks and the tanks a wave's mix
+   names, called from below its column (a truck in along the village's road out), driven up the
+   runs, their men put down, a tank's stand-off and ram, the steel he meets, home;
+   `army_vehicle.hpp`, the `army-vehicles` lab.
+15. Next: the tank's gun and the crews bailing out (M15d3b), the free ride's other systems, a row
+   each (M13+), and the army rows that wait on them (M15e4 the balloons).
 
 ## Rules
 
@@ -186,6 +190,19 @@ free ride's own paramotor flown by `paramotor::para_pilot` to an aim the army se
 physics decides what it can do, so a rig in sinking air sinks even at full throttle: hold the
 height in the aim (`kHoldM`) and gentle the toggles under the floor rather than asking more of
 the pilot.
+
+`army-vehicles` (scenario, `games/fall_line/labs/army_vehicle_lab.cpp`): the ground waves'
+carriers, trucks and tanks on seed 38 (v10) with only the waves sent (`three`, `five`, `home`): the
+vehicles table, every vehicle's track round him and every vehicle's distance from him. A vehicle
+put back on its way, a wave that called none, no man put down at three stars, no tank at five or
+a vehicle still out after `home` fails it. A change to `army_vehicle*.cpp` or its numbers moves
+`tests/golden/fall_line_army_vehicle.txt` (`GE_GOLDEN_WRITE=1
+build/release/tests/fall_line_army_vehicle_test`) and the `army-vehicles` digest, and every hunt
+that reaches three stars (`fall_line_wanted.txt`, `fall_line_gunfire.txt`): put the vehicles table
+before and after in the PR. A vehicle held short cannot always turn where it stands: a truck backs
+with its wheels turned, and one making no headway for `kHeldS` puts its men down where it is. The
+sim's tree index still holds the trees the village felled for its streets: the vehicles skip them
+through the village's ground mask (`ArmyRoad`).
 
 `army-flight` (scenario, `games/fall_line/labs/army_flight_lab.cpp`): the army's helicopters on
 seed 38 (v10) with the army's other arms on (`open`, `rope`, `leapfrog`, `hide`, `fast`): the

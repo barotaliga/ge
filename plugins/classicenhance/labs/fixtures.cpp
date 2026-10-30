@@ -10,10 +10,46 @@
 
 #include "core/libm/libm.hpp"
 #include "core/noise.hpp"
+#include "morph/read.hpp"
+#include "morph/write.hpp"
 
 namespace ge::classicenhance::labs {
 
 namespace {
+
+// A box from lo to hi (file units, the eye frame: +x forward, +y left, +z up) on texel `tx`
+// of an 8 x 8 skin, its faces wound counter-clockwise seen from outside.
+void box(morph::Model& m, morph::Frame& f, const float lo[3], const float hi[3], int tx, int ty) {
+  const float c[3] = {(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2};
+  for (int axis = 0; axis < 3; axis++) {
+    for (int side = 0; side < 2; side++) {
+      const int u = (axis + 1) % 3, v = (axis + 2) % 3;
+      float q[4][3];
+      for (int k = 0; k < 4; k++) {
+        q[k][axis] = side ? hi[axis] : lo[axis];
+        q[k][u] = (k == 1 || k == 2) ? hi[u] : lo[u];
+        q[k][v] = (k >= 2) ? hi[v] : lo[v];
+      }
+      const auto base = uint32_t(m.st.size() / 2);
+      for (auto& p : q) {
+        f.positions.insert(f.positions.end(), {p[0], p[1], p[2]});
+        m.st.insert(m.st.end(), {(float(tx) + 0.5f) / 8, (float(ty) + 0.5f) / 8});
+        m.source_vertex.push_back(int(m.source_vertex.size()));
+      }
+      float e1[3], e2[3], n[3];
+      for (int k = 0; k < 3; k++) e1[k] = q[1][k] - q[0][k], e2[k] = q[2][k] - q[0][k];
+      n[0] = e1[1] * e2[2] - e1[2] * e2[1];
+      n[1] = e1[2] * e2[0] - e1[0] * e2[2];
+      n[2] = e1[0] * e2[1] - e1[1] * e2[0];
+      const float out = n[0] * (q[0][0] - c[0]) + n[1] * (q[0][1] - c[1]) + n[2] * (q[0][2] - c[2]);
+      if (out > 0) {
+        m.indices.insert(m.indices.end(), {base, base + 1, base + 2, base, base + 2, base + 3});
+      } else {
+        m.indices.insert(m.indices.end(), {base, base + 2, base + 1, base, base + 3, base + 2});
+      }
+    }
+  }
+}
 
 // Smooth tiling noise on a 64-texel loop: value noise over a lattice that wraps every `cells`.
 double tile_noise(int x, int y, int cells, double seed) {
@@ -193,6 +229,49 @@ std::vector<FixtureTexture> fixture_textures(const Palette& pal) {
     out.push_back(p.t);
   }
   return out;
+}
+
+// The lab's held weapon: a receiver, a barrel and a glowing sight, authored at the eye as the
+// classic files author theirs; a rest frame and a recoiled one. Written as a classic model file
+// and read back, so the lab goes through the reader the pack's weapons go through.
+morph::Model fixture_weapon(const Palette& palette) {
+  morph::Model m;
+  morph::Skin skin{8, 8, std::vector<uint8_t>(64), 0, 0};
+  const uint8_t metal = nearest_index(palette, 92, 96, 108);
+  const uint8_t wood = nearest_index(palette, 120, 76, 40);
+  for (size_t i = 0; i < 64; i++) skin.indices[i] = i < 32 ? metal : wood;
+  skin.indices[63] = 254;  // fullbright: the sight's lamp
+  m.skins.push_back(skin);
+  const float shift[2] = {0, -3};
+  for (int k = 0; k < 2; k++) {
+    morph::Frame f;
+    f.name = k == 0 ? "rest" : "fire";
+    const float s = shift[k];
+    const float barrel_lo[3] = {12 + s, -9, -9}, barrel_hi[3] = {34 + s, -6, -6};
+    const float body_lo[3] = {2 + s, -11, -14}, body_hi[3] = {16 + s, -4, -7};
+    const float grip_lo[3] = {4 + s, -10, -22}, grip_hi[3] = {9 + s, -5, -13};
+    const float sight_lo[3] = {30 + s, -8, -6}, sight_hi[3] = {32 + s, -7, -4.5f};
+    m.st.clear();
+    m.indices.clear();
+    m.source_vertex.clear();
+    box(m, f, barrel_lo, barrel_hi, 2, 1);
+    box(m, f, body_lo, body_hi, 3, 2);
+    box(m, f, grip_lo, grip_hi, 3, 6);
+    box(m, f, sight_lo, sight_hi, 7, 7);
+    for (int a = 0; a < 3; a++) f.min[size_t(a)] = 1e9f, f.max[size_t(a)] = -1e9f;
+    for (size_t i = 0; i + 2 < f.positions.size(); i += 3) {
+      for (size_t a = 0; a < 3; a++) {
+        f.min[a] = std::min(f.min[a], f.positions[i + a]);
+        f.max[a] = std::max(f.max[a], f.positions[i + a]);
+      }
+    }
+    m.frames.push_back(std::move(f));
+  }
+  m.radius = 40;
+  morph::Model back;
+  std::string error;
+  if (!morph::read_model(morph::write_model(m), "fixture.mdl", &back, &error)) return m;
+  return back;
 }
 
 }  // namespace ge::classicenhance::labs

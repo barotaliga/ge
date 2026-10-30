@@ -58,6 +58,14 @@ Color sample(const Image& img, float x, float y) {
   return {out[0], out[1], out[2], out[3]};
 }
 
+Color sample_nearest(const Image& img, float x, float y) {
+  if (img.empty()) return {0, 0, 0, 0};
+  const int px = std::clamp(static_cast<int>(std::floor(x)), 0, img.width - 1);
+  const int py = std::clamp(static_cast<int>(std::floor(y)), 0, img.height - 1);
+  const uint8_t* c = &img.rgba[(static_cast<size_t>(py) * img.width + px) * 4];
+  return {c[0] / 255.0f, c[1] / 255.0f, c[2] / 255.0f, c[3] / 255.0f};
+}
+
 namespace {
 
 // One box pass of half-width r along rows (step 4) or columns (step width*4), in integers.
