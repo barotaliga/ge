@@ -201,7 +201,7 @@ the tree's own QC compiler (`plugins/progs/qc_compile.hpp`, the language in
   an unknown map key is skipped with a message (`x is not a field`).
 - **When it does not load**: the message says why (a refused record, a missing engine-side
   global or field, a layout of another version) and what to do next. A mod built for the
-  single-player game, or for a server with a different field layout, is refused at load.
+  single-player game, or for a server with a different field layout, is refused at load (the single-player layout gets its own host in M18s).
 - **The free maps** a mod is played on load with `server/bsp_map.hpp` (M18b): a map file read
   into the `MapSpec` (its hulls, its entity lump) and its PVS and PHS answering the server's
   `vis` hook. Until the content's search paths land (M18a) a host hands it the file's bytes; the
@@ -229,6 +229,68 @@ package, and loaded through `engine/mod`. Its half of the ABI is
 - **The sample** is `games/shooters_edge/mods/rocket_bounce/` (rockets half as fast again, a
   grenade's third bounce lights its fuse), built by the tree; `make lab LAB=mod` plays the match
   with it beside the match without it. `ge mod new my-mod --game=shooters_edge` starts a new one.
+
+## Profiles: the shell and the classic games
+
+Shooter's Edge itself is a **shell**: the window, the menu, the console, the HUDs, the network,
+the bots and a small free arena of its own. The fun is in loading the classic games the player
+owns into it. Each classic game is a **profile**, and a match is three independent choices,
+so the games can be mixed (one game's maps with another's movement and a third's models):
+
+| Choice | What it picks | Today | Later |
+| --- | --- | --- | --- |
+| **Content** (the profile) | the packs and game directories on the search path, the map, model and sound formats, the palette and the menus' pictures, the content rules (which episodes the packs open) | the classic game (BSP 29, MDL) | its sequel (BSP 38, its models), the third (BSP 46) |
+| **Program** | the rules of the game: a QC program of a known layout, or a C++ mod (`engine/mod`) | the multiplayer layout; the single-player layout (M18s) | the sequel's rules as a C++ mod, written clean-room |
+| **Movement** | the player move: `sv_playermove arena`, `original`, or a profile's own | both (M18s) | the sequel's move |
+
+```
+ shell (games/shooters_edge)  window · menu · console · HUDs · net · bots · free arena
+   │
+   ├─ profile  (games/shooters_edge/profiles/<id>)  data: packs · dirs · formats · rules
+   │     classic game (29) ─────────── sequel (38) ───────── third (46)
+   │
+   ├─ host     (plugins/shooter)  the loop; the host's KIND follows the program:
+   │     arena host (matches: per-command move, spectators, multicast)
+   │     campaign host (spawn parms, serverflags, level changes, skill, saves, autoaim)
+   │
+   ├─ program  (plugins/progs, engine/mod)  a LAYOUT TABLE per program form
+   │     multiplayer QC (54730) · single-player QC (5927) · C++ mod (the sequel's rules)
+   │
+   └─ move     (plugins/shooter)  sv_playermove: arena · original · (a profile's own)
+```
+
+- **A profile is data, not code**: a row naming its game directories (the classic game's base
+  directory, the sequel's), the formats it reads (each already a reader in `plugins/brush`,
+  `plugins/morph`), its default program and movement, and its **content rule** (the classic
+  game: the full game's second pack opens episodes 2–4, `campaign.md`'s `registered`). Adding the
+  sequel is adding its row and the readers and program it needs; nothing in the shell or the
+  loop branches on a game's name.
+- **A program form is a layout table**, not a struct: the loop mirrors its `Entity` into the
+  program's memory through the table, so the single-player layout (M18s) and any later one are
+  rows of tables, and a C++ program (`engine/mod`) needs none.
+- **The host's kind follows the program, not the game**: a campaign program gets the campaign
+  host's services (parms carried across maps, the level change with its intermission, skill,
+  saves, autoaim), a match program the arena host's. Both run on one loop.
+- **The movement is a setting** for any game: a multiplayer match plays with the original move
+  when `sv_playermove original` is set, and the campaign with the arena move. The setting is
+  sent with the server's settings, so a predicting client predicts with the same rules
+  (`porting/shooters-edge/frame-move.md` has both halves and who jumps in each mix).
+
+### Single player and multiplayer as variants of our mod
+
+The baseline mod (M18d) becomes two variants built from one source tree, and the classic game's
+own programs are the same pair:
+
+| | Arena (multiplayer) | Campaign (single player) |
+| --- | --- | --- |
+| The classic game's own | the player's multiplayer `progs` | the player's single-player `progs` in its first pack: the exact campaign, episode 1 on the shareware pack, all four with the full game |
+| Ours (free) | `qc/arena/progs.src`: today's deathmatch | `qc/campaign/progs.src`: monsters, the level flow, runes, skill, coop on the same common code |
+| Shared | `qc/common/`: weapons, items, combat, doors, plats, buttons, triggers | |
+
+Choosing single or multiplayer is choosing a program: the menu's SINGLE PLAYER ▸ NEW GAME loads
+the profile's campaign program (the pack's own when present, else ours), MULTIPLAYER its arena
+program. Our variants are built by `ge qc build` from their own `progs.src`; a modder copies
+either.
 
 ## Licensing and the clean room
 
@@ -537,7 +599,7 @@ list is in `porting/shooters-edge/survey.md`.
 | Better | A data-driven particle system for mods (effects named in a script) | M18l |
 | Better | The common QC extension builtins and fields (string handling, tracing, the extra entity fields), registered by name | M18c, M18l |
 | Later | Client-side QC (a mod drawing its own HUD and predicting its own entities) | M18m |
-| Later | Single-player campaigns and co-op on the single-player `progs` | M18m |
+| Later | Single-player campaigns and co-op on the single-player `progs` | M18s |
 | Later | Splitscreen; touch controls for phones and tablets | M18m |
 
 ## Labs
@@ -596,5 +658,5 @@ during the work is added when it is found and recorded in `docs/goals/ge-backlog
 The roadmap rows are `docs/goals/M18*.md` (M18 and its lettered rows), after Fall Line. The order:
 content (M18a) and the map (M18b) first, then QC (M18c, M18d), movement (M18e), the game loop and
 multiplayer mods (M18o, M18p), the server (M18f) and its bots (M18r), the compatible protocol (M18g), the client (M18h), the picture (M18i), sound
-(M18j), input and the 2D layer (M18k), hosting and the lobby (M18q), the modern features that need all of it (M18l) and what
-can wait (M18m).
+(M18j), input and the 2D layer (M18k), hosting and the lobby (M18q), the modern features that need all of it (M18l), the
+single-player campaign and the movement setting (M18s), the classic games as profiles (M18t) and what can wait (M18m).
