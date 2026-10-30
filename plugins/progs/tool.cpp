@@ -13,13 +13,16 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "core/num_text.hpp"
 #include "progs/disasm.hpp"
+#include "progs/qc_compile.hpp"
 #include "progs/sample.hpp"
 #include "progs/vm.hpp"
 
@@ -29,7 +32,8 @@ namespace {
 
 constexpr const char* kUsage =
     "usage: qc disasm|run|trace|profile <progs> [--function=<name>] [--args=<n,...>] "
-    "[--builtins=sample] [--entities=<n>] [--statements] [--repeat=<n>] [--top=<n>]";
+    "[--builtins=sample] [--entities=<n>] [--statements] [--repeat=<n>] [--top=<n>]; "
+    "qc build <progs.src|file.qc> [--out=<progs>]";
 
 std::string json_escape(const std::string& s) {
   std::string out = "\"";
@@ -66,7 +70,7 @@ struct Answer {
 };
 
 struct Flags {
-  std::string command, file, function, args, builtins, entities, repeat = "1", top = "10";
+  std::string command, file, function, args, builtins, entities, repeat = "1", top = "10", out;
   bool statements = false;
   std::string bad;  // the first usage error
 };
@@ -93,6 +97,8 @@ Flags parse(int argc, const char* const* argv) {
         f.top = v;
       else if (k == "statements")
         f.statements = true;
+      else if (k == "out")
+        f.out = v;
       else if (f.bad.empty())
         f.bad = "unknown flag --" + k;
     } else if (f.command.empty()) {
@@ -104,10 +110,10 @@ Flags parse(int argc, const char* const* argv) {
     }
   }
   if (f.bad.empty() && f.command != "disasm" && f.command != "run" && f.command != "trace" &&
-      f.command != "profile")
+      f.command != "profile" && f.command != "build")
     f.bad = "unknown command '" + f.command + "'";
   if (f.bad.empty() && f.file.empty()) f.bad = "no progs file given";
-  if (f.bad.empty() && f.command != "disasm" && f.function.empty())
+  if (f.bad.empty() && f.command != "disasm" && f.command != "build" && f.function.empty())
     f.bad = f.command + " needs --function=<name>";
   if (f.bad.empty() && !f.builtins.empty() && f.builtins != "sample")
     f.bad = "--builtins takes 'sample' (a game's own builtins come with the game)";
@@ -123,7 +129,14 @@ bool load(const std::string& file, Progs& p, Answer& a) {
   const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)),
                                    std::istreambuf_iterator<char>());
   std::string error;
-  if (!load_progs(bytes.data(), bytes.size(), p, error)) {
+  // A program that declares no engine-side layout (crc 0: a compiled standalone program, no
+  // game's) is run as it stands; any other crc is held to the layout this tool runs.
+  LoadOptions options;
+  if (bytes.size() >= 8 && bytes[4] == 0 && bytes[5] == 0 && bytes[6] == 0 && bytes[7] == 0) {
+    options.crc = 0;
+    options.check_layout = false;
+  }
+  if (!load_progs(bytes.data(), bytes.size(), p, error, options)) {
     a.finding("error", error, file, "see docs/shooters-edge.md; skill: progs");
     return false;
   }
@@ -390,6 +403,61 @@ int profile(const Flags& f, Answer& a) {
   return a.exit;
 }
 
+// `qc build`: a project file (progs.src) or one source compiled; the progs and its line table
+// written; every diagnostic a finding at its file and line.
+int build(const Flags& f, Answer& a) {
+  const std::filesystem::path in(f.file);
+  QcProject project;
+  if (in.extension() == ".qc") {
+    std::ifstream file(in, std::ios::binary);
+    if (!file) {
+      a.finding("error", "cannot read " + f.file, f.file, "pass a progs.src or a .qc file");
+      return a.exit;
+    }
+    std::ostringstream text;
+    text << file.rdbuf();
+    const QcSource src[] = {{in.filename().string(), text.str()}};
+    project.result = compile_qc(src);
+    project.output = std::filesystem::path(in).replace_extension(".dat");
+  } else {
+    project = compile_project(in);
+  }
+  const std::filesystem::path dir = in.parent_path();
+  for (const QcDiagnostic& d : project.result.diagnostics) {
+    const std::string where = (dir / d.file).generic_string() + ":" + std::to_string(d.line);
+    a.finding(d.error ? "error" : "warning", d.message, where,
+              d.error ? "fix the source and build again (skill: progs, § The QC language)"
+                      : "the progs builds; a game may refuse it");
+  }
+  if (!project.result.ok) {
+    a.summary("the build stopped at the first error");
+    return a.exit;
+  }
+  const std::filesystem::path out = f.out.empty() ? project.output : std::filesystem::path(f.out);
+  const Progs& p = project.result.progs;
+  const std::vector<uint8_t> bytes = write_progs(p);
+  std::ofstream(out, std::ios::binary)
+      .write(reinterpret_cast<const char*>(bytes.data()),
+             static_cast<std::streamsize>(bytes.size()));
+  std::ofstream(out.string() + ".lines") << lines_text(p.lines);
+  if (!std::filesystem::exists(out)) {
+    a.finding("error", "cannot write " + out.generic_string(), out.generic_string(),
+              "check the directory exists and is writable");
+    return a.exit;
+  }
+  int builtins = 0;
+  for (const Function& fn : p.functions) builtins += fn.first_statement < 0 ? 1 : 0;
+  a.summary(out.generic_string() + ": " + std::to_string(bytes.size()) + " bytes, " +
+            std::to_string(p.functions.size() - 1 - static_cast<size_t>(builtins)) +
+            " functions, " + std::to_string(builtins) + " builtins, " +
+            std::to_string(p.statements.size()) + " statements, crc " + std::to_string(p.crc));
+  a.result("{\"out\":" + json_escape(out.generic_string()) + ",\"bytes\":" +
+           std::to_string(bytes.size()) + ",\"statements\":" + std::to_string(p.statements.size()) +
+           ",\"functions\":" + std::to_string(p.functions.size()) + ",\"globals\":" +
+           std::to_string(p.globals.size()) + ",\"crc\":" + std::to_string(p.crc) + "}");
+  return a.exit;
+}
+
 }  // namespace
 
 int qc_main(int argc, const char* const* argv, std::ostream& out) {
@@ -400,6 +468,7 @@ int qc_main(int argc, const char* const* argv, std::ostream& out) {
     return 2;
   }
   if (f.command == "disasm") return disasm(f, a);
+  if (f.command == "build") return build(f, a);
   if (f.command == "profile") return profile(f, a);
   return run(f, a, f.command == "trace");
 }

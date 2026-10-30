@@ -158,7 +158,17 @@ The view, stated once in `plugins/brush/map.hpp`:
   contents, cluster and bounds; `leaf_at` walks it. A 46 leaf stores no contents: solid there is a
   leaf with no cluster.
 - **Visibility**: one row a cluster, decompressed (a non-zero byte is eight bits; a zero and a
-  count stand for that many zero bytes); `cluster_sees` asks it.
+  count stand for that many zero bytes); `cluster_sees` asks it. **The PHS** (what a sound can
+  reach) is built from it on request (`build_phs`): a cluster hears every cluster any cluster it
+  sees can see, so sound carries one set of doorways further than sight. `cluster_hears` asks it.
+- **Clip hulls** (29 and BSP2): the clip nodes (`plane`, two children, each a clip node or a
+  contents number) and each model's first node for hull 1 (the player's box) and hull 2 (the large
+  box). `hull_contents` walks one. A 29 child is read as an unsigned 16-bit number whose top sixteen
+  values are contents, so a map of more than 32767 clip nodes reaches them all. A tree or a hull
+  that loops back on itself is refused, so nothing that walks it recursively can run forever.
+  `plugins/shooter/bsp_world.hpp` turns a read map into the server's brush models (hull 0 the node
+  tree with its leaves' contents, hulls 1 and 2 the clip nodes), and Shooter's Edge's
+  `server/bsp_map.hpp` hands those, the entity lump and the PVS and PHS to the mod server.
 - **Entities**: the lump parsed into `{ "key" "value" ... }` blocks.
 
 **Refused, never overrun.** A reader checks every lump against the file and its record size
@@ -171,7 +181,10 @@ the fixtures thousands of ways on every run and holds every mutant to that.
 **Fixtures of our own.** No map anyone else made is in the tree: `write.hpp` compiles a few
 axis-aligned rooms and point lights into a map of any family (every room's inside faces less its
 doorways, an axis-aligned tree, visibility two doorways deep, a luxel per 16 texels lit by the
-room's own lights, and in 46 a curved patch), the same bytes on every platform. The `bsp` lab draws
+room's own lights, in 29 and BSP2 the player's and the large box's clip hulls, and in 46 a curved
+patch), the same bytes on every platform. A box hull is the grid of the rooms' sides moved by the
+box, each cell open where the box about its middle fits inside the rooms, split down the middle
+of its widest run until a range is uniform (`fixture_hulls.cpp`). The `bsp` lab draws
 each (or any map given with `--map`).
 
 **Pictures.** A 29 or BSP2 map can carry its textures' pixels: `Texture::indexed` holds the
@@ -186,8 +199,8 @@ tree) also writes each map's textures there as PNGs, `<dir>/<map>/<name>.png` wi
 leading `*` and `anim_` for a leading `+`, and `textures.txt` naming each with its size: what the
 procedural texture matcher reads to propose the cloner's texture map (§ Cloning a classic map).
 
-Left to M18b: the clip hulls' trace (they are read and checked), the PHS, the BSPX lumps, animated
-texture sequences, and `ge bsp`.
+Left to M18b: the BSPX lumps, animated texture sequences, `ge bsp`, and brushes for 38 and 46
+(which sweep through brushes rather than clip hulls).
 
 ## Cloning a classic map
 
