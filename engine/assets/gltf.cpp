@@ -3,7 +3,7 @@
 // mirrored into the engine's frame. cgltf's own code is compiled in cgltf.cpp.
 //
 // ge:summary glTF loader definitions: cgltf parse, joints, skins, meshes, materials, clip bake
-// ge:keywords assets gltf cgltf parse mirror bake sampler slerp hermite decompose
+// ge:keywords assets gltf cgltf parse mirror bake sampler slerp hermite decompose morph-target
 // ge:skill assets
 // ge:test tests/assets_gltf_test.cpp
 #include "assets/gltf.hpp"
@@ -190,6 +190,52 @@ void sample_channel(const cgltf_animation_sampler& s, int n, float t, float out[
   for (int k = 0; k < n; ++k) out[k] = a[k] + (b[k] - a[k]) * f;
 }
 
+// A weights channel's value at time t into out (n weights): its keys hold n scalars each (a
+// cubic key three runs of n: in-tangents, values, out-tangents).
+void sample_weights(const cgltf_animation_sampler& s, size_t n, float t, float* out) {
+  const cgltf_accessor* in = s.input;
+  const auto keys = static_cast<cgltf_size>(in->count);
+  if (keys == 0 || n == 0) return;
+  const bool cubic = s.interpolation == cgltf_interpolation_type_cubic_spline;
+  auto value = [&](cgltf_size k, cgltf_size part, size_t i) {
+    float v = 0;
+    cgltf_accessor_read_float(s.output, cubic ? (k * 3 + part) * n + i : k * n + i, &v, 1);
+    return v;
+  };
+  float t0 = 0, t1 = 0;
+  cgltf_accessor_read_float(in, 0, &t0, 1);
+  cgltf_accessor_read_float(in, keys - 1, &t1, 1);
+  if (keys == 1 || t <= t0 || t >= t1) {
+    const cgltf_size k = keys == 1 || t <= t0 ? 0 : keys - 1;
+    for (size_t i = 0; i < n; ++i) out[i] = value(k, 1, i);
+    return;
+  }
+  cgltf_size lo = 0, hi = keys - 1;
+  while (hi - lo > 1) {
+    const cgltf_size mid = (lo + hi) / 2;
+    float tm = 0;
+    cgltf_accessor_read_float(in, mid, &tm, 1);
+    (tm <= t ? lo : hi) = mid;
+  }
+  float ta = 0, tb = 0;
+  cgltf_accessor_read_float(in, lo, &ta, 1);
+  cgltf_accessor_read_float(in, hi, &tb, 1);
+  const float dt = tb - ta;
+  const float f = dt > 0 ? (t - ta) / dt : 0.0f;
+  const float f2 = f * f, f3 = f2 * f;
+  for (size_t i = 0; i < n; ++i) {
+    const float a = value(lo, 1, i), b = value(hi, 1, i);
+    if (s.interpolation == cgltf_interpolation_type_step) {
+      out[i] = a;
+    } else if (cubic) {
+      out[i] = (2 * f3 - 3 * f2 + 1) * a + (f3 - 2 * f2 + f) * dt * value(lo, 2, i) +
+               (-2 * f3 + 3 * f2) * b + (f3 - f2) * dt * value(hi, 0, i);
+    } else {
+      out[i] = a + (b - a) * f;
+    }
+  }
+}
+
 // ── The load ──
 
 struct Loader {
@@ -198,6 +244,7 @@ struct Loader {
   LoadResult& result;
   std::vector<int> joint_of_node;  // a node's joint, or -1 outside the scene
   std::vector<bool> bound;         // a joint's inverse bind came from a skin
+  std::vector<int> mesh_of_node;   // a node's mesh in the model, or -1
 
   bool fail(const std::string& what, const std::string& next) {
     result.ok = false;
@@ -459,6 +506,7 @@ struct Loader {
             mesh.joints.push_back(mesh.joints[size_t{v} * 4 + static_cast<size_t>(j)]);
             mesh.weights.push_back(mesh.weights[size_t{v} * 4 + static_cast<size_t>(j)]);
           }
+          for (MorphTarget& mt : mesh.targets) copy_vertex(mt, v);
           mesh.parts.push_back(static_cast<uint8_t>(p));
           found = copies.emplace(key, n).first;
         }
@@ -474,6 +522,7 @@ struct Loader {
   bool meshes() {
     Model& m = result.model;
     part_of_material.assign(data->materials_count, -1);
+    mesh_of_node.assign(data->nodes_count, -1);
     for (cgltf_size n = 0; n < data->nodes_count; ++n) {
       const cgltf_node& node = data->nodes[n];
       const int self = joint_of_node[n];
@@ -485,13 +534,30 @@ struct Loader {
       // A rigid part's vertices, from its node's space to the space its joint binds them in.
       const Affine rigid = invert(m.joints[self].inverse_bind);
       bool faceted = false;
+      // Every primitive of a mesh has the same targets (glTF's rule); their names are the mesh's.
+      const cgltf_size targets =
+          node.mesh->primitives_count ? node.mesh->primitives[0].targets_count : 0;
+      mesh.targets.resize(targets);
+      mesh.target_weights.assign(targets, 0.0f);
+      for (cgltf_size t = 0; t < targets; ++t) {
+        mesh.targets[t].name = t < node.mesh->target_names_count && node.mesh->target_names[t]
+                                   ? node.mesh->target_names[t]
+                                   : "target" + std::to_string(t);
+        if (t < node.mesh->weights_count) mesh.target_weights[t] = node.mesh->weights[t];
+      }
+      if (targets && node.weights_count == targets) {
+        for (cgltf_size t = 0; t < targets; ++t) mesh.target_weights[t] = node.weights[t];
+      }
       for (cgltf_size p = 0; p < node.mesh->primitives_count; ++p) {
         const cgltf_primitive& prim = node.mesh->primitives[p];
         if (prim.type != cgltf_primitive_type_triangles) {
           return fail("mesh '" + mesh.name + "' has a primitive of points, lines or strips",
                       "triangulate it before export (assets skill)");
         }
-        if (prim.targets_count) note("morph targets are skipped");
+        if (prim.targets_count != targets) {
+          return fail("mesh '" + mesh.name + "' has primitives with different morph targets",
+                      "export the mesh with the same shape keys on every part (assets skill)");
+        }
         const std::optional<Texture> tex = texture_of(prim.material);
         const cgltf_accessor *pos = nullptr, *nrm = nullptr, *jnt = nullptr, *wgt = nullptr,
                              *uv = nullptr;
@@ -567,6 +633,14 @@ struct Loader {
           mesh.weights.insert(mesh.weights.end(), ws, ws + 4);
           mesh.parts.push_back(material);
         }
+        for (cgltf_size t = 0; t < targets; ++t) {
+          if (!read_target(prim.targets[t], pos->count, skinned ? nullptr : &rigid,
+                           mesh.targets[t])) {
+            return fail("mesh '" + mesh.name +
+                            "' has a morph target whose offsets do not match its vertices",
+                        "re-export the mesh with its shape keys (assets skill)");
+          }
+        }
         const cgltf_size count = prim.indices ? prim.indices->count : pos->count;
         for (cgltf_size i = 0; i + 2 < count; i += 3) {
           uint32_t t[3];
@@ -581,15 +655,54 @@ struct Loader {
         if (!uvs.empty()) bake(mesh, *tex, uvs, base, first, material);
       }
       if (faceted) make_faceted(mesh);
+      mesh_of_node[n] = static_cast<int>(m.meshes.size());
       m.meshes.push_back(std::move(mesh));
     }
     return true;
+  }
+
+  // A target's offsets for a primitive's `count` vertices appended: mirrored like the positions
+  // and, on a rigid part, turned into its joint's space (an offset is a direction). A target
+  // with no NORMAL leaves the normals as they are.
+  static bool read_target(const cgltf_morph_target& target, cgltf_size count, const Affine* rigid,
+                          MorphTarget& out) {
+    const cgltf_accessor *pos = nullptr, *nrm = nullptr;
+    for (cgltf_size a = 0; a < target.attributes_count; ++a) {
+      const cgltf_attribute& at = target.attributes[a];
+      if (at.type == cgltf_attribute_type_position) pos = at.data;
+      if (at.type == cgltf_attribute_type_normal) nrm = at.data;
+    }
+    if ((pos && pos->count != count) || (nrm && nrm->count != count)) return false;
+    for (cgltf_size v = 0; v < count; ++v) {
+      float d[2][3] = {{0, 0, 0}, {0, 0, 0}};
+      if (pos) cgltf_accessor_read_float(pos, v, d[0], 3);
+      if (nrm) cgltf_accessor_read_float(nrm, v, d[1], 3);
+      for (auto& e : d) {
+        mirror_point(e);
+        if (rigid) {
+          float q[3];
+          transform_vector(*rigid, e, q);
+          std::copy(q, q + 3, e);
+        }
+      }
+      out.positions.insert(out.positions.end(), d[0], d[0] + 3);
+      out.normals.insert(out.normals.end(), d[1], d[1] + 3);
+    }
+    return true;
+  }
+
+  // Vertex v's offsets appended again, for a copy of v.
+  static void copy_vertex(MorphTarget& t, uint32_t v) {
+    for (size_t k = 0; k < 3; ++k) t.positions.push_back(t.positions[size_t{v} * 3 + k]);
+    for (size_t k = 0; k < 3; ++k) t.normals.push_back(t.normals[size_t{v} * 3 + k]);
   }
 
   // Each triangle its own three vertices and its face's normal.
   static void make_faceted(Mesh& mesh) {
     Mesh f;
     f.name = mesh.name;
+    f.target_weights = mesh.target_weights;
+    for (const MorphTarget& t : mesh.targets) f.targets.push_back({t.name, {}, {}});
     for (size_t t = 0; t + 2 < mesh.indices.size(); t += 3) {
       const float* a = &mesh.positions[size_t{mesh.indices[t]} * 3];
       const float* b = &mesh.positions[size_t{mesh.indices[t + 1]} * 3];
@@ -611,6 +724,14 @@ struct Loader {
         f.weights.insert(f.weights.end(), &mesh.weights[size_t{i} * 4],
                          &mesh.weights[size_t{i} * 4] + 4);
         f.parts.push_back(mesh.parts[i]);
+        for (size_t g = 0; g < f.targets.size(); ++g) {
+          const MorphTarget& src = mesh.targets[g];
+          MorphTarget& dst = f.targets[g];
+          dst.positions.insert(dst.positions.end(), &src.positions[size_t{i} * 3],
+                               &src.positions[size_t{i} * 3] + 3);
+          dst.normals.insert(dst.normals.end(), &src.normals[size_t{i} * 3],
+                             &src.normals[size_t{i} * 3] + 3);
+        }
       }
     }
     mesh = std::move(f);
@@ -634,6 +755,23 @@ struct Loader {
       clip.name = anim.name ? anim.name : "clip" + std::to_string(a);
       clip.frames = static_cast<uint32_t>(std::lround(end * kClipRateHz)) + 1;
       clip.samples.resize(size_t{clip.frames} * joints);
+      // A track for each mesh whose weights a channel moves, starting at the mesh's own weights.
+      std::vector<int> track_of_mesh(m.meshes.size(), -1);
+      for (cgltf_size c = 0; c < anim.channels_count; ++c) {
+        const cgltf_animation_channel& ch = anim.channels[c];
+        if (ch.target_path != cgltf_animation_path_type_weights || !ch.target_node || !ch.sampler)
+          continue;
+        const int mi = mesh_of_node[cgltf_node_index(data, ch.target_node)];
+        if (mi < 0 || track_of_mesh[static_cast<size_t>(mi)] >= 0) continue;
+        const Mesh& mesh = m.meshes[static_cast<size_t>(mi)];
+        track_of_mesh[static_cast<size_t>(mi)] = static_cast<int>(clip.morphs.size());
+        MorphTrack track{mi, {}};
+        for (uint32_t f = 0; f < clip.frames; ++f) {
+          track.weights.insert(track.weights.end(), mesh.target_weights.begin(),
+                               mesh.target_weights.end());
+        }
+        clip.morphs.push_back(std::move(track));
+      }
       for (uint32_t f = 0; f < clip.frames; ++f) {
         Trs* row = &clip.samples[size_t{f} * joints];
         for (size_t j = 0; j < joints; ++j) row[j] = m.joints[j].rest;
@@ -641,6 +779,14 @@ struct Loader {
         for (cgltf_size c = 0; c < anim.channels_count; ++c) {
           const cgltf_animation_channel& ch = anim.channels[c];
           if (!ch.target_node || !ch.sampler) continue;
+          if (ch.target_path == cgltf_animation_path_type_weights) {
+            const int mi = mesh_of_node[cgltf_node_index(data, ch.target_node)];
+            if (mi < 0) continue;
+            const auto tr = static_cast<size_t>(track_of_mesh[static_cast<size_t>(mi)]);
+            const size_t n = m.meshes[static_cast<size_t>(mi)].targets.size();
+            sample_weights(*ch.sampler, n, t, &clip.morphs[tr].weights[size_t{f} * n]);
+            continue;
+          }
           const int j = joint_of_node[cgltf_node_index(data, ch.target_node)];
           if (j < 0) continue;
           Trs& o = row[j];
@@ -657,7 +803,6 @@ struct Loader {
               sample_channel(*ch.sampler, 3, t, o.s);
               break;
             default:
-              note("animations of morph weights are skipped");
               break;
           }
         }
@@ -711,7 +856,7 @@ LoadResult load_gltf(std::span<const uint8_t> bytes, std::string_view where) {
     return result;
   }
   result.ok = true;
-  Loader l{data, name, result, {}, {}, {}, -1, {}, {}, {}};
+  Loader l{data, name, result, {}, {}, {}, {}, -1, {}, {}, {}};
   if (l.joints() && l.skins() && l.meshes()) l.clips();
   if (result.ok && result.model.meshes.empty()) {
     l.fail("it has no mesh in its scene", "export the objects with their meshes; skill: assets");

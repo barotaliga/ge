@@ -174,7 +174,10 @@ TEST(the_arena_doorway_is_tagged_with_its_door) {
   sh::MoveWorld world;
   sh::map_world(arena.world.model(), world);
   const int kDoorEnt = 40;
-  sh::NavMover door{kDoorEnt, arena.door.mins, arena.door.maxs};
+  sh::NavMover door;
+  door.ent = kDoorEnt;
+  door.absmin = arena.door.mins;
+  door.absmax = arena.door.maxs;
   sh::NavGraph g;
   sh::build_nav(world, std::span<const sh::NavMover>(&door, 1), sh::MoveSettings{},
                 sh::NavSettings{}, g);

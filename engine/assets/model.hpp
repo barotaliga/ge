@@ -15,6 +15,9 @@
 //   vertex names its joints in a byte each.
 // - A CLIP is baked at kClipRateHz into one local transform a joint a frame, so sampling a
 //   clip is two reads and a blend, and its first and last frames are its ends.
+// - A MORPH TARGET is an offset a vertex from the mesh at bind (a classic model's frame, a face's
+//   expression): a pose adds each target times its weight to the bind before skinning, and a
+//   clip carries a weight a target a baked frame for each mesh it moves.
 // - AN AFFINE is a 3x4 matrix as three rows (p' = M (x, y, z, 1)): the bone palette's form,
 //   three vec4s a joint on the GPU (render/skinning.hpp).
 //
@@ -22,6 +25,7 @@
 // ge:keywords assets model mesh skinned-mesh skeleton joint bone inverse-bind material clip
 // ge:keywords animation keyframes trs affine palette rigid-part kmaxjoints kcliprate
 // ge:keywords to_affine compose invert transform_point transform_vector
+// ge:keywords morph-target morph-track blend-shape target-weights
 // ge:skill assets
 // ge:test tests/assets_pose_test.cpp
 #pragma once
@@ -72,6 +76,14 @@ struct Material {
   float rgb[3] = {1, 1, 1};  // the base colour, linear
 };
 
+// A mesh's offset from its bind: every vertex's position (m) and normal (a difference of unit
+// normals) a pose adds times the target's weight.
+struct MorphTarget {
+  std::string name;
+  std::vector<float> positions;  // xyz a vertex, m
+  std::vector<float> normals;    // xyz a vertex
+};
+
 // A mesh at bind, in model space. Four influences a vertex, the weights summing to 1.
 struct Mesh {
   std::string name;
@@ -81,14 +93,24 @@ struct Mesh {
   std::vector<float> weights;    // kJointsPerVertex a vertex
   std::vector<uint8_t> parts;    // a vertex's material
   std::vector<uint32_t> indices;
+  std::vector<MorphTarget> targets;
+  std::vector<float> target_weights;  // a target each: the weights when no clip moves them
   uint32_t vertex_count() const { return static_cast<uint32_t>(parts.size()); }
 };
 
-// Every joint's local transform at every baked frame: samples[frame * joints + joint].
+// One mesh's target weights at every baked frame of a clip: weights[frame * targets + target].
+struct MorphTrack {
+  int32_t mesh = -1;
+  std::vector<float> weights;
+};
+
+// Every joint's local transform at every baked frame: samples[frame * joints + joint]; and the
+// target weights of each mesh the clip moves.
 struct Clip {
   std::string name;
   uint32_t frames = 0;  // at kClipRateHz; the last is the clip's end
   std::vector<Trs> samples;
+  std::vector<MorphTrack> morphs;
   double duration_s() const { return frames > 1 ? (frames - 1) / double{kClipRateHz} : 0.0; }
 };
 

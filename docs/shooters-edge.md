@@ -105,9 +105,11 @@ the tree's own QC compiler (`plugins/progs/qc_compile.hpp`, the language in
 - **When it does not load**: the message says why (a refused record, a missing engine-side
   global or field, a layout of another version) and what to do next. A mod built for the
   single-player game, or for a server with a different field layout, is refused at load.
-- **The free maps** a mod is played on arrive with the brush plugin (M18b); until then the
-  match runs on the test arena, whose entity text (`kArenaEntities`) has the classic
-  deathmatch spawn points.
+- **The free maps** a mod is played on load with `server/bsp_map.hpp` (M18b): a map file read
+  into the `MapSpec` (its hulls, its entity lump) and its PVS and PHS answering the server's
+  `vis` hook. Until the content's search paths land (M18a) a host hands it the file's bytes; the
+  scripted match still runs on the test arena, whose entity text (`kArenaEntities`) has the
+  classic deathmatch spawn points.
 
 ## C++ mods
 
@@ -224,7 +226,7 @@ AGENTS.md and the non-goals in `docs/goals.md` state this exception.
 | --- | --- | --- |
 | Fixed-step simulation, deterministic | `loop/run_clock` at 120 Hz; `core/libm`; goldens; labs as determinism tests | The server's frame runs on the run clock at its own rate (77 Hz, the classic tick); each player's move runs on its usercmd's milliseconds, as the protocol defines it. QC floats are 32-bit and its math builtins call `core/libm`, so a server replays to the bit from its input log (M18c, M18f) |
 | Files and archives | Embedded blobs; the labs' inflater | `engine/vfs`, inflate shipped (M18a) |
-| A map format with visibility and collision | A heightfield world (`plugins/mountain`) | `plugins/brush` (reading: M32b; collision: M18b) |
+| A map format with visibility and collision | A heightfield world (`plugins/mountain`) | `plugins/brush` (reading: M32b; clip hulls, PHS: M18b), `plugins/shooter/bsp_world.hpp` (the hulls as the server's brush models) |
 | Scripting for mods | `plugins/progs` (M18c), the stated exception: the VM runs assembled bytecode to the bit and drives the loop's seam through `games/shooters_edge/sim/qc_program.hpp` (`qc` lab) | The builtin catalogue, the map's entity text and the allocate rules (M18p); the compiler (M18d) |
 | Player movement and weapons | `engine/move` (M28): the mover for any genre, the classic arena row among its presets, strafe jumping charted (`docs/movement.md`); `plugins/shooter` (M18o1): the classic player move in floats over clip hulls, held to its recordings on every scenario (`pmove` lab) | The weapons: `plugins/shooter` (M18e) |
 | A server with many clients | `engine/net` links, channels, sessions, NAT, the simulated network, captures; `plugins/shooter` (M18o2): the classic loop (the server's frame on the run clock, entities by movetype, thinking, pushers, touches, the area tree, a player's packet and commands) behind a game-program seam, and `games/shooters_edge/sim`'s native program playing a scripted match that replays to the bit (`se-loop` lab) | The bytecode program on that seam (M18p); the server's clients and bots (M18f); the compatible protocol (M18g); the native one on M17f's replication (M18h) |
@@ -410,6 +412,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `mod` | scenario | The engine's own C++ mod format: the sample mod's match beside the plain match (the loader's verdict, rockets, bounces, the mod's log, both matches' missiles, the rocket's distance and the grenade's height), and the modded match replayed to the bit (built, M52a) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
 | `se-nav` | scenario | Where a player can go on a map by the player move's own proof: the nav graph from above to scale (the floor shaded off the point hull, every node and link by kind, what a mover closes), the quickest routes as the proofs moved a player, from above and the side; on the nav course and the test arena (built, M18r1) |
+| `se-pilot` | scenario | Whether the pilot plays a nav route through the move as fast as the graph proved it: every course route with plain and human hands, the trails from above coloured by mode, times against proven, the strafe jump's speed on a straight, the human axes against a person's bands; on the server's arena the pilot in a bot slot through the door, up the plat and barring the door shut from the east (built, M18r2) |
 | `se-bots` | drive | Bots against bots and against recorded people: frags, deaths, items, the paths drawn on the map, the decisions round a fight, the humanness bands; before and after a change |
 | `se-lobby` | sim | Clients find a hosted game on the LAN and through the rendezvous, fill the lobby, pick teams, chat, start, play and return; a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections |

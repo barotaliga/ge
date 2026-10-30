@@ -109,6 +109,11 @@ constexpr FlagSpec kCiFlags[] = {
     kRepo};
 constexpr FlagSpec kQueueFlags[] = {
     {"base", "<ref>", "the branch the queue merges into (default origin/main)"}, kRepo};
+constexpr FlagSpec kMergeMainFlags[] = {
+    {"base", "<ref>", "the branch merged in (default origin/main, fetched first)"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kDigestFlags[] = {
     {"write", "", "rewrite the lab's file under tests/digests/ (every lab's with no lab named)"},
     {"diff", "", "print only the labs whose digest is off the baseline; write nothing"},
@@ -549,6 +554,11 @@ const CommandSpec kCommands[] = {
      "a pull request merged onto main, then onto main and every pull request queued or armed "
      "ahead of it: the files that conflict and the first one ahead that brings them in",
      kQueueFlags, "ge pr clash 209", "commit"},
+    {"merge-main", "", 0, 0, "build",
+     "main merged into this branch: a file main retired takes main's deletion, a lab digest both "
+     "sides moved is rerun and rewritten, every other conflict is named and left; committed once "
+     "none is left",
+     kMergeMainFlags, "ge merge-main", "commit"},
     {"digest", "[<lab>...]", 0, -1, "build",
      "the labs named (or every lab) at their smoke flags, twice: each digest beside the "
      "committed baseline; --write moves only those labs' rows; --diff prints only the labs "
