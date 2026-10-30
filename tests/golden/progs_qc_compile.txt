@@ -1,0 +1,127 @@
+# The disassembly of tests/progs_qc_compile_test.cpp's kConstructs; written by that test with GE_GOLDEN_WRITE=1
+function 1 ftos (builtins.qc): builtin 1, 1 parameters
+function 2 vlen (builtins.qc): builtin 2, 1 parameters
+function 3 spawn (builtins.qc): builtin 4, 0 parameters
+function 4 print (builtins.qc): builtin 5, 1 parameters
+function 5 add (test.qc): 2 parameters (1 1), locals 3 at @44, first statement 1
+     1  ADD_F      a:a b:b c:@46  ; line 9
+     2  RETURN     a:@46  ; line 9
+     3  DONE       a:@0  ; line 9
+function 6 sub (test.qc): 2 parameters (1 1), locals 3 at @48, first statement 4
+     4  SUB_F      a:a b:b c:@50  ; line 10
+     5  RETURN     a:@50  ; line 10
+     6  DONE       a:@0  ; line 10
+function 7 fact (test.qc): 1 parameters (1), locals 4 at @53, first statement 7
+     7  LE         a:n b:@52 c:@54  ; line 11
+     8  IFNOT      a:@54 b:-> 10  ; line 11
+     9  RETURN     a:@52  ; line 11
+    10  SUB_F      a:n b:@52 c:@54  ; line 11
+    11  STORE_F    a:@54 b:@4  ; line 11
+    12  CALL1      a:fact  ; line 11
+    13  STORE_F    a:@1 b:@55  ; line 11
+    14  MUL_F      a:n b:@55 c:@56  ; line 11
+    15  RETURN     a:@56  ; line 11
+    16  DONE       a:@0  ; line 11
+function 8 loops (test.qc): 1 parameters (1), locals 4 at @63, first statement 17
+    17  STORE_F    a:@58 b:sum  ; line 15
+    18  STORE_F    a:@58 b:i  ; line 16
+    19  LT         a:i b:n c:@66  ; line 16
+    20  IFNOT      a:@66 b:-> 32  ; line 16
+    21  EQ_F       a:i b:@59 c:@66  ; line 17
+    22  IFNOT      a:@66 b:-> 24  ; line 17
+    23  GOTO       a:-> 29  ; line 17
+    24  GT         a:i b:@60 c:@66  ; line 18
+    25  IFNOT      a:@66 b:-> 27  ; line 18
+    26  GOTO       a:-> 32  ; line 18
+    27  ADD_F      a:sum b:i c:@66  ; line 19
+    28  STORE_F    a:@66 b:sum  ; line 19
+    29  ADD_F      a:i b:@52 c:@66  ; line 16
+    30  STORE_F    a:@66 b:i  ; line 16
+    31  GOTO       a:-> 19  ; line 20
+    32  GT         a:sum b:@61 c:@66  ; line 21
+    33  IFNOT      a:@66 b:-> 37  ; line 21
+    34  SUB_F      a:sum b:@61 c:@66  ; line 21
+    35  STORE_F    a:@66 b:sum  ; line 21
+    36  GOTO       a:-> 32  ; line 21
+    37  MUL_F      a:sum b:@59 c:@66  ; line 22
+    38  STORE_F    a:@66 b:sum  ; line 22
+    39  LT         a:sum b:@62 c:@66  ; line 22
+    40  IF         a:@66 b:-> 37  ; line 22
+    41  RETURN     a:sum  ; line 23
+    42  DONE       a:@0  ; line 24
+function 9 vectors (test.qc): 1 parameters (3), locals 15 at @72, first statement 43
+    43  MUL_VF     a:v b:@59 c:@78  ; line 27
+    44  ADD_V      a:@78 b:UP c:@81  ; line 27
+    45  STORE_V    a:@81 b:w  ; line 27
+    46  SUB_F      a:w b:v_z c:@84  ; line 28
+    47  STORE_F    a:@84 b:w_y  ; line 28
+    48  DIV_F      a:@52 b:@68 c:@84  ; line 29
+    49  MUL_VF     a:w b:@84 c:@81  ; line 29
+    50  STORE_V    a:@81 b:w  ; line 29
+    51  MUL_V      a:w b:v c:@84  ; line 30
+    52  SUB_V      a:@69 b:w c:@81  ; line 30
+    53  STORE_V    a:@81 b:@4  ; line 30
+    54  CALL1      a:vlen  ; line 30
+    55  STORE_F    a:@1 b:@85  ; line 30
+    56  ADD_F      a:@84 b:@85 c:@86  ; line 30
+    57  RETURN     a:@86  ; line 30
+    58  DONE       a:@0  ; line 31
+function 10 logic (test.qc): 1 parameters (1), locals 6 at @88, first statement 59
+    59  NOT_F      a:x c:@89  ; line 34
+    60  BITAND     a:x b:@59 c:@90  ; line 34
+    61  NE_F       a:x b:LIMIT c:@91  ; line 34
+    62  AND        a:@90 b:@91 c:@92  ; line 34
+    63  OR         a:@89 b:@92 c:@93  ; line 34
+    64  IFNOT      a:@93 b:-> 67  ; line 34
+    65  RETURN     a:@52  ; line 34
+    66  GOTO       a:-> 71  ; line 35
+    67  GE         a:x b:@68 c:@93  ; line 35
+    68  BITOR      a:@93 b:@52 c:@92  ; line 35
+    69  IFNOT      a:@92 b:-> 71  ; line 35
+    70  RETURN     a:@59  ; line 35
+    71  SUB_F      a:@58 b:x c:@92  ; line 36
+    72  RETURN     a:@92  ; line 36
+    73  DONE       a:@0  ; line 37
+function 11 fields (test.qc): 1 parameters (1), locals 12 at @98, first statement 74
+    74  LOAD_F     a:e b:health c:@99  ; line 40
+    75  ADD_F      a:@99 b:@52 c:@100  ; line 40
+    76  ADDRESS    a:e b:health c:@101  ; line 40
+    77  STOREP_F   a:@100 b:@101  ; line 40
+    78  LOAD_V     a:e b:org c:@102  ; line 41
+    79  ADD_V      a:@102 b:UP c:@105  ; line 41
+    80  ADDRESS    a:e b:org c:@101  ; line 41
+    81  STOREP_V   a:@105 b:@101  ; line 41
+    82  LOAD_F     a:e b:org_x c:@101  ; line 42
+    83  MUL_F      a:@101 b:@59 c:@100  ; line 42
+    84  ADDRESS    a:e b:org_x c:@99  ; line 42
+    85  STOREP_F   a:@100 b:@99  ; line 42
+    86  LOAD_F     a:e b:@96(#1.40129846e-45|1) c:@99  ; line 43
+    87  LOAD_F     a:e b:health c:@100  ; line 43
+    88  STORE_F    a:@97(#3|1077936128) b:@4  ; line 43
+    89  STORE_F    a:@100 b:@7  ; line 43
+    90  CALL2      a:sub  ; line 43
+    91  STORE_F    a:@1 b:@101  ; line 43
+    92  STORE_F    a:@99 b:@4  ; line 43
+    93  STORE_F    a:@101 b:@7  ; line 43
+    94  CALL2      a:add  ; line 43
+    95  STORE_F    a:@1 b:@108  ; line 43
+    96  ADDRESS    a:e b:@95(#2.80259693e-45|2) c:@109  ; line 43
+    97  STOREP_F   a:@108 b:@109  ; line 43
+    98  ADD_F      a:counter b:@52 c:@109  ; line 44
+    99  STORE_F    a:@109 b:counter  ; line 44
+   100  DONE       a:@0  ; line 45
+function 12 strings (test.qc): 0 parameters (), locals 2 at @114, first statement 101
+   101  EQ_S       a:HELLO b:@111(#1.02294788e-43|73) c:@114  ; line 48
+   102  IFNOT      a:@114 b:-> 114  ; line 48
+   103  STORE_F    a:LIMIT b:@4  ; line 48
+   104  CALL1      a:fact  ; line 48
+   105  STORE_F    a:@1 b:@114  ; line 48
+   106  STORE_F    a:@114 b:@4  ; line 48
+   107  CALL1      a:ftos  ; line 48
+   108  STORE_S    a:@1 b:@115  ; line 48
+   109  STORE_S    a:HELLO b:@4  ; line 48
+   110  STORE_S    a:@112(#2.91470081e-43|208) b:@7  ; line 48
+   111  STORE_S    a:@115 b:@10  ; line 48
+   112  STORE_S    a:@113(#2.94272678e-43|210) b:@13  ; line 48
+   113  CALL4      a:print  ; line 48
+   114  DONE       a:@0  ; line 49

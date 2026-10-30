@@ -80,7 +80,12 @@ fixtures we write (`tests/golden/console_*.txt`):
 ## Running your own mod
 
 The mod server (`games/shooters_edge/server`, M18p) runs a multiplayer `progs` as a compiler
-wrote it. Nothing in the tree ships a mod; a player brings his own.
+wrote it. The tree ships one in source: the **baseline mod** (`games/shooters_edge/qc/`, M18d),
+a complete deathmatch (weapons, ammunition, armour, health, deaths and respawns, frags, doors,
+plats, buttons and triggers) written in QC for modders to copy and change. Its README is the
+modder's guide; `ge qc build games/shooters_edge/qc/progs.src` compiles it to `progs.dat` with
+the tree's own QC compiler (`plugins/progs/qc_compile.hpp`, the language in
+`porting/shooters-edge/qc-language.md`), and the `se-baseline` lab plays it against bots.
 
 - **Point the game at it** with a path: `--progs=<file>` on the command line, or the `sv_progs`
   cvar in the server's console lines (`sv_progs mods/arena/progs.dat`, or `set sv_progs ...`).
@@ -175,10 +180,11 @@ free content (§ Content and test data).
 - **Free game data**: a BSD-3-Clause replacement for the classic game's data (maps, models,
   textures, sounds; named in `porting/shooters-edge/survey.md`), fetched at a pinned release into the labs' cache and
   checked by hash, never committed. Its maps and models are the labs' reference scenes.
-- **Free QC**: the labs need a multiplayer `progs` that is not GPL. The plan is our own QC
-  compiler (`ge qc`, M18d), written from the language reference, and a small deathmatch mod of
-  our own in QC, so every server test runs on bytecode built in the tree. Until then the
-  VM's tests run bytecode written by a tiny assembler in the tests.
+- **Free QC**: the labs need a multiplayer `progs` that is not GPL. Our own QC compiler
+  (`ge qc build`, M18d), written from the language reference, builds our own deathmatch mod
+  (`games/shooters_edge/qc/`) in the tree, and the `se-baseline` lab and its test run it. The
+  VM's unit tests still run bytecode written by a tiny assembler, so each opcode is pinned
+  without a compiler between.
 - **Fixtures of our own**: the tests write their own tiny archives, maps (a box, two rooms and a
   door, a ramp, water) and models with writers in the test support code, so a unit test needs
   no download.
@@ -203,12 +209,13 @@ Decided with the `plugins` skill's questions; dependencies run game → plugin �
 | `engine/play` | The play contract grown for a first-person game: an angle axis kind on the protocol's grid, a step whose length the input sets (a usercmd's milliseconds), several players a run | Any first-person game an agent plays through `ge` |
 | `plugins/brush` (new) | The brush world: BSP29 and BSP2 loading, the PVS and PHS, clip hulls and the trace through them, brush models, the entity lump's parser, the lightmap and texture data with animation sequences; `app/`: feeding the world pass | Any game on this map format (single-player, multiplayer, a mod's own game) |
 | `plugins/shooter` (new) | The first-person shooter's movement model (ground and air acceleration, friction, stepping, ducking, water, jumping, the strafe and bunny-hop behaviour players rely on), the classic game loop (the server's frame on the run clock, entities by movetype, thinking, pushers, touches, the area tree, a player's packet and commands) behind a game-program seam any program plugs into, the client's commands and prediction, hitscan and projectile helpers over a trace callback, the view's bob and roll, the bot's aim and movement hands on M16 | Any FPS on the engine, whatever its map format |
-| `plugins/progs` (built, M18c) | The QC VM: the progs loader and checker, the interpreter, entity and global memory, strings, the builtin table a game fills, errors with a QC stack trace, the profiler, the extension registry, the tests' assembler and the `qc` tool `ge qc` hands off to; later the compiler's front end (M18d) | Any game that runs QC bytecode (a single-player game, a multiplayer one, a mod's standalone game) |
+| `plugins/progs` (built, M18c, M18d) | The QC VM: the progs loader and checker, the interpreter, entity and global memory, strings, the builtin table a game fills, errors with a QC stack trace, the profiler, the extension registry, the tests' assembler and the `qc` tool `ge qc` hands off to; the QC compiler (M18d) | Any game that runs QC bytecode (a single-player game, a multiplayer one, a mod's standalone game) |
 | `games/shooters_edge/` | The rules of a match as a game program on the loop's seam (`sim/`: the native program, the test arena and the scripted match, M18o2; the adapter that lets a loaded progs drive the seam, `qc_program.hpp`, M18c), the server (`server/`: the mod server, M18p: the builtins by number, the extensions, the hooks, the clients, the test mod and a match with bots; the dedicated server, M18f), the client (prediction, interpolation, the HUD, menus, the console's commands), the protocol (native and compatible), demos, its labs, its play contract, the dedicated server executable | What makes Shooter's Edge Shooter's Edge |
 
 **The one exception to C++ only.** QC is executed, never written into the engine: the VM
 runs existing mods' bytecode for compatibility, and the engine, the plugins and the game stay
-C++. The tree's own QC is limited to the test mod the labs run (`games/shooters_edge/qc/`).
+C++. The tree's own QC is limited to the game's baseline mod (`games/shooters_edge/qc/`) and
+its test mod.
 AGENTS.md and the non-goals in `docs/goals.md` state this exception.
 
 ## What the engine has, and what it lacks
@@ -398,6 +405,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `pmove` | scenario | Scripted movement on fixture maps: ground acceleration, air control, strafe jumping, bunny hopping, stairs, ramps, water; trajectories charted against the committed recordings (built, M18o1) |
 | `se-loop` | scenario | The classic loop on the test arena: two clients over latency and loss, a rocket, a bouncing grenade, a door a player blocks, a plat; the program's events and the loop's counts, paths from above and the side, the door and the plat against the clock, the prediction's corrections; the thrown entities against their recorded vectors (built, M18o2) |
 | `se-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (needs the reference program; skipped with a reason when its cache is absent) |
+| `se-baseline` | scenario | The baseline mod compiled from its sources and played by bots on the arena with its door and plat: the build's counts, frags and deaths, obituaries by weapon, pickups, every path and missile from above, the frags and the movers' heights against the clock (built, M18d) |
 | `se-mod` | scenario | A mod (the test mod, or a player's progs from `--progs`) played by bots on the test arena to its time limit: the hooks it was called on, the builtins it called, frags, every path from above, the hooks' timeline (built, M18p) |
 | `mod` | scenario | The engine's own C++ mod format: the sample mod's match beside the plain match (the loader's verdict, rockets, bounces, the mod's log, both matches' missiles, the rocket's distance and the grenade's height), and the modded match replayed to the bit (built, M52a) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
@@ -421,7 +429,7 @@ during the work is added when it is found and recorded in `docs/goals/ge-backlog
 | --- | --- |
 | `ge pak ls/cat/extract/build <archive or dir>` | What a search path holds, which archive wins a file, a file's bytes; a fixture pack built from a directory |
 | `ge bsp info/ents/shot <map>` | A map's lumps and limits, its entity lump as text, a top-down picture of leaves, PVS from a point and hulls, all on the CPU |
-| `ge qc build/disasm/run/trace/profile` | Compile QC, disassemble a progs, run a function headless, trace a step's QC calls with arguments and results, time every function (`disasm`, `run`, `trace` and `profile` built in M18c; `build` waits for the compiler, M18d) |
+| `ge qc build/disasm/run/trace/profile` | Compile QC, disassemble a progs, run a function headless, trace a step's QC calls with arguments and results, time every function (`disasm`, `run`, `trace` and `profile` built in M18c; `build` in M18d) |
 | `ge qc diff <progs-a> <progs-b>` | Which functions and fields changed between two builds of a mod |
 | `ge server --map=<m> --bots=<n> --for=<s>` | A headless dedicated server running bots, its input log and digest, for `ge replay`, `ge state` and `ge diverge` |
 | `ge demo info/frames/shot/diff <demo>` | A demo decoded to text frame by frame, a frame pictured, two demos compared to their first difference |
