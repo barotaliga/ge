@@ -216,7 +216,8 @@ bool passed(const Pilot& p, const PilotSense& s, size_t k) {
     return p.airborne && s.onground && across(s.origin, node(g, b).origin) <= kLanded &&
            dz <= kStandUp && dz >= -kStandUp;
   }
-  if (l2 && l2->kind == NavKind::jump && l->mover < 0 && l->kind != NavKind::drop) return false;
+  if (l && l2 && l2->kind == NavKind::jump && l->mover < 0 && l->kind != NavKind::drop)
+    return false;
   if (l && l2 && through(*l) && through(*l2) && level(g, a, b) && level(g, b, p.route[k + 2])) {
     float f = 0;
     const float off = off_segment(s.origin, node(g, a).origin, node(g, b).origin, &f);
@@ -484,9 +485,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         // the target is kStrafeHold off the other way.
         if (err > kStrafeHold)
           p.strafe_side = -1;
-        else if (err < -kStrafeHold)
-          p.strafe_side = 1;
-        else if (p.strafe_side == 0)
+        else if (err < -kStrafeHold || p.strafe_side == 0)
           p.strafe_side = 1;
         w.yaw = unwrap(vh, p.yaw);
         w.side = static_cast<float>(p.strafe_side);
