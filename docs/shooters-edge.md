@@ -420,6 +420,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
+| `se-viewmodel` | picture | The game's eight free weapons in first person on the engine's corridor stage: every one held at rest, each fired in the dark lit by its own muzzle light, the shotgun switched to the rocket launcher, and the player's view-model cvars; each weapon's share of the picture, its muzzle on the screen, its flash's lift and the switch's time (built, M48d) |
 | `se-ambient` | sim | A walk through rooms under sky and by water: the ambience by leaf charted, mixed and written as WAV (built, M18j2) |
 | `se-demo` | sim | A demo played back, seeked and re-recorded; the digest of its frames |
 
