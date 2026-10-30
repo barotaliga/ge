@@ -102,23 +102,28 @@ fn at(p: vec2i) -> vec3f {
 // CONTRAST-ADAPTIVE SHARPENING over the four neighbours: the negative lobe's weight is scaled by
 // how much headroom the neighbourhood leaves (its darkest over its brightest, against 0 and 1), so
 // a flat area is sharpened most and an edge already at full contrast barely at all: no halo, no
-// ringing. The headroom is judged on the luminance squashed into 0..1 (x / (1 + x) of the exposed
-// light, so the sun's thousands do not swamp it), one number a pixel; the lobe is applied to the
-// colour itself, in linear light.
+// ringing. Everything is done on the light squashed into 0..1 (x / (1 + x) of the exposed
+// luminance, the colour scaled with it) and mapped back, so the sun's thousands do not swamp the
+// headroom and a light thousands of times brighter than its neighbours (a lightning channel)
+// cannot pull them below black, a dark rim round it.
+fn squash(c: vec3f, e: f32) -> vec3f {
+  return c * e / (1.0 + dot(c, kLuma) * e);
+}
+
 fn sharpened(p: vec2i, c: vec3f, e: f32) -> vec3f {
-  let n = at(p + vec2i(0, -1));
-  let s = at(p + vec2i(0, 1));
-  let w = at(p + vec2i(-1, 0));
-  let r = at(p + vec2i(1, 0));
-  let l = vec4f(dot(n, kLuma), dot(s, kLuma), dot(w, kLuma), dot(r, kLuma)) * e;
-  let q = l / (1.0 + l);
-  let m = dot(c, kLuma) * e;
-  let mq = m / (1.0 + m);
+  let n = squash(at(p + vec2i(0, -1)), e);
+  let s = squash(at(p + vec2i(0, 1)), e);
+  let w = squash(at(p + vec2i(-1, 0)), e);
+  let r = squash(at(p + vec2i(1, 0)), e);
+  let m = squash(c, e);
+  let q = vec4f(dot(n, kLuma), dot(s, kLuma), dot(w, kLuma), dot(r, kLuma));
+  let mq = dot(m, kLuma);
   let lo = min(mq, min(min(q.x, q.y), min(q.z, q.w)));
   let hi = max(mq, max(max(q.x, q.y), max(q.z, q.w)));
   let amp = sqrt(clamp(min(lo, 1.0 - hi) / max(hi, 1e-4), 0.0, 1.0));
   let k = -amp / mix(8.0, 5.0, look.a.x);
-  return max((c + k * (n + s + w + r)) / (1.0 + 4.0 * k), vec3f(0.0));
+  let t = max((m + k * (n + s + w + r)) / (1.0 + 4.0 * k), vec3f(0.0));
+  return t / (max(1.0 - dot(t, kLuma), 1e-3) * e);
 }
 
 // THE LENS'S LATERAL COLOUR: red magnified a little more and blue a little less than green, so

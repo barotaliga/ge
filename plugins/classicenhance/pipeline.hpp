@@ -18,7 +18,9 @@
 //
 // A stage whose recorded key (its version and options) matches is skipped; `RunOptions::force`
 // reruns it. `RunOptions::only` runs the named stages alone (the ones before them must have run).
-// A report says per stage whether it ran, what it wrote and how long it took.
+// A report says per stage whether it ran, what it wrote and how long it took. While it runs it
+// reports each stage's start, items and end to `RunOptions::progress` (progress.hpp draws them),
+// and stops between items once `RunOptions::cancel` is set.
 //
 // ge:summary The enhancement pipeline's stages, pack to pictures, into the cache
 // ge:keywords pipeline stage pack textures lightmaps sounds models run skip force cache enhance
@@ -27,8 +29,10 @@
 // ge:test tests/classicenhance_pipeline_test.cpp
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <span>
 #include <string>
 #include <vector>
@@ -51,6 +55,18 @@ inline constexpr int kTextureStageVersion = 1;
 inline constexpr int kSoundStageVersion = 1;
 inline constexpr int kPictureStageVersion = 1;
 
+// What the pipeline reports while it works (progress.hpp's board reads it): a stage started
+// (with its item count), an item done, a stage finished, skipped or failed.
+struct Progress {
+  enum class Kind : uint8_t { started, item, finished, skipped, failed };
+  Kind kind = Kind::started;
+  Stage stage = Stage::pack;
+  uint32_t done = 0, total = 0;  // items: done so far (item, finished), in the stage (started)
+  std::string item;              // the item's name (item), the reason (skipped, failed)
+  const assets::Image* before = nullptr;  // a texture's item: the pack's picture
+  const assets::Image* after = nullptr;   // and its enhanced albedo
+};
+
 struct RunOptions {
   EnhanceOptions textures;
   SoundOptions sounds;
@@ -59,6 +75,10 @@ struct RunOptions {
   std::vector<Stage> only;  // empty: every stage
   // At most this many textures (0: all), for a quick look; recorded in the stage's key.
   uint32_t texture_limit = 0;
+  // Called on the pipeline's thread with each report; none: no reports.
+  std::function<void(const Progress&)> progress;
+  // Checked between items: once true, the stage running fails with "cancelled".
+  const std::atomic<bool>* cancel = nullptr;
 };
 
 struct StageResult {

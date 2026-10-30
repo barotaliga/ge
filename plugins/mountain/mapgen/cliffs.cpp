@@ -6,6 +6,7 @@
 // ge:test tests/mountain_generate_test.cpp
 #include "mountain/mapgen/cliffs.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 
@@ -80,6 +81,10 @@ bool on_cliff(std::span<const Cliff> cliffs, double x, double z, double margin) 
     const Extent e = extent(c);
     const double dx = x - c.x;
     const double dz = z - c.z;
+    // As on_kicker: a cliff whose box cannot reach the point on either axis is passed over
+    // before its sine and cosine are worked.
+    const double reach = std::max(e.back, e.ahead) + e.side + 2 * margin + 1;
+    if (std::abs(dx) > reach || std::abs(dz) > reach) continue;
     const double fx = libm::sin(c.heading);
     const double fz = libm::cos(c.heading);
     const double u = dx * fx + dz * fz;

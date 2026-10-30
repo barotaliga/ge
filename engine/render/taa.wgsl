@@ -106,6 +106,12 @@ fn resolve(@builtin(global_invocation_id) id: vec3u) {
   let reactive = textureLoad(motion, clamp(centre, vec2i(0), render - 1), 0).b;
   let prev_uv = uv - m.xy;
   var alpha = max(taa.blend.x, reactive);
+  // A lightning flash lights the whole frame anew for a frame or two: the last frame's dark is no
+  // history for it, and beside a channel the neighbourhood's box is too wide to clip that dark
+  // away, which leaves dark pixels along the channel. Its frames take none.
+  if (flash_count() > 0) {
+    alpha = 1.0;
+  }
   if (any(prev_uv < vec2f(0.0)) || any(prev_uv > vec2f(1.0))) {
     alpha = 1.0;
   }
