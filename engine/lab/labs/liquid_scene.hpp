@@ -1,7 +1,7 @@
 // THE LIQUID LABS' SCENE (shared by `gpu-lava` and `gpu-slime`): a quarry's ground with a pit dug
 // into it, a liquid volume (water/world.hpp) filling the pit, drawn under the sky with the
-// liquid's passes (render/liquid.hpp) and the bloom, on a device of its own, read back as a
-// picture.
+// liquid's passes (render/liquid.hpp) and the bloom, lit by the lamps a view sets (a glowing
+// liquid's own, `liquid_lamps`), on a device of its own, read back as a picture.
 //
 // ge:summary The liquid labs' scene: a pit in a quarry floor, the liquid in it, read back
 // ge:keywords lab liquid scene pit quarry lava slime picture make_scene gpu-lava gpu-slime
@@ -27,6 +27,7 @@
 #include "lab/raster.hpp"
 #include "render/bloom.hpp"
 #include "render/frame.hpp"
+#include "render/lights.hpp"
 #include "render/liquid.hpp"
 #include "render/post.hpp"
 #include "render/sky.hpp"
@@ -138,6 +139,8 @@ struct Scene {
   gr::Sky sky;
   gr::Terrain terrain;
   gr::Liquids liquids;
+  gr::Lights lights;  // the lamps a view sets (`lamps`), none by default
+  std::vector<gr::LocalLight> lamps;
   gr::Bloom bloom;
   gr::Post post;
   gr::FrameRecorder rec;
@@ -171,7 +174,8 @@ inline bool make_scene(ge::gpu::Device& d, Scene& s, const uint8_t rock[3], uint
   gr::create_post(d, s.pipelines, s.post, s.layout, wgpu::TextureFormat::RGBA8Unorm, ps);
   if (!s.pipelines.finish(d)) return false;
   ge::gpu::end_load(d);
-  s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky);
+  gr::create_lights(d, s.lights);
+  s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky, s.lights.buffer);
   gr::create_liquid_targets(d, s.liquids, s.targets);
   const wgpu::TextureView inputs[2] = {s.targets.hdr_view, s.targets.hdr_view};
   gr::create_bloom_targets(d, s.bloom, w, h, inputs);
@@ -188,6 +192,7 @@ inline gl::Picture draw(ge::gpu::Device& d, Scene& s, const gr::FrameView& v, bo
   gr::prepare_sky(s.sky, v);
   gr::prepare_terrain(d, s.terrain, v);
   gr::prepare_liquid(d, s.liquids, v);
+  gr::prepare_lights(d, s.lights, s.lamps, v, s.targets.width, s.targets.height);
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   gr::encode_sky_tables(s.sky, s.pipelines, s.rec, e);
   gr::encode_terrain_cull(s.terrain, s.pipelines, s.rec, e, s.frame);

@@ -172,6 +172,55 @@ double adapt_for(const LiquidLook& look, double key) {
   return key * water::glow_of(l.core + kKelvin, l.emissivity).luminance;
 }
 
+water::Rgb liquid_glow(const LiquidLook& look) {
+  if (look.kind == LiquidKind::slime) return look.slime.glow;
+  const LavaLook& l = look.lava;
+  const water::Glow melt = water::glow_of(l.core + kKelvin, l.emissivity);
+  const water::Glow skin = water::glow_of(l.crust_hot + kKelvin, l.emissivity);
+  const double open = std::clamp(1 - l.cover, 0.0, 1.0);
+  const double a = open * melt.luminance, b = (1 - open) * kCrustGlowShare * skin.luminance;
+  return {a * melt.colour.r + b * skin.colour.r, a * melt.colour.g + b * skin.colour.g,
+          a * melt.colour.b + b * skin.colour.b};
+}
+
+void liquid_lamps(const water::Body& body, const LiquidLook& look, std::vector<LocalLight>& out,
+                  double cell_m) {
+  const water::Rgb glow = liquid_glow(look);
+  const double lum = 0.2126 * glow.r + 0.7152 * glow.g + 0.0722 * glow.b;
+  const double w = body.box[2] - body.box[0], d = body.box[3] - body.box[1];
+  if (lum <= 0 || !(w > 0) || !(d > 0)) return;
+  // The grid: cells of `cell_m`, grown until there are no more than the most.
+  int nx = std::max(1, static_cast<int>(std::ceil(w / cell_m)));
+  int nz = std::max(1, static_cast<int>(std::ceil(d / cell_m)));
+  while (nx * nz > kLiquidLampsMost) {
+    if (nx >= nz) {
+      --nx;
+    } else {
+      --nz;
+    }
+  }
+  const double cw = w / nx, cd = d / nz, area = cw * cd;
+  const double radius = std::sqrt(area / 3.14159265358979323846);
+  LocalLight lamp;
+  lamp.colour[0] = static_cast<float>(glow.r / lum);
+  lamp.colour[1] = static_cast<float>(glow.g / lum);
+  lamp.colour[2] = static_cast<float>(glow.b / lum);
+  lamp.candela = static_cast<float>(lum * area * 0.5);
+  lamp.radius_m = static_cast<float>(radius);
+  // Out to where it lights a face at a tenth of a lux, past the cell's own reach, and no further
+  // than a frame's lamps reach (kLiquidLampReach): a lake's glow on the cloud over it is the sky's.
+  lamp.range_m = static_cast<float>(
+      std::max(std::min(std::sqrt(lamp.candela / 0.1), kLiquidLampReach), 4 * radius));
+  for (int i = 0; i < nx; ++i) {
+    for (int k = 0; k < nz; ++k) {
+      lamp.position[0] = body.box[0] + (i + 0.5) * cw;
+      lamp.position[1] = body.level + radius;
+      lamp.position[2] = body.box[1] + (k + 0.5) * cd;
+      out.push_back(lamp);
+    }
+  }
+}
+
 void create_liquid(gpu::Device& device, gpu::PipelineSet& pipelines, Liquids& liquids,
                    const wgpu::BindGroupLayout& frame) {
   liquids.layout = make_layout(

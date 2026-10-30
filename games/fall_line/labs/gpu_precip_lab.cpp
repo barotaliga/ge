@@ -4,7 +4,8 @@
 // steady SNOW, a STORM's blizzard), four of rain with the snow line over the summit (a DRIZZLE, a
 // RAIN, a DOWNPOUR, a RAINSTORM) and a SLEET with the snow line at the eye. Each from a named view,
 // --frames frames at 60 a second up to --at seconds into the run, so the particles in the picture
-// have flown on the wind those frames. `--skies=` picks some by id.
+// have flown on the wind those frames. `--skies=` picks some by id; `--hour=22` draws them at
+// night, lit by the piste's floodlights (render/lights.hpp through the fall).
 //
 // Beside each: the fall, its rain share at the eye, the rate and its tier, the visual range, the
 // wind, the particles and splashes drawn and the wet ground (deterministic: the air is a pure
@@ -103,6 +104,7 @@ void run(ge::lab::Lab& lab) {
   const double seed = lab.arg_num("seed");
   const std::string& view_name = lab.arg("view");
   const double at = lab.arg_num("at");
+  const double hour = lab.arg_num("hour");
   const int frames = static_cast<int>(lab.arg_num("frames"));
   const int width = static_cast<int>(lab.arg_num("width"));
   const int height = static_cast<int>(lab.arg_num("height"));
@@ -198,7 +200,8 @@ void run(ge::lab::Lab& lab) {
         ge::wind::tier_name(tier) + " fall of " + fixed(f.fall, 2) + ", " + fixed(100 * f.rain, 0) +
         " % rain, " + fixed(ge::wind::rate_of({f.fall, f.rain}), 1) + " mm/h, " +
         fixed(f.visibility, 0) + " m visibility, wind " + fixed(w.speed, 1) + " m/s; " +
-        std::to_string(frames) + " frames up to " + fixed(at, 1) + " s.";
+        std::to_string(frames) + " frames up to " + fixed(at, 1) + " s" +
+        (hour >= 0 ? ", at " + fixed(hour, 1) + " h (the lamps lit after dark)" : "") + ".";
     return ge::lab::Shot{sky.id,
                          title,
                          caption,
@@ -207,6 +210,7 @@ void run(ge::lab::Lab& lab) {
                           {"sky", sky.id},
                           {"view", view_name},
                           {"t", fixed(at, 2)},
+                          {"hour", hour >= 0 ? fixed(hour, 2) : "the map's"},
                           {"size", std::to_string(width) + "x" + std::to_string(height)}}};
   };
 
@@ -253,6 +257,7 @@ void run(ge::lab::Lab& lab) {
         *device, "precip.final", static_cast<uint32_t>(width), static_cast<uint32_t>(height));
     ge::render::FrameView view;
     fall_line::app::make_view(level, view_name, view);
+    if (hour >= 0) fall_line::app::sky_view(level, hour, view);
     for (int n = 0; n < frames; ++n) {
       view.frame = static_cast<uint64_t>(n);
       view.time_s = at - static_cast<double>(frames - 1 - n) / 60;
@@ -304,6 +309,9 @@ const ge::lab::LabSpec kSpec{
         {"skies", "all", "the skies drawn: all, or ids comma-separated (flurries,rain,...)"},
         {"view", "piste", "the named view to shoot from"},
         {"at", "30", "seconds into the run the shot is taken at"},
+        {"hour", "-1",
+         "the solar hour to light the map at (22: at night, under the piste's floodlights); "
+         "negative: the map's own"},
         {"frames", "60", "frames drawn, at 60 a second, up to the shot"},
         {"width", "640", "the picture's width, px"},
         {"height", "360", "the picture's height, px"},
