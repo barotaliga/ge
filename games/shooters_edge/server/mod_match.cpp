@@ -140,7 +140,9 @@ bool is_missile(const QcServer& s, int e) {
       s.q.vm.entities[static_cast<size_t>(e) * static_cast<size_t>(s.q.vm.entityfields) +
                       static_cast<size_t>(ge::progs::kFClassname)]);
   const char* name = ge::progs::vm_string(s.q.vm, cn);
-  return name != nullptr && std::string(name) == "missile";
+  if (name == nullptr) return false;
+  const std::string n = name;  // the test mod's rocket, and the baseline mod's three
+  return n == "missile" || n == "rocket" || n == "grenade" || n == "spike";
 }
 
 // `name value` or `set name value` naming sv_progs among the console lines: its value.
@@ -160,12 +162,13 @@ std::string progs_from_console(const std::vector<std::string>& lines) {
 
 }  // namespace
 
-std::vector<sh::BrushModel> arena_models() {
+std::vector<sh::BrushModel> arena_models(bool movers) {
   static const sim::Arena arena = [] {
     sim::Arena a;
     sim::build_arena(a);
     return a;
   }();
+  if (movers) return arena.models();
   return {arena.models()[0]};
 }
 
@@ -213,7 +216,12 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
   }
   std::string path = opt.progs.empty() ? progs_from_console(opt.console) : opt.progs;
   ge::progs::Progs progs;
-  if (!load_mod(path, progs, r.source, r.error)) return r;
+  if (opt.compiled) {
+    progs = *opt.compiled;
+    r.source = opt.compiled_name.empty() ? "a compiled progs" : opt.compiled_name;
+  } else if (!load_mod(path, progs, r.source, r.error)) {
+    return r;
+  }
 
   QcServerOptions so;
   so.seed = opt.seed;
@@ -230,8 +238,8 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
 
   MapSpec map;
   map.name = "arena";
-  map.models = arena_models();
-  map.entities = kArenaEntities;
+  map.models = arena_models(!opt.entities.empty());
+  map.entities = opt.entities.empty() ? kArenaEntities : opt.entities;
   if (!load_map(s, map, error)) {
     r.error = error + "; next: read the map's messages (" + std::to_string(s.map_messages.size()) +
               ") and the console";
@@ -252,6 +260,18 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
   }
 
   std::vector<int> live(static_cast<size_t>(s.sv.set.max_edicts), -1);  // entity -> missile
+  for (int e = 1; e < s.sv.num_edicts; e++) {
+    const sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
+    if (ed.free || ed.modelindex <= 0 || ed.modelindex >= static_cast<int>(s.models.size()))
+      continue;
+    const std::string& model = s.models[static_cast<size_t>(ed.modelindex)];
+    if (model.empty() || model[0] != '*') continue;
+    const int32_t cn = static_cast<int32_t>(
+        s.q.vm.entities[static_cast<size_t>(e) * static_cast<size_t>(s.q.vm.entityfields) +
+                        static_cast<size_t>(ge::progs::kFClassname)]);
+    const char* name = ge::progs::vm_string(s.q.vm, cn);
+    r.movers.push_back({e, model, name ? name : "", {}});
+  }
   std::vector<sh::Packet> packets(bots.size());
   for (int frame = 0; frame < opt.max_frames; frame++) {
     for (int k = 0; k < opt.bots; k++) {
@@ -286,6 +306,8 @@ ModMatchReport run_mod_match(const ModMatchOptions& opt) {
         m = -1;
       }
     }
+    for (MoverPath& mp : r.movers)
+      mp.z.push_back(s.sv.edicts[static_cast<size_t>(mp.ent)].origin.z);
     for (const NetEvent& ev : s.out.events) {
       if (ev.kind == EventKind::print) r.prints.push_back(ev.text);
       if (ev.kind == EventKind::multicast)

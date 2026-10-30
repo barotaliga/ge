@@ -10,3 +10,7 @@ __pycache__/
 /docs/index.md
 /docs/lab-list.md
 /docs/roadmap.md
+
+# The baseline mod as `ge qc build` writes it (built from games/shooters_edge/qc/, never committed)
+games/shooters_edge/qc/progs.dat
+games/shooters_edge/qc/progs.dat.lines

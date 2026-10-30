@@ -1,7 +1,7 @@
 // Tests: `ge qc` reads the qc executable's answer: its text, its findings (severity, what, where,
 // next), its summary and its JSON result; no answer is an error naming the log, a usage error
-// keeps exit 2. The catalog holds every qc command with its flags. The executable itself is held
-// by tests/progs_tool_test.cpp.
+// keeps exit 2; a build points at disasm next. The catalog holds every qc command with its flags.
+// The executable itself is held by tests/progs_tool_test.cpp.
 //
 // ge:summary Tests: ge qc's reading of the qc executable's answer and its catalog rows
 // ge:keywords test cli ge qc progs answer findings summary result catalog
@@ -61,4 +61,20 @@ TEST(every_qc_command_is_in_the_catalog) {
     for (const FlagSpec& f : c->flags) function = function || f.name == "function";
     CHECK(function);
   }
+}
+
+TEST(qc_build_is_in_the_catalog_and_points_at_disasm) {
+  const CommandSpec* c = find_command("qc build");
+  CHECK(c != nullptr);
+  if (c != nullptr) {
+    CHECK(c->skill == "progs");
+    bool out = false;
+    for (const FlagSpec& f : c->flags) out = out || f.name == "out";
+    CHECK(out);
+  }
+  BuildOptions o;
+  o.repo = "/repo";
+  const Outcome built = qc_answer(o, 0, "@qc summary a.dat: 120 bytes\n", "build");
+  CHECK(exit_of(built) == 0);
+  CHECK(built.next.find("ge qc disasm") != std::string::npos);
 }

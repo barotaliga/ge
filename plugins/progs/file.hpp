@@ -83,6 +83,11 @@ struct LoadOptions {
 bool load_progs(const uint8_t* bytes, size_t size, Progs& progs, std::string& error,
                 const LoadOptions& options = {});
 
+// The file's bytes: the 60-byte header (version and crc as `progs` holds them), then the
+// statements, global and field definitions, functions, strings and globals in that order, little
+// endian. What `load_progs` reads; the assembler and the compiler write through it.
+std::vector<uint8_t> write_progs(const Progs& progs);
+
 // The line table: one line per statement. False (and nothing set) when the counts differ.
 bool set_lines(Progs& progs, std::vector<int32_t> lines, std::string& error);
 // THE LINE TABLE AS A FILE, this engine's own sidecar `<progs>.lines` beside a progs (the file
