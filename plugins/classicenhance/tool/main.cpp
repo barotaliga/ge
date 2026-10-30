@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -220,7 +221,7 @@ bool network(const Flags& f, Upscaler* out, std::string* note, std::string* erro
 
 }  // namespace
 
-int main(int argc, char** argv) {
+static int run_main(int argc, char** argv) {
   const std::string cmd = argc > 1 ? argv[1] : "help";
   if (cmd == "help" || cmd == "--help" || cmd == "-h") {
     std::fputs(kHelp, stdout);
@@ -304,4 +305,26 @@ int main(int argc, char** argv) {
               source_json(src).c_str(), esc(report.dir.string()).c_str(),
               opts.textures.network ? esc(weights).c_str() : "\"kernel\"", stages.c_str());
   return ok ? 0 : 1;
+}
+
+// What nothing else caught ends the program here, with a line that says so, rather than in
+// std::terminate's bare abort.
+int main(int argc, char** argv) {
+  try {
+    return run_main(argc, argv);
+  } catch (const std::exception& e) {
+    std::fprintf(
+        stderr,
+        "classicenhance: stopped by an uncaught exception: %s. This is a bug: run the same "
+        "command under lldb or gdb with a breakpoint on __cxa_throw to see where it "
+        "was thrown.\n",
+        e.what());
+  } catch (...) {
+    std::fprintf(
+        stderr,
+        "classicenhance: stopped by an uncaught exception that is not a std::exception. This "
+        "is a bug: run the same command under lldb or gdb with a breakpoint on "
+        "__cxa_throw to see where it was thrown.\n");
+  }
+  return 1;
 }

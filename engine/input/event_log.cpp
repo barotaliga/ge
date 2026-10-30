@@ -313,7 +313,7 @@ bool read_events(std::string_view src, EventLog& log, std::string& error) {
         }
         ok = finger && phase >= 0 && val(5, e.v[0]) && val(6, e.v[1]) && val(7, e.v[2]);
         if (ok && e.type == EventType::pad_touch) ok = val(8, e.v[3]);
-        if (ok) {
+        if (ok && finger) {
           e.code = static_cast<uint16_t>(*finger);
           e.aux = static_cast<uint8_t>(phase);
         }

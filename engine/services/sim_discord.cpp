@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <deque>
+#include <exception>
 
 #include "core/json_read.hpp"
 
@@ -204,7 +205,18 @@ namespace {
 class SimLink final : public DiscordLink {
  public:
   explicit SimLink(std::shared_ptr<SimDiscord::State> s) : s_(std::move(s)) {}
-  ~SimLink() override { close(); }
+  ~SimLink() override {
+    // A destructor must not throw: a close whose journal line cannot be written (memory) is said
+    // on stderr instead.
+    try {
+      close();
+    } catch (const std::exception& e) {
+      std::fprintf(stderr,
+                   "discord: the simulated link's close threw in its destructor (%s); the "
+                   "journal lacks its last line.\n",
+                   e.what());
+    }
+  }
 
   bool open(std::string* error) override {
     if (!s_->running) {

@@ -113,14 +113,15 @@ Clear clearance_of(const mapgen::Level& level, std::span<const mapgen::PlanPoint
   const bool crusted = level.face && level.crust && region.crust;
   const double support = crusted ? region.crust->packed : 0;
   const mg::Level* lv = &level;
-  const std::vector<PlanPoint> pad_list(pads.begin(), pads.end());
+  std::vector<PlanPoint> pad_list(pads.begin(), pads.end());
   // The groomer's snow (on a real face, not the region's wind crust).
   const auto groomed = [lv, crusted, support](double x, double z) {
     const double p = lv->packed_at(x, z);
     if (!crusted) return p > S::kGroomed;
     return p > S::kGroomed && p > ge::core::sample_field(*lv->crust, x, z) * support + 0.05;
   };
-  return [lv, runs, queues, pad_list, groomed](double x, double z, double hub_pad) {
+  return [lv, runs, queues, pad_list = std::move(pad_list), groomed](double x, double z,
+                                                                     double hub_pad) {
     const mg::Level& map = *lv;
     const mg::ResortMap& resort = *map.resort;
     if (x < 0 || z < 0 || x > map.size || z > map.size) return false;

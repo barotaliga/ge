@@ -42,7 +42,7 @@ function(ge_embed_wgsl target)
 endfunction()
 
 # The shaders_check target, once every ge_embed_wgsl call has run (the root CMakeLists.txt calls
-# this last): every entry point of every shader compiled to SPIR-V by Tint
+# this last): every entry point of every shader compiled by Tint, to SPIR-V or, on macOS, MSL
 # (cmake/WgslCheck.cmake). It needs Tint (GE_TINT, from cmake/Dawn.cmake).
 function(ge_add_shaders_check)
   get_property(resolved GLOBAL PROPERTY GE_WGSL_RESOLVED)
