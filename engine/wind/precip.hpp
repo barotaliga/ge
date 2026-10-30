@@ -19,7 +19,9 @@
 // - THE FALL'S PACE: a raindrop's terminal speed by its diameter (`drop_speed`, the exponential fit
 //   9.65 - 10.3 e^(-0.6 D), m/s, D in mm), the median drop by the rate off the exponential size
 //   spectrum (`median_drop`: D0 = 3.67 / (4.1 R^-0.21) mm); a snowflake's ~1 m/s; sleet between
-//   (`fall_speed`, blended by the rain share).
+//   (`fall_speed`, blended by the rain share). The drops landing on a square metre a second
+//   (`drops_per_m2s`): that spectrum carried down at each size's speed, the count a lake's rings
+//   and the rain's patter are drawn and heard by.
 // - WHAT ONE SEES THROUGH IT (`visibility_of`): rain 11.5 R^-0.63 km (10 km in a drizzle, under a
 //   kilometre in a downpour), snow 1.2 R^-0.9 km (a flake hides ten times what a drop does), a mix
 //   blended in the logarithm.
@@ -35,10 +37,9 @@
 // ge:keywords precip precipitation rain sleet snow drizzle downpour storm blizzard intensity rate
 // ge:keywords tier freezing-level phase drop terminal-speed marshall-palmer visibility swirl wet
 // ge:keywords puddle wetness rate_of tier_of rain_share_at drop_speed median_drop fall_speed
-// ge:keywords visibility_of swirl_of step_wet wet_steady dry_rate cover step_cover lightning
-// ge:keywords flash_at strokes_per_minute thunderstorm
-// ge:skill water render
-// ge:test tests/wind_precip_test.cpp
+// ge:keywords drops_per_m2s mean_drop_over impacts visibility_of swirl_of step_wet wet_steady
+// dry_rate cover step_cover lightning ge:keywords flash_at strokes_per_minute thunderstorm ge:skill
+// water render ge:test tests/wind_precip_test.cpp
 #pragma once
 
 #include <cstdint>
@@ -73,6 +74,12 @@ double rain_share_at(double y, double freezing);
 double drop_speed(double diameter_mm);
 // The median drop diameter, mm, at a rain rate, mm/h.
 double median_drop(double rate);
+// The drops of `smallest` mm and larger landing on a square metre a second at a rain rate, mm/h:
+// the exponential spectrum's count N0 e^(-L D) (N0 = 8000 / m^3 / mm, L = 4.1 R^-0.21 / mm)
+// carried down at each size's terminal speed and summed past `smallest`.
+double drops_per_m2s(double rate, double smallest);
+// The mean diameter of those drops, mm: `smallest` + 1 / L (the spectrum is exponential).
+double mean_drop_over(double rate, double smallest);
 // The fall's pace in still air, m/s: a snowflake's, a drop's of the median size, sleet between.
 double fall_speed(const Precip& p);
 

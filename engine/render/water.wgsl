@@ -19,6 +19,15 @@
 // never shimmers. The WAKES' rings (water/wake.hpp) are summed the same way, kept by the vertex
 // and the pixel as a wave is.
 //
+// THE RAIN'S RINGS (`rain_rings`): every drop of 2 mm and more that lands sets off a ring that
+// runs out at about the slowest a ripple runs (0.25 m/s) and dies in about a second, its
+// crests lengthening as the longer waves run ahead (a smaller drop's ring is a few centimetres
+// and gone in a blink, too small to draw). The drops are the frame's (frame.mist.z, a
+// m^2 a second, under the body's open sky); they are dealt to cells in ten offset layers, each
+// cell at most one ring at a time, so past what the cells can hold (about 30 a m^2 a second) the
+// near water is all rings. A ring's crests too short for the pixel go to the glitter's
+// roughness, as a wave's do, so a lake far off in the rain is dulled rather than ringed.
+//
 // THE LIGHT is render/wgsl/water_light.wgsl's `shade_water`, the moving water's too.
 #include "render/wgsl/frame.wgsl"
 
@@ -176,6 +185,89 @@ fn wake_at(xz: vec2f, t: f32, shortest: f32) -> vec4f {
   return out;
 }
 
+const kRainLayers = 10;
+const kRainCell = 0.6;    // m: a layer's cells, at most one ring alive in each
+const kRainLife = 0.9;    // s: a ring's life
+const kRainSpeed = 0.25;  // m/s: its front's, about the slowest ripple's
+const kRainSlope = 0.4;   // a 2 mm drop's ring's steepest slope, new
+
+// Four numbers from 0 up to 1 off a cell, an epoch and a layer: an integer hash, the same on
+// every GPU.
+fn rain_hash(c: vec2i, epoch: i32, layer: i32) -> vec4f {
+  var h = vec4u(bitcast<u32>(c.x), bitcast<u32>(c.y), bitcast<u32>(epoch), u32(layer) + 1u);
+  h = h * 1664525u + 1013904223u;
+  h.x += h.y * h.w;
+  h.y += h.z * h.x;
+  h.z += h.x * h.y;
+  h.w += h.y * h.z;
+  h = h ^ (h >> vec4u(16u));
+  h.x += h.y * h.w;
+  h.y += h.z * h.x;
+  h.z += h.x * h.y;
+  h.w += h.y * h.z;
+  return vec4f(h >> vec4u(8u)) * (1.0 / 16777216.0);
+}
+
+// The rings' slope at `xz` (x, z) and the slope variance too fine for a pixel `foot` m across.
+fn rain_rings(xz: vec2f, t: f32, foot: f32) -> vec3f {
+  let drops = frame.mist.z * body.rough.w;
+  if (drops <= 0.0) {
+    return vec3f(0.0);
+  }
+  let size = clamp(frame.mist.w / 2.0, 0.4, 1.6);
+  let s0 = kRainSlope * size;
+  // The share of cells that hold a ring each life: the drops over what the layers can hold.
+  let hold = f32(kRainLayers) / (kRainCell * kRainCell * kRainLife);
+  let p = 1.0 - exp(-drops / hold);
+  // A ring's crests cover about a tenth of its cell over its life; what the cells cannot hold
+  // roughens the water whatever the pixel.
+  // The variance the pixel cannot resolve is the rings' expected one (a fifth of the new slope's
+  // square over a life), not the rings under this pixel, so far water dulls evenly.
+  let cover = 0.1;
+  let unresolved = 1.0 - smoothstep(2.0 * foot, 4.0 * foot, 0.08);
+  let mean = 0.5 * 0.21 * s0 * s0 * cover;
+  var out = vec3f(0.0, 0.0,
+                  min(0.05, mean * (f32(kRainLayers) * p * unresolved + max(0.0, drops / hold - p))));
+  // Past twice a pixel the longest crest a ring has, every ring is the roughness alone.
+  if (2.0 * foot >= 0.13) {
+    return out;
+  }
+  for (var l = 0; l < kRainLayers; l++) {
+    let shift = fract(vec2f(0.7548777, 0.5698403) * f32(l)) * kRainCell;
+    let g = (xz + shift) / kRainCell;
+    let base = vec2i(floor(g - 0.5));
+    for (var j = 0; j < 4; j++) {
+      let c = base + vec2i(j & 1, j >> 1);
+      let lead = rain_hash(c, 0, l).x;
+      let clock = t / kRainLife + lead;
+      let epoch = i32(floor(clock));
+      let age = clock - f32(epoch);
+      let h = rain_hash(c, epoch, l);
+      if (h.z >= p) {
+        continue;
+      }
+      // Within the middle fifth of its cell, so the four nearest cells hold every ring in reach.
+      let at = (vec2f(c) + 0.4 + 0.2 * h.xy) * kRainCell - shift;
+      let e = xz - at;
+      let r = length(e);
+      let front = kRainSpeed * kRainLife * age;
+      let lambda = 0.03 + 0.1 * age;  // 0.13 at its end
+      let k = 6.2831853 / lambda;
+      let x = (r - front) / (0.6 * lambda);
+      let fade = (1.0 - age) * (1.0 - age);
+      let a = s0 * fade * (0.6 + 0.8 * h.w);
+      let keep = smoothstep(2.0 * foot, 4.0 * foot, lambda);
+      if (keep <= 0.0 || abs(x) > 2.0) {
+        continue;
+      }
+      let w = keep * a * exp(-x * x) * sin(k * (r - front));
+      out.x += w * e.x / max(r, 1e-4);
+      out.y += w * e.y / max(r, 1e-4);
+    }
+  }
+  return out;
+}
+
 @vertex
 fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) level: u32) -> VertexOut {
   let n = kGrid + 1u;
@@ -244,6 +336,9 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let wake = wake_at(in.xz, t, 2.0 * foot);
   slope += wake.yz;
   lost += wake.w;
+  let rain = rain_rings(in.xz, t, foot);
+  slope += rain.xy;
+  lost += rain.z;
   let n = normalize(vec3f(-slope.x, 1.0, -slope.y));
   let dist = length(in.rel);
   let uv = in.position.xy * frame.size.zw;

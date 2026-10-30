@@ -1,4 +1,4 @@
-# rate, fall speed, visibility, tier per fall; rain share per height; the wet ground, the snow's cover per step; a storm's flash per time (wind_precip_test)
+# rate, fall speed, visibility, tier per fall; rain share per height; the drops landing per rate; the wet ground, the snow's cover per step; a storm's flash per time (wind_precip_test)
 3faafdd2ab383a3e 3ff0000000000000 40d08ff14499f1f7 1
 3fc46d1dcff04429 3ff6281331d8caa6 40c8c2aec4f92a16 1
 3feae4f1a0936dc4 400c1acdcd830ef2 40c90f6fe98f67eb 1
@@ -18,6 +18,9 @@
 3feda12f684bda14
 3fd097b425ed097b
 0
+4072eac14e9db00e 4041a877bb21a3be 400183eb614afaa4
+4095961fd0f4c8f7 4078592c9efb41f6 40025d7fc49a19a0
+40b3abadb7571852 40a395d4d10beea4 4003d60129cc4527
 3fe207f770525375 3ff0000000000000 3fb8fb2900f3edcc
 3fe6cad00552852f 3ff0000000000000 3fc38b4724545388
 3fd6222f3adb4294 3ff0000000000000 3f91624749d0f2d6
