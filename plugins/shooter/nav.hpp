@@ -42,7 +42,10 @@
 // MOVERS (doors, plats, anything pushed) are left out of the proofs: the caller lists each as an
 // entity and its box (`NavMover`), and a node or a link whose swept box meets a mover's box carries
 // that entity (`mover`): the way is open only while the mover is out of it, which the bot checks
-// at run time. Riding a mover (a plat's top at each end) is a later row's.
+// at run time. A mover the caller gives a `travel` (a plat) is also RIDDEN: for every node its box
+// holds at rest, a node on its top at the far end of the travel (the columns traced again with
+// the mover's model placed there), a `ride` link up to it costing the mover's `ride_s`, and links
+// off that top node to the nodes beside it, proven with the mover there like any other.
 //
 // Built once a map, off the hot path (it allocates); `nav_route`, `nav_nearest` and the reads do
 // not allocate beyond the route's own vector. Deterministic to the bit: floats in the move's own
@@ -52,7 +55,7 @@
 // ge:summary Navigation proven by the move: floor nodes off the hulls, links proven by player_move
 // ge:keywords nav navigation nav-graph navmesh waypoint waypoints node link walk drop jump
 // ge:keywords running-jump moving-jump run-up prove prove_link build_nav nav_route nav_nearest
-// nav_reach ge:keywords nav_hash map_world reachability mover door plat route path a-star bot
+// ge:keywords nav_reach nav_hash map_world reachability mover door plat ride route path a-star bot
 // ge:skill shooter bots
 // ge:test tests/shooter_nav_test.cpp
 #pragma once
@@ -76,13 +79,19 @@ struct NavSettings {
   int msec = 13;         // a proof's command length, ms
 };
 
-enum class NavKind : uint8_t { walk, drop, jump };
+// `ride`: stand on a mover's top at rest and be carried to its far end (a plat).
+enum class NavKind : uint8_t { walk, drop, jump, ride };
 const char* nav_kind_name(NavKind k);
 
 // A mover the proofs leave out: its entity and its box in the world.
 struct NavMover {
   int ent = 0;
-  Vec3f absmin, absmax;
+  Vec3f absmin, absmax;  // its box at rest
+  // A mover that carries a player (a plat): its model, where it goes from rest and how long a
+  // ride takes (its wait at rest, then the travel), s. Without a model it is only an obstacle.
+  const BrushModel* model = nullptr;
+  Vec3f travel;
+  float ride_s = 0;
 };
 
 struct NavNode {
@@ -90,6 +99,7 @@ struct NavNode {
   int32_t first_link = 0, links = 0;
   int32_t col = 0, row = 0;  // its grid column
   int32_t mover = -1;        // the entity a mover whose box holds this node, or -1
+  int32_t ride = -1;         // a node on a ridden mover's top at the far end: that mover, or -1
 };
 
 struct NavLink {
@@ -105,7 +115,7 @@ struct NavCounts {
   int64_t columns = 0, proofs = 0, commands = 0;
   int64_t refused = 0;      // candidates no kind reached
   int64_t no_run_up = 0;    // jumps that reached but had no room to run up
-  int64_t by_kind[3] = {};  // links kept, by NavKind
+  int64_t by_kind[4] = {};  // links kept, by NavKind
 };
 
 struct NavGraph {
@@ -114,7 +124,9 @@ struct NavGraph {
   int32_t cols = 0, rows = 0;
   std::vector<NavNode> nodes;
   std::vector<NavLink> links;             // each node's run [first_link, first_link + links)
-  std::vector<int32_t> col_first, col_n;  // each grid column's nodes (top first)
+  std::vector<int32_t> col_first, col_n;  // each grid column's nodes (top first); a ridden
+                                          // mover's top nodes come after every column's
+  std::vector<NavMover> movers;           // the movers it was built with, at rest
   NavCounts counts;
 };
 
@@ -143,7 +155,8 @@ NavProof prove_link(const MoveWorld& world, const MoveSettings& move, Vec3f from
 void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const MoveSettings& move,
                const NavSettings& set, NavGraph& g);
 
-// The node nearest `p` among the columns round it, within 64 units up or down; -1 when none.
+// The node nearest `p` among the columns round it and the ridden movers' top nodes, within 64
+// units up or down; -1 when none.
 int32_t nav_nearest(const NavGraph& g, Vec3f p);
 
 struct NavRoute {
@@ -154,16 +167,16 @@ struct NavRoute {
 
 // The quickest way from node `from` to node `to` (A* on the proofs' times, the heuristic the
 // straight distance at the fastest speed any link has); links through a mover cost
-// `mover_penalty_s` more.
+// `mover_penalty_s` more, and links through a mover in `barred` (a door found shut) are not taken.
 NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& search,
-                   float mover_penalty_s = 1);
+                   float mover_penalty_s = 1, std::span<const int32_t> barred = {});
 
 // Every node a player at node `from` can get to (`search.reached(n)` after; costs the links'
 // times), and how many, `from` itself included.
 int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search);
 
-// The graph's bits: every node's origin and mover, every link's target, kind, time, mover and
-// speed.
+// The graph's bits: every node's origin and mover (and the mover it rides, where any does), every
+// link's target, kind, time, mover and speed.
 uint64_t nav_hash(const NavGraph& g);
 
 }  // namespace ge::shooter
