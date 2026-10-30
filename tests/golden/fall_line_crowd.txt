@@ -1,5 +1,5 @@
-# every 10 s of seed 38's free ride dealt 300 amateurs, the player stood still: the state digest, then how many ski, stop, are down, queue, ride, skate and are up a lift unseen (fall_line_crowd_test)
-543099289cfafd1c 186 9 3 3 99 0 0
-d9b3111d19f74ae3 185 9 0 4 102 0 0
-d734b0fb1e67ae3f 173 11 4 9 102 0 1
-18296981f3cef034 170 13 0 10 105 0 2
+# every 10 s of seed 38's free ride dealt 300 amateurs, the player stood still: the state digest and its parts, then how many ski, stop, are down, queue, ride, skate and are up a lift unseen (fall_line_crowd_test)
+543099289cfafd1c skiers:6de3345e,sleds:f9d8b179,heli:988a1448,para:4fd0bfc1,crowd:fe9bdb2f,wanted:4fd0bfc1,army:4fd0bfc1,gunfire:4fd0bfc1 186 9 3 3 99 0 0
+d9b3111d19f74ae3 skiers:4fd2de07,sleds:0a7f9286,heli:c8f0e871,para:4fd0bfc1,crowd:7aba1408,wanted:4fd0bfc1,army:4fd0bfc1,gunfire:4fd0bfc1 185 9 0 4 102 0 0
+d734b0fb1e67ae3f skiers:23a1ed88,sleds:608afc26,heli:f57f78d3,para:4fd0bfc1,crowd:67d09e0b,wanted:4fd0bfc1,army:4fd0bfc1,gunfire:4fd0bfc1 173 11 4 9 102 0 1
+18296981f3cef034 skiers:41853cbd,sleds:7bb68f4f,heli:25f14a98,para:4fd0bfc1,crowd:7e619fcd,wanted:4fd0bfc1,army:4fd0bfc1,gunfire:4fd0bfc1 170 13 0 10 105 0 2

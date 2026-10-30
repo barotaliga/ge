@@ -148,7 +148,8 @@ int count(const std::vector<fs::GameEvent>& all, fs::EventKind kind) {
 
 // A scene's end for the golden: its name and the state digest.
 std::string end_of(const char* scene, const fs::GameState& st) {
-  return std::string(scene) + " " + hex(fs::state_hash(st, 0xcbf29ce484222325ull));
+  return std::string(scene) + " " + hex(fs::state_hash(st, 0xcbf29ce484222325ull)) + " " +
+         fs::state_parts(st);
 }
 
 // A HUNT AT THREE STARS until one of its machines has halted side-on to him, settled: the stars
@@ -327,7 +328,8 @@ TEST(every_scene_keeps_its_golden) {
   CHECK(got.size() == 4);
   if (env_set("GE_GOLDEN_WRITE")) {
     std::ofstream out(ge::test::root_path(kGolden));
-    out << "# each scene's end: its name and the state digest (fall_line_army_meet_test)\n";
+    out << "# each scene's end: its name, the state digest and its parts "
+           "(fall_line_army_meet_test)\n";
     for (const std::string& row : got) out << row << "\n";
     return;
   }

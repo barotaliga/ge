@@ -227,9 +227,9 @@ TEST(a_scripted_hunt_on_seed_38_keeps_its_golden) {
       lmg += e.value == static_cast<double>(fs::WeaponKind::lmg) ? 1 : 0;
     }
     if (st.steps % static_cast<int64_t>(15 * fs::kHz) == 0) {
-      got.push_back(hex(fs::state_hash(st, 0xcbf29ce484222325ull)) + " " +
-                    std::to_string(st.gunfire.fired) + " " + std::to_string(st.gunfire.hits) + " " +
-                    std::to_string(sk::severity_of(st.racers[0].body)) + " " +
+      got.push_back(hex(fs::state_hash(st, 0xcbf29ce484222325ull)) + " " + fs::state_parts(st) +
+                    " " + std::to_string(st.gunfire.fired) + " " + std::to_string(st.gunfire.hits) +
+                    " " + std::to_string(sk::severity_of(st.racers[0].body)) + " " +
                     fs::wanted_end_name(st.wanted.ended));
     }
   }
@@ -238,7 +238,8 @@ TEST(a_scripted_hunt_on_seed_38_keeps_its_golden) {
                                       std::to_string(lmg));
   if (env_set("GE_GOLDEN_WRITE")) {
     std::ofstream out(ge::test::root_path(kGolden));
-    out << "# each 15 s: state digest, rounds fired, rounds into him, his injury severity score, "
+    out << "# each 15 s: state digest, its parts, rounds fired, rounds into him, his injury "
+           "severity score, "
            "the hunt (fall_line_gunfire_test, the seed 38 hunt at four stars for 150 s)\n";
     for (const std::string& row : got) out << row << "\n";
     return;
