@@ -60,7 +60,9 @@ inline bool gpu_required() {
 constexpr double kFloor = 10, kBed = 6, kLevel = 9;
 constexpr double kPitX = 128, kPitZ = 128, kHalf = 20;
 
-inline float pit_ground(double x, double z) {
+// `crags`: three crags of rock 6 to 9 m tall standing past the pit's far (north) rim, for the
+// views that look across the liquid at something tall (its reflection, the shimmer).
+inline float pit_ground(double x, double z, bool crags = false) {
   const double dx = std::fabs(x - kPitX) - kHalf, dz = std::fabs(z - kPitZ) - kHalf;
   const double out = std::max(dx, dz);  // > 0 outside the pit
   double h = out > 0 ? kFloor : kBed;
@@ -73,6 +75,11 @@ inline float pit_ground(double x, double z) {
     const double r = ge::core::hypot(x - sx, z - sz);
     if (r < 2.2) h = std::max(h, kBed + 2.2 * std::sqrt(1 - (r / 2.2) * (r / 2.2)));
   }
+  for (int i = 0; crags && i < 3; ++i) {
+    const double cx = kPitX - 9 + 8 * i, cz = kPitZ + kHalf + 5 + 2 * (i % 2);
+    const double r = std::max(std::fabs(x - cx), std::fabs(z - cz) * 1.4);
+    if (r < 3) h = std::max(h, kFloor + (6 + 1.5 * i) * std::min(1.0, (3 - r) / 0.8));
+  }
   return static_cast<float>(h);
 }
 
@@ -82,7 +89,7 @@ struct Ground {
 };
 
 // `rock`: the ground's colour, sRGB 0..255.
-inline Ground make_ground(const uint8_t rock[3]) {
+inline Ground make_ground(const uint8_t rock[3], bool crags = false) {
   Ground g;
   constexpr int n = 257;
   constexpr double cell = 1;
@@ -91,7 +98,7 @@ inline Ground make_ground(const uint8_t rock[3]) {
   for (int r = 0; r < n; ++r) {
     for (int c = 0; c < n; ++c) {
       const size_t i = static_cast<size_t>(r) * n + static_cast<size_t>(c);
-      g.field.data[i] = pit_ground(c * cell, r * cell);
+      g.field.data[i] = pit_ground(c * cell, r * cell, crags);
       const double grain =
           0.85 + 0.15 * ge::core::libm::sin(c * 1.7) * ge::core::libm::cos(r * 2.3);
       for (int k = 0; k < 3; ++k)
@@ -150,10 +157,10 @@ struct Scene {
 };
 
 inline bool make_scene(ge::gpu::Device& d, Scene& s, const uint8_t rock[3], uint32_t w, uint32_t h,
-                       double bloom = 0.05) {
+                       double bloom = 0.05, bool crags = false) {
   s.w = w;
   s.h = h;
-  s.ground = make_ground(rock);
+  s.ground = make_ground(rock, crags);
   s.targets = gr::create_targets(d, "gpu-liquid", w, h);
   s.uniforms = gr::make_buffer(d, "gpu-liquid.uniforms", sizeof(gr::FrameUniforms),
                                wgpu::BufferUsage::Uniform);

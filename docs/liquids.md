@@ -215,13 +215,34 @@ Each slime is a turbid volume:
 | `slime-sludge` | olive-brown under grey-brown scum, an oily sheen between, bubbling |
 | `slime-tar` | black glass with an oil's sheen in patches, a rare slow bubble |
 
+## In the light (M30e)
+
+- **The scene in the surface.** Every body mirrors the scene, not only the sky. The reflected ray
+  is marched through the scene's depth copy that the pass already makes: 24 steps that grow with
+  distance out to 80 m, then five halvings onto the hit. The colour copy is read where the ray
+  meets the scene, faded toward the screen's edges and the end of the march, and the sky's light
+  is used where it meets nothing. The Hi-Z pyramid is not used, because it keeps each texel's
+  farthest depth (the bound a cull needs), while a ray needs the nearest to skip empty space.
+  `Liquids::reflections` turns it off.
+- **The heat shimmer.** The air over lava bends a ray through its rising cells
+  (`LavaLook::shimmer`, 4 mrad a metre of hot air by default). The bend is summed along the ray
+  through a layer 3 m deep, strongest at the surface, falling off over a metre. Lava's own surface
+  is looked up where its bent ray lands. What is seen across the lake is drawn again through the
+  bent rays by a box over the body, drawn after the surfaces.
+- **The crust broken.** `break_liquid_crust(liquids, body, x, z, radius, t)` records that
+  something fell in (the latest 8 are kept). A hole of open melt opens at once with a torn edge,
+  then skins over from its edge over 8 + 6 r seconds and is carried by the flow. The crust round
+  it breaks into shards a third of its radius across, their cracks glowing, and a crest runs out
+  in the first second. It is drawn, not stepped: a game calls it when its simulation sees
+  something land in lava.
+
 ## Labs (G9)
 
 | Lab | Kind | Row | What it shows |
 | --- | --- | --- | --- |
 | `liquids` | picture | M30a | The share of a gale's input each liquid keeps by wavelength, the drift, the swim each gives (stroke speed, the scales, metres in 10 s), the damage over time at each immersion (lava's burns, the slimes' ticks), the radiant heat over a lava pool by height |
-| `gpu-lava` | picture | M30b | A lava pool in a quarry by day, at dusk and at night; the crust's cover from 15 to 97 %; the plates close up by day and night; the flow at four moments; both lavas; the glow table |
-| `gpu-slime` | picture | M30c | The five slimes from the rim and close up; the toxic slime glowing by day, at dusk and at night; the gel seen into; one gale over three slimes |
+| `gpu-lava` | picture | M30b | A lava pool in a quarry by day, at dusk and at night; the crust's cover from 15 to 97 %; the plates close up by day and night; the flow at four moments; the heat shimmer across the lake (off, on, a moment later); three stones breaking the crust at four moments; both lavas; the glow table |
+| `gpu-slime` | picture | M30c | The five slimes from the rim and close up; the toxic slime glowing by day, at dusk and at night; the gel seen into; one gale over three slimes; three crags mirrored in the tar, reflections off and on |
 
 ## Sources
 
@@ -242,8 +263,8 @@ The numbers above come from:
 
 - **A full non-Newtonian flow solver.** A pool is drawn and swum in, not poured. Lava that flows
   down a slope, cools and stops is M30d, on the flow grid. It is not a second solver.
-- **Simulating the crust.** The plates and cracks are drawn, not stepped. A game cannot break the
-  crust yet, and a hole punched in it is a later row.
+- **Simulating the crust.** The plates and cracks are drawn, not stepped. A hole punched in it
+  is drawn from the moment and the place a game hands it (`break_liquid_crust`), not simulated.
 - **Texture art.** Every look is procedural, so a game tunes it with numbers and nothing is
   painted.
 
@@ -252,7 +273,5 @@ The numbers above come from:
 These are open rows in `docs/goals.md` § M30:
 
 - viscous flow and lava that cools (M30d);
-- heat shimmer and reflections in the slime (M30e); the glow lighting the walls is built
-  (`liquid_lamps`, M39e: docs/rendering.md § Local lights);
 - the sound (M30f);
 - Shooter's Edge's own liquids (M30g).

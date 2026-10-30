@@ -120,6 +120,7 @@ void stage_body(Liquids::Slot& slot, const water::Body& body, const LiquidLook& 
   put(b.slime0, s.rough, s.film, s.scum, s.bubbles);
   put(b.slime1, s.bubble_size, s.grime, s.debris, 0);
   put(b.scum, s.scum_albedo);
+  b.fx[1] = static_cast<float>(look.kind == LiquidKind::lava ? l.shimmer : 0);
   const std::vector<water::Rgb> table = water::glow_table(kGlowLo, kGlowHi, kGlowEntries, 1.0);
   for (int i = 0; i < kGlowEntries; ++i) put(b.table[i], table[static_cast<size_t>(i)]);
 }
@@ -277,6 +278,18 @@ void create_liquid(gpu::Device& device, gpu::PipelineSet& pipelines, Liquids& li
     desc.depthStencil = &depth;
     desc.fragment = &fragment;
     liquids.p_draw = pipelines.add_render(device, desc);
+    // The shimmer: the box of hot air over a body, both its faces (a pixel's colour is the same
+    // from either, so an eye inside it draws it too), no depth test (the fragment clips its ray by
+    // the scene's depth copy), the motion kept.
+    fragment.entryPoint = "fs_shimmer";
+    colours[1].writeMask = wgpu::ColorWriteMask::None;
+    depth.depthWriteEnabled = false;
+    depth.depthCompare = wgpu::CompareFunction::Always;
+    fragment.constantCount = 0;
+    desc.label = "liquid.shimmer";
+    desc.vertex.entryPoint = "vs_shimmer";
+    desc.vertex.constantCount = 0;
+    liquids.p_shimmer = pipelines.add_render(device, desc);
   }
   std::vector<uint32_t> idx;
   idx.reserve(size_t{kLiquidGrid} * kLiquidGrid * 6);
@@ -337,8 +350,16 @@ void set_liquid_body(gpu::Device& device, Liquids& liquids, int index, const wat
 void prepare_liquid(gpu::Device& device, Liquids& liquids, const FrameView& view) {
   for (Liquids::Slot& slot : liquids.bodies) {
     slot.shown = !slot.hidden && view.eye[1] > slot.staged.info[0];
+    slot.staged.fx[0] = liquids.reflections ? 1.0f : 0.0f;
     device.queue.WriteBuffer(slot.uniform, 0, &slot.staged, sizeof slot.staged);
   }
+}
+
+void break_liquid_crust(Liquids& liquids, int index, double x, double z, double radius, double t) {
+  Liquids::Slot& slot = liquids.bodies[static_cast<size_t>(index)];
+  put(slot.staged.breaks[slot.next_break], x, z, radius, t);
+  slot.next_break = (slot.next_break + 1) % kLiquidBreaks;
+  slot.staged.fx[2] = std::min(slot.staged.fx[2] + 1.0f, static_cast<float>(kLiquidBreaks));
 }
 
 void encode_liquid(const Liquids& liquids, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
@@ -392,6 +413,14 @@ void encode_liquid(const Liquids& liquids, const gpu::PipelineSet& pipelines, Fr
     if (!slot.shown) continue;
     pass.SetBindGroup(1, slot.group);
     pass.DrawIndexed(kLiquidGrid * kLiquidGrid * 6);
+    ++rec.current().draws;
+  }
+  // The shimmer over lava: the scene across it seen again through the bent rays.
+  pass.SetPipeline(pipelines.render(liquids.p_shimmer));
+  for (const Liquids::Slot& slot : liquids.bodies) {
+    if (!slot.shown || slot.staged.info[1] != 0 || !(slot.staged.fx[1] > 0)) continue;
+    pass.SetBindGroup(1, slot.group);
+    pass.Draw(36);
     ++rec.current().draws;
   }
   pass.End();
