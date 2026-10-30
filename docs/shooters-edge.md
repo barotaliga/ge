@@ -328,6 +328,31 @@ the engine's own):
   falls back to the base skin, and the client
   asks the server for a missing skin when downloads are allowed.
 
+**Built so far (M18g, the server half; `docs/goals/M18g.md`)**: the codec, the net channel, the
+server endpoint over `QcServer`, lag compensation for hitscan, a scripted client and a measured
+session (`classic_trial`):
+
+- **The codec.**
+  - The quantization and the CRC are held bit-exact by vectors.
+  - The move checksum uses the protocol's key table, kept as a wire constant for interop
+    (`classic_checksum_table.cpp`). Every move is verified by default.
+  - Every svc and clc message is a table row or a hand-written form, decoded and described for
+    the tests and the lab.
+- **The first tier.** The extension bits in the challenge are answered either in the connect or
+  through `pext`. A base-protocol client gets every base form.
+- **The mod's raw bytes.** What a mod writes with the Write builtins reaches a client only when
+  it reads as whole messages. A malformed message would cost that client the rest of its packet,
+  so it is dropped and counted instead.
+- **Downloads.** Skins (and any served file) download during the signon. Under the chunked
+  extension they go in 1024-byte chunks: the first inside the packet, the rest out of band.
+  Otherwise they use the classic block a `nextdl`.
+- **The rewind.** `traceline` and `tracebox` call `QcServer::lag_rewind` around the trace when
+  the shooter is a client and `antilag` is on. The other players move to where the shooter saw
+  them, then are restored.
+
+`se-net` runs the session under every preset. `se-interop` is a stub until the dedicated
+server's classic flag and existing programs are at hand.
+
 **The native protocol** is the engine's own (`docs/networking.md`), used between our client and
 our server when both ends are ours: the M17 handshake and AEAD (M17i), the snapshot ring and
 deltas with interest (M17f), prediction of the local player and of projectiles, lag
@@ -469,8 +494,8 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-senses` | scenario | Whether a bot sees only what a player's client could and aims by its skill: on the server's arena a seer and a runner visit the goals once per aim skill; the trails from above with a sight line every quarter second it saw, the aim's error against time, how often it saw when a line joined them, the error's median and p90, the reaction and the goals kept (built, M18r3) |
 | `se-bots` | scenario | Whether fighters play the baseline mod's deathmatch like players: four fighters on the arena, the trails, items and deaths from above, each one's mode through the match as a strip, the frags against time, and a table of frags, deaths, shots, pickups, switches, the share in each mode and the weapon held most (built, M18r4) |
 | `se-lobby` | sim | Clients find a hosted game on the LAN and through the rendezvous, fill the lobby, pick teams, chat, start, play and return; a dedicated server outlives the client that started it |
-| `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections |
-| `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`) |
+| `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections (the compatible server half built, M18g: scripted clients under every preset, bytes a second, loss, downloads, the digest) |
+| `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
 | `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the HUD and the markers at the spawn, the blast and the top of the jump; the rise and the health it cost (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |

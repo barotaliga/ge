@@ -37,6 +37,15 @@ add_library(shooters_edge_bots STATIC ${SHOOTERS_EDGE_BOTS_SOURCES})
 target_link_libraries(shooters_edge_bots PUBLIC shooters_edge_server)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_bots)
 
+# The classic protocol (net/classic_*): the codec, the net channel, the classic server over the
+# QC server on engine/net's sockets, the scripted client and the measured trial (skill: net). Only
+# the classic_ files: net/host_* belong to the host's own library.
+file(GLOB SHOOTERS_EDGE_CLASSIC_SOURCES CONFIGURE_DEPENDS
+     ${CMAKE_CURRENT_SOURCE_DIR}/net/classic_*.cpp)
+add_library(shooters_edge_classic STATIC ${SHOOTERS_EDGE_CLASSIC_SOURCES})
+target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server ge_net)
+set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
+
 # The headless dedicated server (server/bin/), named `shooters_edge_server` on disk, at the build's
 # root (build/<preset>/shooters_edge_server): `--help` lists its flags.
 add_executable(shooters_edge_dedicated server/bin/main.cpp)
