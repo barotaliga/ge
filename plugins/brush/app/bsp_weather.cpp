@@ -173,6 +173,7 @@ void apply_weather(const WeatherFrame& w, const WeatherCvars& c, render::FrameVi
   v.puddles = w.on && c.wet ? w.wet.puddles : 0;
   v.snow = w.on && c.snowcover ? w.cover.cover : 0;
   v.flash = w.on ? w.flash : 0;
+  v.rain = w.on ? wind::rate_of(w.fall) * w.fall.rain : 0;
   if (w.on && fog && w.fall.intensity >= wind::kNoFall) {
     v.visibility_m = v.visibility_m > 0 ? std::min(v.visibility_m, w.visibility) : w.visibility;
     // A storm's deck: the sun mostly hidden, the dome grey.

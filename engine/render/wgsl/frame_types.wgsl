@@ -30,7 +30,8 @@ struct Frame {
   moon_east: vec4f,        // toward its 0 N 90 E; w: the disc's brightest light under the shadow
   moon_shadow: vec4f,      // toward the Earth's shadow's axis; w: the albedo map's scale
   mist: vec4f,             // x, y: the reach's mist: where it begins and where it closes, m (0: none);
-                           // z, w: 0
+                           // z: the rain's drops of 2 mm and more landing a m^2 a
+                           // second; w: their mean size, mm
   wet: vec4f,              // the wet ground: the film's share, the puddles' share; the snow's
                            // cover on what faces up; a lightning flash's light over the open sky
   // The sky's style (render/sky_style.hpp's `style_rows`): 0 the Rayleigh scales, the dust's;

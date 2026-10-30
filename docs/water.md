@@ -617,7 +617,56 @@ arm, the hand going in), a breath every other stroke with his eyes out, a few bu
 stroke under, and the gasp coming up.
 
 Not yet: a fall heard through the rock between (the rings know water, not ground); the room's
-own echo under water (the synth's echo is one room for every voice); rain on the water.
+own echo under water (the synth's echo is one room for every voice).
+
+## Rain on the water (`engine/water/rain`, `render/water.wgsl`, M36d)
+
+**The drops** are the rain's own spectrum (`wind::drops_per_m2s`, `docs/rendering.md` §
+Precipitation): the exponential count N0 e^(-L D) (N0 = 8000 / m^3 / mm, L = 4.1 R^-0.21 / mm)
+carried down at each size's terminal speed. About 1300 drops land on a square metre a second at
+1 mm/h, 150 of them a millimetre or more; of 2 mm and more, 19 at 2.5 mm/h and 430 at 25 mm/h,
+their mean size 2 + 1 / L mm (`mean_drop_over`: the spectrum has no memory).
+
+**The rings** (`rain_rings` in `water.wgsl`): the frame carries the drops of 2 mm and more and
+their mean size (`Weather::rain`, mm/h of liquid, packed into `frame.mist.zw`); a smaller drop's
+ring is a few centimetres and gone in a blink, too small to draw. A body takes them under its
+open sky (`WaterDraw::open_sky`, so a cave's pool under its roof stays still). Each drop sets
+off a ring whose front runs out at 0.25 m/s, about the slowest a ripple runs, and dies in 0.9 s,
+its crests lengthening from 3 to 13 cm as the longer waves run ahead; its steepest slope is 0.4
+for a 2 mm drop, falling with the square of its age. The drops are dealt to cells 0.6 m across
+in ten offset layers, each cell at most one ring alive, the share of cells holding one
+1 - e^(-drops / held), so a drizzle's rings are scattered and past the 30 or so a square metre a
+second the cells can hold the near water is crowded with them. A ring's crests too short for
+the pixel go to the glitter's roughness as a wave's do (their expected variance, so far water
+dulls evenly and never sparkles), and what the cells cannot hold roughens the water at every
+distance: a lake far off in a downpour is a dull, even grey. Past twice a pixel the longest
+crest, a pixel only takes the roughness, so the rings cost nothing far off. Fall Line's frame
+hands its eye's rain to the frame; a classic map's weather (`sv_precip`, `sv_rain`) hands its
+own, so an outdoor liquid rings and an indoor one does not.
+
+**The sound** (`hear_rain`, the rain bed, `rain_drops`): the rain's loudness is the power its
+drops bring down, their kinetic energy a square metre a second, 1/2 rho R v^2 with v the median
+drop's terminal speed (`rain_power`), and every voice's level is the root of that over a
+downpour's (50 mm/h), held at 1.5: a drizzle is 30 dB under a downpour, a cloudburst past full.
+Where the ear is (`RainPlace`: the open sky over it, the water round it, a roof over it) splits it:
+
+- **the patter**, the drops on the ground round the ear where the fall reaches (pink, a band
+  rising with the drop's size);
+- **on water**, each drop that goes in traps a bubble that rings at its Minnaert pitch: a light
+  rain's drops of about a millimetre trap ones of about 0.23 mm that ring near 14 kHz, so a
+  lake in the rain hisses high, and a heavy rain's bigger drops ring lower (a white band from
+  14 kHz falling as the median drop passes a millimetre);
+- **the drum**, the drops on a roof over the ear (a pink band near 600 Hz);
+- **the wash**, the rain over the land round the ear out of sight, heard under a roof too;
+- **driven snow**: snow is near silent as it falls; driven on a wind it hisses past the ear,
+  by its rate (full at 5 mm/h of water) and the wind (from 5 m/s, full at 20).
+
+In a light rain the drops nearest the ear (within a tenth of a square metre: a hood, a puddle at
+the feet) are heard one by one, a tick on the ground or a plink on water (a bubble, `bubble`),
+up to three a frame and fading as they thicken; past 60 a second they are the patter alone.
+The `rain-audition` lab renders eight places (a drizzle, a light rain and a downpour in the open,
+the light rain and the downpour by a lake, the downpour under a roof, a blizzard and the same
+snow in still air) and the levels against the rate.
 
 ## Adding water is one call (M24k)
 
@@ -675,12 +724,13 @@ never read back by the simulation.
 | `swim` | scenario | M24d | Every preset side by side: the classic's scripted trajectories, the idle sink, the jump out; the clothed skier's sink over minutes, the cold's stages; the default swimmer |
 | `water-colour` | picture | M24e | Every look's swatches over depth and bed, in sun and shade, from above and below; visibility per look |
 | `flow` | picture | M24f | Dam break against the analytic solution, a basin emptying through a breach against Torricelli, a river to steady state, a waterfall's sheet; depth filmstrips; the volume held |
-| `gpu-water` | picture | M24g, M24g2, M24i | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a boat's wake from behind and from the side, crates dropped in, a river, a waterfall, sunset glitter, night, rain; the distance-band diff |
+| `gpu-water` | picture | M24g, M24g2, M24i, M36d | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a boat's wake from behind and from the side, crates dropped in, the lake in a light and a heavy rain, a river, a waterfall, sunset glitter, night; the distance-band diff |
 | `lake` | picture | M24g, M24h, M24l | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it |
 | `gpu-underwater` | picture | M24h, M24h3 | Every look's view round a scene under water, the presets, Snell's window measured, a dive through the surface; then the caustics and the shafts |
 | `gpu-plunge` | picture | M24h2 | A first-person player in the classic move jumping off a bank into a dirty pond: the plunge from his eyes, the splash from the bank (crater, crown, jet, rings), under the water, surfacing through the waterline into the wet lens; four bodies of different mass dropped in; the player straight in against running in; the entry's numbers |
 | `water-lod` | picture | M24f, M24g | The tiers round an actor and round the camera as maps; a flow region coarsened and refined with its volume held; the picture diff per distance band across a slow fly-out (no band pops); the cost against distance |
 | `water-audition` | sound | M24j | Every water voice, metered and written as WAV: the bank, splashes from a pebble to a boulder, eleven places (a calm and a fresh lake from the shore, a boat and under it, a gale on a beach, a slow river and a stream, a waterfall from 15 and 60 m and under its pool, nowhere), the roar against distance beside 1 / r, a swim |
+| `rain-audition` | sim | M36d | The rain's sound metered and written as WAV: a drizzle, a light rain and a downpour in the open and by a lake, the downpour under a roof, a blizzard and still snow; each voice's level against the rate |
 | `water-cost` | bench | M24f, M24g | The CPU's costs per step (sample, floats, the flow grid) and the GPU's per pass |
 | `free --water` | drive | M24l | Fall Line: the bot near and into water on the free ride |
 | `liquids`, `gpu-lava`, `gpu-slime` | picture | M30 | The other liquids: lava and slime (`docs/liquids.md` § Labs) |
