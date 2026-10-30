@@ -56,6 +56,11 @@ struct Sky {
   wgpu::Buffer
       light;  // frame.wgsl's SkyLight: the sky's four rows, then the eye's (render/eye.hpp)
   wgpu::Buffer no_lights;  // an empty local light list (render/lights.hpp), for a frame with none
+  // Group 0's lamps' shadow atlas without render/lamp_shadows.hpp (1 x 1, nothing cast), and the
+  // comparison sampler every atlas is read with (frame.wgsl's 13 and 14).
+  wgpu::Texture no_lamp_atlas;
+  wgpu::TextureView no_lamp_atlas_view;
+  wgpu::Sampler lamp_compare;
   wgpu::Sampler sampler;
   StarTexture stars;  // the real stars' map (render/stars.hpp), the sky pass's group 1
   MoonTexture moon;   // the moon's albedo map (render/moon.hpp), beside it
@@ -89,12 +94,15 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
 // (render/lights.hpp's `Lights::buffer`, binding 10); none: the sky's empty list. `fog` is the fog
 // in areas' volume (render/fog.hpp's `Fog::volume_view`, binding 11); null, the sky's clear air.
 // `ao` is the ambient occlusion's target (render/ao.hpp, binding 12), or none for the blank (no
-// occlusion).
+// occlusion). `lamp_atlas` is the lamps' shadow atlas (render/lamp_shadows.hpp's
+// `LampShadows::atlas_view`, binding 13), or none for the sky's empty one; never bind it to a
+// group the atlas's own passes read.
 wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
                             const wgpu::Buffer& uniforms, const Sky& sky,
                             const wgpu::Buffer& lights = nullptr,
                             const wgpu::TextureView& fog = nullptr,
-                            const wgpu::TextureView& ao = nullptr);
+                            const wgpu::TextureView& ao = nullptr,
+                            const wgpu::TextureView& lamp_atlas = nullptr);
 
 // Decide which tables this frame rebuilds.
 void prepare_sky(Sky& sky, const FrameView& view);

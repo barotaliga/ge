@@ -1,13 +1,16 @@
 // THE LIT LABS' SCENE (shared by `gpu-lights` and `gpu-flames`): flagstones at y = 0 over 256 m,
-// a family of props (boxes, spheres and cylinders in the lab's own surfaces), the sky, and the
-// local lights and flames a frame hands it, drawn through the whole frame (the terrain, the
+// a family of props (boxes, spheres and cylinders in the lab's own surfaces) and one of the lamps'
+// glowing parts (which cast no shadow), the sky, and the local lights and flames a frame hands it,
+// drawn through the whole frame (the lamps' shadows when the scene has them, the terrain, the
 // instances, the sky, the flames, post) on a device of its own and read back as a picture.
 //
 // ge:summary The lit labs' scene: flagstones, props in their surfaces, lamps and flames, read back
 // ge:keywords lab lit-scene courtyard flagstones props lamps flames make_scene draw view_at
+// ge:keywords lamp-shadows glows movers
 // ge:skill render labs
 #pragma once
 
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -26,6 +29,7 @@
 #include "render/frame.hpp"
 #include "render/hiz.hpp"
 #include "render/instances.hpp"
+#include "render/lamp_shadows.hpp"
 #include "render/lights.hpp"
 #include "render/mesh.hpp"
 #include "render/night.hpp"
@@ -88,8 +92,12 @@ struct Scene {
   gr::Terrain terrain;
   gr::Hiz hiz;
   gr::InstancePipelines ip;
-  gr::InstanceFamily props;
+  gr::InstanceFamily props, glows;
+  bool has_glows = false;
   gr::Lights lights;
+  gr::LampShadows lamp_shadows;
+  bool shadows = false;                       // the lamps cast (the props; never the glows)
+  std::vector<std::array<double, 4>> movers;  // this frame's moving things: centre, radius
   gr::Flames flames;
   gr::Post post;
   gr::FrameRecorder rec;
@@ -100,11 +108,16 @@ struct Scene {
 };
 
 // `more` adds a lab's own pipelines before the load closes (false: it failed); `caster_maps` > 0
-// gives the props that many shadow maps' caster slots (render/shadows.hpp).
+// gives the props that many shadow maps' caster slots (render/shadows.hpp). `glows` are the lamps'
+// own glowing parts, drawn but casting no lamp's shadow; `shadows` gives the lamps with a key
+// their shadows (render/lamp_shadows.hpp), in the props' caster slots after `caster_maps`.
 inline bool make_scene(ge::gpu::Device& d, Scene& s, std::span<const gr::Surface> surfaces,
                        const std::vector<gr::Instance>& props, uint32_t w, uint32_t h,
                        const std::string& label, const std::function<bool()>& more = {},
-                       int caster_maps = 0) {
+                       int caster_maps = 0, const std::vector<gr::Instance>& glows = {},
+                       bool shadows = false) {
+  s.shadows = shadows;
+  s.has_glows = !glows.empty();
   s.w = w;
   s.h = h;
   s.field = ge::core::create_heightfield(0, 0, 1, 257, 257);
@@ -136,20 +149,32 @@ inline bool make_scene(ge::gpu::Device& d, Scene& s, std::span<const gr::Surface
   gr::create_instance_pipelines(d, s.pipelines, s.ip, s.layout);
   gr::create_flames(d, s.pipelines, s.flames, s.layout);
   gr::create_post(d, s.pipelines, s.post, s.layout, wgpu::TextureFormat::RGBA8Unorm);
+  if (shadows) {
+    gr::LampShadowSettings ls;
+    ls.first_slot = caster_maps;
+    gr::create_lamp_shadows(d, s.pipelines, s.lamp_shadows, ls, s.layout, s.sky);
+  }
   if (more && !more()) return false;
   if (!s.pipelines.finish(d)) return false;
   ge::gpu::end_load(d);
   gr::create_lights(d, s.lights);
-  s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky, s.lights.buffer);
+  s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky, s.lights.buffer, nullptr, nullptr,
+                            shadows ? s.lamp_shadows.atlas_view : nullptr);
   gr::create_hiz_targets(d, s.hiz, s.targets);
   gr::bind_flame_targets(d, s.flames, s.targets);
   s.post_group = gr::post_group(d, s.post, s.targets.hdr_view);
   gr::create_family(d, s.ip, s.props, label + ".props", meshes(), surfaces, 256);
-  if (caster_maps > 0) gr::create_family_casters(d, s.ip, s.props, caster_maps);
+  const int slots = caster_maps + (shadows ? static_cast<int>(gr::kMaxLampTiles) : 0);
+  if (slots > 0) gr::create_family_casters(d, s.ip, s.props, slots);
   gr::bind_family_hiz(d, s.ip, s.props, s.hiz);
   s.light = gr::instance_light_group(d, s.ip, s.terrain);
   gr::set_instances(d, s.props, 0, props);
-  s.rec.init(d, label + ".timer", 16);
+  if (s.has_glows) {
+    gr::create_family(d, s.ip, s.glows, label + ".glows", meshes(), surfaces, 64);
+    gr::bind_family_hiz(d, s.ip, s.glows, s.hiz);
+    gr::set_instances(d, s.glows, 0, glows);
+  }
+  s.rec.init(d, label + ".timer", 20);
   s.out = ge::gpu::create_target(d, label + ".final", w, h);
   return true;
 }
@@ -163,11 +188,18 @@ inline gl::Picture draw(ge::gpu::Device& d, Scene& s, const gr::FrameView& v,
   gr::prepare_sky(s.sky, v);
   gr::prepare_terrain(d, s.terrain, v);
   gr::prepare_family(d, s.props, v, s.h, false);
+  if (s.has_glows) gr::prepare_family(d, s.glows, v, s.h, false);
   gr::prepare_lights(d, s.lights, lamps, v, s.w, s.h);
+  gr::InstanceFamily* casters[] = {&s.props};
+  if (s.shadows) {
+    gr::prepare_lamp_shadows(d, s.lamp_shadows, s.lights, lamps, v, s.movers, casters);
+  }
   gr::prepare_flames(d, s.flames, flames, v);
-  gr::InstanceFamily* families[] = {&s.props};
+  gr::InstanceFamily* both[] = {&s.props, &s.glows};
+  const std::span<gr::InstanceFamily* const> families(both, s.has_glows ? 2 : 1);
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   gr::encode_sky_tables(s.sky, s.pipelines, s.rec, e);
+  if (s.shadows) gr::encode_lamp_shadows(s.lamp_shadows, casters, s.ip, s.pipelines, s.rec, e);
   gr::encode_terrain_cull(s.terrain, s.pipelines, s.rec, e, s.frame);
   gr::encode_instances_cull(families, s.ip, s.pipelines, s.rec, e, s.frame, false);
   gr::encode_terrain_horizon(s.terrain, s.pipelines, s.rec, e);
