@@ -144,4 +144,65 @@ Wet wet_steady(double rate, double dry) {
   return wet_of(kFilm + gain / kDrain);
 }
 
+Cover step_cover(const Cover& c, const Precip& p, double sun, double dt) {
+  const double h = std::max(0.0, dt) / 3600;
+  const double rate = rate_of(p);
+  const double rain = clamp01(p.rain);
+  const double laid = kNewSnow * rate * (1 - rain);
+  const double melt = 4 * rate * rain + 2 * clamp01(sun);
+  Cover out;
+  out.depth = std::clamp(c.depth + (laid - melt) * h, 0.0, kDeepestCover);
+  out.cover = 1 - lm::exp(-out.depth / kCoverDepth);
+  return out;
+}
+
+double strokes_per_minute(const Precip& p, double wind) {
+  const Tier t = tier_of(p, wind);
+  if (t != Tier::heavy && t != Tier::storm) return 0;
+  const double rain = clamp01(p.rain);
+  const double per = t == Tier::storm ? 1 + 5 * clamp01((p.intensity - 0.6) / 0.4) : 1;
+  return per * (0.1 + 0.9 * rain);
+}
+
+namespace {
+
+// A 64-bit mix of a slot and a seed (splitmix64's finaliser): the same bits on every machine.
+uint64_t mix(uint64_t v) {
+  v += 0x9e3779b97f4a7c15ull;
+  v = (v ^ (v >> 30)) * 0xbf58476d1ce4e5b9ull;
+  v = (v ^ (v >> 27)) * 0x94d049bb133111ebull;
+  return v ^ (v >> 31);
+}
+
+double unit_of(uint64_t v, int k) { return double((v >> (k * 21)) & 0x1fffff) / double(0x200000); }
+
+// A stroke's light `s` s after it starts: the main stroke, then two returns, each a quick decay.
+double stroke_light(double s) {
+  if (s < 0 || s > 0.4) return 0;
+  double l = lm::exp(-s / 0.045);
+  if (s > 0.11) l += 0.6 * lm::exp(-(s - 0.11) / 0.035);
+  if (s > 0.23) l += 0.35 * lm::exp(-(s - 0.23) / 0.03);
+  return l;
+}
+
+constexpr double kSlot = 0.5;  // s
+
+}  // namespace
+
+double flash_at(double t, const Precip& p, double wind, uint32_t seed) {
+  const double per_min = strokes_per_minute(p, wind);
+  if (per_min <= 0) return 0;
+  const double chance = per_min * kSlot / 60;
+  const int64_t now = static_cast<int64_t>(std::floor(t / kSlot));
+  double light = 0;
+  // A stroke lasts under a slot, so this slot's and the last one's are all that can be lit.
+  for (int64_t k = now - 1; k <= now; ++k) {
+    const uint64_t h = mix(static_cast<uint64_t>(k) ^ (uint64_t(seed) << 40));
+    if (unit_of(h, 0) >= chance) continue;
+    const double start = (static_cast<double>(k) + unit_of(h, 1)) * kSlot;
+    light += (0.4 + 0.6 * unit_of(h, 2)) * stroke_light(t - start);
+  }
+  return std::min(light, 1.5);
+}
+
 }  // namespace ge::wind

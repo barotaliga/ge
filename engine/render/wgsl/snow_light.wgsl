@@ -148,7 +148,7 @@ fn snow_light(s: SnowPoint, gains: SnowGains) -> vec4f {
   var graze = 1.0 - max(dot(n, v), 0.0);
   graze *= graze;
   let lobe = pow(rv, sharp) * (0.25 + 2.5 * gloss * gloss) * (0.15 + 1.6 * graze);
-  c += s.sun * lobe * 0.35 * gains.glare * (1.0 - s.bare) * (1.0 - 0.7 * frame.mist.z) / PI;
+  c += s.sun * lobe * 0.35 * gains.glare * (1.0 - s.bare) * (1.0 - 0.7 * frame.wet.x) / PI;
   // The wet film's mirror and the slush's pools on the flats.
   c += wet_sheen(n, v, s.sun, s.geo_n.y);
   // The glitter, on the loose snow in the sun: fine cells close in, coarser ones a little
@@ -162,7 +162,7 @@ fn snow_light(s: SnowPoint, gains: SnowGains) -> vec4f {
              smoothstep(8.0, 25.0, s.dist) * (1.0 - smoothstep(50.0, 140.0, s.dist));
     // A glint is the sun's disc in a crystal: through cloud the disc spreads and the glint goes
     // before the light does.
-    glint *= s.loose * gains.glitter * frame.weather.x * (1.0 - frame.mist.z);
+    glint *= s.loose * gains.glitter * frame.weather.x * (1.0 - frame.wet.x);
     c += s.sun * glint * 400.0 / PI;
   }
   return vec4f(c, glint);

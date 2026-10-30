@@ -11,12 +11,18 @@
 //   it, the sun through the sky faces with its own shadow map, the sky's light by how open a
 //   point is overhead, and the glowing texels.
 //
-// The passes, in a frame's order: "bsp.shadows" (v2 with lights), "bsp", "bsp.sky" (v2); then the
-// caller's sky, clouds, water and liquids over the frame's targets.
+// - THE WEATHER (v2, `Options::weather`): a third orthographic map looks along the fall, so the
+//   faces the rain and the snow reach (a courtyard's flags, a sill, the floor inside a window as
+//   far as the wind drives it, a wall facing the wind) are wet, pooled with puddles that ripple
+//   while it rains, or snowed on, and the rooms behind stay dry; a lightning flash lights what
+//   is open to the sky. The same map is the fall's shelter (`bsp_shelter`).
+//
+// The passes, in a frame's order: "bsp.shadows" (v2 with lights or weather), "bsp", "bsp.sky" (v2);
+// then the caller's sky, clouds, water and liquids over the frame's targets.
 //
 // ge:summary The BSP renderer: classic or v2 (our sky, our liquids, real-time lights and shadows)
 // ge:keywords bsp brush render renderer r_bspmode classic v2 lightmap point-light cube-shadow
-// ge:keywords sun-shadow sky-mask flicker lava-light
+// ge:keywords sun-shadow sky-mask flicker lava-light weather rain snow puddles shelter bsp_shelter
 // ge:skill brush render
 #pragma once
 
@@ -28,6 +34,7 @@
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "render/frame.hpp"
+#include "render/precip.hpp"
 
 namespace ge::brush::app {
 
@@ -67,11 +74,20 @@ struct Options {
   // r_bump: the relief the rebaked lighting reads off each texture's luminance, m from black to
   // white (0: flat faces). Only `Lighting::rebaked` draws it.
   double bump = 0.012;
+  // THE WEATHER (v2; bsp_weather.hpp): on, the rain falling now (0 .. 1: its ripples in the
+  // puddles), and the way it falls (unit, down and downwind), which a third orthographic map looks
+  // along so only what the fall reaches is wet, pooled or snowed on. How wet, how deep the
+  // puddles, how much snow and the lightning's flash are the frame's (render/view.hpp's Weather).
+  bool weather = false;
+  double raining = 0;
+  double spread = 0.3;  // the tangent of the spread of ways round `fall` the drops and flakes come
+  double fall[3] = {0, -1, 0};
 };
 
 inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side
 inline constexpr uint32_t kOrthoSize = 2048;  // the sun's and the zenith's maps
 inline constexpr int kMaxShadowed = 48;
+inline constexpr uint32_t kOrthos = 3;  // the sun's, the zenith's and the fall's
 
 struct GpuLight {
   float pos[4];
@@ -87,10 +103,11 @@ struct GpuBsp {
   float info[4];
   float info2[4];
   float sky[4];
-  float info3[4];  // the floor (minlight), the bounce, the sky's light, filtered (1) or crisp
-  float info4[4];  // the relief's depth (bump), m
-  float veil[4];   // the sky faces' pixels times these (the sky's light, seen and tinted)
-  GpuJob ortho[2];
+  float info3[4];    // the floor (minlight), the bounce, the sky's light, filtered (1) or crisp
+  float info4[4];    // the relief's depth (bump), m
+  float veil[4];     // the sky faces' pixels times these (the sky's light, seen and tinted)
+  float weather[4];  // on (1), the rain falling now, the fall's spread, 0
+  GpuJob ortho[kOrthos];
 };
 
 struct BspDraw {
@@ -104,7 +121,7 @@ struct BspDraw {
   wgpu::Buffer uniform, lights, jobs;
   wgpu::Texture cubes, orthos;
   std::vector<wgpu::TextureView> cube_layers;  // a view a cube face
-  wgpu::TextureView ortho_layers[2];
+  wgpu::TextureView ortho_layers[kOrthos];
   wgpu::TextureView cubes_view, orthos_view;
   wgpu::Sampler light_sampler, compare;
   wgpu::BindGroupLayout layout, fix_layout, shadow_layout;
@@ -138,6 +155,10 @@ void encode_bsp(const BspDraw& draw, const gpu::PipelineSet& pipelines, render::
 void encode_bsp_veil(const BspDraw& draw, const gpu::PipelineSet& pipelines,
                      render::FrameRecorder& rec, wgpu::CommandEncoder& encoder,
                      const render::FrameTargets& targets);
+
+// THE FALL'S SHELTER for render/precip.hpp: the third orthographic map, so the rain and the snow
+// are drawn only where they reach (valid after `prepare_bsp` with the weather on).
+render::PrecipShelter bsp_shelter(const BspDraw& draw);
 
 // The lights the scene's lava gives off: a grid over each pool's top, each its share of the
 // pool's glow (physical, cd), just over the surface. `core_c` the melt's temperature, `cover` the

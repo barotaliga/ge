@@ -86,6 +86,11 @@ struct Weather {
   // `wet_albedo` and `wet_sheen`.
   double wet = 0.0;
   double puddles = 0.0;
+  // THE SNOW'S COVER on what faces up and is open to the fall, 0 bare .. 1 deep (a world that
+  // draws its own snow, as a mountain does, leaves it 0), and A FLASH of lightning: its light over
+  // the open sky's, a share (engine/wind/precip.hpp's `flash_at`).
+  double snow = 0.0;
+  double flash = 0.0;
 };
 
 // ONE LAYER OF CLOUD (render/clouds.hpp): a slab of the air where the noise passes its cover's
