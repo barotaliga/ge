@@ -181,7 +181,7 @@ static int run_main(int argc, char** argv) {
                         if (a.size() < 2)
                           c.print("benchmark: name a demo (benchmark demo1)");
                         else
-                          bench_ask = a[1];
+                          bench_ask = expand_home(a[1]);
                       });
   se::Hud hud = se::make_hud();
   se::add_cvars(console, hud);
@@ -261,14 +261,16 @@ static int run_main(int argc, char** argv) {
   // The benchmark over: its report, vsync back, the listen server's world again.
   int bench_failed = 0;
   const auto end_bench = [&](const std::string& why, double now_s) {
-    const std::string setup = std::to_string(w) + "x" + std::to_string(h) + ", vsync off, " +
-                              "r_look " + picture.look + ", " + device->report.name + " on " +
-                              device->report.backend;
-    for (const std::string& line :
-         cl::bench_report(bench.name, setup, cl::bench_stats(bench.frame_s))) {
-      console.print(line);
-      hud.notify.push(line, se::hud_style().ink, now_s);
-    }
+    const std::string setup = std::to_string(w) + "x" + std::to_string(h) + ", present " +
+                              surface.present_mode() + ", r_look " + picture.look + ", " +
+                              device->report.name + " on " + device->report.backend;
+    // A run stopped before a frame was timed has no report, only its reason.
+    if (why.empty() || !bench.frame_s.empty())
+      for (const std::string& line :
+           cl::bench_report(bench.name, setup, cl::bench_stats(bench.frame_s))) {
+        console.print(line);
+        hud.notify.push(line, se::hud_style().ink, now_s);
+      }
     if (!why.empty()) {
       console.print("benchmark: stopped early: " + why);
       bench_failed = 1;
@@ -368,8 +370,8 @@ static int run_main(int argc, char** argv) {
         bench.quit_after = quit_after;
         console.print("benchmark: " + bench.found);
         con_view.set_open(false);
-        vsync = false;
-        surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync);
+        vsync = false;  // and unlocked: immediate present, where the platform has it
+        surface.configure_unlocked(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
       }
       args.benchmark.clear();
       bench_ask.clear();

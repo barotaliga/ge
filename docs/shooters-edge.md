@@ -137,7 +137,9 @@ network (the rest of M18h, M18i).
 
 `benchmark <demo>` in the console, or `-benchmark <demo>` on the command line (which quits with
 the report and exits non-zero if the demo stopped early), plays a recorded game **as fast as the
-machine draws it**: vsync off for the run, no frame cap, one demo frame a drawn frame whatever
+machine draws it**: vsync off for the run (an immediate present where the platform has one,
+which Metal needs: its mailbox present still waits on the display; the report names the mode in
+use), no frame cap, one demo frame a drawn frame whatever
 the demo's own clock says, at the window's settings (its size, `r_look` and the picture cvars, `hud_style`). The
 listen server waits meanwhile; ESCAPE stops the run early. At the end the console and the
 terminal print the frames timed and their seconds, the **average** frame rate, the **max** and
@@ -150,7 +152,7 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
     -benchmark ~/Downloads/match.dem
 ```
 
-- **Which demo**: the name through the search path (`demo1.dem` in `pak0.pak`, or a loose file
+- **Which demo**: a path (absolute, or starting `./` or `../`) is read from disk alone; else the name through the search path (`demo1.dem` in `pak0.pak`, or a loose file
   in the game folder), with `.dem` added when the name has no extension, then any file in the
   packs whose name before its extension matches; else the name as a path on disk.
 - **The formats**, told apart by their first bytes (`client/demo.hpp`): the single-player demo

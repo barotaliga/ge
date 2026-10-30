@@ -100,6 +100,20 @@ std::vector<std::string> bench_report(const std::string& demo, const std::string
 
 bool find_demo(const SearchPath& files, const std::string& name, std::vector<uint8_t>& out,
                std::string& found, std::string& error) {
+  // A file's path (absolute, or from the working folder) is read from disk and nowhere else: the
+  // game's folder joined with an absolute path is that path again, which is not the game's file.
+  const bool is_path = fs::path(name).is_absolute() || name.starts_with("./") ||
+                       name.starts_with("../") || name.starts_with(".\\") ||
+                       name.starts_with("..\\");
+  if (is_path) {
+    if (read_disk(name, out)) {
+      found = name;
+      return true;
+    }
+    error = "no demo file at " + name + "; next: check the path, or name a demo the packs hold " +
+            "(demo1, demo1.dem)";
+    return false;
+  }
   std::vector<uint8_t> store;
   const bool has_ext = stem_of(name) != name.substr(name.find_last_of('/') + 1);
   std::vector<std::string> tries = {name};

@@ -74,6 +74,7 @@ void run(gl::Lab& lab) {
   const std::string basedir = lab.arg("basedir");
   const std::string name = lab.arg("demo");
   std::string error;
+  const shooters_edge::look::Picture picture;  // the default look; the world reads it every frame
   cl::SearchPath files;
   if (basedir.empty()) {
     std::vector<uint8_t> pak;
@@ -143,7 +144,7 @@ void run(gl::Lab& lab) {
       if (device) {
         world.reset();
         world = cl::create_world_draw(*device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                                      {}, error);
+                                      picture, error);
         if (!world) {
           lab.fail(error, "Read the gpu: lines above. Skill: render.");
           return;

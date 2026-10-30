@@ -10,6 +10,8 @@
 // ge:keywords find_demo bench_stats damaged
 // ge:skill shooter testing
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -156,6 +158,20 @@ TEST(the_search_path_finds_a_demo_with_or_without_its_extension) {
   cl::Timedemo none;
   CHECK(!cl::timedemo_start(files, "demo9", none, error));
   CHECK(error.find("demo9") != std::string::npos);
+
+  // A file's path is read from disk and reported as that path.
+  const std::string path = (std::filesystem::temp_directory_path() / "se_demo_test.dem").string();
+  {
+    const std::vector<uint8_t> b = cl::write_single_demo(script());
+    std::ofstream(path, std::ios::binary)
+        .write(reinterpret_cast<const char*>(b.data()), static_cast<std::streamsize>(b.size()));
+  }
+  cl::Timedemo disk;
+  CHECK_MSG(cl::timedemo_start(files, path, disk, error), error);
+  CHECK(disk.found == path);
+  std::filesystem::remove(path);
+  CHECK(!cl::timedemo_start(files, path, disk, error));
+  CHECK(error.find("no demo file at") != std::string::npos);
 }
 
 TEST(the_report_s_lows_are_the_slowest_frames_rate) {
