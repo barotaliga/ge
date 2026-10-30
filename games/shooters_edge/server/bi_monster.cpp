@@ -182,17 +182,17 @@ namespace {
 // Steps `self` toward `yaw` by `dist`: ideal_yaw set, turned, moved without relinking; a move
 // that leaves the yaw more than 45 degrees off the ideal is undone (turned, not moved). Relinked.
 bool step_direction(QcServer& s, pg::Vm& vm, int self, float yaw, float dist) {
-  vm_set_f(vm, self, pg::kFIdealYaw, yaw);
+  vm_set_f(vm, self, pg::vm_layout(vm).f.ideal_yaw, yaw);
   sh::Edict& ed = s.sv.edicts[static_cast<size_t>(self)];
-  ed.angles.y = turned_yaw(ed.angles.y, yaw, vm_f(vm, self, pg::kFYawSpeed));
+  ed.angles.y = turned_yaw(ed.angles.y, yaw, vm_f(vm, self, pg::vm_layout(vm).f.yaw_speed));
   const double r = static_cast<double>(yaw) * kRadians;
   const sh::Vec3f move{static_cast<float>(ge::core::libm::cos(r) * dist),
                        static_cast<float>(ge::core::libm::sin(r) * dist), 0};
   const sh::Vec3f old = ed.origin;
-  const bool ok = step_move(s, self, move, vm_e(vm, self, pg::kFEnemy), false);
+  const bool ok = step_move(s, self, move, vm_e(vm, self, pg::vm_layout(vm).f.enemy), false);
   sh::Edict& now = s.sv.edicts[static_cast<size_t>(self)];
   if (ok) {
-    const float delta = now.angles.y - vm_f(vm, self, pg::kFIdealYaw);
+    const float delta = now.angles.y - vm_f(vm, self, pg::vm_layout(vm).f.ideal_yaw);
     if (delta > 45 && delta < 315) now.origin = old;
   }
   sh::link_edict(s.sv, self, true);
@@ -205,8 +205,8 @@ bool draw_is(QcServer& s, int32_t hi, int32_t want) {
 
 void new_chase_dir(QcServer& s, pg::Vm& vm, int self, int goal, float dist) {
   constexpr float kNone = -1;
-  const float olddir =
-      wrap_angle(static_cast<float>(static_cast<int>(vm_f(vm, self, pg::kFIdealYaw) / 45) * 45));
+  const float olddir = wrap_angle(static_cast<float>(
+      static_cast<int>(vm_f(vm, self, pg::vm_layout(vm).f.ideal_yaw) / 45) * 45));
   const float turnaround = wrap_angle(olddir - 180);
   const sh::Edict& me = s.sv.edicts[static_cast<size_t>(self)];
   const sh::Edict& g = s.sv.edicts[static_cast<size_t>(goal)];
@@ -239,13 +239,13 @@ void new_chase_dir(QcServer& s, pg::Vm& vm, int self, int goal, float dist) {
         return;
   }
   if (step_direction(s, vm, self, turnaround, dist)) return;
-  vm_set_f(vm, self, pg::kFIdealYaw, olddir);
+  vm_set_f(vm, self, pg::vm_layout(vm).f.ideal_yaw, olddir);
   if (!check_bottom(s, self)) s.sv.edicts[static_cast<size_t>(self)].flags |= kFlagPartialGround;
 }
 
 // `self` for a monster move; -1 after a fault.
 int self_of(pg::Vm& vm, const char* name) {
-  const int self = pg::entity_number(vm, pg::global_int(vm, pg::kGSelf));
+  const int self = pg::entity_number(vm, pg::global_int(vm, pg::vm_layout(vm).g.self));
   if (self < 0) {
     const std::string m = std::string(name) + ": self is not an entity in use";
     pg::vm_error(vm, m.c_str());
@@ -270,7 +270,7 @@ void bi_walkmove(pg::Vm& vm) {
   const sh::Vec3f move{static_cast<float>(ge::core::libm::cos(r) * dist),
                        static_cast<float>(ge::core::libm::sin(r) * dist), 0};
   const SavedGlobals saved = save_globals(vm);
-  const bool ok = step_move(s, self, move, vm_e(vm, self, pg::kFEnemy), true);
+  const bool ok = step_move(s, self, move, vm_e(vm, self, pg::vm_layout(vm).f.enemy), true);
   restore_globals(vm, saved);
   refresh_from_world(qc_of(vm));
   pg::return_float(vm, ok ? 1.0f : 0.0f);
@@ -287,9 +287,9 @@ void bi_checkbottom(pg::Vm& vm) {
 void bi_changeyaw(pg::Vm& vm) {
   const int self = self_of(vm, "changeyaw");
   if (self < 0) return;
-  uint32_t* yaw = pg::entity_field(vm, self, pg::kFAngles + 1);
-  *yaw = pg::as_word(turned_yaw(pg::as_float(*yaw), vm_f(vm, self, pg::kFIdealYaw),
-                                vm_f(vm, self, pg::kFYawSpeed)));
+  uint32_t* yaw = pg::entity_field(vm, self, pg::vm_layout(vm).f.angles + 1);
+  *yaw = pg::as_word(turned_yaw(pg::as_float(*yaw), vm_f(vm, self, pg::vm_layout(vm).f.ideal_yaw),
+                                vm_f(vm, self, pg::vm_layout(vm).f.yaw_speed)));
 }
 
 void bi_movetogoal(pg::Vm& vm) {
@@ -297,7 +297,7 @@ void bi_movetogoal(pg::Vm& vm) {
   const int self = self_of(vm, "movetogoal");
   if (self < 0) return;
   const float dist = pg::arg_float(vm, 0);
-  const int goal = vm_e(vm, self, pg::kFGoalentity);
+  const int goal = vm_e(vm, self, pg::vm_layout(vm).f.goalentity);
   flush_to_world(qc_of(vm));
   const sh::Edict& ed = s.sv.edicts[static_cast<size_t>(self)];
   pg::return_float(vm, 0);
@@ -305,11 +305,12 @@ void bi_movetogoal(pg::Vm& vm) {
   const SavedGlobals saved = save_globals(vm);
   // With an enemy, close enough (its box grown by dist meets the goal's): stop.
   const sh::Edict& g = s.sv.edicts[static_cast<size_t>(goal)];
-  bool close = vm_e(vm, self, pg::kFEnemy) != 0;
+  bool close = vm_e(vm, self, pg::vm_layout(vm).f.enemy) != 0;
   for (int i = 0; i < 3 && close; i++)
     if (g.absmin[i] > ed.absmax[i] + dist || g.absmax[i] < ed.absmin[i] - dist) close = false;
   if (!close) {
-    if (draw_is(s, 3, 1) || !step_direction(s, vm, self, vm_f(vm, self, pg::kFIdealYaw), dist))
+    if (draw_is(s, 3, 1) ||
+        !step_direction(s, vm, self, vm_f(vm, self, pg::vm_layout(vm).f.ideal_yaw), dist))
       new_chase_dir(s, vm, self, goal, dist);
   }
   restore_globals(vm, saved);

@@ -200,7 +200,7 @@ PlayerState player_state(const ClassicServer& s, int about, int to) {
   PlayerState p;
   p.slot = about;
   p.origin = e.origin;
-  p.frame = static_cast<int>(field(s, about + 1, pg::kFFrame));
+  p.frame = static_cast<int>(field(s, about + 1, s.qc->q.layout->f.frame));
   if (about != to) {
     p.has_msec = true;
     const double ms = 1000 * (sv.time - cs.last_cmd_time);
@@ -215,10 +215,10 @@ PlayerState player_state(const ClassicServer& s, int about, int to) {
   p.velocity = {static_cast<float>(static_cast<int>(e.velocity.x)),
                 static_cast<float>(static_cast<int>(e.velocity.y)),
                 static_cast<float>(static_cast<int>(e.velocity.z))};
-  const int model = static_cast<int>(field(s, about + 1, pg::kFModelindex));
+  const int model = static_cast<int>(field(s, about + 1, s.qc->q.layout->f.modelindex));
   p.modelindex = model == s.player_model ? 0 : model;
-  p.skin = static_cast<int>(field(s, about + 1, pg::kFSkin));
-  p.effects = static_cast<int>(field(s, about + 1, pg::kFEffects));
+  p.skin = static_cast<int>(field(s, about + 1, s.qc->q.layout->f.skin));
+  p.effects = static_cast<int>(field(s, about + 1, s.qc->q.layout->f.effects));
   if (about == to && s.f_weaponframe >= 0) {
     p.has_weaponframe = true;
     p.weaponframe = static_cast<int>(field(s, about + 1, s.f_weaponframe));
@@ -235,18 +235,18 @@ void update_stats(ClassicServer& s, int slot) {
   ClassicClient& c = s.clients[slot];
   const int e = slot + 1;
   int32_t st[kStats] = {};
-  st[0] = static_cast<int32_t>(field(s, e, pg::kFHealth));
-  st[2] =
-      model_index_of(s, static_cast<int32_t>(*pg::entity_field(s.qc->q.vm, e, pg::kFWeaponmodel)));
+  st[0] = static_cast<int32_t>(field(s, e, s.qc->q.layout->f.health));
+  st[2] = model_index_of(
+      s, static_cast<int32_t>(*pg::entity_field(s.qc->q.vm, e, s.qc->q.layout->f.weaponmodel)));
   st[3] = static_cast<int32_t>(field(s, e, s.f_currentammo));
   st[4] = static_cast<int32_t>(field(s, e, s.f_armorvalue));
   for (int i = 0; i < 4; i++) st[6 + i] = static_cast<int32_t>(field(s, e, s.f_ammo[i]));
   st[10] = static_cast<int32_t>(field(s, e, s.f_weapon));
-  const float serverflags = pg::as_float(s.qc->q.vm.globals[pg::kGServerflags]);
-  st[15] =
-      static_cast<int32_t>(field(s, e, pg::kFItems)) | (static_cast<int32_t>(serverflags) << 28);
+  const float serverflags = pg::as_float(s.qc->q.vm.globals[s.qc->q.layout->g.serverflags]);
+  st[15] = static_cast<int32_t>(field(s, e, s.qc->q.layout->f.items)) |
+           (static_cast<int32_t>(serverflags) << 28);
   if (c.ext.has(ExtFamily::z, kZViewHeight))
-    st[16] = static_cast<int32_t>(field(s, e, pg::kFViewOfs + 2));
+    st[16] = static_cast<int32_t>(field(s, e, s.qc->q.layout->f.view_ofs + 2));
   for (int i = 0; i < kStats; i++) {
     if (c.stats_known[i] && c.stats[i] == st[i]) continue;
     if (i == 16 && !c.ext.has(ExtFamily::z, kZViewHeight)) continue;

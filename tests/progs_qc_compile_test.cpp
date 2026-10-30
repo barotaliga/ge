@@ -60,7 +60,7 @@ float run(const std::string& text, const char* fn, std::initializer_list<float> 
   Progs p;
   std::string error;
   LoadOptions o;
-  o.crc = 0;
+  o.any_crc = true;
   o.check_layout = false;
   CHECK_MSG(load_progs(bytes.data(), bytes.size(), p, error, o), error);
   Vm vm;

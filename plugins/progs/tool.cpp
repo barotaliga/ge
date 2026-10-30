@@ -130,10 +130,10 @@ bool load(const std::string& file, Progs& p, Answer& a) {
                                    std::istreambuf_iterator<char>());
   std::string error;
   // A program that declares no engine-side layout (crc 0: a compiled standalone program, no
-  // game's) is run as it stands; any other crc is held to the layout this tool runs.
-  LoadOptions options;
+  // game's) is run as it stands; any other crc is held to the form it names.
+  LoadOptions options = every_form();
   if (bytes.size() >= 8 && bytes[4] == 0 && bytes[5] == 0 && bytes[6] == 0 && bytes[7] == 0) {
-    options.crc = 0;
+    options.any_crc = true;
     options.check_layout = false;
   }
   if (!load_progs(bytes.data(), bytes.size(), p, error, options)) {
