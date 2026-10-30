@@ -145,6 +145,7 @@ side, and charts the steer meant against pressed.
 | Sight and memory, steering (pursuit along a line, a fan of headings, separation over a grid, the stuck check), choosing (a utility selector, a flat state machine, both decision records) | `engine/ai/sight.hpp`, `memory.hpp`, `steer.hpp`, `choose.hpp` | built (M16e) |
 | A first-person map's navigation, every link proven by running the player move (the first plugin user of `ai/path`'s graph search on its own) | `plugins/shooter/nav.hpp` | built (M18r1) |
 | A first-person pilot: a nav route played one usercmd at a time through `ai/hands` (pursuit, jumps at their proven speed from a run-up, the strafe jump, waiting for doors and riding a plat), a server slot's command source; its runs on the nav course and the arena | `plugins/shooter/pilot.hpp`, `games/shooters_edge/bots/pilot_run.hpp`, `se-pilot` | built (M18r2) |
+| A first-person bot's senses and aim: what its client is sent, sight in a cone by the hull trace, hearing, memory, aim on `ai/hands` by skill (perfect, expert, average, novice), the route kept while aiming | `plugins/shooter/senses.hpp`, `aim.hpp`, `bot.hpp`, `games/shooters_edge/bots/duel_run.hpp`, `se-senses` | built (M18r3) |
 
 A piece lands with its first user, never before (G4). A bot a game writes before its piece exists
 still records its decisions, and moves onto the piece when it lands.

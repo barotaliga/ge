@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <span>
 #include <string>
 #include <vector>
@@ -98,9 +99,12 @@ struct Scene {
   uint32_t w = 0, h = 0;
 };
 
+// `more` adds a lab's own pipelines before the load closes (false: it failed); `caster_maps` > 0
+// gives the props that many shadow maps' caster slots (render/shadows.hpp).
 inline bool make_scene(ge::gpu::Device& d, Scene& s, std::span<const gr::Surface> surfaces,
                        const std::vector<gr::Instance>& props, uint32_t w, uint32_t h,
-                       const std::string& label) {
+                       const std::string& label, const std::function<bool()>& more = {},
+                       int caster_maps = 0) {
   s.w = w;
   s.h = h;
   s.field = ge::core::create_heightfield(0, 0, 1, 257, 257);
@@ -132,6 +136,7 @@ inline bool make_scene(ge::gpu::Device& d, Scene& s, std::span<const gr::Surface
   gr::create_instance_pipelines(d, s.pipelines, s.ip, s.layout);
   gr::create_flames(d, s.pipelines, s.flames, s.layout);
   gr::create_post(d, s.pipelines, s.post, s.layout, wgpu::TextureFormat::RGBA8Unorm);
+  if (more && !more()) return false;
   if (!s.pipelines.finish(d)) return false;
   ge::gpu::end_load(d);
   gr::create_lights(d, s.lights);
@@ -140,6 +145,7 @@ inline bool make_scene(ge::gpu::Device& d, Scene& s, std::span<const gr::Surface
   gr::bind_flame_targets(d, s.flames, s.targets);
   s.post_group = gr::post_group(d, s.post, s.targets.hdr_view);
   gr::create_family(d, s.ip, s.props, label + ".props", meshes(), surfaces, 256);
+  if (caster_maps > 0) gr::create_family_casters(d, s.ip, s.props, caster_maps);
   gr::bind_family_hiz(d, s.ip, s.props, s.hiz);
   s.light = gr::instance_light_group(d, s.ip, s.terrain);
   gr::set_instances(d, s.props, 0, props);
