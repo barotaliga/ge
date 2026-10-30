@@ -33,6 +33,7 @@
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_draw.hpp"
+#include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "vfs/pak.hpp"
 
@@ -160,7 +161,7 @@ void run(gl::Lab& lab) {
       hud.layout.draw(overlay,
                       hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
                       se::hud_style());
-      cl::draw_world(*device, *world, view, overlay, out.view);
+      cl::draw_world(*device, *world, view, cl::FxFrame{}, 0, overlay, out.view);
       if (shot < 3 && frame == picks[shot]) {
         const ge::gpu::Image img = ge::gpu::read_now(*device, out);
         lab.shot({ids[shot],

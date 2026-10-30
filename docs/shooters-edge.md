@@ -117,25 +117,28 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   counts, captured); ESCAPE lets it go and a click takes it back; closing the window quits.
 - **The console** (the key under ESCAPE): `map <name>` changes the map, `sv <line>` runs a line on
   the server's console (`sv timelimit 10`, `sv fraglimit 20`, `sv sv_gravity 600`),
-  `sensitivity <degrees a mouse count>` (0.066 by default), `m_invert 1`, `r_bspmode v2`
-  (our sky and real-time lights from the next map; `classic` is the default) and `quit`.
+  `sensitivity <degrees a mouse count>` (0.066 by default), `m_invert 1`, `r_look modern` (our
+  sky, filtered textures and real-time lights; `classic` is the default) with the picture's other
+  cvars (`r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`; the bloom's from
+  the next map) and `quit`.
 - **A rocket jump**: 7 for the launcher, look straight down, then SPACE and the left button
   together. The blast costs about half your health and throws you about four times as high as
   a jump (held by `tests/shooters_edge_listen_test.cpp` and the `se-client` lab).
 
 What the first slice draws: the map in its classic look (its textures, lightmaps, warped liquids
 and sky) over the engine's sky, from the first-person rig (the view height off the mod's view
-offset, stairs smoothed, a landing's dip); the HUD (`hud_style classic|modern|compact`); the
-console; a hot dot on each rocket in flight and an orange disc where one went off. Not yet:
-the other players' and items' models, the weapon in hand, sounds, the effects of the classic
-world pass, menus, and the network (the rest of M18h, M18i).
+offset, stairs smoothed, a landing's dip); the game's effects (`client/world_fx.hpp`: a rocket's
+trail and glow, an explosion's sparks, smoke and light on the walls, the red flash of a hit and
+the tint under water, slime or lava); the HUD (`hud_style classic|modern|compact`); the console.
+Not yet: the other players' and items' models, the weapon in hand, sounds, menus, and the
+network (the rest of M18h, M18i).
 
 ### Benchmarking a demo
 
 `benchmark <demo>` in the console, or `-benchmark <demo>` on the command line (which quits with
 the report and exits non-zero if the demo stopped early), plays a recorded game **as fast as the
 machine draws it**: vsync off for the run, no frame cap, one demo frame a drawn frame whatever
-the demo's own clock says, at the window's settings (its size, `r_bspmode`, `hud_style`). The
+the demo's own clock says, at the window's settings (its size, `r_look` and the picture cvars, `hud_style`). The
 listen server waits meanwhile; ESCAPE stops the run early. At the end the console and the
 terminal print the frames timed and their seconds, the **average** frame rate, the **max** and
 **min** (one over the shortest and longest frame), the **1% low** and **0.1% low** (the slowest
@@ -157,7 +160,7 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 - **What is timed**: every frame but the first few after a level starts (the map's load and its
   pipelines' first use; `kSkipAfterLevel`). A level change inside the demo loads that map from
   the packs. What is drawn is what the window draws today: the map from the recorded eye and
-  the HUD off the recorded stats; the entities' models join when the window draws them (M18i).
+  the HUD off the recorded stats (the demo's effects are not read yet); the entities' models join when the window draws them (M18i).
 - **Headless**: `make lab LAB=se-timedemo` runs the same loop into an offscreen target, on a
   demo written in code round the fixture halls (`--format=client` for the other format), or on
   a real one with `ARGS="--basedir=<dir> --demo=demo1"`, and charts every frame's time.
@@ -360,6 +363,31 @@ the engine's own):
   falls back to the base skin, and the client
   asks the server for a missing skin when downloads are allowed.
 
+**Built so far (M18g, the server half; `docs/goals/M18g.md`)**: the codec, the net channel, the
+server endpoint over `QcServer`, lag compensation for hitscan, a scripted client and a measured
+session (`classic_trial`):
+
+- **The codec.**
+  - The quantization and the CRC are held bit-exact by vectors.
+  - The move checksum uses the protocol's key table, kept as a wire constant for interop
+    (`classic_checksum_table.cpp`). Every move is verified by default.
+  - Every svc and clc message is a table row or a hand-written form, decoded and described for
+    the tests and the lab.
+- **The first tier.** The extension bits in the challenge are answered either in the connect or
+  through `pext`. A base-protocol client gets every base form.
+- **The mod's raw bytes.** What a mod writes with the Write builtins reaches a client only when
+  it reads as whole messages. A malformed message would cost that client the rest of its packet,
+  so it is dropped and counted instead.
+- **Downloads.** Skins (and any served file) download during the signon. Under the chunked
+  extension they go in 1024-byte chunks: the first inside the packet, the rest out of band.
+  Otherwise they use the classic block a `nextdl`.
+- **The rewind.** `traceline` and `tracebox` call `QcServer::lag_rewind` around the trace when
+  the shooter is a client and `antilag` is on. The other players move to where the shooter saw
+  them, then are restored.
+
+`se-net` runs the session under every preset. `se-interop` is a stub until the dedicated
+server's classic flag and existing programs are at hand.
+
 **The native protocol** is the engine's own (`docs/networking.md`), used between our client and
 our server when both ends are ours: the M17 handshake and AEAD (M17i), the snapshot ring and
 deltas with interest (M17f), prediction of the local player and of projectiles, lag
@@ -520,9 +548,9 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-senses` | scenario | Whether a bot sees only what a player's client could and aims by its skill: on the server's arena a seer and a runner visit the goals once per aim skill; the trails from above with a sight line every quarter second it saw, the aim's error against time, how often it saw when a line joined them, the error's median and p90, the reaction and the goals kept (built, M18r3) |
 | `se-bots` | scenario | Whether fighters play the baseline mod's deathmatch like players: four fighters on the arena, the trails, items and deaths from above, each one's mode through the match as a strip, the frags against time, and a table of frags, deaths, shots, pickups, switches, the share in each mode and the weapon held most (built, M18r4) |
 | `se-lobby` | sim | Clients find a hosted game on the LAN and through the rendezvous, fill the lobby, pick teams, chat, start, play and return; a dedicated server outlives the client that started it |
-| `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections |
-| `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`) |
-| `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the HUD and the markers at the spawn, the blast and the top of the jump; the rise and the health it cost (built, M18h first slice) |
+| `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections (the compatible server half built, M18g: scripted clients under every preset, bytes a second, loss, downloads, the digest) |
+| `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
+| `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost and the effects thrown (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
 | `se-viewmodel` | picture | The game's eight free weapons in first person on the engine's corridor stage: every one held at rest, each fired in the dark lit by its own muzzle light, the shotgun switched to the rocket launcher, and the player's view-model cvars; each weapon's share of the picture, its muzzle on the screen, its flash's lift and the switch's time (built, M48d) |
