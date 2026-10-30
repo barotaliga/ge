@@ -344,7 +344,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let uv = in.position.xy * frame.size.zw;
   // A body under a roof (a cave's pool) sees the sky through `open` of its dome (rough.w) and the
   // room's own light, a share of a white face's (emission.w), over the rest.
-  let c = shade_water_roofed(n, in.rel, in.xz, in.position.xy, body.info.x, lost, body.rough.z,
+  let c = shade_water_roofed(n, in.rel, in.xz, in.position.xyz, body.info.x, lost, body.rough.z,
                              Optics(body.c.rgb, body.kd.rgb, body.deep.rgb, body.emission.rgb),
                              0.0, body.rough.w, body.emission.w);
   var out: FragmentOut;

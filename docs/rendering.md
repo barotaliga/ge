@@ -790,9 +790,42 @@ snow reads bright and the moonlit mountain past the lamps is still there, if dim
 `r_light_shadows` switch them; the `world` lab at `--hour=22` and the `village-look` lab's
 evening, night and small-hours looks (`--lights=0` for a before) picture them.
 
+**As built (M39e): lamps everywhere.** The lamps light everything a frame draws, not only the
+terrain and the instances. A cloud of grains or drops reads them through `lamps_through`
+(`wgsl/lights.wgsl`): each lamp's irradiance past its shadow tiles, part of it round a
+Henyey-Greenstein lobe held to a mean of 1 and the rest every way alike, as the sun's light is
+taken through the same cloud. The particles (spray, mist, snow thrown) take it at the sun's own
+lobe (asymmetry 0.6, six tenths round the lobe), so a headlamp's beam shows in the spray. A
+falling flake takes it at 0.5. A raindrop takes it at 0.85, most of it round the lobe, so the rain
+flashes as it passes before a lamp and stays dark beside one. The water (`wgsl/water_light.wgsl`,
+the still bodies and the moving water alike) takes three things from each lamp:
+
+- its glitter, Beckmann over the slopes the pixel cannot resolve, with Smith's masking, which a
+  lamp low over the water near the eye needs and the far sun does not;
+- its light down into the water's own colour;
+- its light on the foam.
+
+A street lamp by a lake lays a broken road of light across it at night. The morph models
+(`morph.wgsl`) read the lamps on a matte face. The skier's skinned figure is an instance family,
+so it read them already. A GLOWING BODY hands the frame a few lamps of its own:
+`liquid_lamps` (`render/liquid.hpp`) lays a grid of point lights over a lava or glowing slime's
+plan, at most 16 of them. Each lamp is as bright as its cell of surface, its luminance (the open
+melt's black body glow and a fifth of the young crust's) times its area over two. Each is lifted
+and softened by its cell's radius and reaches no further than 150 m. The pit's walls are lit by
+its lava at night (`gpu-lava`'s `night-walls`). A fire's flames have handed the list their
+lamps since M39f.
+
+Pictured:
+
+- `gpu-water`'s `lamp-night`: the lake from the jetty in a light rain under a 1000 cd street
+  lamp, its rings and the spray off the post lit, shown with the lamp off and on;
+- `gpu-lava`'s `night-walls` and `night-walls-off`;
+- `precip --hour=22`: the rain, the snow and the splashes under the piste's floodlights.
+
 **Not yet**: the lamps' shadows in the air (`light_inscatter`, the fog's light shafts), a brush
-map's world casting into the atlas, the lamps on particles and water, the lift stations' lamps
-(the stations are not drawn yet) and fires (nothing in the free ride burns yet).
+map's world casting into the atlas, the brush map's own surfaces (they keep their baked light and
+their own torches), the grass and the sprites, the lift stations' lamps (the stations are not
+drawn yet) and fires in the free ride (nothing there burns yet).
 
 ### Materials
 

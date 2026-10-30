@@ -1,14 +1,16 @@
 // LAB `gpu-lava`: LAVA DRAWN (render/liquid.hpp), on the software adapter, in a pit 40 m across in
 // a quarry floor. Named views: the molten lake by day, at dusk and at night (its light the black
 // body's glow of its temperature, so it reads dim by day and blinding by night with no change
-// to the look); the crust's cover from open melt to crusted over; a close look at the plates,
-// their cracks and the ropy folds; the crust carried by a flow, four moments two seconds apart;
-// and the named looks side by side. It holds the glow's brightness to the black body's (a
+// to the look); the pit at night lit by its lava (the glow handed to the frame's lamps), without
+// and with its lamps; the crust's cover from open melt to crusted over; a close look at the
+// plates, their cracks and the ropy folds; the crust carried by a flow, four moments two seconds
+// apart; and the named looks side by side. It holds the glow's brightness to the black body's (a
 // molten pixel's luminance at night against the table's), and fails on a GPU error, a pipeline
 // made after the load, or a view with no lava in it.
 //
 // ge:summary Lab: lava drawn: day, dusk, night, cover, plates close up, flow, the looks
 // ge:keywords lab gpu lava crust plates cracks glow blackbody night dusk flow cover pahoehoe
+// ge:keywords lava-light walls liquid_lamps
 // ge:keywords picture software-adapter
 // ge:skill render water labs
 // ge:test tests/render_liquid_test.cpp
@@ -43,6 +45,9 @@ void put(ge::gpu::Device& d, ls::Scene& s, const std::string& liquid, const gr::
   } else {
     gr::set_liquid_body(d, s.liquids, 0, world.bodies[0], look);
   }
+  // Its light on the pit's walls and the quarry round it.
+  s.lamps.clear();
+  gr::liquid_lamps(world.bodies[0], look, s.lamps);
 }
 
 // A sheet of `pics` side by side with a label over each.
@@ -86,7 +91,8 @@ void run(gl::Lab& lab) {
     // The same deterministic numbers as a run with pictures, so the digest is the same on every
     // row.
     lab.note("No GPU adapter on this machine: no pictures.");
-    ls::placeholders(lab, {"day", "dusk", "night", "cover", "close", "flow", "looks"});
+    ls::placeholders(lab, {"day", "dusk", "night", "night-walls-off", "night-walls", "cover",
+                           "close", "flow", "looks"});
     glow_table(lab);
     ls::checked(lab, 0, 0);
     return;
@@ -143,6 +149,50 @@ void run(gl::Lab& lab) {
     }
     lab.shot({c.id, c.title, c.caption, c.look_for, {{"sun", ls::fixed(c.sun, 2) + " rad"}}}, pic,
              Det::measured);
+  }
+
+  // THE WALLS AT NIGHT: the lava's light on the pit's walls and the quarry floor round it
+  // (`liquid_lamps`), the eye adapted to the lit rock rather than the melt; without its lamps, then
+  // with them.
+  {
+    gr::FrameView v =
+        ls::view_at(ls::kPitX - 4, ls::kFloor + 6, ls::kPitZ - 30, 0.12, -0.32, -0.4, 2.4, t);
+    v.adapt_cd = gr::adapt_for(look_of("lava"), 0.02);
+    const std::vector<gr::LocalLight> lamps = big.lamps;
+    big.lamps.clear();
+    const gl::Picture dark = ls::draw(d, big, v);
+    big.lamps = lamps;
+    const gl::Picture lit = ls::draw(d, big, v);
+    double cd = 0;
+    for (const gr::LocalLight& l : lamps) cd += l.candela;
+    lab.metric("walls.lamps", static_cast<double>(lamps.size()), "count", Det::measured);
+    lab.metric("walls.candela", cd, "cd", Det::measured);
+    const double share = ls::changed(lit, dark);
+    lab.metric("walls.lit-share", share, "", Det::measured);
+    if (lamps.empty() || share < 0.02) {
+      lab.fail("the lava lights none of the pit round it (" + ls::fixed(share * 100, 1) +
+                   "% changed by its lamps)",
+               "Check liquid_lamps (engine/render/liquid.cpp) and that liquid_scene's frame_group "
+               "binds Lights::buffer. Skill: render.");
+    }
+    const std::string caption =
+        "The night view with the eye adapted to the rock, not the melt: the lava's own glow "
+        "handed to the frame's lamps as " +
+        std::to_string(lamps.size()) + " point lights over its plan (" + ls::fixed(cd / 1000, 0) +
+        " kcd in all).";
+    lab.shot({"night-walls-off",
+              "THE PIT AT NIGHT, THE LAVA LIGHTING NOTHING",
+              caption,
+              "the lake glowing but the pit's walls and the floor round it black",
+              {}},
+             dark, Det::measured);
+    lab.shot({"night-walls",
+              "THE PIT AT NIGHT, LIT BY ITS LAVA",
+              caption,
+              "the pit's walls and the rim lit a warm orange from below, brightest nearest the "
+              "melt, the floor behind the rim falling off into the dark",
+              {{"lamps", std::to_string(lamps.size())}}},
+             lit, Det::measured);
   }
 
   const int tw = static_cast<int>(w / 2), th = static_cast<int>(h / 2);
