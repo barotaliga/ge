@@ -569,6 +569,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     f.wet_placed = true;
     view.weather.wet = f.wet.wet;
     view.weather.puddles = f.wet.puddles;
+    view.weather.rain = rate;  // the lakes' rings
   }
   view.reach_m = f.options.reach_m;
   const auto start = std::chrono::steady_clock::now();

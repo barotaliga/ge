@@ -79,7 +79,8 @@ struct FrameUniforms {
   float moon_east[4];    // toward its 0 N 90 E; w: the disc's brightest light under the shadow
   float moon_shadow[4];  // toward the Earth's shadow's axis; w: the albedo map's scale
   float mist[4];         // the reach's mist: where it begins and where it closes, m (0: none);
-                         // 0, 0
+                         // the rain's drops of 2 mm and more landing a m^2 a second,
+                         // and their mean size, mm (render/view.hpp's Weather::rain)
   float wet[4];          // the wet ground: the film's share, the puddles' share; the snow's cover;
                          // a lightning flash (render/view.hpp's Weather)
   // The sky's style (render/sky_style.hpp's `style_rows`): the air's scales, the sun's disc, the
