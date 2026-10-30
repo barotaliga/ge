@@ -74,11 +74,11 @@ void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& 
 
   using r::Slot;
   const auto cs = wgpu::ShaderStage::Compute;
-  c.layout = r::make_layout(device, "bsp.cull",
-                            {Slot::uniform, Slot::storage_shade, Slot::storage_shade,
-                             Slot::storage_shade, Slot::storage, Slot::storage, Slot::storage,
-                             Slot::storage, Slot::texture_raw},
-                            cs);
+  c.layout = r::make_layout(
+      device, "bsp.cull",
+      {Slot::uniform, Slot::storage_shade, Slot::storage_shade, Slot::storage_shade, Slot::storage,
+       Slot::storage, Slot::storage, Slot::storage, Slot::texture_raw},
+      cs);
   const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::bsp_cull, "bsp.cull");
   wgpu::ComputePipelineDescriptor cd{};
   cd.layout = r::make_pipeline_layout(device, "bsp.cull", {frame, c.layout});
@@ -103,18 +103,18 @@ void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& 
 
 void create_bsp_cull_targets(gpu::Device& device, BspCull& c, const r::FrameTargets& targets) {
   r::create_hiz_targets(device, c.hiz, targets);
-  c.group = r::make_group(device, "bsp.cull", c.layout,
-                          {c.params, c.chunk_buf, c.pvs, c.src, c.dst, c.sizes, c.state, c.args,
-                           c.hiz.view});
+  c.group = r::make_group(
+      device, "bsp.cull", c.layout,
+      {c.params, c.chunk_buf, c.pvs, c.src, c.dst, c.sizes, c.state, c.args, c.hiz.view});
 }
 
 void prepare_bsp_cull(gpu::Device& device, BspCull& c, const Scene& scene, const double eye[3],
-                      bool pyramid) {
+                      bool pyramid, bool pvs) {
   // The eye in the file's units (brush/map.hpp's `to_engine`, undone).
   const float p[3] = {float(eye[0] / kUnitM), float(eye[2] / kUnitM), float(eye[1] / kUnitM)};
   const Map& m = scene.map;
   c.eye_leaf = m.leaves.empty() ? 0 : leaf_at(m, p);
-  if (m.leaves.empty())
+  if (m.leaves.empty() || !pvs)
     c.seen.assign(m.surfaces.size(), 1);
   else
     potentially_visible(m, c.eye_leaf, &c.seen);

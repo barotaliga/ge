@@ -70,7 +70,7 @@ TEST(an_explosion_glows_then_its_light_fades_to_nothing) {
   fx::Particles burst;
   fx::explosion(at, 1, &burst);
   int hot = 0;
-  for (const auto& p : burst) hot += p.kelvin > 1500 ? 1 : 0;
+  for (const auto& p : burst) hot += p.kelvin > 1400 ? 1 : 0;
   CHECK(hot >= 100);
   fx::Light a, b, c;
   CHECK(fx::explosion_light(at, 0, &a));

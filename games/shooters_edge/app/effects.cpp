@@ -89,7 +89,7 @@ void trail(const double from[3], const double to[3], uint32_t seed, bool embers,
     if (embers) {
       double dir[3];
       unit(r, dir);
-      Particle e = spark(p, dir, rnd(r, 0.3, 1.2), 1900, 0.35, r);
+      Particle e = spark(p, dir, rnd(r, 0.3, 1.2), 1400, 0.35, r);
       e.fall = 0.1f;
       out->push_back(e);
       out->push_back(smoke(p, 0.14, 0.32, 0.45, 0.9, r));
@@ -114,7 +114,7 @@ void explosion(const double p[3], uint32_t seed, Particles* out) {
   for (int i = 0; i < 140; ++i) {
     double d[3];
     unit(r, d);
-    out->push_back(spark(p, d, rnd(r, 3, 11), 2300, rnd(r, 0.5, 1.1), r));
+    out->push_back(spark(p, d, rnd(r, 3, 11), 1650, rnd(r, 0.5, 1.1), r));
   }
   for (int i = 0; i < 36; ++i) {
     double d[3];
@@ -134,7 +134,7 @@ void impact(const double p[3], const double n[3], uint32_t seed, Particles* out)
     if (along < 0)
       for (int k = 0; k < 3; ++k) d[k] -= 2 * along * n[k];
     for (int k = 0; k < 3; ++k) d[k] = 0.5 * d[k] + 0.5 * n[k];
-    out->push_back(spark(p, d, rnd(r, 2, 6), 1800, 0.25, r));
+    out->push_back(spark(p, d, rnd(r, 2, 6), 1500, 0.25, r));
   }
   for (int i = 0; i < 6; ++i) {
     const double q[3] = {p[0] + n[0] * 0.05, p[1] + n[1] * 0.05, p[2] + n[2] * 0.05};
@@ -181,8 +181,8 @@ void teleport_splash(const double p[3], uint32_t seed, Particles* out) {
     s.streak = 0.04f;
     s.albedo = 1;
     s.opacity = 1;
-    s.kelvin = 7000;  // a cold white glow
-    s.cool_s = 2;
+    s.kelvin = 1700;  // a glow that dulls as it spreads
+    s.cool_s = 0.4f;
     out->push_back(s);
   }
 }
@@ -195,7 +195,7 @@ void lava_splash(const double p[3], uint32_t seed, Particles* out) {
     d[1] = std::abs(d[1]) + 1.5;
     const double l = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
     for (double& c : d) c /= l;
-    Particle q = spark(p, d, rnd(r, 2.5, 5.5), 1450, rnd(r, 1.0, 1.6), r);
+    Particle q = spark(p, d, rnd(r, 2.5, 5.5), 1300, rnd(r, 1.0, 1.6), r);
     q.size = 0.06f;
     q.drag = 0.2f;
     q.fall = 1;
@@ -246,16 +246,23 @@ void screen_blend(const Screen& s, double rgba[4]) {
     a = na;
   };
   switch (s.medium) {
-    case Medium::water: over(0.16, 0.34, 0.38, 0.35); break;
-    case Medium::slime: over(0.22, 0.40, 0.06, 0.55); break;
-    case Medium::lava: over(0.92, 0.36, 0.04, 0.65); break;
-    case Medium::air: break;
+    case Medium::water:
+      over(0.16, 0.34, 0.38, 0.35);
+      break;
+    case Medium::slime:
+      over(0.22, 0.40, 0.06, 0.55);
+      break;
+    case Medium::lava:
+      over(0.92, 0.36, 0.04, 0.65);
+      break;
+    case Medium::air:
+      break;
   }
   if (s.suit) over(0.25, 0.55, 0.20, 0.18);
   if (s.stealth) over(0.45, 0.45, 0.45, 0.25);
   if (s.shield) over(0.95, 0.80, 0.25, 0.22);
   if (s.power) over(0.20, 0.30, 0.95, 0.22);
-  over(0.75, 0.05, 0.02, std::min(s.hurt / 150.0, 0.6));
+  over(0.75, 0.05, 0.02, std::min(s.hurt / 300.0, 0.45));
   rgba[0] = c[0], rgba[1] = c[1], rgba[2] = c[2], rgba[3] = a;
 }
 

@@ -372,7 +372,8 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
             const size_t to =
                 ((size_t(k * layer + lm_at[i].y + y) * s.light.width) + lm_at[i].x + x) * 4;
             for (int c = 0; c < 3; ++c)
-              level[to + size_t(c)] = from + 2 < m.light_rgb.size() ? m.light_rgb[from + size_t(c)] : 0;
+              level[to + size_t(c)] =
+                  from + 2 < m.light_rgb.size() ? m.light_rgb[from + size_t(c)] : 0;
             level[to + 3] = 255;
           }
         }
@@ -481,7 +482,8 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       d.lm2[0] = d.lm2[1] = -1;
       d.styles = 0xffffffffu;
       if (lp) {
-        for (uint32_t k = 0; k < sf.styles; ++k) d.styles &= ~(uint32_t(255 - sf.style[k]) << (8 * k));
+        for (uint32_t k = 0; k < sf.styles; ++k)
+          d.styles &= ~(uint32_t(255 - sf.style[k]) << (8 * k));
       }
       d.anim = anim_of[sf.texture];
       s.vertices.push_back(d);

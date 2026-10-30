@@ -72,7 +72,7 @@ bool write_v38(const Fixture& fx, const Compiled& c, Out* out, std::string* err)
     faces.i32(int32_t(first_edge));
     faces.i16(int32_t(m));
     faces.i16(int32_t(i));
-    for (uint8_t s : {uint8_t(0), uint8_t(255), uint8_t(255), uint8_t(255)}) faces.u8(s);
+    for (uint8_t s : f.styles) faces.u8(s);
     faces.i32(lightofs);
   }
 

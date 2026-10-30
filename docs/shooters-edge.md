@@ -283,22 +283,34 @@ existing server program and an existing client against ours, run as black boxes 
 Built on the existing frame (`docs/rendering.md`), measured in the container on lavapipe like
 every pass, and judged by captioned screenshots:
 
-- **The world**: one static vertex buffer for the map's faces, drawn by material in a few
-  calls, culled by the PVS of the camera's leaf and then by the existing Hi-Z instance culling.
-  Lightmaps packed into atlases; up to four light styles a face, each style's brightness a
-  uniform the frame updates (the flicker and pulse strings mods set), so animated light costs
-  no re-upload. Coloured light from `.lit` files when present.
-- **Materials**: animated texture sequences, warped liquids with optional transparency, the
-  two-layer scrolling sky or a skybox, fullbright palette colours as emissive.
+- **The world** (`plugins/brush/app/bsp_draw.hpp`): one static vertex buffer for the map's
+  faces, sorted by kind and drawn a kind a call. **The cull** (`bsp_cull.hpp`, `r_cull`): the
+  potentially visible set of the eye's leaf on the CPU (a brush model's faces always in it), then
+  on the GPU each face's box against the frustum and the depth pyramid in two phases (last
+  frame's pyramid early, this frame's late), compacted in the faces' own order by a scan so a
+  frame's pixels never hang on thread order, and drawn with indirect calls. `se-world` holds it
+  to the same pixels as drawing everything. **Light styles**: every style a face stores is a
+  layer of the lightmap atlas, and the 64 styles' levels are a uniform the frame fills from their
+  letter patterns ('a' dark, 'm' as baked, ten letters a second; `set_light_style`), so animated
+  light costs no re-upload. Coloured light from `.lit` files when present (to come).
+- **Materials**: animated texture sequences ("+0" .. "+9", five frames a second, each texture
+  starting at its own frame), warped liquids, the two-layer scrolling sky (a skybox to come),
+  fullbright palette colours as emissive.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
-- **Effects**: the classic particle effects as the engine's compute particles; dynamic lights
-  from rockets, muzzle flashes and powerups as a small light list; the screen blends (damage,
-  powerups, liquids).
-- **Two looks, one renderer**: the classic look (nearest filtering, the palette and the colour
-  map applied as a post pass, so it looks like the 8-bit software renderer) and the modern
-  look (filtered true colour, the engine's shadows, bloom and TAA-U, optional higher-resolution
-  replacement textures). A lab pictures every scene in both.
+- **Effects** (`games/shooters_edge/app/effects.hpp`): our own trails and bursts on the engine's
+  particles (a pool over no ground: nothing lands): a rocket's embers and smoke, a grenade's
+  smoke, an explosion's sparks and smoke, a hit's sparks and dust, a wound's droplets (dark: the
+  pool has no colour channel yet), a teleport's column of cold light, lava thrown up. **Dynamic
+  lights** (`set_dynamic_lights`): the classic adds them to the lightmaps' light, falling off in
+  a straight line to their radius; the modern draws them as point lights. **The screen's blend**
+  (`render/post.hpp`'s `set_post_blend`): the liquid round the eye, the powers held and a hurt's
+  fading red folded into one colour and share the post pass mixes in after its grade.
+- **Two looks, one renderer** (`games/shooters_edge/app/look.hpp`): the classic look (crisp
+  texels, the lightmaps and their styles, the map's own sky, no bloom, and the post pass's grade
+  pulling every colour to the nearest of the palette's 256) and the modern look (filtered,
+  real-time lights with shadows, our sky and liquids, bloom; TAA-U and replacement textures to
+  come). The `se-world` lab pictures every named view in both.
 - **Headless**: a CPU raster view of any map from above (the leaves, the PVS of a point, the
   hulls) for the labs, like Fall Line's map views, with no GPU at all.
 

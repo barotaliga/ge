@@ -90,6 +90,9 @@ struct Options {
   // r_cull: the world's faces culled by the eye's potentially visible set, the frustum and the
   // depth pyramid in two phases (bsp_cull.hpp); off draws every face.
   bool cull = true;
+  // r_novis's opposite: the cull's first step, the potentially visible set; off, every face goes
+  // on to the frustum and the pyramid (a map whose visibility is not conservative).
+  bool pvs = true;
 };
 
 inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side
@@ -102,9 +105,9 @@ inline constexpr uint32_t kOrthos = 3;  // the sun's, the zenith's and the fall'
 // to the lightmaps' light as the classic did, falling off in a straight line to nothing at its
 // radius; v2 lit in real time draws it as one more point light.
 struct DynamicLight {
-  double pos[3] = {0, 0, 0};       // engine metres
-  double radius = 5;               // m: where its light ends
-  double colour[3] = {1, 1, 1};    // its light at its middle, the lightmaps' units (1: as baked 'm')
+  double pos[3] = {0, 0, 0};     // engine metres
+  double radius = 5;             // m: where its light ends
+  double colour[3] = {1, 1, 1};  // its light at its middle, the lightmaps' units (1: as baked 'm')
 };
 
 struct GpuLight {
@@ -126,7 +129,7 @@ struct GpuBsp {
   float veil[4];     // the sky faces' pixels times these (the sky's light, seen and tinted)
   float weather[4];  // on (1), the rain falling now, the fall's spread, 0
   GpuJob ortho[kOrthos];
-  float info5[4];  // a lightmap layer's height in the atlas's uv, the layers, 0, 0
+  float info5[4];              // a lightmap layer's height in the atlas's uv, the layers, 0, 0
   float styles[kLightStyles];  // each light style's level now (draw_data.hpp)
 };
 
@@ -159,7 +162,7 @@ struct BspDraw {
   std::array<std::string, kLightStyles> light_styles;
   wgpu::Buffer frames;  // the animated textures' frames (Scene::frames)
   BspCull cull;
-  std::vector<DynamicLight> dynamic;   // this frame's (set_dynamic_lights)
+  std::vector<DynamicLight> dynamic;       // this frame's (set_dynamic_lights)
   std::vector<PointLight> dynamic_points;  // the same as v2's point lights
   uint64_t culled_frames = 0;  // frames culled since the targets were made (0: no pyramid yet)
   // The scene's lava lights and teleporters' lights (made once).

@@ -138,7 +138,7 @@ fn test_late(@builtin(global_invocation_id) id: vec3u) {
     return;
   }
   sizes[i] = 0u;
-  if (state[i] == 0u) {
+  if (state[i] != 1u) {
     return;
   }
   let ch = chunks[i];

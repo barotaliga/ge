@@ -12,7 +12,8 @@
 // - **Visibility**: a room sees itself, the rooms it touches and theirs (two doorways deep).
 // - **Light**: per luxel (one every 16 texels), an ambient plus each light in its room, falling
 //   off linearly to its radius and leaning with the angle; grey in 29 and BSP2, the same as RGB
-//   in 38 and 46. Clip hulls (29, BSP2) are the point tree again; their expansion is the trace's.
+//   in 38 and 46. A light of a style other than 0 lights a lightmap of its own (29, BSP2, 38). Clip
+//   hulls (29, BSP2) are the point tree again; their expansion is the trace's.
 //
 // The bytes are a pure function of the fixture: the same file on every platform.
 //
@@ -43,6 +44,9 @@ struct FixtureLight {
   float pos[3] = {};
   float radius = 300;  // units to darkness
   float bright = 200;  // 0..255 at the light
+  // Its light style (29, BSP2, 38): 0 lights the faces' first lightmap with the ambient; another
+  // number lights a lightmap of its own on the faces of its room, which name that style after 0.
+  uint8_t style = 0;
 };
 
 struct Fixture {

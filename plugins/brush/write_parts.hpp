@@ -31,7 +31,9 @@ struct CFace {
   std::vector<std::array<float, 3>> poly;  // clockwise seen from the room
   float vecs[2][4] = {};                   // s and t: xyz and offset
   int64_t base[2] = {}, size[2] = {};      // the lightmap: first luxel and luxels each way
-  std::vector<uint8_t> luxels;             // grey, size[0] × size[1], rows of size[0]
+  // Grey, size[0] × size[1] a style, rows of size[0], the styles' maps one after another.
+  std::vector<uint8_t> luxels;
+  uint8_t styles[4] = {0, 255, 255, 255};  // the light styles the maps are of
 };
 
 struct CNode {
@@ -53,7 +55,9 @@ struct Compiled {
 
 bool compile(const Fixture& fx, Compiled* out, std::string* err);
 // The luxel brightness at `p` on a surface facing `n` in room `room`.
-uint8_t light_at(const Fixture& fx, uint32_t room, const double p[3], const float n[3]);
+// The light at `p` on a face facing `n` in `room`: of the lights of `style` (0 with the ambient).
+uint8_t light_at(const Fixture& fx, uint32_t room, const double p[3], const float n[3],
+                 uint8_t style = 0);
 // The room `p` is in, or −1.
 int room_of(const Fixture& fx, const float p[3]);
 // One visibility row (a bit a cluster) run-length coded.

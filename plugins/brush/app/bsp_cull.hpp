@@ -38,9 +38,9 @@ struct GpuChunk {
 };
 
 struct BspCull {
-  uint32_t chunks = 0, total = 0;          // faces drawn, indices in the source
-  std::vector<uint32_t> surface;           // each chunk's map surface
-  std::vector<uint8_t> world;              // each chunk: 1 the world's (the PVS decides), 0 a model's
+  uint32_t chunks = 0, total = 0;  // faces drawn, indices in the source
+  std::vector<uint32_t> surface;   // each chunk's map surface
+  std::vector<uint8_t> world;      // each chunk: 1 the world's (the PVS decides), 0 a model's
   wgpu::Buffer src, chunk_buf, pvs, dst, sizes, state, args, params;
   std::vector<uint32_t> args_reset;
   render::Hiz hiz;
@@ -58,10 +58,10 @@ struct BspCull {
 // What the last frame's cull did, in chunks (faces).
 struct CullStats {
   uint32_t chunks = 0;
-  uint32_t pvs = 0;       // left out by the potentially visible set
-  uint32_t frustum = 0;   // outside the frustum
-  uint32_t occluded = 0;  // hidden by the last frame's pyramid (tested again late)
-  uint32_t hidden = 0;    // hidden by this frame's pyramid too
+  uint32_t pvs = 0;              // left out by the potentially visible set
+  uint32_t frustum = 0;          // outside the frustum
+  uint32_t occluded = 0;         // hidden by the last frame's pyramid (tested again late)
+  uint32_t hidden = 0;           // hidden by this frame's pyramid too
   uint32_t early = 0, late = 0;  // drawn by each phase
 };
 
@@ -73,9 +73,9 @@ void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& 
 // The pyramid at the targets' size, and the group that reads it (again when they change).
 void create_bsp_cull_targets(gpu::Device& device, BspCull& cull,
                              const render::FrameTargets& targets);
-// This frame's set from the eye (engine metres), and the arguments reset.
+// This frame's set from the eye (engine metres; `pvs` false: every face), the arguments reset.
 void prepare_bsp_cull(gpu::Device& device, BspCull& cull, const Scene& scene, const double eye[3],
-                      bool pyramid);
+                      bool pyramid, bool pvs = true);
 // A phase's three dispatches (0 early, 1 late).
 void encode_bsp_cull(const BspCull& cull, const gpu::PipelineSet& pipelines,
                      render::FrameRecorder& rec, wgpu::CommandEncoder& encoder,

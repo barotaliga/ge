@@ -72,14 +72,14 @@ void create_pool(gpu::Device& device, gpu::PipelineSet& pipelines, Particles& ps
   cd.compute.module = gpu::create_shader(device, wgsl::particles_sim, "particles_sim");
   cd.compute.entryPoint = "sim";
   ps.p_sim = pipelines.add_compute(device, cd);
-  ps.sim_group = make_group(device, "particles.sim", ps.sim_layout,
-                            {ps.params, ps.slots, ground, heights});
+  ps.sim_group =
+      make_group(device, "particles.sim", ps.sim_layout, {ps.params, ps.slots, ground, heights});
 
   const auto vf = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
   ps.light_layout =
       make_layout(device, "particles.light", {Slot::uniform, Slot::texture, Slot::texture}, vf);
-  ps.light_group = make_group(device, "particles.light", ps.light_layout,
-                              {ground, horizon0, horizon1});
+  ps.light_group =
+      make_group(device, "particles.light", ps.light_layout, {ground, horizon0, horizon1});
   ps.draw_layout =
       make_layout(device, "particles.draw", {Slot::uniform, Slot::storage_read, Slot::depth}, vf);
   ps.shadows = no_sun_shadows(device);
@@ -140,10 +140,10 @@ void create_particles(gpu::Device& device, gpu::PipelineSet& pipelines, Particle
   ps.ground = make_buffer(device, "particles.ground", sizeof none, BU::Uniform);
   device.queue.WriteBuffer(ps.ground, 0, &none, sizeof none);
   const auto use = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
-  ps.ground_height = make_texture(device, "particles.ground.height", 1, 1, 1,
-                                  wgpu::TextureFormat::R32Float, use);
-  ps.ground_horizon = make_texture(device, "particles.ground.horizon", 1, 1, 1,
-                                   wgpu::TextureFormat::R16Float, use);
+  ps.ground_height =
+      make_texture(device, "particles.ground.height", 1, 1, 1, wgpu::TextureFormat::R32Float, use);
+  ps.ground_horizon =
+      make_texture(device, "particles.ground.horizon", 1, 1, 1, wgpu::TextureFormat::R16Float, use);
   const float far_below = -1e9f;
   const uint16_t flat = 0;
   wgpu::TexelCopyTextureInfo dst{};

@@ -156,7 +156,8 @@ TEST(a_room_sees_its_own_faces_and_not_a_room_three_doorways_off) {
     const uint32_t n = br::potentially_visible(m, 1, &seen);
     CHECK(n > 0 && n < m.surfaces.size());
     CHECK(m.leaves[1].marks > 0 && m.leaves[7].marks > 0);
-    for (uint32_t k = 0; k < m.leaves[1].marks; ++k) CHECK(seen[m.marks[m.leaves[1].first_mark + k]]);
+    for (uint32_t k = 0; k < m.leaves[1].marks; ++k)
+      CHECK(seen[m.marks[m.leaves[1].first_mark + k]]);
     for (uint32_t k = 0; k < m.leaves[7].marks; ++k) {
       CHECK(!seen[m.marks[m.leaves[7].first_mark + k]]);
     }
@@ -167,6 +168,26 @@ TEST(a_room_sees_its_own_faces_and_not_a_room_three_doorways_off) {
       if (s.styles > 0) CHECK(s.style[0] == 0);
       for (int k = s.styles; k < 4; ++k) CHECK(s.style[k] == 255);
     }
+  }
+}
+
+TEST(a_light_of_its_own_style_lights_a_second_lightmap_on_its_rooms_faces) {
+  br::Fixture fx = br::sample_fixture();
+  fx.lights[0].style = 5;  // the hall's lamp
+  for (br::Family f : {br::Family::v29, br::Family::bsp2, br::Family::v38}) {
+    std::vector<uint8_t> bytes;
+    std::string err;
+    CHECK(br::write_bsp(fx, f, &bytes, &err));
+    br::Map m;
+    CHECK_MSG(br::read_bsp(bytes, &m, &err), err.c_str());
+    int styled = 0;
+    for (const br::Surface& s : m.surfaces) {
+      if (s.styles == 2) {
+        CHECK(s.style[0] == 0 && s.style[1] == 5 && s.style[2] == 255);
+        ++styled;
+      }
+    }
+    CHECK(styled >= 6);  // the hall's floor, ceiling and walls at least
   }
 }
 

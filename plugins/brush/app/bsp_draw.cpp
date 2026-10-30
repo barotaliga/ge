@@ -243,12 +243,11 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
 
   using r::Slot;
   const auto both = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
-  d.layout = r::make_layout(
-      device, "bsp",
-      {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler, Slot::storage_read,
-       Slot::depth_array, Slot::compare, Slot::depth_array, Slot::texture, Slot::texture,
-       Slot::storage_read},
-      both);
+  d.layout = r::make_layout(device, "bsp",
+                            {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler,
+                             Slot::storage_read, Slot::depth_array, Slot::compare,
+                             Slot::depth_array, Slot::texture, Slot::texture, Slot::storage_read},
+                            both);
   d.group = r::make_group(device, "bsp", d.layout,
                           {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler,
                            d.lights, d.cubes_view, d.compare, d.orthos_view,
@@ -419,10 +418,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     for (const DynamicLight& dl : d.dynamic) {
       PointLight l;
       for (int k = 0; k < 3; ++k) l.pos[k] = dl.pos[k];
-      const double peak = std::max({dl.colour[0], dl.colour[1], dl.colour[2], 1e-6});
-      l.value = 256 * peak;
+      // A light entity of this value reaches the radius; its colour scaled so that half way out
+      // it gives half its middle's light, as the classic's straight fall-off does.
+      l.value = std::max(dl.radius, 0.01) / kUnitM;
       l.reach = dl.radius / 1.5;
-      for (int k = 0; k < 3; ++k) l.colour[k] = dl.colour[k] / peak;
+      for (int k = 0; k < 3; ++k) l.colour[k] = 0.5 * dl.colour[k] * 256 / l.value;
       d.dynamic_points.push_back(l);
     }
     for (const PointLight& l : d.dynamic_points) consider(l);
@@ -514,7 +514,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   set4(d.staged.info4, o.bump, 0, 0, 0);
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers, 0, 0);
   if (o.cull) {
-    prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0);
+    prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0, o.pvs);
     ++d.culled_frames;
   } else {
     d.culled_frames = 0;

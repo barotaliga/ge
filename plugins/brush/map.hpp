@@ -131,8 +131,8 @@ struct Map {
   std::vector<Model> models;  // [0] the world
 
   int32_t clusters = 0;
-  uint32_t row_bytes = 0;    // a cluster's row: one bit a cluster
-  std::vector<uint8_t> pvs;  // clusters × row_bytes, decompressed
+  uint32_t row_bytes = 0;       // a cluster's row: one bit a cluster
+  std::vector<uint8_t> pvs;     // clusters × row_bytes, decompressed
   std::vector<uint32_t> marks;  // the leaves' marked surfaces (Leaf::first_mark), surface indices
 
   std::string entity_text;

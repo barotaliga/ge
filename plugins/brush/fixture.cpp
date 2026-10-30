@@ -143,10 +143,11 @@ int room_of(const Fixture& fx, const float p[3]) {
   return -1;
 }
 
-uint8_t light_at(const Fixture& fx, uint32_t room, const double p[3], const float n[3]) {
-  double b = fx.ambient;
+uint8_t light_at(const Fixture& fx, uint32_t room, const double p[3], const float n[3],
+                 uint8_t style) {
+  double b = style == 0 ? fx.ambient : 0;
   for (const FixtureLight& l : fx.lights) {
-    if (room_of(fx, l.pos) != int(room)) continue;
+    if (l.style != style || room_of(fx, l.pos) != int(room)) continue;
     const double d3[3] = {l.pos[0] - p[0], l.pos[1] - p[1], l.pos[2] - p[2]};
     const double d = std::sqrt(d3[0] * d3[0] + d3[1] * d3[1] + d3[2] * d3[2]);
     if (d >= l.radius) continue;
@@ -276,14 +277,24 @@ bool compile(const Fixture& fx, Compiled* out, std::string* err) {
             f.base[a] = int64_t(std::floor(lo[a] / 16.0));
             f.size[a] = int64_t(std::ceil(hi2[a] / 16.0)) - f.base[a] + 1;
           }
-          for (int64_t j = 0; j < f.size[1]; ++j) {
-            for (int64_t i = 0; i < f.size[0]; ++i) {
-              double p[3];
-              point_at(axis, coord, double((f.base[0] + i) * 16), double((f.base[1] + j) * 16), p);
-              for (int k = 0; k < 3; ++k) {
-                p[k] = std::clamp(p[k], double(rm.min[k]), double(rm.max[k]));
+          // The styles the room's lights are of: 0, then each other in the lights' order.
+          int styles = 1;
+          for (const FixtureLight& l : fx.lights) {
+            if (l.style == 0 || room_of(fx, l.pos) != int(r) || styles == 4) continue;
+            if (std::find(f.styles, f.styles + styles, l.style) == f.styles + styles)
+              f.styles[styles++] = l.style;
+          }
+          for (int st = 0; st < styles; ++st) {
+            for (int64_t j = 0; j < f.size[1]; ++j) {
+              for (int64_t i = 0; i < f.size[0]; ++i) {
+                double p[3];
+                point_at(axis, coord, double((f.base[0] + i) * 16), double((f.base[1] + j) * 16),
+                         p);
+                for (int k = 0; k < 3; ++k) {
+                  p[k] = std::clamp(p[k], double(rm.min[k]), double(rm.max[k]));
+                }
+                f.luxels.push_back(light_at(fx, r, p, f.normal, f.styles[st]));
               }
-              f.luxels.push_back(light_at(fx, r, p, f.normal));
             }
           }
           c.room_faces[r].push_back(uint32_t(c.faces.size()));
