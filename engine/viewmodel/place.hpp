@@ -127,8 +127,9 @@ void held_dir_to_world(const Placement& p, double gun_fov_y, const camera::Pose&
 // `MuzzlePose`): the barrel's tip on frames `a` and `b` blended by `t` (`muzzle_at`), the way the
 // shot leaves (`muzzle_dir`) and the gun's up (held +y, made square to the way), all through
 // `held_to_world`'s lens match, so the flame rides the firing animation and the placement's kick.
+// `barrel`: which of a gun's `barrels` (-1: the one muzzle).
 void muzzle_to_world(const HeldModel& model, int a, int b, double t, const Placement& p,
                      double gun_fov_y, const camera::Pose& view, double at[3], double dir[3],
-                     double up[3]);
+                     double up[3], int barrel = -1);
 
 }  // namespace ge::viewmodel

@@ -178,6 +178,7 @@ TEST(a_door_gun_on_a_man_at_five_stars_kills_him_and_the_hunt_ends_killed) {
   // Staged: one gun alone, the army's own men and machines kept home.
   st.army.fire = false;
   st.army.send_helis = false;
+  st.army.send_vehicles = false;
   st.racers[0].skier = sk::stand_skier(st.world(), kMid, kMid, 0, 0);
   fs::set_wanted(st, 5);
   const double gy = st.level->ground_at(kMid + 80, kMid + 120) + 25;
