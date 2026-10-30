@@ -326,6 +326,11 @@ constexpr FlagSpec kQcEntities{"entities", "<n>",
                                "entities in use before the call (default 1: the world)"};
 constexpr FlagSpec kQcRun[] = {kQcFunction, kQcArgs, kQcBuiltins, kQcEntities,
                                kPreset,     kEngine, kRepo};
+constexpr FlagSpec kQcBuild[] = {
+    {"out", "<file>", "where the progs goes (default: the project's output, or <file>.dat)"},
+    kPreset,
+    kEngine,
+    kRepo};
 constexpr FlagSpec kQcDisasm[] = {
     {"function", "<name>", "only this function (default: every one)"}, kPreset, kEngine, kRepo};
 constexpr FlagSpec kQcTrace[] = {kQcFunction,
@@ -581,6 +586,11 @@ const CommandSpec kCommands[] = {
      "chart series or spans files (a trace, a bench, a profile) to PNG and SVG; several files "
      "overlay; every outlier comes back as a note",
      kGraphFlags, "ge graph runs/before.tsv runs/after.tsv --columns=step_ms", "debug"},
+    {"qc build", "<progs.src>", 1, 1, "create",
+     "QC sources compiled to a progs: a project file (progs.src: the output, then the sources in "
+     "order) or one .qc file; the progs and its .lines written, every mistake a finding at its "
+     "file and line",
+     kQcBuild, "ge qc build games/shooters_edge/qc/progs.src", "progs"},
     {"qc disasm", "<progs>", 1, 1, "see",
      "a QC program (a progs file) checked and disassembled: its counts, then every function's "
      "statements with operands named by their definitions and the source lines when a .lines "

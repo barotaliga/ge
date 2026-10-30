@@ -2,6 +2,7 @@
 //
 // ge:summary The progs loader and checker: sections read, every bound and index validated
 // ge:keywords qc progs load check refuse little-endian sections operands jumps functions defs
+// ge:keywords write_progs write save bytes
 // ge:skill progs
 // ge:test tests/progs_file_test.cpp
 #include "progs/file.hpp"
@@ -316,5 +317,57 @@ const Def* find_def(const Progs& p, const std::vector<Def>& defs, const char* na
 
 const Def* find_field(const Progs& p, const char* name) { return find_def(p, p.fielddefs, name); }
 const Def* find_global(const Progs& p, const char* name) { return find_def(p, p.globaldefs, name); }
+
+namespace {
+
+void put32(std::vector<uint8_t>& out, uint32_t v) {
+  for (int i = 0; i < 4; i++) out.push_back(static_cast<uint8_t>(v >> (8 * i)));
+}
+void put16(std::vector<uint8_t>& out, uint16_t v) {
+  out.push_back(static_cast<uint8_t>(v));
+  out.push_back(static_cast<uint8_t>(v >> 8));
+}
+
+}  // namespace
+
+std::vector<uint8_t> write_progs(const Progs& p) {
+  const auto n = [](size_t v) { return static_cast<uint32_t>(v); };
+  const uint32_t header = 60;
+  const uint32_t st_ofs = header;
+  const uint32_t gd_ofs = st_ofs + n(p.statements.size()) * 8;
+  const uint32_t fd_ofs = gd_ofs + n(p.globaldefs.size()) * 8;
+  const uint32_t fn_ofs = fd_ofs + n(p.fielddefs.size()) * 8;
+  const uint32_t str_ofs = fn_ofs + n(p.functions.size()) * 36;
+  const uint32_t gl_ofs = str_ofs + n(p.strings.size());
+  std::vector<uint8_t> out;
+  out.reserve(gl_ofs + p.globals.size() * 4);
+  for (uint32_t v :
+       {static_cast<uint32_t>(p.version), static_cast<uint32_t>(p.crc), st_ofs,
+        n(p.statements.size()), gd_ofs, n(p.globaldefs.size()), fd_ofs, n(p.fielddefs.size()),
+        fn_ofs, n(p.functions.size()), str_ofs, n(p.strings.size()), gl_ofs, n(p.globals.size()),
+        static_cast<uint32_t>(p.entityfields)})
+    put32(out, v);
+  for (const Statement& s : p.statements) {
+    put16(out, s.op);
+    put16(out, static_cast<uint16_t>(s.a));
+    put16(out, static_cast<uint16_t>(s.b));
+    put16(out, static_cast<uint16_t>(s.c));
+  }
+  for (const auto* defs : {&p.globaldefs, &p.fielddefs}) {
+    for (const Def& d : *defs) {
+      put16(out, d.type);
+      put16(out, d.offset);
+      put32(out, static_cast<uint32_t>(d.name));
+    }
+  }
+  for (const Function& f : p.functions) {
+    for (int32_t v : {f.first_statement, f.parm_start, f.locals, 0, f.name, f.file, f.num_parms})
+      put32(out, static_cast<uint32_t>(v));
+    for (uint8_t s : f.parm_size) out.push_back(s);
+  }
+  out.insert(out.end(), p.strings.begin(), p.strings.end());
+  for (uint32_t w : p.globals) put32(out, w);
+  return out;
+}
 
 }  // namespace ge::progs
