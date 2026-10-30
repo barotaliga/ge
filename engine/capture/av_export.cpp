@@ -37,28 +37,29 @@ bool AvExport::open(const AvExportOptions& o, std::string& error) {
     error = "the frame rate and the step rate must be over 0";
     return false;
   }
-  if (!o.codec.empty() && o.codec != "av1") {
-    error = "no codec `" + o.codec + "`; the export's codecs are av1 and none (uncompressed)";
+  if (!o.codec.empty() && !video_codec_word(o.codec)) {
+    error = "no codec `" + o.codec +
+            "`; the export's codecs are av1, h264, hevc, auto and none (uncompressed)";
     return false;
   }
   opt_ = o;
-  coded_ = o.codec == "av1";
+  coded_ = !o.codec.empty();
   MatroskaOptions m;
   VideoTrack v;
   v.width = o.width;
   v.height = o.height;
   v.fps = o.fps;
   if (coded_) {
-    Av1Options a;
+    VideoEncoderOptions a;
     a.width = o.width;
     a.height = o.height;
     a.fps = o.fps;
     a.crf = o.crf;
     a.speed = o.speed;
     a.threads = o.threads;
-    if (!av1_.open(a, error)) return false;
-    v.codec = "V_AV1";
-    v.codec_private = av1_codec_private(av1_.sequence_header());
+    if (!video_.open(o.codec, a, error)) return false;
+    v.codec = std::string(video_.matroska_codec());
+    v.codec_private = video_.codec_private();
   }
   m.video = v;
   if (o.sound) {
@@ -132,7 +133,7 @@ bool AvExport::frame(const play::Run& run, const lab::Picture& p, std::string& e
   to_i420(p, yuv_);
   if (coded_) {
     held_.fed(frame_ms(frames_, opt_.fps));
-    if (!av1_.encode(yuv_, frame_ms(frames_, opt_.fps), held_.video, error)) return false;
+    if (!video_.encode(yuv_, frame_ms(frames_, opt_.fps), held_.video, error)) return false;
   } else if (!mux_.video(frame_ms(frames_, opt_.fps), true, yuv_, error)) {
     return false;
   }
@@ -152,7 +153,7 @@ bool AvExport::interleave(bool all, std::string& error) {
 bool AvExport::close(std::string& error) {
   if (!emit_sound(frame_sample(frames_, opt_.fps, audio::kRate), error)) return false;
   if (coded_) {
-    if (!av1_.flush(held_.video, error)) return false;
+    if (!video_.flush(held_.video, error)) return false;
     if (sound_ && !opus_.finish(held_.audio, error)) return false;
     if (!interleave(true, error)) return false;
   }

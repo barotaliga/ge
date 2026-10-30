@@ -118,10 +118,18 @@ TEST(each_format_has_its_encoder_command) {
   CHECK(has(gp::encoding_problem({"mov", "", -1, "", "", ""}), "the formats are"));
   CHECK(has(gp::encoding_problem({"mp4", "x;rm", -1, "", "", ""}), "not a plain word"));
   CHECK(has(gp::encoding_problem({"mp4", "", 70, "", "", ""}), "over 63"));
-  // The engine's own MP4 holds AV1 and Opus only.
+  // The engine's own MP4 holds coded pictures only.
   const gp::Encoding own_mp4{"mkv", "av1", -1, "", "", "mp4"};
   CHECK(gp::encoding_problem(own_mp4).empty() && gp::extension_of(own_mp4) == "mp4");
-  CHECK(has(gp::encoding_problem({"mkv", "", -1, "", "", "mp4"}), "--codec=av1"));
+  CHECK(has(gp::encoding_problem({"mkv", "", -1, "", "", "mp4"}), "with a --codec"));
+  // The platform's codecs go in an .mp4 unless an .mkv is asked for; auto may be either codec.
+  for (const char* c : {"h264", "hevc", "auto"}) {
+    const gp::Encoding e{"mkv", c, -1, "", "", ""};
+    CHECK(gp::encoding_problem(e).empty() && gp::extension_of(e) == "mp4");
+    const gp::Encoding in_mkv{"mkv", c, -1, "", "", "mkv"};
+    CHECK(gp::encoding_problem(in_mkv).empty() && gp::extension_of(in_mkv) == "mkv");
+  }
+  CHECK(has(gp::encoding_problem({"mkv", "vp9", -1, "", "", ""}), "h264 and hevc"));
   CHECK(has(gp::encoding_problem({"mkv", "av1", -1, "", "", "avi"}), "no container"));
 }
 

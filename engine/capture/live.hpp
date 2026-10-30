@@ -11,8 +11,9 @@
 //   takes a lock for a swap of buffers; with `queue` pictures already waiting the picture is
 //   DROPPED and counted, never queued without bound.
 // - THE CAPTURE'S OWN WORKER converts each picture to I420 (crop or pad to the file's size if
-//   the window was resized), encodes it (AV1 and Opus with `codec` "av1", the default; raw I420
-//   and float PCM with ""), cuts the sound into 20 ms packets, and writes both tracks
+//   the window was resized), encodes it (the video by `codec`, capture/video.hpp: "av1" the
+//   default, the platform's "h264" or "hevc", or "auto"; the sound Opus; raw I420 and float PCM
+//   with ""), cuts the sound into 20 ms packets, and writes both tracks
 //   INTERLEAVED BY TIME (interleave.hpp): a sound packet goes in once a picture at or after it
 //   has been encoded, or once it is half a second older than the last frame stamped with no
 //   picture before it still waiting (a frame still in the readback ring is a few frames old at
@@ -46,6 +47,7 @@
 #include "capture/codecs.hpp"
 #include "capture/interleave.hpp"
 #include "capture/mux.hpp"
+#include "capture/video.hpp"
 #include "lab/raster.hpp"
 
 namespace ge::capture {
@@ -55,7 +57,7 @@ struct LiveOptions {
   int width = 0, height = 0;  // the file's size; rounded down to even
   double fps = 60;            // nominal: the track's default duration, AV1's keyframe spacing
   bool sound = true;          // an audio track off the tap
-  std::string codec = "av1";  // "av1" (AV1 and Opus, webm) or "" (I420 and float PCM, mkv)
+  std::string codec = "av1";  // av1, h264, hevc or auto (video.hpp), or "" (I420 and PCM, mkv)
   std::string container;      // "mp4" or "mkv"; "" by the file's name (mux.hpp)
   int crf = 32;
   int speed = 10;  // libaom's realtime speed, 7..11
@@ -103,6 +105,8 @@ class Live {
   LiveStats stats() const;
   const std::vector<uint8_t>& memory() const { return mux_.bytes(); }
   std::string_view doc_type() const { return doc_type_; }
+  // What codes the pictures (video.hpp), "" uncompressed.
+  std::string encoder() const { return coded_ ? video_.encoder() : std::string(); }
 
  private:
   struct Pending {
@@ -120,7 +124,7 @@ class Live {
   bool coded_ = false;
   std::string doc_type_;
   Mux mux_;
-  Av1Encoder av1_;
+  VideoEncoder video_;
   OpusEncoder opus_;
   Interleave held_;
 

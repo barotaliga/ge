@@ -28,8 +28,9 @@
 // this one through its ring. No device (a container, SDL_AUDIO_DRIVER=dummy failing) is not an
 // error: the app runs silent. Focus lost fades the buses out with the clock.
 //
-// THE CAPTURE: --capture=PATH.webm or .mp4 (AV1, Opus) or .mkv (raw) records the window and its
-// sound as played, never waiting on either (capture/live.hpp, docs/replays.md § The live capture).
+// THE CAPTURE: --capture=PATH.webm (AV1, Opus), .mp4 (the platform's H.264 where it has an
+// encoder, as on a Mac, else AV1; Opus) or .mkv (raw) records the window and its sound as played,
+// never waiting on either (capture/live.hpp, docs/replays.md § The live capture).
 //
 //   fall_line [--frames=N] [--size=WxH] [--no-vsync] [--seed=N] [--rivals=N] [--view=NAME]
 //             [--hour=H] [--mute] [--bot] [--bindings=PATH] [--inputs=PATH] [--events=PATH]
@@ -387,13 +388,15 @@ static int run_main(int argc, char** argv) {
     o.width = w;
     o.height = h;
     o.sound = !set.mute;
-    o.codec = std::filesystem::path(args.capture).extension() == ".mkv" ? "" : "av1";
+    const std::filesystem::path ext = std::filesystem::path(args.capture).extension();
+    o.codec = ext == ".mkv" ? "" : ext == ".mp4" ? "auto" : "av1";
     if (!capture.open(o, ge::platform::now_ns(), error)) {
       out::error("fall_line: cannot capture to " + args.capture + ": " + error +
                  "; next: pass --capture=<a writable .webm, .mp4 or .mkv path>");
       return 2;
     }
-    out::status("fall_line: capturing the window to " + args.capture);
+    out::status("fall_line: capturing the window to " + args.capture +
+                (capture.encoder().empty() ? "" : " (" + capture.encoder() + ")"));
   }
   Pull puller{&synth, capture.is_open() ? &capture : nullptr};
   std::unique_ptr<ge::platform::AudioOut> speaker;
