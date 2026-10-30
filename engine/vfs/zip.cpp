@@ -8,8 +8,7 @@
 // ge:test tests/vfs_zip_test.cpp
 #include "vfs/zip.hpp"
 
-#include "assets/image.hpp"
-#include "assets/inflate.hpp"
+#include "core/inflate.hpp"
 
 namespace ge::vfs {
 
@@ -145,7 +144,7 @@ bool zip_unpack(std::span<const uint8_t> bytes, const ZipEntry& entry, std::vect
     }
     out->assign(packed.begin(), packed.end());
   } else {
-    auto bytes_out = assets::inflate_raw(packed, entry.size);
+    auto bytes_out = core::inflate_raw(packed, entry.size);
     if (!bytes_out) {
       *error = "zip: entry '" + entry.name + "' does not inflate to its " +
                std::to_string(entry.size) + " bytes; the archive is damaged: fetch it again";
@@ -153,7 +152,7 @@ bool zip_unpack(std::span<const uint8_t> bytes, const ZipEntry& entry, std::vect
     }
     *out = std::move(*bytes_out);
   }
-  if (assets::crc32(out->data(), out->size()) != entry.crc) {
+  if (core::crc32(out->data(), out->size()) != entry.crc) {
     *error =
         "zip: entry '" + entry.name + "' fails its CRC-32; the archive is damaged: fetch it again";
     return false;
@@ -162,7 +161,7 @@ bool zip_unpack(std::span<const uint8_t> bytes, const ZipEntry& entry, std::vect
 }
 
 uint32_t crc32_of(std::span<const uint8_t> bytes) {
-  return assets::crc32(bytes.data(), bytes.size());
+  return core::crc32(bytes.data(), bytes.size());
 }
 
 std::vector<uint8_t> write_stored_zip(
@@ -176,7 +175,7 @@ std::vector<uint8_t> write_stored_zip(
     put16(o, 0);
     put16(o, 0);
     put32(o, 0);
-    put32(o, assets::crc32(data.data(), data.size()));
+    put32(o, core::crc32(data.data(), data.size()));
     put32(o, uint32_t(data.size()));
     put32(o, uint32_t(data.size()));
     put16(o, uint32_t(name.size()));
@@ -193,7 +192,7 @@ std::vector<uint8_t> write_stored_zip(
     put16(o, 0);
     put16(o, 0);
     put32(o, 0);
-    put32(o, assets::crc32(data.data(), data.size()));
+    put32(o, core::crc32(data.data(), data.size()));
     put32(o, uint32_t(data.size()));
     put32(o, uint32_t(data.size()));
     put16(o, uint32_t(name.size()));

@@ -31,14 +31,16 @@
 //   draw and compute pass (`frame_group`'s `lights`), read by `local_lights` for a surface and
 //   `light_inscatter` for a point in the air (a fog volume's march).
 //
-// Shadows of local lights are the next row (docs/goals/M39.md); a light's `shadow` slot is
-// carried already and is -1 (none).
+// - SHADOWS (render/lamp_shadows.hpp): a light with a `shadow` key may be dealt tiles of the lamps'
+//   shadow atlas (a spot one, a point light six, a cube's faces); its GPU row's shadow slot names
+//   its first tile (-1: none) and the tiles' views follow the lights in the buffer.
 //
 // ge:summary Local point and spot lights: units, reach, flicker and pulses, clustered binning
 // ge:keywords render lights local-lights point-light spot-light lamp torch flame muzzle-flash
 // ge:keywords flicker pulse strobe buzz light-style steps candela lux inverse-square window
 // ge:keywords cluster clustered-shading froxel tiles slices bin_lights prepare_lights
 // ge:keywords flicker_level light-grid local_lights light_inscatter headlamp street-lamp
+// ge:keywords lamp-shadow-slot
 // ge:skill render
 // ge:test tests/render_lights_test.cpp
 #pragma once
@@ -61,6 +63,8 @@ inline constexpr uint32_t kClusters = kTilesX * kTilesY * kSlices;
 inline constexpr uint32_t kMaxLightRefs = 32768;  // the clusters' lists in all
 inline constexpr double kSliceNear = 2.0;         // m: slice 0 is [0, kSliceNear]
 inline constexpr double kSliceFar = 2000.0;       // m: the last slice runs on from here
+inline constexpr uint32_t kLampTilesAcross = 8;   // the lamps' shadow atlas: tiles a side
+inline constexpr uint32_t kMaxLampTiles = kLampTilesAcross * kLampTilesAcross;
 
 enum class Flicker : uint8_t { steady, flame, buzz, strobe, pulse, steps };
 
@@ -76,7 +80,10 @@ struct LocalLight {
   float rate_hz = 10;   // a flame's waver, a buzz's or strobe's beat, the steps' letters a second
   float depth = 0.35f;  // a flame's or buzz's swing, 0..1 of its level
   uint32_t seed = 0;    // a flame's or buzz's own noise, so two torches never flicker as one
-  double born_s = 0;    // a pulse's birth, the frame's clock
+  // Casts shadows under this key (render/lamp_shadows.hpp): nonzero, and the same from frame to
+  // frame while it is the same lamp, so its tiles are kept; 0 casts none.
+  uint32_t shadow = 0;
+  double born_s = 0;                         // a pulse's birth, the frame's clock
   float attack_s = 0.002f, decay_s = 0.03f;  // a pulse's rise and its fall to 1/e
   const char* steps = nullptr;               // the steps' letters ('a'..'z', 'm' full)
 };
@@ -93,15 +100,23 @@ struct GpuLight {
   float cone[4];    // 1 / (cos inner - cos outer); the shadow slot (-1: none); 0; 0
 };
 
-// wgsl/lights.wgsl's `LightGrid`'s fixed head; the lists follow it in the buffer.
+// wgsl/lights.wgsl's `LampTile`: one tile of the lamps' shadow atlas (render/lamp_shadows.hpp).
+struct GpuLampTile {
+  float view[16];  // a point relative to the lamp -> the tile's clip (reversed z: near / distance)
+  float rect[4];   // the tile's corner in the atlas (uv); its side (uv); a texel's size 1 m out, m
+};
+
+// wgsl/lights.wgsl's `LightGrid`'s fixed head; the lights, the shadow tiles and the lists follow.
 struct LightHead {
   uint32_t info[4];  // lights, kTilesX, kTilesY, kSlices
   float grid[4];     // a tile's width and height, px; the near plane, m; slices a doubling
-  float more[4];     // kSliceNear, 0, 0, 0
+  float more[4];     // kSliceNear; a shadow tile's texel (uv); the receiver's depth bias (share); 0
   float pad[4];
 };
 inline constexpr uint64_t kLightsOffset = sizeof(LightHead);
-inline constexpr uint64_t kCellsOffset = kLightsOffset + uint64_t{kMaxLights} * sizeof(GpuLight);
+inline constexpr uint64_t kTilesOffset = kLightsOffset + uint64_t{kMaxLights} * sizeof(GpuLight);
+inline constexpr uint64_t kCellsOffset =
+    kTilesOffset + uint64_t{kMaxLampTiles} * sizeof(GpuLampTile);
 inline constexpr uint64_t kRefsOffset = kCellsOffset + uint64_t{kClusters} * 8;
 inline constexpr uint64_t kLightBufferBytes = kRefsOffset + uint64_t{kMaxLightRefs} * 4;
 
@@ -109,11 +124,12 @@ inline constexpr uint64_t kLightBufferBytes = kRefsOffset + uint64_t{kMaxLightRe
 // (offset, count) into the lists, and the lists.
 struct LightBins {
   LightHead head{};
-  std::vector<GpuLight> lights;  // kMaxLights
-  std::vector<uint32_t> cells;   // 2 a cluster
-  std::vector<uint32_t> refs;    // kMaxLightRefs
-  std::vector<uint32_t> order;   // scratch: the lights by distance
-  std::vector<float> order_key;  // scratch
+  std::vector<GpuLight> lights;    // kMaxLights
+  std::vector<GpuLampTile> tiles;  // kMaxLampTiles (render/lamp_shadows.hpp's deal)
+  std::vector<uint32_t> cells;     // 2 a cluster
+  std::vector<uint32_t> refs;      // kMaxLightRefs
+  std::vector<uint32_t> order;     // scratch: the lights by distance
+  std::vector<float> order_key;    // scratch
   uint32_t ref_count = 0;
   uint32_t dropped = 0;  // lights past kMaxLights or refs past kMaxLightRefs this frame
 };

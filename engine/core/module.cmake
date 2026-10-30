@@ -8,7 +8,7 @@ set(GE_LIBM_VENDORED
 add_library(ge_core STATIC ${GE_LIBM_VENDORED} engine/core/libm/pow.cpp
   engine/core/solar.cpp engine/core/moon.cpp engine/core/output.cpp engine/core/num_text.cpp engine/core/parallel.cpp
   engine/core/thread_name.cpp
-  engine/core/json_read.cpp)
+  engine/core/json_read.cpp engine/core/inflate.cpp)
 target_include_directories(ge_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/engine>)
 target_compile_features(ge_core PUBLIC cxx_std_20)
 target_link_libraries(ge_core PUBLIC ge_fp ge_isa Threads::Threads)
