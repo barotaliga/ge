@@ -69,10 +69,10 @@ gate release python3 tools/release.py check || true
 # tools, .gitignore) stops at the gates above: building 10 GB to test it proves nothing more.
 merge_base="$(git merge-base "$base" HEAD 2>/dev/null || echo HEAD)"
 gate_only='^(docs/|\.agents/|\.changes/|porting/.*\.md$|[^/]*\.md$|LICENSE$|\.gitignore$|tools/[^/]*\.(mjs|py)$)'
-# The list is taken whole before it is searched: `grep -q` stops at its first match, and under
-# pipefail the writer it leaves behind dies of SIGPIPE, which would read as "nothing matched".
-changed="$(git diff --name-only "$merge_base" --; git ls-files --others --exclude-standard)"
-if ! grep -Evq "$gate_only" <<<"$changed"; then
+# The list is taken whole first: under pipefail, grep -q quitting at its first match would kill
+# the listing with SIGPIPE and fail the pipe, and the build would be skipped.
+touched="$(git diff --name-only "$merge_base" --; git ls-files --others --exclude-standard)"
+if ! grep -Evq "$gate_only" <<<"$touched"; then
   if ((${#failed[@]})); then
     echo "precheck: red: ${failed[*]} (each above; every gate's output in $log). Fix them, then" \
       "make precheck again." >&2
@@ -88,6 +88,8 @@ if ! gate build make -s build PRESET="$preset"; then
     "red: ${failed[*]}. Fix them, then make precheck again." >&2
   exit 1
 fi
+# A good build's objects kept for the next cloud container (in the background; a no-op elsewhere).
+tools/ccache-share.sh save || true
 gate lint tools/lint.sh "$build" "$base" || true
 # shaders_check exists only where the build has the GPU and Tint (GE_GPU, GE_TINT).
 if grep -q 'shaders_check' "$build/build.ninja" 2>/dev/null; then

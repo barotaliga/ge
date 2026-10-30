@@ -497,8 +497,11 @@ void create_family(gpu::Device& device, const InstancePipelines& ip, InstanceFam
 }
 
 void create_family_casters(gpu::Device& device, const InstancePipelines& ip, InstanceFamily& f,
-                           int maps) {
-  f.casters.assign(static_cast<size_t>(std::max(maps, 0)), CasterSlot{});
+                           int maps, int lamp_tiles) {
+  maps = std::max(maps, 0);
+  lamp_tiles = std::max(lamp_tiles, 0);
+  f.casters.assign(static_cast<size_t>(maps) + static_cast<size_t>(lamp_tiles), CasterSlot{});
+  f.lamp_slot = lamp_tiles > 0 ? maps : -1;
   for (size_t k = 0; k < f.casters.size(); ++k) {
     CasterSlot& c = f.casters[k];
     const std::string name = f.label + ".caster" + std::to_string(k);
