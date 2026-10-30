@@ -37,6 +37,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "mountain/app/cloud_field.hpp"
+#include "mountain/app/storm_look.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "render/bolts.hpp"
 #include "render/cloud_kinds.hpp"
@@ -73,52 +74,6 @@ std::string fixed(double v, int places) {
 
 constexpr double kFrame = 1.0 / 60;
 constexpr int kStrip = 8;  // the filmstrip's frames
-
-// A flash's light over [a, b) as the frame's lamp: the channel's middle, its reach, its candela,
-// and the depth of cloud its light crosses on the way out (deep for a flash inside the cloud, a
-// little for a strike's channel, most of it below the base).
-r::Flashes lamps_of(const gw::Flash* flash, double a, double b) {
-  r::Flashes out;
-  if (flash == nullptr) return out;
-  const gw::FlashLight l = gw::light_of(*flash, a, b);
-  if (l.power <= 0) return out;
-  out.count = 1;
-  r::FlashLamp& lamp = out.lamp[0];
-  lamp.at[0] = l.x;
-  lamp.at[1] = l.y;
-  lamp.at[2] = l.z;
-  lamp.radius_m = l.radius;
-  lamp.candela = l.power * gw::kUnitCandela;
-  lamp.out_tau = l.cloud ? 12 : 3;
-  return out;
-}
-
-// The channel's segments lit over [a, b): the main channel by every stroke, the branches by the
-// first stroke alone (the leader's branches the first return stroke lights); a flash inside the
-// cloud shows none, nor a strike's channel above the cloud's base. The flash's candela is shared
-// out along them by glow and length.
-std::vector<r::BoltSegment> bolts_of(const gw::Flash* flash, const gw::Channel& ch, double a,
-                                     double b, double base_y) {
-  std::vector<r::BoltSegment> out;
-  if (flash == nullptr || flash->kind != gw::FlashKind::ground) return out;
-  const double candela = gw::light_of(*flash, a, b).power * gw::kUnitCandela;
-  if (candela <= 0) return out;
-  const double first = flash->t0 + flash->stroke[0].t;
-  const bool branches = first < b && first + 0.004 >= a;
-  double sum = 0;
-  out.reserve(static_cast<size_t>(ch.count));
-  for (int i = 0; i < ch.count; ++i) {
-    const gw::Segment& s = ch.seg[i];
-    if (s.order > 0 && !branches) continue;
-    if (std::min(s.y0, s.y1) > base_y + 200) continue;
-    const double len = ge::core::hypot(ge::core::hypot(s.x1 - s.x0, s.y1 - s.y0), s.z1 - s.z0);
-    sum += s.glow * len;
-    out.push_back({{s.x0, s.y0, s.z0}, 0.15f, {s.x1, s.y1, s.z1}, s.glow});
-  }
-  if (sum <= 0) return {};
-  for (r::BoltSegment& s : out) s.candela = static_cast<float>(s.candela * candela / sum);
-  return out;
-}
 
 double mean_luma(const ge::lab::Picture& p) {
   double sum = 0;
@@ -362,9 +317,10 @@ void run(ge::lab::Lab& lab) {
       view.time_s = sky_t - back;
       view.frame = number++;
       const double a = t - back - kFrame, b = t - back;
-      view.flashes = lamps_of(flash, a, b);
+      view.flashes = ge::mountain::app::lamps_of(flash, a, b);
       std::vector<r::BoltSegment> segs;
-      if (ch != nullptr) segs = bolts_of(flash, *ch, a, b, tower.base_m);
+      if (ch != nullptr && flash != nullptr)
+        ge::mountain::app::bolts_of(*flash, *ch, a, b, tower.base_m, segs);
       fall_line::app::FrameScene scene;
       scene.bolts = segs;
       fall_line::app::draw(*device, *frame, view, scene, target.view);
@@ -410,8 +366,9 @@ void run(ge::lab::Lab& lab) {
     view.time_s = sky_t + (n + 1) * kFrame;
     view.frame = number++;
     const double a = strike.t0 + n * kFrame, b = a + kFrame;
-    view.flashes = lamps_of(&strike, a, b);
-    const std::vector<r::BoltSegment> segs = bolts_of(&strike, channel[0], a, b, tower.base_m);
+    view.flashes = ge::mountain::app::lamps_of(&strike, a, b);
+    std::vector<r::BoltSegment> segs;
+    ge::mountain::app::bolts_of(strike, channel[0], a, b, tower.base_m, segs);
     fall_line::app::FrameScene scene;
     scene.bolts = segs;
     fall_line::app::draw(*device, *frame, view, scene, target.view);
