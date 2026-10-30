@@ -20,7 +20,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Before and after across refs
 
-- `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%; for a bench lab too: `ge ab <lab> --before=<binary> --runs=3`, the median of each metric) and `ge compare <ref>` (both builds, one table)
+- `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%; for a bench lab too: `ge ab <lab> --before=<binary> --runs=3`, the median of each metric; also `--rounds=3`, each side's best and the delta printed beside the measured noise band, the second binary built or reused off `--before=<ref>`: the approximation study) and `ge compare <ref>` (both builds, one table)
 - `ge bench --ab=<option>` (one frame option against another in the same build, interleaved rounds, the least median kept: a quality ladder priced without a bespoke loop)
 - `ge profile --compare` (per zone and per pass, GPU and CPU deltas, outliers flagged)
 - `ge lab bench <lab> --runs=N --base=main` (each metric's median and spread over N runs, this tree beside the base)
@@ -159,7 +159,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab <gpu-lab>` printing the frame's per-pass GPU and CPU costs as a table beside its metrics
 - `ge lab sound <lab>` (a spectrogram of each WAV a lab writes, on its report page: the cut-off falling with distance seen without listening; the classic-enhance sound page's spectrogram moved into engine/lab and reused; also `ge lab listen <id> <wav>` for one WAV: its meters printed (peak, RMS, band, dropouts) and its spectrogram drawn, so an agent with no speakers checks a voice without writing a chart)
 - `ge profile --wall` (a sampling CPU profiler: wall time by inlined frame, the main thread apart from the workers, where instruction counts hide a slow call)
-- `ge profile --callgrind <lab>`
+- `ge profile --callgrind <lab>` (also as `ge hot <lab> [--callers=<fn>]`: the self and inclusive ranking and one function's top callers in one table; the approximation study)
+- `ge mapgen-bench --tree=<worktree>` (only the mountain plugin and core built from a worktree into a scratch directory and the generator timed, so variants are compared without rebuilding every target; the approximation study)
 - `ge lab <id> --toggle=<feature>` (a lab's passes timed with the feature on and off, one table)
 - `ge issue needs-mac --bench=<invocation>` (the needs-mac issue written with the exact GPU bench command and what to paste back, after trying CI's macOS runner on Metal first, since software-rendered timings say little about real cost)
 - `ge mem --where` (the allocating call stack)
