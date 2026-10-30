@@ -5,8 +5,10 @@
 //
 // ge:summary Reads version 29 and BSP2 maps: polygons, miptex, grey lightmaps, leaf visibility
 // ge:keywords v29 bsp2 read faces surfedges edges texinfo miptex lighting clipnodes leafs visleafs
+// ge:keywords bspx rgblighting
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
+#include <algorithm>
 #include <array>
 #include <cstddef>
 
@@ -50,6 +52,60 @@ struct Texinfo {
 bool is_sky(const std::string& name) {
   return name.size() >= 3 && (name[0] == 's' || name[0] == 'S') &&
          (name[1] == 'k' || name[1] == 'K') && (name[2] == 'y' || name[2] == 'Y');
+}
+
+}  // namespace
+
+namespace {
+
+// The BSPX directory, when one follows the fifteen lumps: at the first four-byte boundary past
+// the last lump's end, "BSPX", a count, then (a 24-byte name, an offset, a length) each.
+bool read_bspx(std::span<const uint8_t> file, const std::vector<Lump>& lumps, Family f, Map* m,
+               std::string* err) {
+  size_t end = 0;
+  for (const Lump& l : lumps) end = std::max(end, size_t(l.off) + l.len);
+  end = (end + 3) & ~size_t(3);
+  if (end + 8 > file.size() || file[end] != 'B' || file[end + 1] != 'S' || file[end + 2] != 'P' ||
+      file[end + 3] != 'X') {
+    return true;
+  }
+  Cursor c{file.subspan(end + 4)};
+  const uint32_t count = c.u32();
+  if (c.bad || count > (file.size() - end - 8) / 32) {
+    return detail::refuse(err, f,
+                          "the BSPX directory at " + std::to_string(end) + " counts " +
+                              std::to_string(count) + " lumps, more than the file holds",
+                          "the map's extra lumps are damaged: recompile it, or strip its BSPX");
+  }
+  for (uint32_t i = 0; i < count; ++i) {
+    char name[25] = {};
+    for (int k = 0; k < 24; ++k) name[k] = char(c.u8());
+    const uint32_t off = c.u32(), len = c.u32();
+    BspxLump l;
+    l.name = name;  // stops at the first zero; the 25th byte always is one
+    if (l.name.empty() || off > file.size() || len > file.size() - off) {
+      return detail::refuse(err, f,
+                            "BSPX lump " + std::to_string(i) + " (" + l.name + ") at " +
+                                std::to_string(off) + " for " + std::to_string(len) +
+                                " bytes lies outside the file's " + std::to_string(file.size()),
+                            "the map's extra lumps are damaged: recompile it, or strip its BSPX");
+    }
+    l.bytes.assign(file.begin() + off, file.begin() + off + len);
+    m->bspx.push_back(std::move(l));
+  }
+  // Colour lighting: the grey lighting's luxels, three bytes each.
+  if (const BspxLump* rgb = bspx_lump(*m, "RGBLIGHTING")) {
+    if (rgb->bytes.size() == m->light_rgb.size()) {
+      std::copy(rgb->bytes.begin(), rgb->bytes.end(), m->light_rgb.begin());
+    } else {
+      return detail::refuse(err, f,
+                            "the BSPX RGBLIGHTING lump holds " + std::to_string(rgb->bytes.size()) +
+                                " bytes for " + std::to_string(m->light_rgb.size() / 3) +
+                                " luxels (" + std::to_string(m->light_rgb.size()) + " expected)",
+                            "the colour lighting is not from this compile: relight the map");
+    }
+  }
+  return true;
 }
 
 }  // namespace
@@ -346,7 +402,7 @@ bool read_v29(std::span<const uint8_t> file, bool bsp2, Map* out, std::string* e
       }
     }
   }
-  return true;
+  return read_bspx(file, L, f, &m, err);
 }
 
 }  // namespace ge::brush

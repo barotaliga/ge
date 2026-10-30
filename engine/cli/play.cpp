@@ -85,8 +85,11 @@ bool read_answer(const BuildOptions& o, int code, const std::string& output, pla
       roots.push_back((p / "").generic_string());
     }
     // Longest first: on macOS the canonical /private/var/... holds the given /var/... in it.
+    // NOLINTBEGIN(clang-analyzer-cplusplus.Move): the analyzer's model of libc++'s sort compares an
+    // element it moved from; the sort itself is sound
     std::ranges::sort(
         roots, [](const std::string& a, const std::string& b) { return a.size() > b.size(); });
+    // NOLINTEND(clang-analyzer-cplusplus.Move)
     auto in_repo = [&](std::string s) {
       for (const std::string& root : roots) {
         for (size_t at = s.find(root); !root.empty() && at != std::string::npos;

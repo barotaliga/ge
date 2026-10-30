@@ -370,8 +370,9 @@ StageResult resort_pistes(ResortAttempt& a) {
                               " " + grade_word(*spec.row) + ") — no start");
       continue;
     }
-    const std::string from = spec.from;
-    const SharedTop shared = [&a, from](int r) { return a.walked[size_t(r)].spec.from == from; };
+    const SharedTop shared = [&a, from = spec.from](int r) {
+      return a.walked[size_t(r)].spec.from == from;
+    };
     // Off the room kept for the ramp down to every start before it (R26).
     std::vector<RampRoom> before = way_rooms;
     before.insert(before.end(), a.rooms.begin(), a.rooms.end());

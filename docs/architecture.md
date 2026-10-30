@@ -403,9 +403,9 @@ pull request, lint over only what the change reaches (the `build` skill § CI).
 **The compiler cache.** Every compile goes through ccache (or sccache) when one is on PATH
 (`cmake/CompilerCache.cmake`; `-DGE_CCACHE=OFF` turns it off, a launcher already set wins), so
 a rebuild of anything built before, in any checkout or build directory, takes its objects from the
-cache. Install it once: `brew install ccache` on macOS, `tools/setup-ubuntu.sh` on Linux, `choco
-install ccache` on Windows (MSVC's debug configurations then embed their debug information, /Z7,
-which a cache can store). CI keeps one cache per row, restored on every run and saved from main
+cache. `tools/setup-macos.sh` and `tools/setup-ubuntu.sh` install it, and `choco install ccache` on
+Windows, where MSVC's debug configurations then embed their debug information (/Z7) so a cache
+can store it. CI keeps one cache per row, restored on every run and saved from main
 (the packaging jobs read the release rows'). A cloud session's container starts with an empty
 disk, so `tools/ccache-share.sh` keeps the cache as one archive in the session's shared project
 folder: `make build`, `make test` and `make precheck` restore it into a new container before

@@ -293,8 +293,10 @@ Level prepare_course(const Level& level, const Stretch& stretch, const CoursePre
       kept.push_back(k);
       continue;
     }
-    cuts.push_back({*k.s, -k.ramp, k.landing, 6,
-                    [k](double u) { return kicker_profile(k.height, k.ramp, k.landing, u); }});
+    cuts.push_back(
+        {*k.s, -k.ramp, k.landing, 6, [h = k.height, r = k.ramp, l = k.landing](double u) {
+           return kicker_profile(h, r, l, u);
+         }});
   }
   if (auto drop = start_drop(level, stretch, P)) cuts.push_back(std::move(*drop));
   Level out = level;

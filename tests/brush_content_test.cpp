@@ -44,9 +44,10 @@ TEST(the_scan_finds_what_is_shipped_and_what_the_maps_name) {
 
   const br::ScannedAsset* slide = find(s, br::AssetKind::sound, "doors/slide.wav");
   CHECK(slide && slide->shipped && slide->uses.size() == 1);
-  CHECK(slide->uses[0].map == "maps/side.bsp" && slide->uses[0].key == "noise1");
+  CHECK(slide && !slide->uses.empty() && slide->uses[0].map == "maps/side.bsp" &&
+        slide->uses[0].key == "noise1");
   const br::ScannedAsset* gong = find(s, br::AssetKind::sound, "misc/gong.wav");
-  CHECK(gong && !gong->shipped && gong->uses[0].classname == "trigger_once");
+  CHECK(gong && !gong->shipped && !gong->uses.empty() && gong->uses[0].classname == "trigger_once");
   const br::ScannedAsset* crate = find(s, br::AssetKind::model, "progs/crate.mdl");
   CHECK(crate && crate->shipped && crate->uses.size() == 1);
   const br::ScannedAsset* box = find(s, br::AssetKind::model, "maps/b_box.bsp");

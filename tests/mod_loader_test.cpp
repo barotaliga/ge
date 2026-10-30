@@ -57,7 +57,7 @@ fs::path edited_copy(const std::string& tag, std::string (*edit)(const std::stri
   return dst;
 }
 
-std::string swap(std::string s, const std::string& from, const std::string& to) {
+std::string replace_once(std::string s, const std::string& from, const std::string& to) {
   const size_t at = s.find(from);
   if (at != std::string::npos) s.replace(at, from.size(), to);
   return s;
@@ -95,14 +95,14 @@ TEST(a_library_built_against_another_abi_is_refused_naming_both_versions) {
 }
 
 TEST(a_manifest_asking_for_another_abi_is_refused_before_the_library_opens) {
-  const fs::path dir =
-      edited_copy("abi", [](const std::string& s) { return swap(s, "abi = 1.0", "abi = 2.0"); });
+  const fs::path dir = edited_copy(
+      "abi", [](const std::string& s) { return replace_once(s, "abi = 1.0", "abi = 2.0"); });
   gm::LoadedMod m;
   const gm::LoadResult r = gm::load_mod(dir, kShootersEdge, m);
   CHECK(mentions(r, "needs mod ABI 2.0", "speaks ABI 1.0"));
   CHECK(!m.library.is_open());
-  const fs::path newer =
-      edited_copy("minor", [](const std::string& s) { return swap(s, "abi = 1.0", "abi = 1.9"); });
+  const fs::path newer = edited_copy(
+      "minor", [](const std::string& s) { return replace_once(s, "abi = 1.0", "abi = 1.9"); });
   CHECK(mentions(gm::load_mod(newer, kShootersEdge, m), "needs mod ABI 1.9"));
 }
 
@@ -127,8 +127,9 @@ TEST(a_library_that_is_not_the_one_packaged_is_refused) {
 
 TEST(no_file_for_this_platform_is_refused) {
   const fs::path dir = edited_copy("platform", [](const std::string& s) {
-    return swap(s, "file." + std::string(gm::this_platform()),
-                gm::this_platform() == "windows-arm64" ? "file.linux-x64" : "file.windows-arm64");
+    return replace_once(
+        s, "file." + std::string(gm::this_platform()),
+        gm::this_platform() == "windows-arm64" ? "file.linux-x64" : "file.windows-arm64");
   });
   gm::LoadedMod m;
   CHECK(mentions(gm::load_mod(dir, kShootersEdge, m), "lists no library for"));

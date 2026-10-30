@@ -24,6 +24,11 @@
 //   `ClipNode`'s child `c >= 0` is a clip node, `c < 0` the contents number itself (29's codes).
 //   `Model::hulls[h - 1]` is hull h's first clip node. 38 and 46 sweep through brushes instead,
 //   which the view does not keep yet: their `clip_nodes` are empty.
+// - **BSPX lumps** (29 and BSP2): extra named lumps a compiler appends after the fifteen, behind a
+//   `BSPX` directory at the first four-byte boundary past the last lump. Each is kept by name
+//   (`Map::bspx`); `RGBLIGHTING` (three bytes a luxel, the grey lighting's size three times over)
+//   is read as the map's colour, as a `.lit` would be. The others wait for a reader that needs
+//   them (`bspx_lump`).
 // - **The PHS** (potentially hearable set): a cluster hears every cluster any cluster it sees can
 //   see. Built on request (`build_phs`), since the server alone asks it and it costs a pass over
 //   the PVS.
@@ -33,13 +38,14 @@
 // ge:summary The classic BSP families read into one view: surfaces, lightmaps, tree, PVS, entities
 // ge:keywords bsp brush map family v29 bsp2 v38 v46 surface lightmap leaf cluster pvs visibility
 // ge:keywords node plane entity model patch to_engine ambient ambient-level clip-hull clipnode
-// ge:keywords phs hearable build_phs cluster_hears hull_contents
+// ge:keywords phs hearable build_phs cluster_hears hull_contents bspx rgblighting bspx_lump
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #pragma once
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace ge::brush {
@@ -128,6 +134,11 @@ struct Entity {
   const std::string& get(const std::string& key) const;
 };
 
+struct BspxLump {
+  std::string name;            // as stored, up to 24 bytes
+  std::vector<uint8_t> bytes;  // a copy: the map outlives the file
+};
+
 struct Map {
   Family family = Family::v29;
   int32_t version = 0;
@@ -152,6 +163,8 @@ struct Map {
   std::vector<uint32_t> marks;  // the leaves' marked surfaces (Leaf::first_mark), surface indices
 
   std::vector<ClipNode> clip_nodes;  // every clip hull of every model (29 and BSP2)
+
+  std::vector<BspxLump> bspx;  // in the directory's order (29 and BSP2)
 
   std::string entity_text;
   std::vector<Entity> entities;
@@ -183,6 +196,9 @@ bool cluster_hears(const Map& map, int32_t from, int32_t to);
 // in its point tree for hull 0 (a leaf's contents). 38 and 46 have no clip hulls: hull 0 only.
 int32_t hull_contents(const Map& map, const float p[3], uint32_t model, int hull);
 // `p` in file units to the engine's frame in metres.
+// The BSPX lump named `name` (any case), or nullptr.
+const BspxLump* bspx_lump(const Map& map, std::string_view name);
+
 void to_engine(const float p[3], double out[3]);
 // An FNV-1a 64 digest of the whole view (geometry, lightmaps, tree, visibility, entities).
 uint64_t map_digest(const Map& map);

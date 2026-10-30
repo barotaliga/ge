@@ -46,6 +46,23 @@ script's hash and the week. `--check` reports without installing; `--verify` bui
 whole suite as CI's Linux x64 row. A new system package a build needs goes in `LIB_PKGS` (a library)
 or `TOOLS` (a command and its minimum), and CI and the hook pick it up.
 
+## The macOS tools
+
+`tools/setup-macos.sh` is the ONE list of macOS tools (`TOOLS`: a command, its minimum and the
+Homebrew formula, `-` for what the Command Line Tools bring). It takes a freshly installed Mac to one
+that builds and tests: Homebrew by its official installer (which installs the Command Line Tools
+headless), `brew shellenv` in the login shell's profile, then the formulas. It runs as the user,
+never root, on the system's bash 3.2 (no `mapfile`, no associative arrays, no empty-array expansion
+under `set -u`), and never runs `/usr/bin/git`, `make`, `c++` or `python3` before the Command Line
+Tools are in, since those are stubs that open Apple's installer. clang-format and clang-tidy 18 come
+from the keg-only `llvm@18`, and only those two commands are linked into Homebrew's bin so Apple
+Clang stays `c++`. A tool on PATH that fails to run (a bottle whose library was upgraded under it)
+counts as broken and is reinstalled. Same flags as the Ubuntu script: `--check`, `--list`,
+`--verify` (the debug preset with `GE_GPU_REQUIRE=1` on Metal), `--quiet`. CI's macOS row still
+installs only `ninja ccache` (it builds release and runs no gate). On macOS `tools/lint.sh` hands
+clang-tidy the SDK (`-isysroot`) and llvm@18's own libc++ headers (`-nostdinc++ -isystem`): Apple
+Clang's compile database names no SDK, and the SDK's libc++ is newer than clang-tidy 18 parses.
+
 ## Adding a dependency
 
 Only when a milestone needs it (G4). Use `FetchContent_Declare` with `GIT_TAG` set to

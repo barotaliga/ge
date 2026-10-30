@@ -1,6 +1,7 @@
 # The script half of `shaders_check` (cmake/Wgsl.cmake), run as `cmake -P` per resolved shader:
-# compile every entry point of WGSL with Tint to SPIR-V, and touch STAMP when all compile.
-# Inputs: TINT, WGSL, STAMP.
+# compile every entry point of WGSL with Tint, and touch STAMP when all compile. The target is
+# SPIR-V where this Tint has its writer (Linux's, Windows') and MSL where it does not (macOS's
+# archive has only the Metal backend, the one a Mac runs). Inputs: TINT, WGSL, STAMP.
 cmake_minimum_required(VERSION 3.25)
 file(READ "${WGSL}" text)
 string(REGEX MATCHALL "@(vertex|fragment|compute)[^f]*fn[ \t\n]+[A-Za-z_][A-Za-z0-9_]*" found "${text}")
@@ -8,9 +9,17 @@ if(NOT found)
   message(FATAL_ERROR "wgsl: ${WGSL} has no @vertex, @fragment or @compute entry point. "
     "Add one or stop embedding the file; skill: gpu, § Shaders.")
 endif()
+execute_process(COMMAND "${TINT}" --help OUTPUT_VARIABLE help ERROR_VARIABLE help)
+# The --format line lists the writers this Tint was built with; the rest of the help names spirv
+# whether it has the writer or not.
+if(help MATCHES "--format <[^>]*spirv")
+  set(format spirv)
+else()
+  set(format msl)
+endif()
 foreach(entry IN LISTS found)
   string(REGEX REPLACE ".*fn[ \t\n]+" "" ep "${entry}")
-  execute_process(COMMAND "${TINT}" --format spirv --ep "${ep}" -o "${STAMP}.${ep}.spv" "${WGSL}"
+  execute_process(COMMAND "${TINT}" --format ${format} --ep "${ep}" -o "${STAMP}.${ep}.${format}" "${WGSL}"
     RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE output)
   if(NOT status EQUAL 0)
     message(FATAL_ERROR "wgsl: ${WGSL} (entry point ${ep}) does not compile:\n${output}\n"

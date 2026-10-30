@@ -1,8 +1,9 @@
 // THE SKY OVER A RUN AS THE SERVER SET IT (cfg/cvars.hpp's sv_weather, sv_snowfall, sv_fog,
-// sv_wind, sv_winddir, sv_hour and sv_skyrate): the map's own weather replaced by the picked one
-// before the run is made (mountain/mapgen/weather.hpp's `with_sky`, so nothing the map built
-// moves, while the wind the skiers ride against and the fall do), and the hour the sky has reached
-// a time into the run. sv_cover is the picture's alone (app/frame.hpp's FrameOptions::cover).
+// sv_wind, sv_winddir, sv_storm, sv_hour and sv_skyrate): the map's own weather replaced by the
+// picked one before the run is made (mountain/mapgen/weather.hpp's `with_sky`, so nothing the map
+// built moves, while the wind the skiers ride against and the fall do), and the hour the sky has
+// reached a time into the run. sv_cover is the picture's alone (app/frame.hpp's
+// FrameOptions::cover).
 //
 // ge:summary The sky over a run from the server's cvars: the weather picked, the sky's hour
 // ge:keywords sky weather sv_weather sv_hour sv_skyrate sky-clock server_sky sky_hour with_sky

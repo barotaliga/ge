@@ -95,8 +95,14 @@ minimal server install (the toolchain, clang-format and clang-tidy 18, the X11, 
 development packages, Mesa's software Vulkan driver and Xvfb for the GPU tests, Node.js and
 Python 3 for the checks); rerun it any time, since it installs only what is missing or too old.
 
+On a Mac, [`tools/setup-macos.sh`](tools/setup-macos.sh) does the same from a freshly installed
+macOS: it installs Homebrew (and with it Xcode's Command Line Tools, so Apple Clang and the Metal
+SDK), puts Homebrew on PATH for new shells, then installs CMake, Ninja, ccache, bash 4+,
+clang-format and clang-tidy 18, Node.js, Python 3 and gh. Run it as yourself, never with sudo.
+
 ```sh
 sudo tools/setup-ubuntu.sh   # once per machine; --check reports, --verify also builds and tests
+tools/setup-macos.sh         # the same on a Mac (no sudo; it asks for your password once)
 ```
 
 ```sh

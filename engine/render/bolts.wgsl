@@ -74,8 +74,17 @@ struct FragmentOut {
   @location(1) motion: vec4f,
 }
 
+// THE EYE SATURATES ON A CHANNEL: a stroke's core is never drawn dimmer than a share of white on
+// the screen rising to kSeen times white as its own light passes kKnee of white, so a strike in
+// the day's light reads as the white line a camera and an eye see, while a night's channel, far
+// over white already, is left as it is.
+const kSeen = 3.0;
+const kKnee = 0.02;
+
 @fragment
 fn fs_main(in: VertexOut) -> FragmentOut {
+  let shown = in.light * exposure();
+  let light = min(max(in.light, kSeen * shown / (shown + kKnee) / exposure()), kMostLight);
   let x2 = in.across * in.across;
   let core = exp(-6.0 * x2);
   // The halo (its sqrt(pi / kHaloFall) integral is kProfile's second term) faded to nothing at
@@ -83,9 +92,9 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let edge = 1.0 - smoothstep(0.6 * kSpan, kSpan, abs(in.across));
   // The halo is a glow, not a second channel: at most kHaloMost of white on the screen, so it
   // fades smoothly into the night however bright the core is.
-  let halo = min(kHalo * in.light, kHaloMost / exposure()) * exp(-kHaloFall * x2) * edge;
+  let halo = min(kHalo * light, kHaloMost / exposure()) * exp(-kHaloFall * x2) * edge;
   var out: FragmentOut;
-  out.colour = vec4f(vec3f(0.86, 0.9, 1.0) * (in.light * core + halo), 0.0);
+  out.colour = vec4f(vec3f(0.86, 0.9, 1.0) * (light * core + halo), 0.0);
   out.motion = vec4f(0.0, 0.0, edge, 0.0);
   return out;
 }

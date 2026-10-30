@@ -9,6 +9,7 @@
 #include "audio/sound.hpp"
 #include "fall_line/sound/bank.hpp"
 #include "fall_line/sound/mix.hpp"
+#include "mountain/air/air.hpp"
 #include "skier/tuning.hpp"
 
 namespace fall_line::sound {
@@ -22,6 +23,9 @@ using sim::EventKind;
 constexpr double kPowderUnder = 0.4;
 // A landing past this share of the legs' limit is the hard one.
 constexpr double kHardShare = 0.5;
+// The ear over the skis, m, and how fast a clap is let go when the run's sound is torn down, s.
+constexpr double kEarHeight = 1.6;
+constexpr float kThunderFade = 0.5f;
 
 float unit(double v) { return v < 0 ? 0.0f : v > 1 ? 1.0f : static_cast<float>(v); }
 
@@ -64,9 +68,35 @@ void wipeout(ge::audio::Synth& synth, int32_t cause, const Listener& ear) {
   }
 }
 
+// The map's storm's thunder at his skis: laid again when the map or its strength changed, heard
+// over again when the clock went back.
+void hear_thunder(RunSound& sound, ge::audio::Synth& synth, const ge::mountain::mapgen::Level& l,
+                  const sim::GameState& state, float dt) {
+  if (sound.storm_level != &l || sound.storm_thunder != l.weather.thunder) {
+    sound.storm = ge::mountain::air::storm_of(l);
+    sound.storm_level = &l;
+    sound.storm_thunder = l.weather.thunder;
+    sound.heard = {};
+  }
+  if (sound.storm.cells == 0) return;
+  if (sound.heard.started && state.t < sound.heard.last) {
+    for (const ge::wind::ThunderClap& c : sound.heard.sounding)
+      synth.sample_stop(c.id, kThunderFade);
+    sound.heard = {};
+  }
+  const ge::skier::SkierState& me = state.racers[0].skier;
+  ge::wind::hear_storm(sound.heard, sound.storm, state.t,
+                       {me.x, me.y + kEarHeight, me.z, me.heading});
+  ge::wind::play_thunder(sound.heard, synth, state.t, dt, kBusEffects);
+}
+
 }  // namespace
 
-RunSound make_run_sound() { return {ge::skier::make_ride_bed(kBusWind, kBusEffects), Seat::chase}; }
+RunSound make_run_sound() {
+  RunSound s;
+  s.bed = ge::skier::make_ride_bed(kBusWind, kBusEffects);
+  return s;
+}
 
 void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameState& state) {
   if (state.racers.empty()) return;
@@ -142,6 +172,7 @@ void run_sound_frame(RunSound& sound, ge::audio::Synth& synth, const sim::GameSt
   heard.wind = {ear.wind * duck, ear.tone};
   heard.snow = {ear.snow * duck};
   ge::skier::ride_bed_update(sound.bed, synth, state.racers[0].skier, state.spec, dt, heard);
+  if (sound.thunder && state.level) hear_thunder(sound, synth, *state.level, state, dt);
 }
 
 void play_menu(ge::audio::Synth& synth, std::string_view id) {
@@ -151,6 +182,7 @@ void play_menu(ge::audio::Synth& synth, std::string_view id) {
 
 void run_sound_silence(RunSound& sound, ge::audio::Synth& synth) {
   ge::skier::ride_bed_silence(sound.bed, synth);
+  for (const ge::wind::ThunderClap& c : sound.heard.sounding) synth.sample_stop(c.id, kThunderFade);
 }
 
 }  // namespace fall_line::sound
