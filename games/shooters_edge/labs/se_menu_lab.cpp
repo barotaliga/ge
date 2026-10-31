@@ -114,7 +114,7 @@ struct Game {
   sm::Host host;
   Game() {
     using CArgs = ge::console::Args;
-    for (const char* c : {"map", "sv", "quit", "newgame"})
+    for (const char* c : {"map", "sv", "quit", "newgame", "load", "save"})
       con.add_command(c, "", [](ge::console::Console&, const CArgs&) {});
     con.add_command("toggleconsole", "", [](ge::console::Console&, const CArgs&) {});
     shooters_edge::client::add_cvars(con, controls);
@@ -127,6 +127,10 @@ struct Game {
     server.set("timelimit", "15", ge::console::Source::local);
     host = {.console = &con, .server = &server, .maps = {"start", "e1m1", "dm6", "arena"}};
     menu.set_packs({"id1/pak0.pak"});
+    host.saves.assign(sm::kSaveSlots, {});
+    host.saves[0] = "the lower hall, kills 4/31";
+    host.saves[1] = "the gate house kills: 0/12";  // a classic text save's comment
+    host.saves[4] = "the long stair, kills 22/40";
   }
 };
 
@@ -141,7 +145,13 @@ constexpr PageShot kPages[] = {
      "The root: SINGLE PLAYER, MULTIPLAYER, OPTIONS, HELP and QUIT, the focus on MULTIPLAYER."},
     {"single", "",
      "SINGLE PLAYER: NEW GAME runs `newgame` (the packs' single-player program from the map "
-     "start); LOAD and SAVE are dimmed until saves land."},
+     "start); LOAD and SAVE open the save slots."},
+    {"load", "s1",
+     "LOAD: twelve slots, each showing its save's line (our save's title, or a classic text "
+     "save's comment); an empty slot is dimmed. A slot runs `load s<i>`."},
+    {"save", "s2",
+     "SAVE: the same twelve slots, every one open; a slot runs `save s<i>` (a used slot is "
+     "saved over)."},
     {"multi", "host",
      "MULTIPLAYER: JOIN A GAME dimmed until the client plays over the network; NEW GAME and "
      "SETUP."},

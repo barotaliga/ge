@@ -35,7 +35,7 @@
 // ge:keywords listen_advance listen_change loaded-map load_named_map baseline_progs map-change
 // ge:keywords forced-view mintic player_state missiles rocket-jump
 // ge:keywords listen_campaign campaign single-player map_changed level-change
-// ge:keywords listen_save listen_load savegame
+// ge:keywords listen_save listen_load savegame listen_save_text listen_load_text classic-save
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -156,6 +156,12 @@ bool listen_save(const Listen& l, std::vector<uint8_t>& out, std::string& error,
 bool listen_load(Listen& l, const ge::progs::Progs& progs, const ListenOptions& opt,
                  std::span<const uint8_t> bytes, std::string_view name, std::string& error,
                  std::unique_ptr<LoadedMap> map = nullptr);
+// The same as the classic text save (server/classic_save.hpp), and one loaded: less is kept, so
+// the game plays on as the program's state says rather than bit for bit.
+bool listen_save_text(const Listen& l, std::string& out, std::string& error);
+bool listen_load_text(Listen& l, const ge::progs::Progs& progs, const ListenOptions& opt,
+                      std::string_view text, std::string_view name, std::string& error,
+                      std::unique_ptr<LoadedMap> map = nullptr);
 // Whether a program is a single-player one (its layout's form).
 bool single_player(const ge::progs::Progs& progs);
 // Whether the server's lines ask for a single-player game: the last `deathmatch` set is 0 (the

@@ -12,6 +12,8 @@
 #include <set>
 #include <system_error>
 
+#include "save/file.hpp"
+
 namespace shooters_edge::client {
 
 namespace fs = std::filesystem;
@@ -121,7 +123,8 @@ std::vector<std::string> map_names(const SearchPath& path) {
 namespace {
 
 // The save's file, or "" with `error` when the name or the folder will not do.
-fs::path save_file(const SearchPath& path, const std::string& name, std::string& error) {
+fs::path save_file(const SearchPath& path, const std::string& name, bool classic,
+                   std::string& error) {
   bool ok = !name.empty() && name.size() <= 64;
   for (const char c : name)
     ok = ok && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
@@ -134,14 +137,15 @@ fs::path save_file(const SearchPath& path, const std::string& name, std::string&
     error = "no game folder to keep saves in; next: start the game with -basedir";
     return {};
   }
-  return fs::path(path.folder) / "saves" / (name + ".save");
+  return classic ? fs::path(path.folder) / (name + ".sav")
+                 : fs::path(path.folder) / "saves" / (name + ".save");
 }
 
 }  // namespace
 
 bool write_save(const SearchPath& path, const std::string& name, std::span<const uint8_t> bytes,
-                std::string& error) {
-  const fs::path file = save_file(path, name, error);
+                std::string& error, bool classic) {
+  const fs::path file = save_file(path, name, classic, error);
   if (file.empty()) return false;
   std::error_code ec;
   fs::create_directories(file.parent_path(), ec);
@@ -169,14 +173,45 @@ bool write_save(const SearchPath& path, const std::string& name, std::span<const
 }
 
 bool read_save(const SearchPath& path, const std::string& name, std::vector<uint8_t>& out,
-               std::string& error) {
-  const fs::path file = save_file(path, name, error);
+               std::string& error, bool classic) {
+  const fs::path file = save_file(path, name, classic, error);
   if (file.empty()) return false;
   if (!read_whole(file, out)) {
     error = "no save " + file.string() + "; next: `save " + name + "` first, or check the name";
     return false;
   }
   return true;
+}
+
+bool classic_save_name(std::string& name) {
+  constexpr std::string_view kExt = ".sav";
+  if (name.size() <= kExt.size() || name.compare(name.size() - kExt.size(), kExt.size(), kExt) != 0)
+    return false;
+  name.resize(name.size() - kExt.size());
+  return true;
+}
+
+std::string save_label(const SearchPath& path, const std::string& name) {
+  std::string error;
+  const fs::path ours = save_file(path, name, false, error);
+  if (ours.empty()) return {};
+  {
+    std::ifstream f(ours, std::ios::binary);
+    std::vector<uint8_t> head(ge::save::kPeekBytes);
+    if (f) {
+      f.read(reinterpret_cast<char*>(head.data()), static_cast<std::streamsize>(head.size()));
+      head.resize(static_cast<size_t>(f.gcount()));
+      ge::save::Header h;
+      ge::save::Meta m;
+      if (ge::save::peek(head, h, m, error) && !m.title.empty()) return m.title;
+    }
+  }
+  std::ifstream f(save_file(path, name, true, error));
+  std::string line;
+  if (!f || !std::getline(f, line) || !std::getline(f, line)) return {};
+  if (!line.empty() && line.back() == '\r') line.pop_back();
+  for (char& c : line) c = c == '_' ? ' ' : c;
+  return line;
 }
 
 }  // namespace shooters_edge::client

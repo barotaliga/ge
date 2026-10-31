@@ -20,6 +20,7 @@
 // ge:summary Shooter's Edge's main menu model: the classic pages, entries wired to cvars, dimming
 // ge:keywords menu main-menu escape single-player multiplayer options help quit new-game setup
 // ge:keywords video dimmed disabled cvar console-line needs togglemenu shooters-edge
+// ge:keywords load-page save-page save-slots
 // ge:skill ui console
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -78,7 +79,17 @@ struct Host {
   ge::console::Console* console = nullptr;
   const ge::console::Cvars* server = nullptr;
   std::vector<std::string> maps = {};  // map names, `start` first when the packs hold it
+  // Each save slot's line (slot i is the save `s<i>`): the save's title, "" for an empty slot.
+  std::vector<std::string> saves = {};
 };
+
+// The save slots the LOAD and SAVE pages show, and the words of an empty one.
+inline constexpr int kSaveSlots = 12;
+inline constexpr std::string_view kEmptySlot = "- EMPTY -";
+// A slot's line cut to what a row holds: the classic look's label column, and the modern look's
+// slab on a phone (the title shortened before the kills are).
+inline constexpr size_t kSlotChars = 22;
+inline constexpr size_t kSlotCharsModern = 28;
 
 // Whether `name` is a cvar or a command of the console or a cvar of the server.
 bool host_knows(const Host& host, std::string_view name);
@@ -86,7 +97,9 @@ bool host_knows(const Host& host, std::string_view name);
 std::string host_value(const Host& host, std::string_view name);
 
 // The pages: `main` (the root), `single`, `multi`, `host` (NEW GAME), `setup`, `options`,
-// `video`, `help` and `quit`.
+// `video`, `help`, `quit`, and the slot pages `load` and `save` (rows `s0`..`s11`, then BACK; a
+// slot activated runs `load s<i>` or `save s<i>` and closes the menu; an empty slot is dimmed on
+// LOAD).
 ge::ui::Menu build_menu();
 
 // Every entry's dimming and value read from the host (on opening, and after the console changed
