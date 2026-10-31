@@ -409,6 +409,9 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
     gl::Trace ideal_line{"the ideal pitch (deg)", {}, {}}, punch_line{"the punch (deg)", {}, {}};
     gl::Trace health_line{"health / 10", {}, {}};
     std::vector<gl::Mark> blow_marks;
+    cl::CampaignView effect_view;
+    std::vector<cl::Effect> effects;
+    int particles = 0;
     for (int i = 0; i < frames && c.server; i++) {
       p.sequence = static_cast<uint32_t>(i + 1);
       for (sh::MoveCmd& cmd : p.cmds) cmd.buttons = fire && (i & 1) ? 1 : 0;
@@ -428,7 +431,23 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
       punch_line.x.push_back(at), punch_line.y.push_back(c.server->sv.edicts[1].punchangle.x);
       health_line.x.push_back(at), health_line.y.push_back(c.server->sv.edicts[1].health / 10);
       if (b.hit) blow_marks.push_back({at, "-" + std::to_string(b.blood)});
+      // The effects the window would draw: the temporary entities and the particle bursts.
+      cl::read_effects(effect_view, c.server->out.unreliable, effects);
+      for (const sv::NetEvent& ev : c.server->out.events)
+        if (ev.kind == sv::EventKind::particle) particles++;
+      sv::clear_frame(c.server->out);
     }
+    int by_kind[7] = {};
+    for (const cl::Effect& e : effects) by_kind[static_cast<int>(e.kind)]++;
+    t.rows.push_back({"effects (impact, spike, explosion, teleport, lava, beam; particle bursts)",
+                      std::to_string(by_kind[0]) + ", " + std::to_string(by_kind[1]) + ", " +
+                          std::to_string(by_kind[2]) + ", " + std::to_string(by_kind[3]) + ", " +
+                          std::to_string(by_kind[4]) + ", " + std::to_string(by_kind[5]) + "; " +
+                          std::to_string(particles)});
+    t.rows.push_back({"unread on the unreliable stream",
+                      effect_view.unknown.empty() ? "(none)" : effect_view.unknown});
+    lab.metric("pack.effects", static_cast<double>(effects.size()), "count");
+    lab.metric("pack.effects.unread", effect_view.unread, "bytes");
     gl::LineChart chart;
     chart.frame = {"THE CLIENT DATA ON A WALK",
                    "map " + map + ", yaw " + lab.arg("yaw") + ", forward " + lab.arg("forward") +

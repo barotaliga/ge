@@ -80,6 +80,83 @@ void read_campaign(CampaignView& v, std::span<const uint8_t> bytes, double time)
   }
 }
 
+void read_effects(CampaignView& v, std::span<const uint8_t> bytes, std::vector<Effect>& out) {
+  size_t i = 0;
+  const auto fits = [&](size_t n) { return i + n <= bytes.size(); };
+  // A coordinate: an i16 of eighths of a unit.
+  const auto coord = [&] {
+    const auto raw = static_cast<int16_t>(bytes[i] | (bytes[i + 1] << 8));
+    i += 2;
+    return static_cast<float>(raw) / 8.0f;
+  };
+  const auto point = [&] {
+    const float x = coord(), y = coord();
+    return ge::shooter::Vec3f{x, y, coord()};
+  };
+  const auto stop = [&](size_t from, const std::string& what) {
+    v.unread += static_cast<int>(bytes.size() - from);
+    if (v.unknown.empty())
+      v.unknown = what + " (" + std::to_string(bytes.size() - from) + " bytes left unread)";
+    i = bytes.size();
+  };
+  while (i < bytes.size()) {
+    const size_t at = i;
+    if (bytes[i] != campaign_svc::temp_entity || !fits(2)) {
+      stop(at, "unreliable message " + std::to_string(bytes[at]));
+      return;
+    }
+    const int code = bytes[i + 1];
+    i += 2;
+    Effect e;
+    e.code = code;
+    switch (code) {
+      case 0:
+      case 1:
+      case 7:
+      case 8:
+        e.kind = EffectKind::spike;
+        break;
+      case 2:
+        e.kind = EffectKind::impact;
+        break;
+      case 3:
+      case 4:
+      case 12:
+        e.kind = EffectKind::explosion;
+        break;
+      case 10:
+        e.kind = EffectKind::lava;
+        break;
+      case 11:
+        e.kind = EffectKind::teleport;
+        break;
+      case 5:
+      case 6:
+      case 9:
+      case 13:
+        e.kind = EffectKind::beam;
+        break;
+      default:
+        stop(at, "temporary entity " + std::to_string(code));
+        return;
+    }
+    const bool beam = e.kind == EffectKind::beam;
+    const size_t body = beam ? 2 + 12 : code == 12 ? 6 + 2 : 6;
+    if (!fits(body)) {
+      stop(at, "temporary entity " + std::to_string(code) + " cut short");
+      return;
+    }
+    if (beam) {
+      e.entity = static_cast<int16_t>(bytes[i] | (bytes[i + 1] << 8));
+      i += 2;
+    }
+    e.at = point();
+    e.end = beam ? point() : e.at;
+    if (code == 12) i += 2;  // the colour range
+    out.push_back(e);
+  }
+}
+
 size_t typed_chars(const CampaignView& v, double time, double printspeed) {
   const double n = std::max(0.0, (time - v.text_at) * printspeed);
   return std::min(v.text.size(), static_cast<size_t>(std::floor(n)));

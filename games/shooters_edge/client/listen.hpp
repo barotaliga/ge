@@ -119,6 +119,9 @@ struct Listen {
   // in order.
   std::vector<sh::Vec3f> explosions;
   std::vector<Blow> blows;  // the blows the player took on this map, in order
+  // A campaign's effects on this map (its temporary entities and particle bursts), in order; its
+  // explosions are in `explosions` too.
+  std::vector<Effect> effects;
 };
 
 // The server made for `progs` (which must outlive it) on `map`, the player connected.

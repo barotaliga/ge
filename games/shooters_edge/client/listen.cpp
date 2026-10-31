@@ -70,6 +70,7 @@ void entered(Listen& l) {
   l.pending_map.clear();
   l.explosions.clear();
   l.blows.clear();
+  l.effects.clear();
   l.server->pending_map.clear();
   const sh::Edict& me = l.server->sv.edicts[1];
   l.view = me.v_angle;
@@ -134,6 +135,19 @@ void read_streams(Listen& l) {
   if (l.campaign_host) {
     read_campaign(l.campaign, out.all, now);
     read_campaign(l.campaign, out.one[0], now);
+    const size_t first = l.effects.size();
+    read_effects(l.campaign, out.unreliable, l.effects);
+    // The particle bursts the program asked for (the server's events: blood, a big burst).
+    for (const sv::NetEvent& ev : out.events) {
+      if (ev.kind != sv::EventKind::particle || (ev.to & 1u) == 0) continue;
+      Effect e;
+      e.code = -1;
+      e.kind = ev.text == "explosion" ? EffectKind::explosion : EffectKind::blood;
+      e.at = e.end = ev.origin;
+      l.effects.push_back(e);
+    }
+    for (size_t i = first; i < l.effects.size(); i++)
+      if (l.effects[i].kind == EffectKind::explosion) l.explosions.push_back(l.effects[i].at);
   }
   out.all.clear();
   out.one[0].clear();
