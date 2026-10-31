@@ -333,48 +333,37 @@ every axis.)
 rule until a leaf.
 
 **The line trace** through a hull, from p1 to p2, finds the first point where the segment
-passes from a non-solid leaf into a solid one. It is one recursive walk, and every number in it
-is a 32-bit float. A call has a node, the segment's two ends p1 and p2, and their two
-fractions p1f and p2f of the whole trace (0 and 1 at the top). It answers "go on" or "stop".
-The trace's result starts as fraction 1, end point = the trace's end, "all solid" set and the
-other flags clear.
+passes from a non-solid leaf into a solid one:
 
-- **A leaf**: an empty leaf clears "all solid" and sets "in open"; a liquid leaf clears "all
-  solid" and sets "in water"; a solid leaf sets "started in solid". All three answer "go on".
-- **A node**: compute the signed distances `t1`, `t2` of p1 and p2 from its plane (`p[type] −
-  dist` for an axial plane, `normal · p − dist` otherwise). Both ≥ 0: the front child with the
-  same segment, and its answer is this call's. Both < 0: the same with the back child.
-- **A straddle** (one end on each side). **The split point already stands 1/32 unit back on p1's
-  side:** `frac = (t1 − 1/32) / (t1 − t2)` when `t1 ≥ 0`, `(t1 + 1/32) / (t1 − t2)` when `t1 < 0`,
-  clamped to [0, 1]; `mid = p1 + frac·(p2 − p1)` per axis and `midf = p1f + (p2f − p1f)·frac`.
-  That one `mid` is both where the near part ends and where the far part STARTS: the far part
-  is never begun on the plane itself. So where a split's back-off moves `mid` along the segment
-  by `(1/32) / |t1 − t2| × length`, which is more than 1/32 when the segment meets the plane
-  at a slant, the far part starts that much short of the plane.
-  1. The near child (the front when `t1 ≥ 0`, else the back) with p1 → mid (p1f → midf). If it
-     answered "stop", answer "stop".
-  2. The contents at `mid`, walked down from the FAR child (not from the hull's first node).
-     If not solid: the far child with mid → p2 (midf → p2f), and its answer is this call's.
-  3. Otherwise, if "all solid" is still set (no empty or liquid leaf yet), answer "stop" and
-     change nothing.
-  4. **The impact.** The plane is this node's, facing p1's side (normal and dist as stored
-     when `t1 ≥ 0`, both negated otherwise). Then, while the contents at `mid` walked down from
-     the hull's FIRST node are solid, `frac −= 0.1` and `mid`, `midf` are worked out again from
-     this call's p1, p2 (if `frac` drops below 0, the current `mid` and `midf` are kept and the
-     loop ends). The result's fraction is `midf` and its end point `mid`. Answer "stop".
-- **Start in solid**: the first leaf reached was solid. "Started in solid" is set; when no
-  empty or liquid leaf was ever reached, "all solid" stays set too, and the fraction stays 1
-  with the end point at the trace's end (the player move treats any start in solid as fraction
-  0). A trace that starts in solid and then leaves it reports "started in solid" with what it
-  met after.
-- **The caller's offset**: the trace runs in the hull's own space (the start and end minus the
-  offset). Only when the fraction is not 1 is the offset added back to the end point; at
-  fraction 1 the end point is still the trace's end as given.
+- Walk down from the first node. At a node, compute the signed distances `t1`, `t2` of the
+  current segment's ends. Both ≥ 0: continue with the front child. Both < 0: continue with
+  the back child. Otherwise the segment straddles the plane: split it at
+  `frac = clamp(t1 / (t1 − t2), 0, 1)` (in float; the split point and its fraction of the whole
+  segment interpolated linearly). Trace the near part (the child on p1's side: the back child
+  when `t1 < t2`, else the front) first; if that part was blocked, its result stands. If that
+  part ended in a solid leaf while some empty or liquid leaf has already been seen, it stands
+  too (leaving a solid is allowed). Then trace the far part; if it is empty or blocked, that
+  stands. If the near part was not empty, the result is "still solid".
+- **The impact**: the near part empty and the far part solid. The plane is this node's,
+  facing the near side (its normal and dist, negated when the near side is the back). The end
+  point is placed **1/32 unit back toward p1**: `frac = (t1 ∓ 1/32) / (t1 − t2)` (plus when
+  `t1 < t2`), clamped to [0, 1], applied to this split's segment; the reported fraction is that
+  point's share of the whole trace.
+- **Start in solid**: the very first leaf reached is solid. The trace then reports "started in
+  solid" and, when it never reached an empty leaf, "all solid", with the end point at the start
+  and fraction 1 (the player move treats any start in solid as fraction 0).
 - Reaching an empty leaf marks "in open", a liquid leaf "in water".
+
+This is the networked move's trace and the arena host's (`vectors/pmove.txt` and
+`vectors/entity.txt` were cut with it). **The original single-player server's trace is a
+different walk** that backs off by 1/32 at every split and starts the far part from there:
+`frame-move.md` § The original trace, held by `vectors/hulltrace.txt`. At a corner of two planes
+the two place the end point differently (`ramp50`'s corner: this walk ends at x 48, the original
+at 47.96875).
 
 ## Test vectors
 
-`vectors/pmove.txt` and `vectors/entity.txt` are the measurements, and `vectors/hulltrace.txt` holds single traces through the same worlds' hulls (one line each: the hull, 0 for a point and 1 for the player's box; the start and end in world space; then the fraction, end point, plane normal and dist, the all-solid, started-in-solid, in-open and in-water flags, whether the world was hit, and how many 0.1 steps back the impact took). The worlds in them are
+`vectors/pmove.txt` and `vectors/entity.txt` are the measurements, and `vectors/hulltrace.txt` holds single traces through the same worlds' hulls made by the ORIGINAL trace (`frame-move.md` § The original trace, not this file's) (one line each: the hull, 0 for a point and 1 for the player's box; the start and end in world space; then the fraction, end point, plane normal and dist, the all-solid, started-in-solid, in-open and in-water flags, whether the world was hit, and how many 0.1 steps back the impact took). The worlds in them are
 written as **brushes**: convex solids, each a list of planes `normal dist` (a point is inside
 when `normal · p ≤ dist` for every plane) and a contents (`solid`, `water`, `slime`, `lava`).
 Every brush lists its six axial planes (its bounding box) as well as any slanted one, so
