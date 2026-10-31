@@ -790,6 +790,18 @@ Either way the server registers with the LAN discovery and, when public, with th
 (M17e, M17j), and answers the classic status queries, so one server browser lists ours and
 existing ones.
 
+**The warmup (M18q1).** Every match map opens in the lobby's warmup (`server/lobby.hpp`): the
+players and bots are on the map and play it freely, but nothing counts: the frag and time limits
+are held off, and when the match starts the map is restarted with every seat on it, so scores,
+items and the clock begin new. Each seat is on the red or the blue team (a new one joins the
+smaller; `team red|blue|auto|switch`), and says `ready` or takes it back with `break`; once every
+seated player is ready (and at least `sv_minplayers` are seated) a countdown of `sv_countdown`
+seconds runs, stopped by a break or a player joining unready; the leader (the listen server's own
+player) may `start` it whoever is ready. When the match's map changes, everyone is back in warmup,
+unready. The window shows a banner (the phase, how many are ready, the keys: F1 ready or break, F2
+the other team, F3 the roster), the countdown's seconds and both teams' roster; `addbot` seats a
+fighter. `sv_lobby 0` starts the match with the map, as before.
+
 **The lobby (M18q).** Before the match, on M17d's sessions: the players and their pings, teams,
 ready, chat to all or the team, a map vote, kick, and the host's start; at the end of the match
 everyone returns to it. Joining is from the server browser, an invite (M17j's friends), or an
@@ -861,7 +873,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-pilot` | scenario | Whether the pilot plays a nav route through the move as fast as the graph proved it: every course route with plain and human hands, the trails from above coloured by mode, times against proven, the strafe jump's speed on a straight, the human axes against a person's bands; on the server's arena the pilot in a bot slot through the door, up the plat and barring the door shut from the east (built, M18r2) |
 | `se-senses` | scenario | Whether a bot sees only what a player's client could and aims by its skill: on the server's arena a seer and a runner visit the goals once per aim skill; the trails from above with a sight line every quarter second it saw, the aim's error against time, how often it saw when a line joined them, the error's median and p90, the reaction and the goals kept (built, M18r3) |
 | `se-bots` | scenario | Whether fighters play the baseline mod's deathmatch like players: four fighters on the arena, the trails, items and deaths from above, each one's mode through the match as a strip, the frags against time, and a table of frags, deaths, shots, pickups, switches, the share in each mode and the weapon held most (built, M18r4) |
-| `se-lobby` | sim | Clients find a hosted game on the LAN and through the rendezvous, fill the lobby, pick teams, chat, start, play and return; a dedicated server outlives the client that started it |
+| `se-lobby` | sim | The warmup on the listen server: bots seated on teams, the free roam, ready, break, the countdown and the map restarted for a clean match (built, M18q1); later clients find a hosted game on the LAN and through the rendezvous, fill the lobby, chat, start, play and return, and a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections (the compatible server half built, M18g: scripted clients under every preset, bytes a second, loss, downloads, the digest) |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
 | `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the weapon in hand, the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost, the effects thrown and the shots the hand saw (built, M18h first slice) |

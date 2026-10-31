@@ -14,6 +14,7 @@
 #include <string>
 
 #include "render/frame.hpp"
+#include "render/mist_fog.hpp"
 
 namespace ge::brush::app {
 
@@ -189,7 +190,46 @@ std::vector<r::FogVolume> bsp_fog(const Scene& s, const FogRows& rows) {
     v.sky = float(sky_share(s, v));
     out.push_back(v);
   }
+  if (rows.air != nullptr) {
+    for (const LiquidPatch& p : s.liquids) {
+      if (p.kind != kWater && p.kind != kSlime) continue;
+      // The pool's sky share by its own floor: a probe as tall as a room over its surface.
+      r::FogVolume probe;
+      probe.centre[0] = (p.box[0] + p.box[2]) / 2;
+      probe.centre[2] = (p.box[1] + p.box[3]) / 2;
+      probe.half[0] = (p.box[2] - p.box[0]) / 2;
+      probe.half[2] = (p.box[3] - p.box[1]) / 2;
+      probe.half[1] = 1;
+      probe.centre[1] = p.level + 1;
+      const double sky = sky_share(s, probe);
+      const wind::Mist mist = pool_mist(p, *rows.air, rows.hour, sky);
+      if (mist.kind == wind::MistKind::none) continue;
+      r::MistPlace at;
+      at.centre[0] = probe.centre[0];
+      at.centre[1] = probe.centre[2];
+      at.half[0] = probe.half[0];
+      at.half[1] = probe.half[2];
+      at.floor_y = p.level;
+      at.drift[0] = std::max(rows.air->wind, 0.0) * sky;
+      r::FogVolume v = r::mist_volume(mist, at);
+      v.sky = float(sky);
+      v.seed = uint32_t(out.size());
+      out.push_back(v);
+    }
+  }
   return out;
+}
+
+wind::Mist pool_mist(const LiquidPatch& pool, const wind::Climate& air, double hour, double sky) {
+  if (pool.kind != kWater && pool.kind != kSlime) return {};
+  // On the surface, over open water, as wet as ground can be.
+  wind::Site site;
+  site.y = pool.level;
+  site.above = 1;
+  site.water_m = 0;
+  site.wet = 1;
+  site.sky = std::clamp(sky, 0.0, 1.0);
+  return wind::mist_at(air, site, hour);
 }
 
 r::OrthoShadow bsp_sun_map(const BspDraw& d) {

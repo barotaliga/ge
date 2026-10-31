@@ -7,12 +7,18 @@
 // Without `--pak` the brush plugin's fog fixture: a hall filled with dust by a `fog_volume`
 // entity, two windows and a door onto an open yard the sun stands over, and a store behind it
 // with a pit in its floor the lab lays a pool of lava in (the fixture's compile writes no liquid
-// contents). With `--pak=<file>` and `--maps=<a>,<b>` a pack's maps from their starts (and
-// `--view`s), each with the hazes over its own lava and slime.
+// contents) and a pond sunk in the yard it fills with water. With `--pak=<file>` and
+// `--maps=<a>,<b>` a pack's maps from their starts (and `--view`s), each with the hazes over its
+// own lava and slime.
+//
+// THE AIR'S FOG over the pools (M51c, `--air=1`): an evening's air handed to the fog (`--mean`,
+// `--wind`, `--water`, `--hour`: by default a classic level's, 2 C in a 9 m/s wind under low cloud
+// over pools at 16 C), so each pool of water and slime steams in wisps rising off it; the sun
+// stays the lab's (`--sun`). `--air=0` asks no air (the before).
 //
 // ge:summary Lab: a BSP map's own fog: a hall's dust lit through its windows, the haze over lava
 // ge:keywords lab bsp fog fog-volume dust lava-haze slime-haze shafts window sky-share
-// ge:keywords before-after gpu-bsp-fog
+// ge:keywords before-after gpu-bsp-fog steam-fog pond pool_mist
 // ge:skill brush render labs
 #include <algorithm>
 #include <cmath>
@@ -183,6 +189,19 @@ ba::LiquidPatch fixture_pool() {
   return p;
 }
 
+// The fixture's pond: sunk in the yard's flagstones, its water 0.1 m under them.
+ba::LiquidPatch fixture_pond() {
+  ba::LiquidPatch p;
+  p.kind = ba::kWater;
+  p.level = -0.1;
+  p.box[0] = 192 * 0.025, p.box[1] = 560 * 0.025, p.box[2] = 448 * 0.025, p.box[3] = 880 * 0.025;
+  p.area = (p.box[2] - p.box[0]) * (p.box[3] - p.box[1]);
+  p.centre[0] = (p.box[0] + p.box[2]) / 2;
+  p.centre[1] = (p.box[1] + p.box[3]) / 2;
+  p.largest = p.area;
+  return p;
+}
+
 void run(gl::Lab& lab) {
   const uint32_t w = static_cast<uint32_t>(lab.arg_num("width"));
   const uint32_t h = w * 9 / 16;
@@ -227,6 +246,16 @@ void run(gl::Lab& lab) {
       for (int k = 0; k < 3; ++k)
         palette[size_t(i) * 3 + size_t(k)] = uint8_t(std::min(250, 90 + i * 3 / 4));
   }
+  // The evening's air the pools are asked under.
+  ge::wind::Climate air;
+  air.mean_c = lab.arg_num("mean");
+  air.wind = lab.arg_num("wind");
+  air.cloud = 0.9;
+  air.humidity = 0.85;
+  air.water_c = lab.arg_num("water");
+  ba::FogRows rows;
+  if (lab.arg_num("air") != 0) rows.air = &air;
+  rows.hour = lab.arg_num("hour");
   std::vector<std::unique_ptr<MapState>> maps;
   gl::LabTable table{
       "The volumes each map's fog is read into",
@@ -239,9 +268,12 @@ void run(gl::Lab& lab) {
       lab.fail(paths[i] + ": " + err, "Check the map's name in the pack (--maps). Skill: brush.");
       return;
     }
-    if (fixture) m->scene.liquids.push_back(fixture_pool());
+    if (fixture) {
+      m->scene.liquids.push_back(fixture_pool());
+      m->scene.liquids.push_back(fixture_pond());
+    }
     m->sky = ba::pick_sky(m->scene.sky_colours);
-    m->fog = ba::bsp_fog(m->scene);
+    m->fog = ba::bsp_fog(m->scene, rows);
     int placed = 0;
     for (const ge::brush::Entity& e : m->scene.map.entities)
       if (e.get("classname") == "fog_volume") ++placed;
@@ -249,7 +281,8 @@ void run(gl::Lab& lab) {
       const gr::FogVolume& v = m->fog[k];
       const char* kind = int(k) < placed         ? "placed"
                          : v.glow[0] > v.glow[1] ? "lava haze"
-                                                 : "slime haze";
+                         : v.glow[1] > 0         ? "slime haze"
+                                                 : "the air's";
       table.rows.push_back(
           {names[i], std::to_string(k), kind,
            ls::fixed(v.centre[0], 1) + "," + ls::fixed(v.centre[1], 1) + "," +
@@ -300,6 +333,15 @@ void run(gl::Lab& lab) {
                      {11.4, 1.7, -10.8},
                      233 * kDeg,
                      -18 * kDeg});
+    views.push_back({"fog-pond",
+                     "The yard's pond on a cold, windy evening",
+                     "Out in the yard, low by its pond, looking across it to the wall: the water "
+                     "far warmer than the evening's air steams, wisps rising off it and leaning on "
+                     "the wind.",
+                     0,
+                     {3, 1.2, 18},
+                     90 * kDeg,
+                     -6 * kDeg});
   } else {
     for (size_t i = 0; i < maps.size(); ++i) {
       const ba::Scene& s = maps[i]->scene;
@@ -436,7 +478,12 @@ const gl::LabSpec kSpec{
      {"time", "40", "the views' time, s"},
      {"range", "60", "the froxels' depth, m"},
      {"frames", "8", "the frames drawn before each picture (the fog's history settling)"},
-     {"only", "", "draw only the views whose id holds this"}},
+     {"only", "", "draw only the views whose id holds this"},
+     {"air", "1", "1: an evening's air asked over the pools (their steam); 0: none (the before)"},
+     {"mean", "2", "the air's day: its mean temperature, C"},
+     {"wind", "9", "the air's wind, m/s"},
+     {"water", "16", "the pools' water, C"},
+     {"hour", "21", "the solar hour the air is asked at"}},
     "--width=128 --frames=2",
     run};
 GE_LAB(kSpec);

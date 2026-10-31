@@ -53,8 +53,12 @@ struct Mist {
   bool freezing = false;      // below 0 C: supercooled, rimes what it touches
 };
 
-// Under this strength no fog is said to lie.
+// Under this strength no fog is said to lie; under `kFormed` it is still forming, its visual range
+// easing from the clear air's (`kClearRange`, m) to its kind's, so a breeze's last wisps or a
+// morning's thinning bank veil a view hardly at all.
 inline constexpr double kNoMist = 0.02;
+inline constexpr double kFormed = 0.3;
+inline constexpr double kClearRange = 20000;
 
 // THE FOG at a site and an hour: the strongest of the five.
 Mist mist_at(const Climate& c, const Site& s, double hour);

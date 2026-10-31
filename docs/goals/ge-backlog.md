@@ -246,6 +246,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge bot nav <map>` (build a map's navigation graph without a lab run, and print its node and link counts, the nodes no route reaches, and the proof of one route: bots thread, M18r; also `--near=x,y,z`, the nodes and links near a point: #293)
 - `ge bot run <map> --from=<x,y,z> --to=<x,y,z> --hands=human --seeds=N` (one route ridden by the bot and printed as its trail, its mode timeline and its why-record, without editing a test: #293, M18r2)
 - `--game=<zip>` on the labs that read a game folder (`ge lab run se-client --game=<release zip>`: the zip mounted as the game directory through `engine/vfs`, its packs read inside it, so pak0 is never extracted into an `id1` folder first; classic HUD thread)
+- `ge lab <lab> --stage-pak=<fixture>` (a pack staged from a fixture of stand-in player models and the other models a demo draws, so the demo and picture labs draw players without the classic pak: today `se-highlights`' moment shots show empty halls; demo highlights thread)
 
 ## Store services
 

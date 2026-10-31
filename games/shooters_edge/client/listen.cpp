@@ -90,6 +90,13 @@ void entered(Listen& l) {
   join_stats(l.campaign, st.total_secrets, st.total_monsters, st.found_secrets, st.killed_monsters);
 }
 
+// The lobby's lines, printed to the player like the server's.
+void said(Listen& l) {
+  if (!l.room) return;
+  for (std::string& line : l.room->lobby.said) l.prints.push_back(std::move(line));
+  l.room->lobby.said.clear();
+}
+
 bool start_map(Listen& l, std::string& error) {
   sv::QcServerOptions so;
   so.seed = l.opt.seed;
@@ -105,7 +112,20 @@ bool start_map(Listen& l, std::string& error) {
   }
   if (l.map->from_file) sv::use_map_sets(*l.server, l.map->bsp);
   sv::connect(*l.server, 0, l.opt.player, false, false);
+  if (l.opt.lobby) {
+    if (!l.room) {
+      l.room = std::make_unique<Room>();
+      l.room->seed = l.opt.seed;
+    }
+    l.room->lobby.settings = l.opt.lobby_settings;
+    if (!l.room->lobby.seats[0].used)
+      sv::lobby_join(l.room->lobby, 0, l.opt.player, false, l.server->sv.time);
+    room_enter(*l.room, *l.server, l.map->spec);
+  } else {
+    l.room.reset();
+  }
   entered(l);
+  said(l);
   return true;
 }
 
@@ -252,7 +272,8 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
   }
   if (l.server) sv::save_change_parms(*l.server);
   l.server = nullptr;
-  l.match.reset();  // its views into the old map go before the map does
+  l.match.reset();                            // its views into the old map go before the map does
+  if (l.room) sv::lobby_back(l.room->lobby);  // a new map: warmup again
   l.map = std::move(map);
   return start_map(l, error);
 }
@@ -261,6 +282,7 @@ bool listen_campaign(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMa
                      const ListenOptions& opt, std::string& error) {
   l.server = nullptr;
   l.match.reset();
+  l.room.reset();  // a campaign has no lobby
   l.campaign_host.reset();
   l.progs = &progs;
   l.opt = opt;
@@ -337,6 +359,7 @@ bool load_game(Listen& l, const pg::Progs& progs, const ListenOptions& opt,
   host->opt.load_ctx = &l;
   l.server = nullptr;
   l.match.reset();
+  l.room.reset();
   l.campaign_host = std::move(host);
   l.progs = &progs;
   l.opt = opt;
@@ -429,6 +452,13 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
       return;
     }
     if (l.campaign_host->history.size() != l.maps_started) campaign_entered(l);
+  } else if (l.room) {  // the bots' packets after the player's, in slot order
+    std::vector<sh::Packet>& ps = l.room->packets;
+    ps.clear();
+    ps.push_back(p);
+    room_packets(*l.room, *l.server, cmd.msec, ps);
+    sv::qc_frame(*l.server, ps.data(), static_cast<int>(ps.size()));
+    for (int k = 1; k < sh::kMaxClients; k++) l.server->out.one[k].clear();  // nobody reads them
   } else {
     sv::qc_frame(*l.server, &p, 1);
   }
@@ -456,6 +486,58 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
   l.forced = me.v_angle.x != cmd.angles.x || me.v_angle.y != cmd.angles.y;
   if (l.forced) l.view = {me.v_angle.x, me.v_angle.y, 0};
   if (!l.campaign_host && !s.pending_map.empty()) l.pending_map = s.pending_map;
+  if (l.room) {
+    // The countdown run out: the map restarted with every seat on it, the match's limits back.
+    const bool due = l.pending_map.empty() && sv::lobby_due(l.room->lobby, s.sv.time);
+    if (due) {
+      std::string error;
+      l.server = nullptr;
+      l.match.reset();
+      if (!start_map(l, error)) {
+        l.failed = error;
+        return;
+      }
+      l.restarted = true;
+    }
+    said(l);
+  }
+}
+
+bool listen_lobby(Listen& l, std::string_view line) {
+  const std::string_view word = line.substr(0, line.find(' '));
+  const bool bot_word = word == "addbot" || word == "removebot";
+  if (!l.room || l.server == nullptr) {
+    if (bot_word || word == "ready" || word == "break" || word == "notready" ||
+        word == "toggleready" || word == "team" || word == "start" || word == "lobby") {
+      l.prints.push_back(std::string(word) +
+                         ": no lobby runs; next: play a match (`map <name>` with deathmatch 1) "
+                         "with `sv_lobby 1`");
+      return true;
+    }
+    return false;
+  }
+  if (word == "addbot") {
+    const size_t sp = line.find(' ');
+    const std::string arg = sp == std::string_view::npos ? "" : std::string(line.substr(sp + 1));
+    sh::AimSkill skill = sh::AimSkill::average;
+    if (!arg.empty() && !skill_named(arg, skill)) {
+      l.prints.push_back("addbot: no skill " + arg + "; next: addbot novice|average|expert");
+      return true;
+    }
+    if (l.room->lobby.phase == sv::LobbyPhase::match) {
+      l.prints.push_back("addbot: the match is on; next: add bots in the warmup");
+      return true;
+    }
+    std::string error;
+    if (room_add_bot(*l.room, *l.server, l.map->spec, skill, error) < 0)
+      l.prints.push_back("addbot: " + error);
+  } else if (word == "removebot") {
+    if (!room_remove_bot(*l.room, *l.server)) l.prints.push_back("removebot: no bot is seated");
+  } else if (!sv::lobby_command(l.room->lobby, 0, line, l.server->sv.time)) {
+    return false;
+  }
+  said(l);
+  return true;
 }
 
 int listen_advance(Listen& l, double wall_s, const sh::MoveCmd& cmd) {

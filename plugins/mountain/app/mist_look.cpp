@@ -12,6 +12,7 @@
 
 #include "core/libm/libm.hpp"
 #include "mountain/mapgen/sun.hpp"
+#include "render/mist_fog.hpp"
 
 namespace ge::mountain::app {
 
@@ -68,21 +69,15 @@ wind::Site open_snow(double y) {
 // A bank of `mist` lying on the ground round (x, z), `reach` m out.
 render::FogVolume bank(const wind::Mist& mist, double x, double z, double reach,
                        const double drift[2]) {
-  render::FogVolume v;
-  v.shape = render::FogVolume::Shape::ellipsoid;
-  v.centre[0] = x;
-  v.centre[2] = z;
-  v.half[0] = v.half[2] = reach;
-  v.half[1] = std::max(mist.depth, 4.0) / 2;
-  v.hug_ground = true;
-  v.density = mist.density;
-  v.edge = std::min(v.half[1], 15.0);
-  v.phase = 0.5;
-  v.noise = mist.noise;
-  v.noise_size = 40;
-  v.wind[0] = drift[0];
-  v.wind[2] = drift[1];
-  return v;
+  render::MistPlace at;
+  at.centre[0] = x;
+  at.centre[1] = z;
+  at.half[0] = at.half[1] = reach;
+  at.hug_ground = true;
+  at.round = true;
+  at.drift[0] = drift[0];
+  at.drift[1] = drift[1];
+  return render::mist_volume(mist, at);
 }
 
 }  // namespace
@@ -120,12 +115,8 @@ MistLook mists_at(const mg::Level& level, double hour, const double eye[3]) {
   wind::Site floor = open_snow(m.base.y);
   floor.hollow = std::min(m.vertical, 600.0);
   out.floor = wind::mist_at(c, floor, hour);
-  if (out.floor.kind == wind::MistKind::valley || out.floor.kind == wind::MistKind::radiation) {
-    out.valley.top_m = m.base.y + out.floor.depth;
-    out.valley.density = out.floor.density;
-    out.valley.drift[0] = kValleyDrift * c.wind * toward[0];
-    out.valley.drift[1] = kValleyDrift * c.wind * toward[1];
-  }
+  const double calm[2] = {kValleyDrift * c.wind * toward[0], kValleyDrift * c.wind * toward[1]};
+  out.valley = render::mist_valley(out.floor, m.base.y, calm);
   const double drift[2] = {kMistDrift * c.wind * toward[0], kMistDrift * c.wind * toward[1]};
   // THE GROUND under the eye, on the open snow.
   out.ground = wind::mist_at(c, open_snow(level.ground_at(eye[0], eye[2])), hour);
@@ -135,6 +126,35 @@ MistLook mists_at(const mg::Level& level, double hour, const double eye[3]) {
   out.summit = wind::mist_at(c, open_snow(m.summit.y), hour);
   if (out.summit.kind == wind::MistKind::hill)
     out.areas.push_back(bank(out.summit, m.summit.x, m.summit.z, kSummitReach, drift));
+  return out;
+}
+
+WaterMist water_mist(const mg::Level& level, const wind::Climate& climate, double hour,
+                     const MapWater& water) {
+  WaterMist out;
+  wind::Climate c = climate;
+  c.water_c = water.water_c;
+  // On the surface itself: open water under the eye, nothing wetter.
+  wind::Site s;
+  s.y = water.level;
+  s.above = 2;
+  s.water_m = 0;
+  s.wet = 1;
+  out.mist = wind::mist_at(c, s, hour);
+  double toward[2];
+  wind_toward(level.weather, toward);
+  render::MistPlace at;
+  at.centre[0] = water.centre[0];
+  at.centre[1] = water.centre[1];
+  at.half[0] = water.half[0];
+  at.half[1] = water.half[1];
+  at.floor_y = water.level;
+  // A box over the shore's (its corners on the shore, where the bank lies too), at its full
+  // density from the water up.
+  at.edge = 1;
+  at.drift[0] = kMistDrift * c.wind * toward[0];
+  at.drift[1] = kMistDrift * c.wind * toward[1];
+  out.area = render::mist_volume(out.mist, at);
   return out;
 }
 
