@@ -48,11 +48,8 @@
 // nothing timed, `cl_demospeed <x>` (0..20, 0 pauses) its speed; `demo_track <slot>` picks the
 // player a multiview recording's view rides (-1: the lowest playing). Every format plays, `.gz`
 // included, and the voice formats (`.qwdv`, `.mvdv`) with their voices. A played demo is watched
-// like a video, with a play bar marking its highlights, seeking, pausing, speeds and skips
-// (client/demo_playback.hpp); the mouse is free while it plays.
-//
-// `-demovideo <demo> <file>` turns a demo into a video with no window and quits
-// (client/demo_video.hpp; docs/shooters-edge.md § A demo as a video).
+// like a video (client/demo_playback.hpp: a play bar, seeking, highlights); `-demovideo <demo>
+// <file>` turns one into a video with no window and quits (client/demo_video.hpp).
 //
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console
