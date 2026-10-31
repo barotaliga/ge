@@ -9,7 +9,7 @@
 //
 //   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>]
 //                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH]
-//                 [-demovideo <demo> <file> [--fps=N] [--codec=<c>] [--seconds=S]]
+//                 [-demovideo <demo> <file> [--fps=N] [--resolution=<WxH|1080p|4k>] ...]
 //                 [+<command> ...]
 //
 // `-basedir` is the folder that holds the game folder (`id1` unless `-game` names another) with
@@ -182,6 +182,31 @@ std::string expand_home(const std::string& p) {
   return home == nullptr ? p : std::string(home) + p.substr(1);
 }
 
+// A size as `WxH` (`1920x1080`) or a name: 480p, 720p, 1080p, 1440p, 4k (2160p). False for
+// anything else, or a side under 16 or over 8192.
+bool size_named(std::string_view v, int& w, int& h) {
+  static constexpr struct {
+    const char* name;
+    int w, h;
+  } kNamed[] = {{"480p", 854, 480},    {"720p", 1280, 720},   {"1080p", 1920, 1080},
+                {"1440p", 2560, 1440}, {"2160p", 3840, 2160}, {"4k", 3840, 2160}};
+  for (const auto& n : kNamed) {
+    if (v == n.name) {
+      w = n.w;
+      h = n.h;
+      return true;
+    }
+  }
+  const size_t x = v.find('x');
+  if (x == std::string_view::npos) return false;
+  const int pw = std::atoi(std::string(v.substr(0, x)).c_str());
+  const int ph = std::atoi(std::string(v.substr(x + 1)).c_str());
+  if (pw < 16 || ph < 16 || pw > 8192 || ph > 8192) return false;
+  w = pw;
+  h = ph;
+  return true;
+}
+
 bool parse(int argc, char** argv, Args& a) {
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg = argv[i];
@@ -211,12 +236,8 @@ bool parse(int argc, char** argv, Args& a) {
       a.game = argv[++i];
     } else if (arg.rfind("--frames=", 0) == 0) {
       a.frames = std::strtol(argv[i] + 9, nullptr, 10);
-    } else if (arg.rfind("--size=", 0) == 0) {
-      const std::string wh(arg.substr(7));
-      const size_t x = wh.find('x');
-      if (x == std::string::npos) return false;
-      a.width = std::atoi(wh.substr(0, x).c_str());
-      a.height = std::atoi(wh.substr(x + 1).c_str());
+    } else if (arg.rfind("--size=", 0) == 0 || arg.rfind("--resolution=", 0) == 0) {
+      if (!size_named(arg.substr(arg.find('=') + 1), a.width, a.height)) return false;
     } else if (!a.plus.empty() || (!arg.empty() && arg[0] == '+')) {
       a.plus.emplace_back(arg);
     } else {
@@ -261,7 +282,8 @@ int run_main(int argc, char** argv) {
     out::error(
         "shooters_edge: unknown flag. Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
         "[-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] [--frames=N] "
-        "[--size=WxH] [-demovideo <demo> <file> [--fps=N] [--codec=<c>] [--seconds=S]] "
+        "[--size=WxH] [-demovideo <demo> <file> [--fps=N] [--resolution=<WxH|720p|1080p|1440p|4k>] "
+        "[--codec=<c>] [--seconds=S]] "
         "[+<command> ...]; next: rerun with those flags only.");
     return 2;
   }

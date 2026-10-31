@@ -288,13 +288,15 @@ loop, the map's ambience follows the eye, and the players' voices in a voice for
 all. A sound starts on the sample its frame's time falls on, so what is heard and seen are within
 a frame of each other however slowly the machine draws. The file is written by `engine/capture`:
 `.mp4` (H.264 or HEVC from the platform's encoder), `.webm` (AV1 and Opus) or `.mkv` (any;
-`--codec=none` uncompressed); `--codec` auto, h264, hevc or av1; `--size` the picture;
+`--codec=none` uncompressed); `--codec` auto, h264, hevc or av1; `--resolution` the picture,
+as `WxH` (each side 16 to 8192, an odd side rounded down to even) or a name: `480p`, `720p` (the
+default), `1080p`, `1440p`, `4k` (`--size` is the same flag);
 `--seconds` the most video. The `+` lines run first, so `+r_look modern` and `+demo_track 2`
 shape it.
 
 ```sh
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
-    -demovideo demo1 ~/Movies/demo1.mp4 --size=1280x720 --fps=60
+    -demovideo demo1 ~/Movies/demo1.mp4 --resolution=1080p --fps=60
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
     -demovideo ~/Downloads/match.mvdv ~/Movies/match.mp4 +demo_track 3
 ```
