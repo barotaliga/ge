@@ -124,3 +124,17 @@ TEST(lab_before_checks_the_ref_out_into_a_worktree) {
   CHECK(tree);
   fs::remove_all(repo);
 }
+
+// `ge lab pair` with nothing to change between its two runs is refused before it builds.
+TEST(lab_pair_needs_a_change) {
+  LabPairOptions pair;
+  pair.id = "world";
+  const Outcome o = run_lab_pair({kRepo, "debug", "", {}}, pair);
+  CHECK(exit_of(o) == 2);
+  CHECK(!o.findings.empty() && o.findings[0].what.starts_with("a pair needs a change"));
+  pair.flip = "ce_relief";
+  pair.before = "ce_relief 0";
+  const Outcome both = run_lab_pair({kRepo, "debug", "", {}}, pair);
+  CHECK(exit_of(both) == 2);
+  CHECK(!both.findings.empty() && both.findings[0].what.starts_with("--switch sets both sides"));
+}

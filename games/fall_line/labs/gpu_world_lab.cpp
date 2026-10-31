@@ -245,6 +245,7 @@ void run(ge::lab::Lab& lab) {
   fall_line::cfg::Settings cvars;
   fall_line::cfg::add_cvars(console, cvars);
   console.execute(lab.arg("cfg"));
+  console.execute(lab.cvars());  // the runner's --cvars, after --cfg (`ge lab pair`)
   console.cvars().apply_latched();
   for (const ge::console::Problem& p : console.problems()) {
     lab.fail("--cfg: " + p.what, p.next + " Skill: console.");

@@ -91,6 +91,15 @@ constexpr FlagSpec kLabDiffFlags[] = {
      "40,36,32,28,28)"},
     kEngine,
     kRepo};
+constexpr FlagSpec kLabPairFlags[] = {
+    kPreset,
+    {"before", "<cvars>", "the console commands the left side is drawn under (\"r_bloom 0\")"},
+    {"after", "<cvars>", "the right side's (default: the lab's own settings)"},
+    {"switch", "<cvar>", "one cvar off on the left and on on the right (<cvar> 0, <cvar> 1)"},
+    {"shots", "<id,...>", "pair only these shots"},
+    {"smoke", "", "run at the lab's smoke flags"},
+    kEngine,
+    kRepo};
 constexpr FlagSpec kPrecheckFlags[] = {
     {"preset", "<debug|release>", "only this preset (default: both, as CI runs them)"},
     kEngine,
@@ -601,6 +610,10 @@ const CommandSpec kCommands[] = {
      "diff every picture of a lab's last run against a kept run: PSNR, SSIM and the share "
      "changed per distance band, each band held to its floor, a four-panel sheet a shot",
      kLabDiffFlags, "ge lab diff world --run -- --views=start,vista", "labs"},
+    {"lab pair", "<id>", 1, 1, "see",
+     "a lab drawn twice, under the --before cvars and the --after ones (the runner's --cvars), "
+     "every shot's two side by side in a sheet with what changed between them",
+     kLabPairFlags, "ge lab pair se-world --before=\"ce_relief 0\" -- --game=fixture", "labs"},
     {"lab publish", "<id>...", 1, -1, "see",
      "a lab's last run (or several labs') on one self-contained page to share: every picture "
      "shrunk and inlined, captions, metrics and tables; --before puts a kept run beside it",
@@ -948,12 +961,13 @@ std::optional<std::string> check_args(const Args& a) {
            (c.args.empty() ? std::string("no arguments") : std::string(c.args)) + ", got " +
            std::to_string(n) + " word(s)";
   }
-  static constexpr std::string_view kPassing[] = {"lab",     "lab diff", "lab sweep", "play",
-                                                  "sim",     "shot",     "record",    "bench",
-                                                  "profile", "mem",      "leaks",     "load"};
+  static constexpr std::string_view kPassing[] = {
+      "lab",    "lab diff", "lab pair", "lab sweep", "play",  "sim", "shot",
+      "record", "bench",    "profile",  "mem",       "leaks", "load"};
   if (!a.passthrough.empty() &&
       std::find(std::begin(kPassing), std::end(kPassing), c.name) == std::end(kPassing)) {
-    return "only ge lab, lab diff, lab sweep, play, sim, shot, record, bench, profile, mem, "
+    return "only ge lab, lab diff, lab pair, lab sweep, play, sim, shot, record, bench, profile, "
+           "mem, "
            "leaks and load pass words after --";
   }
   return std::nullopt;

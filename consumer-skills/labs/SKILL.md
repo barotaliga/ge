@@ -21,6 +21,8 @@ ge lab run --tag=before                # write to previews/run@before/
 ge lab run --compare=before            # every metric beside the tagged run's, every picture diffed
 ge lab run --before=origin/main      # the before from a ref: built in build/before/<sha>/,
                                        # run tagged before, then this tree's run compared with it
+ge lab pair run --switch=r_bloom      # one cvar off and on (or --before=/--after= cvar lines), every
+                                       # shot's two side by side (a lab reads lab.cvars())
 ge lab run --shots=start,vista         # only those shots drawn, while one look is iterated; the
                                        # other pictures stay as they were (a lab skips the render
                                        # when it asks lab.wants(id) first)

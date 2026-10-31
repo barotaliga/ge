@@ -255,6 +255,17 @@ Outcome run(const Args& a) {
     }
     return run_lab_publish(fs::absolute(repo_of(a)), p);
   }
+  if (name == "lab pair") {
+    LabPairOptions pair;
+    pair.id = a.words[0];
+    pair.before = flag_value(a, "before");
+    pair.after = flag_value(a, "after");
+    pair.flip = flag_value(a, "switch");
+    pair.shots = flag_value(a, "shots");
+    pair.smoke = has_flag(a, "smoke");
+    pair.passthrough = a.passthrough;
+    return run_lab_pair(build_options(a), pair);
+  }
   if (name == "lab diff") {
     LabDiffOptions diff;
     diff.id = a.words[0];

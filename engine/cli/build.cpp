@@ -8,6 +8,7 @@
 #include "cli/build.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdlib>
 #include <regex>
 #include <system_error>
@@ -649,6 +650,101 @@ Outcome run_lab(const BuildOptions& o, const LabOptions& lab) {
   out.next = lab.tag.empty()
                  ? "look at the pictures, then tag a baseline: ge lab " + lab.id + " --tag=before"
                  : "change the code, then ge lab " + lab.id + " --compare=" + lab.tag;
+  return out;
+}
+
+namespace {
+
+// One word for the shell, whatever it holds (a cvar line has spaces, semicolons and quotes).
+std::string shell_word(const std::string& s) {
+#ifdef _WIN32
+  std::string out = "\"";
+  for (const char c : s) out += c == '"' ? std::string("\"\"") : std::string(1, c);
+  return out + "\"";
+#else
+  std::string out = "'";
+  for (const char c : s) out += c == '\'' ? std::string("'\\''") : std::string(1, c);
+  return out + "'";
+#endif
+}
+
+}  // namespace
+
+Outcome run_lab_pair(const BuildOptions& o, const LabPairOptions& asked) {
+  Outcome out;
+  LabPairOptions pair = asked;
+  if (!pair.flip.empty()) {  // --switch=<cvar>: off on the left, on on the right
+    if (!pair.before.empty() || !pair.after.empty()) {
+      out.findings.push_back(
+          {Severity::error, "--switch sets both sides; drop --before and --after", "lab " + pair.id,
+           "ge lab pair " + pair.id + " --switch=" + pair.flip});
+      out.exit = 2;
+      return out;
+    }
+    pair.before = pair.flip + " 0";
+    pair.after = pair.flip + " 1";
+  }
+  if (pair.before.empty() && pair.after.empty()) {
+    out.findings.push_back(
+        {Severity::error,
+         "a pair needs a change: --switch=<cvar>, --before=<cvars> or --after=<cvars>",
+         "lab " + pair.id, "ge lab pair " + pair.id + " --before=\"r_bloom 0\""});
+    out.exit = 2;
+    return out;
+  }
+  if (!build_step(o, out, "", "labs")) return out;
+  const fs::path exe = o.repo / "build" / o.preset / "labs";
+  const fs::path log = log_path(o, "ge-lab-pair");
+  const fs::path previews = o.repo / "previews";
+  std::error_code ec;
+  fs::remove(log, ec);
+  std::string common = " --quiet --out=" + quote_path(previews);
+  if (pair.smoke) common += " --smoke";
+  if (!pair.shots.empty()) common += " " + shell_word("--shots=" + pair.shots);
+  for (const std::string& w : pair.passthrough) common += " " + shell_word(w);
+  const std::string tag = "pair-before";
+  const std::array<std::pair<const char*, std::string>, 2> runs{
+      {{"before",
+        " --tag=" + tag + (pair.before.empty() ? "" : " " + shell_word("--cvars=" + pair.before))},
+       {"after", " --compare=" + tag +
+                     (pair.after.empty() ? "" : " " + shell_word("--cvars=" + pair.after))}}};
+  for (const auto& [side, flags] : runs) {
+    std::string cmd = quote_path(exe);
+    cmd.append(" ").append(pair.id).append(common).append(flags);
+    const Ran r = run_logged(cmd, log);
+    out.text += r.output;
+    if (r.code == 0) continue;
+    for (const auto view : split_lines(r.output)) {
+      const std::string line(view);
+      if (line.starts_with("FAIL ")) {
+        out.findings.push_back({Severity::error,
+                                std::string("the ") + side + " run: " + line.substr(5),
+                                rel_path(o.repo, log), "read the log; skill: labs"});
+      }
+    }
+    if (out.findings.empty()) {
+      out.findings.push_back(
+          {Severity::error,
+           std::string("the ") + side + " run failed (exit " + std::to_string(r.code) +
+               "): " + tail_of(r.output, 2),
+           rel_path(o.repo, log),
+           r.code == 2 ? "ge lab " + pair.id + " -- --help lists its flags" : "read the log"});
+    }
+    if (r.code == 2) out.exit = 2;
+    return out;
+  }
+  const fs::path sheets = previews / pair.id / "diff";
+  const auto report = read_text(sheets / "diff.json");
+  out.result = json_obj({{"before", json_str(rel_path(o.repo, previews / (pair.id + "@" + tag)))},
+                         {"after", json_str(rel_path(o.repo, previews / pair.id))},
+                         {"sheets", json_str(rel_path(o.repo, sheets))},
+                         {"diff", report.value_or("null")}});
+  out.summary =
+      "lab " + pair.id + " drawn under " +
+      (pair.before.empty() ? std::string("its own settings") : "\"" + pair.before + "\"") +
+      " and " + (pair.after.empty() ? std::string("its own settings") : "\"" + pair.after + "\"") +
+      "; each shot's before and after side by side in " + rel_path(o.repo, sheets) + "/";
+  out.next = "ge lab publish " + pair.id + " --before=" + tag + " (the pair on one page to share)";
   return out;
 }
 

@@ -346,6 +346,7 @@ void run(gl::Lab& lab) {
     ge::console::Console con;
     lk::add_cvars(con, f.picture);
     con.execute(lab.arg("cvars"));
+    con.execute(lab.cvars());  // the runner's --cvars, after the lab's own (`ge lab pair`)
     for (const auto& p : con.problems()) lab.note("--cvars: " + p.what);
   }
   f.w = w;

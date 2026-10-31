@@ -53,6 +53,19 @@ struct LabOptions {
 };
 Outcome run_lab(const BuildOptions& o, const LabOptions& lab);
 
+// `ge lab pair <id> --before=<cvars>`: the lab run twice through the runner's --cvars, once
+// under `before` (kept as previews/<id>@pair-before/) and once under `after` ("" none), and
+// every shot of the two put side by side in the labs' diff sheets (previews/<id>/diff/).
+struct LabPairOptions {
+  std::string id;
+  std::string before, after;  // console text: "r_bloom 0; sv_hour 8"
+  std::string flip;           // --switch=<cvar>: before "<cvar> 0", after "<cvar> 1"
+  std::string shots;
+  bool smoke = false;
+  std::vector<std::string> passthrough;
+};
+Outcome run_lab_pair(const BuildOptions& o, const LabPairOptions& pair);
+
 // `ge lab diff <id>`: every picture of the lab's last run (or, with `run`, a run now) against
 // the run kept with --tag=<against>, through the labs' own diff (engine/lab/diff.hpp); each band
 // under its floor is an error finding pointing at its sheet.

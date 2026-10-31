@@ -109,6 +109,15 @@ it draws a shot (`world` does); `lab.shot()` drops an unwanted one either way. A
 has no shot of fails the run with the ids it has. The digest of such a run is not the lab's, so
 the runner refuses `--shots` beside `--all`, `--check-digests` and `--write-digests`.
 
+`--cvars="<console text>"` hands a lab console commands to run after its own flags' cvars
+(`lab.cvars()`; the `world`, `se-client`, `se-world` and `se-models` labs read them), so any
+setting can be drawn changed without a flag of the lab's own. A lab given `--cvars` that never
+reads them fails, rather than draw two runs that differ in nothing. `ge lab pair <id>
+--before="<cvars>" [--after="<cvars>"]` (or `--switch=<cvar>`: `<cvar> 0` against `<cvar> 1`) is
+the use: the lab run under each (the before kept as
+`previews/<id>@pair-before/`, the after as the lab's last run) and every shot's two side by side
+in the diff's sheets (`previews/<id>/diff/`), with what changed between them.
+
 `--log=<spec>` switches on log channels for the run (`docs/debugging.md`): every line kept goes to
 `previews/<id>/log.txt` as `[step] level channel: message`, the debug and trace lines only
 there, and a note in the report counts them by channel and level. The log is `measured`: it
