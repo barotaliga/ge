@@ -3,6 +3,7 @@
 //
 // ge:summary The classic map experiment's data: the pack, atlases, liquid bodies and point lights
 // ge:keywords lab classic bsp pack palette miptex atlas lightmap liquid-body point-light flicker
+// ge:keywords surface-atlas relief
 // ge:skill brush labs
 #include <algorithm>
 #include <array>
@@ -23,6 +24,23 @@ namespace ge::brush::app {
 namespace {
 
 using detail::Cursor;
+
+// Mip `out` (tw x th RGBA) of the pw x ph level above it: each texel the mean of its four.
+void halve(const std::vector<uint8_t>& above, uint32_t pw, uint32_t ph, std::vector<uint8_t>& out,
+           uint32_t tw, uint32_t th) {
+  out.assign(size_t(tw) * th * 4, 0);
+  for (uint32_t y = 0; y < th; ++y)
+    for (uint32_t x = 0; x < tw; ++x)
+      for (int c = 0; c < 4; ++c) {
+        int sum = 0;
+        for (uint32_t d = 0; d < 4; ++d) {
+          const uint32_t sx = std::min(2 * x + d % 2, pw - 1);
+          const uint32_t sy = std::min(2 * y + d / 2, ph - 1);
+          sum += above[(size_t(sy) * pw + sx) * 4 + size_t(c)];
+        }
+        out[(size_t(y) * tw + x) * 4 + size_t(c)] = uint8_t(sum / 4);
+      }
+}
 
 bool fail(std::string* error, std::string what) {
   if (error) *error = std::move(what);
@@ -258,6 +276,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
   std::vector<Placed> placed(m.textures.size());
   std::vector<uint32_t> scale_of(m.textures.size(), 1);
   std::vector<std::vector<uint8_t>> own(m.textures.size());
+  std::vector<std::vector<uint8_t>> own_surface(m.textures.size());  // TextureSource::surface's
   for (size_t i = 0; i < m.textures.size(); ++i) {
     if (s.sky_texture == UINT32_MAX && m.textures[i].name.size() >= 3 &&
         lower(m.textures[i].name).rfind("sky", 0) == 0) {
@@ -282,6 +301,13 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
         break;
       }
     }
+    // Its relief, at the picture's size.
+    std::vector<uint8_t> relief;
+    if (!own[i].empty() && source.surface &&
+        source.surface(source.user, m.textures[i].name, w * scale_of[i], h * scale_of[i],
+                       &relief) &&
+        relief.size() == own[i].size())
+      own_surface[i] = std::move(relief);
   }
   {
     // A sequence's frames ("+0name" .. "+9name", "+aname" ..) at one scale, or none replaced.
@@ -296,6 +322,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       if (same) continue;
       for (size_t i : members) {
         own[i].clear();
+        own_surface[i].clear();
         scale_of[i] = 1;
       }
     }
@@ -338,18 +365,8 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
         const uint32_t tw = std::max(p.w >> k, 1u), th = std::max(p.h >> k, 1u);
         rgba[i][k].assign(size_t(tw) * th * 4, 0);
         if (replaced || k >= 4 || (p.w >> k) == 0 || (p.h >> k) == 0) {
-          const uint32_t pw = std::max(p.w >> (k - 1), 1u), ph = std::max(p.h >> (k - 1), 1u);
-          for (uint32_t y = 0; y < th; ++y)
-            for (uint32_t x = 0; x < tw; ++x)
-              for (int c = 0; c < 4; ++c) {
-                int sum = 0;
-                for (uint32_t d = 0; d < 4; ++d) {
-                  const uint32_t sx = std::min(2 * x + d % 2, pw - 1);
-                  const uint32_t sy = std::min(2 * y + d / 2, ph - 1);
-                  sum += rgba[i][k - 1][(size_t(sy) * pw + sx) * 4 + size_t(c)];
-                }
-                rgba[i][k][(size_t(y) * tw + x) * 4 + size_t(c)] = uint8_t(sum / 4);
-              }
+          halve(rgba[i][k - 1], std::max(p.w >> (k - 1), 1u), std::max(p.h >> (k - 1), 1u),
+                rgba[i][k], tw, th);
           continue;
         }
         const bool has = i < mips.size() && mips[i].level[k];
@@ -382,6 +399,36 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
         }
       }
       s.textures.levels.push_back(std::move(level));
+    }
+    // The relief in the same places: flat where a texture has none, each one's mips halved.
+    if (std::any_of(own_surface.begin(), own_surface.end(),
+                    [](const std::vector<uint8_t>& v) { return !v.empty(); })) {
+      s.surface.width = s.textures.width;
+      s.surface.height = s.textures.height;
+      s.surface.mips = levels;
+      for (uint32_t k = 0; k < levels; ++k) {
+        const uint32_t w = s.surface.width >> k, h = s.surface.height >> k;
+        std::vector<uint8_t> level(size_t(w) * h * 4);
+        for (size_t t = 0; t < level.size(); t += 4) std::memcpy(&level[t], kFlatSurface, 4);
+        s.surface.levels.push_back(std::move(level));
+      }
+      for (size_t i = 0; i < placed.size(); ++i) {
+        if (own_surface[i].empty()) continue;
+        const Placed& p = placed[i];
+        std::vector<uint8_t> above = std::move(own_surface[i]), here;
+        for (uint32_t k = 0; k < levels; ++k) {
+          const uint32_t tw = std::max(p.w >> k, 1u), th = std::max(p.h >> k, 1u);
+          if (k > 0) {
+            halve(above, std::max(p.w >> (k - 1), 1u), std::max(p.h >> (k - 1), 1u), here, tw, th);
+            above.swap(here);
+          }
+          std::vector<uint8_t>& level = s.surface.levels[k];
+          const uint32_t w = s.surface.width >> k;
+          for (uint32_t y = 0; y < th; ++y)
+            std::memcpy(&level[((size_t((p.y >> k) + y) * w) + (p.x >> k)) * 4],
+                        &above[size_t(y) * tw * 4], size_t(tw) * 4);
+        }
+      }
     }
   }
 

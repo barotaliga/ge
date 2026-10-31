@@ -22,6 +22,10 @@
 //   while it rains, or snowed on, and the rooms behind stay dry; a lightning flash lights what
 //   is open to the sky. The same map is the fall's shelter (`bsp_shelter`).
 //
+// - THE RELIEF (v2, `Options::relief`): a scene with a surface atlas (draw_data.hpp's
+//   `Scene::surface`: an enhanced texture's normal, height and roughness) is lit texel by texel,
+//   its highlights by its roughness, and its height marched into along the eye's ray (parallax).
+//
 // The passes, in a frame's order: "bsp.shadows" (v2 with lights or weather: the stale maps, timed
 // as one), then with r_cull
 // "bsp.cull", "bsp", "hiz", "bsp.cull.late" and "bsp.late", else "bsp"; then "bsp.sky" (v2);
@@ -31,6 +35,7 @@
 // ge:keywords bsp brush render renderer r_bspmode classic v2 lightmap point-light cube-shadow
 // ge:keywords sun-shadow sky-mask flicker lava-light weather rain snow puddles shelter bsp_shelter
 // ge:keywords set_movers movers moving-brush-models doors plats
+// ge:keywords relief normal-map parallax-occlusion roughness specular ggx surface-atlas
 // ge:keywords shadow-cache shadow-slot fresh_slots fresh_cubes shadow-budget shadow-hitch
 // ge:skill brush render
 #pragma once
@@ -97,6 +102,19 @@ struct Options {
   // r_bump: the relief the rebaked lighting reads off each texture's luminance, m from black to
   // white (0: flat faces). Only `Lighting::rebaked` draws it.
   double bump = 0.012;
+  // THE RELIEF (v2, a scene with a surface atlas: draw_data.hpp's Scene::surface, classic-enhance's
+  // normal, height and roughness maps): each texel's own normal (its tilt times `relief_strength`)
+  // lights it under every light, the sun and the sky; its roughness gives each point light a
+  // highlight (`specular` its strength, 0 none; none off the sun, which on the classic's dark
+  // painted walls reads as foil); its height is a depth the texture is marched into along the eye's ray
+  // (parallax occlusion, `parallax` m from the top to the deepest, 0 none, drawn within
+  // `parallax_reach` m of the eye and faded out before it) and a shade in its crevices. Off, or a
+  // scene with no surface atlas: flat faces, drawn as before.
+  bool relief = true;
+  double relief_strength = 0.8;  // the normal maps' tilt against as baked (1)
+  double specular = 0.35;
+  double parallax = 0.03;
+  double parallax_reach = 10;
   // THE WEATHER (v2; bsp_weather.hpp): on, the rain falling now (0 .. 1: its ripples in the
   // puddles), and the way it falls (unit, down and downwind), which a third orthographic map looks
   // along so only what the fall reaches is wet, pooled or snowed on. How wet, how deep the
@@ -154,11 +172,14 @@ struct GpuBsp {
   float info2[4];
   float sky[4];
   float info3[4];    // the floor (minlight), the bounce, the sky's light, filtered (1) or crisp
-  float info4[4];    // the relief's depth (bump), m; the pack's sky under v2 (1)
+  float info4[4];    // the bump's depth, m; the pack's sky under v2 (1); the parallax's reach, m;
+                     // the relief's highlights' strength
   float veil[4];     // the sky faces' pixels times these (the sky's light, seen and tinted)
   float weather[4];  // on (1), the rain falling now, the fall's spread, 0
   GpuJob ortho[kOrthos];
-  float info5[4];              // a lightmap layer's height in the atlas's uv, the layers, 0, 0
+  // A lightmap layer's height in the atlas's uv, the layers, the relief on (1), the parallax's
+  // depth, m.
+  float info5[4];
   float styles[kLightStyles];  // each light style's level now (draw_data.hpp)
 };
 
@@ -168,6 +189,7 @@ struct BspDraw {
   // Index ranges by kind (draw_data.hpp's `Kind`): first, count.
   uint32_t range[kKinds][2] = {};
   wgpu::Texture atlas, light;
+  wgpu::Texture surface;  // the textures' relief (Scene::surface), or a 1 x 1 flat stand-in
   // The scene's rebaked light (RGB9E5) and its direction (RGBA8), or 1 x 1 stand-ins.
   wgpu::Texture rebake_rgb, rebake_dir;
   wgpu::Buffer uniform, lights, jobs;

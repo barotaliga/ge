@@ -17,24 +17,39 @@
 // side's cvars as the console would. The server's models (items, monsters, the other players)
 // stand where it put them. `--progs=<progs.src>` runs a program of our own there (the campaign
 // variant: its monsters; `pack` the packs' own), and `--settle=<frames>` lets the world run at
-// each view.
+// each view. `--before="<cvars>"` draws the left side in the modern look with those cvars in
+// place of the classic look (`--before="ce_relief 0; ce_parallax 0"`: one switch's before and
+// after).
+//
+// `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
+// two wall torches, their textures enhanced into a cache of the lab's own (classic-enhance's
+// texture enhancer, the kernel at 4x, its height, normal and roughness maps) as the in-game menu's
+// ENHANCE leaves the pack's.
 //
 // ge:summary Lab: the window's frame drawn headless: the halls, a rocket jump, its effects, the HUD
 // ge:keywords lab se-client listen-server window frame rocket-jump hud effects trail explosion
+// ge:keywords before-after relief parallax enhanced-textures fixture-cache
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "assets/sha256.hpp"
 #include "brush/write.hpp"
+#include "classicenhance/cache.hpp"
+#include "classicenhance/pipeline.hpp"
+#include "classicenhance/texture.hpp"
 #include "console/console.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/liquid_scene.hpp"
+#include "lab/png.hpp"
 #include "progs/file.hpp"
 #include "progs/qc_compile.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -75,19 +90,86 @@ bool halls_pack(std::vector<uint8_t>& out, std::string& error) {
   return ge::vfs::write_pak({{"maps/halls.bsp", bsp}}, &out, &error);
 }
 
-// A game folder's map from its start, four ways, classic beside enhanced (private pictures).
+// `--game=fixture`'s pack: a warm palette, and the halls with a deathmatch spot and two wall
+// torches, one at each end wall, so their light rakes along the walls.
+bool fixture_game(std::vector<uint8_t>& out, std::string& error) {
+  ge::brush::Fixture f = ge::brush::sample_fixture();
+  f.entities.push_back(
+      entity({{"classname", "info_player_deathmatch"}, {"origin", "128 192 40"}, {"angle", "0"}}));
+  f.entities.push_back(entity(
+      {{"classname", "light_torch_small_walltorch"}, {"origin", "24 120 136"}, {"light", "200"}}));
+  f.entities.push_back(entity(
+      {{"classname", "light_torch_small_walltorch"}, {"origin", "488 264 136"}, {"light", "200"}}));
+  std::vector<uint8_t> bsp, palette(768);
+  if (!ge::brush::write_bsp(f, ge::brush::Family::v29, &bsp, &error)) return false;
+  for (size_t i = 0; i < 256; ++i) {
+    palette[i * 3] = static_cast<uint8_t>(std::min<size_t>(255, i + 30));
+    palette[i * 3 + 1] = static_cast<uint8_t>(i * 7 / 8 + 20);
+    palette[i * 3 + 2] = static_cast<uint8_t>(i * 3 / 4 + 10);
+  }
+  return ge::vfs::write_pak({{"gfx/palette.lmp", palette}, {"maps/halls.bsp", bsp}}, &out, &error);
+}
+
+// The pack's textures enhanced into `root` as the textures' stage leaves them (the kernel at 4x).
+bool enhance_fixture(std::span<const uint8_t> pack, const std::filesystem::path& root,
+                     std::string& error) {
+  namespace ce = ge::classicenhance;
+  ce::Palette palette;
+  std::vector<ce::PackTexture> textures;
+  if (!ce::pack_textures(pack, &palette, &textures, &error)) return false;
+  const std::filesystem::path dir = ce::pack_dir(root, ge::assets::sha256_hex(pack));
+  for (const ce::PackTexture& t : textures) {
+    const ce::Enhanced e = ce::enhance_texture(t.name, t.indexed, t.width, t.height, palette);
+    const std::filesystem::path at = dir / "textures" / ce::safe_name(t.name);
+    std::filesystem::create_directories(at);
+    const std::pair<const char*, const ge::assets::Image*> maps[] = {{"albedo", &e.albedo},
+                                                                     {"height", &e.height},
+                                                                     {"normal", &e.normal},
+                                                                     {"roughness", &e.roughness}};
+    for (const auto& [name, img] : maps) {
+      if (img->rgba.empty()) continue;
+      if (!gl::write_png((at / (std::string(name) + ".png")).string(),
+                         {img->width, img->height, img->rgba})) {
+        error = "cannot write " + (at / name).string();
+        return false;
+      }
+    }
+  }
+  return ce::write_record(dir, "textures", "se-client fixture");
+}
+
+// A game folder's map from its start, four ways, classic beside enhanced (private pictures), or
+// `--game=fixture`'s halls (pictures for anywhere).
 void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   const std::string folder = lab.arg("game");
-  const size_t cut = folder.find_last_of('/');
-  const std::string base = cut == std::string::npos ? "." : folder.substr(0, cut);
-  const std::string game = cut == std::string::npos ? folder : folder.substr(cut + 1);
   std::string error;
   cl::SearchPath files;
   ge::progs::Progs progs;
   cl::Listen l;
-  if (!cl::open_game_dir(base, game, files, error)) {
-    lab.fail(error, "Read the reason above. Skill: shooter.");
-    return;
+  if (folder == "fixture") {
+    std::vector<uint8_t> pak;
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / "ge_se_client_fixture_cache";
+    std::filesystem::remove_all(root);
+    if (!fixture_game(pak, error) || !enhance_fixture(pak, root, error) ||
+        !cl::add_archive(files, "pak0.pak", std::move(pak), error)) {
+      lab.fail(error, "Read the reason above. Skill: classicenhance.");
+      return;
+    }
+    // The window finds a pack's cache under this root (classicenhance/cache.hpp).
+#if defined(_WIN32)
+    _putenv_s("GE_CLASSIC_CACHE", root.string().c_str());
+#else
+    setenv("GE_CLASSIC_CACHE", root.string().c_str(), 1);  // NOLINT(concurrency-mt-unsafe)
+#endif
+  } else {
+    const size_t cut = folder.find_last_of('/');
+    const std::string base = cut == std::string::npos ? "." : folder.substr(0, cut);
+    const std::string game = cut == std::string::npos ? folder : folder.substr(cut + 1);
+    if (!cl::open_game_dir(base, game, files, error)) {
+      lab.fail(error, "Read the reason above. Skill: shooter.");
+      return;
+    }
   }
   // `--progs`: a program of our own compiled from its progs.src (the campaign variant, say), or
   // `pack` for the packs' own progs.dat; else the arena variant.
@@ -129,7 +211,8 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   shooters_edge::look::Picture looks[2];
   ge::console::Console con[2];
   for (int k = 0; k < 2; ++k) shooters_edge::look::add_cvars(con[k], looks[k]);
-  con[0].execute("r_look classic");
+  const std::string before = lab.arg("before");
+  con[0].execute(before.empty() ? "r_look classic" : before);
   con[1].execute(lab.arg("cvars"));
   cl::WorldDrawPtr world[2];
   for (int k = 0; k < 2; ++k) {
@@ -176,7 +259,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       places.push_back(p);
     }
   }
-  const char* kLooks[2] = {"classic", "enhanced"};
+  const char* kLooks[2] = {before.empty() ? "classic" : "before", "enhanced"};
   for (size_t v = 0; v < places.size(); ++v) {
     const Place& p = places[v];
     auto& player = l.server->sv.edicts[1];
@@ -382,13 +465,17 @@ const gl::LabSpec kSpec{
     "rocket jump lift him?",
     {{"size", "960,540", "the frame's width and height, px"},
      {"models", "games/shooters_edge/content/models/view", "the held weapons' folder"},
-     {"game", "", "a game folder of packs to draw instead of the halls (private pictures only)"},
+     {"game", "",
+      "a game folder of packs to draw instead of the halls (private pictures only), or fixture: "
+      "the halls torch-lit with their textures enhanced"},
      {"map", "start", "with --game: the map's name"},
      {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
      {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"},
      {"progs", "",
       "with --game: a progs.src compiled and run instead of the arena variant, or pack"},
-     {"settle", "4", "with --game: host frames run at each view before it is drawn (at least 4)"}},
+     {"settle", "4", "with --game: host frames run at each view before it is drawn (at least 4)"},
+     {"before", "",
+      "with --game: the left side's cvars in the modern look instead of the classic look"}},
     "--size=480,270",
     run,
 };

@@ -16,6 +16,13 @@
 //   by how open a point is to the zenith (a second map from straight overhead), a floor of
 //   ambient light, and the texels that glow.
 //
+// THE RELIEF (v2, `info5.z` its strength: a scene with classic-enhance's maps, `surface`): each
+// texel's own normal (tangent space, put on the face by its texture coordinates' world gradients,
+// so no tangents are stored) lights it under the point lights, the sun and the sky; its roughness
+// gives every point light a highlight (GGX, `info4.w` its strength); and its height is a depth (`info5.w` m)
+// the texture is marched into along the eye's ray (parallax occlusion, within `info4.z` m of the
+// eye) and a shade in its crevices on the room's light.
+//
 // THE WEATHER (`bsp.weather.x` 1): a face the fall reaches (the fall's map, along the way it comes,
 // and the face turned toward it) takes the frame's wet ground (`frame.wet.x`: darker, a film that
 // mirrors the sky), its puddles on the flats (`frame.wet.y`: pools where a slow noise is lowest,
@@ -30,23 +37,34 @@
 // ge:summary A classic BSP map drawn: atlas textures, lightmaps or real-time lights, the sky mask
 // ge:keywords bsp brush render atlas mip lightmap point-light cube-shadow sun-shadow zenith
 // ge:keywords openness sky-mask classic v2 warp fullbright weather wet puddle ripples snow lightning
+// ge:keywords relief normal-map parallax-occlusion pom height-map roughness specular ggx
 // ge:skill brush render
 #include "render/wgsl/frame.wgsl"
 
 struct Bsp {
-  info: vec4f,   // mode (0 classic, 1 v2), lighting (0 lightmaps, 1 lights, 2 rebaked), lights,
-                 // ambient
-  info2: vec4f,  // time s, the cube face's size, the ortho map's size, the brightness
-  sky: vec4f,    // the classic sky texture's rectangle
-  info3: vec4f,  // v2's soft floor of light (minlight), the baked light's share as bounce, the
-                 // sky's light (r_skylight: the sun's and the open sky's in the rooms), the
-                 // textures filtered (1) or crisp (0)
-  info4: vec4f,  // the relief's depth from the textures' luminance, m (r_bump); the pack's sky
-  veil: vec4f,   // the sky faces' pixels times these (bsp_fix.wgsl's veil)
-  weather: vec4f,  // the weather on (1), the rain falling now (0 .. 1), the fall's spread, 0
-  ortho: array<Job, 3>,  // the sun's map, the zenith's and the fall's
-  info5: vec4f,  // a lightmap layer's height in the atlas's uv, the layers
-  styles: array<vec4f, 16>,  // the 64 light styles' levels now, four a vector
+  // mode (0 classic, 1 v2), lighting (0 lightmaps, 1 lights, 2 rebaked), lights, ambient
+  info: vec4f,
+  // time s, the cube face's size, the ortho map's size, the brightness
+  info2: vec4f,
+  // the classic sky texture's rectangle
+  sky: vec4f,
+  // v2's soft floor of light (minlight), the baked light's share as bounce, the sky's light
+  // (r_skylight: the sun's and the open sky's in the rooms), the textures filtered (1) or crisp (0)
+  info3: vec4f,
+  // the bump's depth from the textures' luminance, m (r_bump); the pack's sky; the parallax's
+  // reach, m; the relief's highlights' strength
+  info4: vec4f,
+  // the sky faces' pixels times these (bsp_fix.wgsl's veil)
+  veil: vec4f,
+  // the weather on (1), the rain falling now (0 .. 1), the fall's spread, 0
+  weather: vec4f,
+  // the sun's map, the zenith's and the fall's
+  ortho: array<Job, 3>,
+  // a lightmap layer's height in the atlas's uv, the layers, the relief's strength (0 off), the
+  // parallax's depth, m
+  info5: vec4f,
+  // the 64 light styles' levels now, four a vector
+  styles: array<vec4f, 16>,
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -61,11 +79,13 @@ struct Job {
 };
 
 struct Light {
-  pos: vec4f,     // world m; w: its reach, m
-  colour: vec4f,  // its strength (rgb, the flicker in it); w: 1 physical (cd), 0 lightmap units
-  info: vec4f,    // x: its shadow's first layer (six a light), -1 none; y: its source's size^2, m^2;
-                  // z: 1 a dynamic light added to the lightmaps (colour its middle's light, pos.w
-                  // its radius)
+  // world m; w: its reach, m
+  pos: vec4f,
+  // its strength (rgb, the flicker in it); w: 1 physical (cd), 0 lightmap units
+  colour: vec4f,
+  // x: its shadow's first layer (six a light), -1 none; y: its source's size^2, m^2; z: 1 a dynamic
+  // light added to the lightmaps (colour its middle's light, pos.w its radius)
+  info: vec4f,
 };
 
 @group(1) @binding(0) var<uniform> bsp: Bsp;
@@ -78,14 +98,19 @@ struct Light {
 @group(1) @binding(7) var orthos: texture_depth_2d_array;
 @group(1) @binding(8) var rebake_rgb: texture_2d<f32>;
 @group(1) @binding(9) var rebake_dir: texture_2d<f32>;
-@group(1) @binding(10) var<storage, read> frames: array<vec4f>;  // the animated textures' frames
+// the animated textures' frames
+@group(1) @binding(10) var<storage, read> frames: array<vec4f>;
 // The brush models: a run of vertices (first, end), 1 hidden; the offset it is drawn at now.
 struct Mover {
   range: vec4u,
   offset: vec4f,
 };
-@group(1) @binding(11) var<storage, read> movers: array<Mover>;  // [0] the world's
+// [0] the world's
+@group(1) @binding(11) var<storage, read> movers: array<Mover>;
+// The textures' relief in the atlas's places: the normal's x and y, the height, the roughness.
+@group(1) @binding(12) var surface: texture_2d<f32>;
 
+const kSolid = 0u;
 const kSky = 1u;
 const kWater = 2u;
 const kSlime = 3u;
@@ -146,7 +171,8 @@ fn vs_main(v: VsIn, @builtin(vertex_index) vi: u32) -> VsOut {
   let at = moved(vi, v.pos);
   o.clip = frame.view_proj * vec4f(at.xyz - frame.eye.xyz, 1.0);
   if (at.w < 0.5) {
-    o.clip = vec4f(2.0, 2.0, 2.0, 1.0);  // outside the view: the triangle is clipped away
+    // outside the view: the triangle is clipped away
+    o.clip = vec4f(2.0, 2.0, 2.0, 1.0);
   }
   o.world = at.xyz;
   o.st = v.st;
@@ -205,7 +231,8 @@ fn filtered(st: vec2f, rect: vec4f, dx: vec2f, dy: vec2f) -> vec4f {
   let big = max(lx, ly);
   let small = max(min(lx, ly), 1e-6);
   let taps = clamp(ceil(big / small), 1.0, 4.0);
-  let top = textureNumLevels(atlas) - 1u;  // 3, or 5 when a texture is upscaled
+  // 3, or 5 when a texture is upscaled
+  let top = textureNumLevels(atlas) - 1u;
   let lod = clamp(log2(max(big / taps, 1e-6)), 0.0, f32(top));
   let k0 = u32(floor(lod));
   let k1 = min(k0 + 1u, top);
@@ -216,6 +243,77 @@ fn filtered(st: vec2f, rect: vec4f, dx: vec2f, dy: vec2f) -> vec4f {
     sum += mix(bilinear(q, rect, k0), bilinear(q, rect, k1), fr);
   }
   return sum / taps;
+}
+
+// The relief's texel at integer `t` of mip `k` of the texture at `rect`, wrapped.
+fn surf_at(t: vec2f, rect: vec4f, k: u32) -> vec4f {
+  let s = f32(1u << k);
+  let size = max(floor(rect.zw / s), vec2f(1.0));
+  let w = t - size * floor(t / size);
+  return textureLoad(surface, vec2i(floor(rect.xy / s) + w), i32(k));
+}
+
+// The relief at `st` (texels of mip 0) at mip `k`, bilinear between its four nearest texels.
+fn surf_bilinear(st: vec2f, rect: vec4f, k: u32) -> vec4f {
+  let p = st / f32(1u << k) - 0.5;
+  let i = floor(p);
+  let f = p - i;
+  let a = surf_at(i, rect, k);
+  let b = surf_at(i + vec2f(1.0, 0.0), rect, k);
+  let c = surf_at(i + vec2f(0.0, 1.0), rect, k);
+  let d = surf_at(i + vec2f(1.0, 1.0), rect, k);
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+// THE PARALLAX: `st` moved to where the eye's ray, entering the face there, first meets the
+// texture's height field `depth` m deep (height 1 the face, 0 the deepest). `per` is the texture
+// coordinates' step a metre of depth along the ray; the ray is marched in `n` even steps (fewer
+// the more squarely the face is seen) and the crossing found between the last two.
+fn parallax(st: vec2f, rect: vec4f, k: u32, per: vec2f, depth: f32, n: i32) -> vec2f {
+  let reach = per * depth;
+  var d = 0.0;
+  // how far below the face the field is here
+  var gap = 1.0 - surf_bilinear(st, rect, k).z;
+  if (gap <= 0.0) {
+    return st;
+  }
+  for (var i = 1; i <= n; i++) {
+    let d1 = f32(i) / f32(n);
+    let gap1 = 1.0 - surf_bilinear(st + reach * d1, rect, k).z - d1;
+    if (gap1 <= 0.0) {
+      d = mix(d, d1, gap / max(gap - gap1, 1e-5));
+      return st + reach * d;
+    }
+    d = d1;
+    gap = gap1;
+  }
+  return st + reach;
+}
+
+// THE HIGHLIGHT: GGX's specular for a light from `l` seen from `v` on normal `n` with `rough`
+// (perceptual), times n.l, a dielectric's reflectance at normal incidence (0.04). `spread` is the
+// light's size over twice its distance: a near flame or a lava pool's glow is no point, so its
+// highlight is widened by it and dimmed to keep its energy (a sphere light's normalisation).
+fn ggx(n: vec3f, l: vec3f, v: vec3f, rough: f32, spread: f32) -> f32 {
+  let nl = dot(n, l);
+  if (nl <= 0.0) {
+    return 0.0;
+  }
+  let h = normalize(l + v);
+  let nh = max(dot(n, h), 0.0);
+  let nv = max(dot(n, v), 1e-3);
+  let a0 = max(rough * rough, 0.002);
+  let a = min(a0 + spread, 1.0);
+  let a2 = a * a;
+  let dd = nh * nh * (a2 - 1.0) + 1.0;
+  let keep = a0 / a;
+  let dist = a2 / (PI * dd * dd) * keep * keep;
+  let kk = a * 0.5;
+  let vis = 0.25 / ((nl * (1.0 - kk) + kk) * (nv * (1.0 - kk) + kk));
+  // Schlick's Fresnel toward a grazing reflectance the roughness lowers: a rough painted wall
+  // keeps no mirror at a glance.
+  let f = 0.04 + (max(1.0 - rough, 0.04) - 0.04) * pow(1.0 - max(dot(h, v), 0.0), 5.0);
+  return dist * vis * f * nl;
 }
 
 // THE TELEPORT'S MAGIC LIQUID (v2): a black ink marbled with grey, flowing UP the panel; silver
@@ -483,7 +581,8 @@ struct Weathered {
   albedo: vec3f,
   sheen: vec3f,
   n: vec3f,
-  flash: f32,  // the lightning's light on the face, a white face's units
+  // the lightning's light on the face, a white face's units
+  flash: f32,
 };
 
 // The rings a drop throws on a puddle round `xz` at time `t`: the surface's tilt (x, z).
@@ -633,6 +732,43 @@ fn shade(in: VsOut) -> FsOut {
     return out;
   }
 
+  // ── The relief: the face's texture axes in the world, the parallax, the texel's own normal ──
+  var ng = normalize(in.nrm);
+  if (dot(ng, eye_dir) > 0.0) {
+    ng = -ng;
+  }
+  var nm = ng;
+  var rough = 1.0;
+  var cavity = 1.0;
+  let r1 = cross(dpy, ng);
+  let r2 = cross(ng, dpx);
+  let det = dot(dpx, r1);
+  let relief = !classic && in.kind == kSolid && bsp.info5.z > 0.0 && abs(det) > 1e-14;
+  if (relief) {
+    // The world gradients of s and t (texels a metre, in the face's plane).
+    let gs = (dx.x * r1 + dy.x * r2) / det;
+    let gt = (dx.y * r1 + dy.y * r2) / det;
+    let ks = u32(clamp(lod, 0.0, f32(textureNumLevels(surface) - 1u)));
+    let dist = length(in.world - frame.eye.xyz);
+    let reach = bsp.info4.z;
+    let depth = bsp.info5.w * (1.0 - smoothstep(0.6 * reach, reach, dist));
+    if (depth > 0.0) {
+      let v = -eye_dir;
+      let vz = max(dot(v, ng), 0.1);
+      let flat = v - dot(v, ng) * ng;
+      let per = -vec2f(dot(gs, flat), dot(gt, flat)) / vz;
+      st = parallax(st, in.rect, ks, per, depth, i32(mix(14.0, 5.0, vz)));
+    }
+    let sv = surf_bilinear(st, in.rect, ks);
+    let tn = (sv.xy * 2.0 - 1.0) * bsp.info5.z;
+    let tz = sqrt(max(1.0 - dot(tn, tn), 0.0));
+    // +x along s; +y up the picture, against t.
+    nm = normalize(tn.x * normalize(gs) - tn.y * normalize(gt) + tz * ng);
+    // The baked roughness widened: the classic textures are painted, not polished.
+    rough = 0.45 + 0.55 * sv.w;
+    cavity = clamp(0.65 + 0.7 * sv.z, 0.65, 1.0);
+  }
+
   var tx = texel(st, in.rect, lod);
   if (!classic && bsp.info3.w > 0.5) {
     tx = filtered(st, in.rect, dx, dy);
@@ -644,19 +780,21 @@ fn shade(in: VsOut) -> FsOut {
     out.colour = vec4f(albedo * white, 1.0);
     return out;
   }
-  var n = normalize(in.nrm);
-  if (dot(n, eye_dir) > 0.0) {
-    n = -n;
-  }
+  // the face's own normal, toward the eye
+  let n = ng;
 
   // ── Rebaked: the map's light worked out again (rebake.hpp), shaded by the light's direction ──
   if (!classic && bsp.info.y > 1.5 && in.lm2.x >= 0.0) {
-    let ng = normalize(in.nrm);
     let raw = textureSampleLevel(rebake_dir, light_sampler, in.lm2, 0.0).xyz;
     let d = raw * (255.0 / 127.5) - vec3f(128.0 / 127.5);
-    let nd = relief_normal(ng, st, in.rect, lod, dx, dy, dpx, dpy, bsp.info4.x);
+    // The face's normal as the map has it (its light's direction is read against that side).
+    let ng0 = normalize(in.nrm);
+    var nd = relief_normal(ng0, st, in.rect, lod, dx, dy, dpx, dpy, bsp.info4.x);
+    if (relief) {
+      nd = nm * sign(dot(ng, ng0));
+    }
     var e = textureSampleLevel(rebake_rgb, light_sampler, in.lm2, 0.0).rgb;
-    e = floor_light(e * directional_scale(d, nd, ng), bsp.info3.x);
+    e = floor_light(e * directional_scale(d, nd, ng0), bsp.info3.x);
     out.colour = vec4f(albedo * e * white + albedo * white * glow, 1.0);
     return out;
   }
@@ -676,10 +814,16 @@ fn shade(in: VsOut) -> FsOut {
   }
 
   // ── Real-time lights ──
-  let wl = weathered(in.world, n, albedo, eye_dir);
+  let wl = weathered(in.world, nm, albedo, eye_dir);
   let p = in.world + n * 0.03;
-  var e = vec3f(bsp.info.w);
+  let v = -eye_dir;
+  // the highlights' strength, 0 none (no relief)
+  let shine = select(0.0, bsp.info4.w, relief);
+  var e = vec3f(bsp.info.w) * cavity;
   var phys = vec3f(0.0);
+  // the highlights, the lightmaps' units
+  var es = vec3f(0.0);
+  var phys_s = vec3f(0.0);
   let count = u32(bsp.info.z);
   for (var i = 0u; i < count; i++) {
     let l = lights[i];
@@ -690,40 +834,52 @@ fn shade(in: VsOut) -> FsOut {
       continue;
     }
     let d = sqrt(d2);
-    let ndl = dot(n, -q / max(d, 1e-4));
-    if (ndl <= 0.0) {
+    let to_light = -q / max(d, 1e-4);
+    // The face must face the light; the texel's own normal then says how much.
+    if (dot(n, to_light) <= 0.0) {
       continue;
     }
+    let ndl = max(dot(wl.n, to_light), 0.0);
     let r = d / reach;
     let r4 = r * r * r * r;
     let window = (1.0 - r4) * (1.0 - r4);
     // Softened near the light over its source's size (a fire's whole flame), 0.2 m at least.
-    var lit = ndl * window / (d2 + max(l.info.y, 0.04));
+    var fall = window / (d2 + max(l.info.y, 0.04));
     if (l.info.x >= 0.0) {
-      lit *= cube_shadow(q, reach, i32(l.info.x));
+      fall *= cube_shadow(q, reach, i32(l.info.x));
+    }
+    var spec = 0.0;
+    if (shine > 0.0) {
+      spec = ggx(wl.n, to_light, v, rough, sqrt(max(l.info.y, 0.04)) / (2.0 * d)) * shine;
     }
     if (l.colour.w > 0.5) {
-      phys += l.colour.rgb * lit;
+      phys += l.colour.rgb * ndl * fall;
+      phys_s += l.colour.rgb * spec * fall;
     } else {
-      e += l.colour.rgb * lit;
+      e += l.colour.rgb * ndl * fall;
+      es += l.colour.rgb * spec * fall;
     }
   }
   // The light bounced round the room: the map's baked light (its light probes) at a share.
-  e += lightmap(in.lm, in.styles) * bsp.info3.y;
-  e = floor_light(e, bsp.info3.x);
+  e += lightmap(in.lm, in.styles) * bsp.info3.y * cavity;
+  e = floor_light(e, bsp.info3.x * cavity);
   e += wl.flash;
   var c = wl.albedo * e * white;
+  // The highlights: a light in the lightmaps' units is a white face's irradiance over pi.
+  c += es * PI * white;
   // A physical light: illuminance (lx) on the face to its luminance in the frame's units.
-  c += wl.albedo * phys / PI * frame.world.y / kSunLux;
+  c += (wl.albedo * phys / PI + phys_s) * frame.world.y / kSunLux;
   // The sun through the sky faces, and the sky's light by how open the point is overhead.
   let sun_dir = frame.sun.xyz;
   let sun_ndl = max(dot(wl.n, sun_dir), 0.0);
   if (sun_ndl > 0.0 && frame.sun.y > 0.0) {
     let lit = ortho_lit(bsp.ortho[0], 0, p, 0.05);
-    c += wl.albedo / PI * sun_light(in.world.y, in.world.xz) * sun_ndl * lit * bsp.info3.z;
+    let sun = sun_light(in.world.y, in.world.xz) * lit * bsp.info3.z;
+    // No highlight: the classic's dark painted walls under a whole sky's sun would read as foil.
+    c += wl.albedo / PI * sun * sun_ndl;
   }
   let open = ortho_lit(bsp.ortho[1], 1, in.world + n * 0.3, 1.2);
-  c += wl.albedo / PI * sky_irradiance(wl.n) * open * bsp.info3.z;
+  c += wl.albedo / PI * sky_irradiance(wl.n) * open * bsp.info3.z * cavity;
   c += wl.sheen;
   c += albedo * white * glow;
   out.colour = vec4f(c, 1.0);

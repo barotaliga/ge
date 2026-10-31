@@ -2,6 +2,7 @@
 //
 // ge:summary Reads the enhanced cache back: the pack's folder, textures and skins by name
 // ge:keywords classicenhance cache read find_cache cached_texture cached_skins albedo emissive
+// ge:keywords cached_surface relief
 // ge:skill classicenhance
 // ge:test tests/classicenhance_cached_test.cpp
 #include "classicenhance/cached.hpp"
@@ -38,6 +39,13 @@ void mark_glow(lab::Picture& colour, const std::optional<lab::Picture>& glow) {
   }
 }
 
+// Whether the pack's own texture `name` is left to the pack (a liquid, the sky).
+bool left_to_pack(std::string_view name) {
+  return name.empty() || name[0] == '*' ||
+         (name.size() >= 3 && (name[0] | 0x20) == 's' && (name[1] | 0x20) == 'k' &&
+          (name[2] | 0x20) == 'y');
+}
+
 }  // namespace
 
 fs::path find_cache(std::span<const uint8_t> pack, const fs::path& root) {
@@ -49,10 +57,7 @@ fs::path find_cache(std::span<const uint8_t> pack, const fs::path& root) {
 
 bool cached_texture(const fs::path& dir, std::string_view name, uint32_t w, uint32_t h,
                     std::vector<uint8_t>* rgba) {
-  if (dir.empty() || name.empty() || name[0] == '*') return false;
-  if (name.size() >= 3 && (name[0] | 0x20) == 's' && (name[1] | 0x20) == 'k' &&
-      (name[2] | 0x20) == 'y')
-    return false;
+  if (dir.empty() || left_to_pack(name)) return false;
   const fs::path at = dir / "textures" / safe_name(std::string(name));
   std::optional<lab::Picture> colour = lab::read_png((at / "albedo.png").string());
   if (!colour || scale_of(*colour, w, h) == 0) return false;
@@ -60,6 +65,28 @@ bool cached_texture(const fs::path& dir, std::string_view name, uint32_t w, uint
   const fs::path glow = at / "emissive.png";
   mark_glow(*colour, fs::exists(glow, ec) ? lab::read_png(glow.string()) : std::nullopt);
   *rgba = std::move(colour->rgba);
+  return true;
+}
+
+bool cached_surface(const fs::path& dir, std::string_view name, uint32_t w, uint32_t h,
+                    std::vector<uint8_t>* rgba) {
+  if (dir.empty() || left_to_pack(name) || w == 0 || h == 0) return false;
+  const fs::path at = dir / "textures" / safe_name(std::string(name));
+  const std::optional<lab::Picture> normal = lab::read_png((at / "normal.png").string());
+  const std::optional<lab::Picture> height = lab::read_png((at / "height.png").string());
+  const std::optional<lab::Picture> rough = lab::read_png((at / "roughness.png").string());
+  const auto fits = [&](const std::optional<lab::Picture>& p) {
+    return p && uint32_t(p->width) == w && uint32_t(p->height) == h &&
+           p->rgba.size() == size_t(w) * h * 4;
+  };
+  if (!fits(normal) || !fits(height) || !fits(rough)) return false;
+  rgba->resize(size_t(w) * h * 4);
+  for (size_t i = 0; i < rgba->size(); i += 4) {
+    (*rgba)[i] = normal->rgba[i];
+    (*rgba)[i + 1] = normal->rgba[i + 1];
+    (*rgba)[i + 2] = height->rgba[i];
+    (*rgba)[i + 3] = rough->rgba[i];
+  }
   return true;
 }
 
