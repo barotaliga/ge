@@ -98,6 +98,13 @@ wind::Air air_at(const WeatherCvars& c, double t) {
 
 }  // namespace
 
+void wind_air(const WeatherCvars& c, double t, double out[3]) {
+  const wind::Air air = air_at(c, t);
+  out[0] = air.x;
+  out[1] = air.y;
+  out[2] = air.z;
+}
+
 WeatherFrame step_weather(const WeatherCvars& c, WeatherState& s, const double eye[3], double t,
                           double sun) {
   WeatherFrame w;

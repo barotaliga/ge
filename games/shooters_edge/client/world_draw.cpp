@@ -62,6 +62,7 @@ struct WorldDraw {
   bool held_fresh = true;
   ge::brush::LightProbe probe;
   WorldExtrasPtr extras;  // the modern look's water, liquids, flames and weather (a map's only)
+  std::vector<gr::Particle> fire_births;  // this frame's sparks off the bonfires
   gr::UiPass ui;
   gr::FrameRecorder rec;
   uint32_t w = 0, h = 0;
@@ -292,6 +293,11 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   }
   if (f.extras) prepare_extras(d, *f.extras, f.bsp, view, o);
   gr::emit_particles(f.particles, fx.births);
+  if (f.extras) {
+    f.fire_births.clear();
+    extras_births(*f.extras, view.time_s, f.fire_births);
+    gr::emit_particles(f.particles, f.fire_births);
+  }
   f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
   gr::prepare_particles(d, f.particles, dt, view.near_m);
   gr::prepare_explosions(d, f.explosions, fx.puffs, view, f.w, f.h, fx.flames);

@@ -76,6 +76,12 @@ Flame campfire_flame(const double base[3], uint32_t seed) {
   f.depth = 0.4f;
   return f;
 }
+// A bonfire: a broad heap of fuel, so a fat body slow to flicker, its gas rising fast and tall.
+Flame bonfire_flame(const double base[3], uint32_t seed) {
+  Flame f = preset(base, seed, 2.0f, 0.5f, 2000, 9000, 2.6f, 5, 0.0f);
+  f.depth = 0.45f;
+  return f;
+}
 
 LocalLight flame_light(const Flame& f) {
   LocalLight l;

@@ -13,14 +13,18 @@
 //   frame's births are spread along their paths.
 // - EACH BIRTH is drawn off its own stream (the seed and its number): where in the area, its
 //   speed, its life, and for an ember its heat (1300 to 1700 K, cooling as it rises: it reddens
-//   and goes out). The pool lights them as it lights every particle (the sun, the sky, the lamps
-//   round them, the fog's haze), so an ember over a fire is lit by the fire and glows on its own.
+//   and goes out). A SPARK is thrown up out of the fuel bed fast (1.5 to 4 m/s), hotter (2900 to
+//   3400 K, from the hottest of the bed, cooling fast) and lofted by the fire's plume while it
+//   slows; it is born moving with the air at the emitter (`air`, m/s), so a wind carries a fire's
+//   sparks off downwind as they climb. The pool lights them as it lights every particle (the sun,
+//   the sky, the lamps round them, the fog's haze), so an ember over a fire is lit by the fire and
+//   glows on its own.
 // - `embers_over` gives a glowing fog volume (render/fog.hpp) its embers: over its floor, as many
 //   as its glow and size give.
 //
 // ge:summary Emitters an area carries: embers, motes, drips and steam as seeded particle births
 // ge:keywords render particles emitter embers sparks motes dust drips ceiling icicle steam
-// ge:keywords area-emitter emit_area embers_over births cadence seeded
+// ge:keywords area-emitter emit_area embers_over births cadence seeded bonfire fire-sparks
 // ge:skill render
 // ge:test tests/render_emitters_test.cpp
 #pragma once
@@ -36,12 +40,13 @@ namespace ge::render {
 inline constexpr uint32_t kMaxAreaBirths = 4096;  // a span's births, at most (a long pause's)
 
 struct AreaEmitter {
-  enum class Kind : uint8_t { embers, motes, drips, steam };
+  enum class Kind : uint8_t { embers, motes, drips, steam, sparks };
   double centre[3] = {0, 0, 0};  // world m
   double half[3] = {1, 1, 1};    // half its size along x, y, z, m
   double rate = 10;              // births a second
   uint32_t seed = 0;
   Kind kind = Kind::embers;
+  double air[3] = {0, 0, 0};  // m/s: the air at the area, which a spark is born moving with
 };
 
 // The births of `emitter` in [t0_s, t1_s), each flown to t1_s, appended to `out` (at most
