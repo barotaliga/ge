@@ -225,7 +225,7 @@ Each slime is a turbid volume:
   farthest depth (the bound a cull needs), while a ray needs the nearest to skip empty space.
   `Liquids::reflections` turns it off.
 - **The heat shimmer.** The air over lava bends a ray through its rising cells
-  (`LavaLook::shimmer`, 4 mrad a metre of hot air by default). The bend is summed along the ray
+  (`LavaLook::shimmer`, 0.8 mrad a metre of hot air by default). The bend is summed along the ray
   through a layer 3 m deep, strongest at the surface, falling off over a metre. Lava's own surface
   is looked up where its bent ray lands. What is seen across the lake is drawn again through the
   bent rays by a box over the body, drawn after the surfaces.
@@ -236,13 +236,41 @@ Each slime is a turbid volume:
   in the first second. It is drawn, not stepped: a game calls it when its simulation sees
   something land in lava.
 
+## From below (M30h)
+
+An eye under a body's level, inside its box (`Liquids::eye_under`, found by `prepare_liquid`),
+sees the liquid all round it. One full-screen triangle is drawn after the surfaces, in the same
+`liquid` pass, so the pass table keeps its rows.
+
+- **Slime is a fog of its own colour.** The scene fades into the Kubelka–Munk colour of a thick
+  layer over exp(-(K + S) d) of the path. That colour is lit by the light reaching the eye's
+  depth: the sun, the sky and the room over the surface, dimmed on the way down by the two-flux
+  diffuse attenuation sqrt(K (K + 2 S)). The slime's own glow is added. The view wobbles slowly.
+- **Its surface from below.** A ray that meets the surface before the scene is refracted out
+  (n = 1.34). Inside Snell's window it shows the world over the surface from the scene copy,
+  with Fresnel's reflected share as the slime's veil. Past the window the surface mirrors the
+  slime below (total internal reflection). A scum's patches show on the window as dark
+  undersides.
+- **Lava is opaque.** The melt's own glow fills the view, with cooler streaks rising through it.
+  The eye is keyed to the melt at 0.6 of a white face's luminance, so the view stays orange
+  and the tone curve does not whiten it. Only what touches the eye shows through
+  the first few centimetres.
+- **A game's least view (`Liquids::under_reach`, m).** A toxic slime's attenuation is hundreds
+  per metre, so an eye in it honestly sees two centimetres. A game that wants to see where it
+  swims sets a reach: no band's attenuation passes 3 / reach, so the reach is where 5 % of the
+  scene is left. The colour is kept, because the veil's colour is the stuff's own. 0 (the
+  default) leaves the liquid as thick as it is.
+
+Not yet: the waterline split for an eye at the level (the water's lens plate,
+`render/underwater.hpp`).
+
 ## Labs (G9)
 
 | Lab | Kind | Row | What it shows |
 | --- | --- | --- | --- |
 | `liquids` | picture | M30a | The share of a gale's input each liquid keeps by wavelength, the drift, the swim each gives (stroke speed, the scales, metres in 10 s), the damage over time at each immersion (lava's burns, the slimes' ticks), the radiant heat over a lava pool by height |
-| `gpu-lava` | picture | M30b | A lava pool in a quarry by day, at dusk and at night; the crust's cover from 15 to 97 %; the plates close up by day and night; the flow at four moments; the heat shimmer across the lake (off, on, a moment later); three stones breaking the crust at four moments; both lavas; the glow table |
-| `gpu-slime` | picture | M30c | The five slimes from the rim and close up; the toxic slime glowing by day, at dusk and at night; the gel seen into; one gale over three slimes; three crags mirrored in the tar, reflections off and on |
+| `gpu-lava` | picture | M30b | A lava pool in a quarry by day, at dusk and at night; the crust's cover from 15 to 97 %; the plates close up by day and night; the flow at four moments; the heat shimmer across the lake (off, on, a moment later); three stones breaking the crust at four moments; the view from under the level; both lavas; the glow table |
+| `gpu-slime` | picture | M30c | The five slimes from the rim and close up; the toxic slime glowing by day, at dusk and at night; the gel seen into; one gale over three slimes; three crags mirrored in the tar, reflections off and on; the toxic slime and the gel from under the level |
 
 ## Sources
 

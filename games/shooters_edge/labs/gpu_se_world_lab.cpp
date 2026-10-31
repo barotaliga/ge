@@ -3,7 +3,8 @@
 // lightmaps and their styles, the map's sky, the palette's colours) and MODERN (filtered, real-time
 // lights with shadows, our sky, bloom). Then what moves: a light style played over a second, a
 // texture's animation, the effects (an explosion, a rocket's trail, a hit, a teleport, lava thrown
-// up, with their dynamic lights) in both looks, and the screen's blends. Every view is drawn culled
+// up, with their dynamic lights) in both looks, the screen's blends, and the sky a switch
+// (ce_skies: our sky, or the pack's under the modern look). Every view is drawn culled
 // (the eye's potentially visible set, then two-phase Hi-Z; brush/app/bsp_cull.hpp); and the GPU's
 // half of the cull (the frustum and the pyramid, the set off) must draw the same pixels as drawing
 // everything. The set is the map's own data and not held so: the arena's rooms see two doorways
@@ -92,13 +93,15 @@ struct View {
   double heading = 0, pitch = 0;
 };
 
-// The arena: the sample fixture with the hall's lamp flickering (a style of its own) and the side
-// room's walls a two-frame animation.
+// The arena: the sample fixture with the hall's lamp flickering (a style of its own), the side
+// room's walls a two-frame animation and the vault open to the sky.
 br::Fixture arena() {
   br::Fixture f = br::sample_fixture();
   if (!f.lights.empty()) f.lights[0].style = kFlicker;
   if (f.rooms.size() > 1) f.rooms[1].wall = "+0glow";
   if (f.rooms.size() > 2) f.rooms[2].wall = "+1glow";
+  for (br::FixtureRoom& r : f.rooms)
+    if (r.name == "vault") r.ceiling = "sky1";
   return f;
 }
 
@@ -128,6 +131,32 @@ std::vector<View> room_views(const br::Fixture& f, const std::string& map) {
     out.push_back(v);
   }
   return out;
+}
+
+// A view up into the open sky: under the level sky face nearest the start (a ceiling of sky, at
+// most 4 m under it), looking up at it; `fallback` pitched up when the map has none.
+View sky_view(const ba::Scene& s, const View& fallback) {
+  double best = 1e30;
+  View v = fallback;
+  v.pitch = std::max(v.pitch, 0.0) + 0.45;
+  for (size_t i = 0; i + 2 < s.indices.size(); i += 3) {
+    const ba::DrawVertex& a = s.vertices[s.indices[i]];
+    if (a.kind != ba::kSky || std::fabs(a.nrm[1]) < 0.7) continue;
+    double c[3] = {0, 0, 0};
+    for (size_t k = 0; k < 3; ++k)
+      for (int j = 0; j < 3; ++j) c[j] += s.vertices[s.indices[i + k]].pos[j] / 3.0;
+    if (c[1] < s.start[1] + 1) continue;
+    const double dx = c[0] - s.start[0], dy = c[1] - s.start[1], dz = c[2] - s.start[2];
+    const double d = dx * dx + dy * dy + dz * dz;
+    if (d >= best) continue;
+    best = d;
+    v.title = fallback.title.substr(0, fallback.title.find(':')) + ": under the open sky";
+    v.eye[0] = c[0];
+    v.eye[1] = std::max(s.start[1] + 0.6, c[1] - 4);
+    v.eye[2] = c[2];
+    v.pitch = 0.9;
+  }
+  return v;
 }
 
 gr::FrameView frame_view(const View& view, const MapState& m, double t) {
@@ -297,7 +326,7 @@ void run(gl::Lab& lab) {
     }
     maps.push_back(std::move(m));
   }
-  const char* const kShots[] = {"styles", "animation", "effects", "blends"};
+  const char* const kShots[] = {"styles", "animation", "effects", "blends", "skies"};
 
   auto device = ge::gpu::create_device({.label = "se-world", .validation = 1});
   if (!device) {
@@ -528,6 +557,35 @@ void run(gl::Lab& lab) {
          "Water a blue-green veil, lava a heavy orange, a hurt red over the power's blue.",
          {}},
         row(pics, labels), Det::measured);
+  }
+  // ── The sky a switch: the modern look with ce_skies on (our sky) and off (the pack's) ──
+  {
+    const View open = sky_view(first.scene, views[0]);
+    const gr::FrameView fv = frame_view(open, first, t);
+    const bool kept = f.picture.ce.skies;
+    std::vector<gl::Picture> pics;
+    pics.push_back(draw(d, f, first, fv, lk::Look::classic, true));
+    f.picture.ce.skies = true;
+    pics.push_back(draw(d, f, first, fv, lk::Look::modern, true));
+    f.picture.ce.skies = false;
+    pics.push_back(draw(d, f, first, fv, lk::Look::modern, true));
+    f.picture.ce.skies = kept;
+    const int n = differ(pics[1], pics[2]);
+    lab.metric("skies.differ", double(n) / double(pics[1].width * pics[1].height), "share",
+               Det::measured);
+    lab.shot(
+        {"skies",
+         "the sky a switch",
+         open.title +
+             ", looking up: the classic look, then the modern with "
+             "ce_skies on (our sky, its clouds and its night through the sky faces) and off (the "
+             "pack's own two scrolling layers, under the modern look's lights).",
+         "The modern pair differ in the sky alone; off, the sky is the classic's.",
+         {}},
+        row(pics, {"CLASSIC", "MODERN, CE_SKIES 1", "MODERN, CE_SKIES 0"}), Det::measured);
+    if (n == 0)
+      lab.fail("ce_skies 0 drew the same sky as ce_skies 1",
+               "Read look.cpp's world_options (pack_sky) and bsp.wgsl's sky faces. Skill: render.");
   }
   ls::checked(lab, int(d.errors.load()), int(d.pipelines_after_load));
 }
