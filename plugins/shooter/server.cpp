@@ -38,6 +38,7 @@ void create_server(Server& sv, const ServerSettings& set, const std::vector<Brus
   for (const BrushModel& m : models) sv.models.push_back(m);
   sv.program = program;
   sv.time = set.start_time;
+  sv.base_time = set.start_time;
   sv.num_edicts =
       sv.set.first_dynamic > sv.set.maxclients ? sv.set.first_dynamic : sv.set.maxclients + 1;
 

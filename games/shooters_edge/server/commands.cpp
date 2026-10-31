@@ -183,8 +183,14 @@ bool server_command(QcServer& s, const std::string& line) {
     set_local_info(s, pg::word(w, 1), pg::word(w, 2));
     return true;
   }
-  if (cmd == "map" && w.count >= 2) {
+  if ((cmd == "map" || cmd == "changelevel") && w.count >= 2) {
     s.pending_map = pg::word(w, 1);
+    s.pending_change = cmd == "map" ? MapChange::new_game : MapChange::change_level;
+    return true;
+  }
+  if (cmd == "restart") {
+    s.pending_map = s.map_name;
+    s.pending_change = MapChange::restart;
     return true;
   }
   if (s.cvars.find(cmd) != nullptr) {

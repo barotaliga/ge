@@ -57,6 +57,8 @@ void() PutClientInServer = {
   self.flags = FL_CLIENT;
   self.deadflag = DEAD_NO;
   self.effects = 0;
+  self.super_damage_finished = 0;
+  self.invincible_finished = 0;
   self.items = W_BLADE | W_SCATTER;
   self.ammo_shells = 25;
   self.ammo_nails = 0;
@@ -108,6 +110,9 @@ void() player_die = {
   self.velocity_z = self.velocity_z + 160;
   self.weaponmodel = "";
   self.effects = 0;
+  self.super_damage_finished = 0;
+  self.invincible_finished = 0;
+  self.items = self.items - (self.items & (IT_QUAD | IT_INVULNERABILITY));
   self.respawn_ready = time + 1;
   if (self.health < -40) sound(self, CHAN_VOICE, "player/udeath.wav", 1, ATTN_NONE);
   else sound(self, CHAN_VOICE, "player/death1.wav", 1, ATTN_NORM);
@@ -166,6 +171,7 @@ void() PlayerPostThink = {
   if (self.deadflag != DEAD_NO || match_over) return;
   if (self.impulse) weapon_impulse();
   weapon_frame();
+  power_frame();
   self.dmg_take = 0;
 };
 

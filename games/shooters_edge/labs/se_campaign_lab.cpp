@@ -17,6 +17,7 @@
 // ge:skill progs shooter labs
 // ge:test tests/progs_layout_test.cpp tests/shooters_edge_qc_single_player_test.cpp
 #include <cmath>
+#include <memory>
 #include <span>
 #include <string>
 #include <utility>
@@ -28,6 +29,8 @@
 #include "core/num_text.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
+#include "shooters_edge/server/bsp_map.hpp"
+#include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/catalogue.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
@@ -51,9 +54,39 @@ using Inputs = std::vector<std::pair<std::string, std::string>>;
 struct Loaded {
   pg::Progs progs;
   std::string from;
-  bool pak1 = false;     // a later pack beside the first
-  bool pop_lmp = false;  // gfx/pop.lmp in the packs: the full game (`registered` 1)
+  bool pak1 = false;             // a later pack beside the first
+  bool pop_lmp = false;          // gfx/pop.lmp in the packs: the full game (`registered` 1)
+  std::vector<uint8_t> content;  // every pack's files (empty for the stub)
+  ge::vfs::Pak pak;
 };
+
+// The packs' maps for the campaign host: a map file read into the spec, its bytes kept until the
+// next call.
+struct PackMaps {
+  const Loaded* l = nullptr;
+  std::unique_ptr<sv::BspMap> bsp;
+  std::vector<std::string> asked;
+};
+
+bool pack_map(void* ctx, const std::string& name, sv::MapSpec& out, std::string& error) {
+  auto& m = *static_cast<PackMaps*>(ctx);
+  m.asked.push_back(name);
+  const ge::vfs::PakEntry* e = ge::vfs::pak_find(m.l->pak, ("maps/" + name + ".bsp").c_str());
+  if (e == nullptr) {
+    error = "no maps/" + name + ".bsp in the packs; next: pass --map with a map the packs hold";
+    return false;
+  }
+  m.bsp = std::make_unique<sv::BspMap>();
+  return sv::read_bsp_map(ge::vfs::pak_file(m.l->content, *e), name, m.bsp.get(), &out, error);
+}
+
+// The campaign stub's maps: the arena under its world.
+bool stub_map(void* ctx, const std::string& name, sv::MapSpec& out, std::string& /*error*/) {
+  static_cast<PackMaps*>(ctx)->asked.push_back(name);
+  out.models = sv::arena_models();
+  out.entities = sv::kStubEntities;
+  return true;
+}
 
 bool load_program(gl::Lab& lab, Loaded& out) {
   std::string error;
@@ -80,6 +113,8 @@ bool load_program(gl::Lab& lab, Loaded& out) {
   }
   out.pak1 = !src.later.empty();
   out.pop_lmp = ge::vfs::pak_find(pak, "gfx/pop.lmp") != nullptr;
+  out.content = content;
+  out.pak = pak;
   const ge::vfs::PakEntry* e = ge::vfs::pak_find(pak, "progs.dat");
   if (e == nullptr) {
     lab.fail("se-campaign: the packs hold no progs.dat", "next: pass the game's own folder");
@@ -276,6 +311,127 @@ void autoaim(gl::Lab& lab, const Inputs& in) {
             in);
 }
 
+// The campaign host on the campaign stub: a new game on `first`, the level change its thinker
+// asks for, the parms and the runes carried, then a restart.
+void campaign_flow(gl::Lab& lab) {
+  pg::Progs mod;
+  std::string error;
+  if (!sv::build_campaign_stub(mod, error)) {
+    lab.fail("se-campaign: " + error, "next: run tests/shooters_edge_campaign_test.cpp");
+    return;
+  }
+  PackMaps maps;
+  sv::CampaignOptions o;
+  o.server.loop.max_edicts = 64;
+  o.load = &stub_map;
+  o.load_ctx = &maps;
+  o.settings = {"skill 1.4"};
+  sv::Campaign c;
+  if (!sv::campaign_new_game(c, mod, o, "first", error)) {
+    lab.fail("se-campaign: the campaign did not start: " + error,
+             "next: run tests/shooters_edge_campaign_test.cpp");
+    return;
+  }
+  sv::campaign_join(c, 0, "player");
+  const pg::LayoutFields& f = pg::kSinglePlayerLayout.f;
+  auto field = [&](int e, int ofs) {
+    return pg::as_float(*pg::entity_field(c.server->q.vm, e, ofs));
+  };
+  gl::LabTable t{
+      "the campaign host on the campaign stub",
+      {"map", "time at the first frame", "skill", "player health", "maps played", "serverflags"},
+      {}};
+  auto row = [&] {
+    t.rows.push_back({c.history.back(), to_fixed(c.server->sv.time, 4),
+                      c.server->cvars.find("skill")->value, to_fixed(field(1, f.health), 0),
+                      to_fixed(field(1, f.frags), 0), to_fixed(c.serverflags, 0)});
+  };
+  row();
+  int frames = 0;
+  while (c.history.size() < 2 && frames < 400) {
+    if (!sv::campaign_frame(c, nullptr, 0, error)) break;
+    frames++;
+  }
+  row();
+  sv::server_command(*c.server, "restart");
+  sv::campaign_frame(c, nullptr, 0, error);
+  row();
+  lab.table(t);
+  lab.metric("campaign.change_frame", frames, "frames");
+  lab.metric("campaign.carried_health", field(1, f.health), "units");
+  lab.note(
+      "the campaign stub's level change: expected health 100, 75, 75; maps played 0, 1, 1; "
+      "serverflags 0, 1, 1; skill 1 throughout; every map's first frame at 1.2");
+}
+
+// The player's own program on its own map: the campaign host's map start with the full rules.
+void pack_campaign(gl::Lab& lab, const Loaded& l) {
+  PackMaps maps;
+  maps.l = &l;
+  sv::CampaignOptions o;
+  o.server.loop.max_edicts = 1024;
+  o.load = &pack_map;
+  o.load_ctx = &maps;
+  o.registered = l.pop_lmp;
+  o.settings = {"skill " + lab.arg("skill"), "deathmatch 0"};
+  sv::Campaign c;
+  std::string error;
+  const std::string map = lab.arg("map");
+  const bool ok = sv::campaign_new_game(c, l.progs, o, map, error);
+  gl::LabTable t{"the campaign host on the player's own map", {"what", "value"}, {}};
+  t.rows.push_back({"map", map});
+  t.rows.push_back({"started", ok ? "yes" : "no: " + error});
+  if (ok) {
+    sv::campaign_join(c, 0, "player");
+    const int seconds = static_cast<int>(lab.arg_num("seconds"));
+    const int frames = static_cast<int>(seconds / sv::kCampaignStep);
+    for (int i = 0; i < frames && c.server; i++)
+      if (!sv::campaign_frame(c, nullptr, 0, error)) break;
+    // A console line after it (`changelevel e1m2`): the change, then one frame on the next map.
+    if (c.server && !lab.arg("then").empty()) {
+      sv::server_command(*c.server, lab.arg("then"));
+      if (!sv::campaign_frame(c, nullptr, 0, error))
+        t.rows.push_back({"after `" + lab.arg("then") + "`", "failed: " + error});
+    }
+  }
+  if (c.server) {
+    const sv::QcServer& s = *c.server;
+    const sv::CampaignStats st = sv::campaign_stats(s);
+    int live = 0;
+    for (int e = 1; e < s.sv.num_edicts; e++)
+      if (!s.sv.edicts[static_cast<size_t>(e)].free) live++;
+    t.rows.push_back({"registered (the packs carry the full game)", l.pop_lmp ? "1" : "0"});
+    t.rows.push_back({"skill", s.cvars.find("skill")->value});
+    t.rows.push_back({"entities live", std::to_string(live)});
+    t.rows.push_back({"inhibited by skill", std::to_string(s.inhibited)});
+    t.rows.push_back({"monsters (killed / total)",
+                      to_fixed(st.killed_monsters, 0) + " / " + to_fixed(st.total_monsters, 0)});
+    t.rows.push_back({"secrets (found / total)",
+                      to_fixed(st.found_secrets, 0) + " / " + to_fixed(st.total_secrets, 0)});
+    t.rows.push_back({"models precached", std::to_string(s.models.size() - 1)});
+    t.rows.push_back({"sounds precached", std::to_string(s.sounds.size() - 1)});
+    t.rows.push_back({"faults", std::to_string(s.q.faults)});
+    t.rows.push_back({"last fault", s.q.last_fault.empty() ? "(none)" : s.q.last_fault});
+    t.rows.push_back({"server time", to_fixed(s.sv.time, 3)});
+    const pg::LayoutFields& f = s.q.layout->f;
+    auto field = [&](int ofs) { return pg::as_float(*pg::entity_field(s.q.vm, 1, ofs)); };
+    t.rows.push_back({"the player: health, armour, items", to_fixed(field(f.health), 0) + ", " +
+                                                               to_fixed(field(f.armorvalue), 0) +
+                                                               ", " + to_fixed(field(f.items), 0)});
+    t.rows.push_back(
+        {"the player's spawn parms 1..4", to_fixed(s.clients[0].spawn_parms[0], 0) + " " +
+                                              to_fixed(s.clients[0].spawn_parms[1], 0) + " " +
+                                              to_fixed(s.clients[0].spawn_parms[2], 0) + " " +
+                                              to_fixed(s.clients[0].spawn_parms[3], 0)});
+    std::string history;
+    for (const std::string& h : c.history) history += (history.empty() ? "" : ", ") + h;
+    t.rows.push_back({"maps started", history});
+    lab.metric("pack.monsters", st.total_monsters, "count");
+    lab.metric("pack.faults", static_cast<double>(s.q.faults), "count");
+  }
+  lab.table(t, gl::Det::measured);
+}
+
 void run(gl::Lab& lab) {
   Loaded l;
   if (!load_program(lab, l)) return;
@@ -323,6 +479,8 @@ void run(gl::Lab& lab) {
   }
   draw_shift(lab, in);
   autoaim(lab, in);
+  campaign_flow(lab);
+  if (!lab.arg("game").empty()) pack_campaign(lab, l);
 }
 
 const gl::LabSpec kSpec{
@@ -338,6 +496,10 @@ const gl::LabSpec kSpec{
         {"game", "",
          "the player's classic game: a release zip, a pack or a folder (empty: the stub)"},
         {"rise", "60", "how far above the shooter the autoaim's target stands, units"},
+        {"map", "start", "with --game: the map the campaign starts on"},
+        {"skill", "1", "with --game: the skill the campaign is played at"},
+        {"seconds", "5", "with --game: how long the map runs after the player joins, s"},
+        {"then", "", "with --game: a console line run after that (`changelevel e1m2`)"},
     },
     "",
     run,

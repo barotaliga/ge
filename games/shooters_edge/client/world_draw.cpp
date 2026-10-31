@@ -51,6 +51,7 @@ struct WorldDraw {
   gr::Bloom bloom;
   gr::Post post[2];
   gr::Particles particles;
+  WorldModels models;
   gr::HeldModels held;
   bool has_held = false;
   ge::viewmodel::Placement last_place;  // the weapon's placement a frame ago
@@ -138,7 +139,7 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
                                uint32_t width, uint32_t height, wgpu::TextureFormat format,
                                const look::Picture& picture,
                                std::span<const ge::viewmodel::HeldModel> weapons,
-                               std::string& error) {
+                               std::string& error, const ModelLoad& models) {
   // A map's frame is made while the map loads, the first and every later one: its pipelines are
   // the load's, not a hitch mid-run.
   d.loading = true;
@@ -209,6 +210,7 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
   gr::create_ui_pass(d, f->pipelines, f->ui, format);
   if (f->has_map) {
     ba::create_bsp(d, f->pipelines, f->bsp, f->scene, f->layout);
+    create_models(d, f->pipelines, f->models, f->layout, files, palette_copy, f->scene.map, models);
     f->extras = create_extras(d, f->pipelines, f->layout, f->scene, picture.ce, picture.weather);
   }
   if (!f->pipelines.finish(d)) {
@@ -256,6 +258,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   gr::emit_particles(f.particles, fx.births);
   f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
   gr::prepare_particles(d, f.particles, dt, view.near_m);
+  if (f.has_map)
+    prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
+                   o.mode == ba::Mode::v2 && f.picture->ce.flames);
   gr::set_post_blend(d, f.post[p], fx.blend);
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
@@ -269,12 +274,14 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   gr::encode_sky_tables(f.skypass, f.pipelines, f.rec, e);
   if (f.extras) encode_extras_sim(*f.extras, f.pipelines, f.rec, e);
   if (f.has_map) ba::encode_bsp(f.bsp, f.pipelines, f.rec, e, f.targets, f.frame);
+  encode_models(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_sky(f.skypass, f.pipelines, f.rec, e, f.targets, f.frame);
   if (f.picture->ce.clouds)
     gr::encode_clouds(f.clouds, f.pipelines, f.rec, e, f.targets, f.frame, view, f.staged);
   if (f.has_map) ba::encode_bsp_veil(f.bsp, f.pipelines, f.rec, e, f.targets);
   if (f.extras) encode_extras(*f.extras, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_particles(f.particles, f.pipelines, f.rec, e, f.targets, f.frame);
+  encode_model_sprites(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
   if (weapon) gr::encode_viewmodel(f.held, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);
   gr::encode_post(f.post[p], f.pipelines, f.rec, e, f.frame, f.post_group[p], target);

@@ -136,12 +136,26 @@ What the first slice draws: the map in its classic look (its textures, lightmaps
 and sky) over the engine's sky, from the first-person rig (the view height off the mod's view
 offset, stairs smoothed, a landing's dip); the game's effects (`client/world_fx.hpp`: a rocket's
 trail and glow, an explosion's sparks, smoke and light on the walls, the red flash of a hit and
-the tint under water, slime or lava); the weapon in hand (`client/held.hpp`: the game's free
+the tint under water, slime or lava); the things standing in the map (`client/world_models.hpp`,
+M18i3: every model, sprite and brush item on the server's model list loaded from the packs once a
+map, then drawn each frame where the server's entities and its static ones stand: the weapons
+lying about, armour, health and ammo boxes, the torches and their flames, the powers, the other
+players in their own top and bottom colours; a group of frames plays at its intervals, an item
+flagged to spin turns, each lit by the lightmap on the floor under it, shaded from above, its
+fullbright texels glowing); the weapon in hand (`client/held.hpp`: the game's free
 models, switched with the number keys, kicked and lit by its muzzle flash as the mod fires it,
 lit by the map's baked light under the player; `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`,
 `cl_guny`, `cl_gunz` and `cl_gunsway` in the console); the HUD (`hud_style
-classic|modern|compact`); the console; the main menu (below). Not yet: the other players' and
-items' models, sounds, and the network (the rest of M18h, M18i).
+classic|modern|compact`); the console; the main menu (below). Not yet: sounds, the map's moving
+brush models (doors, plats) drawn where they move, and the network (the rest of M18h, M18i).
+
+The baseline mod's POWERS (`qc/items.qc`): the quad (`item_artifact_super_damage`, four times
+the damage dealt) and the shield (`item_artifact_invulnerability`, no damage taken), 30 s each,
+back 60 s after they are taken. A power held glows round its holder (`effects`: blue the quad's,
+red the shield's; the window lights the walls round him and tints his own screen). The torches
+and flames (`light_torch_small_walltorch`, `light_flame_*`) are static things the clients draw. In
+the modern look with `ce_flames` on, the torch's model is drawn without its painted flame and the
+engine's burning gas is the flame.
 
 ### Benchmarking a demo
 
@@ -299,7 +313,8 @@ package, and loaded through `engine/mod`. Its half of the ABI is
 Shooter's Edge itself is a **shell**: the window, the menu, the console, the HUDs, the network,
 the bots and a small free arena of its own. The fun is in loading the classic games the player
 owns into it. Each classic game is a **profile**, and a match is three independent choices,
-so the games can be mixed (one game's maps with another's movement and a third's models):
+so the games can be mixed (one game's maps with another's movement and a third's models; the
+weapons and armour are a fourth choice, § Weapons and armour):
 
 | Choice | What it picks | Today | Later |
 | --- | --- | --- | --- |
@@ -339,6 +354,35 @@ so the games can be mixed (one game's maps with another's movement and a third's
   when `sv_playermove original` is set, and the campaign with the arena move. The setting is
   sent with the server's settings, so a predicting client predicts with the same rules
   (`porting/shooters-edge/frame-move.md` has both halves and who jumps in each mix).
+
+### Weapons and armour: an arsenal of their own
+
+Weapons and armour are a **fourth choice**, beside content, program and movement, and they
+can be swapped one at a time. The classic campaign can be played with the sequel's weapons, its
+armour, or both, once the sequel's profile lands. The design makes that possible:
+
+- **An arsenal is data.** Each weapon is a row: its pickup and view models, sounds and HUD icon
+  by the content's names; its ammunition kind; its fire (hitscan, a projectile and its speed,
+  spread, splash); its damage, refire and switch order. Each armour is a row: what it absorbs,
+  its amount and its pickup. A profile ships one weapon set and one armour set, so the classic
+  game's set and the sequel's set are rows in two profiles. Nothing in our programs names a
+  weapon by a constant.
+- **Our programs read the arsenal, never their own copies.** The weapons and armour in
+  `qc/common/` (the arena and campaign variants share them) fire, pick up and absorb through the
+  arsenal's rows. The settings `sv_weapons <profile>` and `sv_armour <profile>` pick which set a
+  map's items give. They default to the content's own sets, and each can be set without the
+  other.
+- **A map's items are mapped, not rewritten.** A map names its items by the content's own class
+  names. The arsenal maps each name to a slot (the shotgun slot, the green armour slot), and the
+  chosen set fills the slot. So the classic game's maps place the sequel's weapons where the
+  classic ones stood. An item with no slot in the chosen set falls back to the content's own.
+- **What a set needs is loaded with it.** The models and sounds of a borrowed set come from its
+  own profile's packs, which must be on the search path. The check at load (M18t5) refuses a mix
+  whose arsenal cannot resolve, and names the missing pack.
+- **The classic programs keep their own.** A pack's own program builds its weapons in its own
+  code, so swapping weapons is a feature of OUR programs (and of a C++ mod that implements the
+  arsenal). The exact classic campaign stays exact. Our campaign variant plays the classic maps
+  with any arsenal.
 
 ### Single player and multiplayer as variants of our mod
 
@@ -680,7 +724,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (needs the reference program; skipped with a reason when its cache is absent) |
 | `se-baseline` | scenario | The baseline mod compiled from its sources and played by bots on the arena with its door and plat: the build's counts, frags and deaths, obituaries by weapon, pickups, every path and missile from above, the frags and the movers' heights against the clock (built, M18d) |
 | `se-mod` | scenario | A mod (the test mod, or a player's progs from `--progs`) played by bots on the test arena to its time limit: the hooks it was called on, the builtins it called, frags, every path from above, the hooks' timeline (built, M18p) |
-| `se-campaign` | scenario | A single-player program (crc 5927: the player's own from `--game`, or the test mod's single-player stub) on its layout table: the program, the layout check entry by entry, the builtins it declares against what the server installs for its form, whether the full game's packs are there; the two forms' offsets compared name by name, the autoaim on the arena from the side (built, M18s1; the campaign host M18s2 grows it) |
+| `se-campaign` | scenario | A single-player program (crc 5927: the player's own from `--game`, or the test mod's single-player stub) on its layout table: the program, the layout check entry by entry, the builtins it declares against what the server installs for its form, whether the full game's packs are there; the two forms' offsets compared name by name, the autoaim on the arena from the side; the campaign host on the campaign stub (a level change, a restart: the parms and runes carried) and, with `--game`, on the pack's own map (`--map`, `--skill`, `--then=changelevel e1m2`: the monsters and secrets counted, the faults, the player's parms) (built, M18s1 and M18s2) |
 | `mod` | scenario | The engine's own C++ mod format: the sample mod's match beside the plain match (the loader's verdict, rockets, bounces, the mod's log, both matches' missiles, the rocket's distance and the grenade's height), and the modded match replayed to the bit (built, M52a) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
 | `se-nav` | scenario | Where a player can go on a map by the player move's own proof: the nav graph from above to scale (the floor shaded off the point hull, every node and link by kind, what a mover closes), the quickest routes as the proofs moved a player, from above and the side; on the nav course and the test arena (built, M18r1) |
@@ -692,6 +736,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
 | `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the weapon in hand, the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost, the effects thrown and the shots the hand saw (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
+| `se-models` | picture | The things a map places, as the window draws them: the armour, a health box, an ammo box, a weapon, a torch or a flame, the quad, the shield, another player in his colours and one holding both powers, each from a clear spot near it in both looks; the things placed by kind and the light under each (built, M18i3; `--pak` and `--map` for a pack's own maps) |
 | `se-menu` | picture | The main menu's pages in the modern look and in the classic look (the fixture's pictures, or the player's pack with `--pack`), every row the game cannot do yet dimmed, classic-enhance's menu under OPTIONS; at desktop, wide and phone sizes (built, M18k2) |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
 | `se-viewmodel` | picture | The game's eight free weapons in first person on the engine's corridor stage: every one held at rest, each fired in the dark lit by its own muzzle light, the shotgun switched to the rocket launcher, and the player's view-model cvars; each weapon's share of the picture, its muzzle on the screen, its flash's lift and the switch's time (built, M48d) |
