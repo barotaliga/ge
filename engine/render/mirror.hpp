@@ -16,13 +16,14 @@
 //   scene) reflects nothing; the first frame after the targets are made reads zeros (nothing
 //   drawn) and does the same.
 //
-// The wet ground's `wet_sheen` (render/wgsl/frame.wgsl) is its first reader: a puddle mirrors the
+// The wet ground's `wet_sheen` (render/wgsl/wet.wgsl) is its first reader: a puddle mirrors the
 // scene and the rain's film a blurred one.
 //
-// ge:summary Screen-space reflections: the scene kept a frame with its distances, marched by a
-// helper ge:keywords render mirror reflection ssr screen-space-reflection puddle wet-ground
-// mirror-keep ge:keywords create_mirror create_mirror_targets encode_mirror scene_reflection
-// last-frame ge:skill render ge:test tests/render_mirror_test.cpp
+// ge:summary Screen-space reflections: the scene kept a frame, marched by a helper
+// ge:keywords render mirror reflection ssr screen-space-reflection puddle wet-ground mirror-keep
+// ge:keywords create_mirror create_mirror_targets encode_mirror scene_reflection last-frame
+// ge:skill render
+// ge:test tests/render_mirror_test.cpp
 #pragma once
 
 #include <cstdint>
