@@ -27,7 +27,12 @@ constexpr std::string_view kNames[] = {
     "qplaque",  "ttl_main", "mainmenu", "menudot1", "menudot2", "menudot3", "menudot4", "menudot5",
     "menudot6", "ttl_sgl",  "sp_menu",  "p_multi",  "mp_menu",  "p_option", "help0",    "help1",
     "help2",    "help3",    "help4",    "help5",    "box_tl",   "box_tm",   "box_tr",   "box_ml",
-    "box_mm",   "box_mr",   "box_bl",   "box_bm",   "box_br"};
+    "box_mm",   "box_mr",   "box_bl",   "box_bm",   "box_br",   "complete", "inter"};
+
+// The big figures the level's end is drawn in, pictures of the glyph sheet's wad.
+constexpr std::string_view kWadNames[] = {"num_0",     "num_1",     "num_2",    "num_3", "num_4",
+                                          "num_5",     "num_6",     "num_7",    "num_8", "num_9",
+                                          "num_minus", "num_colon", "num_slash"};
 
 ui::Image colour(const vfs::IndexedPicture& p, std::span<const uint8_t> palette, int clear) {
   ui::Image img;
@@ -205,6 +210,12 @@ bool load_classic_art(const FindFile& find, ClassicArt* out, std::string* error)
     if (bytes.empty() || !vfs::read_picture(bytes, &p, &why)) continue;
     out->pictures.emplace(std::string(name), colour(p, palette, kClear));
   }
+  for (std::string_view name : kWadNames) {
+    const vfs::WadEntry* e = vfs::wad_find(wad, name);
+    vfs::IndexedPicture p;
+    if (e == nullptr || !vfs::read_picture(vfs::wad_lump(wad_bytes, *e), &p, &why)) continue;
+    out->pictures.emplace(std::string(name), colour(p, palette, kClear));
+  }
   if (out->find("mainmenu") == nullptr) {
     *error = "the packs have no gfx/mainmenu.lmp";
     *out = {};
@@ -218,7 +229,22 @@ std::map<std::string, std::vector<uint8_t>, std::less<>> fixture_files() {
   files["gfx/palette.lmp"] = fixture_palette();
   std::vector<uint8_t> wad;
   std::string error;
-  vfs::write_wad({{"conchars", vfs::kRawLump, glyph_sheet().indices}}, &wad, &error);
+  std::vector<vfs::WadLump> lumps = {{"conchars", vfs::kRawLump, glyph_sheet().indices}};
+  // The big figures: 24 px tall, the colon and the slash 16 px wide.
+  for (std::string_view name : kWadNames) {
+    const std::string_view what = name.substr(4);
+    const bool narrow = what == "colon" || what == "slash";
+    const std::string word = what == "minus"   ? "-"
+                             : what == "colon" ? ":"
+                             : what == "slash" ? "/"
+                                               : std::string(what);
+    lumps.push_back({std::string(name), vfs::kPictureLump,
+                     lmp(canvas(narrow ? 16 : 24, 24, [&](ui::DrawList& dl) {
+                       const ui::Font& f = ui::ui_font(ui::Weight::semibold);
+                       dl.text(f, 22, narrow ? 8.0f : 12.0f, 21, word, kGold, ui::Align::center);
+                     }))});
+  }
+  vfs::write_wad(lumps, &wad, &error);
   files["gfx.wad"] = std::move(wad);
   const auto put = [&](std::string_view name, const ui::Image& img) {
     files["gfx/" + std::string(name) + ".lmp"] = lmp(img);
@@ -230,6 +256,14 @@ std::map<std::string, std::vector<uint8_t>, std::less<>> fixture_files() {
           dl.rect({9, 18.0f + 30 * static_cast<float>(i), 14, 18}, kGold, 3);
       }));
   put("ttl_main", plate(96, 24, "MAIN MENU", 13));
+  put("complete", plate(192, 24, "COMPLETE", 15));
+  put("inter", canvas(160, 144, [](ui::DrawList& dl) {
+        const ui::Font& f = ui::ui_font(ui::Weight::semibold);
+        constexpr std::string_view kRows[] = {"TIME", "SECRETS", "KILLS"};
+        for (int i = 0; i < 3; i++)
+          dl.text(f, 18, 4, 30.0f + 40 * static_cast<float>(i), kRows[i], kGold, ui::Align::left,
+                  1);
+      }));
   put("ttl_sgl", plate(128, 24, "SINGLE PLAYER", 13));
   put("p_multi", plate(120, 24, "MULTIPLAYER", 13));
   put("p_option", plate(96, 24, "OPTIONS", 13));

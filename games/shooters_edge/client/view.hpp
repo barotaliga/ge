@@ -12,7 +12,7 @@
 // ge:summary The player's view of the listen server: the HUD's status and the camera's subject
 // ge:keywords hud-status status_of camera-subject subject_of view-height view-ofs engine_point
 // ge:keywords engine_heading engine_pitch weapons armour ammo items first-person
-// ge:keywords powerups quad shield power_s
+// ge:keywords powerups quad shield power_s keys runes cloak suit item-constants serverflags
 // ge:skill shooter camera ui
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
