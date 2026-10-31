@@ -106,6 +106,80 @@ texture), so the sky's table passes use their own group 0 (`sky.in`).
   `porting/subsystems.md` § render says, and `porting/rendering-survey.md` maps the
   measured costs onto these passes. Put both pictures in the PR.
 
+## Traps every render change meets
+
+Each of these cost a session a build or a day. They hold for every pass.
+
+**Choosing a technique.** Name the measured cost it removes (`docs/rendering.md`: pipelines
+compiled mid-run, a shadow pass that redraws the scene, CPU instance selection, the ground's
+fragment shader on tile GPUs). A technique that answers no measured cost stays in the doc's
+"not taken" list.
+
+**WGSL.**
+- Every draw's shader includes `frame.wgsl`, flattened into one module, so a name added to an
+  include shares one namespace with every shader in the tree (`fresnel`, `Medium` and
+  `medium_at` each collided once). Prefix a shared function with its file's subject
+  (`surface_fresnel`) and grep the tree's `.wgsl` for the name first. A module that must write
+  a binding `frame.wgsl` declares read-only gets its own module and its own copy of the struct.
+- `from` and `target` are reserved words. Tint's error names the first shader that includes the
+  file, and a pipeline only reports `finish()` false.
+- The include resolver reads a shader as a CMake list, so an unbalanced `[` in a comment
+  (`[0, 1)`) silently drops the rest of the file; the symptom is a missing entry point. Write
+  ranges as `0..1`.
+- When a pipeline fails with no message, run `make shaders-check`, or the resolved file under
+  `build/<preset>/gen/render/` through `.cache/deps/Dawn-*/bin/tint --format spirv`, and read its
+  tail.
+
+**The device.**
+- Read the FIRST `gpu:` line of a failure: one refused texture fails every bind group and
+  command buffer after it.
+- A texture's mip chain halves rounding down (`floor(log2(n)) + 1` levels); a CPU pyramid uploaded
+  into one halves the same way. Never ask `textureDimensions` for a level that differs between a
+  dispatch's threads (lavapipe answers wrong); derive it as `max(size0 >> mip, 1)`.
+- A texture is a storage target or sampled within one dispatch, never both, counting every
+  binding of every bound group. Passes that BUILD a table group-0 bind their own layout (`sky.in`).
+- A level change is a load: set `device.loading = true` before building its frame and call
+  `gpu::end_load` after, or every pipeline counts as created mid-run.
+- A generated data table is a `nullptr`-ended array of one short literal a line: Clang rejects a
+  literal over 65,536 characters and MSVC caps one piece at 16 KB; GCC accepts both, so only CI's
+  other rows catch it. The 1000-line cap holds generated files too.
+
+**The pass table.**
+- A pass that is only sometimes needed still opens every frame, or the recorder's GPU times shift
+  onto the wrong rows. Open it as an EMPTY COMPUTE pass: an empty render pass still loads and
+  stores its whole target (5.8 ms for a 2048² attachment on lavapipe).
+- A camera cut resets the cached cascades as well as the TAA history; so does anything that
+  changes what stands after the first frame (felled trees: `reset-sun-shadows`).
+- A pass that reads a set of things into a draw compacts with a scan, never an atomic append:
+  the append's order changes the depth test's winner between coplanar faces, and the digest.
+- After the prepass, `equal` passes coincident triangles twice (clipmap ring edges): an overdraw
+  of 1.0002 is right, a count UNDER 1 is a missed pixel.
+- A line takes no depth bias; write `frag_depth` a little nearer (×1.002, reversed-z) and test
+  `greater-equal` against the read-only depth.
+
+**Light and exposure.** The exposure keys to the light on a sunlit white face, so:
+- `pre_exposure` and `white_luminance` must count `FrameView::lamp_lux`, or a night stored in
+  RGBA16F overflows at a bright emitter (infinity, then NaN, drawn black). An emissive fragment
+  clamps what it writes to 60000. When something bright draws black, read the HDR target's raw
+  values first.
+- Tune a glow (an emissive surface, a spark's heat, a lamp) in the BRIGHTEST dark view it is seen
+  in (dusk, or the darkest room with bloom on), where the exposure is highest and it clips first.
+- A lab view with a lamp in it sets `lamp_lux` as the game's frame does; a lab measuring the moon
+  turns the lamps off.
+
+**Judging a picture.**
+- A view must find its subject: a shadow, a fog or a glint needs the sun on it. A pass that costs
+  more and changes no pixel is a view in the mountain's shade, not a broken pass. Check at the
+  map's own hour and at one that lights the look (`--hour=11`, `--hour=12`), and at the LOWEST sun
+  the scene can have for anything lit off a noise.
+- Measure, don't eye: a glint by contrast against its neighbours, a subject's visibility off the
+  depth target, framing as a screen share, a lamp layout against its lighting class in a test.
+- Time a pass as the median of several frames with nothing else running. On lavapipe any
+  full-screen pass costs about 13 ms at 1280x720, timestamps can land on the wrong row, and a
+  resolution change saves the pixels' ratio on a GPU, not on the CPU raster.
+- An honest before of a shader change: copy the new shaders aside, `git checkout` the old ones,
+  build, run the labs `--tag=before` with the new views in, restore, `--compare=before`.
+
 ## Labs
 
 **`world`** (`games/fall_line/labs/gpu_world_lab.cpp`): Fall Line's frame from each named view
