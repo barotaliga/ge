@@ -94,6 +94,7 @@ std::string tail_of(std::string_view output, int lines) {
 
 bool configure(const BuildOptions& o, const fs::path& log, Outcome& out) {
   std::string cmd = "cmake --preset " + o.preset;
+  for (const std::string& d : o.defines) cmd += " \"-D" + d + "\"";
   if (!o.engine.empty()) {
     std::error_code ec;
     cmd += " -DFETCHCONTENT_SOURCE_DIR_GAMEENGINE2=" +
@@ -459,7 +460,129 @@ Outcome run_check(const BuildOptions& o) {
   return out;
 }
 
+namespace {
+
+void set_env_once(const char* name, const std::string& value) {
+  if (const char* had = std::getenv(name); had && *had) return;  // NOLINT(concurrency-mt-unsafe)
+#ifdef _WIN32
+  _putenv_s(name, value.c_str());
+#else
+  setenv(name, value.c_str(), 1);  // NOLINT(concurrency-mt-unsafe)
+#endif
+}
+
+// The GE_* options this tree's build was configured with (GE_GPU, GE_PLATFORM, GE_DEPS_DIR ...),
+// so the ref's build makes the same labs and shares the downloaded dependencies.
+std::vector<std::string> ge_options(const fs::path& cache) {
+  std::vector<std::string> out;
+  static const std::regex kOption(R"(^(GE_[A-Z0-9_]+):(?:BOOL|STRING|PATH|FILEPATH)=(.*)$)");
+  const std::string text = read_text(cache).value_or("");
+  for (const auto view : split_lines(text)) {
+    const std::string line(view);
+    std::smatch m;
+    if (std::regex_match(line, m, kOption) && !m.str(2).ends_with("-NOTFOUND"))
+      out.push_back(m.str(1) + "=" + m.str(2));
+  }
+  return out;
+}
+
+// `ge lab <id> --before=<ref>`'s first half: the lab at <ref>, built in a scratch worktree
+// (build/before/<sha>/, kept for the next call at that commit) and run into this tree's
+// previews tagged `tag`. Returns false with findings when it could not.
+bool run_at_ref(const BuildOptions& o, const LabOptions& lab, const std::string& tag,
+                Outcome& out) {
+  const fs::path log = log_path(o, "ge-lab-before");
+  std::error_code ec;
+  fs::remove(log, ec);
+  const std::string git = "git -C " + quote_path(o.repo);
+  const Ran sha_run =
+      run_logged(git + " rev-parse --verify --quiet \"" + lab.before + "^{commit}\"", log);
+  std::string sha = sha_run.output.substr(0, sha_run.output.find_first_of("\r\n"));
+  if (sha_run.code != 0 || sha.size() < 12) {
+    out.findings.push_back({Severity::error, "--before=" + lab.before + " names no commit",
+                            rel_path(o.repo, log),
+                            "name a branch, tag or sha (git fetch first for origin/main)"});
+    out.exit = 2;
+    return false;
+  }
+  sha.resize(12);
+  const fs::path tree = o.repo / "build" / "before" / sha;
+  if (!fs::exists(tree / ".git")) {
+    fs::remove_all(tree, ec);
+    fs::create_directories(tree.parent_path(), ec);
+    const Ran add = run_logged(git + " worktree add --detach " + quote_path(tree) + " " + sha, log);
+    if (add.code != 0) {
+      out.findings.push_back({Severity::error,
+                              "git could not check " + lab.before + " out into " +
+                                  rel_path(o.repo, tree) + ": " + tail_of(add.output, 1),
+                              rel_path(o.repo, log),
+                              "read the log; git worktree prune clears a stale one"});
+      return false;
+    }
+  }
+  // The downloads (.cache/deps) shared, not fetched again for the ref's tree.
+  if (fs::exists(o.repo / ".cache") && !fs::exists(tree / ".cache"))
+    fs::create_directory_symlink(o.repo / ".cache", tree / ".cache", ec);
+  // The compiler cache shared: with the base directory the two trees' compiles are the same
+  // command, so the ref's build only compiles what differs from this tree's last build.
+  set_env_once("CCACHE_BASEDIR", o.repo.string());
+  set_env_once("CCACHE_NOHASHDIR", "1");
+
+  BuildOptions at = o;
+  at.repo = tree;
+  at.defines = ge_options(o.repo / "build" / o.preset / "CMakeCache.txt");
+  const fs::path here = fs::current_path(ec);
+  fs::current_path(tree, ec);
+  Outcome built;
+  const bool ok = build_step(at, built, "", "labs");
+  fs::current_path(here, ec);
+  if (!ok) {
+    for (Finding& f : built.findings) {
+      f.what = "at " + lab.before + ": " + f.what;
+      out.findings.push_back(std::move(f));
+    }
+    return false;
+  }
+  std::string cmd = quote_path(tree / "build" / o.preset / "labs") + " " + lab.id +
+                    " --quiet --out=" + quote_path(o.repo / "previews") + " --tag=" + tag;
+  if (lab.smoke) cmd += " --smoke";
+  if (!lab.shots.empty()) cmd += " \"--shots=" + lab.shots + "\"";
+  for (const std::string& w : lab.passthrough) cmd += " \"" + w + "\"";
+  const Ran r = run_logged(cmd, log);
+  if (r.code != 0) {
+    out.findings.push_back({Severity::error,
+                            "the lab at " + lab.before + " failed (exit " + std::to_string(r.code) +
+                                "): " + tail_of(r.output, 2),
+                            rel_path(o.repo, log),
+                            r.code == 2 ? "the lab or a flag is newer than " + lab.before +
+                                              ": run its before by hand on that ref"
+                                        : "read the log"});
+    return false;
+  }
+  out.text = "before: " + lab.id + " at " + lab.before + " (" + sha + "), built in " +
+             rel_path(o.repo, tree) + ", kept as previews/" + lab.id + "@" + tag + "/\n";
+  return true;
+}
+
+}  // namespace
+
 Outcome run_lab(const BuildOptions& o, const LabOptions& lab) {
+  if (!lab.before.empty() && !lab.id.empty()) {
+    const std::string tag = lab.compare.empty() ? "before" : lab.compare;
+    Outcome first;
+    if (!run_at_ref(o, lab, tag, first)) return first;
+    LabOptions now = lab;
+    now.before.clear();
+    now.compare = tag;
+    Outcome out = run_lab(o, now);
+    out.text = first.text + out.text;
+    if (exit_of(out) == 0) {
+      out.next = "ge lab publish " + lab.id + " --before=" + tag +
+                 " (the two runs side by side on one page), or ge lab diff " + lab.id +
+                 " --against=" + tag;
+    }
+    return out;
+  }
   Outcome out;
   if (!build_step(o, out)) return out;
   const fs::path exe = o.repo / "build" / o.preset / "labs";

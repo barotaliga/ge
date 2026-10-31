@@ -20,7 +20,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Before and after across refs
 
-- `ge lab run <id> --before=<ref>` (the lab built at `<ref>`, default origin/main, in a scratch worktree sharing the compiler cache, and run tagged `before`, then this tree's run beside it: the before-and-after shots without a manual checkout, rebuild and restore; TAB scoreboard thread)
+- `ge lab run <id> --before=<ref>` (the lab built at `<ref>`, default origin/main, in a scratch worktree sharing the compiler cache, and run tagged `before`, then this tree's run beside it: the before-and-after shots without a manual checkout, rebuild and restore; TAB scoreboard thread; done: `ge lab <id> --before=<ref>`, the worktree under build/before/<sha>/, this build's GE_* options and downloads, ccache's base dir)
+- `ge lab pair <lab> --before=<cvars>` (any picture lab's frames drawn twice, once under a changed cvar set, and paired side by side: se-client got a one-off `--before` for this; one flag family with `--before=<ref>`, the before taken from a ref or from a cvar set; relief-maps thread, #388)
 - `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%; for a bench lab too: `ge ab <lab> --before=<binary> --runs=3`, the median of each metric; also `--rounds=3`, each side's best and the delta printed beside the measured noise band, the second binary built or reused off `--before=<ref>`: the approximation study; asked again by the map-build profiling, #307: the means and their spread) and `ge compare <ref>` (both builds, one table)
 - `ge bench --ab=<option>` (one frame option against another in the same build, interleaved rounds, the least median kept: a quality ladder priced without a bespoke loop)
 - `ge profile --compare` (per zone and per pass, GPU and CPU deltas, outliers flagged)

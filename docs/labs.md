@@ -117,6 +117,12 @@ never moves a digest.
 In a game repo, `ge lab` is the way in: `ge lab` lists, `ge lab <id> --tag=before` and
 `--compare=before` run one, and with `--json` the lab's whole `report.json` is the answer's
 `result`. `ge lab diff <id>` diffs the pictures (below), every band under its floor a finding.
+`ge lab <id> --before=<ref>` takes the before from a git ref with no checkout of yours: the ref is
+checked out into a scratch worktree (`build/before/<sha>/`, kept for the next call at that
+commit), built with this build's `GE_*` options and its downloads, its lab run into
+`previews/<id>@before/`, then this tree's run compared with it. With ccache on PATH the two trees
+share the cache (`CCACHE_BASEDIR`), so the ref's build compiles only what differs; without it the
+first build at a ref is a whole build of the labs.
 `ge lab publish <id>... [--before=<tag>]` puts the last run (of one lab, or of several one after
 another) on one self-contained page for a report or a pull request (`engine/cli/publish.hpp`). Each picture loses its caption band, which the page
 sets as text, and is shrunk to `--width` (720 px) and inlined as a 256-colour GIF
