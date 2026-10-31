@@ -6,6 +6,9 @@
 // - A missile that flew since the last frame lays its trail over the stretch it flew (a rocket's
 //   or a grenade's embers and smoke) and a rocket glows as it goes.
 // - An explosion the mod announced bursts once and lights the walls while its light fades.
+// - A campaign's temporary entities and particle bursts (Listen::effects): a shot's or a spike's
+//   hit sparks back toward the eye, blood falls, a teleport flares, lava splashes, a beam lights
+//   and sparks where it ends.
 // - THE SCREEN'S BLEND: the liquid round the eye (the player's `waterlevel` and `watertype`), and
 //   a hit's flash, fading: in a campaign off the blows the program reported (Listen::blows: the
 //   blood red, what the armour took a duller amber), in a match off the health lost.
@@ -14,7 +17,7 @@
 //
 // ge:summary The window's effects each frame: trails, explosions, their lights, the screen's blend
 // ge:keywords world-fx effects trail rocket-trail explosion dynamic-light screen-blend hurt-flash
-// ge:keywords underwater medium step_fx fx-state
+// ge:keywords underwater medium step_fx fx-state temp-entity gunshot spike teleport-splash beam
 // ge:skill render shooter
 #pragma once
 
@@ -39,6 +42,7 @@ struct FxState {
   double hurt = 0;                                 // the hit's flash now (effects::Screen::hurt)
   double armour = 0;                               // the armour's share of it (Screen::armour)
   std::size_t blows_seen = 0;                      // of Listen::blows
+  std::size_t effects_seen = 0;                    // of Listen::effects
   float health = 0;                                // the last frame's
   uint32_t seed = 1;
 };

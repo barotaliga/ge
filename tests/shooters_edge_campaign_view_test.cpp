@@ -78,6 +78,55 @@ TEST(a_message_it_does_not_know_ends_the_read) {
   CHECK_MSG(v.unknown.find("message 99") != std::string::npos, v.unknown);
 }
 
+namespace {
+// A coordinate as the stream carries it: an i16 of eighths of a unit.
+void coord(Bytes& b, float v) {
+  const auto raw = static_cast<int16_t>(v * 8);
+  b.push_back(static_cast<uint8_t>(raw & 0xff));
+  b.push_back(static_cast<uint8_t>((raw >> 8) & 0xff));
+}
+void point(Bytes& b, float x, float y, float z) { coord(b, x), coord(b, y), coord(b, z); }
+}  // namespace
+
+TEST(the_temporary_entities_become_effects) {
+  cl::CampaignView v;
+  Bytes b{23, 2};  // a gunshot
+  point(b, 10, -20, 30.5f);
+  b.insert(b.end(), {23, 3});  // an explosion
+  point(b, 1, 2, 3);
+  b.insert(b.end(), {23, 6, 5, 0});  // a beam of entity 5
+  point(b, 0, 0, 0);
+  point(b, 64, 0, -8);
+  b.insert(b.end(), {23, 12});  // the coloured explosion: a point, then a colour range
+  point(b, 4, 4, 4);
+  b.insert(b.end(), {9, 16});
+  b.insert(b.end(), {23, 11});  // a teleport
+  point(b, 0, 0, 24);
+  std::vector<cl::Effect> fx;
+  cl::read_effects(v, b, fx);
+  CHECK(fx.size() == 5);
+  CHECK(fx[0].kind == cl::EffectKind::impact && fx[0].at.x == 10 && fx[0].at.y == -20 &&
+        fx[0].at.z == 30.5f);
+  CHECK(fx[1].kind == cl::EffectKind::explosion && fx[1].at.z == 3);
+  CHECK(fx[2].kind == cl::EffectKind::beam && fx[2].entity == 5 && fx[2].end.x == 64 &&
+        fx[2].end.z == -8);
+  CHECK(fx[3].kind == cl::EffectKind::explosion && fx[3].code == 12 && fx[3].at.x == 4);
+  CHECK(fx[4].kind == cl::EffectKind::teleport && fx[4].at.z == 24);
+  CHECK(v.unread == 0 && v.unknown.empty());
+}
+
+TEST(an_unknown_or_cut_short_temporary_entity_ends_the_read) {
+  cl::CampaignView v;
+  std::vector<cl::Effect> fx;
+  Bytes b{23, 99, 1, 2};
+  cl::read_effects(v, b, fx);
+  CHECK(fx.empty() && v.unread == 4);
+  CHECK_MSG(v.unknown.find("temporary entity 99") != std::string::npos, v.unknown);
+  cl::CampaignView w;
+  cl::read_effects(w, Bytes{23, 3, 0, 0}, fx);
+  CHECK(fx.empty() && w.unknown.find("cut short") != std::string::npos);
+}
+
 TEST(the_text_is_typed_eight_characters_a_second) {
   cl::CampaignView v;
   cl::read_campaign(v, Bytes{31, 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 0}, 10);
@@ -123,6 +172,15 @@ TEST(the_listen_client_plays_a_single_player_program_on_the_campaign_host) {
   CHECK(l.campaign.ended_at == l.server->sv.time);
   CHECK(l.server->out.all.empty());
   CHECK(cl::map_title(l) == "a single-player map");  // the world's message
+
+  // The unreliable stream's temporary entities become the frame's effects, an explosion's spot
+  // among the explosions too.
+  const size_t blasts = l.explosions.size();
+  l.server->out.unreliable = {23, 3, 8, 0, 16, 0, 24, 0};  // an explosion at (1, 2, 3)
+  cl::listen_frame(l, {});
+  CHECK(l.effects.size() == 1 && l.effects[0].kind == cl::EffectKind::explosion);
+  CHECK(l.explosions.size() == blasts + 1 && l.explosions.back().y == 2);
+  CHECK(l.server->out.unreliable.empty());
 
   // At 1.5 s the stub changes level to `second`: the map read ahead is the one entered.
   l.next = stub_map("second");

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 
+#include "core/math.hpp"
 #include "shooters_edge/client/view.hpp"
 
 namespace shooters_edge::client {
@@ -62,6 +63,44 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     put(at, p);
     fx::explosion(p, s.seed++, &out.births);
     s.lit.push_back({at, t});
+  }
+  // A campaign's other effects (its temporary entities and particle bursts; its explosions are
+  // drawn above): a shot's or a spike's hit throws sparks back toward the eye, blood falls, a
+  // teleport flares, lava splashes, a beam lights and sparks where it ends.
+  if (l.effects.size() < s.effects_seen) s.effects_seen = 0;  // a new map
+  const ge::camera::Vec3 eye = v.pose.eye;
+  for (; s.effects_seen < l.effects.size(); s.effects_seen++) {
+    const Effect& e = l.effects[s.effects_seen];
+    const ge::camera::Vec3 at = engine_point(e.kind == EffectKind::beam ? e.end : e.at);
+    double p[3], to_eye[3] = {eye.x - at.x, eye.y - at.y, eye.z - at.z};
+    put(at, p);
+    const double n = ge::core::hypot3(to_eye[0], to_eye[1], to_eye[2]);
+    for (double& c : to_eye) c = n > 0 ? c / n : 0;
+    if (n == 0) to_eye[1] = 1;
+    switch (e.kind) {
+      case EffectKind::impact:
+      case EffectKind::spike:
+        fx::impact(p, to_eye, s.seed++, &out.births);
+        break;
+      case EffectKind::blood: {
+        const double away[3] = {-to_eye[0], -to_eye[1], -to_eye[2]};
+        fx::blood(p, away, s.seed++, &out.births);
+        break;
+      }
+      case EffectKind::teleport:
+        fx::teleport_splash(p, s.seed++, &out.births);
+        break;
+      case EffectKind::lava:
+        fx::lava_splash(p, s.seed++, &out.births);
+        break;
+      case EffectKind::beam: {
+        fx::impact(p, to_eye, s.seed++, &out.births);
+        out.lights.push_back(fx::muzzle_light(p));
+        break;
+      }
+      case EffectKind::explosion:
+        break;
+    }
   }
   std::erase_if(s.lit, [&](const Blast& b) { return t - b.t > fx::kExplosionLight; });
   for (const Blast& b : s.lit) {
