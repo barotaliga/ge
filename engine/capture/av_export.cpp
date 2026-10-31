@@ -62,10 +62,18 @@ bool AvExport::open(const AvExportOptions& o, std::string& error) {
     v.codec_private = video_.codec_private();
   }
   m.video = v;
+  if (o.sound && o.synth) {
+    error = "an export takes a run's sound or the caller's synth, not both";
+    return false;
+  }
   if (o.sound) {
-    synth_ = std::make_unique<audio::Synth>(o.seed);
+    owned_ = std::make_unique<audio::Synth>(o.seed);
+    synth_ = owned_.get();
     sound_ = o.sound->open(*synth_, error);
     if (!sound_) return false;
+  }
+  synth_ = o.synth ? o.synth : synth_;
+  if (synth_) {
     AudioTrack a;
     a.rate = audio::kRate;
     if (coded_) {
@@ -122,6 +130,12 @@ bool AvExport::emit_sound(int64_t to, std::string& error) {
 }
 
 bool AvExport::frame(const play::Run& run, const lab::Picture& p, std::string& error) {
+  if (!frame(p, error)) return false;
+  if (sound_) sound_->frame(run, 1.0 / opt_.fps);
+  return true;
+}
+
+bool AvExport::frame(const lab::Picture& p, std::string& error) {
   if (p.width != opt_.width || p.height != opt_.height) {
     error = "picture " + std::to_string(frames_) + " is " + std::to_string(p.width) + "x" +
             std::to_string(p.height) + ", not the export's " + std::to_string(opt_.width) + "x" +
@@ -138,15 +152,13 @@ bool AvExport::frame(const play::Run& run, const lab::Picture& p, std::string& e
     return false;
   }
   frames_++;
-  if (coded_ && !interleave(false, error)) return false;
-  if (sound_) sound_->frame(run, 1.0 / opt_.fps);
-  return true;
+  return !coded_ || interleave(false, error);
 }
 
 bool AvExport::interleave(bool all, std::string& error) {
   // What is still to be encoded starts no sooner than the next picture's time and the next
   // packet the Opus encoder will cut.
-  return held_.write(mux_, frame_ms(frames_, opt_.fps), sound_ ? opus_.next_ms() : INT64_MAX, all,
+  return held_.write(mux_, frame_ms(frames_, opt_.fps), synth_ ? opus_.next_ms() : INT64_MAX, all,
                      error);
 }
 
@@ -154,7 +166,7 @@ bool AvExport::close(std::string& error) {
   if (!emit_sound(frame_sample(frames_, opt_.fps, audio::kRate), error)) return false;
   if (coded_) {
     if (!video_.flush(held_.video, error)) return false;
-    if (sound_ && !opus_.finish(held_.audio, error)) return false;
+    if (synth_ && !opus_.finish(held_.audio, error)) return false;
     if (!interleave(true, error)) return false;
   }
   return mux_.close(frame_ms(frames_, opt_.fps), error);

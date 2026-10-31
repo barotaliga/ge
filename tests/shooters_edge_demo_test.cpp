@@ -4,12 +4,13 @@
 // the angles, the HUD's status off the stats; a client recording whose command struct is padded to
 // 28 bytes reads the same; a damaged file is refused with its place; the search path finds a pack's
 // demo by its name with or without the extension; a multiview recording (plain or gzip) follows the
-// lowest player or the one asked for, with that player's own stats; the report's 1% low is the
-// slowest frames' rate.
+// lowest player or the one asked for, with that player's own stats; the sounds each frame starts
+// and the level's loops are kept; a voice format (`.qwdv`) opens on its header and a wrong header
+// is refused; the report's 1% low is the slowest frames' rate.
 //
 // ge:summary Tests: every demo format read back frame by frame, demos found, the fps report
 // ge:keywords test demo timedemo benchmark single-player client-recording one-percent-low
-// ge:keywords find_demo bench_stats damaged multiview gzip track
+// ge:keywords find_demo bench_stats damaged multiview gzip track sound-events voice-format
 // ge:skill shooter testing
 #include <algorithm>
 #include <cmath>
@@ -363,3 +364,48 @@ TEST(the_price_reads_each_saving_against_the_base_runs_either_side) {
 }
 
 }  // namespace
+
+TEST(a_demo_keeps_the_sounds_each_frame_starts_and_the_level_s_loops) {
+  const cl::DemoScript s = script();
+  cl::Demo d;
+  std::string error;
+  CHECK(cl::open_demo(cl::write_single_demo(s), d, error));
+  int started = 0;
+  cl::DemoSound first;
+  while (cl::next_frame(d, error) == cl::DemoRead::frame) {
+    for (const cl::DemoSound& e : d.state.started) {
+      if (started++ == 0) first = e;
+    }
+  }
+  CHECK_MSG(error.empty(), error);
+  CHECK(started == 9);  // the rocket's sound every tenth frame of 90
+  CHECK(first.entity == 2 && first.channel == 1 && first.sound == 1);
+  CHECK(near(first.volume, 200.0f / 255.0f, 1e-6f) && first.attenuation == 1.0f);
+  CHECK(d.state.static_sounds.size() == 1);
+  CHECK(d.state.static_sounds[0].sound == 2 && d.state.static_sounds[0].volume == 1.0f);
+  CHECK(d.state.static_sounds[0].origin.x == 16);
+}
+
+TEST(a_voice_format_opens_on_its_header_and_a_wrong_header_is_refused) {
+  const cl::DemoScript s = script();
+  std::vector<uint8_t> bytes = cl::voice_header(cl::DemoFormat::client);
+  const std::vector<uint8_t> plain = cl::write_client_demo(s);
+  bytes.insert(bytes.end(), plain.begin(), plain.end());
+  const Read r = read_all(bytes, cl::DemoFormat::client);
+  check_path(r, s);
+  CHECK(r.last.voice_format);
+  // The header names a multiview recording, the records are a client's: refused.
+  std::vector<uint8_t> wrong = bytes;
+  wrong[5] = 2;
+  cl::Demo d;
+  std::string error;
+  CHECK(!cl::open_demo(wrong, d, error));
+  CHECK(error.find("multiview") != std::string::npos);
+  wrong = bytes;
+  wrong[4] = 9;  // a version this build does not read
+  CHECK(!cl::open_demo(wrong, d, error));
+  CHECK(error.find("version 9") != std::string::npos);
+  CHECK(cl::voice_name("match.mvdv") && cl::voice_name("RED1.QWDV"));
+  CHECK(!cl::voice_name("match.mvd") && !cl::voice_name("v"));
+  CHECK(cl::voice_extension(cl::DemoFormat::multiview) == ".mvdv");
+}

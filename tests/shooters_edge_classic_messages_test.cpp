@@ -157,6 +157,10 @@ std::vector<cn::SvcMsg> every_svc() {
         m.player.velocity = {320, 0, -100};
         m.player.onground = true;
         break;
+      case cn::svc::voice:  // talker 3, Opus generation 1, sequence 9, one frame of 3 bytes
+        m.ints = {3, 0x21, 9};
+        m.data = {3, 0, 1, 2, 3};
+        break;
       case cn::svc::nails:
         m.ints = {2};
         m.data = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};

@@ -1,6 +1,6 @@
 // THE DEMO BENCHMARK: a recorded game (demo.hpp) played back as fast as the machine draws it, at
 // the settings the window has, and the frame rate it reached. The window runs it from the console
-// (`benchmark <demo>`) or the command line (`-benchmark <demo>`, which quits with the report);
+// (`timedemo <demo>`) or the command line (`-timedemo <demo>`, which quits with the report);
 // the `se-timedemo` lab runs the same loop into an offscreen target.
 //
 // THE RULE: ONE DEMO FRAME A DRAWN FRAME, whatever the demo's own clock says (a single-player

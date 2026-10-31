@@ -8,7 +8,8 @@
 // switched, kicked and flashing as the mod fires it), the HUD (hud/layout.hpp) and the console.
 //
 //   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>]
-//                 [-benchmark <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH]
+//                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH]
+//                 [-demovideo <demo> <file> [--fps=N] [--resolution=<WxH|1080p|4k>] ...]
 //                 [+<command> ...]
 //
 // `-basedir` is the folder that holds the game folder (`id1` unless `-game` names another) with
@@ -41,7 +42,7 @@
 // or hides the roster, `addbot` seats a bot, `start` lets the host start whoever is ready, and
 // `sv_lobby 0` starts the match with the map.
 //
-// THE BENCHMARK: `benchmark <demo>` in the console (or `-benchmark <demo>` on the command line,
+// THE BENCHMARK: `timedemo <demo>` in the console (or `-timedemo <demo>` on the command line,
 // which quits when it is done) plays a recorded game (`demo1` from the packs, or a file's path)
 // one demo frame a drawn frame, at the window's settings (one in 33 ms shown, the rest drawn
 // offscreen, so the display never sets the rate), and prints the average, max, min, 1% low and
@@ -49,12 +50,15 @@
 // waits. `playdemo <demo>` (`-playdemo <demo>`) plays one at its own pace instead, vsync on and
 // nothing timed, `cl_demospeed <x>` (0..20, 0 pauses) its speed; `demo_track <slot>` picks the
 // player a multiview recording's view rides (-1: the lowest playing). Every format plays, `.gz`
-// included.
+// included, and the voice formats (`.qwdv`, `.mvdv`) with their voices.
+//
+// `-demovideo <demo> <file>` turns a demo into a video with no window and quits
+// (client/demo_video.hpp; docs/shooters-edge.md § A demo as a video).
 //
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console
 // ge:keywords relative-mouse mouse-look hud first-person effects r_look quit shooters-edge
-// ge:keywords benchmark timedemo demo vsync-off fps playdemo demo_track cl_demospeed
+// ge:keywords benchmark timedemo demo vsync-off fps playdemo demo_track cl_demospeed demovideo
 // ge:keywords main-menu escape vid_fullscreen fullscreen offscreen vid_display vid_displays
 // ge:keywords lobby warmup ready break team addbot
 // ge:skill platform input camera render ui shooter
@@ -79,6 +83,7 @@
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
 #include "shooters_edge/client/controls.hpp"
+#include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -88,6 +93,7 @@
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
+#include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
@@ -104,7 +110,7 @@ namespace out = ge::core::output;
 namespace cl = shooters_edge::client;
 namespace se = shooters_edge::hud;
 
-// A benchmark shows one frame in this many ns (30 a second) and draws the rest offscreen.
+// A timedemo shows one frame in this many ns (30 a second) and draws the rest offscreen.
 constexpr uint64_t kBenchShowNs = 33'333'333;
 
 void print_line(const out::LogLine& line, void*) {
@@ -115,14 +121,64 @@ void print_line(const out::LogLine& line, void*) {
 struct Args {
   std::string basedir = ".";
   std::string game = "id1";
-  std::string progs;      // a mod's progs file ("": the baseline mod)
-  std::string models;     // the held weapons' folder ("": the tree's)
-  std::string benchmark;  // a demo to benchmark, then quit ("": none)
-  std::string playdemo;   // a demo to play at its own pace ("": none)
-  long frames = 0;        // 0: until quit
+  std::string progs;             // a mod's progs file ("": the baseline mod)
+  std::string models;            // the held weapons' folder ("": the tree's)
+  std::string timedemo;          // a demo to benchmark, then quit ("": none)
+  std::string demovideo, video;  // a demo to turn into the video file `video`, then quit
+  double fps = 30, seconds = 0;
+  std::string codec = "auto";
+  std::string playdemo;  // a demo to play at its own pace ("": none)
+  long frames = 0;       // 0: until quit
   int width = 1280, height = 720;
   std::vector<std::string> plus;  // the command line from the first `+` word on
 };
+
+// `-demovideo`: the demo turned into a video with no window, the report printed. The exit code.
+int demo_video_main(const Args& args, const cl::SearchPath& files,
+                    const shooters_edge::look::Picture& picture, int track) {
+  auto device = ge::gpu::create_device({.label = "demovideo", .validation = 0});
+  if (!device) {
+    out::error("shooters_edge: no GPU device for -demovideo; see docs/rendering.md");
+    return 1;
+  }
+  cl::DemoVideoOptions o;
+  o.demo = args.demovideo;
+  o.file = args.video;
+  o.width = args.width & ~1;
+  o.height = args.height & ~1;
+  o.fps = args.fps;
+  o.codec = args.codec == "none" ? "" : args.codec;
+  o.seconds = args.seconds;
+  o.track = track;
+  o.picture = &picture;
+  cl::DemoVideoReport r;
+  std::string error;
+  const auto shown = [](int64_t frame, double t, const ge::lab::Picture&) {
+    if (frame % 300 == 0)
+      out::status("demovideo: picture " + std::to_string(frame) + " at " +
+                  std::to_string(static_cast<int>(t)) + " s");
+  };
+  if (!cl::demo_video(*device, files, o, r, error, shown)) {
+    out::error("shooters_edge: -demovideo " + args.demovideo + ": " + error +
+               "; see docs/shooters-edge.md § A demo as a video");
+    return 2;
+  }
+  out::status("demovideo: " + r.found + " (" + r.format + ") -> " + args.video);
+  const auto num = [](double v) {
+    char b[32];
+    std::snprintf(b, sizeof b, "%g", v);
+    return std::string(b);
+  };
+  out::status("demovideo: " + std::to_string(r.frames) + " pictures, " + num(r.seconds) + " s, " +
+              std::to_string(r.levels) + " levels, " + std::to_string(o.width) + "x" +
+              std::to_string(o.height) + " at " + num(o.fps) + " fps, " + r.container + " " +
+              r.codec + ", " + std::to_string(r.bytes) + " bytes, on " + r.adapter);
+  out::status("demovideo: " + std::to_string(r.sounds) + " sounds, " + std::to_string(r.loops) +
+              " loops, " + std::to_string(r.missing_sounds) + " names no pack has; voice " +
+              std::to_string(r.voice_frames) + " frames in " + std::to_string(r.voice_messages) +
+              " messages, " + std::to_string(r.voice_concealed) + " concealed");
+  return 0;
+}
 
 // `~` or `~/...` as the home folder (a shell leaves a quoted one as it is).
 std::string expand_home(const std::string& p) {
@@ -135,11 +191,36 @@ std::string expand_home(const std::string& p) {
   return home == nullptr ? p : std::string(home) + p.substr(1);
 }
 
+// A size as `WxH` (`1920x1080`) or a name: 480p, 720p, 1080p, 1440p, 4k (2160p). False for
+// anything else, or a side under 16 or over 8192.
+bool size_named(std::string_view v, int& w, int& h) {
+  static constexpr struct {
+    const char* name;
+    int w, h;
+  } kNamed[] = {{"480p", 854, 480},    {"720p", 1280, 720},   {"1080p", 1920, 1080},
+                {"1440p", 2560, 1440}, {"2160p", 3840, 2160}, {"4k", 3840, 2160}};
+  for (const auto& n : kNamed) {
+    if (v == n.name) {
+      w = n.w;
+      h = n.h;
+      return true;
+    }
+  }
+  const size_t x = v.find('x');
+  if (x == std::string_view::npos) return false;
+  const int pw = std::atoi(std::string(v.substr(0, x)).c_str());
+  const int ph = std::atoi(std::string(v.substr(x + 1)).c_str());
+  if (pw < 16 || ph < 16 || pw > 8192 || ph > 8192) return false;
+  w = pw;
+  h = ph;
+  return true;
+}
+
 bool parse(int argc, char** argv, Args& a) {
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg = argv[i];
     // The flags are read wherever they stand, a console line's words (`+r_look modern`) running
-    // from a `+` to the next flag or `+`, so `+r_look modern -benchmark demo1` is a look and a
+    // from a `+` to the next flag or `+`, so `+r_look modern -timedemo demo1` is a look and a
     // benchmark, not one console line of four words.
     if ((arg == "-basedir" || arg == "--basedir") && i + 1 < argc) {
       a.basedir = expand_home(argv[++i]);
@@ -147,20 +228,25 @@ bool parse(int argc, char** argv, Args& a) {
       a.progs = expand_home(argv[++i]);
     } else if ((arg == "-models" || arg == "--models") && i + 1 < argc) {
       a.models = expand_home(argv[++i]);
-    } else if ((arg == "-benchmark" || arg == "--benchmark") && i + 1 < argc) {
-      a.benchmark = expand_home(argv[++i]);
+    } else if ((arg == "-timedemo" || arg == "--timedemo") && i + 1 < argc) {
+      a.timedemo = expand_home(argv[++i]);
+    } else if ((arg == "-demovideo" || arg == "--demovideo") && i + 2 < argc) {
+      a.demovideo = expand_home(argv[++i]);
+      a.video = expand_home(argv[++i]);
+    } else if (arg.rfind("--fps=", 0) == 0) {
+      a.fps = std::strtod(argv[i] + 6, nullptr);
+    } else if (arg.rfind("--seconds=", 0) == 0) {
+      a.seconds = std::strtod(argv[i] + 10, nullptr);
+    } else if (arg.rfind("--codec=", 0) == 0) {
+      a.codec = std::string(arg.substr(8));
     } else if ((arg == "-playdemo" || arg == "--playdemo") && i + 1 < argc) {
       a.playdemo = expand_home(argv[++i]);
     } else if ((arg == "-game" || arg == "--game") && i + 1 < argc) {
       a.game = argv[++i];
     } else if (arg.rfind("--frames=", 0) == 0) {
       a.frames = std::strtol(argv[i] + 9, nullptr, 10);
-    } else if (arg.rfind("--size=", 0) == 0) {
-      const std::string wh(arg.substr(7));
-      const size_t x = wh.find('x');
-      if (x == std::string::npos) return false;
-      a.width = std::atoi(wh.substr(0, x).c_str());
-      a.height = std::atoi(wh.substr(x + 1).c_str());
+    } else if (arg.rfind("--size=", 0) == 0 || arg.rfind("--resolution=", 0) == 0) {
+      if (!size_named(arg.substr(arg.find('=') + 1), a.width, a.height)) return false;
     } else if (!a.plus.empty() || (!arg.empty() && arg[0] == '+')) {
       a.plus.emplace_back(arg);
     } else {
@@ -204,8 +290,9 @@ int run_main(int argc, char** argv) {
   if (!parse(argc, argv, args)) {
     out::error(
         "shooters_edge: unknown flag. Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
-        "[-progs <file>] [-models <dir>] [-benchmark <demo>] [-playdemo <demo>] [--frames=N] "
-        "[--size=WxH] "
+        "[-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] [--frames=N] "
+        "[--size=WxH] [-demovideo <demo> <file> [--fps=N] [--resolution=<WxH|720p|1080p|1440p|4k>] "
+        "[--codec=<c>] [--seconds=S]] "
         "[+<command> ...]; next: rerun with those flags only.");
     return 2;
   }
@@ -264,10 +351,10 @@ int run_main(int argc, char** argv) {
                                   std::to_string(d.width_px) + "x" + std::to_string(d.height_px));
                       });
   std::string bench_ask;  // a demo the console asked to benchmark
-  console.add_command("benchmark", "benchmark <demo>: play a demo flat out and report its fps",
+  console.add_command("timedemo", "timedemo <demo>: play a demo flat out and report its fps",
                       [&](Con& c, const CArgs& a) {
                         if (a.size() < 2)
-                          c.print("benchmark: name a demo (benchmark demo1)");
+                          c.print("timedemo: name a demo (timedemo demo1)");
                         else
                           bench_ask = expand_home(a[1]);
                       });
@@ -301,8 +388,13 @@ int run_main(int argc, char** argv) {
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
   game_menu.add_cvars(console);
-  se::HudArt art = se::free_art();
-  art.finish();
+  // The HUD's pictures: the free set always, and the packs' own status bar pictures once the
+  // packs are open (below); `hud_art` picks between them every frame (hud/classic_art.hpp).
+  se::HudArt free_art = se::free_art();
+  free_art.finish();
+  se::HudArt classic_art;
+  std::string hud_art = "auto";
+  se::add_art_cvar(console, &hud_art);
   // The HUD's feed shows the game's messages (hud.notify, below), so the console's own lines at
   // the top of the screen would show each a second time; a cfg or a + word can turn them back on.
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
@@ -319,6 +411,7 @@ int run_main(int argc, char** argv) {
     out::status("shooters_edge: " + std::to_string(files.archives.size()) + " packs in " +
                 files.folder);
   }
+  if (!args.demovideo.empty()) return demo_video_main(args, files, picture, demo_track);
   // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
   // enhance offers.
   shooters_edge::menu::Host menu_host{.console = &console, .maps = cl::map_names(files)};
@@ -330,6 +423,11 @@ int run_main(int argc, char** argv) {
     };
     if (shooters_edge::menu::load_classic_art(find, &menu_art, &error))
       game_menu.set_art(std::move(menu_art));
+    std::string why;
+    if (se::classic_art_from_packs(find, &classic_art, &why))
+      out::status("shooters_edge: the HUD draws the packs' own status bar pictures (hud_art)");
+    else if (!files.archives.empty())
+      out::status("shooters_edge: the HUD draws the free art: " + why);
     std::vector<std::string> packs;
     packs.reserve(files.archives.size());
     for (const cl::SearchPath::Archive& a : files.archives) packs.push_back(a.path);
@@ -464,7 +562,7 @@ int run_main(int argc, char** argv) {
   ge::gpu::Target bench_off;                 // the benchmark's frames that are not shown
   uint64_t bench_shown_ns = 0;               // when the benchmark last showed a frame
   wgpu::Future bench_in_flight{};            // the frame before this one, waited before the next
-  if (!args.benchmark.empty()) bench_ask = args.benchmark;
+  if (!args.timedemo.empty()) bench_ask = args.timedemo;
   if (!args.playdemo.empty()) {
     bench_ask = args.playdemo;
     play_ask = true;
@@ -499,7 +597,7 @@ int run_main(int argc, char** argv) {
     if (!bench.paced && (why.empty() || !bench.frame_s.empty()))
       console.print(cl::span_report(bench.passes));
     if (!why.empty() && !bench.paced) {
-      console.print("benchmark: stopped early: " + why);
+      console.print("timedemo: stopped early: " + why);
       bench_failed = 1;
     }
     if (bench_in_flight.id != 0) ge::gpu::wait(*device, bench_in_flight);
@@ -663,11 +761,11 @@ int run_main(int argc, char** argv) {
     // A benchmark asked for: vsync off, the listen server waits until it is done. A demo played
     // at its pace keeps vsync.
     if (!bench_ask.empty()) {
-      const bool quit_after = bench_ask == args.benchmark || bench_ask == args.playdemo;
+      const bool quit_after = bench_ask == args.timedemo || bench_ask == args.playdemo;
       if (!cl::timedemo_start(files, bench_ask, bench, error)) {
-        console.print("benchmark: " + error);
+        console.print("timedemo: " + error);
         if (quit_after) {
-          out::error("shooters_edge: the benchmark did not start: " + error +
+          out::error("shooters_edge: the timedemo did not start: " + error +
                      "; see docs/shooters-edge.md § Benchmarking a demo");
           return 2;
         }
@@ -675,14 +773,14 @@ int run_main(int argc, char** argv) {
         bench.quit_after = quit_after;
         bench.paced = play_ask;
         bench.demo.track = demo_track;
-        console.print((play_ask ? "playdemo: " : "benchmark: ") + bench.found);
+        console.print((play_ask ? "playdemo: " : "timedemo: ") + bench.found);
         con_view.set_open(false);
         if (!play_ask) {
           vsync = false;  // and unlocked: immediate present, where the platform has it
           surface.configure_unlocked(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
         }
       }
-      args.benchmark.clear();
+      args.timedemo.clear();
       args.playdemo.clear();
       bench_ask.clear();
       play_ask = false;
@@ -709,7 +807,8 @@ int run_main(int argc, char** argv) {
           cl::demo_view(bench.demo.state, ge::camera::FirstPersonRow{}.fov_y, t);
       view.frame = static_cast<uint64_t>(presented);
       overlay.begin(w, h);
-      se::fill_hud(hud, cl::demo_status(bench.demo.state, t), art);
+      se::fill_hud(hud, cl::demo_status(bench.demo.state, t),
+                   se::pick_art(hud_art, classic_art, free_art));
       hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style());
       // Every frame is drawn, but only one in kBenchShowNs is shown: the rest go to an offscreen
       // target of the surface's format. A window's present waits for the display however its
@@ -802,7 +901,7 @@ int run_main(int argc, char** argv) {
       fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
     overlay.begin(w, h);
     if (listen.campaign.end == cl::LevelEnd::none) {
-      se::fill_hud(hud, cl::status_of(listen, t), art);
+      se::fill_hud(hud, cl::status_of(listen, t), se::pick_art(hud_art, classic_art, free_art));
       const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
       hud.layout.draw(overlay, hf, se::hud_style());
     }
