@@ -18,6 +18,11 @@
 //     the powerups with their seconds under that; the keys over it; the guns small at the
 //     bottom.
 //
+// `viewsize` steps the bars away as the classic game did: at 100 or under every element shows; at
+// 110 the classic look drops its inventory bar (the status bar alone); at 120 every look drops its
+// status elements (the bar, the corners, the arcs), leaving the crosshair, the feed and the centre
+// message.
+//
 // Every look also shows the crosshair, the notify feed (pickups and frags, top left) and the
 // centre message. A look draws with the HUD's ART (art.hpp): the free set, or the player's own
 // classic pictures when classic-enhance has them.
@@ -28,7 +33,7 @@
 // ge:summary Shooter's Edge's HUDs: the classic status bar, modern and compact looks, hud_style
 // ge:keywords hud shooter status-bar inventory-bar classic modern compact hud_style looks
 // ge:keywords health armour ammo face portrait weapons keys powerups runes frags crosshair
-// ge:keywords notify centre-message ring arcs fill_hud add_cvars layout elements
+// ge:keywords notify centre-message ring arcs fill_hud add_cvars layout elements viewsize
 // ge:skill ui console
 // ge:test tests/shooters_edge_hud_test.cpp
 #pragma once
@@ -59,6 +64,7 @@ ge::hud::Style hud_style();
 struct Hud {
   ge::hud::Layout layout;
   std::string look = "classic";  // bound to hud_style
+  int32_t viewsize = 100;        // bound to viewsize: 110 drops the inventory bar, 120 every bar
   ge::hud::Feed notify{4, 4.0, 0.8, 0.15};
   std::string centre;  // the centre message; empty for none
   double centre_until = 0;
@@ -67,7 +73,7 @@ struct Hud {
 // The table: every look's elements, parents before their children.
 Hud make_hud();
 
-// Registers hud_style and every element's hud_ cvars (`hud` must outlive `con`).
+// Registers hud_style, viewsize and every element's hud_ cvars (`hud` must outlive `con`).
 void add_cvars(ge::console::Console& con, Hud& hud);
 
 // Writes every element's content for this frame from the status and the art: the active look's
