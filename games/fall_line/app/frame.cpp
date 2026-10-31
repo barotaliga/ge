@@ -179,8 +179,7 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
 }
 
 // The racers' spray over the `dt` s since the last frame, handed to the pool as births.
-void emit_grains(GameFrame& f);
-
+void emit_grains(GameFrame& f);  // the grains in `f.thrown` into the particle pool
 void throw_spray(GameFrame& f, const FrameScene& scene, double dt) {
   if (!f.options.spray) return;
   for (size_t k = f.spray_pens.size(); k < scene.skiers.size(); ++k) {
@@ -197,24 +196,20 @@ void throw_spray(GameFrame& f, const FrameScene& scene, double dt) {
 // breath (wind::breath_of of the map's day at the sky's solar `hour`).
 void breathe(GameFrame& f, const FrameScene& scene, double hour, double dt) {
   if (!f.options.breath || scene.skiers.empty()) return;
-  for (size_t k = f.breath_pens.size(); k < scene.skiers.size(); ++k) {
+  for (size_t k = f.breath_pens.size(); k < scene.skiers.size(); ++k)
     f.breath_pens.push_back(ge::skier::breath_pen(static_cast<uint32_t>(k)));
-  }
   const ge::wind::Climate climate = ge::mountain::air::climate_of(*f.level);
   f.thrown.clear();
   for (size_t k = 0; k < scene.skiers.size(); ++k) {
     double mouth[3];
     ge::skier::mouth_of(scene.skiers[k], mouth);
-    ge::wind::Site site;
-    site.y = mouth[1];
-    site.snow = 1;
+    const ge::wind::Site site{.y = mouth[1], .snow = 1};
     const double show = ge::wind::breath_of(ge::wind::air_at(climate, site, hour));
     ge::skier::breath_puffs(scene.skiers[k], show, dt, f.breath_pens[k], f.thrown);
   }
   emit_grains(f);
 }
 
-// The grains in `f.thrown` into the particle pool.
 void emit_grains(GameFrame& f) {
   f.births.resize(f.thrown.size());
   for (size_t i = 0; i < f.thrown.size(); ++i) {

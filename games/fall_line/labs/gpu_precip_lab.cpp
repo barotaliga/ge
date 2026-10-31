@@ -36,6 +36,8 @@
 #include <string_view>
 #include <vector>
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "fall_line/app/frame.hpp"
 #include "fall_line/app/views.hpp"
 #include "gpu/device.hpp"
@@ -145,8 +147,8 @@ double mean_at(const mg::Level& level, double y) {
 ge::skier::SkierState standing(const mg::Level& level, const ge::render::FrameView& v,
                                double ahead) {
   ge::skier::SkierState s;
-  s.x = v.eye[0] + ahead * std::sin(v.heading);
-  s.z = v.eye[2] + ahead * std::cos(v.heading);
+  s.x = v.eye[0] + ahead * ge::core::libm::sin(v.heading);
+  s.z = v.eye[2] + ahead * ge::core::libm::cos(v.heading);
   s.y = level.ground_at(s.x, s.z);
   s.heading = v.heading - 0.5 * 3.14159265358979323846;
   return s;
@@ -157,14 +159,14 @@ ge::skier::SkierState standing(const mg::Level& level, const ge::render::FrameVi
 void face_view(const ge::skier::SkierState& s, double along, ge::render::FrameView& v) {
   double m[3];
   ge::skier::mouth_of(s, m);
-  const double fx = std::sin(s.heading), fz = std::cos(s.heading);
-  const double dx = std::sin(along), dz = std::cos(along);
+  const double fx = ge::core::libm::sin(s.heading), fz = ge::core::libm::cos(s.heading);
+  const double dx = ge::core::libm::sin(along), dz = ge::core::libm::cos(along);
   v.eye[0] = m[0] - 2.2 * dx + 0.7 * fx;
   v.eye[1] = m[1] + 0.05;
   v.eye[2] = m[2] - 2.2 * dz + 0.7 * fz;
   const double tx = m[0] + 0.4 * fx - v.eye[0], tz = m[2] + 0.4 * fz - v.eye[2];
-  v.heading = std::atan2(tx, tz);
-  v.pitch = std::atan2(m[1] - 0.2 - v.eye[1], std::hypot(tx, tz));
+  v.heading = ge::core::libm::atan2(tx, tz);
+  v.pitch = ge::core::libm::atan2(m[1] - 0.2 - v.eye[1], ge::core::hypot(tx, tz));
 }
 
 void run(ge::lab::Lab& lab) {

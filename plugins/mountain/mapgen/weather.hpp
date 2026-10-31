@@ -59,7 +59,7 @@ struct SkyPick {
   // afternoon over the summit (`kSummerFreezing`), so its rain is rain to the top.
   double thunder = -1;
   // The day's mean air at the mountain's base, C (`Weather::mean_c`); kept when empty.
-  std::optional<double> mean_c;
+  std::optional<double> mean_c = std::nullopt;
 };
 inline constexpr double kSummerFreezing = 600;  // m over the summit
 void with_sky(Level& level, const SkyPick& pick);
