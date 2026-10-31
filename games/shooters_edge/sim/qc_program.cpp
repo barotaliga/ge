@@ -70,6 +70,7 @@ void mirror_in(QcProgram& q, int e) {
   put_f(q, e, q.layout->f.impulse, d.impulse);
   put_f(q, e, q.layout->f.fixangle, d.fixangle ? 1.0f : 0.0f);
   put_v(q, e, q.layout->f.v_angle, d.v_angle);
+  if (q.layout->f.punchangle >= 0) put_v(q, e, q.layout->f.punchangle, d.punchangle);
   put_f(q, e, q.layout->f.flags, int_float(d.flags));
   put_f(q, e, q.layout->f.teleport_time, d.teleport_time);
   put_f(q, e, q.layout->f.waterlevel, int_float(d.waterlevel));
@@ -106,6 +107,8 @@ void mirror_out(QcProgram& q, int e) {
   d.impulse = get_f(q, e, q.layout->f.impulse);
   d.fixangle = get_f(q, e, q.layout->f.fixangle) != 0;
   d.v_angle = get_v(q, e, q.layout->f.v_angle);
+  if (q.layout->f.punchangle >= 0) d.punchangle = get_v(q, e, q.layout->f.punchangle);
+  d.view_ofs = get_v(q, e, q.layout->f.view_ofs);  // the program's: read, never written
   d.flags = float_int(get_f(q, e, q.layout->f.flags));
   d.teleport_time = get_f(q, e, q.layout->f.teleport_time);
   d.waterlevel = float_int(get_f(q, e, q.layout->f.waterlevel));

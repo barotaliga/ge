@@ -85,6 +85,13 @@ struct ListenOptions {
   bool registered = false;            // a campaign's content is the full game (gfx/pop.lmp)
 };
 
+// A blow the player took (a single-player program's damage record, client_data.hpp): its armour
+// and blood, 0..255 each, and where it came from, map units.
+struct Blow {
+  int armor = 0, blood = 0;
+  sh::Vec3f from;
+};
+
 struct Listen {
   const ge::progs::Progs* progs = nullptr;
   ListenOptions opt;
@@ -111,6 +118,7 @@ struct Listen {
   // Where the mod's explosions went off on this map (its temporary-entity message), map units,
   // in order.
   std::vector<sh::Vec3f> explosions;
+  std::vector<Blow> blows;  // the blows the player took on this map, in order
 };
 
 // The server made for `progs` (which must outlive it) on `map`, the player connected.
@@ -143,6 +151,8 @@ int listen_advance(Listen& l, double wall_s, const sh::MoveCmd& cmd);
 struct PlayerState {
   int entity = 1;
   sh::Vec3f origin, velocity, view_ofs, v_angle;
+  sh::Vec3f punch;        // the program's recoil kick on the view, degrees (0 without one)
+  float ideal_pitch = 0;  // the pitch the view drifts to (a single-player program's), degrees
   bool on_ground = false;
   bool dead = false;
   float health = 0;

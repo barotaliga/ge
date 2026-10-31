@@ -119,6 +119,14 @@ struct HookCall {
 enum class MapChange : uint8_t { new_game, change_level, restart };
 
 // What the server keeps of one client (the player is entity slot + 1).
+// The blow a player took this frame (client_data.hpp): its blood and armour, each 0..255, and
+// where it came from.
+struct ClientBlow {
+  bool hit = false;
+  int armor = 0, blood = 0;
+  sh::Vec3f from;
+};
+
 struct ClientInfo {
   bool active = false;
   bool spectator = false;
@@ -130,6 +138,7 @@ struct ClientInfo {
   bool drop = false;  // a stuffed "disconnect": dropped after the current call
   std::string address = "loopback";
   int ping_ms = 0;
+  ClientBlow blow;  // this frame's (a single-player program's)
 };
 
 struct StaticEntity {

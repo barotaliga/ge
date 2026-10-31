@@ -69,6 +69,7 @@ void entered(Listen& l) {
   l.owed = 0;
   l.pending_map.clear();
   l.explosions.clear();
+  l.blows.clear();
   l.server->pending_map.clear();
   const sh::Edict& me = l.server->sv.edicts[1];
   l.view = me.v_angle;
@@ -305,6 +306,8 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
   }
   read_streams(l);
   sv::clear_frame(s.out);
+  if (const sv::ClientBlow& b = s.clients[0].blow; b.hit)
+    l.blows.push_back({b.armor, b.blood, b.from});
   if (l.campaign.turned) {
     l.view = {l.campaign.angles.x, l.campaign.angles.y, 0};
     l.campaign.turned = false;
@@ -341,6 +344,9 @@ PlayerState player_state(const Listen& l) {
   const pg::Vm& vm = l.server->q.vm;
   const uint32_t* view_ofs = pg::entity_field(vm, 1, pg::vm_layout(vm).f.view_ofs);
   p.view_ofs = {pg::as_float(view_ofs[0]), pg::as_float(view_ofs[1]), pg::as_float(view_ofs[2])};
+  p.punch = me.punchangle;
+  if (const int f = pg::vm_layout(vm).f.idealpitch; f >= 0)
+    p.ideal_pitch = pg::as_float(*pg::entity_field(vm, 1, f));
   return p;
 }
 
