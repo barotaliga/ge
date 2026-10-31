@@ -78,6 +78,9 @@ struct Options {
   double lava_glow = 1;       // that glow's strength, 0 none
   double slime_glow = 1;      // the slime's faint green glow on the walls round it, 0 none
   bool portal_lights = true;  // each teleporter's panel lights its room with a slow pulse
+  // A large flame's light as a bonfire's (bsp_flames.hpp, ce_bonfires): from higher up, softer,
+  // kBonfireLight times as bright.
+  bool bonfires = false;
   // The sky faces as the pack's own scrolling sky under v2 too (ce_skies off): they write their
   // depth and no mask, so our sky and clouds do not fill them; the rooms keep our sky's light.
   bool pack_sky = false;
