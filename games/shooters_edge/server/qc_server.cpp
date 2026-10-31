@@ -421,6 +421,7 @@ void connect(QcServer& s, int slot, const std::string& name, bool spectator, boo
   c.spectator = spectator;
   c.bot = bot;
   c.userid = s.next_userid++;
+  c.entered_at = s.sv.time;
   c.userinfo.emplace_back("name", name);
   if (bot) c.address = "bot";
   // The player's entity starts clean in the VM with its name, so every hook from SetNewParms on

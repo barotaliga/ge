@@ -11,11 +11,12 @@
 //
 // ge:summary The classic menu's pictures (gfx/*.lmp, the glyph sheet) read from the player's pack
 // ge:keywords menu classic pictures lmp palette conchars glyph-sheet plaque title strip cursor
-// ge:keywords help box pack search-path fixture shooters-edge
+// ge:keywords help box pack search-path fixture shooters-edge ranking scorebar palette-colour
 // ge:skill ui vfs
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -38,9 +39,12 @@ struct ClassicArt {
   // `menudot1` .. `menudot6`, `help0` ..; index 255 drawn see-through.
   std::map<std::string, ge::ui::Image, std::less<>> pictures;
   ge::ui::Image glyphs;  // the 128 x 128 glyph sheet, 16 x 16 cells of 8 px; index 0 see-through
+  std::array<uint8_t, 768> palette{};  // the pack's palette, RGB a colour (the scoreboard's fills)
 
   bool loaded() const { return !glyphs.empty() && find("mainmenu") != nullptr; }
   const ge::ui::Image* find(std::string_view name) const;
+  // The palette's colour `index` (0..255), opaque.
+  ge::ui::Color colour(int index) const;
 };
 
 // Every picture the classic menu draws, read through `find`. False with the reason when the files

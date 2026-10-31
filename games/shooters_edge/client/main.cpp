@@ -12,29 +12,28 @@
 //                 [-demovideo <demo> <file> [--fps=N] [--resolution=<WxH|1080p|4k>] ...]
 //                 [+<command> ...]
 //
-// `-basedir` is the folder that holds the game folder (`id1` unless `-game` names another) with
-// its `pak0.pak`, `pak1.pak` ...; a leading `~` is the home folder, and a path with spaces is one
+// `-basedir` is the folder that holds the game folder (`id1` unless `-game` names another) with its
+// `pak0.pak`, `pak1.pak` ...; a leading `~` is the home folder, and a path with spaces is one
 // argument when quoted. `-progs` runs a mod's progs file in place of the baseline mod, and
 // `-models` names the held weapons' folder (by default the tree's
 // `games/shooters_edge/content/models/view`, from where the game runs or where it was built). The
-// `+` words are console lines run at start: `+map dm6` loads that map
-// (`map arena` is the built-in test arena); with none, the map `start` when the packs have it,
-// else the arena.
+// `+` words are console lines run at start: `+map dm6` loads that map (`map arena` is the built-in
+// test arena); with none, the map `start` when the packs have it, else the arena.
 //
 // THE KEYS: W A S D move, SPACE jumps, the left button fires, 1..8 pick a weapon, the wheel the
-// next one; the mouse looks (captured while the window has it; a click takes it back); ESCAPE
-// opens the main menu (menu/game_menu.hpp: drawn in the pack's own pictures when the packs carry
-// them, the rows the game cannot do yet dimmed), and ESCAPE again goes back out of it; the key
-// under ESCAPE drops the console, where `map <name>` changes the map, `sv
-// <line>` is a line for the server's console (`sv timelimit 10`), `save <name>` and `load <name>`
-// keep and bring back a single-player game (`<game folder>/saves/<name>.save`; `<name>.sav` the
-// classic text save in the game folder, which `load` also finds by the bare name), `sensitivity
-// <deg a count>` and `m_invert 0|1` set the look, `r_look classic|modern` and the other picture
-// cvars (app/look.hpp: `r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`) the
-// world's look, the view-model cvars (view/hand.hpp: `r_drawviewmodel`, `r_viewmodel_fov`,
-// `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the
-// window over the whole screen (`vid_display n` which one, of those `vid_displays` lists), and
-// `quit` quits.
+// next one; TAB held shows the scores (client/scores.hpp; `scr_levelstats 0|1`); the mouse looks
+// (captured while the window has it; a click takes it back); ESCAPE opens the main menu
+// (menu/game_menu.hpp: drawn in the pack's own pictures when the packs carry them, the rows the
+// game cannot do yet dimmed), and ESCAPE again goes back out of it; the key under ESCAPE drops the
+// console, where `map <name>` changes the map, `sv <line>` is a line for the server's console (`sv
+// timelimit 10`), `save <name>` and `load <name>` keep and bring back a single-player game (`<game
+// folder>/saves/<name>.save`; `<name>.sav` the classic text save in the game folder, which `load`
+// also finds by the bare name), `sensitivity <deg a count>` and `m_invert 0|1` set the look,
+// `r_look classic|modern` and the other picture cvars (app/look.hpp: `r_fx_lights`, `r_fx_glow`,
+// `r_bloom`, `r_lava_glow`, `r_slime_glow`) the world's look, the view-model cvars (view/hand.hpp:
+// `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon
+// in hand, `vid_fullscreen 0|1` the window over the whole screen (`vid_display n` which one, of
+// those `vid_displays` lists), and `quit` quits.
 //
 // THE LOBBY: a match opens each map in warmup until everyone is ready; F1 ready or break, F2 the
 // other team, F3 the roster (client/lobby_console.hpp lists the words and the settings).
@@ -52,10 +51,11 @@
 // <file>` turns one into a video with no window and quits (client/demo_video.hpp).
 //
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
-// ge:keywords app main window listen-server basedir game-folder plus-commands map console
-// ge:keywords relative-mouse mouse-look hud first-person effects r_look quit shooters-edge
-// ge:keywords benchmark timedemo demo vsync-off fps playdemo demo_track cl_demospeed demovideo
-// ge:keywords main-menu escape vid_fullscreen fullscreen offscreen vid_display vid_displays lobby
+// ge:keywords app main window listen-server basedir game-folder plus-commands map console relative-
+// ge:keywords mouse mouse-look hud first-person effects r_look quit shooters-edge benchmark
+// ge:keywords timedemo demo vsync-off fps playdemo demo_track cl_demospeed demovideo main-menu
+// ge:keywords escape vid_fullscreen fullscreen offscreen vid_display vid_displays lobby scores-key
+// ge:keywords scoreboard scr_levelstats
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
 #include <cstdio>
@@ -85,6 +85,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
@@ -255,30 +256,46 @@ bool parse(int argc, char** argv, Args& a) {
 
 }  // namespace
 
-static  // The campaign's screens over the game: the level's end, else the solo panel while
-        // `scores`.
-    void
-    draw_campaign(ge::ui::DrawList& dl, const cl::Listen& l,
-                  const shooters_edge::menu::ClassicArt& art, int w, int h, bool scores) {
+// What is drawn over the game for the level's end and the scores key (`held`): a campaign's
+// intermission or text, else its solo scorebar (and the level's statistics with
+// `scr_levelstats`); a match's players' board, or the teams' board when the player is dead.
+static void draw_scores(ge::ui::DrawList& dl, const cl::Listen& l,
+                        const shooters_edge::menu::ClassicArt& art, int w, int h, bool held,
+                        bool level_stats, shooters_edge::menu::BoardView& board) {
   namespace mn = shooters_edge::menu;
   const cl::CampaignView& c = l.campaign;
-  mn::LevelStats st;
-  cl::completed_time(c, l.entered_at, st.minutes, st.seconds);
-  if (c.end == cl::LevelEnd::none) {
-    cl::CampaignView now = c;
-    now.ended_at = l.server->sv.time;
-    cl::completed_time(now, l.entered_at, st.minutes, st.seconds);
+  if (l.campaign_host && c.end == cl::LevelEnd::intermission) {
+    mn::draw_intermission(dl, art, w, h, cl::level_stats_of(l));
+    return;
   }
-  st.secrets = static_cast<int>(c.secrets);
-  st.total_secrets = static_cast<int>(c.total_secrets);
-  st.kills = static_cast<int>(c.monsters);
-  st.total_kills = static_cast<int>(c.total_monsters);
-  if (c.end == cl::LevelEnd::intermission)
-    mn::draw_intermission(dl, art, w, h, st);
-  else if (c.end != cl::LevelEnd::none)
+  if (l.campaign_host && c.end != cl::LevelEnd::none) {
     mn::draw_level_text(dl, art, w, h, c.text, cl::typed_chars(c, l.server->sv.time));
-  else if (scores)
-    mn::draw_solo_panel(dl, art, w, h, cl::map_title(l), st);
+    return;
+  }
+  switch (cl::scores_screen(l, held)) {
+    case cl::ScoresScreen::solo: {
+      const mn::LevelStats st = cl::level_stats_of(l);
+      if (level_stats) mn::draw_level_stats(dl, art, w, h, cl::map_title(l), st);
+      // The modern look's level card already holds the strip's figures.
+      if (!level_stats || !art.glyphs.empty())
+        mn::draw_solo_scorebar(dl, art, w, h, cl::map_title(l), st);
+      break;
+    }
+    case cl::ScoresScreen::players: {
+      const mn::Scoreboard b = cl::scores_of(l);
+      mn::draw_scoreboard(dl, art, w, h, b, board);
+      mn::draw_scorebar(dl, art, w, h, b);
+      break;
+    }
+    case cl::ScoresScreen::teams: {
+      const mn::Scoreboard b = cl::scores_of(l);
+      mn::draw_team_scoreboard(dl, art, w, h, b, board);
+      mn::draw_scorebar(dl, art, w, h, b);
+      break;
+    }
+    case cl::ScoresScreen::none:
+      break;
+  }
 }
 
 int run_main(int argc, char** argv) {
@@ -372,6 +389,16 @@ int run_main(int argc, char** argv) {
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
   game_menu.add_cvars(console);
+  // The scores key: TAB held shows the scoreboard (a match) or the level's figures (a campaign).
+  bool level_stats = true;
+  console.cvars().bind({.name = "scr_levelstats",
+                        .fallback = "1",
+                        .flags = ge::console::kArchive,
+                        .help = "1: the scores key in a campaign also shows the level's figures "
+                                "(time, secrets, kills) as the intermission draws them",
+                        .kind = ge::console::CvarKind::boolean},
+                       &level_stats);
+  shooters_edge::menu::BoardView board_view;
   // The HUD's pictures: the free set always, and the packs' own status bar pictures once the
   // packs are open (below); `hud_art` picks between them every frame (hud/classic_art.hpp).
   se::HudArt free_art = se::free_art();
@@ -913,9 +940,9 @@ int run_main(int argc, char** argv) {
       else
         se::draw_lobby(overlay, lv, w, h);
     }
-    draw_campaign(
-        overlay, listen, game_menu.art(), w, h,
-        listen.campaign_host && !con_keys.held && !was_open && input.down(ge::platform::Key::tab));
+    draw_scores(overlay, listen, game_menu.art(), w, h,
+                !con_keys.held && !was_open && input.down(ge::platform::Key::tab), level_stats,
+                board_view);
     game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);
     ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
