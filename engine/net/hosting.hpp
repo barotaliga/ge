@@ -66,6 +66,10 @@ struct HostingConfig {
   int64_t ask_us = 500000;         // an advertise not acknowledged is sent again this often
   int unlist_tries = 8;            // a stop's unlist asked this many times at most
   uint64_t seed = 0;
+  // Players the game seats beside the session's (bots, a second protocol's clients), added to
+  // the advert's count; null: the session's seats alone.
+  int (*seated)(const void* ctx) = nullptr;
+  const void* seated_ctx = nullptr;
 };
 
 enum class HostingState : uint8_t { idle, open, closing, closed };

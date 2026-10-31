@@ -8,8 +8,17 @@ for what a server will grow later: an administrator's tools, recording and broad
 server-side match mods, and cvars that switch on whole groups of others. Rows M53a–M53h
 ([`goals/M53.md`](goals/M53.md)).
 
-This page is the design. Nothing in `engine/server` exists yet; what each row builds is in its
-row file.
+This page is the design; what each row has built is in its row file. Built so far (M53a, part
+one): `engine/server` with `ServerGame`, `Server` (the frame, the node, the session host and the
+LAN hosting round it), the dedicated process (`server_main`: `server.cfg`, then the flags, then
+`+commands`), `ge_add_server`, a sample game and the server trial, and `shooters_edge_server`
+running on it. Running one:
+
+```
+make build
+build/debug/shooters_edge_server --name="Arena Night" --description="bots only" --port=27500 \
+  --maxclients=16 --bots=8 --realtime --for=0
+```
 
 ## What is there today, and what is missing
 
