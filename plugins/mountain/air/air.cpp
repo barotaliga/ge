@@ -12,6 +12,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "core/num.hpp"
+#include "mountain/mapgen/sun.hpp"
 #include "mountain/mapgen/weather.hpp"
 #include "wind/precip.hpp"
 #include "wind/storm.hpp"
@@ -67,6 +68,34 @@ double breath(mapgen::WeatherKind kind) {
 }
 
 // The fall's visual range moved toward the rain's by its share of it, in the logarithm.
+// The sky's kinds as the air's moisture (the relative humidity at the day's mean) and cover.
+struct SkyAir {
+  double humidity, cloud;
+};
+
+SkyAir sky_air(mapgen::WeatherKind kind) {
+  switch (kind) {
+    case mapgen::WeatherKind::clear:
+      return {0.8, 0.05};
+    case mapgen::WeatherKind::fair:
+      return {0.8, 0.3};
+    case mapgen::WeatherKind::flurries:
+      return {0.85, 0.5};
+    case mapgen::WeatherKind::high:
+      return {0.75, 0.5};
+    case mapgen::WeatherKind::overcast:
+      return {0.88, 0.9};
+    case mapgen::WeatherKind::snow:
+      return {0.92, 0.95};
+    case mapgen::WeatherKind::storm:
+      return {0.92, 1.0};
+    case mapgen::WeatherKind::fog:
+      // The inversion's day: the air damp under a clear sky over the sea.
+      return {0.97, 0.15};
+  }
+  return {0.8, 0.3};
+}
+
 void see_through_rain(Fall& out) {
   if (out.rain <= 0) return;
   const double rain = wind::visibility_of({out.fall, 1});
@@ -108,7 +137,46 @@ Wind wind_at(const mapgen::Level& level, double t) {
   return out;
 }
 
+wind::Climate climate_of(const mapgen::Level& level) {
+  const mapgen::Mountain& m = level.mountain;
+  const mapgen::Weather& w = level.weather;
+  const SkyAir sky = sky_air(w.kind);
+  wind::Climate c;
+  c.ref_y = m.base.y;
+  c.mean_c = w.mean_c > mapgen::kNoMean
+                 ? w.mean_c
+                 : 20 - 0.5 * std::fabs(level.sun.latitude) - c.lapse * std::max(m.altitude, 0.0);
+  c.range_c = 10;
+  c.humidity = sky.humidity;
+  c.cloud = sky.cloud;
+  c.wind = w.kind == mapgen::WeatherKind::fog ? std::min(w.wind, 1.5) : w.wind;
+  // Sunrise and sunset off the sun's hour angle at the horizon.
+  const double deg = kPi / 180;
+  const double phi = level.sun.latitude * deg;
+  const double decl = mapgen::declination_of(level.sun.day_of_year) * deg;
+  const double cos_h = core::clamp(-core::libm::tan(phi) * core::libm::tan(decl), -1.0, 1.0);
+  const double half_day = core::libm::acos(cos_h) / deg / 15;
+  c.sunrise = 12 - half_day;
+  c.sunset = 12 + half_day;
+  return c;
+}
+
+double hour_at(const mapgen::Level& level, double t) {
+  const double h = core::num::mod(level.sun.hour + t / 3600, 24.0);
+  return h < 0 ? h + 24 : h;
+}
+
+double snowline_at(const mapgen::Level& level, double hour) {
+  const mapgen::Weather& w = level.weather;
+  if (w.snowline > mapgen::kNoSnowline) return w.snowline;
+  return wind::snow_level(climate_of(level), hour);
+}
+
 Fall fall_at(const mapgen::Level& level, double t, double y) {
+  return fall_at(level, t, y, hour_at(level, t));
+}
+
+Fall fall_at(const mapgen::Level& level, double t, double y, double hour) {
   const mapgen::Weather& w = level.weather;
   Fall out;
   if (!mapgen::snows(w.kind) || w.snowfall <= 0) return out;
@@ -121,8 +189,8 @@ Fall fall_at(const mapgen::Level& level, double t, double y) {
   if (w.kind == mapgen::WeatherKind::storm) fall += kBlown * (wind_at(level, t).gust - 0.5);
   out.fall = core::clamp(fall, 0.0, 1.0);
   out.visibility = visibility_in(out.fall);
-  if (w.snowline > mapgen::kNoSnowline && out.fall > 0) {
-    out.rain = wind::rain_share_at(y, w.snowline + 0.5 * wind::kMeltBand);
+  if (out.fall > 0 && y < kAloft) {
+    out.rain = wind::rain_share_at(y, snowline_at(level, hour) + 0.5 * wind::kMeltBand);
     see_through_rain(out);
   }
   return out;
@@ -177,12 +245,16 @@ double cooled_at(const wind::Storm& storm, double t, double x, double z) {
 
 Fall fall_at(const mapgen::Level& level, const wind::Storm& storm, double t, double x, double y,
              double z) {
-  Fall out = fall_at(level, t, y);
+  return fall_at(level, storm, t, x, y, z, hour_at(level, t));
+}
+
+Fall fall_at(const mapgen::Level& level, const wind::Storm& storm, double t, double x, double y,
+             double z, double hour) {
+  Fall out = fall_at(level, t, y, hour);
   if (storm.cells == 0) return out;
   const double rain = wind::rain_at(storm, x, z, t);
   if (rain <= 0) return out;
-  const mapgen::Weather& w = level.weather;
-  const double line = w.snowline > mapgen::kNoSnowline ? w.snowline : y + 1e6;
+  const double line = snowline_at(level, hour);
   const double freezing = line + 0.5 * wind::kMeltBand - cooled_at(storm, t, x, z);
   const double share = wind::rain_share_at(y, freezing);
   // The two falls as independent chances, the rain's share of them weighted by each.

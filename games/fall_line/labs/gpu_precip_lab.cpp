@@ -4,9 +4,14 @@
 // steady SNOW, a STORM's blizzard), four of rain with the snow line over the summit (a DRIZZLE, a
 // RAIN, a DOWNPOUR, a RAINSTORM) and a SLEET with the snow line at the eye. Each from a named view,
 // --frames frames at 60 a second up to --at seconds into the run, so the particles in the picture
-// have flown on the wind those frames. `--skies=` picks some by id; `--hour=22` draws them at
-// night, lit by the piste's floodlights (render/lights.hpp through the fall); `--mirror=0` draws
-// the wet ground mirroring the sky alone, not the scene (render/mirror.hpp).
+// have flown on the wind those frames. Then the day's air (M51e): a MILD-DAWN and a
+// MILD-AFTERNOON of one day whose mean puts its snow line at the eye mid-morning, so the line
+// (wind::snow_level of the day's air) is under the eye at 06:30 and over it at 14:30; and a
+// BREATH: a skier standing on the piste on the map's own cold, clear, still morning at 07:30, seen
+// side on against the valley, breathing white puffs (skier/app/breath.hpp by wind::breath_of).
+// `--skies=` picks some by id; `--hour=22` draws them at night, lit by the piste's floodlights
+// (render/lights.hpp through the fall); `--mirror=0` draws the wet ground mirroring the sky alone,
+// not the scene (render/mirror.hpp).
 //
 // Beside each: the fall, its rain share at the eye, the rate and its tier, the visual range, the
 // wind, the particles and splashes drawn and the wet ground (deterministic: the air is a pure
@@ -17,8 +22,10 @@
 //
 // ge:summary Lab: snow, sleet and rain from a flurry to a rainstorm, on the wind, with splashes
 // ge:keywords lab precip snowfall rain sleet drizzle downpour flurries snow storm wind splash wet
-// ge:keywords visibility tier fall-line picture
+// ge:keywords visibility tier fall-line picture snow-line snowline_at mild-day breath cold-morning
 // ge:skill render labs
+#include <algorithm>
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -39,6 +46,9 @@
 #include "mountain/mapgen/generate.hpp"
 #include "mountain/mapgen/weather.hpp"
 #include "render/precip.hpp"
+#include "skier/app/breath.hpp"
+#include "wind/climate.hpp"
+#include "wind/cold.hpp"
 #include "wind/field.hpp"
 #include "wind/precip.hpp"
 
@@ -69,6 +79,11 @@ std::string fixed(double v, int places) {
 // The snow line over the summit (rain everywhere), or at the eye (half rain there: a sleet).
 constexpr double kAllRain = 1.5;
 constexpr double kAtEye = -2;
+// The day's mean: the map's own, or the one whose snow line stands at the eye mid-morning (so it
+// is under the eye at dawn and over it in the afternoon).
+constexpr double kOwnMean = 1000;
+constexpr double kMeanAtEye = 999;
+constexpr double kMidMorning = 10.5;
 
 struct Sky {
   const char* id;
@@ -77,6 +92,9 @@ struct Sky {
   double wind;      // m/s at 10 m
   double snowline;  // SkyPick's share of the mountain; kAtEye at the view's eye; -1 none
   const char* look;
+  double mean = kOwnMean;  // the day's mean picked (Weather::mean_c), or kOwnMean / kMeanAtEye
+  double hour = -1;        // the sky's solar hour (the map's start); negative: --hour's
+  bool breath = false;     // a skier standing close by, breathing, seen from in front
 };
 
 constexpr Sky kSkies[] = {
@@ -99,7 +117,55 @@ constexpr Sky kSkies[] = {
      "rain driven slanting hard by the wind, splashes everywhere, the far slope lost in grey"},
     {"sleet", mg::WeatherKind::snow, 0.6, 5, kAtEye,
      "flakes and streaks falling together, the drops faster, a few splashes, the snow damp"},
+    {"mild-dawn", mg::WeatherKind::snow, 0.5, 3, -1,
+     "a mild day's dawn: a steady fall of flakes, the snow line under the eye", kMeanAtEye, 6.5},
+    {"mild-afternoon", mg::WeatherKind::snow, 0.5, 3, -1,
+     "the same day at 14:30: the snow line climbed over the eye, rain streaking down and "
+     "splashing, the snow darker",
+     kMeanAtEye, 14.5},
+    {"breath", mg::WeatherKind::clear, 0, 0, -1,
+     "a cold, clear, still morning: a skier standing on the piste seen side on, a white puff of "
+     "breath in front of his face, thinning within half a metre",
+     kOwnMean, 7.5, true},
 };
+
+// The day's mean, C, whose snow line stands at `y` at kMidMorning.
+double mean_at(const mg::Level& level, double y) {
+  mg::Level l = level;
+  double lo = -40, hi = 40;
+  for (int k = 0; k < 50; ++k) {
+    l.weather.mean_c = 0.5 * (lo + hi);
+    (ge::mountain::air::snowline_at(l, kMidMorning) < y ? lo : hi) = l.weather.mean_c;
+  }
+  return 0.5 * (lo + hi);
+}
+
+// A skier standing still on the snow `ahead` m down the view's line from its eye, facing across
+// it to the view's left.
+ge::skier::SkierState standing(const mg::Level& level, const ge::render::FrameView& v,
+                               double ahead) {
+  ge::skier::SkierState s;
+  s.x = v.eye[0] + ahead * std::sin(v.heading);
+  s.z = v.eye[2] + ahead * std::cos(v.heading);
+  s.y = level.ground_at(s.x, s.z);
+  s.heading = v.heading - 0.5 * 3.14159265358979323846;
+  return s;
+}
+
+// A view of `s`'s face from behind his left shoulder's side, 2.3 m back along `along` (the view's
+// heading, down the mountain), so his breath is seen against the valley and the sky.
+void face_view(const ge::skier::SkierState& s, double along, ge::render::FrameView& v) {
+  double m[3];
+  ge::skier::mouth_of(s, m);
+  const double fx = std::sin(s.heading), fz = std::cos(s.heading);
+  const double dx = std::sin(along), dz = std::cos(along);
+  v.eye[0] = m[0] - 2.2 * dx + 0.7 * fx;
+  v.eye[1] = m[1] + 0.05;
+  v.eye[2] = m[2] - 2.2 * dz + 0.7 * fz;
+  const double tx = m[0] + 0.4 * fx - v.eye[0], tz = m[2] + 0.4 * fz - v.eye[2];
+  v.heading = std::atan2(tx, tz);
+  v.pitch = std::atan2(m[1] - 0.2 - v.eye[1], std::hypot(tx, tz));
+}
 
 void run(ge::lab::Lab& lab) {
   const double seed = lab.arg_num("seed");
@@ -152,6 +218,11 @@ void run(ge::lab::Lab& lab) {
     l.weather.kind = sky->kind;
     l.weather.snowfall = sky->snowfall;
     l.weather.wind = sky->wind;
+    if (sky->hour >= 0) l.sun.hour = sky->hour - at / 3600;  // the shot's hour at `at`
+    if (sky->mean == kMeanAtEye)
+      l.weather.mean_c = mean_at(l, eye_y);
+    else if (sky->mean != kOwnMean)
+      l.weather.mean_c = sky->mean;
     if (sky->snowline == kAtEye) {
       l.weather.snowline = eye_y;
     } else if (sky->snowline >= 0) {
@@ -172,10 +243,37 @@ void run(ge::lab::Lab& lab) {
     lab.metric(k + ".visibility", f.visibility, "m");
     lab.metric(k + ".wind", w.speed, "m/s");
     lab.metric(k + ".gust", w.gust, "share");
+    const double hour_k = ge::mountain::air::hour_at(level, at);
+    const double over = ge::mountain::air::snowline_at(level, hour_k) - eye_y;
+    lab.metric(k + ".snowline", over, "m over the eye");
+    if (sky->mean == kMeanAtEye && (sky->hour < kMidMorning) != (over < 0)) {
+      lab.fail("the " + k + " sky's snow line stands " + fixed(over, 0) +
+                   " m over the eye: it should be under it before mid-morning and over it after",
+               "Read snowline_at in plugins/mountain/air/air.cpp and wind::snow_level. Skill: "
+               "water.");
+    }
     lab.metric(k + ".particles", ge::render::particles_drawn(defaults.fall, f.fall), "count");
     lab.metric(k + ".splashes",
                ge::render::splashes_drawn(defaults.fall, f.rain * std::sqrt(f.fall)), "count");
-    if (ge::render::particles_drawn(defaults.fall, f.fall) == 0) {
+    if (sky->breath) {
+      ge::render::FrameView v = probe;
+      const ge::skier::SkierState sk = standing(level, v, 8);
+      double m[3];
+      ge::skier::mouth_of(sk, m);
+      ge::wind::Site site;
+      site.y = m[1];
+      site.snow = 1;
+      const ge::wind::Thermal air =
+          ge::wind::air_at(ge::mountain::air::climate_of(level), site, hour_k);
+      const double show = ge::wind::breath_of(air);
+      lab.metric(k + ".air", air.temp_c, "C");
+      lab.metric(k + ".breath", show, "share");
+      if (show < 0.3) {
+        lab.fail("the " + k + " sky's cold morning shows a breath of only " + fixed(show, 2),
+                 "Read breath_of in engine/wind/cold.cpp and climate_of in "
+                 "plugins/mountain/air/air.cpp. Skill: water.");
+      }
+    } else if (ge::render::particles_drawn(defaults.fall, f.fall) == 0) {
       lab.fail("the " + k + " sky draws nothing falling at " + fixed(at, 1) + " s",
                "Check fall_at in plugins/mountain/air/air.cpp (the squalls' breath). Skill: "
                "mountain.");
@@ -193,16 +291,31 @@ void run(ge::lab::Lab& lab) {
     const mg::Level& level = levels[i];
     const ge::mountain::air::Fall f = ge::mountain::air::fall_at(level, at, eye_y);
     const ge::mountain::air::Wind w = ge::mountain::air::wind_at(level, at);
+    const double shot_hour = sky.hour >= 0 ? sky.hour : hour;
     const ge::wind::Tier tier = ge::wind::tier_of({f.fall, f.rain}, w.speed);
     std::string title = std::string(sky.id) + ", SEED " + seed_s + " " + view_name;
     for (char& c : title) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    if (sky.breath) {
+      return ge::lab::Shot{
+          sky.id,
+          title,
+          "Seed " + seed_s + "'s `" + view_name + "` view: a skier standing on the piste at " +
+              fixed(shot_hour, 1) +
+              " h on the map's own clear day, seen side on against the valley, his breath "
+              "drawn as particles as thick as the air at his mouth shows one (wind::breath_of).",
+          sky.look,
+          {{"seed", seed_s}, {"sky", sky.id}, {"hour", fixed(shot_hour, 2)}}};
+    }
     const std::string caption =
         "Seed " + seed_s + "'s `" + view_name + "` view under " + sky.id + ": a " +
         ge::wind::tier_name(tier) + " fall of " + fixed(f.fall, 2) + ", " + fixed(100 * f.rain, 0) +
         " % rain, " + fixed(ge::wind::rate_of({f.fall, f.rain}), 1) + " mm/h, " +
         fixed(f.visibility, 0) + " m visibility, wind " + fixed(w.speed, 1) + " m/s; " +
         std::to_string(frames) + " frames up to " + fixed(at, 1) + " s" +
-        (hour >= 0 ? ", at " + fixed(hour, 1) + " h (the lamps lit after dark)" : "") + ".";
+        (shot_hour >= 0 ? ", at " + fixed(shot_hour, 1) + " h" : "") + "; the snow line " +
+        fixed(ge::mountain::air::snowline_at(level, ge::mountain::air::hour_at(level, at)) - eye_y,
+              0) +
+        " m over the eye.";
     return ge::lab::Shot{sky.id,
                          title,
                          caption,
@@ -211,7 +324,7 @@ void run(ge::lab::Lab& lab) {
                           {"sky", sky.id},
                           {"view", view_name},
                           {"t", fixed(at, 2)},
-                          {"hour", hour >= 0 ? fixed(hour, 2) : "the map's"},
+                          {"hour", shot_hour >= 0 ? fixed(shot_hour, 2) : "the map's"},
                           {"size", std::to_string(width) + "x" + std::to_string(height)}}};
   };
 
@@ -259,11 +372,31 @@ void run(ge::lab::Lab& lab) {
         *device, "precip.final", static_cast<uint32_t>(width), static_cast<uint32_t>(height));
     ge::render::FrameView view;
     fall_line::app::make_view(level, view_name, view);
-    if (hour >= 0) fall_line::app::sky_view(level, hour, view);
-    for (int n = 0; n < frames; ++n) {
+    const double sky_hour = picked[i]->hour >= 0 ? picked[i]->hour : hour;
+    if (sky_hour >= 0) fall_line::app::sky_view(level, sky_hour, view);
+    // The breathing skier, and the view of his face.
+    ge::skier::SkierState skier;
+    fall_line::app::FrameScene scene;
+    if (picked[i]->breath) {
+      skier = standing(level, view, 8);
+      face_view(skier, view.heading, view);
+      scene.skiers = std::span<const ge::skier::SkierState>(&skier, 1);
+      double m[3];
+      ge::skier::mouth_of(skier, m);
+      scene.subject = std::array<double, 3>{m[0], m[1], m[2]};  // the focus on his face
+    }
+    // A breath needs a breath's frames (the pen starts it somewhere of its own) to show: drawn
+    // so the last frame falls a third of the way through his second breath out.
+    int drawn = frames;
+    if (picked[i]->breath) {
+      const double from = ge::skier::breath_pen(0).phase;
+      const double turns = 1 + std::fmod(1 + ge::skier::kExhaleShare / 1.5 - from, 1.0);
+      drawn = 1 + static_cast<int>(std::lround(turns * ge::skier::kBreathPeriod * 60));
+    }
+    for (int n = 0; n < drawn; ++n) {
       view.frame = static_cast<uint64_t>(n);
-      view.time_s = at - static_cast<double>(frames - 1 - n) / 60;
-      fall_line::app::draw(*device, *frame, view, {}, target.view);
+      view.time_s = at - static_cast<double>(drawn - 1 - n) / 60;
+      fall_line::app::draw(*device, *frame, view, scene, target.view);
     }
     const ge::gpu::Image img = ge::gpu::read_now(*device, target);
     lab.shot(shot_of(i), ge::lab::Picture{width, height, img.rgba}, Det::measured);

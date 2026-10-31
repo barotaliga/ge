@@ -111,6 +111,7 @@ void with_sky(Level& level, const SkyPick& pick) {
     w.snowline = base + pick.snowline * (level.mountain.summit.y - base);
   }
   if (pick.thunder >= 0) w.thunder = num::min(1.0, pick.thunder);
+  if (pick.mean_c) w.mean_c = *pick.mean_c;
   if (w.thunder > 0 && pick.snowline < 0 && w.snowline <= kNoSnowline)
     w.snowline = level.mountain.summit.y + kSummerFreezing;
 }

@@ -108,6 +108,7 @@
 #include "render/ui_pass.hpp"
 #include "render/underwater.hpp"
 #include "render/water.hpp"
+#include "skier/app/breath.hpp"
 #include "skier/app/rig_pose.hpp"
 #include "skier/app/spray.hpp"
 #include "skier/app/tracks.hpp"
@@ -140,6 +141,7 @@ struct FrameOptions {
   bool snow = true;    // the snow's material (mountain/app/snow.hpp); off: the albedo lit
   bool trails = true;  // the tracks (mountain/app/trails.hpp); drawn only with the snow
   bool spray = true;   // the racers' spray (skier/app/spray.hpp) thrown into the particles
+  bool breath = true;  // the racers' breath in the cold (skier/app/breath.hpp), as particles
   ge::render::ParticleSettings particles;
   bool precip = true;     // what falls (snow, sleet, rain), when the map's sky snows
   bool splashes = true;   // the rain's splashes on the ground (with `precip`)
@@ -253,7 +255,8 @@ struct GameFrame {
   ge::render::CloudPass clouds;
   ge::render::Water water;       // its bodies, `add_water`'s; none: the passes draw nothing
   ge::render::Underwater under;  // the view when the eye is under a body (`under.look`)
-  std::vector<ge::skier::SprayPen> spray_pens;  // each racer's, by his place in the scene
+  std::vector<ge::skier::SprayPen> spray_pens;    // each racer's, by his place in the scene
+  std::vector<ge::skier::BreathPen> breath_pens;  // each racer's, by his place in the scene
   std::vector<ge::skier::SprayGrain> thrown;
   std::vector<ge::render::Particle> births;
   double spray_time = 0;          // the last drawn frame's time_s

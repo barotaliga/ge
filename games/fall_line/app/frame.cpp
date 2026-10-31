@@ -23,6 +23,7 @@
 #include "mountain/app/village_look.hpp"
 #include "mountain/app/weather_look.hpp"
 #include "prof/zones.hpp"
+#include "wind/cold.hpp"
 #include "wind/field.hpp"
 #include "wind/precip.hpp"
 
@@ -178,6 +179,8 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
 }
 
 // The racers' spray over the `dt` s since the last frame, handed to the pool as births.
+void emit_grains(GameFrame& f);
+
 void throw_spray(GameFrame& f, const FrameScene& scene, double dt) {
   if (!f.options.spray) return;
   for (size_t k = f.spray_pens.size(); k < scene.skiers.size(); ++k) {
@@ -187,6 +190,32 @@ void throw_spray(GameFrame& f, const FrameScene& scene, double dt) {
   for (size_t k = 0; k < scene.skiers.size(); ++k) {
     ge::skier::spray_grains(scene.skiers[k], dt, f.spray_pens[k], f.thrown);
   }
+  emit_grains(f);
+}
+
+// THE BREATH in the cold: each racer's puffs over `dt` s, as thick as the air at his mouth shows a
+// breath (wind::breath_of of the map's day at the sky's solar `hour`).
+void breathe(GameFrame& f, const FrameScene& scene, double hour, double dt) {
+  if (!f.options.breath || scene.skiers.empty()) return;
+  for (size_t k = f.breath_pens.size(); k < scene.skiers.size(); ++k) {
+    f.breath_pens.push_back(ge::skier::breath_pen(static_cast<uint32_t>(k)));
+  }
+  const ge::wind::Climate climate = ge::mountain::air::climate_of(*f.level);
+  f.thrown.clear();
+  for (size_t k = 0; k < scene.skiers.size(); ++k) {
+    double mouth[3];
+    ge::skier::mouth_of(scene.skiers[k], mouth);
+    ge::wind::Site site;
+    site.y = mouth[1];
+    site.snow = 1;
+    const double show = ge::wind::breath_of(ge::wind::air_at(climate, site, hour));
+    ge::skier::breath_puffs(scene.skiers[k], show, dt, f.breath_pens[k], f.thrown);
+  }
+  emit_grains(f);
+}
+
+// The grains in `f.thrown` into the particle pool.
+void emit_grains(GameFrame& f) {
   f.births.resize(f.thrown.size());
   for (size_t i = 0; i < f.thrown.size(); ++i) {
     const ge::skier::SprayGrain& g = f.thrown[i];
@@ -551,6 +580,9 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   const ge::wind::Storm* storm = f.options.weather ? storm_over(f) : nullptr;
   const ge::wind::Storm none;
   const ge::wind::Storm& storm_air = storm != nullptr ? *storm : none;
+  // The sky's solar hour: the snow line and the breath read the day's air at it.
+  const double sky_hour =
+      scene.hour >= 0 ? scene.hour : ge::mountain::air::hour_at(*f.level, view.time_s);
   if (f.options.weather) {
     // How far dusk has fallen under the view's sun (the evening's jet and its scud; with the moon
     // the key light, Night's sun), and the height and the speed picked by hand.
@@ -573,7 +605,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
                                                        l.weather, l.seed, l.mountain.base.y,
                                                        l.sun.latitude, view.time_s, aloft);
       view.weather = ge::mountain::app::weather_look(
-          l.weather, ge::mountain::air::fall_at(l, view.time_s, view.eye[1]),
+          l.weather, ge::mountain::air::fall_at(l, view.time_s, view.eye[1], sky_hour),
           view.clouds.count > 0);
       ge::mountain::app::lid_under(f.options.cloud_kinds, f.options.cloud_count, view.weather);
     }
@@ -597,7 +629,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   // clock from the steady state its rain and drying would leave, before the uniforms take it.
   if (f.options.wet && f.options.weather) {
     const ge::mountain::air::Fall fall = ge::mountain::air::fall_at(
-        *f.level, storm_air, view.time_s, view.eye[0], view.eye[1], view.eye[2]);
+        *f.level, storm_air, view.time_s, view.eye[0], view.eye[1], view.eye[2], sky_hour);
     const ge::wind::Precip here{fall.fall, fall.rain};
     const double rate = ge::wind::rate_of(here) * here.rain;
     const double sun = view.weather.sun_pass * std::max(0.0, std::sin(view.sun_elevation));
@@ -758,6 +790,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     f.spray_time = view.time_s;
     f.spray_placed = true;
     throw_spray(f, scene, dt);
+    breathe(f, scene, sky_hour, dt);
     emit_areas(f, scene, view.time_s - dt, view.time_s);
     // The map's air at this moment: the wind carries the spray and the flakes.
     const ge::mountain::air::Wind wind =
@@ -768,7 +801,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     // What falls at the eye: snow above the map's snow line, rain under it, sleet between, and a
     // storm's rain.
     const ge::mountain::air::Fall fall = ge::mountain::air::fall_at(
-        *f.level, storm_air, view.time_s, view.eye[0], view.eye[1], view.eye[2]);
+        *f.level, storm_air, view.time_s, view.eye[0], view.eye[1], view.eye[2], sky_hour);
     r::PrecipFrame at;
     for (int k = 0; k < 3; ++k) {
       at.eye[k] = view.eye[k];
