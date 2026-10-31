@@ -10,16 +10,98 @@ namespace ge::shooter {
 
 namespace {
 
-// What one stretch of the segment did: stayed out of solid all the way, was (or ended) in
-// solid with no impact recorded, or recorded an impact.
-enum class Leg : uint8_t { empty, solid, blocked };
-
 float distance_to(const Plane& pl, Vec3f p) {
   if (pl.type < 3) return p[pl.type] - pl.dist;
   return dot(pl.normal, p) - pl.dist;
 }
 
-Leg check(const Hull& hull, int32_t num, float p1f, float p2f, Vec3f p1, Vec3f p2, HullTrace& tr) {
+// The contents a point falls into walking down from node `num`.
+int contents_from(const Hull& hull, int32_t num, Vec3f p) {
+  while (num >= 0) {
+    const ClipNode& node = hull.nodes[num];
+    num = node.children[distance_to(hull.planes[node.plane], p) < 0 ? 1 : 0];
+  }
+  return num;
+}
+
+// THE ORIGINAL WALK: one call over p1..p2 (fractions p1f..p2f of the whole trace): true "go on",
+// false "stop".
+bool check_original(const Hull& hull, int32_t num, float p1f, float p2f, Vec3f p1, Vec3f p2,
+                    HullTrace& tr) {
+  float t1 = 0, t2 = 0;
+  const Plane* pl = nullptr;
+  const ClipNode* node = nullptr;
+  // Down the tree while the whole segment is on one side of each plane.
+  for (;;) {
+    if (num < 0) {
+      if (num != kContentsSolid) {
+        tr.allsolid = false;
+        if (num == kContentsEmpty)
+          tr.inopen = true;
+        else
+          tr.inwater = true;
+      } else {
+        tr.startsolid = true;
+      }
+      return true;
+    }
+    node = &hull.nodes[num];
+    pl = &hull.planes[node->plane];
+    t1 = distance_to(*pl, p1);
+    t2 = distance_to(*pl, p2);
+    if (t1 >= 0 && t2 >= 0) {
+      num = node->children[0];
+    } else if (t1 < 0 && t2 < 0) {
+      num = node->children[1];
+    } else {
+      break;
+    }
+  }
+
+  // The segment straddles this plane: the split already stands 1/32 back on p1's side, and the
+  // far part starts there.
+  float frac = t1 < 0 ? (t1 + kDistEpsilon) / (t1 - t2) : (t1 - kDistEpsilon) / (t1 - t2);
+  if (frac < 0) frac = 0;
+  if (frac > 1) frac = 1;
+  float midf = p1f + (p2f - p1f) * frac;
+  Vec3f mid = {p1.x + frac * (p2.x - p1.x), p1.y + frac * (p2.y - p1.y),
+               p1.z + frac * (p2.z - p1.z)};
+  const int side = t1 < 0 ? 1 : 0;
+
+  if (!check_original(hull, node->children[side], p1f, midf, p1, mid, tr)) return false;
+  if (contents_from(hull, node->children[side ^ 1], mid) != kContentsSolid)
+    return check_original(hull, node->children[side ^ 1], midf, p2f, mid, p2, tr);
+  if (tr.allsolid) return false;  // never out of the solid: no impact
+
+  // THE IMPACT: the plane facing p1's side; the end point stepped back while it is in solid.
+  if (side == 0) {
+    tr.plane = *pl;
+  } else {
+    tr.plane.normal = -pl->normal;
+    tr.plane.dist = -pl->dist;
+    tr.plane.type = pl->type;
+  }
+  while (contents_from(hull, hull.first_node, mid) == kContentsSolid) {
+    frac -= 0.1f;
+    if (frac < 0) break;
+    tr.backups++;
+    midf = p1f + (p2f - p1f) * frac;
+    mid = {p1.x + frac * (p2.x - p1.x), p1.y + frac * (p2.y - p1.y), p1.z + frac * (p2.z - p1.z)};
+  }
+  tr.fraction = midf;
+  tr.endpos = mid;
+  return false;
+}
+
+// THE NETWORKED WALK: the split on the plane itself, the 1/32 applied only at the impact and
+// clamped within that split's segment (so at a slant-and-wall corner the end can stand on the
+// plane: tests/golden/shooter_recording.txt's steep_climb holds it).
+// What one stretch of the segment did: stayed out of solid all the way, was (or ended) in
+// solid with no impact recorded, or recorded an impact.
+enum class Leg : uint8_t { empty, solid, blocked };
+
+Leg check_networked(const Hull& hull, int32_t num, float p1f, float p2f, Vec3f p1, Vec3f p2,
+                    HullTrace& tr) {
   float t1 = 0, t2 = 0;
   const Plane* pl = nullptr;
   const ClipNode* node = nullptr;
@@ -59,11 +141,11 @@ Leg check(const Hull& hull, int32_t num, float p1f, float p2f, Vec3f p1, Vec3f p
                      p1.z + frac * (p2.z - p1.z)};
   const int side = t1 < t2 ? 1 : 0;
 
-  const Leg near = check(hull, node->children[side], p1f, midf, p1, mid, tr);
+  const Leg near = check_networked(hull, node->children[side], p1f, midf, p1, mid, tr);
   if (near == Leg::blocked) return near;
   if (near == Leg::solid && !tr.allsolid) return near;  // in solid after the open: it stands
 
-  const Leg far = check(hull, node->children[side ^ 1], midf, p2f, mid, p2, tr);
+  const Leg far = check_networked(hull, node->children[side ^ 1], midf, p2f, mid, p2, tr);
   if (far != Leg::solid) return far;  // open (a start in solid left it) or an impact deeper
   if (near != Leg::empty) return Leg::solid;
 
@@ -105,12 +187,19 @@ int point_contents(const Hull& hull, Vec3f p) {
 HullTrace trace_hull(const Hull& hull, Vec3f p1, Vec3f p2) {
   HullTrace tr;
   tr.endpos = p2;
-  check(hull, hull.first_node, 0, 1, p1, p2, tr);
+  check_networked(hull, hull.first_node, 0, 1, p1, p2, tr);
   if (tr.allsolid) {
     tr.startsolid = true;
     tr.fraction = 1;
     tr.endpos = p1;
   }
+  return tr;
+}
+
+HullTrace trace_hull_original(const Hull& hull, Vec3f p1, Vec3f p2) {
+  HullTrace tr;
+  tr.endpos = p2;
+  check_original(hull, hull.first_node, 0, 1, p1, p2, tr);
   return tr;
 }
 

@@ -30,6 +30,16 @@ constexpr float kJumpSpeed = 270, kWaterJumpSpeed = 225, kWaterJumpPush = -50;
 
 Edict& ent(Server& sv, int e) { return sv.edicts[static_cast<size_t>(e)]; }
 
+// The original move's traces take the original walk on any server (hull.hpp).
+struct OriginalWalk {
+  Server& sv;
+  bool was;
+  explicit OriginalWalk(Server& s) : sv(s), was(s.original_walk) { sv.original_walk = true; }
+  ~OriginalWalk() { sv.original_walk = was; }
+  OriginalWalk(const OriginalWalk&) = delete;
+  OriginalWalk& operator=(const OriginalWalk&) = delete;
+};
+
 // A float sum of squares' root in double, rounded to float.
 float root(float squares) { return static_cast<float>(std::sqrt(static_cast<double>(squares))); }
 
@@ -217,6 +227,7 @@ int walk_move(Server& sv, int e, const FrameMoveSettings& set, double dt) {
 
 void frame_think(Server& sv, int e, const FrameCommand& cmd, const FrameMoveSettings& set,
                  double dt) {
+  const OriginalWalk walk(sv);
   Edict& ed = ent(sv, e);
   if (ed.movetype == kMovetypeNone) return;
   const bool on_ground = (ed.flags & kFlagOnGround) != 0;
@@ -273,6 +284,7 @@ void frame_think(Server& sv, int e, const FrameCommand& cmd, const FrameMoveSett
 }
 
 void frame_program_move(Server& sv, int e, bool jump, double dt) {
+  const OriginalWalk walk(sv);
   Edict& ed = ent(sv, e);
   if (ed.movetype != kMovetypeNoclip && ed.health > 0 && (ed.flags & kFlagWaterJump) == 0 &&
       ed.waterlevel > 0) {
@@ -357,6 +369,7 @@ FrameCommand frame_command(const MoveCmd& cmd) {
 }
 
 int frame_move(Server& sv, int e, const FrameMoveSettings& set, double dt) {
+  const OriginalWalk walk(sv);
   if (ent(sv, e).movetype == kMovetypeNoclip) {
     Edict& ed = ent(sv, e);
     ed.origin = mad(ed.origin, static_cast<float>(dt), ed.velocity);

@@ -133,6 +133,9 @@ struct Server {
   std::vector<ClientSlot> clients;  // set.maxclients
   SoundEvent sounds[kMaxSounds];
   int sound_count = 0;
+  // The original walk for every trace (hull.hpp): set on the single-player clock's server, and
+  // for the length of an original move's own traces on any server (framemove.hpp).
+  bool original_walk = false;
   std::vector<uint32_t> touched;  // per entity: the packet stamp it last touched a player in
   uint32_t touch_stamp = 0;
   LoopCounts counts;

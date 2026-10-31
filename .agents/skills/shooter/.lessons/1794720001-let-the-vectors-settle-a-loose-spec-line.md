@@ -12,8 +12,10 @@ settled by working one failing step's numbers by hand from the line before it:
   The 258, 263 and 256 values in the vectors give this away.
 - The swim's room to accelerate is the wish speed minus the speed left after the water friction,
   not the ground rule's wish − v·d. One step (swim_up_and_jump 83) separates the two readings.
-- A trace into a slope-and-wall corner ended 1/32 short of ours. This was a gap in the trace's
-  note, which was wrong for client and server alike: every straddled split is backed off.
+- A trace into a slope-and-wall corner ended 1/32 short of ours. The original host walks its
+  hull differently from the networked one (every split backed off 1/32, then a 0.1 step-back),
+  and the predicted move's recordings hold the networked walk at the same corner. A spec fix
+  that made one walk of the two broke pmove.txt; both walks are kept, one per host.
 
 Do not guess the original's behaviour from memory. Ask the spec thread to fix the note and
 record vectors that isolate the case (it added `vectors/hulltrace.txt`), and build only once
