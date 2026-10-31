@@ -88,6 +88,7 @@
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
+#include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
@@ -368,8 +369,13 @@ int run_main(int argc, char** argv) {
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
   game_menu.add_cvars(console);
-  se::HudArt art = se::free_art();
-  art.finish();
+  // The HUD's pictures: the free set always, and the packs' own status bar pictures once the
+  // packs are open (below); `hud_art` picks between them every frame (hud/classic_art.hpp).
+  se::HudArt free_art = se::free_art();
+  free_art.finish();
+  se::HudArt classic_art;
+  std::string hud_art = "auto";
+  se::add_art_cvar(console, &hud_art);
   // The HUD's feed shows the game's messages (hud.notify, below), so the console's own lines at
   // the top of the screen would show each a second time; a cfg or a + word can turn them back on.
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
@@ -398,6 +404,11 @@ int run_main(int argc, char** argv) {
     };
     if (shooters_edge::menu::load_classic_art(find, &menu_art, &error))
       game_menu.set_art(std::move(menu_art));
+    std::string why;
+    if (se::classic_art_from_packs(find, &classic_art, &why))
+      out::status("shooters_edge: the HUD draws the packs' own status bar pictures (hud_art)");
+    else if (!files.archives.empty())
+      out::status("shooters_edge: the HUD draws the free art: " + why);
     std::vector<std::string> packs;
     packs.reserve(files.archives.size());
     for (const cl::SearchPath::Archive& a : files.archives) packs.push_back(a.path);
@@ -786,7 +797,8 @@ int run_main(int argc, char** argv) {
           cl::demo_view(bench.demo.state, ge::camera::FirstPersonRow{}.fov_y, t);
       view.frame = static_cast<uint64_t>(presented);
       overlay.begin(w, h);
-      se::fill_hud(hud, cl::demo_status(bench.demo.state, t), art);
+      se::fill_hud(hud, cl::demo_status(bench.demo.state, t),
+                   se::pick_art(hud_art, classic_art, free_art));
       const auto placed =
           hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style());
       playback.bar_bottom_px = cl::hud_inset(placed, h);
@@ -869,7 +881,7 @@ int run_main(int argc, char** argv) {
       fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
     overlay.begin(w, h);
     if (listen.campaign.end == cl::LevelEnd::none) {
-      se::fill_hud(hud, cl::status_of(listen, t), art);
+      se::fill_hud(hud, cl::status_of(listen, t), se::pick_art(hud_art, classic_art, free_art));
       const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
       hud.layout.draw(overlay, hf, se::hud_style());
     }
