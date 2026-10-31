@@ -87,7 +87,8 @@ TEST(the_table_lays_the_runs_side_by_side) {
 }
 
 TEST(a_flag_sweep_is_refused_before_any_build_when_malformed_or_beside_set) {
-  const BuildOptions o{std::filesystem::temp_directory_path() / "ge-sweep-test-none", "debug", ""};
+  const BuildOptions o{
+      std::filesystem::temp_directory_path() / "ge-sweep-test-none", "debug", "", {}};
   SweepOptions both{"para", "kFlight=0.5", "hz=60,120", "", "", {}};
   const Outcome a = run_lab_sweep(o, both);
   CHECK(a.exit == 2);

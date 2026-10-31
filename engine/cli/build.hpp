@@ -31,6 +31,7 @@ struct BuildOptions {
   fs::path repo;
   std::string preset = "debug";
   std::string engine;  // --engine: a local engine tree the build uses instead of the download
+  std::vector<std::string> defines;  // more -D<name>=<value> for the configure (a ref's build)
 };
 
 Outcome run_build(const BuildOptions& o);
@@ -44,7 +45,10 @@ struct LabOptions {
   std::string id;  // "" lists the labs
   bool smoke = false;
   std::string tag, compare;
-  std::string shots;                     // "" every shot; "a,b" only those (the runner's --shots)
+  std::string shots;  // "" every shot; "a,b" only those (the runner's --shots)
+  // A git ref: the lab built at it first (a scratch worktree under build/before/) and run tagged
+  // `before` (or --compare's name), then this tree's run compared with it.
+  std::string before;
   std::vector<std::string> passthrough;  // the lab's own flags
 };
 Outcome run_lab(const BuildOptions& o, const LabOptions& lab);
