@@ -7,7 +7,7 @@
 //   vid_width vid_height vid_vsync      the window (A, latched: read at startup)
 //   r_taa r_scale r_occlusion r_shadowsize r_bloom r_snow r_trails r_spray r_precip
 //   r_precip_density r_splashes r_wet r_lightning r_weather r_clouds r_sunsize r_moonsize
-//   r_lights r_light_shadows
+//   r_lights r_light_shadows r_fog r_fog_quality
 //                                       the picture (A, latched: the frame is made once)
 //   r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt r_motionblur r_ao
 //   r_ao_radius r_dof r_dof_focus
@@ -76,8 +76,10 @@ struct Settings {
   bool precip = true, splashes = true, wet = true;  // what falls, the rain's splashes, wet ground
   bool lights = true, light_shadows = true;         // the lamps after dark, their shadows
   bool lightning = true;                            // a thunderstorm's flashes and channels drawn
-  double precip_density = 1.0;                      // the share of the falling particles, 0.25..2
-  double clouds = 1.0;  // the share of the cloud march's steps; 0: no layer drawn
+  bool fog_drawn = true;        // r_fog: the map's mists and the fog in areas drawn
+  uint32_t fog_quality = 2;     // r_fog_quality: the froxels, 0 low .. 3 top (app/mists.hpp)
+  double precip_density = 1.0;  // the share of the falling particles, 0.25..2
+  double clouds = 1.0;          // the share of the cloud march's steps; 0: no layer drawn
   double disc_sun = 1.0, disc_moon = 1.0;  // r_sunsize r_moonsize: the discs drawn larger, 0.5..20
   // The lens and the film, each 0..1 (0: off), and the grade's knobs (render/grade.hpp).
   double sharpen = 0.3, sunrays = 0.5, flare = 0, vignette = 0.25, chromatic = 0, grain = 0,
