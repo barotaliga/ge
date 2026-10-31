@@ -10,6 +10,7 @@
 #include <iterator>
 #include <optional>
 #include <string>
+#include <system_error>
 #include <vector>
 
 #include "capture/clip.hpp"
@@ -35,9 +36,12 @@ TEST(a_clip_reads_back_as_a_webm_with_a_block_a_picture) {
   const std::string path = (std::filesystem::temp_directory_path() / "ge_clip_test.webm").string();
   std::string error;
   CHECK(gc::write_clip(path, frames, 24, error));
-  std::ifstream f(path, std::ios::binary);
-  const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
-                                   std::istreambuf_iterator<char>());
+  std::vector<uint8_t> bytes;
+  {
+    // Closed before the file is removed below: Windows refuses to delete an open file.
+    std::ifstream f(path, std::ios::binary);
+    bytes.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+  }
   const std::optional<gc::ReadFile> read = gc::read_mkv(bytes, error);
   CHECK(read.has_value());
   if (read.has_value()) {
@@ -52,7 +56,8 @@ TEST(a_clip_reads_back_as_a_webm_with_a_block_a_picture) {
       ordered = ordered && file->blocks[i].ms > file->blocks[i - 1].ms;
     CHECK(ordered);
   }
-  std::filesystem::remove(path);
+  std::error_code ec;
+  std::filesystem::remove(path, ec);
 }
 
 TEST(no_pictures_or_tiny_ones_are_refused_with_the_reason) {

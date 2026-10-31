@@ -40,6 +40,7 @@
 #include <iterator>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #include "assets/gltf.hpp"
@@ -312,11 +313,13 @@ void animations(ge::lab::Lab& lab, const se::WeaponLook& look, const std::vector
           (std::filesystem::temp_directory_path() / ("ge-stage-" + stem + ".webm")).string();
       std::string error;
       if (ge::capture::write_clip(tmp, video, fps, error)) {
-        std::ifstream f(tmp, std::ios::binary);
-        lab.attach(stem + ".webm",
-                   std::vector<uint8_t>((std::istreambuf_iterator<char>(f)),
-                                        std::istreambuf_iterator<char>()),
-                   ge::lab::Det::measured);
+        std::vector<uint8_t> webm;
+        {
+          // Closed before the file is removed: Windows refuses to delete an open file.
+          std::ifstream f(tmp, std::ios::binary);
+          webm.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+        }
+        lab.attach(stem + ".webm", std::move(webm), ge::lab::Det::measured);
         std::error_code ec;
         std::filesystem::remove(tmp, ec);
       } else {
