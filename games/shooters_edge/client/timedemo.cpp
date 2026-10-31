@@ -214,8 +214,15 @@ bool timedemo_start(const SearchPath& files, const std::string& name, Timedemo& 
     error = t.found + ": " + error;
     return false;
   }
+  t.start = t.demo;
   t.active = true;
   return true;
+}
+
+void DemoTimeline::frame(const DemoState& s, bool new_level) {
+  if (new_level) last = -1;
+  if (last >= 0) t += std::clamp(s.time - last, 0.0, kTimelineGap);
+  last = s.time;
 }
 
 TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
@@ -229,8 +236,10 @@ TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
       t.levels = s.levels;
       t.skip = kSkipAfterLevel;
       t.last_ns = 0;
+      t.timeline.frame(s, true);
       return TimedemoStep::new_level;
     }
+    t.timeline.frame(s, false);
     return TimedemoStep::frame;
   }
 }
@@ -258,6 +267,32 @@ TimedemoStep playdemo_step(Timedemo& t, double wall_dt_s, double speed, std::str
     }
   }
   return out;
+}
+
+TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error) {
+  const int level_before = t.levels;
+  const std::string map_before = t.demo.state.map;
+  if (timeline_s < t.timeline.t) {  // back: from the start again, the tracked player kept
+    const int track = t.demo.track;
+    t.demo = t.start;
+    t.demo.track = track;
+    t.timeline = {};
+    t.levels = 0;
+  }
+  TimedemoStep out = TimedemoStep::frame;
+  while (t.timeline.t < timeline_s || t.demo.state.map.empty()) {
+    const TimedemoStep s = timedemo_step(t, error);
+    if (s == TimedemoStep::error) return s;
+    if (s == TimedemoStep::end) {
+      out = TimedemoStep::end;
+      break;
+    }
+  }
+  t.clock = t.demo.state.time;
+  t.skip = 0;
+  if (out == TimedemoStep::end) return out;
+  return t.levels != level_before || t.demo.state.map != map_before ? TimedemoStep::new_level
+                                                                    : TimedemoStep::frame;
 }
 
 void timedemo_mark(Timedemo& t, uint64_t now_ns) {
