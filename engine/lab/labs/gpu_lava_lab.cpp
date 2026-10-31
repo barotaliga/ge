@@ -362,8 +362,8 @@ void run(gl::Lab& lab) {
     put(ds, small, "lava", look_of("lava"));
     std::vector<gl::Picture> pics;
     for (const double pitch : {-0.1, 0.75}) {
-      gr::FrameView v = ls::view_at(ls::kPitX - 2, ls::kLevel - 0.6, ls::kPitZ - 6, 0.1, pitch,
-                                    -0.03, 2.4, t);
+      gr::FrameView v =
+          ls::view_at(ls::kPitX - 2, ls::kLevel - 0.6, ls::kPitZ - 6, 0.1, pitch, -0.03, 2.4, t);
       v.adapt_cd = gr::adapt_for(look_of("lava"), 1.5);
       pics.push_back(ls::draw(ds, small, v));
     }

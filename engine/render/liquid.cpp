@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "render/liquid.wgsl.hpp"
+#include "render/liquid_under.wgsl.hpp"
 #include "render/water_copy.wgsl.hpp"
 #include "water/glow.hpp"
 #include "water/liquid.hpp"
@@ -103,7 +104,20 @@ void put(float* out, double a, double b, double c, double d = 0) {
 }
 void put(float* out, const water::Rgb& c, double w = 0) { put(out, c.r, c.g, c.b, w); }
 
+// The lowest a body's liquid reaches: a volume's lowest hull floor, else its level less its depth.
+double floor_of(const water::Body& body) {
+  if (body.kind != water::Kind::volume) return body.level - body.depth;
+  double floor = body.level;
+  for (const water::Hull& hull : body.hulls) {
+    for (const water::Plane& p : hull.planes) {
+      if (p.ny < 0 && p.nx == 0 && p.nz == 0) floor = std::min(floor, p.d / p.ny);
+    }
+  }
+  return floor;
+}
+
 void stage_body(Liquids::Slot& slot, const water::Body& body, const LiquidLook& look, int ripples) {
+  slot.floor = floor_of(body);
   LiquidGpuBody& b = slot.staged;
   put(b.info, body.level, look.kind == LiquidKind::lava ? 0 : 1, ripples, 0);
   for (int i = 0; i < 4; ++i) b.box[i] = static_cast<float>(body.box[i]);
@@ -290,9 +304,13 @@ void create_liquid(gpu::Device& device, gpu::PipelineSet& pipelines, Liquids& li
     desc.vertex.entryPoint = "vs_shimmer";
     desc.vertex.constantCount = 0;
     liquids.p_shimmer = pipelines.add_render(device, desc);
-    // The view from under a body: one triangle over the screen, the same targets and depth.
+    // The view from under a body: one triangle over the screen, the same targets and depth, a
+    // shader of its own (one string literal stays under 64 KB).
+    const wgpu::ShaderModule under = gpu::create_shader(device, wgsl::liquid_under, "liquid.under");
+    fragment.module = under;
     fragment.entryPoint = "fs_under";
     desc.label = "liquid.under";
+    desc.vertex.module = under;
     desc.vertex.entryPoint = "vs_under";
     liquids.p_under = pipelines.add_render(device, desc);
   }
@@ -358,7 +376,8 @@ void prepare_liquid(gpu::Device& device, Liquids& liquids, const FrameView& view
     const LiquidGpuBody& b = slot.staged;
     slot.shown = !slot.hidden && view.eye[1] > b.info[0];
     const bool inside = view.eye[0] > b.box[0] && view.eye[0] < b.box[2] &&
-                        view.eye[2] > b.box[1] && view.eye[2] < b.box[3];
+                        view.eye[2] > b.box[1] && view.eye[2] < b.box[3] &&
+                        view.eye[1] > slot.floor;
     if (!slot.hidden && !slot.shown && inside && liquids.eye_under < 0)
       liquids.eye_under = static_cast<int>(&slot - liquids.bodies.data());
     slot.staged.fx[0] = liquids.reflections ? 1.0f : 0.0f;
@@ -377,9 +396,9 @@ void break_liquid_crust(Liquids& liquids, int index, double x, double z, double 
 void encode_liquid(const Liquids& liquids, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                    wgpu::CommandEncoder& encoder, const FrameTargets& targets,
                    const wgpu::BindGroup& frame) {
-  const bool drawn = liquids.eye_under >= 0 ||
-                     std::any_of(liquids.bodies.begin(), liquids.bodies.end(),
-                                 [](const Liquids::Slot& s) { return s.shown; });
+  const bool drawn =
+      liquids.eye_under >= 0 || std::any_of(liquids.bodies.begin(), liquids.bodies.end(),
+                                            [](const Liquids::Slot& s) { return s.shown; });
   if (!drawn) {
     rec.compute(encoder, "liquid.copy").End();
     rec.compute(encoder, "liquid").End();

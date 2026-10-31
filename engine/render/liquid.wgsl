@@ -27,42 +27,9 @@
 // triangle over the screen for the body the eye is under): the slime's fog, its surface's window
 // and mirror and its scum's shadow; the lava's melt all round.
 #include "render/wgsl/frame.wgsl"
+#include "render/wgsl/liquid_body.wgsl"
 
 override kGrid: u32 = 96u;
-
-struct LiquidBody {
-  info: vec4f,
-  box: vec4f,
-  flow: vec4f,
-  lava0: vec4f,   // core K, crust_hot K, crust_cold K, cover
-  lava1: vec4f,   // plate, crack, ropes, age_rate
-  lava2: vec4f,   // emissivity, crust_rough, melt_rough, the melt's patches' size
-  crust: vec4f,
-  absorb: vec4f,
-  scatter: vec4f,
-  glow: vec4f,
-  slime0: vec4f,  // rough, film nm, scum, bubbles
-  slime1: vec4f,  // bubble size, grime, debris a m^2
-  scum: vec4f,
-  fx: vec4f,      // reflections on, the shimmer (rad/m), the breaks held, 0
-  breaks: array<vec4f, 8>,  // x, z, radius (m), the time it fell in (s)
-  table: array<vec4f, 32>,
-}
-
-struct Ripple {
-  dir: vec4f,   // kx, kz, amplitude, angular frequency
-  more: vec4f,  // phase, k
-}
-
-@group(1) @binding(0) var<uniform> body: LiquidBody;
-@group(1) @binding(1) var<storage, read> ripples: array<Ripple>;
-@group(1) @binding(2) var scene_colour: texture_2d<f32>;
-@group(1) @binding(3) var scene_depth: texture_2d<f32>;
-
-const kGlowLo = 600.0;
-const kGlowHi = 1700.0;
-const kSunLuxCd = 128000.0;
-const kShimmerHeight = 3.0;  // m: render/liquid.hpp's
 
 struct VertexOut {
   @builtin(position) position: vec4f,
@@ -95,42 +62,6 @@ fn vs_main(@builtin(vertex_index) vid: u32) -> VertexOut {
 
 // A grimy pool's dirt: silt and rot, a dark brown.
 const kGrimeAlbedo = vec3f(0.05, 0.04, 0.025);
-
-// HASHES AND NOISE.
-fn hash2(p: vec2i) -> vec2f {
-  var h = vec2u(bitcast<u32>(p.x), bitcast<u32>(p.y));
-  h = h * vec2u(1664525u, 1013904223u) + vec2u(1013904223u, 1664525u);
-  h.x += h.y * 1664525u;
-  h.y += h.x * 1664525u;
-  h = h ^ (h >> vec2u(16u));
-  h.x += h.y * 1664525u;
-  h.y += h.x * 1664525u;
-  h = h ^ (h >> vec2u(16u));
-  return vec2f(h) * (1.0 / 4294967296.0);
-}
-
-fn value_noise(p: vec2f) -> f32 {
-  let i = vec2i(floor(p));
-  let f = fract(p);
-  let u = f * f * (3.0 - 2.0 * f);
-  let a = hash2(i).x;
-  let b = hash2(i + vec2i(1, 0)).x;
-  let c = hash2(i + vec2i(0, 1)).x;
-  let d = hash2(i + vec2i(1, 1)).x;
-  return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-}
-
-fn fbm(p: vec2f) -> f32 {
-  var s = 0.0;
-  var a = 0.5;
-  var q = p;
-  for (var i = 0; i < 4; i++) {
-    s += a * value_noise(q);
-    q = q * 2.03 + vec2f(17.1, 9.7);
-    a *= 0.5;
-  }
-  return s / 0.9375;
-}
 
 // A Voronoi cell at `p` (in cells): x the distance to the border (half of F2 - F1), y the cell's
 // hash, zw the offset to its point.
@@ -312,16 +243,6 @@ fn bent(dir: vec3f, th: vec2f) -> vec3f {
 }
 
 // The glow of a surface at `kelvin`, in the frame's light.
-fn glow_at(kelvin: f32) -> vec3f {
-  let x = clamp((kelvin - kGlowLo) / (kGlowHi - kGlowLo), 0.0, 1.0) * 31.0;
-  let i = u32(floor(x));
-  let j = min(i + 1u, 31u);
-  let c = mix(body.table[i].rgb, body.table[j].rgb, fract(x));
-  // Under the table's first entry the glow falls on toward nothing.
-  let below = clamp(kelvin / kGlowLo, 0.0, 1.0);
-  return c * pow(below, 24.0) * frame.world.y / kSunLuxCd;
-}
-
 // GGX's specular for a roughness `r` with Schlick's Fresnel from `f0`.
 fn ggx(n: vec3f, v: vec3f, l: vec3f, r: f32, f0: f32) -> f32 {
   let h = normalize(v + l);
@@ -334,21 +255,6 @@ fn ggx(n: vec3f, v: vec3f, l: vec3f, r: f32, f0: f32) -> f32 {
   let g = nv / (nv * (1.0 - k) + k) * nl / (nl * (1.0 - k) + k);
   let f = f0 + (1.0 - f0) * pow(1.0 - max(dot(v, h), 0.0), 5.0);
   return d * g * f / (4.0 * nv);
-}
-
-fn fresnel(cos_t: f32, f0: f32) -> f32 {
-  return f0 + (1.0 - f0) * pow(1.0 - clamp(cos_t, 0.0, 1.0), 5.0);
-}
-
-// The scene behind a pixel: its camera-relative distance (huge for the sky).
-fn behind_distance(pixel: vec2i, uv: vec2f) -> f32 {
-  let z = textureLoad(scene_depth, pixel, 0).r;
-  if (z <= 0.0) {
-    return 1e6;
-  }
-  let ndc = vec2f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
-  let p = frame.inv_view_proj * vec4f(ndc, z, 1.0);
-  return length(p.xyz / p.w);
 }
 
 // THE SCENE IN THE SURFACE: the camera-relative ray from `rel` along `r` marched through the
@@ -470,11 +376,6 @@ fn bubbles_at(p: vec2f, t: f32, cell: f32, size: f32, rate: f32) -> vec4f {
     }
   }
   return out;
-}
-
-struct FragmentOut {
-  @location(0) colour: vec4f,
-  @location(1) motion: vec4f,
 }
 
 @fragment
@@ -733,123 +634,5 @@ fn fs_shimmer(in: ShimmerOut) -> FragmentOut {
   var out: FragmentOut;
   out.colour = vec4f(textureLoad(scene_colour, pick, 0).rgb, 1.0);
   out.motion = vec4f(0.0);
-  return out;
-}
-
-// THE VIEW FROM UNDER A BODY: one triangle over the screen when the eye is under its level.
-struct UnderOut {
-  @builtin(position) position: vec4f,
-}
-
-@vertex
-fn vs_under(@builtin(vertex_index) vid: u32) -> UnderOut {
-  let p = vec2f(f32((vid << 1u) & 2u), f32(vid & 2u));
-  var out: UnderOut;
-  out.position = vec4f(p * 2.0 - 1.0, 0.0, 1.0);
-  return out;
-}
-
-fn luma(c: vec3f) -> f32 {
-  return dot(c, vec3f(0.2126, 0.7152, 0.0722));
-}
-
-// The camera-relative direction through the screen's point `uv`.
-fn ray_at(uv: vec2f) -> vec3f {
-  let ndc = vec2f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
-  let p = frame.inv_view_proj * vec4f(ndc, 0.5, 1.0);
-  return normalize(p.xyz / p.w);
-}
-
-// The scene copy where the camera-relative point `rel` lands on the screen (none off it).
-fn scene_toward(rel: vec3f) -> vec4f {
-  let clip = frame.view_proj * vec4f(rel, 1.0);
-  if (clip.w <= 1e-4) {
-    return vec4f(0.0);
-  }
-  let uv = vec2f(clip.x / clip.w * 0.5 + 0.5, 0.5 - clip.y / clip.w * 0.5);
-  if (any(uv < vec2f(0.0)) || any(uv >= vec2f(1.0))) {
-    return vec4f(0.0);
-  }
-  let edge = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
-  return vec4f(textureLoad(scene_colour, vec2i(uv * frame.size.xy), 0).rgb,
-               smoothstep(0.0, 0.08, edge));
-}
-
-@fragment
-fn fs_under(in: UnderOut) -> FragmentOut {
-  let t = frame.time.x;
-  let uv0 = in.position.xy * frame.size.zw;
-  var out: FragmentOut;
-  out.motion = vec4f(0.0);
-  let depth = max(body.info.x - frame.eye.y, 0.0);
-  if (body.info.y < 0.5) {
-    // LAVA: opaque, the melt's glow all round, cooler streaks rising through it, the eye keyed to
-    // the melt (adapt_for's 1.5: held orange, not whitened by the tone curve's shoulder).
-    let dir = ray_at(uv0);
-    let q = vec2f(atan2(dir.x, dir.z) * 2.0, dir.y * 3.0);
-    let swirl = fbm(q * 1.5 + vec2f(0.0, -t * 0.35));
-    let streak = fbm(q * vec2f(2.5, 5.0) + vec2f(2.0 * swirl, -t * 0.8));
-    let cool = smoothstep(0.35, 0.8, streak) * 260.0 + (1.0 - swirl) * 60.0;
-    let core = body.lava0.x;
-    let key = white_luminance() * 1.5 / max(luma(glow_at(core)), 1e-6);
-    let melt = glow_at(core - cool) * key;
-    // What touches the eye shows through the first few centimetres of melt.
-    let d = behind_distance(vec2i(in.position.xy), uv0);
-    let through = exp(-d * 120.0);
-    out.colour = vec4f(mix(melt, textureLoad(scene_colour, vec2i(in.position.xy), 0).rgb, through),
-                       1.0);
-    return out;
-  }
-  // SLIME: a slow wobble of the thick stuff before the eye.
-  let uv = uv0 + 0.004 * vec2f(sin(t * 0.9 + uv0.y * 9.0), cos(t * 0.7 + uv0.x * 7.0));
-  let pixel = vec2i(clamp(uv, vec2f(0.0), vec2f(0.9999)) * frame.size.xy);
-  let dir = ray_at(uv);
-  let d = behind_distance(pixel, uv);
-  let K = body.absorb.rgb;
-  let S = max(body.scatter.rgb, vec3f(1e-4));
-  // A game's least view: no band thicker than 3 / reach (the reach's 5% left).
-  var c = K + S;
-  if (body.fx.w > 0.0) {
-    c = min(c, vec3f(3.0 / body.fx.w));
-  }
-  let ks = K / S;
-  let own = 1.0 + ks - sqrt(ks * ks + 2.0 * ks);
-  let kd = sqrt(K * (K + 2.0 * S)) * (c / (K + S));
-  // The light at the eye's depth: what falls on the surface, dimmed on its way down.
-  let open_sky = body.flow.z;
-  let room = vec3f(white_luminance() * body.flow.w);
-  let sun = sun_light(body.info.x, frame.eye.xz) * step(0.0, frame.sun.y) * open_sky;
-  let down = sun * max(frame.sun.y, 0.0) + sky_irradiance(vec3f(0.0, 1.0, 0.0)) * open_sky +
-             room * PI;
-  let veil = own * down * exp(-kd * depth) / PI + body.glow.rgb * frame.world.y / kSunLuxCd;
-  // The path in the liquid: to the scene, or to the surface over the eye.
-  let ts = select(1e9, depth / max(dir.y, 1e-5), dir.y > 1e-5);
-  var beyond = textureLoad(scene_colour, pixel, 0).rgb;
-  var path = d;
-  if (ts < d) {
-    path = ts;
-    let hit = dir * ts;
-    let out_dir = refract(dir, vec3f(0.0, -1.0, 0.0), 1.34);
-    if (dot(out_dir, out_dir) < 0.25) {
-      // Past the window: the surface mirrors the slime below.
-      beyond = veil;
-    } else {
-      let across = scene_toward(hit + out_dir * max(d - ts, 1.0));
-      let sky = mix(room, sky_luminance(out_dir), open_sky);
-      let seen = mix(sky, across.rgb, across.a);
-      let f = fresnel(dir.y, 0.02);
-      beyond = mix(seen, veil, f);
-      // The scum floating over the window: its underside, dark.
-      let xz = hit.xz + frame.eye.xz;
-      let drift = xz - body.flow.xy * t;
-      let field = fbm(drift * 0.9) * 0.7 + fbm(drift * 4.0) * 0.3;
-      let cover = body.slime0.z;
-      let scum = step(1e-3, cover) *
-                 smoothstep(1.0 - cover - 0.05, 1.0 - cover + 0.1, field);
-      beyond = mix(beyond, veil * 0.25, clamp(scum, 0.0, 1.0));
-    }
-  }
-  let through = exp(-c * path);
-  out.colour = vec4f(beyond * through + veil * (1.0 - through), 1.0);
   return out;
 }

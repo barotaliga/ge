@@ -52,9 +52,9 @@
 //   over it within Snell's window (the ray refracted out, the transmitted share by Fresnel) and,
 //   past it, the slime below mirrored (total internal reflection: its veil); its scum a shadow
 //   on the window. A LAVA is opaque: the melt's own glow fills the view, cooler streaks rising
-//   through it, keyed as `adapt_for`'s photograph exposed for the melt. A thick slime's few
-//   centimetres of view is honest and unplayable, so `under_reach` (m, 0 none) is a game's least
-//   view: no band's attenuation is let past 3 / reach.
+//   through it, the eye keyed to the melt (0.6 of a white face) so it stays orange. A thick slime's
+//   few centimetres of view is honest and unplayable, so `under_reach` (m, 0 none) is a game's
+//   least view: no band's attenuation is let past 3 / reach.
 //
 // Not yet (docs/liquids.md § Not built yet): a flow region's surface; the waterline split for an
 // eye at the level (render/underwater.hpp's lens plate).
@@ -182,6 +182,7 @@ struct Liquids {
     bool hidden = false;
     bool shown = true;
     int next_break = 0;
+    double floor = 0;  // m: the lowest its liquid reaches (an eye under it is not in it)
   };
   std::vector<Slot> bodies;
 };
@@ -220,7 +221,7 @@ int add_liquid_body(gpu::Device& device, Liquids& liquids, const water::Body& bo
 void set_liquid_body(gpu::Device& device, Liquids& liquids, int index, const water::Body& body,
                      const LiquidLook& look, double wind = 0, double toward = 0, double fetch = 10);
 // Uploads this frame's; a body seen from under its level is not drawn, and the one the eye is
-// inside (under its level, over its box) is `eye_under`, drawn round the eye.
+// inside (under its level, over its floor, in its box) is `eye_under`, drawn round the eye.
 void prepare_liquid(gpu::Device& device, Liquids& liquids, const FrameView& view);
 // Something fell into body `index` at (x, z) at time `t` (s, the frame's clock), breaking its
 // crust over `radius` m: the melt shows through a hole that opens at once and skins over again,

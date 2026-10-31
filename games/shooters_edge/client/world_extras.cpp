@@ -55,6 +55,9 @@ WorldExtrasPtr create_extras(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines
   // the ceiling over it.
   gr::underwater_look("pool", x->under.look);
   gr::create_liquid(d, pipelines, x->liquids, frame);
+  // A player dropped in the slime sees a few metres round them, not the two centimetres a toxic
+  // ooze lets through.
+  x->liquids.under_reach = kUnderReach;
   gr::create_flames(d, pipelines, x->flames, frame);
   gr::PrecipSettings precip;
   precip.particles = ba::weather_particles(precip, weather.density);
@@ -125,6 +128,8 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   fall.near_m = view.near_m;
   gr::prepare_precip(d, x.precip, fall);
 }
+
+bool liquid_round_eye(const WorldExtras& x) { return x.liquids.eye_under >= 0; }
 
 void encode_extras_sim(const WorldExtras& x, const ge::gpu::PipelineSet& pipelines,
                        gr::FrameRecorder& rec, wgpu::CommandEncoder& e) {

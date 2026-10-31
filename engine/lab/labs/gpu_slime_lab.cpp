@@ -4,7 +4,8 @@
 // oily film show; the toxic slime glowing at night; the gel seen into, the stones on the bed
 // through it; one gale over three slimes, the ripples each keeps after its viscosity; and the far
 // wall mirrored in the tar, the scene's reflections off and on; and the eye under the level of
-// the toxic slime and the gel, looking across and up. It fails on a GPU error, a pipeline made after the load, or a view with no slime in it.
+// the toxic slime and the gel, looking across and up. It fails on a GPU error, a pipeline made
+// after the load, or a view with no slime in it.
 //
 // ge:summary Lab: slime drawn: five looks, close, glowing, seen into, gale, reflections, from below
 // ge:keywords lab gpu slime toxic gel mucus sludge tar bubbles scum film iridescence ripples
@@ -264,8 +265,8 @@ void run(gl::Lab& lab) {
       put(d, s, name, 2);
       s.liquids.under_reach = name == "slime" ? 4 : 0;
       for (const double pitch : {-0.1, 0.75}) {
-        const gr::FrameView v = ls::view_at(ls::kPitX - 2, ls::kLevel - 0.6, ls::kPitZ - 6, 0.1,
-                                            pitch, 0.6, 2.4, t);
+        const gr::FrameView v =
+            ls::view_at(ls::kPitX - 2, ls::kLevel - 0.6, ls::kPitZ - 6, 0.1, pitch, 0.6, 2.4, t);
         pics.push_back(ls::draw(d, s, v));
         labels.push_back(name + (pitch < 0 ? ", ACROSS" : ", UP AT THE SURFACE"));
       }
