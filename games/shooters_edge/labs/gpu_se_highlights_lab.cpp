@@ -227,7 +227,12 @@ void run(gl::Lab& lab) {
   }
   if (!device) {
     for (const std::string& id : ids) ls::placeholders(lab, {id.c_str()});
-    if (cut) ls::placeholders(lab, {"clip"});
+    if (cut) {
+      // A file's name is in the digest even when its bytes are measured: the same names, empty.
+      lab.attach("clip.gif", {}, gl::Det::measured);
+      if (ge::capture::encoders_built()) lab.attach("clip.webm", {}, gl::Det::measured);
+      ls::placeholders(lab, {"clip"});
+    }
     return;
   }
   lab.note("adapter: " + ge::gpu::adapter_line(*device));
