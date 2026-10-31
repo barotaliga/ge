@@ -79,7 +79,9 @@ picture's band says what it shows and what to look for, so check exactly that. T
 `--compare` table, the diff table and the sheets of the pictures that moved) in the PR body, plus
 `make labs-smoke` green. If the change moves a lab's digest on purpose, run `make ge ARGS="digest <id> --write"`
 (that lab's file only; `make labs-digests` rewrites every lab's), commit
-`tests/digests/`, and say in the PR which lab moved and why.
+`tests/digests/`, and say in the PR which lab moved and why. A digest that moved and you cannot
+say why: `make ge ARGS="digest <id> --why"` names the metrics, rows (by column), shots and files
+that differ from `origin/main`'s run (each run's `digest.tsv` is the list it reads).
 
 ## Write one
 

@@ -52,6 +52,10 @@ struct LabOptions {
   std::vector<std::string> passthrough;  // the lab's own flags
 };
 Outcome run_lab(const BuildOptions& o, const LabOptions& lab);
+// `lab.id` at the git ref `lab.before`: built in a scratch worktree (build/before/<sha>/, kept for
+// the next call at that commit) and run into this tree's previews tagged `tag`, at its smoke flags
+// when `lab.smoke`. False, with findings in `out`, when it could not; `out.text` says where it ran.
+bool run_at_ref(const BuildOptions& o, const LabOptions& lab, const std::string& tag, Outcome& out);
 
 // `ge lab pair <id> --before=<cvars>`: the lab run twice through the runner's --cvars, once
 // under `before` (kept as previews/<id>@pair-before/) and once under `after` ("" none), and

@@ -487,6 +487,8 @@ std::vector<std::string> ge_options(const fs::path& cache) {
   return out;
 }
 
+}  // namespace
+
 // `ge lab <id> --before=<ref>`'s first half: the lab at <ref>, built in a scratch worktree
 // (build/before/<sha>/, kept for the next call at that commit) and run into this tree's
 // previews tagged `tag`. Returns false with findings when it could not.
@@ -564,8 +566,6 @@ bool run_at_ref(const BuildOptions& o, const LabOptions& lab, const std::string&
              rel_path(o.repo, tree) + ", kept as previews/" + lab.id + "@" + tag + "/\n";
   return true;
 }
-
-}  // namespace
 
 Outcome run_lab(const BuildOptions& o, const LabOptions& lab) {
   if (!lab.before.empty() && !lab.id.empty()) {

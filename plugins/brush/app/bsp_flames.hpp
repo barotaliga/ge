@@ -4,13 +4,14 @@
 // light's `flicker_at`, so the fire and the wall it lights waver as one.
 //
 // BONFIRES (`FireLook::bonfires`, classic-enhance's ce_bonfires): a large flame standing on the
-// floor with room over it (a brazier's bowl, `place_fires`; one in a lantern's cage or under a low
-// roof stays a flame) burns as a bonfire rather than a big torch: a broad 2 m body with four
-// lesser tongues round it, a brighter light from higher up, and sparks thrown up out of its bed
-// (render/emitters.hpp's sparks, `bonfire_sparks`). A wall torch stays a torch. The flames lean and
-// the sparks drift in the air at the fire: the map's wind (`FireLook::air`) as far as the sky is
-// open over it (`PointLight::sky`), and a slow draught of its own, so a fire in a closed room still
-// wavers.
+// floor with room over it (a brazier's bowl, `place_fires`) burns as a bonfire rather than a big
+// torch: a broad 2 m body with four lesser tongues round it, a brighter light from higher up, and
+// sparks thrown up out of its bed (render/emitters.hpp's sparks, `bonfire_sparks`). One with no
+// such room (a LANTERN: a cage round it, or a low roof) burns bigger than the pack's flame and
+// smaller than a bonfire, filling its cage, with no sparks. A wall torch stays a torch. The flames
+// lean and the sparks drift in the air at the fire: the map's wind (`FireLook::air`) as far as the
+// sky is open over it (`PointLight::sky`), and a slow draught of its own, so a fire in a closed
+// room still wavers.
 //
 // ge:summary A map's torches and large flames as render::Flame gas synced to their lights; bonfires
 // ge:keywords brush bsp torch flame fire wall-torch light-entity flicker-sync bsp_fires bonfire
@@ -37,6 +38,9 @@ inline constexpr double kBonfireHeight = 80;
 inline constexpr double kBonfireBed = 0.28;
 // How much brighter a bonfire's light is than the large flame's the map was lit for.
 inline constexpr double kBonfireLight = 1.6;
+// A lantern's flame under bonfires: its height, units (a large flame's 41, a bonfire's 80), how
+// many times a large flame's width it burns, and how much brighter its light is.
+inline constexpr double kLanternHeight = 58, kLanternWidth = 1.5, kLanternLight = 1.25;
 // A bonfire's sparks a second.
 inline constexpr double kBonfireSparks = 40;
 
@@ -50,11 +54,15 @@ struct FireLook {
 // Whether a light's fire burns as a bonfire under `look`.
 bool is_bonfire(const PointLight& light, const FireLook& look);
 
+// A fire's flame's height in map units under `bonfires` or not (0 for a light that is no fire).
+double fire_height(const PointLight& light, bool bonfires = false);
 // How far above its entity's origin a fire's light shines from, m: from the middle of its gas
 // (where render::flame_light puts a flame's), 0 for a light that is no fire.
 double fire_light_lift(const PointLight& light, bool bonfires = false);
 // A fire's light softened over its flame's height, m (0 for a light that is no fire).
 double fire_light_size(const PointLight& light, bool bonfires = false);
+// How many times the map's light a fire's light is under `bonfires` (a bonfire's, a lantern's).
+double fire_light_gain(const PointLight& light, bool bonfires = false);
 
 // How bright a fire's core is against a lightmap's 1 (a white face as the map's light lights it).
 inline constexpr double kFireGlow = 30;
@@ -65,7 +73,7 @@ inline constexpr double kBonfireRoom = 2.2, kBonfireReach = 0.6;
 
 // Each light's fire placed in the map, once a map (draw_data's scene does it): the share of open
 // sky over it (`PointLight::sky`, its columns looked up the map's tree), and a large flame without
-// a bonfire's room over and round it made a plain `Fire::flame`.
+// a bonfire's room over and round it made a `Fire::lantern`.
 void place_fires(Scene& scene);
 
 // The air at light `light`'s fire at `t_s`, m/s: the wind times its open sky and its own draught.

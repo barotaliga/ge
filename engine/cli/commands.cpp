@@ -121,8 +121,13 @@ constexpr FlagSpec kDigestFlags[] = {
     {"write", "", "rewrite the lab's file under tests/digests/ (every lab's with no lab named)"},
     {"diff", "", "print only the labs whose digest is off the baseline; write nothing"},
     {"affected", "", "the labs the change since --base reaches, each by its own source's object"},
-    {"base", "<ref>", "with --affected: the change since this ref (default origin/main)"},
+    {"base", "<ref>",
+     "with --affected: the change since this ref; with --why: the ref or kept tag to explain "
+     "against (default origin/main)"},
     {"list", "", "with --affected: name the labs it picks and run nothing"},
+    {"why", "",
+     "what moved in each named lab's digest: the metrics, table rows by column, shots and files "
+     "that differ from --base's run"},
     kPreset,
     kEngine,
     kRepo};
@@ -584,7 +589,7 @@ const CommandSpec kCommands[] = {
     {"digest", "[<lab>...]", 0, -1, "build",
      "the labs named (or every lab) at their smoke flags, twice: each digest beside the "
      "committed baseline; --write moves only those labs' rows; --diff prints only the labs "
-     "that moved",
+     "that moved; --why names what moved in each",
      kDigestFlags, "ge digest wind-sweep level --write", "labs"},
     {"golden diff", "[<golden|test>...]", 0, -1, "build",
      "each golden file against git's --base: the rows that changed and, column by column, what "

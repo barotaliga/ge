@@ -864,7 +864,10 @@ the presets under the noon sun and under one lamp at night.
 **As built (M39f)** (`render/flame.hpp`, `render/flame.wgsl`). Fire is drawn as burning gas, not
 a sprite or a model: one quad a flame facing the eye over its bounding sphere, and per pixel a
 march of 28 steps through the gas, stopped at the scene's depth so a bracket or a wall in front
-of it hides it (the `gpu-flames` lab holds a flame behind a wall to changing no byte). The gas is
+of it hides it (the `gpu-flames` lab holds a flame behind a wall to changing no byte). A step
+no eddy can carry gas to (past the largest sway the noise gives at its height, and again once the
+sway is known) returns before any noise is drawn: those points' light is exactly zero, so the
+picture is the same and the gas costs about half (round 4 of the timedemo's price). The gas is
 a teardrop on its fuel (widest an eighth of the way up, a point at its tip), its edge a Gaussian
 in its radius so it fades over decades of light, torn by three octaves of value noise carried up
 at the gas's rise and growing toward the tip, where the tongues tear loose. Its temperature is
@@ -904,9 +907,12 @@ lofted by the plume and slowed by the air) into the particle pool, which lights 
 them as it does every glowing particle. The air at a fire (`fire_air`) bends its flames and is
 what its sparks are born moving with: the map's wind times the share of open sky over the fire
 (`PointLight::sky`, `place_fires` looking up the map's tree once a map) and a slow draught of its own, so a fire in a
-closed hall wavers and one under the sky streams its sparks downwind. Wall torches, small flames and a
-large flame without a bonfire's room over and round it (a lantern's cage, a low roof:
-`place_fires`, `kBonfireRoom` 2.2 m up and `kBonfireReach` 0.6 m round) stay as they were.
+closed hall wavers and one under the sky streams its sparks downwind. A large flame
+without a bonfire's room over and round it (a lantern's cage, a low roof: `place_fires`,
+`kBonfireRoom` 2.2 m up and `kBonfireReach` 0.6 m round) is a `Fire::lantern`: it burns 1.4 times
+as tall (58 units) and 1.5 times as wide as the pack's flame, filling its cage, its light 1.25
+times as bright (`fire_light_gain`), with no sparks. Wall torches and small flames stay as they
+were.
 
 **Shadows use three techniques, one for each scale:**
 

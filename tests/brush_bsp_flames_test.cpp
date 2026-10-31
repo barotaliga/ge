@@ -1,7 +1,8 @@
 // plugins/brush/app/bsp_flames.hpp: a wall torch's and a large flame's light entities become
 // flames over their origins, a plain lamp none, and each fire's level follows its light's flicker;
 // as bonfires a large flame burns twice as tall in five tongues and throws sparks up its wind, and
-// a wall torch, a small flame and a large one in a cage stay as they were.
+// a large one in a lantern's cage burns bigger with no sparks, and a wall torch and a small flame
+// stay as they were.
 //
 // ge:summary Tests for the map's fires: which lights burn, where, and their level
 // ge:keywords test brush bsp torch flame fire bsp_fires flicker-sync bonfire bonfire_sparks
@@ -101,19 +102,29 @@ TEST(a_bonfire_throws_sparks_that_go_with_the_wind_where_the_sky_is_open) {
   CHECK(std::abs(drift_in / n) < 0.2 && drift_out / n > 1);
 }
 
-TEST(a_large_flame_in_a_lanterns_cage_stays_a_flame) {
+TEST(a_large_flame_in_a_lanterns_cage_burns_bigger_but_no_bonfire) {
   // A map with no tree (a synthetic scene) places nothing: every large flame keeps its room.
   ba::Scene s = three_lights();
   ba::place_fires(s);
   CHECK(s.lights[2].fire == ba::Fire::large && s.lights[2].sky == 0);
-  // A flame that is not large is drawn as a large one's and never burns as a bonfire.
-  s.lights[2].fire = ba::Fire::flame;
+  std::vector<ge::render::Flame> plain, lit;
+  s.lights[2].fire = ba::Fire::lantern;
+  ba::bsp_fires(s, 1.0, 2.0, plain);
   ba::FireLook look;
   look.bonfires = true;
-  std::vector<ge::render::Flame> fires;
-  ba::bsp_fires(s, 1.0, 2.0, fires, look);
-  CHECK(fires.size() == 2 && fires[1].height_m < 1.1f);
+  ba::bsp_fires(s, 1.0, 2.0, lit, look);
+  // One flame, taller and wider than the pack's large flame and smaller than a bonfire.
+  CHECK(plain.size() == 2 && lit.size() == 2);
+  CHECK(lit[1].height_m > 1.3f * plain[1].height_m && lit[1].height_m < 1.6f);
+  CHECK(lit[1].radius_m > 1.4f * plain[1].radius_m);
+  CHECK(ba::fire_light_gain(s.lights[2], true) > 1 &&
+        ba::fire_light_gain(s.lights[2], true) < ba::kBonfireLight);
   std::vector<ge::render::Particle> sparks;
   ba::bonfire_sparks(s, 0, 2, look, sparks);
   CHECK(sparks.empty());
+  // A small flame is drawn as a large one's either way, its light where it was.
+  s.lights[2].fire = ba::Fire::flame;
+  ba::bsp_fires(s, 1.0, 2.0, lit, look);
+  CHECK(lit[1].height_m == plain[1].height_m);
+  CHECK(ba::fire_light_lift(s.lights[2], true) == ba::fire_light_lift(s.lights[2]));
 }

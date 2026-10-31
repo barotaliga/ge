@@ -270,7 +270,9 @@ int run_main(int argc, char** argv) {
                        &display);
   console.add_command("vid_displays", "list the displays vid_display numbers",
                       [&](Con& c, const CArgs&) {
-                        for (const ge::platform::Display& d : ge::platform::displays())
+                        const std::vector<ge::platform::Display> all = ge::platform::displays();
+                        if (all.empty()) c.print("vid_displays: the desktop named no display");
+                        for (const ge::platform::Display& d : all)
                           c.print(std::to_string(d.number) + ": " + d.name + ", " +
                                   std::to_string(d.width_px) + "x" + std::to_string(d.height_px));
                       });

@@ -5,6 +5,7 @@
 //
 //   report.json    everything: the spec, the inputs, metrics, tables, notes, shots, digest
 //   metrics.tsv    key, value, unit, det: one metric a line (what `--compare` reads back)
+//   digest.tsv     what the digest hashed, an input a line (what `ge digest --why` reads)
 //   index.md       THE CONTACT SHEET: every picture with its title, caption, what to look
 //                  for and its inputs, as Markdown an agent reads before opening a picture
 //   <shot>.png     the picture with its caption band
