@@ -262,6 +262,7 @@ void screen_blend(const Screen& s, double rgba[4]) {
   if (s.stealth) over(0.45, 0.45, 0.45, 0.25);
   if (s.shield) over(0.95, 0.80, 0.25, 0.22);
   if (s.power) over(0.20, 0.30, 0.95, 0.22);
+  over(0.62, 0.42, 0.12, std::min(s.armour / 300.0, 0.3));
   over(0.75, 0.05, 0.02, std::min(s.hurt / 300.0, 0.45));
   rgba[0] = c[0], rgba[1] = c[1], rgba[2] = c[2], rgba[3] = a;
 }

@@ -16,9 +16,12 @@
 //   angles, the box, movetype, solid, flags, the functions, nextthink, health, the buttons, the
 //   extension fields gravity, maxspeed and movement, ...) written into its field words, and
 //   `self`, `other`, `time`, `frametime`, `newmis`, `force_retouch` into the globals; after it, the
-//   same are read back (movement is the loop's alone). Ints the loop keeps are QC floats; entities
-//   are entity values (number x entityfields x 4); functions are raw words. The program's own
-//   fields (and the extension fields the loop does not keep) live only in the VM and survive.
+//   same are read back (movement is the loop's alone; `view_ofs`, the eye the original move's
+//   water level reads, the program's alone: read back, never written; `punchangle`, on the form
+//   that has it, both ways, so the loop decays the kick the program set). Ints the loop keeps are
+//   QC floats; entities are entity values (number x entityfields x 4); functions are raw words. The
+//   program's own fields (and the extension fields the loop does not keep) live only in the VM and
+//   survive.
 // - A NESTED CALL (a touch run by a builtin that moves an entity) mirrors the same way and puts
 //   back the server it found, so the outer call goes on with both sides in step.
 // - THE SEAM'S BUILTINS (`qc_spawn` #14, `qc_remove` #15, `qc_setorigin` #2) act on the loop at

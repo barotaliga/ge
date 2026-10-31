@@ -140,7 +140,12 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   in the big figures), an episode's text typed out at eight characters a second, and the
   shareware episode's end opening the help pages; TAB held shows the solo panel (the map's
   title, kills, secrets, time). The HUD shows the keys, the runes, the cloak and the suit, each
-  read by the program's own item constants. On a Mac:
+  read by the program's own item constants. Each frame the server hands the player his own data
+  (`server/client_data.hpp`): a blow he took kicks the view away from where it came from and
+  flashes the screen (the blood red, what the armour took a duller amber); the weapon's punch
+  kicks the view (never the aim) and springs back as the server decays it; and with
+  LOOKSPRING on (`lookspring 1`) the pitch drifts, while he walks with the mouse still, to the
+  slope ahead (`sv_idealpitchscale`: down a stair the view looks down). On a Mac:
 
   ```sh
   build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic
@@ -756,7 +761,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (needs the reference program; skipped with a reason when its cache is absent) |
 | `se-baseline` | scenario | The baseline mod compiled from its sources and played by bots on the arena with its door and plat: the build's counts, frags and deaths, obituaries by weapon, pickups, every path and missile from above, the frags and the movers' heights against the clock (built, M18d) |
 | `se-mod` | scenario | A mod (the test mod, or a player's progs from `--progs`) played by bots on the test arena to its time limit: the hooks it was called on, the builtins it called, frags, every path from above, the hooks' timeline (built, M18p) |
-| `se-campaign` | scenario | A single-player program (crc 5927: the player's own from `--game`, or the test mod's single-player stub) on its layout table: the program, the layout check entry by entry, the builtins it declares against what the server installs for its form, whether the full game's packs are there; the two forms' offsets compared name by name, the autoaim on the arena from the side; the campaign host on the campaign stub (a level change, a restart: the parms and runes carried) and, with `--game`, on the pack's own map (`--map`, `--skill`, `--then=changelevel e1m2`, `--forward` and `--yaw`: the player walked on the server's move; the monsters and secrets counted, the faults, the player's parms; `--exit=1`: the player stood in the map's exit, the level's end read as the window reads it, the attack held on to the next map) (built, M18s1 to M18s4) |
+| `se-campaign` | scenario | A single-player program (crc 5927: the player's own from `--game`, or the test mod's single-player stub) on its layout table: the program, the layout check entry by entry, the builtins it declares against what the server installs for its form, whether the full game's packs are there; the two forms' offsets compared name by name, the autoaim on the arena from the side; the campaign host on the campaign stub (a level change, a restart: the parms and runes carried) and, with `--game`, on the pack's own map (`--map`, `--skill`, `--then=changelevel e1m2`, `--forward` and `--yaw`: the player walked on the server's move; the monsters and secrets counted, the faults, the player's parms; `--exit=1`: the player stood in the map's exit, the level's end read as the window reads it, the attack held on to the next map; `--fire=1`: the attack held on the walk; the client data on the walk charted: the ideal pitch, the punch, the health and every blow) (built, M18s1 to M18s4) |
 | `mod` | scenario | The engine's own C++ mod format: the sample mod's match beside the plain match (the loader's verdict, rockets, bounces, the mod's log, both matches' missiles, the rocket's distance and the grenade's height), and the modded match replayed to the bit (built, M52a) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
 | `se-nav` | scenario | Where a player can go on a map by the player move's own proof: the nav graph from above to scale (the floor shaded off the point hull, every node and link by kind, what a mover closes), the quickest routes as the proofs moved a player, from above and the side; on the nav course and the test arena (built, M18r1) |

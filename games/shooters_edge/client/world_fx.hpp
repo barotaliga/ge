@@ -7,7 +7,8 @@
 //   or a grenade's embers and smoke) and a rocket glows as it goes.
 // - An explosion the mod announced bursts once and lights the walls while its light fades.
 // - THE SCREEN'S BLEND: the liquid round the eye (the player's `waterlevel` and `watertype`), and
-//   a hit's red flash, taken from the health lost and fading.
+//   a hit's flash, fading: in a campaign off the blows the program reported (Listen::blows: the
+//   blood red, what the armour took a duller amber), in a match off the health lost.
 //
 // Every burst draws on its own seed from a counter, so the same run throws the same sparks.
 //
@@ -36,6 +37,8 @@ struct FxState {
   std::size_t explosions_seen = 0;                 // of Listen::explosions
   std::vector<Blast> lit;                          // the explosions whose light still fades
   double hurt = 0;                                 // the hit's flash now (effects::Screen::hurt)
+  double armour = 0;                               // the armour's share of it (Screen::armour)
+  std::size_t blows_seen = 0;                      // of Listen::blows
   float health = 0;                                // the last frame's
   uint32_t seed = 1;
 };

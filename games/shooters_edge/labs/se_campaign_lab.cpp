@@ -16,6 +16,7 @@
 // ge:keywords autoaim sv_aim builtins registered pop-lmp pak1 episodes progs-dat
 // ge:skill progs shooter labs
 // ge:test tests/progs_layout_test.cpp tests/shooters_edge_qc_single_player_test.cpp
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <span>
@@ -28,6 +29,7 @@
 #include "classicenhance/source.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
+#include "lab/chart.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
@@ -400,14 +402,62 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
     const sh::Vec3f start = c.server->sv.edicts[1].origin;
     double walked = 0;
     sh::Vec3f last = start;
+    // The client data on the way (client_data.hpp): the blows, the punch, the ideal pitch.
+    int blows = 0, blood = 0, armour = 0;
+    float punch = 0, ideal_lo = 0, ideal_hi = 0;
+    const bool fire = lab.arg_num("fire") != 0;
+    gl::Trace ideal_line{"the ideal pitch (deg)", {}, {}}, punch_line{"the punch (deg)", {}, {}};
+    gl::Trace health_line{"health / 10", {}, {}};
+    std::vector<gl::Mark> blow_marks;
     for (int i = 0; i < frames && c.server; i++) {
       p.sequence = static_cast<uint32_t>(i + 1);
+      for (sh::MoveCmd& cmd : p.cmds) cmd.buttons = fire && (i & 1) ? 1 : 0;
       if (!sv::campaign_frame(c, &p, 1, error)) break;
       if (!c.server) break;
       const sh::Vec3f now = c.server->sv.edicts[1].origin;
       walked += static_cast<double>(sh::length(now - last));
       last = now;
+      const sv::ClientBlow& b = c.server->clients[0].blow;
+      if (b.hit) blows++, blood += b.blood, armour += b.armor;
+      punch = std::min(punch, c.server->sv.edicts[1].punchangle.x);
+      const int ip = c.server->q.layout->f.idealpitch;
+      const float ideal = pg::as_float(*pg::entity_field(c.server->q.vm, 1, ip));
+      ideal_lo = std::min(ideal_lo, ideal), ideal_hi = std::max(ideal_hi, ideal);
+      const double at = c.server->sv.time;
+      ideal_line.x.push_back(at), ideal_line.y.push_back(ideal);
+      punch_line.x.push_back(at), punch_line.y.push_back(c.server->sv.edicts[1].punchangle.x);
+      health_line.x.push_back(at), health_line.y.push_back(c.server->sv.edicts[1].health / 10);
+      if (b.hit) blow_marks.push_back({at, "-" + std::to_string(b.blood)});
     }
+    gl::LineChart chart;
+    chart.frame = {"THE CLIENT DATA ON A WALK",
+                   "map " + map + ", yaw " + lab.arg("yaw") + ", forward " + lab.arg("forward") +
+                       (fire ? ", firing" : ""),
+                   "server time (s)", "degrees; health / 10"};
+    chart.traces = {ideal_line, punch_line, health_line};
+    chart.marks = blow_marks;
+    chart.spikes = false;
+    const gl::Chart drawn = gl::line_chart(chart);
+    lab.shot({"client-data",
+              drawn.title,
+              "What the server sends the player of himself each frame on the walk: the pitch "
+              "his view drifts to with lookspring (positive: down a slope), the program's punch "
+              "on the view when he fires (decaying 10 degrees a second), and his health; each "
+              "blow he took is a mark with the blood it cost.",
+              "the ideal pitch off zero only on the stairs; a mark at every drop of the health; "
+              "the punch springing back to zero after each shot",
+              {}},
+             gl::to_picture(drawn.plot), gl::Det::measured);
+    t.rows.push_back({"blows taken (blood, armour)", std::to_string(blows) + " (" +
+                                                         std::to_string(blood) + ", " +
+                                                         std::to_string(armour) + ")"});
+    t.rows.push_back({"the punch's most (pitch)", to_fixed(punch, 2) + " deg"});
+    t.rows.push_back({"the ideal pitch's range",
+                      to_fixed(ideal_lo, 2) + " .. " + to_fixed(ideal_hi, 2) + " deg"});
+    lab.metric("pack.blows", blows, "count");
+    lab.metric("pack.punch", punch, "deg");
+    lab.metric("pack.ideal_pitch.lo", ideal_lo, "deg");
+    lab.metric("pack.ideal_pitch.hi", ideal_hi, "deg");
     if (c.server) {
       const sh::Edict& pl = c.server->sv.edicts[1];
       t.rows.push_back({"the player move", c.server->sv.set.playermove == sh::PlayerMove::original
@@ -600,6 +650,7 @@ const gl::LabSpec kSpec{
         {"then", "", "with --game: a console line run after that (`changelevel e1m2`)"},
         {"forward", "0", "with --game: the forward axis the player holds every frame, units/s"},
         {"yaw", "0", "with --game: the player's view yaw, degrees"},
+        {"fire", "0", "with --game, 1: the attack held every other frame while the player walks"},
         {"exit", "0",
          "with --game, 1: then the player stood in the map's exit, the level's end read as the "
          "window reads it and the attack held until the next map"},

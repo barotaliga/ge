@@ -13,6 +13,7 @@
 #include "shooter/frame.hpp"
 #include "shooters_edge/server/builtins.hpp"
 #include "shooters_edge/server/catalogue.hpp"
+#include "shooters_edge/server/client_data.hpp"
 #include "shooters_edge/server/commands.hpp"
 
 namespace shooters_edge::server {
@@ -42,6 +43,9 @@ void add_settings(QcServer& s) {
                "the player move: arena (the predicted move), original (the server's own step) or "
                "auto (original for a single-player program); read at map start",
                con::CvarKind::text});
+  s.cvars.add({"sv_idealpitchscale", "0.8", srv,
+               "a single-player program's view tilt on a slope: degrees a unit of the floor's "
+               "step (0 off)"});
   s.cvars.add({"edgefriction", "2", info, "the original move's friction factor at a ledge"});
   s.cvars.add(
       {"sv_nostep", "0", info, "1: the original move never steps up", con::CvarKind::boolean});
@@ -460,6 +464,7 @@ void qc_frame(QcServer& s, const sh::Packet* packets, int count) {
     sh::server_frame(s.sv, packets, count);
   }
   update_visclients(s);
+  take_client_data(s);
   send_forced_views(s);
   for (int i = 0; i < sh::kMaxClients; i++)
     if (s.clients[i].active && s.clients[i].drop) disconnect(s, i);

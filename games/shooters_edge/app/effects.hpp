@@ -60,7 +60,8 @@ bool explosion_light(const double at[3], double age, Light* out);
 // THE SCREEN'S BLEND: what surrounds the eye, how hurt the player is now, the powers held.
 enum class Medium : uint8_t { air, water, slime, lava };
 struct Screen {
-  double hurt = 0;  // the hurt's flash now: a hit's damage, falling by kHurtFade a second
+  double hurt = 0;    // the hurt's flash now: a hit's damage, falling by kHurtFade a second
+  double armour = 0;  // the same for what the armour took of it: a duller amber under the red
   Medium medium = Medium::air;
   bool power = false, shield = false, suit = false, stealth = false;
 };
