@@ -180,8 +180,45 @@ void set_text_input(Window& window, bool on) {
   }
 }
 
-bool set_fullscreen(Window& window, bool on) {
+std::vector<Display> displays() {
+  std::vector<Display> out;
+  int count = 0;
+  SDL_DisplayID* ids = SDL_GetDisplays(&count);
+  for (int i = 0; ids != nullptr && i < count; ++i) {
+    Display d;
+    d.number = i + 1;
+    const char* name = SDL_GetDisplayName(ids[i]);
+    d.name = name != nullptr ? name : "";
+    if (const SDL_DisplayMode* mode = SDL_GetDesktopDisplayMode(ids[i])) {
+      d.width_px = int(double(mode->w) * double(mode->pixel_density));
+      d.height_px = int(double(mode->h) * double(mode->pixel_density));
+    }
+    out.push_back(d);
+  }
+  SDL_free(ids);
+  return out;
+}
+
+bool set_fullscreen(Window& window, bool on, int display) {
   SDL_Window* w = window.impl_->window;
+  if (on && display > 0) {
+    // The window moved onto that display first: the fullscreen covers the display it stands on.
+    int count = 0;
+    SDL_DisplayID* ids = SDL_GetDisplays(&count);
+    if (ids == nullptr || display > count) {
+      SDL_free(ids);
+      out::error("platform: there is no display " + std::to_string(display) + " (there are " +
+                 std::to_string(count) +
+                 "); fullscreen goes on the window's own display; pass a number the display list "
+                 "names (vid_displays) or 0; skill: platform.");
+    } else {
+      const SDL_DisplayID id = ids[display - 1];
+      SDL_free(ids);
+      SDL_SetWindowPosition(w, int(SDL_WINDOWPOS_CENTERED_DISPLAY(id)),
+                            int(SDL_WINDOWPOS_CENTERED_DISPLAY(id)));
+      SDL_SyncWindow(w);
+    }
+  }
   // A null mode is the borderless desktop fullscreen: the display keeps its mode.
   if (!SDL_SetWindowFullscreenMode(w, nullptr) || !SDL_SetWindowFullscreen(w, on)) {
     out::error(std::string("platform: the window could not go ") +

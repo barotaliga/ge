@@ -12,7 +12,9 @@
 //   point is overhead, and the glowing texels. The shadow maps are KEPT: the world they see
 //   stands still, so a light's cube is drawn when it takes a slot (and only then) and an
 //   orthographic map when its camera moves; every `prepare_bsp` is followed by its `encode_bsp`,
-//   which draws what the prepare found stale.
+//   which draws what the prepare found stale. A frame draws at most `Options::fresh_cubes` new
+//   cubes (a light past the budget waits a frame or more unshadowed), the slots are reused least
+//   recently first, and a dynamic light (it moves or goes out) casts no shadow.
 //
 // - THE WEATHER (v2, `Options::weather`): a third orthographic map looks along the fall, so the
 //   faces the rain and the snow reach (a courtyard's flags, a sill, the floor inside a window as
@@ -29,7 +31,7 @@
 // ge:keywords bsp brush render renderer r_bspmode classic v2 lightmap point-light cube-shadow
 // ge:keywords sun-shadow sky-mask flicker lava-light weather rain snow puddles shelter bsp_shelter
 // ge:keywords set_movers movers moving-brush-models doors plats
-// ge:keywords shadow-cache shadow-slot fresh_slots
+// ge:keywords shadow-cache shadow-slot fresh_slots fresh_cubes shadow-budget shadow-hitch
 // ge:skill brush render
 #pragma once
 
@@ -62,11 +64,14 @@ struct Options {
   double strength = 1;          // the point lights' strength against the classic's
   double dynamic_strength = 1;  // the dynamic lights' (set_dynamic_lights) against the classic's
   int shadowed = 32;            // the nearest lights that cast shadows
-  int most = 160;               // the lights a frame draws at most (the nearest)
-  bool lava_lights = true;      // the lava's glow lights the walls round it
-  double lava_glow = 1;         // that glow's strength, 0 none
-  double slime_glow = 1;        // the slime's faint green glow on the walls round it, 0 none
-  bool portal_lights = true;    // each teleporter's panel lights its room with a slow pulse
+  // The cubes drawn a frame at most for lights new to the shadowed few (each one the map drawn six
+  // times); the rest wait their turn unshadowed. 0 draws none new.
+  int fresh_cubes = 2;
+  int most = 160;             // the lights a frame draws at most (the nearest)
+  bool lava_lights = true;    // the lava's glow lights the walls round it
+  double lava_glow = 1;       // that glow's strength, 0 none
+  double slime_glow = 1;      // the slime's faint green glow on the walls round it, 0 none
+  bool portal_lights = true;  // each teleporter's panel lights its room with a slow pulse
   // The sky faces as the pack's own scrolling sky under v2 too (ce_skies off): they write their
   // depth and no mask, so our sky and clouds do not fill them; the rooms keep our sky's light.
   bool pack_sky = false;
@@ -182,9 +187,12 @@ struct BspDraw {
   // light takes a slot (or moves) and kept while it holds it, and an orthographic map when its
   // camera changes. A slot's key is its light's place and reach as the GPU sees them.
   std::array<std::array<float, 4>, kMaxShadowed> slot_key{};
-  std::array<bool, kMaxShadowed> slot_held{};  // a slot's cube holds its key's light
-  std::vector<int> fresh_slots;                // this frame's slots to draw (prepare_bsp)
-  std::array<GpuJob, kOrthos> ortho_drawn{};   // what each orthographic map holds
+  std::array<bool, kMaxShadowed> slot_held{};      // a slot's cube holds its key's light
+  std::array<uint64_t, kMaxShadowed> slot_used{};  // the shadow_frame a light last read it
+  uint64_t shadow_frame = 0;                       // prepare_bsp's count
+  int shadows_waiting = 0;       // this frame's casters over the budget, unshadowed (prepare_bsp)
+  std::vector<int> fresh_slots;  // this frame's slots to draw (prepare_bsp)
+  std::array<GpuJob, kOrthos> ortho_drawn{};  // what each orthographic map holds
   std::array<bool, kOrthos> ortho_held{};
   std::array<bool, kOrthos> ortho_fresh{};  // this frame's to draw
   Options options;

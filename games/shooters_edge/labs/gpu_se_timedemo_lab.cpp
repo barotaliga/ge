@@ -6,23 +6,29 @@
 // the search path. `--basedir` (and `--game`) opens a game folder instead and `--demo` names its
 // demo (`demo1`), so the same lab measures a real recording on any machine.
 //
-// What it shows: three frames of the run (its start, the middle, the end), the frame time of
-// every timed frame as a line with the median and the 99th percentile as rules, the GPU's time
-// for each pass of the world's frame as boxes (where the timer has timestamp queries), and the
-// report as metrics. The frame count and the levels are deterministic; every time is measured.
+// What it shows: three frames of the run (its start, the middle, the end), the frame time and the
+// GPU span of every timed frame as lines with the median and the 99th percentile as rules, and
+// the report as metrics. The frame count and the levels are deterministic; every time is measured.
+//
+// THE PRICE (`--price=1`): the demo played again with each drawn ce_ switch off in turn, once
+// without the HUD, and once more with everything on; each run's frames as a box and what each
+// switch saved off the median frame (client/timedemo.hpp's `prices`). A pass's own GPU timestamps
+// cannot rank the passes (a tiled GPU overlaps them); the whole frame with one thing gone can.
 //
 // ge:summary Lab: the demo benchmark headless: a demo played flat out, its frames and fps chart
 // ge:keywords lab se-timedemo timedemo benchmark demo fps frame-time one-percent-low chart gpu
-// ge:keywords offscreen
+// ge:keywords offscreen price switch-off-pricing
 // ge:skill shooter perf labs
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "brush/write.hpp"
+#include "classicenhance/switches.hpp"
 #include "core/output.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
@@ -69,12 +75,126 @@ bool fixture_pack(const std::string& format, std::vector<uint8_t>& out, std::str
   return ge::vfs::write_pak({{"maps/halls.bsp", bsp}, {"demo1.dem", demo}}, &out, &error);
 }
 
+// One play of the demo with `picture` (and the HUD unless `no_hud`): every timed frame and its
+// GPU span; the three pictures when `picks` is given.
+struct Played {
+  cl::Timedemo bench;
+  int64_t frames = 0;
+  std::string stop;
+};
+
+struct Rig {
+  gl::Lab& lab;
+  const cl::SearchPath& files;
+  std::string name;
+  ge::gpu::Device* device = nullptr;
+  ge::gpu::Target* out = nullptr;
+  uint32_t w = 0, h = 0;
+  int64_t total = 0;
+};
+
+bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bool shots,
+          Played& p) {
+  gl::Lab& lab = rig.lab;
+  std::string error;
+  if (!cl::timedemo_start(rig.files, rig.name, p.bench, error)) {
+    lab.fail(error, "Name a demo the packs hold (--demo=demo1). Skill: shooter.");
+    return false;
+  }
+  cl::Timedemo& bench = p.bench;
+  cl::WorldDrawPtr world;
+  std::unique_ptr<cl::LoadedMap> map;
+  se::Hud hud = se::make_hud();
+  se::HudArt art = se::free_art();
+  art.finish();
+  const int64_t total = rig.total;
+  const int64_t picks[3] = {std::min<int64_t>(total - 1, cl::kSkipAfterLevel + 1), total / 2,
+                            total - 1};
+  const char* ids[3] = {"start", "middle", "end"};
+  int shot = shots ? 0 : 3;
+  const uint32_t w = rig.w, h = rig.h;
+  ge::gpu::Device* device = rig.device;
+  const uint64_t first_ns = now_ns();
+  for (;;) {
+    const cl::TimedemoStep st = cl::timedemo_step(bench, error);
+    if (st == cl::TimedemoStep::end) break;
+    if (st == cl::TimedemoStep::error) {
+      p.stop = error;
+      break;
+    }
+    if (st == cl::TimedemoStep::new_level) {
+      map = cl::load_named_map(rig.files, bench.demo.state.map, error);
+      if (!map) {
+        p.stop = "the demo's map " + bench.demo.state.map + ": " + error;
+        break;
+      }
+      if (device) {
+        world.reset();
+        world = cl::create_world_draw(*device, rig.files, *map, w, h,
+                                      wgpu::TextureFormat::RGBA8Unorm, picture, {}, error);
+        if (!world) {
+          lab.fail(error, "Read the gpu: lines above. Skill: render.");
+          return false;
+        }
+      }
+    }
+    const double t = static_cast<double>(now_ns() - first_ns) * 1e-9;
+    if (device && world) {
+      ge::render::FrameView view =
+          cl::demo_view(bench.demo.state, ge::camera::FirstPersonRow{}.fov_y, t);
+      view.frame = static_cast<uint64_t>(p.frames);
+      ge::ui::DrawList overlay;
+      overlay.begin(static_cast<int>(w), static_cast<int>(h));
+      if (!no_hud) {
+        se::fill_hud(hud, cl::demo_status(bench.demo.state, t), art);
+        hud.layout.draw(overlay,
+                        hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
+                        se::hud_style());
+      }
+      cl::draw_world(*device, *world, view, cl::FxFrame{}, nullptr, 0, overlay, rig.out->view);
+      if (bench.skip == 0) cl::record_span(*world, bench.passes);
+      if (shot < 3 && p.frames == picks[shot]) {
+        const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
+        lab.shot({ids[shot],
+                  "DEMO FRAME " + std::to_string(p.frames) + " OF " + std::to_string(total),
+                  "The benchmark's frame " + std::to_string(p.frames) + " of " + bench.name +
+                      " on " + bench.demo.state.map +
+                      ", drawn by the window's world frame and "
+                      "HUD from the demo's eye.",
+                  "the map from the recorded eye, the HUD's stats from the demo",
+                  {{"demo", bench.name}, {"size", lab.arg("size")}}},
+                 gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+                 gl::Det::measured);
+        shot++;
+      } else {
+        // Each frame finished before the next is timed, as a present waits for a free image.
+        ge::gpu::wait(*device, device->queue.OnSubmittedWorkDone(
+                                   wgpu::CallbackMode::WaitAnyOnly,
+                                   [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {}));
+      }
+    } else if (!device && shot < 3 && p.frames == picks[shot]) {
+      ls::placeholders(lab, {ids[shot++]});
+    }
+    cl::timedemo_mark(bench, now_ns());
+    p.frames++;
+  }
+  return true;
+}
+
+cl::PriceRun price_run(const std::string& name, const Played& p) {
+  std::vector<double> ms;
+  for (const double f : p.bench.frame_s) ms.push_back(f * 1e3);
+  return {name, cl::median_of(ms),
+          p.bench.passes.span_ms.empty() ? std::nan("") : cl::median_of(p.bench.passes.span_ms)};
+}
+
 void run(gl::Lab& lab) {
   const auto size = lab.arg_nums("size");
   const uint32_t w = size.size() > 0 ? static_cast<uint32_t>(size[0]) : 960;
   const uint32_t h = size.size() > 1 ? static_cast<uint32_t>(size[1]) : 540;
   const std::string basedir = lab.arg("basedir");
   const std::string name = lab.arg("demo");
+  const bool price = lab.arg("price") == "1";
   std::string error;
   shooters_edge::look::Picture picture;  // the world reads it every frame
   if (!lab.arg("look").empty()) picture.look = lab.arg("look");
@@ -90,12 +210,14 @@ void run(gl::Lab& lab) {
     lab.fail(error, "Pass --basedir=<the folder that holds the game folder>. Skill: shooter.");
     return;
   }
-  cl::Timedemo bench;
-  if (!cl::timedemo_start(files, name, bench, error)) {
-    lab.fail(error, "Name a demo the packs hold (--demo=demo1). Skill: shooter.");
-    return;
+  {
+    cl::Timedemo probe;
+    if (!cl::timedemo_start(files, name, probe, error)) {
+      lab.fail(error, "Name a demo the packs hold (--demo=demo1). Skill: shooter.");
+      return;
+    }
+    lab.note("demo: " + probe.found);
   }
-  lab.note("demo: " + bench.found);
 
   auto device = ge::gpu::create_device({.label = "se-timedemo", .validation = 0});
   if (!device && ls::gpu_required()) {
@@ -105,11 +227,6 @@ void run(gl::Lab& lab) {
   if (device) lab.note("adapter: " + ge::gpu::adapter_line(*device));
   ge::gpu::Target out;
   if (device) out = ge::gpu::create_target(*device, "se-timedemo.final", w, h);
-  cl::WorldDrawPtr world;
-  std::unique_ptr<cl::LoadedMap> map;
-  se::Hud hud = se::make_hud();
-  se::HudArt art = se::free_art();
-  art.finish();
 
   // First count the frames (no drawing), so the pictures can be taken at the start, the middle
   // and the end of the same run.
@@ -124,82 +241,19 @@ void run(gl::Lab& lab) {
       if (st == cl::TimedemoStep::new_level) levels++;
     }
   }
-  const int64_t picks[3] = {std::min<int64_t>(total - 1, cl::kSkipAfterLevel + 1), total / 2,
-                            total - 1};
-  const char* ids[3] = {"start", "middle", "end"};
-  int64_t frame = 0;
-  int shot = 0;
-  std::string stop;
-  const uint64_t first_ns = now_ns();
-  for (;;) {
-    const cl::TimedemoStep st = cl::timedemo_step(bench, error);
-    if (st == cl::TimedemoStep::end) break;
-    if (st == cl::TimedemoStep::error) {
-      stop = error;
-      break;
-    }
-    if (st == cl::TimedemoStep::new_level) {
-      map = cl::load_named_map(files, bench.demo.state.map, error);
-      if (!map) {
-        stop = "the demo's map " + bench.demo.state.map + ": " + error;
-        break;
-      }
-      if (device) {
-        world.reset();
-        world = cl::create_world_draw(*device, files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                                      picture, {}, error);
-        if (!world) {
-          lab.fail(error, "Read the gpu: lines above. Skill: render.");
-          return;
-        }
-      }
-    }
-    const double t = static_cast<double>(now_ns() - first_ns) * 1e-9;
-    if (device && world) {
-      ge::render::FrameView view =
-          cl::demo_view(bench.demo.state, ge::camera::FirstPersonRow{}.fov_y, t);
-      view.frame = static_cast<uint64_t>(frame);
-      ge::ui::DrawList overlay;
-      overlay.begin(static_cast<int>(w), static_cast<int>(h));
-      se::fill_hud(hud, cl::demo_status(bench.demo.state, t), art);
-      hud.layout.draw(overlay,
-                      hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
-                      se::hud_style());
-      cl::draw_world(*device, *world, view, cl::FxFrame{}, nullptr, 0, overlay, out.view);
-      if (bench.skip == 0) cl::record_passes(*world, bench.passes);
-      if (shot < 3 && frame == picks[shot]) {
-        const ge::gpu::Image img = ge::gpu::read_now(*device, out);
-        lab.shot({ids[shot],
-                  "DEMO FRAME " + std::to_string(frame) + " OF " + std::to_string(total),
-                  "The benchmark's frame " + std::to_string(frame) + " of " + bench.name + " on " +
-                      bench.demo.state.map +
-                      ", drawn by the window's world frame and "
-                      "HUD from the demo's eye.",
-                  "the map from the recorded eye, the HUD's stats from the demo",
-                  {{"demo", bench.name}, {"size", lab.arg("size")}}},
-                 gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
-                 gl::Det::measured);
-        shot++;
-      } else {
-        // Each frame finished before the next is timed, as a present waits for a free image.
-        ge::gpu::wait(*device, device->queue.OnSubmittedWorkDone(
-                                   wgpu::CallbackMode::WaitAnyOnly,
-                                   [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {}));
-      }
-    } else if (!device && shot < 3 && frame == picks[shot]) {
-      ls::placeholders(lab, {ids[shot++]});
-    }
-    cl::timedemo_mark(bench, now_ns());
-    frame++;
-  }
-  if (!stop.empty()) lab.fail(stop, "Read the reason above. Skill: shooter.");
+  Rig rig{lab, files, name, device ? device.get() : nullptr, &out, w, h, total};
+  Played base;
+  if (!play(rig, picture, false, true, base)) return;
+  if (!base.stop.empty()) lab.fail(base.stop, "Read the reason above. Skill: shooter.");
+  const cl::Timedemo& bench = base.bench;
 
   const cl::BenchStats s = cl::bench_stats(bench.frame_s);
   const std::string setup =
       std::to_string(w) + "x" + std::to_string(h) + ", offscreen" +
       (device ? ", " + device->report.name + " on " + device->report.backend : ", no GPU");
   for (const std::string& line : cl::bench_report(bench.name, setup, s)) lab.note(line);
-  lab.metric("demo.frames", static_cast<double>(frame), "count");
+  lab.note(cl::span_report(bench.passes));
+  lab.metric("demo.frames", static_cast<double>(base.frames), "count");
   lab.metric("demo.levels", levels, "count");
   lab.metric("fps.average", s.avg_fps, "fps", gl::Det::measured);
   lab.metric("fps.max", s.max_fps, "fps", gl::Det::measured);
@@ -208,6 +262,8 @@ void run(gl::Lab& lab) {
   lab.metric("fps.low-0.1pct", s.low01_fps, "fps", gl::Det::measured);
   lab.metric("frame.p50", s.p50_ms, "ms", gl::Det::measured);
   lab.metric("frame.p99", s.p99_ms, "ms", gl::Det::measured);
+  if (!bench.passes.span_ms.empty())
+    lab.metric("gpu.span.p50", cl::median_of(bench.passes.span_ms), "ms", gl::Det::measured);
 
   gl::LineChart lc;
   lc.frame = {"frame time of every timed frame, " + bench.name, setup, "frame", "frame time (ms)"};
@@ -217,45 +273,90 @@ void run(gl::Lab& lab) {
     tr.y.push_back(bench.frame_s[i] * 1e3);
   }
   lc.traces.push_back(std::move(tr));
+  if (!bench.passes.span_ms.empty()) {
+    gl::Trace sp{"GPU span", {}, {}};
+    for (size_t i = 0; i < bench.passes.span_ms.size(); i++) {
+      sp.x.push_back(static_cast<double>(i));
+      sp.y.push_back(bench.passes.span_ms[i]);
+    }
+    lc.traces.push_back(std::move(sp));
+  }
   lc.rules = {s.p50_ms, s.p99_ms};
   const gl::Chart ch = gl::line_chart(lc);
   lab.note(gl::chart_text(ch, 4));
   lab.shot({"frame-times",
             "FRAME TIMES: " + bench.name,
-            "Every timed frame's length in milliseconds, in the order drawn; the dashed rules are "
-            "the median (" +
+            "Every timed frame's length in milliseconds, in the order drawn, and its GPU span "
+            "where the GPU has timestamp queries; the dashed rules are the median (" +
                 fixed(s.p50_ms, 2) + " ms) and the 99th percentile (" + fixed(s.p99_ms, 2) +
                 " ms). Average " + fixed(s.avg_fps, 1) + " fps, 1% low " + fixed(s.low1_fps, 1) +
                 " fps.",
             "a flat line near the median; spikes are the frames the 1% low is made of",
             {{"demo", bench.name}, {"size", lab.arg("size")}}},
            gl::to_picture(ch.plot), gl::Det::measured);
-  // Where the GPU's time went: each pass's readings as a box, dearest first.
-  lab.note(cl::pass_report(bench.passes, 12));
-  if (!bench.passes.names.empty()) {
-    std::vector<gl::Sample> boxes;
-    for (const cl::PassCost& c : cl::pass_costs(bench.passes)) {
-      for (size_t i = 0; i < bench.passes.names.size(); i++)
-        if (bench.passes.names[i] == c.name) boxes.push_back({c.name, bench.passes.ms[i]});
-      lab.metric("gpu." + c.name, c.median_ms, "ms", gl::Det::measured);
+
+  // THE PRICE: the demo again with each drawn switch off in turn, and the base once more.
+  if (price && device) {
+    std::vector<cl::PriceRun> off;
+    std::vector<std::vector<double>> frames_of;  // each run's frames, ms, for the boxes
+    const auto keep = [&](const std::string& row, const Played& p) {
+      off.push_back(price_run(row, p));
+      std::vector<double> ms;
+      for (const double f : p.bench.frame_s) ms.push_back(f * 1e3);
+      frames_of.push_back(std::move(ms));
+    };
+    for (const ge::classicenhance::SwitchSpec& sw : ge::classicenhance::switches()) {
+      if (sw.bake || sw.group == "SOUND" || !(picture.ce.*sw.field)) continue;
+      shooters_edge::look::Picture without = picture;
+      without.ce.*sw.field = false;
+      Played p;
+      if (!play(rig, without, false, false, p)) return;
+      keep("ce_" + std::string(sw.id), p);
+      lab.note("price: ce_" + std::string(sw.id) + " off, median frame " +
+               fixed(off.back().frame_p50_ms, 2) + " ms");
     }
-    boxes.insert(boxes.begin(), gl::Sample{"(frame span)", bench.passes.span_ms});
+    {
+      Played p;
+      if (!play(rig, picture, true, false, p)) return;
+      keep("the HUD", p);
+    }
+    Played again;
+    if (!play(rig, picture, false, false, again)) return;
+    const cl::PriceRun first = price_run("", base);
+    const cl::PriceRun last = price_run("", again);
+    const std::vector<cl::Price> saved = cl::prices(first, off);
+    for (const std::string& line : cl::price_report(first, last, saved)) lab.note(line);
+    for (const cl::Price& pr : saved)
+      lab.metric("price." + pr.name, pr.frame_ms, "ms", gl::Det::measured);
+    lab.metric("price.noise", std::abs(first.frame_p50_ms - last.frame_p50_ms), "ms",
+               gl::Det::measured);
+    // Each run's frames as a box, the base first and last, the rest by what they saved.
+    std::vector<gl::Sample> boxes;
+    const auto add = [&](const std::string& label, const std::vector<double>& ms) {
+      boxes.push_back({label, ms});
+    };
+    std::vector<double> base_ms, again_ms;
+    for (const double f : base.bench.frame_s) base_ms.push_back(f * 1e3);
+    for (const double f : again.bench.frame_s) again_ms.push_back(f * 1e3);
+    add("everything on", base_ms);
+    for (const cl::Price& pr : saved)
+      for (size_t i = 0; i < off.size(); i++)
+        if (off[i].name == pr.name) add(pr.name + " off", frames_of[i]);
+    add("everything on, again", again_ms);
     const gl::Chart pc =
-        gl::box_chart({"GPU time per pass, " + bench.name + ", r_look " + picture.look, setup,
-                       "GPU time (ms)", "pass"},
+        gl::box_chart({"frame time with each thing off, " + bench.name + ", r_look " + picture.look,
+                       setup, "frame time (ms)", "run"},
                       boxes);
     lab.note(gl::chart_text(pc, 4));
-    lab.shot(
-        {"gpu-passes",
-         "GPU BY PASS: " + bench.name,
-         "Every timed frame's GPU time for each pass of the world's frame (r_look " + picture.look +
-             "), dearest first; the top row is the frame's span on the GPU. Software "
-             "adapters' times say nothing about a real GPU.",
-         "one or two passes holding most of the span are where the frame's cost is",
-         {{"demo", bench.name}, {"size", lab.arg("size")}, {"look", picture.look}}},
-        gl::to_picture(pc.plot), gl::Det::measured);
-  } else {
-    ls::placeholders(lab, {"gpu-passes"});
+    lab.shot({"price",
+              "THE PRICE: " + bench.name,
+              "The whole demo played once with everything on, then again with each drawn switch "
+              "off in turn (and once without the HUD), then everything on again; each run's "
+              "frames as a box, the most saved first. The gap between the two all-on runs is "
+              "the noise a saving has to clear.",
+              "the rows whose boxes sit well left of both all-on rows are what the look pays for",
+              {{"demo", bench.name}, {"size", lab.arg("size")}, {"look", picture.look}}},
+             gl::to_picture(pc.plot), gl::Det::measured);
   }
   if (device)
     ls::checked(lab, static_cast<int>(device->errors.load()),
@@ -276,7 +377,10 @@ const gl::LabSpec kSpec{
      {"basedir", "", "a folder holding a game folder: play its demo instead of the fixture"},
      {"game", "id1", "the game folder under --basedir"},
      {"demo", "demo1", "the demo to play, by name or path"},
-     {"look", "", "r_look for the run: classic or modern (empty: the game's default)"}},
+     {"look", "", "r_look for the run: classic or modern (empty: the game's default)"},
+     {"price", "0",
+      "1: play the demo again with each drawn ce_ switch off in turn (and without the HUD) and "
+      "chart what each saved against the whole frame"}},
     "--size=320,180",
     run,
 };
