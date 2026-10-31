@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <memory>
 #include <vector>
 
@@ -76,9 +77,11 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   report = DemoVideoReport{};
   report.adapter = ge::gpu::adapter_line(device);
   if (o.width <= 0 || o.height <= 0 || o.width % 2 != 0 || o.height % 2 != 0 || !(o.fps > 0)) {
+    char fps[32];
+    std::snprintf(fps, sizeof fps, "%g", o.fps);
     error = "the video's size must be even on both sides and its frame rate over 0 (asked " +
-            std::to_string(o.width) + "x" + std::to_string(o.height) + " at " +
-            std::to_string(o.fps) + " fps)";
+            std::to_string(o.width) + "x" + std::to_string(o.height) + " at " + fps +
+            " fps); next: pass --size=WxH with even sides and --fps=N, N over 0";
     return false;
   }
   Timedemo t;

@@ -278,8 +278,9 @@ the view).
 ### A demo as a video
 
 `-demovideo <demo> <file>` turns a recorded game of any format into a video and quits; no window
-opens (`client/demo_video.hpp`). The demo is played at its own pace on a fixed frame clock
-(`--fps`, 30), each picture drawn offscreen on the GPU by the window's own world frame: the map
+opens (`client/demo_video.hpp`). The demo is played at its own pace on a fixed frame clock of
+`--fps=N` pictures a second (30 by default; 60, 24, 25 or any rate over 0, fractions too), each
+picture drawn offscreen on the GPU by the window's own world frame: the map
 from the recorded eye, the entities, doors and other players where the demo has them, the level's
 statics and the HUD off the recorded stats. Its sound is the demo's own: every sound message
 plays the pack's recording (`sound/<name>`) placed where the demo says, the level's static sounds
@@ -293,7 +294,7 @@ shape it.
 
 ```sh
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
-    -demovideo demo1 ~/Movies/demo1.mp4 --size=1280x720
+    -demovideo demo1 ~/Movies/demo1.mp4 --size=1280x720 --fps=60
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
     -demovideo ~/Downloads/match.mvdv ~/Movies/match.mp4 +demo_track 3
 ```
