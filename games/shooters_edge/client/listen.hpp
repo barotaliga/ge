@@ -22,6 +22,10 @@
 // messages (the intermission, the finale, the statistics: campaign_view.hpp) are read off the
 // reliable streams after every frame into `campaign`. `map` in a campaign is a new game.
 //
+// A SAVE (`listen_save`, `listen_load`): the campaign's whole running game (server/
+// campaign_save.hpp) written to bytes and read back as the game playing, so it plays on as if
+// never stopped.
+//
 // THE VIEW: the player's angles are the client's (`Listen::view`, degrees: pitch down positive,
 // yaw counter-clockwise from +x), sent with every command; when the server turns him (a spawn, a
 // teleport: the mod's forced view) the client takes the server's angles (`forced`).
@@ -31,6 +35,7 @@
 // ge:keywords listen_advance listen_change loaded-map load_named_map baseline_progs map-change
 // ge:keywords forced-view mintic player_state missiles rocket-jump
 // ge:keywords listen_campaign campaign single-player map_changed level-change
+// ge:keywords listen_save listen_load savegame
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -40,6 +45,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "progs/file.hpp"
@@ -134,6 +140,22 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
 // match before it (if any) ended. `opt.console`'s lines are the campaign's settings.
 bool listen_campaign(Listen& l, const ge::progs::Progs& progs, std::unique_ptr<LoadedMap> map,
                      const ListenOptions& opt, std::string& error);
+// Why the game cannot be saved now ("" when it can): only a campaign saves, never at the level's
+// end (the intermission or a finale the program's messages started), and never what the campaign
+// host refuses (server/campaign_save.hpp).
+std::string listen_save_problem(const Listen& l);
+// The game saved into `out` (`saved_unix` the caller's clock). False with `error` when it cannot
+// be.
+bool listen_save(const Listen& l, std::vector<uint8_t>& out, std::string& error,
+                 int64_t saved_unix = 0);
+// The save `bytes` (named `name` in a refusal) of the single-player program `progs` (which must
+// outlive the listen) loaded as the game now playing, the match or campaign before it ended; its
+// map read from `opt.files` (or `map`, when it is that map already read), `map_changed` set. The
+// player's view and command sequence go on from the save's. False with `error`, the game before it
+// left playing, when the save does not load.
+bool listen_load(Listen& l, const ge::progs::Progs& progs, const ListenOptions& opt,
+                 std::span<const uint8_t> bytes, std::string_view name, std::string& error,
+                 std::unique_ptr<LoadedMap> map = nullptr);
 // Whether a program is a single-player one (its layout's form).
 bool single_player(const ge::progs::Progs& progs);
 // Whether the server's lines ask for a single-player game: the last `deathmatch` set is 0 (the
