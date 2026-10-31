@@ -155,6 +155,48 @@ std::vector<size_t> fog_in_reach(const FogSettings& settings, const FrameView& v
   return out;
 }
 
+LocalLight fog_glow_light(const FogVolume& v, double floor_y) {
+  LocalLight l;
+  // Its luminance (Rec. 709's weights) sets the candela; the colour keeps a luminance of 1.
+  const double luma = 0.2126 * v.glow[0] + 0.7152 * v.glow[1] + 0.0722 * v.glow[2];
+  for (int a = 0; a < 3; ++a) {
+    l.position[a] = v.centre[a];
+    l.colour[a] = luma > 0 ? static_cast<float>(std::max(v.glow[a], 0.0) / luma) : 1.0f;
+  }
+  // A ground-hugging volume's heart is half its height over the ground.
+  if (v.hug_ground) l.position[1] = floor_y + v.half[1];
+  const double hx = std::max(v.half[0], 1e-3), hy = std::max(v.half[1], 1e-3);
+  const double hz = std::max(v.half[2], 1e-3);
+  const double size = 8 * hx * hy * hz;
+  const double space = v.shape == FogVolume::Shape::ellipsoid ? size * 3.14159265358979 / 6 : size;
+  // The mean extinction: the falloff over its height (2 hy) and the noise's carving (fog.wgsl's
+  // density times 1 - noise / 2 at its mean).
+  const double f = std::max(v.falloff, 0.0) * 2 * hy;
+  const double rise = f > 1e-6 ? (1 - std::exp(-f)) / f : 1.0;
+  const double sigma = std::max(v.density, 0.0) * rise * (1 - 0.5 * std::clamp(v.noise, 0.0, 1.0));
+  // What escapes a thick volume: the glow from its far side is taken out on the way.
+  const double tau = sigma * std::min({hx, hy, hz});
+  const double escape = tau > 1e-6 ? (1 - std::exp(-tau)) / tau : 1.0;
+  l.candela = luma > 0 ? static_cast<float>(luma * sigma * space * escape) : 0.0f;
+  // Its reach: where it has fallen to a third of a lux (moonlight's), as a flame's.
+  l.range_m =
+      static_cast<float>(std::clamp(std::sqrt(l.candela / 0.3), std::max({hx, hy, hz}), 60.0));
+  // The light comes from the whole volume: softened over its size.
+  l.radius_m = static_cast<float>(std::min(hx, hz));
+  if (v.flicker > 0) {
+    l.flicker = Flicker::flame;
+    l.depth = std::clamp(v.flicker, 0.0f, 1.0f);
+    l.rate_hz = v.rate_hz;
+    l.seed = v.seed;
+  }
+  return l;
+}
+
+float fog_glow_level(const FogVolume& v, double t_s) {
+  if (v.flicker <= 0) return 1.0f;
+  return flicker_level(fog_glow_light(v), t_s);
+}
+
 void prepare_fog(gpu::Device& device, Fog& fog, const FrameView& view,
                  std::span<const FogVolume> volumes, bool cut) {
   const std::vector<size_t> reach = fog_in_reach(fog.settings, view, volumes);
@@ -171,7 +213,7 @@ void prepare_fog(gpu::Device& device, Fog& fog, const FrameView& view,
       g.centre[a] = static_cast<float>(v.centre[a] - view.eye[a]);
       g.half[a] = static_cast<float>(std::max(v.half[a], 1e-3));
       g.albedo[a] = static_cast<float>(std::clamp(v.albedo[a], 0.0, 1.0));
-      g.glow[a] = static_cast<float>(std::max(v.glow[a], 0.0));
+      g.glow[a] = static_cast<float>(std::max(v.glow[a], 0.0)) * fog_glow_level(v, view.time_s);
     }
     g.centre[3] = (v.shape == FogVolume::Shape::ellipsoid ? 1.0f : 0.0f) +
                   (v.hug_ground && fog.ground ? 2.0f : 0.0f);

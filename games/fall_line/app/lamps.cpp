@@ -78,6 +78,16 @@ void headlamp_lights(const Headlamp& lamp, uint32_t key, double lit, bool shadow
   out.push_back(flood);
 }
 
+void glow_lights(const ge::mountain::mapgen::Level& level, std::span<const r::FogVolume> fog,
+                 std::span<const r::Flame> flames, std::vector<r::LocalLight>& out) {
+  for (const r::Flame& flame : flames) out.push_back(r::flame_light(flame));
+  for (const r::FogVolume& v : fog) {
+    const double floor_y = v.hug_ground ? level.ground_at(v.centre[0], v.centre[2]) : 0.0;
+    const r::LocalLight l = r::fog_glow_light(v, floor_y);
+    if (l.candela > 0) out.push_back(l);
+  }
+}
+
 double eye_lamp_lux(std::span<const r::LocalLight> lights, const r::FrameView& view,
                     const ge::mountain::mapgen::Level& level) {
   if (lights.empty()) return 0;

@@ -5,7 +5,8 @@
 // - SHAFTS: the same mist from the wood's shaded side, looking toward the sun through the trees,
 //   so they throw shafts through it toward the eye;
 // - GLOW: at night, a glowing haze on the snow ahead (what a fire or a pool of lava lights), red
-//   and orange, among clear air;
+//   and orange, among clear air, over a camp fire; the fire and the haze light the snow round them
+//   as lamps (M38d: render/fog.hpp's `fog_glow_light`, render/flame.hpp's `flame_light`);
 // - DUST: at noon on the piste, a thin warm dust in the air round the eye, carved into drifting
 //   wisps by the noise on the wind;
 // - LAMPS: at night, a mist round a floodlight mast on the piste, its lamps scattered in it (a
@@ -87,8 +88,9 @@ struct Scene {
   double range = 160;  // the froxels' reach, m
   r::FrameView view;
   std::vector<r::FogVolume> fog;
-  std::string what;    // the caption's account of the fog
-  bool dealt = false;  // the map's own mists at `hour` in place of `fog`
+  std::vector<r::Flame> flames;  // fires burning in it, with and without its fog
+  std::string what;              // the caption's account of the fog
+  bool dealt = false;            // the map's own mists at `hour` in place of `fog`
   double hour = -1;
 };
 
@@ -200,11 +202,19 @@ Scene glow(const mg::Level& level, double hour) {
   f.glow[2] = 0.06;
   f.noise = 0.5;
   f.noise_size = 10;
-  f.wind[1] = 0.8;  // the hot air rising
+  f.wind[1] = 0.8;   // the hot air rising
+  f.flicker = 0.3f;  // wavering with the fire under it
+  f.seed = 7;
   s.fog = {f};
+  // The camp fire at its heart, on the snow.
+  const double base[3] = {x, level.ground_at(x, z), z};
+  s.flames = {r::campfire_flame(base, 7)};
   s.what =
       "an ellipsoid of glowing haze 18 m across 28 m ahead, 0.12/m, glowing 0.9 0.32 0.06 "
-      "cd/m2 a metre of extinction, rising on its own heat";
+      "cd/m2 a metre of extinction, rising on its own heat over a camp fire; the fire and the "
+      "haze each a lamp (" +
+      fixed(r::flame_light(s.flames[0]).candela, 0) + " cd and " +
+      fixed(r::fog_glow_light(f).candela, 0) + " cd) lighting the snow round them";
   return s;
 }
 
@@ -449,6 +459,7 @@ void run(ge::lab::Lab& lab) {
       frame->options.fog = on;
       if (on && !s.dealt) scene.fog = s.fog;
       scene.hour = s.hour;
+      scene.flames = s.flames;
       r::FrameView view = s.view;
       for (int n = 0; n < frames; ++n) {
         view.frame = static_cast<uint64_t>(n);

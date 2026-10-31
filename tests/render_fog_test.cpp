@@ -3,11 +3,13 @@
 // absorbing fog is seen through as exp(-extinction x distance) at every slice's far edge; a
 // glowing fog's light is its glow times what the column has taken out of the view (the
 // integration conserves energy); with no volume in reach the picture is the one drawn with no fog
-// at all, bit for bit; a volume changes it; with no validation error.
+// at all, bit for bit; a volume changes it; with no validation error. A glowing volume's lamp:
+// its glow times its extinction and its size, what escapes a thick one, flickering with its glow.
 //
 // ge:summary Tests for the fog in areas: slices, reach, an absorber's and a glow's columns
 // ge:keywords test render fog froxel volume transmittance glow integrate reach slices
 // ge:skill render testing
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -135,6 +137,57 @@ ge::gpu::Image frame(ge::gpu::Device& d, Scene& s, const ge::gpu::Target& out,
 }
 
 }  // namespace
+
+TEST(a_glowing_volume_is_a_lamp_of_its_glow_times_its_extinction_and_size) {
+  r::FogVolume v;
+  v.centre[0] = 10;
+  v.centre[1] = 4;
+  v.centre[2] = -3;
+  v.half[0] = 2;
+  v.half[1] = 1;
+  v.half[2] = 3;
+  v.density = 0.001;  // optically thin: all of it escapes, nearly
+  v.noise = 0;
+  v.glow[0] = v.glow[1] = v.glow[2] = 2;
+  const r::LocalLight l = r::fog_glow_light(v);
+  // 2 cd/m2 a metre of extinction x 0.001/m x 48 m^3, less the little a 1 m half-size takes out.
+  const double thin = 2 * 0.001 * 48;
+  CHECK(l.candela < thin && l.candela > 0.999 * thin);
+  CHECK(l.position[0] == 10 && l.position[1] == 4 && l.position[2] == -3);
+  CHECK(std::fabs(l.colour[0] - 1) < 1e-6 && std::fabs(l.colour[2] - 1) < 1e-6);
+  CHECK(l.radius_m == 2.0f);
+  CHECK(l.flicker == r::Flicker::steady);
+  // An ellipsoid holds pi / 6 of its box; a thick volume lets out less than its glow's sum.
+  v.shape = r::FogVolume::Shape::ellipsoid;
+  CHECK(std::fabs(r::fog_glow_light(v).candela / l.candela - 3.14159265358979 / 6) < 1e-4);
+  v.density = 2;
+  CHECK(r::fog_glow_light(v).candela < 0.5 * 2 * 2 * 48 * 3.14159265358979 / 6);
+  // None glowing: no light; a ground-hugging one stands half its height over the ground.
+  v.glow[0] = v.glow[1] = v.glow[2] = 0;
+  CHECK(r::fog_glow_light(v).candela == 0.0f);
+  v.glow[0] = 1;
+  v.hug_ground = true;
+  CHECK(r::fog_glow_light(v, 100).position[1] == 101);
+}
+
+TEST(a_flickering_glow_and_its_lamp_waver_as_one) {
+  r::FogVolume v;
+  v.glow[0] = 1;
+  CHECK(r::fog_glow_level(v, 3.7) == 1.0f);
+  v.flicker = 0.4f;
+  v.seed = 11;
+  const r::LocalLight l = r::fog_glow_light(v);
+  CHECK(l.flicker == r::Flicker::flame && l.seed == 11u);
+  float lo = 10, hi = 0;
+  for (int i = 0; i < 200; ++i) {
+    const double t = 0.01 * i;
+    const float level = r::fog_glow_level(v, t);
+    CHECK(level == r::flicker_level(l, t));
+    lo = std::min(lo, level);
+    hi = std::max(hi, level);
+  }
+  CHECK(hi - lo > 0.1f);
+}
 
 TEST(a_slice_ends_at_the_square_of_its_share_of_the_range) {
   const r::FogSettings f = small_froxels();

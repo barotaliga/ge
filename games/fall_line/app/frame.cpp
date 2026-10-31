@@ -75,6 +75,7 @@ constexpr r::PassRow kPassTable[] = {
     {"water.under", "water.scene sky.light", "hdr"},
     {"particles", "particles terrain.horizon shadows.maps sky.aerial sky.light depth fog.volume",
      "hdr motion"},
+    {"flames", "depth fog.volume", "hdr"},
     {"precip", "precip terrain.horizon sky.aerial sky.light depth fog.volume", "hdr motion"},
     {"bolts", "depth", "hdr motion"},
     {"mirror.keep", "hdr depth", "mirror.last"},
@@ -142,6 +143,7 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
   for (r::InstanceFamily* family : f.families)
     r::bind_family_hiz(device, f.instancing, *family, f.hiz);
   r::bind_particle_targets(device, f.particles, f.targets);
+  r::bind_flame_targets(device, f.flames, f.targets);
   r::bind_precip_targets(device, f.precip, f.targets);
   r::bind_cloud_targets(device, f.clouds, f.targets);
   r::create_water_targets(device, f.water, f.targets);
@@ -264,6 +266,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
                       options.particles);
   r::create_precip(device, f->pipelines, f->precip, f->frame_layout, f->terrain, options.fall);
   r::create_bolts(device, f->pipelines, f->bolts, f->frame_layout);
+  r::create_flames(device, f->pipelines, f->flames, f->frame_layout);
   r::create_clouds(device, f->pipelines, f->clouds, f->frame_layout);
   r::create_water(device, f->pipelines, f->water, f->frame_layout);
   r::create_underwater(device, f->pipelines, f->under, f->frame_layout);
@@ -672,6 +675,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
       r::set_instances(device, f.buildings, static_cast<uint32_t>(k * 2), stood);
     }
   }
+  dress_mists(*f.level, f.options.fog, scene, view, f.mists);  // the valley's sea in the uniforms
   if (f.options.lights) {
     GE_ZONE("frame.lamps");
     namespace ma = ge::mountain::app;
@@ -686,6 +690,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     if (f.shown_village != nullptr) {
       ma::window_lights(f.shown_village->buildings, f.buildings_lit, f.lamp_list);
     }
+    glow_lights(*f.level, f.mists, scene.flames, f.lamp_list);
     view.lamp_lux = eye_lamp_lux(f.lamp_list, view, *f.level);
     f.lamp_lux = view.lamp_lux;
   }
@@ -702,7 +707,6 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
       r::set_instances(device, *family, 0, stood);
     }
   }
-  dress_mists(*f.level, f.options.fog, scene, view, f.mists);  // the valley's sea in the uniforms
   r::fill_uniforms(f.staged, view, f.targets.width, f.targets.height, &f.history,
                    f.options.taa ? jitter : nullptr);
   {
@@ -751,6 +755,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
         ge::mountain::air::wind_at(*f.level, storm_air, view.time_s, view.eye[0], view.eye[2]);
     const double carried[3] = {wind.x, 0.0, wind.z};
     r::prepare_particles(device, f.particles, dt, view.near_m, carried);
+    r::prepare_flames(device, f.flames, scene.flames, view);
     // What falls at the eye: snow above the map's snow line, rain under it, sleet between, and a
     // storm's rain.
     const ge::mountain::air::Fall fall = ge::mountain::air::fall_at(
@@ -895,6 +900,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   r::encode_water(f.water, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_underwater(f.under, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_particles(f.particles, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
+  r::encode_flames(f.flames, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_precip(f.precip, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_bolts(f.bolts, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   if (f.options.mirror) {
