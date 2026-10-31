@@ -75,7 +75,6 @@ inline constexpr uint32_t kMaxFogVolumes = 32;
 
 struct FogVolume {
   enum class Shape : uint8_t { box, ellipsoid };
-  Shape shape = Shape::box;
   double centre[3] = {0, 0, 0};  // world m
   double half[3] = {10, 2, 10};  // half its size along its own x, y, z, m
   double yaw = 0;                // its turn about the vertical, a world heading (rad)
@@ -85,18 +84,19 @@ struct FogVolume {
   double albedo[3] = {0.95, 0.95, 0.95};  // the share of the light taken out that is scattered
   double phase = 0.4;          // Henyey-Greenstein asymmetry: 0 even, toward 1 a glow round the sun
   double glow[3] = {0, 0, 0};  // its own light, cd/m2 a metre of extinction (lava's haze, a flare)
+  double noise = 0.6;          // the share of the density the noise carves away, 0..1
+  double noise_size = 24;      // m: the noise's tile
+  double wind[3] = {0, 0, 0};  // m/s: the noise drifts on it
   // The glow's flicker, as a flame's (render/lights.hpp's Flicker::flame): its swing, 0 steady ..
   // 1, its rate and its own noise. The volume's glow and its lamp (`fog_glow_light`) waver as one.
   float flicker = 0;
   float rate_hz = 9;
   uint32_t seed = 0;
-  double noise = 0.6;          // the share of the density the noise carves away, 0..1
-  double noise_size = 24;      // m: the noise's tile
-  double wind[3] = {0, 0, 0};  // m/s: the noise drifts on it
   // It stands on the ground (the frame's terrain): its height is measured up from the ground
   // under each point, from 0 to 2 x half[1], so a mist lies as deep over a slope as over a flat;
   // `centre[1]` is then unused. Without a terrain it stands on y = 0.
   bool hug_ground = false;
+  Shape shape = Shape::box;
 };
 
 struct FogSettings {
