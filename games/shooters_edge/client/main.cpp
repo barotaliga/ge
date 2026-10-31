@@ -263,13 +263,13 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       why = "unknown flag " + std::string(arg) +
             (a.plus.empty() ? std::string()
                             : " (after the console line starting " + a.plus.front() + ")") +
-            "; next: rerun with the flags below only.";
+            "; next: rerun with the usage's flags only.";
       return false;
     } else if (!a.plus.empty() || (!arg.empty() && arg[0] == '+')) {
       a.plus.emplace_back(arg);
     } else {
       why = "unknown word " + std::string(arg) +
-            "; next: put it after a +command, or rerun with the flags below only.";
+            "; next: put it after a +command, or rerun with the usage's flags only.";
       return false;
     }
   }
@@ -308,13 +308,12 @@ int run_main(int argc, char** argv) {
   out::set_output_sink(print_line);
   Args args;
   if (std::string why; !parse(argc, argv, args, why)) {
-    out::error("shooters_edge: " + why);
-    out::error(
-        "shooters_edge: usage: shooters_edge [-basedir <dir>] [-game <folder>] "
-        "[-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] [--frames=N] "
-        "[--size=WxH] [-demovideo <demo> <file> [--fps=N] [--resolution=<WxH|720p|1080p|1440p|4k>] "
-        "[--codec=<c>] [--seconds=S]] "
-        "[+<command> ...]");
+    out::error("shooters_edge: the command line was refused: " + why +
+               " Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
+               "[-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] "
+               "[--frames=N] [--size=WxH] [-demovideo <demo> <file> [--fps=N] "
+               "[--resolution=<WxH|720p|1080p|1440p|4k>] [--codec=<c>] [--seconds=S]] "
+               "[+<command> ...]; next: rerun with only those flags.");
     return 2;
   }
 
