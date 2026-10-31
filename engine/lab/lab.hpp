@@ -141,6 +141,18 @@ class Lab {
   // A comma-separated flag as numbers ("38,7,1").
   std::vector<double> arg_nums(std::string_view name) const;
 
+  // THE SHOTS ASKED FOR (the runner's `--shots=<id,...>`): a picture lab iterating one look draws
+  // only those, and every other picture under previews/<lab>/ stays as the last run wrote it.
+  // `wants(id)` is true for every id when none was named; a lab asks it before it renders a
+  // shot, to skip the work. `shot()` drops an unwanted one either way, so a lab that never asks
+  // still writes only the named ones (it just renders the rest for nothing).
+  void only_shots(std::vector<std::string> ids) { only_ = std::move(ids); }
+  bool wants(std::string_view id) const;
+  // The ids passed over (asked of `wants` or dropped by `shot()`), in order, so the runner can
+  // name the ones a typo missed.
+  const std::vector<std::string>& skipped() const { return skipped_; }
+  const std::vector<std::string>& only() const { return only_; }
+
   // What the lab found. All of them feed the report; the deterministic ones feed the digest.
   void metric(std::string key, double value, std::string unit, Det det = Det::deterministic);
   // A table of times or anything else that differs run to run is `measured`: shown, not hashed.
@@ -191,6 +203,8 @@ class Lab {
   std::vector<Taken> shots_;
   std::vector<File> files_;
   std::vector<std::string> failures_;
+  std::vector<std::string> only_;
+  mutable std::vector<std::string> skipped_;
   uint64_t digest_ = 0xcbf29ce484222325ull;
 };
 

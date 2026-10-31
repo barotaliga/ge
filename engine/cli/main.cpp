@@ -326,6 +326,7 @@ Outcome run(const Args& a) {
     lab.smoke = has_flag(a, "smoke");
     lab.tag = flag_value(a, "tag");
     lab.compare = flag_value(a, "compare");
+    lab.shots = flag_value(a, "shots");
     lab.passthrough = a.passthrough;
     return run_lab(build_options(a), lab);
   }

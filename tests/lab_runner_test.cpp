@@ -1,11 +1,12 @@
 // engine/lab's contract and runner, through the command line an agent types: the listing, an
 // unknown flag, a run's files (metrics.tsv, report.json, the contact sheet, the captioned
-// picture), --tag and --compare, the in-process repeat check, --shard and the digest baseline. The
+// picture), --tag and --compare, --shots, the in-process repeat check, --shard and the digest
+// baseline. The
 // labs it runs are registered here, so the test holds the lab runner, not any one lab.
 //
 // ge:summary Tests the lab runner: flags, the report's files, tag and compare, repeat, digests
 // ge:keywords test lab runner registry report digest repeat compare caption smoke measured-shot
-// ge:keywords shard
+// ge:keywords shard shots wants
 // ge:skill labs testing
 #include <filesystem>
 #include <fstream>
@@ -52,6 +53,28 @@ const LabSpec kDrift{"drift",  LabKind::sim,
                      {},       "",
                      drift};
 GE_LAB(kDrift);
+
+// Two shots, shaded by --shade: `asked` is skipped by the lab when not wanted, `dropped` is left
+// to shot() to drop, so --shots holds both ways.
+int asked_renders = 0;
+void pair(Lab& lab) {
+  const auto v = static_cast<uint8_t>(lab.arg_num("shade"));
+  if (lab.wants("asked")) {
+    ++asked_renders;
+    lab.shot({"asked", "ASKED", "Skipped by the lab.", "", {}}, create_picture(8, 8, {v, v, v}));
+  }
+  lab.shot({"dropped", "DROPPED", "Dropped by shot().", "", {}}, create_picture(8, 8, {v, 0, 0}));
+}
+const LabSpec kPair{"pair",
+                    LabKind::picture,
+                    "engine",
+                    "tests/lab_runner_test.cpp",
+                    "labs",
+                    "Does --shots draw only the shots it names?",
+                    {{"shade", "10", "the grey"}},
+                    "",
+                    pair};
+GE_LAB(kPair);
 
 std::string dir() {
   static const std::string d = (fs::temp_directory_path() / "ge_lab_runner_test").string();
@@ -115,13 +138,36 @@ TEST(tag_and_compare) {
   CHECK(run({"toy", "--n=5", "--compare=before"}) == 0);
 }
 
+TEST(shots_draws_only_the_named_ones) {
+  fs::remove_all(dir());
+  const std::string d = dir() + "/pair";
+  CHECK(run({"pair"}) == 0);
+  const std::string asked = slurp(d + "/asked.png"), dropped = slurp(d + "/dropped.png");
+  const std::string sheet = slurp(d + "/index.md");
+  asked_renders = 0;
+  CHECK(run({"pair", "--shade=200", "--shots=dropped"}) == 0);
+  CHECK(asked_renders == 0);                    // the lab asked, and skipped the work
+  CHECK(slurp(d + "/asked.png") == asked);      // left as the whole run wrote it
+  CHECK(slurp(d + "/dropped.png") != dropped);  // drawn again at the new shade
+  CHECK(slurp(d + "/index.md") == sheet);       // the contact sheet still lists both
+  CHECK(slurp(d + "/report.json").find("--shots: drew dropped") != std::string::npos);
+  CHECK(run({"pair", "--shots=asked"}) == 0);
+  CHECK(asked_renders == 1);
+  // A typo fails, naming the ids shot() dropped; the runner refuses a partial digest.
+  CHECK(run({"pair", "--shots=askd"}) == 1);
+  CHECK(slurp(d + "/report.json").find("--shots=asked,dropped") != std::string::npos);
+  CHECK(run({"pair", "--shots=asked", "--write-digests=" + dir() + "/d.txt"}) == 2);
+  CHECK(run({"--all", "--shots=asked"}) == 2);
+}
+
 TEST(repeat_catches_hidden_state) {
   CHECK(run({"toy", "--repeat=3"}) == 0);
   CHECK(run({"drift", "--repeat=2"}) == 1);
 }
 
 TEST(shards_split_the_labs) {
-  // The registry here is {drift, toy}: slice 1/2 is drift alone (fails its repeat), 2/2 toy.
+  // The registry here is {drift, pair, toy}: slice 1/2 is drift and toy (drift fails its
+  // repeat), 2/2 pair.
   CHECK(run({"--all", "--smoke", "--repeat=2", "--shard=1/2"}) == 1);
   CHECK(run({"--all", "--smoke", "--repeat=2", "--shard=2/2"}) == 0);
   CHECK(run({"--all", "--smoke", "--shard=3/2"}) == 2);
