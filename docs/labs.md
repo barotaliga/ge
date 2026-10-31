@@ -94,12 +94,20 @@ make lab LAB=level ARGS=--help                # its flags, with defaults
 make lab LAB=level ARGS=--tag=before          # keep this run as previews/level@before/
 make lab LAB=level ARGS=--compare=before      # every metric beside the kept run's, every picture diffed
 make lab LAB=world ARGS=--diff=before         # run nothing: the last run's pictures against the kept run's
+make lab LAB=world ARGS=--shots=vista         # only the named shots; the other pictures stay as they were
 make labs-smoke                               # every lab at its smoke flags, twice, digests checked
 make labs-digests                             # rewrite tests/digests/ (a reviewed change)
 make ge ARGS="digest level --write"           # rewrite one lab's row only; no --write: just check it
 build/debug/labs --json                       # the list as one JSON array (what `ge lab` reads)
 make lab LAB=trace ARGS="--log=course=debug"  # any lab: the log spec's lines in previews/<id>/log.txt
 ```
+
+`--shots=<id,...>` draws only the named shots of a picture lab while one look is iterated: every
+other picture under `previews/<id>/` (and its contact sheet) stays as the last whole run wrote
+it, and a note says what was drawn. A lab saves the render too by asking `lab.wants(id)` before
+it draws a shot (`world` does); `lab.shot()` drops an unwanted one either way. A named id the lab
+has no shot of fails the run with the ids it has. The digest of such a run is not the lab's, so
+the runner refuses `--shots` beside `--all`, `--check-digests` and `--write-digests`.
 
 `--log=<spec>` switches on log channels for the run (`docs/debugging.md`): every line kept goes to
 `previews/<id>/log.txt` as `[step] level channel: message`, the debug and trace lines only
@@ -109,6 +117,12 @@ never moves a digest.
 In a game repo, `ge lab` is the way in: `ge lab` lists, `ge lab <id> --tag=before` and
 `--compare=before` run one, and with `--json` the lab's whole `report.json` is the answer's
 `result`. `ge lab diff <id>` diffs the pictures (below), every band under its floor a finding.
+`ge lab <id> --before=<ref>` takes the before from a git ref with no checkout of yours: the ref is
+checked out into a scratch worktree (`build/before/<sha>/`, kept for the next call at that
+commit), built with this build's `GE_*` options and its downloads, its lab run into
+`previews/<id>@before/`, then this tree's run compared with it. With ccache on PATH the two trees
+share the cache (`CCACHE_BASEDIR`), so the ref's build compiles only what differs; without it the
+first build at a ref is a whole build of the labs.
 `ge lab publish <id>... [--before=<tag>]` puts the last run (of one lab, or of several one after
 another) on one self-contained page for a report or a pull request (`engine/cli/publish.hpp`). Each picture loses its caption band, which the page
 sets as text, and is shrunk to `--width` (720 px) and inlined as a 256-colour GIF

@@ -47,10 +47,9 @@
 // waits. `playdemo <demo>` (`-playdemo <demo>`) plays one at its own pace instead, vsync on and
 // nothing timed, `cl_demospeed <x>` (0..20, 0 pauses) its speed; `demo_track <slot>` picks the
 // player a multiview recording's view rides (-1: the lowest playing). Every format plays, `.gz`
-// included, and the voice formats (`.qwdv`, `.mvdv`) with their voices.
-//
-// `-demovideo <demo> <file>` turns a demo into a video with no window and quits
-// (client/demo_video.hpp; docs/shooters-edge.md § A demo as a video).
+// included, and the voice formats (`.qwdv`, `.mvdv`) with their voices. A played demo is watched
+// like a video (client/demo_playback.hpp: a play bar, seeking, highlights); `-demovideo <demo>
+// <file>` turns one into a video with no window and quits (client/demo_video.hpp).
 //
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console
@@ -79,6 +78,7 @@
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
 #include "shooters_edge/client/controls.hpp"
+#include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/held.hpp"
@@ -365,22 +365,9 @@ int run_main(int argc, char** argv) {
                           play_ask = true;
                         }
                       });
-  double demo_speed = 1;
-  console.add_command("cl_demospeed", "cl_demospeed <x>: a played demo's speed, 0..20 (0 pauses)",
-                      [&](Con& c, const CArgs& a) {
-                        if (a.size() > 1)
-                          demo_speed = std::clamp(std::atof(a[1].c_str()), 0.0, 20.0);
-                        c.print("cl_demospeed " + std::to_string(demo_speed));
-                      });
-  int demo_track = -1;
   cl::Timedemo bench;
-  console.add_command("demo_track", "demo_track <slot>: the player a multiview demo's view rides",
-                      [&](Con& c, const CArgs& a) {
-                        if (a.size() > 1) demo_track = std::atoi(a[1].c_str());
-                        bench.demo.track = demo_track;
-                        c.print("demo_track " + std::to_string(demo_track) +
-                                (demo_track < 0 ? " (the lowest slot playing)" : ""));
-                      });
+  cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
+  cl::add_playback_commands(console, playback, bench);
   se::Hud hud = se::make_hud();
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
@@ -408,7 +395,7 @@ int run_main(int argc, char** argv) {
     out::status("shooters_edge: " + std::to_string(files.archives.size()) + " packs in " +
                 files.folder);
   }
-  if (!args.demovideo.empty()) return demo_video_main(args, files, picture, demo_track);
+  if (!args.demovideo.empty()) return demo_video_main(args, files, picture, playback.track);
   // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
   // enhance offers.
   shooters_edge::menu::Host menu_host{.console = &console, .maps = cl::map_names(files)};
@@ -675,11 +662,13 @@ int run_main(int argc, char** argv) {
     }
     // The mouse is the look's while captured: the console, the menu or the focus lost lets it go;
     // the menu closing or a click in the window takes it again.
-    const bool release = con_view.open() || input.focus_lost || game_menu.open();
+    // A demo played at its pace frees it for its play bar.
+    const bool watching = bench.active && bench.paced;
+    const bool release = con_view.open() || input.focus_lost || game_menu.open() || watching;
     if (captured && release) {
       captured = false;
       ge::platform::set_relative_mouse(*window, false);
-    } else if (!captured && !con_view.open() && !game_menu.open() &&
+    } else if (!captured && !con_view.open() && !game_menu.open() && !watching &&
                (was_open || held.mouse.buttons.went_down(0))) {
       captured = true;
       ge::platform::set_relative_mouse(*window, true);
@@ -769,8 +758,10 @@ int run_main(int argc, char** argv) {
       } else {
         bench.quit_after = quit_after;
         bench.paced = play_ask;
-        bench.demo.track = demo_track;
+        bench.demo.track = playback.track;
         console.print((play_ask ? "playdemo: " : "timedemo: ") + bench.found);
+        if (play_ask && !cl::playback_begin(playback, bench, error))
+          console.print("playdemo: no highlights: " + error);
         con_view.set_open(false);
         if (!play_ask) {
           vsync = false;  // and unlocked: immediate present, where the platform has it
@@ -787,8 +778,16 @@ int run_main(int argc, char** argv) {
       continue;
     }
     if (bench.active) {
-      const cl::TimedemoStep step = bench.paced ? cl::playdemo_step(bench, wall, demo_speed, error)
-                                                : cl::timedemo_step(bench, error);
+      std::vector<std::string> said;
+      const cl::TimedemoStep step =
+          bench.paced
+              ? cl::playback_step(playback, bench,
+                                  {con_view.open() ? std::span<const bool>{} : input.pressed,
+                                   input.pointer_x * px_per_unit, input.pointer_y * px_per_unit,
+                                   (input.pointer_buttons & 1u) != 0},
+                                  w, h, wall, t, said, error)
+              : cl::timedemo_step(bench, error);
+      for (const std::string& line : said) console.print(line);
       if (step == cl::TimedemoStep::new_level) {
         bench_map = cl::load_named_map(files, bench.demo.state.map, error);
         if (!bench_map) {
@@ -806,7 +805,10 @@ int run_main(int argc, char** argv) {
       overlay.begin(w, h);
       se::fill_hud(hud, cl::demo_status(bench.demo.state, t),
                    se::pick_art(hud_art, classic_art, free_art));
-      hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style());
+      const auto placed =
+          hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style());
+      playback.bar_bottom_px = cl::hud_inset(placed, h);
+      if (bench.paced) cl::playback_draw(overlay, playback, bench, w, h, t);
       // Every frame is drawn, but only one in kBenchShowNs is shown: the rest go to an offscreen
       // target of the surface's format. A window's present waits for the display however its
       // mode is set (macOS's compositor hands an image back once a refresh), so a frame rate

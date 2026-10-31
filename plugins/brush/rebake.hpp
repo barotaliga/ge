@@ -8,7 +8,9 @@
 // THE RESULT (`Rebaked`) is an atlas of irradiance and direction and, for every vertex of the map,
 // its place in that atlas. A cache keeps it as bytes (`write_rebaked`, `read_rebaked`): the
 // irradiance as RGB9E5 (shared-exponent floats, 4 bytes a luxel; a GPU samples it as it is) and
-// the direction as RGBA8 (x, y, z at 127.5 ± 127.5, w 255 where a face covers the luxel).
+// the direction as RGBA8 (x, y, z at 127.5 ± 127.5, w 255 where a face covers the luxel), and the
+// light bounced alone (the irradiance less the direct light, RGB9E5) for a renderer that draws the
+// direct light live and wants only the room's bounce from the bake.
 //
 // ge:summary A brush map's lightmaps rebaked: finer luxels, colour bounce, the light's direction
 // ge:keywords bsp brush rebake lightmap bake directional-lightmap gi bounce cache rgb9e5
@@ -44,6 +46,7 @@ struct RebakeOptions {
 struct Rebaked {
   uint32_t width = 0, height = 0;
   std::vector<uint32_t> rgb9e5;  // irradiance, a luxel
+  std::vector<uint32_t> bounce;  // the bounced light alone, a luxel (empty: a version 1 file)
   std::vector<uint8_t> dir;      // 4 a luxel
   std::vector<float> lm;         // 2 a Map::vertices entry: its atlas 0..1 place; −1 uncharted
   bake::Stats stats;
@@ -57,7 +60,8 @@ bool rebake_map(const Map& map, const RebakeInput& input, const RebakeOptions& o
 uint32_t pack_rgb9e5(const float rgb[3]);
 void unpack_rgb9e5(uint32_t packed, float rgb[3]);
 
-// The cache's bytes: "GERB", a version, the size, then the luxels and the vertices' places.
+// The cache's bytes: "GERB", a version (2), the size, then the luxels (irradiance, direction,
+// bounce) and the vertices' places. A version 1 file (no bounce) still reads.
 std::vector<uint8_t> write_rebaked(const Rebaked& baked);
 bool read_rebaked(std::span<const uint8_t> bytes, Rebaked* out, std::string* error);
 

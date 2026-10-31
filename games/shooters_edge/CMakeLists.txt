@@ -26,7 +26,7 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_sound)
 # shooter).
 file(GLOB SHOOTERS_EDGE_SERVER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/server/*.cpp)
 add_library(shooters_edge_server STATIC ${SHOOTERS_EDGE_SERVER_SOURCES})
-target_link_libraries(shooters_edge_server PUBLIC shooters_edge_sim ge_save)
+target_link_libraries(shooters_edge_server PUBLIC shooters_edge_sim ge_save ge_server)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_server)
 
 # Its bots (bots/): the pilot (plugins/shooter/pilot.hpp) played on the game's maps, on the nav
@@ -47,11 +47,10 @@ target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 
 # The headless dedicated server (server/bin/), named `shooters_edge_server` on disk, at the build's
-# root (build/<preset>/shooters_edge_server): `--help` lists its flags.
-add_executable(shooters_edge_dedicated server/bin/main.cpp)
-target_link_libraries(shooters_edge_dedicated PRIVATE shooters_edge_server)
-set_target_properties(shooters_edge_dedicated PROPERTIES OUTPUT_NAME shooters_edge_server
-                                                         RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
+# root (build/<preset>/shooters_edge_server): the engine's dedicated process (engine/server) over
+# the game's ServerGame (server/dedicated.hpp). `--help` lists its flags.
+ge_add_server(shooters_edge_dedicated OUTPUT_NAME shooters_edge_server SOURCES server/bin/main.cpp
+              LINK shooters_edge_server)
 
 # Its HUD (hud/): the player's status snapshot, the HUD's pictures (the free set painted in code),
 # and the three looks over the engine's HUD layout with their hud_ cvars. No GPU: the CPU raster
@@ -113,7 +112,8 @@ list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
 target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_bots shooters_edge_hud
                                                   shooters_edge_view shooters_edge_sound ge_vfs
-                                                  ge_brush ge_camera ge_input ge_audio ge_net)
+                                                  ge_brush ge_camera ge_input ge_audio ge_net
+                                                  ge_ui ge_replay)
 include(${PROJECT_SOURCE_DIR}/cmake/EmbedBinary.cmake)
 # Each source as `<variant>_<file>` (qc/<variant>/<file>.qc): the arena variant's and the shared.
 foreach(qc arena_engine common_defs arena_glue common_util common_combat common_weapons

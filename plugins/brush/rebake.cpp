@@ -18,7 +18,7 @@ namespace ge::brush {
 namespace {
 
 constexpr uint32_t kMagic = 0x42524547u;  // "GERB" little-endian
-constexpr uint32_t kVersion = 1;
+constexpr uint32_t kVersion = 2;          // 1: no bounce
 
 // A liquid's surface (its upward face) over the plan: x and z bounds, m, and its level.
 struct Pool {
@@ -197,9 +197,13 @@ bool rebake_map(const Map& map, const RebakeInput& input, const RebakeOptions& o
   out->height = lm.height;
   const size_t n = size_t{lm.width} * lm.height;
   out->rgb9e5.resize(n);
+  out->bounce.resize(n);
   out->dir.resize(n * 4);
   for (size_t i = 0; i < n; i++) {
     out->rgb9e5[i] = pack_rgb9e5(&lm.rgb[i * 3]);
+    float b[3];
+    for (int k = 0; k < 3; k++) b[k] = std::max(lm.rgb[i * 3 + k] - lm.direct[i * 3 + k], 0.0f);
+    out->bounce[i] = pack_rgb9e5(b);
     for (int k = 0; k < 3; k++) {
       const double v = std::clamp(static_cast<double>(lm.dir[i * 4 + k]), -1.0, 1.0);
       out->dir[i * 4 + k] = static_cast<uint8_t>(std::floor(v * 127.5 + 128.0));  // -1..1 to 0..255
@@ -223,7 +227,8 @@ bool rebake_map(const Map& map, const RebakeInput& input, const RebakeOptions& o
 
 std::vector<uint8_t> write_rebaked(const Rebaked& baked) {
   std::vector<uint8_t> b;
-  b.reserve(20 + baked.rgb9e5.size() * 8 + baked.lm.size() * 4);
+  const size_t luxels = baked.rgb9e5.size();
+  b.reserve(20 + luxels * 12 + baked.lm.size() * 4);
   put32(b, kMagic);
   put32(b, kVersion);
   put32(b, baked.width);
@@ -231,6 +236,7 @@ std::vector<uint8_t> write_rebaked(const Rebaked& baked) {
   put32(b, static_cast<uint32_t>(baked.lm.size() / 2));
   for (const uint32_t v : baked.rgb9e5) put32(b, v);
   b.insert(b.end(), baked.dir.begin(), baked.dir.end());
+  for (size_t i = 0; i < luxels; i++) put32(b, i < baked.bounce.size() ? baked.bounce[i] : 0);
   for (const float f : baked.lm) {
     uint32_t u = 0;
     std::memcpy(&u, &f, 4);
@@ -246,11 +252,13 @@ bool read_rebaked(std::span<const uint8_t> bytes, Rebaked* out, std::string* err
     return false;
   };
   if (bytes.size() < 20 || get32(bytes.data()) != kMagic) return refuse("not a rebake file");
-  if (get32(bytes.data() + 4) != kVersion) return refuse("written by another version");
+  const uint32_t version = get32(bytes.data() + 4);
+  if (version != 1 && version != kVersion) return refuse("written by another version");
   const uint32_t w = get32(bytes.data() + 8), h = get32(bytes.data() + 12);
   const uint32_t verts = get32(bytes.data() + 16);
   const uint64_t luxels = uint64_t{w} * h;
-  if (w > 16384 || h > 16384 || bytes.size() != 20 + luxels * 8 + uint64_t{verts} * 8) {
+  const uint64_t per = version == 1 ? 8 : 12;
+  if (w > 16384 || h > 16384 || bytes.size() != 20 + luxels * per + uint64_t{verts} * 8) {
     return refuse("its size does not match its header");
   }
   out->width = w;
@@ -260,6 +268,11 @@ bool read_rebaked(std::span<const uint8_t> bytes, Rebaked* out, std::string* err
   for (size_t i = 0; i < luxels; i++, p += 4) out->rgb9e5[i] = get32(p);
   out->dir.assign(p, p + luxels * 4);
   p += luxels * 4;
+  out->bounce.clear();
+  if (version >= 2) {
+    out->bounce.resize(luxels);
+    for (size_t i = 0; i < luxels; i++, p += 4) out->bounce[i] = get32(p);
+  }
   out->lm.resize(size_t{verts} * 2);
   for (float& f : out->lm) {
     const uint32_t u = get32(p);

@@ -37,6 +37,7 @@
 #include <string>
 #include <vector>
 
+#include "classicenhance/lightmaps.hpp"
 #include "classicenhance/models.hpp"
 #include "classicenhance/sound.hpp"
 #include "classicenhance/source.hpp"
@@ -71,6 +72,7 @@ struct RunOptions {
   EnhanceOptions textures;
   SoundOptions sounds;
   ModelOptions models;
+  LightmapOptions lightmaps;
   bool force = false;
   std::vector<Stage> only;  // empty: every stage
   // At most this many textures (0: all), for a quick look; recorded in the stage's key.
