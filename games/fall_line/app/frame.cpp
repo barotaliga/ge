@@ -60,11 +60,11 @@ constexpr r::PassRow kPassTable[] = {
     {"ao", "depth", "ao"},
     {"terrain",
      "terrain.tiles terrain.indirect terrain.height terrain.horizon shadows.maps sky.aerial "
-     "sky.light snow.ground trails.fine trails.coarse depth fog.volume ao lamps.atlas",
+     "sky.light snow.ground trails.fine trails.coarse depth fog.volume ao lamps.atlas mirror.last",
      "hdr motion"},
     {"instances",
      "instances figures.posed instances.early instances.late terrain.horizon shadows.maps "
-     "sky.aerial sky.light depth fog.volume ao lamps.atlas",
+     "sky.aerial sky.light depth fog.volume ao lamps.atlas mirror.last",
      "hdr motion"},
     {"sky", "sky.view sky.moon_view depth fog.volume", "hdr motion"},
     {"clouds.fresh", "depth sky.aerial sky.light", "clouds.fresh"},
@@ -77,6 +77,7 @@ constexpr r::PassRow kPassTable[] = {
      "hdr motion"},
     {"precip", "precip terrain.horizon sky.aerial sky.light depth fog.volume", "hdr motion"},
     {"bolts", "depth", "hdr motion"},
+    {"mirror.keep", "hdr depth", "mirror.last"},
     {"taa", "hdr motion depth taa.history sky.light", "taa.history"},
     {"bloom", "taa.history", "bloom"},
     {"lens", "taa.history depth sky.light", "lens"},
@@ -88,10 +89,11 @@ constexpr r::PassRow kPassTable[] = {
 // What is made at load rather than by a pass (the instances' meshes and streams: the figures'
 // placements and palettes are written before the frame is encoded, their vertices by the skinning
 // pass), and what is the last frame's (the TAA history, the depth pyramid the early cull reads,
-// the cloud's half-size picture the spread reprojects, the fog's lit froxels it blends with).
+// the cloud's half-size picture the spread reprojects, the fog's lit froxels it blends with, the
+// scene the wet ground mirrors).
 constexpr std::string_view kLoadInputs =
     "terrain.height terrain.pyramid terrain.albedo snow.ground instances taa.history hiz.last "
-    "clouds.history fog.history";
+    "clouds.history fog.history mirror.last";
 
 constexpr int kPasses = static_cast<int>(std::size(kPassTable));
 
@@ -127,6 +129,7 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
   f.targets = r::create_targets(device, "frame", r::taa_render_size(w, scale),
                                 r::taa_render_size(h, scale));
   r::create_hiz_targets(device, f.hiz, f.targets);
+  if (f.options.mirror) r::create_mirror_targets(device, f.mirror, f.targets, f.uniforms);
   // The ambient occlusion's target, bound in the frame group (the blank with it off).
   const bool ao = r::ao_on(f.options.ao);
   if (ao) {
@@ -135,7 +138,7 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
   }
   f.frame_group =
       r::frame_group(device, f.frame_layout, f.uniforms, f.sky, f.lights.buffer, f.fog.volume_view,
-                     ao ? f.ao.view : nullptr, f.lamp_shadows.atlas_view);
+                     ao ? f.ao.view : nullptr, f.lamp_shadows.atlas_view, f.mirror.last_view);
   for (r::InstanceFamily* family : f.families)
     r::bind_family_hiz(device, f.instancing, *family, f.hiz);
   r::bind_particle_targets(device, f.particles, f.targets);
@@ -208,60 +211,6 @@ void throw_spray(GameFrame& f, const FrameScene& scene, double dt) {
 
 std::string pass_table_faults() { return r::check_pass_table(kPassTable, kLoadInputs); }
 
-FrameOptions frame_options(const cfg::Settings& s) {
-  FrameOptions o;
-  o.taa = s.taa;
-  o.scale = s.scale;
-  o.occlusion = s.occlusion;
-  o.shadow_size = s.shadow_size;
-  o.bloom = s.bloom;
-  o.look = {.sharpen = s.sharpen,
-            .chromatic = s.chromatic,
-            .vignette = s.vignette,
-            .grain = s.grain,
-            .dirt = s.lensdirt,
-            .motion_blur = s.motionblur};
-  o.lens = {.rays = s.sunrays, .flare = s.flare};
-  o.ao = {.strength = s.ao, .radius_m = s.ao_radius};
-  o.lights = s.lights;
-  o.light_shadows = s.lights && s.light_shadows;
-  o.dof = {.strength = s.dof, .focus_m = s.dof_focus};
-  o.grade = {.contrast = s.contrast,
-             .saturation = s.saturation,
-             .temperature = s.temperature,
-             .tint = s.tint,
-             .gamma = s.gamma};
-  o.snow = s.snow;
-  o.trails = s.trails;
-  o.spray = s.spray;
-  o.precip = s.precip;
-  o.splashes = s.splashes;
-  o.wet = s.wet;
-  o.lightning = s.lightning;
-  o.fog = s.fog_drawn;
-  o.froxels = fog_settings(static_cast<int>(s.fog_quality));
-  o.fall.particles = static_cast<uint32_t>(
-      std::lround(o.fall.particles * std::clamp(s.precip_density, 0.25, 2.0)));
-  o.weather = s.weather;
-  o.clouds = s.clouds;
-  o.cover = s.cover;
-  o.thick = s.thick;
-  o.cloud_height = s.cloud_height;
-  o.cloud_thickness = s.cloud_thickness;
-  o.cloud_speed = s.cloud_speed;
-  o.sun_size = s.disc_sun;
-  o.moon_size = s.disc_moon;
-  cloud_stack_of(s, o);
-  // r_quality: the ladder's picture over the rows it owns; `custom` leaves the settings above.
-  std::string error;
-  if (const auto pick = quality_pick(s.quality, s.budget_ms, static_cast<uint32_t>(s.width),
-                                     static_cast<uint32_t>(s.height), error))
-    o = apply_picture(*pick, o);
-  else if (!error.empty())
-    ge::core::output::warn(error);
-  return o;
-}
-
 std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
                                         const ge::mountain::mapgen::Level& level, uint32_t width,
                                         uint32_t height, wgpu::TextureFormat output,
@@ -320,6 +269,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_underwater(device, f->pipelines, f->under, f->frame_layout);
   r::create_fog(device, f->pipelines, f->fog, f->frame_layout, &f->terrain, options.froxels);
   r::create_hiz_pipelines(device, f->pipelines, f->hiz);
+  if (options.mirror) r::create_mirror(device, f->pipelines, f->mirror);
   r::create_instance_pipelines(device, f->pipelines, f->instancing, f->frame_layout,
                                options.overdraw_probe, options.wire_probe);
   if (options.taa) {
@@ -947,6 +897,11 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   r::encode_particles(f.particles, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_precip(f.precip, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
   r::encode_bolts(f.bolts, f.pipelines, f.recorder, encoder, f.targets, f.frame_group);
+  if (f.options.mirror) {
+    r::encode_mirror(f.mirror, f.pipelines, f.recorder, encoder);
+  } else {
+    f.recorder.compute(encoder, "mirror.keep").End();
+  }
   if (f.options.taa) {
     r::encode_taa(device, f.taa, f.pipelines, f.recorder, encoder, f.frame_group);
   }

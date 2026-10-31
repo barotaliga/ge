@@ -26,6 +26,7 @@
 // ge:test tests/mountain_snow_test.cpp
 
 #include "render/wgsl/frame.wgsl"
+#include "render/wgsl/wet.wgsl"
 
 fn snow_hash3(p0: vec3f) -> vec3f {
   var p = fract(p0 * vec3f(0.1031, 0.1030, 0.0973));
@@ -150,7 +151,7 @@ fn snow_light(s: SnowPoint, gains: SnowGains) -> vec4f {
   let lobe = pow(rv, sharp) * (0.25 + 2.5 * gloss * gloss) * (0.15 + 1.6 * graze);
   c += s.sun * lobe * 0.35 * gains.glare * (1.0 - s.bare) * (1.0 - 0.7 * frame.wet.x) / PI;
   // The wet film's mirror and the slush's pools on the flats.
-  c += wet_sheen(n, v, s.sun, s.geo_n.y);
+  c += wet_sheen(n, v, s.sun, s.geo_n.y, s.world - frame.eye.xyz);
   // The glitter, on the loose snow in the sun: fine cells close in, coarser ones a little
   // further, none past 140 m.
   var glint = 0.0;

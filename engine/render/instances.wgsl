@@ -9,6 +9,7 @@
 // instance's: `see_keep`), then shaded where the
 // depth is `equal` (`fs_main`, which never discards).
 #include "render/wgsl/frame.wgsl"
+#include "render/wgsl/wet.wgsl"
 #include "render/wgsl/terrain_common.wgsl"
 #include "render/wgsl/instances_common.wgsl"
 #include "render/wgsl/sun_shadow.wgsl"
@@ -236,7 +237,7 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   c += s.albedo / PI * flash_on(frame.eye.xyz + in.rel, n);
   c += local_lights(s, in.rel, n, v, in.position.xyz);
   c += s.albedo * s.emissive * (frame.world.y / kSunLux);
-  c += wet_sheen(n, v, sun * max(dot(n, frame.sun.xyz), 0.0), 0.0);
+  c += wet_sheen(n, v, sun * max(dot(n, frame.sun.xyz), 0.0), 0.0, in.rel);
   var out: FragmentOut;
   out.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);
   out.motion = vec4f(screen_motion(frame, vec4f(in.last_rel, 1.0), in.position.xy), 0.0, 0.0);

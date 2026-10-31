@@ -40,7 +40,7 @@ wgpu::BindGroupLayout frame_layout(gpu::Device& device) {
       device, "render.frame",
       {Slot::uniform, Slot::sampler, Slot::texture, Slot::texture, Slot::texture, Slot::texture_3d,
        Slot::storage_read, Slot::texture, Slot::texture_3d, Slot::sampler, Slot::storage_shade,
-       Slot::texture_3d, Slot::texture, Slot::depth, Slot::compare},
+       Slot::texture_3d, Slot::texture, Slot::depth, Slot::compare, Slot::texture},
       wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment | wgpu::ShaderStage::Compute);
 }
 
@@ -213,13 +213,15 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
 wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
                             const wgpu::Buffer& uniforms, const Sky& sky,
                             const wgpu::Buffer& lights, const wgpu::TextureView& fog,
-                            const wgpu::TextureView& ao, const wgpu::TextureView& lamp_atlas) {
+                            const wgpu::TextureView& ao, const wgpu::TextureView& lamp_atlas,
+                            const wgpu::TextureView& mirror) {
   return make_group(
       device, "render.frame", layout,
       {uniforms, sky.sampler, sky.transmittance_view, sky.multiscatter_view, sky.sky_view_view,
        sky.aerial_view, sky.light, sky.moon_view_view, sky.cloud.view, sky.cloud.sampler,
        lights ? lights : sky.no_lights, fog ? fog : sky.no_fog_view, ao ? ao : sky.blank_view,
-       lamp_atlas ? lamp_atlas : sky.no_lamp_atlas_view, sky.lamp_compare});
+       lamp_atlas ? lamp_atlas : sky.no_lamp_atlas_view, sky.lamp_compare,
+       mirror ? mirror : sky.blank_view});
 }
 
 void prepare_sky(Sky& sky, const FrameView& view) {

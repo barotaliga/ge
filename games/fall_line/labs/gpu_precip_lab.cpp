@@ -5,7 +5,8 @@
 // RAIN, a DOWNPOUR, a RAINSTORM) and a SLEET with the snow line at the eye. Each from a named view,
 // --frames frames at 60 a second up to --at seconds into the run, so the particles in the picture
 // have flown on the wind those frames. `--skies=` picks some by id; `--hour=22` draws them at
-// night, lit by the piste's floodlights (render/lights.hpp through the fall).
+// night, lit by the piste's floodlights (render/lights.hpp through the fall); `--mirror=0` draws
+// the wet ground mirroring the sky alone, not the scene (render/mirror.hpp).
 //
 // Beside each: the fall, its rain share at the eye, the rate and its tier, the visual range, the
 // wind, the particles and splashes drawn and the wet ground (deterministic: the air is a pure
@@ -246,6 +247,7 @@ void run(ge::lab::Lab& lab) {
     }
     const mg::Level& level = levels[i];
     fall_line::app::FrameOptions options;
+    options.mirror = lab.arg_num("mirror") != 0;
     auto frame = fall_line::app::create_frame(*device, level, static_cast<uint32_t>(width),
                                               static_cast<uint32_t>(height),
                                               wgpu::TextureFormat::RGBA8Unorm, options);
@@ -315,6 +317,9 @@ const ge::lab::LabSpec kSpec{
         {"frames", "60", "frames drawn, at 60 a second, up to the shot"},
         {"width", "640", "the picture's width, px"},
         {"height", "360", "the picture's height, px"},
+        {"mirror", "1",
+         "1: the scene mirrored in the wet ground (render/mirror.hpp); 0: the sky's light "
+         "alone (the before of M38c)"},
     },
     "--frames=4 --width=160 --height=90 --skies=snow,rain",
     run,

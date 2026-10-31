@@ -93,6 +93,7 @@
 #include "render/lamp_shadows.hpp"
 #include "render/lens.hpp"
 #include "render/lights.hpp"
+#include "render/mirror.hpp"
 #include "render/motion_blur.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
@@ -143,6 +144,7 @@ struct FrameOptions {
   bool wet = true;        // the rain wets the ground: darker, mirroring, pooled on the flats
   bool lightning = true;  // a map's thunderstorm's flashes and channels (mountain/app/storm_look)
   bool fog = true;        // the fog drawn: the map's mists (app/mists.hpp) and the scene's own
+  bool mirror = true;     // the scene mirrored in the wet ground (render/mirror.hpp)
   // THE LAMPS AFTER DARK (app/lamps.hpp): the piste's floods, the street lamps, the windows'
   // spill and the racers' headlamps as local lights; `light_shadows`, the nearest and brightest
   // of them casting into the lamps' atlas (render/lamp_shadows.hpp), `lamp_tiles` of its tiles
@@ -252,6 +254,7 @@ struct GameFrame {
   bool lightning_placed = false;  // a frame has been drawn since the storm's lightning was chosen
   bool lamps_glow = false;        // the posts' glass as last written, lit or dark
   ge::render::Hiz hiz;
+  ge::render::Mirror mirror;  // the last frame kept for the wet ground's mirror (`options.mirror`)
   ge::render::Taa taa;
   ge::render::Bloom bloom;
   ge::render::Lens lens;        // made only when FrameOptions::lens has a half on

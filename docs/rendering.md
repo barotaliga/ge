@@ -1445,6 +1445,39 @@ its day is and where the fog is asked about.
 Not yet: the lakes' steam and advection fog (a site's distance to open water), and the woods'
 own mist (the forest's shelter keeping a radiation fog longer).
 
+## The scene in a mirror
+
+**Screen-space reflection** (M38c, `engine/render/mirror.hpp`, `render/wgsl/mirror.wgsl`): any
+surface asks what it mirrors with one helper, `scene_reflection(rel, r, rough)`, and gets the
+colour along its reflected ray and the share that colour counts for.
+
+- **The kept scene**: the pass "mirror.keep" (after the bolts, before TAA-U) copies the frame's
+  HDR colour into one RGBA16F texture and writes each pixel's distance from the eye in its alpha
+  (0 where the sky is). The NEXT frame binds it at group 0's binding 15 (`frame_group`'s
+  `mirror`). One texture and one binding hold both the colour and the depth, so the group's
+  sampled textures grow by one, and everything the frame drew is in it: the water, the
+  particles, the rain. The frame of lag is not seen at 60 Hz; the march reprojects each step
+  into the last frame's view (`prev_view_proj` and the eye's move), so a turning camera mirrors
+  the right pixel.
+- **The march**: 24 steps from the surface, growing with the distance out to 120 m, then five
+  halvings down onto the kept surface; a step behind it by more than its thickness (half a metre,
+  more far off) passes behind it. A rough surface takes four taps round the hit, spread by its
+  roughness squared; the share fades toward the picture's edges and the march's end, and where
+  the ray leaves the picture or meets nothing the caller's own sky stands. Not a Hi-Z march:
+  the last frame's distances are read at full size, which costs at most 29 loads a pixel and only
+  where a surface asks.
+- **Off**: a group bound with the sky's 1 x 1 blank (every lab and test that never keeps the
+  scene) mirrors nothing, so no frame changes unless its game keeps the scene; neither does the
+  first frame after the targets are made (its kept scene is zeros).
+- **The wet ground** (`render/wgsl/wet.wgsl`, included by the materials the rain soaks rather
+  than by every draw): `wet_sheen` mirrors the scene where it is wet, sharp in a puddle and
+  blurred in the film (roughness 0.6), with the sun's glint only where the sky shows. Fall Line
+  keeps the scene (`r_reflections`, on by default); the `precip` lab's `--mirror=0` is the
+  before.
+
+Not yet: glossy floors, metal and slime in other games' materials (the helper is theirs to call),
+and a mirror for what the picture does not hold (a probe).
+
 ## Anti-aliasing and resolution
 
 **Temporal anti-aliasing with upscaling (TAA-U)** is the default. Each frame's
@@ -1770,7 +1803,8 @@ drain and dry by the wind and the sun). The picture reads the same numbers:
 - THE WET GROUND rides in the frame's `wet` row (`wet.xy`) (`Weather::wet`, `puddles`): every world material
   calls `wet_albedo` (a porous surface goes to half its albedo soaked, the water keeping the light
   in its pores) and adds `wet_sheen` (Schlick's Fresnel off water, the sky along the reflected ray
-  and the sun's glint; on the flats the puddles lie level and mirror sharply). On Fall Line's snow
+  and the sun's glint; on the flats the puddles lie level and mirror sharply; the scene itself where
+  the last frame drew it: § The scene in a mirror). On Fall Line's snow
   that reads as slush: the glitter goes, the glare dulls, the flats pool.
 - Fall Line keeps one wet ground a frame, the eye's, stepped by the frames' clock from the steady
   state its rain and drying would leave. Its rain comes from the map's SNOW LINE

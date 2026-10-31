@@ -27,7 +27,7 @@ struct Surface {
   metal: f32,      // 0 a dielectric .. 1 a metal
   spec: f32,       // a dielectric's reflectance, 0.5 = 4 % head on; 0 (and metal 0): matte
   emissive: f32,   // its own light: luminance in the frame's units (albedo-tinted)
-  porous: f32,     // how much a soaking darkens it (frame.wgsl's wet_albedo)
+  porous: f32,     // how much a soaking darkens it (wet.wgsl's wet_albedo)
 }
 
 fn matte(albedo: vec3f) -> Surface {

@@ -10,6 +10,7 @@
 // first (`terrain.depth`), then shaded where the depth is `equal`, so every visible pixel is
 // shaded once.
 #include "render/wgsl/frame.wgsl"
+#include "render/wgsl/wet.wgsl"
 #include "render/wgsl/terrain_common.wgsl"
 #include "render/wgsl/sun_shadow.wgsl"
 
