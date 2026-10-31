@@ -93,6 +93,7 @@
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
+#include "shooters_edge/menu/lobby_screen.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/view/weapons.hpp"
@@ -901,9 +902,15 @@ int run_main(int argc, char** argv) {
       const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
       hud.layout.draw(overlay, hf, se::hud_style());
     }
-    if (listen.room && listen.server != nullptr)
-      se::draw_lobby(overlay, cl::lobby_view(*listen.room, listen.server->sv.time, 0, lobby_roster),
-                     w, h);
+    if (listen.room && listen.server != nullptr) {
+      // The lobby in the packs' own menu pictures when they carry them, else the modern panel.
+      const se::LobbyView lv =
+          cl::lobby_view(*listen.room, listen.server->sv.time, 0, lobby_roster);
+      if (game_menu.art().loaded())
+        shooters_edge::menu::draw_lobby_classic(overlay, game_menu.art(), lv, w, h);
+      else
+        se::draw_lobby(overlay, lv, w, h);
+    }
     draw_campaign(
         overlay, listen, game_menu.art(), w, h,
         listen.campaign_host && !con_keys.held && !was_open && input.down(ge::platform::Key::tab));

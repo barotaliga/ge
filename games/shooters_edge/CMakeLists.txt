@@ -80,7 +80,8 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_view)
 file(GLOB SHOOTERS_EDGE_MENU_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/menu/*.cpp)
 add_library(shooters_edge_menu STATIC ${SHOOTERS_EDGE_MENU_SOURCES})
 target_include_directories(shooters_edge_menu PUBLIC ${PROJECT_SOURCE_DIR}/games)
-target_link_libraries(shooters_edge_menu PUBLIC ge_ui ge_console ge_vfs ge_classicenhance)
+target_link_libraries(shooters_edge_menu PUBLIC ge_ui ge_console ge_vfs ge_classicenhance
+                                            shooters_edge_hud)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_menu)
 
 # Its app half (app/): the picture's game side over the engine's passes and the brush world's
