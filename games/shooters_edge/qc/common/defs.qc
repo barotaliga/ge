@@ -142,6 +142,9 @@ float EF_RED = 128;     // the shield's
 .float invincible_finished;    // the shield runs out
 .float light_lev;         // a light's brightness (the map's "light" key)
 .float style;             // a light's style
+.void() th_die;           // what a death does to this kind of thing (unset: a player's)
+.void() th_hurt;          // what a hit that leaves it alive does (unset: a player's pain)
+.float show_hostile;      // a player is noisy until this (he fired): monsters hear him
 
 float STATE_TOP = 0;
 float STATE_BOTTOM = 1;
@@ -156,6 +159,7 @@ float match_over;
 float intermission_time;  // when the match ended (0: still on)
 entity last_spawn;        // the spawn point used last
 entity activator;         // the entity that set off the targets being fired
+entity damage_attacker;   // who dealt the hit being taken, for th_hurt and th_die
 
 // --- forward declarations (the files are compiled in order) ---
 

@@ -8,7 +8,8 @@ One set of sources builds two VARIANTS:
 - **`campaign/`**: the classic maps' single-player game, on the single-player form, played by the
   campaign host as it plays any campaign program (porting notes: `campaign-rules.md`). Today it
   has the campaign's flow (starts, exits and the intermission, secrets, counters, relays, skill,
-  episode gates, runes, keys, the inventory carried from map to map); the monsters come next.
+  episode gates, runes, keys, the inventory carried from map to map) and the first monsters (the
+  rifleman and the hound); the rest of the roster comes kind by kind.
 
 Nothing in the engine knows either is ours.
 
@@ -33,7 +34,7 @@ The language is written down in `porting/shooters-edge/qc-language.md`; the comp
 ## The files
 
 A variant compiles its `engine.qc`, then `common/defs.qc`, its `glue.qc`, the rest of `common/`,
-then its `world.qc`.
+then its own files (`progs.src` lists them in order), `world.qc` last.
 
 | File | What is in it |
 | --- | --- |
@@ -47,6 +48,8 @@ then its `world.qc`.
 | `common/player.qc` | Joining, the frame around each command, pain, death, water, slime and lava, the kill command, leaving |
 | `common/map.qc` | The map's things: teleport destinations, lights, walls, doors, plats, buttons, triggers, teleporters, pushes, hurts |
 | `arena/world.qc` | The world, the frag and time limits, the end of a match |
+| `campaign/ai.qc` | The monsters' minds: spawning, the senses, noticing a player, stand, walk a path, run, attack, anger, pain, death; path corners |
+| `campaign/monsters.qc` | The roster: each kind's numbers, attacks, pain and sounds (the rifleman, the hound) |
 | `campaign/world.qc` | The world, the intermission and the next map, the campaign's map things |
 
 ## The game
@@ -69,6 +72,20 @@ then its `world.qc`.
   `func_button`, `trigger_multiple`, `trigger_once`, `trigger_teleport` with
   `info_teleport_destination`, `trigger_push`, `trigger_hurt`, and every item and weapon.
 
+## The campaign's monsters
+
+- **A kind** is a spawn function in `campaign/monsters.qc`: its precaches, its sight and death
+  sounds (`noise`, `noise1`), its gib health and head, its walk and run steps, its `th_` hooks
+  (`th_missile`, `th_melee`, `th_pain`, `th_die`, and `th_check` for an attack decision of its
+  own), then `walkmonster_start(model, health, mins, maxs)`.
+- **Its mind** is `campaign/ai.qc`'s: it stands or walks its path (`target` naming a
+  `path_corner`) until it notices a player (far never, mid in front and seen, near seen and in
+  front unless he fired in the last second, melee seen), then runs at him, attacking when the
+  decision says so. Hurt by another monster it turns on it (riflemen even on their own kind);
+  a trigger that fires it makes it angry at the player who set the trigger off.
+- **A hit** reaches a monster through `damage` (`common/combat.qc`): a thing with `th_hurt` and
+  `th_die` answers its own hits, a player's are `player_pain` and `player_die`.
+
 ## Changing it
 
 - **Keep `engine.qc` as it is.** The engine reads those globals and fields by
@@ -83,4 +100,5 @@ then its `world.qc`.
 - **Check your change**: `ge qc build` until it compiles clean, then the `se-baseline` lab before
   and after (`--tag=before`, then `--compare=before`); for the campaign variant `se-campaign
   --progs=`. Inside this repository the variants are also held by
-  `tests/shooters_edge_baseline_mod_test.cpp` and `tests/shooters_edge_campaign_mod_test.cpp`.
+  `tests/shooters_edge_baseline_mod_test.cpp`, `tests/shooters_edge_campaign_mod_test.cpp` and
+  `tests/shooters_edge_campaign_monsters_test.cpp`.

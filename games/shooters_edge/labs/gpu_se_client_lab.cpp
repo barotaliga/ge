@@ -14,7 +14,10 @@
 // lab draws that map instead, for PRIVATE pictures only: the player at the map's start looking
 // four ways, each in the classic look and in the modern look with every classic-enhance switch on
 // (the enhanced textures when the pack's cache has them); `--cvars="ce_water 0"` sets the modern
-// side's cvars as the console would.
+// side's cvars as the console would. The server's models (items, monsters, the other players)
+// stand where it put them. `--progs=<progs.src>` runs a program of our own there (the campaign
+// variant: its monsters; `pack` the packs' own), and `--settle=<frames>` lets the world run at
+// each view.
 //
 // ge:summary Lab: the window's frame drawn headless: the halls, a rocket jump, its effects, the HUD
 // ge:keywords lab se-client listen-server window frame rocket-jump hud effects trail explosion
@@ -32,6 +35,8 @@
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/liquid_scene.hpp"
+#include "progs/file.hpp"
+#include "progs/qc_compile.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -80,12 +85,39 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   cl::SearchPath files;
   ge::progs::Progs progs;
   cl::Listen l;
-  if (!cl::open_game_dir(base, game, files, error) || !cl::baseline_progs(progs, error)) {
+  if (!cl::open_game_dir(base, game, files, error)) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
   }
+  // `--progs`: a program of our own compiled from its progs.src (the campaign variant, say), or
+  // `pack` for the packs' own progs.dat; else the arena variant.
+  if (lab.arg("progs") == "pack") {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> bytes = cl::find_file(files, "progs.dat", store);
+    if (!ge::progs::load_progs(bytes.data(), bytes.size(), progs, error, ge::progs::every_form())) {
+      lab.fail("se-client: the pack's progs.dat: " + error,
+               "Pass a game folder whose packs hold a progs.dat. Skill: progs.");
+      return;
+    }
+  } else if (const std::string& own = lab.arg("progs"); !own.empty()) {
+    const ge::progs::QcProject built = ge::progs::compile_project(own);
+    if (!built.result.ok) {
+      std::string why;
+      for (const ge::progs::QcDiagnostic& d : built.result.diagnostics)
+        why += ge::progs::diagnostic_text(d) + "\n";
+      lab.fail("se-client: " + own + " does not compile:\n" + why,
+               "Fix the first error at its file and line. Skill: progs.");
+      return;
+    }
+    progs = built.result.progs;
+  } else if (!cl::baseline_progs(progs, error)) {
+    lab.fail(error, "Read the reason above. Skill: shooter.");
+    return;
+  }
+  cl::ListenOptions lo;
+  if (cl::single_player(progs)) lo.console.emplace_back("deathmatch 0");  // as NEW GAME starts it
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, lab.arg("map"), error);
-  if (!map || !cl::listen_start(l, progs, std::move(map), {}, error)) {
+  if (!map || !cl::listen_start(l, progs, std::move(map), lo, error)) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
   }
@@ -102,7 +134,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   cl::WorldDrawPtr world[2];
   for (int k = 0; k < 2; ++k) {
     world[k] = cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                                     looks[k], {}, error);
+                                     looks[k], {}, error, {l.server->models, {}});
     if (!world[k]) {
       lab.fail(error, "Read the gpu: lines above. Skill: render.");
       return;
@@ -154,9 +186,11 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     }
     l.view.x = p.pitch;
     l.view.y = p.yaw;
-    for (int i = 0; i < 4; i++) {  // the eyes and the effects settle (the screen's blend, say)
+    const int settle = std::max(4, static_cast<int>(lab.arg_num("settle")));
+    for (int i = 0; i < settle; i++) {  // the eyes and the effects settle (the screen's blend, say)
       if (p.moved) player.origin = {p.at[0], p.at[1], p.at[2]};
       player.velocity = {};
+      if (i >= 4) cl::listen_frame(l, {});  // the world runs on: monsters notice, move and fire
       t += 0.013;
       cl::frame_view(l, shown, 1, t, 0.013);
       cl::step_fx(l, shown, fx_state, t, 0.013, fx);
@@ -351,7 +385,10 @@ const gl::LabSpec kSpec{
      {"game", "", "a game folder of packs to draw instead of the halls (private pictures only)"},
      {"map", "start", "with --game: the map's name"},
      {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
-     {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"}},
+     {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"},
+     {"progs", "",
+      "with --game: a progs.src compiled and run instead of the arena variant, or pack"},
+     {"settle", "4", "with --game: host frames run at each view before it is drawn (at least 4)"}},
     "--size=480,270",
     run,
 };
