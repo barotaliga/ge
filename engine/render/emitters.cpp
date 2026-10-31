@@ -48,6 +48,23 @@ Particle birth(const AreaEmitter& e, uint64_t k) {
       p.kelvin = f32(core::range(rng, 1300, 1700));
       p.cool_s = f32(core::range(rng, 0.8, 1.6));
       break;
+    case AreaEmitter::Kind::sparks:
+      across(0.5);
+      p.p[1] = f32(floor_y + core::range(rng, 0, 0.4) * e.half[1]);
+      p.v[0] = f32(core::range(rng, -0.8, 0.8) + e.air[0]);
+      p.v[1] = f32(core::range(rng, 1.5, 4.0) + e.air[1]);
+      p.v[2] = f32(core::range(rng, -0.8, 0.8) + e.air[2]);
+      p.life = f32(core::range(rng, 1.2, 3.0));
+      p.size = 0.05f;    // a burning fleck of the fuel, its glow smeared wider by the eye
+      p.drag = 0.6f;     // slowed by the air, so the wind it was born in carries it a while
+      p.fall = -0.05f;   // the plume lifts it: some 0.8 m/s once it has slowed
+      p.streak = 0.15f;  // seen as the streak it draws
+      p.albedo = 0.05f;  // its own light is all there is to it
+      p.opacity = 1.0f;
+      // Thrown out of the hottest of the bed, hotter than an ember that has drifted off a glow.
+      p.kelvin = f32(core::range(rng, 2900, 3400));
+      p.cool_s = f32(core::range(rng, 0.8, 1.6));
+      break;
     case AreaEmitter::Kind::motes:
       across(1.0);
       p.p[1] = f32(e.centre[1] + core::range(rng, -1, 1) * e.half[1]);

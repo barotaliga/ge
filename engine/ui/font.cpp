@@ -244,6 +244,9 @@ const GlyphMask& Font::mask(int glyph, float size, float phase) const {
                        (size_key << 2) | static_cast<uint64_t>(quarter);
   auto it = cache_.find(key);
   if (it != cache_.end()) return it->second;
+  // Drawn at the size the key holds, never the caller's: two sizes within 1/32 px of each other
+  // share an entry, so the mask must not depend on which of them asked first.
+  size = static_cast<float>(size_key) / 16;
   GlyphMask m;
   if (grid()) {
     m = grid_mask(impl_->grid, glyph, grid_cell(impl_->grid, size),

@@ -26,6 +26,7 @@ struct LightEntity {
   double colour[3] = {1, 1, 1};
   bool flame = false;  // a torch or a flame
   bool torch = false;  // a wall torch (a flame too)
+  bool large = false;  // a large flame: a brazier's on the floor (a flame too)
   int style = 0;       // the entity's light style number
 };
 

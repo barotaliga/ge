@@ -70,6 +70,7 @@ Flame torch_flame(const double base[3], uint32_t seed);     // a pitch or wood t
 Flame candle_flame(const double base[3], uint32_t seed);    // a candle's, 4 cm
 Flame brazier_flame(const double base[3], uint32_t seed);   // a brazier's or a big torch's, 0.8 m
 Flame campfire_flame(const double base[3], uint32_t seed);  // a camp fire's, 1.2 m
+Flame bonfire_flame(const double base[3], uint32_t seed);   // a bonfire's, 2 m and broad
 
 // The light the flame casts (render/lights.hpp): flickering as the flame does, with its seed.
 LocalLight flame_light(const Flame& flame);

@@ -32,8 +32,13 @@ TEST(light_entities_reads_place_value_reach_colour_and_style) {
       entity({{"classname", "light_torch_small_walltorch"}, {"origin", "0 0 0"}, {"style", "6"}}));
   m.entities.push_back(entity({{"classname", "light_fluoro"}, {"origin", "1 2 3"}}));
   m.entities.push_back(entity({{"classname", "light"}}));  // no origin: skipped
+  m.entities.push_back(entity({{"classname", "light_flame_large_yellow"}, {"origin", "0 0 0"}}));
+  m.entities.push_back(entity({{"classname", "light_flame_small_white"}, {"origin", "0 0 0"}}));
   const std::vector<LightEntity> ls = light_entities(m);
-  CHECK(ls.size() == 3);
+  CHECK(ls.size() == 5);
+  // A large flame (a brazier's) is told from a small one and from a torch.
+  CHECK(ls[3].flame && ls[3].large && !ls[3].torch);
+  CHECK(ls[4].flame && !ls[4].large && !ls[1].large);
   double want[3];
   const float at[3] = {40, 80, 120};
   to_engine(at, want);

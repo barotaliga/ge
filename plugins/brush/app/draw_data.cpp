@@ -14,6 +14,7 @@
 #include <map>
 #include <numeric>
 
+#include "brush/app/bsp_flames.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/bytes.hpp"
 #include "brush/lights.hpp"
@@ -764,7 +765,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     l.reach = le.reach;
     l.seed = hash32(++n * 0x9e3779b1u);
     l.flame = le.flame;
-    if (l.flame) l.fire = le.torch ? Fire::wall_torch : Fire::large;
+    if (l.flame) l.fire = le.torch ? Fire::wall_torch : le.large ? Fire::large : Fire::flame;
     switch (le.style) {
       case 2:
       case 5:
@@ -791,6 +792,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     for (int k = 0; k < 3; ++k) l.colour[k] = le.colour[k];
     s.lights.push_back(l);
   }
+  place_fires(s);
   return true;
 }
 
