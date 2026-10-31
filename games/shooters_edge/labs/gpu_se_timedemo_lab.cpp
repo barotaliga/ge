@@ -325,11 +325,13 @@ void run(gl::Lab& lab) {
     };
     for (const ge::classicenhance::SwitchSpec& sw : ge::classicenhance::switches()) {
       if (sw.bake || sw.group == "SOUND" || !(picture.ce.*sw.field)) continue;
+      const std::string only = "," + lab.arg("price-only") + ",";
+      if (only != ",," && only.find("," + std::string(sw.id) + ",") == std::string::npos) continue;
       shooters_edge::look::Picture without = picture;
       without.ce.*sw.field = false;
       if (!row("ce_" + std::string(sw.id), without, false)) return;
     }
-    if (!row("the HUD", picture, true)) return;
+    if (lab.arg("price-only").empty() && !row("the HUD", picture, true)) return;
     const std::vector<cl::Price> saved = cl::prices(bases, off);
     for (const std::string& line : cl::price_report(bases, saved)) lab.note(line);
     for (const cl::Price& pr : saved)
@@ -381,7 +383,10 @@ const gl::LabSpec kSpec{
      {"look", "", "r_look for the run: classic or modern (empty: the game's default)"},
      {"price", "0",
       "1: play the demo again with each drawn ce_ switch off in turn (and without the HUD), each "
-      "between two all-on runs, and chart what each saved off the whole frame"}},
+      "between two all-on runs, and chart what each saved off the whole frame"},
+     {"price-only", "",
+      "with --price=1: price only these switches, ids without the ce_ (relief,parallax); empty: "
+      "every drawn one"}},
     "--size=320,180",
     run,
 };
