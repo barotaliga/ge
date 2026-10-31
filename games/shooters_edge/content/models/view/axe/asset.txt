@@ -1,0 +1,6 @@
+# The axe, held weapon 1: a bearded war axe on an ash haft, its texture baked from the kit's
+# procedural materials. Built by `ge asset build axe` (weapon_kit.py beside it).
+builder: build.py
+source: ../weapon_kit.py
+data: se_view
+budget-kib: 1536

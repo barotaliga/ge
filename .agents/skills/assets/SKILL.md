@@ -167,6 +167,10 @@ make lab LAB=models ARGS="--model=plugins/skier/assets/skier/skier.glb"   # then
   influences a vertex, one rest pose a skin, an action baked at **60 frames a second** (24 shows
   as a row of kinks in the lab), glb with base colour factors and no textures.
 
+A held weapon (first person, with hands and a fire clip) is built over its own kit and staged in
+its own lab: load the `held-weapons` skill. Its texture is kept whole by the loader
+(`LoadOptions::keep_textures`), not baked into parts.
+
 ## Images: PNG and PCX
 
 `assets/image.hpp` reads PNG (palette included) into RGBA8. `assets/pcx.hpp` reads the 8-bit,

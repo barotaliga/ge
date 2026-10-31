@@ -1,0 +1,6 @@
+# The shotgun, held weapon 2: a pump-action twelve-bore in blued steel and walnut, its texture
+# baked from the kit's procedural materials. Built by `ge asset build shotgun` (weapon_kit.py).
+builder: build.py
+source: ../weapon_kit.py
+data: se_view
+budget-kib: 1536

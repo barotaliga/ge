@@ -1,4 +1,4 @@
-// LAB `se-viewmodel`: Shooter's Edge's own held weapons (games/shooters_edge/view), the free
+// LAB `se-viewmodel`: Shooter's Edge's own held weapons (games/shooters_edge/view), the built
 // models with no classic pack, drawn in first person on the CPU in the engine's stone corridor
 // (viewmodel/stage.hpp), every frame stepped through the game's hand (view/hand.hpp):
 //
@@ -33,6 +33,7 @@
 #include "lab/raster.hpp"
 #include "shooters_edge/view/hand.hpp"
 #include "shooters_edge/view/weapons.hpp"
+#include "viewmodel/raster.hpp"
 #include "viewmodel/stage.hpp"
 
 namespace {
@@ -92,28 +93,6 @@ void to_screen(const float v[3], double fov_y, double aspect, double out[2]) {
   out[1] = 0.5 - 0.5 * v[1] / (z * ty);
 }
 
-// The share of the screen the model's placed box covers (clipped to the screen).
-double screen_share(const vm::HeldModel& m, const vm::Placement& p, double fov_y, double aspect) {
-  float lo[3], hi[3];
-  vm::held_bounds(m, lo, hi);
-  double x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
-  for (int c = 0; c < 8; ++c) {
-    const float corner[3] = {(c & 1) ? hi[0] : lo[0], (c & 2) ? hi[1] : lo[1],
-                             (c & 4) ? hi[2] : lo[2]};
-    float v[3];
-    vm::place_point(p, corner, v);
-    double s[2];
-    to_screen(v, fov_y, aspect, s);
-    x0 = std::min(x0, s[0]);
-    x1 = std::max(x1, s[0]);
-    y0 = std::min(y0, s[1]);
-    y1 = std::max(y1, s[1]);
-  }
-  const double w = std::clamp(x1, 0.0, 1.0) - std::clamp(x0, 0.0, 1.0);
-  const double h = std::clamp(y1, 0.0, 1.0) - std::clamp(y0, 0.0, 1.0);
-  return std::max(0.0, w) * std::max(0.0, h);
-}
-
 void muzzle_view(const vm::HeldModel& m, const vm::Placement& p, float out[3]) {
   float tip[3];
   vm::muzzle_at(m, 0, 0, 0, tip);
@@ -149,6 +128,13 @@ void run(ge::lab::Lab& lab) {
   if (!se::load_weapon_models(dir, models, &error)) {
     lab.fail(error, "next: rerun from the repository's root, or pass --models=<folder>.");
     return;
+  }
+  // Each weapon without the hands holding it, mounted the same: what its size is measured on.
+  std::vector<vm::HeldModel> bare(models.size());
+  for (const se::WeaponLook& look : se::weapon_looks()) {
+    vm::HeldModel held;
+    se::load_weapon_model(se::weapon_model_path(dir, look), look, held, &error,
+                          &bare[static_cast<size_t>(look.weapon)]);
   }
   const Inputs inputs = {{"models", dir}, {"width", std::to_string(width)}};
   const vm::Stage stage = vm::corridor_stage();
@@ -190,11 +176,12 @@ void run(ge::lab::Lab& lab) {
       const vm::StageLights l = vm::stage_lights(vm::StageLight::day, view, mv);
       panels.push_back(draw(f, l, view));
       labels.emplace_back(look.name);
-      const double share = screen_share(m, f.placement, view.fov_y, aspect);
+      const vm::HeldModel& b = bare[static_cast<size_t>(look.weapon)];
+      const double share = vm::held_coverage(b, f.placement, view.fov_y, width, height);
       double at[2];
       to_screen(mv, view.fov_y, aspect, at);
       float lo[3], hi[3];
-      vm::held_bounds(m, lo, hi);
+      vm::held_bounds(b, lo, hi, 0);
       const std::string key(look.name);
       lab.metric("share-" + key, share, "share");
       char c[4][16];
@@ -203,10 +190,11 @@ void run(ge::lab::Lab& lab) {
       std::snprintf(c[2], 16, "%.3f", at[0]);
       std::snprintf(c[3], 16, "%.3f", at[1]);
       table.rows.push_back({key, c[0], c[1], c[2], c[3]});
-      // Held, not a toy and not the whole picture; the muzzle (the tip) on the screen.
-      if (share < 0.04 || share > 0.3) {
+      // Held, not a toy and not the whole picture (a built weapon at its true size in hands covers
+      // more than a toy-scale one did); the muzzle (the tip) on the screen.
+      if (share < 0.04 || share > 0.4) {
         ++problems;
-        lab.note(key + ": its box covers " + c[1] + " of the picture (stated 0.04..0.3)");
+        lab.note(key + ": it covers " + c[1] + " of the picture (stated 0.04..0.4)");
       }
       if (!look.upright && (at[0] < 0.02 || at[0] > 0.98 || at[1] < 0.02 || at[1] > 0.98)) {
         ++problems;
@@ -215,7 +203,8 @@ void run(ge::lab::Lab& lab) {
     }
     lab.table(table);
     lab.shot({"held", "EVERY WEAPON HELD",
-              "Shooter's Edge's eight free weapons at rest in first person by day in the stone "
+              "Shooter's Edge's eight built weapons, held in the hands, at rest in first person by "
+              "day in the stone "
               "corridor, each on its own mount and offset from the eye, through the hand.",
               "every muzzle points down the corridor; each weapon sits low right at about the "
               "same size, reads as held, and the long launcher is not bigger on screen than the "
@@ -253,7 +242,7 @@ void run(ge::lab::Lab& lab) {
               "at the barrel's tip lights the gun and the room round it, and a flare marks the "
               "muzzle. The melee weapon has no flash.",
               "the light comes from the muzzle: the barrel's top and the near walls lit warm (the "
-              "beam gun's cold), the gun's back darker; the kick has pushed it back and up",
+              "lightning gun's cold), the gun's back darker; the kick has pushed it back and up",
               inputs},
              sheet(panels, labels, 4));
   }
@@ -354,7 +343,7 @@ const ge::lab::LabSpec kSpec{
     "se-viewmodel",
     ge::lab::LabKind::picture,
     "game:shooters_edge",
-    "games/shooters_edge/view (the free weapons' mounts, the hand, the cvars) over "
+    "games/shooters_edge/view (the built weapons' mounts, the hand, the cvars) over "
     "engine/viewmodel",
     "render",
     "Does each of Shooter's Edge's own weapons sit right in the view, light the room when it "
