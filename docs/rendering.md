@@ -722,7 +722,8 @@ between frames.
   `gpu-lights` lab off the depth read back, every pixel a lamp reaches finding that lamp.
 - **Readers.** `local_lights(surface, p, n, v, frag)` sums every listed lamp through the
   surface's model; the instances, the plain terrain and the snow call it. `light_inscatter(p,
-  dir, frag, g)` is the air's (a Henyey-Greenstein phase), for a fog volume's march.
+  dir, frag, g, sigma)` is the air's (a Henyey-Greenstein phase, dimmed by `sigma` a metre
+  toward the lamp), read by the fog's inject (M38e).
 - **The eye under lamps.** The exposure is read off the sky's light; a lit street at night
   needs the lamps' light in it too, or the eye is at the dark sky's gain and every lamp burns
   out. `FrameView::lamp_lux` is that light (lx on a white face); `lamp_lux_at` gives it at a
@@ -1361,7 +1362,13 @@ the next section's.
   fog over the point, and THE GROUND'S LIGHT from below: the sun and the sky sent back by the
   terrain's albedo under the point (the frame's even ground with no terrain), through the fog
   over and under the point. Over snow that is nearly the light from above again, and without it
-  a mist over a sunlit field came out at under half the snow's brightness. Last, its glow. The
+  a mist over a sunlit field came out at under half the snow's brightness. THE LAMPS (M38e):
+  each lamp of the cluster the froxel's point falls in (the light list in group 0, found by the
+  point's pixel and depth as a surface there would find it), its irradiance on the fog's lobe,
+  past its own shadow map where it has one, and dimmed by the medium between the point and the
+  lamp (the extinction at the point taken as even along the way). A floodlight in a mist has a
+  halo, its cone shows and the mast's shadow is a darker band through it; the air the lamps do
+  not reach stays dark. Last, its glow. The
   result is blended with the
   last frame's light at the same world point (reprojected through the last camera), nine
   tenths of it, so the jitter averages to a smooth medium.
@@ -1376,7 +1383,9 @@ the next section's.
 
 On the software adapter at the default 160 x 90 x 64 froxels the inject costs 40 to 210 ms (the
 march toward the light in every froxel the medium fills) and the integrate 15 to 25 ms (the `fog` lab's `gpu-ms` rows); a real GPU's figures and a ladder row
-(the froxels' size) wait for M38f. Not yet: the lamps in the fog (M38e, on M39's light list).
+(the froxels' size) wait for M38f. The lamps cost the inject where they reach (one cluster read
+and its lamps' shadows a froxel): the `lamps` scene's inject 209 ms without them, 293 ms with
+them, on the software adapter.
 
 ## The valley fog
 

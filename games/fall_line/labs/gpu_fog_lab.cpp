@@ -1,4 +1,4 @@
-// LAB `fog`: the fog in areas (engine/render/fog.hpp) in Fall Line's frame. Four scenes over a
+// LAB `fog`: the fog in areas (engine/render/fog.hpp) in Fall Line's frame. Five scenes over a
 // seed's map, each drawn without its fog and with it, from a camera the scene places:
 // - WOODS: under the late morning sun, the wood the sun lights best seen across the sun (the `wood`
 //   view), a ground mist laid over it, the trees' shadows falling through it;
@@ -7,7 +7,9 @@
 // - GLOW: at night, a glowing haze on the snow ahead (what a fire or a pool of lava lights), red
 //   and orange, among clear air;
 // - DUST: at noon on the piste, a thin warm dust in the air round the eye, carved into drifting
-//   wisps by the noise on the wind.
+//   wisps by the noise on the wind;
+// - LAMPS: at night, a mist round a floodlight mast on the piste, its lamps scattered in it (a
+//   halo round each head, the beam's cone, the mast's shadow through it).
 // --frames frames are drawn up to each picture at 60 a second, so the fog's history has settled.
 //
 // Beside each: the volumes in reach and the froxel range (deterministic), the share of the
@@ -18,9 +20,9 @@
 //
 // The sea of fog in the valleys is the `valley-fog` lab's (engine/render/valley_fog.hpp).
 //
-// ge:summary Lab: the fog in areas: woods mist with shafts, a glow, drifting dust
+// ge:summary Lab: the fog in areas: woods mist with shafts, a glow, drifting dust, lamps in mist
 // ge:keywords lab fog mist ground-fog dust glow light-shafts god-rays froxel volume
-// ge:keywords fall-line picture
+// ge:keywords fall-line picture lamps-in-fog halo floodlight
 // ge:skill render labs
 #include <algorithm>
 #include <cctype>
@@ -40,6 +42,7 @@
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
+#include "mountain/app/night_lamps.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "render/fog.hpp"
 #include "render/view.hpp"
@@ -226,6 +229,50 @@ Scene dust(const mg::Level& level, double hour) {
   return s;
 }
 
+Scene lamps(const mg::Level& level, double hour) {
+  Scene s;
+  s.id = "lamps";
+  s.look =
+      "the floodlight's head a bright point with a soft halo round it in the mist, its beam a "
+      "pale cone falling across the piste, the mast's shadow a darker band through it, the air "
+      "away from the lamps dark";
+  fall_line::app::day_view(level, hour, s.view);
+  // The floodlight mast halfway down the piste, seen from 30 m across its throw, 2 m over the
+  // snow, looking up at its head.
+  const std::vector<ge::mountain::app::Lamp> masts = ge::mountain::app::piste_lamps(level);
+  r::FogVolume f;
+  if (!masts.empty()) {
+    const ge::mountain::app::Lamp& m = masts[masts.size() / 2];
+    const double hx = ge::core::libm::sin(m.throw_heading),
+                 hz = ge::core::libm::cos(m.throw_heading);
+    const double ex = m.x + 12 * hx - 30 * hz, ez = m.z + 12 * hz + 30 * hx;
+    s.view.eye[0] = ex;
+    s.view.eye[2] = ez;
+    s.view.eye[1] = level.ground_at(ex, ez) + 2;
+    const double top = level.ground_at(m.x, m.z) + m.height;
+    s.view.heading = ge::core::libm::atan2(m.x + 6 * hx - ex, m.z + 6 * hz - ez);
+    s.view.pitch = ge::core::libm::atan2(top - 6 - s.view.eye[1], 31.0);
+    s.view.fov_y = 62 * kDeg;
+    f.centre[0] = m.x;
+    f.centre[2] = m.z;
+    f.centre[1] = level.ground_at(m.x, m.z);
+  }
+  f.half[0] = f.half[2] = 90;
+  f.half[1] = 30;
+  f.density = 0.012;
+  f.falloff = 0.02;
+  f.edge = 15;
+  f.phase = 0.6;
+  f.noise = 0.3;
+  f.noise_size = 30;
+  f.wind[0] = 0.8;
+  s.fog = {f};
+  s.what =
+      "a night mist 180 m across and 30 m deep round a floodlight mast, 0.012/m thinning "
+      "upward 2 % a metre, forward-scattering (g 0.6), lit by the piste's lamps";
+  return s;
+}
+
 void run(ge::lab::Lab& lab) {
   const double seed = lab.arg_num("seed");
   const int frames = static_cast<int>(lab.arg_num("frames"));
@@ -251,10 +298,11 @@ void run(ge::lab::Lab& lab) {
   if (wanted("shafts")) scenes.push_back(shafts(level, lab.arg_num("morning")));
   if (wanted("glow")) scenes.push_back(glow(level, lab.arg_num("night")));
   if (wanted("dust")) scenes.push_back(dust(level, 12));
+  if (wanted("lamps")) scenes.push_back(lamps(level, lab.arg_num("night")));
   if (scenes.empty()) {
     lab.fail("--scenes `" + want + "` names no scene",
-             "Pass --scenes=all or ids from woods,shafts,glow,dust, comma-separated. Skill: "
-             "render.");
+             "Pass --scenes=all or ids from woods,shafts,glow,dust,lamps, comma-separated. "
+             "Skill: render.");
     return;
   }
   for (const Scene& s : scenes) {
@@ -409,7 +457,8 @@ const ge::lab::LabSpec kSpec{
     "it and lit by the light round it?",
     {
         {"seed", "38", "the map's seed"},
-        {"scenes", "all", "the scenes drawn: all, or ids comma-separated (woods,shafts,glow,dust)"},
+        {"scenes", "all",
+         "the scenes drawn: all, or ids comma-separated (woods,shafts,glow,dust,lamps)"},
         {"morning", "11", "the solar hour of the woods"},
         {"night", "22", "the solar hour of the glow"},
         {"weather", "1", "1: the map's own sky (its cloud and deck); 0: a clear one"},

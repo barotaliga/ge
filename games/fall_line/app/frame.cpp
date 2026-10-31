@@ -48,7 +48,8 @@ constexpr r::PassRow kPassTable[] = {
     {"shadows.figures", "instances figures.posed shadows.lists", "shadows.maps"},
     {"lamps.cull", "instances", "lamps.lists"},
     {"lamps.shadows", "instances figures.posed lamps.lists", "lamps.atlas"},
-    {"fog.inject", "shadows.maps terrain.horizon sky.aerial sky.light fog.history", "fog.media"},
+    {"fog.inject", "shadows.maps terrain.horizon sky.aerial sky.light fog.history lamps.atlas",
+     "fog.media"},
     {"fog.integrate", "fog.media", "fog.volume"},
     {"terrain.depth", "terrain.tiles terrain.indirect terrain.height", "depth"},
     {"instances.depth", "instances figures.posed instances.early", "depth"},
@@ -100,8 +101,7 @@ int lamp_slots(const GameFrame& f) {
              : 0;
 }
 
-// `lamps`' posts stood as `family` (dark: `draw` lights their glass with the dark), casting into
-// the cascades with the forest; nothing for none.
+// `lamps`' posts stood as `family` (dark: `draw` lights their glass), casting with the forest.
 void stand_posts(ge::gpu::Device& device, GameFrame& f, r::InstanceFamily& family,
                  std::string_view label, std::span<const ge::mountain::app::Lamp> lamps) {
   if (lamps.empty()) return;

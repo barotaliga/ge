@@ -35,14 +35,17 @@
 //   reach `fog_uniforms` writes a range of 0 and nothing reads the volume, so a game without fog
 //   draws the same bits it drew before.
 //
-// The lamps' light in the fog (the dynamic lights' list) is added in "fog.inject" when that list
-// is in group 0.
+// - THE LAMPS (M38e): "fog.inject" also scatters every lamp of the cluster a froxel falls in
+//   (render/lights.hpp's list in group 0, wgsl/lights.wgsl's `light_inscatter`) on the volume's
+//   lobe, past each lamp's own shadow map where it has one: a lamp in a mist has a halo, a
+//   floodlight's beam and a post's shadow show in the air. A frame with no lamps adds nothing.
 //
 // ge:summary Fog, mist, dust and glowing haze in areas: volumes into a lit froxel volume
 // ge:summary every material's haze reads, with shafts through the sun's shadows
 // ge:keywords render fog local-fog volumetric-fog froxel mist ground-fog dust smoke haze glow
 // ge:keywords light-shafts god-rays inject integrate henyey-greenstein temporal reprojection
 // ge:keywords fog-volume create_fog prepare_fog encode_fog fog_uniforms read_fog_column
+// ge:keywords lamps-in-fog halo lamp-halo beam light_inscatter
 // ge:skill render
 // ge:test tests/render_fog_test.cpp
 #pragma once
