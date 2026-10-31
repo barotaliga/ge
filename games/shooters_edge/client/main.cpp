@@ -35,6 +35,12 @@
 // window over the whole screen (`vid_display n` which one, of those `vid_displays` lists), and
 // `quit` quits.
 //
+// THE LOBBY (client/lobby_console.hpp): a match opens each map in WARMUP, everyone free to roam
+// with nothing counted, until every player is `ready` (F1, and F1 again or `break` takes it back),
+// then a countdown and the map restarted for the match; F2 (`team switch`) changes team, F3 shows
+// or hides the roster, `addbot` seats a bot, `start` lets the host start whoever is ready, and
+// `sv_lobby 0` starts the match with the map.
+//
 // THE BENCHMARK: `benchmark <demo>` in the console (or `-benchmark <demo>` on the command line,
 // which quits when it is done) plays a recorded game (`demo1` from the packs, or a file's path)
 // one demo frame a drawn frame, at the window's settings (one in 33 ms shown, the rest drawn
@@ -50,6 +56,7 @@
 // ge:keywords relative-mouse mouse-look hud first-person effects r_look quit shooters-edge
 // ge:keywords benchmark timedemo demo vsync-off fps playdemo demo_track cl_demospeed
 // ge:keywords main-menu escape vid_fullscreen fullscreen offscreen vid_display vid_displays
+// ge:keywords lobby warmup ready break team addbot
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
 #include <cstdio>
@@ -75,6 +82,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/lobby_console.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
@@ -229,6 +237,7 @@ int run_main(int argc, char** argv) {
                         if (listen.server)
                           shooters_edge::server::server_command(*listen.server, a.rest(0));
                       });
+  cl::add_lobby_commands(console, listen);
   cl::add_cvars(console, controls);
   shooters_edge::look::add_cvars(console, picture);
   shooters_edge::view::ViewSettings view_settings;
@@ -354,6 +363,8 @@ int run_main(int argc, char** argv) {
   }
   cl::ListenOptions listen_opt;
   listen_opt.files = &files;
+  listen_opt.lobby = listen.opt.lobby;  // the lobby's settings, as the console set them
+  listen_opt.lobby_settings = listen.opt.lobby_settings;
   {
     std::vector<uint8_t> store;
     listen_opt.registered = !cl::find_file(files, "gfx/pop.lmp", store).empty();
@@ -506,6 +517,7 @@ int run_main(int argc, char** argv) {
   ge::input::InputState held;
   const ge::input::InputState idle;
   ge::ui::ConsoleKeys con_keys;
+  bool lobby_roster = true;  // the lobby panel's roster (F3)
   bool text_on = false;
   ge::ui::DrawList overlay;
   ge::platform::InputSnapshot input;
@@ -735,7 +747,14 @@ int run_main(int argc, char** argv) {
       continue;
     }
 
-    // The player's hands, then the server's frames.
+    // The lobby's keys (F1 ready or break, F2 the other team, F3 the roster), then the player's
+    // hands, then the server's frames.
+    {
+      using ge::platform::Key;
+      const bool keys = !con_keys.held && !con_view.open() && !game_menu.open();
+      cl::lobby_keys(listen, keys && input.tapped(Key::f1), keys && input.tapped(Key::f2),
+                     keys && input.tapped(Key::f3), lobby_roster);
+    }
     cl::turn_view(played, controls, listen.view);
     const ge::shooter::MoveCmd cmd = cl::read_controls(played, controls);
     if (listen.server != nullptr) {
@@ -754,6 +773,12 @@ int run_main(int argc, char** argv) {
     if (listen.map_changed) {  // the campaign went on to its next map
       listen.map_changed = false;
       if (!rebuild_world(*listen.map)) return 1;
+      shown = {};
+      fx_state = {};
+      in_hand = {};
+    }
+    if (listen.restarted) {  // the lobby's countdown ran out: the match on a new server
+      listen.restarted = false;
       shown = {};
       fx_state = {};
       in_hand = {};
@@ -781,6 +806,9 @@ int run_main(int argc, char** argv) {
       const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
       hud.layout.draw(overlay, hf, se::hud_style());
     }
+    if (listen.room && listen.server != nullptr)
+      se::draw_lobby(overlay, cl::lobby_view(*listen.room, listen.server->sv.time, 0, lobby_roster),
+                     w, h);
     draw_campaign(
         overlay, listen, game_menu.art(), w, h,
         listen.campaign_host && !con_keys.held && !was_open && input.down(ge::platform::Key::tab));
