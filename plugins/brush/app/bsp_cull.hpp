@@ -41,6 +41,12 @@ struct BspCull {
   uint32_t chunks = 0, total = 0;  // faces drawn, indices in the source
   std::vector<uint32_t> surface;   // each chunk's map surface
   std::vector<uint8_t> world;      // each chunk: 1 the world's (the PVS decides), 0 a model's
+  std::vector<uint32_t> model;     // each chunk's brush model (0 the world)
+  std::vector<GpuChunk> placed;    // each chunk as the map built it
+  // Each brush model's offset (engine metres) and 1 in w when it is hidden (bsp_draw.hpp's
+  // `set_movers`); `moved` until prepare_bsp_cull has moved the chunks' boxes with them.
+  std::vector<std::array<float, 4>> moves;
+  bool moved = false;
   wgpu::Buffer src, chunk_buf, pvs, dst, sizes, state, args, params;
   std::vector<uint32_t> args_reset;
   render::Hiz hiz;

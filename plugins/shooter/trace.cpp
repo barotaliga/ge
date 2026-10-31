@@ -63,16 +63,18 @@ HullTrace clip_to_entity(const Server& sv, int ent, Vec3f start, Vec3f mins, Vec
   const Edict& e = sv.edicts[static_cast<size_t>(ent)];
   Vec3f offset;
   HullTrace tr;
+  const bool original = sv.set.single_player_clock || sv.original_walk;
+  auto walk = original ? &trace_hull_original : &trace_hull;
   if (e.solid == kSolidBsp) {
     const BrushModel& m = sv.models[static_cast<size_t>(e.modelindex)];
     const float width = maxs.x - mins.x;
     const int h = width < 3 ? 0 : width <= 32 ? 1 : 2;
     offset = m.clip_mins[h] - mins + e.origin;
-    tr = trace_hull(m.hulls[h], start - offset, end - offset);
+    tr = walk(m.hulls[h], start - offset, end - offset);
   } else {
     const BoxHull box = make_box_hull(e.mins - maxs, e.maxs - mins);
     offset = e.origin;
-    tr = trace_hull(box.hull(), start - offset, end - offset);
+    tr = walk(box.hull(), start - offset, end - offset);
   }
   if (tr.allsolid)
     tr.endpos = start;

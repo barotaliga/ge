@@ -252,6 +252,16 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
                             wgpu::BufferUsage::Storage);
   if (!scene.frames.empty())
     device.queue.WriteBuffer(d.frames, 0, scene.frames.data(), scene.frames.size() * 16);
+  // The brush models' runs, all at the map's place.
+  d.mover_rows.assign(std::max<size_t>(scene.model_vertices.size(), 1), GpuMover{});
+  for (size_t k = 0; k < scene.model_vertices.size(); ++k) {
+    d.mover_rows[k].range[0] = scene.model_vertices[k][0];
+    d.mover_rows[k].range[1] = scene.model_vertices[k][1];
+  }
+  d.movers = r::make_buffer(device, "bsp.movers", d.mover_rows.size() * sizeof(GpuMover),
+                            wgpu::BufferUsage::Storage);
+  device.queue.WriteBuffer(d.movers, 0, d.mover_rows.data(),
+                           d.mover_rows.size() * sizeof(GpuMover));
   d.lights =
       r::make_buffer(device, "bsp.lights", sizeof(GpuLight) * 512, wgpu::BufferUsage::Storage);
   d.jobs = r::make_buffer(device, "bsp.jobs", sizeof(GpuJob) * (kMaxShadowed * 6 + kOrthos),
@@ -259,15 +269,17 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
 
   using r::Slot;
   const auto both = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
-  d.layout = r::make_layout(device, "bsp",
-                            {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler,
-                             Slot::storage_read, Slot::depth_array, Slot::compare,
-                             Slot::depth_array, Slot::texture, Slot::texture, Slot::storage_read},
-                            both);
-  d.group = r::make_group(device, "bsp", d.layout,
-                          {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler,
-                           d.lights, d.cubes_view, d.compare, d.orthos_view,
-                           d.rebake_rgb.CreateView(), d.rebake_dir.CreateView(), d.frames});
+  d.layout =
+      r::make_layout(device, "bsp",
+                     {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler,
+                      Slot::storage_read, Slot::depth_array, Slot::compare, Slot::depth_array,
+                      Slot::texture, Slot::texture, Slot::storage_read, Slot::storage_read},
+                     both);
+  d.group =
+      r::make_group(device, "bsp", d.layout,
+                    {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler,
+                     d.lights, d.cubes_view, d.compare, d.orthos_view, d.rebake_rgb.CreateView(),
+                     d.rebake_dir.CreateView(), d.frames, d.movers});
   d.fix_layout = r::make_layout(device, "bsp.sky", {Slot::texture, Slot::uniform},
                                 wgpu::ShaderStage::Fragment);
   d.shadow_layout = r::make_layout(device, "bsp.shadows", {Slot::storage_read}, both);
@@ -626,6 +638,29 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
                              d.frame_lights.size() * sizeof(GpuLight));
   }
   device.queue.WriteBuffer(d.jobs, 0, d.frame_jobs.data(), d.frame_jobs.size() * sizeof(GpuJob));
+  if (d.movers_dirty) {
+    device.queue.WriteBuffer(d.movers, 0, d.mover_rows.data(),
+                             d.mover_rows.size() * sizeof(GpuMover));
+    d.movers_dirty = false;
+  }
+}
+
+void set_movers(BspDraw& d, std::span<const Mover> movers) {
+  for (const Mover& m : movers) {
+    if (m.model == 0 || m.model >= d.mover_rows.size()) continue;
+    GpuMover& g = d.mover_rows[m.model];
+    const float o[3] = {float(m.offset[0]), float(m.offset[1]), float(m.offset[2])};
+    const uint32_t hidden = m.hidden ? 1 : 0;
+    if (g.range[2] == hidden && g.offset[0] == o[0] && g.offset[1] == o[1] && g.offset[2] == o[2])
+      continue;
+    g.range[2] = hidden;
+    for (int k = 0; k < 3; ++k) g.offset[k] = o[k];
+    d.movers_dirty = true;
+    if (m.model < d.cull.moves.size()) {
+      d.cull.moves[m.model] = {o[0], o[1], o[2], float(hidden)};
+      d.cull.moved = true;
+    }
+  }
 }
 
 void set_dynamic_lights(BspDraw& d, std::span<const DynamicLight> lights) {

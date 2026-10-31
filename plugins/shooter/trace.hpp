@@ -6,7 +6,9 @@
 // (x size): under 3 units hull 0, up to 32 hull 1, wider hull 2; the hull's own `clip_mins` minus
 // the box's mins plus the model's origin is the offset the sweep is taken in. AGAINST A BOX the
 // entity's box grown by the moving box (its mins minus the mover's maxs, its maxs minus the
-// mover's mins) is a six-plane hull at the entity's origin.
+// mover's mins) is a six-plane hull at the entity's origin. Each hull is walked the networked way,
+// or the original way (hull.hpp) on the single-player clock and during an original move's own
+// traces (`Server::original_walk`).
 //
 // THE WALK (`trace_move`): the world first; a sweep that is all solid in the world looks no
 // further. Then every solid entity linked in the area tree whose absolute box meets the sweep's

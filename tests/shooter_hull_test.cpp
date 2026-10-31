@@ -45,10 +45,14 @@ TEST(trace_that_misses_runs_its_length) {
 
 TEST(trace_in_solid) {
   const sh::BoxHull b = sh::make_box_hull({-10, -10, -10}, {10, 10, 10});
-  // Inside all the way: all solid, ends at its start, fraction 1.
+  // Inside all the way: all solid, fraction 1, the end point its start (the networked walk) or
+  // the trace's end (the original walk).
   const sh::HullTrace t = sh::trace_hull(b.hull(), {0, 0, 0}, {5, 0, 0});
   CHECK(t.startsolid && t.allsolid);
   CHECK(t.fraction == 1 && t.endpos == (sh::Vec3f{0, 0, 0}));
+  const sh::HullTrace o = sh::trace_hull_original(b.hull(), {0, 0, 0}, {5, 0, 0});
+  CHECK(o.startsolid && o.allsolid);
+  CHECK(o.fraction == 1 && o.endpos == (sh::Vec3f{5, 0, 0}));
   // Starting inside and leaving is allowed: started in solid, not all solid, runs out.
   const sh::HullTrace u = sh::trace_hull(b.hull(), {0, 0, 0}, {30, 0, 0});
   CHECK(u.startsolid && !u.allsolid && u.inopen);

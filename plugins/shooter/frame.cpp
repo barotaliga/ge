@@ -21,6 +21,8 @@ void server_frame(Server& sv, const Packet* packets, int count) {
   for (int i = 0; i < count; i++) run_packet(sv, packets[i]);
   const double frametime =
       sv.physics_started || sv.set.single_player_clock ? sv.set.mintic : sv.set.maxtic;
+  if (sv.set.single_player_clock && sv.set.playermove == PlayerMove::original)
+    frame_players_think(sv, frametime);
   sv.physics_started = true;
   sv.last_physics = sv.time;
   physics_frame(sv, frametime);

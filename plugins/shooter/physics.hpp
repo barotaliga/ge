@@ -1,10 +1,12 @@
 // THE PHYSICS FRAME: every entity that is not a player runs once a frame by its movetype; players
-// are moved by their commands (client.hpp).
+// are moved by their commands (client.hpp), or on the single-player clock with the original move
+// in their turn here (`run_player_frame`).
 //
 // THE FRAME (`physics_frame`): `frametime` is the run clock's step (frame.hpp; the map's first
 // physics frame runs the longest step, sv_maxtic). The program's frame start runs with `time` the
 // server's time; then every entity in number order, the world first, skipping free ones: when
-// `force_retouch` is set it is relinked with its trigger touches; players are then skipped; every
+// `force_retouch` is set it is relinked with its trigger touches; players are then skipped (or run
+// by `run_player_frame` on the single-player clock with the original move); every
 // other runs by its movetype (`run_entity`), followed by the new missile check. `force_retouch`
 // counts down by one. An entity never runs twice at one server time (`Edict::last_run`).
 //
@@ -72,7 +74,12 @@ void physics_step(Server& sv, int e, double dt);
 
 // The entity's slide along what it meets for `time` seconds: 1 a floor was hit, 2 a wall, 3
 // trapped in a solid, 7 out of planes.
-int fly_move(Server& sv, int e, float time);
+int fly_move(Server& sv, int e, float time, HullTrace* wall = nullptr);
+// `wall` (optional) gets the last wall the slide met (a plane whose normal z is exactly 0).
+
+// Moves the entity by `push` as far as it goes, relinks it with its trigger touches and, on a
+// hit, runs both touches.
+HullTrace push_entity(Server& sv, int e, Vec3f push);
 
 void check_water_transition(Server& sv, int e);
 

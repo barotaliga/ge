@@ -8,6 +8,7 @@
 #include "shooter/client.hpp"
 
 #include "core/num.hpp"
+#include "shooter/framemove.hpp"
 #include "shooter/physics.hpp"
 
 namespace ge::shooter {
@@ -78,24 +79,62 @@ void list_solids(const Server& sv, int32_t n, int player, Vec3f lo, Vec3f hi, Mo
   if (lo[node.axis] < node.dist) list_solids(sv, node.children[1], player, lo, hi, w, ents);
 }
 
+// Step 1: the buttons, the impulse and the movement into the player's fields.
+void take_buttons(Edict& ed, const MoveCmd& in) {
+  ed.button0 = static_cast<float>(in.buttons & kButtonAttack);
+  ed.button2 = static_cast<float>((in.buttons & kButtonJump) >> 1);
+  ed.button1 = static_cast<float>((in.buttons & kButtonUse) >> 2);
+  if (in.impulse != 0) ed.impulse = in.impulse;
+  ed.movement = {static_cast<float>(in.forward), static_cast<float>(in.side),
+                 static_cast<float>(in.up)};
+}
+
+MoveCmd clamp_pitch(const Server& sv, const MoveCmd& in) {
+  MoveCmd cmd = in;
+  if (cmd.angles.x < sv.set.minpitch) cmd.angles.x = sv.set.minpitch;
+  if (cmd.angles.x > sv.set.maxpitch) cmd.angles.x = sv.set.maxpitch;
+  return cmd;
+}
+
+// The program's part of the original move when the program leaves it to the engine.
+void original_program_part(Server& sv, int e, double dt) {
+  if (sv.set.program_jumps) return;
+  frame_program_move(sv, e, ent(sv, e).button2 != 0, dt);
+}
+
+// A command piece on the original move (framemove.hpp), by the command's own length: the think
+// (angles and wish), the pre-think and the player's think, the program's part, the move.
+void run_original_piece(Server& sv, int slot, const MoveCmd& cmd, double dt) {
+  ClientSlot& c = sv.clients[static_cast<size_t>(slot)];
+  const int e = slot + 1;
+  const FrameMoveSettings set = frame_settings(sv.set);
+  frame_think(sv, e, frame_command(cmd), set, dt);
+  if (!c.spectator) {
+    sv.g.frametime = static_cast<float>(dt);
+    const LandingGuard guard(ent(sv, e));
+    call_hook(sv, e, sv.program.player_pre_think);
+    guard.apply(ent(sv, e));
+    if (!run_think(sv, e, dt)) return;
+  }
+  original_program_part(sv, e, dt);
+  frame_move(sv, e, set, dt);
+  c.last_cmd_time = sv.time;
+}
+
 // One command piece of at most 50 ms: steps 1 to 7.
 void run_piece(Server& sv, int slot, const MoveCmd& in) {
   ClientSlot& c = sv.clients[static_cast<size_t>(slot)];
   const int e = slot + 1;
   sv.counts.commands++;
-  {
-    Edict& ed = ent(sv, e);
-    ed.button0 = static_cast<float>(in.buttons & kButtonAttack);
-    ed.button2 = static_cast<float>((in.buttons & kButtonJump) >> 1);
-    ed.button1 = static_cast<float>((in.buttons & kButtonUse) >> 2);
-    if (in.impulse != 0) ed.impulse = in.impulse;
-    ed.movement = {static_cast<float>(in.forward), static_cast<float>(in.side),
-                   static_cast<float>(in.up)};
-  }
+  take_buttons(ent(sv, e), in);
 
-  MoveCmd cmd = in;
-  if (cmd.angles.x < sv.set.minpitch) cmd.angles.x = sv.set.minpitch;
-  if (cmd.angles.x > sv.set.maxpitch) cmd.angles.x = sv.set.maxpitch;
+  const MoveCmd cmd = clamp_pitch(sv, in);
+  if (sv.set.playermove == PlayerMove::original) {
+    double dt = cmd.msec * 0.001;
+    if (dt > kMaxCommandDt) dt = kMaxCommandDt;
+    run_original_piece(sv, slot, cmd, dt);
+    return;
+  }
   {
     Edict& ed = ent(sv, e);
     if (!ed.fixangle) ed.v_angle = cmd.angles;
@@ -201,6 +240,34 @@ MoveType move_type_of(const Edict& ed, bool old_spectator) {
   return MoveType::normal;
 }
 
+void frame_players_think(Server& sv, double dt) {
+  const FrameMoveSettings set = frame_settings(sv.set);
+  for (int slot = 0; slot < sv.set.maxclients; slot++) {
+    const ClientSlot& c = sv.clients[static_cast<size_t>(slot)];
+    if (!c.active || c.spectator || !c.any_latest) continue;
+    const int e = slot + 1;
+    take_buttons(ent(sv, e), c.latest);
+    frame_think(sv, e, frame_command(clamp_pitch(sv, c.latest)), set, dt);
+  }
+}
+
+void run_player_frame(Server& sv, int e, double dt) {
+  const ClientSlot& c = sv.clients[static_cast<size_t>(e - 1)];
+  if (!c.active || c.spectator) return;
+  call_hook(sv, e, sv.program.player_pre_think);
+  if (ent(sv, e).free) return;
+  const int movetype = ent(sv, e).movetype;
+  if (movetype == kMovetypeWalk || movetype == kMovetypeNoclip) {
+    if (!run_think(sv, e, dt)) return;
+    original_program_part(sv, e, dt);
+    frame_move(sv, e, frame_settings(sv.set), dt);
+  } else {
+    run_entity(sv, e, dt);
+  }
+  if (ent(sv, e).free) return;
+  call_hook(sv, e, sv.program.player_post_think);
+}
+
 void connect_client(Server& sv, int slot, bool spectator, bool bot, bool new_parms) {
   ClientSlot& c = sv.clients[static_cast<size_t>(slot)];
   c = ClientSlot{};
@@ -267,6 +334,14 @@ int run_packet(Server& sv, const Packet& p) {
   c.last_sequence = p.sequence;
   c.any_packet = true;
   sv.touch_stamp++;
+  if (sv.set.single_player_clock && sv.set.playermove == PlayerMove::original) {
+    // The frame moves the player by its newest command; an impulse is taken as it arrives.
+    c.latest = p.cmds[2];
+    c.any_latest = true;
+    if (p.cmds[2].impulse != 0) ent(sv, p.client + 1).impulse = p.cmds[2].impulse;
+    c.latest.impulse = 0;
+    return lost;
+  }
 
   if (lost < kMaxRepeatLost) {
     for (int i = lost; i > 2; i--) {
