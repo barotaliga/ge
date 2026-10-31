@@ -44,30 +44,18 @@
 // - THE CRUST BROKEN (`break_liquid_crust`): a hole of open melt where something fell in, opening
 //   at once and skinning over from its edge, the plates round it cracked and glowing, a crest
 //   running out in the first second; carried by the flow.
-// - SEEN FROM BELOW (`Liquids::eye_under`): an eye under a body's level, inside its box, sees the
-//   liquid round it in one full-screen pass after the surfaces. A SLIME is a fog of its own
-//   colour: the scene fades into the Kubelka-Munk colour of a thick layer, lit by the light
-//   that reaches the eye's depth (dimmed by the two-stream diffuse attenuation sqrt(K (K + 2 S))),
-//   plus its own glow, over exp(-(K + S) d) of the path; the surface from below shows the world
-//   over it within Snell's window (the ray refracted out, the transmitted share by Fresnel) and,
-//   past it, the slime below mirrored (total internal reflection: its veil); its scum a shadow
-//   on the window. A LAVA is opaque: the melt's own glow fills the view, cooler streaks rising
-//   through it, the eye keyed to the melt (0.6 of a white face) so it stays orange. A thick slime's
-//   few centimetres of view is honest and unplayable, so `under_reach` (m, 0 none) is a game's
-//   least view: no band's attenuation is let past 3 / reach.
+// - SEEN FROM BELOW (`Liquids::eye_under`, docs/liquids.md § From below): a slime a fog of its
+//   colour with Snell's window overhead, a lava its melt all round; `under_reach` a least view.
 //
-// Not yet (docs/liquids.md § Not built yet): a flow region's surface; the waterline split for an
-// eye at the level (render/underwater.hpp's lens plate).
+// Not yet: a flow region's surface; the waterline split for an eye at the level.
 //
 // ge:summary Lava and slime drawn: crust plates, cracks and blackbody glow; turbid slime, bubbles
 // ge:keywords render liquid lava slime crust plates cracks voronoi flow-map blackbody glow
 // ge:keywords incandescence pahoehoe ropes kubelka-munk turbid bubbles scum iridescence
 // ge:keywords thin-film sheen toxic gel mucus sludge tar create_liquid add_liquid_body
 // ge:keywords lava_look slime_look liquid_look prepare_liquid encode_liquid liquid_lamps
-// ge:keywords glowing-body lava-light area-light
-// ge:keywords reflections screen-space-reflections ssr heat-shimmer heat-haze crust-broken
+// ge:keywords glowing-body lava-light area-light reflections ssr heat-shimmer crust-broken
 // ge:keywords break_liquid_crust splash under-lava under-slime from-below eye_under under_reach
-// ge:keywords snell-window total-internal-reflection
 // ge:skill render water
 // ge:test tests/render_liquid_test.cpp
 #pragma once

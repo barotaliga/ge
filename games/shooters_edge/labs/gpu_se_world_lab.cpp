@@ -135,7 +135,7 @@ std::vector<View> room_views(const br::Fixture& f, const std::string& map) {
 
 // A view up into the open sky: under the level sky face nearest the start (a ceiling of sky, at
 // most 4 m under it), looking up at it; `fallback` pitched up when the map has none.
-View sky_view(const ba::Scene& s, View fallback) {
+View sky_view(const ba::Scene& s, const View& fallback) {
   double best = 1e30;
   View v = fallback;
   v.pitch = std::max(v.pitch, 0.0) + 0.45;
