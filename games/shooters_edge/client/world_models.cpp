@@ -72,13 +72,14 @@ uint32_t scale_of(const gr::MorphSkin& skin, const ge::assets::Image& big) {
 // texel's mark its source texel's.
 void enhance_skin(gr::MorphSkin& skin, const ge::assets::Image& big, uint32_t from, uint32_t k) {
   const uint32_t w = skin.width * k, h = skin.height * k, step = from / k;
+  if (step == 0) return;
   std::vector<uint8_t> rgba(size_t(w) * h * 4);
   for (uint32_t y = 0; y < h; y++) {
     for (uint32_t x = 0; x < w; x++) {
       uint32_t sum[4] = {0, 0, 0, 0};
       for (uint32_t j = 0; j < step; j++)
         for (uint32_t i = 0; i < step; i++) {
-          const size_t at = (size_t(y * step + j) * uint32_t(big.width) + x * step + i) * 4;
+          const size_t at = ((size_t(y) * step + j) * size_t(big.width) + size_t(x) * step + i) * 4;
           for (int c = 0; c < 4; c++) sum[c] += big.rgba[at + size_t(c)];
         }
       for (int c = 0; c < 4; c++)

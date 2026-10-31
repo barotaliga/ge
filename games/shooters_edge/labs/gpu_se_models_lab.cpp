@@ -536,9 +536,9 @@ void run(gl::Lab& lab) {
             "the surface moving and lit by the room, the walls round it in it", look_at(e, to));
       if (lq.kind != ge::brush::app::kWater) continue;
       // Under it: halfway down to the pool's floor (at most a metre), looking across it.
-      const sh::HullTrace down = sh::trace_move(l.server->sv, {mid.x, mid.y, top - 1}, {0, 0, 0},
-                                                {0, 0, 0}, {mid.x, mid.y, top - 512},
-                                                sh::kTraceNoMonsters, -1);
+      const sh::HullTrace down =
+          sh::trace_move(l.server->sv, {mid.x, mid.y, top - 1}, {0, 0, 0}, {0, 0, 0},
+                         {mid.x, mid.y, top - 512}, sh::kTraceNoMonsters, -1);
       const float depth = (top - 1) - down.endpos.z;
       lab.metric("water.depth", depth * br::kUnitM, "m");
       const float under_eye[3] = {mid.x - 24, mid.y - 24, top - std::min(depth * 0.5f, 40.0f)};
