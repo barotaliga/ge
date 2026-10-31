@@ -6,7 +6,8 @@
 //   so they throw shafts through it toward the eye;
 // - GLOW: at night, a glowing haze on the snow ahead (what a fire or a pool of lava lights), red
 //   and orange, among clear air, over a camp fire; the fire and the haze light the snow round them
-//   as lamps (M38d: render/fog.hpp's `fog_glow_light`, render/flame.hpp's `flame_light`);
+//   as lamps (M38d: render/fog.hpp's `fog_glow_light`, render/flame.hpp's `flame_light`), embers
+//   rising off the fire with the fog on (M38b: render/emitters.hpp);
 // - DUST: at noon on the piste, a thin warm dust in the air round the eye, carved into drifting
 //   wisps by the noise on the wind;
 // - LAMPS: at night, a mist round a floodlight mast on the piste, its lamps scattered in it (a
@@ -88,9 +89,10 @@ struct Scene {
   double range = 160;  // the froxels' reach, m
   r::FrameView view;
   std::vector<r::FogVolume> fog;
-  std::vector<r::Flame> flames;  // fires burning in it, with and without its fog
-  std::string what;              // the caption's account of the fog
-  bool dealt = false;            // the map's own mists at `hour` in place of `fog`
+  std::vector<r::Flame> flames;          // fires burning in it, with and without its fog
+  std::vector<r::AreaEmitter> emitters;  // what its areas give off (embers), with its fog
+  std::string what;                      // the caption's account of the fog
+  bool dealt = false;                    // the map's own mists at `hour` in place of `fog`
   double hour = -1;
 };
 
@@ -209,12 +211,21 @@ Scene glow(const mg::Level& level, double hour) {
   // The camp fire at its heart, on the snow.
   const double base[3] = {x, level.ground_at(x, z), z};
   s.flames = {r::campfire_flame(base, 7)};
+  // The embers rising off the fire and its haze, the fire's spread over its bed.
+  r::AreaEmitter embers = r::embers_over(f, 0, 7);
+  embers.centre[1] = base[1] + 2;
+  embers.half[0] = embers.half[2] = 0.8;
+  embers.half[1] = 2;
+  embers.rate = 40;
+  s.emitters = {embers};
   s.what =
       "an ellipsoid of glowing haze 18 m across 28 m ahead, 0.12/m, glowing 0.9 0.32 0.06 "
       "cd/m2 a metre of extinction, rising on its own heat over a camp fire; the fire and the "
       "haze each a lamp (" +
       fixed(r::flame_light(s.flames[0]).candela, 0) + " cd and " +
-      fixed(r::fog_glow_light(f).candela, 0) + " cd) lighting the snow round them";
+      fixed(r::fog_glow_light(f).candela, 0) +
+      " cd) lighting the snow round them; 40 embers a "
+      "second rising off the fire (render/emitters.hpp), the last 3 s of them in the air";
   return s;
 }
 
@@ -460,6 +471,13 @@ void run(ge::lab::Lab& lab) {
       if (on && !s.dealt) scene.fog = s.fog;
       scene.hour = s.hour;
       scene.flames = s.flames;
+      if (on && lab.arg_num("embers") != 0) scene.emitters = s.emitters;
+      // The embers already in the air: the area's last three seconds, flown to the first frame.
+      std::vector<r::Particle> aloft;
+      for (const r::AreaEmitter& e : scene.emitters) {
+        r::emit_area(e, 27 - static_cast<double>(frames) / 60, 30 - (frames - 1) / 60.0, aloft);
+      }
+      r::emit_particles(frame->particles, aloft);
       r::FrameView view = s.view;
       for (int n = 0; n < frames; ++n) {
         view.frame = static_cast<uint64_t>(n);
@@ -467,6 +485,11 @@ void run(ge::lab::Lab& lab) {
         fall_line::app::draw(*device, *frame, view, scene, target.view);
       }
       const ge::gpu::Image img = ge::gpu::read_now(*device, target);
+      if (on && !s.emitters.empty()) {
+        lab.metric(s.id + ".particles",
+                   r::live_particles(r::read_particles(*device, frame->particles)), "count",
+                   Det::measured);
+      }
       lab.shot(shot_of(s, on), ge::lab::Picture{width, height, img.rgba}, Det::measured);
       if (!on) {
         clear = img.rgba;
@@ -543,6 +566,7 @@ const ge::lab::LabSpec kSpec{
         {"night", "22", "the solar hour of the glow"},
         {"weather", "1", "1: the map's own sky (its cloud and deck); 0: a clear one"},
         {"frames", "16", "frames drawn, at 60 a second, up to each picture"},
+        {"embers", "1", "1: the glow scene's embers rising off its fire; 0: none (M38b's before)"},
         {"width", "640", "the picture's width, px"},
         {"height", "360", "the picture's height, px"},
     },

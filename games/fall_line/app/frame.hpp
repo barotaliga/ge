@@ -85,6 +85,7 @@
 #include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
 #include "render/dof.hpp"
+#include "render/emitters.hpp"
 #include "render/flame.hpp"
 #include "render/fog.hpp"
 #include "render/frame.hpp"
@@ -204,6 +205,9 @@ struct FrameScene {
   // The fires burning this frame (render/flame.hpp): drawn as gas, each lighting the snow and the
   // fog round it as a lamp (app/lamps.hpp's `glow_lights`, with the lamps on). Empty: none.
   std::span<const ge::render::Flame> flames = {};
+  // What the scene's areas give off (render/emitters.hpp): embers, motes, drips, steam, born
+  // into the particles' pool over the frame's span of time. Empty: none.
+  std::span<const ge::render::AreaEmitter> emitters = {};
   // The lightning's channels this frame (render/bolts.hpp), drawn before the resolve; their light
   // is FrameView::flashes. Empty: none.
   std::span<const ge::render::BoltSegment> bolts = {};
