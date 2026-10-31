@@ -40,7 +40,7 @@ constexpr WeaponLook kLooks[kWeapons] = {
     // flash rgb, flash intensity, flash range m, the weapon, held upright, the fire and its knobs
     {"axe",               0.38, {0.11, -0.12, 0.18}, 0.4, 0.5, 0.0, {0, 0, 0}, 0.0f, 0.0f, Weapon::melee, true, "", ""},
     {"shotgun",           0.46, {0.09, -0.12, 0.09}, 1.0, 0.5, 0.1, {1.0f, 0.78f, 0.42f}, 0.35f, 6.0f, Weapon::shotgun, false, "muzzle.shotgun", kShotgunFire},
-    {"double_shotgun",    0.46, {0.09, -0.12, 0.09}, 1.6, 0.7, 0.12, {1.0f, 0.78f, 0.42f}, 0.55f, 7.0f, Weapon::double_shotgun, false, "muzzle.shotgun", kDoubleFire},
+    {"double_shotgun",    0.46, {0.09, -0.12, 0.11}, 1.6, 0.7, 0.12, {1.0f, 0.78f, 0.42f}, 0.55f, 7.0f, Weapon::double_shotgun, false, "muzzle.shotgun", kDoubleFire},
     {"minigun",           0.44, {0.10, -0.13, 0.08}, 0.25, 0.1, 0.06, {1.0f, 0.66f, 0.32f}, 0.2f, 4.0f, Weapon::nailgun, false, "muzzle.nailgun", kMinigunFire},
     {"railgun",           0.52, {0.09, -0.12, 0.09}, 0.35, 0.1, 0.06, {1.0f, 0.66f, 0.32f}, 0.25f, 5.0f, Weapon::heavy_nailgun, false, "muzzle.nailgun", kRailgunFire},
     {"grenade_launcher",  0.50, {0.09, -0.13, 0.09}, 1.2, 0.6, 0.1, {1.0f, 0.78f, 0.42f}, 0.3f, 5.0f, Weapon::grenade_launcher, false, "muzzle.grenade", kGrenadeFire},

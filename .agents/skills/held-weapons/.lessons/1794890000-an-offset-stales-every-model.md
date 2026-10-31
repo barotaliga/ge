@@ -14,3 +14,8 @@ the kit imports `mathutils` before `bpy`. A `sitecustomize.py` that runs `import
 `PYTHONPATH` ahead of the bpy target, makes the builders run unchanged:
 `GE_BLENDER=python3.13 PYTHONPATH=<site>:<bpy> build/debug/ge asset build <name>`. The rebuilt arms
 then move the `se-viewmodel` and `se-weapon-stage` digests.
+
+A nearer place can also push an arm out of its ranges. Bringing the double shotgun in to 0.09 m
+swung its left shoulder across the body to -47 degrees, past the -45 limit, so
+`every_built_weapons_arms_stay_inside_their_ranges` failed. Moving it to 0.11 m fixed it. After a
+rebuild, run `shooters_edge_view_test` before the digests.
