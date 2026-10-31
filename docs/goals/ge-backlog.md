@@ -20,6 +20,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Before and after across refs
 
+- `ge lab run <id> --before=<ref>` (the lab built at `<ref>`, default origin/main, in a scratch worktree sharing the compiler cache, and run tagged `before`, then this tree's run beside it: the before-and-after shots without a manual checkout, rebuild and restore; TAB scoreboard thread)
 - `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%; for a bench lab too: `ge ab <lab> --before=<binary> --runs=3`, the median of each metric; also `--rounds=3`, each side's best and the delta printed beside the measured noise band, the second binary built or reused off `--before=<ref>`: the approximation study; asked again by the map-build profiling, #307: the means and their spread) and `ge compare <ref>` (both builds, one table)
 - `ge bench --ab=<option>` (one frame option against another in the same build, interleaved rounds, the least median kept: a quality ladder priced without a bespoke loop)
 - `ge profile --compare` (per zone and per pass, GPU and CPU deltas, outliers flagged)
@@ -41,6 +42,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## The CI loop
 
+- the session-start hook failing loudly (done: the package step cut off after `GE_SETUP_TIMEOUT` and tried twice, a worker stopped by a signal writes `failed killed ... during <step>`, and `--wait` names a worker that died outright as `failed died` with its last step, instead of a status left `running`; TAB scoreboard thread)
 - precheck running every gate and printing each failure whole (done: no gate stops the run but the build, so every lint finding shows in one round)
 - precheck refusing two rows of one lab in `tests/labs_digests.txt` (done, then retired: each lab's digest is its own file under `tests/digests/`, so no union merge can double one)
 - `ge precheck` (done: the repo's CI gates in both presets) and `ge lint --like-ci` (CI's exact gates and file set) (done: the release preset, the shaders' check, and each reached file the build does not compile an error instead of linted bare)
