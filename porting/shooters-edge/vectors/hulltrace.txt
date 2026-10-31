@@ -1,0 +1,35 @@
+scene ramp50
+trace hull 1 start 44.3078766 0 24 end 48.7523193 0 24 -> fraction 0.823696852 endpos 47.96875 0 24 normal -1 0 0 dist -48 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 44.3078766 0 24 end 48.7523193 0 23.8456783 -> fraction 0 endpos 44.3078766 0 24 normal 0 0 1 dist 24 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 40 0 24 end 52 0 24 -> fraction 0.664062381 endpos 47.96875 0 24 normal -1 0 0 dist -48 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 30 0 24 end 60 0 24 -> fraction 0.598958313 endpos 47.96875 0 24 normal -1 0 0 dist -48 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 47.96875 0 24 end 52.4099998 0 24 -> fraction 0 endpos 47.96875 0 24 normal -1 0 0 dist -48 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 47.9900017 0 24 end 52 0 24 -> fraction 0 endpos 47.9900017 0 24 normal -1 0 0 dist -48 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 48 0 24 end 52 0 24 -> fraction 0 endpos 48 0 24 normal -1 0 0 dist -48 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 40 0 30 end 60 0 30 -> fraction 0.649690032 endpos 52.9938011 0 30 normal -0.766044497 0 0.642787635 dist -21.3432312 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 40 10 24 end 60 30 24 -> fraction 0.39843756 endpos 47.96875 17.9687519 24 normal -1 0 0 dist -48 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 100 0 200 end 100 0 0 -> fraction 0.56990099 endpos 100 0 86.0198059 normal -0.766044497 0 0.642787635 dist -21.3432312 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 60 0 100 end 60 0 0 -> fraction 0.616503358 endpos 60 0 38.349659 normal -0.766044497 0 0.642787635 dist -21.3432312 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 0 0 24 end 300 0 300 -> fraction 0.701070666 endpos 210.321198 0 217.495499 normal -0.766044497 0 0.642787635 dist -21.3432312 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 100 0 24 end 100 0 24 -> fraction 1 endpos 100 0 24 normal 0 0 0 dist 0 allsolid 1 startsolid 1 inopen 0 inwater 0 hit 1 backups 0
+trace hull 0 start 40 0 0.5 end 80 0 0.5 -> fraction 0.609468818 endpos 64.3787537 0 0.5 normal -0.766044497 0 0.642787635 dist -49.0268478 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 0 start 60 0 100 end 60 0 -10 -> fraction 0.908806801 endpos 60 0 0.03125 normal 0 0 1 dist 0 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 0 start 0 0 30 end 200 0 90 -> fraction 0.595588446 endpos 119.117691 0 65.7353058 normal -0.766044497 0 0.642787635 dist -49.0268478 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+scene wall
+trace hull 1 start 200 0 24 end 300 0 24 -> fraction 0.399687499 endpos 239.96875 0 24 normal -1 0 0 dist -240 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 200 0 24 end 300 40 24 -> fraction 0.399687499 endpos 239.96875 15.9875002 24 normal -1 0 0 dist -240 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 220 0 24 end 260 0 24 -> fraction 0.499218762 endpos 239.96875 0 24 normal -1 0 0 dist -240 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 239.96875 0 24 end 250 0 24 -> fraction 0 endpos 239.96875 0 24 normal -1 0 0 dist -240 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 240 0 24 end 250 0 24 -> fraction 0 endpos 240 0 24 normal -1 0 0 dist -240 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 250 0 24 end 260 0 24 -> fraction 1 endpos 260 0 24 normal 0 0 0 dist 0 allsolid 1 startsolid 1 inopen 0 inwater 0 hit 1 backups 0
+trace hull 1 start 200 0 100 end 300 0 0 -> fraction 0.399687499 endpos 239.96875 0 60.03125 normal -1 0 0 dist -240 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 0 start 200 0 10 end 300 0 10 -> fraction 0.559687495 endpos 255.96875 0 10 normal -1 0 0 dist -256 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+scene stairs
+trace hull 1 start 0 0 24 end 100 0 24 -> fraction 0.479687512 endpos 47.96875 0 24 normal -1 0 0 dist -48 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 0 0 42 end 100 0 42 -> fraction 0.799687505 endpos 79.96875 0 42 normal -1 0 0 dist -80 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 0 0 24 end 100 0 60 -> fraction 0.799687505 endpos 79.96875 0 52.7887497 normal -1 0 0 dist -80 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 10 0 30 end 40 0 10 -> fraction 0.298437506 endpos 18.953125 0 24.03125 normal 0 0 1 dist 24 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+scene ledge
+trace hull 1 start 100 0 24 end 200 0 24 -> fraction 1 endpos 200 0 24 normal 0 0 0 dist 0 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 0 backups 0
+trace hull 1 start 140 0 24 end 140 0 -10 -> fraction 0 endpos 140 0 24 normal 0 0 1 dist 24 allsolid 0 startsolid 0 inopen 1 inwater 0 hit 1 backups 0
+trace hull 1 start 150 0 0 end 100 0 40 -> fraction 1 endpos 100 0 40 normal 0 0 0 dist 0 allsolid 0 startsolid 1 inopen 1 inwater 0 hit 1 backups 0

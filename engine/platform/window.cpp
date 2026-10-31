@@ -180,6 +180,18 @@ void set_text_input(Window& window, bool on) {
   }
 }
 
+bool set_fullscreen(Window& window, bool on) {
+  SDL_Window* w = window.impl_->window;
+  // A null mode is the borderless desktop fullscreen: the display keeps its mode.
+  if (!SDL_SetWindowFullscreenMode(w, nullptr) || !SDL_SetWindowFullscreen(w, on)) {
+    out::error(std::string("platform: the window could not go ") +
+               (on ? "fullscreen" : "back to a window") + " (" + SDL_GetError() +
+               "); the window stays as it was; skill: platform.");
+    return false;
+  }
+  return true;
+}
+
 uint64_t now_ns() { return SDL_GetTicksNS(); }
 
 std::string prefs_dir(std::string_view org, std::string_view app) {

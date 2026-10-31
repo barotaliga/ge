@@ -113,6 +113,11 @@ result keeps "started in solid" from any solid it met, and takes the first trace
 solid or reaches a smaller fraction, with that entity as what was hit. A trace that started all
 solid in the world stops looking further.
 
+**The hull trace** is `movement.md` § Clip hulls' line trace, the same walk the player move
+uses, so the server and the client place every end point identically. (The original
+single-player server's trace is a different walk, used by the campaign host: `frame-move.md`
+§ The original trace.)
+
 **Point contents** are the world's hull 0 at the point. **Testing an entity's position** is a
 zero-length trace of its box at its origin (`nomonsters` for triggers and `not` solids): inside
 something when it started in solid.

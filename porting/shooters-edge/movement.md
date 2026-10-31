@@ -354,9 +354,16 @@ passes from a non-solid leaf into a solid one:
   and fraction 1 (the player move treats any start in solid as fraction 0).
 - Reaching an empty leaf marks "in open", a liquid leaf "in water".
 
+This is the networked move's trace and the arena host's (`vectors/pmove.txt` and
+`vectors/entity.txt` were cut with it). **The original single-player server's trace is a
+different walk** that backs off by 1/32 at every split and starts the far part from there:
+`frame-move.md` § The original trace, held by `vectors/hulltrace.txt`. At a corner of two planes
+the two place the end point differently (`ramp50`'s corner: this walk ends at x 48, the original
+at 47.96875).
+
 ## Test vectors
 
-`vectors/pmove.txt` and `vectors/entity.txt` are the measurements. The worlds in them are
+`vectors/pmove.txt` and `vectors/entity.txt` are the measurements, and `vectors/hulltrace.txt` holds single traces through the same worlds' hulls made by the ORIGINAL trace (`frame-move.md` § The original trace, not this file's) (one line each: the hull, 0 for a point and 1 for the player's box; the start and end in world space; then the fraction, end point, plane normal and dist, the all-solid, started-in-solid, in-open and in-water flags, whether the world was hit, and how many 0.1 steps back the impact took). The worlds in them are
 written as **brushes**: convex solids, each a list of planes `normal dist` (a point is inside
 when `normal · p ≤ dist` for every plane) and a contents (`solid`, `water`, `slime`, `lava`).
 Every brush lists its six axial planes (its bounding box) as well as any slanted one, so
