@@ -13,5 +13,5 @@ concepts: [shadows, cascades, caster-slots, still, moving, street-mesh, z-fighti
   through a car park.
 - A family made after load creates no pipeline, but a second `create_frame` on one device does:
   a lab's before and after change the one frame.
-- Without `mesa-vulkan-drivers` a GPU lab draws black with no error. The no-adapter branch
-  (Windows CI) must take the same shot ids, `-before` included, or only that row's digest differs.
+- Without `mesa-vulkan-drivers` a GPU lab draws black with no error. Its no-adapter branch owes
+  the same digest (the `labs` skill, § Digests and determinism).

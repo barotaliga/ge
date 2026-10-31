@@ -132,8 +132,39 @@ result against `tests/digests/`:
 
 So lab code obeys the simulation's rules: no `<cmath>` transcendental (`core/libm`;
 `make libm-check` scans `engine/lab`), pixels rounded with `num::round`, and no randomness
-outside `core::Rng`. Keep table cells free of anything measured: put a time in a `measured`
-metric or a note, never in a table.
+outside `core::Rng`.
+
+**What is measured, not hashed.** Pass `Det::measured` for anything that can differ between two
+honest rows: a time (a table of times too: `Lab::table` hashes every cell by default), anything that
+depends on a GPU-culled draw's order (overdraw without the prepass; only order-free results such as
+a converged still or the depth pyramid are exact), and any number that passes through a named view,
+a camera or the clouds (presentation code calls the platform's `std::atan2`, and MSVC rounds it its
+own way, so only the Windows row moves). Hash what the simulation alone decides.
+
+**A GPU lab's no-adapter branch owes the same digest.** The digest is one running hash over every
+deterministic metric and every shot's ID IN ORDER, and `Lab::shot` hashes the id even when the pixels
+are measured. Windows CI has no adapter, so its `if (!device)` branch must take a placeholder shot
+under every id the device branch takes (`-before` and `-diff` shots included) and give the same
+deterministic metrics in the same order; give `gpu-errors` and `pipelines-after-load` last on both
+paths (`water_scene::placeholders`, gpu-capture's placeholder). A branch that only notes and returns
+digests to the empty FNV value `cbf29ce484222325`. Hiding Vulkan locally does not test it (Dawn falls
+back to Null): force the branch (`gpu.device.reset()` after `create_device`, or `if (true)`), compare
+with `--check-digests=tests/labs_digests.txt`, and restore.
+
+**Names the tools take.** `tools/check-libm.sh` matches an unqualified `log(`, `exp(`, `pow(`,
+`sin(`... in code and in strings, so no function of ours is named after a transcendental (the log
+channel's writer is `output::log_on`) and a chart label spells "log scale" in words. The runner owns
+`--out`, `--tag`, `--compare`, `--diff*`, `--repeat`, `--smoke`, `--all`, `--shard`,
+`--check-digests`, `--write-digests`, `--quiet` and `--debug` (`labs --help`); a lab's own flag of
+one of those names is shadowed, so name it something else (`--timings`).
+
+**Registration lives in the executable.** `GE_LAB(spec)` registers from a static constructor, and the
+linker drops an unreferenced object from a static library, so a lab in a library vanishes with no
+error. Lab files and the helpers they share live in `engine/lab/labs/`, `plugins/*/labs/` or
+`games/*/labs/`, globbed into `labs`; re-run `cmake --preset` after adding one.
+
+**Reading a run back** takes its shots from that run's `report.json`, never the directory listing:
+`previews/<id>/` keeps an older run's files.
 
 ## Kinds still to build
 
