@@ -60,7 +60,7 @@ set_target_properties(shooters_edge_dedicated PROPERTIES OUTPUT_NAME shooters_ed
 file(GLOB SHOOTERS_EDGE_HUD_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/hud/*.cpp)
 add_library(shooters_edge_hud STATIC ${SHOOTERS_EDGE_HUD_SOURCES})
 target_include_directories(shooters_edge_hud PUBLIC ${PROJECT_SOURCE_DIR}/games)
-target_link_libraries(shooters_edge_hud PUBLIC ge_hud ge_console ge_assets)
+target_link_libraries(shooters_edge_hud PUBLIC ge_hud ge_console ge_assets ge_vfs)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_hud)
 
 # Its held weapons (view/): the free set's mounts, kicks and flashes, the hand that switches and
