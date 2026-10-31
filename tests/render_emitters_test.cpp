@@ -6,8 +6,10 @@
 // ge:summary Tests for the area emitters: the cadence, each kind's births, the embers over a glow
 // ge:keywords test render emitter embers motes drips steam emit_area embers_over cadence
 // ge:skill render testing
+#include <array>
+#include <bit>
 #include <cmath>
-#include <cstring>
+#include <cstdint>
 #include <vector>
 
 #include "check.hpp"
@@ -31,7 +33,11 @@ r::AreaEmitter box(r::AreaEmitter::Kind kind, double rate) {
   return e;
 }
 
-bool same(const r::Particle& a, const r::Particle& b) { return std::memcmp(&a, &b, sizeof a) == 0; }
+// The same bits, field by field (every field is a float).
+bool same(const r::Particle& a, const r::Particle& b) {
+  using Bits = std::array<uint32_t, sizeof(r::Particle) / 4>;
+  return std::bit_cast<Bits>(a) == std::bit_cast<Bits>(b);
+}
 
 }  // namespace
 

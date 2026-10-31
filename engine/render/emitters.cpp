@@ -110,8 +110,10 @@ void emit_area(const AreaEmitter& e, double t0, double t1, std::vector<Particle>
     if (at < t0 || at >= t1) continue;
     Particle p = birth(e, k);
     // Flown as the pool flies it, a sixtieth of a second at a time.
-    for (double left = t1 - at; left > 0; left -= kFlightStep) {
-      step_particle(p, f32(std::min(left, kFlightStep)));
+    const double flight = t1 - at;
+    const auto steps = static_cast<int>(std::ceil(flight / kFlightStep));
+    for (int i = 0; i < steps; ++i) {
+      step_particle(p, f32(std::min(flight - i * kFlightStep, kFlightStep)));
     }
     out.push_back(p);
   }
