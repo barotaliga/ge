@@ -320,6 +320,7 @@ void() weapon_frame = {
   }
   makevectors(self.v_angle);
   self.attack_finished = time + weapon_delay(w);
+  self.show_hostile = time + 1;  // the noise wakes monsters that hear it
   ammo_spend(w, weapon_cost(w));
   self.effects = self.effects | EF_MUZZLEFLASH;
   if (w == W_BLADE) {

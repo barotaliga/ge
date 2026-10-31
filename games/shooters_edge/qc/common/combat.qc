@@ -1,5 +1,6 @@
 // DAMAGE AND DEATH: what a hit does (armour first, then health, a push away from the blow),
-// what a blast does to everything near it, and how a death is scored and told.
+// what a blast does to everything near it, and how a death is scored and told. A thing with its
+// own `th_hurt` and `th_die` (a monster) answers the hit itself; a player's are below.
 
 void() player_die;
 void() player_pain;
@@ -54,17 +55,17 @@ void(entity targ, entity inflictor, entity attacker, float damage) damage = {
     targ.velocity = targ.velocity + dir * damage * 8;
   }
   targ.health = targ.health - taken;
-  if (targ.health <= 0) {
-    score_death(targ, attacker);
-    was_self = self;
-    self = targ;
-    player_die();
-    self = was_self;
-    return;
-  }
+  damage_attacker = attacker;
   was_self = self;
   self = targ;
-  player_pain();
+  if (targ.health <= 0) {
+    score_death(targ, attacker);
+    if (self.th_die) self.th_die();
+    else player_die();
+  } else {
+    if (self.th_hurt) self.th_hurt();
+    else player_pain();
+  }
   self = was_self;
 };
 

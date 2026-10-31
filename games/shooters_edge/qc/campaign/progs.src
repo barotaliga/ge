@@ -12,4 +12,6 @@ glue.qc
 ../common/items.qc
 ../common/player.qc
 ../common/map.qc
+ai.qc
+monsters.qc
 world.qc
