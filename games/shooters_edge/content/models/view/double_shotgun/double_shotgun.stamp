@@ -1,5 +1,5 @@
 # What double_shotgun.glb was built from (engine/assets/manifest.hpp). Written by `ge asset build double_shotgun`; never edit it by hand.
 builder build.py 00cf8a771776dd8a
 source ../weapon_kit.py c9bdb5454f33e224
-data se_view bb85d28f2bef1217
+data se_view 9f70ecb82ba3dc25
 blender 5.2.2 LTS
