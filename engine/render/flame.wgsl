@@ -116,6 +116,15 @@ fn flame_glow(f: GpuFlame, p: vec3f, t: f32) -> vec3f {
   // Bent downwind, more toward the tip.
   let bend = q.y * clamp(y, 0.0, 1.3);
   q = vec3f(q.x - f.wind.x * bend, q.y, q.z - f.wind.y * bend);
+  // Where no eddy can carry the gas: every term below is zero past m = 1.8 (the blue shell's past
+  // 1.35), the profile is at most 1.05 radii and the eddies move a point at most 1.35 amp an axis
+  // (1.91 amp across), so a point that far out is skipped before any noise is drawn: the picture
+  // is the same, and most of a flame's bounding sphere is air.
+  let amp = radius * (0.3 + 2.2 * clamp(y, 0.0, 1.2) * clamp(y, 0.0, 1.2));
+  let reach = 1.8 * (1.05 * radius + 1e-5);
+  if (length(q.xz) - 1.92 * amp >= reach) {
+    return vec3f(0.0);
+  }
   // The turbulence, carried up with the gas, in cells of a few radii.
   let cell = radius * 2.5;
   let phase = f.shape.w;
@@ -124,9 +133,12 @@ fn flame_glow(f: GpuFlame, p: vec3f, t: f32) -> vec3f {
   let n1 = flame_fbm(s * 0.8) + 0.35 * (flame_noise(s * 3.1 + vec3f(5.0, 1.0, 9.0)) - 0.5);
   let n2 = flame_fbm(s * 0.8 + vec3f(31.7, 5.1, 12.9)) +
            0.35 * (flame_noise(s * 3.1 + vec3f(41.0, 8.0, 2.0)) - 0.5);
-  let n3 = flame_fbm(s * 1.6 + vec3f(11.3, 23.9, 2.1));
-  let amp = radius * (0.3 + 2.2 * clamp(y, 0.0, 1.2) * clamp(y, 0.0, 1.2));
   let xz = q.xz + (vec2f(n1, n2) - 0.5) * 2.0 * amp;
+  // The same test with the sway known, before the tip's lick and the soot's streaks are drawn.
+  if (length(xz) >= reach) {
+    return vec3f(0.0);
+  }
+  let n3 = flame_fbm(s * 1.6 + vec3f(11.3, 23.9, 2.1));
   // The tip licks up and falls back: the profile read at a height the noise lifts or lowers.
   let ye = y - (n3 - 0.5) * 0.45 * clamp(y * 1.5, 0.0, 1.0);
   let m = length(xz) / (radius * flame_profile(ye) + 1e-5);
