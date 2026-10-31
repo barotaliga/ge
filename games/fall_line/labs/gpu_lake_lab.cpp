@@ -2,7 +2,12 @@
 // games/fall_line/app/frame.cpp's table): a tarn laid on a seed's map, drawn with everything else
 // the game draws (the snow, the trails, the forest, the sky, the cloud, TAA-U, the bloom, the
 // grade), from the shore, from over it, into the sun, in a fresh wind, at the day's end, and
-// from under its surface (render/underwater.hpp).
+// from under its surface (render/underwater.hpp); and at DAWN under the air's own fog (M51c:
+// mountain/app/mist_look.hpp's `water_mist`, render/mist_fog.hpp): a spring morning's air
+// (`--spring`, the day's mean, C) at `--dawn`, still and clear, then in an 8 m/s wind. The still
+// dawn must fog the tarn and the windy one must not: each is drawn with the air's fog and without
+// it, and the lab fails when the still dawn's fog changes under 10 % of the picture or the windy
+// one's over 3 %. Their mists' kinds, extinctions and depths are deterministic rows.
 //
 // THE TARN is the lab's own until the generator lays lakes (docs/goals.md M24l): the flattest
 // open ground of the map's lower half, away from the piste, is dug into a bowl `--radius` m
@@ -16,8 +21,9 @@
 // draws placeholders, so the digest is the same on every row; GE_GPU_REQUIRE=1 fails instead.
 // Built only with GE_GPU.
 //
-// ge:summary Lab: a lake in Fall Line's frame: shore, aerial, into the sun, wind, evening
+// ge:summary Lab: a lake in Fall Line's frame: shore, aerial, into the sun, wind, evening, dawn fog
 // ge:keywords lab lake tarn water fall-line picture in-game reflection glitter shore frame
+// ge:keywords dawn-fog lake-fog steam-fog radiation-fog water_mist
 // ge:skill render water labs
 #include <algorithm>
 #include <cmath>
@@ -37,6 +43,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "mountain/air/air.hpp"
+#include "mountain/app/mist_look.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "water/optics.hpp"
 #include "water/world.hpp"
@@ -206,6 +213,9 @@ struct Shot {
   // surface off the near shore, 4 under the middle looking up.
   int stand;
   double min_share;  // the water's least share of the picture
+  // The air's fog over the tarn at a dawn (`--spring`'s day): 0 none drawn, 1 it must fog the
+  // picture, 2 it must not.
+  int air = 0;
 };
 
 void run(ge::lab::Lab& lab) {
@@ -290,6 +300,15 @@ void run(ge::lab::Lab& lab) {
        "Snell's window: the sky and the snowy slopes seen through a bright circle, the "
        "water mirrored past it",
        -1, -1, 4, 0.3},
+      {"dawn-still", "A STILL, CLEAR DAWN",
+       "The shore view at dawn on a spring morning, still and clear, under the fog the air lays "
+       "over the tarn.",
+       "a bank of mist lying on the water, the far shore faint through it, the slopes above it "
+       "clear in the low sun",
+       lab.arg_num("dawn"), 0.3, 0, 0.05, 1},
+      {"dawn-windy", "A WINDY DAWN", "The same dawn in an 8 m/s wind: the air's fog over the tarn.",
+       "no fog: the wind mixes it away, the far shore sharp across the chop", lab.arg_num("dawn"),
+       8, 0, 0.05, 2},
   };
 
   auto shot_of = [&](const Shot& s) {
@@ -336,13 +355,13 @@ void run(ge::lab::Lab& lab) {
   fall_line::app::day_view(level, -1, day);
   int body = -1;
   double wind_now = -2;
-  auto draw = [&](const ge::render::FrameView& v) {
+  auto draw = [&](const ge::render::FrameView& v, const fall_line::app::FrameScene& scene) {
     fall_line::app::cut(*frame);
     ge::render::FrameView at = v;
     for (int n = 0; n < frames; ++n) {
       at.frame = static_cast<uint64_t>(n);
       at.time_s = 30 - static_cast<double>(frames - 1 - n) / 60;
-      fall_line::app::draw(*device, *frame, at, {}, target.view);
+      fall_line::app::draw(*device, *frame, at, scene, target.view);
     }
     const ge::gpu::Image img = ge::gpu::read_now(*device, target);
     return ge::lab::Picture{width, height, img.rgba};
@@ -385,9 +404,53 @@ void run(ge::lab::Lab& lab) {
       v.eye[1] = tarn.level - 2.5;
       v.pitch = 1.0;
     }
-    const ge::lab::Picture pic = draw(v);
+    // The air's fog over the tarn at a dawn; any other shot draws the frame's own.
+    fall_line::app::FrameScene scene;
+    std::vector<ge::render::FogVolume> fog;
+    if (s.air != 0) {
+      ge::wind::Climate c = ge::mountain::app::mountain_climate(level);
+      c.mean_c = lab.arg_num("spring");
+      c.wind = s.wind;
+      c.cloud = 0.05;
+      ge::mountain::app::MapWater w;
+      w.centre[0] = tarn.x;
+      w.centre[1] = tarn.z;
+      w.half[0] = w.half[1] = tarn.radius;
+      w.level = tarn.level;
+      w.water_c = 4;
+      const ge::mountain::app::WaterMist wm = ge::mountain::app::water_mist(level, c, s.hour, w);
+      lab.metric(s.id + ".mist", static_cast<double>(wm.mist.kind), "kind");
+      lab.metric(s.id + ".mist-density", wm.area.density, "1/m");
+      lab.metric(s.id + ".mist-depth", 2 * wm.area.half[1], "m");
+      lab.note(s.id + ": " + ge::wind::mist_name(wm.mist.kind) + " fog, " +
+               fixed(wm.mist.visibility, 0) + " m visibility, " + fixed(wm.mist.depth, 1) +
+               " m deep");
+      // Without it: the same volume emptied, so the frame deals none of the map's own either.
+      fog = {wm.area};
+      fog[0].density = 0;
+      scene.fog = fog;
+      scene.hour = s.hour;
+      const ge::lab::Picture clear = draw(v, scene);
+      fog[0].density = wm.area.density;
+      const ge::lab::Picture fogged = draw(v, scene);
+      const double share = changed(fogged, clear);
+      lab.metric(s.id + ".fog-share", share, "share", Det::measured);
+      if (s.air == 1 && share < 0.1) {
+        lab.fail(
+            "the still dawn's fog changed " + fixed(share * 100, 1) + "% of the picture, under 10%",
+            "Check wind/mist.cpp's radiation fog by water and render/mist_fog.cpp's bank. "
+            "Skill: render.");
+      }
+      if (s.air == 2 && share > 0.03) {
+        lab.fail(
+            "the windy dawn's fog changed " + fixed(share * 100, 1) + "% of the picture, over 3%",
+            "Check wind/mist.cpp's mixing in the wind and the forming fog's range. "
+            "Skill: render.");
+      }
+    }
+    const ge::lab::Picture pic = draw(v, scene);
     frame->water.bodies[static_cast<size_t>(body)].hidden = true;
-    const ge::lab::Picture dry = draw(v);
+    const ge::lab::Picture dry = draw(v, scene);
     frame->water.bodies[static_cast<size_t>(body)].hidden = false;
     const double share = changed(pic, dry);
     lab.metric(s.id + ".water-share", share, "share", Det::measured);
@@ -429,6 +492,8 @@ const ge::lab::LabSpec kSpec{
         {"frames", "8", "frames drawn, at 60 a second, before each shot (TAA-U settles)"},
         {"width", "640", "the picture's width, px"},
         {"height", "360", "the picture's height, px"},
+        {"spring", "3", "the dawn shots' day: its mean temperature, C (the tarn at 4 C)"},
+        {"dawn", "7.6", "the dawn shots' solar hour"},
     },
     "--frames=2 --width=160 --height=90",
     run,

@@ -2,8 +2,9 @@
 // morning burns off; a wind mixes it away and cloud keeps it from forming; a hollow lays a deeper
 // valley fog; an overcast, saturated mountain is in its hill fog; water far warmer than the air
 // steams, indoors too; moist air over a thawing snowfield lays advection fog in a breeze; the same
-// saturation lays thicker fog at 5 C than at -15 C; fog below 0 C is freezing; and every number
-// keeps its bits in tests/golden/wind_mist.txt.
+// saturation lays thicker fog at 5 C than at -15 C; fog below 0 C is freezing; a fog still forming
+// (a breeze's last wisps) veils hardly anything, a formed one keeps its kind's range; and every
+// number keeps its bits in tests/golden/wind_mist.txt.
 //
 // A deliberate change moves the golden: rewrite it with
 // `GE_GOLDEN_WRITE=1 build/release/tests/wind_mist_test`, and put the `climate` lab's charts
@@ -80,6 +81,16 @@ TEST(a_wind_mixes_it_away_and_cloud_keeps_it_from_forming) {
   c = damp_night();
   c.cloud = 0.95;
   CHECK(gw::mist_at(c, shore(), 5.5).kind != gw::MistKind::radiation);
+}
+
+TEST(a_fog_still_forming_veils_hardly_anything) {
+  gw::Climate c = damp_night();
+  c.wind = 8;
+  const gw::Mist wisps = gw::mist_at(c, shore(), 5.5);
+  CHECK(wisps.kind != gw::MistKind::none && wisps.strength < gw::kFormed);
+  CHECK(wisps.visibility > 5000 && wisps.visibility <= gw::kClearRange);
+  // Formed, its range is its kind's (at full strength under 400 m).
+  CHECK(gw::mist_at(damp_night(), shore(), 5.5).visibility < 400);
 }
 
 TEST(a_hollow_lays_a_deeper_valley_fog) {
