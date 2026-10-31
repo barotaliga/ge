@@ -44,6 +44,7 @@
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
+#include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
@@ -141,6 +142,25 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     }
   }
   ge::gpu::Target out = ge::gpu::create_target(*device, "se-client.final", w, h);
+  // The HUD over every view, in the art `--hud` picks as the window's `hud_art` does: the packs'
+  // own status bar pictures (`auto`, `classic`) or the free set (`free`).
+  se::Hud hud = se::make_hud();
+  se::HudArt free_art = se::free_art();
+  free_art.finish();
+  se::HudArt classic_art;
+  {
+    const auto find = [&files](std::string_view p, std::vector<uint8_t>& store) {
+      return cl::find_file(files, p, store);
+    };
+    std::string why;
+    if (!se::classic_art_from_packs(find, &classic_art, &why)) lab.note(why);
+  }
+  ge::console::Console hud_con;  // `--hudcvars`: hud_style, viewsize and the hud_ cvars
+  se::add_cvars(hud_con, hud);
+  hud_con.execute(lab.arg("hudcvars"));
+  const std::string hud_art = lab.arg("hud").empty() ? "auto" : lab.arg("hud");
+  const se::HudArt& art = se::pick_art(hud_art, classic_art, free_art);
+  lab.metric("hud.classic_art", &art == &classic_art ? 1 : 0, "");
   cl::ViewState shown;
   cl::FxState fx_state;
   cl::FxFrame fx;
@@ -197,9 +217,16 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     }
     fx.births.clear();
     ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
+    ge::ui::DrawList overlay;
+    overlay.begin(static_cast<int>(w), static_cast<int>(h));
+    se::fill_hud(hud, cl::status_of(l, t), art);
+    hud.layout.draw(overlay,
+                    hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
+                    se::hud_style());
     for (int k = 0; k < 2; ++k) {
-      for (int f = 0; f < 30; ++f)  // the weather and the flames run a moment in
+      for (int f = 0; f < 29; ++f)  // the weather and the flames run a moment in
         cl::draw_world(*device, *world[k], view, fx, nullptr, 1.0 / 30, {}, out.view);
+      cl::draw_world(*device, *world[k], view, fx, nullptr, 1.0 / 30, overlay, out.view);
       const ge::gpu::Image img = ge::gpu::read_now(*device, out);
       const std::string id = std::string(kLooks[k]) + "-" + std::to_string(v);
       lab.shot({id,
@@ -386,6 +413,9 @@ const gl::LabSpec kSpec{
      {"map", "start", "with --game: the map's name"},
      {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
      {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"},
+     {"hud", "auto", "with --game: the HUD's art as hud_art picks it: auto, classic or free"},
+     {"hudcvars", "",
+      "with --game: the HUD's cvars (hud_style, viewsize, hud_*), as the console takes them"},
      {"progs", "",
       "with --game: a progs.src compiled and run instead of the arena variant, or pack"},
      {"settle", "4", "with --game: host frames run at each view before it is drawn (at least 4)"}},

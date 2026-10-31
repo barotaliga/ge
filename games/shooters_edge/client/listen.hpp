@@ -26,6 +26,12 @@
 // campaign_save.hpp) written to bytes and read back as the game playing, so it plays on as if
 // never stopped.
 //
+// THE LOBBY (`ListenOptions::lobby`, a match only): every map opens in warmup with the player and
+// the bots seated in `room` (lobby_room.hpp); the bots' packets go into each frame after his; the
+// lobby's lines are printed like the server's; when the countdown runs out the map is restarted
+// with every seat on it (`restarted`), and a map change goes back to warmup. `listen_lobby` runs
+// the player's lobby words.
+//
 // THE VIEW: the player's angles are the client's (`Listen::view`, degrees: pitch down positive,
 // yaw counter-clockwise from +x), sent with every command; when the server turns him (a spawn, a
 // teleport: the mod's forced view) the client takes the server's angles (`forced`).
@@ -33,7 +39,8 @@
 // ge:summary The listen server: the mod server and its local player in one process, no network
 // ge:keywords listen-server local-player client slot usercmd packet listen_start listen_frame
 // ge:keywords listen_advance listen_change loaded-map load_named_map baseline_progs map-change
-// ge:keywords forced-view mintic player_state missiles rocket-jump
+// ge:keywords forced-view mintic player_state missiles rocket-jump lobby warmup listen_lobby
+// ge:keywords match-restart restarted
 // ge:keywords listen_campaign campaign single-player map_changed level-change
 // ge:keywords listen_save listen_load savegame listen_save_text listen_load_text classic-save
 // ge:skill shooter progs
@@ -52,6 +59,7 @@
 #include "shooter/pmove.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/server/bsp_map.hpp"
 #include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/qc_server.hpp"
@@ -89,6 +97,10 @@ struct ListenOptions {
   std::string player = "player";
   const SearchPath* files = nullptr;  // where a campaign's next map is read (outlives the listen)
   bool registered = false;            // a campaign's content is the full game (gfx/pop.lmp)
+  // A match opens every map in the lobby's warmup (lobby_room.hpp): ready, teams, bots, the
+  // countdown, then the map restarted for the match. Off: the match starts with the map.
+  bool lobby = false;
+  sv::LobbySettings lobby_settings;
 };
 
 // A blow the player took (a single-player program's damage record, client_data.hpp): its armour
@@ -128,6 +140,11 @@ struct Listen {
   // A campaign's effects on this map (its temporary entities and particle bursts), in order; its
   // explosions are in `explosions` too.
   std::vector<Effect> effects;
+  // The lobby (a match with `ListenOptions::lobby`; null otherwise) and whether the last frames
+  // restarted the map for the match (the window clears what it keeps of the old server's
+  // entities, then this).
+  std::unique_ptr<Room> room;
+  bool restarted = false;
 };
 
 // The server made for `progs` (which must outlive it) on `map`, the player connected.
@@ -171,6 +188,11 @@ bool wants_campaign(const ListenOptions& opt);
 std::string map_title(const Listen& l);
 // The server's frame length now: the match's `sv_mintic`, or the campaign's step, s.
 double listen_tic(const Listen& l);
+
+// A lobby line from the player (slot 0): the lobby's words (server/lobby.hpp: ready, break,
+// notready, toggleready, team, start, lobby), `addbot [novice|average|expert]` and `removebot`.
+// False when the line is none of them, or when no lobby runs (a line saying so is printed).
+bool listen_lobby(Listen& l, std::string_view line);
 
 // One server frame with the player's command `cmd` (its angles are `l.view`, its length the
 // server's frame; an impulse waiting goes with it).

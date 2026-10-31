@@ -1,6 +1,6 @@
 // THE DEMO BENCHMARK: a recorded game (demo.hpp) played back as fast as the machine draws it, at
 // the settings the window has, and the frame rate it reached. The window runs it from the console
-// (`benchmark <demo>`) or the command line (`-benchmark <demo>`, which quits with the report);
+// (`timedemo <demo>`) or the command line (`-timedemo <demo>`, which quits with the report);
 // the `se-timedemo` lab runs the same loop into an offscreen target.
 //
 // THE RULE: ONE DEMO FRAME A DRAWN FRAME, whatever the demo's own clock says (a single-player
@@ -36,7 +36,7 @@
 // ge:keywords percentile frame-time find_demo bench_stats bench_report timedemo_start
 // ge:keywords timedemo_step timedemo_mark demo_view demo_status unlocked-fps vsync-off
 // ge:keywords gpu-span span_add span_report price prices price_report switch-off-pricing
-// ge:keywords playdemo playdemo_step cl_demospeed demo-pace
+// ge:keywords playdemo playdemo_step cl_demospeed demo-pace timeline demo_seek seek demo-timeline
 // ge:skill shooter perf
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -108,10 +108,26 @@ double median_of(std::vector<double> v);
 bool find_demo(const SearchPath& files, const std::string& name, std::vector<uint8_t>& out,
                std::string& found, std::string& error);
 
+// THE TIMELINE: the seconds a play bar, a seek and a highlight are placed on. The demo's own
+// clock starts over at each level and may stall (a long pause in a recording), so the timeline
+// moves on by each frame's step of the demo's clock, held to 0..`kTimelineGap`, and not at all at
+// a level's first frame. It is the clock `-demovideo`'s pictures run on (demo_video.hpp), so a
+// time read off the bar names the same moment in a video.
+inline constexpr double kTimelineGap = 0.25;  // the most one demo frame moves the timeline, s
+
+struct DemoTimeline {
+  double t = 0;      // s
+  double last = -1;  // the last frame's own demo time (-1: a level's first frame next)
+  // A frame read; `new_level` when it starts a level.
+  void frame(const DemoState& s, bool new_level);
+};
+
 struct Timedemo {
   std::string name;   // as asked
   std::string found;  // where it was read from
   Demo demo;
+  Demo start;                   // the demo as opened, which a seek back starts again from
+  DemoTimeline timeline;        // where the frames read have reached
   std::vector<double> frame_s;  // the timed frames, s
   PassTimes passes;             // the timed frames' GPU spans
   int skip = 0;                 // frames still to go untimed
@@ -142,6 +158,13 @@ TimedemoStep timedemo_step(Timedemo& t, std::string& error);
 // reached the next one. A level start stops the step there as `new_level` and sets the clock to
 // that level's time; the frames are not timed.
 TimedemoStep playdemo_step(Timedemo& t, double wall_dt_s, double speed, std::string& error);
+
+// SEEKING: the demo stood at the first frame at or after `timeline_s` on the timeline (a frame
+// before the last one read starts again from `start`; every frame up to it is read, nothing
+// drawn), the paced clock set to it. `new_level` when the level is not the one it was on (load
+// `t.demo.state.map`); `end` when the demo ends before it (left on its last frame); `error` as the
+// step's.
+TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error);
 
 // A frame presented at `now_ns`: its length is timed unless it is one of the untimed frames.
 void timedemo_mark(Timedemo& t, uint64_t now_ns);

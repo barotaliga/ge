@@ -125,7 +125,8 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   design): the analytic cover read exactly where nothing has crossed, sparse fixed-point tiles
   of columns (depth and mass) where something has, `sample`, `press` with its mass conserved to
   the unit and the berm it throws, the imprint records the picture and the sound read, and the
-  snapshot. It depends on `engine/core` only and draws nothing from a clock or an RNG.
+  snapshot. It depends on `engine/core` and `engine/wind` (the air its weather is read off,
+  `snow/air.hpp`) and draws nothing from a clock or an RNG.
 - **`engine/ui`**: the immediate-mode 2D layer (rects, images, SDF text), plus Dear
   ImGui behind `GE_DEV_UI`.
 - **`engine/charset`**: the engine's bitmap fonts (`ge::charset`, M27; `docs/charsets.md`):

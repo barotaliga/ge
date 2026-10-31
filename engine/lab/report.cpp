@@ -243,6 +243,9 @@ bool write_report(const Lab& lab, const std::string& dir, std::string& error) {
     md += "\n## Files\n\n";
     for (const auto& f : lab.files()) md += "- [" + f.name + "](" + f.name + ")\n";
   }
+  // A run of some shots (--shots) leaves the contact sheet the whole run wrote: its pictures
+  // are the files just rewritten, so the sheet still shows every view, the new ones among them.
+  if (!lab.only().empty() && std::filesystem::exists(dir + "/index.md")) return true;
   return write_text(dir + "/index.md", md, error);
 }
 

@@ -20,6 +20,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Before and after across refs
 
+- `ge lab run <id> --before=<ref>` (the lab built at `<ref>`, default origin/main, in a scratch worktree sharing the compiler cache, and run tagged `before`, then this tree's run beside it: the before-and-after shots without a manual checkout, rebuild and restore; TAB scoreboard thread)
 - `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%; for a bench lab too: `ge ab <lab> --before=<binary> --runs=3`, the median of each metric; also `--rounds=3`, each side's best and the delta printed beside the measured noise band, the second binary built or reused off `--before=<ref>`: the approximation study; asked again by the map-build profiling, #307: the means and their spread) and `ge compare <ref>` (both builds, one table)
 - `ge bench --ab=<option>` (one frame option against another in the same build, interleaved rounds, the least median kept: a quality ladder priced without a bespoke loop)
 - `ge profile --compare` (per zone and per pass, GPU and CPU deltas, outliers flagged)
@@ -29,7 +30,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab sheet <lab> --grid=2x2 [shots]` (shots on one image) and `--watch`
 - `ge lab grid <lab> --vary=cfg:a,b,c` (one composite picture of the same view under several settings, each tile captioned with its setting; asked again as `ge lab sheet <lab> --view=<v> --vary=cfg:...`)
 - `ge lab run --jobs=N <labs>` (independent labs run in parallel, each with its own log, instead of one after another)
-- `ge lab shot <lab> <id>...` / `ge lab <id> --only=<shot>` (one named view of a picture lab drawn alone while a look is iterated, the others left as the last run wrote them, written to `--out=<path>` when given: a runner-wide `--shots=<ids>` and `lab.wants(id)` the lab asks before it renders, in place of the `--views` flag gpu-world and gpu-snow each added and the rest lack; asked for by the console, replays and classic-enhance threads)
+- `ge lab shot <lab> <id>...` / `ge lab <id> --only=<shot>` (one named view of a picture lab drawn alone while a look is iterated, the others left as the last run wrote them, written to `--out=<path>` when given: a runner-wide `--shots=<ids>` and `lab.wants(id)` the lab asks before it renders, in place of the `--views` flag gpu-world and gpu-snow each added and the rest lack; asked for by the console, replays, classic-enhance and lobby threads; done: `--shots=<id,...>` on the runner and `ge lab`, `lab.wants(id)`, the world lab skipping the views not named)
 - a shared `--viewports=<w>x<h>,...` flag for picture labs (every view drawn at each size, e.g. a phone, a laptop and a 4K screen, without each lab adding its own)
 - `ge profile --pass=<name>` (one pass's median and p95, before and after) and `--cost <shader-term>`
 - `ge lab <id> --at-ref=<git-ref>` (the "before" shot from a worktree build of that ref, without stashing, rebuilding and restoring this tree)
@@ -41,6 +42,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## The CI loop
 
+- the session-start hook failing loudly (done: the package step cut off after `GE_SETUP_TIMEOUT` and tried twice, a worker stopped by a signal writes `failed killed ... during <step>`, and `--wait` names a worker that died outright as `failed died` with its last step, instead of a status left `running`; TAB scoreboard thread)
 - precheck running every gate and printing each failure whole (done: no gate stops the run but the build, so every lint finding shows in one round)
 - precheck refusing two rows of one lab in `tests/labs_digests.txt` (done, then retired: each lab's digest is its own file under `tests/digests/`, so no union merge can double one)
 - `ge precheck` (done: the repo's CI gates in both presets) and `ge lint --like-ci` (CI's exact gates and file set) (done: the release preset, the shaders' check, and each reached file the build does not compile an error instead of linted bare)
@@ -65,6 +67,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge ci <pr> --rebase-digests` (after merging the base, the digests both sides moved rewritten and named)
 - `ge goals next` / `ge goals free-rows` (the next open roadmap row with its dependencies, and which rows open pull requests already claim; the second done: `ge goals free [<row>] [--fetch]`, the rows main and every remote branch hold and the next free number or letter; and `ge goals claim <what> [--under=<row>]`, the row reserved and pushed at once, the earlier of two claims keeping it)
 - `ge goals claim <what> --exit=<text> --labs=<lab,...>` (the row's exit criterion and its **Labs it lands** cell written in the same step, so a claimed row file is complete at once; single-player spec thread) (done)
+- `ge goals free` / `claim` with no build (done: `node tools/goals-free.mjs [<row>]` and `--claim "<what>" [--under] [--exit] [--labs]`, the same rows read and the same next free row, for a fresh session; dedicated server thread)
 - `ge goals split <row> <n>` (a milestone row split into sub-rows in docs/goals.md, each with its status file, numbered as `ge goals free` numbers a sub-row)
 - `ge lab sweep <id> --set=<const>=a,b,c` (done: one constexpr rewritten to each value, the labs rebuilt and run, every metric side by side, the source put back; next, a scenario row's own numbers, such as a scripted hand's timings, swept the same way, and `--draws=N` over a range `a..b`, a Monte Carlo of one constant with each metric's spread; and a range form, `--set=<const>=a..b/n`, charting each metric against the knob; and `--sheet`, every value's pictures side by side on one `ge lab publish` page, a contact sheet of the knob)
 - `ge ci <pr> --wait[=<minutes>]` (done: once a minute until a check fails, the PR conflicts or every check finished, at most an hour; with `--merge` the green answer is merged)
@@ -242,6 +245,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge play` for first-person games (an angle axis on the protocol's grid, a step whose length the input sets, several players a run)
 - `ge bot nav <map>` (build a map's navigation graph without a lab run, and print its node and link counts, the nodes no route reaches, and the proof of one route: bots thread, M18r; also `--near=x,y,z`, the nodes and links near a point: #293)
 - `ge bot run <map> --from=<x,y,z> --to=<x,y,z> --hands=human --seeds=N` (one route ridden by the bot and printed as its trail, its mode timeline and its why-record, without editing a test: #293, M18r2)
+- `--game=<zip>` on the labs that read a game folder (`ge lab run se-client --game=<release zip>`: the zip mounted as the game directory through `engine/vfs`, its packs read inside it, so pak0 is never extracted into an `id1` folder first; classic HUD thread)
+- `ge lab <lab> --stage-pak=<fixture>` (a pack staged from a fixture of stand-in player models and the other models a demo draws, so the demo and picture labs draw players without the classic pak: today `se-highlights`' moment shots show empty halls; demo highlights thread)
 
 ## Store services
 

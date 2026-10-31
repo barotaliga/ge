@@ -252,6 +252,30 @@ own) and sets `kCorduroy`, which the next press over the cell clears. `sample(la
 is the column with the weather read in. Held by `tests/snow_time_test.cpp`; charted by the
 `snow-weather` lab.
 
+### The air (`engine/snow/air`, M51d)
+
+A layer's weather need not be written by hand: `engine/snow/air.hpp` reads it off the world's air
+(`engine/wind/climate.hpp`, `docs/climate.md`), so the snow melts, settles and crusts under the
+same air the fog, the frost and the breath read.
+
+- **The air** (`air_c`, `air_schedule`): a run of days, each its own `wind::Climate` (a spring day
+  then a cold front is two), asked at one `wind::Site`: the day's curve, the lapse to the site's
+  height, the night's cold pool in a hollow, the lake beside it. Two days meet over the four hours
+  round midnight. `Weather::air` holds it a point every half hour.
+- **New snow's density** (`fresh_density_over`): `wind::fresh_density` of the air the snow fell
+  through, weighted by the fall: about 68 kg/m³ at −12 °C, 72 at −6 °C, 99 at −1 °C. The same 12
+  kg/m² of water lies about 14 cm deep on the cold day and 9 cm on the mild one.
+- **The weather** (`weather_of`): that air, each day's mean wind and a fall.
+- **The feel** (`feel_at`): the snow's surface (`surface_at`, colder than the air on a clear night,
+  never above 0), the new snow of the last day and whether the snow thawed since it last froze,
+  read into `wind::snow_feel` (powder, squeaky, soft, sticky, slush, crust), `glide_of` for a
+  ski's friction (its wet share growing to slush at +4 °C) and `squeaks` for the sound (under
+  −10 °C at the surface). A clear −12 °C night squeaks at −18 °C on the surface and glides at
+  0.068; the thaw's afternoon is slush at 0.065; the frost after it a crust at 0.031.
+
+A +5 °C spring day then a −8 °C day leaves spring snow at 14:00 and a crust bearing about 1900 N
+by 08:00 the next morning. Held by `tests/snow_air_test.cpp`; charted by the `snow-weather` lab.
+
 ## Level of detail: keep fine only what someone is close to
 
 A free ride's day lays tens of kilometres of tracks; a courtyard's match lays footprints over
@@ -446,7 +470,7 @@ digests on purpose, and the PR names each one; the races, which never ski a pres
 | `snow-press` | scenario | M29a | Every imprint (a ski carving and skidding, a boot, a tyre, a tread, a body) on every kind: cross-sections before and after, the column under it, the berm, mass held to the bit, a groove ridden twice |
 | `snow-field` | picture | M29a, M29d | A layer crossed by a skier, a sled, a car and a walker: plan maps of depth, density, drop and kind; the tiles allocated and their memory |
 | `snow-contact` | scenario | M29b | Sink against load and width for every kind against the Bekker curves; compaction density; traction against slip; a ski planing up with speed |
-| `snow-weather` | scenario | M29c | Hours in minutes: a ski groove filling in storms of three strengths, a fall settling over days at three temperatures, a road drifting in under three winds, a night's crust against a boot and a carving skier, a churned slope before and after a groomer |
+| `snow-weather` | scenario | M29c | Hours in minutes: a ski groove filling in storms of three strengths, a fall settling over days at three temperatures, a road drifting in under three winds, a night's crust against a boot and a carving skier, a churned slope before and after a groomer; the air off a climate (M51d): a thaw then a frost leaving a crust, a cold day's snow lighter, the feel, glide and squeak at three moments |
 | `snow-lod` | picture | M29d | The tiers round the focus actors; a tile folded and refined with its mass held; memory against time on a free-ride day |
 | `snow-cost` | bench | M29d, M29e | `press` and `sample` per call, a step's snow with a field of skiers, folding; the GPU's upload and passes |
 | `gpu-snow` | picture | M29e–M29g | The mirror and the marks (M29e, built): the drop read on the CPU and the GPU side by side, the fine window close up, the fine marks beside the mirror, where each sample is read from, the bytes each update sent; then named views: grooves, ruts, a trench and footprints close up, displaced and not; snow as a sheet over a road and a yard; snow on a roof; the distance-band diff |

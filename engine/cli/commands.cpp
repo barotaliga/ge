@@ -54,6 +54,8 @@ constexpr FlagSpec kLabFlags[] = {
     {"smoke", "", "run at the lab's smoke flags"},
     {"tag", "<name>", "keep this run under previews/<id>@<name>/ for a later --compare"},
     {"compare", "<name>", "set every metric beside the run tagged <name>"},
+    {"shots", "<id,...>",
+     "draw only these shots of a picture lab; the others under previews/<id>/ stay as they were"},
     kEngine,
     kRepo};
 

@@ -55,7 +55,7 @@ humidity and the wet-bulb temperature.
   and over ice (6.1121 exp(22.587 T / (T + 273.86))) gives the dew point, the frost point and the
   humidity. The wet bulb is solved from the psychrometric balance at the height's pressure.
 - **The surface** (`surface_at`): colder than the air on a clear night (up to 4 K, radiating to
-  the sky; less in wind), warmer by day in the sun on bare ground (up to 5 K); snow never above 0;
+  the sky; less in wind; the cold fading over the two hours after sunrise, never a jump), warmer by day in the sun on bare ground (up to 5 K); snow never above 0;
   open water at `water_c`.
 
 ## Snow or rain
@@ -86,7 +86,10 @@ On dry ground most of the water a cooling night squeezes out settles as dew or f
 drainage off the slopes mixes the rest away, so a dry slope keeps at most a thin mist. The fog's
 water is the air's own: the same saturation lays a thicker fog with a 5 C dew point than with a
 -15 C one (the vapour pressure is four times higher). Fog below 0 C is freezing fog: supercooled,
-it rimes what it touches.
+it rimes what it touches. A fog still forming (strength under `kFormed`, 0.3: a breeze's last
+wisps, a morning's thinning bank) is not yet a bank: its visual range eases in the logarithm from
+the clear air's 20 km to its kind's as it strengthens, so a windy dawn by a lake veils a view
+hardly at all while a still one lays a bank 100 to 200 m deep in the eye (M51c).
 
 **So fog is thickest** on a clear, still night after a damp day, by water or over wet ground or
 melting snow, in low ground, from about 0 C up; it lifts when the wind rises, the cloud comes over
@@ -119,8 +122,8 @@ it asks.
 
 | Reader | Reads | Row |
 | --- | --- | --- |
-| The fog's areas (`render/fog.hpp`, M38) | `mist_at` at a world's sites, as `FogVolume`s: `density`, `depth` (`half[1]` is half of it, `hug_ground`), `noise`, the wind for the drift; a valley's fog level from its floor | M51c |
-| The snow layer (`engine/snow`, M29) | `Weather::air` sampled off `air_at`; `fresh_density` for `Weather::fresh_density`; `glide_of` and `snow_feel` for the contact and the sound | M51d |
+| The fog's areas (`render/fog.hpp`, M38) | `mist_at` at a world's sites, handed over by `render/mist_fog.hpp` (`mist_volume`: a bank as deep as `depth`, steam thinning upward in wisps climbing at `rise`; `mist_valley`: a valley's fog level from its floor); Fall Line's valleys, ground and summit and any lake laid on its map (`water_mist`), a classic map's pools of water and slime (`bsp_fog.hpp`'s `FogRows::air`) | M51c (done) |
+| The snow layer (`engine/snow`, M29) | `Weather::air` sampled off `air_at`; `fresh_density` for `Weather::fresh_density`; `glide_of` and `snow_feel` for the contact and the sound (`engine/snow/air.hpp`: `weather_of`, `feel_at`) | M51d (done) |
 | What falls (`precip.hpp`, M36) | `freezing_level` or `snow_level` as the freezing level; `rain_share_of` at the ground | M51e |
 | The water (`engine/water`, M24) | `ice_grown`, `ice_bears`, steam fog over open water | M51e |
 | The classic levels (`plugins/classicenhance`, M41) | a `Climate` per level | M51b |

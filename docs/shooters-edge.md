@@ -182,7 +182,9 @@ while the models' one atlas holds them all, read when the map loads); the weapon
 models, switched with the number keys, kicked and lit by its muzzle flash as the mod fires it,
 lit by the map's baked light under the player; `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`,
 `cl_guny`, `cl_gunz` and `cl_gunsway` in the console); the HUD (`hud_style
-classic|modern|compact`); the console; the main menu (below). The map's own moving brush
+classic|modern|compact`, the classic status bar by default, drawn in the packs' own pictures when
+the packs carry them and in the game's free art when not: `hud_art auto|classic|free`; `viewsize
+110` drops the inventory bar and `viewsize 120` every bar); the console; the main menu (below). The map's own moving brush
 models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, and one
 the game removed (a secret wall the mod does not keep) is not drawn: `brush/app/bsp_draw.hpp`'s
 `set_movers`, fed each frame by `client/world_models.hpp`'s `place_brushes`; their shadows in the
@@ -199,7 +201,7 @@ engine's burning gas is the flame.
 
 ### Benchmarking a demo
 
-`benchmark <demo>` in the console, or `-benchmark <demo>` on the command line (which quits with
+`timedemo <demo>` in the console, or `-timedemo <demo>` on the command line (which quits with
 the report and exits non-zero if the demo stopped early), plays a recorded game **as fast as the
 machine draws it**: every frame drawn, one in 33 ms shown and the rest drawn offscreen (a
 window's present waits for the display on some platforms whatever its mode: on macOS a window's
@@ -217,11 +219,11 @@ display the window is on or on `vid_display n`'s (`vid_displays` lists them). Th
 read wherever they stand, so a `+` console line ends at the next flag:
 
 ```sh
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic -benchmark demo1
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic -timedemo demo1
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic +vid_display 2 \
-    +vid_fullscreen 1 +r_look modern -benchmark demo1
+    +vid_fullscreen 1 +r_look modern -timedemo demo1
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=2560x1600 \
-    -benchmark ~/Downloads/match.dem
+    -timedemo ~/Downloads/match.dem
 ```
 
 - **Which demo**: a path (absolute, or starting `./` or `../`) is read from disk alone; else the name through the search path (`demo1.dem` in `pak0.pak`, or a loose file
@@ -266,6 +268,37 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
 
 (The `+` words go last: everything from the first `+` on is the console's.)
 
+**Like a video.** While a demo plays the mouse is free and a play bar shows along the bottom
+(above the HUD) for a few seconds after the pointer moves or a key is pressed, and always while
+paused (`demo_bar 0|1|2`: never, so, always). The demo is scanned once when it starts for its
+HIGHLIGHTS, and the tracked player's are marked on the bar in their kind's colour; the pointer over
+a marker names it.
+
+| Key | Console | What |
+| --- | --- | --- |
+| a click or drag on the bar | `demo_seek <time>` (`83`, `1:23`) | go there |
+| Space, K, the bar's button | `demo_pause` | pause or play |
+| Right, L | `demo_skip 15` | forward `demo_skip_forward` seconds (15) |
+| Left, J | `demo_skip -5` | back `demo_skip_back` seconds (5) |
+| Up, Down | `cl_demospeed <x>` | faster or slower: 0.25, 0.5, 1, 2, 4, 8 (any 0..20 by hand) |
+| Page Down, N / Page Up, P | `demo_next`, `demo_prev` | the next or last highlight (a few seconds before it) |
+| Home, End | | the start, the end |
+| | `demo_highlights [all]` | the tracked player's highlights (or everyone's) in the console |
+
+A HIGHLIGHT is a moment of the tracked player's (`client/demo_highlights.hpp`): a MULTI KILL (two
+or more kills within 0.2 s: one rocket, one blast), a LONG ROCKET (a rocket kill whose rocket flew
+1000 units or more), an AIR KILL or AIR GIB (a rocket or grenade kill of a player in the air), an
+ANNIHILATION (the victim had 150 or more health and armour and lost it all within 2 s), a TELEFRAG
+and a STREAK (three kills or more within 10 s). The kills are read off what every recording
+carries (`client/demo_scan.hpp`): a player's dead bit or his health going to 0 is a death, the
+other player whose frags went up then is the killer, the rockets are followed from where they
+appear to where they go. No obituary text is read. `make lab LAB=se-highlights
+ARGS="--file=<demo>"` lists a demo's highlights and kills and pictures every player's bar.
+
+A seek back reads the demo again from its start without drawing (a 10 minute match in a fraction
+of a second); the times on the bar are the demo's TIMELINE, its frames' steps added up with a long
+pause in the recording counted as a quarter second, the clock `-demovideo` runs on.
+
 **A multiview recording** holds every player, so the view rides one of them: the lowest slot
 playing by default, or the one `demo_track <slot>` names (`demo_track -1` goes back to the
 default). The view takes that player's origin and his own view angles, his stats for the HUD and
@@ -274,6 +307,64 @@ data) are skipped. The demo's clock is the sum of the records' milliseconds. `ma
 LAB=se-demo ARGS="--file=<demo>"` reads any demo without a GPU and draws every player's path
 from above and his health over the clock, with a table of who played (`--track=<slot>` picks
 the view).
+
+### A demo as a video
+
+`-demovideo <demo> <file>` turns a recorded game of any format into a video and quits; no window
+opens (`client/demo_video.hpp`). The demo is played at its own pace on a fixed frame clock of
+`--fps=N` pictures a second (30 by default; 60, 24, 25 or any rate over 0, fractions too), each
+picture drawn offscreen on the GPU by the window's own world frame: the map
+from the recorded eye, the entities, doors and other players where the demo has them, the level's
+statics and the HUD off the recorded stats. Its sound is the demo's own: every sound message
+plays the pack's recording (`sound/<name>`) placed where the demo says, the level's static sounds
+loop, the map's ambience follows the eye, and the players' voices in a voice format play over it
+all. A sound starts on the sample its frame's time falls on, so what is heard and seen are within
+a frame of each other however slowly the machine draws. The file is written by `engine/capture`:
+`.mp4` (H.264 or HEVC from the platform's encoder), `.webm` (AV1 and Opus) or `.mkv` (any;
+`--codec=none` uncompressed); `--codec` auto, h264, hevc or av1; `--resolution` the picture,
+as `WxH` (each side 16 to 8192, an odd side rounded down to even) or a name: `480p`, `720p` (the
+default), `1080p`, `1440p`, `4k` (`--size` is the same flag);
+`--seconds` the most video. The `+` lines run first, so `+r_look modern` and `+demo_track 2`
+shape it.
+
+```sh
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+    -demovideo demo1 ~/Movies/demo1.mp4 --resolution=1080p --fps=60
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+    -demovideo ~/Downloads/match.mvdv ~/Movies/match.mp4 +demo_track 3
+```
+
+What is not drawn yet: the demo's temporary entities (gunshots, blood, explosions) and the
+weapon in hand. `make lab LAB=se-demo-video` records a match and turns it into videos headless
+(below).
+
+### Demos with voice: `.qwdv` and `.mvdv`
+
+A recording with the players' voices in it is a **format of its own**, so a player that knows
+only the plain formats never meets a message it cannot read: the voice header (8 bytes, `GEVR`,
+the version, the base format, the codec), then the client recording's or the multiview
+recording's records unchanged, with the protocol's voice message (svc 84, the x2 family's voice
+bit) among their messages. Without the header and the voice messages it is a plain recording.
+
+- **The server relays voice** when `ServerConfig::voice` is set: it offers the voice bit, and each
+  voice message a client sends (clc 83: 20 ms Opus frames) goes, with the talker's slot, to the
+  clients that agreed the bit and may hear it. By `voice_route` that is everyone, or (the
+  default) only the players whose user info names the talker's `team`. A talker never gets his
+  own back.
+- **A client's recording (`.qwdv`)** holds what its player was sent: his team's voices, routed to
+  him, and his own, spliced in as he spoke. A plain client recording leaves every voice message
+  out (`net/classic_record.hpp`).
+- **The server's multiview recording (`.mvdv`)** holds every voice it relayed, whoever heard it:
+  all the teams.
+- **Playing one back** (`playdemo`, `-demovideo`, the labs): the reader finds the header by its
+  bytes; each talker's frames play on a stream of their own, a gap of up to three frames
+  concealed by the codec (`client/demo_voice.hpp`).
+
+`make lab LAB=se-demo-video` plays a match on the fixture halls with two teams of two talking
+in turn, records red 1's `.qwdv` and the server's `.mvdv`, charts who is heard in each and turns
+both into videos; `ARGS="--basedir=<dir> --map=dm3 --voices=<dir>"` plays it on a map of the
+game folder's, each client speaking `<dir>/<name>.wav` (red1, red2, blue1, blue2), and
+`ARGS="--basedir=<dir> --demo=demo1"` turns that demo into a video instead.
 
 ### The main menu
 
@@ -725,6 +816,21 @@ Either way the server registers with the LAN discovery and, when public, with th
 (M17e, M17j), and answers the classic status queries, so one server browser lists ours and
 existing ones.
 
+**The warmup (M18q1).** Every match map opens in the lobby's warmup (`server/lobby.hpp`): the
+players and bots are on the map and play it freely, but nothing counts: the frag and time limits
+are held off, and when the match starts the map is restarted with every seat on it, so scores,
+items and the clock begin new. Each seat is on the red or the blue team (a new one joins the
+smaller; `team red|blue|auto|switch`), and says `ready` or takes it back with `break`; once every
+seated player is ready (and at least `sv_minplayers` are seated) a countdown of `sv_countdown`
+seconds runs, stopped by a break or a player joining unready; the leader (the listen server's own
+player) may `start` it whoever is ready. When the match's map changes, everyone is back in warmup,
+unready. The window shows a banner (the phase, how many are ready, the keys: F1 ready or break, F2
+the other team, F3 the roster), the countdown's seconds and both teams' roster; `addbot` seats a
+fighter. `sv_lobby 0` starts the match with the map, as before. When the player's packs carry the
+classic menu's pictures, the lobby is drawn in them (`menu/lobby_screen.hpp`): the banner and the
+roster in the menu's text box, the words in the glyph sheet's two sets, the countdown in the big
+figures, as the ESC menu is; without them it keeps the modern panel.
+
 **The lobby (M18q).** Before the match, on M17d's sessions: the players and their pings, teams,
 ready, chat to all or the team, a map vote, kick, and the host's start; at the end of the match
 everyone returns to it. Joining is from the server browser, an invite (M17j's friends), or an
@@ -796,7 +902,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-pilot` | scenario | Whether the pilot plays a nav route through the move as fast as the graph proved it: every course route with plain and human hands, the trails from above coloured by mode, times against proven, the strafe jump's speed on a straight, the human axes against a person's bands; on the server's arena the pilot in a bot slot through the door, up the plat and barring the door shut from the east (built, M18r2) |
 | `se-senses` | scenario | Whether a bot sees only what a player's client could and aims by its skill: on the server's arena a seer and a runner visit the goals once per aim skill; the trails from above with a sight line every quarter second it saw, the aim's error against time, how often it saw when a line joined them, the error's median and p90, the reaction and the goals kept (built, M18r3) |
 | `se-bots` | scenario | Whether fighters play the baseline mod's deathmatch like players: four fighters on the arena, the trails, items and deaths from above, each one's mode through the match as a strip, the frags against time, and a table of frags, deaths, shots, pickups, switches, the share in each mode and the weapon held most (built, M18r4) |
-| `se-lobby` | sim | Clients find a hosted game on the LAN and through the rendezvous, fill the lobby, pick teams, chat, start, play and return; a dedicated server outlives the client that started it |
+| `se-lobby` | sim | The warmup on the listen server: bots seated on teams, the free roam, ready, break, the countdown and the map restarted for a clean match (built, M18q1); later clients find a hosted game on the LAN and through the rendezvous, fill the lobby, chat, start, play and return, and a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections (the compatible server half built, M18g: scripted clients under every preset, bytes a second, loss, downloads, the digest) |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
 | `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the weapon in hand, the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost, the effects thrown and the shots the hand saw (built, M18h first slice) |

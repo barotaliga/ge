@@ -50,7 +50,7 @@ sim_dirs() {
 }
 dirs=()
 for d in $(sim_dirs) plugins games/*/sim games/*/server games/*/labs games/*/mods; do [[ -d "$d" ]] && dirs+=("$d"); done
-hits="$(git ls-files -- "${dirs[@]}" | grep -E '\.(cpp|hpp|h)$' | grep -v '^engine/core/libm/' | grep -v '^plugins/[^/]*/app/' \
+hits="$(git ls-files --cached --others --exclude-standard -- "${dirs[@]}" | grep -E '\.(cpp|hpp|h)$' | grep -v '^engine/core/libm/' | grep -v '^plugins/[^/]*/app/' \
   | xargs -r grep -nE "$FNS|hypot|__builtin_" /dev/null | scan)"
 if [[ -n "$hits" ]]; then
   echo "$hits" >&2
