@@ -277,6 +277,14 @@ fails when it is off. Three checks use it:
   whose digest is off the baseline (or not in it), writing nothing: the list of rows the PR has
   to explain or fix, in one command (about 14 minutes for every lab in the debug build; name a
   lab to run only it).
+- Every run writes `digest.tsv` beside its report: each input the digest hashed, a line each
+  (`kind  name  value`: a metric, a table's columns, a row named `<title> / <first cell>`, a
+  shot's or a file's own hash). `ge digest <id> --why` reads two of them and names what moved:
+  a metric's two values, a row's cells by column, a row, metric, shot or file that came or went,
+  or the same inputs in another order. It explains against `--base` (default `origin/main`): a
+  kept run when `previews/<id>@<base>/` holds one (`labs <id> --smoke --tag=<base>` keeps it,
+  on any tree, and nothing is built), or else the lab at that git ref, built in a scratch
+  worktree under `build/before/` as `ge lab --before` builds it.
 
 That is why lab code follows the simulation's rules even though it is tooling: no `<cmath>`
 transcendental (`make libm-check` scans `engine/lab`; use `core/libm`), integer pixels from

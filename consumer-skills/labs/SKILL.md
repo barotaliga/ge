@@ -64,7 +64,9 @@ sees only that picture.
 lab a determinism test for free. `ge digest --write` commits every lab's digest to
 `tests/digests/`; from then on `ge test` fails a lab whose digest is not its file there,
 so an output that moves is a change someone meant. `ge digest <id>` checks one lab against it;
-`ge digest <id> --write` moves that lab's row alone (a new lab's row too).
+`ge digest <id> --write` moves that lab's row alone (a new lab's row too). When one moves and
+you do not know why, `ge digest <id> --why` names what did against `origin/main` (or `--base=<ref>`,
+or a kept run's tag): the metrics, the table rows by column, the shots and files that differ.
 
 **Failures** are prompts: `lab.fail("seed 7 finished in 0 steps", "run tests/sim_game_test.cpp;
 skill: sim-system")`. The run carries on so every failure is named, and the runner exits 1.
