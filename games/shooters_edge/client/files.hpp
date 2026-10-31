@@ -51,12 +51,19 @@ std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name
 // and the rest in order.
 std::vector<std::string> map_names(const SearchPath& path);
 
-// THE SAVES: `<game folder>/saves/<name>.save` (the name letters, digits, `_` and `-` only).
-// Written whole to a temporary file and renamed over the old one, so a save is never half written.
-// False with the reason and the next step.
+// THE SAVES: ours `<game folder>/saves/<name>.save`; with `classic`, the classic text save
+// `<game folder>/<name>.sav`, where the classic game keeps its own (the name letters, digits, `_`
+// and `-` only). Written whole to a temporary file and renamed over the old one, so a save is
+// never half written. False with the reason and the next step.
 bool write_save(const SearchPath& path, const std::string& name, std::span<const uint8_t> bytes,
-                std::string& error);
+                std::string& error, bool classic = false);
 bool read_save(const SearchPath& path, const std::string& name, std::vector<uint8_t>& out,
-               std::string& error);
+               std::string& error, bool classic = false);
+// Whether `name` asks for the classic text save (it ends in `.sav`, then taken off).
+bool classic_save_name(std::string& name);
+// The line a menu shows for the save `name`: our save's title when `saves/<name>.save` reads,
+// else the classic text save's comment (`<name>.sav`'s second line, `_` read as a space); ""
+// when there is neither (an empty slot).
+std::string save_label(const SearchPath& path, const std::string& name);
 
 }  // namespace shooters_edge::client

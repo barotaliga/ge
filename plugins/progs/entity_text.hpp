@@ -22,6 +22,7 @@
 // ge:summary The map's entity text: blocks of key/value pairs, and a block's keys into fields
 // ge:keywords qc progs entity-text entities map-entities ed-parse spawn key value classname
 // ge:keywords angle angles light light_lev alpha colormod parse_entity_text apply_entity_block
+// ge:keywords apply_global_block value_text value_is_zero saved-game
 // ge:skill progs
 // ge:test tests/progs_entity_text_test.cpp
 #pragma once
@@ -59,5 +60,19 @@ const char* block_value(const EntityBlock& b, const char* key);
 // with a line in `messages`.
 bool apply_entity_block(Vm& vm, int e, const EntityBlock& b, EntityExtras& extras,
                         std::vector<std::string>& messages, std::string& error);
+
+// Writes the block's keys into the program's globals by name, each read as a field's value is.
+// False on a parse error (`error` says which key); keys that name no global are skipped, each with
+// a line in `messages`.
+bool apply_global_block(Vm& vm, const EntityBlock& b, std::vector<std::string>& messages,
+                        std::string& error);
+
+// A value of `type` at `w` as the entity text writes it (what `apply_entity_block` reads back to
+// the same value): a string its text (a newline as `\n`, a quote dropped); a float or each of a
+// vector's three the shortest decimal that reads back to the same float; an entity its number;
+// a field its name; a function its name.
+std::string value_text(const Vm& vm, uint16_t type, const uint32_t* w);
+// Whether a value of `type` at `w` is zero (a float's or a vector's minus zero counted zero).
+bool value_is_zero(uint16_t type, const uint32_t* w);
 
 }  // namespace ge::progs

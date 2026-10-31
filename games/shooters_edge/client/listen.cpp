@@ -17,6 +17,7 @@
 #include "progs/vm.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/campaign_save.hpp"
+#include "shooters_edge/server/classic_save.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
@@ -309,15 +310,19 @@ bool load_ahead(void* ctx, const std::string& name, sv::MapSpec& out, std::strin
 
 }  // namespace
 
-bool listen_load(Listen& l, const pg::Progs& progs, const ListenOptions& opt,
-                 std::span<const uint8_t> bytes, std::string_view name, std::string& error,
-                 std::unique_ptr<LoadedMap> map) {
+namespace {
+
+// A saved game loaded by `load` (our save or the classic text) as the game now playing; the game
+// before it is left playing when the load fails.
+template <class Load>
+bool load_game(Listen& l, const pg::Progs& progs, const ListenOptions& opt,
+               std::unique_ptr<LoadedMap> map, Load load) {
   LoadAhead ahead{opt.files, std::move(map)};
   sv::CampaignOptions co = campaign_options(l, opt);
   co.load = load_ahead;
   co.load_ctx = &ahead;
   auto host = std::make_unique<sv::Campaign>();
-  if (!sv::campaign_load(*host, progs, co, bytes, name, error)) return false;
+  if (!load(*host, co)) return false;
   host->opt.load = campaign_map;
   host->opt.load_ctx = &l;
   l.server = nullptr;
@@ -330,9 +335,44 @@ bool listen_load(Listen& l, const pg::Progs& progs, const ListenOptions& opt,
   l.map = std::move(ahead.map);
   campaign_entered(l);
   l.map_changed = true;  // the window draws the save's map
-  // The player's commands go on from the saved sequence; his level time from the map's start.
+  // The player's commands go on from the saved sequence.
   l.sequence = l.server->sv.clients[0].last_sequence;
-  l.entered_at = l.server->sv.base_time;
+  return true;
+}
+
+}  // namespace
+
+bool listen_load(Listen& l, const pg::Progs& progs, const ListenOptions& opt,
+                 std::span<const uint8_t> bytes, std::string_view name, std::string& error,
+                 std::unique_ptr<LoadedMap> map) {
+  if (!load_game(l, progs, opt, std::move(map),
+                 [&](sv::Campaign& c, const sv::CampaignOptions& co) {
+                   return sv::campaign_load(c, progs, co, bytes, name, error);
+                 }))
+    return false;
+  l.entered_at = l.server->sv.base_time;  // his level time from the map's start
+  return true;
+}
+
+bool listen_save_text(const Listen& l, std::string& out, std::string& error) {
+  error = listen_save_problem(l);
+  if (!error.empty()) {
+    error = "save: " + error;
+    return false;
+  }
+  return sv::classic_save_text(*l.campaign_host, out, error);
+}
+
+bool listen_load_text(Listen& l, const pg::Progs& progs, const ListenOptions& opt,
+                      std::string_view text, std::string_view name, std::string& error,
+                      std::unique_ptr<LoadedMap> map) {
+  if (!load_game(l, progs, opt, std::move(map),
+                 [&](sv::Campaign& c, const sv::CampaignOptions& co) {
+                   return sv::classic_load_text(c, progs, co, text, name, opt.player, error);
+                 }))
+    return false;
+  // The text keeps no start: his level time from the settled start of the map.
+  l.entered_at = sv::kSettleFrames * sv::kSettleSeconds + 1.0;
   return true;
 }
 

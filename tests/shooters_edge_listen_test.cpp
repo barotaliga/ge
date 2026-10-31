@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -26,6 +27,7 @@
 #include "check.hpp"
 #include "golden.hpp"
 #include "progs/vm.hpp"
+#include "save/file.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/held.hpp"
@@ -182,6 +184,30 @@ TEST(the_search_path_takes_the_newest_pack_s_file) {
   CHECK(!cl::add_archive(files, "bad.pak", {'P', 'A', 'C', 'K'}, error));
   CHECK(!cl::open_game_dir("no-such-base-folder", "id1", files, error));
   CHECK(error.find("-basedir") != std::string::npos);
+}
+
+TEST(a_save_slot_reads_as_our_title_or_the_classic_comment) {
+  namespace fs = std::filesystem;
+  cl::SearchPath files;
+  files.folder = (fs::temp_directory_path() / "ge_se_slot_test").string();
+  fs::remove_all(files.folder);
+  std::string error;
+  CHECK(cl::save_label(files, "s0").empty());  // an empty slot
+  std::vector<uint8_t> ours;
+  ge::save::Meta m;
+  m.game = "shooters_edge";
+  m.title = "the hall, kills 3/12";
+  ge::save::FileWriter w(ours, m);
+  w.finish();
+  CHECK_MSG(cl::write_save(files, "s0", ours, error), error);
+  CHECK(cl::save_label(files, "s0") == "the hall, kills 3/12");
+  const std::string text = "5\nthe_far_room kills: 1/9\n";
+  CHECK_MSG(
+      cl::write_save(files, "s1", {reinterpret_cast<const uint8_t*>(text.data()), text.size()},
+                     error, true),
+      error);
+  CHECK(cl::save_label(files, "s1") == "the far room kills: 1/9");
+  fs::remove_all(files.folder);
 }
 
 TEST(a_map_the_packs_do_not_have_is_named_with_the_next_step) {
