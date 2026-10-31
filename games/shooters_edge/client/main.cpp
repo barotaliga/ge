@@ -36,11 +36,8 @@
 // window over the whole screen (`vid_display n` which one, of those `vid_displays` lists), and
 // `quit` quits.
 //
-// THE LOBBY (client/lobby_console.hpp): a match opens each map in WARMUP, everyone free to roam
-// with nothing counted, until every player is `ready` (F1, and F1 again or `break` takes it back),
-// then a countdown and the map restarted for the match; F2 (`team switch`) changes team, F3 shows
-// or hides the roster, `addbot` seats a bot, `start` lets the host start whoever is ready, and
-// `sv_lobby 0` starts the match with the map.
+// THE LOBBY: a match opens each map in warmup until everyone is ready; F1 ready or break, F2 the
+// other team, F3 the roster (client/lobby_console.hpp lists the words and the settings).
 //
 // THE BENCHMARK: `timedemo <demo>` in the console (or `-timedemo <demo>` on the command line,
 // which quits when it is done) plays a recorded game (`demo1` from the packs, or a file's path)
@@ -59,8 +56,7 @@
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console
 // ge:keywords relative-mouse mouse-look hud first-person effects r_look quit shooters-edge
 // ge:keywords benchmark timedemo demo vsync-off fps playdemo demo_track cl_demospeed demovideo
-// ge:keywords main-menu escape vid_fullscreen fullscreen offscreen vid_display vid_displays
-// ge:keywords lobby warmup ready break team addbot
+// ge:keywords main-menu escape vid_fullscreen fullscreen offscreen vid_display vid_displays lobby
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
 #include <cstdio>
