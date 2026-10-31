@@ -234,6 +234,9 @@ the player's own process and for a dedicated server:
 | The list (`rendezvous.hpp`) | The rendezvous keeps each session's last advertise and answers a LIST ask a page at a time (seven games a page, an ask padded to the biggest page, so no answer outweighs its ask). An advertise is taken only from the address the session registered from |
 | The directory (`directory.hpp`) | The browser's model: one refresh probes the LAN and reads the list's pages, merges a game found both ways into one entry by its session id, pings each entry three times (the discovery probe sent to its session address) and keeps the lowest round trip; the view filters (full, empty, playing, locked, a ping bound, part of the name, where it was found) and sorts (ping, players, name), ties by name then id |
 
+The server around them (the process, its layered `server.cfg`, the lobby's phases, launching a
+dedicated server from the game) is `engine/server`: [`servers.md`](servers.md) (M53).
+
 A game's VISIBILITY is `lan` (the LAN only: no rendezvous, no router), `invite` (registered, so
 joined by the id the host hands out, never listed) or `listed` (public). Joining an entry
 (`directory_route`) is straight to its LAN address, or through the rendezvous by its id, which

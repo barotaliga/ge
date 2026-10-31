@@ -55,6 +55,7 @@ updates that row's status file (`docs/goals/<row>.md`) in its PR.
 | [`docs/climate.md`](docs/climate.md) | Temperature and humidity (M51): the air by the hour, the height, the weather and the ground, the dew point, and what they do: fog of five kinds, snow or rain, the snow's feel, frost, rime, black ice, the breath, lake ice; who reads what |
 | [`docs/grass.md`](docs/grass.md) | Grass (M34): the research, kinds and recipes, covers on a heightfield or a mesh's floors, the blade scatter, the sway in the wind, the grass drawn, and the rows |
 | [`docs/mods.md`](docs/mods.md) | The engine's own mods (M52): the C ABI each way and how it grows, determinism (the state block, the game's stream, the libm), the sandbox, the loader, the platforms and the store form, the package, `ge mod` |
+| [`docs/servers.md`](docs/servers.md) | Servers for every multiplayer game (M53): the one core a game plugs into, listen and dedicated, `server.cfg` in layers, meta-cvars, the lobby and the match's phases, the feature seam for admin tools, recording and match mods |
 
 **The working area.** `porting/` holds everything that only matters while modules are
 being carried over from their reference sources: the porting guide (`porting/README.md`),
