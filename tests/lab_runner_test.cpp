@@ -169,6 +169,8 @@ TEST(cvars_reach_a_lab_that_reads_them_and_fail_one_that_does_not) {
   CHECK(slurp(dir() + "/pair/report.json").find("--cvars: dark") != std::string::npos);
   CHECK(run({"toy", "--cvars=dark"}) == 1);  // toy reads none: a pair would differ in nothing
   CHECK(slurp(dir() + "/toy/report.json").find("the lab reads none") != std::string::npos);
+  CHECK(run({"toy", "--stage-pak=fixture"}) == 1);  // toy reads no files to stage a pack over
+  CHECK(slurp(dir() + "/toy/report.json").find("stages no pack") != std::string::npos);
 }
 
 TEST(repeat_catches_hidden_state) {

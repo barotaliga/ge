@@ -6,12 +6,13 @@
 // that veils it; in the winter's cold the open lake steams in any wind.
 //
 // ge:summary Test: the mountain's mists by its sky and hour: the valley's sea, the summit's cloud
-// ge:keywords test mist fog valley-fog sea-of-fog burn-off hill-fog mountain_climate mists_at
+// ge:keywords test mist fog valley-fog sea-of-fog burn-off hill-fog climate_of mists_at
 // ge:keywords water_mist lake-fog steam-fog
 // ge:skill mountain testing
 #include <cmath>
 
 #include "check.hpp"
+#include "mountain/air/air.hpp"
 #include "mountain/app/mist_look.hpp"
 
 namespace {
@@ -57,7 +58,7 @@ TEST(a_wind_keeps_the_valley_clear) {
 
 TEST(a_fog_sky_lays_the_sea_under_a_clear_lid) {
   const mg::Level level = mountain(mg::WeatherKind::fog, 6);
-  const ge::wind::Climate c = ma::mountain_climate(level);
+  const ge::wind::Climate c = ge::mountain::air::climate_of(level);
   CHECK(c.cloud < 0.3 && c.wind <= 1.5 && c.humidity > 0.9);
   CHECK(ma::mists_at(level, 7, kEye).valley.density > 0);
 }
@@ -72,7 +73,8 @@ TEST(the_summit_stands_in_its_cloud_under_a_damp_overcast) {
 }
 
 TEST(the_day_runs_sunrise_to_sunset_off_the_latitude) {
-  const ge::wind::Climate winter = ma::mountain_climate(mountain(mg::WeatherKind::clear, 1));
+  const ge::wind::Climate winter =
+      ge::mountain::air::climate_of(mountain(mg::WeatherKind::clear, 1));
   CHECK(winter.sunrise > 7 && winter.sunrise < 8.5);
   CHECK(std::fabs(winter.sunrise + winter.sunset - 24) < 1e-9);
 }
@@ -88,7 +90,7 @@ TEST(the_same_question_gets_the_same_answer) {
 
 TEST(a_still_clear_dawn_fogs_the_lake_and_a_windy_one_does_not) {
   const mg::Level level = mountain(mg::WeatherKind::clear, 1);
-  ge::wind::Climate spring = ma::mountain_climate(level);
+  ge::wind::Climate spring = ge::mountain::air::climate_of(level);
   spring.mean_c = 3;
   ma::MapWater lake;
   lake.centre[0] = 500, lake.centre[1] = 400;
@@ -105,7 +107,7 @@ TEST(a_still_clear_dawn_fogs_the_lake_and_a_windy_one_does_not) {
   // 180 m across the lake through it veils under a tenth of the view.
   CHECK(windy.area.density * 180 < 0.1);
   // A midwinter dawn far colder than the open water: sea smoke, in the calm and in the wind.
-  ge::wind::Climate winter = ma::mountain_climate(level);
+  ge::wind::Climate winter = ge::mountain::air::climate_of(level);
   winter.wind = 8;
   const ma::WaterMist smoke = ma::water_mist(level, winter, 7.6, lake);
   CHECK(smoke.mist.kind == ge::wind::MistKind::steam && smoke.area.wind[1] > 0);

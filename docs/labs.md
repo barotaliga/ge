@@ -118,6 +118,12 @@ the use: the lab run under each (the before kept as
 `previews/<id>@pair-before/`, the after as the lab's last run) and every shot's two side by side
 in the diff's sheets (`previews/<id>/diff/`), with what changed between them.
 
+`--stage-pak=<name>` hands a game's labs the name of a pack to stage over the files they read
+(`lab.stage_pak()`), filling only what the game folder lacks. Shooter's Edge's `fixture`
+(`client/stage.hpp`) stages stand-in players, heads, rockets, grenades and gibs, so the
+`se-highlights`, `se-demo-video`, `se-timedemo` and `se-client` labs draw the players of a demo
+without the classic pack; a note lists what was staged. A lab given a name it never stages fails.
+
 `--log=<spec>` switches on log channels for the run (`docs/debugging.md`): every line kept goes to
 `previews/<id>/log.txt` as `[step] level channel: message`, the debug and trace lines only
 there, and a note in the report counts them by channel and level. The log is `measured`: it
