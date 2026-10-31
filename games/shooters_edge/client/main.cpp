@@ -12,31 +12,28 @@
 //                 [-demovideo <demo> <file> [--fps=N] [--resolution=<WxH|1080p|4k>] ...]
 //                 [+<command> ...]
 //
-// `-basedir` is the folder that holds the game folder (`id1` unless `-game` names another) with
-// its `pak0.pak`, `pak1.pak` ...; a leading `~` is the home folder, and a path with spaces is one
+// `-basedir` is the folder that holds the game folder (`id1` unless `-game` names another) with its
+// `pak0.pak`, `pak1.pak` ...; a leading `~` is the home folder, and a path with spaces is one
 // argument when quoted. `-progs` runs a mod's progs file in place of the baseline mod, and
 // `-models` names the held weapons' folder (by default the tree's
 // `games/shooters_edge/content/models/view`, from where the game runs or where it was built). The
-// `+` words are console lines run at start: `+map dm6` loads that map
-// (`map arena` is the built-in test arena); with none, the map `start` when the packs have it,
-// else the arena.
+// `+` words are console lines run at start: `+map dm6` loads that map (`map arena` is the built-in
+// test arena); with none, the map `start` when the packs have it, else the arena.
 //
 // THE KEYS: W A S D move, SPACE jumps, the left button fires, 1..8 pick a weapon, the wheel the
-// next one; TAB held shows the scores (client/scores.hpp: a match's scoreboard, a campaign's
-// solo scorebar and the level's figures, `scr_levelstats 0|1`); the mouse looks (captured while
-// the window has it; a click takes it back); ESCAPE
-// opens the main menu (menu/game_menu.hpp: drawn in the pack's own pictures when the packs carry
-// them, the rows the game cannot do yet dimmed), and ESCAPE again goes back out of it; the key
-// under ESCAPE drops the console, where `map <name>` changes the map, `sv
-// <line>` is a line for the server's console (`sv timelimit 10`), `save <name>` and `load <name>`
-// keep and bring back a single-player game (`<game folder>/saves/<name>.save`; `<name>.sav` the
-// classic text save in the game folder, which `load` also finds by the bare name), `sensitivity
-// <deg a count>` and `m_invert 0|1` set the look, `r_look classic|modern` and the other picture
-// cvars (app/look.hpp: `r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`) the
-// world's look, the view-model cvars (view/hand.hpp: `r_drawviewmodel`, `r_viewmodel_fov`,
-// `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the
-// window over the whole screen (`vid_display n` which one, of those `vid_displays` lists), and
-// `quit` quits.
+// next one; TAB held shows the scores (client/scores.hpp; `scr_levelstats 0|1`); the mouse looks
+// (captured while the window has it; a click takes it back); ESCAPE opens the main menu
+// (menu/game_menu.hpp: drawn in the pack's own pictures when the packs carry them, the rows the
+// game cannot do yet dimmed), and ESCAPE again goes back out of it; the key under ESCAPE drops the
+// console, where `map <name>` changes the map, `sv <line>` is a line for the server's console (`sv
+// timelimit 10`), `save <name>` and `load <name>` keep and bring back a single-player game (`<game
+// folder>/saves/<name>.save`; `<name>.sav` the classic text save in the game folder, which `load`
+// also finds by the bare name), `sensitivity <deg a count>` and `m_invert 0|1` set the look,
+// `r_look classic|modern` and the other picture cvars (app/look.hpp: `r_fx_lights`, `r_fx_glow`,
+// `r_bloom`, `r_lava_glow`, `r_slime_glow`) the world's look, the view-model cvars (view/hand.hpp:
+// `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon
+// in hand, `vid_fullscreen 0|1` the window over the whole screen (`vid_display n` which one, of
+// those `vid_displays` lists), and `quit` quits.
 //
 // THE LOBBY: a match opens each map in warmup until everyone is ready; F1 ready or break, F2 the
 // other team, F3 the roster (client/lobby_console.hpp lists the words and the settings).
@@ -55,11 +52,11 @@
 // (client/demo_video.hpp; docs/shooters-edge.md § A demo as a video).
 //
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
-// ge:keywords app main window listen-server basedir game-folder plus-commands map console
-// ge:keywords relative-mouse mouse-look hud first-person effects r_look quit shooters-edge
-// ge:keywords benchmark timedemo demo vsync-off fps playdemo demo_track cl_demospeed demovideo
-// ge:keywords main-menu escape vid_fullscreen fullscreen offscreen vid_display vid_displays lobby
-// ge:keywords scores-key tab scoreboard scr_levelstats
+// ge:keywords app main window listen-server basedir game-folder plus-commands map console relative-
+// ge:keywords mouse mouse-look hud first-person effects r_look quit shooters-edge benchmark
+// ge:keywords timedemo demo vsync-off fps playdemo demo_track cl_demospeed demovideo main-menu
+// ge:keywords escape vid_fullscreen fullscreen offscreen vid_display vid_displays lobby scores-key
+// ge:keywords scoreboard scr_levelstats
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
 #include <cstdio>
