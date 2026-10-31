@@ -18,6 +18,9 @@
 // - A MORPH TARGET is an offset a vertex from the mesh at bind (a classic model's frame, a face's
 //   expression): a pose adds each target times its weight to the bind before skinning, and a
 //   clip carries a weight a target a baked frame for each mesh it moves.
+// - A KEPT TEXTURE (only when the loader is asked to keep them, assets/gltf.hpp's LoadOptions): a
+//   material's base colour picture and its glow picture as images of the model, and every mesh's
+//   texture coordinates, so a pass that draws pictures (a held weapon's skin) draws them whole.
 // - AN AFFINE is a 3x4 matrix as three rows (p' = M (x, y, z, 1)): the bone palette's form,
 //   three vec4s a joint on the GPU (render/skinning.hpp).
 //
@@ -26,6 +29,7 @@
 // ge:keywords animation keyframes trs affine palette rigid-part kmaxjoints kcliprate
 // ge:keywords to_affine compose invert transform_point transform_vector
 // ge:keywords morph-target morph-track blend-shape target-weights
+// ge:keywords kept-texture texture-coordinates uv images glow emissive
 // ge:skill assets
 // ge:test tests/assets_pose_test.cpp
 #pragma once
@@ -34,6 +38,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include "assets/image.hpp"
 
 namespace ge::assets {
 
@@ -74,6 +80,8 @@ struct Joint {
 struct Material {
   std::string name;
   float rgb[3] = {1, 1, 1};  // the base colour, linear
+  int32_t texture = -1;      // a kept base colour picture (Model::images), times rgb; -1: none
+  int32_t glow = -1;         // a kept glow picture (the file's emissive texture); -1: none
 };
 
 // A mesh's offset from its bind: every vertex's position (m) and normal (a difference of unit
@@ -92,6 +100,7 @@ struct Mesh {
   std::vector<uint8_t> joints;   // kJointsPerVertex a vertex
   std::vector<float> weights;    // kJointsPerVertex a vertex
   std::vector<uint8_t> parts;    // a vertex's material
+  std::vector<float> uv;  // two a vertex (u right, v down) when textures are kept, else empty
   std::vector<uint32_t> indices;
   std::vector<MorphTarget> targets;
   std::vector<float> target_weights;  // a target each: the weights when no clip moves them
@@ -119,6 +128,7 @@ struct Model {
   std::vector<Mesh> meshes;
   std::vector<Material> materials;
   std::vector<Clip> clips;
+  std::vector<Image> images;  // the kept textures (empty unless the loader keeps them)
 };
 
 // The index of the joint, mesh or clip of that name, or -1.

@@ -1,0 +1,5 @@
+# What axe.glb was built from (engine/assets/manifest.hpp). Written by `ge asset build axe`; never edit it by hand.
+builder build.py edc6bf57867a5436
+source ../weapon_kit.py b977f786c7b72d42
+data se_view b1d28d29c16c3a75
+blender 5.2.2 LTS

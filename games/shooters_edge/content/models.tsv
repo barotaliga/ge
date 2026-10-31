@@ -8,8 +8,8 @@ gore/gib_1	Flesh chunk	any gib (random of three)	game	open	-
 gore/gib_2	Flesh chunk	as above	game	open	-
 gore/gib_3	Flesh chunk	as above	game	open	-
 gore/flesh_ball	Thrown flesh lump	ghoul's projectile; meat spray	game	open	-
-view/melee	First-person melee weapon	held weapon 1	game	replaced	kenney/survival-kit
-view/shotgun	First-person shotgun	held weapon 2	game	replaced	kenney/blaster-kit
+view/axe	First-person axe, held in the hand (built: models/view/axe)	held weapon 1	game	replaced	ge/built
+view/shotgun	First-person pump shotgun, held in both hands (built: models/view/shotgun)	held weapon 2	game	replaced	ge/built
 view/double_shotgun	First-person double shotgun	held weapon 3	game	replaced	kenney/blaster-kit
 view/nailgun	First-person nailgun	held weapon 4	game	replaced	kenney/blaster-kit
 view/heavy_nailgun	First-person heavy nailgun	held weapon 5	game	replaced	kenney/blaster-kit

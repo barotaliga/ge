@@ -11,6 +11,9 @@
 // - THE SHOT: the weapon's kick (weapons.hpp) handed to the placement, and its FLASH: a point
 //   light at the muzzle (held_to_world: where the gun's own lens puts it in the world), fading over
 //   the weapon's `flash_s`, for the world's lamps and the gun's own light (`light_held`).
+// - THE ANIMATION: a shot plays the model's `fire` clip from its start (the pump racked, the
+//   barrels turned, the axe's swing: viewmodel::held_clip_frames), handed out as the frames to
+//   draw; a model without one draws its rest frame.
 // - THE PLAYER'S CVARS (`ViewSettings`, `add_view_cvars`), all the player's own (archived):
 //     r_drawviewmodel   draw the weapon at all (0: the hand still switches and flashes, unseen)
 //     r_viewmodel_fov   the weapon's own lens, deg vertical (0: the view's)
@@ -22,7 +25,7 @@
 // ge:summary Shooter's Edge's first-person hand: the switch, the shot's kick and flash, the cvars
 // ge:keywords shooters-edge viewmodel hand weapon-switch put-away raise shot kick flash-light
 // ge:keywords muzzle-light r_drawviewmodel r_viewmodel_fov cl_gunx cl_guny cl_gunz cl_gunsway
-// ge:keywords step_hand held_row add_view_cvars view-settings
+// ge:keywords step_hand held_row add_view_cvars view-settings fire-clip animation frames
 // ge:skill render shooter
 // ge:test tests/shooters_edge_view_test.cpp
 #pragma once
@@ -57,6 +60,7 @@ struct Hand {
   bool fresh = true;
   vm::PlaceState place;
   double flash_left = 0;  // s of the last shot's light still to fade
+  double fire_t = -1;     // s into the `fire` clip (-1: at rest)
 };
 
 struct HandInput {
@@ -68,10 +72,12 @@ struct HandInput {
 struct HandFrame {
   Weapon weapon = Weapon::shotgun;  // the model to draw
   vm::Placement placement;
-  bool drawn = true;       // r_drawviewmodel, and not all the way down
-  bool switching = false;  // the hand is between weapons
-  bool flashing = false;   // `flash` is lit
-  vm::PointLight flash;    // the shot's light, world (its intensity faded)
+  bool drawn = true;             // r_drawviewmodel, and not all the way down
+  bool switching = false;        // the hand is between weapons
+  bool flashing = false;         // `flash` is lit
+  vm::PointLight flash;          // the shot's light, world (its intensity faded)
+  int frame_a = 0, frame_b = 0;  // the model's frames to draw, blended by `frame_t`
+  double frame_t = 0;
 };
 
 // One display frame of `dt` s seen through `view`. `models` is load_weapon_models's set (the

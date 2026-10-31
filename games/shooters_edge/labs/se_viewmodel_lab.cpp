@@ -95,7 +95,7 @@ void to_screen(const float v[3], double fov_y, double aspect, double out[2]) {
 // The share of the screen the model's placed box covers (clipped to the screen).
 double screen_share(const vm::HeldModel& m, const vm::Placement& p, double fov_y, double aspect) {
   float lo[3], hi[3];
-  vm::held_bounds(m, lo, hi);
+  vm::held_bounds(m, lo, hi, 0);
   double x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
   for (int c = 0; c < 8; ++c) {
     const float corner[3] = {(c & 1) ? hi[0] : lo[0], (c & 2) ? hi[1] : lo[1],
@@ -150,6 +150,13 @@ void run(ge::lab::Lab& lab) {
     lab.fail(error, "next: rerun from the repository's root, or pass --models=<folder>.");
     return;
   }
+  // Each weapon without the hands holding it, mounted the same: what its size is measured on.
+  std::vector<vm::HeldModel> bare(models.size());
+  for (const se::WeaponLook& look : se::weapon_looks()) {
+    vm::HeldModel held;
+    se::load_weapon_model(se::weapon_model_path(dir, look), look, held, &error,
+                          &bare[static_cast<size_t>(look.weapon)]);
+  }
   const Inputs inputs = {{"models", dir}, {"width", std::to_string(width)}};
   const vm::Stage stage = vm::corridor_stage();
   const ge::camera::Pose view = stage_view();
@@ -190,11 +197,12 @@ void run(ge::lab::Lab& lab) {
       const vm::StageLights l = vm::stage_lights(vm::StageLight::day, view, mv);
       panels.push_back(draw(f, l, view));
       labels.emplace_back(look.name);
-      const double share = screen_share(m, f.placement, view.fov_y, aspect);
+      const vm::HeldModel& b = bare[static_cast<size_t>(look.weapon)];
+      const double share = screen_share(b, f.placement, view.fov_y, aspect);
       double at[2];
       to_screen(mv, view.fov_y, aspect, at);
       float lo[3], hi[3];
-      vm::held_bounds(m, lo, hi);
+      vm::held_bounds(b, lo, hi, 0);
       const std::string key(look.name);
       lab.metric("share-" + key, share, "share");
       char c[4][16];
@@ -203,10 +211,11 @@ void run(ge::lab::Lab& lab) {
       std::snprintf(c[2], 16, "%.3f", at[0]);
       std::snprintf(c[3], 16, "%.3f", at[1]);
       table.rows.push_back({key, c[0], c[1], c[2], c[3]});
-      // Held, not a toy and not the whole picture; the muzzle (the tip) on the screen.
-      if (share < 0.04 || share > 0.3) {
+      // Held, not a toy and not the whole picture (a built weapon at its true size in hands covers
+      // more than a toy-scale one did); the muzzle (the tip) on the screen.
+      if (share < 0.04 || share > 0.4) {
         ++problems;
-        lab.note(key + ": its box covers " + c[1] + " of the picture (stated 0.04..0.3)");
+        lab.note(key + ": its box covers " + c[1] + " of the picture (stated 0.04..0.4)");
       }
       if (!look.upright && (at[0] < 0.02 || at[0] > 0.98 || at[1] < 0.02 || at[1] > 0.98)) {
         ++problems;

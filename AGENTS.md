@@ -423,6 +423,7 @@ and the directories agree.
 | `gpu` | `engine/gpu`: the native GPU device over Dawn (Dawn's `webgpu.h`), feature tiers, buffers, pipelines and the manifest, WGSL and `make shaders-check` |
 | `render` | A draw pass, the pass table, GPU-driven instances, shadows, sky, TAA-U, post, lab captures, extraction from `GameState` |
 | `assets` | `engine/assets`: an authored model (glTF), posing and skinning, the `models` lab, exporting from Blender |
+| `held-weapons` | A first-person held weapon: a Blender builder over the shared kit, the one pair of hands and jointed arms (IK), the `fire` clip, staging it beside the game's (`se-weapon-stage`, `scripts/stage.sh`), putting it in the game; M48e |
 | `audio` | The synth, a voice, a bed, the audio thread |
 | `ui` | The 2D layer, text, fonts, backdrops, menus, the HUD, a card, the dev UI |
 | `labs` | Writing, running or reading a lab: a measurement, a captioned screenshot, a scenario, a drive, a bench; the before-and-after a PR owes |

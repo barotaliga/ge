@@ -1,0 +1,5 @@
+# What shotgun.glb was built from (engine/assets/manifest.hpp). Written by `ge asset build shotgun`; never edit it by hand.
+builder build.py ba39e89eae2bc6d4
+source ../weapon_kit.py b977f786c7b72d42
+data se_view b1d28d29c16c3a75
+blender 5.2.2 LTS
