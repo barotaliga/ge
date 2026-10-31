@@ -78,6 +78,12 @@ struct Light {
 @group(1) @binding(8) var rebake_rgb: texture_2d<f32>;
 @group(1) @binding(9) var rebake_dir: texture_2d<f32>;
 @group(1) @binding(10) var<storage, read> frames: array<vec4f>;  // the animated textures' frames
+// The brush models: a run of vertices (first, end), 1 hidden; the offset it is drawn at now.
+struct Mover {
+  range: vec4u,
+  offset: vec4f,
+};
+@group(1) @binding(11) var<storage, read> movers: array<Mover>;  // [0] the world's
 
 const kSky = 1u;
 const kWater = 2u;
@@ -117,11 +123,31 @@ fn style_level(id: u32) -> f32 {
   return bsp.styles[id >> 2u][id & 3u];
 }
 
+// The vertex `vi` at `pos` where its brush model stands now; w 0 when the model is hidden.
+fn moved(vi: u32, pos: vec3f) -> vec4f {
+  let n = arrayLength(&movers);
+  let world = movers[0].range;
+  if (n < 2u || (vi >= world.x && vi < world.y)) {
+    return vec4f(pos, 1.0);
+  }
+  for (var i = 1u; i < n; i++) {
+    let m = movers[i];
+    if (vi >= m.range.x && vi < m.range.y) {
+      return vec4f(pos + m.offset.xyz, select(1.0, 0.0, m.range.z != 0u));
+    }
+  }
+  return vec4f(pos, 1.0);
+}
+
 @vertex
-fn vs_main(v: VsIn) -> VsOut {
+fn vs_main(v: VsIn, @builtin(vertex_index) vi: u32) -> VsOut {
   var o: VsOut;
-  o.clip = frame.view_proj * vec4f(v.pos - frame.eye.xyz, 1.0);
-  o.world = v.pos;
+  let at = moved(vi, v.pos);
+  o.clip = frame.view_proj * vec4f(at.xyz - frame.eye.xyz, 1.0);
+  if (at.w < 0.5) {
+    o.clip = vec4f(2.0, 2.0, 2.0, 1.0);  // outside the view: the triangle is clipped away
+  }
+  o.world = at.xyz;
   o.st = v.st;
   o.lm = v.lm;
   o.nrm = v.nrm;

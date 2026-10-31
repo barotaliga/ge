@@ -148,6 +148,9 @@ struct Scene {
   std::vector<uint32_t> indices;
   // Each map surface's run of `indices` (first, count; 0 0 a surface not drawn), for the cull.
   std::vector<std::array<uint32_t, 2>> face_runs;
+  // Each brush model's run of `vertices` (first, end; 0 0 a model with nothing drawn), [0] the
+  // world's: a moving model's faces are moved by their run (bsp_draw.hpp's `set_movers`).
+  std::vector<std::array<uint32_t, 2>> model_vertices;
   std::vector<LiquidPatch> liquids;
   std::vector<Portal> portals;  // the teleporters' panels, largest first
   std::vector<PointLight> lights;

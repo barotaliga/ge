@@ -26,10 +26,16 @@ void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& 
   // Which surfaces are the world's own (model 0): the rest are the brush models'.
   const Map& m = scene.map;
   std::vector<uint8_t> own(m.surfaces.size(), 0);
+  std::vector<uint32_t> model_of(m.surfaces.size(), 0);
   if (!m.models.empty()) {
     const Model& w = m.models[0];
     for (uint32_t k = 0; k < w.surface_count && w.first_surface + k < own.size(); ++k)
       own[w.first_surface + k] = 1;
+    for (size_t mi = 1; mi < m.models.size(); ++mi) {
+      const Model& md = m.models[mi];
+      for (uint32_t k = 0; k < md.surface_count && md.first_surface + k < own.size(); ++k)
+        model_of[md.first_surface + k] = uint32_t(mi);
+    }
   } else {
     std::fill(own.begin(), own.end(), uint8_t{1});
   }
@@ -37,6 +43,7 @@ void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& 
   chunks.reserve(chunk_of.size());
   c.surface.clear();
   c.world.clear();
+  c.model.clear();
   c.total = 0;
   for (const auto& [first, count, kind, surface] : chunk_of) {
     GpuChunk g{};
@@ -55,9 +62,13 @@ void create_bsp_cull(gpu::Device& device, gpu::PipelineSet& pipelines, BspCull& 
     chunks.push_back(g);
     c.surface.push_back(surface);
     c.world.push_back(surface < own.size() ? own[surface] : 0);
+    c.model.push_back(surface < model_of.size() ? model_of[surface] : 0);
     c.total = std::max(c.total, first + count);
   }
   c.chunks = uint32_t(chunks.size());
+  c.placed = chunks;
+  c.moves.assign(std::max<size_t>(m.models.size(), 1), {0, 0, 0, 0});
+  c.moved = false;
   const size_t n = std::max<size_t>(chunks.size(), 1);
   c.chunk_buf = r::make_buffer(device, "bsp.cull.chunks", n * sizeof(GpuChunk), BU::Storage);
   if (!chunks.empty())
@@ -122,10 +133,24 @@ void prepare_bsp_cull(gpu::Device& device, BspCull& c, const Scene& scene, const
   c.in_set = 0;
   for (uint32_t i = 0; i < c.chunks; ++i) {
     const uint32_t s = c.surface[i];
+    const uint32_t mi = c.model[i];
+    if (mi > 0 && mi < c.moves.size() && c.moves[mi][3] > 0.5f) continue;  // removed
     if (!c.world[i] || (s < c.seen.size() && c.seen[s])) {
       c.bits[i / 32] |= 1u << (i % 32);
       ++c.in_set;
     }
+  }
+  if (c.moved) {
+    // A moving model's boxes where it stands now.
+    for (uint32_t i = 0; i < c.chunks; ++i) {
+      const uint32_t mi = c.model[i];
+      if (mi == 0 || mi >= c.moves.size()) continue;
+      GpuChunk g = c.placed[i];
+      for (int k = 0; k < 3; ++k)
+        g.lo[k] += c.moves[mi][size_t(k)], g.hi[k] += c.moves[mi][size_t(k)];
+      device.queue.WriteBuffer(c.chunk_buf, uint64_t{i} * sizeof(GpuChunk), &g, sizeof g);
+    }
+    c.moved = false;
   }
   device.queue.WriteBuffer(c.pvs, 0, c.bits.data(), c.bits.size() * 4);
   device.queue.WriteBuffer(c.args, 0, c.args_reset.data(), c.args_reset.size() * 4);

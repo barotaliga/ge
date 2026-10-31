@@ -28,6 +28,7 @@
 // ge:summary The BSP renderer: classic or v2 (our sky, our liquids, real-time lights and shadows)
 // ge:keywords bsp brush render renderer r_bspmode classic v2 lightmap point-light cube-shadow
 // ge:keywords sun-shadow sky-mask flicker lava-light weather rain snow puddles shelter bsp_shelter
+// ge:keywords set_movers movers moving-brush-models doors plats
 // ge:keywords shadow-cache shadow-slot fresh_slots
 // ge:skill brush render
 #pragma once
@@ -131,6 +132,12 @@ struct GpuJob {
   float o[4], x[4], y[4], z[4], info[4];
 };
 
+// A brush model as the shaders move it: its run of vertices (first, end), 1 hidden, and its offset.
+struct GpuMover {
+  uint32_t range[4];
+  float offset[4];
+};
+
 struct GpuBsp {
   float info[4];
   float info2[4];
@@ -181,6 +188,10 @@ struct BspDraw {
   // The light styles' patterns (draw_data.hpp), empty the light as baked (set_light_style).
   std::array<std::string, kLightStyles> light_styles;
   wgpu::Buffer frames;  // the animated textures' frames (Scene::frames)
+  // The brush models' runs of vertices and where each stands now (set_movers), [0] the world's.
+  wgpu::Buffer movers;
+  std::vector<GpuMover> mover_rows;
+  bool movers_dirty = false;
   BspCull cull;
   std::vector<DynamicLight> dynamic;       // this frame's (set_dynamic_lights)
   std::vector<PointLight> dynamic_points;  // the same as v2's point lights
@@ -200,6 +211,15 @@ void prepare_bsp(gpu::Device& device, BspDraw& draw, const render::FrameView& vi
 // This frame's dynamic lights (before `prepare_bsp`); the classic draws at most kMaxDynamic.
 inline constexpr int kMaxDynamic = 32;
 void set_dynamic_lights(BspDraw& draw, std::span<const DynamicLight> lights);
+// THE MOVING MODELS: a brush model (a door, a plat, a button; model k of the map, k > 0) drawn
+// `offset` engine metres from where the map built it, or not drawn at all when `hidden` (an
+// entity the game removed). A model not named keeps its last place; all start at the map's.
+struct Mover {
+  uint32_t model = 0;
+  double offset[3] = {0, 0, 0};
+  bool hidden = false;
+};
+void set_movers(BspDraw& draw, std::span<const Mover> movers);
 // Light style `style` (0 .. 63) played from now on as `pattern`: letters 'a' (dark) .. 'z', 'm'
 // the light as baked, ten a second (draw_data.hpp's `style_level`); empty for steady.
 void set_light_style(BspDraw& draw, int style, std::string_view pattern);
