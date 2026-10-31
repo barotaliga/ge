@@ -19,8 +19,8 @@
 //
 // Pure functions of their arguments: nothing is stepped, no clock and no random number.
 //
-// ge:summary The snow's air: a layer's weather off the world's climate, new snow's density, the
-// feel ge:keywords snow air weather climate air_at fresh_density fresh-snow-density snow-feel feel
+// ge:summary The snow's air: a layer's weather off the climate, new snow's density, the feel
+// ge:keywords snow air weather climate air_at fresh_density fresh-snow-density snow-feel feel
 // ge:keywords squeak glide thaw frost crust air_schedule weather_of feel_at snow_air
 // ge:skill snow water
 // ge:test tests/snow_air_test.cpp
