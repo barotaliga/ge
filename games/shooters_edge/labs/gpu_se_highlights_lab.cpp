@@ -220,6 +220,11 @@ void run(gl::Lab& lab) {
   for (size_t i = 0; i < shots; i++) ids.push_back("moment-" + std::to_string(i + 1));
   const int clip = static_cast<int>(lab.arg_num("clip"));
   const bool cut = clip > 0 && static_cast<size_t>(clip) <= mine.list.size();
+  // The clip's window is the scan's, so it is in the digest with or without a device.
+  if (cut) {
+    lab.metric("clip.from", mine.list[static_cast<size_t>(clip - 1)].from_s, "s");
+    lab.metric("clip.to", mine.list[static_cast<size_t>(clip - 1)].to_s, "s");
+  }
   if (!device) {
     for (const std::string& id : ids) ls::placeholders(lab, {id.c_str()});
     if (cut) ls::placeholders(lab, {"clip"});
@@ -325,9 +330,11 @@ void run(gl::Lab& lab) {
     lab.fail("se-highlights: the clip: " + error, "Read the reason above. Skill: shooter.");
     return;
   }
-  lab.metric("clip.from", cr.from_s, "s");
-  lab.metric("clip.to", cr.to_s, "s");
-  lab.metric("clip.frames", static_cast<double>(cr.frames), "count");
+  lab.metric("clip.frames", static_cast<double>(cr.frames), "count", gl::Det::measured);
+  if (cr.from_s != h.from_s)
+    lab.fail("se-highlights: the clip starts at " + gu::play_clock(cr.from_s) +
+                 ", the highlight at " + gu::play_clock(h.from_s),
+             "-demovideo --highlight=N must start where the list's window does. Skill: shooter.");
   lab.metric("clip.gif_bytes", static_cast<double>(cr.bytes), "bytes", gl::Det::measured);
   if (cr.highlight != h.text)
     lab.fail(
