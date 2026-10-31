@@ -209,6 +209,13 @@ TEST(load_and_save_show_the_slots_and_run_their_lines) {
   sm::Host host{.console = &w.con};
   host.saves.assign(sm::kSaveSlots, {});
   host.saves[3] = "the hall, kills 3/12";
+  host.saves[5] = "the long corridor of doors, kills 4/31";
+  host.saves[6] = "the gate house of the far keep kills:0/12";
+  sm::refresh(m, host);
+  CHECK(item(m, "load", "s5")->text == "the long corrido, kills 4/31");  // the modern look
+  sm::refresh(m, host, true);  // the classic look's column holds less
+  CHECK(item(m, "load", "s5")->text == "the long c, kills 4/31");
+  CHECK(item(m, "load", "s6")->text == "the gate ho kills:0/12");
   sm::refresh(m, host);
   CHECK(item(m, "single", "load")->opens == "load");
   CHECK(item(m, "single", "save")->opens == "save");

@@ -170,7 +170,7 @@ bool classic_load_text(Campaign& c, const pg::Progs& progs, const CampaignOption
     return refuse(1, "version " + lines[0] + ", not " + std::to_string(kClassicSaveVersion));
   float parms[kParms];
   for (int k = 0; k < kParms; k++)
-    if (!read_float(lines[static_cast<size_t>(2 + k)], parms[k]))
+    if (!read_float(lines[2 + static_cast<size_t>(k)], parms[k]))
       return refuse(3 + k, "spawn parm " + std::to_string(k + 1) + " is not a number");
   float skill = 0, time_f = 0;
   if (!read_float(lines[18], skill)) return refuse(19, "the skill is not a number");
@@ -252,7 +252,7 @@ bool classic_load_text(Campaign& c, const pg::Progs& progs, const CampaignOption
   sv.base_time = time;
   sv.base_frame = sv.frame;
   for (int k = 0; k < kLightStyles; k++) {
-    const std::string& style = lines[static_cast<size_t>(21 + k)];
+    const std::string& style = lines[21 + static_cast<size_t>(k)];
     s.lightstyles[k] = style == kUnsetStyle ? "" : style;
   }
   ClientInfo& ci = s.clients[0];

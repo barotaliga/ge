@@ -86,8 +86,10 @@ struct Host {
 // The save slots the LOAD and SAVE pages show, and the words of an empty one.
 inline constexpr int kSaveSlots = 12;
 inline constexpr std::string_view kEmptySlot = "- EMPTY -";
-// A slot's line cut to what the classic look's label column holds.
+// A slot's line cut to what a row holds: the classic look's label column, and the modern look's
+// slab on a phone (the title shortened before the kills are).
 inline constexpr size_t kSlotChars = 22;
+inline constexpr size_t kSlotCharsModern = 28;
 
 // Whether `name` is a cvar or a command of the console or a cvar of the server.
 bool host_knows(const Host& host, std::string_view name);

@@ -370,6 +370,21 @@ bool slot_page(std::string_view page) { return page == "load" || page == "save";
 
 std::string slot_id(int i) { return "s" + std::to_string(i); }
 
+// A save's line cut to `chars`, the title shortened before the kills are: "the long
+// corridor of doors, kills 4/31" reads "the long c, kills 4/31" in 22.
+std::string slot_text(const std::string& line, size_t chars) {
+  if (line.size() <= chars) return line;
+  const size_t kills = line.rfind(" kills");
+  if (kills == std::string::npos || line.size() - kills >= chars) return line.substr(0, chars);
+  std::string head = line.substr(0, kills);
+  const bool comma = !head.empty() && head.back() == ',';
+  if (comma) head.pop_back();
+  const std::string tail = (comma ? "," : "") + line.substr(kills);
+  head.resize(chars - tail.size());
+  while (!head.empty() && head.back() == ' ') head.pop_back();
+  return head + tail;
+}
+
 bool same_value(std::string_view a, std::string_view b) {
   double x = 0, y = 0;
   if (ge::console::parse_number(a, x) && ge::console::parse_number(b, y)) return x == y;
@@ -508,7 +523,8 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
       }
       const size_t i = std::stoul(it.id.substr(1));
       const std::string line = i < host.saves.size() ? host.saves[i] : std::string();
-      it.text = line.empty() ? std::string(kEmptySlot) : line.substr(0, kSlotChars);
+      it.text = line.empty() ? std::string(kEmptySlot)
+                             : slot_text(line, hide_back ? kSlotChars : kSlotCharsModern);
       it.disabled = !known || (load && line.empty());
     }
     if (page->focus >= 0 && !page->items[static_cast<size_t>(page->focus)].stop()) page->focus = -1;
