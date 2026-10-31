@@ -17,13 +17,16 @@
 //   ground, carved into patches by the noise and drifting on the wind.
 // - THE CLOUD ON THE SUMMIT: the air at the summit; where it lies in its own cloud (a hill fog) a
 //   bank round the top, as deep as that fog, seen from inside when the eye is in it.
+// - THE FOG OVER ITS WATER (`water_mist`, M51c): the air on a lake's surface asked by any caller
+//   that lays one (the generator lays none yet: docs/goals.md M24l), with the day's climate it
+//   is handed (the map's, a lab's), so a still, clear dawn fogs the lake and a windy one does not.
 //
 // Every answer is a pure function of the map, the hour and the eye: nothing is stepped, nothing
 // draws a random number.
 //
 // ge:summary The mountain's mists: the valley's sea of fog, the ground mist, the summit's cloud
 // ge:keywords mist fog valley-fog sea-of-fog inversion ground-mist hill-fog summit-cloud burn-off
-// ge:keywords mountain_climate mists_at climate radiation-fog
+// ge:keywords mountain_climate mists_at climate radiation-fog water_mist lake-fog steam-fog
 // ge:skill mountain render
 // ge:test tests/mountain_mist_look_test.cpp
 #pragma once
@@ -57,5 +60,26 @@ wind::Climate mountain_climate(const mapgen::Level& level);
 
 // The fog at solar `hour` seen from `eye` (world m).
 MistLook mists_at(const mapgen::Level& level, double hour, const double eye[3]);
+
+// A body of open water on the map (a tarn, a lake): its middle and the half sizes of its shore's
+// box (world m, x and z), its surface's height and its water's temperature, C.
+struct MapWater {
+  double centre[2] = {0, 0};
+  double half[2] = {50, 50};
+  double level = 0;
+  double water_c = 4;
+};
+
+// THE FOG OVER THE WATER the day's air `climate` lays at solar `hour` (its `water_c` the water's
+// own): the air on the surface asked (`wind::mist_at` over open water), a steam fog rising off
+// water far warmer than the air, a radiation fog on a clear, still night (a wind mixes it away),
+// an advection fog where moist air is blown over colder water; drawn as an area of fog over the
+// shore's box (render/mist_fog.hpp), drifting on `kMistDrift` of the map's wind.
+struct WaterMist {
+  wind::Mist mist;
+  render::FogVolume area;  // density 0 when none lies
+};
+WaterMist water_mist(const mapgen::Level& level, const wind::Climate& climate, double hour,
+                     const MapWater& water);
 
 }  // namespace ge::mountain::app
