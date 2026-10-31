@@ -50,11 +50,12 @@ std::vector<Glyph> glyphs_of(const ui::DrawList& dl, const mn::ClassicArt& art) 
           {c.box.rect, static_cast<int>(c.box.uv.y / 8) * 16 + static_cast<int>(c.box.uv.x / 8)});
   return out;
 }
-// The glyphs on row `y`, left to right, as text (a code below 32 as '#').
+// The glyphs on row `y`, left to right, as text (a code below 32 as '#'; the second set's
+// blank left out).
 std::string row_text(const std::vector<Glyph>& g, float y) {
   std::vector<Glyph> row;
   for (const Glyph& k : g)
-    if (k.at.y == y) row.push_back(k);
+    if (k.at.y == y && k.code != (' ' | 128)) row.push_back(k);  // the second set's blank
   std::stable_sort(row.begin(), row.end(),
                    [](const Glyph& a, const Glyph& b) { return a.at.x < b.at.x; });
   std::string s;
@@ -127,8 +128,8 @@ TEST(the_players_board_is_laid_out_as_the_notes_say) {
   CHECK(at(g, 16, 24) != nullptr && at(g, 16, 24)->code == 'p');
   CHECK(at(g, 16, 32)->code == 29 && at(g, 24, 32)->code == 30 && at(g, 40, 32)->code == 31);
   CHECK(row_text(g, 32).size() == 4 + 2 + 4 + 5 + 16);
-  // The first row (y 40) is the player: his ping, his loss in the second set (over 25%), his
-  // minutes, his frags bracketed in the box, his name.
+  // The first row (y 40) is the player: the ping, the loss in the second set (over 25%), the
+  // minutes, the frags bracketed in the box, the name.
   CHECK(row_text(g, 40) ==
         "12"
         "30"

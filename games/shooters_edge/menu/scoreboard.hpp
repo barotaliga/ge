@@ -39,13 +39,13 @@ namespace shooters_edge::menu {
 
 // One player as the board lists him.
 struct ScoreRow {
-  std::string name;
+  std::string name{};
   int frags = 0;
   int ping = 0;             // ms
   int loss = 0;             // packet loss, 0..100
   int minutes = 0;          // on the server
   int top = 0, bottom = 0;  // the player's colours, 0..15
-  std::string team;
+  std::string team{};
   bool spectator = false;
   bool self = false;  // the local player
 };
@@ -58,7 +58,7 @@ struct Scoreboard {
 
 // One team as the teams' board lists it.
 struct TeamRow {
-  std::string team;
+  std::string team{};
   int frags = 0, players = 0;
   int low = 999, mean = 999, high = 0;  // its players' pings, ms
   bool self = false;                    // the local player's team
