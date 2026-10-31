@@ -13,6 +13,7 @@
 #include <string_view>
 
 #include "brush/read.hpp"
+#include "classicenhance/cached.hpp"
 #include "classicenhance/models.hpp"
 #include "core/output.hpp"
 #include "morph/read.hpp"
@@ -53,6 +54,49 @@ uint32_t colour_row(const sv::ClientInfo& c, const char* key, uint32_t fallback)
 void to_world(const sh::Vec3f& p, double out[3]) {
   const float f[3] = {p.x, p.y, p.z};
   br::to_engine(f, out);
+}
+
+// How many times the pack's skin `skin` the enhanced copy `big` is across and down; 0 when it is
+// not a whole multiple of 2 or more.
+uint32_t scale_of(const gr::MorphSkin& skin, const ge::assets::Image& big) {
+  if (skin.width == 0 || skin.height == 0 || big.width <= 0 || big.height <= 0) return 0;
+  const uint32_t w = uint32_t(big.width), h = uint32_t(big.height);
+  const uint32_t k = w / skin.width;
+  if (k < 2 || w != skin.width * k || h != skin.height * k || big.rgba.size() != size_t(w) * h * 4)
+    return 0;
+  return k;
+}
+
+// `skin` (the pack's own) redrawn from its enhanced copy `big` (`from` times its size) at `k`
+// times its size, each texel the mean of the copy's under it: the colours the copy's, each
+// texel's mark its source texel's.
+void enhance_skin(gr::MorphSkin& skin, const ge::assets::Image& big, uint32_t from, uint32_t k) {
+  const uint32_t w = skin.width * k, h = skin.height * k, step = from / k;
+  if (step == 0) return;
+  std::vector<uint8_t> rgba(size_t(w) * h * 4);
+  for (uint32_t y = 0; y < h; y++) {
+    for (uint32_t x = 0; x < w; x++) {
+      uint32_t sum[4] = {0, 0, 0, 0};
+      for (uint32_t j = 0; j < step; j++)
+        for (uint32_t i = 0; i < step; i++) {
+          const size_t at = ((size_t(y) * step + j) * size_t(big.width) + size_t(x) * step + i) * 4;
+          for (int c = 0; c < 4; c++) sum[c] += big.rgba[at + size_t(c)];
+        }
+      for (int c = 0; c < 4; c++)
+        rgba[(size_t(y) * w + x) * 4 + size_t(c)] = uint8_t(sum[c] / (step * step));
+    }
+  }
+  std::vector<uint8_t> marks;
+  if (!skin.marks.empty()) {
+    marks.resize(size_t(w) * h);
+    for (uint32_t y = 0; y < h; y++)
+      for (uint32_t x = 0; x < w; x++)
+        marks[size_t(y) * w + x] = skin.marks[size_t(y / k) * skin.width + x / k];
+  }
+  skin.width = w;
+  skin.height = h;
+  skin.rgba = std::move(rgba);
+  skin.marks = std::move(marks);
 }
 
 // Says once why a file on the model list is not drawn.
@@ -110,6 +154,15 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
                    const wgpu::BindGroupLayout& frame, const SearchPath& files,
                    std::span<const uint8_t> palette, const br::Map& map, const ModelLoad& load) {
   std::vector<gr::MorphModel> morphs;
+  // The skins with enhanced copies: the morph model, its pack's own skin, the copy and its scale.
+  struct Enhanced {
+    size_t at;
+    gr::MorphSkin own;
+    ge::assets::Image big;
+    uint32_t from;
+  };
+  std::vector<Enhanced> enhanced;
+  uint32_t most = 0;
   std::vector<gr::SpriteFrame> frames;
   std::set<std::string> refused;
   m.kinds.assign(load.names.size(), {});
@@ -143,6 +196,20 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
       k.synced = model.synced;
       for (size_t s = 0; s < std::max<size_t>(1, model.skins.size()); s++)
         morphs.push_back(models::morph_from_alias(model, palette, int(s)));
+      if (!load.cache.empty() && !model.skins.empty()) {
+        std::vector<ge::assets::Image> big;
+        const std::string stem = std::filesystem::path(name).stem().string();
+        if (ge::classicenhance::cached_skins(load.cache, stem, uint32_t(model.skins[0].width),
+                                             uint32_t(model.skins[0].height), &big) &&
+            big.size() == model.skins.size()) {
+          for (size_t s = 0; s < big.size(); s++) {
+            const uint32_t from = scale_of(morphs[k.first + s].skin, big[s]);
+            if (from == 0) continue;
+            most = std::max(most, from);
+            enhanced.push_back({k.first + s, morphs[k.first + s].skin, std::move(big[s]), from});
+          }
+        }
+      }
       if (ends_with(name, "/flame.mdl") || ends_with(name, "/flame2.mdl")) {
         const mo::Model bare = ge::classicenhance::drop_glowing(model);
         k.bare = uint32_t(morphs.size());
@@ -173,6 +240,31 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
       k.first = uint32_t(morphs.size());
       morphs.push_back(std::move(mm));
     }
+  }
+  if (!enhanced.empty()) {
+    // The atlas is one square: every skin raised to twice the pack's first, then each again
+    // toward the cache's scale, a step kept only while the atlas still holds them all; the rest
+    // stay where they were (the pack's own at worst).
+    std::vector<gr::AtlasRect> rects;
+    std::vector<uint32_t> at_scale(enhanced.size(), 1);
+    for (uint32_t k = 2; k <= most; k *= 2) {
+      for (size_t i = 0; i < enhanced.size(); i++) {
+        const Enhanced& e = enhanced[i];
+        if (at_scale[i] != k / 2 || e.from % k != 0) continue;
+        const gr::MorphSkin was = morphs[e.at].skin;
+        morphs[e.at].skin = e.own;
+        enhance_skin(morphs[e.at].skin, e.big, e.from, k);
+        if (gr::pack_morph_atlas(morphs, rects))
+          at_scale[i] = k;
+        else
+          morphs[e.at].skin = was;
+      }
+    }
+    size_t kept = 0;
+    for (const uint32_t k : at_scale) kept += k > 1;
+    ge::core::output::status("shooters_edge: " + std::to_string(kept) + " of " +
+                             std::to_string(enhanced.size()) + " skins enhanced from " +
+                             load.cache.string());
   }
   if (!morphs.empty()) {
     m.has_morph =
