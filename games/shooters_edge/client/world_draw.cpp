@@ -52,6 +52,7 @@ struct WorldDraw {
   gr::Post post[2];
   gr::Particles particles;
   WorldModels models;
+  std::vector<ba::Mover> movers;  // this frame's (place_brushes)
   gr::HeldModels held;
   bool has_held = false;
   ge::viewmodel::Placement last_place;  // the weapon's placement a frame ago
@@ -252,6 +253,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   gr::prepare_sky(f.skypass, view);
   if (f.has_map) {
     ba::set_dynamic_lights(f.bsp, fx.lights);
+    place_brushes(f.models, fx.models, f.movers);
+    ba::set_movers(f.bsp, f.movers);
     ba::prepare_bsp(d, f.bsp, view, o);
   }
   if (f.extras) prepare_extras(d, *f.extras, f.bsp, view, o);

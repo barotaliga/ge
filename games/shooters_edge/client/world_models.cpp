@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <set>
 #include <string>
 #include <string_view>
@@ -22,6 +23,7 @@ namespace shooters_edge::client {
 namespace gr = ge::render;
 namespace mo = ge::morph;
 namespace br = ge::brush;
+namespace ba = ge::brush::app;
 
 namespace {
 
@@ -111,11 +113,18 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
   std::vector<gr::SpriteFrame> frames;
   std::set<std::string> refused;
   m.kinds.assign(load.names.size(), {});
+  m.brush_of.assign(load.names.size(), 0);
+  m.brushes = uint32_t(map.models.size());
   for (size_t i = 0; i < load.names.size(); i++) {
     const std::string& name = load.names[i];
     ModelKind& k = m.kinds[i];
     // [1] is the map itself and "*N" its own brush models: the map's to draw, not these.
-    if (i == 1 || name.empty() || name[0] == '*') continue;
+    if (name.size() > 1 && name[0] == '*') {
+      const int n = std::atoi(name.c_str() + 1);
+      if (n > 0 && uint32_t(n) < m.brushes) m.brush_of[i] = uint32_t(n);
+      continue;
+    }
+    if (i == 1 || name.empty()) continue;
     std::vector<uint8_t> store;
     const std::span<const uint8_t> bytes = find_file(files, name, store);
     if (bytes.empty()) continue;  // the map itself is not in the packs by this name either
@@ -178,6 +187,25 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
       ge::core::output::status("shooters_edge: the sprites do not fit the atlas; not drawn");
   }
   if (!map.models.empty()) m.probe = models::make_probe(map);
+}
+
+void place_brushes(const WorldModels& m, std::span<const Placed> placed,
+                   std::vector<ba::Mover>& out) {
+  out.clear();
+  if (m.kinds.empty() || m.brushes < 2) return;
+  out.resize(m.brushes - 1);
+  for (uint32_t k = 1; k < m.brushes; k++) {
+    out[k - 1].model = k;
+    out[k - 1].hidden = true;
+  }
+  for (const Placed& p : placed) {
+    if (size_t(p.modelindex) >= m.brush_of.size()) continue;
+    const uint32_t n = m.brush_of[size_t(p.modelindex)];
+    if (n == 0) continue;
+    ba::Mover& mv = out[n - 1];
+    mv.hidden = false;
+    to_world(p.origin, mv.offset);
+  }
 }
 
 void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,

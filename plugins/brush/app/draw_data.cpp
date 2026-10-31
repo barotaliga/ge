@@ -479,6 +479,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
   std::vector<Top> tops;
   std::vector<Portal> faces;  // the teleporters' faces, merged into panels below
   s.face_runs.assign(m.surfaces.size(), {0, 0});
+  s.model_vertices.assign(m.models.size(), {UINT32_MAX, 0});
   for (size_t si = 0; si < m.surfaces.size(); ++si) {
     const Surface& sf = m.surfaces[si];
     Kind kind = kSolid;
@@ -544,6 +545,11 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       up = up && d.nrm[1] > 0.95f;
     }
     double area = 0;
+    if (size_t(model_of[si]) < s.model_vertices.size()) {
+      auto& run = s.model_vertices[size_t(model_of[si])];
+      run[0] = std::min(run[0], base);
+      run[1] = std::max(run[1], uint32_t(s.vertices.size()));
+    }
     s.face_runs[si] = {uint32_t(s.indices.size()), sf.count};
     for (uint32_t i = sf.first; i < sf.first + sf.count; ++i)
       s.indices.push_back(base + m.indices[i] - lo);
@@ -598,6 +604,8 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       tops.push_back(Top{kind, level, {box[0], box[1], box[2], box[3]}, area, {cx / nv, cz / nv}});
     }
   }
+  for (auto& run : s.model_vertices)
+    if (run[0] >= run[1]) run = {0, 0};
 
   // ── The tops grouped: one kind, one level, boxes that touch ──
   std::vector<size_t> parent(tops.size());

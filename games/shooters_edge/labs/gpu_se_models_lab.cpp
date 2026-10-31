@@ -366,6 +366,105 @@ void run(gl::Lab& lab) {
     v.pitch = lm::atan2(dy, std::sqrt(dx * dx + dz * dz));
     shoot(s.id, s.title, s.caption, s.look_for, v);
   }
+  // The map's own moving brush models: a lift where the mod lowered it at spawn and raised, a door
+  // shut and open. The server's entity holding "*N" moves its faces (place_brushes).
+  const auto vector_field = [&](int e, const char* name, sh::Vec3f& out_v) {
+    const ge::progs::Def* def = ge::progs::find_field(progs, name);
+    if (def == nullptr) return false;
+    float c[3];
+    for (int q = 0; q < 3; q++)
+      c[q] = std::bit_cast<float>(
+          *ge::progs::entity_field(l.server->q.vm, e, def->offset + uint32_t(q)));
+    out_v = {c[0], c[1], c[2]};
+    return true;
+  };
+  struct Mover {
+    const char* classname;
+    const char* field;  // the place it moves to for the second picture
+    const char* id[2];
+    const char* title[2];
+    const char* caption;
+    const char* look_for;
+  };
+  constexpr Mover kMovers[] = {
+      {"func_plat",
+       "pos1",
+       {"lift-down", "lift-up"},
+       {"A LIFT, LOWERED", "THE SAME LIFT, UP"},
+       "A lift (a plat of the map's own brushes) where the mod lowers it at spawn, then at the top "
+       "of its ride: its faces drawn where the server holds it.",
+       "the lift's top level with the floor below it, then risen to the floor above"},
+      {"func_door",
+       "pos2",
+       {"door-shut", "door-open"},
+       {"A DOOR, SHUT", "THE SAME DOOR, OPEN"},
+       "A door of the map's own brushes shut, then where the mod opens it to.",
+       "the door filling its frame, then slid away showing the room behind"},
+  };
+  double movers_found = 0;
+  for (const Mover& mv : kMovers) {
+    // The first of the class with a brush model the server placed and a clear view of it.
+    int ent = -1;
+    sh::Vec3f c{};
+    float e[3];
+    for (const ge::brush::Entity& me_ent : world.entities) {
+      if (me_ent.get("classname") != mv.classname) continue;
+      const std::string& model = me_ent.get("model");
+      if (model.empty() || model[0] != '*') continue;
+      for (int q = 1; q < l.server->sv.num_edicts && ent < 0; q++) {
+        const sh::Edict& ed = l.server->sv.edicts[size_t(q)];
+        if (ed.free || ed.modelindex <= 0 || size_t(ed.modelindex) >= l.server->models.size() ||
+            l.server->models[size_t(ed.modelindex)] != model)
+          continue;
+        // A door from its middle's height; a lift from above, at its top.
+        const bool lift = std::string(mv.classname) == "func_plat";
+        const sh::Vec3f mid{0.5f * (ed.absmin.x + ed.absmax.x), 0.5f * (ed.absmin.y + ed.absmax.y),
+                            lift ? ed.absmax.z : 0.5f * (ed.absmin.z + ed.absmax.z)};
+        for (int k = 0; k < 8 && ent < 0; k++) {
+          const double a = k * 0.785398163397448;
+          const float dx = float(lm::cos(a)), dy = float(lm::sin(a));
+          const float dist = lift ? 128.0f : 160.0f, up = lift ? 96.0f : 40.0f;
+          const sh::Vec3f eye{mid.x + dist * dx, mid.y + dist * dy, mid.z + up};
+          const sh::Vec3f near{mid.x + 48 * dx, mid.y + 48 * dy, mid.z + (lift ? 8.0f : 0.0f)};
+          if (open_line(eye, eye, 16) && open_line(eye, near, 0)) {
+            ent = q;
+            c = mid;
+            e[0] = eye.x;
+            e[1] = eye.y;
+            e[2] = eye.z;
+          }
+        }
+      }
+      if (ent >= 0) break;
+    }
+    if (ent < 0) {
+      lab.note(std::string("no ") + mv.classname + " on " + map_name + " with a clear view");
+      continue;
+    }
+    movers_found++;
+    ge::render::FrameView v = base;
+    const float at_f[3] = {c.x, c.y, c.z};
+    double eye[3], at[3];
+    br::to_engine(e, eye);
+    br::to_engine(at_f, at);
+    for (int q = 0; q < 3; q++) v.eye[q] = eye[q];
+    const double dx = at[0] - eye[0], dy = at[1] - eye[1], dz = at[2] - eye[2];
+    v.heading = lm::atan2(dx, dz);
+    v.pitch = lm::atan2(dy, std::sqrt(dx * dx + dz * dz));
+    lab.note(std::string(mv.classname) + ": entity " + std::to_string(ent) + ", eye " +
+             std::to_string(int(e[0])) + " " + std::to_string(int(e[1])) + " " +
+             std::to_string(int(e[2])));
+    for (int stage = 0; stage < 2; stage++) {
+      if (stage == 1) {
+        sh::Vec3f to{};
+        if (!vector_field(ent, mv.field, to)) break;
+        l.server->sv.edicts[size_t(ent)].origin = to;
+      }
+      cl::step_fx(l, shown, fx_state, t, 0, fx);
+      shoot(mv.id[stage], mv.title[stage], mv.caption, mv.look_for, v);
+    }
+  }
+  lab.metric("movers.shot", movers_found, "count");
   if (device)
     ls::checked(lab, static_cast<int>(device->errors.load()),
                 static_cast<int>(device->pipelines_after_load));

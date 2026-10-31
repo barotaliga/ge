@@ -20,7 +20,7 @@
 // ge:summary The window's models: items, weapons, flames, players, loaded from the packs and drawn
 // ge:keywords world-models create_models place_models prepare_models encode_models placed-model
 // ge:keywords items armour health weapons flames torches players statics entity-models morph
-// ge:keywords sprites bare-flames topcolor bottomcolor
+// ge:keywords sprites bare-flames topcolor bottomcolor place_brushes doors plats
 // ge:skill render shooter morph
 #pragma once
 
@@ -30,6 +30,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "brush/app/bsp_draw.hpp"
 #include "brush/map.hpp"
 #include "gpu/device.hpp"
 #include "render/frame.hpp"
@@ -73,7 +74,9 @@ struct ModelKind {
 };
 
 struct WorldModels {
-  std::vector<ModelKind> kinds;  // by modelindex
+  std::vector<ModelKind> kinds;    // by modelindex
+  std::vector<uint32_t> brush_of;  // by modelindex: the map's own brush model ("*N": N), or 0
+  uint32_t brushes = 0;            // the map's brush models, the world's [0] among them
   ge::render::Morph morph;
   ge::render::Sprites sprites;
   bool has_morph = false, has_sprites = false;
@@ -95,6 +98,11 @@ void create_models(ge::gpu::Device& device, ge::gpu::PipelineSet& pipelines, Wor
                    const wgpu::BindGroupLayout& frame, const SearchPath& files,
                    std::span<const uint8_t> palette, const ge::brush::Map& map,
                    const ModelLoad& load);
+// Where the map's own brush models stand this frame (doors, plats, buttons): each one an entity
+// of `placed` holds offset by that entity's origin; one no entity holds (removed by the game) is
+// hidden. Empty when the models were loaded with no server's list.
+void place_brushes(const WorldModels& m, std::span<const Placed> placed,
+                   std::vector<ge::brush::app::Mover>& out);
 // This frame's draws of `placed` at `view` (its time the animations' clock), lit `brightness`
 // times the lightmap under each and never under `minlight` (the world's own: ba::Options's
 // brightness and minlight), `smooth` texels; with `bare_flames` a torch's flame is drawn bare

@@ -146,8 +146,12 @@ fullbright texels glowing); the weapon in hand (`client/held.hpp`: the game's fr
 models, switched with the number keys, kicked and lit by its muzzle flash as the mod fires it,
 lit by the map's baked light under the player; `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`,
 `cl_guny`, `cl_gunz` and `cl_gunsway` in the console); the HUD (`hud_style
-classic|modern|compact`); the console; the main menu (below). Not yet: sounds, the map's moving
-brush models (doors, plats) drawn where they move, and the network (the rest of M18h, M18i).
+classic|modern|compact`); the console; the main menu (below). The map's own moving brush
+models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, and one
+the game removed (a secret wall the mod does not keep) is not drawn: `brush/app/bsp_draw.hpp`'s
+`set_movers`, fed each frame by `client/world_models.hpp`'s `place_brushes`; their shadows in the
+modern look stay where the map built them. Not yet: sounds and the network (the rest of M18h,
+M18i).
 
 The baseline mod's POWERS (`qc/items.qc`): the quad (`item_artifact_super_damage`, four times
 the damage dealt) and the shield (`item_artifact_invulnerability`, no damage taken), 30 s each,
@@ -736,7 +740,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
 | `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the weapon in hand, the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost, the effects thrown and the shots the hand saw (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
-| `se-models` | picture | The things a map places, as the window draws them: the armour, a health box, an ammo box, a weapon, a torch or a flame, the quad, the shield, another player in his colours and one holding both powers, each from a clear spot near it in both looks; the things placed by kind and the light under each (built, M18i3; `--pak` and `--map` for a pack's own maps) |
+| `se-models` | picture | The things a map places, as the window draws them: the armour, a health box, an ammo box, a weapon, a torch or a flame, the quad, the shield, another player in his colours and one holding both powers, each from a clear spot near it in both looks; a lift lowered and up, a door shut and open (M18i6); the things placed by kind and the light under each (built, M18i3; `--pak` and `--map` for a pack's own maps) |
 | `se-menu` | picture | The main menu's pages in the modern look and in the classic look (the fixture's pictures, or the player's pack with `--pack`), every row the game cannot do yet dimmed, classic-enhance's menu under OPTIONS; at desktop, wide and phone sizes (built, M18k2) |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
 | `se-viewmodel` | picture | The game's eight free weapons in first person on the engine's corridor stage: every one held at rest, each fired in the dark lit by its own muzzle light, the shotgun switched to the rocket launcher, and the player's view-model cvars; each weapon's share of the picture, its muzzle on the screen, its flash's lift and the switch's time (built, M48d) |
