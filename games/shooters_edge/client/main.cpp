@@ -77,6 +77,7 @@
 #include "input/state.hpp"
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
+#include "shooters_edge/app/muzzle.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_video.hpp"
@@ -515,6 +516,20 @@ int run_main(int argc, char** argv) {
       out::status("shooters_edge: no weapon is drawn: " + why +
                   "; next: pass -models <the tree's games/shooters_edge/content/models/view>");
   }
+  // Each weapon's muzzle fire (app/muzzle.hpp), at the size its gun is drawn.
+  std::vector<ge::render::MuzzleLook> fire_looks;
+  {
+    std::vector<shooters_edge::effects::FireRow> rows;
+    for (const shooters_edge::view::WeaponLook& look : shooters_edge::view::weapon_looks())
+      rows.push_back({look.muzzle, look.muzzle_knobs});
+    std::string why;
+    if (!shooters_edge::effects::fire_looks(rows, shooters_edge::view::kBuiltScale, fire_looks,
+                                            &why)) {
+      out::error("shooters_edge: " + why +
+                 "; next: fix the weapon's fire in games/shooters_edge/view/weapons.cpp");
+      return 1;
+    }
+  }
 
   auto window = ge::platform::open_window(
       {.title = "Shooter's Edge", .width = args.width, .height = args.height});
@@ -608,6 +623,7 @@ int run_main(int argc, char** argv) {
   cl::FxState fx_state;
   cl::FxFrame fx;
   cl::HeldState in_hand;
+  shooters_edge::effects::MuzzleShots shots;
   size_t printed = 0;
   const uint64_t first_ns = ge::platform::now_ns();
   uint64_t last = first_ns;
@@ -713,6 +729,7 @@ int run_main(int argc, char** argv) {
         shown = {};
         fx_state = {};
         in_hand = {};
+        shots = {};
       }
     }
 
@@ -874,12 +891,14 @@ int run_main(int argc, char** argv) {
       shown = {};
       fx_state = {};
       in_hand = {};
+      shots = {};
     }
     if (listen.restarted) {  // the lobby's countdown ran out: the match on a new server
       listen.restarted = false;
       shown = {};
       fx_state = {};
       in_hand = {};
+      shots = {};
     }
     if (listen.campaign.sellscreen) {  // the shareware episode's end: the help pages
       listen.campaign.sellscreen = false;
@@ -898,6 +917,20 @@ int run_main(int argc, char** argv) {
         cl::step_held(listen, shown, in_hand, view_settings, weapons, t, wall);
     if (hand.flashing)
       fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
+    {
+      // ce_muzzles: each shot's flame, smoke and sparks from the barrel (off: its light alone).
+      const auto wi = static_cast<size_t>(hand.weapon);
+      const ge::render::MuzzleLook* fire =
+          picture.ce.muzzles && wi < fire_looks.size() ? &fire_looks[wi] : nullptr;
+      ge::render::MuzzlePose pose;
+      for (int k = 0; k < 3; ++k) {
+        pose.at[k] = hand.muzzle_at[k];
+        pose.dir[k] = hand.muzzle_dir[k];
+        pose.up[k] = hand.muzzle_up[k];
+      }
+      shooters_edge::effects::step_muzzle(shots, fire, hand.fired && hand.drawn, pose, view.time_s,
+                                          &fx.births, &fx.puffs, &fx.flames);
+    }
     overlay.begin(w, h);
     if (listen.campaign.end == cl::LevelEnd::none) {
       se::fill_hud(hud, cl::status_of(listen, t), se::pick_art(hud_art, classic_art, free_art));

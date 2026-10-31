@@ -20,7 +20,7 @@ struct HeldDraw {
   now: array<vec4f, 3>,   // the placement's rows: the held frame into the view's
   last: array<vec4f, 3>,  // a frame ago
   lens: vec4f,            // 1 / tan(x / 2), 1 / tan(y / 2), the gun's near plane, the depth floor
-  info: vec4u,            // frame a, frame b, model, flags (1: lamps, 2: hide the flame)
+  info: vec4u,            // frame a, frame b, model, flags (1: lamps, 2: hide the flame, 4: the hands)
   mix: vec4f,             // the frames' share, outdoor, white (lx; 0: the eye's), floor
   ambient: vec4f,         // rgb; gloss
   direct: vec4f,          // rgb; shininess
@@ -79,8 +79,11 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) k: u32) -> 
   let p = out.view;
   let jitter = vec2f(2.0 * frame.jitter.z, -2.0 * frame.jitter.w);
   out.position = vec4f(p.xy * d.lens.xy + jitter * p.z, d.lens.z, p.z);
-  if ((d.info.w & 2u) != 0u && flags[m.more.x + vid / 3u] != 0u) {
-    out.position = vec4f(0.0, 0.0, -1.0, 1.0);  // the model's own flash: clipped away
+  // The model's own flash (flag 1) and the hands holding it (flag 2), each clipped away when the
+  // draw hides it (info.w 2 and 4).
+  let tri = flags[m.more.x + vid / 3u];
+  if (((d.info.w >> 1u) & tri) != 0u) {
+    out.position = vec4f(0.0, 0.0, -1.0, 1.0);
   }
   return out;
 }

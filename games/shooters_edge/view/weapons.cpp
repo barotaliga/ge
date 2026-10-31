@@ -14,18 +14,38 @@ namespace shooters_edge::view {
 
 namespace {
 
+// The fires, at the true size (a real gun's: a few milliseconds of glowing gas, small and dim).
+constexpr std::string_view kShotgunFire =
+    "life=0.02,length=0.26,width=0.15,glow=0.02,flash=0.22,sparks=3,light_range=4,"
+    "smoke.smoke=0.5";
+constexpr std::string_view kDoubleFire =
+    "life=0.024,length=0.3,width=0.2,glow=0.022,flash=0.28,prongs=6,sparks=4,light_range=5,"
+    "smoke.smoke=0.65";
+constexpr std::string_view kMinigunFire =
+    "life=0.016,length=0.14,width=0.08,glow=0.02,flash=0.16,sparks=1,light_range=3,"
+    "smoke.smoke=0.18,smoke_speed=1.5";
+constexpr std::string_view kRailgunFire =
+    "length=0.03,width=0.03,glow=0,flash=0,sparks=0,light_range=0,smoke.smoke=0.16,"
+    "smoke_speed=1.5";
+constexpr std::string_view kGrenadeFire =
+    "life=0.022,length=0.14,width=0.11,glow=0.018,flash=0.13,sparks=0,light_range=2.5,"
+    "smoke.smoke=0.55";
+constexpr std::string_view kRocketFire =
+    "life=0.036,length=0.54,width=0.12,glow=0.03,flash=0.22,sparks=3,light_range=5.5,"
+    "smoke.smoke=0.65";
+
 // clang-format off
 constexpr WeaponLook kLooks[kWeapons] = {
     // name, held length m, offset from the eye (right, up, forward m), kick, refire s, flash s,
-    // flash rgb, flash intensity, flash range m, the weapon, held upright
-    {"axe",               0.38, {0.11, -0.10, 0.20}, 0.4, 0.5, 0.0, {0, 0, 0}, 0.0f, 0.0f, Weapon::melee, true},
-    {"shotgun",           0.46, {0.09, -0.09, 0.17}, 1.0, 0.5, 0.1, {1.0f, 0.78f, 0.42f}, 0.35f, 6.0f, Weapon::shotgun, false},
-    {"double_shotgun",    0.46, {0.09, -0.09, 0.17}, 1.6, 0.7, 0.12, {1.0f, 0.78f, 0.42f}, 0.55f, 7.0f, Weapon::double_shotgun, false},
-    {"minigun",           0.44, {0.10, -0.10, 0.16}, 0.25, 0.1, 0.06, {1.0f, 0.66f, 0.32f}, 0.2f, 4.0f, Weapon::nailgun, false},
-    {"railgun",           0.52, {0.09, -0.09, 0.17}, 0.35, 0.1, 0.06, {1.0f, 0.66f, 0.32f}, 0.25f, 5.0f, Weapon::heavy_nailgun, false},
-    {"grenade_launcher",  0.50, {0.09, -0.10, 0.17}, 1.2, 0.6, 0.1, {1.0f, 0.78f, 0.42f}, 0.3f, 5.0f, Weapon::grenade_launcher, false},
-    {"rocket_launcher",   0.62, {0.10, -0.11, 0.16}, 1.5, 0.8, 0.14, {1.0f, 0.72f, 0.38f}, 0.45f, 7.0f, Weapon::rocket_launcher, false},
-    {"lightning_gun",     0.52, {0.10, -0.11, 0.16}, 0.15, 0.1, 0.1, {0.62f, 0.76f, 1.0f}, 0.3f, 6.0f, Weapon::beam_gun, false},
+    // flash rgb, flash intensity, flash range m, the weapon, held upright, the fire and its knobs
+    {"axe",               0.38, {0.11, -0.12, 0.18}, 0.4, 0.5, 0.0, {0, 0, 0}, 0.0f, 0.0f, Weapon::melee, true, "", ""},
+    {"shotgun",           0.46, {0.09, -0.12, 0.09}, 1.0, 0.5, 0.1, {1.0f, 0.78f, 0.42f}, 0.35f, 6.0f, Weapon::shotgun, false, "muzzle.shotgun", kShotgunFire},
+    {"double_shotgun",    0.46, {0.09, -0.12, 0.09}, 1.6, 0.7, 0.12, {1.0f, 0.78f, 0.42f}, 0.55f, 7.0f, Weapon::double_shotgun, false, "muzzle.shotgun", kDoubleFire},
+    {"minigun",           0.44, {0.10, -0.13, 0.08}, 0.25, 0.1, 0.06, {1.0f, 0.66f, 0.32f}, 0.2f, 4.0f, Weapon::nailgun, false, "muzzle.nailgun", kMinigunFire},
+    {"railgun",           0.52, {0.09, -0.12, 0.09}, 0.35, 0.1, 0.06, {1.0f, 0.66f, 0.32f}, 0.25f, 5.0f, Weapon::heavy_nailgun, false, "muzzle.nailgun", kRailgunFire},
+    {"grenade_launcher",  0.50, {0.09, -0.13, 0.09}, 1.2, 0.6, 0.1, {1.0f, 0.78f, 0.42f}, 0.3f, 5.0f, Weapon::grenade_launcher, false, "muzzle.grenade", kGrenadeFire},
+    {"rocket_launcher",   0.62, {0.10, -0.14, 0.08}, 1.5, 0.8, 0.14, {1.0f, 0.72f, 0.38f}, 0.45f, 7.0f, Weapon::rocket_launcher, false, "muzzle.rocket", kRocketFire},
+    {"lightning_gun",     0.52, {0.10, -0.14, 0.08}, 0.15, 0.1, 0.1, {0.62f, 0.76f, 1.0f}, 0.3f, 6.0f, Weapon::beam_gun, false, "", ""},
 };
 // clang-format on
 
@@ -100,6 +120,7 @@ bool load_weapon_model(const std::string& path, const WeaponLook& look, vm::Held
     mount.grip_at_origin = true;
   }
   vm::fit_mount(out, mount, &weapon);
+  if (hands) vm::mark_hands(out, r.model, ".hand");
   if (weapon_only) {
     vm::HeldModel copy = weapon;
     vm::fit_mount(weapon, mount, &copy);

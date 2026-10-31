@@ -21,11 +21,21 @@
 //                       the weapon moved from its place: right, up, forward, m
 //     cl_gunsway        the share of the sway, the stride's swing and the breath (0 still, 1 the
 //                       game's, 2 twice)
+//     r_viewmodel_center
+//                       1 (the default, as the classic arena games hold it): the weapon in the
+//                       middle under the crosshair, nearer the eye and a little higher
+//                       (kCentreNearM, kCentreRiseM), its muzzle below the picture's middle line; 0
+//                       the modern place to the right
+//     r_viewmodel_hands 0: the hands and arms holding the weapon are not drawn, the weapon alone
+// - THE MUZZLE each frame: where the barrel's tip is in the world (the firing animation's frame,
+//   the kick, the lens match), the way it points and the gun's up, for the engine's muzzle fire
+//   (render/muzzle.hpp) the window stages from it; `fired` says a shot left it this frame.
 //
 // ge:summary Shooter's Edge's first-person hand: the switch, the shot's kick and flash, the cvars
 // ge:keywords shooters-edge viewmodel hand weapon-switch put-away raise shot kick flash-light
 // ge:keywords muzzle-light r_drawviewmodel r_viewmodel_fov cl_gunx cl_guny cl_gunz cl_gunsway
 // ge:keywords step_hand held_row add_view_cvars view-settings fire-clip animation frames
+// ge:keywords r_viewmodel_center centred-weapon centered r_viewmodel_hands hide-hands muzzle-pose
 // ge:skill render shooter
 // ge:test tests/shooters_edge_view_test.cpp
 #pragma once
@@ -44,7 +54,15 @@ struct ViewSettings {
   double fov_deg = 0;           // r_viewmodel_fov, vertical (0: the view's)
   double gun_m[3] = {0, 0, 0};  // cl_gunx, cl_guny, cl_gunz
   double sway = 1;              // cl_gunsway
+  bool centre = true;           // r_viewmodel_center
+  bool hands = true;            // r_viewmodel_hands
 };
+
+// How much nearer and higher a centred weapon is held than the place to the right, m
+// (r_viewmodel_center): seen down its length it would read as a thin stub, so it is brought in
+// and lifted until its body shows; its muzzle still sits under the crosshair, not on it.
+inline constexpr double kCentreRiseM = 0.01;
+inline constexpr double kCentreNearM = 0.06;
 
 // The player's view-model cvars, bound to `out`.
 void add_view_cvars(ge::console::Cvars& cvars, ViewSettings& out);
@@ -78,6 +96,11 @@ struct HandFrame {
   vm::PointLight flash;          // the shot's light, world (its intensity faded)
   int frame_a = 0, frame_b = 0;  // the model's frames to draw, blended by `frame_t`
   double frame_t = 0;
+  bool hands = true;                 // draw the hands holding it (r_viewmodel_hands)
+  bool fired = false;                // a shot left the muzzle this frame
+  double muzzle_at[3] = {0, 0, 0};   // the barrel's tip, world, m
+  double muzzle_dir[3] = {0, 0, 1};  // the way it points, world, unit
+  double muzzle_up[3] = {0, 1, 0};   // the gun's up, square to it
 };
 
 // One display frame of `dt` s seen through `view`. `models` is load_weapon_models's set (the

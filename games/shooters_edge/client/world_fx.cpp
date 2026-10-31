@@ -32,6 +32,8 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   place_models(l, out.models);
   out.births.clear();
   out.lights.clear();
+  out.puffs.clear();
+  out.flames.clear();
 
   // The missiles: a trail over the stretch each flew since the last frame, a rocket's glow.
   s.next.clear();

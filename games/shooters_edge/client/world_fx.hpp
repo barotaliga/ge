@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "camera/subject.hpp"
+#include "render/explosions.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
@@ -55,6 +56,10 @@ struct FxFrame {
   // The same without a lava's or a slime's tint, for a look that draws the liquid round the eye.
   double blend_dry[4] = {0, 0, 0, 0};
   std::vector<Placed> models;  // the entities with a model (world_models.hpp)
+  // The weapon in hand's muzzle fire (app/muzzle.hpp): its shots' smoke left in the world and
+  // their flames on this frame's muzzle, for the explosions' pass.
+  std::vector<ge::render::Blast> puffs;
+  std::vector<ge::render::MuzzleFire> flames;
 };
 
 // The effects of the wall frame of `dt` s at time `t` s, after frame_view brought `v` up to date.

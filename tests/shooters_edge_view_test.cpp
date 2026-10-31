@@ -201,8 +201,8 @@ TEST(a_shot_lights_the_muzzle_and_fades) {
   se::HandFrame f = se::step_hand(hand, in, s, models(), eye(), dt);
   const se::WeaponLook& look = se::weapon_look(se::Weapon::shotgun);
   CHECK(f.flashing && f.flash.intensity > 0.9f * look.flash_intensity);
-  // In front of the eye and to the right, where the barrel is.
-  CHECK(f.flash.position[2] > 0.3 && f.flash.position[0] > 0);
+  // In front of the eye and in the middle, where the centred barrel is.
+  CHECK(f.flash.position[2] > 0.3 && std::fabs(f.flash.position[0]) < 0.05);
   in.fired = false;
   float last = f.flash.intensity;
   int frames = 1;
@@ -221,7 +221,12 @@ TEST(the_cvars_move_the_row) {
   se::add_view_cvars(cvars, s);
   const se::WeaponLook& look = se::weapon_look(se::Weapon::shotgun);
   const vm::PlaceRow game = se::held_row(look, s);
-  CHECK(game.offset_m[0] == look.offset_m[0] && game.fov_y == 0);
+  // Centred by default: under the crosshair, nearer and a little higher than the place to the
+  // right.
+  CHECK(s.centre && s.hands);
+  CHECK(game.offset_m[0] == 0 && game.fov_y == 0);
+  CHECK(std::fabs(game.offset_m[1] - (look.offset_m[1] + se::kCentreRiseM)) < 1e-12);
+  CHECK(std::fabs(game.offset_m[2] - (look.offset_m[2] - se::kCentreNearM)) < 1e-12);
   CHECK(cvars.set("cl_gunx", "-0.1", ge::console::Source::local) ==
         ge::console::SetResult::changed);
   CHECK(cvars.set("r_viewmodel_fov", "60", ge::console::Source::local) ==
@@ -231,7 +236,7 @@ TEST(the_cvars_move_the_row) {
   CHECK(cvars.set("r_drawviewmodel", "0", ge::console::Source::local) ==
         ge::console::SetResult::changed);
   const vm::PlaceRow moved = se::held_row(look, s);
-  CHECK(std::fabs(moved.offset_m[0] - (look.offset_m[0] - 0.1)) < 1e-12);
+  CHECK(std::fabs(moved.offset_m[0] - (-0.1)) < 1e-12);
   CHECK(std::fabs(moved.fov_y - 60 * 3.14159265358979 / 180) < 1e-9);
   CHECK(moved.sway_max == 0 && moved.bob_side == 0 && moved.idle_m == 0);
   CHECK(!s.draw);
@@ -242,4 +247,58 @@ TEST(the_cvars_move_the_row) {
   in.fired = true;
   const se::HandFrame f = se::step_hand(hand, in, s, models(), eye(), 1.0 / 60);
   CHECK(!f.drawn && f.flashing);
+}
+
+TEST(centre_and_hands_cvars) {
+  ge::console::Cvars cvars;
+  se::ViewSettings s;
+  se::add_view_cvars(cvars, s);
+  const se::WeaponLook& look = se::weapon_look(se::Weapon::rocket_launcher);
+  CHECK(cvars.set("r_viewmodel_center", "0", ge::console::Source::local) ==
+        ge::console::SetResult::changed);
+  CHECK(cvars.set("r_viewmodel_hands", "0", ge::console::Source::local) ==
+        ge::console::SetResult::changed);
+  CHECK(!s.centre && !s.hands);
+  const vm::PlaceRow right = se::held_row(look, s);
+  CHECK(right.offset_m[0] == look.offset_m[0] && right.offset_m[1] == look.offset_m[1]);
+  se::Hand hand;
+  se::HandInput in;
+  in.weapon = se::Weapon::rocket_launcher;
+  const se::HandFrame f = se::step_hand(hand, in, s, models(), eye(), 1.0 / 60);
+  CHECK(!f.hands && f.drawn);
+}
+
+TEST(built_weapons_mark_their_hands_and_hide_them) {
+  for (const se::WeaponLook& look : se::weapon_looks()) {
+    const vm::HeldModel& m = models()[static_cast<size_t>(look.weapon)];
+    CHECK(m.hand.size() == m.indices.size() / 3);
+    size_t hands = 0;
+    for (uint8_t h : m.hand) hands += h;
+    CHECK(hands > 0 && hands < m.hand.size());
+    std::vector<uint8_t> hidden;
+    vm::hidden_triangles(m, true, false, hidden);
+    CHECK(hidden.empty());  // no flame of its own, the hands kept: nothing hidden
+    vm::hidden_triangles(m, true, true, hidden);
+    size_t off = 0;
+    for (uint8_t h : hidden) off += h;
+    CHECK(off == hands);
+  }
+}
+
+TEST(the_muzzle_rides_the_gun_into_the_world) {
+  // The eye looks down +z: the muzzle is ahead of it, under it, pointing ahead, centred by default.
+  se::Hand hand;
+  se::HandInput in;
+  in.weapon = se::Weapon::shotgun;
+  const se::ViewSettings s;
+  se::HandFrame f;
+  for (int i = 0; i < 30; ++i) f = se::step_hand(hand, in, s, models(), eye(), 1.0 / 60);
+  const ge::camera::Pose v = eye();
+  CHECK(f.muzzle_at[2] > v.eye.z + 0.1);
+  CHECK(f.muzzle_at[1] < v.eye.y);
+  CHECK(std::fabs(f.muzzle_at[0] - v.eye.x) < 0.05);
+  CHECK(f.muzzle_dir[2] > 0.9);
+  in.fired = true;
+  f = se::step_hand(hand, in, s, models(), eye(), 1.0 / 60);
+  CHECK(f.fired);
 }

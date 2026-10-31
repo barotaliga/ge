@@ -140,3 +140,27 @@ TEST(staging_draws_a_flame_stretched_along_its_barrel) {
   r::stage_explosions(ex, {}, v, 160, 90, std::span<const r::MuzzleFire>(&fire, 1));
   CHECK(ex.drawn == 0);
 }
+
+TEST(a_tuned_muzzle_turns_its_preset_by_a_knob_list) {
+  r::MuzzleLook look;
+  CHECK(r::tuned_muzzle("muzzle.shotgun", "life=0.02,length=0.26,smoke.smoke=0.5,sparks=3", &look));
+  CHECK(look.id == "muzzle.shotgun");
+  CHECK(look.life_s == 0.02 && look.length_m == 0.26 && look.smoke.smoke == 0.5 &&
+        look.sparks == 3);
+  CHECK(r::tuned_muzzle("muzzle.rocket", "", &look) && look.id == "muzzle.rocket");
+  CHECK(!r::tuned_muzzle("muzzle.none", "", &look));
+  CHECK(!r::tuned_muzzle("muzzle.shotgun", "nosuch=1", &look));
+  CHECK(!r::tuned_muzzle("muzzle.shotgun", "length=abc", &look));
+  CHECK(!r::tuned_muzzle("muzzle.shotgun", "length", &look));
+}
+
+TEST(a_scaled_muzzle_keeps_its_light_and_times) {
+  r::MuzzleLook look = *r::muzzle_look_by_id("muzzle.shotgun");
+  const r::MuzzleLook was = look;
+  r::scale_muzzle(look, 0.5);
+  CHECK(look.length_m == was.length_m * 0.5 && look.width_m == was.width_m * 0.5);
+  CHECK(look.smoke.radius_m == was.smoke.radius_m * 0.5 &&
+        look.smoke_speed == was.smoke_speed * 0.5);
+  CHECK(look.spark_speed == was.spark_speed * 0.5);
+  CHECK(look.light_range_m == was.light_range_m && look.life_s == was.life_s);
+}

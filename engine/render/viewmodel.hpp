@@ -5,9 +5,9 @@
 //
 // - THE MODELS are uploaded once (`create_viewmodel`): every frame of every held model in one
 //   storage buffer (a vertex two vec4: the position and the normal, the held frame), the
-//   triangles, the texture coordinates or the colours, each triangle's flag (the model's own
-//   muzzle flash, `HeldModel::flame`), and the skins packed into one atlas, each texel's glow
-//   in its alpha. A frame writes its draws alone.
+//   triangles, the texture coordinates or the colours, each triangle's flags (the model's own
+//   muzzle flash, `HeldModel::flame`, 1; the hands holding it, `HeldModel::hand`, 2), and the skins
+//   packed into one atlas, each texel's glow in its alpha. A frame writes its draws alone.
 // - THE DRAW (`HeldDraw`): the model, its two frames and the share between them, its PLACEMENT
 //   (`viewmodel::Placement`, the held frame into the view's) now and a frame ago (the motion the
 //   TAA reads comes from there), the gun's own vertical lens, and its LIGHT: a
@@ -79,6 +79,7 @@ struct HeldDraw {
   bool lamps = true;               // the frame's local lights (render/lights.hpp)
   double white_lux = 0;            // lx on white that the held unit's 1 is (0: the eye's white)
   bool hide_flame = true;          // leave out the model's own flash (`HeldModel::flame`)
+  bool hide_hands = false;         // leave out the hands holding it (`HeldModel::hand`)
 };
 
 // The reversed-z depth the gun's nearest point may take least: what the world at `guard_m` has
@@ -97,7 +98,7 @@ struct GpuHeldDraw {
   float now[12];     // the placement's three rows
   float last[12];    // a frame ago
   float lens[4];     // 1 / tan(x / 2), 1 / tan(y / 2), the gun's near plane (m), the depth floor
-  uint32_t info[4];  // frame a, frame b, model, flags (1: lamps, 2: hide the flame)
+  uint32_t info[4];  // frame a, frame b, model, flags (1: lamps, 2: hide the flame, 4: the hands)
   float mix[4];      // the share between the frames, outdoor, white (lx; 0: the eye's), floor
   float ambient[4];  // rgb; gloss
   float direct[4];   // rgb; shininess
