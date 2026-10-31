@@ -1,12 +1,13 @@
 // LAB `se-baseline`: does the baseline mod (games/shooters_edge/qc/, compiled from its sources by
 // the QC compiler) play a deathmatch on the test arena the way its sources say? The mod is built
-// from `<root>/games/shooters_edge/qc/progs.src` and played by bots on the arena with its door and
-// plat (games/shooters_edge/server/baseline_mod.hpp) until its time limit changes the level.
-// Tables: the build (functions, statements, globals, crc), the frags and deaths, the obituaries
-// by how each death came, the pickups, the missiles by kind, the builtins called. Pictures: the
-// arena from above with the items, the door and the plat, every bot's path and every missile;
-// the frags against the clock; the door's and the plat's heights against the clock. The lab fails
-// when the mod does not compile, faults, spawns an entity it cannot place, or nobody is fragged.
+// from `<root>/games/shooters_edge/qc/arena/progs.src` and played by bots on the arena with its
+// door and plat (games/shooters_edge/server/baseline_mod.hpp) until its time limit changes the
+// level. Tables: the build (functions, statements, globals, crc), the frags and deaths, the
+// obituaries by how each death came, the pickups, the missiles by kind, the builtins called.
+// Pictures: the arena from above with the items, the door and the plat, every bot's path and every
+// missile; the frags against the clock; the door's and the plat's heights against the clock. The
+// lab fails when the mod does not compile, faults, spawns an entity it cannot place, or nobody is
+// fragged.
 //
 // ge:summary Lab: the baseline QC mod compiled from source and played by bots: frags, items, movers
 // ge:keywords lab se-baseline baseline-mod qc-compiler deathmatch frags obituaries pickups door
@@ -251,9 +252,10 @@ void run(gl::Lab& lab) {
                  " times; the last: " + r.last_fault,
              "next: read the QC stack in the fault; the line table names the .qc line");
   for (const std::string& m : r.map_messages)
-    lab.fail("se-baseline: the map said: " + m,
-             "next: declare the field in games/shooters_edge/qc/defs.qc, or fix the entity text "
-             "in games/shooters_edge/server/baseline_mod.cpp");
+    lab.fail(
+        "se-baseline: the map said: " + m,
+        "next: declare the field in games/shooters_edge/qc/common/defs.qc, or fix the entity text "
+        "in games/shooters_edge/server/baseline_mod.cpp");
   if (r.frag_log.empty())
     lab.fail("se-baseline: nobody was fragged",
              "next: run tests/shooters_edge_baseline_mod_test.cpp");

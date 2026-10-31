@@ -23,20 +23,26 @@
 
 // The baseline mod's sources, built into the game (CMakeLists.txt: ge_embed_binary), in the
 // order its project file compiles them.
-extern const unsigned char se_qc_defs[];
-extern const std::size_t se_qc_defs_size;
-extern const unsigned char se_qc_util[];
-extern const std::size_t se_qc_util_size;
-extern const unsigned char se_qc_combat[];
-extern const std::size_t se_qc_combat_size;
-extern const unsigned char se_qc_weapons[];
-extern const std::size_t se_qc_weapons_size;
-extern const unsigned char se_qc_items[];
-extern const std::size_t se_qc_items_size;
-extern const unsigned char se_qc_player[];
-extern const std::size_t se_qc_player_size;
-extern const unsigned char se_qc_world[];
-extern const std::size_t se_qc_world_size;
+extern const unsigned char se_qc_arena_engine[];
+extern const std::size_t se_qc_arena_engine_size;
+extern const unsigned char se_qc_common_defs[];
+extern const std::size_t se_qc_common_defs_size;
+extern const unsigned char se_qc_arena_glue[];
+extern const std::size_t se_qc_arena_glue_size;
+extern const unsigned char se_qc_common_util[];
+extern const std::size_t se_qc_common_util_size;
+extern const unsigned char se_qc_common_combat[];
+extern const std::size_t se_qc_common_combat_size;
+extern const unsigned char se_qc_common_weapons[];
+extern const std::size_t se_qc_common_weapons_size;
+extern const unsigned char se_qc_common_items[];
+extern const std::size_t se_qc_common_items_size;
+extern const unsigned char se_qc_common_player[];
+extern const std::size_t se_qc_common_player_size;
+extern const unsigned char se_qc_common_map[];
+extern const std::size_t se_qc_common_map_size;
+extern const unsigned char se_qc_arena_world[];
+extern const std::size_t se_qc_arena_world_size;
 
 namespace shooters_edge::client {
 
@@ -44,7 +50,8 @@ namespace pg = ge::progs;
 
 namespace {
 
-// The message bytes of the baseline mod's explosion (qc/defs.qc's SVC_TEMPENTITY, TE_EXPLOSION).
+// The message bytes of the baseline mod's explosion (qc/common/defs.qc's SVC_TEMPENTITY,
+// TE_EXPLOSION).
 constexpr uint8_t kTempEntity = 23, kExplosion = 3;
 
 pg::QcSource source(const char* name, const unsigned char* bytes, std::size_t size) {
@@ -171,13 +178,16 @@ void read_streams(Listen& l) {
 
 bool baseline_progs(pg::Progs& out, std::string& error) {
   const pg::QcSource sources[] = {
-      source("defs.qc", se_qc_defs, se_qc_defs_size),
-      source("util.qc", se_qc_util, se_qc_util_size),
-      source("combat.qc", se_qc_combat, se_qc_combat_size),
-      source("weapons.qc", se_qc_weapons, se_qc_weapons_size),
-      source("items.qc", se_qc_items, se_qc_items_size),
-      source("player.qc", se_qc_player, se_qc_player_size),
-      source("world.qc", se_qc_world, se_qc_world_size),
+      source("engine.qc", se_qc_arena_engine, se_qc_arena_engine_size),
+      source("../common/defs.qc", se_qc_common_defs, se_qc_common_defs_size),
+      source("glue.qc", se_qc_arena_glue, se_qc_arena_glue_size),
+      source("../common/util.qc", se_qc_common_util, se_qc_common_util_size),
+      source("../common/combat.qc", se_qc_common_combat, se_qc_common_combat_size),
+      source("../common/weapons.qc", se_qc_common_weapons, se_qc_common_weapons_size),
+      source("../common/items.qc", se_qc_common_items, se_qc_common_items_size),
+      source("../common/player.qc", se_qc_common_player, se_qc_common_player_size),
+      source("../common/map.qc", se_qc_common_map, se_qc_common_map_size),
+      source("world.qc", se_qc_arena_world, se_qc_arena_world_size),
   };
   pg::QcResult r = pg::compile_qc(sources);
   if (!r.ok) {

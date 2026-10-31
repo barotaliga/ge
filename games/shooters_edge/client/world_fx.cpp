@@ -16,7 +16,7 @@ namespace fx = shooters_edge::effects;
 
 namespace {
 
-// The mod's contents codes for the liquids (games/shooters_edge/qc/defs.qc's CONTENT_*).
+// The mod's contents codes for the liquids (games/shooters_edge/qc/common/defs.qc's CONTENT_*).
 constexpr float kWater = -3, kSlime = -4, kLava = -5;
 constexpr float kEyesUnder = 3;  // waterlevel: the eyes under the surface
 

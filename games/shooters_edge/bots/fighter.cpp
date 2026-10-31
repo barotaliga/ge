@@ -25,7 +25,8 @@ namespace {
 namespace pg = ge::progs;
 namespace ai = ge::ai;
 
-// The baseline mod's weapon bits (games/shooters_edge/qc/defs.qc) and ammunition maxima (items.qc).
+// The baseline mod's weapon bits (games/shooters_edge/qc/common/defs.qc) and ammunition maxima
+// (items.qc).
 constexpr int32_t kWScatter = 1, kWDouble = 2, kWSpiker = 4, kWHeavy = 8, kWGrenades = 16;
 constexpr int32_t kWRockets = 32, kWArc = 64, kWBlade = 4096;
 constexpr float kAmmoMax = 100;

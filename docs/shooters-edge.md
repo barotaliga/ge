@@ -303,9 +303,13 @@ The mod server (`games/shooters_edge/server`, M18p) runs a multiplayer `progs` a
 wrote it. The tree ships one in source: the **baseline mod** (`games/shooters_edge/qc/`, M18d),
 a complete deathmatch (weapons, ammunition, armour, health, deaths and respawns, frags, doors,
 plats, buttons and triggers) written in QC for modders to copy and change. Its README is the
-modder's guide; `ge qc build games/shooters_edge/qc/progs.src` compiles it to `progs.dat` with
-the tree's own QC compiler (`plugins/progs/qc_compile.hpp`, the language in
-`porting/shooters-edge/qc-language.md`), and the `se-baseline` lab plays it against bots.
+modder's guide; `ge qc build games/shooters_edge/qc/arena/progs.src` compiles it to `progs.dat`
+with the tree's own QC compiler (`plugins/progs/qc_compile.hpp`, the language in
+`porting/shooters-edge/qc-language.md`), and the `se-baseline` lab plays it against bots. The
+same sources build a second variant, `qc/campaign/` (M18s7): the classic maps' single-player
+game on the single-player program form, run by the campaign host and played on a pack's maps
+by `se-campaign --progs=games/shooters_edge/qc/campaign/progs.src`. What both variants share is
+`qc/common/`; each variant's `engine.qc` and `glue.qc` hold what its form does differently.
 
 - **Point the game at it** with a path: `--progs=<file>` on the command line, or the `sv_progs`
   cvar in the server's console lines (`sv_progs mods/arena/progs.dat`, or `set sv_progs ...`).

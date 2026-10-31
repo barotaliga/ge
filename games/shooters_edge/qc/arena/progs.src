@@ -1,0 +1,14 @@
+// The arena variant (deathmatch on the multiplayer form): the output, then the sources in the
+// order they are compiled. `ge qc build games/shooters_edge/qc/arena/progs.src` writes it (and
+// progs.dat.lines beside it; both are ignored by git).
+progs.dat
+engine.qc
+../common/defs.qc
+glue.qc
+../common/util.qc
+../common/combat.qc
+../common/weapons.qc
+../common/items.qc
+../common/player.qc
+../common/map.qc
+world.qc

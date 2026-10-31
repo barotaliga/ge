@@ -104,38 +104,26 @@ void() use_targets = {
 // --- effects ---
 
 void(vector org) effect_explosion = {
-  WriteByte(MSG_MULTICAST, SVC_TEMPENTITY);
-  WriteByte(MSG_MULTICAST, TE_EXPLOSION);
-  WriteCoord(MSG_MULTICAST, org.x);
-  WriteCoord(MSG_MULTICAST, org.y);
-  WriteCoord(MSG_MULTICAST, org.z);
-  multicast(org, MULTICAST_PHS);
-};
-
-// A puff where a shot hits: blood on something that bleeds, a chip of the wall elsewhere.
-void(vector org, float count, float bleeds) effect_impact = {
-  WriteByte(MSG_MULTICAST, SVC_TEMPENTITY);
-  if (bleeds) WriteByte(MSG_MULTICAST, TE_BLOOD);
-  else WriteByte(MSG_MULTICAST, TE_GUNSHOT);
-  WriteByte(MSG_MULTICAST, count);
-  WriteCoord(MSG_MULTICAST, org.x);
-  WriteCoord(MSG_MULTICAST, org.y);
-  WriteCoord(MSG_MULTICAST, org.z);
-  multicast(org, MULTICAST_PVS);
+  WriteByte(MSG_EFFECT, SVC_TEMPENTITY);
+  WriteByte(MSG_EFFECT, TE_EXPLOSION);
+  WriteCoord(MSG_EFFECT, org.x);
+  WriteCoord(MSG_EFFECT, org.y);
+  WriteCoord(MSG_EFFECT, org.z);
+  effect_send(org, MULTICAST_PHS);
 };
 
 // The arc gun's beam from `from` to `to`, drawn as `self`'s.
 void(vector from, vector to) effect_beam = {
-  WriteByte(MSG_MULTICAST, SVC_TEMPENTITY);
-  WriteByte(MSG_MULTICAST, TE_LIGHTNING2);
-  WriteEntity(MSG_MULTICAST, self);
-  WriteCoord(MSG_MULTICAST, from.x);
-  WriteCoord(MSG_MULTICAST, from.y);
-  WriteCoord(MSG_MULTICAST, from.z);
-  WriteCoord(MSG_MULTICAST, to.x);
-  WriteCoord(MSG_MULTICAST, to.y);
-  WriteCoord(MSG_MULTICAST, to.z);
-  multicast(from, MULTICAST_PHS);
+  WriteByte(MSG_EFFECT, SVC_TEMPENTITY);
+  WriteByte(MSG_EFFECT, TE_LIGHTNING2);
+  WriteEntity(MSG_EFFECT, self);
+  WriteCoord(MSG_EFFECT, from.x);
+  WriteCoord(MSG_EFFECT, from.y);
+  WriteCoord(MSG_EFFECT, from.z);
+  WriteCoord(MSG_EFFECT, to.x);
+  WriteCoord(MSG_EFFECT, to.y);
+  WriteCoord(MSG_EFFECT, to.z);
+  effect_send(from, MULTICAST_PHS);
 };
 
 // A random float in -1..1.

@@ -322,7 +322,7 @@ characters.
 | `games/shooters_edge/menu/` | Shooter's Edge's main menu (`shooters_edge_menu`, no GPU): the classic pages on ESCAPE, rows wired to cvars, the rest dimmed, the pack's own pictures, classic enhance under OPTIONS | `ui` |
 | `games/shooters_edge/labs/` | Shooter's Edge's labs | `labs`, `ui` |
 | `games/shooters_edge/server/` | Shooter's Edge's server: the host, its slots and input log, the dedicated binary; the mod server (QC builtins and extensions, hooks, the test and baseline mods, a progs from a path) | `shooter`, `progs` |
-| `games/shooters_edge/qc/` | Shooter's Edge's baseline deathmatch mod in QC, the one modders start from (built by `ge qc build`) | `progs` |
+| `games/shooters_edge/qc/` | Shooter's Edge's own QC mods modders start from: `common/` shared, `arena/` the deathmatch, `campaign/` the single-player game (built by `ge qc build`) | `progs` |
 | `tests/` | `<topic>_test.cpp`, one executable each; `check.hpp` (the harness), `golden.hpp`, `golden/` | `testing` |
 | `porting/` | The WORKING AREA (above): the porting guide, the porting map, the golden-table generators. Deleted when porting ends | `port` |
 | `tools/` | The repository's checks and scripts: `check-agents.sh`, `agents-index.mjs` (the `ge:` tags, `docs/index.md`, `make find`), `skill-lessons.mjs`, `precheck.sh`, `lint.sh` | `write-code` |

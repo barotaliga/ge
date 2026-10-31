@@ -123,9 +123,9 @@ void() weapon_impulse = {
   if (self.impulse >= 1 && self.impulse <= 8) {
     w = weapon_of_rank(self.impulse);
     if (!(self.items & w)) {
-      sprint(self, PRINT_HIGH, "no weapon\n");
+      say_to(self, PRINT_HIGH, "no weapon\n", "", "", "");
     } else if (ammo_for(w) < weapon_cost(w)) {
-      sprint(self, PRINT_HIGH, "not enough ammo\n");
+      say_to(self, PRINT_HIGH, "not enough ammo\n", "", "", "");
     } else {
       weapon_set(w);
     }
@@ -196,7 +196,7 @@ entity(string mdl, float mtype, float spd, float life) launch = {
   setmodel(m, mdl);
   setsize(m, '0 0 0', '0 0 0');
   setorigin(m, self.origin + self.view_ofs + v_forward * 8 - '0 0 8');
-  newmis = m;
+  missile_now(m);
   return m;
 };
 
@@ -211,12 +211,12 @@ void() spike_touch = {
     other.deathtype = "nailed";
     damage(other, self, self.owner, self.dmg);
   } else {
-    WriteByte(MSG_MULTICAST, SVC_TEMPENTITY);
-    WriteByte(MSG_MULTICAST, TE_SPIKE);
-    WriteCoord(MSG_MULTICAST, self.origin.x);
-    WriteCoord(MSG_MULTICAST, self.origin.y);
-    WriteCoord(MSG_MULTICAST, self.origin.z);
-    multicast(self.origin, MULTICAST_PHS);
+    WriteByte(MSG_EFFECT, SVC_TEMPENTITY);
+    WriteByte(MSG_EFFECT, TE_SPIKE);
+    WriteCoord(MSG_EFFECT, self.origin.x);
+    WriteCoord(MSG_EFFECT, self.origin.y);
+    WriteCoord(MSG_EFFECT, self.origin.z);
+    effect_send(self.origin, MULTICAST_PHS);
   }
   remove(self);
 };
