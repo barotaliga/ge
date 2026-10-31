@@ -89,6 +89,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture) {
     base.dynamic_strength = picture.fx_lights;
     base.lava_glow = picture.lava_glow;
     base.slime_glow = picture.slime_glow;
+    base.pack_sky = !picture.ce.skies;  // ce_skies off: the pack's own scrolling sky
   }
   return base;
 }

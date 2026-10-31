@@ -61,6 +61,9 @@ struct Options {
   double lava_glow = 1;         // that glow's strength, 0 none
   double slime_glow = 1;        // the slime's faint green glow on the walls round it, 0 none
   bool portal_lights = true;    // each teleporter's panel lights its room with a slow pulse
+  // The sky faces as the pack's own scrolling sky under v2 too (ce_skies off): they write their
+  // depth and no mask, so our sky and clouds do not fill them; the rooms keep our sky's light.
+  bool pack_sky = false;
   // r_texfilter: the map's textures filtered (between texels, between mip levels and along a
   // surface seen at a slant) or CRISP, each texel a square as the classic look draws them.
   bool crisp = false;
@@ -131,7 +134,7 @@ struct GpuBsp {
   float info2[4];
   float sky[4];
   float info3[4];    // the floor (minlight), the bounce, the sky's light, filtered (1) or crisp
-  float info4[4];    // the relief's depth (bump), m
+  float info4[4];    // the relief's depth (bump), m; the pack's sky under v2 (1)
   float veil[4];     // the sky faces' pixels times these (the sky's light, seen and tinted)
   float weather[4];  // on (1), the rain falling now, the fall's spread, 0
   GpuJob ortho[kOrthos];

@@ -3,7 +3,8 @@
 // lightmaps and their styles, the map's sky, the palette's colours) and MODERN (filtered, real-time
 // lights with shadows, our sky, bloom). Then what moves: a light style played over a second, a
 // texture's animation, the effects (an explosion, a rocket's trail, a hit, a teleport, lava thrown
-// up, with their dynamic lights) in both looks, and the screen's blends. Every view is drawn culled
+// up, with their dynamic lights) in both looks, the screen's blends, and the sky a switch
+// (ce_skies: our sky, or the pack's under the modern look). Every view is drawn culled
 // (the eye's potentially visible set, then two-phase Hi-Z; brush/app/bsp_cull.hpp); and the GPU's
 // half of the cull (the frustum and the pyramid, the set off) must draw the same pixels as drawing
 // everything. The set is the map's own data and not held so: the arena's rooms see two doorways
@@ -528,6 +529,36 @@ void run(gl::Lab& lab) {
          "Water a blue-green veil, lava a heavy orange, a hurt red over the power's blue.",
          {}},
         row(pics, labels), Det::measured);
+  }
+  // ── The sky a switch: the modern look with ce_skies on (our sky) and off (the pack's) ──
+  {
+    View open = views[0];
+    for (const View& v : views)
+      if (v.id.find("courtyard") != std::string::npos) open = v;
+    open.pitch = std::max(open.pitch, 0.0) + 0.45;  // looking up into the open sky
+    const gr::FrameView fv = frame_view(open, first, t);
+    const bool kept = f.picture.ce.skies;
+    std::vector<gl::Picture> pics;
+    pics.push_back(draw(d, f, first, fv, lk::Look::classic, true));
+    f.picture.ce.skies = true;
+    pics.push_back(draw(d, f, first, fv, lk::Look::modern, true));
+    f.picture.ce.skies = false;
+    pics.push_back(draw(d, f, first, fv, lk::Look::modern, true));
+    f.picture.ce.skies = kept;
+    const int n = differ(pics[1], pics[2]);
+    lab.metric("skies.differ", double(n) / double(pics[1].width * pics[1].height), "share",
+               Det::measured);
+    lab.shot({"skies",
+              "the sky a switch",
+              "Looking up out of " + open.title + ": the classic look, then the modern with "
+              "ce_skies on (our sky, its clouds and its night through the sky faces) and off (the "
+              "pack's own two scrolling layers, under the modern look's lights).",
+              "The modern pair differ in the sky alone; off, the sky is the classic's.",
+              {}},
+             row(pics, {"CLASSIC", "MODERN, CE_SKIES 1", "MODERN, CE_SKIES 0"}), Det::measured);
+    if (n == 0)
+      lab.fail("ce_skies 0 drew the same sky as ce_skies 1",
+               "Read look.cpp's world_options (pack_sky) and bsp.wgsl's sky faces. Skill: render.");
   }
   ls::checked(lab, int(d.errors.load()), int(d.pipelines_after_load));
 }

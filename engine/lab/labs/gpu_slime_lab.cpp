@@ -3,12 +3,12 @@
 // the rim (toxic, gel, mucus, sludge, tar); each close up, where the bubbles, the scum and the
 // oily film show; the toxic slime glowing at night; the gel seen into, the stones on the bed
 // through it; one gale over three slimes, the ripples each keeps after its viscosity; and the far
-// wall mirrored in the tar, the scene's reflections off and on. It
-// fails on a GPU error, a pipeline made after the load, or a view with no slime in it.
+// wall mirrored in the tar, the scene's reflections off and on; and the eye under the level of
+// the toxic slime and the gel, looking across and up. It fails on a GPU error, a pipeline made after the load, or a view with no slime in it.
 //
-// ge:summary Lab: slime drawn: five looks, close up, glowing, seen into, in a gale, reflections
+// ge:summary Lab: slime drawn: five looks, close, glowing, seen into, gale, reflections, from below
 // ge:keywords lab gpu slime toxic gel mucus sludge tar bubbles scum film iridescence ripples
-// ge:keywords kubelka-munk glow picture software-adapter reflections ssr mirror
+// ge:keywords kubelka-munk glow picture software-adapter reflections ssr mirror from-below
 // ge:skill render water labs
 // ge:test tests/render_liquid_test.cpp
 #include <cctype>
@@ -77,7 +77,7 @@ void run(gl::Lab& lab) {
     // The same deterministic numbers as a run with pictures, so the digest is the same on every
     // row.
     lab.note("No GPU adapter on this machine: no pictures.");
-    ls::placeholders(lab, {"looks", "close", "glow", "gel", "gale", "reflections"});
+    ls::placeholders(lab, {"looks", "close", "glow", "gel", "gale", "reflections", "from-below"});
     ls::checked(lab, 0, 0);
     return;
   }
@@ -249,6 +249,47 @@ void run(gl::Lab& lab) {
               "fading toward the near edge where the view looks down into it",
               {}},
              strip(pics, {"SKY ONLY", "THE SCENE MIRRORED"}, 2), Det::measured);
+  }
+  // FROM BELOW: the eye 0.6 m under the level in the pit's middle, looking across and up at the
+  // surface, in the toxic slime (with a game's least view of 4 m) and the clear gel (as thick as
+  // it is).
+  {
+    ge::gpu::Device& d = fresh();
+    ls::Scene s;
+    ls::make_scene(d, s, kConcrete, static_cast<uint32_t>(tw), static_cast<uint32_t>(th), 0.05,
+                   true);
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> labels;
+    for (const std::string name : {"slime", "slime-gel"}) {
+      put(d, s, name, 2);
+      s.liquids.under_reach = name == "slime" ? 4 : 0;
+      for (const double pitch : {-0.1, 0.75}) {
+        const gr::FrameView v = ls::view_at(ls::kPitX - 2, ls::kLevel - 0.6, ls::kPitZ - 6, 0.1,
+                                            pitch, 0.6, 2.4, t);
+        pics.push_back(ls::draw(d, s, v));
+        labels.push_back(name + (pitch < 0 ? ", ACROSS" : ", UP AT THE SURFACE"));
+      }
+    }
+    s.liquids.under_reach = 0;
+    const gr::FrameView v =
+        ls::view_at(ls::kPitX - 2, ls::kLevel - 0.6, ls::kPitZ - 6, 0.1, 0.75, 0.6, 2.4, t);
+    const double share = ls::changed(pics[3], ls::draw(d, s, v, false));
+    lab.metric("from-below.changed-share", share, "", Det::measured);
+    if (share < 0.05) {
+      lab.fail("the gel seen from under its level draws nothing round the eye",
+               "Check fs_under in engine/render/liquid.wgsl and Liquids::eye_under. "
+               "Skill: render.");
+    }
+    lab.shot({"from-below",
+              "FROM BELOW",
+              "The eye 0.6 m under the level in the pit, by day, looking across it and up at the "
+              "surface: the toxic slime (under_reach 4 m, a game's least view; as thick as it is "
+              "it shows nothing past 2 cm) and the clear gel (as it is).",
+              "the toxic slime a green fog with the pit's floor fading into it a few metres off "
+              "and its surface a bright window overhead; the gel clear, the bed and walls "
+              "tinted, the sky through Snell's window and the gel below mirrored round it",
+              {}},
+             strip(pics, labels, 2), Det::measured);
   }
   int errors = 0, late = 0;
   for (const auto& dev : devices) {

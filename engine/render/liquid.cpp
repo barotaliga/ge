@@ -290,6 +290,11 @@ void create_liquid(gpu::Device& device, gpu::PipelineSet& pipelines, Liquids& li
     desc.vertex.entryPoint = "vs_shimmer";
     desc.vertex.constantCount = 0;
     liquids.p_shimmer = pipelines.add_render(device, desc);
+    // The view from under a body: one triangle over the screen, the same targets and depth.
+    fragment.entryPoint = "fs_under";
+    desc.label = "liquid.under";
+    desc.vertex.entryPoint = "vs_under";
+    liquids.p_under = pipelines.add_render(device, desc);
   }
   std::vector<uint32_t> idx;
   idx.reserve(size_t{kLiquidGrid} * kLiquidGrid * 6);
@@ -348,9 +353,16 @@ void set_liquid_body(gpu::Device& device, Liquids& liquids, int index, const wat
 }
 
 void prepare_liquid(gpu::Device& device, Liquids& liquids, const FrameView& view) {
+  liquids.eye_under = -1;
   for (Liquids::Slot& slot : liquids.bodies) {
-    slot.shown = !slot.hidden && view.eye[1] > slot.staged.info[0];
+    const LiquidGpuBody& b = slot.staged;
+    slot.shown = !slot.hidden && view.eye[1] > b.info[0];
+    const bool inside = view.eye[0] > b.box[0] && view.eye[0] < b.box[2] &&
+                        view.eye[2] > b.box[1] && view.eye[2] < b.box[3];
+    if (!slot.hidden && !slot.shown && inside && liquids.eye_under < 0)
+      liquids.eye_under = static_cast<int>(&slot - liquids.bodies.data());
     slot.staged.fx[0] = liquids.reflections ? 1.0f : 0.0f;
+    slot.staged.fx[3] = static_cast<float>(liquids.under_reach);
     device.queue.WriteBuffer(slot.uniform, 0, &slot.staged, sizeof slot.staged);
   }
 }
@@ -365,7 +377,8 @@ void break_liquid_crust(Liquids& liquids, int index, double x, double z, double 
 void encode_liquid(const Liquids& liquids, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                    wgpu::CommandEncoder& encoder, const FrameTargets& targets,
                    const wgpu::BindGroup& frame) {
-  const bool drawn = std::any_of(liquids.bodies.begin(), liquids.bodies.end(),
+  const bool drawn = liquids.eye_under >= 0 ||
+                     std::any_of(liquids.bodies.begin(), liquids.bodies.end(),
                                  [](const Liquids::Slot& s) { return s.shown; });
   if (!drawn) {
     rec.compute(encoder, "liquid.copy").End();
@@ -421,6 +434,12 @@ void encode_liquid(const Liquids& liquids, const gpu::PipelineSet& pipelines, Fr
     if (!slot.shown || slot.staged.info[1] != 0 || !(slot.staged.fx[1] > 0)) continue;
     pass.SetBindGroup(1, slot.group);
     pass.Draw(36);
+    ++rec.current().draws;
+  }
+  if (liquids.eye_under >= 0) {
+    pass.SetPipeline(pipelines.render(liquids.p_under));
+    pass.SetBindGroup(1, liquids.bodies[static_cast<size_t>(liquids.eye_under)].group);
+    pass.Draw(3);
     ++rec.current().draws;
   }
   pass.End();
