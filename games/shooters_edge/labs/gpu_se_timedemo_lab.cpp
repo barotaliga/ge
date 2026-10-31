@@ -43,6 +43,7 @@
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/layout.hpp"
+#include "shooters_edge/labs/staged.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -218,6 +219,7 @@ void run(gl::Lab& lab) {
     lab.fail(error, "Pass --basedir=<the folder that holds the game folder>. Skill: shooter.");
     return;
   }
+  if (!shooters_edge::labs::stage_asked(lab, files)) return;
   {
     cl::Timedemo probe;
     if (!cl::timedemo_start(files, name, probe, error)) {
