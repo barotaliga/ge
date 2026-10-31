@@ -33,6 +33,8 @@ struct WorldExtras {
   std::vector<ba::Kind> liquid_kinds;  // each liquid slot's: kLava or kSlime
   gr::Flames flames;
   std::vector<gr::Flame> fires;
+  ba::FireLook fire_look;  // this frame's: bonfires or not, the wind
+  double sparks_t = -1;    // the time the last sparks were thrown to (< 0: none yet)
   gr::Precip precip;
   ba::WeatherState state;
   ba::WeatherFrame now;
@@ -88,6 +90,10 @@ void dress_extras(WorldExtras& x, gr::FrameView& view, ba::Options& options, dou
   const bool v2 = options.mode == ba::Mode::v2;
   if (!on.shadows) options.shadowed = 0;
   options.portal_lights = options.portal_lights && on.teleports;
+  options.bonfires = v2 && on.flames && on.bonfires;
+  x.fire_look.bonfires = options.bonfires;
+  for (double& a : x.fire_look.air) a = 0;
+  if (on.wind) ba::wind_air(*x.weather, view.time_s, x.fire_look.air);
   if (!on.lava) options.lava_glow = 0;
   if (!on.slime) options.slime_glow = 0;
   // A liquid switched off is the pack's own warped surface, as the classic draws it.
@@ -119,7 +125,8 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   gr::prepare_underwater(d, x.under, x.water, view, x.height);
   gr::prepare_liquid(d, x.liquids, view);
   x.fires.clear();
-  if (v2 && on.flames) ba::bsp_fires(*x.scene, view.time_s, options.brightness, x.fires);
+  if (v2 && on.flames)
+    ba::bsp_fires(*x.scene, view.time_s, options.brightness, x.fires, x.fire_look);
   gr::prepare_flames(d, x.flames, x.fires, view);
   const gr::PrecipShelter shelter = ba::bsp_shelter(bsp);
   gr::bind_precip_shelter(d, x.precip, x.raining ? &shelter : nullptr);
@@ -127,6 +134,15 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   if (x.raining && x.weather->draw) fall = x.now.draw;
   fall.near_m = view.near_m;
   gr::prepare_precip(d, x.precip, fall);
+}
+
+void extras_births(WorldExtras& x, double t_s, std::vector<gr::Particle>& out) {
+  // A jump back in time (a replay's seek, a new map's clock) or a first frame throws none: the
+  // next frame takes up from here.
+  const double t0 = x.sparks_t;
+  x.sparks_t = t_s;
+  if (t0 < 0 || t_s <= t0 || t_s - t0 > 1) return;
+  ba::bonfire_sparks(*x.scene, t0, t_s, x.fire_look, out);
 }
 
 bool liquid_round_eye(const WorldExtras& x) { return x.liquids.eye_under >= 0; }

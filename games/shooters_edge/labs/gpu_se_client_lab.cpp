@@ -325,8 +325,13 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
                     hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
                     se::hud_style());
     for (int k = 0; k < 2; ++k) {
-      for (int f = 0; f < 29; ++f)  // the weather and the flames run a moment in
-        cl::draw_world(*device, *world[k], view, fx, nullptr, 1.0 / 30, {}, out.view);
+      // The weather, the flames and the bonfires' sparks run a second in, ending on the view's
+      // moment.
+      for (int f = 0; f < 29; ++f) {
+        ge::render::FrameView run_in = view;
+        run_in.time_s = view.time_s - (29 - f) / 30.0;
+        cl::draw_world(*device, *world[k], run_in, fx, nullptr, 1.0 / 30, {}, out.view);
+      }
       cl::draw_world(*device, *world[k], view, fx, nullptr, 1.0 / 30, overlay, out.view);
       const ge::gpu::Image img = ge::gpu::read_now(*device, out);
       const std::string id = std::string(kLooks[k]) + "-" + std::to_string(v);

@@ -90,6 +90,10 @@ WeatherFrame step_weather(const WeatherCvars& c, WeatherState& s, const double e
 void apply_weather(const WeatherFrame& w, const WeatherCvars& c, render::FrameView& view,
                    Options& options, bool fog = true);
 
+// The wind's velocity at `t` s over the open map (m/s: the mean from sv_winddir, its gusts and
+// veer), whether or not anything falls: what a fire's flames and sparks are blown by.
+void wind_air(const WeatherCvars& c, double t, double out[3]);
+
 // The particles a full fall draws at `density` (r_precip_density) of `base`.
 uint32_t weather_particles(const render::PrecipSettings& base, double density);
 

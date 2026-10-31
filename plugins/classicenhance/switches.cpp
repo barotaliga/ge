@@ -63,6 +63,10 @@ const SwitchSpec kSwitches[] = {
      false},
     {"flames", "EFFECTS", "FIRE",
      "Torches and braziers burn as live fire. Off: the pack's painted flames.", &S::flames, false},
+    {"bonfires", "EFFECTS", "BONFIRES",
+     "Braziers on the floor burn as bonfires throwing sparks into the wind. Off: a big torch's "
+     "flame.",
+     &S::bonfires, false},
     {"muzzles", "EFFECTS", "MUZZLE FIRE",
      "Each shot's flash and smoke from the barrel. Off: the weapons' own flash.", &S::muzzles,
      false},
