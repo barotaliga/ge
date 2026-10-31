@@ -1,9 +1,10 @@
 // engine/wind/cold.hpp: a clear night's cold surface gathers dew above freezing, hoar frost
-// below it and rime in a windy freezing fog; rain on a frozen surface glazes it; the breath shows
-// in the cold and not in a warm, dry air; lake ice grows by the root of the frost's degree-days
-// and bears a walker at 10 cm; new snow falls lighter in colder air and is continuous through 0 C;
-// a ski glides best a few degrees under freezing; the feel names powder, squeak, sticky, slush and
-// crust where they belong; and every number keeps its bits in tests/golden/wind_cold.txt.
+// below it and rime in a windy freezing fog, and the frost goes as the surface warms; rain on a
+// frozen surface glazes it; the breath shows in the cold and not in a warm, dry air; lake ice
+// grows by the root of the frost's degree-days and bears a walker at 10 cm; new snow falls lighter
+// in colder air and is continuous through 0 C; a ski glides best a few degrees under freezing; the
+// feel names powder, squeak, sticky, slush and crust where they belong; and every number keeps its
+// bits in tests/golden/wind_cold.txt.
 //
 // A deliberate change moves the golden: rewrite it with
 // `GE_GOLDEN_WRITE=1 build/release/tests/wind_cold_test`, and put the `climate` lab's charts
@@ -76,6 +77,17 @@ TEST(a_cold_surface_gathers_dew_frost_or_rime) {
   fog.freezing = true;
   CHECK(gw::deposit_on(night, surface, fog, 6).kind == gw::Deposit::rime);
   CHECK(gw::deposit_on(night, surface, fog, 0.5).kind == gw::Deposit::frost);
+}
+
+TEST(frost_goes_as_the_surface_warms) {
+  gw::Thermal a = air(-6, 0.7);
+  a.frost_c = -9;
+  // Still growing under the frost point: nothing lost.
+  CHECK(gw::frost_loss(a, -11) == 0);
+  // Over it: sublimed at the deposit's own rate.
+  CHECK(std::fabs(gw::frost_loss(a, -7) - 0.06) < 1e-12);
+  // Over 0 C: melted, far faster.
+  CHECK(gw::frost_loss(a, 2) > 0.6 + gw::frost_loss(a, -1));
 }
 
 TEST(rain_on_a_frozen_surface_glazes_it) {

@@ -1880,6 +1880,17 @@ drain and dry by the wind and the sun). The picture reads the same numbers:
 - THE BREATH (`skier/app/breath.hpp`, M51e): each racer breathes out puffs at his mouth, as thick
   as the air there shows a breath (`wind::breath_of` of the map's day at the sky's hour), into the
   particles beside his spray; nothing shows above about 5-10 C. `FrameOptions::breath`.
+- THE COLD ON THE VILLAGE (`mountain/app/village_look.hpp`'s `village_surfaces`, M51f): the night's
+  frost on a parked car at the village (`air::frost_on` at the sky's hour, its `frost_cover`)
+  whitens the parked cars and rimes their glass, and greys the streets a little; a freezing rain's
+  glaze (`air::glaze_at`) darkens the carriageway to a glossy near mirror. Worked out every 30 s of
+  either clock and written into the streets', the parked cars' and the traffic's materials
+  (`render::set_family_surfaces`) only when a 1/32 step is crossed; the traffic takes the glaze
+  and never the frost. `FrameOptions::cold`.
+- LAKE ICE (`mountain/app/ice_look.hpp`, `freeze_water`, M51f): a lake whose ice is past 1 cm is
+  drawn as an ice sheet in its place, a grid of 2 m cells over the water inside the shore: young
+  ice under 4 cm clear and black, glossy; from 10 cm snow lying on it but for the wind's swept
+  patches, a grey-blue glass. One lake a frame freezes until the map lays its own (M24l).
 - THE SNOW'S COVER and THE LIGHTNING are the dial's too: `step_cover` lays ten millimetres of
   snow a millimetre of snow's water and takes it with the rain (4 mm an hour a mm of rain) and
   the sun (2 mm an hour in full sun), the cover's share 1 - e^(-depth / 6 mm); `flash_at(t)`

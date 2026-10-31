@@ -57,6 +57,7 @@
 // ge:keywords see-through set_see_through see_through_keep occluder-fade dithered-fade
 // ge:keywords casters caster-slot shadow-cull create_family_casters draw_casters
 // ge:keywords wire-probe wireframe encode_instances_wire palette-family palettes
+// ge:keywords set_family_surfaces material-update
 // ge:skill render
 // ge:test tests/render_instances_test.cpp
 #pragma once
@@ -244,6 +245,10 @@ void create_family_casters(gpu::Device& device, const InstancePipelines& ip, Ins
 void set_instances(gpu::Device& device, InstanceFamily& family, uint32_t first,
                    std::span<const Instance> instances);
 void set_instance_count(InstanceFamily& family, uint32_t count);
+// The family's materials written again (a look that changes with the hour: frost, a glaze), no
+// more of them than it was made with; the extra ones are dropped.
+void set_family_surfaces(gpu::Device& device, InstanceFamily& family,
+                         std::span<const Surface> surfaces);
 // The camera cut: the next write moves nothing since the last frame (nor the next palettes).
 void cut_family(InstanceFamily& family);
 // A palette family's rows for its parameters' `skin`: joints, this frame's first row, the last's.

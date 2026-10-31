@@ -20,6 +20,7 @@ namespace lm = core::libm;
 
 constexpr double kDepositPerK = 0.03;  // mm/h a kelvin under the dew or frost point
 constexpr double kRimeRate = 0.2;      // mm/h in a thick freezing fog in a 5 m/s wind
+constexpr double kFrostMelt = 0.3;     // mm/h a kelvin over 0 C
 constexpr double kBreathC = 34;        // C, exhaled air (saturated)
 constexpr double kIceRoot = 0.024;     // m per root kelvin-day (Stefan)
 constexpr double kIceMelt = 0.006;     // m a kelvin-day of thaw
@@ -71,6 +72,12 @@ Settling deposit_on(const Thermal& air, double surface_c, const Mist& mist, doub
   if (surface_c < air.dew_c && air.dew_c > 0)
     return {Deposit::dew, kDepositPerK * (air.dew_c - std::max(surface_c, 0.0))};
   return {};
+}
+
+double frost_loss(const Thermal& air, double surface_c) {
+  if (surface_c > 0)
+    return kFrostMelt * surface_c + kDepositPerK * std::max(surface_c - air.frost_c, 0.0);
+  return kDepositPerK * std::max(surface_c - air.frost_c, 0.0);
 }
 
 double glaze_on(double surface_c, double rain) { return clamp01(rain) * smooth(-surface_c / 2); }

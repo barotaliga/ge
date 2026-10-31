@@ -100,7 +100,9 @@ whatever the humidity.
 
 - **Dew, frost and rime** (`deposit_on`): a surface under the dew point gathers dew; under the
   frost point and below 0 C hoar frost; in a freezing fog with a wind, rime on its windward side.
-  About 0.03 mm an hour a kelvin of deficit; rime 0.2 mm an hour in a thick fog at 5 m/s.
+  About 0.03 mm an hour a kelvin of deficit; rime 0.2 mm an hour in a thick fog at 5 m/s. It goes
+  again (`frost_loss`) sublimed at the same rate a kelvin over the frost point and melted at 0.3 mm
+  an hour a kelvin over 0 C.
 - **Black ice** (`glaze_on`): rain on a surface below 0 C, full at -2 C.
 - **The breath** (`breath_of`): exhaled air (34 C, saturated) mixing into the air condenses where
   a mix is supersaturated. 0 unseen (above about 10 C in damp air, 5 C in dry), 1 a -10 C winter's
@@ -126,7 +128,7 @@ it asks.
 | The snow layer (`engine/snow`, M29) | `Weather::air` sampled off `air_at`; `fresh_density` for `Weather::fresh_density`; `glide_of` and `snow_feel` for the contact and the sound (`engine/snow/air.hpp`: `weather_of`, `feel_at`) | M51d (done) |
 | What falls (`precip.hpp`, M36) | `snow_level` of Fall Line's day (`air::climate_of`) at the sky's hour as the snow line (`air::snowline_at`), unless one is picked by hand; `rain_share_at` under it | M51e (done) |
 | The skier's breath (`skier/app/breath.hpp`) | `breath_of` of `air_at` at his mouth, at the sky's hour | M51e (done) |
-| The village's frost and black ice, the water's ice (`engine/water`, M24) | `deposit_on`, `glaze_on`, `ice_grown`, `ice_bears`, steam fog over open water | M51f |
+| The village's frost and black ice, a lake's ice (`plugins/mountain/air/marks.hpp`, drawn by `village_look.hpp`'s `village_surfaces` and `ice_look.hpp`) | `deposit_on` and `frost_loss` over the 24 hours before the sky's hour on a parked car (`frost_on`), `glaze_on` of the fall's rain on the road over the 12 hours before (`glaze_at`), `ice_grown` of the map's mean over a winter's days (`lake_ice`), `ice_bears` | M51f (done) |
 | The classic levels (`plugins/classicenhance`, M41) | a `Climate` per level | M51b |
 
 ## Considered and not taken

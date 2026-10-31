@@ -14,12 +14,21 @@
 // before the village was drawn (no streets, no cars, every tree standing), and the share of the
 // picture the village changes is measured. The evening's, the night's and the small hours' looks
 // are lit by the lamps after dark (the street lamps, the windows' spill, the skier's headlamp;
-// `--lights=0` draws them unlit, for a before). Without an adapter it notes that and draws
+// `--lights=0` draws them unlit, for a before).
+//
+// THE COLD'S MARKS (M51f: mountain/air/marks.hpp, village_look.hpp's `village_surfaces`): the
+// car park at 08:00 under a clear sky picked for it, the night's frost on the parked cars, and
+// a street at 11:00 in a freezing rain (rain to the summit from a warm layer aloft over a day
+// at `--freezing` C), its carriageway glazed. Each one's before is the same look with the marks
+// wiped off. The lab fails when a clear night leaves less frost by 08:00 than whitens a car or
+// any at 13:00, or when the freezing rain leaves the road short of a full glaze (deterministic
+// rows: the frost at 02:00, 08:00 and 13:00, the glaze). Without an adapter it notes that and draws
 // placeholders, so the digest is the same on every row; GE_GPU_REQUIRE=1 fails instead. Built
 // only with GE_GPU.
 //
 // ge:summary Lab: the free ride's village drawn: its streets, its cars, the bus, the felled trees
 // ge:keywords lab village village-look streets vehicles traffic felled picture fall-line
+// ge:keywords frost hoar-frost black-ice freezing-rain glaze village-cold
 // ge:skill render mountain labs
 #include <algorithm>
 #include <array>
@@ -44,9 +53,12 @@
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
+#include "mountain/air/marks.hpp"
 #include "mountain/app/building_look.hpp"
 #include "mountain/app/village_look.hpp"
+#include "mountain/mapgen/weather.hpp"
 #include "mountain/village/traffic.hpp"
+#include "wind/climate.hpp"
 
 namespace {
 
@@ -75,6 +87,9 @@ struct Look {
   const char* caption;
   const char* look_for;
   double hour = -2;  // the sun's hour for this look; -2: the lab's --hour
+  // The cold's marks (M51f): 1 the night's frost at the map's own sky, 2 a freezing rain's glaze
+  // (`--freezing`'s sky). Its before is the same look without them.
+  int cold = 0;
 };
 constexpr Look kLooks[] = {
     {"above", "THE VILLAGE FROM ABOVE",
@@ -118,7 +133,29 @@ constexpr Look kLooks[] = {
      "the village nearly dark: a home or two, the hotels' night porters, first aid's lamp, the "
      "garage and the pump house working",
      2},
+    {"frost-dawn", "THE CAR PARK AT EIGHT, AFTER A CLEAR NIGHT",
+     "The car park at 08:00 after a clear, calm night (a clear sky picked for it): the night's "
+     "frost on it.",
+     "the parked cars white with hoar, their windscreens rimed over; the streets a little "
+     "paler; gone again in the 11:00 car park",
+     8, 1},
+    {"black-ice", "A STREET IN A FREEZING RAIN",
+     "Behind the first car under way at 11:00, rain falling from a warm layer aloft onto a road "
+     "below 0 C.",
+     "the carriageway under the car dark and glossy, mirroring the grey sky: black ice; the "
+     "sidewalks beside it pale",
+     11, 2},
 };
+
+// The village's materials as they are without the cold's marks (a cold look's before).
+void wipe_cold(ge::gpu::Device& device, fall_line::app::GameFrame& f) {
+  const std::vector<r::Surface> bare = ge::mountain::app::village_surfaces({});
+  for (r::InstanceFamily* family : {&f.streets, &f.parked, &f.traffic}) {
+    if (family->capacity > 0) r::set_family_surfaces(device, *family, bare);
+  }
+  f.village_frost = f.village_glaze = -1;
+  f.cold_t = f.cold_hour = -1e9;
+}
 
 // The first building of `kind` in the village, or null.
 const vg::Building* first_of(const fs::Village& vil, vg::BuildingKind kind) {
@@ -159,8 +196,10 @@ bool aim(const fs::GameState& st, const char* id, double t, r::FrameView& v, dou
   }
   for (const vg::VillageArea& a : s.areas) {
     const bool square = a.kind == vg::AreaKind::square;
-    if (((std::strcmp(id, "square") == 0 || std::strcmp(id, "evening") == 0) && square) ||
-        ((std::strcmp(id, "carpark") == 0 || std::strcmp(id, "low-sun") == 0) && !square)) {
+    const bool on_square = std::strcmp(id, "square") == 0 || std::strcmp(id, "evening") == 0;
+    const bool on_park = std::strcmp(id, "carpark") == 0 || std::strcmp(id, "low-sun") == 0 ||
+                         std::strcmp(id, "frost-dawn") == 0;
+    if ((on_square && square) || (on_park && !square)) {
       const double back = square ? 30 : 25, up = square ? 18 : 15;
       look_at(level, a.x, a.y, a.z, a.heading + 3.14159265358979323846, back, up, v, where);
       return true;
@@ -181,7 +220,7 @@ bool aim(const fs::GameState& st, const char* id, double t, r::FrameView& v, dou
     look_at(level, b->x, b->y, b->z, b->heading + 3.14159265358979323846, f.back, f.up, v, where);
     return true;
   }
-  if (std::strcmp(id, "street") == 0 && vil.traffic) {
+  if ((std::strcmp(id, "street") == 0 || std::strcmp(id, "black-ice") == 0) && vil.traffic) {
     const vg::TrafficPlan& plan = *vil.traffic;
     for (int32_t k = 0; k < static_cast<int32_t>(plan.vehicles.size()); ++k) {
       if (plan.vehicles[static_cast<size_t>(k)].kind == vg::VehicleKind::bike) continue;
@@ -201,7 +240,8 @@ void run(ge::lab::Lab& lab) {
   const int px = static_cast<int>(lab.arg_num("px"));
   const int width = px, height = px * 9 / 16;
 
-  const auto level = std::make_shared<const ge::mountain::mapgen::Level>(
+  // Not const: the freezing rain's look picks its sky on the map the frame draws.
+  const auto level = std::make_shared<ge::mountain::mapgen::Level>(
       fs::free_map(seed, static_cast<int>(lab.arg_num("version"))));
   fs::GameState st = fs::create_free_ride(level, 0);
   const std::string seed_s = std::to_string(static_cast<long long>(seed));
@@ -244,6 +284,41 @@ void run(ge::lab::Lab& lab) {
       static_cast<double>(ge::mountain::app::street_mesh(*level, vil.ground).vertex_count()) / 3,
       "count");
 
+  // THE COLD'S MARKS on the village (deterministic rows): the frost on a parked car's roof under
+  // a clear sky through the night and the morning, and the glaze a freezing rain lays.
+  ge::mountain::mapgen::SkyPick clear, freezing;
+  clear.kind = ge::mountain::mapgen::WeatherKind::clear;
+  freezing.kind = ge::mountain::mapgen::WeatherKind::snow;
+  freezing.snowfall = 0.5;
+  freezing.snowline = 2;  // a warm layer aloft: rain to the summit
+  freezing.mean_c = lab.arg_num("freezing");
+  {
+    const double x = 0.5 * (vil.box[0] + vil.box[2]), z = 0.5 * (vil.box[1] + vil.box[3]);
+    const ge::wind::Site roof{.y = level->ground_at(x, z), .above = 1.5};
+    ge::mountain::mapgen::Level night = *level;
+    ge::mountain::mapgen::with_sky(night, clear);
+    for (const double hour : {2.0, 8.0, 13.0}) {
+      const double mm = ge::mountain::air::frost_on(night, roof, hour);
+      lab.metric("frost-at-" + std::to_string(static_cast<int>(hour)), mm, "mm");
+    }
+    const double dawn = ge::mountain::air::frost_on(night, roof, 8);
+    const double noon = ge::mountain::air::frost_on(night, roof, 13);
+    if (ge::mountain::air::frost_cover(dawn) < 1 || noon > 0) {
+      lab.fail("a clear night left " + std::to_string(dawn) + " mm of frost by 08:00 and " +
+                   std::to_string(noon) + " mm at 13:00 (want it whitening the cars, then gone)",
+               "Check mountain/air/marks.cpp's frost_on and wind/cold.cpp's rates. Skill: "
+               "mountain.");
+    }
+    ge::mountain::mapgen::Level rain = *level;
+    ge::mountain::mapgen::with_sky(rain, freezing);
+    const double glaze = ge::mountain::air::glaze_at(rain, roof, at, 11);
+    lab.metric("glaze-freezing-rain", glaze, "share");
+    if (glaze < 0.99) {
+      lab.fail("a freezing rain glazed the road only " + std::to_string(glaze),
+               "Check mountain/air/marks.cpp's glaze_at. Skill: mountain.");
+    }
+  }
+
   auto device = ge::gpu::create_device({.label = "village-look", .validation = 1});
   if (!device) {
     if (env_on("GE_GPU_REQUIRE")) {
@@ -265,6 +340,7 @@ void run(ge::lab::Lab& lab) {
   fall_line::app::FrameOptions options;
   options.lights = lab.arg_num("lights") != 0;
   options.light_shadows = options.lights;
+  options.cold = lab.arg_num("cold") != 0;
   auto frame = fall_line::app::create_frame(*device, *level, static_cast<uint32_t>(width),
                                             static_cast<uint32_t>(height),
                                             wgpu::TextureFormat::RGBA8Unorm, options);
@@ -308,7 +384,7 @@ void run(ge::lab::Lab& lab) {
   }
   std::vector<ge::gpu::Image> before(std::size(kLooks));
   for (size_t i = 0; i < std::size(kLooks); ++i) {
-    if (shown[i]) before[i] = film(views[i], wheres[i].data(), hours[i]);
+    if (shown[i] && kLooks[i].cold == 0) before[i] = film(views[i], wheres[i].data(), hours[i]);
   }
   fall_line::app::show_village(*device, *frame, st.village);
   for (size_t i = 0; i < std::size(kLooks); ++i) {
@@ -317,6 +393,18 @@ void run(ge::lab::Lab& lab) {
       lab.note(std::string(l.id) + ": nothing to show at " + std::to_string(at) + " s");
       blank(l, "NOTHING TO SHOW");
       continue;
+    }
+    if (l.cold != 0) {
+      ge::mountain::mapgen::with_sky(*level, l.cold == 1 ? clear : freezing);
+      fall_line::app::day_view(*level, hours[i], views[i]);
+      aim(st, l.id, at, views[i], wheres[i].data());
+    }
+    if (l.cold != 0) {
+      // The before: the same look with the cold's marks wiped off.
+      frame->options.cold = false;
+      wipe_cold(*device, *frame);
+      before[i] = film(views[i], wheres[i].data(), hours[i]);
+      frame->options.cold = options.cold;
     }
     const ge::gpu::Image after = film(views[i], wheres[i].data(), hours[i]);
     const std::vector<uint8_t>& was = before[i].rgba;
@@ -332,7 +420,7 @@ void run(ge::lab::Lab& lab) {
     lab.shot(shot_of(l), ge::lab::Picture{width, height, after.rgba}, Det::measured);
     ge::lab::Shot b = shot_of(l);
     b.id = std::string(l.id) + "-before";
-    b.title += " (BEFORE: NO VILLAGE DRAWN)";
+    b.title += l.cold != 0 ? " (BEFORE: NO FROST OR ICE DRAWN)" : " (BEFORE: NO VILLAGE DRAWN)";
     lab.shot(b, ge::lab::Picture{width, height, was}, Det::measured);
   }
   lab.metric("gpu-errors", device->errors.load(), "count");
@@ -359,6 +447,8 @@ const ge::lab::LabSpec kSpec{
         {"frames", "8", "frames drawn into each shot at 60 a second"},
         {"px", "768", "the pictures' width (16:9)"},
         {"lights", "1", "the lamps after dark: the street lamps, the windows' spill, the headlamp"},
+        {"cold", "1", "the cold's marks on the village (0: none, for a before)"},
+        {"freezing", "-4", "the freezing rain's day: its mean at the mountain's base, C"},
     },
     "--px=256 --frames=2",
     run,
