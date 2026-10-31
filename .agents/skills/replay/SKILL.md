@@ -1,6 +1,6 @@
 ---
 name: replay
-description: "Use for engine/replay in gameengine2 and anything that watches a run again: a game's Run::clone (the keyframe), the keeper and its thinning policy, the replay player's seek in a step budget, the transport (play, pause, speeds, skip, frame step), the replay file with its marks, clip and game version, the replay index, the live recorder and the instant replay, the director and its highlight reel; later spectating by inputs and the video export (docs/replays.md, rows M23a-M23h)."
+description: "Use for engine/replay in gameengine2 and anything that watches a run again: a game's Run::clone (the keyframe), the keeper and its thinning policy, the replay player's seek in a step budget, the transport (play, pause, speeds, skip, frame step), the replay file with its marks, clip and game version, the replay index, the live recorder and the instant replay, the director and its highlight reel, highlights found by a game's rules and the play bar's markers (engine/replay/highlights, engine/ui/play_bar); later spectating by inputs and the video export (docs/replays.md, rows M23a-M23i)."
 ---
 
 # Replays
@@ -18,6 +18,8 @@ stepped again through the game's own `Run`, never a recording of positions or pi
 | `replay/file.hpp/.cpp` | The replay file (`*.ge-replay`): the input log with marks, a clip, the game's version, the date; its text, `plays_on`, save and load |
 | `replay/index.hpp/.cpp` | The index: a directory's replay files as list rows for a menu's browser, a broken file a problem line |
 | `replay/director.hpp/.cpp` | The director: marks ranked and spaced into a cut of shots by the game's `ShotRule`s; the reel's clock over the shots at their rates |
+| `replay/highlights.hpp/.cpp` | Highlights: a game's rules (`HighlightRule<Event>`) over its own events, finished by the engine (scored, windowed, one subject's, merged, best of, time order); the jump to the next; the director's marks |
+| `ui/play_bar.hpp/.cpp` | The play bar: a seek bar with highlight markers, playhead, tooltip, clock, speed; the pointer's drag and release; drawn into a draw list |
 | `replay/live.hpp/.cpp` | The live run: a session that keeps keyframes and marks; the instant replay lent the live keeper and handed back |
 | `capture/ebml.hpp/.cpp`, `capture/matroska.hpp/.cpp` | The muxer: EBML elements; a Matroska / WebM file of a video and an audio track, clusters cut at keyframes, the seek head, cues and duration patched on close |
 | `capture/mkv_read.hpp/.cpp` | The reader the tests and labs take a file apart with: tracks, blocks, clusters, cues, seek head |
@@ -71,6 +73,12 @@ stream, its log and the straight digest).
   change to `av_export`, `record`'s mkv path or a game's `Sound` runs `make lab LAB=capture`
   before and after: `late`, `early` and `unshown` 0, `sound-off-ms` under 0.1; Fall Line's runs
   `make lab LAB=capture-run` too (the sound never silence, every picture and sample in the file).
+- **Highlights are the engine's, moments are the game's.** `finish_highlights` knows no kind: a game
+  hands it its rules' findings and a `HighlightKind` a kind. Shooter's Edge's are
+  `games/shooters_edge/client/demo_highlights.hpp`; a change there or in the scan runs `make lab
+  LAB=se-highlights` before and after (every scripted moment found: `highlights.<kind>` counts), and
+  once with `--file=<a real recording>` to see what it finds in a real match. The play bar keeps no
+  clock: the app hands it the playhead and acts on what `play_bar_pointer` answers.
 - **The live capture never makes a frame wait.** The game's thread only stamps, requests a copy
   and swaps buffers (`Live::stamp`, `ReadbackRing::capture`/`poll`, `Live::picture`); the audio
   thread only copies into a lock-free ring; everything slow is the worker's. A frame that finds

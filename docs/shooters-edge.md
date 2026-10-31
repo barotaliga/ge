@@ -266,6 +266,37 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
 
 (The `+` words go last: everything from the first `+` on is the console's.)
 
+**Like a video.** While a demo plays the mouse is free and a play bar shows along the bottom
+(above the HUD) for a few seconds after the pointer moves or a key is pressed, and always while
+paused (`demo_bar 0|1|2`: never, so, always). The demo is scanned once when it starts for its
+HIGHLIGHTS, and the tracked player's are marked on the bar in their kind's colour; the pointer over
+a marker names it.
+
+| Key | Console | What |
+| --- | --- | --- |
+| a click or drag on the bar | `demo_seek <time>` (`83`, `1:23`) | go there |
+| Space, K, the bar's button | `demo_pause` | pause or play |
+| Right, L | `demo_skip 15` | forward `demo_skip_forward` seconds (15) |
+| Left, J | `demo_skip -5` | back `demo_skip_back` seconds (5) |
+| Up, Down | `cl_demospeed <x>` | faster or slower: 0.25, 0.5, 1, 2, 4, 8 (any 0..20 by hand) |
+| Page Down, N / Page Up, P | `demo_next`, `demo_prev` | the next or last highlight (a few seconds before it) |
+| Home, End | | the start, the end |
+| | `demo_highlights [all]` | the tracked player's highlights (or everyone's) in the console |
+
+A HIGHLIGHT is a moment of the tracked player's (`client/demo_highlights.hpp`): a MULTI KILL (two
+or more kills within 0.2 s: one rocket, one blast), a LONG ROCKET (a rocket kill whose rocket flew
+1000 units or more), an AIR KILL or AIR GIB (a rocket or grenade kill of a player in the air), an
+ANNIHILATION (the victim had 150 or more health and armour and lost it all within 2 s), a TELEFRAG
+and a STREAK (three kills or more within 10 s). The kills are read off what every recording
+carries (`client/demo_scan.hpp`): a player's dead bit or his health going to 0 is a death, the
+other player whose frags went up then is the killer, the rockets are followed from where they
+appear to where they go. No obituary text is read. `make lab LAB=se-highlights
+ARGS="--file=<demo>"` lists a demo's highlights and kills and pictures every player's bar.
+
+A seek back reads the demo again from its start without drawing (a 10 minute match in a fraction
+of a second); the times on the bar are the demo's TIMELINE, its frames' steps added up with a long
+pause in the recording counted as a quarter second, the clock `-demovideo` runs on.
+
 **A multiview recording** holds every player, so the view rides one of them: the lowest slot
 playing by default, or the one `demo_track <slot>` names (`demo_track -1` goes back to the
 default). The view takes that player's origin and his own view angles, his stats for the HUD and

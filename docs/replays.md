@@ -126,6 +126,45 @@ shot's stretch, and every pose after that is a pure function of the shot and the
 (`film_pose`, fractional between steps), so a video export draws any frame without stepping the
 camera from the start (the `camera-director` lab).
 
+## Highlights and the play bar (M23i)
+
+A recorded run is long and most of it is ordinary; a player wants the moments. A HIGHLIGHT is one
+of them: a time, a kind, a weight, whose moment it is and a line saying what happened. The engine
+(`engine/replay/highlights.hpp`) does what every game would otherwise write again; the game says
+what a moment is.
+
+THE GAME'S HALF is its events and its rules. The events are whatever its scan of a run reads off
+it, in a struct of its own (Shooter's Edge's: each kill, with the killer, the victim, the weapon,
+the distance, the rocket's flight, whether the victim was in the air or gibbed, his health and
+armour before and how quickly he lost them, whether it was a telefrag). A rule
+(`HighlightRule<Event>`) reads the whole list and adds a highlight for each moment it finds, so a
+rule over several events (two kills from one rocket, three in ten seconds) is as easy as one over
+one. A `HighlightKind` a kind gives its label, its colour on the bar, its window (how long before
+the moment and after it a clip or a jump takes) and the scale its weight is scored by.
+
+THE ENGINE'S HALF (`finish_highlights`): a highlight of a kind with no row is refused and counted;
+each is scored and windowed inside the run; a subject's alone are kept when asked (the tracked
+player's); one subject's highlights within `merge_s` of each other are ONE moment ("air kill +
+streak"), its kinds best first and its score their sum; the best `most` are kept; the list is in
+time order. `next_highlight` is the jump key (the next window's opening, or the last before);
+`highlight_marks` hands the list to the director as marks, so a highlight reel is a cut like any
+other.
+
+THE PLAY BAR (`engine/ui/play_bar.hpp`) is a video player's seek bar over any timeline: the track,
+the played part, the playhead, a marker in its kind's colour for each highlight, the window of the
+one under the pointer shaded, a tooltip with its line and time, play and pause, the clock, the
+speed and a title. It keeps no state but the pointer's drag (a press on the track drags the
+playhead, the release seeks; a press on the button toggles), reads no clock and is drawn into a
+draw list, so the CPU raster pictures it in a test. It sizes itself by the target's height and sits
+above a HUD that keeps the bottom of the screen.
+
+Shooter's Edge's demos are the first user (`docs/shooters-edge.md` § Watching a demo): the demo is
+scanned once when it starts (`client/demo_scan.hpp`: 41,820 frames of a real 621 s match in about
+a second), its rules (`client/demo_highlights.hpp`) find multi kills, long rockets, air kills and
+air gibs, annihilated stacks, telefrags and streaks, and the window's bar seeks, pauses, changes
+speed, skips and jumps between them. The `se-highlights` lab pictures every player's bar and the
+watched player's view at each of his moments.
+
 ## Video with sound (M23d)
 
 Two ways to a video, one pipeline:
@@ -388,6 +427,7 @@ environment or the game's own settings, never hard-coded in the engine.
 | `gpu-capture-live` | Does the live capture take every frame and its sound in real time, in sync, with no frame waiting on it? | M23d3 |
 | `stream` | Does an RTMP session to a test ingest in the lab carry every frame, does the bitrate follow a narrowed link and recover, and is the key never printed? | M23e |
 | `spectate` | Do spectators through a relay over every network preset step to the player's digest, how late, and at how many bytes a second? | M23f |
+| `se-highlights` | Which moments of a demo are worth watching again, does the finder find each one, and does the play bar show them where they happened? | M23i |
 | `discord` | Against a stand-in Discord client in the lab: the handshake, the activity set and cleared, a join request answered? | M23g |
 
 Every one runs headless on the GPU-less Linux container: the export renders on the software

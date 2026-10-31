@@ -27,6 +27,20 @@ namespace shooters_edge::client {
 
 namespace {
 
+// A `\key\value\key\value` info string's value for `key` ("" when absent).
+std::string info_field(const std::string& info, const std::string& key) {
+  size_t at = 0;
+  while (at < info.size() && info[at] == '\\') {
+    const size_t k_end = info.find('\\', at + 1);
+    if (k_end == std::string::npos) return "";
+    const size_t v_end = std::min(info.find('\\', k_end + 1), info.size());
+    if (info.compare(at + 1, k_end - at - 1, key) == 0)
+      return info.substr(k_end + 1, v_end - k_end - 1);
+    at = v_end;
+  }
+  return "";
+}
+
 // Extension families' tags, the four letters read little-endian.
 constexpr uint32_t kFamilyFte = 0x58455446, kFamilyFte2 = 0x32455446, kFamilyMvd = 0x3144564D;
 // Their bits that change how a message reads.
@@ -216,6 +230,8 @@ void player_info(Demo& d, DemoMsg& m) {
   if ((flags & 0x80) != 0) p.effects = m.u8();
   if ((flags & 0x100) != 0) m.u8();      // weapon frame
   if ((flags & (1 << 17)) != 0) m.u8();  // transparency
+  p.dead = (flags & 0x200) != 0;
+  p.gib = (flags & 0x400) != 0;
   p.present = true;
   if (slot >= 0 && slot < 32) d.state.players[static_cast<size_t>(slot)] = p;
 }
@@ -226,7 +242,8 @@ void player_info(Demo& d, DemoMsg& m) {
 // are the player's state this frame.
 void multiview_player(Demo& d, DemoMsg& m) {
   constexpr int kMvAngles = 8;  // 8, 16, 32: the three angles; 1, 2, 4: the three origins
-  constexpr int kMvEffects = 64, kMvSkin = 128, kMvWeaponFrame = 1024, kMvModel = 2048;
+  constexpr int kMvEffects = 64, kMvSkin = 128, kMvDead = 256, kMvGib = 512;
+  constexpr int kMvWeaponFrame = 1024, kMvModel = 2048;
   const Wire w = wire_of(d);
   const int slot = m.u8();
   const int bits = m.u16();
@@ -243,6 +260,8 @@ void multiview_player(Demo& d, DemoMsg& m) {
   if ((bits & kMvSkin) != 0) p.skin = m.u8();
   if ((bits & kMvEffects) != 0) p.effects = m.u8();
   if ((bits & kMvWeaponFrame) != 0) m.u8();
+  p.dead = (bits & kMvDead) != 0;
+  p.gib = (bits & kMvGib) != 0;
   p.present = true;
 }
 
@@ -289,6 +308,8 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   for (Frame& f : d.ring) f.clear();
   for (DemoEntity& p : s.players) p = DemoEntity{};
   for (auto& st : d.player_stats) st.fill(0);
+  s.frags.fill(0);
+  for (std::string& n : s.names) n.clear();
   return true;
 }
 
@@ -418,11 +439,13 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 12:
         m.u8();
         m.str();
-        break;  // lightstyle
-      case 14:
-        m.u8();
-        m.i16();
-        break;    // updatefrags
+        break;    // lightstyle
+      case 14: {  // updatefrags
+        const int slot = m.u8();
+        const int frags = m.i16();
+        if (slot < 32) s.frags[static_cast<size_t>(slot)] = frags;
+        break;
+      }
       case 16: {  // stopsound
         const int packed = m.u16();
         s.stopped.emplace_back((packed >> 3) & 1023, packed & 7);
@@ -506,12 +529,14 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       }
       case 39:
         m.i16();
-        break;  // muzzleflash
-      case 40:
-        m.u8();
+        break;    // muzzleflash
+      case 40: {  // updateuserinfo: the slot, the user id, the info string (\\key\\value...)
+        const int slot = m.u8();
         m.i32();
-        m.str();
-        break;    // updateuserinfo
+        const std::string info = m.str();
+        if (slot < 32) s.names[static_cast<size_t>(slot)] = info_field(info, "name");
+        break;
+      }
       case 41: {  // download: under chunked downloads a chunk number first (-1: a transfer's start)
         if ((d.ext_fte & kFteChunkedDownloads) != 0) {
           const int32_t chunk = m.i32();
