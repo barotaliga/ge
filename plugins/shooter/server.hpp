@@ -45,6 +45,12 @@ constexpr int kMaxEdicts = 2048;  // the protocol's limit
 constexpr int kMaxClients = 32;
 constexpr int kMaxSounds = 256;  // sounds a frame keeps for the host (more are counted, dropped)
 
+// Which player move the server runs (sv_playermove; framemove.hpp says when each moves).
+enum class PlayerMove : uint8_t {
+  arena,     // the predicted move (pmove.hpp): each command moves the player as it arrives
+  original,  // the original move (framemove.hpp): the server's own step
+};
+
 // The server's settings: the move's (sent to clients) and the loop's own.
 struct ServerSettings {
   MoveSettings move;
@@ -65,6 +71,15 @@ struct ServerSettings {
   // The single-player clock (frame.hpp): a frame's packets and physics see the time the frame
   // started at, the time advancing after them, and an entity thinks at most once a frame.
   bool single_player_clock = false;
+  // The player move, and its program: a single-player program jumps for itself in its pre-think
+  // (the original move then never jumps), a multiplayer one expects the move to (sent to clients).
+  PlayerMove playermove = PlayerMove::arena;
+  bool program_jumps = false;
+  // The original move's own settings (the rest are `move`'s).
+  float edgefriction = 2;  // edgefriction: the friction's factor where the ground ahead falls away
+  bool nostep = false;     // sv_nostep: no stepping up
+  float rollangle = 2;     // cl_rollangle: the body's roll at speed, degrees
+  float rollspeed = 200;   // cl_rollspeed: the sideways speed that rolls it fully, units/s
 };
 
 // A sound the loop or the program started this frame, for the host to play.
@@ -90,6 +105,8 @@ struct ClientSlot {
   double speed_check_time = 0;  // the server time of the last speed check
   int last_msec = 0;            // ms since the server last ran this player's command (for others)
   double last_cmd_time = 0;     // the server time its last command ran
+  MoveCmd latest;               // the original move on the single-player clock: the command the
+  bool any_latest = false;      // next frame moves by (it persists until a newer one arrives)
 };
 
 // What the loop did, counted (the lab and the tests read them; they feed no rule).
