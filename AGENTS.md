@@ -274,6 +274,7 @@ characters.
 | `engine/save/` | Saves (`ge::save`, `docs/saves.md`): the save file (header, meta, tagged versioned chunks, directory, XXH64), the state described once for its writer and reader | `save` |
 | `engine/capture/` | Video with sound (`ge::capture`, in `ge_play`; `docs/replays.md`): the Matroska and fragmented MP4 muxers and readers, I420, the encoders, the export's A/V clock, the live capture, the sync fixture | `replay` |
 | `engine/net/` | Multiplayer networking (`ge::net`, `docs/networking.md`): addresses, the wire, UDP and TCP sockets, links, the simulated network, sessions, LAN discovery, replication; the only place socket headers are included | `net` |
+| `engine/server/` | The server core (`ge::server`, `docs/servers.md`): `ServerGame` a game plugs in, the frame, the node, session and hosting round it, the dedicated process (`ge_add_server`), the sample game and trial | `net` |
 | `engine/texgen/` | Procedural textures (`ge::texgen`, `docs/textures.md`): the `.tex` recipe, tileable noise, the layer kinds, the bake to maps and its disk cache; `library/` the specimens | `textures` |
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |

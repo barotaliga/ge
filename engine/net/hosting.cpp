@@ -157,6 +157,7 @@ void hosting_update(Hosting& h, int64_t now_us) {
   if (!h.node || h.state == HostingState::idle || h.state == HostingState::closed) return;
   const bool open = h.state == HostingState::open;
   h.advert.seated = session_player_count(*h.session, false);
+  if (h.config.seated) h.advert.seated += h.config.seated(h.config.seated_ctx);
   h.advert.phase = h.session->phase;
   // Pings on the node's own socket, and the LAN's probes on the discovery socket.
   for (const Foreign& f : h.node->foreign) {
