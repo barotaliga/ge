@@ -410,7 +410,10 @@ void run(ge::lab::Lab& lab) {
              "intermission's figures live over the view.",
              [&](ui::DrawList& dl) {
                sm::draw_level_stats(dl, art, v.w, v.h, "the Grey Halls", stats);
-               sm::draw_solo_scorebar(dl, art, v.w, v.h, "the Grey Halls", stats);
+               // As the window draws it: the game's own look's card already holds the strip's
+               // figures.
+               if (!art.glyphs.empty())
+                 sm::draw_solo_scorebar(dl, art, v.w, v.h, "the Grey Halls", stats);
              });
       sm::BoardView plain_view, team_view, large_view;
       screen("scores", "THE SCOREBOARD, " + name + ", AT " + v.name(),

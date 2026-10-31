@@ -188,7 +188,9 @@ static void draw_scores(ge::ui::DrawList& dl, const cl::Listen& l,
     case cl::ScoresScreen::solo: {
       const mn::LevelStats st = cl::level_stats_of(l);
       if (level_stats) mn::draw_level_stats(dl, art, w, h, cl::map_title(l), st);
-      mn::draw_solo_scorebar(dl, art, w, h, cl::map_title(l), st);
+      // The modern look's level card already holds the strip's figures.
+      if (!level_stats || !art.glyphs.empty())
+        mn::draw_solo_scorebar(dl, art, w, h, cl::map_title(l), st);
       break;
     }
     case cl::ScoresScreen::players: {

@@ -217,14 +217,54 @@ TEST(the_scorebar_shows_the_maps_clock) {
   CHECK(at(g, 184, 180)->code == 'T');
 }
 
-TEST(without_the_packs_pictures_the_board_is_drawn_in_the_engines_type) {
+TEST(without_the_packs_pictures_the_board_is_the_games_own_card) {
   const mn::ClassicArt none;
   ui::DrawList dl;
-  dl.begin(640, 400);
+  dl.begin(1280, 720);
   mn::BoardView view;
-  mn::draw_scoreboard(dl, none, 640, 400, board(), view);
-  int texts = 0;
-  for (const ui::Cmd& c : dl.cmds()) texts += c.kind == ui::CmdKind::text ? 1 : 0;
-  CHECK(texts > 10);
+  mn::draw_scoreboard(dl, none, 1280, 720, board(), view);
   CHECK(glyphs_of(dl, none).empty());
+  std::vector<std::string> words;
+  for (const ui::Cmd& c : dl.cmds())
+    if (c.kind == ui::CmdKind::text) words.push_back(c.text.text);
+  const auto has = [&words](const std::string& w) {
+    return std::find(words.begin(), words.end(), w) != words.end();
+  };
+  CHECK(has("SCOREBOARD") && has("FREE FOR ALL") && has("4:12"));
+  CHECK(has("me") && has("bo") && has("anna") && has("999"));
+  // The player first by frags and slot, the spectator named under the rows, not ranked.
+  const auto at_word = [&words](const std::string& w) {
+    return std::find(words.begin(), words.end(), w) - words.begin();
+  };
+  CHECK(at_word("me") < at_word("bo") && at_word("bo") < at_word("anna"));
+  CHECK(has("SPECTATORS") && has("watcher") && !has("4"));
+  // No scorebar: the card's header carries the clock.
+  dl.begin(1280, 720);
+  mn::draw_scorebar(dl, none, 1280, 720, board());
+  CHECK(dl.cmds().empty());
+}
+
+TEST(the_games_own_card_tiles_the_teams_and_fits_a_large_game) {
+  const mn::ClassicArt none;
+  mn::Scoreboard b;
+  b.teamplay = true;
+  for (int i = 0; i < 24; i++)
+    b.rows.push_back(
+        {.name = "p" + std::to_string(i), .frags = 30 - i, .team = i % 2 ? "red" : "blue"});
+  ui::DrawList dl;
+  dl.begin(1280, 720);
+  mn::BoardView view;
+  mn::draw_team_scoreboard(dl, none, 1280, 720, b, view);
+  int texts = 0;
+  bool red = false, blue = false;
+  float lowest = 0;
+  for (const ui::Cmd& c : dl.cmds()) {
+    if (c.kind != ui::CmdKind::text) continue;
+    texts++;
+    red = red || c.text.text == "RED";
+    blue = blue || c.text.text == "BLUE";
+    lowest = std::max(lowest, c.text.baseline);
+  }
+  CHECK(red && blue && texts > 24);
+  CHECK(lowest < 720);  // every row on the frame
 }

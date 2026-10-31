@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "shooters_edge/menu/classic_view.hpp"
+#include "shooters_edge/menu/score_modern.hpp"
 #include "ui/font.hpp"
 
 namespace shooters_edge::menu {
@@ -150,6 +151,10 @@ std::vector<std::string> field_names(int n, int digits, int* skip) {
 
 void draw_intermission(ui::DrawList& dl, const ClassicArt& art, int width, int height,
                        const LevelStats& s) {
+  if (art.glyphs.empty()) {
+    draw_modern_level_card(dl, width, height, "LEVEL COMPLETE", "", s, true);
+    return;
+  }
   darken(dl);
   const ClassicLayout l = classic_screen(width, height);
   const ClassicPen pen{dl, art, l};
@@ -163,6 +168,10 @@ void draw_intermission(ui::DrawList& dl, const ClassicArt& art, int width, int h
 
 void draw_level_stats(ui::DrawList& dl, const ClassicArt& art, int width, int height,
                       std::string_view title, const LevelStats& s) {
+  if (art.glyphs.empty()) {
+    draw_modern_level_card(dl, width, height, title, "", s, false);
+    return;
+  }
   const ClassicLayout l = classic_screen(width, height);
   const ClassicPen pen{dl, art, l};
   const ClassicType type{pen, !art.glyphs.empty()};
@@ -172,6 +181,10 @@ void draw_level_stats(ui::DrawList& dl, const ClassicArt& art, int width, int he
 
 void draw_solo_scorebar(ui::DrawList& dl, const ClassicArt& art, int width, int height,
                         std::string_view title, const LevelStats& s) {
+  if (art.glyphs.empty()) {
+    draw_modern_solo_strip(dl, width, height, title, s);
+    return;
+  }
   const ClassicLayout l = classic_screen(width, height);
   const ClassicPen pen{dl, art, l};
   const ClassicType type{pen, !art.glyphs.empty()};

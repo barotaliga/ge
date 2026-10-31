@@ -15,6 +15,7 @@
 
 #include "shooters_edge/menu/classic_view.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
+#include "shooters_edge/menu/score_modern.hpp"
 
 namespace shooters_edge::menu {
 
@@ -28,13 +29,8 @@ constexpr float kBarY = 176;
 constexpr float kPlainX = 16, kTeamsX = 4, kTeamBoardX = 36;
 constexpr size_t kNameChars = 15, kTeamChars = 4;
 
-// Without the pack's palette: one colour a player colour, its ramp's middle in our own hues.
-constexpr uint32_t kStandIn[14] = {0xc8c8c8, 0x8b6a3e, 0x8d8dc4, 0x5f7f3f, 0xb03a2e,
-                                   0x9a8a3a, 0xc0702a, 0xc48a9a, 0x8c5a9a, 0x9a6a8a,
-                                   0x7aa0a0, 0xd0b060, 0x5a6ad0, 0xd0d040};
-
 ui::Color fill_of(const ClassicArt& art, int colour) {
-  if (art.glyphs.empty()) return ui::hex(kStandIn[std::clamp(colour, 0, 13)]);
+  if (art.glyphs.empty()) return player_colour(colour);
   return art.colour(colour_index(colour));
 }
 
@@ -151,6 +147,10 @@ std::vector<TeamRow> team_rows(const Scoreboard& b) {
 
 void draw_scoreboard(ui::DrawList& dl, const ClassicArt& art, int width, int height,
                      const Scoreboard& b, BoardView& view) {
+  if (art.glyphs.empty()) {
+    draw_modern_board(dl, width, height, b, false);
+    return;
+  }
   const ClassicLayout l = classic_screen(width, height);
   const ClassicPen pen{dl, art, l};
   const ClassicType type{pen, !art.glyphs.empty()};
@@ -160,6 +160,10 @@ void draw_scoreboard(ui::DrawList& dl, const ClassicArt& art, int width, int hei
 
 void draw_team_scoreboard(ui::DrawList& dl, const ClassicArt& art, int width, int height,
                           const Scoreboard& b, BoardView& view) {
+  if (art.glyphs.empty()) {
+    draw_modern_board(dl, width, height, b, true);
+    return;
+  }
   if (!b.teamplay) {
     draw_scoreboard(dl, art, width, height, b, view);
     return;
@@ -189,6 +193,7 @@ void draw_team_scoreboard(ui::DrawList& dl, const ClassicArt& art, int width, in
 
 void draw_scorebar(ui::DrawList& dl, const ClassicArt& art, int width, int height,
                    const Scoreboard& b) {
+  if (art.glyphs.empty()) return;  // the modern board's header carries the clock
   const ClassicLayout l = classic_screen(width, height);
   const ClassicPen pen{dl, art, l};
   const ClassicType type{pen, !art.glyphs.empty()};

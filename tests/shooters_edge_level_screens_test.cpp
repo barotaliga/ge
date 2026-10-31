@@ -3,7 +3,7 @@
 // the intermission's title, labels and big figures where the layout puts them; the finale's text
 // typed a character at a time, each line centred by its whole width; the solo scorebar's rows,
 // the level's statistics and the big figures' fields;
-// and every screen drawn in the engine's type when the packs carry no pictures.
+// and every screen drawn in the game's own modern look when the packs carry no pictures.
 //
 // ge:summary Tests: the intermission, the level's statistics, the solo scorebar, the typed finale
 // ge:keywords test campaign intermission finale typed-text solo-scorebar level-stats big-figures
@@ -164,12 +164,13 @@ TEST(without_the_packs_pictures_the_screens_are_drawn_in_the_engines_type) {
   const mn::ClassicArt none;
   ui::DrawList dl;
   dl.begin(640, 400);
+  // The game's own look: the heading, then the three tiles' labels and values.
   mn::draw_intermission(dl, none, 640, 400, {.minutes = 0, .seconds = 9});
-  CHECK(texts(dl) == 1 + 3 + 4 + 3 + 3);  // the title, the labels, 0:09, 0/0, 0/0
+  CHECK(texts(dl) == 1 + 3 + 3);
   dl.begin(640, 400);
   mn::draw_level_text(dl, none, 640, 400, "AB", 2);
   CHECK(texts(dl) == 1);
   dl.begin(640, 400);
   mn::draw_solo_scorebar(dl, none, 640, 400, "x", {});
-  CHECK(texts(dl) == 4);
+  CHECK(texts(dl) == 1 + 3 + 3);  // the title, the three labels and values
 }
