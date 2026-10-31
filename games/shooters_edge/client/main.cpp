@@ -652,6 +652,10 @@ int run_main(int argc, char** argv) {
     // The player's hands, then the server's frames.
     cl::turn_view(played, controls, listen.view);
     const ge::shooter::MoveCmd cmd = cl::read_controls(played, controls);
+    if (listen.server != nullptr) {
+      const cl::PlayerState me = cl::player_state(listen);
+      cl::spring_view(played, controls, me.on_ground, cmd, me.ideal_pitch, wall, listen.view);
+    }
     if (cmd.impulse != 0) listen.impulse = cmd.impulse;
     // A single-player game waits while the console or the menu is up.
     const bool paused = listen.campaign_host && (con_view.open() || game_menu.open());

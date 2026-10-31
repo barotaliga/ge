@@ -98,6 +98,15 @@ TEST(the_screen_blend_is_nothing_in_clear_air_and_stacks_what_is_held) {
   fx::screen_blend(hurt, rgba);
   CHECK(rgba[3] > 0 && rgba[0] > rgba[1] && rgba[0] > rgba[2]);
   CHECK(fx::fade_hurt(hurt.hurt, 10) == 0);
+  // What the armour took of a blow flashes a duller amber under the red: more green in it.
+  const double red_green = rgba[1];
+  hurt.armour = fx::take_hurt(0, 20);
+  fx::screen_blend(hurt, rgba);
+  CHECK(rgba[0] > rgba[1] && rgba[1] > red_green);
+  fx::Screen armour_only;
+  armour_only.armour = fx::take_hurt(0, 20);
+  fx::screen_blend(armour_only, rgba);
+  CHECK(rgba[3] > 0 && rgba[1] > 0.3 && rgba[2] < rgba[1]);
   // The powers over the water: more of the picture blended than the water alone.
   water.power = true;
   water.shield = true;

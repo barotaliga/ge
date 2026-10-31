@@ -89,12 +89,23 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   const int mine = int(field_named(l, p.entity, "effects"));
   glow(mine, p.origin);
 
-  // The screen: the liquid round the eye, and a hit's flash from the health lost.
+  // The screen: the liquid round the eye, and a hit's flash from the blows reported (a campaign)
+  // or the health lost (a match).
   s.hurt = fx::fade_hurt(s.hurt, dt);
-  if (!p.dead && p.health < s.health) s.hurt = fx::take_hurt(s.hurt, s.health - p.health);
+  s.armour = fx::fade_hurt(s.armour, dt);
+  if (l.blows.size() < s.blows_seen) s.blows_seen = 0;  // a new map
+  if (l.campaign_host) {
+    for (; s.blows_seen < l.blows.size(); s.blows_seen++) {
+      s.hurt = fx::take_hurt(s.hurt, l.blows[s.blows_seen].blood);
+      s.armour = fx::take_hurt(s.armour, l.blows[s.blows_seen].armor);
+    }
+  } else if (!p.dead && p.health < s.health) {
+    s.hurt = fx::take_hurt(s.hurt, s.health - p.health);
+  }
   s.health = p.health;
   fx::Screen screen;
   screen.hurt = s.hurt;
+  screen.armour = s.armour;
   screen.power = (mine & kGlowBlue) != 0;
   screen.shield = (mine & kGlowRed) != 0;
   if (field_named(l, p.entity, "waterlevel") >= kEyesUnder) {

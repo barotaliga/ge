@@ -33,6 +33,22 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
                     .help = "the mouse's pitch upside down (0 or 1)",
                     .kind = ge::console::CvarKind::boolean},
                    &c.invert);
+  con.cvars().bind({.name = "lookspring",
+                    .fallback = "0",
+                    .flags = ge::console::kArchive,
+                    .help = "1: the view's pitch centres (follows the slope) as you move",
+                    .kind = ge::console::CvarKind::boolean},
+                   &c.lookspring);
+}
+
+void spring_view(const ge::input::InputState& in, const ControlSettings& c, bool on_ground,
+                 const ge::shooter::MoveCmd& cmd, float ideal, double dt,
+                 ge::shooter::Vec3f& view) {
+  if (!c.lookspring || !on_ground || in.mouse.dy != 0) return;
+  if (cmd.forward == 0 && cmd.side == 0) return;
+  const double most = kSpringSpeed * dt;
+  const double gap = static_cast<double>(ideal) - view.x;
+  view.x = static_cast<float>(view.x + std::clamp(gap, -most, most));
 }
 
 void turn_view(const ge::input::InputState& in, const ControlSettings& c,
