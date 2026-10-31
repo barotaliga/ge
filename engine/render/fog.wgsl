@@ -246,7 +246,13 @@ fn inject(@builtin(global_invocation_id) id: vec3u) {
     let ground_in = (key * max(frame.sun.y, 0.0) + sky_up) * albedo_under(rel) / PI;
     let bounce = 0.5 * ground_in * diffuse_through(tau_up + 2.0 * low);
     let glow = m.glow * (frame.world.y / kSunLux);
-    lit = vec4f(m.scatter * (key * phase + sky + bounce) + glow, m.extinction);
+    // THE LAMPS (render/lights.hpp): each lamp of the cluster the point falls in, on the volume's
+    // lobe and past its own shadow map, so a lamp in a mist has a halo and a spot's cone shows.
+    let clip = frame.view_proj * vec4f(rel, 1.0);
+    let ndc = clip.xyz / clip.w;
+    let frag = vec3f((ndc.x * 0.5 + 0.5) * frame.size.x, (0.5 - ndc.y * 0.5) * frame.size.y, ndc.z);
+    let lamps = light_inscatter(rel, d, frag, m.g, m.extinction);
+    lit = vec4f(m.scatter * (key * phase + sky + bounce + lamps) + glow, m.extinction);
   }
   // The last frame's light at the same world point, where that point was in its volume.
   if (fp.look.y > 0.0) {
