@@ -10,7 +10,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   var c = albedo / PI * (g.sun * max(dot(g.n, frame.sun.xyz), 0.0) + sky_irradiance(g.n) * sky_seen(in.position) +
                             flash_on(frame.eye.xyz + g.rel, g.n));
   let v = -g.rel / max(g.dist, 1e-3);
-  c += wet_sheen(g.n, v, g.sun, g.n.y);
+  c += wet_sheen(g.n, v, g.sun, g.n.y, g.rel);
   c += local_lights(matte(albedo), g.rel, g.n, v, in.position.xyz);
   return ground_out(in, c, 0.0);
 }

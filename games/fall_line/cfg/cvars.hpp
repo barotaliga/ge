@@ -78,6 +78,7 @@ struct Settings {
   bool lightning = true;                            // a thunderstorm's flashes and channels drawn
   bool fog_drawn = true;        // r_fog: the map's mists and the fog in areas drawn
   uint32_t fog_quality = 2;     // r_fog_quality: the froxels, 0 low .. 3 top (app/mists.hpp)
+  bool reflections = true;      // r_reflections: the scene mirrored in the wet ground
   double precip_density = 1.0;  // the share of the falling particles, 0.25..2
   double clouds = 1.0;          // the share of the cloud march's steps; 0: no layer drawn
   double disc_sun = 1.0, disc_moon = 1.0;  // r_sunsize r_moonsize: the discs drawn larger, 0.5..20

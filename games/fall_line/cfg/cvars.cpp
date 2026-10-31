@@ -168,6 +168,13 @@ void add_cvars(con::Console& c, Settings& s) {
           .min = 0,
           .max = 3},
          &s.fog_quality);
+  v.bind({.name = "r_reflections",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "the scene mirrored in the wet ground: the trees and the sky upside down in a "
+                  "puddle, blurred in the rain's film (0: the sky's light alone)",
+          .kind = CvarKind::boolean},
+         &s.reflections);
   v.bind({.name = "r_weather",
           .fallback = "1",
           .flags = kStartup,

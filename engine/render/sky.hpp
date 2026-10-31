@@ -96,13 +96,16 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
 // `ao` is the ambient occlusion's target (render/ao.hpp, binding 12), or none for the blank (no
 // occlusion). `lamp_atlas` is the lamps' shadow atlas (render/lamp_shadows.hpp's
 // `LampShadows::atlas_view`, binding 13), or none for the sky's empty one; never bind it to a
-// group the atlas's own passes read.
+// group the atlas's own passes read. `mirror` is the last frame's kept scene (render/mirror.hpp's
+// `Mirror::last_view`, binding 15), or none for the blank (nothing reflected); never bind it to
+// the group of a pass that keeps the scene.
 wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& layout,
                             const wgpu::Buffer& uniforms, const Sky& sky,
                             const wgpu::Buffer& lights = nullptr,
                             const wgpu::TextureView& fog = nullptr,
                             const wgpu::TextureView& ao = nullptr,
-                            const wgpu::TextureView& lamp_atlas = nullptr);
+                            const wgpu::TextureView& lamp_atlas = nullptr,
+                            const wgpu::TextureView& mirror = nullptr);
 
 // Decide which tables this frame rebuilds.
 void prepare_sky(Sky& sky, const FrameView& view);
