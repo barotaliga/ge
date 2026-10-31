@@ -1,0 +1,7 @@
+# The double shotgun, held weapon 3: a side-by-side break-action in case-hardened steel, blued
+# barrels and walnut, its texture baked from the kit's procedural materials. Built by
+# `ge asset build double_shotgun` (weapon_kit.py beside it).
+builder: build.py
+source: ../weapon_kit.py
+data: se_view
+budget-kib: 1536

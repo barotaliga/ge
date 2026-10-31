@@ -283,4 +283,27 @@ void place_held(const HeldModel& model, const Placement& place, int a, int b, do
   }
 }
 
+double held_coverage(const HeldModel& model, const Placement& place, double fov_y, int width,
+                     int height) {
+  std::vector<float> p, n;
+  place_held(model, place, 0, 0, 0, p, n);
+  const float black[3] = {0, 0, 0};
+  ViewTarget t = make_target(width, height, 1, black);
+  DrawLit d;
+  d.positions = p;
+  d.normals = n;
+  d.indices = model.indices;
+  d.colour = model.colour;
+  d.uv = model.uv;
+  d.skin = model.skin.image.rgba.empty() ? nullptr : &model.skin;
+  d.fov_y = place.fov_y > 0 ? place.fov_y : fov_y;
+  d.near_m = 0.01;
+  d.cull_back = false;
+  draw_lit(t, d, Lighting{});
+  size_t covered = 0;
+  for (float z : t.depth)
+    if (z < 1e30f) ++covered;
+  return t.depth.empty() ? 0.0 : static_cast<double>(covered) / static_cast<double>(t.depth.size());
+}
+
 }  // namespace ge::viewmodel

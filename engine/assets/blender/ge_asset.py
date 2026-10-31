@@ -18,8 +18,8 @@
 # it back. So a model built here faces heading 0 in the game.
 #
 # THE RULES the export keeps (the assets skill's): normals exported, smooth where a builder asks;
-# at most four influences a vertex, normalised; base colours, no textures; no cameras or lights;
-# actions sampled at 60 frames a second. A builder never reads a clock or a random seed of its
+# at most four influences a vertex, normalised; base colours, and textures only when a builder
+# bakes its own and asks; no cameras or lights; actions sampled at 60 frames a second. A builder never reads a clock or a random seed of its
 # own: the same data gives the same model.
 #
 # ge:summary The library a Blender model builder imports: arguments, the frame, bones, meshes, export
@@ -229,19 +229,26 @@ class MeshBuilder:
         return obj
 
 
-def export(out):
-    """The scene as a binary glTF: the skins, the normals and the base colours; no cameras,
-    lights or textures."""
+def export(out, textures=False, animations=False):
+    """The scene as a binary glTF: the skins, the normals and the base colours; no cameras or
+    lights. `textures`: the materials' pictures and the texture coordinates too (a baked texture
+    the game keeps whole). `animations`: every NLA track as one animation named after it (a clip
+    spread over several objects is one track name on each), sampled at the scene's 60 frames a
+    second."""
     bpy.ops.export_scene.gltf(
         filepath=out,
         export_format="GLB",
         export_yup=True,
         export_skins=True,
-        export_animations=False,
+        export_animations=animations,
+        export_animation_mode="NLA_TRACKS",
+        export_force_sampling=True,
+        export_frame_step=1,
+        export_optimize_animation_size=False,
         export_cameras=False,
         export_lights=False,
-        export_image_format="NONE",
-        export_texcoords=False,
+        export_image_format="AUTO" if textures else "NONE",
+        export_texcoords=textures,
         export_tangents=False,
         export_def_bones=False,
     )

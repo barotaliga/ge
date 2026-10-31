@@ -51,6 +51,7 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
     hand.fresh = false;
   }
   hand.wanted = in.weapon;
+  const Weapon before = hand.held;
   if (in.fired && hand.held != hand.wanted) {
     // The simulation fires the new weapon at once: it is in the hand, up.
     hand.held = hand.wanted;
@@ -58,6 +59,7 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   }
   // Down at the bottom of a switch: the new weapon goes into the hand and comes up.
   if (hand.held != hand.wanted && hand.place.lowered >= 1.0) hand.held = hand.wanted;
+  if (hand.held != before) hand.fire_t = -1;  // a new weapon comes up at rest
 
   const WeaponLook& look = weapon_look(hand.held);
   const vm::PlaceRow row = held_row(look, s);
@@ -84,6 +86,19 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
     f.flashing = true;
   }
   hand.flash_left = hand.flash_left > dt ? hand.flash_left - dt : 0;
+
+  // The fire clip from its start on a shot, held at its end once played.
+  if (static_cast<size_t>(hand.held) < models.size()) {
+    const vm::HeldModel& m = models[static_cast<size_t>(hand.held)];
+    const int clip = vm::find_held_clip(m, "fire");
+    if (in.fired && clip >= 0) hand.fire_t = 0;
+    if (hand.fire_t >= 0 && clip >= 0) {
+      vm::held_clip_frames(m, clip, hand.fire_t, false, f.frame_a, f.frame_b, f.frame_t);
+      const vm::HeldClip& c = m.clips[static_cast<size_t>(clip)];
+      hand.fire_t += dt;
+      if (hand.fire_t * c.fps > c.count - 1) hand.fire_t = -1;
+    }
+  }
   return f;
 }
 

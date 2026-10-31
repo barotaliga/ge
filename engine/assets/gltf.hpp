@@ -16,6 +16,11 @@
 //   factor, as a part of its own a colour (`<material>#rrggbb`), the vertices two colours share
 //   split. A low-poly kit's colour atlas draws exactly, and every pass that draws parts draws
 //   it; a photograph's texture is reduced to a colour a face, and a note says so;
+// - or, when asked (`LoadOptions::keep_textures`), each base colour texture KEPT WHOLE: the
+//   picture as one of the model's images, the material naming it, every mesh's texture
+//   coordinates (the transform applied; a vertex of an untextured primitive at 0, 0), and the
+//   material's emissive texture kept the same way as its glow; nothing is baked into parts. A
+//   pass that draws pictures (a held weapon's skin, engine/viewmodel) asks for this;
 // - each mesh's morph targets (their POSITION and NORMAL offsets, their names from the mesh's
 //   `targetNames`, the mesh's or its node's default weights);
 // - each animation as a Clip baked at kClipRateHz: translations, rotations and scales, with
@@ -38,6 +43,7 @@
 // ge:keywords slerp bake clip base-colour faceted rigid-node blender export
 // ge:keywords morph-target target-names weights-channel shape-key blend-shape
 // ge:keywords base-colour-texture texture-bake colour-atlas texcoord khr-texture-transform
+// ge:keywords keep_textures load-options kept-texture emissive-texture glow uv
 // ge:skill assets
 // ge:test tests/assets_gltf_test.cpp
 #pragma once
@@ -59,10 +65,15 @@ struct LoadResult {
   std::vector<std::string> notes;  // what was skipped, one line each
 };
 
+struct LoadOptions {
+  bool keep_textures = false;  // keep the base colour and emissive pictures whole (above)
+};
+
 // A model from a file's bytes. `where` names it in messages and is the path relative URIs (a
 // .gltf's .bin) resolve against.
-LoadResult load_gltf(std::span<const uint8_t> bytes, std::string_view where);
+LoadResult load_gltf(std::span<const uint8_t> bytes, std::string_view where,
+                     const LoadOptions& options = {});
 // A model from a file on disk.
-LoadResult load_gltf_file(const std::string& path);
+LoadResult load_gltf_file(const std::string& path, const LoadOptions& options = {});
 
 }  // namespace ge::assets

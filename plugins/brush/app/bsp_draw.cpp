@@ -205,6 +205,21 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
   d.atlas = r::make_texture(device, "bsp.atlas", scene.textures.width, scene.textures.height, 1,
                             wgpu::TextureFormat::RGBA8UnormSrgb, sampled, scene.textures.mips);
   upload(device, d.atlas, scene.textures);
+  {
+    // The relief (draw_data.hpp's Scene::surface), or a 1 x 1 flat stand-in nothing reads.
+    const bool has = !scene.surface.levels.empty();
+    const uint32_t w = has ? scene.surface.width : 1, h = has ? scene.surface.height : 1;
+    d.surface = r::make_texture(device, "bsp.surface", w, h, 1, wgpu::TextureFormat::RGBA8Unorm,
+                                sampled, has ? scene.surface.mips : 1);
+    if (has) {
+      upload(device, d.surface, scene.surface);
+    } else {
+      Atlas flat;
+      flat.width = flat.height = 1;
+      flat.levels.push_back({kFlatSurface[0], kFlatSurface[1], kFlatSurface[2], kFlatSurface[3]});
+      upload(device, d.surface, flat);
+    }
+  }
   d.light = r::make_texture(device, "bsp.lightmaps", scene.light.width, scene.light.height, 1,
                             wgpu::TextureFormat::RGBA8Unorm, sampled);
   upload(device, d.light, scene.light);
@@ -217,6 +232,9 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
         r::make_texture(device, "bsp.rebake", w, h, 1, wgpu::TextureFormat::RGB9E5Ufloat, sampled);
     d.rebake_dir = r::make_texture(device, "bsp.rebake.dir", w, h, 1,
                                    wgpu::TextureFormat::RGBA8Unorm, sampled);
+    const bool bounced = has && rb.bounce.size() == rb.rgb9e5.size();
+    d.rebake_bounce = r::make_texture(device, "bsp.rebake.bounce", bounced ? w : 1, bounced ? h : 1,
+                                      1, wgpu::TextureFormat::RGB9E5Ufloat, sampled);
     const uint32_t zero = 0;
     const uint8_t flat[4] = {128, 128, 128, 0};
     wgpu::TexelCopyBufferLayout layout{};
@@ -230,6 +248,16 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     dst.texture = d.rebake_dir;
     device.queue.WriteTexture(&dst, has ? static_cast<const void*>(rb.dir.data()) : flat,
                               size_t(w) * h * 4, &layout, &size);
+    dst.texture = d.rebake_bounce;
+    if (bounced) {
+      device.queue.WriteTexture(&dst, rb.bounce.data(), size_t(w) * h * 4, &layout, &size);
+    } else {
+      wgpu::TexelCopyBufferLayout one{};
+      one.bytesPerRow = 4;
+      one.rowsPerImage = 1;
+      const wgpu::Extent3D px{1, 1, 1};
+      device.queue.WriteTexture(&dst, &zero, 4, &one, &px);
+    }
   }
 
   d.cubes = depth_array(device, "bsp.cubes", kCubeSize, kMaxShadowed * 6);
@@ -269,17 +297,17 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
 
   using r::Slot;
   const auto both = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
-  d.layout =
-      r::make_layout(device, "bsp",
-                     {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler,
-                      Slot::storage_read, Slot::depth_array, Slot::compare, Slot::depth_array,
-                      Slot::texture, Slot::texture, Slot::storage_read, Slot::storage_read},
-                     both);
-  d.group =
-      r::make_group(device, "bsp", d.layout,
-                    {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler,
-                     d.lights, d.cubes_view, d.compare, d.orthos_view, d.rebake_rgb.CreateView(),
-                     d.rebake_dir.CreateView(), d.frames, d.movers});
+  d.layout = r::make_layout(
+      device, "bsp",
+      {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler, Slot::storage_read,
+       Slot::depth_array, Slot::compare, Slot::depth_array, Slot::texture, Slot::texture,
+       Slot::storage_read, Slot::storage_read, Slot::texture, Slot::texture},
+      both);
+  d.group = r::make_group(
+      device, "bsp", d.layout,
+      {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler, d.lights,
+       d.cubes_view, d.compare, d.orthos_view, d.rebake_rgb.CreateView(), d.rebake_dir.CreateView(),
+       d.frames, d.movers, d.surface.CreateView(), d.rebake_bounce.CreateView()});
   d.fix_layout = r::make_layout(device, "bsp.sky", {Slot::texture, Slot::uniform},
                                 wgpu::ShaderStage::Fragment);
   d.shadow_layout = r::make_layout(device, "bsp.shadows", {Slot::storage_read}, both);
@@ -631,10 +659,18 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
                                          : 0,
        double(d.frame_lights.size()), o.ambient);
   set4(d.staged.info2, view.time_s, kCubeSize, kOrthoSize, o.brightness);
-  set4(d.staged.info3, o.minlight, o.lighting == Lighting::lights ? o.bounce : 0, o.sky_light,
+  // The bounce's share; negative: the rebake's bounce in its place (this share where it has none).
+  const bool rebounce = o.rebake_bounce && o.mode == Mode::v2 && !s.rebaked.bounce.empty();
+  const double share = o.lighting == Lighting::lights ? o.bounce : 0;
+  set4(d.staged.info3, o.minlight, rebounce && share > 0 ? -share : share, o.sky_light,
        o.crisp ? 0 : 1);
-  set4(d.staged.info4, o.bump, o.pack_sky ? 1 : 0, 0, 0);
-  set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers, 0, 0);
+  // The relief (v2, a scene with a surface atlas): on, the parallax's depth and reach.
+  const bool relief = o.relief && o.mode == Mode::v2 && !s.surface.levels.empty();
+  const double parallax = relief ? std::max(o.parallax, 0.0) : 0;
+  set4(d.staged.info4, o.bump, o.pack_sky ? 1 : 0, parallax > 0 ? o.parallax_reach : 0,
+       relief ? o.specular : 0);
+  set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers,
+       relief ? std::max(o.relief_strength, 1e-3) : 0, parallax);
   if (o.cull) {
     prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0, o.pvs);
     ++d.culled_frames;

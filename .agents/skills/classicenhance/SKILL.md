@@ -49,13 +49,14 @@ maps) and `morph` (the models and sprites):
 | `classicenhance/app/upscaler_gpu.hpp/.cpp`, `app/upscaler.wgsl` | The upscaler on the GPU: the weights uploaded once, a texture's dispatches recorded and submitted at once; the tool links it when the build has a GPU |
 | `classicenhance/planes.hpp/.cpp` | The wrapping float planes the enhancer works in: blur, percentile, the sRGB tables |
 | `classicenhance/cache.hpp/.cpp` | The cache's root (`GE_CLASSIC_CACHE`, else the per-user cache folder), the per-pack layout, stage records, whole-file writes, `safe_name` |
-| `classicenhance/lightmaps.hpp/.cpp` | The lightmap stage: `light_map` writes a map's light; until the rebake (M40) lands, the map's own lightmaps shelf-packed into one picture |
+| `classicenhance/lightmaps.hpp/.cpp` | The lightmap stage: `texture_means` (the enhanced albedo's means, else the pack's pixels) and `light_map`, each map rebaked by `brush::rebake_map` into `lightmaps/<map>.gerb` |
 | `classicenhance/sound.hpp/.cpp` | The sound enhancer: `read_wav`, `write_wav` (the loop start in a `cue ` chunk), `reduce_noise`, `extend_band`, `enhance_sound` |
 | `classicenhance/models.hpp/.cpp` | The models stage: `enhance_models` (every model as glTF with enhanced skins, sprites' frames as PNGs, the index and `replaced.txt`), `drop_glowing` |
 | `classicenhance/replace.hpp` | `kReplacements`: the pack files the engine draws its own effect in place of (file, effect id, keep the glowing parts, why) |
 | `classicenhance/pictures.hpp/.cpp` | The pictures stage's reading: `pack_pictures` (the wad's pictures and font sheet, the `gfx/` pictures; the palette and colour map left out), `picture_rgba` (index 255 see-through, index 0 in the font sheet) |
 | `classicenhance/pipeline.hpp/.cpp` | `run_pipeline`: the stages pack → textures → lightmaps → sounds → models → pictures, each skipped when its recorded key is current; `pack_textures` |
 | `classicenhance/weapons.hpp/.cpp` | The held weapons (M48b): `held_from_morph` (the eye frame into the held frame, wound back out, the fullbright skin texels as glow), `classic_weapon_row`, `probe_under` (the lightmap under the player, 128 = 1), `muzzle_flash_light`, `flame_lights`, `pack_weapons`, `classic_fire_of` and `classic_fire_frame` (each weapon's muzzle-fire look and rate, the firing frames); the labs `classic-weapons` and `classic-weapons-fire` (GPU) |
+| `classicenhance/cached.hpp/.cpp` | The cache read back by a game: `find_cache`, `cached_texture` (the albedo, glow in alpha), `cached_surface` (normal x, y, height and roughness in one texel, for the BSP scene's surface atlas: `ce_relief`, `ce_parallax`), `cached_skins` |
 | `classicenhance/tool/main.cpp` | The `classicenhance` executable (`verify`, `run`, `status`), one JSON object an answer |
 
 Beside it in the engine: `engine/vfs/zip.hpp` (the zip reader, also the `.pk3` container),
@@ -106,12 +107,14 @@ container the pack is fetched into the scratchpad only, never into the tree.
    small `-lh5-` encoder, packs from `vfs::write_pak`, maps from `brush::write_bsp`). A test
    passes its fixture's digest as the known list; the real list stays the default.
 
-## The lightmap stage's owner
+## The lightmap stage
 
-The rebake's baker and its `plugins/brush` adapter belong to the lightmaps work (rows M40a, the
-baker in `engine/bake`, and M40b, `plugins/brush/rebake.hpp`). When `brush::rebake_map(map, input,
-options, &out, &err)` lands, `light_map` (row M41b) fills `RebakeInput` with the enhanced albedo
-(`texture_means`), the map's lights (`bake_lights`, both in `plugins/brush/app/draw_data.hpp`) and
-the sky colour, and writes `write_rebaked`'s bytes (magic `GERB`, version 1; the light's direction
-in world space) as `lightmaps/<map>.gerb`; `kLightmapStageVersion` moves to 2 so every cache reruns
-the stage. Nothing else in the pipeline changes.
+The baker (`engine/bake`) and its brush adapter (`plugins/brush/rebake.hpp`) are the lightmaps
+work's (rows M40a and M40b); this plugin only wires them to the cache. `light_map` fills
+`RebakeInput` with `texture_means` and `brush::map_bake_lights` (the map's light entities as
+`plugins/brush/lights.hpp` reads them: the renderer's point lights read the same, so a light baked
+and a light drawn live agree) and no sun or sky (the game draws both live, at the map's hour), and
+writes `write_rebaked`'s bytes (GERB version 2: irradiance, direction and the bounce alone). The
+stage's key carries its `LightmapOptions` and the textures stage's key, so new textures rebake.
+The game reads the file with `cached_rebake` (`ce_rebake`), and the modern look adds only its
+bounce under the live lights (`bsp_draw.hpp`'s `rebake_bounce`).

@@ -168,3 +168,27 @@ TEST(resolve_over_keeps_the_picture_beneath_where_nothing_was_drawn) {
   const size_t mid = (size_t{16} * 32 + 16) * 4;
   CHECK(over[mid] == plain[mid] && over[mid + 1] == plain[mid + 1]);
 }
+
+TEST(coverage_counts_the_pixels_a_model_fills) {
+  // A square plate at the grip, facing the eye, placed 0.5 m ahead: through a 90 deg lens a plate
+  // 1.2 m across fills the whole picture, one 0.1 m across a small share of it.
+  auto plate = [](float half) {
+    vm::HeldModel m;
+    vm::HeldFrame f;
+    f.positions = {-half, -half, 0, half, -half, 0, half, half, 0, -half, half, 0};
+    f.normals = {0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1};
+    m.frames.push_back(f);
+    m.indices = {0, 2, 1, 0, 3, 2};
+    m.colour.assign(12, 0.5f);
+    return m;
+  };
+  vm::Placement p;
+  p.m[11] = 0.5;  // half a metre ahead of the eye
+  const double fov = 3.141592653589793 / 2;
+  CHECK(vm::held_coverage(plate(0.6f), p, fov, 64, 64) > 0.99);
+  const double small = vm::held_coverage(plate(0.05f), p, fov, 64, 64);
+  CHECK(small > 0.005 && small < 0.02);  // (0.1 / 1.0)^2 = 0.01 of the picture
+  vm::HeldModel none;
+  none.frames.emplace_back();
+  CHECK(vm::held_coverage(none, p, fov, 64, 64) == 0);
+}

@@ -1,10 +1,12 @@
 // The cache read back by a game (plugins/classicenhance/cached.hpp): a texture's enhanced copy
 // at a multiple of the pack's size, its glowing texels marked in alpha; a size that fits no
 // multiple, a liquid's or the sky's name, and a missing file all leave the pack's own; a model's
-// skins in order; and a pack whose textures were never enhanced has no cache.
+// skins in order; its relief (normal, height, roughness) packed at the albedo's size; and a pack
+// whose textures were never enhanced has no cache.
 //
 // ge:summary Tests reading the enhanced cache back: textures, glow in alpha, skins, refusals
 // ge:keywords test classicenhance cache cached_texture cached_skins find_cache glow alpha
+// ge:keywords cached_surface relief normal height roughness
 // ge:skill classicenhance testing
 #include <filesystem>
 #include <string>
@@ -59,6 +61,18 @@ TEST(textures_and_skins_come_back_at_a_multiple_of_the_packs_size) {
   CHECK(!ce::cached_texture(dir, "*water", 16, 8, &rgba));
   CHECK(!ce::cached_texture(dir, "sky4", 16, 8, &rgba));
 
+  // The relief: the normal's x, y, the height and the roughness in one texel, at the albedo's size.
+  CHECK(!ce::cached_surface(dir, "wall1", 32, 16, &rgba));  // no maps yet
+  picture(dir / "textures" / "wall1" / "normal.png", 32, 16, 128);
+  picture(dir / "textures" / "wall1" / "height.png", 32, 16, 200);
+  CHECK(!ce::cached_surface(dir, "wall1", 32, 16, &rgba));  // no roughness
+  picture(dir / "textures" / "wall1" / "roughness.png", 32, 16, 190);
+  CHECK(ce::cached_surface(dir, "WALL1", 32, 16, &rgba));
+  CHECK(rgba.size() == size_t{32} * 16 * 4 && rgba[0] == 128 && rgba[1] == 128 && rgba[2] == 200 &&
+        rgba[3] == 190);
+  CHECK(!ce::cached_surface(dir, "wall1", 16, 8, &rgba));  // the albedo's size, not the pack's
+  CHECK(!ce::cached_surface(dir, "*water", 32, 16, &rgba));
+
   picture(dir / "models" / "soldier" / "skin0.png", 64, 32, 10);
   picture(dir / "models" / "soldier" / "skin1.png", 64, 32, 20);
   std::vector<ge::assets::Image> skins;
@@ -67,4 +81,29 @@ TEST(textures_and_skins_come_back_at_a_multiple_of_the_packs_size) {
   CHECK(!ce::cached_skins(dir, "soldier", 15, 8, &skins));
   CHECK(!ce::cached_skins(dir, "dog", 16, 8, &skins));
   fs::remove_all(root);
+}
+
+// A map's rebake comes back only whole and made for a map of the same vertices.
+TEST(a_rebake_comes_back_for_its_own_map_only) {
+  const fs::path dir = fs::temp_directory_path() / "ge_classicenhance_rebake";
+  fs::remove_all(dir);
+  ge::brush::Rebaked r;
+  r.width = 2;
+  r.height = 1;
+  r.rgb9e5 = {1, 2};
+  r.bounce = {3, 4};
+  r.dir.assign(8, 128);
+  r.lm = {0.25f, 0.5f, -1, -1, 0.75f, 0.5f};  // three vertices
+  ge::brush::Rebaked back;
+  CHECK(!ce::cached_rebake(dir, "e1m1", 3, &back));  // none yet
+  CHECK(ce::write_whole(dir / "lightmaps" / "e1m1.gerb", ge::brush::write_rebaked(r)));
+  CHECK(!ce::cached_rebake(dir, "e1m1", 4, &back));  // another map's
+  CHECK(back.rgb9e5.empty());
+  CHECK(ce::cached_rebake(dir, "e1m1", 3, &back));
+  CHECK(back.bounce == r.bounce && back.lm == r.lm);
+  std::vector<uint8_t> cut = ge::brush::write_rebaked(r);
+  cut.pop_back();
+  CHECK(ce::write_whole(dir / "lightmaps" / "e1m2.gerb", cut));
+  CHECK(!ce::cached_rebake(dir, "e1m2", 3, &back));
+  fs::remove_all(dir);
 }

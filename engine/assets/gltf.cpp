@@ -242,6 +242,7 @@ struct Loader {
   const cgltf_data* data;
   std::string where;
   LoadResult& result;
+  LoadOptions options;
   std::vector<int> joint_of_node;  // a node's joint, or -1 outside the scene
   std::vector<bool> bound;         // a joint's inverse bind came from a skin
   std::vector<int> mesh_of_node;   // a node's mesh in the model, or -1
@@ -356,6 +357,13 @@ struct Loader {
         const auto& pbr = mat->pbr_metallic_roughness;
         std::copy(pbr.base_color_factor, pbr.base_color_factor + 3, out.rgb);
       }
+      if (options.keep_textures) {
+        if (const std::optional<Texture> t = texture_of(mat)) out.texture = kept(t->index);
+        if (mat->emissive_texture.texture && mat->emissive_texture.texture->image) {
+          const cgltf_image* img = mat->emissive_texture.texture->image;
+          if (image_of(img)) out.glow = kept(cgltf_image_index(data, img));
+        }
+      }
       m.materials.push_back(out);
     }
     return part_of_material[i];
@@ -373,12 +381,23 @@ struct Loader {
   // (u' = a u + b v + c, v' = d u + e v + f).
   struct Texture {
     const Image* image = nullptr;
+    cgltf_size index = 0;  // the file's image
     int texcoord = 0;
     float xf[6] = {1, 0, 0, 0, 1, 0};
   };
   std::map<cgltf_size, Image> images;                    // decoded once an image
   std::vector<cgltf_size> unread;                        // images that could not be
   std::map<std::tuple<int, uint32_t>, int> baked_parts;  // (source part, sRGB colour) to part
+  std::map<cgltf_size, int32_t> kept_images;             // the file's image to the model's
+
+  // The model's copy of the file's image `i` (decoded already), kept once.
+  int32_t kept(cgltf_size i) {
+    if (const auto it = kept_images.find(i); it != kept_images.end()) return it->second;
+    const auto at = static_cast<int32_t>(result.model.images.size());
+    result.model.images.push_back(images.at(i));
+    kept_images.emplace(i, at);
+    return at;
+  }
 
   const Image* image_of(const cgltf_image* img) {
     const cgltf_size i = cgltf_image_index(data, img);
@@ -410,6 +429,7 @@ struct Loader {
     Texture t;
     t.image = image_of(view.texture->image);
     if (!t.image) return {};
+    t.index = cgltf_image_index(data, view.texture->image);
     t.texcoord = view.texcoord;
     if (view.has_transform) {
       const cgltf_texture_transform& x = view.transform;
@@ -652,7 +672,20 @@ struct Loader {
           // The mirror turns the winding over: swap the last two to keep the front outside.
           mesh.indices.insert(mesh.indices.end(), {base + t[0], base + t[2], base + t[1]});
         }
-        if (!uvs.empty()) bake(mesh, *tex, uvs, base, first, material);
+        if (options.keep_textures) {
+          // Kept whole: the coordinates, transformed, a vertex (0, 0 where nothing is drawn).
+          for (cgltf_size v = 0; v < pos->count; ++v) {
+            float u = 0, w = 0;
+            if (!uvs.empty()) {
+              const float a = uvs[v * 2], b = uvs[v * 2 + 1];
+              u = tex->xf[0] * a + tex->xf[1] * b + tex->xf[2];
+              w = tex->xf[3] * a + tex->xf[4] * b + tex->xf[5];
+            }
+            mesh.uv.insert(mesh.uv.end(), {u, w});
+          }
+        } else if (!uvs.empty()) {
+          bake(mesh, *tex, uvs, base, first, material);
+        }
       }
       if (faceted) make_faceted(mesh);
       mesh_of_node[n] = static_cast<int>(m.meshes.size());
@@ -724,6 +757,8 @@ struct Loader {
         f.weights.insert(f.weights.end(), &mesh.weights[size_t{i} * 4],
                          &mesh.weights[size_t{i} * 4] + 4);
         f.parts.push_back(mesh.parts[i]);
+        if (!mesh.uv.empty())
+          f.uv.insert(f.uv.end(), &mesh.uv[size_t{i} * 2], &mesh.uv[size_t{i} * 2] + 2);
         for (size_t g = 0; g < f.targets.size(); ++g) {
           const MorphTarget& src = mesh.targets[g];
           MorphTarget& dst = f.targets[g];
@@ -840,13 +875,14 @@ const char* cgltf_why(cgltf_result r) {
 
 }  // namespace
 
-LoadResult load_gltf(std::span<const uint8_t> bytes, std::string_view where) {
+LoadResult load_gltf(std::span<const uint8_t> bytes, std::string_view where,
+                     const LoadOptions& options) {
   LoadResult result;
   const std::string name(where);
-  cgltf_options options{};
+  cgltf_options parse{};
   cgltf_data* data = nullptr;
-  cgltf_result r = cgltf_parse(&options, bytes.data(), bytes.size(), &data);
-  if (r == cgltf_result_success) r = cgltf_load_buffers(&options, data, name.c_str());
+  cgltf_result r = cgltf_parse(&parse, bytes.data(), bytes.size(), &data);
+  if (r == cgltf_result_success) r = cgltf_load_buffers(&parse, data, name.c_str());
   if (r == cgltf_result_success) r = cgltf_validate(data);
   if (r != cgltf_result_success) {
     result.error =
@@ -856,7 +892,7 @@ LoadResult load_gltf(std::span<const uint8_t> bytes, std::string_view where) {
     return result;
   }
   result.ok = true;
-  Loader l{data, name, result, {}, {}, {}, {}, -1, {}, {}, {}};
+  Loader l{data, name, result, options, {}, {}, {}, {}, -1, {}, {}, {}, {}};
   if (l.joints() && l.skins() && l.meshes()) l.clips();
   if (result.ok && result.model.meshes.empty()) {
     l.fail("it has no mesh in its scene", "export the objects with their meshes; skill: assets");
@@ -866,7 +902,7 @@ LoadResult load_gltf(std::span<const uint8_t> bytes, std::string_view where) {
   return result;
 }
 
-LoadResult load_gltf_file(const std::string& path) {
+LoadResult load_gltf_file(const std::string& path, const LoadOptions& options) {
   std::ifstream f(path, std::ios::binary);
   if (!f) {
     LoadResult r;
@@ -876,7 +912,7 @@ LoadResult load_gltf_file(const std::string& path) {
   }
   const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
                                    std::istreambuf_iterator<char>());
-  return load_gltf(bytes, path);
+  return load_gltf(bytes, path, options);
 }
 
 }  // namespace ge::assets
