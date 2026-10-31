@@ -259,6 +259,36 @@ TEST(a_glowing_fog_gives_its_glow_for_what_it_takes_out_of_the_view) {
   CHECK(d.errors.load() == 0);
 }
 
+// A volume's share of the open sky (FogVolume::sky) scales the sky's light and the ground's
+// light from below in it, and only those: a closed room's dust (0) keeps the sun's light, an open
+// one (1) adds the rest, and half the share half of it.
+TEST(a_volumes_sky_share_scales_the_light_of_the_sky_and_the_ground) {
+  auto device = ge::test::test_device();
+  if (!device) return;
+  ge::gpu::Device& d = *device;
+  Scene s;
+  make_scene(d, s);
+  const ge::gpu::Target out = ge::gpu::create_target(d, "test.final", kW, kH);
+  std::vector<float> cols[3];
+  const float shares[3] = {0.0f, 0.5f, 1.0f};
+  for (int k = 0; k < 3; ++k) {
+    r::FogVolume f = everywhere(0.02);
+    f.sky = shares[k];
+    frame(d, s, out, {f});
+    cols[k] = r::read_fog_column(d, s.fog, 12, 8);
+  }
+  const uint32_t z = s.fog.settings.slices - 1;
+  for (int c = 0; c < 3; ++c) {
+    const double closed = cols[0][z * 4 + c], half = cols[1][z * 4 + c], open = cols[2][z * 4 + c];
+    CHECK(closed > 0);           // the sun still lights it
+    CHECK(open > 1.2 * closed);  // the sky and the snow below light it more
+    CHECK(std::fabs(half - 0.5 * (closed + open)) <= 0.02 * open);
+  }
+  // The share changes no extinction.
+  CHECK(std::fabs(cols[0][z * 4 + 3] - cols[2][z * 4 + 3]) < 1e-6);
+  CHECK(d.errors.load() == 0);
+}
+
 TEST(no_fog_in_reach_draws_the_clear_air_bit_for_bit_and_a_fog_changes_it) {
   auto device = ge::test::test_device();
   if (!device) return;

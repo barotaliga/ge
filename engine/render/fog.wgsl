@@ -20,6 +20,7 @@ struct FogVol {
   albedo: vec4f,  // the scattered share; w: the phase's asymmetry
   glow: vec4f,    // its own light, cd/m2 a metre of extinction; w: the noise's share
   drift: vec4f,   // the noise's offset, tiles; w: one over its tile (1/m)
+  light: vec4f,   // x: the share of the open sky's light that reaches it
 }
 
 @group(1) @binding(0) var<uniform> fp: FogParams;
@@ -43,6 +44,7 @@ struct FogMedium {
   scatter: vec3f,
   glow: vec3f,
   g: f32,
+  sky: f32,  // the share of the sky's light that reaches the point, weighted as the asymmetry
 }
 
 // How high a camera-relative point stands over the ground under it, m (with no ground, over y = 0
@@ -92,7 +94,7 @@ fn volume_density(v: FogVol, rel: vec3f, above: f32, noisy: bool) -> f32 {
 }
 
 fn fog_medium_at(rel: vec3f, above: f32) -> FogMedium {
-  var m = FogMedium(0.0, vec3f(0.0), vec3f(0.0), 0.0);
+  var m = FogMedium(0.0, vec3f(0.0), vec3f(0.0), 0.0, 0.0);
   var gw = 0.0;
   for (var i = 0u; i < fp.grid.w; i++) {
     let v = vols[i];
@@ -104,9 +106,11 @@ fn fog_medium_at(rel: vec3f, above: f32) -> FogMedium {
     m.scatter += d * v.albedo.rgb;
     m.glow += d * v.glow.rgb;
     m.g += d * v.albedo.w;
+    m.sky += d * v.light.x;
     gw += d;
   }
   m.g = m.g / max(gw, 1e-9);
+  m.sky = m.sky / max(gw, 1e-9);
   return m;
 }
 
@@ -237,14 +241,15 @@ fn inject(@builtin(global_invocation_id) id: vec3u) {
     // The sky's light: its irradiance on a level face as an even radiance over the upper half,
     // scattered evenly (E / 2 pi), through the medium over the point.
     let sky_up = sky_irradiance(vec3f(0.0, 1.0, 0.0));
-    let sky = sky_up / (2.0 * PI) * diffuse_through(tau_up);
+    // A room's share of it (`FogVolume::sky`): what its windows let in.
+    let sky = sky_up / (2.0 * PI) * diffuse_through(tau_up) * m.sky;
     // THE GROUND'S LIGHT from below: what the ground under the point sends back of the sun and
     // the sky (a white face's light times its albedo), as an even radiance over the lower half,
     // through the medium over the ground and between it and the point. Over snow it is nearly
     // the light from above again: a mist over a sunlit field is lit from both sides.
     let low = clamp(above, 0.0, 63.0) * m.extinction;
     let ground_in = (key * max(frame.sun.y, 0.0) + sky_up) * albedo_under(rel) / PI;
-    let bounce = 0.5 * ground_in * diffuse_through(tau_up + 2.0 * low);
+    let bounce = 0.5 * ground_in * diffuse_through(tau_up + 2.0 * low) * m.sky;
     let glow = m.glow * (frame.world.y / kSunLux);
     // THE LAMPS (render/lights.hpp): each lamp of the cluster the point falls in, on the volume's
     // lobe and past its own shadow map, so a lamp in a mist has a halo and a spot's cone shows.

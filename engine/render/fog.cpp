@@ -39,6 +39,7 @@ struct Volume {
   float albedo[4];
   float glow[4];
   float drift[4];
+  float light[4];  // the open sky's share; 0, 0, 0
 };
 
 double wrap01(double v) { return v - std::floor(v); }
@@ -230,6 +231,7 @@ void prepare_fog(gpu::Device& device, Fog& fog, const FrameView& view,
       g.drift[a] = static_cast<float>(wrap01(-v.wind[a] * view.time_s / tile));
     }
     g.drift[3] = static_cast<float>(1.0 / tile);
+    g.light[0] = std::clamp(v.sky, 0.0f, 1.0f);
   }
   device.queue.WriteBuffer(fog.volumes, 0, staged, sizeof(Volume) * fog.count);
   // This frame writes the other media; the last frame's is the history.

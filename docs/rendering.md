@@ -1391,6 +1391,11 @@ the next section's.
   (`fog_glow_level`, read by `prepare_fog`) and its lamp as one. A game hands the lamp to its
   light list beside its fires' (`flame_light`) and a lava pool's (`liquid_lamps`, § Liquids),
   so all three light the walls, the floor and the fog round them.
+- **A room's share of the sky** (M38g): `FogVolume::sky`, 1 under the open sky, scales the
+  sky's light and the ground's light from below in the volume, so a closed room's dust is lit only
+  by the sun past the casters' maps (its windows), its lamps and its glow. A game that draws its
+  own orthographic sun map hands it to the fog as its casters with `ortho_shadow_params`
+  (`render/shadows.hpp`'s `OrthoShadow`), read as cascade 0 with the game's own comparison.
 - **Embers and drips** (M38b): an area carries particle emitters (`render/emitters.hpp`). An
   `AreaEmitter` is a box, a kind (embers, motes, drips, steam), a rate a second and a seed;
   `emit_area(e, t0, t1, out)` appends every particle born in (t0, t1], each flown on from its
@@ -1883,6 +1888,19 @@ decide all of it, through a soft edge whose spread is the eddies over the fall's
 slow, scatters wider than rain), with the wet and the snow struck in noise spots across it: lab `gpu-bsp-weather` (the weather fixture, a hall with windows onto a yard and
 a store behind it) shows eight weathers in four views and checks, with no GPU, that a ray back up
 the fall leaves by the sky from the yard and the window's patch and is stopped from the store.
+
+A classic map's own areas of fog (M38g, `plugins/brush/app/bsp_fog.hpp`) are read when it loads
+into the engine's `FogVolume`s (§ Fog in an area): a `fog_volume` entity, a brush entity (its
+model's box) or a point one (`origin` and `size`), with keys for the density, the albedo, the glow,
+the falloff, the edge, the phase, the noise, the wind and the flicker; and over every pool of lava
+a glowing haze thickest at the melt, rising on its heat and flickering, and over every pool of
+slime a faint green one. Each volume's share of the open sky (`FogVolume::sky`, rays straight up
+from its floor through the map's faces) scales the sky's light and the ground's in it, so a closed
+hall's dust is lit only by the sun through its windows: the fog's casters are the v2 renderer's
+own sun map, handed over as an `OrthoShadow` (`render/shadows.hpp`) through `BspFogShadow`, and
+`bsp.wgsl` sees every face but the sky's through `local_fog`. Lab `gpu-bsp-fog` draws the fog
+fixture (the weather fixture's hall filled with dust by a `fog_volume` entity, and a pit of lava in
+its store) with its fog and without, and a pack's maps with `--pak`.
 
 Every shader's whole-line comments are left out of what is embedded (`cmake/WgslEmbed.cmake`), so
 a material that includes `frame.wgsl` stays under the 60 KB literal cap however well it is

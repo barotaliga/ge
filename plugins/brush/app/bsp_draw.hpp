@@ -114,6 +114,8 @@ struct Options {
   // v2 leaves the liquids' faces to the engine's water and liquid passes; these draw a kind's
   // faces warped as the classic does instead (a game whose pass for that kind is switched off).
   bool warped_water = false, warped_slime = false, warped_lava = false;
+  // The sun's map drawn for the area fog's light (bsp_fog.hpp) even with the lightmaps' light.
+  bool fog_sun = false;
 };
 
 inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side

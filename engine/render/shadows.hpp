@@ -32,6 +32,7 @@
 // ge:keywords per-tile-cull crowd-shadows
 // ge:keywords depth-array comparison-sampler pcf orthographic texel-snap redraw-threshold
 // ge:keywords create_sun_shadows prepare_sun_shadows encode_sun_shadows shadow-params
+// ge:keywords ortho_shadow_params ortho-shadow
 // ge:skill render
 // ge:test tests/render_shadows_test.cpp
 #pragma once
@@ -151,5 +152,22 @@ void shadow_view(const double sun[3], double radius, double depth, double basis[
 // `prepare_sun_shadows` runs, and what a lab counts redraws by without a device.
 bool update_cascade(const ShadowSettings& settings, int c, const double sun[3], const double eye[3],
                     ShadowCascade& k, float m[16]);
+
+// AN ORTHOGRAPHIC MAP A GAME DRAWS ITSELF, read as the sun's casters (a BSP map's sun map, drawn
+// by its own renderer, for the fog's light): centred on `o`, `x` and `y` across and up its face,
+// looking along `z`, `half` m to each side and `depth` m deep each way, a texel storing
+// (z . (p - o) + depth) / (2 depth) of what it sees. The block reads it as cascade 0 (layer 0 of
+// the maps bound beside it) with the sampler the game binds beside it: less-or-equal for a map
+// looking along the sun's light (the nearest caster's depth the least), lit where a point is no
+// deeper; `bias` is added to the point's depth (negative for such a map). No figures.
+struct OrthoShadow {
+  double o[3] = {0, 0, 0};
+  double x[3] = {1, 0, 0}, y[3] = {0, 1, 0}, z[3] = {0, 0, 1};
+  double half = 1, depth = 1;
+  uint32_t size = 1;  // texels a side
+  double bias = -0.0015;
+};
+// The block for `map` seen from `eye` (world m); pure.
+ShadowParams ortho_shadow_params(const OrthoShadow& map, const double eye[3]);
 
 }  // namespace ge::render

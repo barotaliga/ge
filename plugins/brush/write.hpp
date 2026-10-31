@@ -69,6 +69,11 @@ Fixture sample_fixture();
 // marks have somewhere to reach, somewhere to slant in and somewhere to stay dry.
 Fixture weather_fixture();
 
+// The fog's fixture (bsp_fog.hpp): the weather's, its hall filled with dust by a `fog_volume`
+// entity (the sun reaches it only through the windows) and a pit sunk in the store's floor for a
+// pool of lava.
+Fixture fog_fixture();
+
 // The fixture as a map of `family`; false with the reason in `*error`.
 bool write_bsp(const Fixture& fixture, Family family, std::vector<uint8_t>* out,
                std::string* error);

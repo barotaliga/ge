@@ -212,6 +212,45 @@ TEST(shadow_view_maps_its_box) {
   CHECK(std::fabs(out[2] - 1) < 1e-5);
 }
 
+// A game's own orthographic map read as cascade 0: a point's clip is its place on the map's face
+// over its half size, and its depth along the map's axis as the map stores it.
+TEST(an_ortho_map_reads_as_cascade_zero) {
+  r::OrthoShadow m;
+  const double c[3] = {10, 5, -3};
+  for (int k = 0; k < 3; ++k) m.o[k] = c[k];
+  // Looking straight down from over the map: x across, y up the page (+z), z down.
+  m.x[0] = 1, m.x[1] = 0, m.x[2] = 0;
+  m.y[0] = 0, m.y[1] = 0, m.y[2] = 1;
+  m.z[0] = 0, m.z[1] = -1, m.z[2] = 0;
+  m.half = 20;
+  m.depth = 40;
+  m.size = 2048;
+  const double eye[3] = {12, 6, -1};
+  const r::ShadowParams p = r::ortho_shadow_params(m, eye);
+  CHECK(p.offset[0][3] == 1.0f && p.offset[1][3] == 0.0f && p.info[3] == 0.0f);
+  CHECK(std::fabs(p.info[2] - float(m.bias)) < 1e-9);
+  CHECK(std::fabs(p.texel[0] - 40.0f / 2048) < 1e-7);
+  // A camera-relative point moved to the map's centre, then through the matrix (what
+  // sun_shadow does): the map's centre, a point 10 m across and one 20 m under it.
+  const auto clip = [&](const double world[3], double out[3]) {
+    double q[3];
+    for (int k = 0; k < 3; ++k) q[k] = world[k] - eye[k] + p.offset[0][k];
+    apply(p.cascade[0], q, out);
+  };
+  double out[3];
+  clip(c, out);
+  CHECK(std::fabs(out[0]) < 1e-6 && std::fabs(out[1]) < 1e-6 && std::fabs(out[2] - 0.5) < 1e-6);
+  const double across[3] = {c[0] + 10, c[1], c[2]};
+  clip(across, out);
+  CHECK(std::fabs(out[0] - 0.5) < 1e-5);
+  const double up_page[3] = {c[0], c[1], c[2] + 10};
+  clip(up_page, out);
+  CHECK(std::fabs(out[1] - 0.5) < 1e-5);
+  const double under[3] = {c[0], c[1] - 20, c[2]};
+  clip(under, out);
+  CHECK(std::fabs(out[2] - 0.75) < 1e-5);  // (z . q + depth) / (2 depth)
+}
+
 TEST(cascades_redraw_past_their_thresholds) {
   auto device = ge::test::test_device();
   if (!device) return;

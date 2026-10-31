@@ -613,7 +613,8 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   {
     const bool v2_lights = o.mode == Mode::v2 && o.lighting == Lighting::lights;
     const bool weather_on = o.mode == Mode::v2 && o.weather;
-    const bool need[kOrthos] = {v2_lights, v2_lights || weather_on, weather_on};
+    const bool fog_sun = o.mode == Mode::v2 && o.fog_sun;
+    const bool need[kOrthos] = {v2_lights || fog_sun, v2_lights || weather_on, weather_on};
     for (uint32_t k = 0; k < kOrthos; ++k) {
       const bool same = d.ortho_held[k] && same_job(d.ortho_drawn[k], d.staged.ortho[k]);
       d.ortho_fresh[k] = need[k] && !same;

@@ -364,4 +364,24 @@ void encode_sun_shadows(SunShadows& s, std::span<InstanceFamily* const> still,
   for (bool& d : s.due) d = false;
 }
 
+ShadowParams ortho_shadow_params(const OrthoShadow& m, const double eye[3]) {
+  ShadowParams p{};
+  const double half = std::max(m.half, 1e-6), depth = std::max(m.depth, 1e-6);
+  // Column-major: column i is world axis i's share of clip x, y and z.
+  for (int i = 0; i < 3; ++i) {
+    p.cascade[0][i * 4 + 0] = static_cast<float>(m.x[i] / half);
+    p.cascade[0][i * 4 + 1] = static_cast<float>(m.y[i] / half);
+    p.cascade[0][i * 4 + 2] = static_cast<float>(m.z[i] / (2 * depth));
+    p.offset[0][i] = static_cast<float>(eye[i] - m.o[i]);
+  }
+  p.cascade[0][14] = 0.5f;
+  p.cascade[0][15] = 1.0f;
+  p.offset[0][3] = 1.0f;
+  p.info[0] = static_cast<float>(m.size);
+  p.info[1] = 1.0f;
+  p.info[2] = static_cast<float>(m.bias);
+  p.texel[0] = static_cast<float>(2 * half / std::max(m.size, 1u));
+  return p;
+}
+
 }  // namespace ge::render

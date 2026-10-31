@@ -578,8 +578,21 @@ struct FsOut {
   @location(2) mask: vec4f,
 };
 
+// THE FOG IN AN AREA (render/fog.hpp; bsp_fog.hpp's volumes): under v2 every face but the sky's
+// mask seen through it, the dust of a hall, the haze over a pool of lava. With no volume in reach
+// `local_fog` hands the colour back as it came, so a map with no fog draws the bits it drew.
 @fragment
 fn fs_main(in: VsOut) -> FsOut {
+  var out = shade(in);
+  if (bsp.info.x > 0.5 && out.mask.x < 0.5) {
+    let rel = in.world - frame.eye.xyz;
+    out.colour = vec4f(local_fog(out.colour.rgb, in.clip.xy * frame.size.zw, length(rel)),
+                       out.colour.a);
+  }
+  return out;
+}
+
+fn shade(in: VsOut) -> FsOut {
   var out: FsOut;
   out.motion = vec4f(0.0);
   out.mask = vec4f(0.0);
