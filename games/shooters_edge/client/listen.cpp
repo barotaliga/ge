@@ -16,6 +16,7 @@
 #include "progs/qc_compile.hpp"
 #include "progs/vm.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
+#include "shooters_edge/server/campaign_save.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
@@ -125,6 +126,18 @@ void campaign_entered(Listen& l) {
   l.maps_started = l.campaign_host->history.size();
   if (l.map->from_file) sv::use_map_sets(*l.server, l.map->bsp);
   entered(l);
+}
+
+// The campaign host's options for the listen's settings (its loader the listen's).
+sv::CampaignOptions campaign_options(Listen& l, const ListenOptions& opt) {
+  sv::CampaignOptions co;
+  co.server.seed = opt.seed;
+  co.server.loop.max_edicts = 1024;
+  co.load = campaign_map;
+  co.load_ctx = &l;
+  co.registered = opt.registered;
+  co.settings = opt.console;
+  return co;
 }
 
 // The program's client messages this frame (the all-clients stream, then the player's own), read
@@ -243,13 +256,7 @@ bool listen_campaign(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMa
   l.failed.clear();
   const std::string name = map->name;
   l.next = std::move(map);
-  sv::CampaignOptions co;
-  co.server.seed = opt.seed;
-  co.server.loop.max_edicts = 1024;
-  co.load = campaign_map;
-  co.load_ctx = &l;
-  co.registered = opt.registered;
-  co.settings = opt.console;
+  sv::CampaignOptions co = campaign_options(l, opt);
   l.campaign_host = std::make_unique<sv::Campaign>();
   if (!sv::campaign_new_game(*l.campaign_host, progs, co, name, error)) {
     l.campaign_host.reset();
@@ -258,6 +265,74 @@ bool listen_campaign(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMa
   sv::campaign_join(*l.campaign_host, 0, opt.player);
   campaign_entered(l);
   l.map_changed = false;
+  return true;
+}
+
+std::string listen_save_problem(const Listen& l) {
+  if (!l.campaign_host || l.server == nullptr)
+    return "only a single-player game saves; next: start one (SINGLE PLAYER > NEW GAME)";
+  if (l.campaign.end != LevelEnd::none) return "the level is over; next: save on the next map";
+  return sv::campaign_save_problem(*l.campaign_host);
+}
+
+bool listen_save(const Listen& l, std::vector<uint8_t>& out, std::string& error,
+                 int64_t saved_unix) {
+  error = listen_save_problem(l);
+  if (!error.empty()) {
+    error = "save: " + error;
+    return false;
+  }
+  return sv::campaign_save(*l.campaign_host, out, error, saved_unix);
+}
+
+namespace {
+
+// The map a save names, read for its load and handed to the listen only once the load is good.
+struct LoadAhead {
+  const SearchPath* files = nullptr;
+  std::unique_ptr<LoadedMap> map;
+};
+
+bool load_ahead(void* ctx, const std::string& name, sv::MapSpec& out, std::string& error) {
+  LoadAhead& a = *static_cast<LoadAhead*>(ctx);
+  if (!a.map || a.map->name != name) {
+    if (a.files == nullptr) {
+      error = "no search path to read maps/" + name + ".bsp from; next: set ListenOptions::files";
+      return false;
+    }
+    a.map = load_named_map(*a.files, name, error);
+    if (!a.map) return false;
+  }
+  out = a.map->spec;
+  return true;
+}
+
+}  // namespace
+
+bool listen_load(Listen& l, const pg::Progs& progs, const ListenOptions& opt,
+                 std::span<const uint8_t> bytes, std::string_view name, std::string& error,
+                 std::unique_ptr<LoadedMap> map) {
+  LoadAhead ahead{opt.files, std::move(map)};
+  sv::CampaignOptions co = campaign_options(l, opt);
+  co.load = load_ahead;
+  co.load_ctx = &ahead;
+  auto host = std::make_unique<sv::Campaign>();
+  if (!sv::campaign_load(*host, progs, co, bytes, name, error)) return false;
+  host->opt.load = campaign_map;
+  host->opt.load_ctx = &l;
+  l.server = nullptr;
+  l.match.reset();
+  l.campaign_host = std::move(host);
+  l.progs = &progs;
+  l.opt = opt;
+  l.failed.clear();
+  l.next.reset();
+  l.map = std::move(ahead.map);
+  campaign_entered(l);
+  l.map_changed = true;  // the window draws the save's map
+  // The player's commands go on from the saved sequence; his level time from the map's start.
+  l.sequence = l.server->sv.clients[0].last_sequence;
+  l.entered_at = l.server->sv.base_time;
   return true;
 }
 

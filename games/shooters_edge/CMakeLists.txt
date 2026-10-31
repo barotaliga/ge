@@ -26,7 +26,7 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_sound)
 # shooter).
 file(GLOB SHOOTERS_EDGE_SERVER_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/server/*.cpp)
 add_library(shooters_edge_server STATIC ${SHOOTERS_EDGE_SERVER_SOURCES})
-target_link_libraries(shooters_edge_server PUBLIC shooters_edge_sim)
+target_link_libraries(shooters_edge_server PUBLIC shooters_edge_sim ge_save)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_server)
 
 # Its bots (bots/): the pilot (plugins/shooter/pilot.hpp) played on the game's maps, on the nav

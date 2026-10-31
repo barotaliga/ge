@@ -1,7 +1,7 @@
 // The client's search path (files.hpp).
 //
 // ge:summary The client's search path over a game folder's loose files and numbered packs
-// ge:keywords search-path pak open_game_dir find_file add_archive
+// ge:keywords search-path pak open_game_dir find_file add_archive write_save read_save
 // ge:skill vfs shooter
 // ge:test tests/shooters_edge_listen_test.cpp
 #include "shooters_edge/client/files.hpp"
@@ -116,6 +116,67 @@ std::vector<std::string> map_names(const SearchPath& path) {
   if (names.erase("start") > 0) out.emplace_back("start");
   out.insert(out.end(), names.begin(), names.end());
   return out;
+}
+
+namespace {
+
+// The save's file, or "" with `error` when the name or the folder will not do.
+fs::path save_file(const SearchPath& path, const std::string& name, std::string& error) {
+  bool ok = !name.empty() && name.size() <= 64;
+  for (const char c : name)
+    ok = ok && ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                c == '_' || c == '-');
+  if (!ok) {
+    error = "the save's name `" + name + "` is not 1..64 letters, digits, _ or -; next: `save s1`";
+    return {};
+  }
+  if (path.folder.empty()) {
+    error = "no game folder to keep saves in; next: start the game with -basedir";
+    return {};
+  }
+  return fs::path(path.folder) / "saves" / (name + ".save");
+}
+
+}  // namespace
+
+bool write_save(const SearchPath& path, const std::string& name, std::span<const uint8_t> bytes,
+                std::string& error) {
+  const fs::path file = save_file(path, name, error);
+  if (file.empty()) return false;
+  std::error_code ec;
+  fs::create_directories(file.parent_path(), ec);
+  fs::path tmp = file;
+  tmp += ".tmp";
+  {
+    std::ofstream f(tmp, std::ios::binary | std::ios::trunc);
+    f.write(reinterpret_cast<const char*>(bytes.data()),
+            static_cast<std::streamsize>(bytes.size()));
+    f.flush();
+    if (!f) {
+      error = "could not write " + tmp.string() +
+              "; next: check the folder is writable and the "
+              "disk has room";
+      return false;
+    }
+  }
+  fs::rename(tmp, file, ec);
+  if (ec) {
+    error = "could not put the save at " + file.string() + ": " + ec.message() +
+            "; next: check the folder is writable";
+    return false;
+  }
+  return true;
+}
+
+bool read_save(const SearchPath& path, const std::string& name, std::vector<uint8_t>& out,
+               std::string& error) {
+  const fs::path file = save_file(path, name, error);
+  if (file.empty()) return false;
+  if (!read_whole(file, out)) {
+    error = "no save " + file.string() + "; next: `save " + name + "` first, or check the name";
+    return false;
+  }
+  return true;
 }
 
 }  // namespace shooters_edge::client
