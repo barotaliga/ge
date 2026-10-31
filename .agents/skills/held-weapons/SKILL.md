@@ -86,6 +86,7 @@ faces shade flat and the bevels catch the light. Every part names its material.
 | `prism(name, profile[(y, z)], width, mat, width_at=)` | A side profile pushed across X: guards, triggers, blades; `width_at(y, z)` thins a blade to its edge |
 | `loft(name, rings[(y, cx, cz, rx, rz, power)], mat, rot=)` | Superellipse sections along Y: stocks, grips, pumps, hafts (`rot=(pi/2, 0, 0)` stands it up along Z) |
 | `screw(name, loc, mat, r, axis)` | A head standing out of a face along `axis` (`"-X"` the left) |
+| `cable(name, points, r, mat)` | A round tube swept through any points: a cable, a hose, a curved prong |
 
 Cylinders want 24 to 32 sides; the hands and arms stay coarse (6 to 10).
 

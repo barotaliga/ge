@@ -1,0 +1,5 @@
+# What lightning_gun.glb was built from (engine/assets/manifest.hpp). Written by `ge asset build lightning_gun`; never edit it by hand.
+builder build.py 9acfa9f0d949542f
+source ../weapon_kit.py 6baac67ceb982c65
+data se_view fc502edc1e5700ff
+blender 5.2.2 LTS

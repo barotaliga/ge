@@ -1,0 +1,6 @@
+# The lightning gun, held weapon 8 (the beam gun's slot): a tesla gun with glowing coils, its
+# texture and glow baked from the kit's procedural materials. Built by `ge asset build lightning_gun`.
+builder: build.py
+source: ../weapon_kit.py
+data: se_view
+budget-kib: 1536

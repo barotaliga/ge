@@ -1,4 +1,4 @@
-// LAB `se-viewmodel`: Shooter's Edge's own held weapons (games/shooters_edge/view), the free
+// LAB `se-viewmodel`: Shooter's Edge's own held weapons (games/shooters_edge/view), the built
 // models with no classic pack, drawn in first person on the CPU in the engine's stone corridor
 // (viewmodel/stage.hpp), every frame stepped through the game's hand (view/hand.hpp):
 //
@@ -203,7 +203,8 @@ void run(ge::lab::Lab& lab) {
     }
     lab.table(table);
     lab.shot({"held", "EVERY WEAPON HELD",
-              "Shooter's Edge's eight free weapons at rest in first person by day in the stone "
+              "Shooter's Edge's eight built weapons, held in the hands, at rest in first person by "
+              "day in the stone "
               "corridor, each on its own mount and offset from the eye, through the hand.",
               "every muzzle points down the corridor; each weapon sits low right at about the "
               "same size, reads as held, and the long launcher is not bigger on screen than the "
@@ -241,7 +242,7 @@ void run(ge::lab::Lab& lab) {
               "at the barrel's tip lights the gun and the room round it, and a flare marks the "
               "muzzle. The melee weapon has no flash.",
               "the light comes from the muzzle: the barrel's top and the near walls lit warm (the "
-              "beam gun's cold), the gun's back darker; the kick has pushed it back and up",
+              "lightning gun's cold), the gun's back darker; the kick has pushed it back and up",
               inputs},
              sheet(panels, labels, 4));
   }
@@ -342,7 +343,7 @@ const ge::lab::LabSpec kSpec{
     "se-viewmodel",
     ge::lab::LabKind::picture,
     "game:shooters_edge",
-    "games/shooters_edge/view (the free weapons' mounts, the hand, the cvars) over "
+    "games/shooters_edge/view (the built weapons' mounts, the hand, the cvars) over "
     "engine/viewmodel",
     "render",
     "Does each of Shooter's Edge's own weapons sit right in the view, light the room when it "

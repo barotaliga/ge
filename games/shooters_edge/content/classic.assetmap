@@ -246,7 +246,7 @@ model progs/v_nail.mdl view/minigun
 model progs/v_nail2.mdl view/railgun
 model progs/v_rock.mdl view/grenade_launcher
 model progs/v_rock2.mdl view/rocket_launcher
-model progs/v_light.mdl view/beam_gun
+model progs/v_light.mdl view/lightning_gun
 model progs/g_shot.mdl pickup/weapon_double_shotgun
 model progs/g_nail.mdl pickup/weapon_nailgun
 model progs/g_nail2.mdl pickup/weapon_heavy_nailgun

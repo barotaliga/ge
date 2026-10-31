@@ -15,7 +15,7 @@ view/minigun	First-person six-barrel minigun in both hands, the nailgun's slot (
 view/railgun	First-person railgun in both hands, the heavy nailgun's slot (built: models/view/railgun)	held weapon 5	game	replaced	ge/built
 view/grenade_launcher	First-person six-shot revolver grenade launcher in both hands (built: models/view/grenade_launcher)	held weapon 6	game	replaced	ge/built
 view/rocket_launcher	First-person shoulder-fired rocket tube in both hands (built: models/view/rocket_launcher)	held weapon 7	game	replaced	ge/built
-view/beam_gun	First-person beam gun	held weapon 8	game	replaced	kenney/blaster-kit
+view/lightning_gun	First-person tesla lightning gun in both hands, the beam gun's slot (built: models/view/lightning_gun)	held weapon 8	game	replaced	ge/built
 pickup/weapon_double_shotgun	Double shotgun on the floor	weapon pickup	game	replaced	kenney/blaster-kit
 pickup/weapon_nailgun	Nailgun on the floor	weapon pickup	game	replaced	kenney/blaster-kit
 pickup/weapon_heavy_nailgun	Heavy nailgun on the floor	weapon pickup	game	replaced	kenney/blaster-kit

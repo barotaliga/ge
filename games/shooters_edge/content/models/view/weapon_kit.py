@@ -771,6 +771,13 @@ class Kit:
             self._place(bm, (0, 0, 0), rot)
         return self._add(name, bm, mat, bevel)
 
+    def cable(self, name, points, r, mat, sides=10):
+        """A round cable (a hose, a wire bundle, a prong) swept through `points`, closed at its
+        ends."""
+        bm = bmesh.new()
+        _sweep(bm, [(Vector(p), r, r) for p in points], sides)
+        return self._add(name, bm, mat, 0.0)
+
     def screw(self, name, loc, mat, r=0.0025, axis="X", depth=0.0015):
         """A slotted screw head standing out of a face along `axis` (sign in front: "-X")."""
         sign = -1 if axis.startswith("-") else 1

@@ -1,13 +1,15 @@
-// SHOOTER'S EDGE'S HELD WEAPONS: the game's own first-person weapons, the free models in
-// `content/models/view` (content/models.tsv, CREDITS.md), put into the engine's view-model layer
-// (engine/viewmodel) without the classic pack: each one's form, its MOUNT (how it sits in the
-// hand), its kick, how often it fires and the light its shot throws.
+// SHOOTER'S EDGE'S HELD WEAPONS: the game's own first-person weapons, built in Blender in
+// `content/models/view` (one folder a weapon; content/models.tsv, CREDITS.md), put into the
+// engine's view-model layer (engine/viewmodel) without the classic pack: each one's form, its MOUNT
+// (how it sits in the hand), its kick, how often it fires and the light its shot throws.
 //
 // - THE SET (`Weapon`) is the game's eight held weapons in the order of their number keys (impulse
-//   1 to 8): the melee weapon, the shotgun, the double shotgun, the nailgun, the heavy nailgun, the
-//   grenade launcher, the rocket launcher and the beam gun.
-// - THE MOUNT (`WeaponLook`): the kit's guns point along -z once in the engine's frame and are
-//   modelled at toy scale, so each is turned muzzle forward and scaled to its own held LENGTH (m),
+//   1 to 8), named by what they do in the game: the melee weapon, the shotgun, the double shotgun,
+//   the nailgun, the heavy nailgun, the grenade launcher, the rocket launcher and the beam gun.
+//   Their LOOKS are named by their models: the axe, the shotgun, the double shotgun, the minigun,
+//   the railgun, the grenade launcher, the rocket launcher and the lightning gun.
+// - THE MOUNT (`WeaponLook`): a dropped-in model points along -z once in the engine's frame at any
+//   scale, so it is turned muzzle forward and scaled to its own held LENGTH (m),
 //   gripped low and a third of the way from the back, and sat at its own OFFSET from the eye
 //   (right, up, forward, m): a long launcher further out and lower than a short shotgun, so every
 //   weapon fills about the same share of the picture's lower right and none is cut by its edge.
