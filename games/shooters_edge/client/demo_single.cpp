@@ -185,8 +185,26 @@ bool server_info(Demo& d, DemoMsg& m, std::string& error) {
   s.levels++;
   s.intermission = false;
   s.entities.clear();
+  s.statics.clear();
+  s.static_sounds.clear();
   d.baselines.clear();
   return true;
+}
+
+// The sound message: a mask (volume, attenuation), its fields, the entity and channel packed in
+// a short, the sound's index, the point.
+void sound(DemoState& s, DemoMsg& m) {
+  DemoSound e;
+  const int mask = m.u8();
+  e.volume = byte_volume((mask & 1) != 0 ? m.u8() : 255);
+  e.attenuation = byte_attenuation((mask & 2) != 0 ? m.u8() : 64);
+  const int packed = m.u16();
+  e.entity = packed >> 3;
+  e.channel = packed & 7;
+  e.sound = m.u8();
+  const float x = coord(m), y = coord(m), z = coord(m);
+  e.origin = {x, y, z};
+  if (!m.bad) s.started.push_back(e);
 }
 
 bool temp_entity(DemoMsg& m, std::string& error) {
@@ -247,13 +265,9 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
         case kSetView:
           s.view_entity = m.i16();
           break;
-        case kSound: {
-          const int mask = m.u8();
-          if ((mask & 1) != 0) m.u8();
-          if ((mask & 2) != 0) m.u8();
-          m.skip(2 + 1 + 6);  // the channel, the sound, the point
+        case kSound:
+          sound(s, m);
           break;
-        }
         case kTime:
           s.time = m.f32();
           break;
@@ -282,9 +296,11 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
         case kClientData:
           client_data(s, m);
           break;
-        case kStopSound:
-          m.i16();
+        case kStopSound: {
+          const int packed = m.u16();
+          s.stopped.emplace_back(packed >> 3, packed & 7);
           break;
+        }
         case kUpdateColors:
           m.skip(2);
           break;
@@ -295,7 +311,7 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           m.skip(2 + 6);
           break;
         case kSpawnStatic:
-          read_spawn(m);
+          s.statics.push_back(read_spawn(m));
           break;
         case kSpawnBaseline: {
           const int n = m.i16();
@@ -318,9 +334,16 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
         case kFoundSecret:
         case kSellScreen:
           break;
-        case kSpawnStaticSound:
-          m.skip(6 + 3);
+        case kSpawnStaticSound: {
+          DemoStaticSound e;
+          const float x = coord(m), y = coord(m), z = coord(m);
+          e.origin = {x, y, z};
+          e.sound = m.u8();
+          e.volume = byte_volume(m.u8());
+          e.attenuation = byte_attenuation(m.u8());
+          s.static_sounds.push_back(e);
           break;
+        }
         case kIntermission:
           s.intermission = true;
           break;

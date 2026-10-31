@@ -70,8 +70,8 @@ Fixture sample_fixture();
 Fixture weather_fixture();
 
 // The fog's fixture (bsp_fog.hpp): the weather's, its hall filled with dust by a `fog_volume`
-// entity (the sun reaches it only through the windows) and a pit sunk in the store's floor for a
-// pool of lava.
+// entity (the sun reaches it only through the windows), a pit sunk in the store's floor for a
+// pool of lava and a pond sunk in the yard for water.
 Fixture fog_fixture();
 
 // The fixture as a map of `family`; false with the reason in `*error`.

@@ -88,6 +88,13 @@ Fixture fog_fixture() {
   pit.max[0] = 416, pit.max[1] = -464, pit.max[2] = 0;
   pit.floor = "rock", pit.wall = "rock", pit.ceiling = "rock";
   f.rooms.push_back(pit);
+  // A pond sunk in the yard's flagstones, 0.6 m deep: the lab fills it with water (M51c's steam).
+  FixtureRoom pond;
+  pond.name = "pond";
+  pond.min[0] = 192, pond.min[1] = 560, pond.min[2] = -24;
+  pond.max[0] = 448, pond.max[1] = 880, pond.max[2] = 0;
+  pond.floor = "rock", pond.wall = "rock", pond.ceiling = "sky1";
+  f.rooms.push_back(pond);
   // The hall's dust, placed by the map as a point entity with a size (map units, z up).
   Entity dust;
   dust.pairs = {{"classname", "fog_volume"}, {"origin", "320 -208 112"},  {"size", "640 384 224"},

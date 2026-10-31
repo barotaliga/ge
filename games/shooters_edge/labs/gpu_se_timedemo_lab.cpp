@@ -1,5 +1,5 @@
 // LAB `se-timedemo`: THE DEMO BENCHMARK WITHOUT A WINDOW. A recorded game played flat out the
-// way the window's `benchmark` command plays it (client/timedemo.hpp: one demo frame a drawn
+// way the window's `timedemo` command plays it (client/timedemo.hpp: one demo frame a drawn
 // frame, every frame timed but the first after a level start), drawn into an offscreen target by
 // the window's own world frame and HUD. By default the demo is written in code (demo_write.hpp):
 // a walk round the fixture halls (plugins/brush) in the format `--format` names, in a pack on

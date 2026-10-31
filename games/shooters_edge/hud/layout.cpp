@@ -375,6 +375,15 @@ void add_cvars(ge::console::Console& con, Hud& hud) {
                             "compact (round the crosshair)",
                     .kind = ge::console::CvarKind::text},
                    &hud.look);
+  con.cvars().bind({.name = "viewsize",
+                    .fallback = "100",
+                    .help = "the status bars: 100 every one, 110 the classic look's status bar "
+                            "without its inventory bar, 120 none (the crosshair and the messages "
+                            "stay)",
+                    .kind = ge::console::CvarKind::integer,
+                    .min = 100,
+                    .max = 120},
+                   &hud.viewsize);
   gh::add_hud_cvars(con, hud.layout);
 }
 
@@ -558,6 +567,14 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   at(notify).feed = &hud.notify;
   at(notify).t = s.t;
   at(notify).on &= !hud.notify.lines().empty();
+  // viewsize: 110 drops the inventory bar (its pieces hang from it), 120 every status element.
+  if (hud.viewsize >= 110)
+    for (const Id id : {ibar, ibar_ammo, ibar_guns, ibar_items, ibar_runes, ibar_frags})
+      at(id).on = false;
+  if (hud.viewsize >= 120)
+    for (size_t i = 0; i < L.size(); ++i)
+      if (i != crosshair && i != notify && i != centre) L[i].content.on = false;
+
   at(centre).value = hud.centre;
   at(centre).on &= !hud.centre.empty() && s.t < hud.centre_until;
 }

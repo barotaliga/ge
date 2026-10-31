@@ -64,6 +64,7 @@ const SvcDef kDefs[] = {
     {svc::spawnbaseline2, true, "spawnbaseline2", "*"},
     {svc::updatestatstring, true, "updatestatstring", "bs"},
     {svc::updatestatfloat, true, "updatestatfloat", "bf"},
+    {svc::voice, false, "voice", "*"},
     {svc::spawnstaticsound2, true, "spawnstaticsound2", "CCCbhbb"},
 };
 constexpr int kDefCount = static_cast<int>(sizeof kDefs / sizeof kDefs[0]);
@@ -266,10 +267,12 @@ bool write_svc(gn::Writer& w, const SvcMsg& m, const WireCtx& ctx) {
     case svc::spawnstatic2:
       write_entity_delta(w, kNull, m.ents.empty() ? kNull : m.ents[0].state, true, ctx.ext);
       return true;
-    case svc::spawnbaseline2:
-      write_short(w, at(m.ints, 0));
-      write_entity_delta(w, kNull, m.ents.empty() ? kNull : m.ents[0].state, true, ctx.ext);
+    case svc::spawnbaseline2: {  // the entity's number is the record's own
+      EntityState st = m.ents.empty() ? kNull : m.ents[0].state;
+      if (!m.ints.empty()) st.number = m.ints[0];
+      write_entity_delta(w, kNull, st, true, ctx.ext);
       return true;
+    }
     case svc::temp_entity: {
       const auto kind = static_cast<uint8_t>(at(m.ints, 0));
       const char* layout = temp_entity_layout(kind);
@@ -301,6 +304,13 @@ bool write_svc(gn::Writer& w, const SvcMsg& m, const WireCtx& ctx) {
       return true;
     case svc::nails:
       write_byte(w, at(m.ints, 0));
+      gn::write_bytes(w, m.data.data(), m.data.size());
+      return true;
+    case svc::voice:
+      write_byte(w, at(m.ints, 0));
+      write_byte(w, at(m.ints, 1));
+      write_byte(w, at(m.ints, 2));
+      write_short(w, static_cast<int>(m.data.size()));
       gn::write_bytes(w, m.data.data(), m.data.size());
       return true;
     case svc::packetentities:
@@ -395,11 +405,10 @@ bool read_svc(gn::Reader& r, SvcMsg& m, const WireCtx& ctx, std::string& error) 
         break;
       }
       case svc::spawnbaseline2:
-        m.ints.push_back(read_short(r));
-        [[fallthrough]];
       case svc::spawnstatic2: {
         const uint16_t word = gn::read_u16(r);
         m.ents.push_back(read_entity_record(r, word, kNull, ctx.ext));
+        if (m.id == svc::spawnbaseline2) m.ints.push_back(m.ents.back().number);
         break;
       }
       case svc::temp_entity: {
@@ -438,6 +447,13 @@ bool read_svc(gn::Reader& r, SvcMsg& m, const WireCtx& ctx, std::string& error) 
       case svc::playerinfo:
         m.player = read_playerinfo(r, ctx.ext, &m.player_flags);
         break;
+      case svc::voice: {
+        m.ints = {read_byte(r), read_byte(r), read_byte(r)};
+        const auto n = static_cast<size_t>(read_short(r) & 0xffff);
+        const uint8_t* p = gn::read_view(r, n);
+        if (p) m.data.assign(p, p + n);
+        break;
+      }
       case svc::nails: {
         const int n = read_byte(r);
         m.ints.push_back(n);
@@ -507,6 +523,8 @@ const char* clc_name(uint8_t id) {
       return "tmove";
     case clc::upload:
       return "upload";
+    case clc::voice:
+      return "voice";
     default:
       return nullptr;
   }
@@ -557,6 +575,13 @@ bool write_clc(gn::Writer& w, const ClcMsg& m) {
       write_byte(w, m.percent);
       if (m.size > 0) gn::write_bytes(w, m.data.data(), m.data.size());
       return true;
+    case clc::voice:
+      write_byte(w, m.id);
+      write_byte(w, m.gen);
+      write_byte(w, m.seq);
+      write_short(w, static_cast<int>(m.data.size()));
+      gn::write_bytes(w, m.data.data(), m.data.size());
+      return true;
     default:
       return false;
   }
@@ -594,6 +619,14 @@ bool read_clc(gn::Reader& r, ClcMsg& m, std::string& error) {
         const uint8_t* p = gn::read_view(r, static_cast<size_t>(m.size));
         if (p) m.data.assign(p, p + m.size);
       }
+      break;
+    }
+    case clc::voice: {
+      m.gen = read_byte(r);
+      m.seq = read_byte(r);
+      const auto n = static_cast<size_t>(read_short(r) & 0xffff);
+      const uint8_t* p = gn::read_view(r, n);
+      if (p) m.data.assign(p, p + n);
       break;
     }
     default:

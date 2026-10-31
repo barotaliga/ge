@@ -216,6 +216,31 @@ it moves the ground the simulation skis on; every term is light.
 - The generator and the analysis read one rule book and share nothing else.
 - A game's lists of which seeds it races belong to the game; their digests are this plugin's
   tests.
+- **A feature the map must carry is a condition of the attempt**, planned inside it before
+  whatever is dealt round it (the park before the drifts: 9 of 30 pistes carried one when laid on
+  the accepted map, 30 of 30 inside the attempt) and before the analysis that must hold it (the
+  routes fell trunks and cut jumps, so they go on the base map after `resort_base` and before
+  `analyze_resort`). The attempt is refused when it does not fit. Then sweep the attempts taken
+  with and without it.
+- **A long stage is a function over the attempt struct** (`ResortAttempt`, one function a stage
+  returning `StageResult`); the test hashes each section the attempt holds and names the first
+  that moves. Walked runs live in a `std::deque`: the network index keeps pointers into them.
+- **What is cut into a heightfield is cut wider than its check reads.** A bilinear read at a
+  feature's end reaches a cell or more behind it, so grade two cells past each end, continuing the
+  profile's pitch. Geometry finer than the 2 m grid (a jump's table edge, a 300 m landing radius)
+  answers `ground_at` and `normal_at` off its own profile (`Level::venue`), with the grid cut
+  below it. A coarse grid decides WHERE a thing may stand; what it stands ON (a building's floor)
+  is read at the ground's own resolution, every metre.
+- **A spatial question is bounded by how far it cares.** `nearest_within` with a reach answers a
+  far tree at once (the slalom's tree check went from 6 s to milliseconds); a ring walk clamps
+  each ring to the occupied box, which keeps the visit order and the tie rule. A new spatial index
+  keeps its occupied box too.
+- **A rule a setter keeps by stepping off is checked against the same rule**: a gate stepped off
+  one jump landed on the next jump's lip, which only a 30-seed sweep found.
+- **A plugin planner takes the game's places as arguments** (`plan_streets(level, pads)`), never
+  looks them up, and its tests stand such a place where a street would run.
+- **A course of its own over a piste is sized by its own geometry**: the ski cross measures a
+  stretch by the chords its line is laid on, not by the piste's arc plus a fudge factor.
 
 ## Labs
 
