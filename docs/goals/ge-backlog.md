@@ -87,7 +87,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - precheck running a lab's full flags, not only its smoke flags, when a change reaches that lab's subject (`ge lab run --full-for=<lab>`: the smoke run stopped short of the moment that moved; #156)
 - precheck naming the goldens and digests main already fails (`--known-red`, off main's last CI run), so a red that is main's own is ruled out without a second full run (#267)
 - `ge ci <run> --lab-log` (a failed lab's per-view metrics read out of a CI job's log, so a flake names its view without a rerun; #233)
-- `ge digest --affected` following the running `ge`'s preset (the release `ge` still ran the debug labs), and `--only-moved-by=<symbol>` (only the labs whose digest a named symbol can move: a `state.hpp` change reached 67 labs, over 25 minutes in debug; #231)
+- `ge digest --affected` following the running `ge`'s preset (the release `ge` still ran the debug labs), and `--only-moved-by=<symbol>` (only the labs whose digest a named symbol can move: a `state.hpp` change reached 67 labs, over 25 minutes in debug; #231; a brush, app or render change reached about 85 labs, past a 4-core container's 30-minute window: precheck running only the labs a change can move, bonfires thread, #402)
 - `ge digest --affected --write` (only the digests the change moved rewritten, each named with why, in place of one lab at a time; #270), and `ge digest --affected` resuming after an interrupt (a container restart lost a half-written set; #279)
 
 ## Inspecting a run
@@ -238,6 +238,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 - `ge pmove <scenario> --line=N` (one recorded movement scenario stepped against `engine/move`, stopping at the first line that differs, with both sides' state there; classic game loop thread)
 - `ge bsp info/ents/shot` (a map's lumps and limits, its entity lump, a CPU picture of leaves, the PVS from a point and the hulls)
+- `ge lab views --map=<pak map> --near=<classname>` (eye positions framing every entity of a class, such as a large flame light, printed ready to paste into a lab's `--views`, so a lab's views are not found by reading the entity lump by hand; bonfires thread, #402)
 - `ge qc build/disasm/run/trace/profile/diff/assemble/builtins` (our QC compiler; a progs disassembled, run, traced a step at a time, timed by function, diffed against another build by the functions and fields that changed, and assembled from a text listing; `ge qc builtins <progs>`: the builtin numbers a progs calls, checked against the game's catalogue, so "will this mod run here" is one command)
 - `ge server --map --bots --for` (a headless dedicated server with bots, writing an input log for `ge replay`, `ge state` and `ge diverge`; run, replayed and diffed from a game repo as well, which the lobby and hosting thread asked for)
 - `ge demo info/frames/shot/diff` (a client or MVD demo decoded frame by frame, a frame pictured, two demos to their first difference)
@@ -248,7 +249,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge bot nav <map>` (build a map's navigation graph without a lab run, and print its node and link counts, the nodes no route reaches, and the proof of one route: bots thread, M18r; also `--near=x,y,z`, the nodes and links near a point: #293)
 - `ge bot run <map> --from=<x,y,z> --to=<x,y,z> --hands=human --seeds=N` (one route ridden by the bot and printed as its trail, its mode timeline and its why-record, without editing a test: #293, M18r2)
 - `--game=<zip>` on the labs that read a game folder (`ge lab run se-client --game=<release zip>`: the zip mounted as the game directory through `engine/vfs`, its packs read inside it, so pak0 is never extracted into an `id1` folder first; classic HUD thread)
-- `ge lab <lab> --stage-pak=<fixture>` (a pack staged from a fixture of stand-in player models and the other models a demo draws, so the demo and picture labs draw players without the classic pak: today `se-highlights`' moment shots show empty halls; demo highlights thread)
+- `ge lab <lab> --stage-pak=<fixture>` (a pack staged from a fixture of stand-in player models and the other models a demo draws, so the demo and picture labs draw players without the classic pak: today `se-highlights`' moment shots show empty halls; demo highlights thread; done: the runner's `--stage-pak=<name>`, `Lab::stage_pak()`, Shooter's Edge's `fixture` in client/stage.hpp, read by se-highlights, se-demo-video, se-timedemo and se-client)
 
 ## Store services
 

@@ -41,6 +41,7 @@
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/labs/staged.hpp"
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/classic_server.hpp"
@@ -368,6 +369,7 @@ void run(gl::Lab& lab) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
   }
+  if (!shooters_edge::labs::stage_asked(lab, files)) return;
   lab.attach("red1.qwdv", m.qwdv, gl::Det::measured);
   lab.attach("match.mvdv", m.mvdv, gl::Det::measured);
   video(lab, device.get(), files, "red1.qwdv", "qwdv");

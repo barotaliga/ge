@@ -46,6 +46,9 @@ const LabFlag kRunnerFlags[] = {
     {"cvars", "",
      "console commands a lab with a console runs after its own (\"r_bloom 0; sv_hour 8\"): what "
      "ge lab pair changes between its two runs"},
+    {"stage-pak", "",
+     "a pack a game's labs stage over their files by name (Shooter's Edge: fixture, stand-in "
+     "players), filling what the game folder lacks"},
     {"shots", "",
      "draw only these shots (id,id,...): every other picture under <out>/<id>/ stays as the "
      "last run wrote it, for iterating one look"},
@@ -423,10 +426,16 @@ int run_labs(int argc, const char* const* argv) {
       Lab lab(*s, args);
       lab.only_shots(only);
       lab.use_cvars(get(runner, "cvars"));
+      lab.use_stage_pak(get(runner, "stage-pak"));
       dump.text.clear();
       dump.counts.clear();
       s->run(lab);
       if (r == 0 && !only.empty()) note_only(lab, dir);
+      if (r == 0 && !lab.stage_pak_given().empty() && !lab.stage_pak_read()) {
+        lab.fail("--stage-pak was given and the lab stages no pack",
+                 "next: have the lab stage lab.stage_pak() over the files it reads (the "
+                 "se-highlights, se-demo-video, se-timedemo and se-client labs do). Skill: labs.");
+      }
       if (r == 0 && !lab.cvars_given().empty()) {
         if (!lab.cvars_read()) {
           lab.fail("--cvars was given and the lab reads none",
