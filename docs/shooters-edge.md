@@ -161,17 +161,22 @@ engine's burning gas is the flame.
 
 `benchmark <demo>` in the console, or `-benchmark <demo>` on the command line (which quits with
 the report and exits non-zero if the demo stopped early), plays a recorded game **as fast as the
-machine draws it**: vsync off for the run (an immediate present where the platform has one,
-which Metal needs: its mailbox present still waits on the display; the report names the mode in
-use), no frame cap, one demo frame a drawn frame whatever
+machine draws it**: every frame drawn, one in 33 ms shown and the rest drawn offscreen (a
+window's present waits for the display on some platforms whatever its mode: on macOS a window's
+image comes back once a refresh), no frame cap, one demo frame a drawn frame whatever
 the demo's own clock says, at the window's settings (its size, `r_look` and the picture cvars, `hud_style`). The
 listen server waits meanwhile; ESCAPE stops the run early. At the end the console and the
 terminal print the frames timed and their seconds, the **average** frame rate, the **max** and
 **min** (one over the shortest and longest frame), the **1% low** and **0.1% low** (the slowest
-1% and 0.1% of frames as a rate over their own time), and the median and 99th-percentile frame:
+1% and 0.1% of frames as a rate over their own time), the median and 99th-percentile frame, and
+**where the GPU's time went**: the median GPU span of a frame and its dearest passes (where the
+GPU has timestamp queries). `+vid_fullscreen 1` (or the menu's VIDEO ▸ FULLSCREEN) runs it over
+the whole screen at the desktop's own mode:
 
 ```sh
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic -benchmark demo1
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic +vid_fullscreen 1 \
+    -benchmark demo1
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=2560x1600 \
     -benchmark ~/Downloads/match.dem
 ```
@@ -191,7 +196,7 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 - **Headless**: `make lab LAB=se-timedemo` runs the same loop into an offscreen target, on a
   demo written in code round the fixture halls (`--format=client` or `--format=multiview` for the
   other formats), or on a real one with `ARGS="--basedir=<dir> --demo=demo1"`, and charts every
-  frame's time.
+  frame's time, and every pass's GPU time (`--look=classic|modern` picks the look).
 
 ### Watching a demo
 

@@ -219,7 +219,7 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
   }
   ge::gpu::end_load(d);
   f->frame = gr::frame_group(d, f->layout, f->uniforms, f->skypass);
-  f->rec.init(d, "shooters_edge.timer", 16);
+  f->rec.init(d, "shooters_edge.timer", gr::kMaxPasses);  // every pass timed
   make_targets(d, *f);
   return f;
 }
@@ -293,6 +293,13 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   wgpu::CommandBuffer c = e.Finish();
   d.queue.Submit(1, &c);
   f.rec.after_submit(d);
+}
+
+void record_passes(const WorldDraw& f, PassTimes& p) {
+  const gr::FrameStats& s = f.rec.stats;
+  for (int i = 0; i < s.count; i++)
+    pass_add(p, s.passes[static_cast<size_t>(i)].name, s.passes[static_cast<size_t>(i)].gpu_ms);
+  span_add(p, s.gpu_span_ms());
 }
 
 }  // namespace shooters_edge::client
