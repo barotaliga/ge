@@ -17,11 +17,18 @@
 //   storm's gusts lifting snow off the ground into the air. Out of a sky that does not snow, 0.
 //   With it, how far one can see through it (`visibility_in`: 45 m at a fall of 1, opening as
 //   the inverse square of the fall, 20 km at none).
-// - SNOW OR RAIN (`fall_at`'s height): under the map's snow line (`Weather::snowline`, raised only
-//   by a sky picked by hand) the fall turns to rain over engine/wind/precip.hpp's melting band,
-//   its `rain` share; one sees through rain as precip.hpp's `visibility_of` says (far further than
-//   through snow), a sleet blended between in the logarithm. Above the line, or with no height,
-//   nothing moves: a dealt map's air keeps its bits.
+// - THE DAY'S AIR (`climate_of`): the map's day as engine/wind/climate.hpp's `Climate`. A winter's
+//   day on the map's face: its mean falls half a degree from 20 C at the sea for every degree from
+//   the equator, then the lapse up to the valley's floor (or the mean a sky picked by hand sets,
+//   `Weather::mean_c`); a 10 K swing; the sky's kind as the air's moisture and cover; the map's
+//   wind (calmed to 1.5 m/s under a fog); sunrise and sunset off the sun's latitude and day.
+// - SNOW OR RAIN (`fall_at`'s height): under the snow line (`snowline_at`: one picked by hand,
+//   `Weather::snowline`, or else the day's own, `wind::snow_level` of `climate_of` at the hour, so
+//   it climbs through a mild afternoon and sinks again at night) the fall turns to rain over
+//   engine/wind/precip.hpp's melting band, its `rain` share; one sees through rain as precip.hpp's
+//   `visibility_of` says (far further than through snow), a sleet blended between in the
+//   logarithm. Above the line, or with no height, nothing moves. The hour is the caller's (the
+//   sky's clock); without one, `hour_at`: the map's start hour moved on in real time.
 //
 // - A THUNDERSTORM (`storm_of`, `Weather::thunder` above 0, a sky picked by hand): engine/wind's
 //   multicell storm laid off the map's seed, its first cell mature at the run's start and drifting
@@ -41,13 +48,15 @@
 //
 // ge:summary The wind and the falling snow at a moment: gusts, veer, squalls, visibility
 // ge:keywords air wind gust veer downhill_from wind_at field_of fall_at snowfall squall visibility
-// ge:keywords visibility_in weather blizzard flurries storm rain sleet snowline aloft
+// ge:keywords visibility_in weather blizzard flurries storm rain sleet snowline aloft climate_of
+// ge:keywords snowline_at snow-level snow-line hour_at day-air
 // ge:keywords thunderstorm storm_of thunder gust-front outflow downdraft freezing-level cooled_at
 // ge:skill mountain
 // ge:test tests/mountain_air_test.cpp
 #pragma once
 
 #include "mountain/mapgen/types.hpp"
+#include "wind/climate.hpp"
 #include "wind/field.hpp"
 #include "wind/storm.hpp"
 
@@ -80,8 +89,18 @@ double downhill_from(double from);
 wind::Field field_of(const mapgen::Level& level);
 
 Wind wind_at(const mapgen::Level& level, double t);
-// The fall at time `t` s and world height `y` m.
+
+// THE MAP'S DAY OF AIR.
+wind::Climate climate_of(const mapgen::Level& level);
+// The solar hour `t` s into a run whose sky keeps real time from the map's start, 0..24.
+double hour_at(const mapgen::Level& level, double t);
+// The snow line at solar `hour`, world m: the one picked by hand, else the day's air's.
+double snowline_at(const mapgen::Level& level, double hour);
+
+// The fall at time `t` s and world height `y` m, the snow line at solar `hour` (`hour_at` when
+// none is given).
 Fall fall_at(const mapgen::Level& level, double t, double y = kAloft);
+Fall fall_at(const mapgen::Level& level, double t, double y, double hour);
 
 // THE STORM over the map: `Weather::thunder`'s cells (none: `cells` 0).
 inline constexpr double kSteer = 9;             // m/s, the cells' drift
@@ -95,6 +114,8 @@ Wind wind_at(const mapgen::Level& level, const wind::Storm& storm, double t, dou
 // The fall at (x, y, z) with `storm`'s rain in it.
 Fall fall_at(const mapgen::Level& level, const wind::Storm& storm, double t, double x, double y,
              double z);
+Fall fall_at(const mapgen::Level& level, const wind::Storm& storm, double t, double x, double y,
+             double z, double hour);
 // How far the freezing level stands under `storm`'s downdrafts at (x, z), m below the map's.
 double cooled_at(const wind::Storm& storm, double t, double x, double z);
 

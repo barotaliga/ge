@@ -2,11 +2,12 @@
 // hour, as the renderer draws it. The air is engine/wind's (climate.hpp, mist.hpp): this file only
 // says what the mountain's day is and where the fog is asked about.
 //
-// - THE DAY (`mountain_climate`): a winter's day on the map's face. The day's mean falls with the
-//   latitude (a degree further from the equator, half a degree colder at the sea) and with the
-//   valley's height (the standard lapse); the sky's kind sets the moisture, the cover and the swing
-//   (a clear night's is widest), the map's wind its wind, and the map's sun its sunrise and sunset.
-//   A FOG sky is the inversion's day: damp, still air under a clear sky, so its valleys fill.
+// - THE DAY (plugins/mountain/air's `climate_of`): a winter's day on the map's face. The day's
+//   mean falls with the latitude (a degree further from the equator, half a degree colder at the
+//   sea) and with the valley's height (the standard lapse); the sky's kind sets the moisture, the
+//   cover and the swing (a clear night's is widest), the map's wind its wind, and the map's sun
+//   its sunrise and sunset. A FOG sky is the inversion's day: damp, still air under a clear sky,
+//   so its valleys fill.
 // - THE SEA OF FOG (`MistLook::valley`, render/valley_fog.hpp): the air at the valley's floor, in
 //   a hollow as deep as the mountain (to 600 m), where the night's cold pool lies. A radiation or
 //   valley fog there fills the valleys LEVEL to its top; it burns off as the morning's sun breaks
@@ -26,7 +27,7 @@
 //
 // ge:summary The mountain's mists: the valley's sea of fog, the ground mist, the summit's cloud
 // ge:keywords mist fog valley-fog sea-of-fog inversion ground-mist hill-fog summit-cloud burn-off
-// ge:keywords mountain_climate mists_at climate radiation-fog water_mist lake-fog steam-fog
+// ge:keywords climate_of mists_at climate radiation-fog water_mist lake-fog steam-fog
 // ge:skill mountain render
 // ge:test tests/mountain_mist_look_test.cpp
 #pragma once
@@ -54,9 +55,6 @@ struct MistLook {
   std::vector<render::FogVolume> areas;  // the ground mist round the eye, the summit's cloud
   wind::Mist floor, ground, summit;      // what the air laid at each place
 };
-
-// The map's day of air.
-wind::Climate mountain_climate(const mapgen::Level& level);
 
 // The fog at solar `hour` seen from `eye` (world m).
 MistLook mists_at(const mapgen::Level& level, double hour, const double eye[3]);

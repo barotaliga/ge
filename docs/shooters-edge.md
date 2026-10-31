@@ -138,8 +138,13 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   end is the program's (`client/campaign_view.hpp`, drawn by `menu/level_screens.hpp`): the
   intermission (the pack's `complete` and `inter` pictures, the time, the secrets and the kills
   in the big figures), an episode's text typed out at eight characters a second, and the
-  shareware episode's end opening the help pages; TAB held shows the solo panel (the map's
-  title, kills, secrets, time). The HUD shows the keys, the runes, the cloak and the suit, each
+  shareware episode's end opening the help pages; TAB held shows the solo scorebar in the
+  status bar's place (monsters, secrets, the time, the map's title) and, with `scr_levelstats 1`
+  (the default), the level's figures live as the intermission draws them. In a match TAB held
+  shows the scoreboard (`menu/scoreboard.hpp`, read off the server by `client/scores.hpp`): the
+  pack's `ranking` picture, the players by frags with their ping, loss, minutes, colour box and
+  name, spectators last, a team column and the teams' board first with teamplay; the teams'
+  board shows by itself while the player is dead. The HUD shows the keys, the runes, the cloak and the suit, each
   read by the program's own item constants. Each frame the server hands the player his own data
   (`server/client_data.hpp`): a blow he took kicks the view away from where it came from and
   flashes the screen (the blood red, what the armour took a duller amber); the weapon's punch
@@ -920,7 +925,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the weapon in hand, the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost, the effects thrown and the shots the hand saw (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-models` | picture | The things a map places, as the window draws them: the armour, a health box, an ammo box, a weapon, a torch or a flame, the quad, the shield, another player in his colours and one holding both powers, each from a clear spot near it in both looks; a lift lowered and up, a door shut and open (M18i6); the things placed by kind and the light under each (built, M18i3; `--pak` and `--map` for a pack's own maps) |
-| `se-menu` | picture | The main menu's pages in the modern look and in the classic look (the fixture's pictures, or the player's pack with `--pack`), every row the game cannot do yet dimmed, classic-enhance's menu under OPTIONS; at desktop, wide and phone sizes; the campaign's screens (the intermission, a finale typed part way, the solo panel) in the engine's type, the fixture and the pack (built, M18k2, M18s4) |
+| `se-menu` | picture | The main menu's pages in the modern look and in the classic look (the fixture's pictures, or the player's pack with `--pack`), every row the game cannot do yet dimmed, classic-enhance's menu under OPTIONS; at desktop, wide and phone sizes; the campaign's screens (the intermission, a finale typed part way, the solo scorebar with the level's figures) and a match's scoreboard (the players, the teams, the large game) in the engine's type, the fixture and the pack (built, M18k2, M18k3, M18s4) |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
 | `se-viewmodel` | picture | The game's eight free weapons in first person on the engine's corridor stage: every one held at rest, each fired in the dark lit by its own muzzle light, the shotgun switched to the rocket launcher, and the player's view-model cvars; each weapon's share of the picture, its muzzle on the screen, its flash's lift and the switch's time (built, M48d) |
 | `se-ambient` | sim | A walk through rooms under sky and by water: the ambience by leaf charted, mixed and written as WAV (built, M18j2) |

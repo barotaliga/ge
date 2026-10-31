@@ -277,6 +277,8 @@ struct Drift {
 
 // The weather a map is skied under (R19).
 inline constexpr double kNoSnowline = -1e9;
+// No day's mean picked: the map's own air (air::climate_of).
+inline constexpr double kNoMean = -1e9;
 struct Weather {
   WeatherKind kind;
   double snowfall;   // 0 (nothing falling) … 1 (a blizzard)
@@ -284,14 +286,18 @@ struct Weather {
   double wind;       // mean wind at 10 m, m/s
   double wind_from;  // the world heading it blows FROM
   bool evening;      // whether R19 sent the map out in the evening (R15's exception)
-  // The snow line: the world height at which half the fall is rain, rain under it and snow above
-  // (air::fall_at, over engine/wind/precip.hpp's melting band). R19 deals none, so a dealt map is
-  // snow to the valley; only a sky picked by hand (`with_sky`) raises it.
+  // The snow line PICKED BY HAND: the world height at which half the fall is rain, rain under it
+  // and snow above (air::fall_at, over engine/wind/precip.hpp's melting band). R19 deals none: a
+  // dealt map's line is its day's air's (air::snowline_at, rising and falling with the day), and
+  // only a sky picked by hand (`with_sky`) fixes one here.
   double snowline = kNoSnowline;
   // A THUNDERSTORM's strength (air::storm_of lays its cells off the map's seed): 0 none, 0.3 a weak
   // cell, 0.5 an ordinary one, 1 a severe one. R19 deals none; only a sky picked by hand
   // (`with_sky`) brings one.
   double thunder = 0;
+  // The day's mean air at the mountain's base, C, PICKED BY HAND (`with_sky`); kNoMean: the
+  // map's own (air::climate_of, off its latitude and height).
+  double mean_c = kNoMean;
 };
 
 // The day (R15).

@@ -11,8 +11,10 @@
 //     them again in the player's own pack. Those pictures are the pack's: they stay on this
 //     machine and on a private page, and are left out of the digest.
 //
-// THE CAMPAIGN'S SCREENS (level_screens.hpp) are drawn too, in the engine's type, the fixture and
-// the pack: the intermission, an episode's finale typed part way, the solo panel.
+// THE CAMPAIGN'S SCREENS (level_screens.hpp) and THE SCOREBOARD (scoreboard.hpp) are drawn too, in
+// the engine's type, the fixture and the pack: the intermission, an episode's finale typed part
+// way, the solo scorebar with the level's figures, a match's scoreboard, the teams' board and the
+// large game.
 //
 // The console is set up as the window sets it up (the mouse's cvars, the HUD's style, the menu's
 // own cvars and the ce_ switches, `map`, `sv`, `quit` and `toggleconsole`), so the rows dimmed in
@@ -21,9 +23,11 @@
 //
 // ge:summary Lab: the main menu's pages in the modern and the classic look at three viewports
 // ge:keywords lab se-menu menu main-menu classic modern dimmed pages viewports pack pictures
-// ge:keywords intermission finale solo-panel level-screens campaign
+// ge:keywords intermission finale solo-scorebar level-stats level-screens campaign scoreboard
+// ge:keywords ranking teams large-game
 // ge:skill ui labs
 // ge:test tests/shooters_edge_menu_test.cpp tests/shooters_edge_level_screens_test.cpp
+// ge:test tests/shooters_edge_scoreboard_test.cpp
 #include <initializer_list>
 #include <map>
 #include <string>
@@ -37,6 +41,7 @@
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
+#include "shooters_edge/menu/scoreboard.hpp"
 #include "ui/raster.hpp"
 #include "vfs/pak.hpp"
 
@@ -50,6 +55,60 @@ std::string cat(std::initializer_list<std::string_view> parts) {
   std::string out;
   for (std::string_view p : parts) out += p;
   return out;
+}
+
+// A match's board for the lab: four players and a spectator, colours of every kind.
+sm::Scoreboard lab_board(bool teams) {
+  sm::Scoreboard b;
+  b.teamplay = teams;
+  b.rows = {{.name = "Ravenna",
+             .frags = 17,
+             .ping = 31,
+             .minutes = 12,
+             .top = 4,
+             .bottom = 4,
+             .team = "red"},
+            {.name = "you",
+             .frags = 9,
+             .ping = 24,
+             .minutes = 12,
+             .top = 13,
+             .bottom = 12,
+             .team = "blue",
+             .self = true},
+            {.name = "Kestrel",
+             .frags = 21,
+             .ping = 58,
+             .loss = 31,
+             .minutes = 9,
+             .top = 3,
+             .bottom = 11,
+             .team = "blue"},
+            {.name = "the watcher", .frags = 0, .ping = 77, .spectator = true},
+            {.name = "Moss",
+             .frags = -2,
+             .ping = 1200,
+             .minutes = 1,
+             .top = 0,
+             .bottom = 6,
+             .team = "red"}};
+  b.minutes = 12;
+  b.seconds = 41;
+  return b;
+}
+
+sm::Scoreboard lab_large_board() {
+  sm::Scoreboard b;
+  for (int i = 0; i < 20; i++)
+    b.rows.push_back({.name = "player " + std::to_string(i + 1),
+                      .frags = 40 - 2 * i,
+                      .ping = 20 + 7 * i,
+                      .minutes = 20 - i / 2,
+                      .top = i % 14,
+                      .bottom = (i * 5) % 14,
+                      .self = i == 6});
+  b.minutes = 20;
+  return b;
 }
 
 struct Viewport {
@@ -332,8 +391,8 @@ void run(ge::lab::Lab& lab) {
             {cat({"level-", what, "-", name, "-", v.name()}),
              title,
              caption,
-             "the figures beside their labels, the text centred and typed, the panel above the "
-             "status bar",
+             "the figures beside their labels, the text centred and typed, the scorebar in the "
+             "status bar's place, the board's columns under their header",
              {{"art", name}, {"viewport", v.name()}}},
             picture_of(std::move(img)), det);
       };
@@ -345,11 +404,45 @@ void run(ge::lab::Lab& lab) {
              "An episode's end: its text typed out at eight characters a second, here 12.5 s in "
              "(100 characters), each line centred by its whole width.",
              [&](ui::DrawList& dl) { sm::draw_level_text(dl, art, v.w, v.h, kFinale, 100); });
-      screen("solo", "THE SOLO PANEL, " + name + ", AT " + v.name(),
-             "The scores key held in a campaign: the map's title, then the kills, the secrets and "
-             "the time on the map.",
+      screen("solo", "THE SOLO SCOREBAR AND THE LEVEL'S FIGURES, " + name + ", AT " + v.name(),
+             "The scores key held in a campaign: the status bar's place taken by the scorebar "
+             "(monsters, secrets, the time, the map's title) and, with scr_levelstats 1, the "
+             "intermission's figures live over the view.",
              [&](ui::DrawList& dl) {
-               sm::draw_solo_panel(dl, art, v.w, v.h, "The Grey Halls", stats);
+               sm::draw_level_stats(dl, art, v.w, v.h, "the Grey Halls", stats);
+               // As the window draws it: the game's own look's card already holds the strip's
+               // figures.
+               if (!art.glyphs.empty())
+                 sm::draw_solo_scorebar(dl, art, v.w, v.h, "the Grey Halls", stats);
+             });
+      sm::BoardView plain_view, team_view, large_view;
+      screen("scores", "THE SCOREBOARD, " + name + ", AT " + v.name(),
+             "The scores key held in a match: the ranking picture, the header and its rules, a "
+             "row a player by frags (the ping, the loss, the minutes, the colour box with the "
+             "frags, the player's own bracketed, the name), the spectator last; the scorebar "
+             "with the map's clock.",
+             [&](ui::DrawList& dl) {
+               const sm::Scoreboard b = lab_board(false);
+               sm::draw_scoreboard(dl, art, v.w, v.h, b, plain_view);
+               sm::draw_scorebar(dl, art, v.w, v.h, b);
+             });
+      screen("teams", "THE TEAMS' SCOREBOARD, " + name + ", AT " + v.name(),
+             "Teamplay on and the player dead: the teams by frags (their pings' low, mean and "
+             "high, the player's team bracketed), then the players with their team column.",
+             [&](ui::DrawList& dl) {
+               const sm::Scoreboard b = lab_board(true);
+               sm::draw_team_scoreboard(dl, art, v.w, v.h, b, team_view);
+               sm::draw_scorebar(dl, art, v.w, v.h, b);
+             });
+      screen("large", "THE LARGE GAME, " + name + ", AT " + v.name(),
+             "Twenty players: the rows reach the bottom, so the board closes them to 8 px with "
+             "thinner top colours, and keeps that for the session.",
+             [&](ui::DrawList& dl) {
+               const sm::Scoreboard b = lab_large_board();
+               ui::DrawList scratch;
+               scratch.begin(v.w, v.h);
+               sm::draw_scoreboard(scratch, art, v.w, v.h, b, large_view);  // turns it on
+               sm::draw_scoreboard(dl, art, v.w, v.h, b, large_view);
              });
     }
   }
