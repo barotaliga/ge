@@ -17,7 +17,7 @@
 // ge:keywords viewmodel cpu raster rasterizer triangles depth z-buffer perspective-correct
 // ge:keywords near-clip back-face supersample resolve exposure srgb draw_lit clear_depth
 // ge:keywords held-raster view-target hidden-triangles hide-flame resolve_over composite
-// ge:keywords over-picture
+// ge:keywords over-picture held_coverage coverage screen-share
 // ge:skill render labs
 // ge:test tests/viewmodel_raster_test.cpp
 #pragma once
@@ -72,5 +72,11 @@ std::vector<uint8_t> resolve_over(const ViewTarget& t, std::span<const uint8_t> 
 // by `t`, drawn with `fov_y` into `out_positions` and `out_normals` (view).
 void place_held(const HeldModel& model, const Placement& place, int a, int b, double t,
                 std::vector<float>& out_positions, std::vector<float>& out_normals);
+
+// The share of a `width` x `height` picture (0..1) that `model` (frame 0) covers when placed by
+// `place` and drawn alone through `fov_y`: the pixels it actually fills, so a long weapon whose
+// back passes behind the eye is measured by what shows, not by its box.
+double held_coverage(const HeldModel& model, const Placement& place, double fov_y, int width,
+                     int height);
 
 }  // namespace ge::viewmodel

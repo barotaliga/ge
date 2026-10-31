@@ -11,12 +11,13 @@
 //
 // ge:summary A lab picture shrunk, cut to 256 colours and written as a GIF for a review page
 // ge:keywords gif lzw palette quantize quantise shrink downscale box-filter encode web picture
-// ge:keywords publish review page small
+// ge:keywords publish review page small animated-gif animation frames loop encode_gif_frames
 // ge:skill labs
 // ge:test tests/lab_gif_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <vector>
 
 #include "lab/raster.hpp"
@@ -29,5 +30,10 @@ Picture shrink(const Picture& picture, int width);
 
 // `picture` as a GIF89a file: one frame, a global palette of at most 256 colours.
 std::vector<uint8_t> encode_gif(const Picture& picture);
+
+// `frames` (all the first one's size) as an animated GIF89a file that loops forever, each shown
+// for `delay_cs` hundredths of a second, one palette of at most 256 colours for them all: a
+// model's animation a reader opens in any browser.
+std::vector<uint8_t> encode_gif_frames(std::span<const Picture> frames, int delay_cs);
 
 }  // namespace ge::lab

@@ -108,6 +108,9 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   namespace vm = ge::viewmodel;
   gr::HeldDraw g;
   g.model = static_cast<uint32_t>(h.weapon);
+  g.frame_a = h.frame_a;
+  g.frame_b = h.frame_b;
+  g.blend = static_cast<float>(h.frame_t);
   g.now = h.placement;
   g.last = f.held_fresh ? h.placement : f.last_place;
   f.last_place = h.placement;

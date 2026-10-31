@@ -17,10 +17,13 @@
 
 namespace ge::viewmodel {
 
-void held_bounds(const HeldModel& model, float min[3], float max[3]) {
+void held_bounds(const HeldModel& model, float min[3], float max[3], int frame) {
   for (int k = 0; k < 3; ++k) min[k] = max[k] = 0;
   bool first = true;
-  for (const HeldFrame& f : model.frames) {
+  const bool one = frame >= 0 && static_cast<size_t>(frame) < model.frames.size();
+  for (size_t fi = one ? size_t(frame) : 0; fi < (one ? size_t(frame) + 1 : model.frames.size());
+       ++fi) {
+    const HeldFrame& f = model.frames[fi];
     for (size_t i = 0; i + 2 < f.positions.size(); i += 3) {
       for (int k = 0; k < 3; ++k) {
         const float v = f.positions[i + k];
@@ -66,7 +69,7 @@ void turn(std::vector<float>& v, const AxisMap& a) {
 
 }  // namespace
 
-void fit_mount(HeldModel& model, const Mount& mount) {
+void fit_mount(HeldModel& model, const Mount& mount, const HeldModel* measured_on) {
   if (mount.muzzle == mount.up || mount.muzzle < 0 || mount.muzzle > 2 || mount.up < 0 ||
       mount.up > 2)
     return;
@@ -76,11 +79,21 @@ void fit_mount(HeldModel& model, const Mount& mount) {
     turn(f.normals, a);
   }
   float lo[3], hi[3];
-  held_bounds(model, lo, hi);
+  if (measured_on) {
+    HeldModel m = *measured_on;
+    for (HeldFrame& f : m.frames) {
+      turn(f.positions, a);
+      turn(f.normals, a);
+    }
+    held_bounds(m, lo, hi, mount.bounds_frame);
+  } else {
+    held_bounds(model, lo, hi, mount.bounds_frame);
+  }
   const double length = hi[2] - lo[2];
   const double s = mount.length_m > 0 && length > 0 ? mount.length_m / length : mount.scale;
   double grip[3];
-  for (int k = 0; k < 3; ++k) grip[k] = lo[k] + (hi[k] - lo[k]) * mount.grip[k];
+  for (int k = 0; k < 3; ++k)
+    grip[k] = mount.grip_at_origin ? 0.0 : lo[k] + (hi[k] - lo[k]) * mount.grip[k];
   for (HeldFrame& f : model.frames)
     for (size_t i = 0; i + 2 < f.positions.size(); i += 3)
       for (int k = 0; k < 3; ++k)
@@ -164,15 +177,76 @@ void muzzle_at(const HeldModel& model, int a, int b, double t, float out[3], int
   for (size_t k = 0; k < 3; ++k) out[k] = static_cast<float>(sum[k] / n);
 }
 
-HeldModel held_from_model(const assets::Model& model, int clip, int frames) {
-  HeldModel out;
-  if (frames < 1) frames = 1;
-  if (clip < 0 || clip >= static_cast<int>(model.clips.size())) frames = 1;
+namespace {
+
+// A model loaded with its textures kept (assets::LoadOptions::keep_textures): the first textured
+// material's picture is the skin, every vertex reads it at its coordinates, and the material's
+// glow picture (the file's emissive texture) marks the texels that light themselves where it is
+// at least half bright. A model with no kept picture keeps its colours.
+void skin_from_kept(const assets::Model& model, HeldModel& out) {
+  const assets::Material* textured = nullptr;
+  for (const assets::Material& m : model.materials) {
+    if (m.texture >= 0 && static_cast<size_t>(m.texture) < model.images.size()) {
+      textured = &m;
+      break;
+    }
+  }
+  if (!textured) return;
+  for (const assets::Mesh& mesh : model.meshes)
+    if (mesh.uv.size() != size_t{mesh.vertex_count()} * 2) return;
+  out.skin.image = model.images[static_cast<size_t>(textured->texture)];
+  for (const assets::Mesh& mesh : model.meshes)
+    out.uv.insert(out.uv.end(), mesh.uv.begin(), mesh.uv.end());
+  out.colour.clear();
+  if (textured->glow < 0 || static_cast<size_t>(textured->glow) >= model.images.size()) return;
+  const assets::Image& glow = model.images[static_cast<size_t>(textured->glow)];
+  const assets::Image& img = out.skin.image;
+  out.skin.glow.assign(size_t(img.width) * size_t(img.height), 0);
+  for (int y = 0; y < img.height; ++y) {
+    for (int x = 0; x < img.width; ++x) {
+      const uint8_t* g =
+          assets::texel(glow, (static_cast<float>(x) + 0.5f) / static_cast<float>(img.width),
+                        (static_cast<float>(y) + 0.5f) / static_cast<float>(img.height));
+      if (std::max({g[0], g[1], g[2]}) >= 128) out.skin.glow[size_t(y) * img.width + x] = 1;
+    }
+  }
+}
+
+}  // namespace
+
+namespace {
+
+// One frame of `model`: clip `clip` at `t_s`, or the rest pose when clip < 0.
+HeldFrame posed_frame(const assets::Model& model, int clip, double t_s, std::string name) {
   const size_t joints = model.joints.size();
   std::vector<assets::Trs> local(joints);
   std::vector<assets::Affine> global(joints), palette(joints);
+  if (clip >= 0)
+    assets::sample_clip(model, model.clips[size_t(clip)], t_s, false, local);
+  else
+    assets::rest_pose(model, local);
+  assets::pose_globals(model, local, global);
+  assets::skin_palette(model, global, palette);
+  HeldFrame hf;
+  hf.name = std::move(name);
+  size_t n = 0;
+  for (const assets::Mesh& mesh : model.meshes) n += size_t{mesh.vertex_count()} * 3;
+  hf.positions.resize(n);
+  hf.normals.resize(n);
+  size_t at = 0;
+  for (const assets::Mesh& mesh : model.meshes) {
+    const size_t m = size_t{mesh.vertex_count()} * 3;
+    assets::skin_mesh(mesh, palette, std::span<float>(hf.positions.data() + at, m),
+                      std::span<float>(hf.normals.data() + at, m));
+    at += m;
+  }
+  return hf;
+}
 
-  // The shared half: the triangles and each vertex's colour, meshes one after another.
+// The shared half: the triangles and each vertex's colour (or the kept skin), meshes one after
+// another.
+HeldModel held_surface(const assets::Model& model) {
+  HeldModel out;
   uint32_t base = 0;
   for (const assets::Mesh& mesh : model.meshes) {
     for (uint32_t i : mesh.indices) out.indices.push_back(base + i);
@@ -182,32 +256,79 @@ HeldModel held_from_model(const assets::Model& model, int clip, int frames) {
     }
     base += mesh.vertex_count();
   }
+  skin_from_kept(model, out);
+  return out;
+}
 
+}  // namespace
+
+HeldModel held_from_model(const assets::Model& model, int clip, int frames) {
+  if (frames < 1) frames = 1;
+  if (clip < 0 || clip >= static_cast<int>(model.clips.size())) frames = 1;
+  HeldModel out = held_surface(model);
   for (int f = 0; f < frames; ++f) {
-    HeldFrame hf;
     if (clip >= 0 && frames > 1) {
-      const assets::Clip& c = model.clips[clip];
-      const double t = c.duration_s() * f / (frames - 1);
-      assets::sample_clip(model, c, t, false, local);
-      hf.name = c.name + "." + std::to_string(f);
+      const assets::Clip& c = model.clips[size_t(clip)];
+      out.frames.push_back(posed_frame(model, clip, c.duration_s() * f / (frames - 1),
+                                       c.name + "." + std::to_string(f)));
     } else {
-      assets::rest_pose(model, local);
-      hf.name = "rest";
+      out.frames.push_back(posed_frame(model, -1, 0, "rest"));
     }
-    assets::pose_globals(model, local, global);
-    assets::skin_palette(model, global, palette);
-    hf.positions.resize(size_t{base} * 3);
-    hf.normals.resize(size_t{base} * 3);
-    size_t at = 0;
-    for (const assets::Mesh& mesh : model.meshes) {
-      const size_t n = size_t{mesh.vertex_count()} * 3;
-      assets::skin_mesh(mesh, palette, std::span<float>(hf.positions.data() + at, n),
-                        std::span<float>(hf.normals.data() + at, n));
-      at += n;
-    }
-    out.frames.push_back(std::move(hf));
   }
   return out;
+}
+
+HeldModel held_with_clips(const assets::Model& model, double fps) {
+  HeldModel out = held_surface(model);
+  out.frames.push_back(posed_frame(model, -1, 0, "rest"));
+  if (fps <= 0) return out;
+  for (size_t c = 0; c < model.clips.size(); ++c) {
+    const assets::Clip& clip = model.clips[c];
+    HeldClip hc;
+    hc.name = clip.name;
+    hc.first = static_cast<int>(out.frames.size());
+    hc.fps = fps;
+    const double len = clip.duration_s();
+    hc.count = static_cast<int>(len * fps + 0.999) + 1;
+    for (int f = 0; f < hc.count; ++f) {
+      const double t = f + 1 == hc.count ? len : f / fps;
+      out.frames.push_back(
+          posed_frame(model, static_cast<int>(c), t, clip.name + "." + std::to_string(f)));
+    }
+    out.clips.push_back(std::move(hc));
+  }
+  return out;
+}
+
+int find_held_clip(const HeldModel& model, std::string_view name) {
+  for (size_t i = 0; i < model.clips.size(); ++i)
+    if (model.clips[i].name == name) return static_cast<int>(i);
+  return -1;
+}
+
+void held_clip_frames(const HeldModel& model, int clip, double t_s, bool loop, int& a, int& b,
+                      double& t) {
+  a = b = 0;
+  t = 0;
+  if (clip < 0 || static_cast<size_t>(clip) >= model.clips.size()) return;
+  const HeldClip& c = model.clips[size_t(clip)];
+  if (c.count <= 0) return;
+  if (c.count == 1) {
+    a = b = c.first;
+    return;
+  }
+  double at = t_s * c.fps;
+  const double last = c.count - 1;
+  if (loop) {
+    at -= last * static_cast<double>(static_cast<long long>(at / last));
+    if (at < 0) at += last;
+  } else {
+    at = at < 0 ? 0 : at > last ? last : at;
+  }
+  const int i = static_cast<int>(at);
+  a = c.first + (i < c.count - 1 ? i : c.count - 1);
+  b = c.first + (i + 1 < c.count ? i + 1 : c.count - 1);
+  t = at - i;
 }
 
 void pose_frames(const HeldModel& model, int a, int b, double t, std::vector<float>& positions,
