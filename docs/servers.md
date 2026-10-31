@@ -12,13 +12,21 @@ This page is the design; what each row has built is in its row file. Built so fa
 one): `engine/server` with `ServerGame`, `Server` (the frame, the node, the session host and the
 LAN hosting round it), the dedicated process (`server_main`: `server.cfg`, then the flags, then
 `+commands`), `ge_add_server`, a sample game and the server trial, and `shooters_edge_server`
-running on it. Running one:
+running on it. M53b: `server.cfg` in layers (`engine/server/config`: the base game directory's,
+each mod's lowest first, a profile's winning copy, the command line, the console), every server
+value's file and line kept (`Cvars::set_watch`), the rest of the server's cvars, and
+`--explain`. Running one:
 
 ```
 make build
 build/debug/shooters_edge_server --name="Arena Night" --description="bots only" --port=27500 \
   --maxclients=16 --bots=8 --realtime --for=0
+build/debug/shooters_edge_server --root=servers --mod=arena --cfg=duel --explain=sv_
 ```
+
+The layers are read as loose files under `--root` (`<root>/<dir>/server.cfg`); a copy inside a
+pack is not read yet, and `ge server cfg --explain` comes with `ge server` (M53d) over the
+binary's own `--explain`.
 
 ## What is there today, and what is missing
 

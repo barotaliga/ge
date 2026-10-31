@@ -31,12 +31,13 @@
 // ge:summary Console variables: named, typed, flagged settings, owned or bound to a struct field
 // ge:keywords cvar cvars console-variable setting settings config cfg flag archive server-info
 // ge:keywords user-info cheat latch read-only bind tier sv_ cl_ r_ info-string apply_info
-// ge:keywords revision clamp sv_cheats
+// ge:keywords revision clamp sv_cheats set_watch watch
 // ge:skill console
 // ge:test tests/console_cvar_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <string>
@@ -158,6 +159,12 @@ class Cvars {
   // kServerInfo when the server sent them). Returns how many values moved.
   int apply_info(std::string_view info, Source source);
 
+  // A host's watch on every set from outside code that the tier allowed (changed, the same value
+  // again, or latched), with the value as given: a server keeps where each of its values came from
+  // (engine/server/config.hpp). One watch; null removes it.
+  using Watch = std::function<void(const Cvar&, std::string_view value, Source source)>;
+  void set_watch(Watch watch) { watch_ = std::move(watch); }
+
   bool is_server() const { return is_server_; }
   bool cheats() const;  // sv_cheats is on
 
@@ -172,6 +179,7 @@ class Cvars {
   std::vector<std::unique_ptr<Cvar>> all_;
   bool is_server_;
   Cvar* sv_cheats_ = nullptr;
+  Watch watch_;
 };
 
 // A valid cvar or command name: 1–63 characters of [a-z0-9_+.-], no leading digit.

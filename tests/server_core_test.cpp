@@ -40,11 +40,11 @@ const ServerTrial& lan_trial() {
   return t;
 }
 
-// A console whose only file is `server.cfg` with `text`.
+// A console whose only file is the base game's `server.cfg` with `text`.
 void cfg_files(ge::console::Console& con, const std::string& text) {
   con.set_files(
       [text](std::string_view name, std::string& out) {
-        if (name != "server.cfg") return false;
+        if (name != "base/server.cfg") return false;
         out = text;
         return true;
       },
@@ -104,11 +104,12 @@ TEST(server_settings_cfg_then_flags_then_commands) {
   ge::console::Console con(true);
   cfg_files(con, "sv_hostname \"From the cfg\"\nsv_maxclients 12\nsv_description \"cfg\"\n");
   ServerConfig c;
+  ServerCfg cfg;
   std::string error;
   CHECK(server_configure(con,
                          {"--name=From the flag", "--port=27999", "--for=3", "+set",
                           "sv_description", "from a command"},
-                         c, sample_game(), error));
+                         c, cfg, sample_game(), error));
   CHECK(error.empty());
   CHECK(c.hostname == "From the flag");  // the flag over the cfg
   CHECK(c.maxclients == 12);             // the cfg over the fallback
@@ -123,16 +124,18 @@ TEST(server_settings_refused_with_where_and_next) {
     ge::console::Console con(true);
     cfg_files(con, "sv_hostname ok\nnot_a_command 1\n");
     ServerConfig c;
+    ServerCfg cfg;
     std::string error;
-    CHECK(!server_configure(con, {}, c, sample_game(), error));
-    CHECK(error.find("server.cfg:2") != std::string::npos);
+    CHECK(!server_configure(con, {}, c, cfg, sample_game(), error));
+    CHECK(error.find("base/server.cfg:2") != std::string::npos);
   }
   {
     ge::console::Console con(true);
     cfg_files(con, "");
     ServerConfig c;
+    ServerCfg cfg;
     std::string error;
-    CHECK(!server_configure(con, {"--colour=red"}, c, sample_game(), error));
+    CHECK(!server_configure(con, {"--colour=red"}, c, cfg, sample_game(), error));
     CHECK(error.find("unknown flag '--colour=red'") != std::string::npos);
     CHECK(error.find("--help") != std::string::npos);
   }
@@ -150,8 +153,9 @@ TEST(server_settings_refused_with_where_and_next) {
 
 TEST(server_help_names_every_flag) {
   const std::string help = server_help(sample_game());
-  for (const char* f : {"--name", "--description", "--ip", "--port", "--maxclients", "--map",
-                        "--bots", "--for", "--realtime", "--offline", "--replay", "--dir"})
+  for (const char* f :
+       {"--name", "--description", "--ip", "--port", "--maxclients", "--map", "--bots", "--for",
+        "--realtime", "--offline", "--replay", "--root", "--base", "--mod", "--cfg", "--explain"})
     CHECK(help.find(f) != std::string::npos);
 }
 

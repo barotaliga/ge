@@ -15,7 +15,6 @@
 #include <iterator>
 #include <thread>
 
-#include "console/cfg.hpp"
 #include "core/num.hpp"
 #include "net/address.hpp"
 
@@ -41,7 +40,22 @@ constexpr CvarFlag kCvarFlags[] = {
     {"--seed", "sv_seed"},
     {"--password", "sv_password"},
     {"--visibility", "sv_visibility"},
+    {"--motd", "sv_motd"},
+    {"--admin", "sv_admin"},
 };
+
+std::vector<std::string> split_commas(const std::string& s) {
+  std::vector<std::string> out;
+  size_t at = 0;
+  while (at <= s.size()) {
+    const size_t comma = s.find(',', at);
+    std::string part = s.substr(at, comma == std::string::npos ? std::string::npos : comma - at);
+    if (!part.empty()) out.push_back(std::move(part));
+    if (comma == std::string::npos) break;
+    at = comma + 1;
+  }
+  return out;
+}
 
 bool number(const std::string& key, const std::string& val, double& out, std::string& error) {
   char* end = nullptr;
@@ -192,10 +206,18 @@ int main_body(int argc, char** argv, const ServerGame& game) {
     std::printf("%.*s\n", static_cast<int>(line.size()), line.data());
   });
   ServerConfig c;
+  ServerCfg cfg;
   std::string error;
-  if (!server_configure(con, args, c, game, error)) {
+  if (!server_configure(con, args, c, cfg, game, error)) {
     std::fprintf(stderr, "%s: %s\n", game.binary, error.c_str());
     return 1;
+  }
+  if (c.explain) {
+    std::printf("read:");
+    for (const std::string& f : cfg.read) std::printf(" %s", f.c_str());
+    std::printf("%s\n", cfg.read.empty() ? " (no cfg file)" : "");
+    std::fputs(explain(con, cfg, c.explain_prefix).c_str(), stdout);
+    return 0;
   }
   return c.replay.empty() ? run(game, c) : replay(game, c);
 }
@@ -203,8 +225,9 @@ int main_body(int argc, char** argv, const ServerGame& game) {
 }  // namespace
 
 bool server_configure(console::Console& con, const std::vector<std::string>& args, ServerConfig& c,
-                      const ServerGame& game, std::string& error) {
+                      ServerCfg& cfg, const ServerGame& game, std::string& error) {
   add_server_cvars(con.cvars(), c, game);
+  cfg.base = game.base_dir;
   std::vector<std::string> line;  // the command line as `+commands`, flags first
   std::vector<std::string> rest;  // the `+commands` given, after the flags
   std::string dir;
@@ -247,8 +270,17 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
       c.log = val;
     } else if (key == "--replay") {
       c.replay = val;
-    } else if (key == "--dir") {
+    } else if (key == "--root") {
       dir = val;
+    } else if (key == "--base") {
+      cfg.base = val;
+    } else if (key == "--mod") {
+      cfg.mods = split_commas(val);
+    } else if (key == "--cfg") {
+      cfg.profile = val;
+    } else if (key == "--explain") {
+      c.explain = true;
+      c.explain_prefix = val;
     } else {
       error = "unknown flag '" + a + "'; next: " + game.binary + " --help";
       return false;
@@ -258,36 +290,35 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
     error = "--for must not be negative";
     return false;
   }
+  if (cfg.base.empty()) {
+    error = "--base needs a directory; next: " + std::string(game.binary) + " --help";
+    return false;
+  }
   if (!dir.empty()) con.set_search_path({std::filesystem::path(dir)});
+  std::string mods;
+  for (const std::string& m : cfg.mods) mods.append(mods.empty() ? "" : ",").append(m);
+  con.cvars().set("sv_mod", mods, console::Source::code);
   line.insert(line.end(), rest.begin(), rest.end());
-  con.clear_problems();
   // Startup sets what a restart would: the latched settings take their values at once, quietly,
   // and are latched again for the server's own console.
   std::vector<console::Cvar*> latched;
-  for (const char* name : {"net_ip", "net_port", "sv_maxclients", "sv_bots", "sv_seed"}) {
-    console::Cvar* v = con.cvars().find(name);
-    if (v && (v->flags & console::kLatch) != 0) {
+  for (console::Cvar* v : con.cvars().sorted()) {
+    if ((v->flags & console::kServer) != 0 && (v->flags & console::kLatch) != 0) {
       v->flags &= ~uint32_t{console::kLatch};
       latched.push_back(v);
     }
   }
-  console::start_server(con, line);
+  const bool ok = load_server_cfg(con, cfg, line, error);
   for (console::Cvar* v : latched) v->flags |= console::kLatch;
-  for (const console::Problem& p : con.problems()) {
-    if (p.severity != console::Problem::Severity::error) continue;
-    error = (p.where.file.empty() ? std::string("the settings")
-                                  : p.where.file + ":" + std::to_string(p.where.line)) +
-            ": " + p.what + (p.next.empty() ? "" : "; next: " + p.next);
-    return false;
-  }
-  return true;
+  return ok;
 }
 
 std::string server_help(const ServerGame& game) {
   std::string out = std::string(game.binary) + ": " + game.title + "'s dedicated server.\n\n";
   out +=
-      "Settings come from server.cfg (in --dir, default here), then these flags, then any\n"
-      "+commands (+set sv_hostname \"Arena\"). Each flag sets the cvar beside it.\n\n"
+      "Settings come from the base game directory's server.cfg, then each mod's, then a\n"
+      "profile, then these flags, then any +commands (+set sv_hostname \"Arena\"). Each flag\n"
+      "sets the cvar beside it.\n\n"
       "  --name=TEXT        sv_hostname: the name in the browser and the lobby\n"
       "  --description=TEXT sv_description: a line under the name\n"
       "  --ip=ADDR          net_ip: the address to listen on (default every interface)\n"
@@ -303,14 +334,22 @@ std::string server_help(const ServerGame& game) {
       "  --bots=N           sv_bots: slots the game's bots fill\n"
       "  --seed=N           sv_seed: the run's seed\n"
       "  --password=TEXT    sv_password: joining takes it\n"
-      "  --visibility=V     sv_visibility: lan, invite or listed\n\n"
+      "  --visibility=V     sv_visibility: lan, invite or listed\n"
+      "  --motd=TEXT        sv_motd: the message a player sees on joining\n"
+      "  --admin=TEXT       sv_admin: how to reach the server's owner\n\n"
+      "  --root=PATH        where the game directories are (default here)\n"
+      "  --base=DIR         the base game directory (default " +
+      std::string(game.base_dir) +
+      "), its server.cfg read first\n"
+      "  --mod=A,B          mods over the base, lowest first: each one's server.cfg after it\n"
+      "  --cfg=NAME         a profile: NAME.cfg from the highest directory that has one\n"
+      "  --explain[=PREFIX] print each server value, where it was set and what it overrode\n\n"
       "  --for=S            seconds of server time to run (default 60; 0 runs until stopped)\n"
       "  --status=S         a status line every S seconds of server time (default 5; 0 none)\n"
       "  --realtime         pace the frames to the wall clock (a server people play on)\n"
       "  --offline          no socket: the game alone\n"
       "  --log=PATH         write the run's input log here\n"
       "  --replay=PATH      replay an input log and name the first frame that leaves it\n"
-      "  --dir=PATH         where server.cfg is read\n"
       "  --help             this\n";
   return out;
 }

@@ -93,6 +93,7 @@ gs::ServerGame make() {
   g.default_port = kServerPort;
   g.discovery_port = kDiscoveryPort;
   g.max_clients = 32;
+  g.base_dir = "id1";       // the game folder the client reads too (client/main.cpp)
   g.default_map = "arena";  // the test arena, roofed: the only map until compiled maps load (M18b)
   g.create = create;
   g.destroy = destroy;
