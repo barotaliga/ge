@@ -36,6 +36,7 @@
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/hud/layout.hpp"
+#include "shooters_edge/labs/staged.hpp"
 #include "ui/play_bar.hpp"
 #include "ui/raster.hpp"
 #include "vfs/pak.hpp"
@@ -238,6 +239,7 @@ void run(gl::Lab& lab) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
   }
+  if (!shooters_edge::labs::stage_asked(lab, files)) return;
   cl::DemoVideoOptions o;
   o.demo = "match.mvd";
   o.width = kW;

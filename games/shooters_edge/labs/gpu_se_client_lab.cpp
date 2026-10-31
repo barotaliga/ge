@@ -62,6 +62,7 @@
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
+#include "shooters_edge/labs/staged.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -189,6 +190,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       return;
     }
   }
+  if (!shooters_edge::labs::stage_asked(lab, files)) return;
   // `--progs`: a program of our own compiled from its progs.src (the campaign variant, say), or
   // `pack` for the packs' own progs.dat; else the arena variant.
   if (lab.arg("progs") == "pack") {
@@ -358,6 +360,7 @@ void run(gl::Lab& lab) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
   }
+  if (!shooters_edge::labs::stage_asked(lab, files)) return;
   cl::Listen l;
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "halls", error);
   if (!map || !cl::listen_start(l, progs, std::move(map), {}, error)) {
