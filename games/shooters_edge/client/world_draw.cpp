@@ -2,7 +2,7 @@
 //
 // ge:summary The window's world frame: the BSP map, the effects, sky, bloom, post, the overlay
 // ge:keywords world-draw bsp frame create_world_draw draw_world resize_world particles
-// ge:keywords enhanced-textures texture-cache
+// ge:keywords enhanced-textures texture-cache relief normal-map parallax
 // ge:skill render brush shooter
 #include "shooters_edge/client/world_draw.hpp"
 
@@ -94,6 +94,13 @@ bool from_cache(void* user, std::string_view name, uint32_t w, uint32_t h,
                                             w, h, rgba);
 }
 
+// Their relief (normal, height, roughness) beside them, for the modern look to light them by.
+bool surface_from_cache(void* user, std::string_view name, uint32_t w, uint32_t h,
+                        std::vector<uint8_t>* rgba) {
+  return ge::classicenhance::cached_surface(*static_cast<const std::filesystem::path*>(user), name,
+                                            w, h, rgba);
+}
+
 // The weapon's draw this frame: its model and placement, lit by the baked light on the floor under
 // the eye (the lightmap's 0.5 the light as baked, from above) and by its own flash.
 gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
@@ -170,6 +177,7 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
       cache = ge::classicenhance::find_cache(files.archives[0].bytes);
     if (!cache.empty()) {
       source.replace = from_cache;
+      source.surface = surface_from_cache;
       source.user = &cache;
       ge::core::output::status("shooters_edge: the enhanced textures from " + cache.string());
     }

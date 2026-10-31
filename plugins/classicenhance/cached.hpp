@@ -10,10 +10,14 @@
 //   RGBA with alpha 255 where emissive.png glows (the classic's fullbright texels: lit by nothing
 //   but themselves). The liquids' and the sky's textures (names starting '*' or "sky") are left
 //   to the pack: the renderers draw those their own way.
+// - `cached_surface`: the same texture's relief for a modern renderer to light it with, packed into
+//   one RGBA picture the albedo's size: the normal's x and y (tangent space, +Y up the picture),
+//   the height (255 the top) and the roughness, from normal.png, height.png and roughness.png.
 // - `cached_skins`: models/<name>/skin<k>.png, each skin of a model, the same size rule.
 //
 // ge:summary The enhanced cache read back by a game: the pack's folder, textures and skins by name
 // ge:keywords classicenhance cache read find_cache cached_texture cached_skins albedo emissive
+// ge:keywords cached_surface normal-map height-map roughness relief parallax
 // ge:keywords upscaled texture skin replace renderer atlas
 // ge:skill classicenhance
 // ge:test tests/classicenhance_cached_test.cpp
@@ -37,6 +41,13 @@ std::filesystem::path find_cache(std::span<const uint8_t> pack,
 // The enhanced copy of texture `name` (the pack's w x h) into `rgba`: (w k) x (h k) x 4, k the
 // cache's scale. False (and `rgba` untouched) when there is none of a size that fits.
 bool cached_texture(const std::filesystem::path& dir, std::string_view name, uint32_t w, uint32_t h,
+                    std::vector<uint8_t>* rgba);
+
+// The relief of texture `name` whose enhanced albedo is `w` x `h` (cached_texture's size) into
+// `rgba`: w x h x 4, each texel the normal's x and y (0.5 flat), the height (1 the top) and the
+// roughness, as bytes. False (and `rgba` untouched) when any of the three maps is missing, of
+// another size, or the texture is one cached_texture leaves to the pack.
+bool cached_surface(const std::filesystem::path& dir, std::string_view name, uint32_t w, uint32_t h,
                     std::vector<uint8_t>* rgba);
 
 // The enhanced skins of model `name` (the file's stem, "soldier" for progs/soldier.mdl), each

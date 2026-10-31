@@ -94,6 +94,16 @@ whatever draws or plays the thing; two change the cache (`apply_bakes`: the trai
 leaves the kernel, rounding on rounds the models) and want ENHANCE again. `ce_skies` is read by
 the modern look (`brush/app/bsp_draw.hpp`'s `pack_sky`): on, the sky faces show our sky, its
 clouds and its night; off, the pack's own two scrolling layers under the modern look's lights.
+`ce_relief` and `ce_parallax` light the enhanced textures with their maps under the modern look
+(`brush/app/bsp_draw.hpp`'s `relief`, `specular` and `parallax`; the game reads the maps beside
+each albedo with `cached.hpp`'s `cached_surface` into the scene's surface atlas). `ce_relief` puts
+each texel's normal under every light (the torches, the lamps, the sun and the sky) and gives each
+lamp and torch a highlight by the texel's roughness (GGX, widened for a near flame and dimmed at
+glancing angles: the metal shines, the stone barely); off, flat
+faces. `ce_parallax` marches the eye's ray into the height map (parallax occlusion, 3 cm deep from
+the top to the deepest, within 10 m of the eye and faded out before it), so mortar and cracks sink
+into the wall and shift as the player moves, and shades the crevices on the room's light; off, the
+bumps lie flat. Neither changes the cache.
 Under a lava's or a slime's level the modern look draws the liquid round the eye
 (`render/liquid.hpp`, seen from below, with a least view of 3 m) and leaves out the screen's flat
 tint for it.
