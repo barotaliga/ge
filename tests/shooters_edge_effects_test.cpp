@@ -182,3 +182,16 @@ TEST(ce_skies_picks_our_sky_or_the_packs_in_the_modern_look) {
   CHECK(lk::world_options(lk::Look::modern, {}, pic).pack_sky);
   CHECK(!lk::world_options(lk::Look::classic, {}, pic).pack_sky);  // the classic's own already
 }
+
+TEST(ce_relief_and_ce_parallax_light_the_enhanced_textures_in_the_modern_look) {
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  const auto on = lk::world_options(lk::Look::modern, {}, pic);
+  CHECK(on.relief && on.parallax > 0);
+  con.execute("ce_parallax 0");
+  const auto flat = lk::world_options(lk::Look::modern, {}, pic);
+  CHECK(flat.relief && flat.parallax == 0);
+  con.execute("ce_relief 0");
+  CHECK(!lk::world_options(lk::Look::modern, {}, pic).relief);
+}

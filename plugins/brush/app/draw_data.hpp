@@ -6,6 +6,7 @@
 //
 // ge:summary The classic map experiment's data: atlases, vertices, liquid bodies, point lights
 // ge:keywords lab classic bsp pack palette miptex atlas lightmap liquid-body point-light flicker
+// ge:keywords surface-atlas relief normal-map height-map roughness
 // ge:skill brush labs
 #pragma once
 
@@ -137,6 +138,11 @@ struct Scene {
   std::string name;
   Map map;
   Atlas textures;  // sRGB colours, every mip the file stores
+  // THE RELIEF (TextureSource::surface): the textures' surfaces in the same places and mips as
+  // `textures`, each texel the normal's x and y in tangent space (128 flat; +Y up the picture), the
+  // height (255 the top) and the roughness, linear bytes; a texture with none is flat at the top
+  // with a roughness of 0.75. Empty (no levels) when no texture has one.
+  Atlas surface;
   // The lightmaps, a luxel's border round each, in `light_layers` layers stacked down the atlas:
   // layer k holds every face's k-th style (a face's place the same in each).
   Atlas light;
@@ -171,12 +177,20 @@ struct Scene {
 // as wide and tall, k 2, 4 or 8 (the atlas then keeps more mips and the faces sample it finer); the
 // frames of an animated texture ('+' names) share one k, or all keep their own. False keeps the
 // map's own.
+//
+// `surface`, when set, is asked for each texture `replace` filled, at that picture's size w x h:
+// it fills `rgba` (w x h x 4) with the texture's relief as `Scene::surface` holds it, or returns
+// false for a flat one.
 struct TextureSource {
   bool (*replace)(void* user, std::string_view name, uint32_t w, uint32_t h,
                   std::span<const uint8_t> indexed, std::span<const uint8_t> palette,
                   std::vector<uint8_t>* rgba) = nullptr;
   void* user = nullptr;
+  bool (*surface)(void* user, std::string_view name, uint32_t w, uint32_t h,
+                  std::vector<uint8_t>* rgba) = nullptr;
 };
+// A texel of `Scene::surface` where a texture has no relief: flat, at the top, fairly rough.
+inline constexpr uint8_t kFlatSurface[4] = {128, 128, 255, 191};
 
 // The map `path` in `pack` read and made ready, with `palette` (768 bytes) for its pixels.
 bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t> palette,

@@ -1,10 +1,12 @@
 // The cache read back by a game (plugins/classicenhance/cached.hpp): a texture's enhanced copy
 // at a multiple of the pack's size, its glowing texels marked in alpha; a size that fits no
 // multiple, a liquid's or the sky's name, and a missing file all leave the pack's own; a model's
-// skins in order; and a pack whose textures were never enhanced has no cache.
+// skins in order; its relief (normal, height, roughness) packed at the albedo's size; and a pack
+// whose textures were never enhanced has no cache.
 //
 // ge:summary Tests reading the enhanced cache back: textures, glow in alpha, skins, refusals
 // ge:keywords test classicenhance cache cached_texture cached_skins find_cache glow alpha
+// ge:keywords cached_surface relief normal height roughness
 // ge:skill classicenhance testing
 #include <filesystem>
 #include <string>
@@ -58,6 +60,18 @@ TEST(textures_and_skins_come_back_at_a_multiple_of_the_packs_size) {
   CHECK(!ce::cached_texture(dir, "none", 16, 8, &rgba));
   CHECK(!ce::cached_texture(dir, "*water", 16, 8, &rgba));
   CHECK(!ce::cached_texture(dir, "sky4", 16, 8, &rgba));
+
+  // The relief: the normal's x, y, the height and the roughness in one texel, at the albedo's size.
+  CHECK(!ce::cached_surface(dir, "wall1", 32, 16, &rgba));  // no maps yet
+  picture(dir / "textures" / "wall1" / "normal.png", 32, 16, 128);
+  picture(dir / "textures" / "wall1" / "height.png", 32, 16, 200);
+  CHECK(!ce::cached_surface(dir, "wall1", 32, 16, &rgba));  // no roughness
+  picture(dir / "textures" / "wall1" / "roughness.png", 32, 16, 190);
+  CHECK(ce::cached_surface(dir, "WALL1", 32, 16, &rgba));
+  CHECK(rgba.size() == size_t{32} * 16 * 4 && rgba[0] == 128 && rgba[1] == 128 && rgba[2] == 200 &&
+        rgba[3] == 190);
+  CHECK(!ce::cached_surface(dir, "wall1", 16, 8, &rgba));  // the albedo's size, not the pack's
+  CHECK(!ce::cached_surface(dir, "*water", 32, 16, &rgba));
 
   picture(dir / "models" / "soldier" / "skin0.png", 64, 32, 10);
   picture(dir / "models" / "soldier" / "skin1.png", 64, 32, 20);

@@ -56,6 +56,7 @@ maps) and `morph` (the models and sprites):
 | `classicenhance/pictures.hpp/.cpp` | The pictures stage's reading: `pack_pictures` (the wad's pictures and font sheet, the `gfx/` pictures; the palette and colour map left out), `picture_rgba` (index 255 see-through, index 0 in the font sheet) |
 | `classicenhance/pipeline.hpp/.cpp` | `run_pipeline`: the stages pack → textures → lightmaps → sounds → models → pictures, each skipped when its recorded key is current; `pack_textures` |
 | `classicenhance/weapons.hpp/.cpp` | The held weapons (M48b): `held_from_morph` (the eye frame into the held frame, wound back out, the fullbright skin texels as glow), `classic_weapon_row`, `probe_under` (the lightmap under the player, 128 = 1), `muzzle_flash_light`, `flame_lights`, `pack_weapons`, `classic_fire_of` and `classic_fire_frame` (each weapon's muzzle-fire look and rate, the firing frames); the labs `classic-weapons` and `classic-weapons-fire` (GPU) |
+| `classicenhance/cached.hpp/.cpp` | The cache read back by a game: `find_cache`, `cached_texture` (the albedo, glow in alpha), `cached_surface` (normal x, y, height and roughness in one texel, for the BSP scene's surface atlas: `ce_relief`, `ce_parallax`), `cached_skins` |
 | `classicenhance/tool/main.cpp` | The `classicenhance` executable (`verify`, `run`, `status`), one JSON object an answer |
 
 Beside it in the engine: `engine/vfs/zip.hpp` (the zip reader, also the `.pk3` container),
