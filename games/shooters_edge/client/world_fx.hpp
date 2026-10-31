@@ -45,7 +45,9 @@ struct FxFrame {
   effects::Particles births;
   std::vector<effects::Light> lights;
   double blend[4] = {0, 0, 0, 0};  // the screen's: sRGB colour and share
-  std::vector<Placed> models;      // the entities with a model (world_models.hpp)
+  // The same without a lava's or a slime's tint, for a look that draws the liquid round the eye.
+  double blend_dry[4] = {0, 0, 0, 0};
+  std::vector<Placed> models;  // the entities with a model (world_models.hpp)
 };
 
 // The effects of the wall frame of `dt` s at time `t` s, after frame_view brought `v` up to date.

@@ -264,7 +264,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (f.has_map)
     prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
                    o.mode == ba::Mode::v2 && f.picture->ce.flames);
-  gr::set_post_blend(d, f.post[p], fx.blend);
+  // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.
+  const bool round = f.extras && liquid_round_eye(*f.extras);
+  gr::set_post_blend(d, f.post[p], round ? fx.blend_dry : fx.blend);
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
     gr::HeldDraw draw = held_draw(f, *held, view);

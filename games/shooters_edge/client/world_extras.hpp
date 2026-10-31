@@ -55,6 +55,11 @@ void dress_extras(WorldExtras& x, ge::render::FrameView& view, ge::brush::app::O
 // look).
 void prepare_extras(ge::gpu::Device& device, WorldExtras& x, const ge::brush::app::BspDraw& bsp,
                     const ge::render::FrameView& view, const ge::brush::app::Options& options);
+// After prepare_extras: whether the eye is under a lava's or a slime's level and the liquid is
+// drawn round it (render/liquid.hpp's view from below), so the screen's blend leaves it out.
+bool liquid_round_eye(const WorldExtras& x);
+// m: the least an eye in a liquid sees (render/liquid.hpp's `under_reach`).
+inline constexpr double kUnderReach = 3;
 // Before the world: the fall's simulation.
 void encode_extras_sim(const WorldExtras& x, const ge::gpu::PipelineSet& pipelines,
                        ge::render::FrameRecorder& rec, wgpu::CommandEncoder& encoder);

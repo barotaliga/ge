@@ -611,7 +611,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   set4(d.staged.info2, view.time_s, kCubeSize, kOrthoSize, o.brightness);
   set4(d.staged.info3, o.minlight, o.lighting == Lighting::lights ? o.bounce : 0, o.sky_light,
        o.crisp ? 0 : 1);
-  set4(d.staged.info4, o.bump, 0, 0, 0);
+  set4(d.staged.info4, o.bump, o.pack_sky ? 1 : 0, 0, 0);
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers, 0, 0);
   if (o.cull) {
     prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0, o.pvs);

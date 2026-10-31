@@ -5,13 +5,15 @@
 // and with its lamps; the crust's cover from open melt to crusted over; a close look at the
 // plates, their cracks and the ropy folds; the crust carried by a flow, four moments two seconds
 // apart; the heat shimmer across the lake, off and on; three stones breaking the crust, at four
-// moments; and the named looks side by side. It holds the glow's brightness to the black body's (a
+// moments; the eye under the level; and the named looks side by side. It holds the glow's
+// brightness to the black body's (a
 // molten pixel's luminance at night against the table's), and fails on a GPU error, a pipeline
 // made after the load, or a view with no lava in it.
 //
-// ge:summary Lab: lava drawn: day, dusk, night, cover, close up, flow, shimmer, crust broken
+// ge:summary Lab: lava drawn: day, dusk, night, cover, close, flow, shimmer, crust, from below
 // ge:keywords lab gpu lava crust plates cracks glow blackbody night dusk flow cover pahoehoe
 // ge:keywords lava-light walls liquid_lamps heat-shimmer crust-broken break_liquid_crust
+// ge:keywords from-below under-lava
 // ge:keywords picture software-adapter
 // ge:skill render water labs
 // ge:test tests/render_liquid_test.cpp
@@ -93,7 +95,7 @@ void run(gl::Lab& lab) {
     // row.
     lab.note("No GPU adapter on this machine: no pictures.");
     ls::placeholders(lab, {"day", "dusk", "night", "night-walls-off", "night-walls", "cover",
-                           "close", "flow", "shimmer", "crust-broken", "looks"});
+                           "close", "flow", "shimmer", "crust-broken", "from-below", "looks"});
     glow_table(lab);
     ls::checked(lab, 0, 0);
     return;
@@ -351,6 +353,38 @@ void run(gl::Lab& lab) {
               "holes skinning over, the small one shrunk to a spot by the end",
               {}},
              strip(pics, labels, 2), Det::measured);
+  }
+  // FROM BELOW: the eye 0.6 m under the level in the lake, looking across and up.
+  {
+    ls::Scene small;
+    ge::gpu::Device& ds = fresh();
+    ls::make_scene(ds, small, kBasalt, static_cast<uint32_t>(tw), static_cast<uint32_t>(th));
+    put(ds, small, "lava", look_of("lava"));
+    std::vector<gl::Picture> pics;
+    for (const double pitch : {-0.1, 0.75}) {
+      gr::FrameView v =
+          ls::view_at(ls::kPitX - 2, ls::kLevel - 0.6, ls::kPitZ - 6, 0.1, pitch, -0.03, 2.4, t);
+      v.adapt_cd = gr::adapt_for(look_of("lava"), 1.5);
+      pics.push_back(ls::draw(ds, small, v));
+    }
+    gr::FrameView v =
+        ls::view_at(ls::kPitX - 2, ls::kLevel - 0.6, ls::kPitZ - 6, 0.1, -0.1, -0.03, 2.4, t);
+    v.adapt_cd = gr::adapt_for(look_of("lava"), 1.5);
+    const double share = ls::changed(pics[0], ls::draw(ds, small, v, false));
+    lab.metric("from-below.changed-share", share, "", Det::measured);
+    if (share < 0.5) {
+      lab.fail("the lava seen from under its level does not fill the view",
+               "Check fs_under in engine/render/liquid.wgsl and Liquids::eye_under. "
+               "Skill: render.");
+    }
+    lab.shot({"from-below",
+              "FROM BELOW",
+              "The eye 0.6 m under the molten lake's level at dusk, looking across and up: lava "
+              "is opaque, so its own glow fills the view, the eye keyed to the melt.",
+              "the whole view molten orange, darker streaks of cooler melt rising through it; "
+              "none of the pit's walls or the sky",
+              {}},
+             strip(pics, {"ACROSS", "UP AT THE SURFACE"}, 2), Det::measured);
   }
   // THE LOOKS.
   {
