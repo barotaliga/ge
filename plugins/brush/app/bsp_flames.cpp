@@ -1,8 +1,8 @@
 // The map's fires: each fire's light entity to a flame at its model's flame, its level its light's;
-// a large flame as a bonfire, its tongues, its air and its sparks.
+// a large flame as a bonfire, its tongues, its air and its sparks; a caged one as a lantern.
 //
 // ge:summary The map's fires as flames: the preset by kind, the base, the light's level, bonfires
-// ge:keywords brush bsp torch flame fire bsp_fires bonfire sparks place_fires fire_air
+// ge:keywords brush bsp torch flame fire bsp_fires bonfire sparks place_fires fire_air lantern
 // ge:skill brush render
 // ge:test tests/brush_bsp_flames_test.cpp
 #include "brush/app/bsp_flames.hpp"
@@ -51,17 +51,35 @@ bool is_bonfire(const PointLight& l, const FireLook& look) {
   return look.bonfires && l.fire == Fire::large;
 }
 
+double fire_height(const PointLight& l, bool bonfires) {
+  switch (l.fire) {
+    case Fire::none:
+      return 0;
+    case Fire::wall_torch:
+      return kTorchHeight;
+    case Fire::large:
+      return bonfires ? kBonfireHeight : kLargeHeight;
+    case Fire::lantern:
+      return bonfires ? kLanternHeight : kLargeHeight;
+    case Fire::flame:
+      break;
+  }
+  return kLargeHeight;
+}
+
 double fire_light_lift(const PointLight& l, bool bonfires) {
   if (l.fire == Fire::none) return 0;
-  const bool torch = l.fire == Fire::wall_torch;
-  const double tall = torch ? kTorchHeight : bonfires ? kBonfireHeight : kLargeHeight;
-  return ((torch ? kTorchBase : kLargeBase) + 0.35 * tall) * kUnitM;
+  const double base = l.fire == Fire::wall_torch ? kTorchBase : kLargeBase;
+  return (base + 0.35 * fire_height(l, bonfires)) * kUnitM;
 }
 
 double fire_light_size(const PointLight& l, bool bonfires) {
-  if (l.fire == Fire::none) return 0;
-  if (l.fire == Fire::wall_torch) return kTorchHeight * kUnitM;
-  return (bonfires ? kBonfireHeight : kLargeHeight) * kUnitM;
+  return fire_height(l, bonfires) * kUnitM;
+}
+
+double fire_light_gain(const PointLight& l, bool bonfires) {
+  if (!bonfires) return 1;
+  return l.fire == Fire::large ? kBonfireLight : l.fire == Fire::lantern ? kLanternLight : 1.0;
 }
 
 void place_fires(Scene& scene) {
@@ -80,7 +98,7 @@ void place_fires(Scene& scene) {
       open += up_from(scene.map, x, b[1] + 0.3, z, 200) == 2;
     }
     l.sky = static_cast<float>(open / 5.0);
-    if (l.fire == Fire::large && !room) l.fire = Fire::flame;
+    if (l.fire == Fire::large && !room) l.fire = Fire::lantern;
   }
 }
 
@@ -110,8 +128,11 @@ void bsp_fires(const Scene& scene, double t_s, double brightness, std::vector<re
     if (!bonfire) {
       render::Flame f =
           torch ? render::torch_flame(base, l.seed) : render::brazier_flame(base, l.seed);
-      const double h = (torch ? kTorchHeight : kLargeHeight) * kUnitM;
-      f.radius_m = static_cast<float>(f.radius_m * h / f.height_m);
+      const double tall = fire_height(l, look.bonfires);
+      const double h = tall * kUnitM;
+      // A lantern's flame grows fatter than it grows tall: it fills its cage.
+      const double fat = tall > kLargeHeight ? kLanternWidth * kLargeHeight / tall : 1.0;
+      f.radius_m = static_cast<float>(f.radius_m * h / f.height_m * fat);
       f.height_m = static_cast<float>(h);
       f.level = level;
       f.relative = relative;

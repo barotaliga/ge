@@ -104,9 +104,10 @@ enum class Flicker : uint8_t { steady, candle, pulse, strobe, buzz };
 
 // The fire a light entity's model stands for, drawn as burning gas (bsp_flames.hpp): a wall
 // torch; a large flame with room over it (a brazier on the floor, which burns as a bonfire under
-// ce_bonfires); or any other flame (a small one, or a large one in a lantern's cage or under a
-// low roof), drawn as a large flame's and never a bonfire. `place_fires` tells them apart.
-enum class Fire : uint8_t { none, wall_torch, large, flame };
+// ce_bonfires); a large flame with no such room (a lantern's cage round it, or a low roof), which
+// burns bigger under ce_bonfires; or a small flame, drawn as a large one's. `place_fires` tells
+// the large ones apart.
+enum class Fire : uint8_t { none, wall_torch, large, flame, lantern };
 
 struct PointLight {
   double pos[3] = {0, 0, 0};  // engine metres
