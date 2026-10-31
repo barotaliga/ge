@@ -19,6 +19,9 @@ ge lab run -- --help                   # its own flags; they go after --
 ge lab run -- --seeds=7                # one lab with its own flags
 ge lab run --tag=before                # write to previews/run@before/
 ge lab run --compare=before            # every metric beside the tagged run's, every picture diffed
+ge lab run --shots=start,vista         # only those shots drawn, while one look is iterated; the
+                                       # other pictures stay as they were (a lab skips the render
+                                       # when it asks lab.wants(id) first)
 ge lab diff run                        # the last run's pictures against previews/run@before/:
                                        # PSNR and SSIM per distance band, each under its floor a finding
 ge lab diff run --run -- --seeds=7     # run it first, then diff

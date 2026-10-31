@@ -186,7 +186,20 @@ void Lab::table(LabTable t, Det det) {
 
 void Lab::note(std::string line) { notes_.push_back(std::move(line)); }
 
+bool Lab::wants(std::string_view id) const {
+  if (only_.empty()) return true;
+  for (const std::string& o : only_) {
+    if (o == id) return true;
+  }
+  for (const std::string& k : skipped_) {
+    if (k == id) return false;
+  }
+  skipped_.emplace_back(id);
+  return false;
+}
+
 void Lab::shot(Shot s, const Picture& picture, Det det, DistanceMap distance) {
+  if (!wants(s.id)) return;
   Picture out = framed(s, picture);
   hash(s.id.data(), s.id.size() + 1);
   if (det == Det::deterministic) hash(out.rgba.data(), out.rgba.size());

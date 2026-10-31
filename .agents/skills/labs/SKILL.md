@@ -32,6 +32,8 @@ make lab LAB=<id> ARGS="--seeds=38 --tag=before" # BEFORE your change: kept in p
 # ...change the code...
 make lab LAB=<id> ARGS="--seeds=38 --compare=before"   # AFTER: every metric beside the kept run,
                                                        # every picture diffed (previews/<id>/diff/)
+make lab LAB=<id> ARGS="--seeds=38 --shots=vista"   # WHILE ITERATING one look: only the named
+                                                       # shots drawn, the rest left as they were
 build/debug/ge lab publish <id> --before=before   # THE PICTURES FOR THE REPORT AND THE PR: one
                                                   # self-contained page, before beside after, ready
                                                   # to publish (previews/<id>/publish.html)
