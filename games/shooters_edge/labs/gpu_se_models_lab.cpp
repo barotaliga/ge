@@ -465,6 +465,92 @@ void run(gl::Lab& lab) {
     }
   }
   lab.metric("movers.shot", movers_found, "count");
+
+  // The map's liquids as the window draws them: each kind's largest pool from over its top, and
+  // the water from under it (the window's own view under the surface).
+  {
+    ge::brush::app::Pack mp;
+    mp.bytes = l.map->file;
+    mp.files.push_back({"maps/x.bsp", 0, static_cast<uint32_t>(l.map->file.size())});
+    ge::brush::app::Scene scene;
+    const std::vector<uint8_t> grey(768, 128);  // the pools' shapes alone are read
+    std::string err;
+    if (!ge::brush::app::load_scene(mp, mp.files[0].name, grey, &scene, &err))
+      lab.note("the map's liquids not read: " + err);
+    const struct {
+      ge::brush::app::Kind kind;
+      const char* id;
+      const char* title;
+    } kLiquids[] = {{ge::brush::app::kWater, "water", "THE WATER"},
+                    {ge::brush::app::kSlime, "slime", "THE SLIME"},
+                    {ge::brush::app::kLava, "lava", "THE LAVA"}};
+    double pools = 0;
+    for (const auto& lq : kLiquids) {
+      const ge::brush::app::LiquidPatch* best = nullptr;
+      for (const ge::brush::app::LiquidPatch& p : scene.liquids)
+        if (p.kind == lq.kind && (best == nullptr || p.largest > best->largest)) best = &p;
+      if (best == nullptr) {
+        lab.note(std::string("no ") + lq.id + " on " + map_name);
+        continue;
+      }
+      // Its top's middle in the file's units, then a clear eye over it looking across.
+      const float top = float(best->level / br::kUnitM);
+      const sh::Vec3f mid{float(best->centre[0] / br::kUnitM), float(best->centre[1] / br::kUnitM),
+                          top};
+      float e[3];
+      bool found = false;
+      for (const float dist : {96.0f, 64.0f, 32.0f}) {
+        for (int k = 0; k < 8 && !found; k++) {
+          const double a = k * 0.785398163397448;
+          const sh::Vec3f eye{mid.x + dist * float(lm::cos(a)), mid.y + dist * float(lm::sin(a)),
+                              top + 56};
+          if (open_line(eye, eye, 8) && open_line(eye, {mid.x, mid.y, top + 4}, 0)) {
+            e[0] = eye.x;
+            e[1] = eye.y;
+            e[2] = eye.z;
+            found = true;
+          }
+        }
+        if (found) break;
+      }
+      if (!found) {
+        lab.note(std::string("no clear view over the ") + lq.id + " on " + map_name);
+        continue;
+      }
+      pools++;
+      const auto look_at = [&](const float from[3], const float to[3]) {
+        ge::render::FrameView v = base;
+        double eye[3], at[3];
+        br::to_engine(from, eye);
+        br::to_engine(to, at);
+        for (int q = 0; q < 3; q++) v.eye[q] = eye[q];
+        const double dx = at[0] - eye[0], dy = at[1] - eye[1], dz = at[2] - eye[2];
+        v.heading = lm::atan2(dx, dz);
+        v.pitch = lm::atan2(dy, std::sqrt(dx * dx + dz * dz));
+        return v;
+      };
+      const float to[3] = {mid.x, mid.y, top};
+      shoot(lq.id, lq.title,
+            std::string("The map's largest pool of ") + lq.id +
+                " from a little way off and over its top, as the window draws it.",
+            "the surface moving and lit by the room, the walls round it in it", look_at(e, to));
+      if (lq.kind != ge::brush::app::kWater) continue;
+      // Under it: halfway down to the pool's floor (at most a metre), looking across it.
+      const sh::HullTrace down = sh::trace_move(l.server->sv, {mid.x, mid.y, top - 1}, {0, 0, 0},
+                                                {0, 0, 0}, {mid.x, mid.y, top - 512},
+                                                sh::kTraceNoMonsters, -1);
+      const float depth = (top - 1) - down.endpos.z;
+      lab.metric("water.depth", depth * br::kUnitM, "m");
+      const float under_eye[3] = {mid.x - 24, mid.y - 24, top - std::min(depth * 0.5f, 40.0f)};
+      const float across[3] = {mid.x + 64, mid.y + 64, under_eye[2] + 8};
+      shoot("underwater", "UNDER THE WATER",
+            "The same pool from under its top, looking across it: the view the player has when "
+            "he swims.",
+            "the room seen through the surface above, the colour and the haze of the water",
+            look_at(under_eye, across));
+    }
+    lab.metric("liquids.shot", pools, "count");
+  }
   if (device)
     ls::checked(lab, static_cast<int>(device->errors.load()),
                 static_cast<int>(device->pipelines_after_load));
