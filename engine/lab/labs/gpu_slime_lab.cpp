@@ -2,12 +2,13 @@
 // in a quarry floor with stones on its bed. Named views: the five named slimes side by side from
 // the rim (toxic, gel, mucus, sludge, tar); each close up, where the bubbles, the scum and the
 // oily film show; the toxic slime glowing at night; the gel seen into, the stones on the bed
-// through it; and one gale over three slimes, the ripples each keeps after its viscosity. It
+// through it; one gale over three slimes, the ripples each keeps after its viscosity; and the far
+// wall mirrored in the tar, the scene's reflections off and on. It
 // fails on a GPU error, a pipeline made after the load, or a view with no slime in it.
 //
-// ge:summary Lab: slime drawn: five looks, close up, glowing at night, seen into, in a gale
+// ge:summary Lab: slime drawn: five looks, close up, glowing, seen into, in a gale, reflections
 // ge:keywords lab gpu slime toxic gel mucus sludge tar bubbles scum film iridescence ripples
-// ge:keywords kubelka-munk glow picture software-adapter
+// ge:keywords kubelka-munk glow picture software-adapter reflections ssr mirror
 // ge:skill render water labs
 // ge:test tests/render_liquid_test.cpp
 #include <cctype>
@@ -76,7 +77,7 @@ void run(gl::Lab& lab) {
     // The same deterministic numbers as a run with pictures, so the digest is the same on every
     // row.
     lab.note("No GPU adapter on this machine: no pictures.");
-    ls::placeholders(lab, {"looks", "close", "glow", "gel", "gale"});
+    ls::placeholders(lab, {"looks", "close", "glow", "gel", "gale", "reflections"});
     ls::checked(lab, 0, 0);
     return;
   }
@@ -215,6 +216,39 @@ void run(gl::Lab& lab) {
               "slime and the gel glassy, the glint one smooth streak",
               {{"wind", "18 m/s"}}},
              strip(pics, labels, 3), Det::measured);
+  }
+  // THE SCENE IN THE TAR: the far rim and the quarry beyond it mirrored in the tar, from 1.5 m
+  // over its near edge, with the scene's reflections off (the sky's alone) and on.
+  {
+    ge::gpu::Device& d = fresh();
+    ls::Scene s;
+    ls::make_scene(d, s, kConcrete, static_cast<uint32_t>(tw), static_cast<uint32_t>(th), 0.05,
+                   true);
+    put(d, s, "slime-tar", 0);
+    const gr::FrameView v =
+        ls::view_at(ls::kPitX - 3, ls::kLevel + 1.5, ls::kPitZ - 19, 0.05, -0.06, 0.35, 0.3, t);
+    std::vector<gl::Picture> pics;
+    s.liquids.reflections = false;
+    pics.push_back(ls::draw(d, s, v));
+    s.liquids.reflections = true;
+    pics.push_back(ls::draw(d, s, v));
+    const double share = ls::changed(pics[0], pics[1]);
+    lab.metric("reflections.changed-share", share, "", Det::measured);
+    if (share < 0.01) {
+      lab.fail("the tar mirrors nothing of the scene (" + ls::fixed(share * 100, 1) +
+                   "% changed by its reflections)",
+               "Check scene_mirror in engine/render/liquid.wgsl and Liquids::reflections. "
+               "Skill: render.");
+    }
+    lab.shot({"reflections",
+              "THE SCENE IN THE TAR",
+              "The tar from 1.5 m over its near edge, looking across the pit at the far wall and "
+              "the quarry floor beyond, with the scene's reflections off (the sky's alone) and on "
+              "(the reflected ray marched through the scene's depth).",
+              "on the right the far wall and the rim standing upside down in the black glass, "
+              "fading toward the near edge where the view looks down into it",
+              {}},
+             strip(pics, {"SKY ONLY", "THE SCENE MIRRORED"}, 2), Det::measured);
   }
   int errors = 0, late = 0;
   for (const auto& dev : devices) {

@@ -87,8 +87,12 @@ frame):
    - **Swimming** (water level 2 or more, not noclip): as `movement.md`'s water move with these
      numbers: the wish from the VIEW's forward and right with the up axis added to z (or 60
      subtracted when all three axes are 0, a drift down); the wish speed capped at `sv_maxspeed`
-     and then × 0.7; friction: speed −= `dt` × speed × `sv_friction`; acceleration as on the
-     ground with that wish.
+     and then × 0.7; friction: speed −= `dt` × speed × `sv_friction` (floored at 0),
+     with the velocity scaled to the new speed. Then, unless the wish speed is 0, the
+     acceleration differs from the ground's: **the room left is the wish speed minus the speed
+     after the friction** (the velocity's whole length, not its share along the wish), and
+     when that is above 0 the velocity gains `min(sv_accelerate × wish speed × dt, room)` along
+     the normalised wish.
    - **On the ground**: friction, then acceleration (below).
    - **In the air**: air acceleration (below).
 5. **[The program's pre-think]**, which in the campaign jumps and checks for a water jump.

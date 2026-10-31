@@ -30,8 +30,22 @@
 //   is the share of open melt at the core's glow and the crust's at a share of its young skin's
 //   (the cracks and the plates still hot). Steady: the melt changes slower than a frame.
 //
-// Not yet (docs/liquids.md § Not built yet): reflections of the scene (the sky's alone now), the
-// heat shimmer over lava, a flow region's surface.
+// - THE SCENE IN IT (`Liquids::reflections`): the reflected ray marched through the scene's own
+//   depth copy (24 steps growing with distance, then halved down onto the hit), the colour copy
+//   read where it meets the scene, faded toward the screen's edges and the march's end, the sky's
+//   own light where it meets nothing. The Hi-Z pyramid holds each texel's FARTHEST depth (a
+//   cull's bound), so it cannot skip empty space for a ray, which needs the nearest: the full
+//   depth copy the pass already makes is marched instead.
+// - THE HEAT SHIMMER (`LavaLook::shimmer`): the air over the melt is hot, and a ray through it is
+//   bent by its rising cells, a few thousandths of a radian over a lake; the bend is summed along
+//   the ray through a layer kShimmerHeight deep, strongest at the surface. What is seen across
+//   the lake is drawn again through the bent rays (a box over the body, after the surfaces), and
+//   the lava's own surface is looked up where its bent ray lands.
+// - THE CRUST BROKEN (`break_liquid_crust`): a hole of open melt where something fell in, opening
+//   at once and skinning over from its edge, the plates round it cracked and glowing, a crest
+//   running out in the first second; carried by the flow.
+//
+// Not yet (docs/liquids.md § Not built yet): a flow region's surface.
 //
 // ge:summary Lava and slime drawn: crust plates, cracks and blackbody glow; turbid slime, bubbles
 // ge:keywords render liquid lava slime crust plates cracks voronoi flow-map blackbody glow
@@ -39,6 +53,8 @@
 // ge:keywords thin-film sheen toxic gel mucus sludge tar create_liquid add_liquid_body
 // ge:keywords lava_look slime_look liquid_look prepare_liquid encode_liquid liquid_lamps
 // ge:keywords glowing-body lava-light area-light
+// ge:keywords reflections screen-space-reflections ssr heat-shimmer heat-haze crust-broken
+// ge:keywords break_liquid_crust splash
 // ge:skill render water
 // ge:test tests/render_liquid_test.cpp
 #pragma once
@@ -62,6 +78,8 @@ inline constexpr int kLiquidRipples = 16;    // the ripple components a body dra
 inline constexpr int kGlowEntries = 32;      // the glow table's entries
 inline constexpr double kGlowLo = 600;       // K: the table's first (under any visible glow)
 inline constexpr double kGlowHi = 1700;      // K: its last
+inline constexpr int kLiquidBreaks = 8;      // the crust's breaks a body remembers (the latest)
+inline constexpr double kShimmerHeight = 3;  // m: the hot air's layer over lava, drawn as a box
 
 enum class LiquidKind : uint8_t { lava, slime };
 
@@ -79,6 +97,8 @@ struct LavaLook {
   double melt_rough = 0.12;
   water::Rgb crust_albedo{0.045, 0.041, 0.038};
   double patch = 0;  // m: the open melt's patches' size (0: seven plates)
+  // rad/m: the heat shimmer, how far a metre of the hot air over the melt bends a ray (0 none).
+  double shimmer = 0.0008;
 };
 
 struct SlimeLook {
@@ -127,12 +147,15 @@ struct LiquidGpuBody {
   float slime0[4];   // rough, film nm, scum, bubbles
   float slime1[4];   // bubble_size, grime, debris, 0
   float scum[4];     // the scum's albedo
-  float table[kGlowEntries][4];  // the glow table, cd/m^2 rgb (water/glow.hpp)
+  float fx[4];       // reflections on (1) or off, the shimmer (rad/m), the breaks held, 0
+  float breaks[kLiquidBreaks][4];  // x, z (m), radius (m), the time it fell in (s)
+  float table[kGlowEntries][4];    // the glow table, cd/m^2 rgb (water/glow.hpp)
 };
 
 struct Liquids {
   wgpu::BindGroupLayout layout, copy_layout;
-  uint32_t p_copy = 0, p_draw = 0;
+  uint32_t p_copy = 0, p_draw = 0, p_shimmer = 0;
+  bool reflections = true;  // the scene mirrored in the surface (else the sky's alone)
   wgpu::Texture scene_colour, scene_depth;
   wgpu::TextureView scene_colour_view, scene_depth_view;
   wgpu::BindGroup copy_group;
@@ -143,6 +166,7 @@ struct Liquids {
     wgpu::BindGroup group;
     bool hidden = false;
     bool shown = true;
+    int next_break = 0;
   };
   std::vector<Slot> bodies;
 };
@@ -182,7 +206,12 @@ void set_liquid_body(gpu::Device& device, Liquids& liquids, int index, const wat
                      const LiquidLook& look, double wind = 0, double toward = 0, double fetch = 10);
 // Uploads this frame's; a body seen from under its level is not drawn.
 void prepare_liquid(gpu::Device& device, Liquids& liquids, const FrameView& view);
-// "liquid.copy" and "liquid".
+// Something fell into body `index` at (x, z) at time `t` (s, the frame's clock), breaking its
+// crust over `radius` m: the melt shows through a hole that opens at once and skins over again,
+// the broken plates round it glowing hot (lava; a slime ignores it). The latest kLiquidBreaks are
+// kept.
+void break_liquid_crust(Liquids& liquids, int index, double x, double z, double radius, double t);
+// "liquid.copy" and "liquid" (the surfaces, then the shimmer over lava).
 void encode_liquid(const Liquids& liquids, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                    wgpu::CommandEncoder& encoder, const FrameTargets& targets,
                    const wgpu::BindGroup& frame);

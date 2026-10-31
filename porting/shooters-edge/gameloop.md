@@ -113,6 +113,18 @@ result keeps "started in solid" from any solid it met, and takes the first trace
 solid or reaches a smaller fraction, with that entity as what was hit. A trace that started all
 solid in the world stops looking further.
 
+**The hull trace is the same walk on the server and in the player move.** Each solid's hull is
+traced by `movement.md` § Clip hulls' line trace, with nothing changed: the same split with its
+1/32 back-off at EVERY straddled node (so the far part starts at that backed-off point, never
+on the plane), the same impact, the same step back by 0.1 of the split while the end point is
+still inside solid, and the offset added back only when the fraction is not 1. The server and
+the client place the end point identically. A trace that reaches a corner of two planes ends
+1/32 along the normal short of the second plane it straddles when the first split's back-off
+already left it short of the second plane (the worked case: `vectors/hulltrace.txt`'s first
+line, in the slope's corner, ends at x 47.96875 rather than 48). `vectors/hulltrace.txt`
+holds 31 such traces through hull 0 and hull 1 in the move scenes: corners, slants, starts on
+a plane, starts in solid that leave it, and all-solid starts.
+
 **Point contents** are the world's hull 0 at the point. **Testing an entity's position** is a
 zero-length trace of its box at its origin (`nomonsters` for triggers and `not` solids): inside
 something when it started in solid.

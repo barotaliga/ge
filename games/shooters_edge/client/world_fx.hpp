@@ -26,6 +26,7 @@
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/world_models.hpp"
 
 namespace shooters_edge::client {
 
@@ -44,6 +45,7 @@ struct FxFrame {
   effects::Particles births;
   std::vector<effects::Light> lights;
   double blend[4] = {0, 0, 0, 0};  // the screen's: sRGB colour and share
+  std::vector<Placed> models;      // the entities with a model (world_models.hpp)
 };
 
 // The effects of the wall frame of `dt` s at time `t` s, after frame_view brought `v` up to date.

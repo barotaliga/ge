@@ -7,6 +7,9 @@
 //                    (taken only when it protects more than what is worn)          20 s
 //   item_shells 20   item_spikes 25   item_rockets 5   item_cells 6 (spawnflags 1: twice)  20 s
 //   weapon_*         the weapon and some of its ammunition                          30 s
+//   item_artifact_super_damage    the QUAD: four times the damage dealt, 30 s       60 s
+//   item_artifact_invulnerability the SHIELD: no damage taken, 30 s                  60 s
+//                    (a power held glows round its player: blue, red, or both)
 
 float MAX_SHELLS = 100;
 float MAX_NAILS = 200;
@@ -222,6 +225,53 @@ void() weapon_rocketlauncher = {
 void() weapon_lightning = {
   self.ammo_cells = 15;
   weapon_start(W_ARC, "Arc Gun", "progs/g_light.mdl");
+};
+
+// --- the powers ---
+
+float POWER_TIME = 30;
+
+void() power_touch = {
+  if (!can_pick_up()) return;
+  if (self.items == IT_QUAD) {
+    other.super_damage_finished = time + POWER_TIME;
+    sprint(other, PRINT_LOW, "You got the Quad Damage\n");
+  } else {
+    other.invincible_finished = time + POWER_TIME;
+    sprint(other, PRINT_LOW, "You got the Shield\n");
+  }
+  other.items = other.items | self.items;
+  item_taken();
+};
+
+void(string mdl, string snd, float bit) power_start = {
+  self.items = bit;
+  self.touch = power_touch;
+  if (bit == IT_QUAD) self.effects = EF_DIMLIGHT | EF_BLUE;
+  else self.effects = EF_DIMLIGHT | EF_RED;
+  item_start(mdl, snd, '-16 -16 -24', '16 16 32', 60);
+};
+
+void() item_artifact_super_damage = {
+  power_start("progs/quaddama.mdl", "items/damage.wav", IT_QUAD);
+};
+void() item_artifact_invulnerability = {
+  power_start("progs/invulner.mdl", "items/protect.wav", IT_INVULNERABILITY);
+};
+
+// Each frame for a living player: the powers that ran out taken away, the glow of the ones held.
+void() power_frame = {
+  if (self.super_damage_finished && self.super_damage_finished < time) {
+    self.super_damage_finished = 0;
+    self.items = self.items - (self.items & IT_QUAD);
+  }
+  if (self.invincible_finished && self.invincible_finished < time) {
+    self.invincible_finished = 0;
+    self.items = self.items - (self.items & IT_INVULNERABILITY);
+  }
+  self.effects = self.effects - (self.effects & (EF_DIMLIGHT | EF_BLUE | EF_RED));
+  if (self.super_damage_finished) self.effects = self.effects | EF_DIMLIGHT | EF_BLUE;
+  if (self.invincible_finished) self.effects = self.effects | EF_DIMLIGHT | EF_RED;
 };
 
 void() item_precache = {

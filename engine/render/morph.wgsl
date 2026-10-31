@@ -137,8 +137,11 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   let y = in.rel.y + frame.eye.y;
   let outdoor = d.blends.w;
   let sun = sun_light_open(y) * max(dot(n, frame.sun.xyz), 0.0);
-  let light = outdoor * (sun + sky_irradiance(n)) + d.ambient.rgb +
-              d.shade.rgb * max(dot(n, d.shade_dir.xyz), 0.0);
+  var own = d.ambient.rgb + d.shade.rgb * max(dot(n, d.shade_dir.xyz), 0.0);
+  if (d.ambient.w > 0.5) {
+    own = own * (PI * white_luminance());  // in the scene's white (MorphDraw::light_in_white)
+  }
+  let light = outdoor * (sun + sky_irradiance(n)) + own;
   var c = s.rgb / PI * light + s.rgb * (s.w * d.blends.z * white_luminance());
   // The lamps on its skin (a torch carried past, a muzzle's flash), on a matte face.
   c += local_lights(matte(s.rgb), in.rel, n, -normalize(in.rel), in.position.xyz);

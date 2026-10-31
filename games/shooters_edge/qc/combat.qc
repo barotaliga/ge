@@ -33,6 +33,8 @@ void(entity targ, entity inflictor, entity attacker, float damage) damage = {
   local entity was_self;
   if (!targ.takedamage || targ.health <= 0) return;
   if (match_over) return;
+  if (targ.invincible_finished > time) return;  // the shield
+  if (attacker.super_damage_finished > time) damage = damage * 4;  // the quad
   // Armour takes its share, as far as it lasts.
   saved = ceil(targ.armortype * damage);
   if (saved >= targ.armorvalue) {
