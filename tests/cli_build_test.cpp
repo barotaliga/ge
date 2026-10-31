@@ -8,6 +8,8 @@
 // ge:keywords test cli ge build test check compiler_findings test_findings parse output
 // ge:skill agent-interface testing
 // ge:test tests/cli_build_test.cpp
+#include <cstdlib>
+#include <filesystem>
 #include <string>
 
 #include "check.hpp"
@@ -87,4 +89,38 @@ TEST(failed_tests_and_their_harness_lines_become_findings) {
   CHECK(f[3].what == "test sim_wind_test failed (Failed)" &&
         f[3].next.find("--filter=^sim_wind_test$") != std::string::npos);
   CHECK(f[4].where == "labs");
+}
+
+// `ge lab <id> --before=<ref>`: a ref that names no commit is refused before anything builds,
+// and a real one is checked out into build/before/<sha>/ and built there (here it has no
+// CMake presets, so its configure fails, and the finding says it was the ref's).
+TEST(lab_before_checks_the_ref_out_into_a_worktree) {
+  const fs::path repo = fs::temp_directory_path() / "ge_cli_build_test_before";
+  fs::remove_all(repo);
+  fs::create_directories(repo);
+  const std::string git = "git -C \"" + repo.generic_string() + "\" ";
+  const std::string quiet =
+      " > \"" + (repo.parent_path() / "ge_cli_build_test_git.log").generic_string() + "\" 2>&1";
+  CHECK(std::system((git + "init -q" + quiet).c_str()) == 0);
+  CHECK(
+      std::system((git + "-c user.name=t -c user.email=t@t commit -q --allow-empty -m one" + quiet)
+                      .c_str()) == 0);
+  BuildOptions o{repo, "debug", "", {}};
+  LabOptions lab;
+  lab.id = "run-clock";
+  lab.before = "no-such-ref";
+  const Outcome refused = run_lab(o, lab);
+  CHECK(exit_of(refused) == 2);
+  CHECK(!refused.findings.empty() &&
+        refused.findings[0].what == "--before=no-such-ref names no commit");
+  lab.before = "HEAD";
+  const Outcome built = run_lab(o, lab);
+  CHECK(exit_of(built) == 1);
+  CHECK_MSG(!built.findings.empty() && built.findings[0].what.starts_with("at HEAD: "),
+            built.findings.empty() ? std::string("no finding") : built.findings[0].what);
+  bool tree = false;
+  for (const auto& e : fs::directory_iterator(repo / "build" / "before"))
+    tree = fs::exists(e.path() / ".git");
+  CHECK(tree);
+  fs::remove_all(repo);
 }
