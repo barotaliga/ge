@@ -3,17 +3,22 @@
 // the player and two bots seated; the frame drawn as the window draws it (the world from the
 // player's eyes, the weapon in hand, the HUD, then the lobby panel of hud/lobby_panel.hpp over
 // it) at three moments: the WARMUP (the player roaming the hall, not ready), the COUNTDOWN after
-// his `ready`, and the MATCH's first frame after the map restarted (no panel). The lobby's counts
-// are deterministic metrics; the pictures are measured (each adapter rasterises its own way).
+// his `ready`, and the MATCH's first frame after the map restarted (no panel). The warmup and the
+// countdown are drawn again in the CLASSIC LOOK (menu/lobby_screen.hpp): in the fixture's menu
+// pictures (`classic-*`) and, given `--pack`, in the player's own pack's (`pack-*`, never
+// committed or published beyond a private page). The lobby's counts are deterministic metrics;
+// the pictures are measured (each adapter rasterises its own way).
 //
 // ge:summary Lab: the lobby drawn in the window's frame: warmup, countdown, the match's start
 // ge:keywords lab se-lobby-view lobby warmup countdown panel frame hud listen-server halls
 // ge:skill shooter render labs
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
 #include "brush/write.hpp"
+#include "classicenhance/source.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
@@ -27,6 +32,8 @@
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/hud/lobby_panel.hpp"
+#include "shooters_edge/menu/classic_art.hpp"
+#include "shooters_edge/menu/lobby_screen.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -38,6 +45,7 @@ namespace se = shooters_edge::hud;
 namespace sh = ge::shooter;
 namespace sv = shooters_edge::server;
 namespace ls = ge::lab::liquid_scene;
+namespace sm = shooters_edge::menu;
 
 ge::brush::Entity entity(std::initializer_list<std::pair<std::string, std::string>> pairs) {
   ge::brush::Entity e;
@@ -71,6 +79,46 @@ void run(gl::Lab& lab) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
   }
+  // The classic looks: the fixture's menu pictures always, the player's pack's when named.
+  struct Look {
+    std::string name;
+    sm::ClassicArt art;
+  };
+  std::vector<Look> looks;
+  {
+    const auto fixture = sm::fixture_files();
+    Look f{"classic", {}};
+    const sm::FindFile find = [&fixture](std::string_view p,
+                                         std::vector<uint8_t>&) -> std::span<const uint8_t> {
+      const auto it = fixture.find(p);
+      return it == fixture.end() ? std::span<const uint8_t>{}
+                                 : std::span<const uint8_t>(it->second);
+    };
+    if (!sm::load_classic_art(find, &f.art, &error)) {
+      lab.fail("the fixture's menu pictures did not load: " + error,
+               "check fixture_files in games/shooters_edge/menu/classic_art.cpp. Skill: ui.");
+      return;
+    }
+    looks.push_back(std::move(f));
+  }
+  ge::classicenhance::Source src;
+  ge::vfs::Pak src_dir;
+  if (!lab.arg("pack").empty()) {
+    Look p{"pack", {}};
+    const sm::FindFile find = [&](std::string_view path,
+                                  std::vector<uint8_t>&) -> std::span<const uint8_t> {
+      const ge::vfs::PakEntry* e = ge::vfs::pak_find(src_dir, path);
+      return e ? ge::vfs::pak_file(src.pack, *e) : std::span<const uint8_t>{};
+    };
+    if (!ge::classicenhance::open_source(lab.arg("pack"), &src, &error) ||
+        !ge::vfs::read_pak(src.pack, &src_dir, &error) ||
+        !sm::load_classic_art(find, &p.art, &error))
+      lab.fail("the pack's menu pictures did not load: " + error,
+               "give --pack the release zip, an installed folder or its pak0.pak. Skill: ui.");
+    else
+      looks.push_back(std::move(p));
+  }
+
   cl::Listen l;
   cl::ListenOptions opt;
   opt.lobby = true;
@@ -131,27 +179,47 @@ void run(gl::Lab& lab) {
       hand = cl::step_held(l, shown, held, view_settings, weapons, t, kTic);
     }
   };
-  const auto picture = [&](const char* id, const char* title, const char* caption,
-                           const char* look_for) {
+  // The frame at this moment: the modern panel as `id`, then each classic look as `<look>-<id>`
+  // when `classic`.
+  const auto picture = [&](const std::string& id, const std::string& title,
+                           const std::string& caption, const std::string& look_for, bool classic) {
     ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
     cl::step_fx(l, shown, fx_state, t, 0, fx);
-    if (!device) {
-      ls::placeholders(lab, {id});
-      return;
+    const se::LobbyView lv = cl::lobby_view(*l.room, l.server->sv.time, 0, true);
+    std::vector<const Look*> sets = {nullptr};
+    if (classic)
+      for (const Look& k : looks) sets.push_back(&k);
+    for (const Look* k : sets) {
+      const std::string shot_id = k ? k->name + "-" + id : id;
+      if (!device) {
+        ls::placeholders(lab, {shot_id.c_str()});
+        continue;
+      }
+      ge::ui::DrawList overlay;
+      overlay.begin(static_cast<int>(w), static_cast<int>(h));
+      se::fill_hud(hud, cl::status_of(l, t), art);
+      hud.layout.draw(overlay,
+                      hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
+                      se::hud_style());
+      if (k)
+        sm::draw_lobby_classic(overlay, k->art, lv, static_cast<int>(w), static_cast<int>(h));
+      else
+        se::draw_lobby(overlay, lv, static_cast<int>(w), static_cast<int>(h));
+      cl::draw_world(*device, *world, view, fx, &hand, 0, overlay, out.view);
+      const ge::gpu::Image img = ge::gpu::read_now(*device, out);
+      const std::string t2 = k ? title + " (" +
+                                     (k->name == "pack" ? "the pack's" : "the fixture's") +
+                                     " menu pictures)"
+                               : title;
+      const std::string c2 =
+          k ? "The same moment in the classic look: the banner and the roster in the text box of "
+              "the menu pictures, the glyph sheet's two sets, the count in the big figures. " +
+                  caption
+            : caption;
+      lab.shot({shot_id, t2, c2, look_for, {{"map", "halls"}, {"size", lab.arg("size")}}},
+               gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+               gl::Det::measured);
     }
-    ge::ui::DrawList overlay;
-    overlay.begin(static_cast<int>(w), static_cast<int>(h));
-    se::fill_hud(hud, cl::status_of(l, t), art);
-    hud.layout.draw(overlay,
-                    hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
-                    se::hud_style());
-    se::draw_lobby(overlay, cl::lobby_view(*l.room, l.server->sv.time, 0, true),
-                   static_cast<int>(w), static_cast<int>(h));
-    cl::draw_world(*device, *world, view, fx, &hand, 0, overlay, out.view);
-    const ge::gpu::Image img = ge::gpu::read_now(*device, out);
-    lab.shot({id, title, caption, look_for, {{"map", "halls"}, {"size", lab.arg("size")}}},
-             gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
-             gl::Det::measured);
   };
 
   play(80, {});  // the spawn, the fall onto the launcher
@@ -163,20 +231,20 @@ void run(gl::Lab& lab) {
           "The player free in the fixture hall with the launcher he picked up, the HUD along the "
           "bottom, and the lobby over it: WARMUP, 2 of 3 ready (the bots), the keys, and the two "
           "teams' roster on the right with the player's row lit and NOT READY.",
-          "the banner at the top centre, the roster clear of the HUD, the world lit behind");
+          "the banner at the top centre, the roster clear of the HUD, the world lit behind", true);
   cl::listen_lobby(l, "ready");
   play(80, {});
   picture("countdown", "THE COUNTDOWN",
           "After `ready` (F1): everyone is ready and the countdown's seconds stand large in the "
           "upper half; the roster's marks are all READY.",
-          "the count readable over the world, the banner saying COUNTDOWN");
+          "the count readable over the world, the banner saying COUNTDOWN", true);
   const int countdowns = l.room->lobby.countdowns;
   play(260, {});
   picture("match", "THE MATCH'S FIRST MOMENTS",
           "The countdown ran out and the map restarted a second ago: the player respawned on the "
           "launcher's spot with the frags at zero (the bots are already fighting him), and no "
           "lobby over the game.",
-          "no banner or roster; the HUD alone");
+          "no banner or roster; the HUD alone", false);
   lab.metric("lobby.seated", sv::lobby_seated(l.room->lobby), "count");
   lab.metric("lobby.countdowns", countdowns, "count");
   lab.metric("lobby.matches", l.room->lobby.matches, "count");
@@ -199,7 +267,9 @@ const gl::LabSpec kSpec{
     "Does the lobby read over the game in the window's frame: the warmup, the countdown, and "
     "nothing once the match is on?",
     {{"size", "960,540", "the frame's width and height, px"},
-     {"models", "games/shooters_edge/content/models/view", "the held weapons' folder"}},
+     {"models", "games/shooters_edge/content/models/view", "the held weapons' folder"},
+     {"pack", "",
+      "the player's classic pack (release zip, folder or pak0.pak) for the pack-* shots"}},
     "--size=480,270",
     run,
 };

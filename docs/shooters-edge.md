@@ -795,7 +795,10 @@ seconds runs, stopped by a break or a player joining unready; the leader (the li
 player) may `start` it whoever is ready. When the match's map changes, everyone is back in warmup,
 unready. The window shows a banner (the phase, how many are ready, the keys: F1 ready or break, F2
 the other team, F3 the roster), the countdown's seconds and both teams' roster; `addbot` seats a
-fighter. `sv_lobby 0` starts the match with the map, as before.
+fighter. `sv_lobby 0` starts the match with the map, as before. When the player's packs carry the
+classic menu's pictures, the lobby is drawn in them (`menu/lobby_screen.hpp`): the banner and the
+roster in the menu's text box, the words in the glyph sheet's two sets, the countdown in the big
+figures, as the ESC menu is; without them it keeps the modern panel.
 
 **The lobby (M18q).** Before the match, on M17d's sessions: the players and their pings, teams,
 ready, chat to all or the team, a map vote, kick, and the host's start; at the end of the match
