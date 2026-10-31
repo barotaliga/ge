@@ -1,5 +1,5 @@
 # What railgun.glb was built from (engine/assets/manifest.hpp). Written by `ge asset build railgun`; never edit it by hand.
 builder build.py ed3dd0660090f864
 source ../weapon_kit.py 6baac67ceb982c65
-data se_view fc502edc1e5700ff
+data se_view 08d075b67d37be81
 blender 5.2.2 LTS
