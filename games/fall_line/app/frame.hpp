@@ -53,11 +53,11 @@
 // spray and the falling snow, and its fall says how much of the snow is drawn. Every pipeline is
 // made in `create_frame` (the manifest), and the device's load ends there: a pipeline made after it
 // is an error.
-//
 // ge:summary Fall Line's frame: its pass table over engine/render and the GPU half it owns
 // ge:keywords fall-line frame pass-table game-frame create_frame draw pass_table_faults fog
 // ge:keywords render offscreen surface stats draw_wire wire-probe wireframe water add_water
-// freeze_water lake-ice ge:skill render
+// ge:keywords freeze_water lake-ice village-cold
+// ge:skill render
 #pragma once
 
 #include <array>

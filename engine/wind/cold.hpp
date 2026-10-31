@@ -31,8 +31,10 @@
 // ge:keywords frost hoar-frost dew rime glaze black-ice breath condensation lake-ice ice
 // ge:keywords stefan freezing-degree-days gold bearing snow-feel powder slush sticky squeak
 // ge:keywords crust glide ski-friction fresh-snow-density hedstrom deposit_on glaze_on
-// ge:keywords frost_loss sublimation breath_of ice_grown ice_bears snow_feel fresh_density glide_of
-// feel_name ge:skill water determinism ge:test tests/wind_cold_test.cpp
+// ge:keywords frost_loss sublimation breath_of ice_grown ice_bears snow_feel fresh_density
+// ge:keywords glide_of feel_name
+// ge:skill water determinism
+// ge:test tests/wind_cold_test.cpp
 #pragma once
 
 #include <cstdint>

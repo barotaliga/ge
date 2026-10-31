@@ -48,16 +48,15 @@
 // (`InstancePipelines::shadows`, bound by `bind_instance_shadows`; none until then). Shaders:
 // instances.wgsl, instances_cull.wgsl.
 //
-// ge:summary GPU-driven instance families: meshes and LODs, two-phase Hi-Z culling, indirect
-// draws
+// ge:summary GPU-driven instance families: meshes, LODs, two-phase Hi-Z culling, indirect draws
 // ge:keywords render instances instance-family gpu-driven two-phase-culling occlusion-culling
 // ge:keywords hi-z lod lod-band dither cross-fade bucket indirect-draw base-vertex compaction
 // ge:keywords vertex-pulling soa streams materials pick_lod create_family set_instances
 // ge:keywords encode_instances_cull encode_instances_depth encode_instances instance-stats
 // ge:keywords see-through set_see_through see_through_keep occluder-fade dithered-fade
+// ge:keywords set_family_surfaces
 // ge:keywords casters caster-slot shadow-cull create_family_casters draw_casters
 // ge:keywords wire-probe wireframe encode_instances_wire palette-family palettes
-// ge:keywords set_family_surfaces material-update
 // ge:skill render
 // ge:test tests/render_instances_test.cpp
 #pragma once
