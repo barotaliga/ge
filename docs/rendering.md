@@ -1416,7 +1416,34 @@ hundred metres can give, so it is a layer of its own, drawn per pixel (`render/v
 
 The `valley-fog` lab draws a seed's sea from the summit, from the air, at dawn and from under it.
 Not yet: the mountains' shade on the top (a sea at dawn is lit to its far shore under every
-ridge's shadow) and Fall Line's own seas, dealt by the map's weather and hour (M38f).
+ridge's shadow). Fall Line's own seas are dealt by the map's air at the hour (next section).
+
+## Fall Line's fog
+
+The fog in areas and the valleys' sea are mechanisms; **Fall Line's fog** (M38f) is the map's
+own air laying them (`plugins/mountain/app/mist_look.hpp`, `games/fall_line/app/mists.hpp`). The
+air is `engine/wind`'s (`climate.hpp`, `mist.hpp`, docs/climate.md); the mountain only says what
+its day is and where the fog is asked about.
+
+- **The day** (`mountain_climate`): a winter's day on the map's face. Its mean falls half a
+  degree for every degree of latitude and with the valley's height; the sky's kind sets the
+  moisture, the cover and the swing; the map's wind is its wind, and its sun sets its sunrise and
+  sunset. A FOG sky is an inversion's day: damp, still air under a clear sky.
+- **The sea in the valleys**: the air at the valley's floor, in a hollow as deep as the mountain
+  (to 600 m), where the night's cold pool lies. A valley or radiation fog there is the frame's
+  `FrameView::valley`, its top at the floor plus the fog's depth, drifting on a fifth of the wind.
+- **The ground mist** round the eye and **the cloud on the summit**: the air at the ground under
+  the eye and at the summit, each a bank hugging the ground in the froxels where it fogs.
+- **The hour**: the sky's (the scene's hour, else the map's), so the fog burns off as the morning
+  breaks the cold pool. Seed 38 starts its clear January morning in a sea of fog 200 m deep at
+  half past seven, and is clear from half past eight (the `fog` lab's `dawn` scenes).
+- **The frame** (`dress_mists`, called before the uniforms): a caller that brings fog of its
+  own (`FrameScene::fog`, or a `FrameView::valley` set) draws only its own, so a lab's scene is
+  the scene it placed. `r_fog 0` draws no fog at all; `r_fog_quality` 0 to 3 sizes the froxels
+  (80 x 45 x 32 up to 240 x 135 x 96; 2, the default, is 160 x 90 x 64).
+
+Not yet: the lakes' steam and advection fog (a site's distance to open water), and the woods'
+own mist (the forest's shelter keeping a radiation fog longer).
 
 ## Anti-aliasing and resolution
 
