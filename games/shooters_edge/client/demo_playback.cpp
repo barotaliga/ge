@@ -259,6 +259,7 @@ std::vector<std::string> highlight_lines(const DemoPlayback& p, bool all) {
   std::vector<std::string> out;
   const gr::Highlights everyone = all ? demo_highlights(p.scan, -1) : gr::Highlights{};
   const std::vector<gr::Highlight>& list = all ? everyone.list : p.highlights.list;
+  out.reserve(list.size() + 1);
   for (const gr::Highlight& h : list)
     out.push_back(gu::play_clock(h.at_s) + "  " + player_name(p.scan.names, h.subject) + "  " +
                   h.text);

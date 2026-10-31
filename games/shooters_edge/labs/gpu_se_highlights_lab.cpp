@@ -190,9 +190,8 @@ void run(gl::Lab& lab) {
              cl::player_name(scan.names, owners[i]) + "  ·  " + std::to_string(n) +
                  (n == 1 ? " highlight" : " highlights"));
     for (int y = 0; y < kStrip; y++)
-      std::copy_n(
-          frame.rgba.begin() + static_cast<ptrdiff_t>((kH - kStrip + y) * kW * 4), kW * 4,
-          sheet.rgba.begin() + static_cast<ptrdiff_t>((static_cast<int>(i) * kStrip + y) * kW * 4));
+      std::copy_n(frame.rgba.begin() + (static_cast<ptrdiff_t>(kH - kStrip + y) * kW * 4), kW * 4,
+                  sheet.rgba.begin() + ((static_cast<ptrdiff_t>(i) * kStrip + y) * kW * 4));
   }
   if (!owners.empty())
     lab.shot({"bars", "EVERY PLAYER'S PLAY BAR",
