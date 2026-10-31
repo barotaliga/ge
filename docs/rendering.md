@@ -1493,7 +1493,7 @@ own air laying them (`plugins/mountain/app/mist_look.hpp`, `games/fall_line/app/
 air is `engine/wind`'s (`climate.hpp`, `mist.hpp`, docs/climate.md); the mountain only says what
 its day is and where the fog is asked about.
 
-- **The day** (`mountain_climate`): a winter's day on the map's face. Its mean falls half a
+- **The day** (`air::climate_of`, plugins/mountain/air): a winter's day on the map's face. Its mean falls half a
   degree for every degree of latitude and with the valley's height; the sky's kind sets the
   moisture, the cover and the swing; the map's wind is its wind, and its sun sets its sunrise and
   sunset. A FOG sky is an inversion's day: damp, still air under a clear sky.
@@ -1884,10 +1884,15 @@ drain and dry by the wind and the sun). The picture reads the same numbers:
   that reads as slush: the glitter goes, the glare dulls, the flats pool.
 - Fall Line keeps one wet ground a frame, the eye's, stepped by the frames' clock from the steady
   state its rain and drying would leave. Its rain comes from the map's SNOW LINE
-  (`Weather::snowline`, raised only by `sv_snowline`: R19 deals none, so every dealt map is snow
-  to the valley and no digest moves). The cvars: `r_precip`, `r_precip_density`, `r_splashes`,
-  `r_wet`; the labs `precip` (eight skies from a flurry to a rainstorm) and `precip-air` (the
-  numbers as charts).
+  (`air::snowline_at`: `sv_snowline`'s where it is set, else `wind::snow_level` of the map's day at
+  the sky's hour, M51e, so a mild day's line climbs through the afternoon; a dealt winter map's
+  lies far under its base, snow to the valley). The cvars: `r_precip`, `r_precip_density`,
+  `r_splashes`, `r_wet`; the labs `precip` (eight skies from a flurry to a rainstorm, a mild day's
+  dawn and afternoon either side of its snow line, and a skier's breath on a cold morning) and
+  `precip-air` (the numbers as charts).
+- THE BREATH (`skier/app/breath.hpp`, M51e): each racer breathes out puffs at his mouth, as thick
+  as the air there shows a breath (`wind::breath_of` of the map's day at the sky's hour), into the
+  particles beside his spray; nothing shows above about 5-10 C. `FrameOptions::breath`.
 - THE SNOW'S COVER and THE LIGHTNING are the dial's too: `step_cover` lays ten millimetres of
   snow a millimetre of snow's water and takes it with the rain (4 mm an hour a mm of rain) and
   the sun (2 mm an hour in full sun), the cover's share 1 - e^(-depth / 6 mm); `flash_at(t)`

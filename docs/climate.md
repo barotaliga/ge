@@ -124,8 +124,9 @@ it asks.
 | --- | --- | --- |
 | The fog's areas (`render/fog.hpp`, M38) | `mist_at` at a world's sites, handed over by `render/mist_fog.hpp` (`mist_volume`: a bank as deep as `depth`, steam thinning upward in wisps climbing at `rise`; `mist_valley`: a valley's fog level from its floor); Fall Line's valleys, ground and summit and any lake laid on its map (`water_mist`), a classic map's pools of water and slime (`bsp_fog.hpp`'s `FogRows::air`) | M51c (done) |
 | The snow layer (`engine/snow`, M29) | `Weather::air` sampled off `air_at`; `fresh_density` for `Weather::fresh_density`; `glide_of` and `snow_feel` for the contact and the sound (`engine/snow/air.hpp`: `weather_of`, `feel_at`) | M51d (done) |
-| What falls (`precip.hpp`, M36) | `freezing_level` or `snow_level` as the freezing level; `rain_share_of` at the ground | M51e |
-| The water (`engine/water`, M24) | `ice_grown`, `ice_bears`, steam fog over open water | M51e |
+| What falls (`precip.hpp`, M36) | `snow_level` of Fall Line's day (`air::climate_of`) at the sky's hour as the snow line (`air::snowline_at`), unless one is picked by hand; `rain_share_at` under it | M51e (done) |
+| The skier's breath (`skier/app/breath.hpp`) | `breath_of` of `air_at` at his mouth, at the sky's hour | M51e (done) |
+| The village's frost and black ice, the water's ice (`engine/water`, M24) | `deposit_on`, `glaze_on`, `ice_grown`, `ice_bears`, steam fog over open water | M51f |
 | The classic levels (`plugins/classicenhance`, M41) | a `Climate` per level | M51b |
 
 ## Considered and not taken

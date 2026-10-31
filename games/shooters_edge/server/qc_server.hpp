@@ -138,7 +138,8 @@ struct ClientInfo {
   bool drop = false;  // a stuffed "disconnect": dropped after the current call
   std::string address = "loopback";
   int ping_ms = 0;
-  ClientBlow blow;  // this frame's (a single-player program's)
+  double entered_at = 0;  // the server's time it connected, s (the scoreboard's minutes)
+  ClientBlow blow;        // this frame's (a single-player program's)
 };
 
 struct StaticEntity {

@@ -328,7 +328,7 @@ void run(ge::lab::Lab& lab) {
   for (size_t k = 0; k < shots.size(); ++k) {
     const Shot& s = shots[k];
     if (s.air == 0) continue;
-    ge::wind::Climate c = ge::mountain::app::mountain_climate(level);
+    ge::wind::Climate c = ge::mountain::air::climate_of(level);
     c.mean_c = lab.arg_num("spring");
     c.wind = s.wind;
     c.cloud = 0.05;

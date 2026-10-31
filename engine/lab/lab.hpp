@@ -164,6 +164,18 @@ class Lab {
     return cvars_;
   }
   bool cvars_read() const { return cvars_read_; }
+
+  // THE PACK ASKED TO BE STAGED (the runner's `--stage-pak=<name>`): a game's labs that read files
+  // stage the pack of that name over their search path (Shooter's Edge's `fixture`: stand-in
+  // players, client/stage.hpp), so they draw what a game folder would hold without one. Read the
+  // same way as the cvars: a lab given a name it never asks for fails.
+  void use_stage_pak(std::string name) { stage_pak_ = std::move(name); }
+  const std::string& stage_pak() const {
+    stage_pak_read_ = true;
+    return stage_pak_;
+  }
+  bool stage_pak_read() const { return stage_pak_read_; }
+  const std::string& stage_pak_given() const { return stage_pak_; }
   const std::string& cvars_given() const { return cvars_; }
 
   // What the lab found. All of them feed the report; the deterministic ones feed the digest.
@@ -220,6 +232,8 @@ class Lab {
   mutable std::vector<std::string> skipped_;
   std::string cvars_;
   mutable bool cvars_read_ = false;
+  std::string stage_pak_;
+  mutable bool stage_pak_read_ = false;
   uint64_t digest_ = 0xcbf29ce484222325ull;
 };
 

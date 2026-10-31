@@ -23,6 +23,7 @@
 #include "golden.hpp"
 #include "mountain/air/air.hpp"
 #include "mountain/mapgen/weather.hpp"
+#include "wind/climate.hpp"
 
 namespace {
 
@@ -150,6 +151,33 @@ TEST(a_storm_passes_over_the_middle_with_its_gusts_and_rain) {
   const ma::Fall dry = ma::fall_at(l, s, ma::kOverhead, mx + 60000, 1000, mz);
   CHECK(dry.fall < 0.01);
   CHECK_BITS(ma::wind_at(l, s, 12, mx + 60000, mz).speed, ma::wind_at(l, 12).speed);
+}
+
+TEST(the_snow_line_climbs_with_the_day_and_a_picked_one_stays) {
+  mg::Level l = sky(38, mg::WeatherKind::snow, 0.6, 3, 0);
+  l.sun = {12, 30, 46, std::nullopt};
+  l.mountain.base.y = 1000;
+  l.mountain.summit.y = 2400;
+  l.weather.mean_c = 2;  // a mild day at the base
+  const double dawn = ma::snowline_at(l, 6.5), noon = ma::snowline_at(l, 14.5);
+  CHECK(noon > dawn + 200);
+  CHECK(dawn == ge::wind::snow_level(ma::climate_of(l), 6.5));
+  // Rain under the line, snow over it.
+  CHECK(ma::fall_at(l, 0, noon - 400, 14.5).rain > 0.99);
+  CHECK(ma::fall_at(l, 0, noon + 400, 14.5).rain == 0);
+  // The same height: snow at dawn, rain in the afternoon.
+  const double mid = 0.5 * (dawn + noon);
+  CHECK(ma::fall_at(l, 0, mid, 6.5).rain < 0.01 && ma::fall_at(l, 0, mid, 14.5).rain > 0.99);
+  // A cold day's line is far under the base: snow to the valley, the fall's bits unmoved.
+  mg::Level cold = l;
+  cold.weather.mean_c = -12;
+  CHECK(ma::snowline_at(cold, 14.5) < cold.mountain.base.y - 500);
+  // A line picked by hand stays where it was put, all day.
+  mg::Level picked = l;
+  picked.weather.snowline = 1500;
+  CHECK(ma::snowline_at(picked, 6.5) == 1500 && ma::snowline_at(picked, 14.5) == 1500);
+  // The hour keeps real time from the map's start, wrapped to 0..24.
+  CHECK(std::fabs(ma::hour_at(l, 3600 * 13) - 1) < 1e-9);
 }
 
 TEST(every_number_keeps_its_golden) {

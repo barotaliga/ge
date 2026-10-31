@@ -2,7 +2,7 @@
 // on the summit.
 //
 // ge:summary The mountain's mists: the formulas behind mist_look.hpp
-// ge:keywords mist fog valley-fog ground-mist summit-cloud mountain_climate mists_at
+// ge:keywords mist fog valley-fog ground-mist summit-cloud climate_of mists_at
 // ge:skill mountain render
 // ge:test tests/mountain_mist_look_test.cpp
 #include "mountain/app/mist_look.hpp"
@@ -11,7 +11,7 @@
 #include <cmath>
 
 #include "core/libm/libm.hpp"
-#include "mountain/mapgen/sun.hpp"
+#include "mountain/air/air.hpp"
 #include "render/mist_fog.hpp"
 
 namespace ge::mountain::app {
@@ -20,37 +20,6 @@ namespace {
 
 namespace lm = core::libm;
 namespace mg = mapgen;
-
-constexpr double kPi = 3.14159265358979323846;
-constexpr double kDeg = kPi / 180;
-
-// The sky's kinds as the air's moisture (the relative humidity at the day's mean) and cover.
-struct SkyAir {
-  double humidity, cloud;
-};
-
-SkyAir sky_air(mg::WeatherKind kind) {
-  switch (kind) {
-    case mg::WeatherKind::clear:
-      return {0.8, 0.05};
-    case mg::WeatherKind::fair:
-      return {0.8, 0.3};
-    case mg::WeatherKind::flurries:
-      return {0.85, 0.5};
-    case mg::WeatherKind::high:
-      return {0.75, 0.5};
-    case mg::WeatherKind::overcast:
-      return {0.88, 0.9};
-    case mg::WeatherKind::snow:
-      return {0.92, 0.95};
-    case mg::WeatherKind::storm:
-      return {0.92, 1.0};
-    case mg::WeatherKind::fog:
-      // The inversion's day: the air damp under a clear sky over the sea.
-      return {0.97, 0.15};
-  }
-  return {0.8, 0.3};
-}
 
 // The way the map's wind blows TO, a unit (x, z).
 void wind_toward(const mg::Weather& w, double out[2]) {
@@ -82,32 +51,9 @@ render::FogVolume bank(const wind::Mist& mist, double x, double z, double reach,
 
 }  // namespace
 
-wind::Climate mountain_climate(const mg::Level& level) {
-  const mg::Mountain& m = level.mountain;
-  const SkyAir air = sky_air(level.weather.kind);
-  wind::Climate c;
-  // A winter's day: half a degree colder at the sea for every degree from the equator, then the
-  // lapse up to the valley's floor.
-  c.ref_y = m.base.y;
-  c.mean_c = 20 - 0.5 * std::fabs(level.sun.latitude) - c.lapse * std::max(m.altitude, 0.0);
-  c.range_c = 10;
-  c.humidity = air.humidity;
-  c.cloud = air.cloud;
-  c.wind = level.weather.kind == mg::WeatherKind::fog ? std::min(level.weather.wind, 1.5)
-                                                      : level.weather.wind;
-  // Sunrise and sunset off the sun's hour angle at the horizon.
-  const double phi = level.sun.latitude * kDeg;
-  const double decl = mg::declination_of(level.sun.day_of_year) * kDeg;
-  const double cos_h = std::clamp(-lm::tan(phi) * lm::tan(decl), -1.0, 1.0);
-  const double half_day = lm::acos(cos_h) / kDeg / 15;
-  c.sunrise = 12 - half_day;
-  c.sunset = 12 + half_day;
-  return c;
-}
-
 MistLook mists_at(const mg::Level& level, double hour, const double eye[3]) {
   MistLook out;
-  const wind::Climate c = mountain_climate(level);
+  const wind::Climate c = air::climate_of(level);
   const mg::Mountain& m = level.mountain;
   double toward[2];
   wind_toward(level.weather, toward);
