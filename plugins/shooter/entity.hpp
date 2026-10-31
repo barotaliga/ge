@@ -49,6 +49,7 @@ constexpr int kFlagMonster = 32;    // a missile clips against it with a 30-unit
 constexpr int kFlagItem = 256;      // a pick-up: its trigger box grown 15 units sideways
 constexpr int kFlagOnGround = 512;  // resting on `groundentity`
 constexpr int kFlagWaterJump = 2048;
+constexpr int kFlagJumpReleased = 4096;  // the jump button let go since the last jump
 
 // A function of the game program, by number; 0 is none. The loop only passes the number back to
 // the program (`Program::call`, program.hpp).
@@ -89,6 +90,11 @@ struct Edict {
   float gravity = 0;   // a factor; 0 means 1
   float maxspeed = 0;  // a player's own cap; 0 means sv_maxspeed
   Vec3f movement;      // the command's forward, side and up moves, written before each command
+  // The original move's (framemove.hpp).
+  Vec3f oldorigin;   // the last spot the box was free at (unstick goes back to it)
+  Vec3f view_ofs;    // the eye above the origin
+  Vec3f movedir;     // a water jump's horizontal push
+  Vec3f punchangle;  // the view's recoil kick, degrees (decays; never moves the aim)
 };
 
 }  // namespace ge::shooter

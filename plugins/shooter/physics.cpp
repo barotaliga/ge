@@ -7,6 +7,7 @@
 // ge:test tests/shooter_physics_test.cpp tests/shooter_toss_recording_test.cpp
 #include "shooter/physics.hpp"
 
+#include "shooter/client.hpp"
 #include "shooter/push.hpp"
 #include "shooter/slide.hpp"
 #include "shooter/trace.hpp"
@@ -37,8 +38,8 @@ int trace_kind(const Edict& ed) {
   return kTraceNormal;
 }
 
-// Moves the entity by `push` as far as it goes, relinks it with its trigger touches and, on a
-// hit, runs both touches.
+}  // namespace
+
 HullTrace push_entity(Server& sv, int e, Vec3f push) {
   Edict& ed = ent(sv, e);
   const Vec3f end = ed.origin + push;
@@ -48,6 +49,8 @@ HullTrace push_entity(Server& sv, int e, Vec3f push) {
   if (tr.ent >= 0) impact(sv, e, tr.ent);
   return tr;
 }
+
+namespace {
 
 void physics_none(Server& sv, int e, double dt) { run_think(sv, e, dt); }
 
@@ -143,7 +146,7 @@ void physics_toss(Server& sv, int e, double dt, HullTrace* last) {
   check_water_transition(sv, e);
 }
 
-int fly_move(Server& sv, int e, float time) {
+int fly_move(Server& sv, int e, float time, HullTrace* wall) {
   int blocked = 0;
   const Vec3f primal = ent(sv, e).velocity;
   Vec3f original = primal;
@@ -174,7 +177,10 @@ int fly_move(Server& sv, int e, float time) {
         ed.groundentity = tr.ent;
       }
     }
-    if (tr.plane.normal.z == 0) blocked |= 2;
+    if (tr.plane.normal.z == 0) {
+      blocked |= 2;
+      if (wall != nullptr) *wall = tr;
+    }
     impact(sv, e, tr.ent);
     if (ent(sv, e).free) break;
 
@@ -281,7 +287,11 @@ void physics_frame(Server& sv, double frametime) {
   for (int i = 0; i < sv.num_edicts; i++) {
     if (ent(sv, i).free) continue;
     if (sv.g.force_retouch != 0) link_edict(sv, i, true);
-    if (i >= 1 && i <= sv.set.maxclients) continue;
+    if (i >= 1 && i <= sv.set.maxclients) {
+      if (sv.set.single_player_clock && sv.set.playermove == PlayerMove::original)
+        run_player_frame(sv, i, frametime);
+      continue;
+    }
     run_entity(sv, i, frametime);
     run_new_missile(sv);
   }

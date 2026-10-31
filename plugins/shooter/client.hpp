@@ -74,6 +74,17 @@ void disconnect_client(Server& sv, int slot);
 // The command length the speed check lets through, and the bank it leaves.
 int speed_check(ClientSlot& c, double now, int msec);
 
+// THE ORIGINAL MOVE (`ServerSettings::playermove`, framemove.hpp): on the multiplayer clock each
+// command piece is the original step by the piece's length (the think, the pre-think and the
+// player's think, the program's part unless the program jumps for itself, the move); on the
+// single-player clock a packet only keeps its newest command (and takes its impulse), every
+// active player thinks with that command after the frame's packets (`frame_players_think`), and
+// the physics frame runs each player in its turn (`run_player_frame`: the pre-think, then a walking
+// or noclip player's think, the program's part and the move, any other movetype's own rules, then
+// the post-think).
+void frame_players_think(Server& sv, double dt);
+void run_player_frame(Server& sv, int e, double dt);
+
 // Runs one packet as the server reads it; returns how many packets were lost before it (-1 when
 // the packet is older than one already read and is ignored).
 int run_packet(Server& sv, const Packet& p);

@@ -38,6 +38,13 @@ void add_settings(QcServer& s) {
   s.cvars.add({"samelevel", "0", info, "1: the map does not change at the end"});
   s.cvars.add({"sv_gravity", "800", info, "the world's gravity, units/s^2"});
   s.cvars.add({"sv_maxspeed", "320", info, "a player's run speed, units/s"});
+  s.cvars.add({"sv_playermove", "auto", info,
+               "the player move: arena (the predicted move), original (the server's own step) or "
+               "auto (original for a single-player program); read at map start",
+               con::CvarKind::text});
+  s.cvars.add({"edgefriction", "2", info, "the original move's friction factor at a ledge"});
+  s.cvars.add(
+      {"sv_nostep", "0", info, "1: the original move never steps up", con::CvarKind::boolean});
   s.cvars.add({"sv_phs", "1", srv, "1: sounds go only to clients that can hear them"});
   s.cvars.add({"sv_specprint", "0", srv,
                "bits: 1 spectators get a copy of a tracked player's centerprints, 2 sprints"});
@@ -281,6 +288,14 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
   n.should_pause = named(progs, "GE_ShouldPause");
   n.timeofday = named(progs, "timeofday");
 
+  // The player move, read at map start: auto follows the program's form.
+  set.program_jumps = s.q.layout->single_player;
+  const std::string& move = s.cvars.find("sv_playermove")->value;
+  set.playermove = move == "original" || (move != "arena" && set.program_jumps)
+                       ? sh::PlayerMove::original
+                       : sh::PlayerMove::arena;
+  set.edgefriction = static_cast<float>(s.cvars.find("edgefriction")->number);
+  set.nostep = s.cvars.find("sv_nostep")->on();
   sh::create_server(s.sv, set, map.models, sim::qc_program(s.q));
   apply_settings(s);
   s.map_name = map.name;

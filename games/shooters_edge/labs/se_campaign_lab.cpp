@@ -385,8 +385,38 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
     sv::campaign_join(c, 0, "player");
     const int seconds = static_cast<int>(lab.arg_num("seconds"));
     const int frames = static_cast<int>(seconds / sv::kCampaignStep);
-    for (int i = 0; i < frames && c.server; i++)
-      if (!sv::campaign_frame(c, nullptr, 0, error)) break;
+    // The player's hands: the forward axis held (and the view's yaw), a packet a frame.
+    sh::Packet p;
+    for (sh::MoveCmd& cmd : p.cmds) {
+      cmd.msec = 14;
+      cmd.forward = static_cast<int16_t>(lab.arg_num("forward"));
+      cmd.angles.y = static_cast<float>(lab.arg_num("yaw"));
+    }
+    const sh::Vec3f start = c.server->sv.edicts[1].origin;
+    double walked = 0;
+    sh::Vec3f last = start;
+    for (int i = 0; i < frames && c.server; i++) {
+      p.sequence = static_cast<uint32_t>(i + 1);
+      if (!sv::campaign_frame(c, &p, 1, error)) break;
+      if (!c.server) break;
+      const sh::Vec3f now = c.server->sv.edicts[1].origin;
+      walked += static_cast<double>(sh::length(now - last));
+      last = now;
+    }
+    if (c.server) {
+      const sh::Edict& pl = c.server->sv.edicts[1];
+      t.rows.push_back({"the player move", c.server->sv.set.playermove == sh::PlayerMove::original
+                                               ? "original"
+                                               : "arena"});
+      t.rows.push_back({"the player: start, end",
+                        to_fixed(start.x, 1) + " " + to_fixed(start.y, 1) + " " +
+                            to_fixed(start.z, 1) + " -> " + to_fixed(pl.origin.x, 1) + " " +
+                            to_fixed(pl.origin.y, 1) + " " + to_fixed(pl.origin.z, 1)});
+      t.rows.push_back({"the player: walked, on the ground",
+                        to_fixed(walked, 1) + " units, " +
+                            ((pl.flags & sh::kFlagOnGround) != 0 ? "yes" : "no")});
+      lab.metric("pack.walked", walked, "units");
+    }
     // A console line after it (`changelevel e1m2`): the change, then one frame on the next map.
     if (c.server && !lab.arg("then").empty()) {
       sv::server_command(*c.server, lab.arg("then"));
@@ -500,6 +530,8 @@ const gl::LabSpec kSpec{
         {"skill", "1", "with --game: the skill the campaign is played at"},
         {"seconds", "5", "with --game: how long the map runs after the player joins, s"},
         {"then", "", "with --game: a console line run after that (`changelevel e1m2`)"},
+        {"forward", "0", "with --game: the forward axis the player holds every frame, units/s"},
+        {"yaw", "0", "with --game: the player's view yaw, degrees"},
     },
     "",
     run,
