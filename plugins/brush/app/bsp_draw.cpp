@@ -511,7 +511,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // slot left unused longest (a light that steps out of the nearest few and back in finds its cube
   // still there), at most `fresh_cubes` a frame: one over the budget lights without a shadow until
   // a later frame draws its cube, so a doorway into a room of torches costs no frame more than
-  // the budget's cubes.
+  // the budget's cubes. The map's first frame draws them all.
   const auto key_of = [](const GpuLight& g) {
     return std::array<float, 4>{g.pos[0], g.pos[1], g.pos[2], g.pos[3]};
   };
@@ -533,7 +533,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   }
   d.fresh_slots.clear();
   d.shadows_waiting = 0;
-  const size_t budget = size_t(std::max(o.fresh_cubes, 0));
+  // The first frame after the map is made draws every cube: it is the load's, not play's.
+  const size_t budget =
+      d.shadow_frame == 1 ? size_t(kMaxShadowed) : size_t(std::max(o.fresh_cubes, 0));
   for (const size_t c : homeless) {
     if (d.fresh_slots.size() >= budget) {
       ++d.shadows_waiting;  // info[0] stays -1: lit, unshadowed, this frame

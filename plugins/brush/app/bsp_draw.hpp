@@ -65,7 +65,8 @@ struct Options {
   double dynamic_strength = 1;  // the dynamic lights' (set_dynamic_lights) against the classic's
   int shadowed = 32;            // the nearest lights that cast shadows
   // The cubes drawn a frame at most for lights new to the shadowed few (each one the map drawn six
-  // times); the rest wait their turn unshadowed. 0 draws none new.
+  // times); the rest wait their turn unshadowed. 0 draws none new. The map's first frame draws
+  // every cube whatever this says (it is the load's).
   int fresh_cubes = 2;
   int most = 160;             // the lights a frame draws at most (the nearest)
   bool lava_lights = true;    // the lava's glow lights the walls round it
