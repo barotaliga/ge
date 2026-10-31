@@ -64,8 +64,8 @@ void draw_world(ge::gpu::Device& device, WorldDraw& w, ge::render::FrameView vie
                 const FxFrame& fx, const shooters_edge::view::HandFrame* held, double dt,
                 const ge::ui::DrawList& overlay, const wgpu::TextureView& target);
 
-// The last GPU readings of the frame's passes (a frame or more late) into `p`, by pass name, and
-// the frame's span; nothing when the GPU has no timestamp queries.
-void record_passes(const WorldDraw& w, PassTimes& p);
+// The last GPU reading of the frame's span (a frame or more late) into `p`; nothing when the GPU
+// has no timestamp queries.
+void record_span(const WorldDraw& w, PassTimes& p);
 
 }  // namespace shooters_edge::client

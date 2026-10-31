@@ -1391,6 +1391,18 @@ the next section's.
   (`fog_glow_level`, read by `prepare_fog`) and its lamp as one. A game hands the lamp to its
   light list beside its fires' (`flame_light`) and a lava pool's (`liquid_lamps`, § Liquids),
   so all three light the walls, the floor and the fog round them.
+- **Embers and drips** (M38b): an area carries particle emitters (`render/emitters.hpp`). An
+  `AreaEmitter` is a box, a kind (embers, motes, drips, steam), a rate a second and a seed;
+  `emit_area(e, t0, t1, out)` appends every particle born in (t0, t1], each flown on from its
+  birth to t1, for the frame's `emit_particles`. Birth k draws only from `make_rng` of the seed
+  and k, so a span split in two gives the same births as one span, a frame's step changes
+  nothing and two areas never share a stream; a long pause keeps the latest `kMaxAreaBirths`.
+  Embers rise off the floor in the hot air, glow at 1300 to 1700 K and cool and fade
+  (`embers_over` sets them over a glowing volume, their rate from its lamp); motes drift in a
+  lit dust; drips fall from the box's top at their rate; steam lifts off warm water. The pool
+  flies, lights and hazes them as any particle (§ Particles and figures). Fall Line hands its
+  frame a scene's emitters (`FrameScene::emitters`); the `fog` lab's `glow` scene puts embers
+  over its fire (`--embers=0` turns them off).
 
 On the software adapter at the default 160 x 90 x 64 froxels the inject costs 40 to 210 ms (the
 march toward the light in every froxel the medium fills) and the integrate 15 to 25 ms (the `fog` lab's `gpu-ms` rows); a real GPU's figures and a ladder row

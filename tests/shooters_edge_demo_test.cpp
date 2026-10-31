@@ -334,22 +334,32 @@ TEST(the_report_s_lows_are_the_slowest_frames_rate) {
   CHECK(cl::bench_stats({}).frames == 0);
 }
 
-TEST(the_gpu_report_ranks_the_passes_by_their_median) {
+TEST(the_gpu_line_gives_the_median_span_or_says_it_was_not_measured) {
   cl::PassTimes p;
-  CHECK(cl::pass_report(p, 4).find("not measured") != std::string::npos);
-  for (int i = 0; i < 5; i++) {
-    cl::pass_add(p, "bsp", 6 + i);  // median 8
-    cl::pass_add(p, "post", 1);     // median 1
-    cl::pass_add(p, "bloom", NAN);  // not measured: left out
-    cl::span_add(p, 10);
-  }
-  const std::vector<cl::PassCost> c = cl::pass_costs(p);
-  CHECK(c.size() == 2);
-  CHECK(c[0].name == "bsp" && c[0].median_ms == 8 && near(float(c[0].share), 0.8f, 1e-6f));
-  CHECK(c[1].name == "post");
-  const std::string line = cl::pass_report(p, 1);
-  CHECK(line.find("span 10.00 ms") != std::string::npos);
-  CHECK(line.find("bsp 8.00") != std::string::npos && line.find("post") == std::string::npos);
+  CHECK(cl::span_report(p).find("not measured") != std::string::npos);
+  for (int i = 0; i < 5; i++) cl::span_add(p, 6 + i);  // median 8
+  cl::span_add(p, NAN);                                // not measured: left out
+  CHECK(p.span_ms.size() == 5);
+  CHECK(cl::span_report(p).find("median 8.00 ms") != std::string::npos);
+}
+
+TEST(the_price_reads_each_saving_against_the_base_runs_either_side) {
+  // The machine slows by 1 ms a run: the bracketing base runs take the drift out.
+  const cl::PriceRun bases[] = {{"", 10, 8}, {"", 11, 9}, {"", 12, 10}, {"", 13, 11}};
+  const cl::PriceRun off[] = {
+      {"ce_water", 9.5, 7.5}, {"ce_shadows", 7.5, 5.5}, {"the HUD", 12.6, 10.5}};
+  const std::vector<cl::Price> p = cl::prices(bases, off);
+  CHECK(p.size() == 3);
+  CHECK(p[0].name == "ce_shadows" && p[0].frame_ms == 4 && p[0].span_ms == 4);
+  CHECK(p[1].name == "ce_water" && p[1].frame_ms == 1);
+  CHECK(p[2].name == "the HUD" &&
+        near(float(p[2].frame_ms), -0.1f, 1e-5f));  // under the noise: can be negative
+  CHECK(cl::price_noise(bases) == 1);
+  const std::vector<std::string> lines = cl::price_report(bases, p);
+  CHECK(lines.size() == 4);
+  CHECK(lines[0].find("10.00 to 13.00 ms over 4 runs") != std::string::npos);
+  CHECK(lines[0].find("under 1.00 ms is noise") != std::string::npos);
+  CHECK(lines[1].find("ce_shadows off saves 4.00 ms") != std::string::npos);
 }
 
 }  // namespace

@@ -499,15 +499,23 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     // A fire lights the wall behind it from its whole flame: its light softened over its height.
     const double soft = fire_light_size(l);
     set4(g.info, -1, soft * soft, 0, 0);
-    if (!l.physical && int(casters.size()) < d.options.shadowed)
+    // A dynamic light moves or goes out from one frame to the next, so a cube of it would be drawn
+    // again every frame: it lights without a shadow.
+    const bool dynamic = !d.dynamic_points.empty() && p.l >= d.dynamic_points.data() &&
+                         p.l < d.dynamic_points.data() + d.dynamic_points.size();
+    if (!l.physical && !dynamic && int(casters.size()) < d.options.shadowed)
       casters.push_back(d.frame_lights.size());
     d.frame_lights.push_back(g);
   }
-  // Each caster keeps the slot that already holds its cube; the rest take a slot no caster holds
-  // and have their cubes drawn this frame.
+  // Each caster keeps the slot that already holds its cube; the rest, nearest first, take the
+  // slot left unused longest (a light that steps out of the nearest few and back in finds its cube
+  // still there), at most `fresh_cubes` a frame: one over the budget lights without a shadow until
+  // a later frame draws its cube, so a doorway into a room of torches costs no frame more than
+  // the budget's cubes. The map's first frame draws them all.
   const auto key_of = [](const GpuLight& g) {
     return std::array<float, 4>{g.pos[0], g.pos[1], g.pos[2], g.pos[3]};
   };
+  ++d.shadow_frame;
   std::array<bool, kMaxShadowed> taken{};
   std::vector<size_t> homeless;
   for (const size_t c : casters) {
@@ -520,15 +528,28 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       continue;
     }
     taken[size_t(slot)] = true;
+    d.slot_used[size_t(slot)] = d.shadow_frame;
     d.frame_lights[c].info[0] = float(slot * 6);
   }
   d.fresh_slots.clear();
+  d.shadows_waiting = 0;
+  // The first frame after the map is made draws every cube: it is the load's, not play's.
+  const size_t budget =
+      d.shadow_frame == 1 ? size_t(kMaxShadowed) : size_t(std::max(o.fresh_cubes, 0));
   for (const size_t c : homeless) {
-    int slot = 0;
-    while (taken[size_t(slot)]) ++slot;  // casters <= kMaxShadowed: one is always free
-    taken[size_t(slot)] = true;
+    if (d.fresh_slots.size() >= budget) {
+      ++d.shadows_waiting;  // info[0] stays -1: lit, unshadowed, this frame
+      continue;
+    }
+    int slot = -1;
+    for (int k = 0; k < kMaxShadowed; ++k) {
+      if (taken[size_t(k)]) continue;
+      if (slot < 0 || d.slot_used[size_t(k)] < d.slot_used[size_t(slot)]) slot = k;
+    }
+    taken[size_t(slot)] = true;  // casters <= kMaxShadowed: one is always free
     d.slot_key[size_t(slot)] = key_of(d.frame_lights[c]);
     d.slot_held[size_t(slot)] = true;
+    d.slot_used[size_t(slot)] = d.shadow_frame;
     d.fresh_slots.push_back(slot);
     d.frame_lights[c].info[0] = float(slot * 6);
   }

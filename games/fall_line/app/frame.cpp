@@ -209,6 +209,14 @@ void throw_spray(GameFrame& f, const FrameScene& scene, double dt) {
   r::emit_particles(f.particles, f.births);
 }
 
+// The scene's area emitters' births over [t0, t1) s (render/emitters.hpp).
+void emit_areas(GameFrame& f, const FrameScene& scene, double t0, double t1) {
+  if (scene.emitters.empty()) return;
+  f.births.clear();
+  for (const r::AreaEmitter& e : scene.emitters) r::emit_area(e, t0, t1, f.births);
+  r::emit_particles(f.particles, f.births);
+}
+
 }  // namespace
 
 std::string pass_table_faults() { return r::check_pass_table(kPassTable, kLoadInputs); }
@@ -750,6 +758,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     f.spray_time = view.time_s;
     f.spray_placed = true;
     throw_spray(f, scene, dt);
+    emit_areas(f, scene, view.time_s - dt, view.time_s);
     // The map's air at this moment: the wind carries the spray and the flakes.
     const ge::mountain::air::Wind wind =
         ge::mountain::air::wind_at(*f.level, storm_air, view.time_s, view.eye[0], view.eye[2]);
