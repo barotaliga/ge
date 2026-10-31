@@ -43,7 +43,7 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_bots)
 file(GLOB SHOOTERS_EDGE_CLASSIC_SOURCES CONFIGURE_DEPENDS
      ${CMAKE_CURRENT_SOURCE_DIR}/net/classic_*.cpp)
 add_library(shooters_edge_classic STATIC ${SHOOTERS_EDGE_CLASSIC_SOURCES})
-target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server ge_net)
+target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters_edge_client ge_net)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 
 # The headless dedicated server (server/bin/), named `shooters_edge_server` on disk, at the build's
@@ -108,11 +108,11 @@ ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME
 # the GPU and the platform are built. Headers are spelled "shooters_edge/client/<file>.hpp".
 file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/client/*.cpp)
 list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX
-     "/client/(main|world_draw|world_extras|world_fx|world_models)\\.cpp$")
+     "/client/(main|world_draw|world_extras|world_fx|world_models|demo_video)\\.cpp$")
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
 target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_hud
-                                                  shooters_edge_view ge_vfs ge_brush ge_camera
-                                                  ge_input)
+                                                  shooters_edge_view shooters_edge_sound ge_vfs
+                                                  ge_brush ge_camera ge_input ge_audio ge_net)
 include(${PROJECT_SOURCE_DIR}/cmake/EmbedBinary.cmake)
 # Each source as `<variant>_<file>` (qc/<variant>/<file>.qc): the arena variant's and the shared.
 foreach(qc arena_engine common_defs arena_glue common_util common_combat common_weapons
@@ -123,15 +123,17 @@ endforeach()
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_client)
 # The world's frame (client/world_draw.cpp), the modern look's water, liquids, flames and weather
 # behind the classic-enhance switches (client/world_extras.cpp), the effects fed to it
-# (client/world_fx.cpp) and the models standing in it (client/world_models.cpp, the packs' own)
-# are a library of their own with the GPU, which the window and the game's GPU lab (`se-client`,
+# (client/world_fx.cpp), the models standing in it (client/world_models.cpp, the packs' own) and
+# a demo turned into a video (client/demo_video.cpp, through engine/capture) are a library of their
+# own with the GPU, which the window and the game's GPU lab (`se-client`,
 # labs/gpu_se_client_lab.cpp) link.
 if(GE_GPU AND TARGET ge_brush_app)
   add_library(shooters_edge_client_gpu STATIC client/world_draw.cpp client/world_extras.cpp
-                                              client/world_fx.cpp client/world_models.cpp)
+                                              client/world_fx.cpp client/world_models.cpp
+                                              client/demo_video.cpp)
   target_link_libraries(shooters_edge_client_gpu PUBLIC shooters_edge_client shooters_edge_app
                                                         ge_brush_app ge_classicenhance ge_render
-                                                        ge_ui ge_morph)
+                                                        ge_ui ge_morph ge_play)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_client_gpu)
 endif()
 if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)

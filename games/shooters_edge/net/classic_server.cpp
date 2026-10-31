@@ -18,6 +18,7 @@
 #include "progs/text.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/server/commands.hpp"
 
 namespace shooters_edge::net {
@@ -262,6 +263,39 @@ void read_move(ClassicServer& s, int slot, const ClcMsg& m, const uint8_t* paylo
   s.packets.push_back(p);
 }
 
+// A client's voice relayed to those who hear it, and into a multiview recording.
+void relay_voice(ClassicServer& s, int slot, const ClcMsg& m) {
+  const ClassicClient& c = s.clients[slot];
+  if (!s.cfg.voice || !c.ext.has(ExtFamily::x2, kX2Voice) || c.state != ConnState::spawned ||
+      m.data.size() > kMostVoiceBytes) {
+    s.counts.voice_refused++;
+    return;
+  }
+  s.counts.voice_in++;
+  SvcMsg v;
+  v.id = svc::voice;
+  v.ints = {slot, m.gen, m.seq};
+  v.data = m.data;
+  uint8_t buf[kMaxMsgLen + 8];
+  gn::Writer w = gn::make_writer(buf, sizeof buf);
+  write_svc(w, v, WireCtx{});
+  const std::string team = info_get(c.userinfo, "team");
+  for (int j = 0; j < sh::kMaxClients && !w.overflow; j++) {
+    ClassicClient& d = s.clients[j];
+    if (j == slot || d.state != ConnState::spawned || !d.ext.has(ExtFamily::x2, kX2Voice)) continue;
+    if (s.cfg.voice_route == VoiceRoute::team &&
+        (team.empty() || info_get(d.userinfo, "team") != team))
+      continue;
+    if (d.datagram.size() + w.size > kMaxMsgLen / 2) {
+      s.counts.voice_dropped++;
+      continue;
+    }
+    d.datagram.insert(d.datagram.end(), buf, buf + w.size);
+    s.counts.voice_out++;
+  }
+  if (s.mvd) mvd_voice(*s.mvd, v);
+}
+
 void handle_packet(ClassicServer& s, int slot, const uint8_t* data, size_t size) {
   ClassicClient& c = s.clients[slot];
   size_t at = 0;
@@ -301,6 +335,9 @@ void handle_packet(ClassicServer& s, int slot, const uint8_t* data, size_t size)
         break;
       case clc::upload:
         client_print(s, slot, 2, "Uploads are not taken.\n");
+        break;
+      case clc::voice:
+        relay_voice(s, slot, m);
         break;
       default:
         break;
@@ -415,6 +452,7 @@ bool classic_start(ClassicServer& s, sv::QcServer& qc, gn::Transport& t, const S
   s.f_ammo[3] = field_offset(*qc.progs, "ammo_cells");
   s.f_weapon = field_offset(*qc.progs, "weapon");
   s.f_weaponframe = field_offset(*qc.progs, "weaponframe");
+  if (cfg.voice) s.cfg.offered[ExtFamily::x2] |= kX2Voice;
 
   // What the map's load wrote: its static sounds and signon writes; its statics are qc.statics.
   for (const sv::NetEvent& ev : qc.out.events)
@@ -610,6 +648,7 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
       antilag_record(s.antilag, i, s.qc->sv.time,
                      s.qc->sv.edicts[static_cast<size_t>(i) + 1].origin);
   route_events(s);
+  if (s.mvd) mvd_frame(s, *s.mvd);
 
   for (int i = 0; i < sh::kMaxClients; i++) {
     ClassicClient& c = s.clients[i];
