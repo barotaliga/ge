@@ -898,9 +898,12 @@ lofted by the plume and slowed by the air) into the particle pool, which lights 
 them as it does every glowing particle. The air at a fire (`fire_air`) bends its flames and is
 what its sparks are born moving with: the map's wind times the share of open sky over the fire
 (`PointLight::sky`, `place_fires` looking up the map's tree once a map) and a slow draught of its own, so a fire in a
-closed hall wavers and one under the sky streams its sparks downwind. Wall torches, small flames and a
-large flame without a bonfire's room over and round it (a lantern's cage, a low roof:
-`place_fires`, `kBonfireRoom` 2.2 m up and `kBonfireReach` 0.6 m round) stay as they were.
+closed hall wavers and one under the sky streams its sparks downwind. A large flame
+without a bonfire's room over and round it (a lantern's cage, a low roof: `place_fires`,
+`kBonfireRoom` 2.2 m up and `kBonfireReach` 0.6 m round) is a `Fire::lantern`: it burns 1.4 times
+as tall (58 units) and 1.5 times as wide as the pack's flame, filling its cage, its light 1.25
+times as bright (`fire_light_gain`), with no sparks. Wall torches and small flames stay as they
+were.
 
 **Shadows use three techniques, one for each scale:**
 

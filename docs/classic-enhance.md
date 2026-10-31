@@ -95,8 +95,8 @@ leaves the kernel, rounding on rounds the models) and want ENHANCE again. `ce_sk
 the modern look (`brush/app/bsp_draw.hpp`'s `pack_sky`): on, the sky faces show our sky, its
 clouds and its night; off, the pack's own two scrolling layers under the modern look's lights.
 `ce_bonfires` burns the braziers (a map's large flames on the floor) as bonfires throwing sparks
-into the wind (`brush/app/bsp_flames.hpp`, M41l); off, they burn as a big torch's flame. The wall
-torches are torches either way.
+into the wind and the lanterns' caged flames bigger (`brush/app/bsp_flames.hpp`, M41l); off,
+they burn at the pack's flame sizes. The wall torches are torches either way.
 `ce_relief` and `ce_parallax` light the enhanced textures with their maps under the modern look
 (`brush/app/bsp_draw.hpp`'s `relief`, `specular` and `parallax`; the game reads the maps beside
 each albedo with `cached.hpp`'s `cached_surface` into the scene's surface atlas). `ce_relief` puts
