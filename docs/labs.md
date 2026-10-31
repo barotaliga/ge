@@ -94,12 +94,20 @@ make lab LAB=level ARGS=--help                # its flags, with defaults
 make lab LAB=level ARGS=--tag=before          # keep this run as previews/level@before/
 make lab LAB=level ARGS=--compare=before      # every metric beside the kept run's, every picture diffed
 make lab LAB=world ARGS=--diff=before         # run nothing: the last run's pictures against the kept run's
+make lab LAB=world ARGS=--shots=vista         # only the named shots; the other pictures stay as they were
 make labs-smoke                               # every lab at its smoke flags, twice, digests checked
 make labs-digests                             # rewrite tests/digests/ (a reviewed change)
 make ge ARGS="digest level --write"           # rewrite one lab's row only; no --write: just check it
 build/debug/labs --json                       # the list as one JSON array (what `ge lab` reads)
 make lab LAB=trace ARGS="--log=course=debug"  # any lab: the log spec's lines in previews/<id>/log.txt
 ```
+
+`--shots=<id,...>` draws only the named shots of a picture lab while one look is iterated: every
+other picture under `previews/<id>/` (and its contact sheet) stays as the last whole run wrote
+it, and a note says what was drawn. A lab saves the render too by asking `lab.wants(id)` before
+it draws a shot (`world` does); `lab.shot()` drops an unwanted one either way. A named id the lab
+has no shot of fails the run with the ids it has. The digest of such a run is not the lab's, so
+the runner refuses `--shots` beside `--all`, `--check-digests` and `--write-digests`.
 
 `--log=<spec>` switches on log channels for the run (`docs/debugging.md`): every line kept goes to
 `previews/<id>/log.txt` as `[step] level channel: message`, the debug and trace lines only

@@ -1,6 +1,6 @@
 ---
 name: ui
-description: "Use for engine/ui and any game's menus, HUD and cards in gameengine2: engine/charset (the bitmap fonts, noise layers and text looks), the immediate-mode 2D layer (paints, the draw list, images, fonts over stb_truetype, the CPU raster), backdrops (colour, gradient, drifting picture, the live scene, scrims), menus as a model and a view (pages, items, focus, events, the responsive layout), the `menu` lab, the strings table, the HUD readouts and presses, the shell's cards and settings, and the Dear ImGui developer UI."
+description: "Use for engine/ui and any game's menus, HUD and cards in gameengine2: engine/charset (the bitmap fonts, noise layers and text looks), the immediate-mode 2D layer (paints, the draw list, images, fonts over stb_truetype, the CPU raster), backdrops (colour, gradient, drifting picture, the live scene, scrims), menus as a model and a view (pages, items, focus, events, the responsive layout), the `menu` lab, the play bar (seek bar with markers), the strings table, the HUD readouts and presses, the shell's cards and settings, and the Dear ImGui developer UI."
 ---
 
 # UI
@@ -39,6 +39,11 @@ is the design; this skill is how to work in it.
   width, anchored low), scales to a 720 px reference and shrinks a page that would not fit, glides
   the highlight and fades a page in, stepped by the caller's dt so a recorded run draws the same.
   `layout_problems` names what a screenshot would show wrong.
+- **The play bar** (`play_bar.hpp`): a video player's seek bar over any timeline (a demo, a
+  replay): markers in a highlight kind's colour, a tooltip, play and pause, the clock and speed;
+  the pointer's drag (`play_bar_pointer`) is its only state. Scaled to a 720 px reference and
+  lifted over a HUD by `bottom_px`. `tests/ui_play_bar_test.cpp` checks it to the pixel; the
+  `se-highlights` lab pictures it over a game.
 
 ## The HUD kit (`engine/hud/`, `ge::hud`)
 

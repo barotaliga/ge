@@ -44,6 +44,7 @@ struct LabOptions {
   std::string id;  // "" lists the labs
   bool smoke = false;
   std::string tag, compare;
+  std::string shots;                     // "" every shot; "a,b" only those (the runner's --shots)
   std::vector<std::string> passthrough;  // the lab's own flags
 };
 Outcome run_lab(const BuildOptions& o, const LabOptions& lab);

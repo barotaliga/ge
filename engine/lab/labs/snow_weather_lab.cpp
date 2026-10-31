@@ -12,6 +12,7 @@
 // ge:keywords chart ledger
 // ge:skill snow labs
 // ge:test tests/snow_time_test.cpp
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -20,6 +21,7 @@
 
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
+#include "snow/air.hpp"
 #include "snow/layer.hpp"
 #include "snow/press.hpp"
 #include "snow/reference.hpp"
@@ -29,6 +31,7 @@ namespace {
 
 namespace gl = ge::lab;
 namespace sn = ge::snow;
+namespace gw = ge::wind;
 
 constexpr double kHour = 3600;
 constexpr double kBoot = 785;      // N, a skier standing on one boot
@@ -62,6 +65,17 @@ void carve(sn::Layer& layer, double x, double t) {
   const sn::ReferenceContact rc = sn::reference_contact(0);
   for (int i = 0; i < 24; i++) sn::press(layer, sn::place(rc.imprint, x, -3 + 0.25 * i, 0), t);
 }
+
+gw::Climate day(double mean, double range, double cloud, double wind) {
+  gw::Climate c;
+  c.mean_c = mean;
+  c.range_c = range;
+  c.cloud = cloud;
+  c.wind = wind;
+  return c;
+}
+
+std::string kind_name(sn::Kind k) { return std::string(sn::kind_row(k).name); }
 
 void check_ledger(gl::Lab& lab, const sn::Layer& l, const std::string& what) {
   if (sn::mass_units(l) + l.spilled != l.mass_in) {
@@ -255,6 +269,121 @@ void run(gl::Lab& lab) {
   table.rows.push_back({"groomed samples", std::to_string(g.samples), ""});
   table.rows.push_back({"mass through the swath", fix(g.mass, 1), "kg"});
   lab.metric("groom.mass", g.mass, "kg");
+
+  // THE AIR'S CRUST: a spring day (+5 C mean) then a cold front (-8 C), the air off the climate.
+  sn::SnowAir spring;
+  spring.days = {day(5, 10, 0.1, 1), day(-8, 10, 0.1, 1)};
+  const sn::Weather sw = sn::weather_of(spring, sn::Schedule{}, 48 * kHour);
+  sn::SnowWorld spw;
+  sn::Layer& sl = sn::add_layer(spw, flat(0.6, &sw, cell));
+  gl::LineChart thaw;
+  thaw.frame = {"A thaw, then a frost, off the climate",
+                "a +5 C spring day, then a -8 C day: the air at the snow and the crust's bearing",
+                "hours from midnight", "air (C); crust bears (kN)"};
+  gl::Trace air_t{"air (C)", {}, {}}, surf_t{"snow's surface (C)", {}, {}},
+      lid_t{"crust bears (kN)", {}, {}};
+  for (int i = 0; i <= 2 * points; i++) {
+    const double hours = 48.0 * i / (2 * points);
+    air_t.x.push_back(hours);
+    air_t.y.push_back(sn::air_c(spring, hours * kHour));
+    surf_t.x.push_back(hours);
+    surf_t.y.push_back(sn::snow_c(spring, hours * kHour));
+    const double load = sn::crust_load(sw, hours * kHour);
+    lid_t.x.push_back(hours);
+    lid_t.y.push_back(std::isfinite(load) ? std::min(load, 8000.0) / 1000 : 0);
+  }
+  thaw.traces = {air_t, surf_t, lid_t};
+  thaw.rules = {0, kBoot / 1000, kCarving / 1000};
+  chart(lab, "thaw", thaw,
+        "The layer's Weather::air read off the world's climate (air_at at its place): the spring "
+        "day melts the snow (spring snow, no lid), the night and the cold day after freeze it into "
+        "a crust whose bearing grows with the frost since the thaw (capped at 8 kN on the chart).",
+        "The air above 0 from late morning to the evening of day one, the crust's line zero "
+        "through it, then rising through the night past the boot's (0.79) and the carving "
+        "skier's (1.57) lines and on through day two; the snow's surface never above 0");
+  const sn::Kind noon_kind = sn::sample(sl, 0, 0, 14 * kHour).kind;
+  const sn::Kind dawn_kind = sn::sample(sl, 0, 0, 32 * kHour).kind;
+  table.rows.push_back({"thaw day's snow at 14:00", kind_name(noon_kind), ""});
+  table.rows.push_back({"the next day's snow at 08:00", kind_name(dawn_kind), ""});
+  table.rows.push_back({"the crust bears at 08:00", fix(sn::crust_load(sw, 32 * kHour), 0), "N"});
+  lab.metric("thaw.crust-load", sn::crust_load(sw, 32 * kHour), "N");
+  check_ledger(lab, sl, "the thaw layer");
+  if (noon_kind != sn::Kind::spring || dawn_kind != sn::Kind::crust) {
+    lab.fail("a thaw then a frost left " + kind_name(noon_kind) + " at noon and " +
+                 kind_name(dawn_kind) + " the next morning, not spring snow then a crust",
+             "Read `weather_of` in engine/snow/air.cpp and `weathered` in time.cpp, then rerun "
+             "tests/snow_air_test.cpp (skill: snow).");
+  }
+
+  // A COLD DAY'S SNOW: the same storm's water on days at -12, -6 and -1 C.
+  gl::LineChart light;
+  light.frame = {"A cold day's snow is lighter",
+                 "12 kg/m2 of water in six hours onto 20 cm, under overcast days at three means",
+                 "hours", "depth the storm added (cm)"};
+  const double means[3] = {-12, -6, -1};
+  double densities[3] = {0, 0, 0};
+  for (int k = 0; k < 3; k++) {
+    sn::SnowAir a;
+    a.days = {day(means[k], 2, 0.9, 1)};
+    const sn::Schedule fall{{0, 1, 6 * kHour, 6 * kHour + 1}, {0, 2.0 / 3600, 2.0 / 3600, 0}};
+    const sn::Weather w = sn::weather_of(a, fall, 24 * kHour);
+    densities[k] = w.fresh_density;
+    sn::SnowWorld world;
+    sn::Layer& layer = sn::add_layer(world, flat(0.2, &w, cell));
+    // What the storm adds: against the same layer under the same air with nothing falling (the
+    // old snow under it settles either way).
+    sn::Weather dry = w;
+    dry.fall = {};
+    sn::Layer& bare = sn::add_layer(world, flat(0.2, &dry, cell));
+    const auto added = [&](double t) {
+      return 100 * (sn::sample(layer, 0, 0, t).depth - sn::sample(bare, 0, 0, t).depth);
+    };
+    gl::Trace t{fix(means[k], 0) + " C", {}, {}};
+    for (int i = 0; i <= points; i++) {
+      const double hours = 12.0 * i / points;
+      t.x.push_back(hours);
+      t.y.push_back(added(hours * kHour));
+    }
+    light.traces.push_back(t);
+    const double fresh = added(6 * kHour + 2);
+    table.rows.push_back(
+        {"new snow at " + fix(means[k], 0) + " C", fix(w.fresh_density, 0), "kg/m3"});
+    table.rows.push_back({"the storm added at " + fix(means[k], 0) + " C", fix(fresh, 1), "cm"});
+    lab.metric("light." + fix(-means[k], 0) + "below.density", w.fresh_density, "kg/m3");
+  }
+  chart(lab, "light", light,
+        "The depth the same six hours of snow add on three days: the new snow's "
+        "density is wind::fresh_density of the air it fell through, so a cold day's fall is "
+        "lighter and lies deeper for the same water.",
+        "Three curves rising for six hours then settling: the -12 C day highest (about 14 cm "
+        "more than the same air with nothing falling), the -1 C day lowest (about 9)");
+  if (!(densities[0] < densities[1] && densities[1] < densities[2])) {
+    lab.fail("new snow was not lighter on the colder days: " + fix(densities[0], 0) + ", " +
+                 fix(densities[1], 0) + ", " + fix(densities[2], 0) + " kg/m3",
+             "Read `fresh_density_over` in engine/snow/air.cpp and wind::fresh_density "
+             "(skill: snow).");
+  }
+
+  // THE FEEL: the snow underfoot at four moments, its glide and whether it squeaks.
+  struct Moment {
+    const char* what;
+    const sn::SnowAir* air;
+    const sn::Weather* weather;
+    double hour;
+  };
+  sn::SnowAir frozen;
+  frozen.days = {day(-12, 8, 0, 1)};
+  const sn::Weather fw = sn::weather_of(frozen, sn::Schedule{}, 24 * kHour);
+  const Moment moments[3] = {{"a clear -12 C day at 04:00", &frozen, &fw, 4},
+                             {"the thaw day at 14:00", &spring, &sw, 14},
+                             {"the frost after it at 08:00", &spring, &sw, 32}};
+  for (const Moment& m : moments) {
+    const sn::SnowFeel f = sn::feel_at(*m.air, *m.weather, m.hour * kHour);
+    table.rows.push_back({std::string(m.what) + ": feel", gw::feel_name(f.kind), ""});
+    table.rows.push_back(
+        {std::string(m.what) + ": snow, glide",
+         fix(f.snow_c, 1) + " C, " + fix(f.glide, 3) + (f.squeak ? ", squeaks" : ""), "C, mu"});
+  }
   lab.table(table);
 }
 

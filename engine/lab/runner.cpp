@@ -43,6 +43,9 @@ const LabFlag kRunnerFlags[] = {
      "the diff's floor for each band, dB, nearest first and the sky last"},
     {"repeat", "1", "run each lab N times in this process; different digests fail the run"},
     {"smoke", "", "run at the lab's smoke flags (what CI runs)", true},
+    {"shots", "",
+     "draw only these shots (id,id,...): every other picture under <out>/<id>/ stays as the "
+     "last run wrote it, for iterating one look"},
     {"all", "", "run every registered lab", true},
     {"shard", "",
      "with --all, run only slice I of N (I/N, from 1/N): every Nth lab, so CTest runs them in "
@@ -180,6 +183,40 @@ bool parse(const std::vector<std::string>& words, const LabSpec* spec, Args& run
   return true;
 }
 
+// "a, b,,c" -> {"a", "b", "c"}.
+std::vector<std::string> split_ids(const std::string& list) {
+  std::vector<std::string> out;
+  std::istringstream in(list);
+  std::string id;
+  while (std::getline(in, id, ',')) {
+    const auto b = id.find_first_not_of(' ');
+    const auto e = id.find_last_not_of(' ');
+    if (b != std::string::npos) out.push_back(id.substr(b, e - b + 1));
+  }
+  return out;
+}
+
+// After a --shots run: a note saying what was drawn, and a failure for each named id the lab
+// drew no shot of (a typo, or a view this lab's flags do not make), with the ids it has.
+void note_only(Lab& lab, const std::string& dir) {
+  std::string drawn;
+  for (const auto& t : lab.shots()) drawn += (drawn.empty() ? "" : ", ") + t.shot.id;
+  lab.note("--shots: drew " + (drawn.empty() ? std::string("nothing") : drawn) +
+           "; every other picture in " + dir +
+           "/ is from an earlier run, and this run's digest covers only these.");
+  for (const std::string& id : lab.only()) {
+    bool found = false;
+    for (const auto& t : lab.shots()) found = found || t.shot.id == id;
+    if (found) continue;
+    std::string ids;
+    for (const std::string& k : lab.skipped()) ids += (ids.empty() ? "" : ",") + k;
+    lab.fail("--shots named '" + id + "', and the lab drew no shot of that id",
+             ids.empty() ? "next: run it once without --shots and pick from the .png names in " +
+                               dir + "/ (some views need the lab's own flags too)."
+                         : "next: pick from the ids it has: --shots=" + ids + ".");
+  }
+}
+
 std::string get(const Args& args, const char* name) {
   for (const auto& [k, v] : args) {
     if (k == name) return v;
@@ -283,6 +320,14 @@ int run_labs(int argc, const char* const* argv) {
     std::fprintf(stderr, "labs: %s\n", error.c_str());
     return 2;
   }
+  const std::vector<std::string> only = split_ids(get(runner, "shots"));
+  if (!only.empty() &&
+      (all || !get(runner, "check-digests").empty() || !get(runner, "write-digests").empty())) {
+    std::fprintf(stderr,
+                 "labs: --shots draws part of one lab, so its digest is not the lab's: name one "
+                 "lab, and check or write digests on a whole run (drop --shots).\n");
+    return 2;
+  }
   if (const std::string against = get(runner, "diff"); !against.empty()) {
     if (all) {
       std::fprintf(stderr, "labs: --diff takes one lab: labs <id> --diff=%s\n", against.c_str());
@@ -373,9 +418,11 @@ int run_labs(int argc, const char* const* argv) {
     bool ok = true;
     for (int r = 0; r < repeat; r++) {
       Lab lab(*s, args);
+      lab.only_shots(only);
       dump.text.clear();
       dump.counts.clear();
       s->run(lab);
+      if (r == 0 && !only.empty()) note_only(lab, dir);
       if (r == 0 && dump.on) {
         std::string counts;
         for (const auto& [key, n] : dump.counts) {

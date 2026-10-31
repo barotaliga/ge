@@ -549,6 +549,7 @@ void run(ge::lab::Lab& lab) {
   for (Scene& sc : scenes) {
     const std::string& name = sc.name;
     for (const auto& racers : sc.laid) fall_line::app::track(*frame, {racers});
+    if (!lab.wants(name)) continue;  // --shots: the tracks above still stamp, for the next view
     const ge::gpu::Image img = still(sc);
     frame->recorder.wait(*device);
     sc.clouds = layers_of(frame->drawn_clouds, level.mountain.base.y);

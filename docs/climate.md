@@ -55,7 +55,7 @@ humidity and the wet-bulb temperature.
   and over ice (6.1121 exp(22.587 T / (T + 273.86))) gives the dew point, the frost point and the
   humidity. The wet bulb is solved from the psychrometric balance at the height's pressure.
 - **The surface** (`surface_at`): colder than the air on a clear night (up to 4 K, radiating to
-  the sky; less in wind), warmer by day in the sun on bare ground (up to 5 K); snow never above 0;
+  the sky; less in wind; the cold fading over the two hours after sunrise, never a jump), warmer by day in the sun on bare ground (up to 5 K); snow never above 0;
   open water at `water_c`.
 
 ## Snow or rain
@@ -123,7 +123,7 @@ it asks.
 | Reader | Reads | Row |
 | --- | --- | --- |
 | The fog's areas (`render/fog.hpp`, M38) | `mist_at` at a world's sites, handed over by `render/mist_fog.hpp` (`mist_volume`: a bank as deep as `depth`, steam thinning upward in wisps climbing at `rise`; `mist_valley`: a valley's fog level from its floor); Fall Line's valleys, ground and summit and any lake laid on its map (`water_mist`), a classic map's pools of water and slime (`bsp_fog.hpp`'s `FogRows::air`) | M51c (done) |
-| The snow layer (`engine/snow`, M29) | `Weather::air` sampled off `air_at`; `fresh_density` for `Weather::fresh_density`; `glide_of` and `snow_feel` for the contact and the sound | M51d |
+| The snow layer (`engine/snow`, M29) | `Weather::air` sampled off `air_at`; `fresh_density` for `Weather::fresh_density`; `glide_of` and `snow_feel` for the contact and the sound (`engine/snow/air.hpp`: `weather_of`, `feel_at`) | M51d (done) |
 | What falls (`precip.hpp`, M36) | `freezing_level` or `snow_level` as the freezing level; `rain_share_of` at the ground | M51e |
 | The water (`engine/water`, M24) | `ice_grown`, `ice_bears`, steam fog over open water | M51e |
 | The classic levels (`plugins/classicenhance`, M41) | a `Climate` per level | M51b |

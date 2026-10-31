@@ -494,6 +494,7 @@ Outcome run_lab(const BuildOptions& o, const LabOptions& lab) {
   if (lab.smoke) cmd += " --smoke";
   if (!lab.tag.empty()) cmd += " --tag=" + lab.tag;
   if (!lab.compare.empty()) cmd += " --compare=" + lab.compare;
+  if (!lab.shots.empty()) cmd += " \"--shots=" + lab.shots + "\"";
   for (const std::string& w : lab.passthrough) cmd += " \"" + w + "\"";
   const Ran r = run_logged(cmd, log);
   out.text = r.output;

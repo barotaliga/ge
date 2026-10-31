@@ -70,11 +70,14 @@ double surface_from(const Climate& c, const Site& s, double hour, double air) {
   const double len = day_length(c);
   const double d = since_sunrise(c, hour);
   double t = air;
+  // Radiating to the sky from an hour after sunset, damped by the wind's mixing, and fading over
+  // the two hours after sunrise as the sun comes onto it (a surface does not jump at dawn).
+  const double cooled = kNightCool * clear * clear * open / (1 + c.wind / 4);
   if (d <= len) {
     t += kSunWarm * lm::sin(kPi * d / len) * clear * open * (1 - clamp01(s.snow));
+    t -= cooled * (1 - smooth(d / 2));
   } else {
-    // Radiating to the sky from an hour after sunset; damped by the wind's mixing.
-    t -= kNightCool * smooth(d - len) * clear * clear * open / (1 + c.wind / 4);
+    t -= cooled * smooth(d - len);
   }
   const double snow = clamp01(s.snow);
   return t + (std::min(t, 0.0) - t) * snow;
