@@ -723,9 +723,23 @@ void run(ge::lab::Lab& lab) {
   const std::string dir = lab.arg("models");
   const std::string which = lab.arg("weapon");
   const std::string candidate = lab.arg("candidate");
-  std::vector<vm::HeldModel> game_set;
+  // The game's set, each weapon from its own model; a slot whose model is not there yet (a
+  // weapon being built under a new name) is the candidate's when one is given.
+  std::vector<vm::HeldModel> game_set(se::weapon_looks().size());
   std::string error;
-  if (!se::load_weapon_models(dir, game_set, &error)) {
+  std::vector<bool> missing(game_set.size(), false);
+  for (const se::WeaponLook& look : se::weapon_looks()) {
+    const auto at = static_cast<size_t>(look.weapon);
+    if (se::load_weapon_model(se::weapon_model_path(dir, look), look, game_set[at], &error))
+      continue;
+    if (!candidate.empty() && which == look.name &&
+        se::load_weapon_model(candidate, look, game_set[at], &error)) {
+      missing[at] = true;
+      lab.note(std::string(look.name) +
+               ": the game has no model of it yet; the candidate alone "
+               "is staged");
+      continue;
+    }
     lab.fail(error, "next: rerun from the repository's root, or pass --models=<folder>.");
     return;
   }
@@ -771,7 +785,9 @@ void run(ge::lab::Lab& lab) {
       staged.push_back(std::move(s));
       return true;
     };
-    if (!add("GAME", se::weapon_model_path(dir, *look))) return;
+    if (!missing[static_cast<size_t>(look->weapon)] &&
+        !add("GAME", se::weapon_model_path(dir, *look)))
+      return;
     if (!candidate.empty() && !add("CANDIDATE", candidate)) return;
     if (!stage_one(lab, *look, staged, game_set, width, inputs)) ++problems;
   }

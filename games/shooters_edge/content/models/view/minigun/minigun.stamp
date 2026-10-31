@@ -1,0 +1,5 @@
+# What minigun.glb was built from (engine/assets/manifest.hpp). Written by `ge asset build minigun`; never edit it by hand.
+builder build.py d10b239c55e88de7
+source ../weapon_kit.py c9bdb5454f33e224
+data se_view 37ee286dc1245725
+blender 5.2.2 LTS

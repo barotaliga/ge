@@ -571,14 +571,15 @@ def _segment(kit, name, length, radii, away, end_cap, cuff=False):
                  cuff_mat, sides=10)
 
 
-def _ease(keys, t):
-    """A group's (offset, turn) at `t` from its keys, smoothstepped between them."""
+def _ease(keys, t, linear=False):
+    """A group's (offset, turn) at `t` from its keys, smoothstepped between them (or straight, for
+    a steady motion such as barrels turning)."""
     if t <= keys[0][0]:
         return Vector(keys[0][1]), Vector(keys[0][2])
     for (t0, d0, r0), (t1, d1, r1) in zip(keys, keys[1:]):
         if t <= t1:
             u = (t - t0) / (t1 - t0) if t1 > t0 else 1.0
-            e = u * u * (3 - 2 * u)
+            e = u if linear else u * u * (3 - 2 * u)
             return (Vector(d0).lerp(Vector(d1), e), Vector(r0).lerp(Vector(r1), e))
     return Vector(keys[-1][1]), Vector(keys[-1][2])
 
@@ -635,10 +636,11 @@ class Kit:
         finally:
             self.current = before
 
-    def clip(self, name, keys):
+    def clip(self, name, keys, ease="smooth"):
         """A clip: {group: [(t_s, (dx, dy, dz), (rx, ry, rz)), ...]}, each group's offset from
-        rest (m) and its turn (rad, Euler XYZ about its pivot) at each time, eased between."""
-        self.clips.append((name, keys))
+        rest (m) and its turn (rad, Euler XYZ about its pivot) at each time, smoothstepped between
+        keys, or `ease="linear"` for a steady motion (barrels spinning shot after shot)."""
+        self.clips.append((name, keys, ease))
 
     # Every part goes through here: its material, its bevel, smooth shading with hardened normals.
     def _add(self, name, bm, mat, bevel, segments=2, angle=35.0):
@@ -1080,7 +1082,7 @@ class Kit:
             for g in self.world:
                 if g not in order and (self.parent[g] is None or self.parent[g] in order):
                     order.append(g)
-        for name, keys in self.clips:
+        for name, keys, ease in self.clips:
             for g in keys:
                 if g not in self.world:
                     raise SystemExit("weapon_kit: clip %s keys %s, which is no part" % (name, g))
@@ -1097,7 +1099,7 @@ class Kit:
                     p = self.parent[g]
                     local = (self.world[p].inverted() @ rest) if p is not None else rest
                     if g in keys:
-                        d, r = _ease(keys[g], t)
+                        d, r = _ease(keys[g], t, ease == "linear")
                         # Offset and turned in the parent's axes, about the part's own pivot, on
                         # top of its rest turn (a torso's stance).
                         local = (Matrix.Translation(local.translation + d) @

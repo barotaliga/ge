@@ -239,10 +239,10 @@ model progs/gib1.mdl gore/gib_1
 model progs/gib2.mdl gore/gib_2
 model progs/gib3.mdl gore/gib_3
 model progs/zom_gib.mdl gore/flesh_ball
-model progs/v_axe.mdl view/melee
+model progs/v_axe.mdl view/axe
 model progs/v_shot.mdl view/shotgun
 model progs/v_shot2.mdl view/double_shotgun
-model progs/v_nail.mdl view/nailgun
+model progs/v_nail.mdl view/minigun
 model progs/v_nail2.mdl view/heavy_nailgun
 model progs/v_rock.mdl view/grenade_launcher
 model progs/v_rock2.mdl view/rocket_launcher

@@ -200,6 +200,16 @@ hand plays `fire` from its start on each shot.
 
 ## Where it goes wrong
 
+- **Every built weapon goes stale together.** The kit and the `se_view` data set (every weapon's
+  offset, the shoulders, the limits) are sources of each model, so changing either, even one
+  weapon's offset, rebuilds all. `ge asset build` with no names builds exactly the stale ones.
+- **A renamed slot** (the nailgun's slot holding the minigun): rename the look in `weapons.cpp`,
+  and the row in `classic.assetmap` and `models.tsv`. Until the built model is in, the staging
+  lab stages the candidate alone.
+- **A spin is linear.** A part that turns on every shot (barrels) is keyed with
+  `kit.clip(..., ease="linear")` through a turn that leaves it looking as at rest (60 degrees for
+  six barrels), so a held trigger spins it with no seam.
+
 - **A part missing after the split**: a bpy edit operation acts on the selection the vertices and
   edges carry, not only the faces. Deselect every vertex and edge before selecting a group's
   faces (the kit's `_split` does).
