@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -156,7 +157,7 @@ TEST(rebake_codec) {
   // A version 1 file (no bounce) still reads, with no bounce.
   std::vector<uint8_t> v1 = write_rebaked(r);
   v1[4] = 1;
-  v1.erase(v1.begin() + 20 + 6 * 8, v1.begin() + 20 + 6 * 12);
+  v1.erase(v1.begin() + 20 + std::ptrdiff_t{48}, v1.begin() + 20 + std::ptrdiff_t{72});
   CHECK(read_rebaked(v1, &back, &err));
   CHECK(back.rgb9e5 == r.rgb9e5 && back.dir == r.dir && back.lm == r.lm && back.bounce.empty());
   std::vector<uint8_t> cut(bytes.begin(), bytes.end() - 1);

@@ -244,7 +244,7 @@ bool run_lightmaps(const Source& src, const fs::path& dir, const RunOptions& o, 
     if (!rep.item(map_name(e->path), error)) return false;
   }
   r.note = std::to_string(r.files) + " maps rebaked, " + std::to_string(luxels / 1000) +
-           " thousand luxels, " + std::to_string(bytes / (1024 * 1024)) + " MB";
+           " thousand luxels, " + std::to_string(bytes / (uint64_t{1024} * 1024)) + " MB";
   return true;
 }
 
