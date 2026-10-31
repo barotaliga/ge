@@ -86,6 +86,12 @@ bool campaign_new_game(Campaign& c, const pg::Progs& progs, const CampaignOption
                        const std::string& map, std::string& error);
 // A player joins this map now (SetNewParms, ClientConnect, PutClientInServer) and is carried on.
 void campaign_join(Campaign& c, int slot, const std::string& name);
+// The map `map` started for a saved game (campaign_save.hpp): the program and options taken, the
+// campaign's carried state (`settings`, `serverflags`, the players) as the caller set it, the
+// spawn functions run and the map settled, and nobody entered: the save's state is read over it.
+// The history gains "load <map>". False with `error` when the map does not load.
+bool campaign_reopen(Campaign& c, const pg::Progs& progs, const CampaignOptions& opt,
+                     const std::string& map, std::string& error);
 // One frame of the single-player host; then the change a console line or the program asked for.
 // False with `error` when the next map does not load (the campaign has no server then).
 bool campaign_frame(Campaign& c, const sh::Packet* packets, int count, std::string& error);

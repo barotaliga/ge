@@ -39,8 +39,10 @@ void round_skill(QcServer& s) {
   set(s, "skill", std::to_string(skill));
 }
 
-// The map `name` started on a new server; the players entered with `change`'s parms.
-bool start_level(Campaign& c, const std::string& name, MapChange change, std::string& error) {
+// The map `name` started on a new server, `kind` its line in the history; with `join`, the
+// players entered with the parms the change left them.
+bool start_level(Campaign& c, const std::string& name, const char* kind, bool join,
+                 std::string& error) {
   keep_settings(c);
   c.server.reset();  // it points into the old map: it goes before the loader is asked again
   c.map = MapSpec{};
@@ -68,10 +70,8 @@ bool start_level(Campaign& c, const std::string& name, MapChange change, std::st
   if (!load_map(s, c.map, error)) return false;
   sh::settle_frames(s.sv, kSettleFrames, kSettleSeconds);
 
-  const char* kind = change == MapChange::new_game       ? "new "
-                     : change == MapChange::change_level ? "change "
-                                                         : "restart ";
   c.history.push_back(kind + name);
+  if (!join) return true;
   for (int i = 0; i < sh::kMaxClients; i++) {
     CampaignPlayer& p = c.players[i];
     if (!p.active) continue;
@@ -145,7 +145,18 @@ bool campaign_change(Campaign& c, MapChange change, const std::string& map, std:
       }
       break;
   }
-  return start_level(c, map, change, error);
+  const char* kind = change == MapChange::new_game       ? "new "
+                     : change == MapChange::change_level ? "change "
+                                                         : "restart ";
+  return start_level(c, map, kind, true, error);
+}
+
+bool campaign_reopen(Campaign& c, const pg::Progs& progs, const CampaignOptions& opt,
+                     const std::string& map, std::string& error) {
+  c.server.reset();  // the settings are the caller's (`c.settings`), never the old server's
+  c.opt = opt;
+  c.progs = &progs;
+  return start_level(c, map, "load ", false, error);
 }
 
 bool campaign_frame(Campaign& c, const sh::Packet* packets, int count, std::string& error) {

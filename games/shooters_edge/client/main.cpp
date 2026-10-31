@@ -25,8 +25,9 @@
 // opens the main menu (menu/game_menu.hpp: drawn in the pack's own pictures when the packs carry
 // them, the rows the game cannot do yet dimmed), and ESCAPE again goes back out of it; the key
 // under ESCAPE drops the console, where `map <name>` changes the map, `sv
-// <line>` is a line for the server's console (`sv timelimit 10`), `sensitivity <deg a count>`
-// and `m_invert 0|1` set the look, `r_look classic|modern` and the other picture cvars
+// <line>` is a line for the server's console (`sv timelimit 10`), `save <name>` and `load <name>`
+// keep and bring back a single-player game (`<game folder>/saves/<name>.save`), `sensitivity <deg a
+// count>` and `m_invert 0|1` set the look, `r_look classic|modern` and the other picture cvars
 // (app/look.hpp: `r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`) the world's
 // look, the view-model cvars (view/hand.hpp: `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`,
 // `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the window over the
@@ -51,6 +52,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <exception>
 #include <memory>
 #include <span>
@@ -345,6 +347,32 @@ int run_main(int argc, char** argv) {
                           listen.opt.console.emplace_back("coop 0");
                           next_map = "start";
                         });
+  // The saves (the campaign's whole game: listen.hpp's `listen_save`), `<game>/saves/<name>.save`.
+  std::string load_ask;  // a save the console asked to load (loaded where a map change is made)
+  if (campaign_progs != nullptr) {
+    console.add_command(
+        "save", "save <name>: the single-player game saved as saves/<name>.save",
+        [&](Con& c, const CArgs& a) {
+          if (a.size() < 2) {
+            c.print("save: save <name>");
+            return;
+          }
+          std::vector<uint8_t> bytes;
+          std::string why;
+          if (!cl::listen_save(listen, bytes, why, static_cast<int64_t>(std::time(nullptr))) ||
+              !cl::write_save(files, a[1], bytes, why))
+            c.print(why);
+          else
+            c.print("saved " + a[1]);
+        });
+    console.add_command("load", "load <name>: the game saved as saves/<name>.save",
+                        [&](Con& c, const CArgs& a) {
+                          if (a.size() < 2)
+                            c.print("load: load <name>");
+                          else
+                            load_ask = a[1];
+                        });
+  }
   std::unique_ptr<cl::LoadedMap> first = cl::load_named_map(files, next_map, error);
   if (!first || !cl::listen_start(listen, progs, std::move(first), listen_opt, error)) {
     out::error("shooters_edge: the first map did not start: " + error +
@@ -560,6 +588,20 @@ int run_main(int argc, char** argv) {
         fx_state = {};
         in_hand = {};
       }
+    }
+
+    // A save asked for: the game it holds now playing (the world drawn anew below).
+    if (!load_ask.empty()) {
+      const std::string name = load_ask;
+      load_ask.clear();
+      std::vector<uint8_t> bytes;
+      cl::ListenOptions lo = listen.opt;
+      lo.console.emplace_back("deathmatch 0");
+      if (!cl::read_save(files, name, bytes, error) ||
+          !cl::listen_load(listen, *campaign_progs, lo, bytes, name, error))
+        console.print("load: " + error);
+      else
+        console.print("loaded " + name);
     }
 
     // A benchmark asked for: vsync off, the listen server waits until it is done. A demo played

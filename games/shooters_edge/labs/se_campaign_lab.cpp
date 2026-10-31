@@ -17,6 +17,7 @@
 // ge:skill progs shooter labs
 // ge:test tests/progs_layout_test.cpp tests/shooters_edge_qc_single_player_test.cpp
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <memory>
 #include <span>
@@ -35,6 +36,7 @@
 #include "shooters_edge/client/campaign_view.hpp"
 #include "shooters_edge/server/bsp_map.hpp"
 #include "shooters_edge/server/campaign.hpp"
+#include "shooters_edge/server/campaign_save.hpp"
 #include "shooters_edge/server/catalogue.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
@@ -316,6 +318,67 @@ void autoaim(gl::Lab& lab, const Inputs& in) {
             in);
 }
 
+// THE SAVE CHECKED (server/campaign_save.hpp): the game saved now, the save loaded into a second
+// campaign (`load` and `load_ctx` its own maps), and both run on `frames` frames with the same
+// packets (`packet(i)`, null for none): the frame their digests part at, -1 when they never do.
+struct SaveCheck {
+  bool ok = false;
+  std::string why;
+  size_t bytes = 0;
+  int frames = 0, parted = -1;
+  double save_ms = 0, load_ms = 0;
+  double saved_at = 0;         // the server's time when saved, s
+  std::string a_maps, b_maps;  // the maps each started after the save
+  gl::Trace a_x{"never saved: the player's x / 10", {}, {}};
+  gl::Trace b_x{"loaded: the player's x / 10", {}, {}};
+  gl::Trace a_live{"never saved: entities live / 10", {}, {}};
+  gl::Trace b_live{"loaded: entities live / 10", {}, {}};
+};
+
+template <class Packet>
+SaveCheck save_and_go_on(sv::Campaign& a, const sv::CampaignOptions& opt, int frames,
+                         Packet packet) {
+  SaveCheck r;
+  std::vector<uint8_t> file;
+  const auto t0 = std::chrono::steady_clock::now();
+  if (!sv::campaign_save(a, file, r.why)) return r;
+  const auto t1 = std::chrono::steady_clock::now();
+  sv::Campaign b;
+  if (!sv::campaign_load(b, *a.progs, opt, file, "lab", r.why)) return r;
+  const auto t2 = std::chrono::steady_clock::now();
+  r.ok = true;
+  r.saved_at = a.server->sv.time;
+  const size_t a_from = a.history.size(), b_from = b.history.size();
+  r.bytes = file.size();
+  r.save_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+  r.load_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
+  const auto live = [](const sv::QcServer& s) {
+    int n = 0;
+    for (int e = 1; e < s.sv.num_edicts; e++) n += s.sv.edicts[static_cast<size_t>(e)].free ? 0 : 1;
+    return n / 10.0;
+  };
+  if (sv::campaign_digest(*a.server) != sv::campaign_digest(*b.server)) r.parted = 0;
+  for (int i = 0; i < frames && r.parted < 0; i++) {
+    const sh::Packet* p = packet(i);
+    std::string error;
+    if (!sv::campaign_frame(a, p, p ? 1 : 0, error) || !sv::campaign_frame(b, p, p ? 1 : 0, error))
+      break;
+    if (!a.server || !b.server) break;
+    sv::clear_frame(a.server->out);
+    sv::clear_frame(b.server->out);
+    r.frames = i + 1;
+    const double at = (i + 1) * sv::kCampaignStep;
+    r.a_x.x.push_back(at), r.a_x.y.push_back(a.server->sv.edicts[1].origin.x / 10);
+    r.b_x.x.push_back(at), r.b_x.y.push_back(b.server->sv.edicts[1].origin.x / 10);
+    r.a_live.x.push_back(at), r.a_live.y.push_back(live(*a.server));
+    r.b_live.x.push_back(at), r.b_live.y.push_back(live(*b.server));
+    if (sv::campaign_digest(*a.server) != sv::campaign_digest(*b.server)) r.parted = i + 1;
+  }
+  for (size_t k = a_from; k < a.history.size(); k++) r.a_maps += " " + a.history[k];
+  for (size_t k = b_from; k < b.history.size(); k++) r.b_maps += " " + b.history[k];
+  return r;
+}
+
 // The campaign host on the campaign stub: a new game on `first`, the level change its thinker
 // asks for, the parms and the runes carried, then a restart.
 void campaign_flow(gl::Lab& lab) {
@@ -330,7 +393,7 @@ void campaign_flow(gl::Lab& lab) {
   o.server.loop.max_edicts = 64;
   o.load = &stub_map;
   o.load_ctx = &maps;
-  o.settings = {"skill 1.4"};
+  o.settings = {"skill 1.4", "deathmatch 0"};
   sv::Campaign c;
   if (!sv::campaign_new_game(c, mod, o, "first", error)) {
     lab.fail("se-campaign: the campaign did not start: " + error,
@@ -362,6 +425,14 @@ void campaign_flow(gl::Lab& lab) {
   sv::campaign_frame(c, nullptr, 0, error);
   row();
   lab.table(t);
+  PackMaps loaded_maps;
+  sv::CampaignOptions lo = o;
+  lo.load_ctx = &loaded_maps;
+  const SaveCheck sc = save_and_go_on(c, lo, 200, [](int) { return nullptr; });
+  lab.metric("campaign.save.ok", sc.ok ? 1 : 0, "bool");
+  lab.metric("campaign.save.parted", sc.parted, "frame");
+  lab.metric("campaign.save.frames", sc.frames, "frames");
+  if (!sc.ok) lab.fail("se-campaign: the stub's save: " + sc.why, "next: run the save's tests");
   lab.metric("campaign.change_frame", frames, "frames");
   lab.metric("campaign.carried_health", field(1, f.health), "units");
   lab.note(
@@ -490,6 +561,57 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
                         to_fixed(walked, 1) + " units, " +
                             ((pl.flags & sh::kFlagOnGround) != 0 ? "yes" : "no")});
       lab.metric("pack.walked", walked, "units");
+    }
+    // The save: made after the walk, loaded into a second campaign, both walked on.
+    if (c.server && lab.arg_num("save") > 0) {
+      PackMaps loaded_maps;
+      loaded_maps.l = &l;
+      sv::CampaignOptions lo = o;
+      lo.load_ctx = &loaded_maps;
+      const int more = static_cast<int>(lab.arg_num("save") / sv::kCampaignStep);
+      const SaveCheck sc = save_and_go_on(c, lo, more, [&](int i) {
+        p.sequence = static_cast<uint32_t>(frames + i + 1);
+        for (sh::MoveCmd& cmd : p.cmds) {
+          cmd.buttons = fire && (i & 1) ? 1 : 0;
+          cmd.angles.y = static_cast<float>(lab.arg_num("yaw")) + static_cast<float>(i % 360);
+        }
+        return &p;
+      });
+      t.rows.push_back({"the save", sc.ok ? std::to_string(sc.bytes) + " bytes, written in " +
+                                                to_fixed(sc.save_ms, 2) + " ms, loaded in " +
+                                                to_fixed(sc.load_ms, 1) + " ms"
+                                          : "refused: " + sc.why});
+      t.rows.push_back({"the loaded game against the one never saved",
+                        sc.parted < 0
+                            ? "the same digest every frame of " + std::to_string(sc.frames)
+                            : "parted at frame " + std::to_string(sc.parted)});
+      t.rows.push_back({"maps started after the save (never saved; loaded)",
+                        (sc.a_maps.empty() ? " none" : sc.a_maps) + ";" +
+                            (sc.b_maps.empty() ? " none" : sc.b_maps)});
+      lab.metric("pack.save.bytes", static_cast<double>(sc.bytes), "bytes");
+      lab.metric("pack.save.parted", sc.parted, "frame");
+      lab.metric("pack.save.frames", sc.frames, "frames");
+      if (sc.ok) {
+        gl::LineChart sch;
+        sch.frame = {"THE SAVE LOADED AND PLAYED ON",
+                     "map " + map + ": saved at " + to_fixed(sc.saved_at, 1) +
+                         " s, both games given the same commands" +
+                         (sc.a_maps.empty() ? "" : "; then" + sc.a_maps),
+                     "seconds after the save", "the player's x / 10; entities live / 10"};
+        sch.traces = {sc.a_x, sc.b_x, sc.a_live, sc.b_live};
+        sch.spikes = false;
+        const gl::Chart sch_drawn = gl::line_chart(sch);
+        lab.shot({"save-continue",
+                  sch_drawn.title,
+                  "The game saved, its save loaded into a second campaign (the map started "
+                  "again, the save's state read over it), and both played on with the same "
+                  "commands, turning as they walk: the player's place and the live entities "
+                  "(the monsters, their missiles, the gibs) of each.",
+                  "each loaded line exactly over its never-saved line (one line seen per pair), "
+                  "and the table's digest the same every frame",
+                  {}},
+                 gl::to_picture(sch_drawn.plot), gl::Det::measured);
+      }
     }
     // The exit: the player stood in the map's first changelevel trigger; the program's messages
     // read as the window reads them (the intermission, the counts), then the attack button held
@@ -670,6 +792,9 @@ const gl::LabSpec kSpec{
         {"forward", "0", "with --game: the forward axis the player holds every frame, units/s"},
         {"yaw", "0", "with --game: the player's view yaw, degrees"},
         {"fire", "0", "with --game, 1: the attack held every other frame while the player walks"},
+        {"save", "0",
+         "with --game, s: after the walk the game saved, loaded into a second campaign, and "
+         "both walked on this long with the same commands (their digests compared each frame)"},
         {"exit", "0",
          "with --game, 1: then the player stood in the map's exit, the level's end read as the "
          "window reads it and the attack held until the next map"},
