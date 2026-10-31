@@ -323,6 +323,31 @@ void run(ge::lab::Lab& lab) {
          {"size", std::to_string(width) + "x" + std::to_string(height)}}};
   };
 
+  // The dawn shots' fog off the air (deterministic rows, with a GPU or without).
+  std::vector<ge::mountain::app::WaterMist> mists(shots.size());
+  for (size_t k = 0; k < shots.size(); ++k) {
+    const Shot& s = shots[k];
+    if (s.air == 0) continue;
+    ge::wind::Climate c = ge::mountain::app::mountain_climate(level);
+    c.mean_c = lab.arg_num("spring");
+    c.wind = s.wind;
+    c.cloud = 0.05;
+    ge::mountain::app::MapWater w;
+    w.centre[0] = tarn.x;
+    w.centre[1] = tarn.z;
+    w.half[0] = w.half[1] = tarn.radius;
+    w.level = tarn.level;
+    w.water_c = 4;
+    const ge::mountain::app::WaterMist& wm = mists[k] =
+        ge::mountain::app::water_mist(level, c, s.hour, w);
+    lab.metric(s.id + ".mist", static_cast<double>(wm.mist.kind), "kind");
+    lab.metric(s.id + ".mist-density", wm.area.density, "1/m");
+    lab.metric(s.id + ".mist-depth", 2 * wm.area.half[1], "m");
+    lab.note(s.id + ": " + ge::wind::mist_name(wm.mist.kind) + " fog, " +
+             fixed(wm.mist.visibility, 0) + " m visibility, " + fixed(wm.mist.depth, 1) +
+             " m deep");
+  }
+
   auto device = ge::gpu::create_device({.label = "lake", .validation = 1});
   if (!device) {
     if (env_on("GE_GPU_REQUIRE")) {
@@ -408,23 +433,7 @@ void run(ge::lab::Lab& lab) {
     fall_line::app::FrameScene scene;
     std::vector<ge::render::FogVolume> fog;
     if (s.air != 0) {
-      ge::wind::Climate c = ge::mountain::app::mountain_climate(level);
-      c.mean_c = lab.arg_num("spring");
-      c.wind = s.wind;
-      c.cloud = 0.05;
-      ge::mountain::app::MapWater w;
-      w.centre[0] = tarn.x;
-      w.centre[1] = tarn.z;
-      w.half[0] = w.half[1] = tarn.radius;
-      w.level = tarn.level;
-      w.water_c = 4;
-      const ge::mountain::app::WaterMist wm = ge::mountain::app::water_mist(level, c, s.hour, w);
-      lab.metric(s.id + ".mist", static_cast<double>(wm.mist.kind), "kind");
-      lab.metric(s.id + ".mist-density", wm.area.density, "1/m");
-      lab.metric(s.id + ".mist-depth", 2 * wm.area.half[1], "m");
-      lab.note(s.id + ": " + ge::wind::mist_name(wm.mist.kind) + " fog, " +
-               fixed(wm.mist.visibility, 0) + " m visibility, " + fixed(wm.mist.depth, 1) +
-               " m deep");
+      const ge::mountain::app::WaterMist& wm = mists[&s - shots.data()];
       // Without it: the same volume emptied, so the frame deals none of the map's own either.
       fog = {wm.area};
       fog[0].density = 0;
