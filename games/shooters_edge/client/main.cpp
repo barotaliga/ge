@@ -330,7 +330,7 @@ static int run_main(int argc, char** argv) {
   surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), true);
   cl::WorldDrawPtr world = cl::create_world_draw(
       *device, files, *listen.map, static_cast<uint32_t>(w), static_cast<uint32_t>(h),
-      surface.format(), picture, weapons, error, {listen.server->models});
+      surface.format(), picture, weapons, error, {listen.server->models, {}});
   if (!world) {
     out::error("shooters_edge: the world draw did not load: " + error + "; see docs/rendering.md");
     return 1;
@@ -488,7 +488,7 @@ static int run_main(int argc, char** argv) {
         world.reset();
         world = cl::create_world_draw(*device, files, *listen.map, static_cast<uint32_t>(w),
                                       static_cast<uint32_t>(h), surface.format(), picture, weapons,
-                                      error, {listen.server->models});
+                                      error, {listen.server->models, {}});
         if (!world) {
           out::error("shooters_edge: the new world draw did not load: " + error +
                      "; see docs/rendering.md");

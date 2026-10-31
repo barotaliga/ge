@@ -6,9 +6,11 @@
 // - LOADED (`create_models`, while the world's frame is made): each name on the server's model
 //   list through the search path: a `.mdl` as one morph model a skin, a `.spr` as sprite frames,
 //   a `.bsp` item (a health box, an ammo crate) as one morph model of its faces
-//   (app/classic_models.hpp). The map's own brush models ("*1", ...) are the map's, not these.
-//   A torch's flame (`flame.mdl`, `flame2.mdl`) is also loaded bare, its stick and cage without
-//   the painted flame, for the frames whose effects burn the flame instead.
+//   (app/classic_models.hpp), its skins the enhanced cache's upscaled copies when `cache` names one
+//   and the atlas holds them all (else the pack's own, every one). The map's own brush models
+//   ("*1", ...) are the map's, not these. A torch's flame (`flame.mdl`, `flame2.mdl`) is also
+//   loaded bare, its stick and cage without the painted flame, for the frames whose effects burn
+//   the flame instead.
 // - PLACED (`place_models`, each frame from the server): every live entity with a model but the
 //   local player (whose eyes the camera is), then the static ones; its frame, skin, angles and
 //   colours as the server holds them.
@@ -21,10 +23,12 @@
 // ge:keywords world-models create_models place_models prepare_models encode_models placed-model
 // ge:keywords items armour health weapons flames torches players statics entity-models morph
 // ge:keywords sprites bare-flames topcolor bottomcolor place_brushes doors plats
+// ge:keywords ce_models enhanced-skins cached_skins
 // ge:skill render shooter morph
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -60,6 +64,9 @@ void place_models(const Listen& l, std::vector<Placed>& out);
 
 struct ModelLoad {
   std::span<const std::string> names;  // the server's model list
+  // The enhanced cache (`ce_models`: classicenhance/cached.hpp's `find_cache`), or empty: a
+  // model's skins drawn from its enhanced copies when they are all there and the atlas holds them.
+  std::filesystem::path cache;
 };
 
 // One server model as drawn.
