@@ -71,8 +71,11 @@ inline constexpr double kClipFps = 30;
 // their true size, so the hands are the same size in every weapon; its origin is the grip hand's
 // hold, put at the look's offset. The shoulders are where they are from the eye, in true metres
 // (right, up, forward), the same for every weapon: they move only with the body (an axe's swing).
+// They sit 6 cm higher and 10 cm further forward than a body's (0.24 below and 0.06 behind the
+// eye): with the anatomy's own, the hands holding a shouldered gun fall below the bottom of the
+// view. The shoulders are never seen, and every joint still keeps its human range.
 inline constexpr double kBuiltScale = 0.5;
-inline constexpr double kShoulderM[2][3] = {{0.19, -0.24, -0.06}, {-0.19, -0.24, -0.06}};  // r, l
+inline constexpr double kShoulderM[2][3] = {{0.19, -0.18, 0.04}, {-0.19, -0.18, 0.04}};  // r, l
 inline constexpr double kUpperArmM = 0.32;  // shoulder to elbow
 inline constexpr double kForearmM = 0.27;   // elbow to wrist
 
