@@ -16,10 +16,16 @@
 // longest); the 1% LOW and the 0.1% LOW: the slowest 1% (0.1%) of frames, at least one, as a
 // frame rate over their own time; the median and 99th-percentile frame in milliseconds.
 //
-// WHERE THE GPU'S TIME WENT (`PassTimes`): each timed frame's GPU time per pass of the world's
-// frame, by the pass's name, and the frame's span; the report gives each pass's median, most
-// first, and its share of the median span. A reading is a frame or more late (the timer's), and
-// a GPU without timestamp queries gives none: the report then says so.
+// THE GPU'S FRAME (`PassTimes`): each timed frame's GPU span (its first pass's start to its last
+// pass's end), a frame or more late (the timer's); a GPU without timestamp queries gives none and
+// the report says so. A pass's own timestamps do not say what it costs: a tiled GPU overlaps the
+// passes, and each one's reading stretches over its neighbours' work.
+//
+// THE PRICE (`prices`): what each thing the look draws costs, found the one honest way: the demo
+// played again with that thing switched off, its median frame and span against the base's. The
+// base is played before and after every such run and each saving is read against the mean of the
+// two around it, so a machine that warms or gets busier over the minutes does not read as a
+// saving; the largest gap between two neighbouring base runs is the noise a saving has to clear.
 //
 // FINDING THE DEMO (`find_demo`): the name as given through the search path (a pack's
 // `demo1.dem`, a loose file in the game folder), then with `.dem` added, then the first file in
@@ -29,7 +35,7 @@
 // ge:keywords timedemo benchmark demo fps frame-rate average max min one-percent-low low
 // ge:keywords percentile frame-time find_demo bench_stats bench_report timedemo_start
 // ge:keywords timedemo_step timedemo_mark demo_view demo_status unlocked-fps vsync-off
-// ge:keywords gpu-per-pass pass_add pass_costs pass_report
+// ge:keywords gpu-span span_add span_report price prices price_report switch-off-pricing
 // ge:keywords playdemo playdemo_step cl_demospeed demo-pace
 // ge:skill shooter perf
 // ge:test tests/shooters_edge_demo_test.cpp
@@ -64,26 +70,38 @@ BenchStats bench_stats(std::span<const double> frame_s);
 std::vector<std::string> bench_report(const std::string& demo, const std::string& setup,
                                       const BenchStats& s);
 
-// The GPU's time per pass over a run, by name, and the frames' spans; ms.
+// The GPU's span of each timed frame over a run, ms.
 struct PassTimes {
-  std::vector<std::string> names;
-  std::vector<std::vector<double>> ms;  // ms[i]: every reading of names[i]
-  std::vector<double> span_ms;          // each frame's GPU span
+  std::vector<double> span_ms;
 };
-// A reading of pass `name` (a NaN one, not measured, is left out).
-void pass_add(PassTimes& p, std::string_view name, double ms);
-// A frame's GPU span (NaN left out).
+// A frame's GPU span (NaN, not measured, left out).
 void span_add(PassTimes& p, double ms);
-struct PassCost {
+// The report's GPU line: the median span, or that this GPU has no timestamp queries.
+std::string span_report(const PassTimes& p);
+
+// One run of a price: what was switched off (empty for the base) and its medians, ms (span NaN
+// when the GPU has no timestamp queries).
+struct PriceRun {
   std::string name;
-  double median_ms = 0;
-  double share = 0;  // of the median span; 0 when no span was read
+  double frame_p50_ms = 0;
+  double span_p50_ms = 0;
 };
-// Every pass's median, most first.
-std::vector<PassCost> pass_costs(const PassTimes& p);
-// The report's GPU line: the median span and the `most` dearest passes; says so when nothing was
-// measured.
-std::string pass_report(const PassTimes& p, size_t most);
+// What switching a thing off saved against the base: the frame's and the span's, ms.
+struct Price {
+  std::string name;
+  double frame_ms = 0;
+  double span_ms = 0;
+};
+// Each run's saving against the base runs either side of it (`bases`: one more than `off`, base
+// i played before off i), the most saved first.
+std::vector<Price> prices(std::span<const PriceRun> bases, std::span<const PriceRun> off);
+// The largest gap between two neighbouring base runs' median frames, ms.
+double price_noise(std::span<const PriceRun> bases);
+// The price as lines: the base runs' spread (the noise) and each saving, most first.
+std::vector<std::string> price_report(std::span<const PriceRun> bases,
+                                      std::span<const Price> saved);
+// The median of `v` (0 when empty).
+double median_of(std::vector<double> v);
 
 // The demo `name` (see above) as bytes; `found` says where it came from. False with the places
 // tried and the next step.
@@ -95,7 +113,7 @@ struct Timedemo {
   std::string found;  // where it was read from
   Demo demo;
   std::vector<double> frame_s;  // the timed frames, s
-  PassTimes passes;             // the timed frames' GPU time per pass
+  PassTimes passes;             // the timed frames' GPU spans
   int skip = 0;                 // frames still to go untimed
   int levels = 0;               // the level starts the window has loaded
   uint64_t last_ns = 0;         // the last mark (0: none yet)

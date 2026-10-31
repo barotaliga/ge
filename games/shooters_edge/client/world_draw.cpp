@@ -304,11 +304,6 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   f.rec.after_submit(d);
 }
 
-void record_passes(const WorldDraw& f, PassTimes& p) {
-  const gr::FrameStats& s = f.rec.stats;
-  for (int i = 0; i < s.count; i++)
-    pass_add(p, s.passes[static_cast<size_t>(i)].name, s.passes[static_cast<size_t>(i)].gpu_ms);
-  span_add(p, s.gpu_span_ms());
-}
+void record_span(const WorldDraw& f, PassTimes& p) { span_add(p, f.rec.stats.gpu_span_ms()); }
 
 }  // namespace shooters_edge::client

@@ -3,7 +3,8 @@
 //
 // ge:summary The demo benchmark's report, its demo lookup and steps, the eye and HUD off a demo
 // ge:keywords bench_stats bench_report find_demo timedemo_start timedemo_step timedemo_mark
-// ge:keywords demo_view demo_status one-percent-low pass_add pass_costs pass_report
+// ge:keywords demo_view demo_status one-percent-low span_add span_report prices price_report
+// ge:keywords price_noise
 // ge:skill shooter perf
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/timedemo.hpp"
@@ -98,49 +99,58 @@ std::vector<std::string> bench_report(const std::string& demo, const std::string
   };
 }
 
-void pass_add(PassTimes& p, std::string_view name, double ms) {
-  if (std::isnan(ms)) return;
-  size_t i = 0;
-  while (i < p.names.size() && p.names[i] != name) i++;
-  if (i == p.names.size()) {
-    p.names.emplace_back(name);
-    p.ms.emplace_back();
-  }
-  p.ms[i].push_back(ms);
-}
-
 void span_add(PassTimes& p, double ms) {
   if (!std::isnan(ms)) p.span_ms.push_back(ms);
 }
 
-namespace {
-double median(std::vector<double> v) {
+double median_of(std::vector<double> v) {
   if (v.empty()) return 0;
   const auto mid = v.begin() + static_cast<std::ptrdiff_t>(v.size() / 2);
   std::nth_element(v.begin(), mid, v.end());
   return *mid;
 }
-}  // namespace
 
-std::vector<PassCost> pass_costs(const PassTimes& p) {
-  const double span = median(p.span_ms);
-  std::vector<PassCost> out;
-  for (size_t i = 0; i < p.names.size(); i++) {
-    const double m = median(p.ms[i]);
-    out.push_back({p.names[i], m, span > 0 ? m / span : 0});
+std::string span_report(const PassTimes& p) {
+  if (p.span_ms.empty()) return "  GPU frame: not measured (this GPU has no timestamp queries)";
+  return "  GPU frame span, median " + fixed(median_of(p.span_ms), 2) +
+         " ms (what each thing costs: the se-timedemo lab's --price)";
+}
+
+std::vector<Price> prices(std::span<const PriceRun> bases, std::span<const PriceRun> off) {
+  std::vector<Price> out;
+  for (size_t i = 0; i < off.size() && i + 1 < bases.size(); i++) {
+    const double frame = (bases[i].frame_p50_ms + bases[i + 1].frame_p50_ms) / 2;
+    const double span = (bases[i].span_p50_ms + bases[i + 1].span_p50_ms) / 2;
+    out.push_back({off[i].name, frame - off[i].frame_p50_ms, span - off[i].span_p50_ms});
   }
   std::stable_sort(out.begin(), out.end(),
-                   [](const PassCost& a, const PassCost& b) { return a.median_ms > b.median_ms; });
+                   [](const Price& a, const Price& b) { return a.frame_ms > b.frame_ms; });
   return out;
 }
 
-std::string pass_report(const PassTimes& p, size_t most) {
-  if (p.names.empty()) return "  GPU by pass: not measured (this GPU has no timestamp queries)";
-  std::string line = "  GPU by pass, medians: span " + fixed(median(p.span_ms), 2) + " ms;";
-  const std::vector<PassCost> costs = pass_costs(p);
-  for (size_t i = 0; i < costs.size() && i < most; i++)
-    line += (i == 0 ? " " : ", ") + costs[i].name + " " + fixed(costs[i].median_ms, 2);
-  return line;
+double price_noise(std::span<const PriceRun> bases) {
+  double most = 0;
+  for (size_t i = 1; i < bases.size(); i++)
+    most = std::max(most, std::abs(bases[i].frame_p50_ms - bases[i - 1].frame_p50_ms));
+  return most;
+}
+
+std::vector<std::string> price_report(std::span<const PriceRun> bases,
+                                      std::span<const Price> saved) {
+  std::vector<std::string> out;
+  if (bases.empty()) return out;
+  double lo = bases[0].frame_p50_ms, hi = lo;
+  for (const PriceRun& b : bases) {
+    lo = std::min(lo, b.frame_p50_ms);
+    hi = std::max(hi, b.frame_p50_ms);
+  }
+  out.push_back("  price: everything on, median frame " + fixed(lo, 2) + " to " + fixed(hi, 2) +
+                " ms over " + std::to_string(bases.size()) + " runs; a saving under " +
+                fixed(price_noise(bases), 2) + " ms is noise");
+  for (const Price& p : saved)
+    out.push_back("    " + p.name + " off saves " + fixed(p.frame_ms, 2) + " ms a frame (span " +
+                  fixed(p.span_ms, 2) + ")");
+  return out;
 }
 
 bool find_demo(const SearchPath& files, const std::string& name, std::vector<uint8_t>& out,

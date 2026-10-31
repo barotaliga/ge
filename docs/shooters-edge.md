@@ -209,14 +209,17 @@ listen server waits meanwhile; ESCAPE stops the run early. At the end the consol
 terminal print the frames timed and their seconds, the **average** frame rate, the **max** and
 **min** (one over the shortest and longest frame), the **1% low** and **0.1% low** (the slowest
 1% and 0.1% of frames as a rate over their own time), the median and 99th-percentile frame, and
-**where the GPU's time went**: the median GPU span of a frame and its dearest passes (where the
-GPU has timestamp queries). `+vid_fullscreen 1` (or the menu's VIDEO ▸ FULLSCREEN) runs it over
-the whole screen at the desktop's own mode:
+the median **GPU span** of a frame (where the GPU has timestamp queries). What each thing the look
+draws costs is the lab's `--price` (below), never a pass's own timestamps: a tiled GPU overlaps
+the passes and each one's reading stretches over its neighbours' work. `+vid_fullscreen 1` (or
+the menu's VIDEO ▸ FULLSCREEN) runs it over the whole screen at the desktop's own mode, on the
+display the window is on or on `vid_display n`'s (`vid_displays` lists them). The `-` flags are
+read wherever they stand, so a `+` console line ends at the next flag:
 
 ```sh
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic -benchmark demo1
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic +vid_fullscreen 1 \
-    -benchmark demo1
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic +vid_display 2 \
+    +vid_fullscreen 1 +r_look modern -benchmark demo1
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=2560x1600 \
     -benchmark ~/Downloads/match.dem
 ```
@@ -236,7 +239,17 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 - **Headless**: `make lab LAB=se-timedemo` runs the same loop into an offscreen target, on a
   demo written in code round the fixture halls (`--format=client` or `--format=multiview` for the
   other formats), or on a real one with `ARGS="--basedir=<dir> --demo=demo1"`, and charts every
-  frame's time, and every pass's GPU time (`--look=classic|modern` picks the look).
+  frame's time and GPU span (`--look=classic|modern` picks the look).
+- **The price** (`ARGS="... --look=modern --price=1"`): the demo played again with each drawn
+  `ce_` switch off in turn and once without the HUD, each run between two runs with everything on;
+  a switch's saving is read against the mean of the all-on runs either side (so a machine warming
+  or getting busier over the minutes reads as no saving), and the largest gap between neighbouring
+  all-on runs is the noise. The lab charts each run's frames as a box and lists what each switch
+  saved off the median frame, the most first.
+- **The shadow maps** (the modern look): a light's cube is drawn when it joins the shadowed few
+  and kept while it stays; at most two new cubes a frame (`Options::fresh_cubes`), the rest of a
+  room's torches unshadowed for the frames until their turn, so walking into a room costs no
+  frame more than two cubes; a dynamic light (a flash, a rocket) lights without a shadow.
 
 ### Watching a demo
 

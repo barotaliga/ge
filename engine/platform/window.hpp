@@ -16,7 +16,7 @@
 // ge:keywords platform window sdl native-window surface-handles input keyboard pointer mouse
 // ge:keywords focus quit resize pixel-size hidpi input-snapshot poll clock ticks monotonic
 // ge:keywords headless display_available open_window poll_input now_ns prefs_dir prefs user-dir
-// ge:keywords fullscreen set_fullscreen
+// ge:keywords fullscreen set_fullscreen displays external-monitor
 // ge:skill platform
 // ge:test tests/platform_window_test.cpp
 #pragma once
@@ -26,6 +26,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace ge::platform {
 
@@ -106,18 +107,28 @@ class Window {
   friend void set_relative_mouse(Window& window, bool on);
   friend bool relative_mouse(const Window& window);
   friend void set_text_input(Window& window, bool on);
-  friend bool set_fullscreen(Window& window, bool on);
+  friend bool set_fullscreen(Window& window, bool on, int display);
   std::unique_ptr<Impl> impl_;
 };
 
 // Open a window. Returns nullptr after an agent-actionable error line when it cannot.
 std::unique_ptr<Window> open_window(const WindowDesc& desc);
 
-// The window over the whole of its display (the desktop's own mode: no mode change, the drawable
-// at the display's pixel size) or back to its windowed size. The pixel size changes a frame or
-// more later, through `InputSnapshot::resized`. False after an agent-actionable error line when
+// A display the desktop has, numbered from 1 in the platform's order, at its desktop mode's pixel
+// size.
+struct Display {
+  int number = 0;
+  std::string name;
+  int width_px = 0, height_px = 0;
+};
+std::vector<Display> displays();
+
+// The window over the whole of a display (the desktop's own mode: no mode change, the drawable at
+// the display's pixel size) or back to its windowed size. `display` 0 is the one the window stands
+// on, n the n-th of `displays()` (the window is moved there first). The pixel size changes a frame
+// or more later, through `InputSnapshot::resized`. False after an agent-actionable error line when
 // the platform refuses.
-bool set_fullscreen(Window& window, bool on);
+bool set_fullscreen(Window& window, bool on, int display = 0);
 
 // Read every pending event, once per frame on the main thread, into `input` (its `pressed`
 // and per-frame flags are cleared first; `held` carries over).

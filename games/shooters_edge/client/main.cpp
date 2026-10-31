@@ -32,7 +32,8 @@
 // cvars (app/look.hpp: `r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`) the
 // world's look, the view-model cvars (view/hand.hpp: `r_drawviewmodel`, `r_viewmodel_fov`,
 // `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the
-// window over the whole screen, and `quit` quits.
+// window over the whole screen (`vid_display n` which one, of those `vid_displays` lists), and
+// `quit` quits.
 //
 // THE BENCHMARK: `benchmark <demo>` in the console (or `-benchmark <demo>` on the command line,
 // which quits when it is done) plays a recorded game (`demo1` from the packs, or a file's path)
@@ -48,7 +49,7 @@
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console
 // ge:keywords relative-mouse mouse-look hud first-person effects r_look quit shooters-edge
 // ge:keywords benchmark timedemo demo vsync-off fps playdemo demo_track cl_demospeed
-// ge:keywords main-menu escape vid_fullscreen fullscreen offscreen
+// ge:keywords main-menu escape vid_fullscreen fullscreen offscreen vid_display vid_displays
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
 #include <cstdio>
@@ -129,9 +130,10 @@ std::string expand_home(const std::string& p) {
 bool parse(int argc, char** argv, Args& a) {
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg = argv[i];
-    if (!a.plus.empty() || (!arg.empty() && arg[0] == '+')) {
-      a.plus.emplace_back(arg);
-    } else if ((arg == "-basedir" || arg == "--basedir") && i + 1 < argc) {
+    // The flags are read wherever they stand, a console line's words (`+r_look modern`) running
+    // from a `+` to the next flag or `+`, so `+r_look modern -benchmark demo1` is a look and a
+    // benchmark, not one console line of four words.
+    if ((arg == "-basedir" || arg == "--basedir") && i + 1 < argc) {
       a.basedir = expand_home(argv[++i]);
     } else if ((arg == "-progs" || arg == "--progs") && i + 1 < argc) {
       a.progs = expand_home(argv[++i]);
@@ -151,6 +153,8 @@ bool parse(int argc, char** argv, Args& a) {
       if (x == std::string::npos) return false;
       a.width = std::atoi(wh.substr(0, x).c_str());
       a.height = std::atoi(wh.substr(x + 1).c_str());
+    } else if (!a.plus.empty() || (!arg.empty() && arg[0] == '+')) {
+      a.plus.emplace_back(arg);
     } else {
       return false;
     }
@@ -237,6 +241,19 @@ int run_main(int argc, char** argv) {
                                 "0: a window",
                         .kind = ge::console::CvarKind::boolean},
                        &fullscreen);
+  int display = 0;  // vid_display; read when the window goes fullscreen
+  console.cvars().bind({.name = "vid_display",
+                        .fallback = "0",
+                        .help = "the display vid_fullscreen covers: 0 the one the window is on, n "
+                                "the n-th that vid_displays lists",
+                        .kind = ge::console::CvarKind::integer},
+                       &display);
+  console.add_command("vid_displays", "list the displays vid_display numbers",
+                      [&](Con& c, const CArgs&) {
+                        for (const ge::platform::Display& d : ge::platform::displays())
+                          c.print(std::to_string(d.number) + ": " + d.name + ", " +
+                                  std::to_string(d.width_px) + "x" + std::to_string(d.height_px));
+                      });
   std::string bench_ask;  // a demo the console asked to benchmark
   console.add_command("benchmark", "benchmark <demo>: play a demo flat out and report its fps",
                       [&](Con& c, const CArgs& a) {
@@ -469,7 +486,7 @@ int run_main(int argc, char** argv) {
         hud.notify.push(line, se::hud_style().ink, now_s);
       }
     if (!bench.paced && (why.empty() || !bench.frame_s.empty()))
-      console.print(cl::pass_report(bench.passes, 8));
+      console.print(cl::span_report(bench.passes));
     if (!why.empty() && !bench.paced) {
       console.print("benchmark: stopped early: " + why);
       bench_failed = 1;
@@ -510,7 +527,7 @@ int run_main(int argc, char** argv) {
     last = now;
     if (input.quit) break;
     if (fullscreen != full_applied) {  // the size follows through `input.resized`
-      if (!ge::platform::set_fullscreen(*window, fullscreen)) fullscreen = full_applied;
+      if (!ge::platform::set_fullscreen(*window, fullscreen, display)) fullscreen = full_applied;
       full_applied = fullscreen;
     }
     ge::input::update(held, queue);
@@ -701,7 +718,7 @@ int run_main(int argc, char** argv) {
       }
       // The demo's effects are not read yet: the world's frame with none of its own.
       cl::draw_world(*device, *world, view, cl::FxFrame{}, nullptr, wall, overlay, target);
-      if (!bench.paced && bench.skip == 0) cl::record_passes(*world, bench.passes);
+      if (!bench.paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) surface.present();
       if (bench.paced) {  // playback: every frame shown, nothing timed
         ++presented;
