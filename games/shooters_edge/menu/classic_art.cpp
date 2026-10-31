@@ -27,12 +27,14 @@ constexpr std::string_view kNames[] = {
     "qplaque",  "ttl_main", "mainmenu", "menudot1", "menudot2", "menudot3", "menudot4", "menudot5",
     "menudot6", "ttl_sgl",  "sp_menu",  "p_multi",  "mp_menu",  "p_option", "help0",    "help1",
     "help2",    "help3",    "help4",    "help5",    "box_tl",   "box_tm",   "box_tr",   "box_ml",
-    "box_mm",   "box_mr",   "box_bl",   "box_bm",   "box_br",   "complete", "inter"};
+    "box_mm",   "box_mr",   "box_bl",   "box_bm",   "box_br",   "complete", "inter",    "ranking"};
 
 // The big figures the level's end is drawn in, pictures of the glyph sheet's wad.
 constexpr std::string_view kWadNames[] = {"num_0",     "num_1",     "num_2",    "num_3", "num_4",
                                           "num_5",     "num_6",     "num_7",    "num_8", "num_9",
                                           "num_minus", "num_colon", "num_slash"};
+// The wad's other pictures: the status bar's strip the scores key shows (320 x 24).
+constexpr std::string_view kWadStrips[] = {"scorebar"};
 
 ui::Image colour(const vfs::IndexedPicture& p, std::span<const uint8_t> palette, int clear) {
   ui::Image img;
@@ -159,6 +161,19 @@ vfs::IndexedPicture glyph_sheet() {
       const ui::Rect r = cell(k);
       dl.rect({r.x, r.y + 3, 8, 2}, kBronze);
     }
+    // 16 and 17 the gold brackets round the player's own frags, 29 30 31 a rule's left end,
+    // middle and right end (the scoreboard's header underline).
+    const ui::Rect lb = cell(16), rb = cell(17);
+    dl.rect({lb.x + 1, lb.y, 2, 8}, kGold);
+    dl.rect({lb.x + 1, lb.y, 5, 2}, kGold);
+    dl.rect({lb.x + 1, lb.y + 6, 5, 2}, kGold);
+    dl.rect({rb.x + 5, rb.y, 2, 8}, kGold);
+    dl.rect({rb.x + 2, rb.y, 5, 2}, kGold);
+    dl.rect({rb.x + 2, rb.y + 6, 5, 2}, kGold);
+    for (int k : {29, 30, 31}) {
+      const ui::Rect r = cell(k);
+      dl.rect({r.x + (k == 29 ? 1.0f : 0.0f), r.y + 3, k == 30 ? 8.0f : 7.0f, 2}, kGold);
+    }
     const ui::Rect h = cell(131);
     dl.rect({h.x + 2, h.y + 1, 4, 6}, kGold, 1);
     // 12 is the cursor's blank half, 13 its arrow.
@@ -176,6 +191,12 @@ std::vector<uint8_t> lmp(const ui::Image& img) { return vfs::write_picture(quant
 const ui::Image* ClassicArt::find(std::string_view name) const {
   const auto it = pictures.find(name);
   return it == pictures.end() ? nullptr : &it->second;
+}
+
+ui::Color ClassicArt::colour(int index) const {
+  const size_t at = static_cast<size_t>(std::clamp(index, 0, 255)) * 3;
+  return {static_cast<float>(palette[at]) / 255, static_cast<float>(palette[at + 1]) / 255,
+          static_cast<float>(palette[at + 2]) / 255, 1};
 }
 
 std::span<const std::string_view> classic_picture_names() { return kNames; }
@@ -203,6 +224,7 @@ bool load_classic_art(const FindFile& find, ClassicArt* out, std::string* error)
     return false;
   }
   out->glyphs = colour(glyphs, palette, 0);
+  std::copy(palette.begin(), palette.end(), out->palette.begin());
   for (std::string_view name : kNames) {
     const std::string path = "gfx/" + std::string(name) + ".lmp";
     const std::span<const uint8_t> bytes = find(path, store);
@@ -211,6 +233,12 @@ bool load_classic_art(const FindFile& find, ClassicArt* out, std::string* error)
     out->pictures.emplace(std::string(name), colour(p, palette, kClear));
   }
   for (std::string_view name : kWadNames) {
+    const vfs::WadEntry* e = vfs::wad_find(wad, name);
+    vfs::IndexedPicture p;
+    if (e == nullptr || !vfs::read_picture(vfs::wad_lump(wad_bytes, *e), &p, &why)) continue;
+    out->pictures.emplace(std::string(name), colour(p, palette, kClear));
+  }
+  for (std::string_view name : kWadStrips) {
     const vfs::WadEntry* e = vfs::wad_find(wad, name);
     vfs::IndexedPicture p;
     if (e == nullptr || !vfs::read_picture(vfs::wad_lump(wad_bytes, *e), &p, &why)) continue;
@@ -244,6 +272,11 @@ std::map<std::string, std::vector<uint8_t>, std::less<>> fixture_files() {
                        dl.text(f, 22, narrow ? 8.0f : 12.0f, 21, word, kGold, ui::Align::center);
                      }))});
   }
+  lumps.push_back({"scorebar", vfs::kPictureLump, lmp(canvas(320, 24, [](ui::DrawList& dl) {
+                     dl.rect({0, 0, 320, 24}, kDark);
+                     dl.rect({0, 0, 320, 1}, kBronze);
+                     dl.rect({0, 23, 320, 1}, kBronze);
+                   }))});
   vfs::write_wad(lumps, &wad, &error);
   files["gfx.wad"] = std::move(wad);
   const auto put = [&](std::string_view name, const ui::Image& img) {
@@ -264,6 +297,7 @@ std::map<std::string, std::vector<uint8_t>, std::less<>> fixture_files() {
           dl.text(f, 18, 4, 30.0f + 40 * static_cast<float>(i), kRows[i], kGold, ui::Align::left,
                   1);
       }));
+  put("ranking", plate(144, 24, "RANKINGS", 15));
   put("ttl_sgl", plate(128, 24, "SINGLE PLAYER", 13));
   put("p_multi", plate(120, 24, "MULTIPLAYER", 13));
   put("p_option", plate(96, 24, "OPTIONS", 13));
