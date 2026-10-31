@@ -9,7 +9,8 @@
 //   the floor thinning upward by `falloff`, softened over `edge` m inside its faces, carved by the
 //   cloud's tiled noise (frame.wgsl's `cloud_noise`) drifting on the wind, scattering a share
 //   `albedo` of what it takes out with a Henyey-Greenstein lobe `phase`, and glowing `glow` cd/m2 a
-//   metre of extinction. `prepare_fog` keeps the kMaxFogVolumes nearest that reach into the froxel
+//   metre of extinction, its share `sky` of the open sky's light (a closed room's dust takes none
+//   of it, M38g). `prepare_fog` keeps the kMaxFogVolumes nearest that reach into the froxel
 //   volume and hands them to the GPU camera-relative.
 // - THE FROXELS: `FogSettings::width` x `height` columns over the screen, `slices` deep out to
 //   `range` m, a slice's far edge at range x (slice / slices)^2, so the slices near the eye are
@@ -92,6 +93,10 @@ struct FogVolume {
   float flicker = 0;
   float rate_hz = 9;
   uint32_t seed = 0;
+  // The share of the open sky's light that reaches it, 0..1: 1 under the open sky, 0 in a closed
+  // room (a hall's dust lit only by the sun through its windows, past the casters' maps, and by
+  // its lamps). It scales the sky's light and the ground's light from below.
+  float sky = 1;
   // It stands on the ground (the frame's terrain): its height is measured up from the ground
   // under each point, from 0 to 2 x half[1], so a mist lies as deep over a slope as over a flat;
   // `centre[1]` is then unused. Without a terrain it stands on y = 0.

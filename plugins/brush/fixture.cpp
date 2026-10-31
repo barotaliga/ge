@@ -77,6 +77,26 @@ Fixture weather_fixture() {
   return f;
 }
 
+Fixture fog_fixture() {
+  Fixture f = weather_fixture();
+  f.message = "The fixture halls in fog";
+  // A pit sunk in the store's floor, 0.8 m deep: the lab lays a pool of lava in it (the compile
+  // writes no liquid contents).
+  FixtureRoom pit;
+  pit.name = "pit";
+  pit.min[0] = 224, pit.min[1] = -608, pit.min[2] = -32;
+  pit.max[0] = 416, pit.max[1] = -464, pit.max[2] = 0;
+  pit.floor = "rock", pit.wall = "rock", pit.ceiling = "rock";
+  f.rooms.push_back(pit);
+  // The hall's dust, placed by the map as a point entity with a size (map units, z up).
+  Entity dust;
+  dust.pairs = {{"classname", "fog_volume"}, {"origin", "320 -208 112"},  {"size", "640 384 224"},
+                {"density", "0.07"},         {"albedo", "0.85 0.8 0.72"}, {"phase", "0.6"},
+                {"noise", "0.45"},           {"noise_size", "3"},         {"edge", "0.3"}};
+  f.entities.push_back(dust);
+  return f;
+}
+
 namespace detail {
 
 namespace {
