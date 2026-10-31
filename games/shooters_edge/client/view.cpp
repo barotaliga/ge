@@ -22,6 +22,15 @@ constexpr double kDeg = kPi / 180;
 constexpr int kWeaponBits[hud::kGuns] = {1, 2, 4, 8, 16, 32, 64};
 constexpr int kBlade = 4096;
 constexpr int kArmour1 = 8192, kArmour2 = 16384, kArmour3 = 32768;
+constexpr int kShield = 1048576, kDamage = 4194304;  // IT_INVULNERABILITY, IT_QUAD
+
+// The seconds left of a powerup the mod marks held by `bit` and runs out at its `field`.
+double power_left(const Listen& l, int items, int bit, const char* field) {
+  if ((items & bit) == 0) return 0;
+  const double now = l.server ? l.server->sv.time : 0;
+  const double left = static_cast<double>(field_named(l, 1, field)) - now;
+  return left > 0 ? left : 1e-3;  // held: never shown as not held while the bit is set
+}
 
 int bits(float f) { return f > 0 ? static_cast<int>(f) : 0; }
 
@@ -62,6 +71,10 @@ hud::Status status_of(const Listen& l, double t) {
   if (held != kBlade)
     for (int k = 0; k < hud::kGuns; k++)
       if (held == kWeaponBits[k]) s.weapon = static_cast<hud::Weapon>(k + 1);
+  s.power_s[static_cast<size_t>(hud::Power::shield)] =
+      power_left(l, items, kShield, "invincible_finished");
+  s.power_s[static_cast<size_t>(hud::Power::damage)] =
+      power_left(l, items, kDamage, "super_damage_finished");
   s.frags = static_cast<int>(field_named(l, 1, "frags"));
   return s;
 }

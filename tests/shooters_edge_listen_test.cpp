@@ -339,3 +339,31 @@ TEST(the_hand_raises_the_launcher_and_sees_one_shot_a_rocket) {
   run(40, {});
   CHECK(held.shots == 1);
 }
+
+TEST(the_hud_counts_down_the_quad_and_the_shield_and_drops_them_when_they_run_out) {
+  cl::Listen l;
+  if (!start(l)) return;
+  for (int i = 0; i < 80; i++) cl::listen_frame(l, {});
+  namespace hud = shooters_edge::hud;
+  CHECK(!cl::status_of(l, 1.0).powered(hud::Power::damage));
+  CHECK(!cl::status_of(l, 1.0).powered(hud::Power::shield));
+  const float now = static_cast<float>(l.server->sv.time);
+  const float items = cl::field_named(l, 1, "items");
+  set_field(l, 1, "items", items + 1048576 + 4194304);  // IT_INVULNERABILITY + IT_QUAD
+  set_field(l, 1, "super_damage_finished", now + 30);
+  set_field(l, 1, "invincible_finished", now + 20);
+  cl::listen_frame(l, {});
+  const hud::Status s = cl::status_of(l, 1.0);
+  CHECK(s.powered(hud::Power::damage) && s.powered(hud::Power::shield));
+  const double quad = s.power_s[static_cast<size_t>(hud::Power::damage)];
+  const double shield = s.power_s[static_cast<size_t>(hud::Power::shield)];
+  CHECK_MSG(quad > 29 && quad <= 30, "the quad's seconds: " + std::to_string(quad));
+  CHECK_MSG(shield > 19 && shield <= 20, "the shield's seconds: " + std::to_string(shield));
+  // Both run out: the mod takes the bits off, and the HUD drops them.
+  const float later = static_cast<float>(l.server->sv.time);
+  set_field(l, 1, "super_damage_finished", later + 0.05f);
+  set_field(l, 1, "invincible_finished", later + 0.05f);
+  for (int i = 0; i < 10; i++) cl::listen_frame(l, {});
+  const hud::Status gone = cl::status_of(l, 2.0);
+  CHECK(!gone.powered(hud::Power::damage) && !gone.powered(hud::Power::shield));
+}

@@ -9,7 +9,10 @@
 //   and the light is the lightmaps' or REAL-TIME: the map's light entities as point lights (each
 //   one's flicker, the nearest `shadowed` with a cube of depth), the lava's glow as lights over
 //   it, the sun through the sky faces with its own shadow map, the sky's light by how open a
-//   point is overhead, and the glowing texels.
+//   point is overhead, and the glowing texels. The shadow maps are KEPT: the world they see
+//   stands still, so a light's cube is drawn when it takes a slot (and only then) and an
+//   orthographic map when its camera moves; every `prepare_bsp` is followed by its `encode_bsp`,
+//   which draws what the prepare found stale.
 //
 // - THE WEATHER (v2, `Options::weather`): a third orthographic map looks along the fall, so the
 //   faces the rain and the snow reach (a courtyard's flags, a sill, the floor inside a window as
@@ -17,7 +20,8 @@
 //   while it rains, or snowed on, and the rooms behind stay dry; a lightning flash lights what
 //   is open to the sky. The same map is the fall's shelter (`bsp_shelter`).
 //
-// The passes, in a frame's order: "bsp.shadows" (v2 with lights or weather), then with r_cull
+// The passes, in a frame's order: "bsp.shadows" (v2 with lights or weather: the stale maps, timed
+// as one), then with r_cull
 // "bsp.cull", "bsp", "hiz", "bsp.cull.late" and "bsp.late", else "bsp"; then "bsp.sky" (v2);
 // then the caller's sky, clouds, water and liquids over the frame's targets.
 //
@@ -25,6 +29,7 @@
 // ge:keywords bsp brush render renderer r_bspmode classic v2 lightmap point-light cube-shadow
 // ge:keywords sun-shadow sky-mask flicker lava-light weather rain snow puddles shelter bsp_shelter
 // ge:keywords set_movers movers moving-brush-models doors plats
+// ge:keywords shadow-cache shadow-slot fresh_slots
 // ge:skill brush render
 #pragma once
 
@@ -168,8 +173,17 @@ struct BspDraw {
   // This frame's (prepare_bsp).
   GpuBsp staged{};
   std::vector<GpuLight> frame_lights;
-  std::vector<GpuJob> frame_jobs;  // the cube faces, then the two orthographic maps
+  std::vector<GpuJob> frame_jobs;  // every slot's six cube faces, then the orthographic maps
   int shadowed = 0;
+  // THE SHADOW MAPS KEPT: the world they see does not move, so a light's cube is drawn when the
+  // light takes a slot (or moves) and kept while it holds it, and an orthographic map when its
+  // camera changes. A slot's key is its light's place and reach as the GPU sees them.
+  std::array<std::array<float, 4>, kMaxShadowed> slot_key{};
+  std::array<bool, kMaxShadowed> slot_held{};  // a slot's cube holds its key's light
+  std::vector<int> fresh_slots;                // this frame's slots to draw (prepare_bsp)
+  std::array<GpuJob, kOrthos> ortho_drawn{};   // what each orthographic map holds
+  std::array<bool, kOrthos> ortho_held{};
+  std::array<bool, kOrthos> ortho_fresh{};  // this frame's to draw
   Options options;
   // The light styles' patterns (draw_data.hpp), empty the light as baked (set_light_style).
   std::array<std::string, kLightStyles> light_styles;

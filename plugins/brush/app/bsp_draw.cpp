@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <iterator>
 
 #include "brush/app/bsp.wgsl.hpp"
 #include "brush/app/bsp_fix.wgsl.hpp"
@@ -415,6 +416,14 @@ void create_bsp_targets(gpu::Device& device, BspDraw& d, const r::FrameTargets& 
   d.culled_frames = 0;  // the new pyramid holds no frame yet
 }
 
+// Whether two shadow cameras are the same to the bit (the floats as the GPU gets them).
+static bool same_job(const GpuJob& a, const GpuJob& b) {
+  const auto eq = [](const float(&x)[4], const float(&y)[4]) {
+    return std::equal(std::begin(x), std::end(x), std::begin(y));
+  };
+  return eq(a.o, b.o) && eq(a.x, b.x) && eq(a.y, b.y) && eq(a.z, b.z) && eq(a.info, b.info);
+}
+
 void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, const Options& o) {
   const Scene& s = *d.scene;
   d.options = o;
@@ -470,8 +479,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     if (picks.size() > size_t(std::min(o.most, 512))) picks.resize(size_t(std::min(o.most, 512)));
   }
   d.frame_lights.clear();
-  d.frame_jobs.clear();
-  int shadowed = 0;
+  d.frame_jobs.assign(size_t(kMaxShadowed) * 6 + kOrthos, GpuJob{});
+  // The nearest lights that cast shadows, by their index in frame_lights.
+  std::vector<size_t> casters;
   for (const Pick& p : picks) {
     const PointLight& l = *p.l;
     GpuLight g{};
@@ -489,27 +499,60 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     // A fire lights the wall behind it from its whole flame: its light softened over its height.
     const double soft = fire_light_size(l);
     set4(g.info, -1, soft * soft, 0, 0);
-    if (!l.physical && shadowed < d.options.shadowed) {
-      g.info[0] = float(shadowed * 6);
-      for (int f = 0; f < 6; ++f) {
-        const int i = f / 2;
-        const double sign = f % 2 ? -1.0 : 1.0;
-        GpuJob j{};
-        set4(j.o, g.pos[0], g.pos[1], g.pos[2], g.pos[3]);
-        double ax[3] = {0, 0, 0}, ay[3] = {0, 0, 0}, az[3] = {0, 0, 0};
-        ax[(i + 1) % 3] = 1;
-        ay[(i + 2) % 3] = 1;
-        az[i] = sign;
-        set4(j.x, ax[0], ax[1], ax[2], 0);
-        set4(j.y, ay[0], ay[1], ay[2], 0);
-        set4(j.z, az[0], az[1], az[2], 0);
-        set4(j.info, 0, 0, 0, 0);
-        d.frame_jobs.push_back(j);
-      }
-      ++shadowed;
-    }
+    if (!l.physical && int(casters.size()) < d.options.shadowed)
+      casters.push_back(d.frame_lights.size());
     d.frame_lights.push_back(g);
   }
+  // Each caster keeps the slot that already holds its cube; the rest take a slot no caster holds
+  // and have their cubes drawn this frame.
+  const auto key_of = [](const GpuLight& g) {
+    return std::array<float, 4>{g.pos[0], g.pos[1], g.pos[2], g.pos[3]};
+  };
+  std::array<bool, kMaxShadowed> taken{};
+  std::vector<size_t> homeless;
+  for (const size_t c : casters) {
+    const std::array<float, 4> key = key_of(d.frame_lights[c]);
+    int slot = -1;
+    for (int k = 0; k < kMaxShadowed && slot < 0; ++k)
+      if (d.slot_held[size_t(k)] && !taken[size_t(k)] && d.slot_key[size_t(k)] == key) slot = k;
+    if (slot < 0) {
+      homeless.push_back(c);
+      continue;
+    }
+    taken[size_t(slot)] = true;
+    d.frame_lights[c].info[0] = float(slot * 6);
+  }
+  d.fresh_slots.clear();
+  for (const size_t c : homeless) {
+    int slot = 0;
+    while (taken[size_t(slot)]) ++slot;  // casters <= kMaxShadowed: one is always free
+    taken[size_t(slot)] = true;
+    d.slot_key[size_t(slot)] = key_of(d.frame_lights[c]);
+    d.slot_held[size_t(slot)] = true;
+    d.fresh_slots.push_back(slot);
+    d.frame_lights[c].info[0] = float(slot * 6);
+  }
+  // Every held slot's six faces, so the jobs buffer always says what its cubes hold.
+  for (int k = 0; k < kMaxShadowed; ++k) {
+    if (!d.slot_held[size_t(k)]) continue;
+    const std::array<float, 4>& key = d.slot_key[size_t(k)];
+    for (int f = 0; f < 6; ++f) {
+      const int i = f / 2;
+      const double sign = f % 2 ? -1.0 : 1.0;
+      GpuJob j{};
+      set4(j.o, key[0], key[1], key[2], key[3]);
+      double ax[3] = {0, 0, 0}, ay[3] = {0, 0, 0}, az[3] = {0, 0, 0};
+      ax[(i + 1) % 3] = 1;
+      ay[(i + 2) % 3] = 1;
+      az[i] = sign;
+      set4(j.x, ax[0], ax[1], ax[2], 0);
+      set4(j.y, ay[0], ay[1], ay[2], 0);
+      set4(j.z, az[0], az[1], az[2], 0);
+      set4(j.info, 0, 0, 0, 0);
+      d.frame_jobs[size_t(k) * 6 + size_t(f)] = j;
+    }
+  }
+  const int shadowed = int(casters.size());
   d.shadowed = shadowed;
   // The classic's and v2's lightmaps: the dynamic lights added to the lightmaps' light.
   if (!lights) {
@@ -540,9 +583,25 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   const double fl = std::sqrt(fall[0] * fall[0] + fall[1] * fall[1] + fall[2] * fall[2]);
   for (double& c : fall) c /= fl;
   d.staged.ortho[2] = ortho_job(fall, centre, radius, radius);
-  for (uint32_t k = 0; k < kOrthos; ++k) d.frame_jobs.push_back(d.staged.ortho[k]);
+  for (uint32_t k = 0; k < kOrthos; ++k)
+    d.frame_jobs[size_t(kMaxShadowed) * 6 + k] = d.staged.ortho[k];
   set4(d.staged.weather, o.weather && o.mode == Mode::v2 ? 1 : 0, std::clamp(o.raining, 0.0, 1.0),
        std::clamp(o.spread, 0.0, 1.0), 0);
+  // The orthographic maps this frame reads (the sun's and the zenith's lit in real time, the
+  // zenith's and the fall's under weather), drawn only when their camera moved.
+  {
+    const bool v2_lights = o.mode == Mode::v2 && o.lighting == Lighting::lights;
+    const bool weather_on = o.mode == Mode::v2 && o.weather;
+    const bool need[kOrthos] = {v2_lights, v2_lights || weather_on, weather_on};
+    for (uint32_t k = 0; k < kOrthos; ++k) {
+      const bool same = d.ortho_held[k] && same_job(d.ortho_drawn[k], d.staged.ortho[k]);
+      d.ortho_fresh[k] = need[k] && !same;
+      if (d.ortho_fresh[k]) {
+        d.ortho_drawn[k] = d.staged.ortho[k];
+        d.ortho_held[k] = true;
+      }
+    }
+  }
 
   set4(d.staged.info, o.mode == Mode::v2 ? 1 : 0,
        o.lighting == Lighting::lights    ? 1
@@ -622,9 +681,15 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
   const auto draw_solid = [&](wgpu::RenderPassEncoder& pass, uint32_t instance) {
     pass.DrawIndexed(d.range[kSolid][1], 1, d.range[kSolid][0], 0, instance);
   };
-  rec.compute(encoder, "bsp.shadows").End();
-  const bool weather = v2 && d.staged.weather[0] > 0.5;
+  // Only the maps prepare_bsp found stale: the lights new to a slot, the orthographic cameras
+  // that moved (the zenith's also for the lightning, and the fall's, with the weather on); timed
+  // together as "bsp.shadows".
+  const int cube_passes = lights ? int(d.fresh_slots.size()) * 6 : 0;
+  int parts = cube_passes;
+  for (uint32_t k = 0; k < kOrthos; ++k) parts += d.ortho_fresh[k] ? 1 : 0;
+  if (parts == 0) rec.compute(encoder, "bsp.shadows").End();
   {
+    int part = 0;
     const auto shadow_pass = [&](const wgpu::TextureView& view, uint32_t job, bool sky) {
       wgpu::RenderPassDepthStencilAttachment depth{};
       depth.view = view;
@@ -633,27 +698,24 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
       depth.depthClearValue = 1.0f;
       wgpu::RenderPassDescriptor desc{};
       desc.depthStencilAttachment = &depth;
-      wgpu::RenderPassEncoder pass = encoder.BeginRenderPass(&desc);
+      wgpu::RenderPassEncoder pass = rec.render_part(encoder, desc, "bsp.shadows", part++, parts);
+      rec.current().draws += sky ? 2 : 1;
       pass.SetPipeline(pipelines.render(d.p_shadow));
       pass.SetBindGroup(0, d.shadow_group);
       pass.SetVertexBuffer(0, d.vertices);
       pass.SetIndexBuffer(d.indices, wgpu::IndexFormat::Uint32);
       draw_solid(pass, job);
-      if (sky) pass.DrawIndexed(d.range[kSky][1], 1, d.range[kSky][0], 0, job);
+      if (sky && d.range[kSky][1] > 0)
+        pass.DrawIndexed(d.range[kSky][1], 1, d.range[kSky][0], 0, job);
       pass.End();
     };
-    const uint32_t first_ortho = uint32_t(d.shadowed * 6);
-    if (lights) {
-      for (int k = 0; k < d.shadowed * 6; ++k)
-        shadow_pass(d.cube_layers[size_t(k)], uint32_t(k), true);
-      shadow_pass(d.ortho_layers[0], first_ortho, false);
-      shadow_pass(d.ortho_layers[1], first_ortho + 1, false);
-    }
-    // The fall's map, and the zenith's for the lightning, with the weather on.
-    if (weather) {
-      if (!lights) shadow_pass(d.ortho_layers[1], first_ortho + 1, false);
-      shadow_pass(d.ortho_layers[2], first_ortho + 2, false);
-    }
+    const uint32_t first_ortho = uint32_t(kMaxShadowed * 6);
+    if (lights)
+      for (const int slot : d.fresh_slots)
+        for (int f = 0; f < 6; ++f)
+          shadow_pass(d.cube_layers[size_t(slot) * 6 + size_t(f)], uint32_t(slot * 6 + f), true);
+    for (uint32_t k = 0; k < kOrthos; ++k)
+      if (d.ortho_fresh[k]) shadow_pass(d.ortho_layers[k], first_ortho + k, false);
   }
   // The map: every kind's faces, or (culled) a phase's, drawn into the targets; the late phase
   // over what the early one drew.

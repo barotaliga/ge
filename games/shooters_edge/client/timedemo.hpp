@@ -5,8 +5,9 @@
 //
 // THE RULE: ONE DEMO FRAME A DRAWN FRAME, whatever the demo's own clock says (a single-player
 // block, or a client recording's packet). So every machine draws the same frames and the time it
-// took is the measure; the demo's clock is not waited on. The window turns vsync off for the run
-// (and back on after); it has no frame cap. A level start loads its map from the search path
+// took is the measure; the demo's clock is not waited on. The window draws every frame but shows
+// only some (main.cpp: a window's present waits for the display on some platforms whatever its
+// mode), and has no frame cap. A level start loads its map from the search path
 // and rebuilds the world's frame, and the frames until `kSkipAfterLevel` draws later are not
 // timed (the load, the pipelines' first use).
 //
@@ -14,6 +15,11 @@
 // (frames over seconds), the MAX (one over the shortest frame) and the MIN (one over the
 // longest); the 1% LOW and the 0.1% LOW: the slowest 1% (0.1%) of frames, at least one, as a
 // frame rate over their own time; the median and 99th-percentile frame in milliseconds.
+//
+// WHERE THE GPU'S TIME WENT (`PassTimes`): each timed frame's GPU time per pass of the world's
+// frame, by the pass's name, and the frame's span; the report gives each pass's median, most
+// first, and its share of the median span. A reading is a frame or more late (the timer's), and
+// a GPU without timestamp queries gives none: the report then says so.
 //
 // FINDING THE DEMO (`find_demo`): the name as given through the search path (a pack's
 // `demo1.dem`, a loose file in the game folder), then with `.dem` added, then the first file in
@@ -23,6 +29,7 @@
 // ge:keywords timedemo benchmark demo fps frame-rate average max min one-percent-low low
 // ge:keywords percentile frame-time find_demo bench_stats bench_report timedemo_start
 // ge:keywords timedemo_step timedemo_mark demo_view demo_status unlocked-fps vsync-off
+// ge:keywords gpu-per-pass pass_add pass_costs pass_report
 // ge:keywords playdemo playdemo_step cl_demospeed demo-pace
 // ge:skill shooter perf
 // ge:test tests/shooters_edge_demo_test.cpp
@@ -31,6 +38,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "render/view.hpp"
@@ -56,6 +64,27 @@ BenchStats bench_stats(std::span<const double> frame_s);
 std::vector<std::string> bench_report(const std::string& demo, const std::string& setup,
                                       const BenchStats& s);
 
+// The GPU's time per pass over a run, by name, and the frames' spans; ms.
+struct PassTimes {
+  std::vector<std::string> names;
+  std::vector<std::vector<double>> ms;  // ms[i]: every reading of names[i]
+  std::vector<double> span_ms;          // each frame's GPU span
+};
+// A reading of pass `name` (a NaN one, not measured, is left out).
+void pass_add(PassTimes& p, std::string_view name, double ms);
+// A frame's GPU span (NaN left out).
+void span_add(PassTimes& p, double ms);
+struct PassCost {
+  std::string name;
+  double median_ms = 0;
+  double share = 0;  // of the median span; 0 when no span was read
+};
+// Every pass's median, most first.
+std::vector<PassCost> pass_costs(const PassTimes& p);
+// The report's GPU line: the median span and the `most` dearest passes; says so when nothing was
+// measured.
+std::string pass_report(const PassTimes& p, size_t most);
+
 // The demo `name` (see above) as bytes; `found` says where it came from. False with the places
 // tried and the next step.
 bool find_demo(const SearchPath& files, const std::string& name, std::vector<uint8_t>& out,
@@ -66,6 +95,7 @@ struct Timedemo {
   std::string found;  // where it was read from
   Demo demo;
   std::vector<double> frame_s;  // the timed frames, s
+  PassTimes passes;             // the timed frames' GPU time per pass
   int skip = 0;                 // frames still to go untimed
   int levels = 0;               // the level starts the window has loaded
   uint64_t last_ns = 0;         // the last mark (0: none yet)

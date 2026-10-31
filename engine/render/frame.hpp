@@ -24,7 +24,7 @@
 // ge:summary The frame's shared half: uniforms, named targets, the pass table and its stats
 // ge:keywords render frame uniforms frame-uniforms targets hdr depth reverse-z pass-table
 // ge:keywords pass-row named-targets check_pass_table frame-stats gpu-ms draws dispatches
-// ge:keywords cpu-ms prepare-ms
+// ge:keywords cpu-ms prepare-ms render_part
 // ge:keywords bind-group-layout make_layout slot fill_uniforms create_targets
 // ge:skill render gpu
 // ge:test tests/render_frame_test.cpp
@@ -201,6 +201,11 @@ struct FrameRecorder {
                                         int part, int parts);
   wgpu::RenderPassEncoder render(wgpu::CommandEncoder& encoder, wgpu::RenderPassDescriptor desc,
                                  std::string_view name);
+  // Part `part` of `parts` render passes timed and counted as ONE pass, as compute_part: for a
+  // run of passes into many targets (a light's six cube faces, every stale shadow map).
+  wgpu::RenderPassEncoder render_part(wgpu::CommandEncoder& encoder,
+                                      wgpu::RenderPassDescriptor desc, std::string_view name,
+                                      int part, int parts);
   // The pass opened last: count its draws and dispatches here.
   PassStat& current() { return stats.passes[static_cast<size_t>(stats.count - 1)]; }
   // After the last pass, in the same encoder; then after the submit.

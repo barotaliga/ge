@@ -334,4 +334,22 @@ TEST(the_report_s_lows_are_the_slowest_frames_rate) {
   CHECK(cl::bench_stats({}).frames == 0);
 }
 
+TEST(the_gpu_report_ranks_the_passes_by_their_median) {
+  cl::PassTimes p;
+  CHECK(cl::pass_report(p, 4).find("not measured") != std::string::npos);
+  for (int i = 0; i < 5; i++) {
+    cl::pass_add(p, "bsp", 6 + i);  // median 8
+    cl::pass_add(p, "post", 1);     // median 1
+    cl::pass_add(p, "bloom", NAN);  // not measured: left out
+    cl::span_add(p, 10);
+  }
+  const std::vector<cl::PassCost> c = cl::pass_costs(p);
+  CHECK(c.size() == 2);
+  CHECK(c[0].name == "bsp" && c[0].median_ms == 8 && near(float(c[0].share), 0.8f, 1e-6f));
+  CHECK(c[1].name == "post");
+  const std::string line = cl::pass_report(p, 1);
+  CHECK(line.find("span 10.00 ms") != std::string::npos);
+  CHECK(line.find("bsp 8.00") != std::string::npos && line.find("post") == std::string::npos);
+}
+
 }  // namespace

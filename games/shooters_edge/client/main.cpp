@@ -29,21 +29,24 @@
 // and `m_invert 0|1` set the look, `r_look classic|modern` and the other picture cvars
 // (app/look.hpp: `r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`) the world's
 // look, the view-model cvars (view/hand.hpp: `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`,
-// `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, and `quit` quits.
+// `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the window over the
+// whole screen, and `quit` quits.
 //
 // THE BENCHMARK: `benchmark <demo>` in the console (or `-benchmark <demo>` on the command line,
 // which quits when it is done) plays a recorded game (`demo1` from the packs, or a file's path)
-// with vsync off, one demo frame a drawn frame, at the window's settings, and prints the average,
-// max, min, 1% low and 0.1% low frame rates (client/timedemo.hpp); the listen server waits.
-// `playdemo <demo>` (`-playdemo <demo>`) plays one at its own pace instead, vsync on and nothing
-// timed, `cl_demospeed <x>` (0..20, 0 pauses) its speed; `demo_track <slot>` picks the player a
-// multiview recording's view rides (-1: the lowest playing). Every format plays, `.gz` included.
+// one demo frame a drawn frame, at the window's settings (one in 33 ms shown, the rest drawn
+// offscreen, so the display never sets the rate), and prints the average, max, min, 1% low and
+// 0.1% low frame rates and the GPU's dearest passes (client/timedemo.hpp); the listen server
+// waits. `playdemo <demo>` (`-playdemo <demo>`) plays one at its own pace instead, vsync on and
+// nothing timed, `cl_demospeed <x>` (0..20, 0 pauses) its speed; `demo_track <slot>` picks the
+// player a multiview recording's view rides (-1: the lowest playing). Every format plays, `.gz`
+// included.
 //
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console
 // ge:keywords relative-mouse mouse-look hud first-person effects r_look quit shooters-edge
 // ge:keywords benchmark timedemo demo vsync-off fps playdemo demo_track cl_demospeed
-// ge:keywords main-menu escape
+// ge:keywords main-menu escape vid_fullscreen fullscreen offscreen
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
 #include <cstdio>
@@ -59,6 +62,7 @@
 #include "core/output.hpp"
 #include "gpu/device.hpp"
 #include "gpu/surface.hpp"
+#include "gpu/target.hpp"
 #include "input/state.hpp"
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
@@ -85,6 +89,9 @@ namespace {
 namespace out = ge::core::output;
 namespace cl = shooters_edge::client;
 namespace se = shooters_edge::hud;
+
+// A benchmark shows one frame in this many ns (30 a second) and draws the rest offscreen.
+constexpr uint64_t kBenchShowNs = 33'333'333;
 
 void print_line(const out::LogLine& line, void*) {
   std::FILE* to = line.level == out::Level::error ? stderr : stdout;
@@ -192,6 +199,13 @@ static int run_main(int argc, char** argv) {
   shooters_edge::view::ViewSettings view_settings;
   shooters_edge::view::add_view_cvars(console.cvars(), view_settings);
   console.add_command("quit", "quit the game", [&](Con&, const CArgs&) { quit = true; });
+  bool fullscreen = false;  // vid_fullscreen; the window follows it each frame
+  console.cvars().bind({.name = "vid_fullscreen",
+                        .fallback = "0",
+                        .help = "1: the window over the whole screen (the desktop's own mode), "
+                                "0: a window",
+                        .kind = ge::console::CvarKind::boolean},
+                       &fullscreen);
   std::string bench_ask;  // a demo the console asked to benchmark
   console.add_command("benchmark", "benchmark <demo>: play a demo flat out and report its fps",
                       [&](Con& c, const CArgs& a) {
@@ -326,7 +340,11 @@ static int run_main(int argc, char** argv) {
   ge::platform::set_relative_mouse(*window, true);
   bool captured = true;
   bool vsync = true;
+  bool full_applied = false;  // what the window was last set to; vid_fullscreen is the ask
   std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
+  ge::gpu::Target bench_off;                 // the benchmark's frames that are not shown
+  uint64_t bench_shown_ns = 0;               // when the benchmark last showed a frame
+  wgpu::Future bench_in_flight{};            // the frame before this one, waited before the next
   if (!args.benchmark.empty()) bench_ask = args.benchmark;
   if (!args.playdemo.empty()) {
     bench_ask = args.playdemo;
@@ -346,8 +364,8 @@ static int run_main(int argc, char** argv) {
   // The benchmark over: its report, vsync back, the listen server's world again.
   int bench_failed = 0;
   const auto end_bench = [&](const std::string& why, double now_s) {
-    const std::string setup = std::to_string(w) + "x" + std::to_string(h) + ", present " +
-                              surface.present_mode() + ", r_look " + picture.look + ", " +
+    const std::string setup = std::to_string(w) + "x" + std::to_string(h) +
+                              ", drawn offscreen, shown at 30 Hz, r_look " + picture.look + ", " +
                               device->report.name + " on " + device->report.backend;
     // A run stopped before a frame was timed has no report, only its reason; playback times none.
     if (bench.paced) {
@@ -359,10 +377,15 @@ static int run_main(int argc, char** argv) {
         console.print(line);
         hud.notify.push(line, se::hud_style().ink, now_s);
       }
+    if (!bench.paced && (why.empty() || !bench.frame_s.empty()))
+      console.print(cl::pass_report(bench.passes, 8));
     if (!why.empty() && !bench.paced) {
       console.print("benchmark: stopped early: " + why);
       bench_failed = 1;
     }
+    if (bench_in_flight.id != 0) ge::gpu::wait(*device, bench_in_flight);
+    bench_in_flight = {};
+    bench_off = {};
     bench.active = false;
     bench_map.reset();
     vsync = true;
@@ -395,6 +418,10 @@ static int run_main(int argc, char** argv) {
     const double t = static_cast<double>(now - first_ns) * 1e-9;
     last = now;
     if (input.quit) break;
+    if (fullscreen != full_applied) {  // the size follows through `input.resized`
+      if (!ge::platform::set_fullscreen(*window, fullscreen)) fullscreen = full_applied;
+      full_applied = fullscreen;
+    }
     ge::input::update(held, queue);
     ge::ui::feed_console(console, con_view, queue, con_keys);
     if (con_view.open() != text_on) {
@@ -524,12 +551,38 @@ static int run_main(int argc, char** argv) {
       overlay.begin(w, h);
       se::fill_hud(hud, cl::demo_status(bench.demo.state, t), art);
       hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style());
-      wgpu::TextureView target = surface.acquire(*device);
-      if (!target) continue;
+      // Every frame is drawn, but only one in kBenchShowNs is shown: the rest go to an offscreen
+      // target of the surface's format. A window's present waits for the display however its
+      // mode is set (macOS's compositor hands an image back once a refresh), so a frame rate
+      // timed through it is the display's; drawn offscreen it is the machine's.
+      const uint64_t frame_ns = ge::platform::now_ns();
+      wgpu::TextureView target;
+      const bool show = bench.paced || frame_ns - bench_shown_ns >= kBenchShowNs;
+      if (show) target = surface.acquire(*device);
+      if (target) {
+        bench_shown_ns = frame_ns;
+      } else {
+        if (bench_off.width != static_cast<uint32_t>(w) ||
+            bench_off.height != static_cast<uint32_t>(h))
+          bench_off = ge::gpu::create_target(*device, "benchmark frame", static_cast<uint32_t>(w),
+                                             static_cast<uint32_t>(h), surface.format());
+        target = bench_off.view;
+      }
       // The demo's effects are not read yet: the world's frame with none of its own.
       cl::draw_world(*device, *world, view, cl::FxFrame{}, nullptr, wall, overlay, target);
-      surface.present();
-      if (!bench.paced) cl::timedemo_mark(bench, ge::platform::now_ns());
+      if (!bench.paced && bench.skip == 0) cl::record_passes(*world, bench.passes);
+      if (bench_shown_ns == frame_ns) surface.present();
+      if (bench.paced) {  // playback: every frame shown, nothing timed
+        ++presented;
+        continue;
+      }
+      // At most one frame in flight, as a swap chain of two images would allow: the GPU's time
+      // is in the frame rate, not queued behind it.
+      const wgpu::Future done = device->queue.OnSubmittedWorkDone(
+          wgpu::CallbackMode::WaitAnyOnly, [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
+      if (bench_in_flight.id != 0) ge::gpu::wait(*device, bench_in_flight);
+      bench_in_flight = done;
+      cl::timedemo_mark(bench, ge::platform::now_ns());
       ++presented;
       continue;
     }
@@ -569,8 +622,9 @@ static int run_main(int argc, char** argv) {
   const double seconds = static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
   char line[160];
   std::snprintf(line, sizeof line,
-                "shooters_edge: %ld frames in %.2f s (%.1f ms a frame), %u GPU errors", presented,
-                seconds, presented ? seconds * 1e3 / static_cast<double>(presented) : 0.0,
+                "shooters_edge: %ld frames in %.2f s (%.1f ms a frame) at %dx%d, %u GPU errors",
+                presented, seconds,
+                presented ? seconds * 1e3 / static_cast<double>(presented) : 0.0, w, h,
                 device->errors.load());
   out::status(line);
   return device->errors.load() == 0 && !device->lost.load() && bench_failed == 0 ? 0 : 1;
