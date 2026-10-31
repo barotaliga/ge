@@ -326,7 +326,7 @@ void run(gl::Lab& lab) {
     }
     maps.push_back(std::move(m));
   }
-  const char* const kShots[] = {"styles", "animation", "effects", "blends"};
+  const char* const kShots[] = {"styles", "animation", "effects", "blends", "skies"};
 
   auto device = ge::gpu::create_device({.label = "se-world", .validation = 1});
   if (!device) {
