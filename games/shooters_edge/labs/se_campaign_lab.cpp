@@ -33,6 +33,7 @@
 #include "lab/chart.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
+#include "progs/qc_compile.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
 #include "shooters_edge/server/bsp_map.hpp"
 #include "shooters_edge/server/campaign.hpp"
@@ -127,6 +128,21 @@ bool load_program(gl::Lab& lab, Loaded& out) {
   if (e == nullptr) {
     lab.fail("se-campaign: the packs hold no progs.dat", "next: pass the game's own folder");
     return false;
+  }
+  // `--progs`: a campaign program of our own (a progs.src compiled here) on the pack's maps.
+  if (const std::string& own = lab.arg("progs"); !own.empty()) {
+    const pg::QcProject built = pg::compile_project(own);
+    if (!built.result.ok) {
+      std::string why;
+      for (const pg::QcDiagnostic& d : built.result.diagnostics)
+        why += pg::diagnostic_text(d) + "\n";
+      lab.fail("se-campaign: " + own + " does not compile:\n" + why,
+               "next: fix the first error at its file and line");
+      return false;
+    }
+    out.progs = built.result.progs;
+    out.from = own + " (compiled here)";
+    return true;
   }
   const std::span<const uint8_t> bytes = ge::vfs::pak_file(content, *e);
   out.from = "progs.dat of " + game;
@@ -861,6 +877,9 @@ const gl::LabSpec kSpec{
         {"game", "",
          "the player's classic game: a release zip, a pack or a folder (empty: the stub)"},
         {"rise", "60", "how far above the shooter the autoaim's target stands, units"},
+        {"progs", "",
+         "with --game: a campaign program of our own to run on the pack's maps, as its progs.src "
+         "(games/shooters_edge/qc/campaign/progs.src); empty: the pack's own progs.dat"},
         {"map", "start", "with --game: the map the campaign starts on"},
         {"skill", "1", "with --game: the skill the campaign is played at"},
         {"seconds", "5", "with --game: how long the map runs after the player joins, s"},

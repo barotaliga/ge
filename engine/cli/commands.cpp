@@ -608,7 +608,7 @@ const CommandSpec kCommands[] = {
      "QC sources compiled to a progs: a project file (progs.src: the output, then the sources in "
      "order) or one .qc file; the progs and its .lines written, every mistake a finding at its "
      "file and line",
-     kQcBuild, "ge qc build games/shooters_edge/qc/progs.src", "progs"},
+     kQcBuild, "ge qc build games/shooters_edge/qc/arena/progs.src", "progs"},
     {"qc disasm", "<progs>", 1, 1, "see",
      "a QC program (a progs file) checked and disassembled: its counts, then every function's "
      "statements with operands named by their definitions and the source lines when a .lines "

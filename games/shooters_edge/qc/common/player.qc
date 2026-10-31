@@ -1,49 +1,12 @@
 // THE PLAYERS: coming in, spawning, the frame around each command (dying, drowning, burning,
-// respawning, firing), pain and death, the kill command and leaving.
-
-// --- spawn parms (kept by the server across a map change; deathmatch starts everyone fresh) ---
-
-void() SetNewParms = {
-  parm1 = 0;
-};
-
-void() SetChangeParms = {
-  parm1 = 0;
-};
-
-// --- spawn points ---
-
-// The next deathmatch spawn point after the last one used whose spot is clear of players, round
-// the map's list; any one when all are taken; the start point on a map without any.
-entity() spawn_point = {
-  local entity spot, p;
-  local float tries, clear;
-  spot = last_spawn;
-  for (tries = 0; tries < 64; tries += 1) {
-    spot = find(spot, classname, "info_player_deathmatch");
-    if (!spot) spot = find(world, classname, "info_player_deathmatch");
-    if (!spot) break;
-    clear = TRUE;
-    p = findradius(spot.origin, 84);
-    while (p) {
-      if (p.classname == "player" && p.health > 0) clear = FALSE;
-      p = p.chain;
-    }
-    if (clear) {
-      last_spawn = spot;
-      return spot;
-    }
-  }
-  if (spot) return spot;
-  spot = find(world, classname, "info_player_start");
-  if (!spot) error("the map has no spawn point for players");
-  return spot;
-};
+// respawning, firing), pain and death, the kill command and leaving. What the variants do
+// differently is in their `glue.qc`: the spawn parms, the spawn point, the inventory a player
+// starts with, and what a respawn is.
 
 // --- coming in ---
 
 void() ClientConnect = {
-  bprint(PRINT_HIGH, self.netname, " entered the game\n");
+  say_all(PRINT_HIGH, self.netname, " entered the game\n", "", "", "", "");
 };
 
 void() PutClientInServer = {
@@ -59,13 +22,6 @@ void() PutClientInServer = {
   self.effects = 0;
   self.super_damage_finished = 0;
   self.invincible_finished = 0;
-  self.items = W_BLADE | W_SCATTER;
-  self.ammo_shells = 25;
-  self.ammo_nails = 0;
-  self.ammo_rockets = 0;
-  self.ammo_cells = 0;
-  self.armortype = 0;
-  self.armorvalue = 0;
   self.attack_finished = time;
   self.pain_finished = 0;
   self.air_finished = time + 12;
@@ -75,7 +31,7 @@ void() PutClientInServer = {
   self.maxspeed = 320;
   self.gravity = 1;
   self.spawn_time = time;
-  weapon_set(W_SCATTER);
+  give_inventory();  // the variant's: a fresh one, or the one the parms carry
   spot = spawn_point();
   self.origin = spot.origin + '0 0 1';
   self.angles = spot.angles;
@@ -118,18 +74,13 @@ void() player_die = {
   else sound(self, CHAN_VOICE, "player/death1.wav", 1, ATTN_NORM);
 };
 
-// A dead player comes back when he presses attack, jump or use after a second, or by himself
-// after five.
+// A dead player comes back (the variant's `player_respawn`) when he presses attack, jump or use
+// after a second, or by himself after five.
 void() player_dead_frame = {
   if (time < self.respawn_ready) return;
   if (self.button0 || self.button1 || self.button2 || time > self.respawn_ready + 4) {
     player_respawn();
   }
-};
-
-void() player_respawn = {
-  self.deadflag = DEAD_RESPAWNABLE;
-  PutClientInServer();
 };
 
 // --- water and slime and lava ---
@@ -186,7 +137,7 @@ void() ClientKill = {
 };
 
 void() ClientDisconnect = {
-  bprint(PRINT_HIGH, self.netname, " left the game with ", ftos(self.frags), " frags\n");
+  say_all(PRINT_HIGH, self.netname, " left the game with ", ftos(self.frags), " frags\n", "", "");
   sound(self, CHAN_BODY, "player/tornoff2.wav", 1, ATTN_NONE);
   self.classname = "disconnected";
   self.takedamage = DAMAGE_NO;

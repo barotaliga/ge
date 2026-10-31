@@ -83,7 +83,7 @@ void() health_touch = {
   if (other.health >= limit) return;
   other.health = other.health + self.health;
   if (other.health > limit) other.health = limit;
-  sprint(other, PRINT_LOW, "You receive ", ftos(self.health), " health\n");
+  say_to(other, PRINT_LOW, "You receive ", ftos(self.health), " health\n", "");
   item_taken();
   if (self.spawnflags & 2) {
     self.owner = other;
@@ -114,7 +114,7 @@ void() armour_touch = {
   other.armortype = self.armortype;
   other.armorvalue = self.armorvalue;
   other.items = other.items - (other.items & IT_ARMOR_ALL) + self.items;
-  sprint(other, PRINT_LOW, "You got armor\n");
+  say_to(other, PRINT_LOW, "You got armor\n", "", "", "");
   item_taken();
 };
 
@@ -148,7 +148,7 @@ void() ammo_touch = {
   local entity was_self;
   if (!can_pick_up()) return;
   if (!ammo_give(self.ammo_shells, self.ammo_nails, self.ammo_rockets, self.ammo_cells)) return;
-  sprint(other, PRINT_LOW, "You got ammunition\n");
+  say_to(other, PRINT_LOW, "You got ammunition\n", "", "", "");
   item_taken();
   was_self = self;
   self = other;
@@ -182,7 +182,7 @@ void() weapon_touch = {
   had = other.items & self.weapon;
   ammo_give(self.ammo_shells, self.ammo_nails, self.ammo_rockets, self.ammo_cells);
   other.items = other.items | self.weapon;
-  sprint(other, PRINT_LOW, "You got the ", self.netname, "\n");
+  say_to(other, PRINT_LOW, "You got the ", self.netname, "\n", "");
   item_taken();
   was_self = self;
   self = other;
@@ -235,10 +235,10 @@ void() power_touch = {
   if (!can_pick_up()) return;
   if (self.items == IT_QUAD) {
     other.super_damage_finished = time + POWER_TIME;
-    sprint(other, PRINT_LOW, "You got the Quad Damage\n");
+    say_to(other, PRINT_LOW, "You got the Quad Damage\n", "", "", "");
   } else {
     other.invincible_finished = time + POWER_TIME;
-    sprint(other, PRINT_LOW, "You got the Shield\n");
+    say_to(other, PRINT_LOW, "You got the Shield\n", "", "", "");
   }
   other.items = other.items | self.items;
   item_taken();

@@ -20,7 +20,8 @@ namespace {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kDeg = kPi / 180;
 
-// The mod's weapon bits (games/shooters_edge/qc/defs.qc's W_*) as the HUD's weapons, in its order.
+// The mod's weapon bits (games/shooters_edge/qc/common/defs.qc's W_*) as the HUD's weapons, in its
+// order.
 constexpr int kWeaponBits[hud::kGuns] = {1, 2, 4, 8, 16, 32, 64};
 constexpr int kBlade = 4096;
 constexpr int kArmour1 = 8192, kArmour2 = 16384, kArmour3 = 32768;

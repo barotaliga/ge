@@ -22,13 +22,13 @@
 
 namespace shooters_edge::server {
 
-constexpr const char* kBaselineSource = "games/shooters_edge/qc/progs.src";
+constexpr const char* kBaselineSource = "games/shooters_edge/qc/arena/progs.src";
 
 // The test arena's entities for the baseline mod (the arena's door and plat as its models).
 extern const char* const kBaselineArenaEntities;
 
-// The baseline mod compiled from `<root>/games/shooters_edge/qc/progs.src`. False with `error`
-// (every diagnostic's file and line, and the next step).
+// The baseline mod compiled from `<root>/games/shooters_edge/qc/arena/progs.src`. False with
+// `error` (every diagnostic's file and line, and the next step).
 bool compile_baseline_mod(const std::filesystem::path& root, ge::progs::Progs& out,
                           std::string& error);
 

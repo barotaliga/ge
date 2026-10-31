@@ -11,19 +11,19 @@ void(entity targ, entity attacker) score_death = {
   how = targ.deathtype;
   if (attacker == targ) {
     targ.frags = targ.frags - 1;
-    bprint(PRINT_MEDIUM, targ.netname, " fragged themselves\n");
+    say_all(PRINT_MEDIUM, targ.netname, " fragged themselves\n", "", "", "", "");
     return;
   }
   if (attacker.classname == "player") {
     attacker.frags = attacker.frags + 1;
-    logfrag(attacker, targ);
+    note_frag(attacker, targ);
     if (how == "") how = "fragged";
-    bprint(PRINT_MEDIUM, targ.netname, " was ", how, " by ", attacker.netname, "\n");
+    say_all(PRINT_MEDIUM, targ.netname, " was ", how, " by ", attacker.netname, "\n");
     return;
   }
   targ.frags = targ.frags - 1;
   if (how == "") how = "died";
-  bprint(PRINT_MEDIUM, targ.netname, " ", how, "\n");
+  say_all(PRINT_MEDIUM, targ.netname, " ", how, "\n", "", "");
 };
 
 // `damage` points from `attacker` through `inflictor` (the missile, or the attacker itself).
