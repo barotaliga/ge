@@ -19,6 +19,7 @@ namespace cl = shooters_edge::client;
 bool parse_words(std::vector<std::string> words, cl::Args& a, std::string& why) {
   words.insert(words.begin(), "shooters_edge");
   std::vector<char*> argv;
+  argv.reserve(words.size());
   for (std::string& w : words) argv.push_back(w.data());
   return cl::parse(static_cast<int>(argv.size()), argv.data(), a, why);
 }
