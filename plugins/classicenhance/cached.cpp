@@ -79,13 +79,16 @@ bool cached_surface(const fs::path& dir, std::string_view name, uint32_t w, uint
     return p && uint32_t(p->width) == w && uint32_t(p->height) == h &&
            p->rgba.size() == size_t(w) * h * 4;
   };
-  if (!fits(normal) || !fits(height) || !fits(rough)) return false;
+  if (!normal || !height || !rough || !fits(normal) || !fits(height) || !fits(rough)) return false;
+  const std::vector<uint8_t>& nv = normal->rgba;
+  const std::vector<uint8_t>& hv = height->rgba;
+  const std::vector<uint8_t>& rv = rough->rgba;
   rgba->resize(size_t(w) * h * 4);
   for (size_t i = 0; i < rgba->size(); i += 4) {
-    (*rgba)[i] = normal->rgba[i];
-    (*rgba)[i + 1] = normal->rgba[i + 1];
-    (*rgba)[i + 2] = height->rgba[i];
-    (*rgba)[i + 3] = rough->rgba[i];
+    (*rgba)[i] = nv[i];
+    (*rgba)[i + 1] = nv[i + 1];
+    (*rgba)[i + 2] = hv[i];
+    (*rgba)[i + 3] = rv[i];
   }
   return true;
 }
