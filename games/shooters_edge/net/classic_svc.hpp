@@ -10,10 +10,16 @@
 // byte under the teleport bit, then three angles), serverdata (11: the agreed families' magic
 // and bits, then the version, the spawn count, the game directory, the player number, the level's
 // name and ten movement floats), spawnstatic2 and spawnbaseline2 (21, 66: an entity record from
-// the null state, 66 after a short number), temp_entity (23: a kind byte, then the kind's own
-// layout), download (41), playerinfo (42, classic_delta.hpp), nails (43: a count byte, then 6
-// bytes a nail), the lists (45, 46, 56, 60: the start index, the names, an empty name, the next
-// start's low byte), packetentities (47) and deltapacketentities (48: a from-sequence byte).
+// the null state, the entity's number in its own word), temp_entity (23: a kind byte, then the
+// kind's own layout), download (41), playerinfo (42, classic_delta.hpp), nails (43: a count byte,
+// then 6 bytes a nail), the lists (45, 46, 56, 60: the start index, the names, an empty name, the
+// next start's low byte), packetentities (47) and deltapacketentities (48: a from-sequence byte),
+// voice (84, under the x2 family's voice bit: the talker's slot, the generation byte (the codec in
+// its high nibble, 2 for Opus; the talker's stream generation in its low one), the first frame's
+// sequence byte, a short length and the frames, each a short length and its bytes).
+//
+// THE CLIENT'S VOICE (clc 83): the generation byte, the sequence byte, a short length and the
+// frames, as svc 84 without the slot (the server stamps it from the channel).
 //
 // DOWNLOADS (41): the classic transfer is a short block size (-1: refused, then a byte 0), a
 // percent byte and the block. Under chunked downloads, a long first: -1 starts a transfer (a long
@@ -28,6 +34,7 @@
 // ge:keywords svc clc message-ids layout serverdata soundlist modellist download temp-entity
 // ge:keywords sound setangle packetentities playerinfo stringcmd move delta tmove upload nails
 // ge:keywords read_svc write_svc read_clc write_clc describe_svc describe_clc svc_def
+// ge:keywords voice voice-message clc-voice
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_messages_test.cpp
 #pragma once
@@ -54,11 +61,12 @@ constexpr uint8_t chokecount = 44, modellist = 45, soundlist = 46, packetentitie
 constexpr uint8_t deltapacketentities = 48, maxspeed = 49, entgravity = 50, setinfo = 51;
 constexpr uint8_t serverinfo = 52, updatepl = 53, soundextended = 55, soundlistshort = 56;
 constexpr uint8_t modellistshort = 60, spawnbaseline2 = 66, updatestatstring = 78;
-constexpr uint8_t updatestatfloat = 79, spawnstaticsound2 = 94;
+constexpr uint8_t updatestatfloat = 79, voice = 84, spawnstaticsound2 = 94;
 }  // namespace svc
 
 namespace clc {
 constexpr uint8_t nop = 1, move = 3, stringcmd = 4, delta = 5, tmove = 6, upload = 7;
+constexpr uint8_t voice = 83;
 }  // namespace clc
 
 // Temporary entity kinds (svc 23).
@@ -95,7 +103,7 @@ struct SvcMsg {
   std::vector<int32_t> ints;                       // the layout's integer fields, in order
   std::vector<float> floats;                       // its float, coord and angle fields, in order
   std::vector<std::string> strings;                // its strings, in order
-  std::vector<uint8_t> data;                       // a download block, nails
+  std::vector<uint8_t> data;                       // a download block, nails, voice frames
   std::vector<std::pair<uint32_t, uint32_t>> ext;  // serverdata's (magic, bits) pairs
   std::vector<EntityRecord> ents;                  // packet entities (read against the null state)
   PlayerState player;
@@ -117,7 +125,8 @@ struct ClcMsg {
   std::string text;                  // a string command
   int delta = 0;                     // a delta's sequence byte
   sh::Vec3f origin;                  // a tmove's
-  std::vector<uint8_t> data;         // an upload's block
+  std::vector<uint8_t> data;         // an upload's block, a voice message's frames
+  int gen = 0, seq = 0;              // a voice message's generation and first sequence
   int size = 0, percent = 0;         // an upload's
 };
 

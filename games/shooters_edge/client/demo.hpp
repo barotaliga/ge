@@ -1,5 +1,5 @@
 // A RECORDED GAME READ BACK, frame by frame: the two recording formats the window plays (the
-// `benchmark` command, timedemo.hpp), parsed far enough to know the map, the view and the
+// `timedemo` command, timedemo.hpp), parsed far enough to know the map, the view and the
 // player's status at every frame, and checked so a damaged file is refused with the place it
 // broke rather than misread.
 //
@@ -28,13 +28,32 @@
 // yaw counter-clockwise from +x (view.hpp converts to the engine's).
 //
 // WHAT IS KEPT: the precache lists, every entity's last origin, angles, model and frame (so a
-// renderer of entities can draw them), the stats, the demo's clock. Sounds, prints and effects
-// are read and skipped.
+// renderer of entities can draw them), the static entities and the static (looping) sounds of the
+// level, the stats, the demo's clock; and, for the frame just read only (`DemoState::started`,
+// `stopped`, `voice`: emptied at the next frame), the sounds it started and stopped and the voice
+// it carried. Prints and effects are read and skipped.
+//
+// THE VOICE FORMATS (`.qwdv`, `.mvdv`): a client or multiview recording with the players' voice in
+// it is a format of its own, so a player that knows only the plain formats never meets a message
+// it cannot read: an 8-byte header (`kVoiceMagic` "GEVR", the version 1, the base format 1 client
+// or 2 multiview, the codec `kVoiceOpus`), then the base format's records unchanged with the voice
+// messages among their messages. Without the header and the voice messages it is a plain
+// recording (net/classic_record.hpp writes either). `DemoState::voice_format` says which was read.
+//
+// VOICE (`DemoVoice`) is the protocol's voice message (svc 84, under the x2 family's voice bit):
+// the talker's slot, a generation byte (the codec in its high nibble, `kVoiceOpus`; the talker's
+// stream generation in its low one), the first frame's sequence byte, a u16 length and the
+// payload: 20 ms Opus frames of 48 kHz mono, each a u16 length and its bytes. A client recording
+// with voice carries the voices its player was sent (the server routes a team's talk to the team
+// alone) and the recorder's own, written in as he spoke; a multiview recording with voice carries
+// every player's. A plain recording from another program may carry the message too and is read
+// the same. demo_voice.hpp decodes them into each talker's sound.
 //
 // ge:summary Recorded games read frame by frame: the single-player demo and the client recording
 // ge:keywords demo recording dem playback timedemo benchmark single-player multiplayer client
 // ge:keywords serverinfo serverdata playerinfo packet-entities clientdata view-entity open_demo
 // ge:keywords next_frame demo-format demo-state stats intermission multiview mvd gzip track
+// ge:keywords voice-format qwdv mvdv voice-header sound-events static-sounds read_voice
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -53,6 +72,18 @@ namespace shooters_edge::client {
 namespace sh = ge::shooter;
 
 enum class DemoFormat : uint8_t { single, client, multiview };
+
+// The voice formats' header (see above).
+inline constexpr uint8_t kVoiceMagic[4] = {'G', 'E', 'V', 'R'};
+inline constexpr size_t kVoiceHeader = 8;
+inline constexpr int kVoiceOpus = 2;  // the voice message's codec (the generation's high nibble)
+
+// The header a voice format of `base` (client or multiview) opens with.
+std::vector<uint8_t> voice_header(DemoFormat base);
+// The voice format's extension for `base`: `.qwdv` (client) or `.mvdv` (multiview).
+std::string voice_extension(DemoFormat base);
+// Whether `path` names a voice format by its extension (any case).
+bool voice_name(const std::string& path);
 
 // The stats a frame carries (the single-player `clientdata`, the multiplayer `updatestat`): the
 // classic stat numbers, so the HUD reads one table for both.
@@ -75,8 +106,37 @@ struct DemoEntity {
   bool present = false;  // updated this frame (single) or in the last entity list (client)
 };
 
+// A sound the frame started: the protocol's sound message.
+struct DemoSound {
+  int entity = 0, channel = 0;
+  int sound = 0;          // the sound list's index (DemoState::sounds)
+  float volume = 1;       // 0..1
+  float attenuation = 1;  // the protocol's factor: 0 heard everywhere, 1 a normal sound
+  sh::Vec3f origin;       // units
+};
+
+// The protocol's volume byte (255 full) and attenuation byte (64 a normal sound) as factors.
+inline float byte_volume(int b) { return static_cast<float>(b) / 255.0f; }
+inline float byte_attenuation(int b) { return static_cast<float>(b) / 64.0f; }
+
+// A looping sound the level placed (spawnstaticsound).
+struct DemoStaticSound {
+  sh::Vec3f origin;
+  int sound = 0;
+  float volume = 1, attenuation = 1;
+};
+
+// One voice message: a talker's run of 20 ms frames.
+struct DemoVoice {
+  int sender = 0;             // the talker's slot
+  int gen = 0;                // the codec (high nibble) and the talker's stream generation (low)
+  int seq = 0;                // the first frame's sequence, mod 256
+  std::vector<uint8_t> data;  // the frames: each a u16 length and its bytes
+};
+
 struct DemoState {
   DemoFormat format = DemoFormat::single;
+  bool voice_format = false;                // a `.qwdv` or `.mvdv` (the voice header)
   int protocol = 0;                         // 15 single, 28 client and multiview
   std::string map;                          // "e1m1" off `maps/e1m1.bsp`; "" before the first level
   int levels = 0;                           // level starts read so far (a new level: load its map)
@@ -91,7 +151,13 @@ struct DemoState {
   std::vector<std::string> models, sounds;  // precache lists, index 1 first ([0] is "")
   std::vector<DemoEntity> entities;         // by number
   std::vector<DemoEntity> players;          // client, multiview: by slot (32)
-  int64_t frames = 0;                       // frames read
+  std::vector<DemoEntity> statics;          // the level's static entities, in order
+  std::vector<DemoStaticSound> static_sounds;  // the level's looping sounds, in order
+  // This frame's alone (emptied when the next one is read):
+  std::vector<DemoSound> started;            // sounds started, in order
+  std::vector<std::pair<int, int>> stopped;  // (entity, channel) stopped
+  std::vector<DemoVoice> voice;              // voice messages, in order
+  int64_t frames = 0;                        // frames read
 };
 
 struct Demo {
@@ -149,6 +215,11 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error);
 // The multiview format: whether `bytes` opens as one, and its next frame.
 bool is_multiview(std::span<const uint8_t> bytes);
 DemoRead next_multiview(Demo& d, std::string& error);
+
+// The voice message's body (after the id byte) into `out`; false when it runs past the end.
+bool read_voice(DemoMsg& m, DemoVoice& out);
+// A voice message's frames: each frame's bytes in order. False when the lengths overrun.
+bool voice_frames(const DemoVoice& v, std::vector<std::span<const uint8_t>>& out);
 
 // `maps/<name>.bsp` -> `<name>`; anything else -> "".
 std::string map_of_model(const std::string& model);

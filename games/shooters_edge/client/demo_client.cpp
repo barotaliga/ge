@@ -30,7 +30,8 @@ namespace {
 // Extension families' tags, the four letters read little-endian.
 constexpr uint32_t kFamilyFte = 0x58455446, kFamilyFte2 = 0x32455446, kFamilyMvd = 0x3144564D;
 // Their bits that change how a message reads.
-constexpr uint32_t kFteTrans = 0x8, kFteFloatCoords = 0x8000;
+constexpr uint32_t kFteTrans = 0x8, kFteFloatCoords = 0x8000, kFteChunkedDownloads = 0x20000000;
+constexpr size_t kChunkBytes = 1024;  // a chunked download's chunk
 constexpr uint32_t kMvdFloatCoords = 0x1, kMvdHighLagTeleport = 0x2;
 
 constexpr int kMostEntities = 2048;
@@ -256,7 +257,7 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
     else if (tag == kFamilyMvd)
       d.ext_mvd = static_cast<uint32_t>(m.i32());
     else if (tag == kFamilyFte2)
-      m.i32();  // voice: nothing a recording's reader needs
+      m.i32();  // voice among them: its message is read whether or not the bit is set
     else
       break;
   }
@@ -282,6 +283,8 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
   s.sounds.assign(1, "");
   s.intermission = false;
   s.entities.clear();
+  s.statics.clear();
+  s.static_sounds.clear();
   d.baselines.clear();
   for (Frame& f : d.ring) f.clear();
   for (DemoEntity& p : s.players) p = DemoEntity{};
@@ -331,29 +334,43 @@ bool temp_entity(DemoMsg& m, const Wire& w, std::string& error) {
   }
 }
 
-void sound(DemoMsg& m, const Wire& w) {
-  const int packed = m.u16();
-  if ((packed & 0x8000) != 0) m.u8();
-  if ((packed & 0x4000) != 0) m.u8();
-  m.u8();
-  skip_point(m, w);
+sh::Vec3f point(DemoMsg& m, const Wire& w) {
+  const float x = coord(m, w), y = coord(m, w), z = coord(m, w);
+  return {x, y, z};
 }
 
-void sound_extended(DemoMsg& m, const Wire& w) {
+// The sound message: the entity (bits 3..12) and channel (0..2) in a short whose top bits say a
+// volume byte and an attenuation byte follow, the sound's index, the point.
+void sound(DemoState& s, DemoMsg& m, const Wire& w) {
+  DemoSound e;
+  const int packed = m.u16();
+  e.volume = byte_volume((packed & 0x8000) != 0 ? m.u8() : 255);
+  e.attenuation = byte_attenuation((packed & 0x4000) != 0 ? m.u8() : 64);
+  e.entity = (packed >> 3) & 1023;
+  e.channel = packed & 7;
+  e.sound = m.u8();
+  e.origin = point(m, w);
+  if (!m.bad) s.started.push_back(e);
+}
+
+// The sound-double form: a flags byte, the volume and attenuation it names, the entity and
+// channel (a short and a byte when wide), the sound's index (a short when wide), the point.
+void sound_extended(DemoState& s, DemoMsg& m, const Wire& w) {
+  DemoSound e;
   const int flags = m.u8();
-  if ((flags & 1) != 0) m.u8();
-  if ((flags & 2) != 0) m.u8();
+  e.volume = byte_volume((flags & 1) != 0 ? m.u8() : 255);
+  e.attenuation = byte_attenuation((flags & 2) != 0 ? m.u8() : 64);
   if ((flags & 8) != 0) {
-    m.i16();
-    m.u8();
+    e.entity = m.u16();
+    e.channel = m.u8();
   } else {
-    m.i16();
+    const int packed = m.u16();
+    e.entity = packed >> 3;
+    e.channel = packed & 7;
   }
-  if ((flags & 0x10) != 0)
-    m.u16();
-  else
-    m.u8();
-  skip_point(m, w);
+  e.sound = (flags & 0x10) != 0 ? m.u16() : m.u8();
+  e.origin = point(m, w);
+  if (!m.bad) s.started.push_back(e);
 }
 
 }  // namespace
@@ -377,7 +394,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         break;
       }
       case 6:
-        sound(m, w);
+        sound(s, m, w);
         break;
       case 8:
         m.u8();
@@ -405,16 +422,18 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 14:
         m.u8();
         m.i16();
-        break;  // updatefrags
-      case 16:
-        m.i16();
-        break;  // stopsound
+        break;    // updatefrags
+      case 16: {  // stopsound
+        const int packed = m.u16();
+        s.stopped.emplace_back((packed >> 3) & 1023, packed & 7);
+        break;
+      }
       case 19:
         m.skip(2);
         skip_point(m, w);
         break;  // damage
       case 20:
-        read_spawn(m, w);
+        s.statics.push_back(read_spawn(m, w));
         break;  // spawnstatic
       case 21:
       case 66: {  // spawnstatic2, spawnbaseline2: an entity delta from the null state
@@ -422,6 +441,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         const int bits = delta_flags(m, m.u16(), w, n);
         DemoEntity e;
         delta_fields(m, bits, w, e);
+        if (id == 21) s.statics.push_back(e);
         if (id == 66 && n < kMostEntities) {
           if (static_cast<size_t>(n) >= d.baselines.size())
             d.baselines.resize(static_cast<size_t>(n) + 1);
@@ -453,10 +473,15 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 34:
       case 35:
         break;
-      case 29:
-        skip_point(m, w);
-        m.skip(3);
-        break;    // spawnstaticsound
+      case 29: {  // spawnstaticsound
+        DemoStaticSound e;
+        e.origin = point(m, w);
+        e.sound = m.u8();
+        e.volume = byte_volume(m.u8());
+        e.attenuation = byte_attenuation(m.u8());
+        s.static_sounds.push_back(e);
+        break;
+      }
       case 30: {  // intermission: the eye and the look
         const float x = coord(m, w), y = coord(m, w), z = coord(m, w);
         const float a = angle(m, w), b = angle(m, w), c = angle(m, w);
@@ -487,7 +512,17 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         m.i32();
         m.str();
         break;    // updateuserinfo
-      case 41: {  // download
+      case 41: {  // download: under chunked downloads a chunk number first (-1: a transfer's start)
+        if ((d.ext_fte & kFteChunkedDownloads) != 0) {
+          const int32_t chunk = m.i32();
+          if (chunk < 0) {
+            m.i32();  // the size (or why there is none)
+            m.str();  // the file
+          } else {
+            m.skip(kChunkBytes);
+          }
+          break;
+        }
         const int size = m.i16();
         m.u8();
         if (size > 0) m.skip(static_cast<size_t>(size));
@@ -535,8 +570,13 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         m.skip(2);
         break;  // updatepl
       case 55:
-        sound_extended(m, w);
+        sound_extended(s, m, w);
         break;
+      case 84: {  // voice (the x2 family's voice bit)
+        DemoVoice v;
+        if (read_voice(m, v)) s.voice.push_back(std::move(v));
+        break;
+      }
       case 78:
         m.u8();
         m.str();

@@ -10,21 +10,33 @@
 // modern client does; `pext` names none and answers the server's `cmd pext` with them; `none`
 // answers `pext` with nothing (a base-protocol client). The z set travels in `*z_ext` either way.
 //
+// VOICE (`ClientConfig::voice`): the client asks for the x2 family's voice bit and, while its
+// `talk` script says so, speaks: `speech` when given, else a voice of its own
+// (net/voice_trial.hpp's speech off its seed), from where it last stopped, cut into 20 ms frames,
+// Opus-coded (net/voice_codec.hpp) and sent as one voice message (clc 83) a tick with the frames
+// cut since the last. It counts the voice messages it is sent by talker.
+//
+// RECORDING (`record`, set after `client_start`): every packet it reads and every command it sends
+// go into a ClientRecorder (classic_record.hpp), and its own voice with them in the voice format.
+//
 // Nothing reads a wall clock: `client_tick` takes the network's time, so a session replays.
 //
 // ge:summary A scripted classic-protocol client: challenge, connect, signon, downloads, moves
 // ge:keywords classic-client scripted-client signon getchallenge connect pext skins download
 // ge:keywords nextdl chunked frames delta-request playerinfo packetentities client_tick
+// ge:keywords voice talk speech team record client-recording
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_server_test.cpp
 #pragma once
 
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "net/transport.hpp"
+#include "net/voice_codec.hpp"
 #include "shooters_edge/net/classic_channel.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
 
@@ -41,13 +53,18 @@ enum class ClientStage : uint8_t {
 };
 const char* client_stage_name(ClientStage s);
 
+struct ClientRecorder;
+
 // The script's command at a tick (msec set by the client).
 using ClientScript = sh::MoveCmd (*)(int tick, int seed);
 sh::MoveCmd default_script(int tick, int seed);
+// Whether the client speaks at a tick.
+using ClientTalk = bool (*)(int tick, int seed);
 
 struct ClientConfig {
   std::string name = "player";
   std::string skin = "base";
+  std::string team;  // the user info's team ("": none)
   int topcolor = 0, bottomcolor = 0;
   int rate = 25000;
   bool spectator = false;
@@ -56,6 +73,9 @@ struct ClientConfig {
   Ext ask = first_tier();          // what it understands
   std::vector<std::string> files;  // the files it already has ("skins/base.pcx")
   ClientScript script = &default_script;
+  bool voice = false;                          // ask for voice and speak while `talk` says so
+  ClientTalk talk = nullptr;                   // null: never speaks
+  const std::vector<float>* speech = nullptr;  // 48 kHz mono to speak (null: a voice of its own)
   int seed = 1;
   uint16_t qport = 1;
 };
@@ -115,6 +135,17 @@ struct ClassicClientEnd {
 
   ClientDownload dl;
   std::map<std::string, std::vector<uint8_t>> downloaded;
+
+  // Voice.
+  std::unique_ptr<gn::VoiceEncoder> encoder;
+  std::vector<float> speech;  // the voice it speaks, looped
+  size_t speech_at = 0;
+  std::vector<float> mic;            // samples not yet a whole frame
+  std::vector<uint8_t> voice_out;    // this tick's voice message, sent with its move
+  int voice_seq = 0;                 // frames sent, mod 256
+  int64_t voice_sent = 0;            // frames sent
+  int64_t voice_heard[32] = {};      // voice messages received, by talker
+  ClientRecorder* record = nullptr;  // a recording running (classic_record.hpp)
 
   // Counts.
   int64_t svc_counts[256] = {};

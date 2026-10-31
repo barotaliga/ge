@@ -10,11 +10,16 @@
 #include <cstdio>
 #include <cstring>
 
+#include "net/voice_trial.hpp"
 #include "progs/text.hpp"
 #include "shooter/usercmd.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/classic_record.hpp"
 
 namespace shooters_edge::net {
+
+namespace cl = shooters_edge::client;
 
 namespace pg = ge::progs;
 
@@ -50,6 +55,7 @@ std::string userinfo_of(const ClassicClientEnd& c) {
   info_set(u, "bottomcolor", std::to_string(c.cfg.bottomcolor));
   info_set(u, "rate", std::to_string(c.cfg.rate));
   info_set(u, "msg", "1");
+  if (!c.cfg.team.empty()) info_set(u, "team", c.cfg.team);
   if (c.cfg.spectator) info_set(u, "spectator", "1");
   if (!c.cfg.password.empty()) info_set(u, "password", c.cfg.password);
   if (c.cfg.ask[ExtFamily::z]) info_set(u, "*z_ext", std::to_string(c.cfg.ask[ExtFamily::z]));
@@ -350,21 +356,69 @@ void read_payload(ClassicClientEnd& c, const uint8_t* data, size_t size, size_t 
   gn::Reader r = gn::make_reader(data, size);
   r.at = at;
   WireCtx ctx;
+  std::vector<std::pair<size_t, size_t>> messages;  // each message's bytes, for a recording
+  const auto recorded = [&] {
+    if (c.record) record_packet(*c.record, c.now, {data, at}, {data, size}, messages);
+  };
   while (remaining(r) > 0 && c.stage != ClientStage::dropped) {
+    const size_t from = r.at;
     const uint8_t id = r.data[r.at];
     c.svc_counts[id]++;
     if (id == svc::packetentities || id == svc::deltapacketentities) {
       r.at++;
       on_entities(c, r, id == svc::deltapacketentities);
-      if (!c.error.empty()) return;
+      if (!c.error.empty()) return recorded();
+      messages.emplace_back(from, r.at);
       continue;
     }
     ctx.ext = c.ext;
     ctx.chunked = c.ext.has(ExtFamily::x, kXChunkedDl);
     SvcMsg m;
-    if (!read_svc(r, m, ctx, c.error)) return;
+    if (!read_svc(r, m, ctx, c.error)) return recorded();
+    messages.emplace_back(from, r.at);
+    if (m.id == svc::voice && !m.ints.empty() && m.ints[0] >= 0 && m.ints[0] < 32)
+      c.voice_heard[m.ints[0]]++;
     apply(c, m);
   }
+  recorded();
+}
+
+// The voice cut since the last tick (`samples` of it) and, while talking, sent as one message.
+void speak(ClassicClientEnd& c, int samples) {
+  const bool talking = c.cfg.talk != nullptr && c.cfg.talk(c.tick, c.cfg.seed);
+  for (int i = 0; i < samples; i++) {
+    const bool say = talking && !c.speech.empty();
+    c.mic.push_back(say ? c.speech[c.speech_at] : 0.0f);
+    if (say) c.speech_at = (c.speech_at + 1) % c.speech.size();
+  }
+  ClcMsg m;
+  m.id = clc::voice;
+  m.gen = cl::kVoiceOpus << 4;
+  m.seq = c.voice_seq;
+  int frames = 0;
+  while (c.mic.size() >= static_cast<size_t>(gn::kVoiceFrame)) {
+    if (talking && c.encoder) {
+      uint8_t frame[gn::kVoiceMaxBytes];
+      const int n = c.encoder->encode(c.mic.data(), frame, sizeof frame);
+      if (n > 0) {
+        m.data.push_back(static_cast<uint8_t>(n & 0xFF));
+        m.data.push_back(static_cast<uint8_t>(n >> 8));
+        m.data.insert(m.data.end(), frame, frame + n);
+        frames++;
+      }
+    }
+    c.mic.erase(c.mic.begin(), c.mic.begin() + gn::kVoiceFrame);
+  }
+  if (frames == 0) return;
+  c.voice_seq = (c.voice_seq + frames) & 0xFF;
+  c.voice_sent += frames;
+  uint8_t buf[kMaxMsgLen];
+  gn::Writer w = gn::make_writer(buf, sizeof buf);
+  write_clc(w, m);
+  if (w.overflow) return;
+  // Unreliable, like a move: a frame late is a frame lost.
+  c.voice_out.insert(c.voice_out.end(), buf, buf + w.size);
+  if (c.record && c.playernum >= 0) record_own_voice(*c.record, c.playernum, m);
 }
 
 void read_oob(ClassicClientEnd& c, const uint8_t* data, size_t size) {
@@ -444,6 +498,15 @@ void client_start(ClassicClientEnd& c, gn::Transport& t, const gn::Address& serv
   c.transport = &t;
   c.server = server;
   c.now = now;
+  if (cfg.voice) {
+    c.cfg.ask[ExtFamily::x2] |= kX2Voice;
+    c.encoder = std::make_unique<gn::VoiceEncoder>();
+    std::string error;
+    if (!c.encoder->open(gn::VoiceCodecConfig{}, error)) c.encoder.reset();
+    c.speech = cfg.speech ? *cfg.speech
+                          : gn::voice_trial_speech(static_cast<uint32_t>(cfg.seed) * 7919u + 17u,
+                                                   6.0, 100.0 + 25.0 * (cfg.seed % 5));
+  }
 }
 
 void client_command(ClassicClientEnd& c, const std::string& line) {
@@ -516,9 +579,16 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
     const int loss =
         c.ch.accepted ? static_cast<int>(100 * c.ch.dropped / (c.ch.accepted + c.ch.dropped)) : 0;
     write_move(w, c.cmds, static_cast<uint8_t>(loss), c.ch.outgoing_sequence);
+    if (c.record) record_command(*c.record, c.now, cmd);
     if (c.valid_frame >= 0) {
       write_byte(w, clc::delta);
       write_byte(w, c.valid_frame & 0xff);
+    }
+    if (c.cfg.voice && c.ext.has(ExtFamily::x2, kX2Voice)) {
+      speak(c, cmd.msec * gn::kVoiceRate / 1000);
+      if (w.size + c.voice_out.size() <= w.capacity)
+        gn::write_bytes(w, c.voice_out.data(), c.voice_out.size());
+      c.voice_out.clear();
     }
   } else {
     write_byte(w, clc::nop);
