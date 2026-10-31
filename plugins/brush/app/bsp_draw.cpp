@@ -520,12 +520,14 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       // The classic's light at half its reach, value / 2 of 128, matched by an inverse square:
       // the strength a metre off is that times the half reach squared.
       const double half = l.value * kUnitM / 2;
-      const double at1 = l.value / 256.0 * half * half * o.strength * flicker_at(l, view.time_s);
-      set4(g.pos, l.pos[0], l.pos[1] + fire_light_lift(l), l.pos[2], l.reach * 1.5);
+      const bool bonfire = o.bonfires && l.fire == Fire::large;
+      const double at1 = l.value / 256.0 * half * half * o.strength * flicker_at(l, view.time_s) *
+                         (bonfire ? kBonfireLight : 1.0);
+      set4(g.pos, l.pos[0], l.pos[1] + fire_light_lift(l, o.bonfires), l.pos[2], l.reach * 1.5);
       set4(g.colour, l.colour[0] * at1, l.colour[1] * at1, l.colour[2] * at1, 0);
     }
     // A fire lights the wall behind it from its whole flame: its light softened over its height.
-    const double soft = fire_light_size(l);
+    const double soft = fire_light_size(l, o.bonfires);
     set4(g.info, -1, soft * soft, 0, 0);
     // A dynamic light moves or goes out from one frame to the next, so a cube of it would be drawn
     // again every frame: it lights without a shadow.
