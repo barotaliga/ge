@@ -123,12 +123,9 @@ fragment shader on tile GPUs). A technique that answers no measured cost stays i
   a binding `frame.wgsl` declares read-only gets its own module and its own copy of the struct.
 - `from` and `target` are reserved words. Tint's error names the first shader that includes the
   file, and a pipeline only reports `finish()` false.
-- The include resolver reads a shader as a CMake list, so an unbalanced `[` in a comment
-  (`[0, 1)`) silently drops the rest of the file; the symptom is a missing entry point. Write
-  ranges as `0..1`.
 - When a pipeline fails with no message, run `make shaders-check`, or the resolved file under
-  `build/<preset>/gen/render/` through `.cache/deps/Dawn-*/bin/tint --format spirv`, and read its
-  tail.
+  `build/<preset>/gen/render/` through `.cache/deps/Dawn-*/bin/tint --format spirv`. A missing
+  entry point means the resolved file was cut short: read its tail.
 
 **The device.**
 - Read the FIRST `gpu:` line of a failure: one refused texture fails every bind group and

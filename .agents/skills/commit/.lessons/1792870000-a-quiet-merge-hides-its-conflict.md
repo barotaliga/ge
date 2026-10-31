@@ -1,7 +1,7 @@
 ---
 title: a quiet merge hides its conflict, and precheck passes on the conflicted tree
 date: 2026-10-22
-scope: git merge, tools/precheck.sh, AGENTS.md
+scope: tools/precheck.sh, AGENTS.md
 concepts: [merge, conflict, precheck, push, agents-md]
 ---
 
