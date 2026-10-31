@@ -712,7 +712,9 @@ Outcome run_digest(const BuildOptions& o, const DigestOptions& d) {
           continue;
         }
         before_path = previews / (id + "@why-base") / "digest.tsv";
-        against = id + " at " + d.base + " (its smoke run, previews/" + id + "@why-base/)";
+        against = id;
+        against.append(" at ").append(d.base).append(" (its smoke run, previews/");
+        against.append(id).append("@why-base/)");
       }
       bool had_before = false, had_after = false;
       const auto before = ge::lab::read_ledger(before_path.string(), &had_before);
