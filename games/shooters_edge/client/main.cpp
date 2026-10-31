@@ -21,7 +21,9 @@
 // else the arena.
 //
 // THE KEYS: W A S D move, SPACE jumps, the left button fires, 1..8 pick a weapon, the wheel the
-// next one; the mouse looks (captured while the window has it; a click takes it back); ESCAPE
+// next one; TAB held shows the scores (client/scores.hpp: a match's scoreboard, a campaign's
+// solo scorebar and the level's figures, `scr_levelstats 0|1`); the mouse looks (captured while
+// the window has it; a click takes it back); ESCAPE
 // opens the main menu (menu/game_menu.hpp: drawn in the pack's own pictures when the packs carry
 // them, the rows the game cannot do yet dimmed), and ESCAPE again goes back out of it; the key
 // under ESCAPE drops the console, where `map <name>` changes the map, `sv
@@ -50,6 +52,7 @@
 // ge:keywords relative-mouse mouse-look hud first-person effects r_look quit shooters-edge
 // ge:keywords benchmark timedemo demo vsync-off fps playdemo demo_track cl_demospeed
 // ge:keywords main-menu escape vid_fullscreen fullscreen offscreen vid_display vid_displays
+// ge:keywords scores-key tab scoreboard scr_levelstats
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
 #include <cstdio>
@@ -76,6 +79,7 @@
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
@@ -164,30 +168,44 @@ bool parse(int argc, char** argv, Args& a) {
 
 }  // namespace
 
-static  // The campaign's screens over the game: the level's end, else the solo panel while
-        // `scores`.
-    void
-    draw_campaign(ge::ui::DrawList& dl, const cl::Listen& l,
-                  const shooters_edge::menu::ClassicArt& art, int w, int h, bool scores) {
+// What is drawn over the game for the level's end and the scores key (`held`): a campaign's
+// intermission or text, else its solo scorebar (and the level's statistics with
+// `scr_levelstats`); a match's players' board, or the teams' board when the player is dead.
+static void draw_scores(ge::ui::DrawList& dl, const cl::Listen& l,
+                        const shooters_edge::menu::ClassicArt& art, int w, int h, bool held,
+                        bool level_stats, shooters_edge::menu::BoardView& board) {
   namespace mn = shooters_edge::menu;
   const cl::CampaignView& c = l.campaign;
-  mn::LevelStats st;
-  cl::completed_time(c, l.entered_at, st.minutes, st.seconds);
-  if (c.end == cl::LevelEnd::none) {
-    cl::CampaignView now = c;
-    now.ended_at = l.server->sv.time;
-    cl::completed_time(now, l.entered_at, st.minutes, st.seconds);
+  if (l.campaign_host && c.end == cl::LevelEnd::intermission) {
+    mn::draw_intermission(dl, art, w, h, cl::level_stats_of(l));
+    return;
   }
-  st.secrets = static_cast<int>(c.secrets);
-  st.total_secrets = static_cast<int>(c.total_secrets);
-  st.kills = static_cast<int>(c.monsters);
-  st.total_kills = static_cast<int>(c.total_monsters);
-  if (c.end == cl::LevelEnd::intermission)
-    mn::draw_intermission(dl, art, w, h, st);
-  else if (c.end != cl::LevelEnd::none)
+  if (l.campaign_host && c.end != cl::LevelEnd::none) {
     mn::draw_level_text(dl, art, w, h, c.text, cl::typed_chars(c, l.server->sv.time));
-  else if (scores)
-    mn::draw_solo_panel(dl, art, w, h, cl::map_title(l), st);
+    return;
+  }
+  switch (cl::scores_screen(l, held)) {
+    case cl::ScoresScreen::solo: {
+      const mn::LevelStats st = cl::level_stats_of(l);
+      if (level_stats) mn::draw_level_stats(dl, art, w, h, cl::map_title(l), st);
+      mn::draw_solo_scorebar(dl, art, w, h, cl::map_title(l), st);
+      break;
+    }
+    case cl::ScoresScreen::players: {
+      const mn::Scoreboard b = cl::scores_of(l);
+      mn::draw_scoreboard(dl, art, w, h, b, board);
+      mn::draw_scorebar(dl, art, w, h, b);
+      break;
+    }
+    case cl::ScoresScreen::teams: {
+      const mn::Scoreboard b = cl::scores_of(l);
+      mn::draw_team_scoreboard(dl, art, w, h, b, board);
+      mn::draw_scorebar(dl, art, w, h, b);
+      break;
+    }
+    case cl::ScoresScreen::none:
+      break;
+  }
 }
 
 int run_main(int argc, char** argv) {
@@ -292,6 +310,16 @@ int run_main(int argc, char** argv) {
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
   game_menu.add_cvars(console);
+  // The scores key: TAB held shows the scoreboard (a match) or the level's figures (a campaign).
+  bool level_stats = true;
+  console.cvars().bind({.name = "scr_levelstats",
+                        .fallback = "1",
+                        .flags = ge::console::kArchive,
+                        .help = "1: the scores key in a campaign also shows the level's figures "
+                                "(time, secrets, kills) as the intermission draws them",
+                        .kind = ge::console::CvarKind::boolean},
+                       &level_stats);
+  shooters_edge::menu::BoardView board_view;
   se::HudArt art = se::free_art();
   art.finish();
   // The HUD's feed shows the game's messages (hud.notify, below), so the console's own lines at
@@ -781,9 +809,9 @@ int run_main(int argc, char** argv) {
       const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
       hud.layout.draw(overlay, hf, se::hud_style());
     }
-    draw_campaign(
-        overlay, listen, game_menu.art(), w, h,
-        listen.campaign_host && !con_keys.held && !was_open && input.down(ge::platform::Key::tab));
+    draw_scores(overlay, listen, game_menu.art(), w, h,
+                !con_keys.held && !was_open && input.down(ge::platform::Key::tab), level_stats,
+                board_view);
     game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);
     ge::ui::draw_console(overlay, con_view, {}, nullptr, t);

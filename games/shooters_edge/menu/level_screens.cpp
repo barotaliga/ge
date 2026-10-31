@@ -1,7 +1,8 @@
 // The campaign's screens (level_screens.hpp).
 //
-// ge:summary Draws the intermission overlay, the typed finale and the solo panel
-// ge:keywords draw_intermission draw_level_text draw_solo_panel figure_names big-figures
+// ge:summary Draws the intermission, the level's statistics, the solo scorebar, the typed finale
+// ge:keywords draw_intermission draw_level_text draw_level_stats draw_solo_scorebar figure_names
+// ge:keywords field_names padded classic-type big-figures
 // ge:skill ui
 // ge:test tests/shooters_edge_level_screens_test.cpp
 #include "shooters_edge/menu/level_screens.hpp"
@@ -19,37 +20,15 @@ namespace {
 namespace ui = ge::ui;
 
 constexpr float kScreenW = 320, kScreenH = 200;
-constexpr float kTitleY = 24, kInterY = 56, kFiguresX = 160;
-constexpr float kRowTop = 10, kRowGap = 40;  // the figures' rows within the labels' picture
-constexpr float kPanelY = 152, kPanelH = 24;
+constexpr float kTitleX = 64, kTitleY = 24, kInterY = 56;
+constexpr float kRowY[3] = {64, 104, 144};  // the time's, the secrets', the kills' figures
+constexpr float kFieldX = 160, kSlashX = 232, kTotalX = 240;
+constexpr float kColonX = 234, kTensX = 246, kUnitsX = 266;
+constexpr float kFigureW = 24;       // a big figure's cell
+constexpr float kBarY = 176;         // the status bar's row on the screen
 constexpr float kTextMiddle = 0.4f;  // the typed text's block, its middle down the screen
-constexpr size_t kPanelChars = 40;
 const ui::Color kInk{0.92f, 0.86f, 0.74f, 1};
-
-// The classic screen's type: the glyph sheet, or the engine's font when the packs have none.
-struct Type {
-  const ClassicPen& pen;
-  bool glyphs;
-
-  void text(std::string_view s, float x, float y) const {
-    if (glyphs) {
-      pen.text(s, x, y, false);
-      return;
-    }
-    const ClassicLayout& l = pen.l;
-    pen.dl.text(ui::ui_font(), 8 * l.scale, l.x + x * l.scale, l.y + (y + 7) * l.scale, s, kInk);
-  }
-  // `s` centred on the screen at row `y`.
-  void centred(std::string_view s, float y) const {
-    if (glyphs) {
-      text(s, std::floor((kScreenW - 8 * static_cast<float>(s.size())) / 2), y);
-      return;
-    }
-    const ClassicLayout& l = pen.l;
-    pen.dl.text(ui::ui_font(), 8 * l.scale, l.x + kScreenW / 2 * l.scale, l.y + (y + 7) * l.scale,
-                s, kInk, ui::Align::center);
-  }
-};
+const ui::Color kGoldInk{0.86f, 0.64f, 0.32f, 1};
 
 // The big figures `names` from (x, y); the x after them. A figure the packs lack is drawn in the
 // engine's font in its cell.
@@ -57,7 +36,7 @@ float figures(const ClassicPen& pen, const std::vector<std::string>& names, floa
   for (const std::string& name : names) {
     const ui::Image* img = pen.art.find(name);
     const bool narrow = name == "num_colon" || name == "num_slash";
-    const float w = img != nullptr ? static_cast<float>(img->width) : narrow ? 16 : 24;
+    const float w = img != nullptr ? static_cast<float>(img->width) : narrow ? 16 : kFigureW;
     if (img != nullptr) {
       pen.picture(img, x, y);
     } else {
@@ -75,11 +54,11 @@ float figures(const ClassicPen& pen, const std::vector<std::string>& names, floa
   return x;
 }
 
-std::vector<std::string> joined(std::vector<std::string> a, const char* mid,
-                                const std::vector<std::string>& b) {
-  a.emplace_back(mid);
-  a.insert(a.end(), b.begin(), b.end());
-  return a;
+// A number in a field of `digits` big figures from x.
+void field(const ClassicPen& pen, int n, int digits, float x, float y) {
+  int skip = 0;
+  const std::vector<std::string> names = field_names(n, digits, &skip);
+  figures(pen, names, x + kFigureW * static_cast<float>(skip), y);
 }
 
 void darken(ui::DrawList& dl) {
@@ -87,9 +66,68 @@ void darken(ui::DrawList& dl) {
           ui::hex(0x000000, 0.6f));
 }
 
+// The labels and the figures the intermission and the level's statistics share.
+void level_figures(const ClassicPen& pen, const ClassicType& type, const LevelStats& s) {
+  if (const ui::Image* inter = pen.art.find("inter")) {
+    pen.picture(inter, 0, kInterY);
+  } else {
+    constexpr std::string_view kLabels[] = {"TIME", "SECRETS", "KILLS"};
+    for (int i = 0; i < 3; i++) type.text(kLabels[i], 32, kRowY[i] + 8);
+  }
+  field(pen, s.minutes, 3, kFieldX, kRowY[0]);
+  figures(pen, {"num_colon"}, kColonX, kRowY[0]);
+  const int sec = std::clamp(s.seconds, 0, 59);
+  figures(pen, {"num_" + std::to_string(sec / 10)}, kTensX, kRowY[0]);
+  figures(pen, {"num_" + std::to_string(sec % 10)}, kUnitsX, kRowY[0]);
+  field(pen, s.secrets, 3, kFieldX, kRowY[1]);
+  figures(pen, {"num_slash"}, kSlashX, kRowY[1]);
+  field(pen, s.total_secrets, 3, kTotalX, kRowY[1]);
+  field(pen, s.kills, 3, kFieldX, kRowY[2]);
+  figures(pen, {"num_slash"}, kSlashX, kRowY[2]);
+  field(pen, s.total_kills, 3, kTotalX, kRowY[2]);
+}
+
 std::string two(int n) { return (n < 10 ? "0" : "") + std::to_string(n); }
 
 }  // namespace
+
+void ClassicType::text(std::string_view s, float x, float y, bool alt) const {
+  if (glyphs) {
+    pen.text(s, x, y, alt);
+    return;
+  }
+  const ClassicLayout& l = pen.l;
+  pen.dl.text(ui::ui_font(), 8 * l.scale, l.x + x * l.scale, l.y + (y + 7) * l.scale, s,
+              alt ? kGoldInk : kInk);
+}
+
+void ClassicType::centred(std::string_view s, float y, float cx) const {
+  text(s, std::floor(cx - 4 * static_cast<float>(s.size())), y);
+}
+
+void ClassicType::glyph(uint8_t code, float x, float y) const {
+  if (glyphs) {
+    pen.glyph(code, x, y);
+    return;
+  }
+  // The engine's stand-ins: the brackets as brackets, a rule's pieces as a line.
+  const ClassicLayout& l = pen.l;
+  if (code == 16 || code == 17) {
+    pen.dl.text(ui::ui_font(), 8 * l.scale, l.x + (x + 4) * l.scale, l.y + (y + 7) * l.scale,
+                code == 16 ? "[" : "]", kGoldInk, ui::Align::center);
+  } else if (code >= 29 && code <= 31) {
+    pen.dl.rect(pen.at(x + (code == 29 ? 1.0f : 0.0f), y + 3, code == 30 ? 8.0f : 7.0f, 1),
+                kGoldInk);
+  }
+}
+
+std::string padded(int n, int width, int keep) {
+  std::string d = std::to_string(n);
+  if (d.size() < static_cast<size_t>(width))
+    d.insert(0, static_cast<size_t>(width) - d.size(), ' ');
+  if (keep > 0 && d.size() > static_cast<size_t>(keep)) d.resize(static_cast<size_t>(keep));
+  return d;
+}
 
 std::vector<std::string> figure_names(int n, int digits) {
   std::vector<std::string> out;
@@ -101,31 +139,52 @@ std::vector<std::string> figure_names(int n, int digits) {
   return out;
 }
 
+std::vector<std::string> field_names(int n, int digits, int* skip) {
+  std::string d = std::to_string(n);
+  if (d.size() > static_cast<size_t>(digits)) d = d.substr(d.size() - static_cast<size_t>(digits));
+  *skip = digits - static_cast<int>(d.size());
+  std::vector<std::string> out;
+  for (char c : d) out.push_back(c == '-' ? std::string("num_minus") : std::string("num_") + c);
+  return out;
+}
+
 void draw_intermission(ui::DrawList& dl, const ClassicArt& art, int width, int height,
                        const LevelStats& s) {
   darken(dl);
   const ClassicLayout l = classic_screen(width, height);
   const ClassicPen pen{dl, art, l};
-  const Type type{pen, !art.glyphs.empty()};
+  const ClassicType type{pen, !art.glyphs.empty()};
   if (const ui::Image* complete = art.find("complete"))
-    pen.picture(complete, std::floor((kScreenW - static_cast<float>(complete->width)) / 2),
-                kTitleY);
+    pen.picture(complete, kTitleX, kTitleY);
   else
     type.centred("LEVEL COMPLETE", kTitleY + 8);
-  if (const ui::Image* inter = art.find("inter")) {
-    pen.picture(inter, 0, kInterY);
-  } else {
-    constexpr std::string_view kLabels[] = {"TIME", "SECRETS", "KILLS"};
-    for (int i = 0; i < 3; i++)
-      type.text(kLabels[i], 32, kInterY + kRowTop + 8 + kRowGap * static_cast<float>(i));
-  }
-  const float y0 = kInterY + kRowTop;
-  figures(pen, joined(figure_names(s.minutes), "num_colon", figure_names(s.seconds, 2)), kFiguresX,
-          y0);
-  figures(pen, joined(figure_names(s.secrets), "num_slash", figure_names(s.total_secrets)),
-          kFiguresX, y0 + kRowGap);
-  figures(pen, joined(figure_names(s.kills), "num_slash", figure_names(s.total_kills)), kFiguresX,
-          y0 + 2 * kRowGap);
+  level_figures(pen, type, s);
+}
+
+void draw_level_stats(ui::DrawList& dl, const ClassicArt& art, int width, int height,
+                      std::string_view title, const LevelStats& s) {
+  const ClassicLayout l = classic_screen(width, height);
+  const ClassicPen pen{dl, art, l};
+  const ClassicType type{pen, !art.glyphs.empty()};
+  type.centred(title.substr(0, 40), kTitleY + 8);
+  level_figures(pen, type, s);
+}
+
+void draw_solo_scorebar(ui::DrawList& dl, const ClassicArt& art, int width, int height,
+                        std::string_view title, const LevelStats& s) {
+  const ClassicLayout l = classic_screen(width, height);
+  const ClassicPen pen{dl, art, l};
+  const ClassicType type{pen, !art.glyphs.empty()};
+  if (const ui::Image* bar = art.find("scorebar"))
+    pen.picture(bar, 0, kBarY);
+  else
+    dl.rect(pen.at(0, kBarY, kScreenW, 24), ui::hex(0x000000, 0.75f));
+  type.text("Monsters:" + padded(s.kills, 3) + " /" + padded(s.total_kills, 3), 8, kBarY + 4);
+  type.text("Secrets :" + padded(s.secrets, 3) + " /" + padded(s.total_secrets, 3), 8, kBarY + 12);
+  type.text("Time :" + padded(s.minutes, 3) + ":" + two(std::clamp(s.seconds, 0, 59)), 184,
+            kBarY + 4);
+  // Centred on x 232; a title too long for the bar's right part keeps its first 22 characters.
+  type.centred(title.substr(0, 22), kBarY + 12, 232);
 }
 
 void draw_level_text(ui::DrawList& dl, const ClassicArt& art, int width, int height,
@@ -133,7 +192,7 @@ void draw_level_text(ui::DrawList& dl, const ClassicArt& art, int width, int hei
   darken(dl);
   const ClassicLayout l = classic_screen(width, height);
   const ClassicPen pen{dl, art, l};
-  const Type type{pen, !art.glyphs.empty()};
+  const ClassicType type{pen, !art.glyphs.empty()};
   size_t lines = 1;
   for (char c : text) lines += c == '\n' ? 1 : 0;
   const float top =
@@ -151,20 +210,6 @@ void draw_level_text(ui::DrawList& dl, const ClassicArt& art, int width, int hei
     if (left > 0) left--;  // the line's break
     at = end + 1;
   }
-}
-
-void draw_solo_panel(ui::DrawList& dl, const ClassicArt& art, int width, int height,
-                     std::string_view title, const LevelStats& s) {
-  const ClassicLayout l = classic_screen(width, height);
-  const ClassicPen pen{dl, art, l};
-  const Type type{pen, !art.glyphs.empty()};
-  dl.rect(pen.at(0, kPanelY, kScreenW, kPanelH), ui::hex(0x000000, 0.75f));
-  type.centred(title.substr(0, kPanelChars), kPanelY + 4);
-  const std::string row = "Kills " + std::to_string(s.kills) + "/" + std::to_string(s.total_kills) +
-                          "  Secrets " + std::to_string(s.secrets) + "/" +
-                          std::to_string(s.total_secrets) + "  Time " + std::to_string(s.minutes) +
-                          ":" + two(s.seconds);
-  type.centred(std::string_view(row).substr(0, kPanelChars), kPanelY + 13);
 }
 
 }  // namespace shooters_edge::menu

@@ -1,11 +1,13 @@
 // Tests: the campaign's screens (games/shooters_edge/menu/level_screens.hpp) over the menu's
 // fixture pictures (classic_art.hpp's `fixture_files`, painted in code in the pack's formats):
 // the intermission's title, labels and big figures where the layout puts them; the finale's text
-// typed a character at a time, each line centred by its whole width; the solo panel's two rows;
+// typed a character at a time, each line centred by its whole width; the solo scorebar's rows,
+// the level's statistics and the big figures' fields;
 // and every screen drawn in the engine's type when the packs carry no pictures.
 //
-// ge:summary Tests: the intermission overlay, the typed finale and the solo panel as drawn
-// ge:keywords test campaign intermission finale typed-text solo-panel big-figures fixture
+// ge:summary Tests: the intermission, the level's statistics, the solo scorebar, the typed finale
+// ge:keywords test campaign intermission finale typed-text solo-scorebar level-stats big-figures
+// ge:keywords fixture field_names padded
 // ge:skill ui testing
 #include <string>
 #include <vector>
@@ -75,14 +77,20 @@ TEST(the_intermission_shows_the_title_the_labels_and_the_figures) {
   CHECK(complete[0].x == 128 && complete[0].y == 48 && complete[0].w == 384);  // (64, 24)
   const std::vector<ui::Rect> inter = boxes_of(dl, art.find("inter"));
   CHECK(inter.size() == 1 && inter[0].x == 0 && inter[0].y == 112);  // (0, 56)
-  // 1:05 at y 66, 1/2 at y 106, 10/12 at y 146, each from x 160.
+  // The minutes right-aligned in a field of three from x 160 on y 64, the colon at 234, the
+  // seconds' digits at 246 and 266; 1/2 on y 104 and 10/12 on y 144, the slash at 232 and the
+  // total's field from 240.
   const std::vector<ui::Rect> colon = boxes_of(dl, art.find("num_colon"));
-  CHECK(colon.size() == 1 && colon[0].x == 2 * (160 + 24) && colon[0].y == 2 * 66);
+  CHECK(colon.size() == 1 && colon[0].x == 2 * 234 && colon[0].y == 2 * 64);
+  const std::vector<ui::Rect> five = boxes_of(dl, art.find("num_5"));
+  CHECK(five.size() == 1 && five[0].x == 2 * 266 && five[0].y == 2 * 64);
   const std::vector<ui::Rect> slash = boxes_of(dl, art.find("num_slash"));
   CHECK(slash.size() == 2);
-  CHECK(slash[0].x == 2 * (160 + 24) && slash[0].y == 2 * 106);
-  CHECK(slash[1].x == 2 * (160 + 48) && slash[1].y == 2 * 146);
-  CHECK(boxes_of(dl, art.find("num_1")).size() == 4);  // 1:05, 1/2, 10/12 twice
+  CHECK(slash[0].x == 2 * 232 && slash[0].y == 2 * 104);
+  CHECK(slash[1].x == 2 * 232 && slash[1].y == 2 * 144);
+  const std::vector<ui::Rect> two = boxes_of(dl, art.find("num_2"));
+  CHECK(two.size() == 2 && two[0].x == 2 * 288 && two[1].x == 2 * 288);  // 2 and 12's units
+  CHECK(boxes_of(dl, art.find("num_1")).size() == 4);                    // 1:05, 1/2, 10/12 twice
   CHECK(boxes_of(dl, art.find("num_0")).size() == 2);
   CHECK(texts(dl) == 0);
 }
@@ -106,17 +114,50 @@ TEST(the_finale_is_typed_and_each_line_centred_by_its_whole_width) {
   CHECK(glyphs(100).size() == 6);
 }
 
-TEST(the_solo_panel_shows_the_title_and_the_counts) {
+TEST(the_solo_scorebar_takes_the_status_bars_place) {
+  const mn::ClassicArt art = fixture_art();
+  CHECK(art.find("scorebar") != nullptr);
+  ui::DrawList dl;
+  dl.begin(320, 200);
+  mn::draw_solo_scorebar(
+      dl, art, 320, 200, "the Grey Gate",
+      {.minutes = 2, .seconds = 7, .secrets = 0, .total_secrets = 3, .kills = 4, .total_kills = 9});
+  const std::vector<ui::Rect> bar = boxes_of(dl, art.find("scorebar"));
+  CHECK(bar.size() == 1 && bar[0].x == 0 && bar[0].y == 176);
+  // "Monsters:  4 /  9" (12 glyphs), "Secrets :  0 /  3" (11), "Time :  2:07" (9) and the
+  // title (11) without their spaces.
+  const std::vector<ui::Rect> g = boxes_of(dl, &art.glyphs);
+  CHECK_MSG(g.size() == 43, std::to_string(g.size()));
+  for (const ui::Rect& r : g) CHECK(r.y >= 180 && r.y + r.h <= 196);
+  CHECK(g[0].x == 8 && g[0].y == 180);  // M
+  // The title centred on x 232 on the bar's second row: 13 characters from 232 - 52.
+  CHECK(g[32].x == 180 && g[32].y == 188);
+}
+
+TEST(the_level_stats_are_the_intermissions_figures_under_the_maps_title) {
   const mn::ClassicArt art = fixture_art();
   ui::DrawList dl;
   dl.begin(320, 200);
-  mn::draw_solo_panel(
-      dl, art, 320, 200, "the Grey Gate",
-      {.minutes = 2, .seconds = 7, .secrets = 0, .total_secrets = 3, .kills = 4, .total_kills = 9});
-  // "theGreyGate" (11) and "Kills4/9Secrets0/3Time2:07" (26) without their spaces.
+  mn::draw_level_stats(dl, art, 320, 200, "AB",
+                       {.minutes = 0, .seconds = 9, .secrets = 1, .total_secrets = 1});
+  CHECK(boxes_of(dl, art.find("complete")).empty());
+  CHECK(boxes_of(dl, art.find("inter")).size() == 1);
   const std::vector<ui::Rect> g = boxes_of(dl, &art.glyphs);
-  CHECK_MSG(g.size() == 37, std::to_string(g.size()));
-  for (const ui::Rect& r : g) CHECK(r.y >= 152 && r.y + r.h <= 176);
+  CHECK(g.size() == 2 && g[0].x == 152 && g[0].y == 32);
+  const std::vector<ui::Rect> nine = boxes_of(dl, art.find("num_9"));
+  CHECK(nine.size() == 1 && nine[0].x == 266 && nine[0].y == 64);
+}
+
+TEST(a_field_keeps_its_last_digits_and_is_right_aligned) {
+  int skip = 0;
+  CHECK(mn::field_names(7, 3, &skip) == std::vector<std::string>{"num_7"} && skip == 2);
+  CHECK(mn::field_names(-5, 3, &skip) == (std::vector<std::string>{"num_minus", "num_5"}) &&
+        skip == 1);
+  CHECK(mn::field_names(1234, 3, &skip) == (std::vector<std::string>{"num_2", "num_3", "num_4"}) &&
+        skip == 0);
+  CHECK(mn::padded(5, 3) == "  5");
+  CHECK(mn::padded(1000, 3, 3) == "100");
+  CHECK(mn::padded(-100, 3, 3) == "-10");
 }
 
 TEST(without_the_packs_pictures_the_screens_are_drawn_in_the_engines_type) {
@@ -129,6 +170,6 @@ TEST(without_the_packs_pictures_the_screens_are_drawn_in_the_engines_type) {
   mn::draw_level_text(dl, none, 640, 400, "AB", 2);
   CHECK(texts(dl) == 1);
   dl.begin(640, 400);
-  mn::draw_solo_panel(dl, none, 640, 400, "x", {});
-  CHECK(texts(dl) == 2);
+  mn::draw_solo_scorebar(dl, none, 640, 400, "x", {});
+  CHECK(texts(dl) == 4);
 }
