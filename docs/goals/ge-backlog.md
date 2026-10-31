@@ -236,6 +236,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Shooter's Edge (M18, docs/shooters-edge.md § The `ge` tooling it needs)
 
+- one command-line reader for every game window and tool `ge new` scaffolds (`ge::play` or `engine/cli`): flags read wherever they stand, a `+` console line ending at the next flag, an unknown flag refused with the console line it followed, and a renamed flag naming its new name (Shooter's Edge's client does this by hand since the timedemo thread; a Mac run waited ten minutes on `-benchmark` swallowed into a console line)
 - `ge pmove <scenario> --line=N` (one recorded movement scenario stepped against `engine/move`, stopping at the first line that differs, with both sides' state there; classic game loop thread)
 - `ge bsp info/ents/shot` (a map's lumps and limits, its entity lump, a CPU picture of leaves, the PVS from a point and the hulls)
 - `ge qc build/disasm/run/trace/profile/diff/assemble/builtins` (our QC compiler; a progs disassembled, run, traced a step at a time, timed by function, diffed against another build by the functions and fields that changed, and assembled from a text listing; `ge qc builtins <progs>`: the builtin numbers a progs calls, checked against the game's catalogue, so "will this mod run here" is one command)

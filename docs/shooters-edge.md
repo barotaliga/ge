@@ -216,7 +216,10 @@ draws costs is the lab's `--price` (below), never a pass's own timestamps: a til
 the passes and each one's reading stretches over its neighbours' work. `+vid_fullscreen 1` (or
 the menu's VIDEO ▸ FULLSCREEN) runs it over the whole screen at the desktop's own mode, on the
 display the window is on or on `vid_display n`'s (`vid_displays` lists them). The `-` flags are
-read wherever they stand, so a `+` console line ends at the next flag:
+read wherever they stand, so a `+` console line ends at the next flag, and a flag the client does
+not know is refused wherever it stands (with the console line it followed named) rather than read
+as one of the line's words; `-benchmark` says it is now `-timedemo`. A negative number (`-1`) is
+a word:
 
 ```sh
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic -timedemo demo1

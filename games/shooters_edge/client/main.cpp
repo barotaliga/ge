@@ -58,6 +58,7 @@
 // ge:keywords main-menu escape vid_fullscreen fullscreen offscreen vid_display vid_displays lobby
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -213,9 +214,23 @@ bool size_named(std::string_view v, int& w, int& h) {
   return true;
 }
 
-bool parse(int argc, char** argv, Args& a) {
+// A word that reads as a flag: `-x` or `--x` with a letter after the dashes (a negative number,
+// `-1` or `-0.5`, is a console line's word).
+bool flag_like(std::string_view w) {
+  const size_t dashes = w.rfind("--", 0) == 0 ? 2 : w.rfind('-', 0) == 0 ? 1 : 0;
+  return dashes > 0 && w.size() > dashes &&
+         std::isalpha(static_cast<unsigned char>(w[dashes])) != 0;
+}
+
+// False with `why` (the word refused and the next step) on a flag it does not know, wherever it
+// stands: a flag inside a `+` console line is never taken as one of the line's words.
+bool parse(int argc, char** argv, Args& a, std::string& why) {
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg = argv[i];
+    if (arg == "-benchmark" || arg == "--benchmark") {
+      why = std::string(arg) + " was renamed to -timedemo; next: rerun with -timedemo <demo>.";
+      return false;
+    }
     // The flags are read wherever they stand, a console line's words (`+r_look modern`) running
     // from a `+` to the next flag or `+`, so `+r_look modern -timedemo demo1` is a look and a
     // benchmark, not one console line of four words.
@@ -244,9 +259,17 @@ bool parse(int argc, char** argv, Args& a) {
       a.frames = std::strtol(argv[i] + 9, nullptr, 10);
     } else if (arg.rfind("--size=", 0) == 0 || arg.rfind("--resolution=", 0) == 0) {
       if (!size_named(arg.substr(arg.find('=') + 1), a.width, a.height)) return false;
+    } else if (flag_like(arg)) {
+      why = "unknown flag " + std::string(arg) +
+            (a.plus.empty() ? std::string()
+                            : " (after the console line starting " + a.plus.front() + ")") +
+            "; next: rerun with the flags below only.";
+      return false;
     } else if (!a.plus.empty() || (!arg.empty() && arg[0] == '+')) {
       a.plus.emplace_back(arg);
     } else {
+      why = "unknown word " + std::string(arg) +
+            "; next: put it after a +command, or rerun with the flags below only.";
       return false;
     }
   }
@@ -284,13 +307,14 @@ static  // The campaign's screens over the game: the level's end, else the solo 
 int run_main(int argc, char** argv) {
   out::set_output_sink(print_line);
   Args args;
-  if (!parse(argc, argv, args)) {
+  if (std::string why; !parse(argc, argv, args, why)) {
+    out::error("shooters_edge: " + why);
     out::error(
-        "shooters_edge: unknown flag. Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
+        "shooters_edge: usage: shooters_edge [-basedir <dir>] [-game <folder>] "
         "[-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] [--frames=N] "
         "[--size=WxH] [-demovideo <demo> <file> [--fps=N] [--resolution=<WxH|720p|1080p|1440p|4k>] "
         "[--codec=<c>] [--seconds=S]] "
-        "[+<command> ...]; next: rerun with those flags only.");
+        "[+<command> ...]");
     return 2;
   }
 
