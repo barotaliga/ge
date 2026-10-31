@@ -1,10 +1,13 @@
 // plugins/mountain/app/mist_look.hpp: a clear, still winter night fills the valley with a level sea
 // of fog that is gone by noon; a wind keeps it out; a fog sky lays it under its clear lid; the
 // summit stands in its own cloud under a damp overcast; the day's sunrise and sunset come off the
-// latitude and the day of the year; and the answer is the same every time it is asked.
+// latitude and the day of the year; and the answer is the same every time it is asked. Over a
+// lake on a spring morning a still, clear dawn lays a bank on the water and a windy one nothing
+// that veils it; in the winter's cold the open lake steams in any wind.
 //
 // ge:summary Test: the mountain's mists by its sky and hour: the valley's sea, the summit's cloud
 // ge:keywords test mist fog valley-fog sea-of-fog burn-off hill-fog mountain_climate mists_at
+// ge:keywords water_mist lake-fog steam-fog
 // ge:skill mountain testing
 #include <cmath>
 
@@ -81,4 +84,29 @@ TEST(the_same_question_gets_the_same_answer) {
   CHECK_BITS(a.valley.top_m, b.valley.top_m);
   CHECK_BITS(a.valley.density, b.valley.density);
   CHECK(a.areas.size() == b.areas.size());
+}
+
+TEST(a_still_clear_dawn_fogs_the_lake_and_a_windy_one_does_not) {
+  const mg::Level level = mountain(mg::WeatherKind::clear, 1);
+  ge::wind::Climate spring = ma::mountain_climate(level);
+  spring.mean_c = 3;
+  ma::MapWater lake;
+  lake.centre[0] = 500, lake.centre[1] = 400;
+  lake.half[0] = lake.half[1] = 90;
+  lake.level = 0;
+  lake.water_c = 4;
+  spring.wind = 0.3;
+  const ma::WaterMist still = ma::water_mist(level, spring, 7.6, lake);
+  CHECK(still.mist.kind == ge::wind::MistKind::radiation);
+  CHECK(still.area.density > 0.01 && still.area.centre[1] - still.area.half[1] == 0);
+  CHECK(still.area.shape == ge::render::FogVolume::Shape::box && still.area.edge <= 1);
+  spring.wind = 8;
+  const ma::WaterMist windy = ma::water_mist(level, spring, 7.6, lake);
+  // 180 m across the lake through it veils under a tenth of the view.
+  CHECK(windy.area.density * 180 < 0.1);
+  // A midwinter dawn far colder than the open water: sea smoke, in the calm and in the wind.
+  ge::wind::Climate winter = ma::mountain_climate(level);
+  winter.wind = 8;
+  const ma::WaterMist smoke = ma::water_mist(level, winter, 7.6, lake);
+  CHECK(smoke.mist.kind == ge::wind::MistKind::steam && smoke.area.wind[1] > 0);
 }

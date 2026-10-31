@@ -3,10 +3,13 @@
 // a brush one into its model's box, and anything else, or one with no box, into none; the fog
 // fixture's hall dust takes no light from the sky (its windows are in a wall) while a volume over
 // its yard takes all of it; a pool of lava gets a glowing haze over its top and a pool of slime a
-// faint green one, each switched off by its row.
+// faint green one, each switched off by its row; with the day's air handed in, a pool of water far
+// warmer than a cold, windy night's air steams in rising wisps (indoors and out), one by a cold
+// night's air does not, and without the air nothing is asked.
 //
 // ge:summary Tests for a classic map's own fog: entity keys, brush boxes, sky share, liquids' hazes
-// ge:keywords test brush bsp fog fog-volume fog_volume sky-share lava-haze slime-haze
+// ge:keywords test brush bsp fog fog-volume fog_volume sky-share lava-haze slime-haze pool_mist
+// ge:keywords steam-fog climate
 // ge:skill brush testing
 #include <cmath>
 #include <string>
@@ -137,5 +140,32 @@ TEST(lava_glows_through_its_haze_and_slime_faintly) {
   rows.lava = false;
   CHECK(ba::bsp_fog(s, rows).size() == 1);
   rows.slime = false;
+  CHECK(ba::bsp_fog(s, rows).empty());
+}
+
+TEST(a_warm_pool_steams_on_a_cold_windy_night_and_a_cold_one_does_not) {
+  ba::Scene s = fixture_scene();
+  s.liquids.push_back(pool(ba::kWater, -0.1, 4.8, 14, 11.2, 22));  // the yard's pond
+  ba::FogRows rows;
+  rows.placed = false;
+  CHECK(ba::bsp_fog(s, rows).empty());  // no air handed in: nothing asked
+  ge::wind::Climate night;
+  night.mean_c = 2;
+  night.wind = 9;
+  night.cloud = 0.9;
+  night.water_c = 16;  // a pool far warmer than the night
+  rows.air = &night;
+  rows.hour = 22;
+  std::vector<gr::FogVolume> fog = ba::bsp_fog(s, rows);
+  CHECK(fog.size() == 1);
+  const gr::FogVolume& steam = fog[0];
+  CHECK(steam.density > 0 && steam.wind[1] > 0 && steam.falloff > 0);  // wisps, rising, thinning
+  CHECK(near(steam.centre[1] - steam.half[1], -0.1) && near(steam.centre[0], 8));
+  CHECK(steam.sky == 1.0f && steam.wind[0] > 0);  // out in the yard, drifting on the wind
+  CHECK(ba::pool_mist(s.liquids[0], night, 22, 0).kind == ge::wind::MistKind::steam);  // indoors
+  // Lava is its own haze's, never the air's.
+  CHECK(ba::pool_mist(pool(ba::kLava, 0, 0, 0, 1, 1), night, 22, 1).kind ==
+        ge::wind::MistKind::none);
+  night.water_c = 3;  // a pool as cold as the night
   CHECK(ba::bsp_fog(s, rows).empty());
 }
