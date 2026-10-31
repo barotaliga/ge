@@ -50,6 +50,7 @@ enum class Key : uint8_t {
   w = 26,
   enter = 40,
   escape = 41,
+  tab = 43,
   space = 44,
   right = 79,
   left = 80,

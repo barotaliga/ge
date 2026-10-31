@@ -152,6 +152,22 @@ void add_cvars(con::Console& c, Settings& s) {
           .help = "a thunderstorm's flashes lighting the cloud and the ground, and its bolts",
           .kind = CvarKind::boolean},
          &s.lightning);
+  v.bind({.name = "r_fog",
+          .fallback = "1",
+          .flags = kStartup,
+          .help = "the fog: the map's mists (the valleys' sea of fog on a still morning, the "
+                  "ground mist, the cloud on the summit) and a scene's own",
+          .kind = CvarKind::boolean},
+         &s.fog_drawn);
+  v.bind({.name = "r_fog_quality",
+          .fallback = "2",
+          .flags = kStartup,
+          .help = "the fog's froxels: 0 low (80 x 45 x 32) .. 2 high (160 x 90 x 64) .. 3 top "
+                  "(240 x 135 x 96)",
+          .kind = CvarKind::integer,
+          .min = 0,
+          .max = 3},
+         &s.fog_quality);
   v.bind({.name = "r_weather",
           .fallback = "1",
           .flags = kStartup,

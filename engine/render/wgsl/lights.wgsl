@@ -144,9 +144,11 @@ fn local_lights(s: Surface, p: vec3f, n: vec3f, v: vec3f, frag: vec3f) -> vec3f 
 
 // EVERY LAMP in the air at camera-relative `p` (a fog volume's sample), seen along `dir` (unit,
 // away the eye): the light scattered toward the eye per unit of the medium's scattering, with a
-// Henyey-Greenstein phase of asymmetry `g`, read off the cluster `p` falls in (`frag` its pixel
-// and depth, as a surface there would have them).
-fn light_inscatter(p: vec3f, dir: vec3f, frag: vec3f, g: f32) -> vec3f {
+// Henyey-Greenstein phase of asymmetry `g`, past each lamp's own shadow map where it has one (so
+// a post's shadow and a spot's cone show in the air) and dimmed by the medium between it and
+// the lamp (`sigma` the extinction a metre at `p`, taken as even along the way), read off the
+// cluster `p` falls in (`frag` its pixel and depth, as a surface there would have them).
+fn light_inscatter(p: vec3f, dir: vec3f, frag: vec3f, g: f32, sigma: f32) -> vec3f {
   if (light_grid.info.x == 0u) {
     return vec3f(0.0);
   }
@@ -154,10 +156,12 @@ fn light_inscatter(p: vec3f, dir: vec3f, frag: vec3f, g: f32) -> vec3f {
   var c = vec3f(0.0);
   for (var k = 0u; k < cell.y; k++) {
     var l: vec3f;
-    let e = lamp_irradiance(light_grid.refs[cell.x + k], p, &l);
+    let i = light_grid.refs[cell.x + k];
+    let e = lamp_irradiance(i, p, &l);
     let mu = dot(-dir, l);
     let hg = (1.0 - g * g) / (4.0 * PI * pow(max(1.0 + g * g + 2.0 * g * mu, 1e-4), 1.5));
-    c += e * hg;
+    let reach = length(light_grid.lights[i].at.xyz - p);
+    c += e * (hg * exp(-sigma * reach) * lamp_shadow(i, p, l, frag));
   }
   return c;
 }

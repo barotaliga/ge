@@ -14,6 +14,7 @@
 #include "fall_line/app/ladder.hpp"
 #include "fall_line/app/lamps.hpp"
 #include "fall_line/app/look.hpp"
+#include "fall_line/app/mists.hpp"
 #include "fall_line/app/scene.hpp"
 #include "fall_line/app/sky_type.hpp"
 #include "mountain/air/air.hpp"
@@ -48,7 +49,8 @@ constexpr r::PassRow kPassTable[] = {
     {"shadows.figures", "instances figures.posed shadows.lists", "shadows.maps"},
     {"lamps.cull", "instances", "lamps.lists"},
     {"lamps.shadows", "instances figures.posed lamps.lists", "lamps.atlas"},
-    {"fog.inject", "shadows.maps terrain.horizon sky.aerial sky.light fog.history", "fog.media"},
+    {"fog.inject", "shadows.maps terrain.horizon sky.aerial sky.light fog.history lamps.atlas",
+     "fog.media"},
     {"fog.integrate", "fog.media", "fog.volume"},
     {"terrain.depth", "terrain.tiles terrain.indirect terrain.height", "depth"},
     {"instances.depth", "instances figures.posed instances.early", "depth"},
@@ -100,8 +102,7 @@ int lamp_slots(const GameFrame& f) {
              : 0;
 }
 
-// `lamps`' posts stood as `family` (dark: `draw` lights their glass with the dark), casting into
-// the cascades with the forest; nothing for none.
+// `lamps`' posts stood as `family` (dark: `draw` lights their glass), casting with the forest.
 void stand_posts(ge::gpu::Device& device, GameFrame& f, r::InstanceFamily& family,
                  std::string_view label, std::span<const ge::mountain::app::Lamp> lamps) {
   if (lamps.empty()) return;
@@ -237,6 +238,8 @@ FrameOptions frame_options(const cfg::Settings& s) {
   o.splashes = s.splashes;
   o.wet = s.wet;
   o.lightning = s.lightning;
+  o.fog = s.fog_drawn;
+  o.froxels = fog_settings(static_cast<int>(s.fog_quality));
   o.fall.particles = static_cast<uint32_t>(
       std::lround(o.fall.particles * std::clamp(s.precip_density, 0.25, 2.0)));
   o.weather = s.weather;
@@ -588,9 +591,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
   const ge::wind::Storm none;
   const ge::wind::Storm& storm_air = storm != nullptr ? *storm : none;
   if (f.options.weather) {
-    // How far dusk has fallen under the view's sun (the evening's jet and its scud), and the
-    // height and the speed picked by hand.
-    // (With the moon the key light the view's sun_* are the moon's, and Night's the sun's.)
+    // How far dusk has fallen under the view's sun (the evening's jet and its scud; with the moon
+    // the key light, Night's sun), and the height and the speed picked by hand.
     const double sun = view.night.moon_key ? view.night.sun_elevation : view.sun_elevation;
     const ge::mountain::app::Aloft aloft{.dusk = ge::mountain::app::dusk_of(sun),
                                          .speed = f.options.cloud_speed,
@@ -651,9 +653,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
     view.weather.puddles = f.wet.puddles;
     view.weather.rain = rate;  // the lakes' rings
   }
-  // THE STORM'S LIGHTNING over the time since the last drawn frame (a sixtieth on the first, or
-  // after the clock went back): its lamps, the open sky's flash, and the strikes' channels, unless
-  // the caller lit the frame itself.
+  // THE STORM'S LIGHTNING since the last drawn frame (a sixtieth on the first, or after the clock
+  // went back): its lamps, the sky's flash and the strikes' channels, unless the caller lit it.
   std::span<const r::BoltSegment> bolts = scene.bolts;
   if (storm != nullptr && f.options.lightning && view.flashes.count == 0 && scene.bolts.empty()) {
     GE_ZONE("frame.lightning");
@@ -703,9 +704,8 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
                      std::span<const r::Instance>(f.staged_figures.data(), racers));
     r::set_instance_count(f.figures, static_cast<uint32_t>(racers));
   }
-  // THE LAMPS, on with the dark: the windows lit at the sky's hour (their glass written again
-  // only when one building's changes), then this frame's lights (app/lamps.hpp) and the light the
-  // eye adapts to among them, before the uniforms take it.
+  // THE LAMPS, on with the dark: the windows lit at the sky's hour (their glass written again only
+  // when one building's changes), this frame's lights (app/lamps.hpp) and the eye's light by them.
   const double sun = view.night.moon_key ? view.night.sun_elevation : view.sun_elevation;
   const double lit = ge::mountain::app::lamps_lit(sun);
   if (f.shown_village != nullptr && !f.buildings_lit.empty()) {
@@ -752,12 +752,12 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
       r::set_instances(device, *family, 0, stood);
     }
   }
+  dress_mists(*f.level, f.options.fog, scene, view, f.mists);  // the valley's sea in the uniforms
   r::fill_uniforms(f.staged, view, f.targets.width, f.targets.height, &f.history,
                    f.options.taa ? jitter : nullptr);
   {
     GE_ZONE("frame.fog");
-    r::prepare_fog(device, f.fog, view, f.options.fog ? scene.fog : std::span<const r::FogVolume>{},
-                   fresh);
+    r::prepare_fog(device, f.fog, view, f.mists, fresh);
     r::fog_uniforms(f.fog, f.staged);
   }
   device.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
