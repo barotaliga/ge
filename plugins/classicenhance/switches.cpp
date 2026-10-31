@@ -28,7 +28,7 @@ const SwitchSpec kSwitches[] = {
     {"glow", "TEXTURES", "GLOWING TEXELS",
      "The bright texels of lamps and signs glow. Off: they are just bright.", &S::glow, false},
     {"rebake", "LIGHT", "REBAKED LIGHT",
-     "The maps' light worked out again with bounce and direction. Off: the pack's light.",
+     "The light bounces off the walls, coloured by them, worked out again. Off: the pack's light.",
      &S::rebake, false},
     {"flicker", "LIGHT", "LIVE LIGHTS",
      "Torches and flames cast flickering light that moves shadows. Off: their light is baked.",

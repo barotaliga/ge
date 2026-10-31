@@ -86,6 +86,37 @@ TEST(rebake_fixture) {
     lit = std::max(lit, c[1]);
   }
   CHECK(lit > 0.1f);
+  // The bounce is the irradiance less the direct light: never more than it, and some of it lit.
+  CHECK(out.bounce.size() == out.rgb9e5.size());
+  float bounced = 0;
+  for (size_t i = 0; i < out.bounce.size(); i++) {
+    float c[3], b[3];
+    unpack_rgb9e5(out.rgb9e5[i], c);
+    unpack_rgb9e5(out.bounce[i], b);
+    for (int k = 0; k < 3; k++) CHECK(b[k] <= c[k] * 1.01f + 1e-6f);
+    bounced = std::max(bounced, b[1]);
+  }
+  CHECK(bounced > 0);
+  CHECK(bounced < lit);
+}
+
+// With no gather pass there is no bounce.
+TEST(rebake_direct_only_has_no_bounce) {
+  const Map m = fixture_map();
+  RebakeInput in;
+  in.lights = lights_of(m);
+  RebakeOptions o;
+  o.atlas_width = 1024;
+  o.bake.samples = 8;
+  o.bake.bounces = 0;
+  Rebaked out;
+  std::string err;
+  CHECK(rebake_map(m, in, o, &out, &err));
+  for (const uint32_t p : out.bounce) {
+    float b[3];
+    unpack_rgb9e5(p, b);
+    CHECK(b[0] == 0 && b[1] == 0 && b[2] == 0);
+  }
 }
 
 // RGB9E5 keeps each channel within half a step of the largest channel's precision.
@@ -118,6 +149,16 @@ TEST(rebake_codec) {
   CHECK(back.rgb9e5 == r.rgb9e5);
   CHECK(back.dir == r.dir);
   CHECK(back.lm == r.lm);
+  CHECK(back.bounce == std::vector<uint32_t>(6, 0));
+  r.bounce = {9, 8, 7, 6, 5, 4};
+  CHECK(read_rebaked(write_rebaked(r), &back, &err));
+  CHECK(back.bounce == r.bounce);
+  // A version 1 file (no bounce) still reads, with no bounce.
+  std::vector<uint8_t> v1 = write_rebaked(r);
+  v1[4] = 1;
+  v1.erase(v1.begin() + 20 + 6 * 8, v1.begin() + 20 + 6 * 12);
+  CHECK(read_rebaked(v1, &back, &err));
+  CHECK(back.rgb9e5 == r.rgb9e5 && back.dir == r.dir && back.lm == r.lm && back.bounce.empty());
   std::vector<uint8_t> cut(bytes.begin(), bytes.end() - 1);
   CHECK(!read_rebaked(cut, &back, &err));
   CHECK(err.find("rebake") != std::string::npos);

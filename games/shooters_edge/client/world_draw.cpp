@@ -188,6 +188,18 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
       error = "the map " + map.name + " cannot be drawn: " + error;
       return nullptr;
     }
+    // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
+    // adds its bounce under the live lights (look.cpp).
+    if (picture.ce.rebake && !files.archives.empty()) {
+      const std::filesystem::path dir =
+          cache.empty() ? ge::classicenhance::find_cache(files.archives[0].bytes) : cache;
+      ge::brush::Rebaked baked;
+      if (ge::classicenhance::cached_rebake(dir, map.name, f->scene.map.vertices.size(), &baked)) {
+        ba::attach_rebake(f->scene, std::move(baked));
+        ge::core::output::status("shooters_edge: the rebaked light of " + map.name + " from " +
+                                 dir.string());
+      }
+    }
     f->has_map = true;
     f->sky = ba::pick_sky(f->scene.sky_colours);
     f->top_y = f->scene.maxs[1];

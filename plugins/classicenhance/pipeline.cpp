@@ -60,7 +60,11 @@ std::string stage_key(Stage s, const RunOptions& o) {
             " sharpen " + num(e.sharpen) + " grain " + num(e.grain) + " relief " + num(e.relief) +
             " limit " + std::to_string(o.texture_limit) + network_key(e);
   } else if (s == Stage::lightmaps) {
-    text += " v" + std::to_string(kLightmapStageVersion);
+    // The rebake reads the enhanced albedo's means: a new texture stage reruns it.
+    const LightmapOptions& l = o.lightmaps;
+    text += " v" + std::to_string(kLightmapStageVersion) + " luxel " + num(l.luxel_m) +
+            " samples " + std::to_string(l.samples) + " bounces " + std::to_string(l.bounces) +
+            " after " + stage_key(Stage::textures, o);
   } else if (s == Stage::sounds) {
     const SoundOptions& d = o.sounds;
     text += " v" + std::to_string(kSoundStageVersion) + " rate " + std::to_string(d.rate) +
@@ -210,23 +214,37 @@ bool run_textures(const Source& src, const fs::path& dir, const RunOptions& o, R
   return true;
 }
 
-bool run_lightmaps(const Source& src, const fs::path& dir, Reports& rep, StageResult& r,
-                   std::string* error) {
+bool run_lightmaps(const Source& src, const fs::path& dir, const RunOptions& o, Reports& rep,
+                   StageResult& r, std::string* error) {
   vfs::Pak pak;
   if (!vfs::read_pak(src.content(), &pak, error)) return false;
   const std::vector<const vfs::PakEntry*> maps = maps_of(pak);
+  std::span<const uint8_t> palette;
+  if (const vfs::PakEntry* pal = vfs::pak_find(pak, "gfx/palette.lmp"); pal && pal->size >= 768) {
+    palette = vfs::pak_file(src.content(), *pal).first(768);
+  }
   rep.started(maps.size());
+  uint64_t luxels = 0, bytes = 0;
   for (const vfs::PakEntry* e : maps) {
     brush::Map map;
     if (!brush::read_bsp(vfs::pak_file(src.content(), *e), &map, error)) {
       *error = e->path + ": " + *error;
       return false;
     }
-    if (!light_map(map, map_name(e->path), dir / "lightmaps", error)) return false;
+    const std::vector<std::array<float, 3>> albedo = texture_means(map, dir, palette);
+    brush::Rebaked baked;
+    size_t size = 0;
+    if (!light_map(map, map_name(e->path), dir / "lightmaps", albedo, error, o.lightmaps, &baked,
+                   &size)) {
+      return false;
+    }
+    luxels += baked.stats.luxels;
+    bytes += size;
     r.files++;
     if (!rep.item(map_name(e->path), error)) return false;
   }
-  r.note = std::to_string(r.files) + " maps' own light packed (the rebake is row M40's)";
+  r.note = std::to_string(r.files) + " maps rebaked, " + std::to_string(luxels / 1000) +
+           " thousand luxels, " + std::to_string(bytes / (1024 * 1024)) + " MB";
   return true;
 }
 
@@ -425,7 +443,7 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
         ok = run_textures(source, report->dir, opts, rep, r, error);
         break;
       case Stage::lightmaps:
-        ok = run_lightmaps(source, report->dir, rep, r, error);
+        ok = run_lightmaps(source, report->dir, opts, rep, r, error);
         break;
       case Stage::sounds:
         ok = run_sounds(source, report->dir, opts, rep, r, error);

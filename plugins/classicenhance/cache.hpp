@@ -10,7 +10,7 @@
 //     pack/pak0.pak           the pack, unchanged (so a rerun needs no source)
 //     textures/index.txt      one line a texture: name, folder, size, material, glows
 //     textures/<name>/        albedo.png, height.png, normal.png, roughness.png, emissive.png
-//     lightmaps/<map>.png     each map's light (lightmaps.hpp)
+//     lightmaps/<map>.gerb    each map's light rebaked (lightmaps.hpp)
 //     stages.txt              one line a stage that finished: its name and its key
 //
 // A stage's key digests its version and its options: a rerun skips a stage whose recorded key
