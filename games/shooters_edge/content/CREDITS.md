@@ -2,6 +2,24 @@
 
 Every sound and model in this directory, the pack it came from, its author and its licence. All of them are CC0 1.0 (public domain dedication): no attribution is required, and it is given anyway. Each file was converted (sounds: trimmed, loudness-normalised, mono 16-bit 22 050 Hz WAV; models: the texture packed into the GLB) and renamed to our name; the source file is named so it can be fetched again.
 
+## Shooter's Edge: built models
+
+- Id: `ge/built`
+- Author: this repository's own builders (Blender Python run by `ge asset build`; each texture baked from procedural materials, no picture taken from anyone)
+- Source: the builder beside each model, `models/view/<name>/build.py` over `models/view/weapon_kit.py`
+- Licence: the repository's own (`LICENSE` at its root)
+
+| Our file | Source file |
+| --- | --- |
+| `models/view/axe/axe.glb` | `models/view/axe/build.py` |
+| `models/view/double_shotgun/double_shotgun.glb` | `models/view/double_shotgun/build.py` |
+| `models/view/grenade_launcher/grenade_launcher.glb` | `models/view/grenade_launcher/build.py` |
+| `models/view/lightning_gun/lightning_gun.glb` | `models/view/lightning_gun/build.py` |
+| `models/view/minigun/minigun.glb` | `models/view/minigun/build.py` |
+| `models/view/railgun/railgun.glb` | `models/view/railgun/build.py` |
+| `models/view/rocket_launcher/rocket_launcher.glb` | `models/view/rocket_launcher/build.py` |
+| `models/view/shotgun/shotgun.glb` | `models/view/shotgun/build.py` |
+
 ## Kenney: Blaster Kit
 
 - Id: `kenney/blaster-kit`
@@ -28,13 +46,6 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `models/projectile/nail.glb` | `Models/GLB format/bullet-foam.glb` |
 | `models/projectile/nail_heavy.glb` | `Models/GLB format/bullet-foam-thick.glb` |
 | `models/projectile/rocket.glb` | `Models/GLB format/bullet-foam-tip-thick.glb` |
-| `models/view/beam_gun.glb` | `Models/GLB format/blaster-r.glb` |
-| `models/view/double_shotgun.glb` | `Models/GLB format/blaster-l.glb` |
-| `models/view/grenade_launcher.glb` | `Models/GLB format/blaster-b.glb` |
-| `models/view/heavy_nailgun.glb` | `Models/GLB format/blaster-p.glb` |
-| `models/view/nailgun.glb` | `Models/GLB format/blaster-d.glb` |
-| `models/view/rocket_launcher.glb` | `Models/GLB format/blaster-h.glb` |
-| `models/view/shotgun.glb` | `Models/GLB format/blaster-j.glb` |
 
 ## Kenney: Digital Audio
 
@@ -227,7 +238,6 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `models/pickup/rockets_small.glb` | `Models/GLB format/box.glb` |
 | `models/projectile/lava_ball.glb` | `Models/GLB format/rock-c.glb` |
 | `models/prop/barrel_explosive.glb` | `Models/GLB format/barrel.glb` |
-| `models/view/melee.glb` | `Models/GLB format/tool-axe-upgraded.glb` |
 
 ## 10 Clicks and Switches
 

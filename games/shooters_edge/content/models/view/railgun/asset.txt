@@ -1,0 +1,7 @@
+# The railgun, held weapon 5 (the heavy nailgun's slot; its look, the slot still fires nails): twin
+# rails with a glowing channel, its texture and glow baked from the kit's procedural materials.
+# Built by `ge asset build railgun`.
+builder: build.py
+source: ../weapon_kit.py
+data: se_view
+budget-kib: 1536

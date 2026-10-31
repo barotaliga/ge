@@ -48,7 +48,8 @@ struct Bsp {
   info2: vec4f,
   // the classic sky texture's rectangle
   sky: vec4f,
-  // v2's soft floor of light (minlight), the baked light's share as bounce, the sky's light
+  // v2's soft floor of light (minlight), the baked light's share as bounce (negative: the
+  // rebake's bounce in its place, the share where the rebake has none), the sky's light
   // (r_skylight: the sun's and the open sky's in the rooms), the textures filtered (1) or crisp (0)
   info3: vec4f,
   // the bump's depth from the textures' luminance, m (r_bump); the pack's sky; the parallax's
@@ -109,6 +110,8 @@ struct Mover {
 @group(1) @binding(11) var<storage, read> movers: array<Mover>;
 // The textures' relief in the atlas's places: the normal's x and y, the height, the roughness.
 @group(1) @binding(12) var surface: texture_2d<f32>;
+// the rebake's light bounced alone (rebake.hpp), or a 1 x 1 stand-in
+@group(1) @binding(13) var rebake_bounce: texture_2d<f32>;
 
 const kSolid = 0u;
 const kSky = 1u;
@@ -860,8 +863,13 @@ fn shade(in: VsOut) -> FsOut {
       es += l.colour.rgb * spec * fall;
     }
   }
-  // The light bounced round the room: the map's baked light (its light probes) at a share.
-  e += lightmap(in.lm, in.styles) * bsp.info3.y * cavity;
+  // The light bounced round the room: the rebake's own where it has one, else the map's baked
+  // light (its light probes) at a share.
+  if (bsp.info3.y < 0.0 && in.lm2.x >= 0.0) {
+    e += textureSampleLevel(rebake_bounce, light_sampler, in.lm2, 0.0).rgb * cavity;
+  } else {
+    e += lightmap(in.lm, in.styles) * abs(bsp.info3.y) * cavity;
+  }
   e = floor_light(e, bsp.info3.x * cavity);
   e += wl.flash;
   var c = wl.albedo * e * white;

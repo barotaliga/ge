@@ -195,3 +195,13 @@ TEST(ce_relief_and_ce_parallax_light_the_enhanced_textures_in_the_modern_look) {
   con.execute("ce_relief 0");
   CHECK(!lk::world_options(lk::Look::modern, {}, pic).relief);
 }
+
+TEST(ce_rebake_adds_the_cached_bounce_in_the_modern_look_only) {
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).rebake_bounce);
+  CHECK(!lk::world_options(lk::Look::classic, {}, pic).rebake_bounce);
+  con.execute("ce_rebake 0");
+  CHECK(!lk::world_options(lk::Look::modern, {}, pic).rebake_bounce);
+}

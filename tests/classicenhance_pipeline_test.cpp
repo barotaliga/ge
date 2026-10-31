@@ -15,12 +15,14 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include "assets/gltf.hpp"
 #include "assets/sha256.hpp"
+#include "brush/rebake.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "classicenhance/cache.hpp"
@@ -98,6 +100,8 @@ TEST(pipeline_writes_every_stage_and_skips_what_is_current) {
   ce::RunOptions opts;
   opts.textures.scale = 2;
   opts.sounds.extend = 0;  // keep the fixture quick
+  opts.lightmaps.samples = 8;
+  opts.lightmaps.bounces = 1;
   ce::RunReport report;
   CHECK_MSG(ce::run_pipeline(src, root, opts, &report, &error), error);
   const fs::path dir = ce::pack_dir(root, sha);
@@ -107,8 +111,15 @@ TEST(pipeline_writes_every_stage_and_skips_what_is_current) {
   CHECK(fs::file_size(dir / "pack" / "pak0.pak") == src.pack.size());
   CHECK(read_text(dir / "NOTICE.txt").find("do not share") != std::string::npos);
   CHECK(read_text(dir / "source.txt").find(sha) != std::string::npos);
-  CHECK(fs::exists(dir / "lightmaps" / "a_copy.png") &&
-        fs::exists(dir / "lightmaps" / "b_hall.png"));
+  // Each map's light rebaked, with its bounce, for every vertex of the map.
+  for (const char* m : {"a_copy", "b_hall"}) {
+    std::ifstream f(dir / "lightmaps" / (std::string(m) + ".gerb"), std::ios::binary);
+    const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
+                                     std::istreambuf_iterator<char>());
+    ge::brush::Rebaked baked;
+    CHECK_MSG(ge::brush::read_rebaked(bytes, &baked, &error), error);
+    CHECK(!baked.lm.empty() && baked.bounce.size() == baked.rgb9e5.size() && baked.width > 0);
+  }
 
   // The sound at 48 kHz, its loop start carried to the new rate, named in the index.
   ce::Pcm hum;
@@ -163,12 +174,13 @@ TEST(pipeline_writes_every_stage_and_skips_what_is_current) {
     CHECK(index.find(t.name + " ") != std::string::npos);
   }
 
-  // A rerun skips every stage; a new scale reruns the textures alone; --force reruns all.
+  // A rerun skips every stage; a new scale reruns the textures and the rebake that reads their
+  // colours; --force reruns all.
   CHECK(ce::run_pipeline(src, root, opts, &report, &error));
   for (const ce::StageResult& r : report.stages) CHECK(!r.ran && r.note == "up to date");
   opts.textures.scale = 3;
   CHECK(ce::run_pipeline(src, root, opts, &report, &error));
-  CHECK(!report.stages[0].ran && report.stages[1].ran && !report.stages[2].ran &&
+  CHECK(!report.stages[0].ran && report.stages[1].ran && report.stages[2].ran &&
         !report.stages[3].ran && !report.stages[4].ran && !report.stages[5].ran);
   opts.force = true;
   opts.only = {ce::Stage::lightmaps};

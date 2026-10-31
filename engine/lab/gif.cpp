@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <iterator>
+#include <span>
 #include <unordered_map>
 
 namespace ge::lab {
@@ -195,11 +197,13 @@ Picture shrink(const Picture& picture, int width) {
   return out;
 }
 
-std::vector<uint8_t> encode_gif(const Picture& picture) {
-  const Indexed ix = index_colours(picture);
+namespace {
+
+// The header, the screen and the global table of `ix`'s palette.
+std::vector<uint8_t> gif_head(const Indexed& ix, int width, int height) {
   std::vector<uint8_t> out = {'G', 'I', 'F', '8', '9', 'a'};
-  put16(out, picture.width);
-  put16(out, picture.height);
+  put16(out, width);
+  put16(out, height);
   out.push_back(0xF7);  // a global table of 256 entries, 8 bits a channel
   out.push_back(0);     // the background is entry 0
   out.push_back(0);     // square pixels
@@ -209,11 +213,16 @@ std::vector<uint8_t> encode_gif(const Picture& picture) {
     out.push_back(static_cast<uint8_t>((c >> 8) & 255));
     out.push_back(static_cast<uint8_t>(c & 255));
   }
+  return out;
+}
+
+// One frame of `pixels` (indices into the global table), the whole screen, LZW-coded.
+void put_frame(std::vector<uint8_t>& out, std::span<const uint8_t> pixels, int width, int height) {
   out.push_back(0x2C);  // the frame: at the origin, the whole screen, no local table
   put16(out, 0);
   put16(out, 0);
-  put16(out, picture.width);
-  put16(out, picture.height);
+  put16(out, width);
+  put16(out, height);
   out.push_back(0);
 
   // LZW over 8-bit symbols: clear 256, end 257. A code grows a bit when the next one would not
@@ -226,10 +235,10 @@ std::vector<uint8_t> encode_gif(const Picture& picture) {
   uint32_t next = kEnd + 1;
   int size = 9;
   w.put(kClear, size);
-  if (!ix.pixels.empty()) {
-    uint32_t cur = ix.pixels[0];
-    for (size_t i = 1; i < ix.pixels.size(); ++i) {
-      const uint32_t key = cur << 8 | ix.pixels[i];
+  if (!pixels.empty()) {
+    uint32_t cur = pixels[0];
+    for (size_t i = 1; i < pixels.size(); ++i) {
+      const uint32_t key = cur << 8 | pixels[i];
       if (const auto it = table.find(key); it != table.end()) {
         cur = it->second;
         continue;
@@ -243,7 +252,7 @@ std::vector<uint8_t> encode_gif(const Picture& picture) {
         next = kEnd + 1;
         size = 9;
       }
-      cur = ix.pixels[i];
+      cur = pixels[i];
     }
     w.put(cur, size);
     if (next + 1 > (1u << size) && size < 12 && next != kEnd + 1) ++size;
@@ -256,7 +265,46 @@ std::vector<uint8_t> encode_gif(const Picture& picture) {
     out.insert(out.end(), w.bytes.begin() + static_cast<std::ptrdiff_t>(at),
                w.bytes.begin() + static_cast<std::ptrdiff_t>(at + len));
   }
-  out.push_back(0);     // the frame's last sub-block
+  out.push_back(0);  // the frame's last sub-block
+}
+
+}  // namespace
+
+std::vector<uint8_t> encode_gif(const Picture& picture) {
+  const Indexed ix = index_colours(picture);
+  std::vector<uint8_t> out = gif_head(ix, picture.width, picture.height);
+  put_frame(out, ix.pixels, picture.width, picture.height);
+  out.push_back(0x3B);  // the trailer
+  return out;
+}
+
+std::vector<uint8_t> encode_gif_frames(std::span<const Picture> frames, int delay_cs) {
+  if (frames.empty()) return {};
+  const int w = frames[0].width, h = frames[0].height;
+  // One palette for every frame: the frames stacked into one picture and indexed together.
+  Picture all{w, h * static_cast<int>(frames.size()), {}};
+  all.rgba.reserve(frames[0].rgba.size() * frames.size());
+  for (const Picture& f : frames) {
+    if (f.width == w && f.height == h) {
+      all.rgba.insert(all.rgba.end(), f.rgba.begin(), f.rgba.end());
+    } else {
+      all.rgba.insert(all.rgba.end(), size_t(w) * size_t(h) * 4, 0);
+    }
+  }
+  const Indexed ix = index_colours(all);
+  std::vector<uint8_t> out = gif_head(ix, w, h);
+  // Played over and over: the application extension a browser reads the loop count from.
+  const uint8_t loop[] = {0x21, 0xFF, 0x0B, 'N', 'E',  'T',  'S',  'C',  'A', 'P',
+                          'E',  '2',  '.',  '0', 0x03, 0x01, 0x00, 0x00, 0x00};
+  out.insert(out.end(), std::begin(loop), std::end(loop));
+  const size_t n = size_t(w) * size_t(h);
+  for (size_t k = 0; k < frames.size(); ++k) {
+    // The frame's delay: a graphic control extension, no transparency, each frame replacing all.
+    out.insert(out.end(), {0x21, 0xF9, 0x04, 0x04});
+    put16(out, std::max(1, delay_cs));
+    out.insert(out.end(), {0x00, 0x00});
+    put_frame(out, std::span<const uint8_t>(ix.pixels).subspan(k * n, n), w, h);
+  }
   out.push_back(0x3B);  // the trailer
   return out;
 }

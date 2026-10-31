@@ -108,6 +108,9 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   namespace vm = ge::viewmodel;
   gr::HeldDraw g;
   g.model = static_cast<uint32_t>(h.weapon);
+  g.frame_a = h.frame_a;
+  g.frame_b = h.frame_b;
+  g.blend = static_cast<float>(h.frame_t);
   g.now = h.placement;
   g.last = f.held_fresh ? h.placement : f.last_place;
   f.last_place = h.placement;
@@ -187,6 +190,18 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     if (!ba::load_scene(pack, pack.files[0].name, palette_copy, &f->scene, &error, source)) {
       error = "the map " + map.name + " cannot be drawn: " + error;
       return nullptr;
+    }
+    // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
+    // adds its bounce under the live lights (look.cpp).
+    if (picture.ce.rebake && !files.archives.empty()) {
+      const std::filesystem::path dir =
+          cache.empty() ? ge::classicenhance::find_cache(files.archives[0].bytes) : cache;
+      ge::brush::Rebaked baked;
+      if (ge::classicenhance::cached_rebake(dir, map.name, f->scene.map.vertices.size(), &baked)) {
+        ba::attach_rebake(f->scene, std::move(baked));
+        ge::core::output::status("shooters_edge: the rebaked light of " + map.name + " from " +
+                                 dir.string());
+      }
     }
     f->has_map = true;
     f->sky = ba::pick_sky(f->scene.sky_colours);
