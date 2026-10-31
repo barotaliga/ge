@@ -236,9 +236,11 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
   other formats), or on a real one with `ARGS="--basedir=<dir> --demo=demo1"`, and charts every
   frame's time and GPU span (`--look=classic|modern` picks the look).
 - **The price** (`ARGS="... --look=modern --price=1"`): the demo played again with each drawn
-  `ce_` switch off in turn and once without the HUD, then everything on once more (the two
-  all-on runs' gap is the noise); the lab charts each run's frames as a box and lists what each
-  switch saved off the median frame, the most first.
+  `ce_` switch off in turn and once without the HUD, each run between two runs with everything on;
+  a switch's saving is read against the mean of the all-on runs either side (so a machine warming
+  or getting busier over the minutes reads as no saving), and the largest gap between neighbouring
+  all-on runs is the noise. The lab charts each run's frames as a box and lists what each switch
+  saved off the median frame, the most first.
 - **The shadow maps** (the modern look): a light's cube is drawn when it joins the shadowed few
   and kept while it stays; at most two new cubes a frame (`Options::fresh_cubes`), the rest of a
   room's torches unshadowed for the frames until their turn, so walking into a room costs no

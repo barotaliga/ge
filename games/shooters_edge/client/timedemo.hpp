@@ -22,8 +22,10 @@
 // passes, and each one's reading stretches over its neighbours' work.
 //
 // THE PRICE (`prices`): what each thing the look draws costs, found the one honest way: the demo
-// played again with that thing switched off, its median frame and span against the base run's.
-// The base is played first and last, so the two give the noise a saving has to clear.
+// played again with that thing switched off, its median frame and span against the base's. The
+// base is played before and after every such run and each saving is read against the mean of the
+// two around it, so a machine that warms or gets busier over the minutes does not read as a
+// saving; the largest gap between two neighbouring base runs is the noise a saving has to clear.
 //
 // FINDING THE DEMO (`find_demo`): the name as given through the search path (a pack's
 // `demo1.dem`, a loose file in the game folder), then with `.dem` added, then the first file in
@@ -90,10 +92,13 @@ struct Price {
   double frame_ms = 0;
   double span_ms = 0;
 };
-// Each run's saving against `base`, the most saved first.
-std::vector<Price> prices(const PriceRun& base, std::span<const PriceRun> off);
-// The price as lines: the base's two runs (their gap is the noise) and each saving, most first.
-std::vector<std::string> price_report(const PriceRun& base, const PriceRun& again,
+// Each run's saving against the base runs either side of it (`bases`: one more than `off`, base
+// i played before off i), the most saved first.
+std::vector<Price> prices(std::span<const PriceRun> bases, std::span<const PriceRun> off);
+// The largest gap between two neighbouring base runs' median frames, ms.
+double price_noise(std::span<const PriceRun> bases);
+// The price as lines: the base runs' spread (the noise) and each saving, most first.
+std::vector<std::string> price_report(std::span<const PriceRun> bases,
                                       std::span<const Price> saved);
 // The median of `v` (0 when empty).
 double median_of(std::vector<double> v);

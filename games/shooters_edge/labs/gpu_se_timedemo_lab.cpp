@@ -10,10 +10,11 @@
 // GPU span of every timed frame as lines with the median and the 99th percentile as rules, and
 // the report as metrics. The frame count and the levels are deterministic; every time is measured.
 //
-// THE PRICE (`--price=1`): the demo played again with each drawn ce_ switch off in turn, once
-// without the HUD, and once more with everything on; each run's frames as a box and what each
-// switch saved off the median frame (client/timedemo.hpp's `prices`). A pass's own GPU timestamps
-// cannot rank the passes (a tiled GPU overlaps them); the whole frame with one thing gone can.
+// THE PRICE (`--price=1`): the demo played again with each drawn ce_ switch off in turn and once
+// without the HUD, each run between two all-on runs; each run's frames as a box and what each
+// switch saved off the median frame against the all-on runs either side (timedemo.hpp's `prices`).
+// A pass's own GPU timestamps cannot rank the passes (a tiled GPU overlaps them); the whole frame
+// with one thing gone can.
 //
 // ge:summary Lab: the demo benchmark headless: a demo played flat out, its frames and fps chart
 // ge:keywords lab se-timedemo timedemo benchmark demo fps frame-time one-percent-low chart gpu
@@ -181,9 +182,16 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
   return true;
 }
 
-cl::PriceRun price_run(const std::string& name, const Played& p) {
+// A run's timed frames in ms.
+std::vector<double> ms_of(const std::vector<double>& frame_s) {
   std::vector<double> ms;
-  for (const double f : p.bench.frame_s) ms.push_back(f * 1e3);
+  ms.reserve(frame_s.size());
+  for (const double f : frame_s) ms.push_back(f * 1e3);
+  return ms;
+}
+
+cl::PriceRun price_run(const std::string& name, const Played& p) {
+  const std::vector<double> ms = ms_of(p.bench.frame_s);
   return {name, cl::median_of(ms),
           p.bench.passes.span_ms.empty() ? std::nan("") : cl::median_of(p.bench.passes.span_ms)};
 }
@@ -295,54 +303,45 @@ void run(gl::Lab& lab) {
             {{"demo", bench.name}, {"size", lab.arg("size")}}},
            gl::to_picture(ch.plot), gl::Det::measured);
 
-  // THE PRICE: the demo again with each drawn switch off in turn, and the base once more.
+  // THE PRICE: the demo again with each drawn switch off in turn, each between two all-on runs.
   if (price && device) {
-    std::vector<cl::PriceRun> off;
-    std::vector<std::vector<double>> frames_of;  // each run's frames, ms, for the boxes
-    const auto keep = [&](const std::string& row, const Played& p) {
-      off.push_back(price_run(row, p));
-      std::vector<double> ms;
-      for (const double f : p.bench.frame_s) ms.push_back(f * 1e3);
-      frames_of.push_back(std::move(ms));
+    std::vector<cl::PriceRun> bases{price_run("", base)}, off;
+    std::vector<std::vector<double>> frames_of;               // each switched-off run's frames, ms
+    std::vector<double> base_ms = ms_of(base.bench.frame_s);  // every all-on run's frames, ms
+    const auto row = [&](const std::string& label, const shooters_edge::look::Picture& pic,
+                         bool no_hud) {
+      Played p;
+      if (!play(rig, pic, no_hud, false, p)) return false;
+      off.push_back(price_run(label, p));
+      frames_of.push_back(ms_of(p.bench.frame_s));
+      Played again;
+      if (!play(rig, picture, false, false, again)) return false;
+      bases.push_back(price_run("", again));
+      const std::vector<double> again_ms = ms_of(again.bench.frame_s);
+      base_ms.insert(base_ms.end(), again_ms.begin(), again_ms.end());
+      lab.note("price: " + label + " off, median frame " + fixed(off.back().frame_p50_ms, 2) +
+               " ms, everything on after it " + fixed(bases.back().frame_p50_ms, 2) + " ms");
+      return true;
     };
     for (const ge::classicenhance::SwitchSpec& sw : ge::classicenhance::switches()) {
       if (sw.bake || sw.group == "SOUND" || !(picture.ce.*sw.field)) continue;
       shooters_edge::look::Picture without = picture;
       without.ce.*sw.field = false;
-      Played p;
-      if (!play(rig, without, false, false, p)) return;
-      keep("ce_" + std::string(sw.id), p);
-      lab.note("price: ce_" + std::string(sw.id) + " off, median frame " +
-               fixed(off.back().frame_p50_ms, 2) + " ms");
+      if (!row("ce_" + std::string(sw.id), without, false)) return;
     }
-    {
-      Played p;
-      if (!play(rig, picture, true, false, p)) return;
-      keep("the HUD", p);
-    }
-    Played again;
-    if (!play(rig, picture, false, false, again)) return;
-    const cl::PriceRun first = price_run("", base);
-    const cl::PriceRun last = price_run("", again);
-    const std::vector<cl::Price> saved = cl::prices(first, off);
-    for (const std::string& line : cl::price_report(first, last, saved)) lab.note(line);
+    if (!row("the HUD", picture, true)) return;
+    const std::vector<cl::Price> saved = cl::prices(bases, off);
+    for (const std::string& line : cl::price_report(bases, saved)) lab.note(line);
     for (const cl::Price& pr : saved)
       lab.metric("price." + pr.name, pr.frame_ms, "ms", gl::Det::measured);
-    lab.metric("price.noise", std::abs(first.frame_p50_ms - last.frame_p50_ms), "ms",
-               gl::Det::measured);
-    // Each run's frames as a box, the base first and last, the rest by what they saved.
-    std::vector<gl::Sample> boxes;
-    const auto add = [&](const std::string& label, const std::vector<double>& ms) {
-      boxes.push_back({label, ms});
-    };
-    std::vector<double> base_ms, again_ms;
-    for (const double f : base.bench.frame_s) base_ms.push_back(f * 1e3);
-    for (const double f : again.bench.frame_s) again_ms.push_back(f * 1e3);
-    add("everything on", base_ms);
+    lab.metric("price.noise", cl::price_noise(bases), "ms", gl::Det::measured);
+    // Every all-on run's frames as one box, then each switched-off run's, the most saved first.
+    std::vector<gl::Sample> boxes{
+        {"everything on (" + std::to_string(bases.size()) + " runs)", base_ms}};
     for (const cl::Price& pr : saved)
       for (size_t i = 0; i < off.size(); i++)
-        if (off[i].name == pr.name) add(pr.name + " off", frames_of[i]);
-    add("everything on, again", again_ms);
+        if (off[i].name == pr.name)
+          boxes.push_back({pr.name + " off, saves " + fixed(pr.frame_ms, 2), frames_of[i]});
     const gl::Chart pc =
         gl::box_chart({"frame time with each thing off, " + bench.name + ", r_look " + picture.look,
                        setup, "frame time (ms)", "run"},
@@ -350,11 +349,13 @@ void run(gl::Lab& lab) {
     lab.note(gl::chart_text(pc, 4));
     lab.shot({"price",
               "THE PRICE: " + bench.name,
-              "The whole demo played once with everything on, then again with each drawn switch "
-              "off in turn (and once without the HUD), then everything on again; each run's "
-              "frames as a box, the most saved first. The gap between the two all-on runs is "
-              "the noise a saving has to clear.",
-              "the rows whose boxes sit well left of both all-on rows are what the look pays for",
+              "The whole demo played with each drawn switch off in turn (and once without the "
+              "HUD), each run between two runs with everything on; each run's frames as a box, "
+              "the most saved first, and its saving against the mean of the all-on runs either "
+              "side of it. A saving under " +
+                  fixed(cl::price_noise(bases), 2) +
+                  " ms (the largest gap between neighbouring all-on runs) is noise.",
+              "the rows whose saving clears the noise are what the look pays for",
               {{"demo", bench.name}, {"size", lab.arg("size")}, {"look", picture.look}}},
              gl::to_picture(pc.plot), gl::Det::measured);
   }
@@ -379,8 +380,8 @@ const gl::LabSpec kSpec{
      {"demo", "demo1", "the demo to play, by name or path"},
      {"look", "", "r_look for the run: classic or modern (empty: the game's default)"},
      {"price", "0",
-      "1: play the demo again with each drawn ce_ switch off in turn (and without the HUD) and "
-      "chart what each saved against the whole frame"}},
+      "1: play the demo again with each drawn ce_ switch off in turn (and without the HUD), each "
+      "between two all-on runs, and chart what each saved off the whole frame"}},
     "--size=320,180",
     run,
 };

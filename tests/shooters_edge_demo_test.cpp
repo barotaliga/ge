@@ -343,17 +343,22 @@ TEST(the_gpu_line_gives_the_median_span_or_says_it_was_not_measured) {
   CHECK(cl::span_report(p).find("median 8.00 ms") != std::string::npos);
 }
 
-TEST(the_price_ranks_what_each_switch_off_saved_against_the_base) {
-  const cl::PriceRun base{"", 10, 8};
-  const cl::PriceRun off[] = {{"ce_water", 9, 7.5}, {"ce_shadows", 6, 4}, {"the HUD", 10.2, 8}};
-  const std::vector<cl::Price> p = cl::prices(base, off);
+TEST(the_price_reads_each_saving_against_the_base_runs_either_side) {
+  // The machine slows by 1 ms a run: the bracketing base runs take the drift out.
+  const cl::PriceRun bases[] = {{"", 10, 8}, {"", 11, 9}, {"", 12, 10}, {"", 13, 11}};
+  const cl::PriceRun off[] = {
+      {"ce_water", 9.5, 7.5}, {"ce_shadows", 7.5, 5.5}, {"the HUD", 12.6, 10.5}};
+  const std::vector<cl::Price> p = cl::prices(bases, off);
   CHECK(p.size() == 3);
   CHECK(p[0].name == "ce_shadows" && p[0].frame_ms == 4 && p[0].span_ms == 4);
   CHECK(p[1].name == "ce_water" && p[1].frame_ms == 1);
-  CHECK(p[2].name == "the HUD" && p[2].frame_ms < 0);  // a saving under the noise can be negative
-  const std::vector<std::string> lines = cl::price_report(base, {"", 10.3, 8}, p);
+  CHECK(p[2].name == "the HUD" &&
+        near(float(p[2].frame_ms), -0.1f, 1e-5f));  // under the noise: can be negative
+  CHECK(cl::price_noise(bases) == 1);
+  const std::vector<std::string> lines = cl::price_report(bases, p);
   CHECK(lines.size() == 4);
-  CHECK(lines[0].find("under 0.30 ms is noise") != std::string::npos);
+  CHECK(lines[0].find("10.00 to 13.00 ms over 4 runs") != std::string::npos);
+  CHECK(lines[0].find("under 1.00 ms is noise") != std::string::npos);
   CHECK(lines[1].find("ce_shadows off saves 4.00 ms") != std::string::npos);
 }
 
