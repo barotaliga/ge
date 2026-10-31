@@ -87,7 +87,7 @@ constexpr double kOwnMean = 1000;
 constexpr double kMeanAtEye = 999;
 constexpr double kMidMorning = 10.5;
 
-struct Sky {
+struct Sky {  // NOLINT(clang-analyzer-optin.performance.Padding): a lab's table, read in order
   const char* id;
   mg::WeatherKind kind;
   double snowfall;

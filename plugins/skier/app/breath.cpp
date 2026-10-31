@@ -41,7 +41,9 @@ int breath_puffs(const SkierState& s, double show, double dt, BreathPen& pen,
   pen.phase += dt / period;
   // The share of [start, start + dt / period) spent breathing out, breath by breath.
   double out_s = 0;
-  for (double b = std::floor(start); b < pen.phase; b += 1) {
+  const int first = static_cast<int>(std::floor(start));
+  for (int k = first; k < pen.phase; ++k) {
+    const double b = k;
     const double lo = std::max(start, b), hi = std::min(pen.phase, b + kExhaleShare);
     if (hi > lo) out_s += (hi - lo) * period;
   }
