@@ -110,7 +110,7 @@ file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_
 list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX
      "/client/(main|world_draw|world_extras|world_fx|world_models|demo_video)\\.cpp$")
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
-target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_hud
+target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_bots shooters_edge_hud
                                                   shooters_edge_view shooters_edge_sound ge_vfs
                                                   ge_brush ge_camera ge_input ge_audio ge_net)
 include(${PROJECT_SOURCE_DIR}/cmake/EmbedBinary.cmake)

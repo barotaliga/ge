@@ -125,7 +125,11 @@ Mist mist_at(const Climate& c, const Site& s, double hour) {
   // water's.
   const double source = std::max({carried, air.dew_c, best.water_dew});
   out.visibility = range_between(best.clear, best.thick, best.strength * water_share(source));
-  out.visibility = std::min(out.visibility, 20000.0);
+  // A fog still forming (a breeze's last wisps, the morning's thinning) is not yet a bank: its
+  // range eases in the logarithm from the clear air's to the kind's as it strengthens.
+  const double formed = smooth(best.strength / kFormed);
+  out.visibility = lm::exp((1 - formed) * lm::log(kClearRange) + formed * lm::log(out.visibility));
+  out.visibility = std::min(out.visibility, kClearRange);
   out.density = 3 / out.visibility;
   out.noise = best.noise;
   out.rise = best.rise;

@@ -155,6 +155,9 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     std::string why;
     if (!se::classic_art_from_packs(find, &classic_art, &why)) lab.note(why);
   }
+  ge::console::Console hud_con;  // `--hudcvars`: hud_style, viewsize and the hud_ cvars
+  se::add_cvars(hud_con, hud);
+  hud_con.execute(lab.arg("hudcvars"));
   const std::string hud_art = lab.arg("hud").empty() ? "auto" : lab.arg("hud");
   const se::HudArt& art = se::pick_art(hud_art, classic_art, free_art);
   lab.metric("hud.classic_art", &art == &classic_art ? 1 : 0, "");
@@ -411,6 +414,8 @@ const gl::LabSpec kSpec{
      {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
      {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"},
      {"hud", "auto", "with --game: the HUD's art as hud_art picks it: auto, classic or free"},
+     {"hudcvars", "",
+      "with --game: the HUD's cvars (hud_style, viewsize, hud_*), as the console takes them"},
      {"progs", "",
       "with --game: a progs.src compiled and run instead of the arena variant, or pack"},
      {"settle", "4", "with --game: host frames run at each view before it is drawn (at least 4)"}},

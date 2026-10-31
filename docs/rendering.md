@@ -1446,6 +1446,33 @@ The `valley-fog` lab draws a seed's sea from the summit, from the air, at dawn a
 Not yet: the mountains' shade on the top (a sea at dawn is lit to its far shore under every
 ridge's shadow). Fall Line's own seas are dealt by the map's air at the hour (next section).
 
+## Fog from the air
+
+`engine/render/mist_fog.hpp` (M51c) is how any world hands what its air says lies at a place
+(`wind::mist_at`'s `Mist`, docs/climate.md § Fog) to the frame's fog. `mist_volume` lays a bank of
+the mist over a plan box or an ellipse on a floor (a lake's surface, a pool's) or on the ground
+under each point: its extinction at the floor the mist's `density`, as deep as its `depth` (4 m
+at the least), carved on a 40 m tile by its `noise`, drifting on the wind it is handed. A STEAM
+fog is the water's breath, not a bank: thickest on the surface and thinned e^-3 to its top,
+carved into small wisps (a tile of twice its depth, 2 to 12 m) that climb at the mist's `rise`.
+`mist_valley` lays a radiation or valley fog over a valley's floor as its level sea
+(`FrameView::valley`), its top the floor plus the depth. Fall Line's mists (below) are built
+through both.
+
+- **Over a lake on Fall Line's map** (`mist_look.hpp`'s `water_mist`): the air on the surface
+  asked over open water, with the day's climate the caller hands in. On a spring morning (a day's
+  mean of 3 C, the tarn at 4 C) a still, clear dawn lays a radiation fog on the water, 0.020/m and
+  7 m deep, while an 8 m/s wind leaves a fog still forming that veils almost nothing; in the
+  winter's cold an open tarn steams in any wind (sea smoke). The generator lays no lakes yet
+  (M24l): the `lake` lab digs a tarn and draws its `dawn-still` and `dawn-windy` shots, failing
+  when the still dawn's fog changes under 10 % of the picture or the windy one's over 3 %
+  (37 % and 1.4 % on seed 38).
+- **Over a classic map's pools** (`bsp_fog.hpp`'s `FogRows::air` and `hour`): each pool of water
+  and slime asked under the level's evening air at the share of the sky it sees, so a pool far
+  warmer than a cold night's air steams in rising wisps, indoors and out, drifting on the wind
+  where the sky is open. The `gpu-bsp-fog` lab's `fog-pond` view: the fog fixture's yard pond
+  under a classic level's evening (2 C, 9 m/s, low cloud, the pool at 16 C).
+
 ## Fall Line's fog
 
 The fog in areas and the valleys' sea are mechanisms; **Fall Line's fog** (M38f) is the map's
@@ -1900,7 +1927,8 @@ hall's dust is lit only by the sun through its windows: the fog's casters are th
 own sun map, handed over as an `OrthoShadow` (`render/shadows.hpp`) through `BspFogShadow`, and
 `bsp.wgsl` sees every face but the sky's through `local_fog`. Lab `gpu-bsp-fog` draws the fog
 fixture (the weather fixture's hall filled with dust by a `fog_volume` entity, and a pit of lava in
-its store) with its fog and without, and a pack's maps with `--pak`.
+its store, and a pond in its yard steaming under an evening's air, § Fog from the air) with its
+fog and without, and a pack's maps with `--pak`.
 
 Every shader's whole-line comments are left out of what is embedded (`cmake/WgslEmbed.cmake`), so
 a material that includes `frame.wgsl` stays under the 60 KB literal cap however well it is

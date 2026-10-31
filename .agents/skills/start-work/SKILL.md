@@ -44,7 +44,9 @@ task is probably out of scope (G4), so ask before you build it. A task that adds
 its number before anything else: `build/<preset>/ge goals claim "<what the row is>"` (`--under=M17`
 for a letter under one; `--exit="<text>" --labs=<lab,...>` fill those cells in the same step) writes
 the row's file `docs/goals/<row>.md` (`Status:`, `Milestone:`, `Exit:`, `Labs:`, then notes), pushes it to your branch at once and checks every branch, so two
-threads starting together never take the same number; a new row edits no shared table. Then load the skill
+threads starting together never take the same number; a new row edits no shared table. Before
+the tree is built, `node tools/goals-free.mjs [<row>]` answers the same next free row and
+`node tools/goals-free.mjs --claim "<what>"` (the same flags) claims it, with no build. Then load the skill
 `AGENTS.md` routes the subject to, plus `write-code`.
 
 ## 5. What already exists

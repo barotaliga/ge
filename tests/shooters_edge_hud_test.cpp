@@ -280,3 +280,30 @@ TEST(hud_art_is_a_cvar_that_starts_on_auto) {
   con.execute("hud_art free");
   CHECK(value == "free");
 }
+
+TEST(viewsize_drops_the_inventory_bar_at_110_and_every_bar_at_120) {
+  ge::console::Console con;
+  se::Hud hud = se::make_hud();
+  se::add_cvars(con, hud);
+  CHECK(hud.viewsize == 100);
+  se::Status s = armed();
+  s.board = {{.frags = 3, .me = true}};
+  const auto on = [&](const char* id) { return content(hud, id).on; };
+  se::fill_hud(hud, s, art());
+  CHECK(on("sbar") && on("sbar_face") && on("ibar") && on("ibar_guns") && on("ibar_frags"));
+  con.execute("viewsize 110");
+  se::fill_hud(hud, s, art());
+  CHECK(on("sbar") && on("sbar_face") && on("sbar_ammo"));
+  CHECK(!on("ibar") && !on("ibar_ammo") && !on("ibar_guns") && !on("ibar_items") &&
+        !on("ibar_runes") && !on("ibar_frags"));
+  con.execute("viewsize 120");
+  se::fill_hud(hud, s, art());
+  CHECK(!on("sbar") && !on("sbar_face") && !on("sbar_health") && !on("ibar"));
+  CHECK(on("crosshair"));
+  con.execute("hud_style modern");
+  se::fill_hud(hud, s, art());
+  CHECK(!on("health") && !on("ammo") && !on("guns") && on("crosshair"));
+  con.execute("viewsize 30");  // clamped to 100: every bar back
+  se::fill_hud(hud, s, art());
+  CHECK(hud.viewsize == 100 && on("health") && on("guns"));
+}
