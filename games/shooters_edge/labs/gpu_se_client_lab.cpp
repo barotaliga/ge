@@ -232,6 +232,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   const std::string before = lab.arg("before");
   con[0].execute(before.empty() ? "r_look classic" : before);
   con[1].execute(lab.arg("cvars"));
+  con[1].execute(lab.cvars());  // the runner's --cvars on the modern side (`ge lab pair`)
   cl::WorldDrawPtr world[2];
   for (int k = 0; k < 2; ++k) {
     world[k] = cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,

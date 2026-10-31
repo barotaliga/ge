@@ -226,6 +226,7 @@ void run(gl::Lab& lab) {
     ge::console::Console con;
     shooters_edge::look::add_cvars(con, look);
     con.execute(lab.arg("cvars"));
+    con.execute(lab.cvars());  // the runner's --cvars, after the lab's own (`ge lab pair`)
     for (const auto& p : con.problems()) lab.note("--cvars: " + p.what);
   }
   cl::WorldDrawPtr frame;

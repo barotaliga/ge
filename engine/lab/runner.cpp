@@ -43,6 +43,9 @@ const LabFlag kRunnerFlags[] = {
      "the diff's floor for each band, dB, nearest first and the sky last"},
     {"repeat", "1", "run each lab N times in this process; different digests fail the run"},
     {"smoke", "", "run at the lab's smoke flags (what CI runs)", true},
+    {"cvars", "",
+     "console commands a lab with a console runs after its own (\"r_bloom 0; sv_hour 8\"): what "
+     "ge lab pair changes between its two runs"},
     {"shots", "",
      "draw only these shots (id,id,...): every other picture under <out>/<id>/ stays as the "
      "last run wrote it, for iterating one look"},
@@ -419,10 +422,21 @@ int run_labs(int argc, const char* const* argv) {
     for (int r = 0; r < repeat; r++) {
       Lab lab(*s, args);
       lab.only_shots(only);
+      lab.use_cvars(get(runner, "cvars"));
       dump.text.clear();
       dump.counts.clear();
       s->run(lab);
       if (r == 0 && !only.empty()) note_only(lab, dir);
+      if (r == 0 && !lab.cvars_given().empty()) {
+        if (!lab.cvars_read()) {
+          lab.fail("--cvars was given and the lab reads none",
+                   "next: have the lab run lab.cvars() through its console after its own flags "
+                   "(the world and se-client labs do), or set the setting with the lab's own "
+                   "flag. Skill: labs.");
+        } else {
+          lab.note("--cvars: " + lab.cvars_given());
+        }
+      }
       if (r == 0 && dump.on) {
         std::string counts;
         for (const auto& [key, n] : dump.counts) {

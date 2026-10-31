@@ -153,6 +153,19 @@ class Lab {
   const std::vector<std::string>& skipped() const { return skipped_; }
   const std::vector<std::string>& only() const { return only_; }
 
+  // THE CVARS ASKED FOR (the runner's `--cvars="<console text>"`, what `ge lab pair` changes
+  // between its two runs): a lab with a console executes them after its own flags' cvars, so any
+  // setting can be drawn on and off without a flag of the lab's own. Asking marks the lab as one
+  // that reads them; a lab given cvars that never asks fails, rather than draw a pair that differs
+  // in nothing.
+  void use_cvars(std::string text) { cvars_ = std::move(text); }
+  const std::string& cvars() const {
+    cvars_read_ = true;
+    return cvars_;
+  }
+  bool cvars_read() const { return cvars_read_; }
+  const std::string& cvars_given() const { return cvars_; }
+
   // What the lab found. All of them feed the report; the deterministic ones feed the digest.
   void metric(std::string key, double value, std::string unit, Det det = Det::deterministic);
   // A table of times or anything else that differs run to run is `measured`: shown, not hashed.
@@ -205,6 +218,8 @@ class Lab {
   std::vector<std::string> failures_;
   std::vector<std::string> only_;
   mutable std::vector<std::string> skipped_;
+  std::string cvars_;
+  mutable bool cvars_read_ = false;
   uint64_t digest_ = 0xcbf29ce484222325ull;
 };
 

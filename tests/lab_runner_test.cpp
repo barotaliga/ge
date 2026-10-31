@@ -58,7 +58,8 @@ GE_LAB(kDrift);
 // to shot() to drop, so --shots holds both ways.
 int asked_renders = 0;
 void pair(Lab& lab) {
-  const auto v = static_cast<uint8_t>(lab.arg_num("shade"));
+  // The runner's --cvars, as a lab with a console reads them: "dark" draws the grey black.
+  const auto v = lab.cvars() == "dark" ? uint8_t{0} : static_cast<uint8_t>(lab.arg_num("shade"));
   if (lab.wants("asked")) {
     ++asked_renders;
     lab.shot({"asked", "ASKED", "Skipped by the lab.", "", {}}, create_picture(8, 8, {v, v, v}));
@@ -158,6 +159,16 @@ TEST(shots_draws_only_the_named_ones) {
   CHECK(slurp(d + "/report.json").find("--shots=asked,dropped") != std::string::npos);
   CHECK(run({"pair", "--shots=asked", "--write-digests=" + dir() + "/d.txt"}) == 2);
   CHECK(run({"--all", "--shots=asked"}) == 2);
+}
+
+TEST(cvars_reach_a_lab_that_reads_them_and_fail_one_that_does_not) {
+  fs::remove_all(dir());
+  CHECK(run({"pair", "--tag=lit"}) == 0);
+  CHECK(run({"pair", "--cvars=dark"}) == 0);
+  CHECK(slurp(dir() + "/pair/asked.png") != slurp(dir() + "/pair@lit/asked.png"));
+  CHECK(slurp(dir() + "/pair/report.json").find("--cvars: dark") != std::string::npos);
+  CHECK(run({"toy", "--cvars=dark"}) == 1);  // toy reads none: a pair would differ in nothing
+  CHECK(slurp(dir() + "/toy/report.json").find("the lab reads none") != std::string::npos);
 }
 
 TEST(repeat_catches_hidden_state) {
