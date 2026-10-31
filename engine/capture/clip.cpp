@@ -6,6 +6,11 @@
 // ge:test tests/capture_clip_test.cpp
 #include "capture/clip.hpp"
 
+#include <algorithm>
+#include <cstddef>
+#include <span>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "capture/av_export.hpp"
