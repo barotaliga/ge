@@ -128,7 +128,11 @@ foreach(i RANGE 1 ${GE_LABS_SHARDS})
   # From the repository's root, where a lab finds its golden images (gpu-capture). With the GPU
   # in, the software driver's worker threads keep allocations past exit (as in the gpu_ tests).
   # COST: start the slices first, so a parallel ctest is not left waiting on one at the end.
-  set_tests_properties(${name} PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR} COST 100)
+  # PROCESSORS 2: a slice peaks at 2.5-3.8 GB resident (release; more under ASan), so four at
+  # once on a 4-core, 16 GB CI runner come near its memory (the hosted runner was shut down
+  # mid-slice there); two slices at a time keep the peak near half that.
+  set_tests_properties(${name} PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR} COST 100
+    PROCESSORS 2)
   if(GE_GPU)
     set_tests_properties(${name} PROPERTIES ENVIRONMENT "ASAN_OPTIONS=detect_leaks=0")
   endif()
