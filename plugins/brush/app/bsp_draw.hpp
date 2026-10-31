@@ -106,8 +106,8 @@ struct Options {
   // normal, height and roughness maps): each texel's own normal (its tilt times `relief_strength`)
   // lights it under every light, the sun and the sky; its roughness gives each point light a
   // highlight (`specular` its strength, 0 none; none off the sun, which on the classic's dark
-  // painted walls reads as foil); its height is a depth the texture is marched into along the eye's ray
-  // (parallax occlusion, `parallax` m from the top to the deepest, 0 none, drawn within
+  // painted walls reads as foil); its height is a depth the texture is marched into along the eye's
+  // ray (parallax occlusion, `parallax` m from the top to the deepest, 0 none, drawn within
   // `parallax_reach` m of the eye and faded out before it) and a shade in its crevices. Off, or a
   // scene with no surface atlas: flat faces, drawn as before.
   bool relief = true;
