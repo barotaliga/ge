@@ -280,4 +280,33 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   return true;
 }
 
+std::vector<std::string> demo_video_lines(const DemoVideoOptions& o, const DemoVideoReport& r) {
+  const auto num = [](double v) {
+    char b[32];
+    std::snprintf(b, sizeof b, "%g", v);
+    return std::string(b);
+  };
+  const auto clock = [](double s) {
+    const auto t = static_cast<long long>(std::floor(std::max(0.0, s) + 1e-3));
+    char b[32];
+    std::snprintf(b, sizeof b, "%lld:%02lld", t / 60, t % 60);
+    return std::string(b);
+  };
+  std::vector<std::string> out;
+  out.push_back("demovideo: " + r.found + " (" + r.format + ") -> " +
+                (o.file.empty() ? std::string("memory") : o.file));
+  if (!r.highlight.empty() || r.from_s > 0)
+    out.push_back("demovideo: the clip " + clock(r.from_s) + " to " + clock(r.to_s) +
+                  (r.highlight.empty() ? "" : ": " + r.highlight));
+  out.push_back("demovideo: " + std::to_string(r.frames) + " pictures, " + num(r.seconds) + " s, " +
+                std::to_string(r.levels) + " levels, " + std::to_string(o.width) + "x" +
+                std::to_string(o.height) + " at " + num(o.fps) + " fps, " + r.container + " " +
+                r.codec + ", " + std::to_string(r.bytes) + " bytes, on " + r.adapter);
+  out.push_back("demovideo: " + std::to_string(r.sounds) + " sounds, " + std::to_string(r.loops) +
+                " loops, " + std::to_string(r.missing_sounds) + " names no pack has; voice " +
+                std::to_string(r.voice_frames) + " frames in " + std::to_string(r.voice_messages) +
+                " messages, " + std::to_string(r.voice_concealed) + " concealed");
+  return out;
+}
+
 }  // namespace shooters_edge::client

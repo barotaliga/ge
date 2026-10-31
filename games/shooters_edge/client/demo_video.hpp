@@ -97,4 +97,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
                 DemoVideoReport& report, std::string& error,
                 const DemoVideoPicture& picture = nullptr);
 
+// The report as `-demovideo` prints it: where from and to, the clip, the pictures, the file, the
+// sounds, a line each.
+std::vector<std::string> demo_video_lines(const DemoVideoOptions& o, const DemoVideoReport& r);
+
 }  // namespace shooters_edge::client

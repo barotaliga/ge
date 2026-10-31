@@ -167,23 +167,7 @@ int demo_video_main(const Args& args, const cl::SearchPath& files,
                "; see docs/shooters-edge.md § A demo as a video");
     return 2;
   }
-  out::status("demovideo: " + r.found + " (" + r.format + ") -> " + args.video);
-  if (!r.highlight.empty() || r.from_s > 0)
-    out::status("demovideo: the clip " + ge::ui::play_clock(r.from_s) + " to " +
-                ge::ui::play_clock(r.to_s) + (r.highlight.empty() ? "" : ": " + r.highlight));
-  const auto num = [](double v) {
-    char b[32];
-    std::snprintf(b, sizeof b, "%g", v);
-    return std::string(b);
-  };
-  out::status("demovideo: " + std::to_string(r.frames) + " pictures, " + num(r.seconds) + " s, " +
-              std::to_string(r.levels) + " levels, " + std::to_string(o.width) + "x" +
-              std::to_string(o.height) + " at " + num(o.fps) + " fps, " + r.container + " " +
-              r.codec + ", " + std::to_string(r.bytes) + " bytes, on " + r.adapter);
-  out::status("demovideo: " + std::to_string(r.sounds) + " sounds, " + std::to_string(r.loops) +
-              " loops, " + std::to_string(r.missing_sounds) + " names no pack has; voice " +
-              std::to_string(r.voice_frames) + " frames in " + std::to_string(r.voice_messages) +
-              " messages, " + std::to_string(r.voice_concealed) + " concealed");
+  for (const std::string& line : cl::demo_video_lines(o, r)) out::status(line);
   return 0;
 }
 
