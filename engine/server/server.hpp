@@ -16,14 +16,18 @@
 //
 // THE SETTINGS are `ServerConfig`, every field a cvar on the server's tier (`add_server_cvars`):
 // `sv_hostname`, `sv_description`, `net_ip`, `net_port`, `sv_maxclients`, `sv_map`, `sv_bots`,
-// `sv_seed`, `sv_password`, `sv_visibility`. A dedicated server reads them from `server.cfg`
-// and its command line (main.hpp).
+// `sv_seed`, `sv_password`, `sv_visibility`; and those kept for what reads them as it lands:
+// `sv_motd`, `sv_admin`, `sv_maprotation`, `sv_maxspectators`, `sv_spectatorpassword`,
+// `sv_rendezvous`, `sv_mod` (read-only: the mods the server was started with). A dedicated server
+// reads them from the game directories' `server.cfg` in layers and its command line (config.hpp,
+// main.hpp).
 //
 // ge:summary The server core: ServerGame's table, the frame, the node, session and hosting round it
 // ge:keywords server dedicated-server listen-server server-core servergame server_frame
 // ge:keywords server_open hostname description port listen-address maxclients bots seed
 // ge:keywords sv_hostname sv_description net_ip net_port sv_maxclients sv_map sv_bots sv_seed
-// ge:keywords sv_password sv_visibility lan-advert multiplayer hosting
+// ge:keywords sv_password sv_visibility sv_motd sv_admin sv_maprotation sv_maxspectators
+// ge:keywords sv_spectatorpassword sv_rendezvous sv_mod lan-advert multiplayer hosting
 // ge:skill net
 // ge:test tests/server_core_test.cpp
 #pragma once
@@ -55,13 +59,22 @@ struct ServerConfig {
   uint32_t seed = 1;                // sv_seed: the run's seed
   std::string password;             // sv_password: joining takes it (the advert says locked)
   std::string visibility = "lan";   // sv_visibility: lan, invite or listed (net/hosting.hpp)
+  std::string motd;                 // sv_motd: the message a player sees on joining
+  std::string admin;                // sv_admin: how to reach the server's owner
+  std::string maprotation;          // sv_maprotation: the maps after the first, space-separated
+  int32_t max_spectators = 0;       // sv_maxspectators: spectators beside the players
+  std::string spectator_password;   // sv_spectatorpassword: watching takes it
+  std::string rendezvous;           // sv_rendezvous: the rendezvous to list with (M17r)
+  std::string mod;                  // sv_mod: the mods' directories, lowest first (read-only)
 
-  double seconds = 60;      // server time to run (0: until stopped)
-  double status_every = 5;  // a status line every this many seconds of server time (0: none)
-  bool realtime = false;    // pace the frames to the wall clock
-  bool offline = false;     // no socket: the game alone (a test, a lab, a run of bots)
-  std::string log;          // write the run's input log here
-  std::string replay;       // replay this input log instead of running
+  double seconds = 60;         // server time to run (0: until stopped)
+  double status_every = 5;     // a status line every this many seconds of server time (0: none)
+  bool realtime = false;       // pace the frames to the wall clock
+  bool offline = false;        // no socket: the game alone (a test, a lab, a run of bots)
+  std::string log;             // write the run's input log here
+  std::string replay;          // replay this input log instead of running
+  bool explain = false;        // print every server value with its source instead of running
+  std::string explain_prefix;  // only the cvars starting with this
 };
 
 // What a replay found.
@@ -81,6 +94,7 @@ struct ServerGame {
   uint16_t discovery_port = 0;    // the game's fixed LAN discovery port (0: no LAN answers)
   int max_clients = kMaxClients;  // the most `sv_maxclients` may be (at most kMaxClients)
   const char* default_map = "";
+  const char* base_dir = "base";  // the base game directory, whose server.cfg is read first
 
   // The game on `config`'s map with its bots; null with `error` (what and the next action).
   void* (*create)(const ServerConfig& config, std::string& error) = nullptr;

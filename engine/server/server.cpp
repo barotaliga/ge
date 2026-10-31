@@ -54,6 +54,9 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   const std::string bots = std::to_string(c.bots), seed = std::to_string(c.seed);
   const std::string name = c.hostname, about = c.description, ip = c.ip, map = c.map;
   const std::string password = c.password, visibility = c.visibility;
+  const std::string motd = c.motd, admin = c.admin, rotation = c.maprotation;
+  const std::string spectators = std::to_string(c.max_spectators);
+  const std::string spec_password = c.spectator_password, rendezvous = c.rendezvous, mod = c.mod;
   cvars.bind(
       {"sv_hostname", name, info, "the server's name in the browser and the lobby", CvarKind::text},
       &c.hostname);
@@ -80,6 +83,25 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   cvars.bind({"sv_visibility", visibility, cn::kServer,
               "lan (the LAN only), invite (by its id) or listed (public)", CvarKind::text},
              &c.visibility);
+  cvars.bind({"sv_motd", motd, cn::kServer, "the message a player sees on joining", CvarKind::text},
+             &c.motd);
+  cvars.bind({"sv_admin", admin, info, "how to reach the server's owner", CvarKind::text},
+             &c.admin);
+  cvars.bind({"sv_maprotation", rotation, info, "the maps after the first, space-separated",
+              CvarKind::text},
+             &c.maprotation);
+  cvars.bind({"sv_maxspectators", spectators, latched_info, "spectators beside the players",
+              CvarKind::integer, 0, static_cast<double>(kMaxClients)},
+             &c.max_spectators);
+  cvars.bind({"sv_spectatorpassword", spec_password, cn::kServer,
+              "a password to watch (empty: none)", CvarKind::text},
+             &c.spectator_password);
+  cvars.bind({"sv_rendezvous", rendezvous, latched, "the rendezvous to list with (empty: none)",
+              CvarKind::text},
+             &c.rendezvous);
+  cvars.bind({"sv_mod", mod, cn::kServer | cn::kServerInfo | cn::kReadOnly,
+              "the mods' directories over the base, lowest first (--mod)", CvarKind::text},
+             &c.mod);
 }
 
 bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,

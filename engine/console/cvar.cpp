@@ -220,6 +220,7 @@ SetResult Cvars::set(Cvar& c, std::string_view value, Source source) {
       if ((c.flags & kServer) != 0 && !is_server_) return SetResult::server;
       if ((c.flags & kCheat) != 0 && !cheats()) return SetResult::cheat;
     }
+    if (watch_) watch_(c, value, source);
   }
   if ((c.flags & kLatch) != 0 && source != Source::code) {
     if (value == c.value) {
