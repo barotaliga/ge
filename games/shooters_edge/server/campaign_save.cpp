@@ -144,8 +144,8 @@ void extras(Io& io, pg::EntityExtras& x) {
 template <class Io>
 bool same_count(Io& io, uint32_t n, size_t expected, const char* what) {
   if (n == expected) return true;
-  io.fail(std::string(what) + ": " + std::to_string(n) + " saved, " + std::to_string(expected) +
-          " on this server");
+  io.fail("the save holds " + std::to_string(n) + " of " + what + ", this server " +
+          std::to_string(expected) + "; next: load it with the build and map it was saved on");
   return false;
 }
 
@@ -153,8 +153,9 @@ bool same_count(Io& io, uint32_t n, size_t expected, const char* what) {
 template <class Io>
 bool at_most(Io& io, int32_t n, int32_t least, int32_t most, const char* what) {
   if (n >= least && n <= most) return true;
-  io.fail(std::string(what) + " " + std::to_string(n) + " outside " + std::to_string(least) + ".." +
-          std::to_string(most));
+  io.fail("the save's " + std::string(what) + " is " + std::to_string(n) + ", outside " +
+          std::to_string(least) + ".." + std::to_string(most) +
+          "; next: the file is damaged, load another save");
   return false;
 }
 
@@ -294,11 +295,12 @@ void text_in(Io& io, char* buf, size_t size) {
   io(t);
   if constexpr (Io::kReading) {
     if (t.size() >= size) {
-      io.fail("a temporary string of " + std::to_string(t.size()) + " bytes");
+      io.fail("the save's temporary string is " + std::to_string(t.size()) + " bytes, too long" +
+              "; next: the file is damaged, load another save");
       return;
     }
     std::memset(buf, 0, size);
-    std::memcpy(buf, t.data(), t.size());
+    t.copy(buf, t.size());  // the rest of the buffer stays zero: the string ends there
   }
 }
 
@@ -453,11 +455,13 @@ bool campaign_load(Campaign& c, const pg::Progs& progs, const CampaignOptions& o
     }
     save::Reader r = f.reader(*info);
     walk(r);
-    if (r.ok() && !r.at_end()) r.fail("bytes left over");
+    if (r.ok() && !r.at_end())
+      r.fail("the chunk has bytes left over once read; next: load a save this build wrote");
     if (!r.ok()) {
       error = std::string(name) + ": chunk " + save::tag_name(tag) + " at byte " +
-              std::to_string(r.offset()) + ": " + r.problem() +
-              "; next: the file is damaged or of another build, load another save";
+              std::to_string(r.offset()) + ": " + r.problem();
+      if (r.problem().find("next:") == std::string::npos)
+        error += "; next: the file is damaged or of another build, load another save";
       return false;
     }
     return true;
