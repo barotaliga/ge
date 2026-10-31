@@ -10,7 +10,9 @@
 // ge:keywords test lobby warmup countdown ready break team leader addbot match-restart panel
 // ge:skill shooter testing
 #include <memory>
+#include <span>
 #include <string>
+#include <vector>
 
 #include "check.hpp"
 #include "progs/layout.hpp"
@@ -18,6 +20,8 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
 #include "shooters_edge/hud/lobby_panel.hpp"
+#include "shooters_edge/menu/classic_art.hpp"
+#include "shooters_edge/menu/lobby_screen.hpp"
 #include "shooters_edge/server/lobby.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
@@ -210,6 +214,48 @@ TEST(the_panel_draws_at_both_viewports_and_not_in_the_match) {
   dl.begin(1280, 720);
   shooters_edge::hud::draw_lobby(dl, v, 1280, 720);
   CHECK(dl.size() == 0);
+}
+
+TEST(the_classic_look_draws_in_the_packs_pictures_and_stops_above_the_status_bar) {
+  namespace sm = shooters_edge::menu;
+  const auto files = sm::fixture_files();
+  sm::ClassicArt art;
+  std::string error;
+  const sm::FindFile find = [&files](std::string_view p,
+                                     std::vector<uint8_t>&) -> std::span<const uint8_t> {
+    const auto it = files.find(p);
+    return it == files.end() ? std::span<const uint8_t>{} : std::span<const uint8_t>(it->second);
+  };
+  CHECK(sm::load_classic_art(find, &art, &error));
+  shooters_edge::hud::LobbyView v;
+  v.rows = {{"player", 1, false, false, true, true},
+            {"bot1 (average)", 2, true, true, false, false}};
+  const auto drawn = [&](const shooters_edge::hud::LobbyView& view, int w, int h) {
+    ge::ui::DrawList dl;
+    dl.begin(w, h);
+    sm::draw_lobby_classic(dl, art, view, w, h);
+    return dl.size();
+  };
+  for (const auto& [w, h] : {std::pair{1280, 720}, std::pair{390, 844}}) CHECK(drawn(v, w, h) > 40);
+  // The countdown adds the big figures; a hidden roster leaves the banner alone.
+  shooters_edge::hud::LobbyView c = v;
+  c.phase = shooters_edge::hud::LobbyShown::countdown;
+  c.seconds_left = 3;
+  CHECK(drawn(c, 1280, 720) > drawn(v, 1280, 720));
+  shooters_edge::hud::LobbyView hidden = v;
+  hidden.roster = false;
+  CHECK(drawn(hidden, 1280, 720) < drawn(v, 1280, 720));
+  // A full team shows as many rows as fit above the status bar, and no more.
+  CHECK(sm::lobby_classic_rows() == 7);
+  shooters_edge::hud::LobbyView full, more;
+  for (int i = 0; i < 7; i++) full.rows.push_back({"bot" + std::to_string(i), 1, true, true});
+  more = full;
+  for (int i = 7; i < 12; i++) more.rows.push_back({"bot" + std::to_string(i), 1, true, true});
+  // Only the tallies differ (7/7 and 7 OF 7 against 12/12 and 12 OF 12): four glyphs more.
+  CHECK(drawn(more, 1280, 720) == drawn(full, 1280, 720) + 4);
+  shooters_edge::hud::LobbyView m = v;
+  m.phase = shooters_edge::hud::LobbyShown::match;
+  CHECK(drawn(m, 1280, 720) == 0);
 }
 
 }  // namespace
