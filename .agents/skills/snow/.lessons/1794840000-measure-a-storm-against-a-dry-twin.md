@@ -1,7 +1,7 @@
 ---
 title: Measure what a fall adds against a twin layer with nothing falling
 date: 2026-10-31
-scope: engine/snow/air, engine/lab/labs/snow_weather_lab
+scope: engine/snow/air.cpp, engine/lab/labs/snow_weather_lab.cpp
 concepts: [fresh, density, settling, storm, depth, twin, lab]
 ---
 

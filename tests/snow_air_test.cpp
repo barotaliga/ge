@@ -49,7 +49,8 @@ TEST(the_layers_air_is_the_climates_at_its_place) {
   sn::SnowAir a;
   a.days = {day(-4)};
   a.site.y = 500;
-  for (double h = 0; h < 24; h += 1.5) {
+  for (int i = 0; i < 16; i++) {
+    const double h = 1.5 * i;
     CHECK(std::fabs(sn::air_c(a, h * kHour) - gw::air_at(a.days[0], a.site, h).temp_c) < 1e-12);
   }
   // Higher is colder.
@@ -68,7 +69,8 @@ TEST(two_days_meet_round_midnight_without_a_jump) {
   sn::SnowAir a;
   a.days = {day(4), day(-8)};
   double prev = sn::air_c(a, 20 * kHour);
-  for (double h = 20; h <= 28; h += 0.05) {
+  for (int i = 0; i <= 160; i++) {
+    const double h = 20 + 0.05 * i;
     const double v = sn::air_c(a, h * kHour);
     CHECK(std::fabs(v - prev) < 0.3);
     prev = v;

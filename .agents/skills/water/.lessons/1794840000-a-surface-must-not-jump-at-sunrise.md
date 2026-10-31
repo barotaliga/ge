@@ -1,8 +1,8 @@
 ---
 title: A surface's night cooling must fade after sunrise, not stop at it
 date: 2026-10-31
-scope: engine/wind/climate
-concepts: [surface_at, sunrise, radiative-cooling, snow, discontinuity, chart]
+scope: engine/wind/climate.cpp
+concepts: [surface-at, sunrise, radiative-cooling, snow, discontinuity, chart]
 ---
 
 `surface_at` cooled a clear night's surface up to 4 K until the moment of sunrise and then not at
