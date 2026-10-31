@@ -9,7 +9,8 @@
 //   layers of the sky texture.
 // - MODE 1, V2: the liquids are not drawn here (our water, lava and slime bodies are), and the sky
 //   faces write a MASK the fix-up pass turns into the cleared depth, so our sky and clouds fill
-//   them. Lit by the lightmaps (`info.y` 0) or by the lights (`info.y` 1): every point light's
+//   them (or, `info4.y` 1, draw the pack's scrolling sky as the classic does). Lit by the
+//   lightmaps (`info.y` 0) or by the lights (`info.y` 1): every point light's
 //   inverse square under a window that closes at its reach, its shadow from a cube of depth
 //   (the nearest lights'), the sun through the sky faces with its own shadow map, the sky's light
 //   by how open a point is to the zenith (a second map from straight overhead), a floor of
@@ -40,7 +41,7 @@ struct Bsp {
   info3: vec4f,  // v2's soft floor of light (minlight), the baked light's share as bounce, the
                  // sky's light (r_skylight: the sun's and the open sky's in the rooms), the
                  // textures filtered (1) or crisp (0)
-  info4: vec4f,  // the relief's depth from the textures' luminance, m (r_bump); unused
+  info4: vec4f,  // the relief's depth from the textures' luminance, m (r_bump); the pack's sky
   veil: vec4f,   // the sky faces' pixels times these (bsp_fix.wgsl's veil)
   weather: vec4f,  // the weather on (1), the rain falling now (0 .. 1), the fall's spread, 0
   ortho: array<Job, 3>,  // the sun's map, the zenith's and the fall's
@@ -601,7 +602,7 @@ fn fs_main(in: VsOut) -> FsOut {
   let eye_dir = normalize(in.world - frame.eye.xyz);
 
   if (in.kind == kSky) {
-    if (classic) {
+    if (classic || bsp.info4.y > 0.5) {
       out.colour = vec4f(srgb_to_linear(classic_sky(eye_dir)) * white, 1.0);
     } else {
       out.mask = vec4f(1.0);

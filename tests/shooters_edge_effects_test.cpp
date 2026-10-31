@@ -163,3 +163,13 @@ TEST(the_picture_cvars_tune_the_modern_look_and_leave_the_classic) {
   con.execute("r_look retro");
   CHECK(lk::look_of(pic) == lk::Look::modern);
 }
+
+TEST(ce_skies_picks_our_sky_or_the_packs_in_the_modern_look) {
+  ge::console::Console con;
+  lk::Picture pic;
+  lk::add_cvars(con, pic);
+  CHECK(!lk::world_options(lk::Look::modern, {}, pic).pack_sky);  // on: our sky
+  con.execute("ce_skies 0");
+  CHECK(lk::world_options(lk::Look::modern, {}, pic).pack_sky);
+  CHECK(!lk::world_options(lk::Look::classic, {}, pic).pack_sky);  // the classic's own already
+}

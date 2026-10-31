@@ -105,6 +105,9 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
                                      : fx::Medium::air;
   }
   fx::screen_blend(screen, out.blend);
+  if (screen.medium == fx::Medium::lava || screen.medium == fx::Medium::slime)
+    screen.medium = fx::Medium::air;
+  fx::screen_blend(screen, out.blend_dry);
 }
 
 }  // namespace shooters_edge::client

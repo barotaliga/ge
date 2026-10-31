@@ -21,7 +21,8 @@ if(GE_GPU)
     engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/precip.wgsl engine/render/precip_sim.wgsl
     engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_copy.wgsl
     engine/render/water_stream.wgsl
-    engine/render/underwater.wgsl engine/render/liquid.wgsl engine/render/grass.wgsl
+    engine/render/underwater.wgsl engine/render/liquid.wgsl engine/render/liquid_under.wgsl
+    engine/render/grass.wgsl
     engine/render/grass_scatter.wgsl
     engine/render/ui_pass.wgsl engine/render/eye.wgsl engine/render/eye_adapt.wgsl engine/render/explosions.wgsl
     engine/render/bolts.wgsl

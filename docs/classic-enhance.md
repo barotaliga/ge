@@ -91,7 +91,12 @@ the player's settings), so the console and a config set it as the menu does (`ce
 menu's `switches` pages hold a toggle a switch, a page a group, with every switch of the group on
 or off together and the defaults. Most switches change only what is drawn and played, read by
 whatever draws or plays the thing; two change the cache (`apply_bakes`: the trained upscaler off
-leaves the kernel, rounding on rounds the models) and want ENHANCE again.
+leaves the kernel, rounding on rounds the models) and want ENHANCE again. `ce_skies` is read by
+the modern look (`brush/app/bsp_draw.hpp`'s `pack_sky`): on, the sky faces show our sky, its
+clouds and its night; off, the pack's own two scrolling layers under the modern look's lights.
+Under a lava's or a slime's level the modern look draws the liquid round the eye
+(`render/liquid.hpp`, seen from below, with a least view of 3 m) and leaves out the screen's flat
+tint for it.
 
 ## The texture enhancer
 
