@@ -35,6 +35,12 @@
 //   reach `fog_uniforms` writes a range of 0 and nothing reads the volume, so a game without fog
 //   draws the same bits it drew before.
 //
+// - ITS GLOW AS A LAMP (M38d): a glowing volume lights what is round it, the snow under a fire's
+//   haze, a cave's walls round a pool's glow. `fog_glow_light` hands it to the frame's lamps
+//   (render/lights.hpp) as one point light at its heart: an optically thin volume's intensity is
+//   its glow times its extinction times its volume (cd), the share that escapes a thick one
+//   ((1 - e^-tau) / tau over its smallest half-size) kept, softened over its own size, flickering
+//   by its `flicker` as its glow in the froxels does (`fog_glow_level`, read by `prepare_fog`).
 // - THE LAMPS (M38e): "fog.inject" also scatters every lamp of the cluster a froxel falls in
 //   (render/lights.hpp's list in group 0, wgsl/lights.wgsl's `light_inscatter`) on the volume's
 //   lobe, past each lamp's own shadow map where it has one: a lamp in a mist has a halo, a
@@ -45,7 +51,8 @@
 // ge:keywords render fog local-fog volumetric-fog froxel mist ground-fog dust smoke haze glow
 // ge:keywords light-shafts god-rays inject integrate henyey-greenstein temporal reprojection
 // ge:keywords fog-volume create_fog prepare_fog encode_fog fog_uniforms read_fog_column
-// ge:keywords lamps-in-fog halo lamp-halo beam light_inscatter
+// ge:keywords lamps-in-fog halo lamp-halo beam light_inscatter fog_glow_light fog_glow_level
+// ge:keywords glow-lamp glowing-haze flicker
 // ge:skill render
 // ge:test tests/render_fog_test.cpp
 #pragma once
@@ -57,6 +64,7 @@
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "render/frame.hpp"
+#include "render/lights.hpp"
 #include "render/view.hpp"
 
 namespace ge::render {
@@ -67,7 +75,6 @@ inline constexpr uint32_t kMaxFogVolumes = 32;
 
 struct FogVolume {
   enum class Shape : uint8_t { box, ellipsoid };
-  Shape shape = Shape::box;
   double centre[3] = {0, 0, 0};  // world m
   double half[3] = {10, 2, 10};  // half its size along its own x, y, z, m
   double yaw = 0;                // its turn about the vertical, a world heading (rad)
@@ -80,10 +87,16 @@ struct FogVolume {
   double noise = 0.6;          // the share of the density the noise carves away, 0..1
   double noise_size = 24;      // m: the noise's tile
   double wind[3] = {0, 0, 0};  // m/s: the noise drifts on it
+  // The glow's flicker, as a flame's (render/lights.hpp's Flicker::flame): its swing, 0 steady ..
+  // 1, its rate and its own noise. The volume's glow and its lamp (`fog_glow_light`) waver as one.
+  float flicker = 0;
+  float rate_hz = 9;
+  uint32_t seed = 0;
   // It stands on the ground (the frame's terrain): its height is measured up from the ground
   // under each point, from 0 to 2 x half[1], so a mist lies as deep over a slope as over a flat;
   // `centre[1]` is then unused. Without a terrain it stands on y = 0.
   bool hug_ground = false;
+  Shape shape = Shape::box;
 };
 
 struct FogSettings {
@@ -140,6 +153,13 @@ void encode_fog(Fog& fog, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
 // Labs and tests (blocks): the integrated volume's column through froxel (x, y), front to back:
 // four floats a slice (the in-scatter rgb, the transmittance).
 std::vector<float> read_fog_column(gpu::Device& device, const Fog& fog, uint32_t x, uint32_t y);
+
+// The lamp a glowing volume lights its surroundings with (render/lights.hpp), at its heart:
+// `floor_y` is the ground under it for a volume that hugs the ground (its height measured up
+// from there), unused for one that does not. A candela of 0 for a volume that does not glow.
+LocalLight fog_glow_light(const FogVolume& volume, double floor_y = 0);
+// The glow's level at `t_s` (1 for a steady glow): its lamp's `flicker_level`.
+float fog_glow_level(const FogVolume& volume, double t_s);
 
 // A slice's far edge, m: range x (slice / slices)^2.
 double fog_slice_far(const FogSettings& settings, uint32_t slice);

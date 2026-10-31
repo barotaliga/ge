@@ -85,6 +85,7 @@
 #include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
 #include "render/dof.hpp"
+#include "render/flame.hpp"
 #include "render/fog.hpp"
 #include "render/frame.hpp"
 #include "render/grade.hpp"
@@ -200,6 +201,9 @@ struct FrameScene {
   double run_time = 0;
   // The fog in areas this frame (render/fog.hpp): mist, ground fog, dust; empty, none.
   std::span<const ge::render::FogVolume> fog = {};
+  // The fires burning this frame (render/flame.hpp): drawn as gas, each lighting the snow and the
+  // fog round it as a lamp (app/lamps.hpp's `glow_lights`, with the lamps on). Empty: none.
+  std::span<const ge::render::Flame> flames = {};
   // The lightning's channels this frame (render/bolts.hpp), drawn before the resolve; their light
   // is FrameView::flashes. Empty: none.
   std::span<const ge::render::BoltSegment> bolts = {};
@@ -227,6 +231,7 @@ struct GameFrame {
   std::vector<ge::skier::TrackPen> pens;  // each racer's, by his place in the scene
   std::vector<ge::mountain::app::TrailStamp> laid;
   ge::render::Particles particles;
+  ge::render::Flames flames;  // the scene's fires (`FrameScene::flames`)
   ge::render::Precip precip;
   ge::render::Fog fog;
   std::vector<ge::render::FogVolume>

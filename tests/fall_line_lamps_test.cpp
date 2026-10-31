@@ -1,16 +1,20 @@
 // games/fall_line/app/lamps.hpp: a racer's headlamp is on the brow of his posed head, lower in
 // a tuck, turned with him and tipped down at the snow ahead; it is a shadowed spot and an
 // unshadowed flood, nothing by day; the eye adapts to the lamps' light on the snow ahead, nothing
-// without lamps, and a dark view is not blinded by one pool in it.
+// without lamps, and a dark view is not blinded by one pool in it; a fire and a glowing haze are
+// each a lamp, a plain mist none.
 //
 // ge:summary Tests for Fall Line's lamps: the headlamp's pose and beams, the eye's lamp lux
 // ge:keywords test fall-line headlamp headlamp_lights headlamp_of eye_lamp_lux lamp_lux
+// ge:keywords glow_lights fire-light
 // ge:skill render testing
 #include <cmath>
 #include <vector>
 
 #include "check.hpp"
 #include "fall_line/app/lamps.hpp"
+#include "render/flame.hpp"
+#include "render/fog.hpp"
 #include "render/lights.hpp"
 #include "render/view.hpp"
 #include "skier/synthetic.hpp"
@@ -101,4 +105,24 @@ TEST(the_eye_adapts_to_the_lamps_on_the_snow_ahead) {
     row.push_back(m);
   }
   CHECK(fa::eye_lamp_lux(row, v, level) > 3 * lux);
+}
+
+TEST(a_fire_and_a_glowing_haze_are_each_a_lamp_and_a_plain_mist_none) {
+  const ge::mountain::mapgen::Level level = ge::skier::synthetic_slope();
+  ge::render::FogVolume mist;
+  ge::render::FogVolume haze;
+  haze.glow[0] = 0.9;
+  haze.glow[1] = 0.3;
+  haze.hug_ground = true;
+  haze.centre[0] = 300;
+  haze.centre[2] = 200;
+  const double base[3] = {300, level.ground_at(300, 200), 200};
+  const ge::render::Flame fire = ge::render::campfire_flame(base, 3);
+  std::vector<ge::render::LocalLight> out;
+  const ge::render::FogVolume fog[] = {mist, haze};
+  fa::glow_lights(level, fog, std::span<const ge::render::Flame>(&fire, 1), out);
+  CHECK(out.size() == 2);
+  CHECK(out[0].candela == ge::render::flame_light(fire).candela);
+  CHECK(out[1].candela > 0);
+  CHECK(std::fabs(out[1].position[1] - (level.ground_at(300, 200) + haze.half[1])) < 1e-9);
 }
