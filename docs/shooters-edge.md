@@ -128,6 +128,24 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   map), every classic-enhance switch (`ce_water 0`, `ce_flames 0`, `ce_shadows 0`, ...;
   `ce_textures` and `ce_bloom` from the next map), the weather's (`sv_weather 1` brings the rain)
   and `quit`.
+- **The campaign** (M18s4): ESCAPE ▸ SINGLE PLAYER ▸ NEW GAME (or `newgame` in the console)
+  plays the packs' own single-player program from the map `start`, on the campaign host
+  (`server/campaign.hpp`): the maps in a chain, the next one read when the program changes level,
+  the parms and runes carried, the game paused while the menu or the console is up. Lit when
+  the packs carry a `progs.dat` of the single-player form (or `-progs` names one). `map <name>`
+  then starts a new game of it on that map while the server's last `deathmatch` is 0; a
+  MULTIPLAYER ▸ NEW GAME sets its rules and goes back to the deathmatch program. The level's
+  end is the program's (`client/campaign_view.hpp`, drawn by `menu/level_screens.hpp`): the
+  intermission (the pack's `complete` and `inter` pictures, the time, the secrets and the kills
+  in the big figures), an episode's text typed out at eight characters a second, and the
+  shareware episode's end opening the help pages; TAB held shows the solo panel (the map's
+  title, kills, secrets, time). The HUD shows the keys, the runes, the cloak and the suit, each
+  read by the program's own item constants. On a Mac:
+
+  ```sh
+  build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic
+  # then ESCAPE, SINGLE PLAYER, NEW GAME
+  ```
 - **A rocket jump**: 7 for the launcher, look straight down, then SPACE and the left button
   together. The blast costs about half your health and throws you about four times as high as
   a jump (held by `tests/shooters_edge_listen_test.cpp` and the `se-client` lab).
@@ -236,7 +254,7 @@ server's frames go on under it). Its pages are the classic game's:
 | Page | Rows |
 | --- | --- |
 | main | SINGLE PLAYER, MULTIPLAYER, OPTIONS, HELP, QUIT |
-| SINGLE PLAYER | NEW GAME (`map start`), LOAD, SAVE |
+| SINGLE PLAYER | NEW GAME (`newgame`: the packs' campaign from `start`), LOAD, SAVE |
 | MULTIPLAYER | JOIN A GAME, NEW GAME (the rules, then START), SETUP (name, shirt and pants colours) |
 | NEW GAME | MAX PLAYERS, GAME TYPE (`deathmatch`), TEAMPLAY, SKILL, FRAG LIMIT, TIME LIMIT, MAP, START |
 | OPTIONS | CUSTOMIZE CONTROLS, GO TO CONSOLE, RESET TO DEFAULTS, SCREEN SIZE, BRIGHTNESS, MOUSE SPEED (`sensitivity`), MUSIC VOLUME, SOUND VOLUME, ALWAYS RUN, INVERT MOUSE (`m_invert`), LOOKSPRING, LOOKSTRAFE, VIDEO OPTIONS, CLASSIC ENHANCE |
@@ -261,7 +279,7 @@ server's frames go on under it). Its pages are the classic game's:
 - **OPTIONS ▸ CLASSIC ENHANCE** opens classic-enhance's own menu in its place: the pack (the packs
   on the search path), ENHANCE into the local cache watched stage by stage, every `ce_` switch.
 - `togglemenu`, `menu_main`, `menu_options` and `menu_quit` open it from the console or a bind.
-  The `se-menu` lab pictures every page in both looks.
+  The `se-menu` lab pictures every page in both looks, and the campaign's screens.
 
 ## Running your own mod
 
@@ -738,7 +756,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-parity` | scenario | The same scripted inputs through our movement and an existing server's, measured against each other within a tolerance (needs the reference program; skipped with a reason when its cache is absent) |
 | `se-baseline` | scenario | The baseline mod compiled from its sources and played by bots on the arena with its door and plat: the build's counts, frags and deaths, obituaries by weapon, pickups, every path and missile from above, the frags and the movers' heights against the clock (built, M18d) |
 | `se-mod` | scenario | A mod (the test mod, or a player's progs from `--progs`) played by bots on the test arena to its time limit: the hooks it was called on, the builtins it called, frags, every path from above, the hooks' timeline (built, M18p) |
-| `se-campaign` | scenario | A single-player program (crc 5927: the player's own from `--game`, or the test mod's single-player stub) on its layout table: the program, the layout check entry by entry, the builtins it declares against what the server installs for its form, whether the full game's packs are there; the two forms' offsets compared name by name, the autoaim on the arena from the side; the campaign host on the campaign stub (a level change, a restart: the parms and runes carried) and, with `--game`, on the pack's own map (`--map`, `--skill`, `--then=changelevel e1m2`, `--forward` and `--yaw`: the player walked on the server's move; the monsters and secrets counted, the faults, the player's parms) (built, M18s1 and M18s2) |
+| `se-campaign` | scenario | A single-player program (crc 5927: the player's own from `--game`, or the test mod's single-player stub) on its layout table: the program, the layout check entry by entry, the builtins it declares against what the server installs for its form, whether the full game's packs are there; the two forms' offsets compared name by name, the autoaim on the arena from the side; the campaign host on the campaign stub (a level change, a restart: the parms and runes carried) and, with `--game`, on the pack's own map (`--map`, `--skill`, `--then=changelevel e1m2`, `--forward` and `--yaw`: the player walked on the server's move; the monsters and secrets counted, the faults, the player's parms; `--exit=1`: the player stood in the map's exit, the level's end read as the window reads it, the attack held on to the next map) (built, M18s1 to M18s4) |
 | `mod` | scenario | The engine's own C++ mod format: the sample mod's match beside the plain match (the loader's verdict, rockets, bounces, the mod's log, both matches' missiles, the rocket's distance and the grenade's height), and the modded match replayed to the bit (built, M52a) |
 | `se-server` | drive | Eight bots deathmatch on a free map for a minute: frags, items, the server's frame cost, its digest |
 | `se-nav` | scenario | Where a player can go on a map by the player move's own proof: the nav graph from above to scale (the floor shaded off the point hull, every node and link by kind, what a mover closes), the quickest routes as the proofs moved a player, from above and the side; on the nav course and the test arena (built, M18r1) |
@@ -751,7 +769,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the weapon in hand, the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost, the effects thrown and the shots the hand saw (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-models` | picture | The things a map places, as the window draws them: the armour, a health box, an ammo box, a weapon, a torch or a flame, the quad, the shield, another player in his colours and one holding both powers, each from a clear spot near it in both looks; a lift lowered and up, a door shut and open (M18i6); the things placed by kind and the light under each (built, M18i3; `--pak` and `--map` for a pack's own maps) |
-| `se-menu` | picture | The main menu's pages in the modern look and in the classic look (the fixture's pictures, or the player's pack with `--pack`), every row the game cannot do yet dimmed, classic-enhance's menu under OPTIONS; at desktop, wide and phone sizes (built, M18k2) |
+| `se-menu` | picture | The main menu's pages in the modern look and in the classic look (the fixture's pictures, or the player's pack with `--pack`), every row the game cannot do yet dimmed, classic-enhance's menu under OPTIONS; at desktop, wide and phone sizes; the campaign's screens (the intermission, a finale typed part way, the solo panel) in the engine's type, the fixture and the pack (built, M18k2, M18s4) |
 | `se-audio` | sim | Sounds of a scripted fight rendered, metered and written as WAV |
 | `se-viewmodel` | picture | The game's eight free weapons in first person on the engine's corridor stage: every one held at rest, each fired in the dark lit by its own muzzle light, the shotgun switched to the rocket launcher, and the player's view-model cvars; each weapon's share of the picture, its muzzle on the screen, its flash's lift and the switch's time (built, M48d) |
 | `se-ambient` | sim | A walk through rooms under sky and by water: the ambience by leaf charted, mixed and written as WAV (built, M18j2) |

@@ -86,7 +86,7 @@ TEST(rows_dim_until_the_console_knows_what_they_need) {
   Menu m = sm::build_menu();
   sm::Host host{.console = &w.con, .maps = {"start", "arena"}};
   sm::refresh(m, host);
-  CHECK(!item(m, "single", "new")->disabled);
+  CHECK(item(m, "single", "new")->disabled);   // no single-player program: no `newgame`
   CHECK(item(m, "single", "load")->disabled);  // no `load` yet
   CHECK(item(m, "multi", "join")->disabled);   // no `connect` yet
   CHECK(item(m, "options", "volume")->disabled);
@@ -97,6 +97,10 @@ TEST(rows_dim_until_the_console_knows_what_they_need) {
   w.con.add_command("load", "", [](ge::console::Console&, const ge::console::Args&) {});
   sm::refresh(m, host);
   CHECK(!item(m, "single", "load")->disabled);
+  // So does NEW GAME once the packs carry a campaign (the window registers `newgame` then).
+  w.con.add_command("newgame", "", [](ge::console::Console&, const ge::console::Args&) {});
+  sm::refresh(m, host);
+  CHECK(!item(m, "single", "new")->disabled);
   // A server cvar the mod ignores stays dimmed although the server has it.
   ge::console::Cvars server(true);
   server.add({.name = "skill", .fallback = "1"});

@@ -20,6 +20,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -29,6 +30,7 @@
 #include "core/num_text.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
+#include "shooters_edge/client/campaign_view.hpp"
 #include "shooters_edge/server/bsp_map.hpp"
 #include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/catalogue.hpp"
@@ -46,6 +48,7 @@ namespace pg = ge::progs;
 namespace sh = ge::shooter;
 namespace sv = shooters_edge::server;
 namespace la = shooters_edge::labs;
+namespace cl = shooters_edge::client;
 namespace ce = ge::classicenhance;
 using ge::core::num::to_fixed;
 using Inputs = std::vector<std::pair<std::string, std::string>>;
@@ -364,6 +367,8 @@ void campaign_flow(gl::Lab& lab) {
       "serverflags 0, 1, 1; skill 1 throughout; every map's first frame at 1.2");
 }
 
+constexpr double kExitWait = 2.5;  // s after the intermission before the attack is held
+
 // The player's own program on its own map: the campaign host's map start with the full rules.
 void pack_campaign(gl::Lab& lab, const Loaded& l) {
   PackMaps maps;
@@ -416,6 +421,69 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
                         to_fixed(walked, 1) + " units, " +
                             ((pl.flags & sh::kFlagOnGround) != 0 ? "yes" : "no")});
       lab.metric("pack.walked", walked, "units");
+    }
+    // The exit: the player stood in the map's first changelevel trigger; the program's messages
+    // read as the window reads them (the intermission, the counts), then the attack button held
+    // after `kExitWait` until the next map starts.
+    if (c.server && lab.arg_num("exit") != 0) {
+      const sv::QcServer& s = *c.server;
+      int trigger = 0;
+      for (int e = 1; e < s.sv.num_edicts && trigger == 0; e++) {
+        const pg::Vm& vm = s.q.vm;
+        const char* cn = pg::vm_string(
+            vm, static_cast<int32_t>(*pg::entity_field(vm, e, s.q.layout->f.classname)));
+        if (!s.sv.edicts[static_cast<size_t>(e)].free && cn != nullptr &&
+            std::string_view(cn) == "trigger_changelevel")
+          trigger = e;
+      }
+      t.rows.push_back({"the exit (a changelevel trigger)",
+                        trigger == 0 ? "none on this map" : "entity " + std::to_string(trigger)});
+      if (trigger != 0) {
+        const sh::Edict& tr = c.server->sv.edicts[static_cast<size_t>(trigger)];
+        const sh::Vec3f centre = (tr.absmin + tr.absmax) * 0.5f;
+        sh::set_origin(c.server->sv, 1, centre);
+        cl::CampaignView view;
+        const sv::CampaignStats st = sv::campaign_stats(*c.server);
+        cl::join_stats(view, st.total_secrets, st.total_monsters, st.found_secrets,
+                       st.killed_monsters);
+        const double entered = c.server->sv.time;
+        const size_t started = c.history.size();
+        double pressed_at = -1;
+        sh::Packet still;
+        for (sh::MoveCmd& cmd : still.cmds) cmd.msec = 14;
+        for (int i = 0; i < static_cast<int>(20 / sv::kCampaignStep); i++) {
+          const bool press = view.end == cl::LevelEnd::intermission &&
+                             c.server->sv.time - view.ended_at > kExitWait;
+          if (press && pressed_at < 0) pressed_at = c.server->sv.time;
+          for (sh::MoveCmd& cmd : still.cmds) cmd.buttons = press && (i & 1) ? 1 : 0;
+          still.sequence = static_cast<uint32_t>(frames + i + 1);
+          if (!sv::campaign_frame(c, &still, 1, error) || c.history.size() != started) break;
+          sv::MessageSink& out = c.server->out;
+          cl::read_campaign(view, out.all, c.server->sv.time);
+          cl::read_campaign(view, out.one[0], c.server->sv.time);
+          out.all.clear();
+          out.one[0].clear();
+        }
+        int mins = 0, secs = 0;
+        cl::completed_time(view, entered, mins, secs);
+        t.rows.push_back({"the level's end the client read",
+                          view.end == cl::LevelEnd::intermission
+                              ? "the intermission at " + to_fixed(view.ended_at, 2) + " s"
+                              : "none"});
+        t.rows.push_back({"its counts (kills, secrets)",
+                          to_fixed(view.monsters, 0) + "/" + to_fixed(view.total_monsters, 0) +
+                              ", " + to_fixed(view.secrets, 0) + "/" +
+                              to_fixed(view.total_secrets, 0)});
+        t.rows.push_back({"unread messages", view.unknown.empty() ? "(none)" : view.unknown});
+        t.rows.push_back({"the attack pressed, then",
+                          pressed_at < 0 ? "never"
+                                         : "at " + to_fixed(pressed_at, 2) + " s: " +
+                                               (c.history.size() != started ? c.history.back()
+                                                                            : "no level change")});
+        lab.metric("pack.exit.intermission", view.end == cl::LevelEnd::intermission ? 1 : 0,
+                   "bool");
+        lab.metric("pack.exit.changed", c.history.size() != started ? 1 : 0, "bool");
+      }
     }
     // A console line after it (`changelevel e1m2`): the change, then one frame on the next map.
     if (c.server && !lab.arg("then").empty()) {
@@ -532,6 +600,9 @@ const gl::LabSpec kSpec{
         {"then", "", "with --game: a console line run after that (`changelevel e1m2`)"},
         {"forward", "0", "with --game: the forward axis the player holds every frame, units/s"},
         {"yaw", "0", "with --game: the player's view yaw, degrees"},
+        {"exit", "0",
+         "with --game, 1: then the player stood in the map's exit, the level's end read as the "
+         "window reads it and the attack held until the next map"},
     },
     "",
     run,

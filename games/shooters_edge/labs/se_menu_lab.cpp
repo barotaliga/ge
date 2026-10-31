@@ -11,6 +11,9 @@
 //     them again in the player's own pack. Those pictures are the pack's: they stay on this
 //     machine and on a private page, and are left out of the digest.
 //
+// THE CAMPAIGN'S SCREENS (level_screens.hpp) are drawn too, in the engine's type, the fixture and
+// the pack: the intermission, an episode's finale typed part way, the solo panel.
+//
 // The console is set up as the window sets it up (the mouse's cvars, the HUD's style, the menu's
 // own cvars and the ce_ switches, `map`, `sv`, `quit` and `toggleconsole`), so the rows dimmed in
 // the pictures are the rows dimmed in the game. Every layout is held to the view's problems check
@@ -18,8 +21,9 @@
 //
 // ge:summary Lab: the main menu's pages in the modern and the classic look at three viewports
 // ge:keywords lab se-menu menu main-menu classic modern dimmed pages viewports pack pictures
+// ge:keywords intermission finale solo-panel level-screens campaign
 // ge:skill ui labs
-// ge:test tests/shooters_edge_menu_test.cpp
+// ge:test tests/shooters_edge_menu_test.cpp tests/shooters_edge_level_screens_test.cpp
 #include <initializer_list>
 #include <map>
 #include <string>
@@ -32,6 +36,7 @@
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
+#include "shooters_edge/menu/level_screens.hpp"
 #include "ui/raster.hpp"
 #include "vfs/pak.hpp"
 
@@ -109,7 +114,7 @@ struct Game {
   sm::Host host;
   Game() {
     using CArgs = ge::console::Args;
-    for (const char* c : {"map", "sv", "quit"})
+    for (const char* c : {"map", "sv", "quit", "newgame"})
       con.add_command(c, "", [](ge::console::Console&, const CArgs&) {});
     con.add_command("toggleconsole", "", [](ge::console::Console&, const CArgs&) {});
     shooters_edge::client::add_cvars(con, controls);
@@ -135,7 +140,8 @@ constexpr PageShot kPages[] = {
     {"main", "multi",
      "The root: SINGLE PLAYER, MULTIPLAYER, OPTIONS, HELP and QUIT, the focus on MULTIPLAYER."},
     {"single", "",
-     "SINGLE PLAYER: NEW GAME runs `map start`; LOAD and SAVE are dimmed until saves land."},
+     "SINGLE PLAYER: NEW GAME runs `newgame` (the packs' single-player program from the map "
+     "start); LOAD and SAVE are dimmed until saves land."},
     {"multi", "host",
      "MULTIPLAYER: JOIN A GAME dimmed until the client plays over the network; NEW GAME and "
      "SETUP."},
@@ -287,6 +293,56 @@ void run(ge::lab::Lab& lab) {
     }
   }
   lab.metric("problems", problems, "count");
+
+  // The campaign's screens (level_screens.hpp) over the game: in the engine's type, then in each
+  // set of pictures.
+  const sm::LevelStats stats{
+      .minutes = 3, .seconds = 7, .secrets = 2, .total_secrets = 6, .kills = 41, .total_kills = 52};
+  // A stand-in episode's end, written for the lab.
+  constexpr std::string_view kFinale =
+      "The last gate folds shut behind you and\nthe hall falls silent. The stone in your\n"
+      "hand is warm, and somewhere below the\nfloor a bell rings once. One of four.\n"
+      "Three more wait beyond the dark.";
+  for (int pass = -1; pass < static_cast<int>(sets.size()); pass++) {
+    const sm::ClassicArt none;
+    const sm::ClassicArt& art = pass < 0 ? none : sets[static_cast<size_t>(pass)].art;
+    const std::string name = pass < 0 ? "none" : sets[static_cast<size_t>(pass)].name;
+    const ge::lab::Det det =
+        pass < 0 ? ge::lab::Det::deterministic : sets[static_cast<size_t>(pass)].det;
+    for (const Viewport& v : viewports) {
+      if (v.h > v.w) continue;
+      const auto screen = [&](const char* what, const std::string& title,
+                              const std::string& caption, const auto& draw) {
+        ui::DrawList dl;
+        dl.begin(v.w, v.h);
+        draw(dl);
+        ui::Image img = arena(v.w, v.h);
+        ui::render(dl, img);
+        lab.shot(
+            {cat({"level-", what, "-", name, "-", v.name()}),
+             title,
+             caption,
+             "the figures beside their labels, the text centred and typed, the panel above the "
+             "status bar",
+             {{"art", name}, {"viewport", v.name()}}},
+            picture_of(std::move(img)), det);
+      };
+      screen("intermission", "THE INTERMISSION, " + name + ", AT " + v.name(),
+             "The level done: the title, the labels and the completed time, the secrets found "
+             "and the kills, 3:07, 2/6, 41/52, in the big figures.",
+             [&](ui::DrawList& dl) { sm::draw_intermission(dl, art, v.w, v.h, stats); });
+      screen("finale", "THE FINALE, TYPED, " + name + ", AT " + v.name(),
+             "An episode's end: its text typed out at eight characters a second, here 12.5 s in "
+             "(100 characters), each line centred by its whole width.",
+             [&](ui::DrawList& dl) { sm::draw_level_text(dl, art, v.w, v.h, kFinale, 100); });
+      screen("solo", "THE SOLO PANEL, " + name + ", AT " + v.name(),
+             "The scores key held in a campaign: the map's title, then the kills, the secrets and "
+             "the time on the map.",
+             [&](ui::DrawList& dl) {
+               sm::draw_solo_panel(dl, art, v.w, v.h, "The Grey Halls", stats);
+             });
+    }
+  }
 }
 
 const ge::lab::LabSpec kSpec{

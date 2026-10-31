@@ -53,6 +53,7 @@
 #include <cstdlib>
 #include <exception>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -77,6 +78,7 @@
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
+#include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/view/weapons.hpp"
@@ -155,7 +157,33 @@ bool parse(int argc, char** argv, Args& a) {
 
 }  // namespace
 
-static int run_main(int argc, char** argv) {
+static  // The campaign's screens over the game: the level's end, else the solo panel while
+        // `scores`.
+    void
+    draw_campaign(ge::ui::DrawList& dl, const cl::Listen& l,
+                  const shooters_edge::menu::ClassicArt& art, int w, int h, bool scores) {
+  namespace mn = shooters_edge::menu;
+  const cl::CampaignView& c = l.campaign;
+  mn::LevelStats st;
+  cl::completed_time(c, l.entered_at, st.minutes, st.seconds);
+  if (c.end == cl::LevelEnd::none) {
+    cl::CampaignView now = c;
+    now.ended_at = l.server->sv.time;
+    cl::completed_time(now, l.entered_at, st.minutes, st.seconds);
+  }
+  st.secrets = static_cast<int>(c.secrets);
+  st.total_secrets = static_cast<int>(c.total_secrets);
+  st.kills = static_cast<int>(c.monsters);
+  st.total_kills = static_cast<int>(c.total_monsters);
+  if (c.end == cl::LevelEnd::intermission)
+    mn::draw_intermission(dl, art, w, h, st);
+  else if (c.end != cl::LevelEnd::none)
+    mn::draw_level_text(dl, art, w, h, c.text, cl::typed_chars(c, l.server->sv.time));
+  else if (scores)
+    mn::draw_solo_panel(dl, art, w, h, cl::map_title(l), st);
+}
+
+int run_main(int argc, char** argv) {
   out::set_output_sink(print_line);
   Args args;
   if (!parse(argc, argv, args)) {
@@ -290,8 +318,35 @@ static int run_main(int argc, char** argv) {
                "; see docs/shooters-edge.md § Running your own mod");
     return 2;
   }
+  // The campaign: a single-player program given with -progs, else the packs' own progs.dat when
+  // it is one. With it, SINGLE PLAYER ▸ NEW GAME (`newgame`) is lit.
+  ge::progs::Progs pack_progs;
+  const ge::progs::Progs* campaign_progs = cl::single_player(progs) ? &progs : nullptr;
+  if (campaign_progs == nullptr) {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> bytes = cl::find_file(files, "progs.dat", store);
+    std::string why;
+    if (!bytes.empty() &&
+        ge::progs::load_progs(bytes.data(), bytes.size(), pack_progs, why,
+                              ge::progs::every_form()) &&
+        cl::single_player(pack_progs))
+      campaign_progs = &pack_progs;
+  }
+  cl::ListenOptions listen_opt;
+  listen_opt.files = &files;
+  {
+    std::vector<uint8_t> store;
+    listen_opt.registered = !cl::find_file(files, "gfx/pop.lmp", store).empty();
+  }
+  if (campaign_progs != nullptr)
+    console.add_command("newgame", "newgame: a new single-player game from the map start",
+                        [&](Con&, const CArgs&) {
+                          listen.opt.console.emplace_back("deathmatch 0");
+                          listen.opt.console.emplace_back("coop 0");
+                          next_map = "start";
+                        });
   std::unique_ptr<cl::LoadedMap> first = cl::load_named_map(files, next_map, error);
-  if (!first || !cl::listen_start(listen, progs, std::move(first), {}, error)) {
+  if (!first || !cl::listen_start(listen, progs, std::move(first), listen_opt, error)) {
     out::error("shooters_edge: the first map did not start: " + error +
                "; see docs/shooters-edge.md § Playing it");
     return 2;
@@ -480,7 +535,14 @@ static int run_main(int argc, char** argv) {
       if (!m) {
         console.print("map: " + error);
         listen.pending_map.clear();
-      } else if (!cl::listen_change(listen, std::move(m), error)) {
+      } else if (!(campaign_progs != nullptr && cl::wants_campaign(listen.opt)
+                       ? (listen.campaign_host
+                              ? cl::listen_change(listen, std::move(m), error)
+                              : cl::listen_campaign(listen, *campaign_progs, std::move(m),
+                                                    listen.opt, error))
+                   : listen.campaign_host || listen.progs != &progs
+                       ? cl::listen_start(listen, progs, std::move(m), listen.opt, error)
+                       : cl::listen_change(listen, std::move(m), error))) {
         out::error("shooters_edge: the map change failed: " + error +
                    "; see docs/shooters-edge.md § Playing it");
         return 2;
@@ -591,7 +653,25 @@ static int run_main(int argc, char** argv) {
     cl::turn_view(played, controls, listen.view);
     const ge::shooter::MoveCmd cmd = cl::read_controls(played, controls);
     if (cmd.impulse != 0) listen.impulse = cmd.impulse;
-    const int frames = cl::listen_advance(listen, wall, cmd);
+    // A single-player game waits while the console or the menu is up.
+    const bool paused = listen.campaign_host && (con_view.open() || game_menu.open());
+    const int frames = paused ? 0 : cl::listen_advance(listen, wall, cmd);
+    if (!listen.failed.empty()) {
+      out::error("shooters_edge: the campaign's next map did not start: " + listen.failed +
+                 "; see docs/shooters-edge.md § Playing it");
+      return 2;
+    }
+    if (listen.map_changed) {  // the campaign went on to its next map
+      listen.map_changed = false;
+      if (!rebuild_world(*listen.map)) return 1;
+      shown = {};
+      fx_state = {};
+      in_hand = {};
+    }
+    if (listen.campaign.sellscreen) {  // the shareware episode's end: the help pages
+      listen.campaign.sellscreen = false;
+      game_menu.show(menu_host, "help");
+    }
     for (; printed < listen.prints.size(); printed++) {
       const std::string& line = listen.prints[printed];
       console.print(line);
@@ -606,9 +686,14 @@ static int run_main(int argc, char** argv) {
     if (hand.flashing)
       fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
     overlay.begin(w, h);
-    se::fill_hud(hud, cl::status_of(listen, t), art);
-    const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
-    hud.layout.draw(overlay, hf, se::hud_style());
+    if (listen.campaign.end == cl::LevelEnd::none) {
+      se::fill_hud(hud, cl::status_of(listen, t), art);
+      const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
+      hud.layout.draw(overlay, hf, se::hud_style());
+    }
+    draw_campaign(
+        overlay, listen, game_menu.art(), w, h,
+        listen.campaign_host && !con_keys.held && !was_open && input.down(ge::platform::Key::tab));
     game_menu.draw(overlay, w, h, t);
     con_view.frame(wall);
     ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
