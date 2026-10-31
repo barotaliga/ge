@@ -257,6 +257,29 @@ std::string map_of_model(const std::string& model) {
   return model.substr(kPre.size(), model.size() - kPre.size() - kExt.size());
 }
 
+std::vector<uint8_t> voice_header(DemoFormat base) {
+  return {kVoiceMagic[0],
+          kVoiceMagic[1],
+          kVoiceMagic[2],
+          kVoiceMagic[3],
+          1,
+          static_cast<uint8_t>(base == DemoFormat::multiview ? 2 : 1),
+          kVoiceOpus,
+          0};
+}
+
+std::string voice_extension(DemoFormat base) {
+  return base == DemoFormat::multiview ? ".mvdv" : ".qwdv";
+}
+
+bool voice_name(const std::string& path) {
+  if (path.size() < 5) return false;
+  std::string ext = path.substr(path.size() - 5);
+  for (char& c : ext) c = static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+  return ext == voice_extension(DemoFormat::client) ||
+         ext == voice_extension(DemoFormat::multiview);
+}
+
 bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
   out = Demo{};
   if (bytes.size() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b) {
@@ -268,6 +291,19 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
       return false;
     }
     bytes = std::move(*unpacked);
+  }
+  int voice_base = 0;  // the voice header's base format (1 client, 2 multiview), 0: none
+  if (bytes.size() >= kVoiceHeader && std::equal(kVoiceMagic, kVoiceMagic + 4, bytes.begin())) {
+    if (bytes[4] != 1 || (bytes[5] != 1 && bytes[5] != 2) || bytes[6] != kVoiceOpus) {
+      error = "the voice recording's header names version " + std::to_string(bytes[4]) +
+              ", base format " + std::to_string(bytes[5]) + " and codec " +
+              std::to_string(bytes[6]) +
+              "; only version 1 of a client (1) or multiview (2) recording with Opus (2) is "
+              "read; next: re-record it with this build";
+      return false;
+    }
+    voice_base = bytes[5];
+    bytes.erase(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(kVoiceHeader));
   }
   if (is_multiview(bytes)) {
     out.state.format = DemoFormat::multiview;
@@ -289,13 +325,55 @@ bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
         "name another";
     return false;
   }
+  if (voice_base != 0) {
+    const DemoFormat said = voice_base == 2 ? DemoFormat::multiview : DemoFormat::client;
+    if (out.state.format != said) {
+      error = std::string("the voice recording's header says a ") +
+              (said == DemoFormat::multiview ? "multiview" : "client") +
+              " recording follows, and the records are not one; next: the file is damaged";
+      return false;
+    }
+    out.state.voice_format = true;
+  }
   out.state.players.resize(32);
   out.bytes = std::move(bytes);
   return true;
 }
 
+bool read_voice(DemoMsg& m, DemoVoice& out) {
+  out.sender = m.u8();
+  out.gen = m.u8();
+  out.seq = m.u8();
+  const int n = m.u16();
+  if (m.bad || m.at + static_cast<size_t>(n) > m.b.size()) {
+    m.skip(static_cast<size_t>(n));
+    return false;
+  }
+  out.data.assign(m.b.begin() + static_cast<std::ptrdiff_t>(m.at),
+                  m.b.begin() + static_cast<std::ptrdiff_t>(m.at + static_cast<size_t>(n)));
+  m.at += static_cast<size_t>(n);
+  return true;
+}
+
+bool voice_frames(const DemoVoice& v, std::vector<std::span<const uint8_t>>& out) {
+  out.clear();
+  size_t at = 0;
+  while (at < v.data.size()) {
+    if (at + 2 > v.data.size()) return false;
+    const size_t n = static_cast<size_t>(v.data[at] | v.data[at + 1] << 8);
+    at += 2;
+    if (at + n > v.data.size()) return false;
+    out.emplace_back(v.data.data() + at, n);
+    at += n;
+  }
+  return true;
+}
+
 DemoRead next_frame(Demo& d, std::string& error) {
   if (d.ended) return DemoRead::end;
+  d.state.started.clear();
+  d.state.stopped.clear();
+  d.state.voice.clear();
   if (d.state.format == DemoFormat::client) return next_client(d, error);
   if (d.state.format == DemoFormat::multiview) {
     const DemoRead r = next_multiview(d, error);

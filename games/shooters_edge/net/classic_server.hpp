@@ -29,6 +29,14 @@
 // 1/25 within 10..1024 bytes) or, when agreed, chunks of 1024 bytes asked for by number, the first
 // a frame inside the packet and the rest out of band as `\chunk` packets.
 //
+// VOICE (`ServerConfig::voice`): the x2 family's voice bit offered, and each voice message a
+// client sends (clc 83, at most `kMostVoiceBytes`) relayed as svc 84 with the talker's slot to the
+// clients that agreed the bit and may hear it: by `voice_route`, everyone, or only the players
+// whose user info names the talker's `team` (a talker with no team is heard by nobody on that
+// route); a talker never gets his own back. With a multiview recording running
+// (`ClassicServer::mvd`, classic_record.hpp), every relayed message goes into it too, whoever heard
+// it.
+//
 // LAG COMPENSATION (`ServerConfig::antilag`, classic_antilag.hpp): each player's origins are kept
 // with their server times; a hitscan trace a mod marks lagged sees the other players where the
 // shooter saw them.
@@ -41,7 +49,7 @@
 // ge:keywords classic-server endpoint connectionless challenge connect signon serverdata
 // ge:keywords prespawn baselines spawn begin skins download chunked packet-entities playerinfo
 // ge:keywords stats choke rate ping user-info server-info classic_start classic_frame
-// ge:keywords verify_move_checksum antilag status
+// ge:keywords verify_move_checksum antilag status voice voice-relay team-voice voice_route mvd
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_server_test.cpp
 #pragma once
@@ -61,6 +69,12 @@ namespace shooters_edge::net {
 
 namespace sv = shooters_edge::server;
 
+struct MultiviewRecorder;
+
+inline constexpr size_t kMostVoiceBytes = 1024;  // a client's voice message's frames, bytes
+
+enum class VoiceRoute : uint8_t { all, team };
+
 struct ServedFile {
   std::string path;  // lower case, slashes: "skins/blue.pcx"
   std::vector<uint8_t> bytes;
@@ -78,6 +92,8 @@ struct ServerConfig {
   Ext offered = first_tier();
   int chunks_per_frame = 30;
   bool antilag = false;
+  bool voice = false;  // offer the voice bit and relay voice
+  VoiceRoute voice_route = VoiceRoute::team;
   uint32_t seed = 1;  // the challenges' stream
 };
 
@@ -134,6 +150,7 @@ struct ServerCounts {
   int64_t datagrams_in = 0, datagrams_out = 0, bytes_in = 0, bytes_out = 0, choked = 0;
   int64_t effects_dropped = 0, events = 0;
   int64_t mod_bytes_dropped = 0;  // a mod's raw bytes that did not read as whole messages
+  int64_t voice_in = 0, voice_out = 0, voice_refused = 0, voice_dropped = 0;
 };
 
 struct Challenge {
@@ -175,6 +192,7 @@ struct ClassicServer {
   // Field offsets of the mod's own fields a stat or the player state reads (-1: absent).
   int f_currentammo = -1, f_armorvalue = -1, f_ammo[4] = {-1, -1, -1, -1}, f_weapon = -1;
   int f_weaponframe = -1;
+  MultiviewRecorder* mvd = nullptr;  // a multiview recording running (classic_record.hpp)
 };
 
 // Serves `qc` (its map already loaded) over `t`. False with `error` when it cannot.
@@ -203,5 +221,7 @@ void route_events(ClassicServer& s);
 void send_frames(ClassicServer& s);
 void send_download_chunks(ClassicServer& s, int slot, gn::Writer& dgram);
 EntityState entity_state(const ClassicServer& s, int e);
+// A player's stats as the server sends them (`view_height`: the z set's view height in 16).
+void player_stats(const ClassicServer& s, int slot, int32_t out[kStats], bool view_height);
 
 }  // namespace shooters_edge::net

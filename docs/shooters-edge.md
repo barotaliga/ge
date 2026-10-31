@@ -204,7 +204,7 @@ engine's burning gas is the flame.
 
 ### Benchmarking a demo
 
-`benchmark <demo>` in the console, or `-benchmark <demo>` on the command line (which quits with
+`timedemo <demo>` in the console, or `-timedemo <demo>` on the command line (which quits with
 the report and exits non-zero if the demo stopped early), plays a recorded game **as fast as the
 machine draws it**: every frame drawn, one in 33 ms shown and the rest drawn offscreen (a
 window's present waits for the display on some platforms whatever its mode: on macOS a window's
@@ -222,11 +222,11 @@ display the window is on or on `vid_display n`'s (`vid_displays` lists them). Th
 read wherever they stand, so a `+` console line ends at the next flag:
 
 ```sh
-build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic -benchmark demo1
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic -timedemo demo1
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic +vid_display 2 \
-    +vid_fullscreen 1 +r_look modern -benchmark demo1
+    +vid_fullscreen 1 +r_look modern -timedemo demo1
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=2560x1600 \
-    -benchmark ~/Downloads/match.dem
+    -timedemo ~/Downloads/match.dem
 ```
 
 - **Which demo**: a path (absolute, or starting `./` or `../`) is read from disk alone; else the name through the search path (`demo1.dem` in `pak0.pak`, or a loose file
@@ -279,6 +279,64 @@ data) are skipped. The demo's clock is the sum of the records' milliseconds. `ma
 LAB=se-demo ARGS="--file=<demo>"` reads any demo without a GPU and draws every player's path
 from above and his health over the clock, with a table of who played (`--track=<slot>` picks
 the view).
+
+### A demo as a video
+
+`-demovideo <demo> <file>` turns a recorded game of any format into a video and quits; no window
+opens (`client/demo_video.hpp`). The demo is played at its own pace on a fixed frame clock of
+`--fps=N` pictures a second (30 by default; 60, 24, 25 or any rate over 0, fractions too), each
+picture drawn offscreen on the GPU by the window's own world frame: the map
+from the recorded eye, the entities, doors and other players where the demo has them, the level's
+statics and the HUD off the recorded stats. Its sound is the demo's own: every sound message
+plays the pack's recording (`sound/<name>`) placed where the demo says, the level's static sounds
+loop, the map's ambience follows the eye, and the players' voices in a voice format play over it
+all. A sound starts on the sample its frame's time falls on, so what is heard and seen are within
+a frame of each other however slowly the machine draws. The file is written by `engine/capture`:
+`.mp4` (H.264 or HEVC from the platform's encoder), `.webm` (AV1 and Opus) or `.mkv` (any;
+`--codec=none` uncompressed); `--codec` auto, h264, hevc or av1; `--resolution` the picture,
+as `WxH` (each side 16 to 8192, an odd side rounded down to even) or a name: `480p`, `720p` (the
+default), `1080p`, `1440p`, `4k` (`--size` is the same flag);
+`--seconds` the most video. The `+` lines run first, so `+r_look modern` and `+demo_track 2`
+shape it.
+
+```sh
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+    -demovideo demo1 ~/Movies/demo1.mp4 --resolution=1080p --fps=60
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+    -demovideo ~/Downloads/match.mvdv ~/Movies/match.mp4 +demo_track 3
+```
+
+What is not drawn yet: the demo's temporary entities (gunshots, blood, explosions) and the
+weapon in hand. `make lab LAB=se-demo-video` records a match and turns it into videos headless
+(below).
+
+### Demos with voice: `.qwdv` and `.mvdv`
+
+A recording with the players' voices in it is a **format of its own**, so a player that knows
+only the plain formats never meets a message it cannot read: the voice header (8 bytes, `GEVR`,
+the version, the base format, the codec), then the client recording's or the multiview
+recording's records unchanged, with the protocol's voice message (svc 84, the x2 family's voice
+bit) among their messages. Without the header and the voice messages it is a plain recording.
+
+- **The server relays voice** when `ServerConfig::voice` is set: it offers the voice bit, and each
+  voice message a client sends (clc 83: 20 ms Opus frames) goes, with the talker's slot, to the
+  clients that agreed the bit and may hear it. By `voice_route` that is everyone, or (the
+  default) only the players whose user info names the talker's `team`. A talker never gets his
+  own back.
+- **A client's recording (`.qwdv`)** holds what its player was sent: his team's voices, routed to
+  him, and his own, spliced in as he spoke. A plain client recording leaves every voice message
+  out (`net/classic_record.hpp`).
+- **The server's multiview recording (`.mvdv`)** holds every voice it relayed, whoever heard it:
+  all the teams.
+- **Playing one back** (`playdemo`, `-demovideo`, the labs): the reader finds the header by its
+  bytes; each talker's frames play on a stream of their own, a gap of up to three frames
+  concealed by the codec (`client/demo_voice.hpp`).
+
+`make lab LAB=se-demo-video` plays a match on the fixture halls with two teams of two talking
+in turn, records red 1's `.qwdv` and the server's `.mvdv`, charts who is heard in each and turns
+both into videos; `ARGS="--basedir=<dir> --map=dm3 --voices=<dir>"` plays it on a map of the
+game folder's, each client speaking `<dir>/<name>.wav` (red1, red2, blue1, blue2), and
+`ARGS="--basedir=<dir> --demo=demo1"` turns that demo into a video instead.
 
 ### The main menu
 

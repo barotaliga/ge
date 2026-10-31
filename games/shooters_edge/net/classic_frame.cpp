@@ -19,6 +19,7 @@
 #include "progs/layout.hpp"
 #include "progs/vm.hpp"
 #include "shooter/client.hpp"
+#include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 
 namespace shooters_edge::net {
@@ -231,10 +232,10 @@ PlayerState player_state(const ClassicServer& s, int about, int to) {
   return p;
 }
 
-void update_stats(ClassicServer& s, int slot) {
-  ClassicClient& c = s.clients[slot];
+}  // namespace
+
+void player_stats(const ClassicServer& s, int slot, int32_t st[kStats], bool view_height) {
   const int e = slot + 1;
-  int32_t st[kStats] = {};
   st[0] = static_cast<int32_t>(field(s, e, s.qc->q.layout->f.health));
   st[2] = model_index_of(
       s, static_cast<int32_t>(*pg::entity_field(s.qc->q.vm, e, s.qc->q.layout->f.weaponmodel)));
@@ -245,8 +246,15 @@ void update_stats(ClassicServer& s, int slot) {
   const float serverflags = pg::as_float(s.qc->q.vm.globals[s.qc->q.layout->g.serverflags]);
   st[15] = static_cast<int32_t>(field(s, e, s.qc->q.layout->f.items)) |
            (static_cast<int32_t>(serverflags) << 28);
-  if (c.ext.has(ExtFamily::z, kZViewHeight))
-    st[16] = static_cast<int32_t>(field(s, e, s.qc->q.layout->f.view_ofs + 2));
+  if (view_height) st[16] = static_cast<int32_t>(field(s, e, s.qc->q.layout->f.view_ofs + 2));
+}
+
+namespace {
+
+void update_stats(ClassicServer& s, int slot) {
+  ClassicClient& c = s.clients[slot];
+  int32_t st[kStats] = {};
+  player_stats(s, slot, st, c.ext.has(ExtFamily::z, kZViewHeight));
   for (int i = 0; i < kStats; i++) {
     if (c.stats_known[i] && c.stats[i] == st[i]) continue;
     if (i == 16 && !c.ext.has(ExtFamily::z, kZViewHeight)) continue;
@@ -309,6 +317,7 @@ void send_static_updates(ClassicServer& s) {
 
 void route_events(ClassicServer& s) {
   sv::MessageSink& out = s.qc->out;
+  if (s.mvd) mvd_events(s, *s.mvd);
   for (const sv::NetEvent& ev : out.events) route_event(s, ev);
   s.counts.events += static_cast<int64_t>(out.events.size());
   send_static_updates(s);

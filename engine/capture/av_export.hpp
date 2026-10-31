@@ -19,6 +19,13 @@
 // still to come can start before it. The game's sound comes from its `SoundSpec` (play/game.hpp);
 // with none the file has no audio track.
 //
+// A SOUND THE CALLER PLAYS (`AvExportOptions::synth`): an export of something that is not a play
+// contract's run (a recorded game played back, games/shooters_edge/client/demo_video.hpp) hands
+// the export its own synth instead of a `SoundSpec`. The caller plays its events on that synth and
+// calls `sound_to(sample)` first, so each event starts on the sample its time falls on; the export
+// renders the synth between, exactly as it does for a run's steps, and pictures go in through the
+// run-less `frame`.
+//
 // ge:summary A run exported with its sound: pictures as I420, the synth rendered on the step clock
 // ge:keywords export av-export mkv matroska sound audio sync lockstep click flash frame-clock
 // ge:keywords sample step-sample offline-render synth i420 pcm av1 opus webm interleave
@@ -47,14 +54,15 @@ struct AvExportOptions {
   double fps = 30;
   double hz = 120;                         // the run's steps a second
   int64_t from = 0;                        // the step picture 0 shows
-  const play::SoundSpec* sound = nullptr;  // null: no audio track
-  uint32_t seed = 1;                       // the synth's noise
-  std::string codec;                       // "" uncompressed; av1, h264, hevc or auto (video.hpp)
-  std::string container;                   // "mp4" or "mkv"; "" by the file's name (mux.hpp)
-  int crf = 32;                            // av1: 0..63, lower is better and larger
-  int speed = 9;                           // av1: libaom's realtime speed, 7..11
-  int threads = 4;                         // av1: the encoder's threads
-  int audio_bitrate = 128000;              // av1: Opus's bits a second
+  const play::SoundSpec* sound = nullptr;  // null: no audio track (unless `synth`)
+  audio::Synth* synth = nullptr;  // the caller's own synth, played by the caller (with no `sound`)
+  uint32_t seed = 1;              // the synth's noise
+  std::string codec;              // "" uncompressed; av1, h264, hevc or auto (video.hpp)
+  std::string container;          // "mp4" or "mkv"; "" by the file's name (mux.hpp)
+  int crf = 32;                   // av1: 0..63, lower is better and larger
+  int speed = 9;                  // av1: libaom's realtime speed, 7..11
+  int threads = 4;                // av1: the encoder's threads
+  int audio_bitrate = 128000;     // av1: Opus's bits a second
 };
 
 // The sample step `at`'s events sound at: (at - from) * rate / hz, rounded.
@@ -71,15 +79,24 @@ class AvExport {
   void stepped(const play::Run& run, int64_t at);
   // The next picture (`p` at the open size) of `run` as it stands.
   bool frame(const play::Run& run, const lab::Picture& p, std::string& error);
+  // The next picture of an export whose sound the caller plays (`AvExportOptions::synth`).
+  bool frame(const lab::Picture& p, std::string& error);
+  // The caller's synth rendered up to `sample` (from the export's start): call it before playing
+  // an event that starts there. A sample already rendered renders nothing.
+  void sound_to(int64_t sample) { render_to(sample); }
   // The last picture's sound, and the file closed.
   bool close(std::string& error);
 
-  bool has_sound() const { return sound_ != nullptr; }
+  bool has_sound() const { return synth_ != nullptr; }
   int64_t frames() const { return frames_; }
   int64_t samples() const { return emitted_; }
   int64_t bytes() const { return mux_.written(); }
   const std::vector<uint8_t>& memory() const { return mux_.bytes(); }
   std::string_view doc_type() const { return doc_type_; }
+  // The video track's codec id as the container names it ("V_UNCOMPRESSED" when none).
+  std::string_view video_codec() const {
+    return coded_ ? video_.matroska_codec() : std::string_view("V_UNCOMPRESSED");
+  }
 
  private:
   void render_to(int64_t sample);
@@ -91,7 +108,8 @@ class AvExport {
   AvExportOptions opt_;
   Mux mux_;
   std::string doc_type_;
-  std::unique_ptr<audio::Synth> synth_;
+  std::unique_ptr<audio::Synth> owned_;  // the run's synth (a `SoundSpec`'s)
+  audio::Synth* synth_ = nullptr;        // the one rendered: `owned_` or the caller's
   std::unique_ptr<play::Sound> sound_;
   std::vector<float> pending_;  // rendered, not yet written: samples from `emitted_` on
   int64_t rendered_ = 0;        // samples rendered
