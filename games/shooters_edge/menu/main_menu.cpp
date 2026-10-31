@@ -60,9 +60,10 @@ constexpr Entry kEntries[] = {
     {.page = "single",
      .id = "new",
      .text = "NEW GAME",
-     .hint = "Start the first map, `start`, from the beginning.",
-     .line = "map start",
-     .needs = "map",
+     .hint = "The campaign from its first map, `start`. Needs a single-player program: the "
+             "packs' own progs.dat.",
+     .line = "newgame",
+     .needs = "newgame",
      .closes = true},
     {.page = "single",
      .id = "load",

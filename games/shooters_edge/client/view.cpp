@@ -9,6 +9,8 @@
 #include <cmath>
 
 #include "brush/map.hpp"
+#include "progs/file.hpp"
+#include "progs/vm.hpp"
 #include "shooter/brush_hull.hpp"
 
 namespace shooters_edge::client {
@@ -33,6 +35,14 @@ double power_left(const Listen& l, int items, int bit, const char* field) {
 }
 
 int bits(float f) { return f > 0 ? static_cast<int>(f) : 0; }
+
+// An item's bit as the running program names it (its constant `IT_...`), else `fallback`: the
+// campaign's program carries its own table, the baseline mod the same bits it shares.
+int item_bit(const Listen& l, const char* name, int fallback) {
+  const ge::progs::Def* d = ge::progs::find_global(*l.progs, name);
+  if (d == nullptr) return fallback;
+  return bits(ge::progs::global_float(l.server->q.vm, d->offset));
+}
 
 }  // namespace
 
@@ -72,9 +82,20 @@ hud::Status status_of(const Listen& l, double t) {
     for (int k = 0; k < hud::kGuns; k++)
       if (held == kWeaponBits[k]) s.weapon = static_cast<hud::Weapon>(k + 1);
   s.power_s[static_cast<size_t>(hud::Power::shield)] =
-      power_left(l, items, kShield, "invincible_finished");
+      power_left(l, items, item_bit(l, "IT_INVULNERABILITY", kShield), "invincible_finished");
   s.power_s[static_cast<size_t>(hud::Power::damage)] =
-      power_left(l, items, kDamage, "super_damage_finished");
+      power_left(l, items, item_bit(l, "IT_QUAD", kDamage), "super_damage_finished");
+  s.power_s[static_cast<size_t>(hud::Power::cloak)] =
+      power_left(l, items, item_bit(l, "IT_INVISIBILITY", 0), "invisible_finished");
+  s.power_s[static_cast<size_t>(hud::Power::suit)] =
+      power_left(l, items, item_bit(l, "IT_SUIT", 0), "radsuit_finished");
+  const int silver = item_bit(l, "IT_KEY1", 0), gold = item_bit(l, "IT_KEY2", 0);
+  s.key_silver = silver != 0 && (items & silver) != 0;
+  s.key_gold = gold != 0 && (items & gold) != 0;
+  // The runes: the first four bits of the program's `serverflags`, carried from map to map.
+  const int flags_at = l.server->q.layout->g.serverflags;
+  if (flags_at >= 0)
+    s.runes = static_cast<uint8_t>(bits(ge::progs::global_float(l.server->q.vm, flags_at)) & 15);
   s.frags = static_cast<int>(field_named(l, 1, "frags"));
   return s;
 }

@@ -7,6 +7,7 @@
 #include "shooters_edge/client/listen.hpp"
 
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <string_view>
 
@@ -60,20 +61,8 @@ std::string text_field(const Listen& l, int e, int field) {
   return t == nullptr ? "" : t;
 }
 
-bool start_map(Listen& l, std::string& error) {
-  sv::QcServerOptions so;
-  so.seed = l.opt.seed;
-  so.loop.max_edicts = 1024;
-  l.server = sv::make_qc_server(*l.progs, so, error);
-  if (!l.server) return false;
-  for (const std::string& line : l.opt.console) sv::server_command(*l.server, line);
-  if (!sv::load_map(*l.server, l.map->spec, error)) {
-    error = "the map " + l.map->name + " did not load: " + error +
-            "; next: read the console's lines above";
-    return false;
-  }
-  if (l.map->from_file) sv::use_map_sets(*l.server, l.map->bsp);
-  sv::connect(*l.server, 0, l.opt.player, false, false);
+// What the client keeps of a map is new: the commands, the counts, the view the server set.
+void entered(Listen& l) {
   l.sequence = 0;
   for (sh::MoveCmd& c : l.cmds) c = {};
   l.frames = 0;
@@ -84,7 +73,69 @@ bool start_map(Listen& l, std::string& error) {
   const sh::Edict& me = l.server->sv.edicts[1];
   l.view = me.v_angle;
   l.forced = true;
+  l.entered_at = l.server->sv.time;
+  l.campaign = CampaignView{};
+  const sv::CampaignStats st = sv::campaign_stats(*l.server);
+  join_stats(l.campaign, st.total_secrets, st.total_monsters, st.found_secrets, st.killed_monsters);
+}
+
+bool start_map(Listen& l, std::string& error) {
+  sv::QcServerOptions so;
+  so.seed = l.opt.seed;
+  so.loop.max_edicts = 1024;
+  l.match = sv::make_qc_server(*l.progs, so, error);
+  l.server = l.match.get();
+  if (!l.server) return false;
+  for (const std::string& line : l.opt.console) sv::server_command(*l.server, line);
+  if (!sv::load_map(*l.server, l.map->spec, error)) {
+    error = "the map " + l.map->name + " did not load: " + error +
+            "; next: read the console's lines above";
+    return false;
+  }
+  if (l.map->from_file) sv::use_map_sets(*l.server, l.map->bsp);
+  sv::connect(*l.server, 0, l.opt.player, false, false);
+  entered(l);
   return true;
+}
+
+// The campaign host's map loader: the map read ahead when it is the one asked for, else read from
+// the search path. The listen keeps it (the spec's models point into it) until the next call.
+bool campaign_map(void* ctx, const std::string& name, sv::MapSpec& out, std::string& error) {
+  Listen& l = *static_cast<Listen*>(ctx);
+  std::unique_ptr<LoadedMap> m = std::move(l.next);
+  if (!m || m->name != name) {
+    if (l.opt.files == nullptr) {
+      error = "no search path to read maps/" + name + ".bsp from; next: set ListenOptions::files";
+      return false;
+    }
+    m = load_named_map(*l.opt.files, name, error);
+    if (!m) return false;
+  }
+  l.map = std::move(m);
+  out = l.map->spec;
+  l.map_changed = true;
+  return true;
+}
+
+// The campaign's map now playing, as the listen's: the server, its sets, the player's arrival.
+void campaign_entered(Listen& l) {
+  l.server = l.campaign_host->server.get();
+  l.maps_started = l.campaign_host->history.size();
+  if (l.map->from_file) sv::use_map_sets(*l.server, l.map->bsp);
+  entered(l);
+}
+
+// The program's client messages this frame (the all-clients stream, then the player's own), read
+// and emptied: nothing else drains a listen server's reliable streams.
+void read_streams(Listen& l) {
+  sv::MessageSink& out = l.server->out;
+  const double now = l.server->sv.time;
+  if (l.campaign_host) {
+    read_campaign(l.campaign, out.all, now);
+    read_campaign(l.campaign, out.one[0], now);
+  }
+  out.all.clear();
+  out.one[0].clear();
 }
 
 }  // namespace
@@ -143,6 +194,8 @@ std::unique_ptr<LoadedMap> load_named_map(const SearchPath& files, const std::st
 
 bool listen_start(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMap> map,
                   const ListenOptions& opt, std::string& error) {
+  if (single_player(progs)) return listen_campaign(l, progs, std::move(map), opt, error);
+  l.campaign_host.reset();
   l.progs = &progs;
   l.opt = opt;
   l.map = std::move(map);
@@ -150,15 +203,74 @@ bool listen_start(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMap> 
 }
 
 bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error) {
+  if (l.campaign_host) {
+    const std::string name = map->name;
+    l.next = std::move(map);
+    if (!sv::campaign_change(*l.campaign_host, sv::MapChange::new_game, name, error)) return false;
+    campaign_entered(l);
+    l.map_changed = false;
+    return true;
+  }
   if (l.server) sv::save_change_parms(*l.server);
-  l.server.reset();  // its views into the old map go before the map does
+  l.server = nullptr;
+  l.match.reset();  // its views into the old map go before the map does
   l.map = std::move(map);
   return start_map(l, error);
 }
 
+bool listen_campaign(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMap> map,
+                     const ListenOptions& opt, std::string& error) {
+  l.server = nullptr;
+  l.match.reset();
+  l.campaign_host.reset();
+  l.progs = &progs;
+  l.opt = opt;
+  l.failed.clear();
+  const std::string name = map->name;
+  l.next = std::move(map);
+  sv::CampaignOptions co;
+  co.server.seed = opt.seed;
+  co.server.loop.max_edicts = 1024;
+  co.load = campaign_map;
+  co.load_ctx = &l;
+  co.registered = opt.registered;
+  co.settings = opt.console;
+  l.campaign_host = std::make_unique<sv::Campaign>();
+  if (!sv::campaign_new_game(*l.campaign_host, progs, co, name, error)) {
+    l.campaign_host.reset();
+    return false;
+  }
+  sv::campaign_join(*l.campaign_host, 0, opt.player);
+  campaign_entered(l);
+  l.map_changed = false;
+  return true;
+}
+
+bool single_player(const pg::Progs& progs) {
+  return progs.layout != nullptr && progs.layout->single_player;
+}
+
+bool wants_campaign(const ListenOptions& opt) {
+  bool campaign = false;
+  for (const std::string& line : opt.console) {
+    const std::string_view s = line;
+    constexpr std::string_view kName = "deathmatch ";
+    if (s.substr(0, kName.size()) == kName) campaign = std::atof(line.c_str() + kName.size()) == 0;
+  }
+  return campaign;
+}
+
+std::string map_title(const Listen& l) {
+  const std::string t = text_field(l, 0, l.server->q.layout->f.message);
+  return t.empty() ? l.map->name : t;
+}
+
+double listen_tic(const Listen& l) {
+  return l.campaign_host ? sv::kCampaignStep : l.server->sv.set.mintic;
+}
+
 void listen_frame(Listen& l, sh::MoveCmd cmd) {
-  sv::QcServer& s = *l.server;
-  cmd.msec = static_cast<uint8_t>(ge::core::num::round(s.sv.set.mintic * 1000));
+  cmd.msec = static_cast<uint8_t>(ge::core::num::round(listen_tic(l) * 1000));
   cmd.angles = l.view;
   if (l.impulse != 0) {
     cmd.impulse = static_cast<uint8_t>(l.impulse);
@@ -171,7 +283,16 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
   p.client = 0;
   p.sequence = ++l.sequence;
   for (int i = 0; i < 3; i++) p.cmds[i] = l.cmds[i];
-  sv::qc_frame(s, &p, 1);
+  if (l.campaign_host) {
+    if (!sv::campaign_frame(*l.campaign_host, &p, 1, l.failed)) {
+      l.server = nullptr;
+      return;
+    }
+    if (l.campaign_host->history.size() != l.maps_started) campaign_entered(l);
+  } else {
+    sv::qc_frame(*l.server, &p, 1);
+  }
+  sv::QcServer& s = *l.server;
   l.frames++;
   for (const sv::NetEvent& ev : s.out.events) {
     if ((ev.kind == sv::EventKind::print || ev.kind == sv::EventKind::centerprint) &&
@@ -182,19 +303,24 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
         ev.bytes[1] == kExplosion)
       l.explosions.push_back(ev.origin);
   }
+  read_streams(l);
   sv::clear_frame(s.out);
+  if (l.campaign.turned) {
+    l.view = {l.campaign.angles.x, l.campaign.angles.y, 0};
+    l.campaign.turned = false;
+  }
   // The mod's forced view (a spawn, a teleport) leaves the player's angles off the ones sent.
   const sh::Edict& me = s.sv.edicts[1];
   l.forced = me.v_angle.x != cmd.angles.x || me.v_angle.y != cmd.angles.y;
   if (l.forced) l.view = {me.v_angle.x, me.v_angle.y, 0};
-  if (!s.pending_map.empty()) l.pending_map = s.pending_map;
+  if (!l.campaign_host && !s.pending_map.empty()) l.pending_map = s.pending_map;
 }
 
 int listen_advance(Listen& l, double wall_s, const sh::MoveCmd& cmd) {
-  const double tic = l.server->sv.set.mintic;
+  const double tic = listen_tic(l);
   l.owed += wall_s;
   int n = 0;
-  while (l.owed >= tic && n < kMostFrames && l.pending_map.empty()) {
+  while (l.owed >= tic && n < kMostFrames && l.pending_map.empty() && l.server != nullptr) {
     l.owed -= tic;
     listen_frame(l, cmd);
     n++;

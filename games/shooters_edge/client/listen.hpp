@@ -15,6 +15,13 @@
 // session of scripted commands steps the same server on any machine. An impulse (a weapon key)
 // waits until a frame takes it.
 //
+// A CAMPAIGN (`listen_campaign`): a single-player program (its layout's form) played on the
+// campaign host (server/campaign.hpp) in place of one server: its maps in a chain, each read from
+// `ListenOptions::files` by name when the program changes level (`map_changed` says so, for the
+// window to draw the new map), the frames on the host's 1/72 s clock. The program's client
+// messages (the intermission, the finale, the statistics: campaign_view.hpp) are read off the
+// reliable streams after every frame into `campaign`. `map` in a campaign is a new game.
+//
 // THE VIEW: the player's angles are the client's (`Listen::view`, degrees: pitch down positive,
 // yaw counter-clockwise from +x), sent with every command; when the server turns him (a spawn, a
 // teleport: the mod's forced view) the client takes the server's angles (`forced`).
@@ -23,10 +30,12 @@
 // ge:keywords listen-server local-player client slot usercmd packet listen_start listen_frame
 // ge:keywords listen_advance listen_change loaded-map load_named_map baseline_progs map-change
 // ge:keywords forced-view mintic player_state missiles rocket-jump
+// ge:keywords listen_campaign campaign single-player map_changed level-change
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <span>
@@ -35,8 +44,10 @@
 
 #include "progs/file.hpp"
 #include "shooter/pmove.hpp"
+#include "shooters_edge/client/campaign_view.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/server/bsp_map.hpp"
+#include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
 namespace shooters_edge::client {
@@ -70,13 +81,24 @@ struct ListenOptions {
   uint32_t seed = 1;
   std::vector<std::string> console = {"deathmatch 1"};  // server lines before each map loads
   std::string player = "player";
+  const SearchPath* files = nullptr;  // where a campaign's next map is read (outlives the listen)
+  bool registered = false;            // a campaign's content is the full game (gfx/pop.lmp)
 };
 
 struct Listen {
   const ge::progs::Progs* progs = nullptr;
   ListenOptions opt;
   std::unique_ptr<LoadedMap> map;
-  std::unique_ptr<sv::QcServer> server;
+  sv::QcServer* server = nullptr;       // the one playing: `match`'s, or the campaign's map's
+  std::unique_ptr<sv::QcServer> match;  // a match's server (null in a campaign)
+  std::unique_ptr<sv::Campaign> campaign_host;  // a campaign's host (null in a match)
+  std::unique_ptr<LoadedMap> next;              // a map read ahead for the campaign's loader
+  bool map_changed = false;  // the campaign moved to another map in the last frames (the window
+                             // draws the new one and clears it)
+  size_t maps_started = 0;   // of the campaign's history: the maps the listen has entered
+  std::string failed;        // the campaign's next map did not load: why
+  CampaignView campaign;     // the program's client messages (campaign_view.hpp)
+  double entered_at = 0;     // the server's time the player entered this map, s
   uint32_t sequence = 0;
   sh::MoveCmd cmds[3];              // the three newest, oldest first
   double owed = 0;                  // wall seconds not yet run, s
@@ -94,8 +116,22 @@ struct Listen {
 // The server made for `progs` (which must outlive it) on `map`, the player connected.
 bool listen_start(Listen& l, const ge::progs::Progs& progs, std::unique_ptr<LoadedMap> map,
                   const ListenOptions& opt, std::string& error);
-// The same progs on another map (the spawn parms saved first), the player connected again.
+// The same progs on another map (the spawn parms saved first), the player connected again; in a
+// campaign, a new game on it.
 bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error);
+// A new game of the single-player program `progs` (which must outlive the listen) on `map`, the
+// match before it (if any) ended. `opt.console`'s lines are the campaign's settings.
+bool listen_campaign(Listen& l, const ge::progs::Progs& progs, std::unique_ptr<LoadedMap> map,
+                     const ListenOptions& opt, std::string& error);
+// Whether a program is a single-player one (its layout's form).
+bool single_player(const ge::progs::Progs& progs);
+// Whether the server's lines ask for a single-player game: the last `deathmatch` set is 0 (the
+// menu's SINGLE PLAYER ▸ NEW GAME sets it so, a match's rules set it to 1 or more).
+bool wants_campaign(const ListenOptions& opt);
+// The map's title: the world's message, else the map's name.
+std::string map_title(const Listen& l);
+// The server's frame length now: the match's `sv_mintic`, or the campaign's step, s.
+double listen_tic(const Listen& l);
 
 // One server frame with the player's command `cmd` (its angles are `l.view`, its length the
 // server's frame; an impulse waiting goes with it).
