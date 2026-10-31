@@ -9,7 +9,7 @@
 //
 //   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>]
 //                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH]
-//                 [-demovideo <demo> <file> [--fps=N] [--resolution=<WxH|1080p|4k>] ...]
+//                 [-demovideo <demo> <file> [--from=m:ss --to=m:ss | --highlight=N] ...]
 //                 [+<command> ...]
 //
 // `-basedir` is the folder that holds the game folder (`id1` unless `-game` names another) with
@@ -48,8 +48,8 @@
 // nothing timed, `cl_demospeed <x>` (0..20, 0 pauses) its speed; `demo_track <slot>` picks the
 // player a multiview recording's view rides (-1: the lowest playing). Every format plays, `.gz`
 // included, and the voice formats (`.qwdv`, `.mvdv`) with their voices. A played demo is watched
-// like a video (client/demo_playback.hpp: a play bar, seeking, highlights); `-demovideo <demo>
-// <file>` turns one into a video with no window and quits (client/demo_video.hpp).
+// like a video (client/demo_playback.hpp); `-demovideo <demo> <file>` turns one, or a clip of it,
+// into a video or a GIF with no window and quits (client/demo_video.hpp).
 //
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console
@@ -123,6 +123,9 @@ struct Args {
   std::string timedemo;          // a demo to benchmark, then quit ("": none)
   std::string demovideo, video;  // a demo to turn into the video file `video`, then quit
   double fps = 30, seconds = 0;
+  double from = 0, to = -1;  // -demovideo's clip on the demo's timeline, s (to < 0: the end)
+  int highlight = 0;         // -demovideo's clip: the tracked player's Nth highlight
+  int gif_width = 480;
   std::string codec = "auto";
   std::string playdemo;  // a demo to play at its own pace ("": none)
   long frames = 0;       // 0: until quit
@@ -145,7 +148,10 @@ int demo_video_main(const Args& args, const cl::SearchPath& files,
   o.height = args.height & ~1;
   o.fps = args.fps;
   o.codec = args.codec == "none" ? "" : args.codec;
-  o.seconds = args.seconds;
+  o.seconds = args.to > args.from ? args.to - args.from : args.seconds;
+  o.from_s = args.from;
+  o.highlight = args.highlight;
+  o.gif_width = args.gif_width;
   o.track = track;
   o.picture = &picture;
   cl::DemoVideoReport r;
@@ -161,6 +167,9 @@ int demo_video_main(const Args& args, const cl::SearchPath& files,
     return 2;
   }
   out::status("demovideo: " + r.found + " (" + r.format + ") -> " + args.video);
+  if (!r.highlight.empty() || r.from_s > 0)
+    out::status("demovideo: the clip " + ge::ui::play_clock(r.from_s) + " to " +
+                ge::ui::play_clock(r.to_s) + (r.highlight.empty() ? "" : ": " + r.highlight));
   const auto num = [](double v) {
     char b[32];
     std::snprintf(b, sizeof b, "%g", v);
@@ -234,6 +243,14 @@ bool parse(int argc, char** argv, Args& a) {
       a.fps = std::strtod(argv[i] + 6, nullptr);
     } else if (arg.rfind("--seconds=", 0) == 0) {
       a.seconds = std::strtod(argv[i] + 10, nullptr);
+    } else if (arg.rfind("--from=", 0) == 0 || arg.rfind("--to=", 0) == 0) {
+      const double t = cl::parse_clock(std::string(arg.substr(arg.find('=') + 1)));
+      if (t < 0) return false;
+      (arg[2] == 'f' ? a.from : a.to) = t;
+    } else if (arg.rfind("--highlight=", 0) == 0) {
+      a.highlight = static_cast<int>(std::strtol(argv[i] + 12, nullptr, 10));
+    } else if (arg.rfind("--gif-width=", 0) == 0) {
+      a.gif_width = static_cast<int>(std::strtol(argv[i] + 12, nullptr, 10));
     } else if (arg.rfind("--codec=", 0) == 0) {
       a.codec = std::string(arg.substr(8));
     } else if ((arg == "-playdemo" || arg == "--playdemo") && i + 1 < argc) {
@@ -289,6 +306,7 @@ int run_main(int argc, char** argv) {
         "shooters_edge: unknown flag. Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
         "[-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] [--frames=N] "
         "[--size=WxH] [-demovideo <demo> <file> [--fps=N] [--resolution=<WxH|720p|1080p|1440p|4k>] "
+        "[--from=m:ss] [--to=m:ss] [--highlight=N] [--gif-width=N] "
         "[--codec=<c>] [--seconds=S]] "
         "[+<command> ...]; next: rerun with those flags only.");
     return 2;
