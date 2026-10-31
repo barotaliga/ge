@@ -67,7 +67,7 @@ void player_rows(const ClassicPen& pen, const ClassicType& type, const Scoreboar
   else
     rules(type, {4, 2, 4, 5, 16}, x, y + 8);
   y += 16;
-  const float step = view.large ? 8 : 10;
+  const float step = view.large ? 8.0f : 10.0f;
   for (size_t k : score_order(b)) {
     if (y > kLastRow) break;
     const ScoreRow& r = b.rows[k];
