@@ -142,7 +142,7 @@ struct FrameOptions {
   bool splashes = true;   // the rain's splashes on the ground (with `precip`)
   bool wet = true;        // the rain wets the ground: darker, mirroring, pooled on the flats
   bool lightning = true;  // a map's thunderstorm's flashes and channels (mountain/app/storm_look)
-  bool fog = true;        // the scene's fog in areas (FrameScene::fog, render/fog.hpp) drawn
+  bool fog = true;        // the fog drawn: the map's mists (app/mists.hpp) and the scene's own
   // THE LAMPS AFTER DARK (app/lamps.hpp): the piste's floods, the street lamps, the windows'
   // spill and the racers' headlamps as local lights; `light_shadows`, the nearest and brightest
   // of them casting into the lamps' atlas (render/lamp_shadows.hpp), `lamp_tiles` of its tiles
@@ -227,6 +227,8 @@ struct GameFrame {
   ge::render::Particles particles;
   ge::render::Precip precip;
   ge::render::Fog fog;
+  std::vector<ge::render::FogVolume>
+      mists;  // this frame's fog: the map's (app/mists.hpp), the scene's
   ge::render::Bolts bolts;
   ge::wind::Wet wet;    // the water on the ground, stepped by the frames' clock
   double wet_time = 0;  // the last drawn frame's time_s

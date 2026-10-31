@@ -1,5 +1,5 @@
-// LAB `fog`: the fog in areas (engine/render/fog.hpp) in Fall Line's frame. Five scenes over a
-// seed's map, each drawn without its fog and with it, from a camera the scene places:
+// LAB `fog`: the fog in areas (engine/render/fog.hpp) in Fall Line's frame. Six kinds of scene over
+// a seed's map, each drawn without its fog and with it, from a camera the scene places:
 // - WOODS: under the late morning sun, the wood the sun lights best seen across the sun (the `wood`
 //   view), a ground mist laid over it, the trees' shadows falling through it;
 // - SHAFTS: the same mist from the wood's shaded side, looking toward the sun through the trees,
@@ -9,7 +9,12 @@
 // - DUST: at noon on the piste, a thin warm dust in the air round the eye, carved into drifting
 //   wisps by the noise on the wind;
 // - LAMPS: at night, a mist round a floodlight mast on the piste, its lamps scattered in it (a
-//   halo round each head, the beam's cone, the mast's shadow through it).
+//   halo round each head, the beam's cone, the mast's shadow through it);
+// - DAWN: the map's own mists (app/mists.hpp, mountain/app/mist_look.hpp) at each of --dawn's
+//   hours, from high over the summit looking down to the valley: a still, clear morning starts in
+//   the valley's sea of fog, and it is gone by noon. Their fog is the map's air's, not placed: the
+//   valley's top and extinction and the mists' kinds are deterministic rows; the lab fails when the
+//   first hour has no fog or an hour from noon on is not clear.
 // --frames frames are drawn up to each picture at 60 a second, so the fog's history has settled.
 //
 // Beside each: the volumes in reach and the froxel range (deterministic), the share of the
@@ -22,7 +27,7 @@
 //
 // ge:summary Lab: the fog in areas: woods mist with shafts, a glow, drifting dust, lamps in mist
 // ge:keywords lab fog mist ground-fog dust glow light-shafts god-rays froxel volume
-// ge:keywords fall-line picture lamps-in-fog halo floodlight
+// ge:keywords fall-line picture lamps-in-fog halo floodlight dawn burn-off map-mists sea-of-fog
 // ge:skill render labs
 #include <algorithm>
 #include <cctype>
@@ -37,11 +42,13 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "fall_line/app/frame.hpp"
+#include "fall_line/app/mists.hpp"
 #include "fall_line/app/views.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
+#include "mountain/app/mist_look.hpp"
 #include "mountain/app/night_lamps.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "render/fog.hpp"
@@ -80,7 +87,9 @@ struct Scene {
   double range = 160;  // the froxels' reach, m
   r::FrameView view;
   std::vector<r::FogVolume> fog;
-  std::string what;  // the caption's account of the fog
+  std::string what;    // the caption's account of the fog
+  bool dealt = false;  // the map's own mists at `hour` in place of `fog`
+  double hour = -1;
 };
 
 // The direction toward the sun along the ground (unit, x and z).
@@ -273,6 +282,34 @@ Scene lamps(const mg::Level& level, double hour) {
   return s;
 }
 
+std::vector<std::string> split(const std::string& text, char sep) {
+  std::vector<std::string> out;
+  size_t from = 0;
+  while (from <= text.size()) {
+    const size_t at = std::min(text.find(sep, from), text.size());
+    if (at > from) out.push_back(text.substr(from, at - from));
+    from = at + 1;
+  }
+  return out;
+}
+
+Scene dawn(const mg::Level& level, double hour) {
+  Scene s;
+  char id[32];
+  std::snprintf(id, sizeof id, "dawn-%g", hour);
+  s.id = id;
+  s.dealt = true;
+  s.hour = hour;
+  s.range = 300;
+  fall_line::app::day_view(level, hour, s.view);
+  fall_line::app::make_view(level, "vista", s.view);
+  s.look = hour < 12 ? "on a still, clear morning the valleys under a level sea of fog, the "
+                       "ridges standing out of it in the sun"
+                     : "by noon the fog gone, the valley clear";
+  s.what = "the map's own mists at its air's hour, nothing placed";
+  return s;
+}
+
 void run(ge::lab::Lab& lab) {
   const double seed = lab.arg_num("seed");
   const int frames = static_cast<int>(lab.arg_num("frames"));
@@ -299,13 +336,26 @@ void run(ge::lab::Lab& lab) {
   if (wanted("glow")) scenes.push_back(glow(level, lab.arg_num("night")));
   if (wanted("dust")) scenes.push_back(dust(level, 12));
   if (wanted("lamps")) scenes.push_back(lamps(level, lab.arg_num("night")));
+  if (wanted("dawn")) {
+    for (const std::string& h : split(lab.arg("dawn"), ','))
+      scenes.push_back(dawn(level, std::strtod(h.c_str(), nullptr)));
+  }
   if (scenes.empty()) {
     lab.fail("--scenes `" + want + "` names no scene",
-             "Pass --scenes=all or ids from woods,shafts,glow,dust,lamps, comma-separated. "
+             "Pass --scenes=all or ids from woods,shafts,glow,dust,lamps,dawn, comma-separated. "
              "Skill: render.");
     return;
   }
   for (const Scene& s : scenes) {
+    if (s.dealt) {
+      // The map's air at the hour: what it lays, and where.
+      const ge::mountain::app::MistLook m = ge::mountain::app::mists_at(level, s.hour, s.view.eye);
+      lab.metric(s.id + ".valley-top", m.valley.density > 0 ? m.valley.top_m : 0, "m");
+      lab.metric(s.id + ".valley-density", m.valley.density, "1/m");
+      lab.metric(s.id + ".floor-kind", static_cast<double>(m.floor.kind), "kind");
+      lab.metric(s.id + ".areas", static_cast<double>(m.areas.size()), "count");
+      continue;
+    }
     r::FogSettings fs;
     fs.range = s.range;
     const size_t in = r::fog_in_reach(fs, s.view, s.fog).size();
@@ -364,6 +414,9 @@ void run(ge::lab::Lab& lab) {
   }
   uint32_t errors = 0, late = 0;
   bool first = true;
+  const Scene* first_dawn = nullptr;
+  for (const Scene& s : scenes)
+    if (s.dealt && first_dawn == nullptr) first_dawn = &s;
   for (const Scene& s : scenes) {
     // A frame is made once a device (its load ends), and each scene's froxels have their reach.
     if (!first) {
@@ -393,7 +446,9 @@ void run(ge::lab::Lab& lab) {
     for (bool on : {false, true}) {
       fall_line::app::cut(*frame);
       fall_line::app::FrameScene scene;
-      if (on) scene.fog = s.fog;
+      frame->options.fog = on;
+      if (on && !s.dealt) scene.fog = s.fog;
+      scene.hour = s.hour;
       r::FrameView view = s.view;
       for (int n = 0; n < frames; ++n) {
         view.frame = static_cast<uint64_t>(n);
@@ -418,7 +473,20 @@ void run(ge::lab::Lab& lab) {
       const double pixels = static_cast<double>(width) * height;
       lab.metric(s.id + ".changed", static_cast<double>(changed) / pixels, "share", Det::measured);
       lab.metric(s.id + ".luma", luma / pixels, "levels", Det::measured);
-      if (static_cast<double>(changed) < pixels * 0.01) {
+      if (s.dealt) {
+        // The morning burns off: fog at the first hour asked, none from noon.
+        const bool fogged = static_cast<double>(changed) > pixels * 0.01;
+        if (s.hour >= 12 && fogged) {
+          lab.fail("the " + s.id + " scene is not clear by noon",
+                   "Check the burn-off in mountain/app/mist_look.cpp and wind/mist.cpp's night "
+                   "chill. Skill: render.");
+        }
+        if (&s == first_dawn && !fogged) {
+          lab.fail("the " + s.id + " scene, the morning's first, has no fog",
+                   "Check the map's air in mountain/app/mist_look.cpp (a clear, still night "
+                   "fogs the valley) and dress_mists in app/mists.cpp. Skill: render.");
+        }
+      } else if (static_cast<double>(changed) < pixels * 0.01) {
         lab.fail("the " + s.id + " scene's fog leaves the picture as it was",
                  "Check prepare_fog and the froxels in engine/render/fog.cpp and local_fog in "
                  "engine/render/wgsl/frame.wgsl. Skill: render.");
@@ -458,7 +526,8 @@ const ge::lab::LabSpec kSpec{
     {
         {"seed", "38", "the map's seed"},
         {"scenes", "all",
-         "the scenes drawn: all, or ids comma-separated (woods,shafts,glow,dust,lamps)"},
+         "the scenes drawn: all, or ids comma-separated (woods,shafts,glow,dust,lamps,dawn)"},
+        {"dawn", "7.5,8,8.5,12", "the solar hours of the dawn scenes, comma-separated"},
         {"morning", "11", "the solar hour of the woods"},
         {"night", "22", "the solar hour of the glow"},
         {"weather", "1", "1: the map's own sky (its cloud and deck); 0: a clear one"},
