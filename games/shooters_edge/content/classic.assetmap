@@ -243,7 +243,7 @@ model progs/v_axe.mdl view/axe
 model progs/v_shot.mdl view/shotgun
 model progs/v_shot2.mdl view/double_shotgun
 model progs/v_nail.mdl view/minigun
-model progs/v_nail2.mdl view/heavy_nailgun
+model progs/v_nail2.mdl view/railgun
 model progs/v_rock.mdl view/grenade_launcher
 model progs/v_rock2.mdl view/rocket_launcher
 model progs/v_light.mdl view/beam_gun

@@ -14,6 +14,7 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `models/view/axe/axe.glb` | `models/view/axe/build.py` |
 | `models/view/double_shotgun/double_shotgun.glb` | `models/view/double_shotgun/build.py` |
 | `models/view/minigun/minigun.glb` | `models/view/minigun/build.py` |
+| `models/view/railgun/railgun.glb` | `models/view/railgun/build.py` |
 | `models/view/shotgun/shotgun.glb` | `models/view/shotgun/build.py` |
 
 ## Kenney: Blaster Kit
@@ -44,7 +45,6 @@ Every sound and model in this directory, the pack it came from, its author and i
 | `models/projectile/rocket.glb` | `Models/GLB format/bullet-foam-tip-thick.glb` |
 | `models/view/beam_gun.glb` | `Models/GLB format/blaster-r.glb` |
 | `models/view/grenade_launcher.glb` | `Models/GLB format/blaster-b.glb` |
-| `models/view/heavy_nailgun.glb` | `Models/GLB format/blaster-p.glb` |
 | `models/view/rocket_launcher.glb` | `Models/GLB format/blaster-h.glb` |
 
 ## Kenney: Digital Audio

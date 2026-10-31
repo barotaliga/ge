@@ -12,7 +12,7 @@ view/axe	First-person axe, held in the hand (built: models/view/axe)	held weapon
 view/shotgun	First-person pump shotgun, held in both hands (built: models/view/shotgun)	held weapon 2	game	replaced	ge/built
 view/double_shotgun	First-person side-by-side break-action shotgun, held in both hands (built: models/view/double_shotgun)	held weapon 3	game	replaced	ge/built
 view/minigun	First-person six-barrel minigun in both hands, the nailgun's slot (built: models/view/minigun)	held weapon 4	game	replaced	ge/built
-view/heavy_nailgun	First-person heavy nailgun	held weapon 5	game	replaced	kenney/blaster-kit
+view/railgun	First-person railgun in both hands, the heavy nailgun's slot (built: models/view/railgun)	held weapon 5	game	replaced	ge/built
 view/grenade_launcher	First-person grenade launcher	held weapon 6	game	replaced	kenney/blaster-kit
 view/rocket_launcher	First-person rocket launcher	held weapon 7	game	replaced	kenney/blaster-kit
 view/beam_gun	First-person beam gun	held weapon 8	game	replaced	kenney/blaster-kit
