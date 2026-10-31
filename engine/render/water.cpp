@@ -33,7 +33,21 @@ constexpr float kMorphStart = 0.8f;
 double deep_k(double w) { return w * w / water::kGravity; }
 double deep_w(double length) { return std::sqrt(water::kGravity * 2 * kPi / length); }
 
+// The lowest a volume's water reaches: its hulls' lowest floor. A lake, an ocean or a river is
+// open below (its bed is the ground), so an eye anywhere under its level is in it.
+double floor_of(const water::Body& body) {
+  if (body.kind != water::Kind::volume) return -1e300;
+  double floor = body.level;
+  for (const water::Hull& hull : body.hulls) {
+    for (const water::Plane& p : hull.planes) {
+      if (p.ny < 0 && p.nx == 0 && p.nz == 0) floor = std::min(floor, p.d / p.ny);
+    }
+  }
+  return floor;
+}
+
 void stage_body(Water::Slot& slot, const water::Body& body) {
+  slot.floor = floor_of(body);
   WaterGpuBody& b = slot.staged;
   b.info[0] = static_cast<float>(body.level);
   b.info[1] = 1.0f;
@@ -321,7 +335,9 @@ void prepare_water(gpu::Device& device, Water& water, const FrameView& view) {
     slot.shown = !slot.hidden && view.eye[1] > b.info[0];
     const bool inside = view.eye[0] >= b.box[0] && view.eye[0] <= b.box[2] &&
                         view.eye[2] >= b.box[1] && view.eye[2] <= b.box[3];
-    if (!slot.hidden && !slot.shown && inside && water.eye_under < 0) {
+    // A pool's box is only its plan: an eye under the level but below the floor (a room under
+    // another pool) is not in it.
+    if (!slot.hidden && !slot.shown && inside && view.eye[1] > slot.floor && water.eye_under < 0) {
       water.eye_under = static_cast<int>(&slot - water.bodies.data());
     }
     if (slot.shown && inside && view.eye[1] < b.info[0] + kWaterlineBand && water.eye_near < 0) {
