@@ -112,8 +112,10 @@ sheet (`Face::glyph_sheet`) draws the counts in a set's own type.
 
 Shooter's Edge's three HUDs (`games/shooters_edge/hud/layout.hpp`) are the first user: the
 classic bar, the modern corners and the compact rings round the crosshair, one table picked by
-`hud_style`, drawn from the game's free art or, through classic-enhance, the classic set's own
-pictures.
+`hud_style`, drawn from the game's free art or the classic set's own pictures: the window reads
+those straight from the player's packs at start (or a lab from classic-enhance's cache), and
+`hud_art auto|classic|free` picks between the two sets (`auto`, the default: the packs' pictures
+whenever the packs carry them).
 
 ## Skins: the player's and the game's own textures
 
