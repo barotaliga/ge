@@ -102,6 +102,8 @@ struct Water {
     wgpu::BindGroup group;
     bool hidden = false;           // the caller's switch: not drawn (a lab's dry picture)
     bool shown = true;             // this frame's: not hidden and seen from over its level
+    // m: a volume's lowest hull floor (an eye under it is not in it); open water has none
+    double floor = -1e300;
     float veil[4] = {0, 0, 0, 0};  // the fog a view under it looks through (water::Optics)
   };
   std::vector<Slot> bodies;

@@ -19,7 +19,7 @@
 namespace ge::brush::app {
 
 struct LiquidRows {
-  std::string water = "water", water_look = "nordic-brown";  // the liquid's row, the water's look
+  std::string water = "water", water_look = "nordic-clear";  // the liquid's row, the water's look
   std::string lava = "lava", slime = "slime";                // rows of water/liquids.hpp
   double depth = 2;                                          // m under the top the volume reaches
   double lava_cover = 0.3;  // the share of the lava crusted over (the classic's lava is molten)
