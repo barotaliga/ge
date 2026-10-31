@@ -195,6 +195,57 @@ everything once per host frame:
 - Toss, bounce, fly and step entities move by the same rules as `gameloop.md` § Tossing and
   § Step.
 
+## The original trace
+
+The original server traces every hull (the world's, a door's, an entity's six-plane box, `movement.md` § Clip hulls) with this walk, for the player's move and for everything else (the program's `traceline`, the toss, a monster's step). From p1 to p2 it finds the first point where the segment
+passes from a non-solid leaf into a solid one. It is one recursive walk, and every number in it
+is a 32-bit float. A call has a node, the segment's two ends p1 and p2, and their two
+fractions p1f and p2f of the whole trace (0 and 1 at the top). It answers "go on" or "stop".
+The trace's result starts as fraction 1, end point = the trace's end, "all solid" set and the
+other flags clear.
+
+- **A leaf**: an empty leaf clears "all solid" and sets "in open"; a liquid leaf clears "all
+  solid" and sets "in water"; a solid leaf sets "started in solid". All three answer "go on".
+- **A node**: compute the signed distances `t1`, `t2` of p1 and p2 from its plane (`p[type] −
+  dist` for an axial plane, `normal · p − dist` otherwise). Both ≥ 0: the front child with the
+  same segment, and its answer is this call's. Both < 0: the same with the back child.
+- **A straddle** (one end on each side). **The split point already stands 1/32 unit back on p1's
+  side:** `frac = (t1 − 1/32) / (t1 − t2)` when `t1 ≥ 0`, `(t1 + 1/32) / (t1 − t2)` when `t1 < 0`,
+  clamped to [0, 1]; `mid = p1 + frac·(p2 − p1)` per axis and `midf = p1f + (p2f − p1f)·frac`.
+  That one `mid` is both where the near part ends and where the far part STARTS: the far part
+  is never begun on the plane itself. So where a split's back-off moves `mid` along the segment
+  by `(1/32) / |t1 − t2| × length`, which is more than 1/32 when the segment meets the plane
+  at a slant, the far part starts that much short of the plane.
+  1. The near child (the front when `t1 ≥ 0`, else the back) with p1 → mid (p1f → midf). If it
+     answered "stop", answer "stop".
+  2. The contents at `mid`, walked down from the FAR child (not from the hull's first node).
+     If not solid: the far child with mid → p2 (midf → p2f), and its answer is this call's.
+  3. Otherwise, if "all solid" is still set (no empty or liquid leaf yet), answer "stop" and
+     change nothing.
+  4. **The impact.** The plane is this node's, facing p1's side (normal and dist as stored
+     when `t1 ≥ 0`, both negated otherwise). Then, while the contents at `mid` walked down from
+     the hull's FIRST node are solid, `frac −= 0.1` and `mid`, `midf` are worked out again from
+     this call's p1, p2 (if `frac` drops below 0, the current `mid` and `midf` are kept and the
+     loop ends). The result's fraction is `midf` and its end point `mid`. Answer "stop".
+- **Start in solid**: the first leaf reached was solid. "Started in solid" is set; when no
+  empty or liquid leaf was ever reached, "all solid" stays set too, and the fraction stays 1
+  with the end point at the trace's end (the player move treats any start in solid as fraction
+  0). A trace that starts in solid and then leaves it reports "started in solid" with what it
+  met after.
+- **The caller's offset**: the trace runs in the hull's own space (the start and end minus the
+  offset). Only when the fraction is not 1 is the offset added back to the end point; at
+  fraction 1 the end point is still the trace's end as given.
+
+**How it differs from the networked trace** (`movement.md` § Clip hulls): there the split is
+on the plane (`t1 / (t1 − t2)`), the 1/32 back-off is applied only at the impact and only
+within that split's segment, the far part is traced rather than tested by its contents at the
+split, and there is no 0.1 step-back. At a corner of two planes the end point differs:
+`ramp50`'s corner ends at x 47.96875 here and at 48 there.
+
+**Which walk a match uses**: the campaign host (a single-player program) uses this one for
+every trace, and the arena host uses the networked one. `framemove.txt` and `hulltrace.txt`
+were cut with this walk; `pmove.txt` and `entity.txt` with the networked one.
+
 ## Test vectors
 
 `vectors/framemove.txt` holds the measurements. Its `scene` lines name scenes of
