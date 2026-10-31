@@ -188,7 +188,8 @@ models, switched with the number keys, kicked and lit by its muzzle flash as the
 lit by the map's baked light under the player; `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`,
 `cl_guny`, `cl_gunz` and `cl_gunsway` in the console); the HUD (`hud_style
 classic|modern|compact`, the classic status bar by default, drawn in the packs' own pictures when
-the packs carry them and in the game's free art when not: `hud_art auto|classic|free`); the console; the main menu (below). The map's own moving brush
+the packs carry them and in the game's free art when not: `hud_art auto|classic|free`; `viewsize
+110` drops the inventory bar and `viewsize 120` every bar); the console; the main menu (below). The map's own moving brush
 models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, and one
 the game removed (a secret wall the mod does not keep) is not drawn: `brush/app/bsp_draw.hpp`'s
 `set_movers`, fed each frame by `client/world_models.hpp`'s `place_brushes`; their shadows in the
