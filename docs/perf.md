@@ -95,6 +95,20 @@ shadow 10 ms (the figures' tiles 6 of it), the tracks 6, the ridges' horizon 6, 
 | The tracks: past a quarter of a coarse texel a pixel the groove's slope fades out, gone by a half, and the track is one tap of the coarse map (was five, or ten in the fine window's rim) | 62.9 → 62.0 | one pixel of one view a level apart; every band at or near 100 dB | `mountain/app/snow.wgsl` |
 | Both | 65.2 → 62.0 (−5%) | | |
 
+## Shooter's Edge's world frame
+
+Measured with `build/release/labs se-timedemo --basedir=<the shareware game> --demo=demo1
+--size=640,360 --look=modern`, every timed frame of the demo, on the container's software adapter
+(llvmpipe): proportions, not a real GPU's times. The pictures are held by the digests of
+`gpu-bsp`, `gpu-bsp-weather`, `se-world` and `se-timedemo`.
+
+| Change | bsp.shadows (median ms) | frame span (median ms) | Average fps | Where |
+| --- | --- | --- | --- | --- |
+| The shadow maps kept: a light's six cube faces drawn when it takes a slot, not every frame; the sun's, the zenith's and the fall's maps when their camera moves (the modern look drew up to 32 lights x 6 faces of the whole map, and two 2048² maps of it, every frame) | 438 → 0.01 (17 at p95: lights new to the eye) | 563 → 127 | 1.8 → 7.6 | `brush/app/bsp_draw.cpp` |
+
+What is left is the map's colour pass (`bsp`, 76 ms of the 127 here): the filtered texels, up to
+160 lights a pixel and their cube shadows, and the sun's and the sky's maps.
+
 ## The flow step on threads
 
 `water::step_flow` splits its rows over `core::parallel_bands`. On the persistent pool a call
