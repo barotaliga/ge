@@ -337,8 +337,7 @@ void prepare_water(gpu::Device& device, Water& water, const FrameView& view) {
                         view.eye[2] >= b.box[1] && view.eye[2] <= b.box[3];
     // A pool's box is only its plan: an eye under the level but below the floor (a room under
     // another pool) is not in it.
-    if (!slot.hidden && !slot.shown && inside && view.eye[1] > slot.floor &&
-        water.eye_under < 0) {
+    if (!slot.hidden && !slot.shown && inside && view.eye[1] > slot.floor && water.eye_under < 0) {
       water.eye_under = static_cast<int>(&slot - water.bodies.data());
     }
     if (slot.shown && inside && view.eye[1] < b.info[0] + kWaterlineBand && water.eye_near < 0) {
