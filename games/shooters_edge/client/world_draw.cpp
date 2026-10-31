@@ -211,7 +211,11 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
   gr::create_ui_pass(d, f->pipelines, f->ui, format);
   if (f->has_map) {
     ba::create_bsp(d, f->pipelines, f->bsp, f->scene, f->layout);
-    create_models(d, f->pipelines, f->models, f->layout, files, palette_copy, f->scene.map, models);
+    // ce_models: the models' enhanced skins, when this pack's were enhanced.
+    ModelLoad load = models;
+    if (picture.ce.models && !files.archives.empty())
+      load.cache = ge::classicenhance::find_cache(files.archives[0].bytes);
+    create_models(d, f->pipelines, f->models, f->layout, files, palette_copy, f->scene.map, load);
     f->extras = create_extras(d, f->pipelines, f->layout, f->scene, picture.ce, picture.weather);
   }
   if (!f->pipelines.finish(d)) {

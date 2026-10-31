@@ -142,7 +142,9 @@ map, then drawn each frame where the server's entities and its static ones stand
 lying about, armour, health and ammo boxes, the torches and their flames, the powers, the other
 players in their own top and bottom colours; a group of frames plays at its intervals, an item
 flagged to spin turns, each lit by the lightmap on the floor under it, shaded from above, its
-fullbright texels glowing); the weapon in hand (`client/held.hpp`: the game's free
+fullbright texels glowing; with `ce_models` on and the pack enhanced, each skin is the
+cache's upscaled copy, raised to twice the pack's size and then toward the cache's own scale
+while the models' one atlas holds them all, read when the map loads); the weapon in hand (`client/held.hpp`: the game's free
 models, switched with the number keys, kicked and lit by its muzzle flash as the mod fires it,
 lit by the map's baked light under the player; `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`,
 `cl_guny`, `cl_gunz` and `cl_gunsway` in the console); the HUD (`hud_style
