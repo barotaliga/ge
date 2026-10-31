@@ -32,7 +32,8 @@ constexpr ui::Color kRedLit = ui::hex(0xc04b2b), kBlueLit = ui::hex(0x3b5fa7);
 // `s` centred in a box of `cols` cells whose left edge is at `x`.
 void centred(const ClassicPen& pen, std::string_view s, float x, int cols, float y, bool alt) {
   const auto n = static_cast<int>(std::min(s.size(), static_cast<size_t>(cols)));
-  pen.text(s.substr(0, static_cast<size_t>(n)), x + 8 * static_cast<float>((cols - n) / 2), y, alt);
+  pen.text(s.substr(0, static_cast<size_t>(n)),
+           x + 8 * std::floor(static_cast<float>(cols - n) / 2), y, alt);
 }
 
 void count(const ClassicPen& pen, int seconds, float opacity) {
