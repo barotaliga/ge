@@ -90,6 +90,10 @@ struct Options {
   // r_bounce: the share of the map's baked light added to the real-time lights as the light
   // bounced round the room (the lightmaps as light probes: the room's own light, not flat grey).
   double bounce = 0.35;
+  // The rebake's bounce in its place (a scene with a rebake, `attach_rebake`): the room's light
+  // bounced off its walls, worked out with the direct light left out, added at its full strength
+  // under the real-time lights; the faces it does not cover keep the baked light's share.
+  bool rebake_bounce = false;
   // r_skylight: the sky through the sky faces against the rooms, and its light in them (the
   // sun's and the open sky's): 1 our sky as it is, under 1 dimmer (a dusk's against torch-lit
   // halls), times `sky_tint` (each channel's share, a tint toward the map's own sky).
@@ -191,7 +195,7 @@ struct BspDraw {
   wgpu::Texture atlas, light;
   wgpu::Texture surface;  // the textures' relief (Scene::surface), or a 1 x 1 flat stand-in
   // The scene's rebaked light (RGB9E5) and its direction (RGBA8), or 1 x 1 stand-ins.
-  wgpu::Texture rebake_rgb, rebake_dir;
+  wgpu::Texture rebake_rgb, rebake_dir, rebake_bounce;
   wgpu::Buffer uniform, lights, jobs;
   wgpu::Texture cubes, orthos;
   std::vector<wgpu::TextureView> cube_layers;  // a view a cube face

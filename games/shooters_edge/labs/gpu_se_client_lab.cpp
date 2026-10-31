@@ -40,6 +40,7 @@
 #include <vector>
 
 #include "assets/sha256.hpp"
+#include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "classicenhance/cache.hpp"
 #include "classicenhance/pipeline.hpp"
@@ -136,7 +137,23 @@ bool enhance_fixture(std::span<const uint8_t> pack, const std::filesystem::path&
       }
     }
   }
-  return ce::write_record(dir, "textures", "se-client fixture");
+  if (!ce::write_record(dir, "textures", "se-client fixture")) return false;
+  // Each map's light rebaked (the lightmap stage's file), quickly: the halls are small.
+  ge::vfs::Pak pak_dir;
+  if (!ge::vfs::read_pak(pack, &pak_dir, &error)) return false;
+  for (const ge::vfs::PakEntry& e : pak_dir.entries) {
+    if (e.path.rfind("maps/", 0) != 0 || !e.path.ends_with(".bsp")) continue;
+    ge::brush::Map map;
+    if (!ge::brush::read_bsp(ge::vfs::pak_file(pack, e), &map, &error)) return false;
+    const std::string stem = e.path.substr(5, e.path.size() - 9);
+    ce::LightmapOptions o;
+    o.samples = 16;
+    if (!ce::light_map(map, stem, dir / "lightmaps", ce::texture_means(map, dir, palette.rgb),
+                       &error, o)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 // A game folder's map from its start, four ways, classic beside enhanced (private pictures), or

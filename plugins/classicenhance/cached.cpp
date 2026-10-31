@@ -7,6 +7,8 @@
 // ge:test tests/classicenhance_cached_test.cpp
 #include "classicenhance/cached.hpp"
 
+#include <fstream>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -110,6 +112,20 @@ bool cached_skins(const fs::path& dir, std::string_view name, uint32_t w, uint32
   }
   if (out.empty()) return false;
   *skins = std::move(out);
+  return true;
+}
+
+bool cached_rebake(const fs::path& dir, std::string_view name, size_t vertices,
+                   brush::Rebaked* out) {
+  if (dir.empty() || name.empty()) return false;
+  std::ifstream f(dir / "lightmaps" / (safe_name(std::string(name)) + ".gerb"), std::ios::binary);
+  if (!f) return false;
+  const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
+                                   std::istreambuf_iterator<char>());
+  brush::Rebaked baked;
+  std::string error;
+  if (!brush::read_rebaked(bytes, &baked, &error) || baked.lm.size() != vertices * 2) return false;
+  *out = std::move(baked);
   return true;
 }
 

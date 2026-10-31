@@ -51,7 +51,7 @@ cache is `GE_CLASSIC_CACHE` when set, else the platform's cache folder (`XDG_CAC
 | --- | --- | --- |
 | `pack` | `pack/pak0.pak`, `NOTICE.txt`, `source.txt` | the source changes |
 | `textures` | `textures/<name>/{albedo,height,normal,roughness,emissive}.png` | `kTextureStageVersion`, the options, the upscaler's weights or its device move |
-| `lightmaps` | `lightmaps/<map>.png` (the map's own light, packed); the rebake's file once M41b lands | `kLightmapStageVersion` moves |
+| `lightmaps` | `lightmaps/<map>.gerb`: each map's light rebaked (`brush::rebake_map`: 0.25 m luxels, two bounces off the textures' mean colours, the light's direction, and the bounce alone); the shareware pack's 21 maps take about 4 minutes on four cores and 53 MB | `kLightmapStageVersion`, the options or the textures' stage move |
 | `sounds` | `sounds/<path>.wav` (48 kHz, 16-bit, the loop start in a `cue ` chunk), `sounds/index.txt` | `kSoundStageVersion` or the options move |
 | `models` | `models/<name>.glb` (every model: enhanced skins, smooth normals, a morph target a frame, its clips), `models/<name>/skin<k>.png` and `glow<k>.png` (each skin alone, for a game drawing the pack's own model), `sprites/<name>/<frame>.png`, `models/index.txt`, `replaced.txt` | `kModelStageVersion` or the options move |
 | `pictures` | `pictures/<name>.png` (the wad's pictures and the 128x128 font sheet by lump name, `pictures/gfx/<name>.png` for the pack's own picture files), unscaled, in the palette's colours with the see-through index clear; `pictures/index.txt` | `kPictureStageVersion` moves |
@@ -107,6 +107,15 @@ bumps lie flat. Neither changes the cache.
 Under a lava's or a slime's level the modern look draws the liquid round the eye
 (`render/liquid.hpp`, seen from below, with a least view of 3 m) and leaves out the screen's flat
 tint for it.
+
+`ce_rebake` reads the map's rebake from the cache (`cached.hpp`'s `cached_rebake`, for a map of the
+same vertices only) and, under the modern look, adds the light bounced round the rooms from it
+(`brush/app/bsp_draw.hpp`'s `rebake_bounce`) in place of the stand-in the look otherwise uses (a
+share, `r_bounce`, of the pack's own lightmaps). The bake leaves out the sun and the open sky,
+which the game draws live at the map's own hour. The classic walls are dark (their mean colour is
+about 0.1 in linear light), so their true bounce is about a twentieth of the direct light: rooms
+read a little darker and more contrasted than under the stand-in, with the walls' colour in their
+shadows. Off, the stand-in.
 
 ## The texture enhancer
 

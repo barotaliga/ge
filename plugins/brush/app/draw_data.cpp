@@ -16,6 +16,7 @@
 
 #include "brush/app/draw_data.hpp"
 #include "brush/bytes.hpp"
+#include "brush/lights.hpp"
 #include "brush/read.hpp"
 #include "core/libm/libm.hpp"
 
@@ -746,28 +747,25 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
               [](const Portal& a, const Portal& b) { return a.area > b.area; });
   }
 
-  // ── The lights and the start ──
-  uint32_t n = 0;
+  // ── The start, and the lights (brush/lights.hpp reads them) ──
   for (const Entity& e : m.entities) {
-    const std::string cls = e.get("classname");
     double o[3];
-    if (cls == "info_player_start" && vec3(e.get("origin"), o)) {
+    if (e.get("classname") == "info_player_start" && vec3(e.get("origin"), o)) {
       float f[3] = {float(o[0]), float(o[1]), float(o[2] + 22)};
       to_engine(f, s.start);
       s.start_heading = heading_of(number(e.get("angle"), 0));
     }
-    if (cls.rfind("light", 0) != 0 || !vec3(e.get("origin"), o)) continue;
+  }
+  uint32_t n = 0;
+  for (const LightEntity& le : light_entities(m)) {
     PointLight l;
-    float f[3] = {float(o[0]), float(o[1]), float(o[2])};
-    to_engine(f, l.pos);
-    l.value = number(e.get("light"), 300);
-    const double wait = std::max(number(e.get("wait"), 1), 0.1);
-    l.reach = l.value / wait * kUnitM;
+    for (int k = 0; k < 3; ++k) l.pos[k] = le.pos[k];
+    l.value = le.value;
+    l.reach = le.reach;
     l.seed = hash32(++n * 0x9e3779b1u);
-    l.flame = cls.find("torch") != std::string::npos || cls.find("flame") != std::string::npos;
-    if (l.flame) l.fire = cls.find("torch") != std::string::npos ? Fire::wall_torch : Fire::large;
-    const int style = int(number(e.get("style"), 0));
-    switch (style) {
+    l.flame = le.flame;
+    if (l.flame) l.fire = le.torch ? Fire::wall_torch : Fire::large;
+    switch (le.style) {
       case 2:
       case 5:
       case 11:
@@ -790,13 +788,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       default:
         l.flicker = l.flame ? Flicker::candle : Flicker::steady;
     }
-    // A flame's light is a fire's (about 1900 K), a lamp's a warm bulb's (2900 K), a tube's cool.
-    const double* c = nullptr;
-    static const double kFlame[3] = {1.0, 0.56, 0.24}, kBulb[3] = {1.0, 0.8, 0.58},
-                        kTube[3] = {0.86, 0.95, 1.0};
-    c = l.flame ? kFlame : cls.find("fluoro") != std::string::npos ? kTube : kBulb;
-    const double luma = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
-    for (int k = 0; k < 3; ++k) l.colour[k] = c[k] / luma;
+    for (int k = 0; k < 3; ++k) l.colour[k] = le.colour[k];
     s.lights.push_back(l);
   }
   return true;
@@ -837,16 +829,12 @@ std::vector<bake::Light> bake_lights(const Scene& scene, double strength) {
   std::vector<bake::Light> out;
   for (const PointLight& l : scene.lights) {
     if (l.physical) continue;
-    bake::Light b;
-    for (int k = 0; k < 3; ++k) b.pos[k] = l.pos[k];
-    // The real-time path's strength a metre off (bsp_draw.cpp, prepare_bsp): the classic's light
-    // at half its reach, value / 2 of 128, matched by an inverse square.
-    const double half = l.value * kUnitM / 2;
-    const double at1 = l.value / 256.0 * half * half * strength;
-    for (int k = 0; k < 3; ++k) b.colour[k] = l.colour[k] * at1;
-    b.reach = l.reach * 1.5;
-    b.radius = 0.2;
-    out.push_back(b);
+    LightEntity le;
+    for (int k = 0; k < 3; ++k) le.pos[k] = l.pos[k];
+    le.value = l.value;
+    le.reach = l.reach;
+    for (int k = 0; k < 3; ++k) le.colour[k] = l.colour[k];
+    out.push_back(bake_light_of(le, strength));
   }
   return out;
 }

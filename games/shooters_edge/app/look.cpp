@@ -93,6 +93,8 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture) {
     // ce_relief and ce_parallax: the enhanced textures' normal, roughness and height maps.
     base.relief = picture.ce.relief;
     if (!picture.ce.parallax) base.parallax = 0;
+    // ce_rebake: the light bounced round the rooms from the cache's rebake, under the live lights.
+    base.rebake_bounce = picture.ce.rebake;
   }
   return base;
 }

@@ -14,11 +14,13 @@
 //   one RGBA picture the albedo's size: the normal's x and y (tangent space, +Y up the picture),
 //   the height (255 the top) and the roughness, from normal.png, height.png and roughness.png.
 // - `cached_skins`: models/<name>/skin<k>.png, each skin of a model, the same size rule.
+// - `cached_rebake`: lightmaps/<map>.gerb, the map's light rebaked (lightmaps.hpp), when it is
+//   whole and made for a map of the same vertices.
 //
 // ge:summary The enhanced cache read back by a game: the pack's folder, textures and skins by name
 // ge:keywords classicenhance cache read find_cache cached_texture cached_skins albedo emissive
 // ge:keywords cached_surface normal-map height-map roughness relief parallax
-// ge:keywords upscaled texture skin replace renderer atlas
+// ge:keywords upscaled texture skin replace renderer atlas cached_rebake gerb rebake bounce
 // ge:skill classicenhance
 // ge:test tests/classicenhance_cached_test.cpp
 #pragma once
@@ -30,6 +32,7 @@
 #include <vector>
 
 #include "assets/image.hpp"
+#include "brush/rebake.hpp"
 
 namespace ge::classicenhance {
 
@@ -54,5 +57,11 @@ bool cached_surface(const std::filesystem::path& dir, std::string_view name, uin
 // at a multiple of the pack's `w` x `h`; false when the cache has none.
 bool cached_skins(const std::filesystem::path& dir, std::string_view name, uint32_t w, uint32_t h,
                   std::vector<assets::Image>* skins);
+
+// The rebaked light of map `name` (the file's stem, "e1m1" for maps/e1m1.bsp) made for a map of
+// `vertices` vertices; false (and `out` untouched) when the cache has none, it does not read, or it
+// was made for another map.
+bool cached_rebake(const std::filesystem::path& dir, std::string_view name, size_t vertices,
+                   brush::Rebaked* out);
 
 }  // namespace ge::classicenhance
