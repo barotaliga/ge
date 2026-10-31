@@ -1380,6 +1380,17 @@ the next section's.
   premultiplied colour, by the cloud's composite (`local_fog_over`). It is group 0's binding 11
   and `frame.fog` (the range, the slices). With no volume in reach the range is 0, nothing reads
   the volume, and the picture is the bits it was without fog (`render_fog_test`).
+- **Its glow as a lamp** (M38d): a glowing volume lights what is round it. `fog_glow_light`
+  makes its `LocalLight`, one point light at its heart (half its height over the ground for one
+  that hugs it). An optically thin volume's intensity is its glow times its extinction times its
+  volume, in cd: a column of length l through it shows glow x extinction x l of luminance, and
+  the intensity is that summed over its face. The mean extinction takes the falloff over its
+  height and the noise's carving; a thick volume keeps only what escapes it, (1 - e^-tau) / tau
+  over its smallest half-size. The light is softened over its size and reaches a third of a lux.
+  A volume's `flicker` (a flame's swing, with its rate and seed) wavers its glow in the froxels
+  (`fog_glow_level`, read by `prepare_fog`) and its lamp as one. A game hands the lamp to its
+  light list beside its fires' (`flame_light`) and a lava pool's (`liquid_lamps`, § Liquids),
+  so all three light the walls, the floor and the fog round them.
 
 On the software adapter at the default 160 x 90 x 64 froxels the inject costs 40 to 210 ms (the
 march toward the light in every froxel the medium fills) and the integrate 15 to 25 ms (the `fog` lab's `gpu-ms` rows); a real GPU's figures and a ladder row
@@ -1441,6 +1452,14 @@ its day is and where the fog is asked about.
   own (`FrameScene::fog`, or a `FrameView::valley` set) draws only its own, so a lab's scene is
   the scene it placed. `r_fog 0` draws no fog at all; `r_fog_quality` 0 to 3 sizes the froxels
   (80 x 45 x 32 up to 240 x 135 x 96; 2, the default, is 160 x 90 x 64).
+
+**Fires and glow** (M38d): Fall Line's frame draws a scene's fires (`FrameScene::flames`, the
+"flames" pass after the particles) and, with the lamps on, hands each fire and each glowing fog
+volume to its lamps (`app/lamps.hpp`'s `glow_lights`), so a fire lights the snow and the fog
+round it. The `fog` lab's `glow` scene is a camp fire under a glowing haze on seed 38 at night:
+the fire 1064 cd and the haze 30 cd (deterministic rows in its caption), the snow
+round them orange. The eye adapts to the fire, so the floodlit snow nearby reads darker beside
+it.
 
 Not yet: the lakes' steam and advection fog (a site's distance to open water), and the woods'
 own mist (the forest's shelter keeping a radiation fog longer).

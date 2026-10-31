@@ -68,12 +68,14 @@ constexpr Entry kEntries[] = {
     {.page = "single",
      .id = "load",
      .text = "LOAD",
-     .hint = "Load a saved game. Saved games come with the saves rows.",
+     .hint = "Load a saved game: a slot of yours, or a classic .sav kept as s0 to s11.",
+     .opens = "load",
      .needs = "load"},
     {.page = "single",
      .id = "save",
      .text = "SAVE",
-     .hint = "Save the game. Saved games come with the saves rows.",
+     .hint = "Save the game into one of the slots.",
+     .opens = "save",
      .needs = "save"},
     {.page = "single", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
@@ -360,6 +362,29 @@ constexpr const char* kPages[][2] = {
     {"quit", "QUIT"},
 };
 
+// The slot pages, built here rather than from the table: one row a slot, its words the save's
+// line (`Host::saves`), and the slot's console line `load s<i>` or `save s<i>`.
+constexpr const char* kSlotPages[][2] = {{"load", "LOAD"}, {"save", "SAVE"}};
+
+bool slot_page(std::string_view page) { return page == "load" || page == "save"; }
+
+std::string slot_id(int i) { return "s" + std::to_string(i); }
+
+// A save's line cut to `chars`, the title shortened before the kills are: "the long
+// corridor of doors, kills 4/31" reads "the long c, kills 4/31" in 22.
+std::string slot_text(const std::string& line, size_t chars) {
+  if (line.size() <= chars) return line;
+  const size_t kills = line.rfind(" kills");
+  if (kills == std::string::npos || line.size() - kills >= chars) return line.substr(0, chars);
+  std::string head = line.substr(0, kills);
+  const bool comma = !head.empty() && head.back() == ',';
+  if (comma) head.pop_back();
+  const std::string tail = (comma ? "," : "") + line.substr(kills);
+  head.resize(chars - tail.size());
+  while (!head.empty() && head.back() == ' ') head.pop_back();
+  return head + tail;
+}
+
 bool same_value(std::string_view a, std::string_view b) {
   double x = 0, y = 0;
   if (ge::console::parse_number(a, x) && ge::console::parse_number(b, y)) return x == y;
@@ -426,6 +451,15 @@ ge::ui::Menu build_menu() {
       page.items.push_back(std::move(it));
     }
   }
+  for (const auto& [id, title] : kSlotPages) {
+    ge::ui::Page& page = m.add_page(id, title);
+    for (int i = 0; i < kSaveSlots; i++) {
+      ge::ui::Item it{.id = slot_id(i), .text = std::string(kEmptySlot)};
+      it.hint = std::string(id) == "load" ? "Load this game." : "Save the game here.";
+      page.items.push_back(std::move(it));
+    }
+    page.items.push_back({.id = "back", .text = "BACK", .kind = ItemKind::back});
+  }
   return m;
 }
 
@@ -477,12 +511,36 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
     if (page->focus >= 0 && !page->items[static_cast<size_t>(page->focus)].stop())
       page->focus = -1;  // the menu moves it to the first stop
   }
+  for (const auto& [id, title] : kSlotPages) {
+    ge::ui::Page* page = menu.page(id);
+    if (page == nullptr) continue;
+    const bool load = std::string_view(id) == "load";
+    const bool known = host_knows(host, id);
+    for (ge::ui::Item& it : page->items) {
+      if (it.kind == ItemKind::back) {
+        it.disabled = hide_back;
+        continue;
+      }
+      const size_t i = std::stoul(it.id.substr(1));
+      const std::string line = i < host.saves.size() ? host.saves[i] : std::string();
+      it.text = line.empty() ? std::string(kEmptySlot)
+                             : slot_text(line, hide_back ? kSlotChars : kSlotCharsModern);
+      it.disabled = !known || (load && line.empty());
+    }
+    if (page->focus >= 0 && !page->items[static_cast<size_t>(page->focus)].stop()) page->focus = -1;
+  }
 }
 
 Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) {
   if (e.kind == ge::ui::EventKind::back_at_root) return Outcome::back_at_root;
   if (host.console == nullptr) return Outcome::none;
   ge::console::Console& con = *host.console;
+  if (slot_page(e.page)) {
+    if (e.kind != ge::ui::EventKind::activated || e.item.empty() || e.item[0] != 's')
+      return Outcome::none;
+    con.execute(e.page + " " + e.item);
+    return Outcome::close;
+  }
   const Entry* entry = find_entry(e.page, e.item);
   ge::ui::Page* page = menu.page(e.page);
   if (entry == nullptr || page == nullptr) return Outcome::none;

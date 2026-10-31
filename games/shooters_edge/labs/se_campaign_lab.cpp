@@ -38,6 +38,7 @@
 #include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/campaign_save.hpp"
 #include "shooters_edge/server/catalogue.hpp"
+#include "shooters_edge/server/classic_save.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/qc_server.hpp"
@@ -611,6 +612,81 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
                   "and the table's digest the same every frame",
                   {}},
                  gl::to_picture(sch_drawn.plot), gl::Det::measured);
+      }
+    }
+    // The classic text save: written, read into a third campaign, written again; then both
+    // games walked on side by side (the text keeps less, so they may part: when is measured).
+    if (c.server && lab.arg_num("save") > 0) {
+      PackMaps text_maps;
+      text_maps.l = &l;
+      sv::CampaignOptions lo = o;
+      lo.load_ctx = &text_maps;
+      std::string text, again, why;
+      sv::Campaign b;
+      const bool wrote = sv::classic_save_text(c, text, why);
+      const bool read = wrote && sv::classic_load_text(b, l.progs, lo, text, "lab", "player", why);
+      const bool same = read && sv::classic_save_text(b, again, why) && again == text;
+      int lines = 0;
+      for (const char ch : text) lines += ch == '\n' ? 1 : 0;
+      t.rows.push_back({"the classic text save",
+                        !read ? "refused: " + why
+                              : std::to_string(text.size()) + " bytes, " + std::to_string(lines) +
+                                    " lines; read back and written again: " +
+                                    (same ? "the same text" : "a different text")});
+      lab.metric("pack.classic.same", same ? 1 : 0, "bool");
+      if (read) {
+        int parted = -1, ran = 0;
+        const int more = static_cast<int>(lab.arg_num("save") / sv::kCampaignStep);
+        for (int i = 0; i < more; i++) {
+          sh::Packet q = p;
+          q.sequence = static_cast<uint32_t>(frames + more + i + 1);
+          if (!sv::campaign_frame(c, &q, 1, why) || !sv::campaign_frame(b, &q, 1, why)) break;
+          if (!c.server || !b.server) break;
+          sv::clear_frame(c.server->out);
+          sv::clear_frame(b.server->out);
+          ran = i + 1;
+          if (parted < 0 && sv::campaign_digest(*c.server) != sv::campaign_digest(*b.server))
+            parted = ran;
+        }
+        // Where the two games stand after the walk: they keep the program's state, so they stay
+        // the same game (the player near his place, the same monsters killed) though no longer
+        // bit for bit.
+        double apart = -1;
+        std::string ends = "a game ended";
+        if (c.server && b.server) {
+          const auto& pa = c.server->sv.edicts[1].origin;
+          const auto& pb = b.server->sv.edicts[1].origin;
+          const double dx = pa.x - pb.x, dy = pa.y - pb.y, dz = pa.z - pb.z;
+          apart = std::sqrt(dx * dx + dy * dy + dz * dz);
+          const pg::LayoutFields& lf = c.server->q.layout->f;
+          const auto live = [](const sv::QcServer& s) {
+            int n = 0;
+            for (int e = 1; e < s.sv.num_edicts; e++)
+              n += s.sv.edicts[static_cast<size_t>(e)].free ? 0 : 1;
+            return n;
+          };
+          const auto kills = [](const sv::QcServer& s) {
+            const pg::Def* d = pg::find_global(*s.q.vm.progs, "killed_monsters");
+            return d ? to_fixed(pg::as_float(s.q.vm.globals[d->offset]), 0) : std::string("?");
+          };
+          ends = to_fixed(apart, 1) + " units apart; health " +
+                 to_fixed(pg::as_float(*pg::entity_field(c.server->q.vm, 1, lf.health)), 0) + ", " +
+                 to_fixed(pg::as_float(*pg::entity_field(b.server->q.vm, 1, lf.health)), 0) +
+                 "; entities live " + std::to_string(live(*c.server)) + ", " +
+                 std::to_string(live(*b.server)) + "; monsters killed " + kills(*c.server) + ", " +
+                 kills(*b.server);
+        }
+        t.rows.push_back({"after " + to_fixed(ran * sv::kCampaignStep, 1) +
+                              " s on (original, classic): the players",
+                          ends});
+        lab.metric("pack.classic.apart", apart, "units");
+        t.rows.push_back({"the classic save's game against the original",
+                          (parted < 0 ? "the same digest every frame of " + std::to_string(ran)
+                                      : "parted at frame " + std::to_string(parted)) +
+                              "; faults " + std::to_string(b.server ? b.server->q.faults : -1)});
+        lab.metric("pack.classic.parted", parted, "frame");
+        lab.metric("pack.classic.faults", b.server ? static_cast<double>(b.server->q.faults) : -1,
+                   "count");
       }
     }
     // The exit: the player stood in the map's first changelevel trigger; the program's messages

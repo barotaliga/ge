@@ -11,6 +11,8 @@
 //   lands some seven metres ahead of a skier standing tall. Neutral white, 5500 K, so its pool
 //   reads apart from the floods' and the street lamps'. The spot casts shadows (the trees' trunks
 //   across its pool), the flood does not.
+// - WHAT GLOWS (`glow_lights`): the scene's fires and its glowing fog, each a lamp at its heart,
+//   flickering as it burns.
 // - THE EYE (`eye_lamp_lux`): the lamps' light on the snow the camera looks at (a white face
 //   turned to them, render/lights.hpp's `lamp_lux_at`, at points of the ground along the view),
 //   their geometric mean, so a few bright pools in a dark view do not blind it, and under it (a
@@ -19,7 +21,7 @@
 //
 // ge:summary Fall Line's lamps at night: the frame's local lights, the headlamps, the eye's lux
 // ge:keywords fall-line lamps headlamp head-lamp night-lights lamp-list eye-lamp-lux lamp_lux
-// ge:keywords headlamp_lights headlamp_of eye_lamp_lux night_lights
+// ge:keywords headlamp_lights headlamp_of eye_lamp_lux night_lights glow_lights fire-light
 // ge:skill render
 // ge:test tests/fall_line_lamps_test.cpp
 #pragma once
@@ -30,6 +32,8 @@
 
 #include "mountain/app/night_lamps.hpp"
 #include "mountain/mapgen/types.hpp"
+#include "render/flame.hpp"
+#include "render/fog.hpp"
 #include "render/lights.hpp"
 #include "render/view.hpp"
 #include "skier/app/figure.hpp"
@@ -54,6 +58,14 @@ Headlamp headlamp_of(const ge::skier::FigureFrame& frame, const ge::skier::RigPo
 // `shadows`.
 void headlamp_lights(const Headlamp& lamp, uint32_t key, double lit, bool shadows,
                      std::vector<ge::render::LocalLight>& out);
+
+// Append what glows as lamps (M38d): each fire's light (render/flame.hpp's `flame_light`) and each
+// glowing fog volume's (render/fog.hpp's `fog_glow_light`, a ground-hugging one over `level`'s
+// ground), so a fire lights the snow and the fog round it.
+void glow_lights(const ge::mountain::mapgen::Level& level,
+                 std::span<const ge::render::FogVolume> fog,
+                 std::span<const ge::render::Flame> flames,
+                 std::vector<ge::render::LocalLight>& out);
 
 // The lux the eye adapts to among `lights` from `view` over `level`'s snow: a share of the
 // geometric mean of their light at points of the ground ahead (0 when none reaches any).

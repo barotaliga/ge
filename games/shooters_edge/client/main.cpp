@@ -26,12 +26,14 @@
 // them, the rows the game cannot do yet dimmed), and ESCAPE again goes back out of it; the key
 // under ESCAPE drops the console, where `map <name>` changes the map, `sv
 // <line>` is a line for the server's console (`sv timelimit 10`), `save <name>` and `load <name>`
-// keep and bring back a single-player game (`<game folder>/saves/<name>.save`), `sensitivity <deg a
-// count>` and `m_invert 0|1` set the look, `r_look classic|modern` and the other picture cvars
-// (app/look.hpp: `r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`) the world's
-// look, the view-model cvars (view/hand.hpp: `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`,
-// `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the window over the
-// whole screen (`vid_display n` which one, of those `vid_displays` lists), and `quit` quits.
+// keep and bring back a single-player game (`<game folder>/saves/<name>.save`; `<name>.sav` the
+// classic text save in the game folder, which `load` also finds by the bare name), `sensitivity
+// <deg a count>` and `m_invert 0|1` set the look, `r_look classic|modern` and the other picture
+// cvars (app/look.hpp: `r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`) the
+// world's look, the view-model cvars (view/hand.hpp: `r_drawviewmodel`, `r_viewmodel_fov`,
+// `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the
+// window over the whole screen (`vid_display n` which one, of those `vid_displays` lists), and
+// `quit` quits.
 //
 // THE BENCHMARK: `benchmark <demo>` in the console (or `-benchmark <demo>` on the command line,
 // which quits when it is done) plays a recorded game (`demo1` from the packs, or a file's path)
@@ -367,21 +369,28 @@ int run_main(int argc, char** argv) {
   std::string load_ask;  // a save the console asked to load (loaded where a map change is made)
   if (campaign_progs != nullptr) {
     console.add_command(
-        "save", "save <name>: the single-player game saved as saves/<name>.save",
+        "save",
+        "save <name>: the single-player game saved as saves/<name>.save (<name>.sav: the "
+        "classic text save in the game folder)",
         [&](Con& c, const CArgs& a) {
           if (a.size() < 2) {
             c.print("save: save <name>");
             return;
           }
+          std::string why, name = a[1];
+          const bool classic = cl::classic_save_name(name);
           std::vector<uint8_t> bytes;
-          std::string why;
-          if (!cl::listen_save(listen, bytes, why, static_cast<int64_t>(std::time(nullptr))) ||
-              !cl::write_save(files, a[1], bytes, why))
+          std::string text;
+          const bool made = classic ? cl::listen_save_text(listen, text, why)
+                                    : cl::listen_save(listen, bytes, why,
+                                                      static_cast<int64_t>(std::time(nullptr)));
+          if (classic) bytes.assign(text.begin(), text.end());
+          if (!made || !cl::write_save(files, name, bytes, why, classic))
             c.print(why);
           else
             c.print("saved " + a[1]);
         });
-    console.add_command("load", "load <name>: the game saved as saves/<name>.save",
+    console.add_command("load", "load <name>: the game saved as saves/<name>.save, else <name>.sav",
                         [&](Con& c, const CArgs& a) {
                           if (a.size() < 2)
                             c.print("load: load <name>");
@@ -548,9 +557,14 @@ int run_main(int argc, char** argv) {
       }
       menu_host.server = listen.server ? &listen.server->cvars : nullptr;
       // A benchmark's Escape stops the run (below) and opens nothing.
-      game_menu.update(mi,
-                       !con_keys.held && !was_open && !bench.active && input.tapped(Key::escape),
-                       menu_host, wall);
+      const bool opening =
+          !con_keys.held && !was_open && !bench.active && input.tapped(Key::escape);
+      if (opening) {  // the slots' lines read again: a save may have been made since
+        menu_host.saves.assign(shooters_edge::menu::kSaveSlots, {});
+        for (int i = 0; i < shooters_edge::menu::kSaveSlots; i++)
+          menu_host.saves[static_cast<size_t>(i)] = cl::save_label(files, "s" + std::to_string(i));
+      }
+      game_menu.update(mi, opening, menu_host, wall);
     }
     // The mouse is the look's while captured: the console, the menu or the focus lost lets it go;
     // the menu closing or a click in the window takes it again.
@@ -613,8 +627,22 @@ int run_main(int argc, char** argv) {
       std::vector<uint8_t> bytes;
       cl::ListenOptions lo = listen.opt;
       lo.console.emplace_back("deathmatch 0");
-      if (!cl::read_save(files, name, bytes, error) ||
-          !cl::listen_load(listen, *campaign_progs, lo, bytes, name, error))
+      // Ours by that name, else the classic text save (`<name>.sav` names it alone).
+      std::string base = name;
+      bool classic = cl::classic_save_name(base);
+      if (!classic && !cl::read_save(files, base, bytes, error))
+        classic = cl::read_save(files, base, bytes, error, true);
+      else if (classic && !cl::read_save(files, base, bytes, error, true))
+        bytes.clear();
+      const bool loaded =
+          !bytes.empty() &&
+          (classic
+               ? cl::listen_load_text(
+                     listen, *campaign_progs, lo,
+                     std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()),
+                     name, error)
+               : cl::listen_load(listen, *campaign_progs, lo, bytes, name, error));
+      if (!loaded)
         console.print("load: " + error);
       else
         console.print("loaded " + name);

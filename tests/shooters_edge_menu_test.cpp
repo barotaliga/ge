@@ -3,7 +3,8 @@
 // cvar and written by a console line; NEW GAME's START running the rules on the server and the
 // map; ESCAPE opening the menu and going back out of it; the classic pictures read from a pack's
 // files and refused without them; the classic layout's rows on the 320 x 200 screen; the modern
-// and the classic looks drawing every page clean.
+// and the classic looks drawing every page clean; LOAD and SAVE's slots, their lines and the
+// console lines they run.
 //
 // ge:summary Tests the main menu: pages, dimming by the console, cvars, START, ESCAPE, both looks
 // ge:keywords test menu main-menu dimmed cvar console new-game start escape classic modern layout
@@ -198,19 +199,63 @@ TEST(classic_pictures_are_read_from_the_packs_files) {
   CHECK(error.find("mainmenu") != std::string::npos);
 }
 
+TEST(load_and_save_show_the_slots_and_run_their_lines) {
+  World w;
+  for (const char* c : {"load", "save"})
+    w.con.add_command(c, "", [&w, c](ge::console::Console&, const ge::console::Args& a) {
+      w.ran.push_back(std::string(c) + " " + a.rest(0));
+    });
+  Menu m = sm::build_menu();
+  sm::Host host{.console = &w.con};
+  host.saves.assign(sm::kSaveSlots, {});
+  host.saves[3] = "the hall, kills 3/12";
+  host.saves[5] = "the long corridor of doors, kills 4/31";
+  host.saves[6] = "the gate house of the far keep kills:0/12";
+  sm::refresh(m, host);
+  CHECK(item(m, "load", "s5")->text == "the long corrido, kills 4/31");  // the modern look
+  sm::refresh(m, host, true);  // the classic look's column holds less
+  CHECK(item(m, "load", "s5")->text == "the long c, kills 4/31");
+  CHECK(item(m, "load", "s6")->text == "the gate ho kills:0/12");
+  sm::refresh(m, host);
+  CHECK(item(m, "single", "load")->opens == "load");
+  CHECK(item(m, "single", "save")->opens == "save");
+  CHECK(m.page("load")->items.size() == sm::kSaveSlots + 1);  // the slots and BACK
+  CHECK(item(m, "load", "s0")->disabled);                     // an empty slot loads nothing
+  CHECK(item(m, "load", "s0")->text == sm::kEmptySlot);
+  CHECK(!item(m, "load", "s3")->disabled);
+  CHECK(item(m, "load", "s3")->text == "the hall, kills 3/12");
+  CHECK(!item(m, "save", "s0")->disabled);  // any slot takes a save
+  // A slot pressed runs its line and closes the menu.
+  m.open("load");
+  for (const MenuEvent& e : press(m, "s3"))
+    CHECK(sm::apply_event(e, m, host) ==
+          (e.kind == EventKind::activated ? sm::Outcome::close : sm::Outcome::none));
+  m.reset();
+  m.open("save");
+  for (const MenuEvent& e : press(m, "s0")) sm::apply_event(e, m, host);
+  CHECK(w.ran.size() == 2 && w.ran[0] == "load s3" && w.ran[1] == "save s0");
+  // Without the commands both pages are dimmed.
+  World bare;
+  sm::Host none{.console = &bare.con};
+  none.saves = host.saves;
+  sm::refresh(m, none);
+  CHECK(item(m, "load", "s3")->disabled && item(m, "save", "s0")->disabled);
+}
+
 TEST(both_looks_lay_every_page_out_clean) {
   const auto files = sm::fixture_files();
   World w;
   sm::GameMenu g;
   g.add_cvars(w.con);
   sm::Host host{.console = &w.con, .maps = {"start", "arena"}};
+  host.saves = {"", "the hall, kills 3/12", "a line longer than the label column holds"};
   sm::ClassicArt art;
   std::string error;
   CHECK(sm::load_classic_art(fixture_find(files), &art, &error));
   for (const char* look : {"modern", "classic"}) {
     if (std::string(look) == "classic") g.set_art(art);
-    for (const char* page :
-         {"main", "single", "multi", "host", "setup", "options", "video", "help", "quit"}) {
+    for (const char* page : {"main", "single", "multi", "host", "setup", "options", "video", "help",
+                             "quit", "load", "save"}) {
       for (const auto& [width, height] : {std::pair{1280, 720}, std::pair{390, 844}}) {
         g.show(host, page);
         CHECK(g.classic() == (std::string(look) == "classic"));
