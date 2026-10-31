@@ -153,14 +153,14 @@ TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
   CHECK(cl::listen_lobby(l, "break"));
   CHECK(l.room->lobby.phase == sv::LobbyPhase::warmup);
   CHECK(cl::listen_lobby(l, "toggleready"));
-  const sv::QcServer* warm = l.server;
+  const double warm_time = l.server->sv.time;  // the old server's clock (its address may be reused)
   int ran = 0;
   while (!l.restarted && ran < 400) {
     cl::listen_frame(l, idle);
     ran++;
   }
   CHECK(l.restarted);
-  CHECK(l.server != warm);
+  CHECK(l.server->sv.time < warm_time);  // a new server: its clock started over
   CHECK(l.room->lobby.phase == sv::LobbyPhase::match);
   CHECK(ran >= 150 && ran <= 160);  // 2 s of 13 ms frames
   CHECK(frags_of(l, 1) == 0);
