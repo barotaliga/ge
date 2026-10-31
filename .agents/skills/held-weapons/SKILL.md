@@ -39,8 +39,10 @@ app) into `build/<preset>/stage/<name>.glb` without touching the tree or the sta
 - **the kit's report**: the islands' fill of the texture (55 to 70 % is good), each wrist's bend at
   rest and at worst, any hand past its arm's reach, triangles, vertices, nodes and clips;
 - **the staged table**: the game's model and the candidate, their size held (the weapon alone,
-  without its hands), the share of the picture its box covers (stated 0.04 to 0.4) and where the
-  muzzle lands;
+  without its hands), the share of the picture it actually covers (`viewmodel::held_coverage`, its
+  pixels drawn alone; stated 0.04 to 0.4; the built set covers 0.05 to 0.13) and where the muzzle
+  lands. A box's share is no measure for a long gun: its back passes behind the eye and its box
+  blows up to the whole screen;
 - **the tip on the screen** at six frames of each clip (0 left/top, 1 right/bottom): tune a swing
   by these numbers, then look;
 - **the arms**: the ARMS table (each joint's angle at rest, least and most) and any joint out of
@@ -206,6 +208,13 @@ hand plays `fire` from its start on each shot.
 - **A renamed slot** (the nailgun's slot holding the minigun): rename the look in `weapons.cpp`,
   and the row in `classic.assetmap` and `models.tsv`. Until the built model is in, the staging
   lab stages the candidate alone.
+- **A weapon pointing straight away from the eye hides its length.** Its whole forward half falls
+  into a sliver beside the receiver. Turn it a few degrees in with `finish(turn=Matrix.Rotation(
+  0.05..0.09, 4, "Z"))` (the railgun, the grenade launcher, the rocket launcher) so its left side
+  opens to the eye; the hands settle after the turn.
+- **Nothing tall right by the eye.** A stock bar, a pad or a motor level with the receiver's top
+  and behind the grip fills the picture. Keep what is behind the grip low and dark, and put a
+  big motor ahead of the grip (the minigun).
 - **A spin is linear.** A part that turns on every shot (barrels) is keyed with
   `kit.clip(..., ease="linear")` through a turn that leaves it looking as at rest (60 degrees for
   six barrels), so a held trigger spins it with no seam.

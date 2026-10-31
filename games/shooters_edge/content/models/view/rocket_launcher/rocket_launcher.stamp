@@ -1,0 +1,5 @@
+# What rocket_launcher.glb was built from (engine/assets/manifest.hpp). Written by `ge asset build rocket_launcher`; never edit it by hand.
+builder build.py bdd22d9d22d201f0
+source ../weapon_kit.py c9bdb5454f33e224
+data se_view 751350bd13ec480c
+blender 5.2.2 LTS

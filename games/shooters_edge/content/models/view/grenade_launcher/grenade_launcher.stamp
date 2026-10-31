@@ -1,5 +1,5 @@
 # What grenade_launcher.glb was built from (engine/assets/manifest.hpp). Written by `ge asset build grenade_launcher`; never edit it by hand.
 builder build.py 7e22a0783389fc74
 source ../weapon_kit.py c9bdb5454f33e224
-data se_view 9f70ecb82ba3dc25
+data se_view 751350bd13ec480c
 blender 5.2.2 LTS

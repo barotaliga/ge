@@ -24,7 +24,7 @@ constexpr WeaponLook kLooks[kWeapons] = {
     {"minigun",           0.44, {0.10, -0.10, 0.16}, 0.25, 0.1, 0.06, {1.0f, 0.66f, 0.32f}, 0.2f, 4.0f, Weapon::nailgun, false},
     {"railgun",           0.52, {0.09, -0.09, 0.17}, 0.35, 0.1, 0.06, {1.0f, 0.66f, 0.32f}, 0.25f, 5.0f, Weapon::heavy_nailgun, false},
     {"grenade_launcher",  0.50, {0.09, -0.10, 0.17}, 1.2, 0.6, 0.1, {1.0f, 0.78f, 0.42f}, 0.3f, 5.0f, Weapon::grenade_launcher, false},
-    {"rocket_launcher",   0.62, {0.15, -0.19, 0.38}, 1.5, 0.8, 0.14, {1.0f, 0.72f, 0.38f}, 0.45f, 7.0f, Weapon::rocket_launcher, false},
+    {"rocket_launcher",   0.62, {0.10, -0.11, 0.16}, 1.5, 0.8, 0.14, {1.0f, 0.72f, 0.38f}, 0.45f, 7.0f, Weapon::rocket_launcher, false},
     {"beam_gun",          0.52, {0.15, -0.18, 0.34}, 0.15, 0.1, 0.1, {0.62f, 0.76f, 1.0f}, 0.3f, 6.0f, Weapon::beam_gun, false},
 };
 // clang-format on

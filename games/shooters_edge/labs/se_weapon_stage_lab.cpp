@@ -127,28 +127,6 @@ void to_screen(const float v[3], double fov_y, double aspect, double out[2]) {
   out[1] = 0.5 - 0.5 * v[1] / (z * ty);
 }
 
-// The share of the screen the model's placed box at rest covers (clipped to the screen).
-double screen_share(const vm::HeldModel& m, const vm::Placement& p, double fov_y, double aspect) {
-  float lo[3], hi[3];
-  vm::held_bounds(m, lo, hi, 0);
-  double x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
-  for (int c = 0; c < 8; ++c) {
-    const float corner[3] = {(c & 1) ? hi[0] : lo[0], (c & 2) ? hi[1] : lo[1],
-                             (c & 4) ? hi[2] : lo[2]};
-    float v[3];
-    vm::place_point(p, corner, v);
-    double s[2];
-    to_screen(v, fov_y, aspect, s);
-    x0 = std::min(x0, s[0]);
-    x1 = std::max(x1, s[0]);
-    y0 = std::min(y0, s[1]);
-    y1 = std::max(y1, s[1]);
-  }
-  const double w = std::clamp(x1, 0.0, 1.0) - std::clamp(x0, 0.0, 1.0);
-  const double h = std::clamp(y1, 0.0, 1.0) - std::clamp(y0, 0.0, 1.0);
-  return std::max(0.0, w) * std::max(0.0, h);
-}
-
 void muzzle_view(const vm::HeldModel& m, const vm::Placement& p, float out[3]) {
   float tip[3];
   vm::muzzle_at(m, 0, 0, 0, tip);
@@ -618,7 +596,7 @@ bool stage_one(ge::lab::Lab& lab, const se::WeaponLook& look, const std::vector<
     float lo[3], hi[3];
     vm::held_bounds(s.bare, lo, hi, 0);
     const double dx = hi[0] - lo[0], dy = hi[1] - lo[1], dz = hi[2] - lo[2];
-    const double share = screen_share(s.bare, rest.placement, view.fov_y, aspect);
+    const double share = vm::held_coverage(s.bare, rest.placement, view.fov_y, width, height);
     double at[2];
     to_screen(mv, view.fov_y, aspect, at);
     const std::string mkey = key + (s.label == "GAME" ? "" : "-candidate");
@@ -648,9 +626,7 @@ bool stage_one(ge::lab::Lab& lab, const se::WeaponLook& look, const std::vector<
     // more than a toy-scale one did); the muzzle on the screen.
     if (share < 0.04 || share > 0.4) {
       ok = false;
-      lab.note(key + " " + s.label + ": its box covers " + c[6] +
-               " of the picture (stated "
-               "0.04..0.4)");
+      lab.note(key + " " + s.label + ": it covers " + c[6] + " of the picture (stated 0.04..0.4)");
     }
     if (!look.upright && (at[0] < 0.02 || at[0] > 0.98 || at[1] < 0.02 || at[1] > 0.98)) {
       ok = false;
