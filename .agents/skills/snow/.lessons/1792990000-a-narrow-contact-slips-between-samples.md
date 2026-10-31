@@ -1,7 +1,7 @@
 ---
 title: A contact narrower than a cell slips between the samples; widen it and keep its pressure
 date: 2026-10-23
-scope: engine/snow/press
+scope: engine/snow/press.cpp, engine/snow/press.hpp
 concepts: [press, cell, narrow, ski, berm, mass, spilled]
 ---
 
