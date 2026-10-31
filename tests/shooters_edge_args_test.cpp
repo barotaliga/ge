@@ -44,6 +44,18 @@ TEST(an_unknown_flag_is_refused_with_the_console_line_it_followed) {
   CHECK(why.find("unknown flag --frobs=2") != std::string::npos);
 }
 
+TEST(a_clip_is_read_off_the_demos_clock) {
+  cl::Args a;
+  std::string why;
+  CHECK(parse_words({"-demovideo", "m.mvd", "c.gif", "--from=4:31", "--to=279", "--highlight=3",
+                     "--gif-width=320"},
+                    a, why));
+  CHECK(a.from == 271 && a.to == 279 && a.highlight == 3 && a.gif_width == 320);
+  cl::Args b;
+  CHECK(!parse_words({"--from=soon"}, b, why));
+  CHECK(why.find("--from=soon") != std::string::npos && why.find("next:") != std::string::npos);
+}
+
 TEST(benchmark_names_its_new_name) {
   cl::Args a;
   std::string why;

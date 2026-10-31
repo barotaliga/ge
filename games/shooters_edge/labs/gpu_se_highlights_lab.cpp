@@ -10,24 +10,30 @@
 // read, the play bar of each player with highlights (engine/ui/play_bar.hpp, drawn by the CPU
 // raster: the markers, their windows, a tooltip), and, with a GPU, the watched player's view at
 // each of his highlights with the bar over it as the window shows it while paused there (the frames
-// drawn by client/demo_video.hpp, the bar drawn over them). The scan's counts, the highlights and
-// the bars are deterministic; the GPU's pictures and the times are measured.
+// drawn by client/demo_video.hpp, the bar drawn over them), and one highlight (`--clip=N`) cut
+// out as a clip the way `-demovideo --highlight=N` cuts it: a strip of its frames, the animated
+// GIF and, when the build has the encoders, the WebM, both written beside the report. The scan's
+// counts, the highlights and the bars are deterministic; the GPU's pictures and the times are
+// measured.
 //
 // ge:summary Lab: a demo's highlights found and shown on the play bar, over the game's frames
 // ge:keywords lab se-highlights highlights demo scan play-bar markers multi-kill long-shot
-// ge:keywords air-kill annihilation telefrag streak tooltip
+// ge:keywords air-kill annihilation telefrag streak tooltip clip gif webm export
 // ge:skill shooter replay labs
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
 #include <vector>
 
 #include "brush/write.hpp"
+#include "capture/codecs.hpp"
 #include "gpu/device.hpp"
+#include "lab/gif.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/liquid_scene.hpp"
 #include "lab/raster.hpp"
@@ -212,8 +218,21 @@ void run(gl::Lab& lab) {
                                         static_cast<size_t>(std::max(0.0, lab.arg_num("moments"))));
   std::vector<std::string> ids;
   for (size_t i = 0; i < shots; i++) ids.push_back("moment-" + std::to_string(i + 1));
+  const int clip = static_cast<int>(lab.arg_num("clip"));
+  const bool cut = clip > 0 && static_cast<size_t>(clip) <= mine.list.size();
+  // The clip's window is the scan's, so it is in the digest with or without a device.
+  if (cut) {
+    lab.metric("clip.from", mine.list[static_cast<size_t>(clip - 1)].from_s, "s");
+    lab.metric("clip.to", mine.list[static_cast<size_t>(clip - 1)].to_s, "s");
+  }
   if (!device) {
     for (const std::string& id : ids) ls::placeholders(lab, {id.c_str()});
+    if (cut) {
+      // A file's name is in the digest even when its bytes are measured: the same names, empty.
+      lab.attach("clip.gif", {}, gl::Det::measured);
+      if (ge::capture::encoders_built()) lab.attach("clip.webm", {}, gl::Det::measured);
+      ls::placeholders(lab, {"clip"});
+    }
     return;
   }
   lab.note("adapter: " + ge::gpu::adapter_line(*device));
@@ -295,6 +314,95 @@ void run(gl::Lab& lab) {
               "the playhead on the marker the tooltip names", in},
              to_lab(img), gl::Det::measured);
   }
+  if (!cut) return;
+
+  // One highlight cut out as a clip, as `-demovideo <demo> <file> --highlight=N` cuts it.
+  const gr::Highlight& h = mine.list[static_cast<size_t>(clip - 1)];
+  cl::DemoVideoOptions c = o;
+  c.seconds = 0;
+  c.highlight = clip;
+  c.gif = true;
+  c.gif_width = 320;
+  c.fps = 10;
+  c.width = kW / 2;  // a quarter of the pixels: the GIF is shrunk to 320 px anyway
+  c.height = kH / 2;
+  std::vector<uint8_t> gif;
+  c.memory = &gif;
+  std::vector<gl::Picture> frames;
+  const auto every = [&](int64_t, double, const gl::Picture& p) { frames.push_back(p); };
+  cl::DemoVideoReport cr;
+  if (!cl::demo_video(*device, files, c, cr, error, every)) {
+    lab.fail("se-highlights: the clip: " + error, "Read the reason above. Skill: shooter.");
+    return;
+  }
+  lab.metric("clip.frames", static_cast<double>(cr.frames), "count", gl::Det::measured);
+  if (cr.from_s != h.from_s)
+    lab.fail("se-highlights: the clip starts at " + gu::play_clock(cr.from_s) +
+                 ", the highlight at " + gu::play_clock(h.from_s),
+             "-demovideo --highlight=N must start where the list's window does. Skill: shooter.");
+  lab.metric("clip.gif_bytes", static_cast<double>(cr.bytes), "bytes", gl::Det::measured);
+  if (cr.highlight != h.text)
+    lab.fail(
+        "se-highlights: the clip was cut from \"" + cr.highlight + "\", not \"" + h.text + "\"",
+        "The highlight -demovideo picks must be the one the list numbers. Skill: shooter.");
+  lab.attach("clip.gif", std::move(gif), gl::Det::measured);
+  std::string webm_note = "no WebM: this build has no encoders (GE_ENCODERS off)";
+  if (ge::capture::encoders_built()) {
+    const std::string tmp =
+        (std::filesystem::temp_directory_path() / "ge-se-highlights-clip.webm").string();
+    cl::DemoVideoOptions w = c;
+    w.gif = false;
+    w.memory = nullptr;
+    w.file = tmp;
+    w.codec = "av1";
+    w.container = "";
+    w.fps = 15;
+    cl::DemoVideoReport wr;
+    if (!cl::demo_video(*device, files, w, wr, error)) {
+      lab.fail("se-highlights: the clip's WebM: " + error, "Read the reason above. Skill: replay.");
+      return;
+    }
+    std::vector<uint8_t> webm;
+    {
+      std::ifstream f(tmp, std::ios::binary);
+      webm.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+    }
+    std::filesystem::remove(tmp);
+    lab.metric("clip.webm_bytes", static_cast<double>(webm.size()), "bytes", gl::Det::measured);
+    lab.attach("clip.webm", std::move(webm), gl::Det::measured);
+    webm_note =
+        "clip.webm (AV1, 15 fps, " + std::to_string(c.width) + "x" + std::to_string(c.height) + ")";
+  }
+  // The strip: four of the clip's frames, side by side.
+  const size_t n = std::min<size_t>(4, frames.size());
+  if (n == 0) {
+    lab.fail("se-highlights: the clip has no frames",
+             "Read the clip's window above. Skill: shooter.");
+    return;
+  }
+  const int cw = c.width, ch = c.height;
+  gl::Picture strip{cw * static_cast<int>(n), ch,
+                    std::vector<uint8_t>(static_cast<size_t>(cw) * n * ch * 4, 0)};
+  for (size_t i = 0; i < n; i++) {
+    const size_t at = n == 1 ? 0 : i * (frames.size() - 1) / (n - 1);
+    const gl::Picture small = gl::shrink(frames[at], cw);
+    for (int y = 0; y < std::min(ch, small.height); y++)
+      std::copy_n(
+          small.rgba.begin() + static_cast<ptrdiff_t>(y) * small.width * 4, small.width * 4,
+          strip.rgba.begin() +
+              (static_cast<ptrdiff_t>(y) * strip.width + static_cast<ptrdiff_t>(i) * cw) * 4);
+  }
+  lab.shot({"clip", "CLIP #" + std::to_string(clip) + ": " + h.text,
+            "The watched player's highlight " + std::to_string(clip) +
+                " cut out as -demovideo "
+                "--highlight=" +
+                std::to_string(clip) + " cuts it: " + gu::play_clock(cr.from_s) + " to " +
+                gu::play_clock(cr.to_s) + " (" + std::to_string(cr.frames) +
+                " frames at 10 fps), four of its frames from first to last. Beside the report: "
+                "clip.gif (" +
+                std::to_string(c.gif_width) + " px wide) and " + webm_note + ".",
+            "the moment inside the strip, the lead-in before it and the hold after", in},
+           strip, gl::Det::measured);
 }
 
 const gl::LabSpec kSpec{
@@ -312,6 +420,7 @@ const gl::LabSpec kSpec{
         {"basedir", "", "a folder holding a game folder: the demo's map from there"},
         {"game", "id1", "the game folder under --basedir"},
         {"moments", "6", "the watched player's highlights pictured with the GPU, the first n"},
+        {"clip", "1", "the watched player's highlight cut out as a GIF and a WebM (0: none)"},
     },
     "--moments=1",
     run,

@@ -335,11 +335,23 @@ default), `1080p`, `1440p`, `4k` (`--size` is the same flag);
 `--seconds` the most video. The `+` lines run first, so `+r_look modern` and `+demo_track 2`
 shape it.
 
+**A clip.** `--from=m:ss --to=m:ss` cuts the part between two times on the play bar's clock (the
+times `playdemo`'s bar and `demo_seek` use), and `--highlight=N` cuts the tracked player's Nth
+highlight, its window from a few seconds before the moment to a few after (`demo_highlights` in
+the console lists them numbered while the demo plays; `+demo_track <slot>` picks another
+player's). The frames before the clip are read and not drawn. A file named `.gif` is an animated
+GIF (no sound, `--gif-width=N` wide, 480 by default; `--fps=15` keeps it small) and needs no video
+encoder; `.webm`, `.mp4` and `.mkv` are videos with sound as above.
+
 ```sh
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
     -demovideo demo1 ~/Movies/demo1.mp4 --resolution=1080p --fps=60
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
     -demovideo ~/Downloads/match.mvdv ~/Movies/match.mp4 +demo_track 3
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+    -demovideo ~/Downloads/match.mvd.gz ~/Movies/airgib.webm --highlight=3 +demo_track 2
+build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
+    -demovideo ~/Downloads/match.mvd.gz ~/Movies/airgib.gif --from=4:31 --to=4:39 --fps=15
 ```
 
 What is not drawn yet: the demo's temporary entities (gunshots, blood, explosions) and the

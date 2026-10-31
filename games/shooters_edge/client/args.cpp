@@ -6,6 +6,8 @@
 // ge:test tests/shooters_edge_args_test.cpp
 #include "shooters_edge/client/args.hpp"
 
+#include "shooters_edge/client/demo_playback.hpp"
+
 #include <cctype>
 #include <cstdlib>
 
@@ -82,6 +84,18 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       a.fps = std::strtod(argv[i] + 6, nullptr);
     } else if (arg.rfind("--seconds=", 0) == 0) {
       a.seconds = std::strtod(argv[i] + 10, nullptr);
+    } else if (arg.rfind("--from=", 0) == 0 || arg.rfind("--to=", 0) == 0) {
+      const double t = parse_clock(std::string(arg.substr(arg.find('=') + 1)));
+      if (t < 0) {
+        why = "the time in " + std::string(arg) +
+              " is not m:ss, h:mm:ss or seconds; next: rerun with one of those.";
+        return false;
+      }
+      (arg[2] == 'f' ? a.from : a.to) = t;
+    } else if (arg.rfind("--highlight=", 0) == 0) {
+      a.highlight = static_cast<int>(std::strtol(argv[i] + 12, nullptr, 10));
+    } else if (arg.rfind("--gif-width=", 0) == 0) {
+      a.gif_width = static_cast<int>(std::strtol(argv[i] + 12, nullptr, 10));
     } else if (arg.rfind("--codec=", 0) == 0) {
       a.codec = std::string(arg.substr(8));
     } else if ((arg == "-playdemo" || arg == "--playdemo") && i + 1 < argc) {

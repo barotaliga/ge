@@ -9,7 +9,7 @@
 //
 //   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>]
 //                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH]
-//                 [-demovideo <demo> <file> [--fps=N] [--resolution=<WxH|1080p|4k>] ...]
+//                 [-demovideo <demo> <file> [--from=m:ss --to=m:ss | --highlight=N] ...]
 //                 [+<command> ...]
 //
 // `-basedir` is the folder that holds the game folder (`id1` unless `-game` names another) with its
@@ -47,8 +47,8 @@
 // nothing timed, `cl_demospeed <x>` (0..20, 0 pauses) its speed; `demo_track <slot>` picks the
 // player a multiview recording's view rides (-1: the lowest playing). Every format plays, `.gz`
 // included, and the voice formats (`.qwdv`, `.mvdv`) with their voices. A played demo is watched
-// like a video (client/demo_playback.hpp: a play bar, seeking, highlights); `-demovideo <demo>
-// <file>` turns one into a video with no window and quits (client/demo_video.hpp).
+// like a video (client/demo_playback.hpp); `-demovideo <demo> <file>` turns one, or a clip of it,
+// into a video or a GIF with no window and quits (client/demo_video.hpp).
 //
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console relative-
@@ -132,7 +132,10 @@ int demo_video_main(const cl::Args& args, const cl::SearchPath& files,
   o.height = args.height & ~1;
   o.fps = args.fps;
   o.codec = args.codec == "none" ? "" : args.codec;
-  o.seconds = args.seconds;
+  o.seconds = args.to > args.from ? args.to - args.from : args.seconds;
+  o.from_s = args.from;
+  o.highlight = args.highlight;
+  o.gif_width = args.gif_width;
   o.track = track;
   o.picture = &picture;
   cl::DemoVideoReport r;
@@ -147,20 +150,7 @@ int demo_video_main(const cl::Args& args, const cl::SearchPath& files,
                "; see docs/shooters-edge.md § A demo as a video");
     return 2;
   }
-  out::status("demovideo: " + r.found + " (" + r.format + ") -> " + args.video);
-  const auto num = [](double v) {
-    char b[32];
-    std::snprintf(b, sizeof b, "%g", v);
-    return std::string(b);
-  };
-  out::status("demovideo: " + std::to_string(r.frames) + " pictures, " + num(r.seconds) + " s, " +
-              std::to_string(r.levels) + " levels, " + std::to_string(o.width) + "x" +
-              std::to_string(o.height) + " at " + num(o.fps) + " fps, " + r.container + " " +
-              r.codec + ", " + std::to_string(r.bytes) + " bytes, on " + r.adapter);
-  out::status("demovideo: " + std::to_string(r.sounds) + " sounds, " + std::to_string(r.loops) +
-              " loops, " + std::to_string(r.missing_sounds) + " names no pack has; voice " +
-              std::to_string(r.voice_frames) + " frames in " + std::to_string(r.voice_messages) +
-              " messages, " + std::to_string(r.voice_concealed) + " concealed");
+  for (const std::string& line : cl::demo_video_lines(o, r)) out::status(line);
   return 0;
 }
 
@@ -216,7 +206,8 @@ int run_main(int argc, char** argv) {
                " Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
                "[-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] "
                "[--frames=N] [--size=WxH] [-demovideo <demo> <file> [--fps=N] "
-               "[--resolution=<WxH|720p|1080p|1440p|4k>] [--codec=<c>] [--seconds=S]] "
+               "[--resolution=<WxH|720p|1080p|1440p|4k>] [--from=m:ss] [--to=m:ss] [--highlight=N] "
+               "[--gif-width=N] [--codec=<c>] [--seconds=S]] "
                "[+<command> ...]; next: rerun with only those flags.");
     return 2;
   }
