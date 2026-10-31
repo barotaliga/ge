@@ -9,6 +9,7 @@
 #include "lab/lab.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <map>
@@ -165,10 +166,41 @@ void Lab::hash(const void* bytes, size_t n) {
   for (size_t i = 0; i < n; i++) digest_ = (digest_ ^ b[i]) * 0x100000001b3ull;
 }
 
+namespace {
+
+// FNV-1a 64 of a byte run, as 16 hex digits: a shot's or a file's own hash in the ledger.
+std::string bytes_hash(const uint8_t* b, size_t n) {
+  uint64_t h = 0xcbf29ce484222325ull;
+  for (size_t i = 0; i < n; i++) h = (h ^ b[i]) * 0x100000001b3ull;
+  char out[17];
+  std::snprintf(out, sizeof out, "%016llx", static_cast<unsigned long long>(h));
+  return out;
+}
+
+// A ledger field: a tab or a line break inside it would split the line.
+void flatten(std::string& s) {
+  for (char& c : s) {
+    if (c == '\t' || c == '\n' || c == '\r') c = ' ';
+  }
+}
+
+}  // namespace
+
+void Lab::record(std::string_view kind, std::string_view name, std::string_view value) {
+  std::string n(name);
+  flatten(n);
+  std::string line(kind);
+  line.append("\t").append(n).append("\t").append(value);
+  ledger_.push_back(std::move(line));
+}
+
 void Lab::metric(std::string key, double value, std::string unit, Det det) {
   if (det == Det::deterministic) {
     hash(key.data(), key.size() + 1);
     hash(&value, sizeof value);
+    char text[40];
+    std::snprintf(text, sizeof text, "%.17g", value);
+    record("metric", key, text);
   }
   metrics_.push_back(Metric{std::move(key), value, std::move(unit), det});
 }
@@ -178,8 +210,25 @@ void Lab::table(LabTable t, Det det) {
     tables_.push_back(std::move(t));
     return;
   }
+  std::string cols;
+  for (std::string c : t.columns) {
+    flatten(c);
+    cols.append(cols.empty() ? "" : "\t").append(c);
+  }
+  record("columns", t.title, cols);
+  std::map<std::string, int> seen;
   for (const auto& row : t.rows) {
-    for (const auto& cell : row) hash(cell.data(), cell.size() + 1);
+    std::string cells;
+    for (size_t c = 0; c < row.size(); c++) {
+      hash(row[c].data(), row[c].size() + 1);
+      std::string cell = row[c];
+      flatten(cell);
+      cells.append(c ? "\t" : "").append(cell);
+    }
+    std::string key = t.title + " / " + (row.empty() ? std::string() : row[0]);
+    const int n = seen[key]++;
+    if (n > 0) key += " #" + std::to_string(n + 1);
+    record("row", key, cells);
   }
   tables_.push_back(std::move(t));
 }
@@ -203,6 +252,8 @@ void Lab::shot(Shot s, const Picture& picture, Det det, DistanceMap distance) {
   Picture out = framed(s, picture);
   hash(s.id.data(), s.id.size() + 1);
   if (det == Det::deterministic) hash(out.rgba.data(), out.rgba.size());
+  record("shot", s.id,
+         det == Det::deterministic ? bytes_hash(out.rgba.data(), out.rgba.size()) : "measured");
   shots_.push_back(
       Taken{std::move(s), std::move(out), det, picture.width, picture.height, std::move(distance)});
 }
@@ -210,6 +261,10 @@ void Lab::shot(Shot s, const Picture& picture, Det det, DistanceMap distance) {
 void Lab::attach(std::string name, std::vector<uint8_t> bytes, Det det) {
   hash(name.data(), name.size() + 1);
   if (det == Det::deterministic) hash(bytes.data(), bytes.size());
+  record("file", name,
+         det == Det::deterministic ? bytes_hash(bytes.data(), bytes.size()) + " " +
+                                         std::to_string(bytes.size()) + " bytes"
+                                   : std::string("measured"));
   files_.push_back(File{std::move(name), std::move(bytes), det});
 }
 

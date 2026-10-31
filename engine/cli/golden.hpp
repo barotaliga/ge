@@ -58,6 +58,9 @@ struct DigestOptions {
   bool write = false, diff = false;
   bool affected = false, list = false;  // the labs the change since `base` reaches
   std::string base = "origin/main";
+  // What moved in each named lab's digest against `base`: a kept run tagged so
+  // (previews/<lab>@<base>/), or else the lab at that git ref, built in a scratch worktree.
+  bool why = false;
 };
 Outcome run_digest(const BuildOptions& o, const DigestOptions& d);
 

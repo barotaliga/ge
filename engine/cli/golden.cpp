@@ -16,7 +16,9 @@
 #include <regex>
 #include <sstream>
 
+#include "cli/build.hpp"
 #include "cli/json.hpp"
+#include "lab/digest_why.hpp"
 #include "lab/digests.hpp"
 
 namespace ge::cli {
@@ -531,6 +533,13 @@ Outcome run_digest(const BuildOptions& o, const DigestOptions& d) {
     out.exit = 2;
     return out;
   }
+  if (d.why && (labs.empty() || d.affected || write)) {
+    out.findings.push_back({Severity::error, "--why needs lab names, and no --affected or --write",
+                            "the flags",
+                            "name the labs to explain: ge digest <lab> --why [--base=<ref|tag>]"});
+    out.exit = 2;
+    return out;
+  }
   if (write && only_moved) {
     out.findings.push_back({Severity::error, "--write and --diff together", "the flags",
                             "--diff shows what moved and writes nothing; run it, then --write"});
@@ -684,6 +693,58 @@ Outcome run_digest(const BuildOptions& o, const DigestOptions& d) {
                              {"baseline", before.empty() ? "null" : json_str(before)},
                              {"state", json_str(state)}}));
   }
+  // --why: each lab's ledger against the same lab's at --base, a kept run's when one is tagged so.
+  std::vector<std::string> whys;
+  if (d.why) {
+    for (const std::string& id : labs) {
+      const fs::path kept = previews / (id + "@" + d.base) / "digest.tsv";
+      std::string against = "the kept run previews/" + id + "@" + d.base + "/";
+      fs::path before_path = kept;
+      if (!fs::exists(kept, ec)) {
+        LabOptions at;
+        at.id = id;
+        at.smoke = true;
+        at.before = d.base;
+        Outcome at_ref;
+        if (!run_at_ref(o, at, "why-base", at_ref)) {
+          out.findings.insert(out.findings.end(), at_ref.findings.begin(), at_ref.findings.end());
+          if (at_ref.exit != 0) out.exit = at_ref.exit;
+          continue;
+        }
+        before_path = previews / (id + "@why-base") / "digest.tsv";
+        against = id + " at " + d.base + " (its smoke run, previews/" + id + "@why-base/)";
+      }
+      bool had_before = false, had_after = false;
+      const auto before = ge::lab::read_ledger(before_path.string(), &had_before);
+      const auto after = ge::lab::read_ledger((previews / id / "digest.tsv").string(), &had_after);
+      if (!had_before || !had_after) {
+        out.findings.push_back(
+            {Severity::error,
+             "no digest.tsv for " + id + (had_before ? " in this run" : " in " + against),
+             rel_path(o.repo, had_before ? previews / id : before_path.parent_path()),
+             had_before ? "the lab failed before its report: read the log"
+                        : "the ref predates the digest ledger: name a later one, or keep a run "
+                          "first (ge lab " +
+                              id + " --smoke --tag=<name>) and pass --base=<name>"});
+        continue;
+      }
+      const ge::lab::DigestWhy why = ge::lab::explain_digest(before, after);
+      out.text.append("why ").append(id).append(", against ").append(against).append(":\n");
+      if (why.same()) out.text.append("  nothing the digest hashes moved\n");
+      std::vector<std::string> said;
+      for (const std::string& line : why.lines) {
+        out.text.append("  ").append(line).append("\n");
+        said.push_back(json_str(line));
+      }
+      whys.push_back(json_obj({{"lab", json_str(id)},
+                               {"against", json_str(against)},
+                               {"changed", json_num(static_cast<long long>(why.changed))},
+                               {"added", json_num(static_cast<long long>(why.added))},
+                               {"removed", json_num(static_cast<long long>(why.removed))},
+                               {"reordered", json_bool(why.reordered)},
+                               {"lines", json_arr(said)}}));
+    }
+  }
   if (write && read_rows() != was) out.written.push_back(rel);
   if (!had && !write) {
     out.findings.push_back({Severity::note, "the repo has no lab digest baseline", rel,
@@ -692,7 +753,13 @@ Outcome run_digest(const BuildOptions& o, const DigestOptions& d) {
   }
   out.result = json_obj({{"baseline", json_str(rel)},
                          {"labs", json_arr(rows)},
+                         {"why", d.why ? json_arr(whys) : "null"},
                          {"log", json_str(rel_path(o.repo, log))}});
+  if (d.why) {
+    out.summary = "what moved in each lab's digest against " + d.base + ", above";
+    out.next = "a move you meant: ge digest <lab> --write, and say why in the PR";
+    return out;
+  }
   if (only_moved) {
     std::string names;
     for (const std::string& id : moved_ids) names += (names.empty() ? "" : ", ") + id;
