@@ -282,6 +282,10 @@ bool video(gl::Lab& lab, ge::gpu::Device* device, const cl::SearchPath& files,
   o.container = "mkv";
   if (!lab.arg_nums("game-volume").empty())
     o.volume = static_cast<float>(lab.arg_nums("game-volume")[0]);
+  // The look: the video's default (modern, every classic-enhance switch on) or the classic.
+  shooters_edge::look::Picture look;
+  if (lab.arg("look") == "classic") look.look = "classic";
+  o.picture = &look;
   std::vector<uint8_t> video_bytes;
   o.memory = &video_bytes;
   const std::string ids[3] = {tag + "-start", tag + "-middle", tag + "-end"};
@@ -441,7 +445,9 @@ const gl::LabSpec kSpec{
      {"game-volume", "0.5", "the game's sounds under the voices, 0..1 (0: the voices alone)"},
      {"map", "", "with --basedir: play the match on this map of the game folder's instead"},
      {"voices", "", "a folder of <name>.wav (red1, red2, blue1, blue2) the clients speak"},
-     {"font", "packs", "the words' type: packs (a stand-in pack's glyph sheet) or charset"}},
+     {"font", "packs", "the words' type: packs (a stand-in pack's glyph sheet) or charset"},
+     {"look", "modern",
+      "the picture: modern (the video's default, classic-enhance on) or classic"}},
     "--size=160,90 --seconds=2 --ticks=1000",
     run,
 };

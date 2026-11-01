@@ -508,20 +508,23 @@ int run_main(int argc, char** argv) {
   bool vsync = true;
   bool full_applied = false;  // what the window was last set to; vid_fullscreen is the ask
   std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
-  ge::gpu::Target bench_off;                 // the benchmark's frames that are not shown
-  uint64_t bench_shown_ns = 0;               // when the benchmark last showed a frame
-  wgpu::Future bench_in_flight{};            // the frame before this one, waited before the next
+  size_t bench_models = 0;         // the demo's model list's length the world was made with
+  cl::FxFrame bench_fx;            // the demo's models standing in the world this frame
+  ge::gpu::Target bench_off;       // the benchmark's frames that are not shown
+  uint64_t bench_shown_ns = 0;     // when the benchmark last showed a frame
+  wgpu::Future bench_in_flight{};  // the frame before this one, waited before the next
   if (!args.timedemo.empty()) bench_ask = args.timedemo;
   if (!args.playdemo.empty()) {
     bench_ask = args.playdemo;
     play_ask = true;
   }
   // The world's frame for `map`, or false with the error said.
-  const auto rebuild_world = [&](const cl::LoadedMap& map) {
+  // The world for `map`, with the models on `models` (a demo's list) standing in it.
+  const auto rebuild_world = [&](const cl::LoadedMap& map, const cl::ModelLoad& models = {}) {
     world.reset();
-    world =
-        cl::create_world_draw(*device, files, map, static_cast<uint32_t>(w),
-                              static_cast<uint32_t>(h), surface.format(), picture, weapons, error);
+    world = cl::create_world_draw(*device, files, map, static_cast<uint32_t>(w),
+                                  static_cast<uint32_t>(h), surface.format(), picture, weapons,
+                                  error, models);
     if (!world)
       out::error("shooters_edge: the world draw did not load: " + error +
                  "; see docs/rendering.md");
@@ -760,11 +763,18 @@ int run_main(int argc, char** argv) {
           if (!end_bench("the demo's map " + bench.demo.state.map + ": " + error, t)) return 1;
           continue;
         }
-        if (!rebuild_world(*bench_map)) return 1;
+        bench_models = 0;  // made below, with the demo's models
       } else if (step != cl::TimedemoStep::frame) {
         if (!end_bench(step == cl::TimedemoStep::error ? error : "", t)) return 1;
         continue;
       }
+      // The model list grows through a client recording's signon: the world is made again with it,
+      // so the players, items and flames stand in it in their enhanced skins (client/demo_video).
+      if (bench_map && bench.demo.state.models.size() != bench_models) {
+        if (!rebuild_world(*bench_map, {bench.demo.state.models, {}})) return 1;
+        bench_models = bench.demo.state.models.size();
+      }
+      cl::demo_placed(bench.demo.state, bench_fx.models);
       ge::render::FrameView view =
           cl::demo_view(bench.demo.state, ge::camera::FirstPersonRow{}.fov_y, t);
       view.frame = static_cast<uint64_t>(presented);
@@ -792,8 +802,8 @@ int run_main(int argc, char** argv) {
                                              static_cast<uint32_t>(h), surface.format());
         target = bench_off.view;
       }
-      // The demo's effects are not read yet: the world's frame with none of its own.
-      cl::draw_world(*device, *world, view, cl::FxFrame{}, nullptr, wall, overlay, target);
+      // The demo's models in it; its effects (gunshots, explosions) are not read yet.
+      cl::draw_world(*device, *world, view, bench_fx, nullptr, wall, overlay, target);
       if (!bench.paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) surface.present();
       if (bench.paced) {  // playback: every frame shown, nothing timed

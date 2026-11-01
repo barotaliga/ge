@@ -46,37 +46,6 @@ int listener_of(const DemoState& s) {
   return s.format == DemoFormat::single ? s.view_entity : s.player + 1;
 }
 
-// What the demo has standing in the world this frame: its entities with a model (not the eye's
-// own), the other players, the level's statics.
-void demo_placed(const DemoState& s, std::vector<Placed>& out) {
-  out.clear();
-  const int models = static_cast<int>(s.models.size());
-  const int me = listener_of(s);
-  const auto put = [&](int entity, const DemoEntity& e) {
-    if (e.model <= 0 || e.model >= models) return;
-    Placed p;
-    p.entity = entity;
-    p.modelindex = e.model;
-    p.frame = e.frame;
-    p.skin = e.skin;
-    p.effects = e.effects;
-    p.origin = e.origin;
-    p.angles = e.angles;
-    out.push_back(p);
-  };
-  for (size_t n = 1; n < s.entities.size(); n++) {
-    if (static_cast<int>(n) == me || !s.entities[n].present) continue;
-    if (s.format != DemoFormat::single && n <= s.players.size()) continue;  // players: below
-    put(static_cast<int>(n), s.entities[n]);
-  }
-  if (s.format != DemoFormat::single) {
-    for (size_t k = 0; k < s.players.size(); k++)
-      if (static_cast<int>(k) != s.player && s.players[k].present)
-        put(static_cast<int>(k) + 1, s.players[k]);
-  }
-  for (size_t i = 0; i < s.statics.size(); i++) put(-1 - static_cast<int>(i), s.statics[i]);
-}
-
 bool ends_with(std::string_view s, std::string_view tail) {
   return s.size() >= tail.size() && s.substr(s.size() - tail.size()) == tail;
 }
@@ -117,6 +86,35 @@ void caption_type(const SearchPath& files, ge::ui::Image& glyphs, std::string& f
 }
 
 }  // namespace
+
+void demo_placed(const DemoState& s, std::vector<Placed>& out) {
+  out.clear();
+  const int models = static_cast<int>(s.models.size());
+  const int me = listener_of(s);
+  const auto put = [&](int entity, const DemoEntity& e) {
+    if (e.model <= 0 || e.model >= models) return;
+    Placed p;
+    p.entity = entity;
+    p.modelindex = e.model;
+    p.frame = e.frame;
+    p.skin = e.skin;
+    p.effects = e.effects;
+    p.origin = e.origin;
+    p.angles = e.angles;
+    out.push_back(p);
+  };
+  for (size_t n = 1; n < s.entities.size(); n++) {
+    if (static_cast<int>(n) == me || !s.entities[n].present) continue;
+    if (s.format != DemoFormat::single && n <= s.players.size()) continue;  // players: below
+    put(static_cast<int>(n), s.entities[n]);
+  }
+  if (s.format != DemoFormat::single) {
+    for (size_t k = 0; k < s.players.size(); k++)
+      if (static_cast<int>(k) != s.player && s.players[k].present)
+        put(static_cast<int>(k) + 1, s.players[k]);
+  }
+  for (size_t i = 0; i < s.statics.size(); i++) put(-1 - static_cast<int>(i), s.statics[i]);
+}
 
 bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVideoOptions& o,
                 DemoVideoReport& report, std::string& error, const DemoVideoPicture& picture) {

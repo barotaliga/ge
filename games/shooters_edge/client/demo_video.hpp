@@ -47,6 +47,7 @@
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/world_models.hpp"
 
 namespace shooters_edge::client {
 
@@ -100,6 +101,10 @@ struct DemoVideoReport {
 // Called with each picture as it goes into the file (a lab's strip): its index and its time on
 // the demo's timeline.
 using DemoVideoPicture = std::function<void(int64_t frame, double t, const ge::lab::Picture&)>;
+
+// What the demo has standing in the world this frame into `out`: its entities with a model (not
+// the eye's own), the other players, the level's statics (the window's playdemo draws them too).
+void demo_placed(const DemoState& s, std::vector<Placed>& out);
 
 // `o.demo` from `files` into `o.file` on `device`. False with the reason and the next step.
 bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVideoOptions& o,
