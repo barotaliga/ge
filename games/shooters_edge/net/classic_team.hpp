@@ -48,7 +48,9 @@ struct TeamSide {
 struct TeamMatchOptions {
   std::span<const uint8_t> map;  // the map file
   std::string map_name = "halls";
-  std::string entities;  // in place of the map's entity text (empty: the map's own)
+  std::string entities;   // in place of the map's entity text (empty: the map's own)
+  std::string locs;       // the map's place names file's text (empty: named off its items)
+  std::string locs_from;  // where it was read from
   const ge::progs::Progs* progs = nullptr;  // the baseline mod, compiled
   TeamSide teams[2] = {TeamSide("red", 4), TeamSide("blue", 13)};
   int frames = 46154;   // server frames of 13 ms (ten minutes)
@@ -73,12 +75,13 @@ struct TeamPlayer {
   int64_t weapon_commands[9] = {};
   int64_t pilot_modes[9] = {};  // live commands in each pilot mode (shooter/pilot.hpp)
   int64_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0;
-  float travelled = 0;          // units along the path
-  std::string last;             // where he stood at the end, and what he was going for
-  std::vector<sh::Vec3f> path;  // every path_every frames
-  std::vector<uint8_t> roles;   // beside it: its role, 255 dead
-  std::vector<int16_t> known;   // beside it: how many items it knows (recalls) of the map's
-  int64_t said = 0;             // team messages it said
+  float travelled = 0;           // units along the path
+  std::string last;              // where he stood at the end, and what he was going for
+  std::vector<sh::Vec3f> path;   // every path_every frames
+  std::vector<uint8_t> roles;    // beside it: its role, 255 dead
+  std::vector<int16_t> known;    // beside it: how many items it knows (recalls) of the map's
+  int64_t said = 0;              // team messages it said
+  int64_t read = 0, missed = 0;  // its mates' team lines it read, and missed
 };
 
 struct TeamTotals {
@@ -113,6 +116,9 @@ struct TeamMatchReport {
   int64_t dives = 0;        // pockets only the water reaches, each with a field to dive in by
   double nav_build_ms = 0;  // measured
   int hold_item = -1, quad_item = -1;
+  std::string locs_from;                     // where the place names came from
+  int64_t locs = 0;                          // how many points they name
+  int64_t lines_read = 0, lines_missed = 0;  // team lines the fighters read and missed
   uint64_t digest = 0;
   int64_t faults = 0;
   std::vector<uint8_t> mvd;  // the recording

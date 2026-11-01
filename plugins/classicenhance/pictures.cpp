@@ -117,33 +117,28 @@ void enhance_cell(const assets::Image& img, int x0, int y0, int cw, int ch, std:
 }  // namespace
 
 bool pack_pictures(std::span<const uint8_t> pack_bytes, Palette* palette,
-                   std::vector<PackPicture>* out, std::string* error) {
+                   std::vector<PackPicture>* out, std::string* error, const Profile& profile) {
   out->clear();
   vfs::Pak pak;
   if (!vfs::read_pak(pack_bytes, &pak, error)) return false;
-  const vfs::PakEntry* pal = vfs::pak_find(pak, "gfx/palette.lmp");
-  if (pal == nullptr || pal->size < 768) {
-    *error = "the pack has no gfx/palette.lmp of 768 bytes; it is not the classic pack";
-    return false;
-  }
-  std::memcpy(palette->rgb.data(), vfs::pak_file(pack_bytes, *pal).data(), 768);
-  const vfs::PakEntry* wad_entry = vfs::pak_find(pak, "gfx.wad");
+  if (!read_palette(profile, pak, pack_bytes, palette, error)) return false;
+  const std::string wad_name(profile.wad);
+  const vfs::PakEntry* wad_entry = vfs::pak_find(pak, wad_name);
   if (wad_entry == nullptr) {
-    *error =
-        "the pack has no gfx.wad, where the status bar's pictures are; it is not the "
-        "classic pack";
+    *error = "the pack has no " + wad_name + ", where the status bar's pictures are; it is not " +
+             std::string(profile.what) + "'s pack (profile " + std::string(profile.id) + ")";
     return false;
   }
   const std::span<const uint8_t> wad_bytes = vfs::pak_file(pack_bytes, *wad_entry);
   vfs::Wad wad;
   if (!vfs::read_wad(wad_bytes, &wad, error)) {
-    *error = "gfx.wad: " + *error;
+    *error = wad_name + ": " + *error;
     return false;
   }
   for (const vfs::WadEntry& e : wad.entries) {
     PackPicture p;
     p.name = lower(e.name);
-    p.from = "gfx.wad";
+    p.from = wad_name;
     bool ok = false;
     if (e.compressed) continue;
     if (e.type == vfs::kPictureLump) {
@@ -156,23 +151,18 @@ bool pack_pictures(std::span<const uint8_t> pack_bytes, Palette* palette,
       continue;
     }
     if (!ok) {
-      *error = "gfx.wad lump '" + e.name + "': " + *error;
+      *error = wad_name + " lump '" + e.name + "': " + *error;
       return false;
     }
     out->push_back(std::move(p));
   }
-  std::vector<const vfs::PakEntry*> files;
-  for (const vfs::PakEntry& e : pak.entries) {
-    if (e.path.rfind("gfx/", 0) == 0 && e.path.ends_with(".lmp")) files.push_back(&e);
-  }
-  std::sort(files.begin(), files.end(), [](auto* a, auto* b) { return a->path < b->path; });
-  for (const vfs::PakEntry* e : files) {
+  for (const vfs::PakEntry* e : assets_of(pak, profile.pictures)) {
     PackPicture p;
     std::string ignored;
     // The palette and the colour map are tables, not pictures: their sizes do not add up.
     if (!vfs::read_picture(vfs::pak_file(pack_bytes, *e), &p.picture, &ignored)) continue;
     if (size_t(8) + p.picture.indices.size() != e->size) continue;
-    p.name = lower(e->path.substr(0, e->path.size() - 4));
+    p.name = lower(e->path.substr(0, e->path.size() - profile.pictures.ext.size()));
     p.from = e->path;
     out->push_back(std::move(p));
   }

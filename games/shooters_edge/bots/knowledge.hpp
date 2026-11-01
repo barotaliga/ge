@@ -42,7 +42,7 @@ const char* map_sense_name(MapSense s);
 // The items a game turns on: the best armours, the mega health, the rocket launcher, the powers.
 bool key_item(const ItemSpot& it);
 
-// The item as a player calls it out: "RA", "quad", "RL", "mega" and so on.
+// The item as a player calls it out: "ra", "quad", "rl", "mh" and so on.
 const char* item_call(const ItemSpot& it);
 
 // A vector in a map's text ("x y z"); false on none.
@@ -51,7 +51,7 @@ bool parse_vec(const char* text, sh::Vec3f& out);
 bool item_of(const char* cn, int spawnflags, ItemSpot& it);
 
 // The callout for an enemy at `there`: by the landmark nearest it that the player knows (a key item
-// or a weapon: "enemy at RA", "enemy at RL"), the key items counted nearer; empty with none near.
+// or a weapon: "enemy at ra", "enemy at rl"), the key items counted nearer; empty with none near.
 std::string enemy_call(const Fighter& f, sh::Vec3f there);
 
 // What the player starts the match knowing (call after the items are read).
