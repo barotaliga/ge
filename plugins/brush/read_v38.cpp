@@ -237,7 +237,7 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
       if (first < 0 || count < 0 || size_t(first) > sides || size_t(count) > sides - size_t(first))
         continue;  // a brush whose sides are out of range marks nothing (the view keeps no brush)
       for (int32_t k = 0; k < count; ++k) {
-        const int32_t ti = side_texinfo[size_t(first + k)];
+        const int32_t ti = side_texinfo[size_t(first) + size_t(k)];
         if (ti >= 0 && size_t(ti) < texinfo.size())
           contents_of[texinfo[size_t(ti)].texture] |= contents;
       }
