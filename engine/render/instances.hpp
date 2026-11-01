@@ -48,13 +48,13 @@
 // (`InstancePipelines::shadows`, bound by `bind_instance_shadows`; none until then). Shaders:
 // instances.wgsl, instances_cull.wgsl.
 //
-// ge:summary GPU-driven instance families: meshes and LODs, two-phase Hi-Z culling, indirect
-// draws
+// ge:summary GPU-driven instance families: meshes, LODs, two-phase Hi-Z culling, indirect draws
 // ge:keywords render instances instance-family gpu-driven two-phase-culling occlusion-culling
 // ge:keywords hi-z lod lod-band dither cross-fade bucket indirect-draw base-vertex compaction
 // ge:keywords vertex-pulling soa streams materials pick_lod create_family set_instances
 // ge:keywords encode_instances_cull encode_instances_depth encode_instances instance-stats
 // ge:keywords see-through set_see_through see_through_keep occluder-fade dithered-fade
+// ge:keywords set_family_surfaces
 // ge:keywords casters caster-slot shadow-cull create_family_casters draw_casters
 // ge:keywords wire-probe wireframe encode_instances_wire palette-family palettes
 // ge:skill render
@@ -244,6 +244,10 @@ void create_family_casters(gpu::Device& device, const InstancePipelines& ip, Ins
 void set_instances(gpu::Device& device, InstanceFamily& family, uint32_t first,
                    std::span<const Instance> instances);
 void set_instance_count(InstanceFamily& family, uint32_t count);
+// The family's materials written again (a look that changes with the hour: frost, a glaze), no
+// more of them than it was made with; the extra ones are dropped.
+void set_family_surfaces(gpu::Device& device, InstanceFamily& family,
+                         std::span<const Surface> surfaces);
 // The camera cut: the next write moves nothing since the last frame (nor the next palettes).
 void cut_family(InstanceFamily& family);
 // A palette family's rows for its parameters' `skin`: joints, this frame's first row, the last's.

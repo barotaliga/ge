@@ -9,6 +9,13 @@
 // it, and the lab fails when the still dawn's fog changes under 10 % of the picture or the windy
 // one's over 3 %. Their mists' kinds, extinctions and depths are deterministic rows.
 //
+// FROZEN (M51f: mountain/air/marks.hpp's `lake_ice`, app/frame.hpp's `freeze_water`): the tarn
+// after `--days` of winter at `--winter` C (the day's mean at the mountain's base, lapsed to the
+// tarn), its ice drawn in place of the water (mountain/app/ice_look.hpp: snow on it, the wind's
+// swept patches bare), and after one night at -4 C, young black ice. The lab fails when the
+// winter's ice does not bear a skier (`kSkier` kg, Gold's formula), when the one night's does,
+// or when either sheet changes under 5 % of the shore's picture against the open water.
+//
 // THE TARN is the lab's own until the generator lays lakes (docs/goals.md M24l): the flattest
 // open ground of the map's lower half, away from the piste, is dug into a bowl `--radius` m
 // across its shore, its rim made good where the ground falls away, the trees in it taken out,
@@ -24,6 +31,7 @@
 // ge:summary Lab: a lake in Fall Line's frame: shore, aerial, into the sun, wind, evening, dawn fog
 // ge:keywords lab lake tarn water fall-line picture in-game reflection glitter shore frame
 // ge:keywords dawn-fog lake-fog steam-fog radiation-fog water_mist
+// ge:keywords lake-ice frozen-lake black-ice freeze_water lake_ice ice_bears
 // ge:skill render water labs
 #include <algorithm>
 #include <cmath>
@@ -43,10 +51,12 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "mountain/air/air.hpp"
+#include "mountain/air/marks.hpp"
 #include "mountain/app/mist_look.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "water/optics.hpp"
 #include "water/world.hpp"
+#include "wind/cold.hpp"
 
 namespace {
 
@@ -56,6 +66,7 @@ namespace lm = ge::core::libm;
 namespace gw = ge::water;
 
 constexpr double kPi = 3.14159265358979323846;
+constexpr double kSkier = 90;  // kg: a skier and his gear, what the ice must bear
 
 bool env_on(const char* name) {
 #ifdef _MSC_VER
@@ -216,6 +227,10 @@ struct Shot {
   // The air's fog over the tarn at a dawn (`--spring`'s day): 0 none drawn, 1 it must fog the
   // picture, 2 it must not.
   int air = 0;
+  // The ice: `ice_days` of winter at `ice_mean` C (none where days is negative); 1 it must bear a
+  // skier, 2 it must not.
+  double ice_days = -1, ice_mean = 0;
+  int bears = 0;
 };
 
 void run(ge::lab::Lab& lab) {
@@ -309,6 +324,17 @@ void run(ge::lab::Lab& lab) {
       {"dawn-windy", "A WINDY DAWN", "The same dawn in an 8 m/s wind: the air's fog over the tarn.",
        "no fog: the wind mixes it away, the far shore sharp across the chop", lab.arg_num("dawn"),
        8, 0, 0.05, 2},
+      {"frozen", "FROZEN",
+       "The shore view after " + fixed(lab.arg_num("days"), 0) + " days of winter at " +
+           fixed(lab.arg_num("winter"), 0) + " C: the tarn under its ice.",
+       "a flat white sheet where the water was, the snow lying on it, patches of bare glassy "
+       "ice the wind swept catching the light; no mirror of the slopes, no ripples",
+       -1, -1, 0, 0.05, 0, lab.arg_num("days"), lab.arg_num("winter"), 1},
+      {"thin-ice", "ONE COLD NIGHT",
+       "The shore view after a single night at -4 C: young ice, too thin to bear a skier.",
+       "black, glassy ice where the water was, the sky's light sliding across it; no snow on "
+       "it, no ripples",
+       -1, -1, 0, 0.05, 0, 0.5, -4, 2},
   };
 
   auto shot_of = [&](const Shot& s) {
@@ -346,6 +372,29 @@ void run(ge::lab::Lab& lab) {
     lab.note(s.id + ": " + ge::wind::mist_name(wm.mist.kind) + " fog, " +
              fixed(wm.mist.visibility, 0) + " m visibility, " + fixed(wm.mist.depth, 1) +
              " m deep");
+  }
+
+  // The ice on the frozen shots (deterministic rows, with a GPU or without).
+  std::vector<double> ice(shots.size(), 0);
+  for (size_t k = 0; k < shots.size(); ++k) {
+    const Shot& s = shots[k];
+    if (s.ice_days < 0) continue;
+    mg::Level winter = level;
+    winter.weather.mean_c = s.ice_mean;
+    ice[k] = ge::mountain::air::lake_ice(winter, tarn.level, s.ice_days);
+    const double bears = ge::wind::ice_bears(ice[k]);
+    lab.metric(s.id + ".ice", ice[k], "m");
+    lab.metric(s.id + ".bears", bears, "kg");
+    lab.note(s.id + ": " + fixed(ice[k] * 100, 1) + " cm of ice, bears " + fixed(bears, 0) + " kg");
+    if (s.bears == 1 && bears < kSkier) {
+      lab.fail(s.id + "'s ice (" + fixed(ice[k] * 100, 1) + " cm) does not bear a skier",
+               "Check wind/cold.cpp's ice_grown and mountain/air/marks.cpp's lake_ice. Skill: "
+               "mountain.");
+    }
+    if (s.bears == 2 && bears >= kSkier) {
+      lab.fail(s.id + "'s one night of ice (" + fixed(ice[k] * 100, 1) + " cm) bears a skier",
+               "Check wind/cold.cpp's ice_grown. Skill: mountain.");
+    }
   }
 
   auto device = ge::gpu::create_device({.label = "lake", .validation = 1});
@@ -457,6 +506,24 @@ void run(ge::lab::Lab& lab) {
             "Skill: render.");
       }
     }
+    if (s.ice_days >= 0) {
+      // The ice against the open water from the same stand.
+      const gw::World world = tarn_world(level, tarn, s.wind, look);
+      const ge::lab::Picture open = draw(v, scene);
+      fall_line::app::freeze_water(*device, *frame, body, world.bodies[0], ice[&s - shots.data()]);
+      const ge::lab::Picture frozen = draw(v, scene);
+      fall_line::app::freeze_water(*device, *frame, body, world.bodies[0], 0);
+      const double share = changed(frozen, open);
+      lab.metric(s.id + ".ice-share", share, "share", Det::measured);
+      if (share < s.min_share) {
+        lab.fail("the " + s.id + " view's ice changed " + fixed(share * 100, 1) +
+                     "% of the picture against the open water",
+                 "Check mountain/app/ice_look.cpp's sheet and app/frame.cpp's freeze_water. "
+                 "Skill: render.");
+      }
+      lab.shot(shot_of(s), frozen, Det::measured);
+      continue;
+    }
     const ge::lab::Picture pic = draw(v, scene);
     frame->water.bodies[static_cast<size_t>(body)].hidden = true;
     const ge::lab::Picture dry = draw(v, scene);
@@ -503,6 +570,8 @@ const ge::lab::LabSpec kSpec{
         {"height", "360", "the picture's height, px"},
         {"spring", "3", "the dawn shots' day: its mean temperature, C (the tarn at 4 C)"},
         {"dawn", "7.6", "the dawn shots' solar hour"},
+        {"winter", "-8", "the frozen shot's winter: the day's mean at the mountain's base, C"},
+        {"days", "60", "the frozen shot's winter: its days"},
     },
     "--frames=2 --width=160 --height=90",
     run,

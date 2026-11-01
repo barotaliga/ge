@@ -53,10 +53,10 @@
 // spray and the falling snow, and its fall says how much of the snow is drawn. Every pipeline is
 // made in `create_frame` (the manifest), and the device's load ends there: a pipeline made after it
 // is an error.
-//
 // ge:summary Fall Line's frame: its pass table over engine/render and the GPU half it owns
 // ge:keywords fall-line frame pass-table game-frame create_frame draw pass_table_faults fog
 // ge:keywords render offscreen surface stats draw_wire wire-probe wireframe water add_water
+// ge:keywords freeze_water lake-ice village-cold
 // ge:skill render
 #pragma once
 
@@ -142,6 +142,7 @@ struct FrameOptions {
   bool trails = true;  // the tracks (mountain/app/trails.hpp); drawn only with the snow
   bool spray = true;   // the racers' spray (skier/app/spray.hpp) thrown into the particles
   bool breath = true;  // the racers' breath in the cold (skier/app/breath.hpp), as particles
+  bool cold = true;    // the night's frost and a freezing rain's glaze on the village
   ge::render::ParticleSettings particles;
   bool precip = true;     // what falls (snow, sleet, rain), when the map's sky snows
   bool splashes = true;   // the rain's splashes on the ground (with `precip`)
@@ -253,7 +254,9 @@ struct GameFrame {
   ge::mountain::app::StormLights lightning;
   double lightning_time = 0;
   ge::render::CloudPass clouds;
-  ge::render::Water water;       // its bodies, `add_water`'s; none: the passes draw nothing
+  ge::render::Water water;         // its bodies, `add_water`'s; none: the passes draw nothing
+  ge::render::InstanceFamily ice;  // `freeze_water`'s sheet, over body `ice_body`
+  int ice_body = -1;
   ge::render::Underwater under;  // the view when the eye is under a body (`under.look`)
   std::vector<ge::skier::SprayPen> spray_pens;    // each racer's, by his place in the scene
   std::vector<ge::skier::BreathPen> breath_pens;  // each racer's, by his place in the scene
@@ -291,6 +294,9 @@ struct GameFrame {
   std::vector<ge::render::Instance> staged_traffic;
   // Each building's windows as last written, lit or dark (building_look.hpp's `lights_on`).
   std::vector<uint8_t> buildings_lit;
+  // The village's frost and glaze as last written (village_look.hpp's `cold_steps`), and the run
+  // time and the hour they were worked out at.
+  double village_frost = -1, village_glaze = -1, cold_t = -1e9, cold_hour = -1e9;
   wgpu::BindGroup instance_light;
   ge::render::SunShadows shadows;
   // THE LAMPS (FrameOptions::lights): the light buffer and the lamps' shadow atlas, the masts and
@@ -367,6 +373,11 @@ void track(GameFrame& frame, const FrameScene& scene);
 int add_water(ge::gpu::Device& device, GameFrame& frame, const ge::water::Body& body,
               const ge::render::WaterDraw& draw = {});
 void set_water(ge::gpu::Device& device, GameFrame& frame, int index, const ge::water::Body& body);
+// THE ICE on lake `index` (`body` its water), `h` m thick (mountain/air/marks.hpp's `lake_ice`):
+// from mountain/app/ice_look.hpp's `kIceShows` its water is not drawn and the ice sheet is, its
+// look by `h`; thinner, open water again. One lake a frame freezes (the first asked).
+void freeze_water(ge::gpu::Device& device, GameFrame& frame, int index, const ge::water::Body& body,
+                  double h);
 
 // Forget every track and all the spray (a new run on the same map).
 void forget_tracks(GameFrame& frame);

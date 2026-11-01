@@ -10,6 +10,7 @@
 #include <cmath>
 #include <iterator>
 
+#include "core/num.hpp"
 #include "core/output.hpp"
 #include "fall_line/app/ladder.hpp"
 #include "fall_line/app/lamps.hpp"
@@ -17,9 +18,12 @@
 #include "fall_line/app/mists.hpp"
 #include "fall_line/app/scene.hpp"
 #include "fall_line/app/sky_type.hpp"
+#include "fall_line/app/thrown.hpp"
 #include "mountain/air/air.hpp"
+#include "mountain/air/marks.hpp"
 #include "mountain/app/building_look.hpp"
 #include "mountain/app/cloud_field.hpp"
+#include "mountain/app/ice_look.hpp"
 #include "mountain/app/village_look.hpp"
 #include "mountain/app/weather_look.hpp"
 #include "prof/zones.hpp"
@@ -178,67 +182,30 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
   f.history.valid = false;
 }
 
-// The racers' spray over the `dt` s since the last frame, handed to the pool as births.
-void emit_grains(GameFrame& f);  // the grains in `f.thrown` into the particle pool
-void throw_spray(GameFrame& f, const FrameScene& scene, double dt) {
-  if (!f.options.spray) return;
-  for (size_t k = f.spray_pens.size(); k < scene.skiers.size(); ++k) {
-    f.spray_pens.push_back(ge::skier::spray_pen(static_cast<uint32_t>(k)));
-  }
-  f.thrown.clear();
-  for (size_t k = 0; k < scene.skiers.size(); ++k) {
-    ge::skier::spray_grains(scene.skiers[k], dt, f.spray_pens[k], f.thrown);
-  }
-  emit_grains(f);
-}
-
-// THE BREATH in the cold: each racer's puffs over `dt` s, as thick as the air at his mouth shows a
-// breath (wind::breath_of of the map's day at the sky's solar `hour`).
-void breathe(GameFrame& f, const FrameScene& scene, double hour, double dt) {
-  if (!f.options.breath || scene.skiers.empty()) return;
-  for (size_t k = f.breath_pens.size(); k < scene.skiers.size(); ++k)
-    f.breath_pens.push_back(ge::skier::breath_pen(static_cast<uint32_t>(k)));
-  const ge::wind::Climate climate = ge::mountain::air::climate_of(*f.level);
-  f.thrown.clear();
-  for (size_t k = 0; k < scene.skiers.size(); ++k) {
-    double mouth[3];
-    ge::skier::mouth_of(scene.skiers[k], mouth);
-    const ge::wind::Site site{.y = mouth[1], .snow = 1};
-    const double show = ge::wind::breath_of(ge::wind::air_at(climate, site, hour));
-    ge::skier::breath_puffs(scene.skiers[k], show, dt, f.breath_pens[k], f.thrown);
-  }
-  emit_grains(f);
-}
-
-void emit_grains(GameFrame& f) {
-  f.births.resize(f.thrown.size());
-  for (size_t i = 0; i < f.thrown.size(); ++i) {
-    const ge::skier::SprayGrain& g = f.thrown[i];
-    r::Particle& p = f.births[i];
-    p = r::Particle{};
-    p.p[0] = static_cast<float>(g.x);
-    p.p[1] = static_cast<float>(g.y);
-    p.p[2] = static_cast<float>(g.z);
-    p.v[0] = static_cast<float>(g.vx);
-    p.v[1] = static_cast<float>(g.vy);
-    p.v[2] = static_cast<float>(g.vz);
-    p.life = static_cast<float>(g.life);
-    p.size = static_cast<float>(g.size);
-    p.drag = static_cast<float>(g.drag);
-    p.fall = static_cast<float>(g.fall);
-    p.streak = static_cast<float>(g.streak);
-    p.albedo = static_cast<float>(g.albedo);
-    p.opacity = static_cast<float>(g.opacity);
-  }
-  r::emit_particles(f.particles, f.births);
-}
-
-// The scene's area emitters' births over [t0, t1) s (render/emitters.hpp).
-void emit_areas(GameFrame& f, const FrameScene& scene, double t0, double t1) {
-  if (scene.emitters.empty()) return;
-  f.births.clear();
-  for (const r::AreaEmitter& e : scene.emitters) r::emit_area(e, t0, t1, f.births);
-  r::emit_particles(f.particles, f.births);
+// THE COLD ON THE VILLAGE (mountain/air/marks.hpp): the night's frost on what stood out in it and
+// a freezing rain's glaze on its streets at the sky's solar `hour`, worked out again every 30 s
+// of either clock and written into the families' materials when a step is crossed.
+void chill_village(ge::gpu::Device& device, GameFrame& f, double t, double hour) {
+  namespace ma = ge::mountain::app;
+  namespace air = ge::mountain::air;
+  if (std::fabs(t - f.cold_t) < 30 && std::fabs(hour - f.cold_hour) < 30.0 / 3600) return;
+  f.cold_t = t;
+  f.cold_hour = hour;
+  const sim::Village& v = *f.shown_village;
+  const double x = 0.5 * (v.box[0] + v.box[2]), z = 0.5 * (v.box[1] + v.box[3]);
+  const ge::wind::Site site{.y = f.level->ground_at(x, z), .above = 1.5};
+  const ma::VillageCold cold =
+      ma::cold_steps({air::frost_cover(air::frost_on(*f.level, site, hour)),
+                      air::glaze_at(*f.level, site, t, hour)});
+  if (cold.frost == f.village_frost && cold.glaze == f.village_glaze) return;
+  f.village_frost = cold.frost;
+  f.village_glaze = cold.glaze;
+  // The traffic was driven: its glass scraped, its engine warm.
+  const std::vector<r::Surface> still = ma::village_surfaces(cold);
+  if (f.streets.capacity > 0) r::set_family_surfaces(device, f.streets, still);
+  if (f.parked.capacity > 0) r::set_family_surfaces(device, f.parked, still);
+  if (f.traffic.capacity > 0)
+    r::set_family_surfaces(device, f.traffic, ma::village_surfaces({0, cold.glaze}));
 }
 
 }  // namespace
@@ -404,6 +371,30 @@ void set_water(ge::gpu::Device& device, GameFrame& f, int index, const ge::water
   r::set_water_body(device, f.water, index, body);
 }
 
+void freeze_water(ge::gpu::Device& device, GameFrame& f, int index, const ge::water::Body& body,
+                  double h) {
+  namespace ma = ge::mountain::app;
+  if (index < 0 || static_cast<size_t>(index) >= f.water.bodies.size()) return;
+  if (f.ice_body >= 0 && f.ice_body != index) return;
+  const bool frozen = h >= ma::kIceShows;
+  f.water.bodies[static_cast<size_t>(index)].hidden = frozen;
+  if (f.ice_body < 0) {
+    if (!frozen) return;
+    r::MeshSource sheet;
+    sheet.lods.push_back(
+        {ma::ice_mesh(body.shore, body.level, ge::core::num::to_uint32(f.level->seed)), 0.0f});
+    r::create_family(device, f.instancing, f.ice, "water.ice",
+                     std::span<const r::MeshSource>(&sheet, 1), ma::ice_surfaces(h), 1);
+    r::bind_family_hiz(device, f.instancing, f.ice, f.hiz);
+    f.families.push_back(&f.ice);
+    f.ice_body = index;
+  }
+  r::set_family_surfaces(device, f.ice, ma::ice_surfaces(h));
+  r::Instance at;
+  if (!frozen) at.scale[0] = at.scale[1] = at.scale[2] = 0;
+  r::set_instances(device, f.ice, 0, std::span<const r::Instance>(&at, 1));
+}
+
 void show_village(ge::gpu::Device& device, GameFrame& f,
                   std::shared_ptr<const sim::Village> shown) {
   namespace ma = ge::mountain::app;
@@ -424,7 +415,7 @@ void show_village(ge::gpu::Device& device, GameFrame& f,
   sheet.lods.push_back({ma::street_mesh(*f.level, village.ground), 0.0f});
   if (sheet.lods.front().mesh.vertex_count() > 0) {
     r::create_family(device, f.instancing, f.streets, "village.streets",
-                     std::span<const r::MeshSource>(&sheet, 1), ma::village_materials(), 1);
+                     std::span<const r::MeshSource>(&sheet, 1), ma::village_surfaces({}), 1);
     r::bind_family_hiz(device, f.instancing, f.streets, f.hiz);
     r::Instance at;
     at.position[0] = village.ground.x0;
@@ -454,7 +445,7 @@ void show_village(ge::gpu::Device& device, GameFrame& f,
   const vg::TrafficPlan& plan = *village.traffic;
   if (!plan.parked.empty()) {
     r::create_family(device, f.instancing, f.parked, "village.parked", ma::vehicle_meshes(),
-                     ma::village_materials(), static_cast<uint32_t>(plan.parked.size()));
+                     ma::village_surfaces({}), static_cast<uint32_t>(plan.parked.size()));
     r::create_family_casters(device, f.instancing, f.parked, r::kCascades, lamp_slots(f));
     if (lamp_slots(f) > 0) f.lamp_casters.push_back(&f.parked);
     r::bind_family_hiz(device, f.instancing, f.parked, f.hiz);
@@ -467,7 +458,7 @@ void show_village(ge::gpu::Device& device, GameFrame& f,
   }
   if (!plan.vehicles.empty()) {
     r::create_family(device, f.instancing, f.traffic, "village.traffic", ma::vehicle_meshes(),
-                     ma::village_materials(), static_cast<uint32_t>(plan.vehicles.size()));
+                     ma::village_surfaces({}), static_cast<uint32_t>(plan.vehicles.size()));
     r::create_family_casters(device, f.instancing, f.traffic, r::kMaxShadowFigures, lamp_slots(f));
     if (lamp_slots(f) > 0) f.lamp_casters.push_back(&f.traffic);
     r::bind_family_hiz(device, f.instancing, f.traffic, f.hiz);
@@ -710,6 +701,7 @@ void draw(ge::gpu::Device& device, GameFrame& f, const r::FrameView& seen, const
       r::set_instances(device, f.buildings, static_cast<uint32_t>(k * 2), stood);
     }
   }
+  if (f.shown_village != nullptr && f.options.cold) chill_village(device, f, view.time_s, sky_hour);
   dress_mists(*f.level, f.options.fog, scene, view, f.mists);  // the valley's sea in the uniforms
   if (f.options.lights) {
     GE_ZONE("frame.lamps");

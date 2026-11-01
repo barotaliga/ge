@@ -573,6 +573,14 @@ void set_instance_count(InstanceFamily& f, uint32_t count) {
   f.count = std::min(count, f.capacity);
 }
 
+void set_family_surfaces(gpu::Device& device, InstanceFamily& f,
+                         std::span<const Surface> surfaces) {
+  std::vector<float> mats;
+  pack_surfaces(surfaces, mats);
+  const uint64_t bytes = std::min<uint64_t>(mats.size() * 4, f.materials.GetSize());
+  if (bytes > 0) device.queue.WriteBuffer(f.materials, 0, mats.data(), bytes);
+}
+
 void cut_family(InstanceFamily& f) {
   f.moved_since_cut = false;
   f.palettes_settle = true;

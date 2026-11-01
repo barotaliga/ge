@@ -6,7 +6,8 @@
 //   frost point and below 0 C it grows hoar frost (feathers of ice straight from the vapour); in
 //   freezing fog with a wind the supercooled droplets freeze on its windward side as rime. The
 //   rate is the deficit times a coefficient (about 0.03 mm an hour a kelvin), what a clear night
-//   lays on a car's roof.
+//   lays on a car's roof. It goes again (`frost_loss`) as the surface warms: sublimed at the same
+//   rate a kelvin over the frost point, melted at 0.3 mm an hour a kelvin over 0 C.
 // - BLACK ICE (`glaze_on`): rain on a surface below 0 C freezes into a clear glaze.
 // - BREATH (`breath_of`): exhaled air (34 C, saturated) mixing into the air; where some mix of
 //   the two is supersaturated it condenses. What shows is the most liquid water a mix holds past
@@ -30,7 +31,8 @@
 // ge:keywords frost hoar-frost dew rime glaze black-ice breath condensation lake-ice ice
 // ge:keywords stefan freezing-degree-days gold bearing snow-feel powder slush sticky squeak
 // ge:keywords crust glide ski-friction fresh-snow-density hedstrom deposit_on glaze_on
-// ge:keywords breath_of ice_grown ice_bears snow_feel fresh_density glide_of feel_name
+// ge:keywords frost_loss sublimation breath_of ice_grown ice_bears snow_feel fresh_density
+// ge:keywords glide_of feel_name
 // ge:skill water determinism
 // ge:test tests/wind_cold_test.cpp
 #pragma once
@@ -54,6 +56,9 @@ struct Settling {
 // What the air lays on a surface at `surface_c` (surface_at, or the game's own: a car's roof, a
 // railing): dew, hoar frost, or rime in a freezing fog with a wind of `wind` m/s.
 Settling deposit_on(const Thermal& air, double surface_c, const Mist& mist, double wind);
+// How fast frost (or rime) on a surface at `surface_c` goes, mm/h of ice: sublimed into air whose
+// frost point is under the surface, melted once the surface is over 0 C; 0 while it still grows.
+double frost_loss(const Thermal& air, double surface_c);
 
 // The clear ice rain lays on a surface at `surface_c` under a fall whose rain share is `rain`,
 // 0..1: 0 no glaze .. 1 a full glaze (the surface well under freezing in plain rain).

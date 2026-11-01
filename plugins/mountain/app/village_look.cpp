@@ -6,8 +6,11 @@
 // ge:test tests/mountain_village_look_test.cpp
 #include "mountain/app/village_look.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
+
+#include "core/num.hpp"
 
 namespace ge::mountain::app {
 
@@ -34,6 +37,12 @@ constexpr std::array<float, 3> kLampRgb{0.85f, 0.82f, 0.70f};
 // A ploughed street packed under the traffic, grit in it; a sidewalk the blower left.
 constexpr std::array<float, 3> kCarriageRgb{0.30f, 0.29f, 0.28f};
 constexpr std::array<float, 3> kWalkRgb{0.58f, 0.59f, 0.61f};
+// Hoar frost's white, and how far a full frost takes each part toward it (the glass rimed over,
+// a tyre's flank hardly; the streets' packed snow already pale).
+constexpr std::array<float, 3> kFrostRgb{0.80f, 0.84f, 0.90f};
+constexpr std::array<float, kVillageParts> kFrostReach{0.7f, 0.95f, 0.3f, 0.6f, 0.8f, 0.5f, 0.4f};
+// A full glaze: the carriageway this much darker, its roughness and its reflectance.
+constexpr float kGlazeDark = 0.15f, kGlazeRough = 0.04f, kGlazeSpec = 0.5f;
 
 void box(render::MeshData& m, float cx, float cy, float cz, float hx, float hy, float hz,
          uint8_t part) {
@@ -264,6 +273,38 @@ std::vector<float> village_materials() {
     for (const auto* rgb : parts) out.insert(out.end(), rgb->begin(), rgb->end());
   }
   return out;
+}
+
+std::vector<render::Surface> village_surfaces(const VillageCold& cold) {
+  const std::vector<float> rgb = village_materials();
+  std::vector<render::Surface> out;
+  out.reserve(rgb.size() / 3);
+  const auto frost = static_cast<float>(std::clamp(cold.frost, 0.0, 1.0));
+  const auto glaze = static_cast<float>(std::clamp(cold.glaze, 0.0, 1.0));
+  for (size_t i = 0; i + 2 < rgb.size(); i += 3) {
+    const size_t part = (i / 3) % kVillageParts;
+    render::Surface s = render::matte_surface(&rgb[i]);
+    if (part == kCarriage && glaze > 0) {
+      for (float& c : s.albedo) c *= 1 - (1 - kGlazeDark) * glaze;
+      s.rough = 1 - (1 - kGlazeRough) * glaze;
+      s.spec = kGlazeSpec * glaze;
+    }
+    // The frost lies over the glaze: hoar grows on black ice too.
+    const float w = frost * kFrostReach[part];
+    if (w > 0) {
+      for (size_t c = 0; c < 3; ++c) s.albedo[c] += (kFrostRgb[c] - s.albedo[c]) * w;
+      s.rough += (1 - s.rough) * w;
+    }
+    out.push_back(s);
+  }
+  return out;
+}
+
+VillageCold cold_steps(const VillageCold& cold) {
+  const auto step = [](double v) {
+    return core::num::round(std::clamp(v, 0.0, 1.0) / kColdStep) * kColdStep;
+  };
+  return {step(cold.frost), step(cold.glaze)};
 }
 
 uint32_t vehicle_material(int32_t id, vg::VehicleKind kind) {

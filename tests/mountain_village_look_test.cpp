@@ -1,16 +1,19 @@
 // plugins/mountain/app/village_look.hpp: every vehicle kind has a mesh the size of its measures
 // with a smaller far LOD; the streets' mesh covers each carriageway and sidewalk cell once, faces
 // up, a hand's breadth over the snow; the materials are a set a paint; a vehicle is turned to its
-// heading and hidden off the map.
+// heading and hidden off the map; a frost whitens the cars and rimes their glass, a glaze darkens
+// the carriageway to a gloss, and no cold leaves the matte colours bit for bit.
 //
 // ge:summary Tests for the village as drawn: vehicle meshes and LODs, the streets' mesh, materials
 // ge:keywords test village village_look street_mesh vehicle_mesh vehicle_instance materials lod
+// ge:keywords village_surfaces frost glaze cold_steps
 // ge:skill mountain testing
 #include <cmath>
 #include <cstdint>
 
 #include "check.hpp"
 #include "mountain/app/village_look.hpp"
+#include "render/surface.hpp"
 #include "skier/synthetic.hpp"
 
 namespace {
@@ -149,4 +152,30 @@ TEST(a_vehicle_is_turned_to_its_heading_and_hidden_off_the_map) {
   const ge::render::Instance parked = mapp::parked_instance(car);
   CHECK(parked.mesh == static_cast<uint32_t>(vg::VehicleKind::suv));
   CHECK(parked.scale[0] == 1 && parked.position[2] == 3);
+}
+
+TEST(the_cold_whitens_the_cars_and_glazes_the_road) {
+  const std::vector<float> rgb = mapp::village_materials();
+  const std::vector<ge::render::Surface> bare = mapp::village_surfaces({});
+  CHECK(bare.size() * 3 == rgb.size());
+  // No cold: the matte colours, bit for bit.
+  for (size_t i = 0; i < bare.size(); ++i) {
+    const ge::render::Surface m = ge::render::matte_surface(&rgb[i * 3]);
+    for (int c = 0; c < 3; ++c) CHECK_BITS(bare[i].albedo[c], m.albedo[c]);
+    CHECK(bare[i].rough == m.rough && bare[i].spec == m.spec);
+  }
+  // A full frost: the glass rimed white, the paint paler, the tyres hardly.
+  const std::vector<ge::render::Surface> frost = mapp::village_surfaces({1, 0});
+  const size_t car = mapp::kVillageParts;  // the first paint's set
+  CHECK(frost[car + mapp::kGlass].albedo[1] > 0.7f && bare[car + mapp::kGlass].albedo[1] < 0.05f);
+  CHECK(frost[car + mapp::kPaint].albedo[1] > bare[car + mapp::kPaint].albedo[1]);
+  CHECK(frost[car + mapp::kTyre].albedo[1] < 0.3f);
+  // A full glaze: the carriageway darker and glossy, the sidewalk untouched.
+  const std::vector<ge::render::Surface> glaze = mapp::village_surfaces({0, 1});
+  CHECK(glaze[mapp::kCarriage].albedo[0] < 0.5f * bare[mapp::kCarriage].albedo[0]);
+  CHECK(glaze[mapp::kCarriage].rough < 0.1f && glaze[mapp::kCarriage].spec > 0);
+  CHECK(glaze[mapp::kWalk].rough == bare[mapp::kWalk].rough);
+  // The steps: rounded to kColdStep, kept in 0..1.
+  const mapp::VillageCold c = mapp::cold_steps({0.5 + 0.2 * mapp::kColdStep, 1.7});
+  CHECK(c.frost == 0.5 && c.glaze == 1);
 }
