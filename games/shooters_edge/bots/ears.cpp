@@ -14,8 +14,11 @@
 
 #include "progs/entity_text.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
+#include "shooters_edge/profiles/items.hpp"
 
 namespace shooters_edge::bots {
+
+namespace pf = shooters_edge::profiles;
 
 namespace {
 
@@ -26,30 +29,6 @@ using sh::SoundClass;
 constexpr float kSnapMin = 200;     // a guess is put on a spot this near it at the least, units
 constexpr float kSnapSlack = 1.5f;  // and up to this many times the ear's error further
 
-const sh::SoundMeaning kSounds[] = {
-    {"items/armor1.wav", SoundClass::pickup, true, "armor"},
-    {"items/r_item2.wav", SoundClass::pickup, true, "mh"},
-    {"items/r_item1.wav", SoundClass::pickup, false, "health"},
-    {"items/health1.wav", SoundClass::pickup, false, "health"},
-    {"weapons/pkup.wav", SoundClass::pickup, true, "weapon"},
-    {"weapons/lock4.wav", SoundClass::pickup, false, "ammo"},
-    {"items/damage.wav", SoundClass::power, true, "quad"},
-    {"items/protect.wav", SoundClass::power, true, "pent"},
-    {"misc/r_tele1.wav", SoundClass::spawn, true, "spawn"},
-    {"weapons/ax1.wav", SoundClass::fire, false, ""},
-    {"weapons/guncock.wav", SoundClass::fire, false, ""},
-    {"weapons/shotgn2.wav", SoundClass::fire, false, ""},
-    {"weapons/rocket1i.wav", SoundClass::fire, false, ""},
-    {"weapons/spike2.wav", SoundClass::fire, false, ""},
-    {"weapons/grenade.wav", SoundClass::fire, false, ""},
-    {"weapons/sgun1.wav", SoundClass::fire, false, ""},
-    {"weapons/lhit.wav", SoundClass::fire, false, ""},
-    {"player/pain1.wav", SoundClass::pain, false, ""},
-    {"player/drown1.wav", SoundClass::pain, false, ""},
-    {"player/death1.wav", SoundClass::death, false, ""},
-    {"player/udeath.wav", SoundClass::death, false, ""},
-};
-
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
   return std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
@@ -57,31 +36,11 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 
 }  // namespace
 
-std::span<const sh::SoundMeaning> sound_table() { return kSounds; }
+std::span<const sh::SoundMeaning> sound_table() { return pf::kClassicTables.sounds; }
 
 const char* hears_as(const ItemSpot& it) {
-  switch (it.kind) {
-    case ItemKind::health:
-      return "health";
-    case ItemKind::mega:
-      return "mh";
-    case ItemKind::armor1:
-    case ItemKind::armor2:
-    case ItemKind::armor3:
-      return "armor";
-    case ItemKind::shells:
-    case ItemKind::nails:
-    case ItemKind::rockets:
-    case ItemKind::cells:
-      return "ammo";
-    case ItemKind::quad:
-      return "quad";
-    case ItemKind::pent:
-      return "pent";
-    case ItemKind::weapon:
-      return "weapon";
-  }
-  return "";
+  const pf::ItemWords* w = pf::item_words(pf::kClassicTables.words, it.kind, it.weapon);
+  return w != nullptr ? w->heard.data() : "";
 }
 
 void ears_init(Fighter& f, sh::AimSkill skill, const char* entities) {
@@ -104,7 +63,8 @@ EarNews fighter_hear(Fighter& f, const server::QcServer& s, int me, sh::Vec3f ea
   EarNews news;
   if (t == f.heard_t) return news;
   f.heard_t = t;
-  sh::hear(f.bot.view, me, ear, f.ears, kSounds, fighting, f.rng, f.heard, &f.hear_stats);
+  sh::hear(f.bot.view, me, ear, f.ears, pf::kClassicTables.sounds, fighting, f.rng, f.heard,
+           &f.hear_stats);
   const bool knows_map = f.sense != MapSense::novice;
   const int players = s.sv.set.maxclients;
   for (const sh::HeardSound& h : f.heard) {

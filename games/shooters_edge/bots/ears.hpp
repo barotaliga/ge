@@ -11,7 +11,8 @@
 // A sound from an enemy is a heard contact (senses.hpp: chased like a sighting a moment old); one
 // from a teammate whose slot is known moves him on the fighter's map of its team (mind.hpp).
 //
-// THE SAMPLES are this game's data (`kSounds`), as its baseline mod plays them.
+// THE SAMPLES are the game profile's data (profiles/items.hpp: `kClassicSounds`, and the heard
+// words in `kClassicWords`), as the baseline mod plays them.
 //
 // Deterministic: the fighter's own stream decides what it takes in and how far off it judges it.
 //
