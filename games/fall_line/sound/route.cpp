@@ -6,11 +6,15 @@
 // ge:test tests/fall_line_sound_test.cpp
 #include "fall_line/sound/route.hpp"
 
+#include <algorithm>
+
 #include "audio/sound.hpp"
 #include "fall_line/sound/bank.hpp"
 #include "fall_line/sound/mix.hpp"
 #include "mountain/air/air.hpp"
 #include "skier/tuning.hpp"
+#include "water/float.hpp"
+#include "water/sound.hpp"
 
 namespace fall_line::sound {
 
@@ -26,6 +30,8 @@ constexpr double kHardShare = 0.5;
 // The ear over the skis, m, and how fast a clap is let go when the run's sound is torn down, s.
 constexpr double kEarHeight = 1.6;
 constexpr float kThunderFade = 0.5f;
+// A skier's body through the water: the radius a splash is sized by, m.
+constexpr double kBodySize = 0.35;
 
 float unit(double v) { return v < 0 ? 0.0f : v > 1 ? 1.0f : static_cast<float>(v); }
 
@@ -140,6 +146,16 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
         // Into a wall: the same knock, harder, as nothing gives.
         play(synth, kBump, ear, 0.6f + 0.4f * unit(e.value / 6));
         break;
+      case EventKind::sank:
+      case EventKind::ashore: {
+        // Into a tarn, or hauled out of it: the water's own splash (water/sound.hpp), a body's
+        // size, at his speed through the surface; the bubbles going down with him.
+        const ge::water::Splash splash{
+            me.x, me.y, me.z, std::max(me.speed, 1.0), kBodySize, e.kind == EventKind::sank};
+        ge::water::play_splash(synth, sound.rng, splash, 0, kBusEffects);
+        break;
+      }
+      case EventKind::skim:     // the planing skis are heard as the skis' own hiss
       case EventKind::takeoff:  // the wind's rush coming up is the take-off
       case EventKind::shoulder:
       case EventKind::bump:
@@ -158,7 +174,6 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
       case EventKind::army_vehicle:
       case EventKind::gunfire:  // the reports, the cracks and the strikes wait for their voices
       case EventKind::hurt:     // the blow is heard as the fall that dealt it
-      case EventKind::sank:     // the ice's crack and the splash wait for their voices (M24l3)
       case EventKind::died:
         break;
     }
