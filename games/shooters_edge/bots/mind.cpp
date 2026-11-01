@@ -23,7 +23,6 @@ constexpr int32_t kWRockets = 32, kWArc = 64;
 constexpr double kHelp_s = 6;         // a call for help holds this long
 constexpr double kHoldsFresh_s = 40;  // a mate's `safe` this old still says he holds his area
 constexpr double kGoingFresh_s = 12;  // a mate's `coming X` this old still says he goes for X
-constexpr double kToldFresh_s = 10;   // a point this old is still followed
 constexpr float kMateSight = 1500;    // a teammate is made out within this, units
 constexpr float kGiveNear = 600;      // an item is left to a teammate in sight this near it
 constexpr float kQuadNear = 800;      // a teammate this near the quad has it covered
