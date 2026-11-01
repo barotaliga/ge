@@ -20,6 +20,7 @@
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/team.hpp"
+#include "shooters_edge/bots/water.hpp"
 
 namespace shooters_edge::bots {
 
@@ -40,12 +41,10 @@ constexpr float kRetreatBelow = 50;  // health plus armour's protection: weak un
 constexpr float kStrongAgain = 80;   // and strong again at this
 constexpr double kChase_s = 3;       // a contact lost this long ago is still chased
 constexpr double kImpulseGap_s = 0.5;
-constexpr double kWait_s = 20;     // an item back within this is worth going to wait for
-constexpr double kHealWait_s = 3;  // but a retreat goes for health that is there
-constexpr double kKeepGoal = 1.5;  // the goal's score is held up by this against the others
-constexpr float kRun = 320;        // units/s, the run to an item
-constexpr double kAir_s = 6;  // under this long, the shorter way out of the water (drowning at 12)
-constexpr double kDiveMost_s = 8;   // no dive whose swim is longer than this
+constexpr double kWait_s = 20;      // an item back within this is worth going to wait for
+constexpr double kHealWait_s = 3;   // but a retreat goes for health that is there
+constexpr double kKeepGoal = 1.5;   // the goal's score is held up by this against the others
+constexpr float kRun = 320;         // units/s, the run to an item
 constexpr double kCallAgain_s = 8;  // an enemy in sight is called out again after this
 constexpr double kTold_s = 10;      // a point at an item is followed this long
 
@@ -256,7 +255,8 @@ int32_t best_item(const Fighter& f, const server::QcServer& s, const Stats& st, 
     if (!item_in_mind(f, i)) return 0.0;
     // No way there from here, unless by its dive (from a node there is a way to).
     const bool by_dive = f.reach_at >= 0 && !f.reach.reached(it.node);
-    if (by_dive && (!it.dive || !f.reach.reached(it.dive_node) || it.dive_s > kDiveMost_s))
+    if (by_dive && (!it.dive || !f.reach.reached(it.dive_node) || it.dive_s > kDiveMost_s ||
+                    (i == f.dive_off && t < f.dive_off_until)))
       return 0.0;
     if (door_shut(s, it) &&
         (it.button_node < 0 || (f.reach_at >= 0 && !f.reach.reached(it.button_node))))
@@ -425,7 +425,8 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
   bool escaping = false;  // on the way out of a pocket: no other goal this think
   // A dive is chosen again every think (go_item); one under way keeps the escape out of it.
   const bool was_diving = f.diving >= 0;
-  // A dive once in the water is swum to its end: no other goal turns it round under water.
+  // A dive once in the water is swum to its end: no other goal turns it round under water (only
+  // fighter_command gives it up, late or short of air).
   const int32_t committed = was_diving && self.waterlevel >= 1 ? f.diving : -1;
   f.diving = -1;
   // Off the graph (knocked onto a ledge no proof stands on): back to the nearest node by sight
@@ -719,7 +720,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, 
   sh::bot_init(f.bot, g, sh::PilotSettings{}, sh::PilotHands::human, skill, hz, seed);
   f.slot = slot;
   f.sense = map_sense_of(skill);
-  f.rng = seed * 2654435761u + 12345u;
+  f.rng = ge::core::make_rng(seed * 2654435761u + 12345u);
   const int me = slot + 1;
   sh::client_view(s.sv, me, f.bot.view);
   std::vector<pg::EntityBlock> blocks;
@@ -866,38 +867,8 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
   }
 
   sh::Vec3f way;
-  const sh::Edict& body = s.sv.edicts[static_cast<size_t>(me)];
-  // Its air: the head under this long, it takes whichever way out of the water is shorter, the
-  // dive's on or the way back, so it never drowns on a swim.
-  if (body.waterlevel >= 3) {
-    if (f.under_since < 0) f.under_since = t;
-  } else {
-    f.under_since = -1;
-  }
-  const bool short_of_air = f.under_since >= 0 && t - f.under_since > kAir_s;
-  const ItemSpot* dive_for = f.diving >= 0 ? &f.items[static_cast<size_t>(f.diving)] : nullptr;
-  // A walk along a pool's floor turns up and out by the field at kAir_s. A dive is left to finish:
-  // none is planned longer than kDiveMost_s, so its way on is the way to air.
-  const bool on_dive = dive_for && dive_for->dive;
-  if (short_of_air && f.swim && !on_dive && sh::swim_steps(*f.swim, body.origin) >= 0)
-    f.swimming = true;
-  // Diving: in the water, or at the dive's node (arrived, or within a step of it).
-  const bool dive_now =
-      dive_for && dive_for->dive &&
-      (body.waterlevel >= 1 ||
-       (f.goal_node == dive_for->dive_node &&
-        (f.bot.pilot.pilot.mode == sh::PilotMode::arrived ||
-         dist(body.origin,
-              f.bot.pilot.pilot.g->nodes[static_cast<size_t>(dive_for->dive_node)].origin) <
-             48))) &&
-      (body.waterlevel >= 1
-           ? sh::swim_next(*dive_for->dive, *f.bot.pilot.pilot.g, body.origin, way)
-           : dive_for->dive_entry >= 0 &&
-                 (way =
-                      f.bot.pilot.pilot.g->nodes[static_cast<size_t>(dive_for->dive_entry)].origin,
-                  true));
-  if (!dead && (dive_now ||
-                (f.swimming && sh::swim_next(*f.swim, *f.bot.pilot.pilot.g, body.origin, way)))) {
+  const bool swim = water_way(f, s, me, t, msec, why, way);  // every command: it keeps the air
+  if (!dead && swim) {
     // Swimming the field's way out: the view on the next cell (pitch down positive), forward,
     // and jump held, which rises in water and climbs out over the edge at the top.
     const sh::Vec3f me_at = s.sv.edicts[static_cast<size_t>(me)].origin;

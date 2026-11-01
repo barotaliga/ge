@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include "core/prng.hpp"
 #include "shooter/senses.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
@@ -33,10 +34,7 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
   return std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
 }
 
-double draw(Fighter& f) {
-  f.rng = f.rng * 1664525u + 1013904223u;
-  return static_cast<double>(f.rng >> 8) / 16777216.0;
-}
+double draw(Fighter& f) { return ge::core::next(f.rng); }
 
 Mate& mate_named(Fighter& f, const std::string& name) {
   for (Mate& m : f.mind.mates)
