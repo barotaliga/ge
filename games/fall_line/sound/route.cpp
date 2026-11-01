@@ -158,6 +158,7 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
       case EventKind::army_vehicle:
       case EventKind::gunfire:  // the reports, the cracks and the strikes wait for their voices
       case EventKind::hurt:     // the blow is heard as the fall that dealt it
+      case EventKind::sank:     // the ice's crack and the splash wait for their voices (M24l3)
       case EventKind::died:
         break;
     }

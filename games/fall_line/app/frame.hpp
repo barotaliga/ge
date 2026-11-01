@@ -375,9 +375,11 @@ int add_water(ge::gpu::Device& device, GameFrame& frame, const ge::water::Body& 
 void set_water(ge::gpu::Device& device, GameFrame& frame, int index, const ge::water::Body& body);
 // THE ICE on lake `index` (`body` its water), `h` m thick (mountain/air/marks.hpp's `lake_ice`):
 // from mountain/app/ice_look.hpp's `kIceShows` its water is not drawn and the ice sheet is, its
-// look by `h`; thinner, open water again. One lake a frame freezes (the first asked).
+// look by `h`; thinner, open water again. One lake a frame freezes (the first asked). `swept_only`
+// (read when the sheet is made): only the wind's bare patches, for ice on ground filled flat, whose
+// own snow is the snow on the ice.
 void freeze_water(ge::gpu::Device& device, GameFrame& frame, int index, const ge::water::Body& body,
-                  double h);
+                  double h, bool swept_only = false);
 
 // Forget every track and all the spray (a new run on the same map).
 void forget_tracks(GameFrame& frame);

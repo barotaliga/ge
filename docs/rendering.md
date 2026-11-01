@@ -1488,8 +1488,9 @@ through both.
   asked over open water, with the day's climate the caller hands in. On a spring morning (a day's
   mean of 3 C, the tarn at 4 C) a still, clear dawn lays a radiation fog on the water, 0.020/m and
   7 m deep, while an 8 m/s wind leaves a fog still forming that veils almost nothing; in the
-  winter's cold an open tarn steams in any wind (sea smoke). The generator lays no lakes yet
-  (M24l): the `lake` lab digs a tarn and draws its `dawn-still` and `dawn-windy` shots, failing
+  winter's cold an open tarn steams in any wind (sea smoke). The generator lays no lakes (the
+  free ride lays its tarn after it, M24l): the `lake` lab digs a tarn of its own and draws its
+  `dawn-still` and `dawn-windy` shots, failing
   when the still dawn's fog changes under 10 % of the picture or the windy one's over 3 %
   (37 % and 1.4 % on seed 38).
 - **Over a classic map's pools** (`bsp_fog.hpp`'s `FogRows::air` and `hour`): each pool of water
@@ -1915,7 +1916,12 @@ drain and dry by the wind and the sun). The picture reads the same numbers:
 - LAKE ICE (`mountain/app/ice_look.hpp`, `freeze_water`, M51f): a lake whose ice is past 1 cm is
   drawn as an ice sheet in its place, a grid of 2 m cells over the water inside the shore: young
   ice under 4 cm clear and black, glossy; from 10 cm snow lying on it but for the wind's swept
-  patches, a grey-blue glass. One lake a frame freezes until the map lays its own (M24l).
+  patches, a grey-blue glass. One lake a frame freezes. On ice over ground filled flat (the free
+  ride's tarn when it bears a skier, M24l) only the swept patches are laid, in 1 m cells and more
+  of them, since the map's own snow is the snow on the ice.
+- THE MAP'S LAKES (`app/lakes.hpp`'s `show_lakes`, called by `create_frame`, M24l): every lake a
+  game laid on the map (`Level::lakes`) added to the frame's water over its dug bed, and frozen by
+  its ice on the map's day; the `tarn` and `tarn-high` views look over the first one.
 - THE SNOW'S COVER and THE LIGHTNING are the dial's too: `step_cover` lays ten millimetres of
   snow a millimetre of snow's water and takes it with the rain (4 mm an hour a mm of rain) and
   the sun (2 mm an hour in full sun), the cover's share 1 - e^(-depth / 6 mm); `flash_at(t)`

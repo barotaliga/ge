@@ -37,7 +37,8 @@ render::Surface mix(const Rgb& from, const Rgb& to, float w, float rough) {
 
 }  // namespace
 
-render::MeshData ice_mesh(std::span<const water::Point> shore, double level, uint32_t seed) {
+render::MeshData ice_mesh(std::span<const water::Point> shore, double level, uint32_t seed,
+                          bool swept_only) {
   render::MeshData m;
   if (shore.size() < 3) return m;
   double x0 = shore[0].x, z0 = shore[0].z, x1 = x0, z1 = z0;
@@ -48,19 +49,21 @@ render::MeshData ice_mesh(std::span<const water::Point> shore, double level, uin
     z1 = std::max(z1, p.z);
   }
   const auto y = static_cast<float>(level + kIceLift);
-  const int cols = static_cast<int>(std::ceil((x1 - x0) / kIceCell)) + 1;
-  const int rows = static_cast<int>(std::ceil((z1 - z0) / kIceCell)) + 1;
+  const double cell = swept_only ? kIceCellFlat : kIceCell;
+  const int cols = static_cast<int>(std::ceil((x1 - x0) / cell)) + 1;
+  const int rows = static_cast<int>(std::ceil((z1 - z0) / cell)) + 1;
   const double noise_seed = static_cast<double>(seed % 100000u);
   for (int row = 0; row < rows; ++row) {
     for (int col = 0; col < cols; ++col) {
-      const double ax = x0 + kIceCell * (col - 0.5), az = z0 + kIceCell * (row - 0.5);
-      const double bx = ax + kIceCell, bz = az + kIceCell;
+      const double ax = x0 + cell * (col - 0.5), az = z0 + cell * (row - 0.5);
+      const double bx = ax + cell, bz = az + cell;
       if (!water::inside(shore, ax, az) && !water::inside(shore, bx, az) &&
           !water::inside(shore, ax, bz) && !water::inside(shore, bx, bz)) {
         continue;
       }
       const double swept = core::value_noise(0.5 * (ax + bx), 0.5 * (az + bz), kPatch, noise_seed);
-      const uint8_t part = swept > kSwept ? kIceBare : kIceSnow;
+      const uint8_t part = swept > (swept_only ? kSweptFlat : kSwept) ? kIceBare : kIceSnow;
+      if (swept_only && part != kIceBare) continue;
       const float a[3] = {static_cast<float>(ax), y, static_cast<float>(az)};
       const float b[3] = {static_cast<float>(ax), y, static_cast<float>(bz)};
       const float c[3] = {static_cast<float>(bx), y, static_cast<float>(az)};

@@ -405,8 +405,9 @@ With no body shown both rows run empty. What it draws:
   back. The sun's glitter is Beckmann over every slope the pixel cannot resolve (the components
   it dropped, the spectrum's tail past the detail band, a calm surface's own ripples), so the
   far water glints as a broad path and never shimmers. A body's own glow (lava) is added.
-- **In a game**: Fall Line's frame owns one `Water` and takes bodies by `add_water`; the `lake`
-  lab digs a tarn into a seed's map to show it until the generator lays lakes (M24l).
+- **In a game**: Fall Line's frame owns one `Water` and takes bodies by `add_water`, and draws
+  every lake a game laid on its map (`app/lakes.hpp`, § Fall Line's tarn); the `lake` lab digs
+  a tarn of its own into a seed's race map, low in the valley, for the water's own looks.
 
 Not built yet (M24g2): the GPU detail FFT and its cascades, foam, caustics, the shore's wet band,
 rain, the lake shore mesh and the channel's and flow region's own geometry, the reflections over
@@ -718,6 +719,31 @@ gets is the engine's own `gpu-water` once it is. Packaging's `scaffold` job grow
 Not yet: waking a lake or a volume into a flow region when the game breaks what held it (a game
 lays the region with `add_flow` and `fill_to` today); a window of the GPU's water in a game repo.
 
+## Fall Line's tarn (`plugins/mountain/tarn`, M24l)
+
+The generator lays no water, so no dealt map moves; a game lays it after, as a `MapLake` in
+`Level::lakes` (`mountain/mapgen/types.hpp`). Fall Line's free ride lays one tarn
+(`sim/free.hpp`'s `free_map`):
+
+- **The site** (`find_tarn`): the flattest open ground 60 m round between 0.45 and 0.85 of the way
+  from the mountain's base to its summit, where a glacier's cirque leaves its basin, the whole
+  reach the tarn reshapes (twice its shore out) 30 m clear of every run, ski route and lift line.
+- **The shore** (`reach_of`, `shore_of`): the radius swelled and pinched by two lobes and three
+  (12 % and 7 % of it), turned by phases off the site. The surface is the shore's lowest ground,
+  so on a slope the ground above is cut back into a headwall.
+- **The ice** (`tarn_ice`): `air::lake_ice` at the surface over the winter so far (`winter_days`:
+  since the freeze-up, mid-November in the north and mid-May in the south, none in the summer
+  half). Ice that bears a skier (90 kg by Gold's formula, about 5 cm) is filled flat at the
+  surface: to a skier a frozen tarn is a level field of snow, and only the wind's swept patches
+  of bare ice are drawn on it. Thinner ice, or none, lies over a bowl dug 6 m under the rim and
+  drawn as the water (`add_lake`, the dug ground its bed) or as young black ice over it
+  (`freeze_water`).
+- **Through it** (`sim/lake.hpp`): a skier whose skis go 0.3 m under the surface inside the shore
+  is in the water: a `sank` event, the water's drag (4 per second), and after 2.5 s he is stood
+  back on his run as if he had asked. Swimming in the clothed preset, the ice's crack and the
+  splash, skimming and the bot keeping off thin ice are M24l3; the real faces' own lakes and
+  streams are M24l2.
+
 ## Determinism (G1)
 
 Wind, waves, channels and optics are pure functions of their data and the time: nothing to
@@ -739,14 +765,15 @@ never read back by the simulation.
 | `water-colour` | picture | M24e | Every look's swatches over depth and bed, in sun and shade, from above and below; visibility per look |
 | `flow` | picture | M24f | Dam break against the analytic solution, a basin emptying through a breach against Torricelli, a river to steady state, a waterfall's sheet; depth filmstrips; the volume held |
 | `gpu-water` | picture | M24g, M24g2, M24i, M36d | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a boat's wake from behind and from the side, crates dropped in, the lake in a light and a heavy rain, a river, a waterfall, sunset glitter, night; the distance-band diff |
-| `lake` | picture | M24g, M24h, M24l | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it |
+| `lake` | picture | M24g, M24h, M51f | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it, frozen |
+| `tarn` | picture | M24l | The free ride's tarn on a seed in the game's frame: on the map's day, open, under thin black ice and frozen to bear a skier, from below its lip and from high over it; its site, surface and ice as rows |
 | `gpu-underwater` | picture | M24h, M24h3 | Every look's view round a scene under water, the presets, Snell's window measured, a dive through the surface; then the caustics and the shafts |
 | `gpu-plunge` | picture | M24h2 | A first-person player in the classic move jumping off a bank into a dirty pond: the plunge from his eyes, the splash from the bank (crater, crown, jet, rings), under the water, surfacing through the waterline into the wet lens; four bodies of different mass dropped in; the player straight in against running in; the entry's numbers |
 | `water-lod` | picture | M24f, M24g | The tiers round an actor and round the camera as maps; a flow region coarsened and refined with its volume held; the picture diff per distance band across a slow fly-out (no band pops); the cost against distance |
 | `water-audition` | sound | M24j | Every water voice, metered and written as WAV: the bank, splashes from a pebble to a boulder, eleven places (a calm and a fresh lake from the shore, a boat and under it, a gale on a beach, a slow river and a stream, a waterfall from 15 and 60 m and under its pool, nowhere), the roar against distance beside 1 / r, a swim |
 | `rain-audition` | sim | M36d | The rain's sound metered and written as WAV: a drizzle, a light rain and a downpour in the open and by a lake, the downpour under a roof, a blizzard and still snow; each voice's level against the rate |
 | `water-cost` | bench | M24f, M24g | The CPU's costs per step (sample, floats, the flow grid) and the GPU's per pass |
-| `free --water` | drive | M24l | Fall Line: the bot near and into water on the free ride |
+| `free --water` | drive | M24l3 | Fall Line: the bot near and into water on the free ride |
 | `liquids`, `gpu-lava`, `gpu-slime` | picture | M30 | The other liquids: lava and slime (`docs/liquids.md` § Labs) |
 
 ## Sources
