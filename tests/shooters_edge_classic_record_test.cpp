@@ -19,11 +19,13 @@
 
 #include "audio/synth.hpp"
 #include "check.hpp"
+#include "console/console.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "progs/file.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_voice.hpp"
+#include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/classic_server.hpp"
@@ -81,7 +83,7 @@ struct Session {
     cn::ServerConfig cfg;
     cfg.voice = true;
     if (!cn::classic_start(server, *qc, st, cfg, error)) return false;
-    cn::mvd_start(mvd, true, packed);
+    cn::mvd_start(mvd, true, packed ? cl::kDefaultPackLevel : 0);
     server.mvd = &mvd;
     for (int i = 0; i < kClients; i++) {
       gn::open_sim_transport(ct[i], net,
@@ -95,8 +97,8 @@ struct Session {
       cc.talk = &talk;
       cn::client_start(c[i], ct[i], gn::sim_address(0, cn::kPortServer), cc, 0);
     }
-    cn::record_start(voiced, true, packed);
-    cn::record_start(plain, false, packed);
+    cn::record_start(voiced, true, packed ? cl::kDefaultPackLevel : 0);
+    cn::record_start(plain, false, packed ? cl::kDefaultPackLevel : 0);
     c[0].record = &voiced;
     c[1].record = &plain;
     for (int f = 0; f < kTicks; f++) {
@@ -299,4 +301,15 @@ TEST(a_recording_plays_out_of_every_archive) {
   CHECK(cl::open_demo(two, d, error));
   CHECK(!cl::open_demo(both, d, error));
   CHECK_MSG(error.find("a.mvdv, b.qwdvz") != std::string::npos, error);
+}
+
+TEST(the_demo_pack_cvars_default_to_packed) {
+  ge::console::Console con;
+  cl::RecordSettings rs;
+  cl::bind_record_cvars(con, rs);
+  CHECK(cl::record_pack_level(rs) == cl::kDefaultPackLevel);
+  con.execute("demo_pack 0");
+  CHECK(cl::record_pack_level(rs) == 0);
+  con.execute("demo_pack 1; demo_pack_level 3");
+  CHECK(cl::record_pack_level(rs) == 3);
 }

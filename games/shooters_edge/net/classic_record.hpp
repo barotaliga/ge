@@ -23,13 +23,13 @@
 // `single`. In voice format, every voice message the server relayed, whoever it was routed to, as
 // an `all` record: a multiview recording hears every team. `mvd_stop` ends it with a disconnect.
 //
-// PACKED (`packed` at the start): the same bytes, given as they are written to a zstd stream at the
-// engine's chosen setting (engine/vfs/zstd.hpp), so `bytes` holds only what the next record call
-// has not yet fed and `pack.out` the packed file so far; the stream is flushed every
-// `kPackFlushBytes` of recording, so a file saved from `pack.out` mid-match (or left by a crash)
-// plays to the last flush. `record_stop` and `mvd_stop` end the stream and leave the whole packed
-// file in `bytes`, which unpacks to exactly the plain recording's bytes (client/demo.hpp's
-// `packed_extension` names it: `.qwdz`, `.mvdz`, `.qwdvz`, `.mvdvz`).
+// PACKED (a zstd level over 0 at the start; record_cvars.hpp's `demo_pack` and `demo_pack_level`
+// give it): the same bytes, given as they are written to a zstd stream (engine/vfs/zstd.hpp), so
+// `bytes` holds only what the next record call has not yet fed and `pack.out` the packed file so
+// far; the stream is flushed every `kPackFlushBytes` of recording, so a file saved from `pack.out`
+// mid-match (or left by a crash) plays to the last flush. `record_stop` and `mvd_stop` end the
+// stream and leave the whole packed file in `bytes`, which unpacks to exactly the plain recording's
+// bytes (client/demo.hpp's `packed_extension` names it: `.qwdz`, `.mvdz`, `.qwdvz`, `.mvdvz`).
 //
 // Nothing reads a clock but the server's and the network's, so a session over the simulated
 // network records the same bytes every run.
@@ -69,8 +69,9 @@ struct ClientRecorder {
   int64_t packets = 0, commands = 0, voice_messages = 0, own_messages = 0, stripped = 0;
 };
 
-// A recording begun (the voice header written when `voice`), packed as it goes when `packed`.
-void record_start(ClientRecorder& r, bool voice, bool packed = false);
+// A recording begun (the voice header written when `voice`), packed as it goes at zstd level
+// `pack_level` (0: plain; record_cvars.hpp's `record_pack_level` reads the cvars).
+void record_start(ClientRecorder& r, bool voice, int pack_level = 0);
 // The recording ended: a packed one's stream ended, its whole file in `bytes`.
 void record_stop(ClientRecorder& r);
 // A packet received at `time`: its channel header and its messages, each a span of the payload.
@@ -105,9 +106,9 @@ struct MultiviewRecorder {
   int64_t frames = 0, events = 0, voice_messages = 0, dropped = 0;
 };
 
-// A recording begun (the voice header written when `voice`), packed as it goes when `packed`; the
-// signon follows at the next frame.
-void mvd_start(MultiviewRecorder& r, bool voice, bool packed = false);
+// A recording begun (the voice header written when `voice`), packed as it goes at zstd level
+// `pack_level` (0: plain); the signon follows at the next frame.
+void mvd_start(MultiviewRecorder& r, bool voice, int pack_level = 0);
 // The frame's events, read before the server routes them (classic_frame.cpp's route_events).
 void mvd_events(ClassicServer& s, MultiviewRecorder& r);
 // A voice message the server relayed (`m.ints`: the slot, the generation, the sequence).

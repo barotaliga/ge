@@ -136,6 +136,7 @@ TEST(mutated_wads_are_refused_or_read_in_range) {
 
 TEST(mutated_packed_and_archived_files_are_refused_or_unpacked) {
   std::vector<uint8_t> plain;
+  plain.reserve(6000);
   for (int i = 0; i < 6000; i++) plain.push_back(static_cast<uint8_t>((i * 7) ^ (i >> 5)));
   const std::vector<std::vector<uint8_t>> clean = {
       vfs::write_gzip(plain, "a.bin"), vfs::zstd_pack(plain, {3, 0, false}), vfs::xz_pack(plain, 1),

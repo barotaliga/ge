@@ -211,7 +211,8 @@ void run(gl::Lab& lab) {
     vfs::Unpacked u;
     if (!vfs::unpack_one(std::vector<uint8_t>(std::istreambuf_iterator<char>(f), {}), u, error,
                          cl::demo_name)) {
-      lab.fail("se-demo-pack: " + path + ": " + error, "next: name a demo file");
+      lab.fail(std::string("se-demo-pack: ").append(path).append(": ").append(error),
+               "next: name a demo file");
       return;
     }
     inputs.push_back({path.substr(path.find_last_of("/\\") + 1), std::move(u.bytes)});

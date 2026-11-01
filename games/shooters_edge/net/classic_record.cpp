@@ -206,9 +206,9 @@ void feed(R& r) {
 }
 
 template <typename R>
-void begin_pack(R& r, bool packed) {
-  r.packed = packed;
-  if (packed) ge::vfs::zstd_begin(r.pack);
+void begin_pack(R& r, int level) {
+  r.packed = level > 0;
+  if (r.packed) ge::vfs::zstd_begin(r.pack, {std::clamp(level, 1, 22), 0, false});
 }
 
 // A packed recorder's stream ended and its file moved into `bytes`.
@@ -224,11 +224,11 @@ void end_pack(R& r) {
 
 // ---- the client's recording ----
 
-void record_start(ClientRecorder& r, bool voice, bool packed) {
+void record_start(ClientRecorder& r, bool voice, int pack_level) {
   r = ClientRecorder{};
   r.voice = voice;
   if (voice) r.bytes = cl::voice_header(cl::DemoFormat::client);
-  begin_pack(r, packed);
+  begin_pack(r, pack_level);
 }
 
 void record_stop(ClientRecorder& r) { end_pack(r); }
@@ -290,11 +290,11 @@ void record_own_voice(ClientRecorder& r, int slot, const ClcMsg& m) {
 
 // ---- the server's multiview recording ----
 
-void mvd_start(MultiviewRecorder& r, bool voice, bool packed) {
+void mvd_start(MultiviewRecorder& r, bool voice, int pack_level) {
   r = MultiviewRecorder{};
   r.voice = voice;
   if (voice) r.bytes = cl::voice_header(cl::DemoFormat::multiview);
-  begin_pack(r, packed);
+  begin_pack(r, pack_level);
 }
 
 void mvd_events(ClassicServer& s, MultiviewRecorder& r) {

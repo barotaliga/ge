@@ -27,12 +27,9 @@ uint64_t number(const uint8_t* f, size_t n) {
   }
   uint64_t v = 0;
   for (size_t i = 0; i < n; i++) {
-    if (f[i] >= '0' && f[i] <= '7')
-      v = v * 8 + (f[i] - '0');
-    else if (f[i] != ' ' && f[i] != 0)
-      break;
-    else if (v != 0)
-      break;
+    const bool digit = f[i] >= '0' && f[i] <= '7';
+    if (!digit && (v != 0 || (f[i] != ' ' && f[i] != 0))) break;  // past the digits
+    if (digit) v = v * 8 + (f[i] - '0');
   }
   return v;
 }
@@ -115,7 +112,7 @@ bool read_tar(std::span<const uint8_t> bytes, std::vector<TarEntry>& out, std::s
       if (name.empty()) {
         name = text(h, 100);
         if (std::memcmp(h + 257, "ustar", 5) == 0 && h[345] != 0)
-          name = text(h + 345, 155) + "/" + name;
+          name = text(h + 345, 155).append("/").append(name);
       }
       out.push_back({name, data, static_cast<size_t>(size)});
       long_name.clear();
@@ -132,7 +129,7 @@ std::vector<uint8_t> write_tar(
   std::vector<uint8_t> o;
   for (const auto& [name, data] : files) {
     uint8_t h[kBlock] = {};
-    std::memcpy(h, name.data(), std::min<size_t>(name.size(), 100));
+    std::copy_n(name.begin(), std::min<size_t>(name.size(), 100), h);  // NUL-padded, maybe full
     put_octal(h + 100, 8, 0644);
     put_octal(h + 108, 8, 0);
     put_octal(h + 116, 8, 0);
