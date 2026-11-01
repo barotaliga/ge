@@ -2,7 +2,7 @@
 title: Moving a weapon's offset in weapons.cpp stales every built model; rebuild them in the same PR
 date: 2026-10-31
 scope: games/shooters_edge/view/weapons.cpp, games/shooters_edge/assets/view_data.cpp, games/shooters_edge/content/models/view
-concepts: [held-weapon, offset, placement, se_view, stamp, assets_check, bpy, rebuild]
+concepts: [held-weapon, offset, placement, se-view, stamp, assets-check, bpy, rebuild]
 ---
 
 Each weapon's offset from the eye is part of the `se_view` data set, because the builder's arm
