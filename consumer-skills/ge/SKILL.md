@@ -88,6 +88,8 @@ ge pak ls <gamedir> [--mods=a,b] [--hidden]  # a game dir mounted: each file's w
 ge pak extract <a> [<file>...] --out=<dir>  # all files or the named ones; ge pak build <dir> --out=<a>
 ge pak convert <in> <out>        # .pak to .pk3 and back (a written .pk3 is stored, not deflated)
 ge pak sum <a> [<file>...] [--out=<sums>|--check=<sums>]  # SHA-256s kept, or held to a sums file
+ge demo pack <rec> [--level=19]   # a recording packed to <rec>z (zstd, as a game records), checked, with its ratio
+ge demo unpack <file> [--out=<f>]  # the one recording in a .mvdz, .gz, .tar.gz, .zip, .7z or .xz written plain
 ge texture kinds                 # every procedural texture layer kind and key (skill: textures)
 ge texture check <file.tex>...   # a texture recipe's mistakes, each at its line
 ge texture bake <file.tex> --ref="seed=12 wear=0.8"   # one variant to PNG maps in build/textures
