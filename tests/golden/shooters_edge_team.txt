@@ -1,2 +1,2 @@
 # games/shooters_edge/net/classic_team.hpp: 4on4 of fighters on the fixture halls, teamplay 1, seed 3, 1500 frames: the match's digest (tests/shooters_edge_team_test.cpp)
-23a48faf84883de5
+44b61f086c51143a

@@ -3,7 +3,8 @@
 // minutes, on four seeds. Every one scores and dies, picks items up, switches weapons and holds one
 // better than the starting scattergun for a while, and spends time in each of its four modes; the
 // mod never faults; the experts outscore the novices over the four seeds (one seed is a coin toss);
-// and a match replays to the bit and matches its golden (tests/golden/shooters_edge_fight.txt,
+// aggressive novices fight and die more than cowardly ones (shooter/temper.hpp); and a match
+// replays to the bit and matches its golden (tests/golden/shooters_edge_fight.txt,
 // GE_GOLDEN_WRITE=1 rewrites it; the PR says why).
 //
 // ge:summary Tests: fighters play the baseline mod's deathmatch: score, items, modes, skill, bits
@@ -70,6 +71,39 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
   }
   CHECK_MSG(expert > novice, "over four seeds the experts scored " + std::to_string(expert) +
                                  ", the novices " + std::to_string(novice));
+}
+
+TEST(aggressive_novices_fight_more_and_die_more_than_cowardly_ones) {
+  // Four novices, two aggressive and two cowards, on four seeds: the aggressive are in a fight far
+  // more of their time and die more; the cowards spend most of theirs backing off.
+  int64_t deaths[2] = {}, fight[2] = {}, alive[2] = {}, turned[2] = {};
+  for (uint32_t seed = 1; seed <= 4; seed++) {
+    fb::FightOptions o = duel_of_skills(seed, 9000);
+    o.skills.assign(4, sh::AimSkill::novice);
+    o.tempers = {sh::Temper::aggressive, sh::Temper::aggressive, sh::Temper::coward,
+                 sh::Temper::coward};
+    const fb::FightReport r = fb::run_fight(o);
+    CHECK_MSG(r.ok, r.error);
+    if (!r.ok) return;
+    for (const fb::FightPlayer& p : r.players) {
+      const int k = p.temper == sh::Temper::aggressive ? 0 : 1;
+      deaths[k] += p.deaths;
+      fight[k] += p.stats.mode_commands[static_cast<int>(fb::FightMode::fight)];
+      turned[k] += p.stats.mode_commands[static_cast<int>(fb::FightMode::retreat)];
+      for (int m = 0; m < 4; m++) alive[k] += p.stats.mode_commands[m];
+    }
+  }
+  std::printf(
+      "aggressive: %lld deaths, fight %.2f; cowards: %lld deaths, fight %.2f, retreat %.2f\n",
+      static_cast<long long>(deaths[0]),
+      static_cast<double>(fight[0]) / static_cast<double>(alive[0]),
+      static_cast<long long>(deaths[1]),
+      static_cast<double>(fight[1]) / static_cast<double>(alive[1]),
+      static_cast<double>(turned[1]) / static_cast<double>(alive[1]));
+  CHECK_MSG(deaths[0] > deaths[1], "the aggressive novices died no more than the cowards");
+  CHECK_MSG(fight[0] * alive[1] > 4 * fight[1] * alive[0],
+            "the aggressive novices were not in a fight four times the cowards' share");
+  CHECK_MSG(turned[1] * 2 > alive[1], "the cowards spent less than half their time backing off");
 }
 
 TEST(a_fighters_match_replays_to_the_bit_and_matches_its_golden) {

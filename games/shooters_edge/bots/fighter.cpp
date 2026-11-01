@@ -23,6 +23,7 @@
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/spam.hpp"
 #include "shooters_edge/bots/team.hpp"
+#include "shooters_edge/bots/temper.hpp"
 #include "shooters_edge/bots/water.hpp"
 
 namespace shooters_edge::bots {
@@ -286,7 +287,7 @@ int32_t best_item(const Fighter& f, const server::QcServer& s, const Stats& st, 
     double sc = v / (1 + std::fmax(run, wait));
     if (i == f.goal_item) sc *= kKeepGoal;  // the goal held unless another is clearly better
     if (i == f.tired_item && t < f.tired_until) sc *= kTired;  // gone for in vain lately
-    if (enemy && heal && dist(*enemy, it.at) < dist(me, it.at)) sc *= 0.2;
+    if (enemy && (heal || f.outmatched) && dist(*enemy, it.at) < dist(me, it.at)) sc *= 0.2;
     // A teammate who said he goes for it has it; one in sight it is no use to, or the quad's
     // carrier, gets it; a strong player leaves health to the others; a point is followed.
     if (mate_going(f, i, t)) sc *= 0.15;
@@ -559,19 +560,25 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
   const bool seen_now = c && c->visible;
   // Lost from sight a moment ago, or heard a moment ago (the newer of the two is where it is).
   const bool by_ear = c && ai::known(c->heard) && (!ai::known(c->seen) || c->heard.at > c->seen.at);
-  // A sound is chased only by a player strong enough to want the fight (a launcher counted);
+  // The odds as this player sizes them (temper.hpp): his might against the enemy's as he believes
+  // it. His temperament says which fights he takes, and whether he goes after a sound at all;
   // anyone else hears it, keeps away from it and goes on with his items.
-  const bool recent =
-      c &&
-      ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s) ||
-       (by_ear && ai::age(c->heard, t) <= kHeardChase_s && fighter_strength(st) >= kRetakeStrong));
+  const float mine = sh::might(own_might(st));
+  const float theirs = c ? foe_might(f, c->ent, t) : 0;
+  const bool engage = c && sh::takes_fight(f.temper, f.skill, mine, theirs);
+  const bool recent = c && ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s && engage) ||
+                            (by_ear && ai::age(c->heard, t) <= kHeardChase_s &&
+                             sh::chases_sound(f.temper, f.skill, mine, theirs)));
   const sh::Vec3f enemy =
       c ? at_of(by_ear || !ai::known(c->seen) ? c->heard : c->seen) : sh::Vec3f{};
   const float range = c ? dist(eye, enemy) : 400;
 
   // The mode.
   const float strong = strength(st);
-  const bool weak = f.mode == FightMode::retreat ? strong < kStrongAgain : strong < kRetreatBelow;
+  const float below = sh::retreat_below(f.temper);
+  const bool weak = f.mode == FightMode::retreat
+                        ? strong < std::fmin(below + (kStrongAgain - kRetreatBelow), 100.f)
+                        : strong < below;
   const int32_t heal_at =
       c && weak ? best_item(f, s, st, self.origin, t, true, &enemy, nullptr) : -1;
   // Help is called over a key area being lost (bots/mind.hpp `wants_help`).
@@ -582,11 +589,17 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
     help.status = status_of(st);
     mind_say(f, t, help, self.origin);
   }
+  f.outmatched = false;
   if (heal_at >= 0 && item_value(f.items[static_cast<size_t>(heal_at)], st) > 0) {
     set_mode(f, FightMode::retreat, why, "weak with someone about: health or armour first");
+  } else if (seen_now && !engage) {
+    f.outmatched = true;
+    f.stats.outmatched++;
+    set_mode(f, FightMode::retreat, why, "outmatched: armour, a weapon or the team first");
   } else if (seen_now) {
     set_mode(f, FightMode::fight, why, "a contact in sight");
   } else if (recent) {
+    if (!seen_now && by_ear) f.stats.sound_chases++;
     set_mode(f, FightMode::chase, why, "lost from sight or heard a moment ago");
   } else {
     set_mode(f, FightMode::roam, why, "no one known");
@@ -616,9 +629,13 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
     } else if (f.mode == FightMode::roam && button_poke(f, s, me, t)) {
       go_to(f, f.button_spots[static_cast<size_t>(f.poke)].node);  // a novice's whim
     } else {
-      const bool heal = f.mode == FightMode::retreat;
+      // Outmatched, anything that evens the odds will do, away from the enemy.
+      const bool heal = f.mode == FightMode::retreat && !f.outmatched;
       const int32_t i = best_item(f, s, st, self.origin, t, heal, c ? &enemy : nullptr, why);
-      if (i >= 0) {
+      const int32_t mate = f.outmatched ? nearest_mate_node(f, self.origin, t) : -1;
+      if (i < 0 && mate >= 0) {
+        go_to(f, mate);  // nothing to take: to the team
+      } else if (i >= 0) {
         go_item(f, s, i);
       } else if (f.sense == MapSense::novice && (!f.team || f.mind.claim < 0)) {
         // Nothing in mind: a novice walks the map to learn it.
@@ -717,6 +734,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, 
   sh::bot_init(f.bot, g, sh::PilotSettings{}, sh::PilotHands::human, skill, hz, seed);
   f.slot = slot;
   f.sense = map_sense_of(skill);
+  f.skill = skill;
   f.rng = ge::core::make_rng(seed * 2654435761u + 12345u);
   const int me = slot + 1;
   sh::client_view(s.sv, me, f.bot.view);

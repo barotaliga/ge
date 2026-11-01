@@ -343,6 +343,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         p.name = i < side.names.size() ? side.names[i] : side.name + std::to_string(i + 1);
         p.team = t;
         p.skill = seat.skill;
+        if (i < side.tempers.size()) p.temper = side.tempers[i];
         gn::open_sim_transport(ct[static_cast<size_t>(k)], net,
                                gn::sim_address(static_cast<uint32_t>(k + 1), kPortClient));
         ClientConfig cc;
@@ -400,6 +401,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       bt::fighter_init(seat.fighter, graph, s, slot, map->spec.entities.c_str(), seat.skill, kHz,
                        opt.seed + 31u * static_cast<uint32_t>(k));
       seat.fighter.bot.yaw = s.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
+      seat.fighter.temper = r.players[static_cast<size_t>(k)].temper;
       seat.fighter.name = r.players[static_cast<size_t>(k)].name;
       if (locs.points.empty()) {
         if (!opt.locs.empty() && sh::parse_locs(opt.locs, locs) > 0) {
@@ -628,6 +630,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].heard_taken = fi.stats.heard_taken;
     r.players[k].heard_spawns = fi.stats.heard_spawns;
     r.players[k].spam_shots = fi.stats.spam_shots;
+    r.players[k].outmatched = fi.stats.outmatched;
+    r.players[k].sound_chases = fi.stats.sound_chases;
     r.lines_read += mn.read;
     r.lines_missed += mn.missed;
   }

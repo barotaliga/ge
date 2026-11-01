@@ -130,6 +130,24 @@ void run(gl::Lab& lab) {
   o.locs_from = locs_from;
   o.progs = &progs;
   o.seed = seed;
+  // The temperaments, red's then blue's, a letter or a word each (a, b, c), comma separated.
+  {
+    const std::string list = lab.arg("tempers");
+    size_t at = 0, k = 0;
+    while (!list.empty() && at <= list.size()) {
+      const size_t end = std::min(list.find(',', at), list.size());
+      sh::Temper tp;
+      if (!sh::temper_of(std::string_view(list).substr(at, end - at), tp)) {
+        lab.fail("se-team: --tempers: '" + list.substr(at, end - at) + "' is no temperament",
+                 "next: aggressive, balanced or coward (a, b or c), one a player, red's first");
+        return;
+      }
+      cn::TeamSide& side = o.teams[k < o.teams[0].skills.size() ? 0 : 1];
+      side.tempers.push_back(tp);
+      k++;
+      at = end + 1;
+    }
+  }
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
   if (!r.ok) {
@@ -240,6 +258,17 @@ void run(gl::Lab& lab) {
     heard += p.heard;
   }
   lab.table(et);
+  gl::LabTable tt_{
+      "each player's temperament",
+      {"player", "temperament", "aim", "frags", "deaths", "outmatched s", "after sounds s"},
+      {}};
+  for (const cn::TeamPlayer& p : r.players) {
+    tt_.rows.push_back({p.name, sh::temper_name(p.temper), sh::aim_skill_name(p.skill),
+                        to_fixed(p.frags, 0), std::to_string(p.deaths),
+                        to_fixed(static_cast<double>(p.outmatched) * bt::kPilotMsec / 1000, 0),
+                        to_fixed(static_cast<double>(p.sound_chases) * bt::kPilotMsec / 1000, 0)});
+  }
+  lab.table(tt_);
   lab.metric("team.sounds-taken-in", static_cast<double>(heard), "count");
   lab.metric("team.sounds-missed", static_cast<double>(sounds - heard), "count");
   lab.metric("team.items-heard-taken", static_cast<double>(heard_taken), "count");
@@ -479,6 +508,9 @@ const gl::LabSpec kSpec{
         {"locs", "",
          "the map's place names (a .loc file); else the game folder's locs/<map>.loc, else the "
          "items'"},
+        {"tempers", "",
+         "each player's temperament, red's then blue's, comma separated: aggressive, balanced or "
+         "coward (a, b, c); missing: balanced"},
         {"items", "key",
          "the items noted with the nearest a player came: key (the held armour, the quad) or all"},
     },

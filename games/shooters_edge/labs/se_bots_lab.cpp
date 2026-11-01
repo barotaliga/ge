@@ -55,6 +55,45 @@ void run(gl::Lab& lab) {
   o.frames = frames;
   o.seed = seed;
   o.root = lab.arg("root");
+  // The skills and temperaments, one a fighter, comma separated (empty: the defaults).
+  const auto split = [](const std::string& list) {
+    std::vector<std::string> out;
+    size_t at = 0;
+    while (!list.empty() && at <= list.size()) {
+      const size_t end = std::min(list.find(',', at), list.size());
+      out.push_back(list.substr(at, end - at));
+      at = end + 1;
+    }
+    return out;
+  };
+  if (!lab.arg("skills").empty()) {
+    o.skills.clear();
+    for (const std::string& w : split(lab.arg("skills"))) {
+      bool named = false;
+      sh::AimSkill k = sh::AimSkill::average;
+      for (sh::AimSkill c : {sh::AimSkill::novice, sh::AimSkill::average, sh::AimSkill::expert,
+                             sh::AimSkill::perfect})
+        if (w == sh::aim_skill_name(c)) {
+          k = c;
+          named = true;
+        }
+      if (!named) {
+        lab.fail("se-bots: --skills: '" + w + "' is no skill",
+                 "next: novice, average, expert or perfect, one a fighter");
+        return;
+      }
+      o.skills.push_back(k);
+    }
+  }
+  for (const std::string& w : split(lab.arg("tempers"))) {
+    sh::Temper tp;
+    if (!sh::temper_of(w, tp)) {
+      lab.fail("se-bots: --tempers: '" + w + "' is no temperament",
+               "next: aggressive, balanced or coward (a, b, c), one a fighter");
+      return;
+    }
+    o.tempers.push_back(tp);
+  }
   const fb::FightReport r = fb::run_fight(o);
   if (!r.ok) {
     lab.fail("se-bots: " + r.error, "next: run tests/shooters_edge_fight_test.cpp");
@@ -63,8 +102,8 @@ void run(gl::Lab& lab) {
   const double secs = r.frames * fb::kPilotMsec * 0.001;
 
   gl::LabTable t{"each fighter over the match",
-                 {"fighter", "aim", "frags", "deaths", "shots", "pickups", "switches", "roam",
-                  "fight", "chase", "retreat", "held most"},
+                 {"fighter", "aim", "temperament", "frags", "deaths", "shots", "pickups",
+                  "switches", "roam", "fight", "chase", "retreat", "held most"},
                  {}};
   static const char* kWeapon[9] = {
       "", "blade", "scattergun", "double", "spiker", "heavy spiker", "grenades", "rockets", "arc"};
@@ -81,10 +120,10 @@ void run(gl::Lab& lab) {
     int most = 1;
     for (int w = 1; w <= 8; w++)
       if (s.weapon_commands[w] > s.weapon_commands[most]) most = w;
-    t.rows.push_back({p.name, sh::aim_skill_name(p.skill), to_fixed(p.frags, 0),
-                      std::to_string(p.deaths), std::to_string(s.shots), std::to_string(s.pickups),
-                      std::to_string(s.switches), share(0), share(1), share(2), share(3),
-                      kWeapon[most]});
+    t.rows.push_back({p.name, sh::aim_skill_name(p.skill), sh::temper_name(p.temper),
+                      to_fixed(p.frags, 0), std::to_string(p.deaths), std::to_string(s.shots),
+                      std::to_string(s.pickups), std::to_string(s.switches), share(0), share(1),
+                      share(2), share(3), kWeapon[most]});
     const std::string key = "fight." + p.name;
     lab.metric(key + ".frags", p.frags, "count");
     lab.metric(key + ".deaths", p.deaths, "count");
@@ -211,6 +250,11 @@ const gl::LabSpec kSpec{
         {"frames", "9000", "the match's server frames (13 ms each)"},
         {"seed", "1", "the mod's and the fighters' seed"},
         {"root", ".", "the repository's root (the mod's sources are under it)"},
+        {"skills", "",
+         "the fighters' aims, comma separated (empty: expert, average, average, novice)"},
+        {"tempers", "",
+         "the fighters' temperaments, comma separated: aggressive, balanced or coward (a, b, c); "
+         "missing: balanced"},
     },
     "--frames=2000",
     run,

@@ -111,12 +111,14 @@ FightReport run_fight(const FightOptions& opt) {
     FightPlayer& p = r.players[static_cast<size_t>(k)];
     p.name = "bot" + std::to_string(k + 1);
     p.skill = opt.skills[static_cast<size_t>(k)];
+    if (static_cast<size_t>(k) < opt.tempers.size()) p.temper = opt.tempers[static_cast<size_t>(k)];
     server::connect(s, k, p.name, false, true);
   }
   for (int k = 0; k < n; k++) {
     Fighter& f = fighters[static_cast<size_t>(k)];
     fighter_init(f, graph, s, k, server::kBaselineArenaEntities, opt.skills[static_cast<size_t>(k)],
                  kHz, opt.seed + 31u * static_cast<uint32_t>(k));
+    f.temper = r.players[static_cast<size_t>(k)].temper;
     f.bot.yaw = s.sv.edicts[static_cast<size_t>(k) + 1].v_angle.y;
     if (k == 0) f.bot.pilot.why = opt.why;
   }

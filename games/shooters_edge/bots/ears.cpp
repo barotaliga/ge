@@ -14,6 +14,7 @@
 
 #include "progs/entity_text.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
+#include "shooters_edge/bots/temper.hpp"
 #include "shooters_edge/profiles/items.hpp"
 
 namespace shooters_edge::bots {
@@ -126,6 +127,7 @@ EarNews fighter_hear(Fighter& f, const server::QcServer& s, int me, sh::Vec3f ea
           m.at_t = t;
         }
     } else {
+      foe_heard(f, h, t);  // what he took, fired or cried tells his might (temper.hpp)
       sh::sense_heard(f.bot.senses, h.ent, me, place, t, f.why);
     }
   }
