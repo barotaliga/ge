@@ -40,6 +40,7 @@
 // ge:keywords relief normal-map parallax-occlusion pom height-map roughness specular ggx
 // ge:skill brush render
 #include "render/wgsl/frame.wgsl"
+#include "render/wgsl/fall_shelter.wgsl"
 
 struct Bsp {
   // mode (0 classic, 1 v2), lighting (0 lightmaps, 1 lights, 2 rebaked), lights, ambient
@@ -509,55 +510,15 @@ fn ortho_lit(j: Job, layer: i32, p: vec3f, spread: f32) -> f32 {
   return lit / 9.0;
 }
 
-// THE SHARE OF THE FALL THAT REACHES `p` (0 .. 1). The drops and the flakes do not come along
-// one line: the gusts veer them and the eddies toss them, so they arrive on a spread of ways round
-// the fall's (`bsp.weather.z`, the spread's tangent: wider for snow than for rain). Like a soft
-// shadow: the faces between `p` and the sky along the fall (the blocker, searched in the fall's
-// map) stand some metres above it, and the further below its opening a point lies, the wider the
-// edge it sees: the twelve taps over that disc, turned by a hash of the place, say how much of
-// the spread gets through. So a window's patch is densest where the line through it lands and
-// thins out, scattered, round it.
+// THE SHARE OF THE FALL THAT REACHES `p` (0 .. 1): the fall's map (`bsp.ortho[2]`) marched along
+// a cone of ways round the fall's (`bsp.weather.z`, the spread's tangent: wider for snow than for
+// rain) by render/wgsl/fall_shelter.wgsl, the same test the flakes, the drops and the splashes
+// take, so a roofed room stays dry and a window's patch thins out, scattered, round its line.
 fn fall_reach(p: vec3f) -> f32 {
   let j = bsp.ortho[2];
-  let q = p - j.o.xyz;
-  let half = j.o.w;
-  let depth = j.info.y;
-  let uv = vec2f(0.5 + 0.5 * dot(q, j.x.xyz) / half, 0.5 - 0.5 * dot(q, j.y.xyz) / half);
-  let z = (dot(q, j.z.xyz) + depth) / (2.0 * depth) - 0.0015;
-  let size = f32(textureDimensions(orthos).x);
-  let spread = bsp.weather.z;
-  // The blocker: the faces nearer the sky than `p` within the widest edge this map could give.
-  let reach_m = min(spread * 10.0, 4.0);
-  var blocker = 0.0;
-  var blocked = 0.0;
-  for (var k = 0; k < 9; k++) {
-    let o = vec2f(f32(k % 3) - 1.0, f32(k / 3) - 1.0) * reach_m * 0.5 / half;
-    let t = clamp(vec2i((uv + o) * size), vec2i(0), vec2i(i32(size) - 1));
-    let d = textureLoad(orthos, t, 2, 0);
-    if (d < z) {
-      blocker += d;
-      blocked += 1.0;
-    }
-  }
-  if (blocked < 0.5) {
-    return 1.0;
-  }
-  // How far below the blocker `p` lies along the fall, m, and the edge that gives.
-  let below = max(z - blocker / blocked, 0.0) * 2.0 * depth;
-  let edge = max(below * spread, 0.03) * 0.5 / half;
+  let m = FallMap(j.o.xyz, j.x.xyz, j.y.xyz, j.z.xyz, j.o.w, j.info.y, 2);
   let turn = hash12(floor(p.xz * 40.0) + vec2f(floor(p.y * 40.0))) * 6.2831853;
-  let c = cos(turn);
-  let sn = sin(turn);
-  var lit = 0.0;
-  for (var k = 0; k < 12; k++) {
-    // A golden-angle spiral over the unit disc.
-    let r = sqrt((f32(k) + 0.5) / 12.0);
-    let a = f32(k) * 2.3999632;
-    let d = vec2f(cos(a), sin(a)) * r;
-    let o = vec2f(d.x * c - d.y * sn, d.x * sn + d.y * c) * edge;
-    lit += textureSampleCompareLevel(orthos, shadow_cmp, uv + o, 2, z);
-  }
-  return lit / 12.0;
+  return fall_share(orthos, shadow_cmp, m, p, bsp.weather.z, 8, turn);
 }
 
 // A smooth value noise in 0 .. 1 over the plane.
