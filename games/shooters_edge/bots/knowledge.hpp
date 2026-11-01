@@ -48,7 +48,8 @@ const char* item_call(const ItemSpot& it);
 
 // A vector in a map's text ("x y z"); false on none.
 bool parse_vec(const char* text, sh::Vec3f& out);
-// The map's item from its classname and spawnflags, or false.
+// The map's item from its classname and spawnflags, by the game profile's rows
+// (profiles/items.hpp), or false.
 bool item_of(const char* cn, int spawnflags, ItemSpot& it);
 
 // The callout for an enemy at `there`: by the landmark nearest it that the player knows (a key item

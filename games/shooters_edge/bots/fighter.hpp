@@ -49,6 +49,7 @@
 #include "shooter/hearing.hpp"
 #include "shooter/swim.hpp"
 #include "shooters_edge/bots/mind.hpp"
+#include "shooters_edge/profiles/items.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
 namespace shooters_edge::bots {
@@ -66,20 +67,8 @@ struct Stats {
 };
 Stats read_stats(const server::QcServer& s, int ent);
 
-enum class ItemKind : uint8_t {
-  health,
-  mega,
-  armor1,
-  armor2,
-  armor3,
-  shells,
-  nails,
-  rockets,
-  cells,
-  weapon,
-  quad,
-  pent,  // the shield (no damage taken)
-};
+// What an item is, the game profile's vocabulary (profiles/items.hpp).
+using ItemKind = shooters_edge::profiles::ItemKind;
 
 // How well a player knows the map (knowledge.hpp): where its items are and when they come back.
 enum class MapSense : uint8_t { novice, average, expert };

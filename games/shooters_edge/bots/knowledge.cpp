@@ -9,12 +9,14 @@
 
 #include <cmath>
 #include <cstdlib>
-#include <cstring>
 #include <string>
 
 #include "shooter/senses.hpp"
+#include "shooters_edge/profiles/items.hpp"
 
 namespace shooters_edge::bots {
+
+namespace pf = shooters_edge::profiles;
 
 namespace {
 
@@ -39,69 +41,16 @@ bool parse_vec(const char* text, sh::Vec3f& out) {
   return true;
 }
 
-// The map's item from its classname, or false.
+// The map's item from its classname, by the game profile's rows (profiles/items.hpp), or false.
 bool item_of(const char* cn, int spawnflags, ItemSpot& it) {
-  const bool twice = (spawnflags & 1) != 0;
-  struct Ammo4 {
-    const char* cn;
-    ItemKind kind;
-    float amount;
-  };
-  static const Ammo4 kAmmo[4] = {{"item_shells", ItemKind::shells, 20},
-                                 {"item_spikes", ItemKind::nails, 25},
-                                 {"item_rockets", ItemKind::rockets, 5},
-                                 {"item_cells", ItemKind::cells, 6}};
-  for (const Ammo4& a : kAmmo)
-    if (std::strcmp(cn, a.cn) == 0) {
-      it.kind = a.kind;
-      it.amount = a.amount * (twice ? 2.f : 1.f);
-      it.name = a.cn;
-      return true;
-    }
-  if (std::strcmp(cn, "item_artifact_invulnerability") == 0) {
-    it.kind = ItemKind::pent;
-    it.respawn_s = 60;
-    it.name = "pent";
-    return true;
-  }
-  if (std::strcmp(cn, "item_artifact_super_damage") == 0) {
-    it.kind = ItemKind::quad;
-    it.respawn_s = 60;
-    it.name = "quad";
-    return true;
-  }
-  if (std::strcmp(cn, "item_health") == 0) {
-    it.kind = (spawnflags & 2) ? ItemKind::mega : ItemKind::health;
-    it.amount = (spawnflags & 2) ? 100.f : (spawnflags & 1) ? 15.f : 25.f;
-    it.name = (spawnflags & 2) ? "mega health" : "health";
-    return true;
-  }
-  if (std::strcmp(cn, "item_armor1") == 0)
-    it.kind = ItemKind::armor1;
-  else if (std::strcmp(cn, "item_armor2") == 0)
-    it.kind = ItemKind::armor2;
-  else if (std::strcmp(cn, "item_armorInv") == 0)
-    it.kind = ItemKind::armor3;
-  if (std::strncmp(cn, "item_armor", 10) == 0) {
-    it.name = cn;
-    return true;
-  }
-  struct Gun {
-    const char* cn;
-    int32_t bit;
-  };
-  static const Gun kGuns[6] = {{"weapon_supershotgun", 2},    {"weapon_nailgun", 4},
-                               {"weapon_supernailgun", 8},    {"weapon_grenadelauncher", 16},
-                               {"weapon_rocketlauncher", 32}, {"weapon_lightning", 64}};
-  for (const Gun& g : kGuns)
-    if (std::strcmp(cn, g.cn) == 0) {
-      it.kind = ItemKind::weapon;
-      it.weapon = g.bit;
-      it.respawn_s = 30;
-      it.name = cn;
-      return true;
-    }
-  return false;
+  const pf::ItemRow* r = pf::item_row(pf::kClassicTables.items, cn, spawnflags);
+  if (r == nullptr) return false;
+  if (r->sets_kind) it.kind = r->kind;
+  if (r->amount >= 0) it.amount = r->amount * (r->doubles && (spawnflags & 1) != 0 ? 2.f : 1.f);
+  if (r->respawn_s >= 0) it.respawn_s = r->respawn_s;
+  if (r->weapon != 0) it.weapon = r->weapon;
+  it.name = r->name.empty() ? std::string(cn) : std::string(r->name);
+  return true;
 }
 
 // The callout for an enemy at `there`: by the landmark nearest it that the player knows (a key item
@@ -152,46 +101,8 @@ bool key_item(const ItemSpot& it) {
 }
 
 const char* item_call(const ItemSpot& it) {
-  switch (it.kind) {
-    case ItemKind::health:
-      return "health";
-    case ItemKind::mega:
-      return "mh";
-    case ItemKind::armor1:
-      return "ga";
-    case ItemKind::armor2:
-      return "ya";
-    case ItemKind::armor3:
-      return "ra";
-    case ItemKind::shells:
-      return "shells";
-    case ItemKind::nails:
-      return "nails";
-    case ItemKind::rockets:
-      return "rox";
-    case ItemKind::cells:
-      return "cells";
-    case ItemKind::quad:
-      return "quad";
-    case ItemKind::pent:
-      return "pent";
-    case ItemKind::weapon:
-      break;
-  }
-  switch (it.weapon) {
-    case 2:
-      return "ssg";
-    case 4:
-      return "ng";
-    case 8:
-      return "sng";
-    case 16:
-      return "gl";
-    case 32:
-      return "rl";
-    default:
-      return "lg";
-  }
+  const pf::ItemWords* w = pf::item_words(pf::kClassicTables.words, it.kind, it.weapon);
+  return w != nullptr ? w->call.data() : "";
 }
 
 void knowledge_init(Fighter& f) {
