@@ -16,6 +16,7 @@
 #include <fstream>
 #include <iterator>
 
+#include "classicenhance/profile.hpp"
 #include "shooters_edge/client/view.hpp"
 
 namespace shooters_edge::client {
@@ -204,6 +205,25 @@ bool find_demo(const SearchPath& files, const std::string& name, std::vector<uin
           " in the game's packs or folder, nor on disk; next: name a "
           "demo the packs hold (demo1, demo1.dem) or a file's path";
   return false;
+}
+
+std::string demo_game_dir(const std::string& basedir, const std::string& opened,
+                          const std::string& recorded, std::string& note) {
+  note.clear();
+  const std::string base(ge::classicenhance::classic_profile().base_dir);
+  if (recorded.empty() || recorded == opened || recorded == base || opened != base) return opened;
+  // A folder name only: a recording naming a path is not followed out of the base folder.
+  if (recorded.find_first_of("/\\:") != std::string::npos || recorded == "." || recorded == "..")
+    return opened;
+  const fs::path dir = fs::path(basedir.empty() ? "." : basedir) / recorded;
+  std::error_code ec;
+  if (fs::is_directory(dir, ec)) return recorded;
+  if (recorded != "qw")  // the plain game's own folder: most installs fold it into the base
+    note = "the demo was recorded in the game folder " + recorded + ", and " + dir.string() +
+           " is not there, so its own models and sounds are missing; next: put the mod's folder "
+           "beside " +
+           base + ", or pass -game " + recorded;
+  return opened;
 }
 
 bool timedemo_start(const SearchPath& files, const std::string& name, Timedemo& t,

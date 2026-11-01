@@ -508,20 +508,30 @@ int run_main(int argc, char** argv) {
   bool vsync = true;
   bool full_applied = false;  // what the window was last set to; vid_fullscreen is the ask
   std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
-  ge::gpu::Target bench_off;                 // the benchmark's frames that are not shown
-  uint64_t bench_shown_ns = 0;               // when the benchmark last showed a frame
-  wgpu::Future bench_in_flight{};            // the frame before this one, waited before the next
+  // The demo's own game folder when it names one the window is not on (timedemo.hpp's
+  // demo_game_dir: a team mod's models), null while it plays from the window's; and the folder
+  // and the model list's length the demo's world was made with (the list grows in a signon).
+  std::unique_ptr<cl::SearchPath> bench_files;
+  std::string bench_game = args.game, bench_note;
+  size_t bench_models = 0;
+  cl::FxFrame bench_fx;            // the demo's entities and players this frame (demo_video.hpp)
+  ge::gpu::Target bench_off;       // the benchmark's frames that are not shown
+  uint64_t bench_shown_ns = 0;     // when the benchmark last showed a frame
+  wgpu::Future bench_in_flight{};  // the frame before this one, waited before the next
   if (!args.timedemo.empty()) bench_ask = args.timedemo;
   if (!args.playdemo.empty()) {
     bench_ask = args.playdemo;
     play_ask = true;
   }
   // The world's frame for `map`, or false with the error said.
-  const auto rebuild_world = [&](const cl::LoadedMap& map) {
+  // The world drawn again for `map`, with the models on `load` standing in it, through `from`
+  // (the demo's game folder while one plays, else the window's).
+  const auto rebuild_world = [&](const cl::LoadedMap& map, const cl::ModelLoad& load,
+                                 const cl::SearchPath& from) {
     world.reset();
-    world =
-        cl::create_world_draw(*device, files, map, static_cast<uint32_t>(w),
-                              static_cast<uint32_t>(h), surface.format(), picture, weapons, error);
+    world = cl::create_world_draw(*device, from, map, static_cast<uint32_t>(w),
+                                  static_cast<uint32_t>(h), surface.format(), picture, weapons,
+                                  error, load);
     if (!world)
       out::error("shooters_edge: the world draw did not load: " + error +
                  "; see docs/rendering.md");
@@ -554,10 +564,18 @@ int run_main(int argc, char** argv) {
     bench_off = {};
     bench.active = false;
     bench_map.reset();
+    bench_files.reset();
+    bench_game = args.game;
+    bench_note.clear();
+    bench_models = 0;
     vsync = true;
     surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync);
     if (bench.quit_after) quit = true;
-    return rebuild_world(*listen.map);
+    // The listen server's world again, its models with it.
+    return rebuild_world(
+        *listen.map,
+        listen.server != nullptr ? cl::ModelLoad{listen.server->models, {}} : cl::ModelLoad{},
+        files);
   };
 
   ge::input::Queue queue;
@@ -785,16 +803,42 @@ int run_main(int argc, char** argv) {
                                   w, h, wall, t, said, error)
               : cl::timedemo_step(bench, error);
       for (const std::string& line : said) console.print(line);
+      const cl::DemoState& ds = bench.demo.state;
       if (step == cl::TimedemoStep::new_level) {
-        bench_map = cl::load_named_map(files, bench.demo.state.map, error);
+        // The game folder the recording's server ran, mounted when the window is not on it.
+        std::string note;
+        const std::string want = cl::demo_game_dir(args.basedir, args.game, ds.game, note);
+        if (note != bench_note && !note.empty()) console.print("playdemo: " + note);
+        bench_note = note;
+        if (want != bench_game) {
+          auto from = std::make_unique<cl::SearchPath>();
+          if (want != args.game && cl::open_game_dir(args.basedir, want, *from, error)) {
+            console.print("playdemo: the demo's game folder " + from->folder);
+            bench_files = std::move(from);
+          } else {
+            if (want != args.game) console.print("playdemo: " + error);
+            bench_files.reset();
+          }
+          bench_game = bench_files ? want : args.game;
+        }
+        const cl::SearchPath& from = bench_files ? *bench_files : files;
+        bench_map = cl::load_named_map(from, ds.map, error);
         if (!bench_map) {
-          if (!end_bench("the demo's map " + bench.demo.state.map + ": " + error, t)) return 1;
+          if (!end_bench("the demo's map " + ds.map + ": " + error, t)) return 1;
           continue;
         }
-        if (!rebuild_world(*bench_map)) return 1;
+        if (!rebuild_world(*bench_map, {ds.models, {}}, from)) return 1;
+        bench_models = ds.models.size();
       } else if (step != cl::TimedemoStep::frame) {
         if (!end_bench(step == cl::TimedemoStep::error ? error : "", t)) return 1;
         continue;
+      }
+      // A client recording's model list may still grow after its level started: the world is
+      // made again with the whole list, so every model it names is drawn.
+      if (bench_map && ds.models.size() != bench_models) {
+        if (!rebuild_world(*bench_map, {ds.models, {}}, bench_files ? *bench_files : files))
+          return 1;
+        bench_models = ds.models.size();
       }
       ge::render::FrameView view =
           cl::demo_view(bench.demo.state, ge::camera::FirstPersonRow{}.fov_y, t);
@@ -823,8 +867,9 @@ int run_main(int argc, char** argv) {
                                              static_cast<uint32_t>(h), surface.format());
         target = bench_off.view;
       }
-      // The demo's effects are not read yet: the world's frame with none of its own.
-      cl::draw_world(*device, *world, view, cl::FxFrame{}, nullptr, wall, overlay, target);
+      // The demo's entities and the other players stand in it; its effects are not read yet.
+      cl::demo_placed(ds, bench_fx.models);
+      cl::draw_world(*device, *world, view, bench_fx, nullptr, wall, overlay, target);
       if (!bench.paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) surface.present();
       if (bench.paced) {  // playback: every frame shown, nothing timed
@@ -869,7 +914,7 @@ int run_main(int argc, char** argv) {
     }
     if (listen.map_changed) {  // the campaign went on to its next map
       listen.map_changed = false;
-      if (!rebuild_world(*listen.map)) return 1;
+      if (!rebuild_world(*listen.map, {listen.server->models, {}}, files)) return 1;
       shown = {};
       fx_state = {};
       in_hand = {};

@@ -271,7 +271,17 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 demo ends) plays a recorded game **at its own pace**: vsync on, nothing timed, each drawn frame
 moving the demo's clock on by the frame's wall time (at most a tenth of a second, so a stall
 slows the demo instead of skipping it). `cl_demospeed <x>` sets the speed (1 by default, up to
-20; 0 pauses). ESCAPE stops it. The demo is found and drawn as the benchmark finds and draws it.
+20; 0 pauses). ESCAPE stops it. The demo is found and drawn as the benchmark finds and draws it:
+the map from the recorded eye, the HUD, and every entity the demo holds (the other players in
+their colours, the items, the missiles, the level's statics), as `-demovideo` draws them.
+
+**The demo's game folder.** A multiplayer recording names the game folder its server ran
+(`fortress` for a team mod, `qw` for the plain game). When the window was opened on the base
+folder (no `-game`) and that folder is beside it under `-basedir`, the demo plays from it, the
+base under it, so the mod's own models, skins and maps are found; a `-game` you pass always wins.
+A folder that is not there is named in the console with what to do (the plain game's `qw` is not:
+most installs fold it into the base). Nothing is played: sounds, voices and the messages (deaths,
+chat) are not in the window's playback yet (only in `-demovideo`).
 
 ```sh
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \

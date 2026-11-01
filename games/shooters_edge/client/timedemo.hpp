@@ -36,6 +36,7 @@
 // ge:keywords percentile frame-time find_demo bench_stats bench_report timedemo_start
 // ge:keywords timedemo_step timedemo_mark demo_view demo_status unlocked-fps vsync-off
 // ge:keywords gpu-span span_add span_report price prices price_report switch-off-pricing
+// ge:keywords demo_game_dir gamedir game-folder mod-folder fortress
 // ge:keywords playdemo playdemo_step cl_demospeed demo-pace timeline demo_seek seek demo-timeline
 // ge:skill shooter perf
 // ge:test tests/shooters_edge_demo_test.cpp
@@ -107,6 +108,16 @@ double median_of(std::vector<double> v);
 // tried and the next step.
 bool find_demo(const SearchPath& files, const std::string& name, std::vector<uint8_t>& out,
                std::string& found, std::string& error);
+
+// THE DEMO'S GAME FOLDER: a multiplayer recording names the game folder its server ran
+// (`DemoState::game`: "fortress" for a team mod, "qw" for the plain game), and the mod's models,
+// sounds and maps live there. The folder to play it from, given the window opened on `opened`
+// (the `-game` asked, the base folder when none was) under `basedir`: `recorded` when the window
+// is on the base folder and `<basedir>/<recorded>` exists (the base kept under it, as `-game`
+// mounts it); else `opened`, so a `-game` asked wins. `note` is the console's line when the
+// recorded folder is not there (empty otherwise): the demo then plays on the folder opened.
+std::string demo_game_dir(const std::string& basedir, const std::string& opened,
+                          const std::string& recorded, std::string& note);
 
 // THE TIMELINE: the seconds a play bar, a seek and a highlight are placed on. The demo's own
 // clock starts over at each level and may stall (a long pause in a recording), so the timeline

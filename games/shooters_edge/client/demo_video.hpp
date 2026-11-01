@@ -28,6 +28,7 @@
 // ge:keywords demo-video demovideo export video mp4 webm mkv record demo-to-video frame-clock
 // ge:keywords sound voice qwdv mvdv capture h264 av1 opus offscreen readback
 // ge:keywords clip gif animated-gif highlight from-to start-end excerpt
+// ge:keywords demo_placed demo-players other-players player-colours
 // ge:skill shooter replay render
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -42,6 +43,7 @@
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/world_models.hpp"
 
 namespace shooters_edge::client {
 
@@ -93,6 +95,11 @@ struct DemoVideoReport {
 using DemoVideoPicture = std::function<void(int64_t frame, double t, const ge::lab::Picture&)>;
 
 // `o.demo` from `files` into `o.file` on `device`. False with the reason and the next step.
+// What a demo has standing in the world this frame, for `FxFrame::models`: its entities with a
+// model (not the eye's own), the other players in their colours, the level's statics. The video
+// and the window's playback (`playdemo`, `timedemo`) both draw these.
+void demo_placed(const DemoState& s, std::vector<Placed>& out);
+
 bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVideoOptions& o,
                 DemoVideoReport& report, std::string& error,
                 const DemoVideoPicture& picture = nullptr);
