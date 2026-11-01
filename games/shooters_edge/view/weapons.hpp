@@ -26,7 +26,13 @@
 //   along the barrel.
 // - THE SHOT: its KICK (the size handed to the placement: back and up), its REFIRE (s between
 //   shots while attack is held) and its FLASH: a point light at the muzzle (colour, intensity at
-//   1 m in the held unit, range, how long it lasts), none for the melee weapon.
+//   1 m in the held unit, range, how long it lasts), none for the melee weapon; and its FIRE: the
+//   flame, smoke and sparks the engine throws from the muzzle (render/muzzle.hpp), named as a
+//   preset turned by a knob list at the weapon's true size (`muzzle`, `muzzle_knobs`; the drawing
+//   scales it by kBuiltScale with the gun). A real gun's flash is a few milliseconds of glowing
+//   gas, small and dim, and the smoke is what is left: the table is tuned to that, the shotguns a
+//   short wide star, the launchers a thump and a jet, the minigun a small bright spit, the railgun
+//   a faint puff; the beam gun's light is its beam, the melee weapon throws none.
 // - THE ROW (`weapon_row`): the engine's modern row (a stride's sway, weight on a turn, a breath
 //   at rest) with the game's quicker put-away; the hand (hand.hpp) puts each weapon's offset and
 //   the player's cvars on top of it.
@@ -36,7 +42,8 @@
 // ge:keywords free-models glb kick refire muzzle-flash flash-light weapon-row weapon_looks
 // ge:keywords load_weapon_models melee shotgun nailgun rocket-launcher beam-gun impulse
 // ge:keywords load_weapon_model weapon_model_path built-asset candidate axe minigun railgun
-// ge:keywords lightning-gun grenade-launcher double-shotgun hands arms gloves
+// ge:keywords lightning-gun grenade-launcher double-shotgun hands arms gloves muzzle-fire
+// ge:keywords muzzle_knobs smoke sparks centred-offset
 // ge:skill render shooter
 // ge:test tests/shooters_edge_view_test.cpp
 #pragma once
@@ -92,7 +99,9 @@ struct WeaponLook {
   float flash_intensity;  // at 1 m, held unit
   float flash_range_m;
   Weapon weapon;
-  bool upright;  // held upright by its handle (a melee weapon), not barrel forward
+  bool upright;                   // held upright by its handle (a melee weapon), not barrel forward
+  std::string_view muzzle;        // the fire's preset (render/muzzle.hpp; "": none)
+  std::string_view muzzle_knobs;  // turned on it, "knob=value,...", at the true size
 };
 
 std::span<const WeaponLook> weapon_looks();

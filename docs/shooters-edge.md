@@ -185,8 +185,11 @@ fullbright texels glowing; with `ce_models` on and the pack enhanced, each skin 
 cache's upscaled copy, raised to twice the pack's size and then toward the cache's own scale
 while the models' one atlas holds them all, read when the map loads); the weapon in hand (`client/held.hpp`: the game's free
 models, switched with the number keys, kicked and lit by its muzzle flash as the mod fires it,
-lit by the map's baked light under the player; `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`,
-`cl_guny`, `cl_gunz` and `cl_gunsway` in the console); the HUD (`hud_style
+lit by the map's baked light under the player, every shot firing the engine's muzzle flame, smoke
+and sparks (`app/muzzle.hpp`; `ce_muzzles 0` leaves the light alone); `r_drawviewmodel`,
+`r_viewmodel_fov`, `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`, `r_viewmodel_center` (1 by
+default: centred under the crosshair; 0 to the right) and `r_viewmodel_hands` (0: the weapon
+without its hands) in the console); the HUD (`hud_style
 classic|modern|compact`, the classic status bar by default, drawn in the packs' own pictures when
 the packs carry them and in the game's free art when not: `hud_art auto|classic|free`; `viewsize
 110` drops the inventory bar and `viewsize 120` every bar); the console; the main menu (below). The map's own moving brush

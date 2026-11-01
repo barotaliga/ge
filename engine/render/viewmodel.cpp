@@ -74,7 +74,7 @@ GpuHeldDraw pack_held_draw(const HeldDraw& d, const FrameView& view, uint32_t wi
   g.info[0] = static_cast<uint32_t>(std::max(d.frame_a, 0));
   g.info[1] = static_cast<uint32_t>(std::max(d.frame_b, 0));
   g.info[2] = d.model;
-  g.info[3] = (d.lamps ? 1u : 0u) | (d.hide_flame ? 2u : 0u);
+  g.info[3] = (d.lamps ? 1u : 0u) | (d.hide_flame ? 2u : 0u) | (d.hide_hands ? 4u : 0u);
   g.mix[0] = d.blend;
   g.mix[1] = d.outdoor;
   g.mix[2] = static_cast<float>(d.white_lux);
@@ -171,7 +171,11 @@ bool create_viewmodel(gpu::Device& device, gpu::PipelineSet& pipelines, HeldMode
     }
     indices.insert(indices.end(), hm.indices.begin(), hm.indices.end());
     const size_t tris = hm.indices.size() / 3;
-    for (size_t t = 0; t < tris; ++t) tri_flags.push_back(t < hm.flame.size() && hm.flame[t]);
+    for (size_t t = 0; t < tris; ++t) {
+      const bool flame = t < hm.flame.size() && hm.flame[t] != 0;
+      const bool hand = t < hm.hand.size() && hm.hand[t] != 0;
+      tri_flags.push_back((flame ? 1u : 0u) | (hand ? 2u : 0u));
+    }
     held.index_counts.push_back(static_cast<uint32_t>(tris * 3));
     held.frame_counts.push_back(static_cast<uint32_t>(hm.frames.size()));
   }

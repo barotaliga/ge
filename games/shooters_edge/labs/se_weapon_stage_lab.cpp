@@ -626,10 +626,11 @@ bool stage_one(ge::lab::Lab& lab, const se::WeaponLook& look, const std::vector<
       lab.note(key + " " + s.label + ": " + s.path + " is " +
                std::to_string((bytes + 1023) / 1024) + " KiB");
     // Held, not a toy and not the whole picture (a built weapon at its true size in hands covers
-    // more than a toy-scale one did); the muzzle on the screen.
-    if (share < 0.04 || share > 0.4) {
+    // more than a toy-scale one did, and a long gun held centred, as the game does by default,
+    // is seen down its length and covers less); the muzzle on the screen.
+    if (share < 0.02 || share > 0.4) {
       ok = false;
-      lab.note(key + " " + s.label + ": it covers " + c[6] + " of the picture (stated 0.04..0.4)");
+      lab.note(key + " " + s.label + ": it covers " + c[6] + " of the picture (stated 0.02..0.4)");
     }
     if (!look.upright && (at[0] < 0.02 || at[0] > 0.98 || at[1] < 0.02 || at[1] > 0.98)) {
       ok = false;

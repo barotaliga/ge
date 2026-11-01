@@ -478,15 +478,21 @@ light per pixel and is held to that reference.
 M48d) is its eight free models, each with its own mount (held length, grip), offset from the eye,
 kick, refire and muzzle light. Its hand switches weapons by putting one away and raising the
 next, and lights the muzzle on every shot. The player moves it with `r_drawviewmodel`,
-`r_viewmodel_fov`, `cl_gunx`/`cl_guny`/`cl_gunz` and `cl_gunsway`. The `se-viewmodel` lab
-pictures every weapon held, fired in the dark, switched and moved by the cvars.
+`r_viewmodel_fov`, `cl_gunx`/`cl_guny`/`cl_gunz` and `cl_gunsway`, `r_viewmodel_center` (1, the
+default: centred under the crosshair as the classic arena games hold it; 0 to the right) and
+`r_viewmodel_hands` (0: the weapon without the hands and arms it is built holding, the triangles
+`HeldModel::hand` marks, left out by `HeldDraw::hide_hands` on the GPU and `DrawLit::hidden` on
+the CPU). Every shot fires the engine's muzzle fire (§ Muzzle fire) from the muzzle the hand puts
+in the world each frame, scaled with the gun (`games/shooters_edge/app/muzzle.hpp`). The
+`se-viewmodel` lab pictures every weapon held (centred and to the right), fired in the dark,
+switched and moved by the cvars; `se-muzzle` fires each one in the explosions' yard.
 
 **The GPU pass** ("viewmodel") draws after the world and its transparent effects and before the TAA
 and post, so the HUD lands over it.
 
 - **Upload.** Every frame of every held model goes up once, as the morph meshes' do: positions and
   normals in one buffer, the triangles, the UVs or vertex colours, a flag per triangle for the
-  model's own flash, and the skins in one atlas with the glow in alpha. A frame writes only its
+  model's own flash and one for the hands holding it, and the skins in one atlas with the glow in alpha. A frame writes only its
   draws.
 - **Lens and depth.** The gun is projected through its own lens at the frame's aspect and TAA
   jitter. Its depth is squeezed into [near / `guard_m`, 1] of the reversed-z buffer by the

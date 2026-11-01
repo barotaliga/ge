@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
+#include <string>
 
 #include "core/libm/libm.hpp"
 #include "core/prng.hpp"
@@ -255,6 +257,33 @@ bool set_muzzle_knob(MuzzleLook& look, std::string_view name, double value) {
     return true;
   }
   return false;
+}
+
+bool tuned_muzzle(std::string_view preset, std::string_view knobs, MuzzleLook* out) {
+  const MuzzleLook* base = muzzle_look_by_id(preset);
+  if (!base) return false;
+  *out = *base;
+  for (std::string_view rest = knobs; !rest.empty();) {
+    const size_t comma = rest.find(',');
+    const std::string_view one = rest.substr(0, comma);
+    rest = comma == std::string_view::npos ? std::string_view{} : rest.substr(comma + 1);
+    const size_t eq = one.find('=');
+    if (eq == std::string_view::npos) return false;
+    const std::string text(one.substr(eq + 1));
+    char* end = nullptr;
+    const double v = std::strtod(text.c_str(), &end);
+    if (text.empty() || end != text.c_str() + text.size()) return false;
+    if (!set_muzzle_knob(*out, one.substr(0, eq), v)) return false;
+  }
+  return true;
+}
+
+void scale_muzzle(MuzzleLook& look, double s) {
+  look.length_m *= s;
+  look.width_m *= s;
+  look.smoke.radius_m *= s;
+  look.smoke_speed *= s;
+  look.spark_speed *= s;
 }
 
 Flame flame_at(const Shot& s, const MuzzlePose& pose, double now_s) {

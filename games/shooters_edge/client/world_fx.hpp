@@ -13,24 +13,32 @@
 //   a hit's flash, fading: in a campaign off the blows the program reported (Listen::blows: the
 //   blood red, what the armour took a duller amber), in a match off the health lost.
 //
+// - THE HELD WEAPON'S FIRE: each shot's flame, smoke and sparks from the barrel the hand puts in
+//   the world (app/muzzle.hpp, each weapon's row at the size its gun is drawn), under ce_muzzles.
+//
 // Every burst draws on its own seed from a counter, so the same run throws the same sparks.
 //
 // ge:summary The window's effects each frame: trails, explosions, their lights, the screen's blend
 // ge:keywords world-fx effects trail rocket-trail explosion dynamic-light screen-blend hurt-flash
 // ge:keywords underwater medium step_fx fx-state temp-entity gunshot spike teleport-splash beam
+// ge:keywords held-fire muzzle-fire fire_held load_held_fire
 // ge:skill render shooter
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "camera/subject.hpp"
+#include "render/explosions.hpp"
 #include "shooters_edge/app/effects.hpp"
+#include "shooters_edge/app/muzzle.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/world_models.hpp"
+#include "shooters_edge/view/hand.hpp"
 
 namespace shooters_edge::client {
 
@@ -55,9 +63,27 @@ struct FxFrame {
   // The same without a lava's or a slime's tint, for a look that draws the liquid round the eye.
   double blend_dry[4] = {0, 0, 0, 0};
   std::vector<Placed> models;  // the entities with a model (world_models.hpp)
+  // The weapon in hand's muzzle fire (app/muzzle.hpp): its shots' smoke left in the world and
+  // their flames on this frame's muzzle, for the explosions' pass.
+  std::vector<ge::render::Blast> puffs;
+  std::vector<ge::render::MuzzleFire> flames;
 };
 
 // The effects of the wall frame of `dt` s at time `t` s, after frame_view brought `v` up to date.
 void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double dt, FxFrame& out);
+
+// The held weapons' fire: every built weapon's look (by its index) and the shots still burning.
+struct HeldFire {
+  std::vector<ge::render::MuzzleLook> looks;
+  effects::MuzzleShots shots;
+};
+
+// Each built weapon's fire from its row (view/weapons.hpp) at kBuiltScale; false with `error`
+// naming the row when a row's knobs do not read.
+bool load_held_fire(HeldFire& f, std::string* error);
+
+// The hand's shot this frame (`hand.fired`) and the fire still burning, staged into `out` at time
+// `now_s`; `on` false (ce_muzzles 0): a shot throws nothing, its light alone.
+void fire_held(HeldFire& f, const view::HandFrame& hand, bool on, double now_s, FxFrame& out);
 
 }  // namespace shooters_edge::client

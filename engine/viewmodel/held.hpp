@@ -26,6 +26,9 @@
 // - THE MODEL'S OWN FLAME: `flame` marks the triangles that are the file's muzzle flash (a classic
 //   weapon draws its flash as glowing geometry on its firing frames), so a game whose engine
 //   draws the flash hides them (`DrawLit::hidden`).
+// - THE HANDS: `hand` marks the triangles of the hands and arms a model is built holding
+//   (`mark_hands`: every mesh whose name carries a marker), so a player who wants the weapon alone
+//   sees it without them (`hidden_triangles`).
 //
 // ge:summary The held model: a first-person weapon's frames, skin, colours and grip mount
 // ge:keywords viewmodel view-model held-model first-person weapon gun hands morph-frames
@@ -34,6 +37,7 @@
 // ge:keywords kept-texture baked-texture emissive-glow held-clip held_with_clips animation
 // ge:keywords find_held_clip held_clip_frames fire-animation bounds_frame
 // ge:keywords barrels multi-barrel alternating-barrels frame_barrel barrel_of_frame
+// ge:keywords hide-hands mark_hands hidden_triangles hands-off arms
 // ge:skill render assets
 // ge:test tests/viewmodel_held_test.cpp
 #pragma once
@@ -77,6 +81,7 @@ struct HeldModel {
   std::vector<uint32_t> muzzle_vertices;  // the barrel's tip is their centre (empty: the origin)
   float muzzle_dir[3] = {0, 0, 1};        // the way the shot leaves, held frame, unit
   std::vector<uint8_t> flame;             // one a triangle: 1 the model's own muzzle flash
+  std::vector<uint8_t> hand;              // one a triangle: 1 the hands and arms holding it
   // More than one barrel: each one's tip vertices (empty: the one muzzle, `muzzle_vertices`), and
   // the barrel each frame fires from, one a frame (-1: none; empty: barrel 0 on every frame).
   std::vector<std::vector<uint32_t>> barrels;
@@ -139,6 +144,15 @@ HeldModel held_from_model(const assets::Model& model, int clip = -1, int frames 
 // model baked at `fps` (its start and end included) as frames named "<clip>.<i>", each listed in
 // `clips`. A model with no clip is held_from_model's one rest frame.
 HeldModel held_with_clips(const assets::Model& model, double fps);
+
+// Marks `model`'s triangles that come from a mesh of `source` (the glTF it was made from by
+// held_from_model or held_with_clips: the meshes one after another) whose name contains `marker`
+// as the hands (`HeldModel::hand`). False when none does (`hand` left empty).
+bool mark_hands(HeldModel& model, const assets::Model& source, std::string_view marker);
+
+// One flag a triangle of `model` for `DrawLit::hidden`: nonzero where it is the model's own flame
+// and `flame` is set, or its hands and `hands` is set. Empty when nothing is hidden.
+void hidden_triangles(const HeldModel& model, bool flame, bool hands, std::vector<uint8_t>& out);
 
 // The clip named `name`, or -1.
 int find_held_clip(const HeldModel& model, std::string_view name);
