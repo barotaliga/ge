@@ -52,7 +52,7 @@ void rules(const ClassicType& type, std::initializer_list<int> widths, float x, 
 
 void ranking(const ClassicPen& pen, const ClassicType& type) {
   if (const ui::Image* r = pen.art.find("ranking"))
-    pen.picture(r, std::floor(160 - static_cast<float>(r->width) / 2), 0);
+    pen.picture(r, std::floor(160 - pen.art.width_of(*r) / 2), 0);
   else
     type.centred("RANKINGS", 8);
 }

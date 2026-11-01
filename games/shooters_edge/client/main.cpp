@@ -78,6 +78,7 @@
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
 #include "shooters_edge/client/args.hpp"
+#include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_video.hpp"
@@ -330,18 +331,23 @@ int run_main(int argc, char** argv) {
   // enhance offers.
   shooters_edge::menu::Host menu_host{.console = &console, .maps = cl::map_names(files)};
   menu_host.maps.emplace_back("arena");
-  {
-    shooters_edge::menu::ClassicArt menu_art;
-    const auto find = [&files](std::string_view p, std::vector<uint8_t>& store) {
-      return cl::find_file(files, p, store);
-    };
-    if (shooters_edge::menu::load_classic_art(find, &menu_art, &error))
-      game_menu.set_art(std::move(menu_art));
-    std::string why;
-    if (se::classic_art_from_packs(find, &classic_art, &why))
-      out::status("shooters_edge: the HUD draws the packs' own status bar pictures (hud_art)");
+  // ce_pictures: the menu's and the status bar's pictures enhanced from the packs' cache; read
+  // again when it flips and when a map loads (client/classic_pictures.hpp).
+  const auto load_pictures = [&](bool say) {
+    cl::ClassicPictures pics = cl::load_classic_pictures(files, picture.ce.pictures);
+    if (!pics.menu.glyphs.empty()) game_menu.set_art(std::move(pics.menu));
+    classic_art = std::move(pics.hud);
+    classic_art.finish();
+    if (!say) return pics.enhanced;
+    if (!classic_art.bar.empty())
+      out::status("shooters_edge: the HUD draws the packs' own status bar pictures (hud_art)" +
+                  std::string(classic_art.density > 1 ? ", enhanced (ce_pictures)" : ""));
     else if (!files.archives.empty())
-      out::status("shooters_edge: the HUD draws the free art: " + why);
+      out::status("shooters_edge: the HUD draws the free art: " + pics.hud_why);
+    return pics.enhanced;
+  };
+  bool pictures_enhanced = load_pictures(true);
+  {
     std::vector<std::string> packs;
     packs.reserve(files.archives.size());
     for (const cl::SearchPath::Archive& a : files.archives) packs.push_back(a.path);
@@ -550,6 +556,7 @@ int run_main(int argc, char** argv) {
   uint64_t last = first_ns;
   long presented = 0;
   while ((args.frames == 0 || presented < args.frames) && !quit) {
+    if (picture.ce.pictures != pictures_enhanced) pictures_enhanced = load_pictures(false);
     queue.clear();
     ge::platform::poll_input(*window, input, *devices, queue);
     const uint64_t now = ge::platform::now_ns();
@@ -642,6 +649,7 @@ int run_main(int argc, char** argv) {
         world = cl::create_world_draw(*device, files, *listen.map, static_cast<uint32_t>(w),
                                       static_cast<uint32_t>(h), surface.format(), picture, weapons,
                                       error, {listen.server->models, {}});
+        pictures_enhanced = load_pictures(false);  // an enhance run since shows its pictures
         if (!world) {
           out::error("shooters_edge: the new world draw did not load: " + error +
                      "; see docs/rendering.md");

@@ -15,7 +15,8 @@
 // screen, and no two boxes overlapping unless one hangs from the other or both are drawn
 // concentric on purpose (the arcs). A close-up of the classic bars shows each moment at the
 // bar's own scale. With `--classic=<folder>` every look is drawn again in the player's own
-// classic pictures from classic-enhance's local cache (classic_art.hpp).
+// classic pictures from classic-enhance's local cache (classic_art.hpp): `<cache>/pictures` as
+// the pack has them, `<cache>/pictures/enhanced` upscaled (`ce_pictures`).
 //
 // ge:summary Lab: Shooter's Edge's classic, modern and compact HUDs at five screen sizes
 // ge:keywords lab hud se-hud shooter status-bar classic modern compact looks viewports

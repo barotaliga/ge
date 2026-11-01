@@ -1,6 +1,7 @@
 // THE MENU IN THE CLASSIC LOOK: the main menu's model (main_menu.hpp) drawn the way the classic
 // game drew its menu, in the pack's own pictures (classic_art.hpp), on a 320 x 200 screen scaled
-// by a whole number and centred:
+// by a whole number and centred (an enhanced set, `ClassicArt::density` above 1, drawn at the same
+// classic sizes from its finer pixels, filtered):
 //
 // - the plaque down the left at (16, 4) and the page's title picture centred at the top;
 // - the root, SINGLE PLAYER and MULTIPLAYER as the pack's strips of 20 px rows at (72, 32), the
@@ -51,10 +52,10 @@ struct ClassicPen {
   void picture(const ge::ui::Image* img, float x, float y, float opacity = 1) const {
     if (img == nullptr) return;
     ge::ui::Box b;
-    b.rect = at(x, y, static_cast<float>(img->width), static_cast<float>(img->height));
+    b.rect = at(x, y, art.width_of(*img), art.height_of(*img));
     b.image = img;
     b.uv = {0, 0, static_cast<float>(img->width), static_cast<float>(img->height)};
-    b.nearest = true;
+    b.nearest = art.density <= 1;  // the pack's own pixels stay crisp; enhanced ones filter
     b.feather = 0;
     b.opacity = opacity;
     dl.box(b);
@@ -64,8 +65,9 @@ struct ClassicPen {
     ge::ui::Box b;
     b.rect = at(x, y, 8, 8);
     b.image = &art.glyphs;
-    b.uv = {static_cast<float>((code & 15) * 8), static_cast<float>((code >> 4) * 8), 8, 8};
-    b.nearest = true;
+    const float cell = 8 * art.density;
+    b.uv = {static_cast<float>(code & 15) * cell, static_cast<float>(code >> 4) * cell, cell, cell};
+    b.nearest = art.density <= 1;
     b.feather = 0;
     b.opacity = opacity;
     dl.box(b);

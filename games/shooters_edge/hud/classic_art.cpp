@@ -127,7 +127,15 @@ bool classic_art(const std::filesystem::path& dir, HudArt* out, std::string* err
   const PictureFind find = [&dir](std::string_view name, ui::Image* img) {
     return load_png(dir / (std::string(name) + ".png"), img);
   };
-  if (classic_art(find, dir.string(), out, error)) return true;
+  if (classic_art(find, dir.string(), out, error)) {
+    // The cache's enhanced folder (`pictures/enhanced/`) holds the same pictures at a whole
+    // multiple of their size: the bar (320 art pixels wide) says which.
+    if (out->bar.width >= 640 && out->bar.width % 320 == 0) {
+      out->density = static_cast<float>(out->bar.width) / 320.0f;
+      out->finish();
+    }
+    return true;
+  }
   if (error != nullptr)
     *error +=
         " (run classic-enhance's pictures stage on the pack: ge tool classicenhance -- run "
@@ -135,7 +143,8 @@ bool classic_art(const std::filesystem::path& dir, HudArt* out, std::string* err
   return false;
 }
 
-bool classic_art_from_packs(const FileFind& find, HudArt* out, std::string* error) {
+bool classic_art_from_packs(const FileFind& find, HudArt* out, std::string* error,
+                            const PictureUpgrade& upgrade) {
   std::vector<uint8_t> pal_store, wad_store;
   const std::span<const uint8_t> palette = find("gfx/palette.lmp", pal_store);
   if (palette.size() != 768) {
@@ -150,23 +159,32 @@ bool classic_art_from_packs(const FileFind& find, HudArt* out, std::string* erro
       *error = "classic_art: the packs have no readable gfx.wad" + (why.empty() ? "" : ": " + why);
     return false;
   }
+  // The set's density: the first picture's enhanced scale (the bar's), 1 with no upgrade.
+  uint32_t density = 0;
   const PictureFind pictures = [&](std::string_view name, ui::Image* img) {
     const ge::vfs::WadEntry* e = ge::vfs::wad_find(wad, name);
     if (e == nullptr) return false;
     ge::vfs::IndexedPicture p;
     std::string bad;
     // The glyph sheet is a raw 128 x 128 lump with index 0 see-through; every other a picture.
-    if (name == "conchars") {
-      if (!ge::vfs::read_raw_picture(ge::vfs::wad_lump(wad_bytes, *e), 128, 128, &p, &bad))
-        return false;
-      *img = colour(p, palette, 0);
-      return true;
-    }
-    if (!ge::vfs::read_picture(ge::vfs::wad_lump(wad_bytes, *e), &p, &bad)) return false;
-    *img = colour(p, palette, 255);
+    const bool sheet = name == "conchars";
+    if (sheet ? !ge::vfs::read_raw_picture(ge::vfs::wad_lump(wad_bytes, *e), 128, 128, &p, &bad)
+              : !ge::vfs::read_picture(ge::vfs::wad_lump(wad_bytes, *e), &p, &bad))
+      return false;
+    *img = colour(p, palette, sheet ? 0 : 255);
+    ui::Image big;
+    const uint32_t k = upgrade ? upgrade(name, p.width, p.height, &big) : 0;
+    if (density == 0) density = k == 0 ? 1 : k;
+    if (k == density && k > 1)
+      *img = std::move(big);
+    else
+      *img = ui::scaled_nearest(*img, static_cast<int>(density));
     return true;
   };
-  return classic_art(pictures, "the packs' gfx.wad", out, error);
+  if (!classic_art(pictures, "the packs' gfx.wad", out, error)) return false;
+  out->density = static_cast<float>(density);
+  out->finish();
+  return true;
 }
 
 const HudArt& pick_art(std::string_view hud_art, const HudArt& classic, const HudArt& free) {

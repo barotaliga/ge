@@ -49,16 +49,16 @@ void count(const ClassicPen& pen, int seconds, float opacity) {
       return;
     }
     imgs.push_back(img);
-    w += static_cast<float>(img->width) * kCountScale;
+    w += pen.art.width_of(*img) * kCountScale;
   }
   float x = std::floor((kScreenW - w) / 2);
   for (const ui::Image* img : imgs) {
-    const float iw = static_cast<float>(img->width), ih = static_cast<float>(img->height);
+    const float iw = pen.art.width_of(*img), ih = pen.art.height_of(*img);
     ui::Box b;
     b.rect = pen.at(x, kCountY, iw * kCountScale, ih * kCountScale);
     b.image = img;
-    b.uv = {0, 0, iw, ih};
-    b.nearest = true;
+    b.uv = {0, 0, static_cast<float>(img->width), static_cast<float>(img->height)};
+    b.nearest = pen.art.density <= 1;
     b.feather = 0;
     b.opacity = opacity;
     pen.dl.box(b);

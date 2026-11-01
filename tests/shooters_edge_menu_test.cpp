@@ -274,3 +274,46 @@ TEST(both_looks_lay_every_page_out_clean) {
   CHECK(l.strip && l.scale == 3);
   CHECK(l.items[1].y - l.items[0].y == 60);
 }
+
+TEST(enhanced_pictures_draw_at_the_classic_sizes) {
+  // An upgrade with four times the pixels for the glyph sheet and the main strip; every other
+  // picture is the pack's, scaled up nearest to the same density.
+  const auto files = sm::fixture_files();
+  std::vector<std::string> asked;
+  const sm::PictureUpgrade upgrade = [&asked](std::string_view name, int w, int h, Image* out) {
+    asked.emplace_back(name);
+    if (name != "conchars" && name != "gfx/mainmenu") return uint32_t{0};
+    *out = make_image(w * 4, h * 4, {1, 1, 1, 1});
+    return uint32_t{4};
+  };
+  sm::ClassicArt plain, art;
+  std::string error;
+  CHECK_MSG(sm::load_classic_art(fixture_find(files), &plain, &error), error);
+  CHECK_MSG(sm::load_classic_art(fixture_find(files), &art, &error, upgrade), error);
+  CHECK(art.density == 4 && plain.density == 1);
+  CHECK(art.glyphs.width == 512 && art.glyphs.height == 512);
+  // The pictures by the cache's names: the gfx/ pictures under gfx/, the wad's by their own.
+  CHECK(std::find(asked.begin(), asked.end(), "gfx/qplaque") != asked.end());
+  CHECK(std::find(asked.begin(), asked.end(), "num_0") != asked.end());
+  for (std::string_view n : sm::classic_picture_names()) {
+    const Image* a = art.find(n);
+    const Image* p = plain.find(n);
+    CHECK_MSG(a != nullptr && p != nullptr && a->width == 4 * p->width &&
+                  art.width_of(*a) == static_cast<float>(p->width),
+              std::string(n));
+  }
+  // The same layout as the pack's own.
+  World w;
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con, .maps = {"start", "arena"}};
+  g.set_art(std::move(art));
+  g.show(host, "main");
+  const sm::ClassicLayout a = sm::layout_classic(g.main(), g.art(), 1280, 720);
+  const sm::ClassicLayout b = sm::layout_classic(g.main(), plain, 1280, 720);
+  CHECK(a.items.size() == b.items.size() && a.items[0].w == b.items[0].w);
+  DrawList dl;
+  dl.begin(1280, 720);
+  g.draw(dl, 1280, 720, 0.25);
+  for (const std::string& p : g.problems()) CHECK_MSG(false, p);
+}

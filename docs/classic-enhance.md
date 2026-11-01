@@ -54,7 +54,7 @@ cache is `GE_CLASSIC_CACHE` when set, else the platform's cache folder (`XDG_CAC
 | `lightmaps` | `lightmaps/<map>.gerb`: each map's light rebaked (`brush::rebake_map`: 0.25 m luxels, two bounces off the textures' mean colours, the light's direction, and the bounce alone); the shareware pack's 21 maps take about 4 minutes on four cores and 53 MB | `kLightmapStageVersion`, the options or the textures' stage move |
 | `sounds` | `sounds/<path>.wav` (48 kHz, 16-bit, the loop start in a `cue ` chunk), `sounds/index.txt` | `kSoundStageVersion` or the options move |
 | `models` | `models/<name>.glb` (every model: enhanced skins, smooth normals, a morph target a frame, its clips), `models/<name>/skin<k>.png` and `glow<k>.png` (each skin alone, for a game drawing the pack's own model), `sprites/<name>/<frame>.png`, `models/index.txt`, `replaced.txt` | `kModelStageVersion` or the options move |
-| `pictures` | `pictures/<name>.png` (the wad's pictures and the 128x128 font sheet by lump name, `pictures/gfx/<name>.png` for the pack's own picture files), unscaled, in the palette's colours with the see-through index clear; `pictures/index.txt` | `kPictureStageVersion` moves |
+| `pictures` | `pictures/<name>.png` (the wad's pictures and the 128x128 font sheet by lump name, `pictures/gfx/<name>.png` for the pack's own picture files), unscaled, in the palette's colours with the see-through index clear; the same upscaled under `pictures/enhanced/` (`enhance_picture`); `pictures/index.txt` | `kPictureStageVersion`, the scale, the sharpening, the grain or the upscaler moves |
 
 Each stage records a key in `stages.txt`; a file is written whole (to `.part`, then renamed), so a
 stopped run never leaves half a texture that looks finished.
@@ -266,12 +266,30 @@ Sprites are written frame by frame at their source size, their transparent index
 
 ## The pictures
 
-The `pictures` stage writes the pack's 2D art as it is: the status bar, its digits and alarm
-digits, the portraits, the weapon, key and powerup icons, the 128x128 font sheet, and the menus'
-pictures. They are written unscaled, because a HUD draws them at a whole number of screen pixels
-a pixel, sampled nearest; an upscale would soften the edges the art is drawn to. Index 255 is
-see-through in a picture and index 0 in the font sheet. Shooter's Edge's classic HUD look reads
-them by their lump names in place of its own art.
+The `pictures` stage writes the pack's 2D art twice: the status bar, its digits and alarm digits,
+the portraits, the weapon, key and powerup icons, the 128x128 font sheet, and the menus' pictures.
+
+- **As it is**, under `pictures/`: unscaled, for a HUD that draws them at a whole number of screen
+  pixels a pixel, sampled nearest (`ce_pictures 0`). Index 255 is see-through in a picture and
+  index 0 in the font sheet.
+- **Enhanced**, under `pictures/enhanced/` (`enhance_picture`, `plugins/classicenhance/pictures.hpp`):
+  upscaled at the textures' scale (4) by the textures' upscaler (the trained network under
+  `ce_upscaler`, else the edge-aware kernel; `upscale_albedo` in `texture.hpp`). Before the
+  upscale the opaque texels' colours are spread into the see-through ones round them, so the
+  see-through index's colour never bleeds into an edge, and the picture is padded by its own edge
+  texels, so it is not read as a tile that wraps; the font sheet is done a glyph cell at a time, so
+  no glyph reaches into its neighbour. The alpha is the see-through mask sampled bilinearly at the
+  new size and steepened about one half: a stroke one texel wide stays one texel wide, a staircase
+  becomes a smooth edge, and the edge is about a pixel and a quarter soft.
+
+Shooter's Edge's window reads them by their names (`cached_picture` in `cached.hpp`) when
+`ce_pictures` is on (the default): its classic status bar, the counts and the crosshair in the
+glyph sheet, the classic menu's plaque, titles, strips, cursor, help pages and text box, the
+glyph text of the menu pages, the intermission and the scoreboard all come from four times the
+pixels, drawn at their classic sizes and filtered (`client/classic_pictures.hpp`). A picture the
+cache lacks is the pack's own scaled up nearest, so one set never mixes sizes. The demo video's
+status bar is drawn the same way. The `se-menu` lab (`--pack`) adds an `enhanced` set once the
+stage has run on that pack, and the `se-hud` lab reads `--classic=<cache>/pictures/enhanced`.
 
 ## The air
 

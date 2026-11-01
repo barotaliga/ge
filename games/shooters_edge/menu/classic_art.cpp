@@ -201,7 +201,8 @@ ui::Color ClassicArt::colour(int index) const {
 
 std::span<const std::string_view> classic_picture_names() { return kNames; }
 
-bool load_classic_art(const FindFile& find, ClassicArt* out, std::string* error) {
+bool load_classic_art(const FindFile& find, ClassicArt* out, std::string* error,
+                      const PictureUpgrade& upgrade) {
   *out = {};
   std::vector<uint8_t> pal_store, wad_store, store;
   const std::span<const uint8_t> palette = find("gfx/palette.lmp", pal_store);
@@ -223,26 +224,34 @@ bool load_classic_art(const FindFile& find, ClassicArt* out, std::string* error)
     *error = "gfx.wad has no 128 x 128 glyph sheet `conchars`";
     return false;
   }
-  out->glyphs = colour(glyphs, palette, 0);
+  // Each picture as the pack has it, or its enhanced copy at the glyph sheet's density.
+  uint32_t density = 0;
+  const auto picture = [&](std::string_view cache_name, const vfs::IndexedPicture& p, int clear) {
+    ui::Image img = colour(p, palette, clear);
+    ui::Image big;
+    const uint32_t k = upgrade ? upgrade(cache_name, p.width, p.height, &big) : 0;
+    if (density == 0) density = k == 0 ? 1 : k;
+    if (k == density && k > 1) return big;
+    return ui::scaled_nearest(img, static_cast<int>(density));
+  };
+  out->glyphs = picture("conchars", glyphs, 0);
+  out->density = static_cast<float>(density);
   std::copy(palette.begin(), palette.end(), out->palette.begin());
   for (std::string_view name : kNames) {
     const std::string path = "gfx/" + std::string(name) + ".lmp";
     const std::span<const uint8_t> bytes = find(path, store);
     vfs::IndexedPicture p;
     if (bytes.empty() || !vfs::read_picture(bytes, &p, &why)) continue;
-    out->pictures.emplace(std::string(name), colour(p, palette, kClear));
+    out->pictures.emplace(std::string(name), picture("gfx/" + std::string(name), p, kClear));
   }
-  for (std::string_view name : kWadNames) {
-    const vfs::WadEntry* e = vfs::wad_find(wad, name);
-    vfs::IndexedPicture p;
-    if (e == nullptr || !vfs::read_picture(vfs::wad_lump(wad_bytes, *e), &p, &why)) continue;
-    out->pictures.emplace(std::string(name), colour(p, palette, kClear));
-  }
-  for (std::string_view name : kWadStrips) {
-    const vfs::WadEntry* e = vfs::wad_find(wad, name);
-    vfs::IndexedPicture p;
-    if (e == nullptr || !vfs::read_picture(vfs::wad_lump(wad_bytes, *e), &p, &why)) continue;
-    out->pictures.emplace(std::string(name), colour(p, palette, kClear));
+  for (const auto names : {std::span<const std::string_view>(kWadNames),
+                           std::span<const std::string_view>(kWadStrips)}) {
+    for (std::string_view name : names) {
+      const vfs::WadEntry* e = vfs::wad_find(wad, name);
+      vfs::IndexedPicture p;
+      if (e == nullptr || !vfs::read_picture(vfs::wad_lump(wad_bytes, *e), &p, &why)) continue;
+      out->pictures.emplace(std::string(name), picture(name, p, kClear));
+    }
   }
   if (out->find("mainmenu") == nullptr) {
     *error = "the packs have no gfx/mainmenu.lmp";

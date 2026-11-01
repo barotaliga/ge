@@ -252,6 +252,23 @@ TEST(the_classic_set_reads_straight_from_the_packs_wad_in_the_palettes_colours) 
   CHECK(a.crosshair.rgba[0] == 9 && a.crosshair.rgba[3] == 255);
   CHECK(a.count_face.sheet == &a.glyphs);
 
+  // Enhanced: the bar and the glyph sheet from the upgrade at four times the pixels, the rest the
+  // pack's scaled up nearest to the same density, every picture the same size in art pixels.
+  {
+    const se::PictureUpgrade upgrade = [](std::string_view name, int w, int h, ge::ui::Image* out) {
+      if (name != "sbar" && name != "conchars") return uint32_t{0};
+      *out = ge::ui::make_image(w * 4, h * 4, {0.5f, 0.5f, 0.5f, 1});
+      return uint32_t{4};
+    };
+    se::HudArt big;
+    CHECK_MSG(se::classic_art_from_packs(find, &big, &error, upgrade), error);
+    CHECK(big.density == 4 && big.sheet.density == 4);
+    CHECK(big.bar.width == 1280 && big.bar.rgba[0] == 128);                     // the upgrade's
+    CHECK(big.inventory_bar.width == 1280 && big.inventory_bar.rgba[0] == 40);  // the pack's, x4
+    CHECK(big.glyphs.width == 512 && big.crosshair.width == 32);
+    CHECK(big.digit[0].width == 96 && big.count_face.sheet == &big.glyphs);
+  }
+
   // hud_art: auto and classic draw the packs' set, free the game's own; a pack with no set
   // leaves the free art whatever is asked.
   se::HudArt free = se::free_art();
