@@ -76,11 +76,13 @@
 #include "gpu/surface.hpp"
 #include "gpu/target.hpp"
 #include "input/state.hpp"
+#include "platform/audio.hpp"
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/controls.hpp"
+#include "shooters_edge/client/demo_heard.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -120,43 +122,6 @@ constexpr uint64_t kBenchShowNs = 33'333'333;
 void print_line(const out::LogLine& line, void*) {
   std::FILE* to = line.level == out::Level::error ? stderr : stdout;
   std::fprintf(to, "%.*s\n", static_cast<int>(line.message.size()), line.message.data());
-}
-
-// `-demovideo`: the demo turned into a video with no window, the report printed. The exit code.
-int demo_video_main(const cl::Args& args, const cl::SearchPath& files,
-                    const shooters_edge::look::Picture& picture, int track) {
-  auto device = ge::gpu::create_device({.label = "demovideo", .validation = 0});
-  if (!device) {
-    out::error("shooters_edge: no GPU device for -demovideo; see docs/rendering.md");
-    return 1;
-  }
-  cl::DemoVideoOptions o;
-  o.demo = args.demovideo;
-  o.file = args.video;
-  o.width = args.width & ~1;
-  o.height = args.height & ~1;
-  o.fps = args.fps;
-  o.codec = args.codec == "none" ? "" : args.codec;
-  o.seconds = args.to > args.from ? args.to - args.from : args.seconds;
-  o.from_s = args.from;
-  o.highlight = args.highlight;
-  o.gif_width = args.gif_width;
-  o.track = track;
-  o.picture = &picture;
-  cl::DemoVideoReport r;
-  std::string error;
-  const auto shown = [](int64_t frame, double t, const ge::lab::Picture&) {
-    if (frame % 300 == 0)
-      out::status("demovideo: picture " + std::to_string(frame) + " at " +
-                  std::to_string(static_cast<int>(t)) + " s");
-  };
-  if (!cl::demo_video(*device, files, o, r, error, shown)) {
-    out::error("shooters_edge: -demovideo " + args.demovideo + ": " + error +
-               "; see docs/shooters-edge.md § A demo as a video");
-    return 2;
-  }
-  for (const std::string& line : cl::demo_video_lines(o, r)) out::status(line);
-  return 0;
 }
 
 }  // namespace
@@ -296,6 +261,16 @@ int run_main(int argc, char** argv) {
   cl::Timedemo bench;
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
   cl::add_playback_commands(console, playback, bench);
+  // The window's sound: a played demo's for now (client/demo_heard.hpp), at `volume`.
+  ge::audio::Synth synth;  // outlives the device that pulls it (opened with the window)
+  double volume = 0.7;
+  console.cvars().bind({.name = "volume",
+                        .fallback = "0.7",
+                        .help = "the game's sound, 0..1 (a played demo's sounds and voices)",
+                        .kind = ge::console::CvarKind::number,
+                        .min = 0,
+                        .max = 1},
+                       &volume);
   se::Hud hud = se::make_hud();
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
@@ -336,7 +311,7 @@ int run_main(int argc, char** argv) {
     out::status("shooters_edge: " + std::to_string(cl::archive_paths(files).size()) +
                 " archives on the search path of " + files.folder);
   }
-  if (!args.demovideo.empty()) return demo_video_main(args, files, picture, playback.track);
+  if (!args.demovideo.empty()) return cl::demo_video_main(args, files, picture, playback.track);
   // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
   // enhance offers.
   const cl::GameAdapter& adapter = cl::adapter_of(shooters_edge::profiles::classic_game());
@@ -512,6 +487,14 @@ int run_main(int argc, char** argv) {
   }
   ge::platform::DevicesPtr devices = ge::platform::open_devices();
   if (!devices) return 1;
+  const auto pull = [](float* out, int frames, void* user) {
+    static_cast<ge::audio::Synth*>(user)->render(out, frames);
+  };
+  const std::unique_ptr<ge::platform::AudioOut> speaker =
+      ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
+  out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
+                      : std::string("shooters_edge: no audio device; a demo plays silent"));
+  cl::DemoHearing hearing(synth);  // a played demo's sounds, voices and printed lines
   ge::platform::set_relative_mouse(*window, true);
   bool captured = true;
   bool vsync = true;
@@ -571,6 +554,8 @@ int run_main(int argc, char** argv) {
     bench_map.reset();
     bench_folder = {};
     bench_models = 0;
+    hearing.stop();
+    hud.centre.clear();
     vsync = true;
     surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync);
     if (bench.quit_after) quit = true;
@@ -775,6 +760,7 @@ int run_main(int argc, char** argv) {
       } else {
         bench.quit_after = quit_after;
         bench.paced = play_ask;
+        bench.hear = play_ask;  // its sounds and lines gathered for the draw (demo_heard.hpp)
         bench.demo.track = playback.track;
         console.print((play_ask ? "playdemo: " : "timedemo: ") + bench.found);
         if (play_ask && !cl::playback_begin(playback, bench, error))
@@ -819,6 +805,7 @@ int run_main(int argc, char** argv) {
         }
         if (!rebuild_world(*bench_map, {ds.models, {}}, from)) return 1;
         bench_models = ds.models.size();
+        if (bench.paced) hearing.level(ds, from, &bench_map->bsp.map);
       } else if (step != cl::TimedemoStep::frame) {
         if (!end_bench(step == cl::TimedemoStep::error ? error : "", t)) return 1;
         continue;
@@ -828,6 +815,16 @@ int run_main(int argc, char** argv) {
         const cl::SearchPath& from = bench_folder.path ? *bench_folder.path : files;
         if (!rebuild_world(*bench_map, {ds.models, {}}, from)) return 1;
         bench_models = ds.models.size();
+      }
+      if (bench.paced) {  // what the frames read carried: heard, and its lines shown
+        synth.bus_gain(0, static_cast<float>(volume) / cl::kDemoVolume);
+        std::vector<std::string> lines;
+        if (hearing.frame(ds, bench.heard, static_cast<float>(wall), lines, hud.centre))
+          hud.centre_until = t + 2;
+        for (const std::string& line : lines) {
+          console.print(line);
+          hud.notify.push(line, se::hud_style().ink, t);
+        }
       }
       ge::render::FrameView view =
           cl::demo_view(bench.demo.state, ge::camera::FirstPersonRow{}.fov_y, t);
