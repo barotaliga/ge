@@ -86,6 +86,37 @@ TEST(the_winter_counts_from_the_freeze_up_and_is_none_in_summer) {
   CHECK(tn::winter_days(l) == 0);
 }
 
+TEST(the_spring_thaw_rots_the_ice_and_opens_a_moat) {
+  mg::Level l = map38();
+  const std::optional<mg::MapLake> found = tn::find_tarn(l, kRadius);
+  CHECK(found.has_value());
+  if (!found) return;
+  // Before the melt: none of it; through it, the ice grown by its start melting to nothing.
+  l.sun.day_of_year = 320 + 100 - 365;
+  CHECK(tn::thaw_of(l) == 0);
+  const double before = tn::tarn_ice(l, *found);
+  l.sun.day_of_year = 320 + 182 - tn::kThawDays - 365;
+  const double grown = tn::tarn_ice(l, *found);
+  CHECK(grown >= before && tn::thaw_of(l) == 0);
+  l.sun.day_of_year += tn::kThawDays / 2;
+  CHECK(std::abs(tn::thaw_of(l) - 0.5) < 1e-9);
+  const double half = tn::tarn_ice(l, *found);
+  l.sun.day_of_year += tn::kThawDays / 2 - 1;
+  CHECK(tn::thaw_of(l) > 0.95 && tn::tarn_ice(l, *found) < half);
+  // Rotten ice bears less than sound ice as thick; the moat widens with the thaw.
+  mg::MapLake lake = *found;
+  lake.ice = 0.09;  // 9 cm of sound ice carries 140 kg; rotten through, half
+  CHECK(tn::bears(lake));
+  lake.thaw = 1;
+  CHECK(!tn::bears(lake) && tn::bears(lake.ice));
+  CHECK(tn::moat_of(lake) == tn::kMoat);
+  lake.thaw = 0.5;
+  CHECK(tn::moat_of(lake) == tn::kMoat / 2);
+  // Laid thawing, the tarn carries its thaw.
+  tn::lay_tarn(l, *found);
+  CHECK(l.lakes.size() == 1 && l.lakes[0].thaw > 0.9);
+}
+
 TEST(ice_that_bears_a_skier_is_filled_flat) {
   CHECK(!tn::bears(0.03));
   CHECK(tn::bears(0.2));

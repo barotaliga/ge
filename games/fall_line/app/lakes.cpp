@@ -31,8 +31,11 @@ void show_lakes(ge::gpu::Device& device, GameFrame& f) {
     ge::water::add_lake(world, shore, lake.level, {.temperature = ge::mountain::tarn::kTarnWater},
                         {bed_height, &level});
     const int body = add_water(device, f, world.bodies[0]);
-    // Ice that bears a skier lies on ground filled flat (lake.depth 0): the map's snow is on it.
-    freeze_water(device, f, body, world.bodies[0], lake.ice, lake.depth == 0);
+    // Ice that bears a skier lies on ground filled flat (lake.depth 0): the map's snow is on it,
+    // and its thaw is its look alone (no water under it to open a moat on).
+    const bool filled = lake.depth == 0;
+    freeze_water(device, f, body, world.bodies[0], lake.ice, filled,
+                 filled ? 0 : ge::mountain::tarn::moat_of(lake), lake.thaw);
   }
 }
 
