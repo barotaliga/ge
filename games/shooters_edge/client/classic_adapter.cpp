@@ -4,16 +4,20 @@
 //
 // ge:summary The first classic game's adapter: mod folders, QC programs, maps, pictures, demos
 // ge:keywords classic-adapter list_mods find_program list_maps map_info map_textures list_demos
-// ge:keywords find_demo open_demo mod-folder qwprogs
+// ge:keywords find_demo open_demo mod-folder qwprogs replacement-texture png tga
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #include <algorithm>
 #include <filesystem>
+#include <optional>
 #include <set>
 #include <system_error>
 #include <utility>
 
+#include "assets/image.hpp"
+#include "assets/tga.hpp"
 #include "brush/read.hpp"
+#include "core/output.hpp"
 #include "progs/layout.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -130,10 +134,43 @@ bool map_info(const GameAdapter& self, const SearchPath& files, std::string_view
   return true;
 }
 
-std::vector<ge::brush::MapPicture> map_textures(const GameAdapter&, const SearchPath&,
+// A PNG or TGA in the files standing in for the texture `name` of map `map`, read into `p`.
+void replace_picture(const SearchPath& files, std::string_view map, ge::brush::MapPicture& p) {
+  std::string name = p.name;
+  std::replace(name.begin(), name.end(), '*', '#');
+  const std::string places[] = {"textures/" + std::string(map) + "/" + name, "textures/" + name};
+  for (const std::string& stem : places) {
+    for (const char* ext : {".png", ".tga"}) {
+      const std::string path = stem + ext;
+      std::vector<uint8_t> store;
+      const std::span<const uint8_t> bytes = find_file(files, path, store);
+      if (bytes.empty()) continue;
+      std::string why;
+      std::optional<ge::assets::Image> img =
+          ext[1] == 'p' ? ge::assets::decode_png(bytes) : ge::assets::decode_tga(bytes, &why);
+      if (!img || img->width <= 0 || img->height <= 0) {
+        ge::core::output::status("shooters_edge: " + path + " did not read" +
+                                 (why.empty() ? std::string() : " (" + why + ")") +
+                                 "; the map's own " + p.name + " is drawn");
+        continue;
+      }
+      p.rgba = std::move(img->rgba);
+      p.rgba_width = static_cast<uint32_t>(img->width);
+      p.rgba_height = static_cast<uint32_t>(img->height);
+      return;
+    }
+  }
+}
+
+std::vector<ge::brush::MapPicture> map_textures(const GameAdapter&, const SearchPath& files,
+                                                std::string_view map,
                                                 std::span<const uint8_t> map_file,
                                                 std::vector<uint8_t>&) {
-  return ge::brush::read_map_pictures(map_file);  // the first game's maps carry their pictures
+  // The first game's maps carry their pictures; a picture file of the same name stands in.
+  std::vector<ge::brush::MapPicture> out = ge::brush::read_map_pictures(map_file);
+  for (ge::brush::MapPicture& p : out)
+    if (!p.name.empty()) replace_picture(files, map, p);
+  return out;
 }
 
 std::vector<std::string> list_demos(const GameAdapter& self, const SearchPath& files) {
