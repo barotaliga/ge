@@ -264,6 +264,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge bot run <map> --from=<x,y,z> --to=<x,y,z> --hands=human --seeds=N` (one route ridden by the bot and printed as its trail, its mode timeline and its why-record, without editing a test: #293, M18r2)
 - `--game=<zip>` on the labs that read a game folder (`ge lab run se-client --game=<release zip>`: the zip mounted as the game directory through `engine/vfs`, its packs read inside it, so pak0 is never extracted into an `id1` folder first; classic HUD thread)
 - `ge lab <lab> --stage-pak=<fixture>` (a pack staged from a fixture of stand-in player models and the other models a demo draws, so the demo and picture labs draw players without the classic pak: today `se-highlights`' moment shots show empty halls; demo highlights thread; done: the runner's `--stage-pak=<name>`, `Lab::stage_pak()`, Shooter's Edge's `fixture` in client/stage.hpp, read by se-highlights, se-demo-video, se-timedemo and se-client)
+- `ge demo track <demo> --player=<name> [--tsv]` (one player's origin, view and speed a frame off any demo, and `ge demo players` listing who played with their frame counts: the bunny-hop thread decoded the demo in a scratch script before the lab existed; and `ge bot hop <map> --from --to` racing the pilot's ways on one trip)
 
 ## Store services
 

@@ -146,6 +146,41 @@ lines; the worst is 1.4e-4 unit); the seven left out need what no row carries (u
 spectator, three server settings). `engine/move/presets.cpp`'s `classic_arena` stays a
 starting point in the same units, not this row.
 
+## The bunny hop, read and flown
+
+The classic move's air control (`plugins/shooter/pmove.cpp`'s air acceleration) adds speed along
+the wish only up to 30 units/s of it, so the most a command gains comes with the wish at right
+angles to the velocity: it adds 30 across, turns the velocity by atan(30 / v) and raises v^2 by
+900. A hopper holds the side key alone, keeps the view on the velocity and turns it with the
+velocity: his turn rate IS his gain, at most `max_turn(v, 77)` (about 440 degrees a second at
+300 units/s, 220 at 600). The jump runs before friction, so a jump pressed on the command he lands
+loses nothing; one more command on the ground costs about 4 x v x dt.
+
+A recorded pro's 2 on 2 (a multiview demo, followed player by player) reads exactly so:
+`plugins/shooter/hops.hpp`'s `read_hops` turns any track (a demo's, a bot's run) into its
+frames (velocity, ground, the turn against the most, the view's lag behind the velocity) and its
+hops (ground frames before each jump, the chain, the speed gained). Over the match the player
+jumped 30 times a minute and chained 8.5% (5 in a row at best); on the long runs between items
+he holds the turn at the most the move allows, switches side about once a hop in the air, reaches
+about 600 units/s and spends one frame on the ground between chained jumps, his view about 4
+degrees outside the turn (a frame late, as a recording shows it).
+
+The bots' pilot flies it as its HOP mode (`plugins/shooter/pilot.hpp`): on a walk or drop link
+at speed it jumps on landing (the button released between, as the move demands), picks its side
+from where the route lies against the velocity (held 12 degrees and `hop_side_s`, or swung over
+when the route lies 45 degrees off), sets the view ahead of the velocity by the turn it can make,
+and, given the map's solids, flips side when the arc it is on meets a wall within 0.12 s. It
+leaves the mode near the route's end, slowed on the ground or aiming at a player. Expert and
+perfect bots hop with practised hands (no delay, no settle); the rest walk. On the pro's own
+trips over a real map the expert hop takes about 1.2 times his time, the walk 1.6 times.
+
+The labs: `se-moves` (any demo, any player: the map as a wireframe from above and at an angle,
+the path coloured by speed, the longest chain close up with the view's ticks, a chase view from
+inside the map and its GIF, the lag and ground-frame histograms) and `se-hop` (the player's
+trips replayed by the pilot's ways on the same map from his start and speed: walk, strafe, hop,
+hop with human hands, the ideal hop; a trip his time beats the bots' by a quarter is flagged as a
+trick or a shortcut the graph lacks).
+
 ## Moving ground and pushes
 
 What moves a body from outside its own step (`push.hpp`), and the order a game runs it in:

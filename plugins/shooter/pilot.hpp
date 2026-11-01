@@ -29,15 +29,25 @@
 //               (the air's 30 unit/s cap adds the most speed with the wish at right angles to the
 //               velocity), its sign the side the target is on; left `strafe_end` units before the
 //               stretch ends.
+//   hop         with `hop` set (an expert) the strafe gives way to the BUNNY HOP, as a recorded
+//               pro moves (docs/movement.md § The bunny hop): any stretch of walks and drops with
+//               no mover or jump, `hop_min` units or more, curves and stairs too. In the air the
+//               side key alone and the view led on the velocity by the move's most turn (the
+//               most gain); the side the route `hop_look_s` ahead lies on, switched past
+//               `hop_hold` after `hop_side_s` (at once past `hop_swing`); the back key when the
+//               aim is `hop_brake` off. The jump is let go in the air and pressed on the
+//               landing's command (no friction taken). With the map's solids in the sense, a
+//               side whose arc meets a wall within `hop_see_s` gives way to the other. Left
+//               `hop_end` units before the stretch ends, or landing under `hop_slow` x maxspeed.
 // STUCK: no nearer the target for `stuck_s` on the ground plans again from the node nearest where
 // it stands; LOST (more than `lost` units from the link, on the ground) the same. Every decision
 // is recorded on the `ai::Why` handed in (`link`: the mode chosen, with its facts), and the intent
 // before the hands (`hands`: yaw, forward, side).
 //
-// THE HANDS (`ai::Hands`, hands.hpp): the yaw (degrees, unwrapped), the forward and side axes
-// (shares of the player's maxspeed) pass through the pilot's hands; the jump is a button and
-// passes untouched. `pilot_hands(none)` presses what the pilot wants; `human` reacts about 0.15 s
-// late and turns and moves the axes as a hand does.
+// THE HANDS (`ai::Hands`): yaw, forward and side pass through them, the jump untouched.
+// `none` presses what the pilot wants; `human` reacts about 0.15 s late and moves as a hand does
+// (it cannot hold a hop's speed); `practised` (an expert's movement) has no reaction to wait for
+// and no settle, as a pro's view stays within a few degrees of his velocity while it turns.
 //
 // Allocates only when it plans (the route's vector); deterministic to the bit (floats in the
 // move's order, angles through core's libm). Held by tests/shooter_pilot_test.cpp, drawn by the
@@ -74,12 +84,23 @@ struct PilotSettings {
   float line = 20;         // a stretch's nodes lie within this of its straight line, units
   float look = 64;         // a walk aims this far along the route, units
   float lead_s = 0;        // and steers from where it will be this long ahead (late hands), s
+  // THE HOP (an expert's bunny hop, off by default; replaces the strafe when on):
+  bool hop = false;         // hop the route's walks and drops, round its curves too
+  float hop_min = 256;      // the shortest stretch hopped, along the route, units
+  float hop_end = 96;       // hopping stops this far along the route before the stretch's end
+  float hop_look_s = 0.3f;  // the hop aims at the route this long ahead at its speed, s
+  float hop_hold = 12;      // the side holds until the aim is this far off the other way, deg
+  float hop_side_s = 0.2f;  // and for at least this long (a hand's rhythm), unless the aim is
+  float hop_swing = 45;     // this far off: then the side it is on at once, deg
+  float hop_brake = 70;     // the aim this far off the velocity: the back key pressed too, deg
+  float hop_slow = 0.75f;   // landed under this share of maxspeed: the hop ends (run instead)
+  float hop_see_s = 0.12f;  // the arc ahead checked for a wall this long, s (with a world)
 };
 
-enum class PilotMode : uint8_t { idle, walk, run_up, jump, air, wait, ride, strafe, arrived };
+enum class PilotMode : uint8_t { idle, walk, run_up, jump, air, wait, ride, strafe, arrived, hop };
 const char* pilot_mode_name(PilotMode m);
 
-enum class PilotHands : uint8_t { none, human };
+enum class PilotHands : uint8_t { none, human, practised };
 // The hands' axes: yaw (degrees), forward and side (shares of maxspeed), jump.
 std::vector<ai::AxisHands> pilot_hands(PilotHands profile);
 // How far ahead a pilot with these hands steers from (their delay), s.
@@ -91,12 +112,16 @@ struct PilotSense {
   bool onground = false;
   float maxspeed = 320;
   std::span<const NavMover> movers;  // each mover's entity and box as it stands now
+  // The map's solids, when the pilot may look ahead through them (the hop checks its arc for a
+  // wall, as a player sees the room); null: the hop flies blind.
+  const MoveWorld* world = nullptr;
 };
 
 struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
   int32_t rides = 0, strafes = 0;
-  double time_s = 0;  // the commands' time since the last pilot_go
+  int32_t hops = 0, hop_jumps = 0;  // hop stretches entered, jumps pressed on a landing in them
+  double time_s = 0;                // the commands' time since the last pilot_go
 };
 
 struct Pilot {
@@ -109,8 +134,9 @@ struct Pilot {
   float yaw = 0;                 // the view's yaw last pressed, degrees, unwrapped
   float best = 0, best_s = 0;    // the nearest the target has been and when (the stuck check)
   float wait_s = 0;              // waiting at a mover this long
-  int32_t strafe_end_node = -1;  // the route index a strafe stretch ends at
+  int32_t strafe_end_node = -1;  // the route index a strafe or hop stretch ends at
   int8_t strafe_side = 0;        // the side axis's sign in the air, -1 left, 1 right
+  float side_s = 0;              // the hop's side held this long, s
   bool jump_pressed = false;     // the jump button in the last command
   bool airborne = false;         // left the ground on the current jump link
   int32_t barred[4] = {-1, -1, -1, -1};    // doors found shut: planned round
@@ -123,6 +149,9 @@ struct Pilot {
 // A pilot on `g` (kept alive and unmoved) with `hands` (from pilot_hands), its wander off `seed`.
 void pilot_init(Pilot& p, const NavGraph& g, const PilotSettings& set,
                 std::span<const ai::AxisHands> hands, double hz, uint32_t seed);
+// The view turned to `yaw` (degrees) with the hands at rest there: a pilot taking over a player
+// already moving (a run started from a recorded player's place and velocity).
+void pilot_face(Pilot& p, float yaw);
 // Plans the way to node `goal` from where the pilot stands; false when there is none.
 bool pilot_go(Pilot& p, int32_t goal, const PilotSense& sense);
 // The next command, `msec` long.
@@ -135,7 +164,8 @@ struct PilotBot {
   Pilot pilot;
   std::vector<int32_t> goals;
   size_t next_goal = 0;
-  std::vector<NavMover> now;  // the movers as they stand (reused)
+  std::vector<NavMover> now;   // the movers as they stand (reused)
+  MoveWorld* world = nullptr;  // the map's solids the hop looks ahead through (null: none)
   ai::Why* why = nullptr;
   int64_t command = 0;
   int32_t arrivals = 0;

@@ -714,7 +714,13 @@ Stats read_stats(const server::QcServer& s, int ent) {
 
 void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, int slot,
                   const char* entities, sh::AimSkill skill, double hz, uint32_t seed) {
-  sh::bot_init(f.bot, g, sh::PilotSettings{}, sh::PilotHands::human, skill, hz, seed);
+  // An expert moves as a pro does: the bunny hop on practised hands (shooter/pilot.hpp); the
+  // others walk and strafe on a person's hands.
+  const bool expert = skill == sh::AimSkill::expert || skill == sh::AimSkill::perfect;
+  sh::PilotSettings ps;
+  ps.hop = expert;
+  sh::bot_init(f.bot, g, ps, expert ? sh::PilotHands::practised : sh::PilotHands::human, skill, hz,
+               seed);
   f.slot = slot;
   f.sense = map_sense_of(skill);
   f.rng = ge::core::make_rng(seed * 2654435761u + 12345u);

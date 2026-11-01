@@ -177,6 +177,100 @@ int32_t strafe_stretch(const Pilot& p, Vec3f at) {
   return best;
 }
 
+// THE HOP's stretch from route[k]: the furthest route index whose links from k are walks or drops
+// with no mover, none of them the walk into a jump's start; and its length along the route.
+// -1 when shorter than `hop_min`.
+int32_t hop_stretch(const Pilot& p, Vec3f at) {
+  const NavGraph& g = *p.g;
+  int32_t best = -1;
+  float along = across(at, node(g, p.route[p.k + 1]).origin);
+  for (size_t j = p.k + 1; j < p.route.size(); j++) {
+    const NavLink* l = link_of(g, p.route[j - 1], p.route[j]);
+    if (l == nullptr || (l->kind != NavKind::walk && l->kind != NavKind::drop) || l->mover >= 0)
+      break;
+    const NavLink* l2 = j + 1 < p.route.size() ? link_of(g, p.route[j], p.route[j + 1]) : nullptr;
+    if (l2 != nullptr && l2->kind == NavKind::jump) break;
+    if (j > p.k + 1) along += across(node(g, p.route[j - 1]).origin, node(g, p.route[j]).origin);
+    if (along >= p.set.hop_min) best = static_cast<int32_t>(j);
+  }
+  return best;
+}
+
+// The route index k' in [k, end) whose link at lies nearest, from k on (the hop runs past nodes
+// without standing on them), and how far along the route from there to node `end` is left.
+float hop_follow(Pilot& p, Vec3f at, int32_t end) {
+  const NavGraph& g = *p.g;
+  auto off = [&](size_t k) {
+    return off_segment(at, node(g, p.route[k]).origin, node(g, p.route[k + 1]).origin);
+  };
+  while (p.k + 2 <= static_cast<size_t>(end) && off(p.k + 1) <= off(p.k)) p.k++;
+  float f = 0;
+  const Vec3f a = node(g, p.route[p.k]).origin, b = node(g, p.route[p.k + 1]).origin;
+  off_segment(at, a, b, &f);
+  float left = across(at, b) * 1.0f;
+  for (size_t j = p.k + 2; j <= static_cast<size_t>(end); j++)
+    left += across(node(g, p.route[j - 1]).origin, node(g, p.route[j]).origin);
+  return left;
+}
+
+// The point `look` units along the route from where `at` lies on link k, up to node `end`.
+Vec3f hop_aim(const Pilot& p, Vec3f at, float look, int32_t end) {
+  const NavGraph& g = *p.g;
+  float f = 0;
+  Vec3f a = node(g, p.route[p.k]).origin, b = node(g, p.route[p.k + 1]).origin;
+  off_segment(at, a, b, &f);
+  Vec3f from{a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, b.z};
+  float left = look;
+  for (size_t k = p.k; k + 1 <= static_cast<size_t>(end); k++) {
+    b = node(g, p.route[k + 1]).origin;
+    const float d = across(from, b);
+    if (d >= left) {
+      const float u = left / d;
+      return {from.x + (b.x - from.x) * u, from.y + (b.y - from.y) * u, b.z};
+    }
+    left -= d;
+    from = b;
+  }
+  return node(g, p.route[static_cast<size_t>(end)]).origin;
+}
+
+// The most the velocity turns a second in the air with the wish across it (hops.hpp's rule:
+// 30 units/s across it a command), degrees/s.
+float hop_turn_rate(float speed, float dt) {
+  if (speed <= 1 || dt <= 0) return 0;
+  const double r = core::libm::atan2(30.0, static_cast<double>(speed));
+  return static_cast<float>(r * (180.0 / core::kPi)) / dt;
+}
+
+// How long the hop's arc on `side` (-1 left, 1 right) stays clear of walls, up to `horizon`: the
+// velocity turned at the move's most each command, the player's box traced along it a step up
+// (so a stair's riser is not a wall). Floors and ramps it meets do not count.
+float arc_clear(const MoveWorld& world, Vec3f o, Vec3f v, int side, float dt, float horizon) {
+  const float speed = root_of(v.x * v.x + v.y * v.y);
+  if (speed < 1 || dt <= 0) return horizon;
+  const double step =
+      -static_cast<double>(side) * hop_turn_rate(speed, dt) * dt * (core::kPi / 180.0);
+  const auto c = static_cast<float>(core::libm::cos(step)),
+             sn = static_cast<float>(core::libm::sin(step));
+  Vec3f at{o.x, o.y, o.z + kStepHeight};
+  if (!box_free(world, at)) at = o;
+  Vec3f vel{v.x, v.y, 0};
+  constexpr int kChunk = 4;  // commands a trace covers
+  for (float t = 0; t < horizon;) {
+    Vec3f to = at;
+    for (int i = 0; i < kChunk; i++) {
+      vel = {vel.x * c - vel.y * sn, vel.x * sn + vel.y * c, 0};
+      to = to + vel * dt;
+    }
+    const HullTrace tr = player_trace(world, at, to);
+    if (tr.startsolid) return t;
+    if (tr.fraction < 1 && tr.plane.normal.z < 0.7f) return t + tr.fraction * dt * kChunk;
+    at = to;
+    t += dt * kChunk;
+  }
+  return horizon;
+}
+
 void restart(Pilot& p, const PilotSense& s) {
   p.best = 1e30f;
   p.best_s = static_cast<float>(p.stats.time_s);
@@ -361,6 +455,8 @@ const char* pilot_mode_name(PilotMode m) {
       return "strafe";
     case PilotMode::arrived:
       return "arrived";
+    case PilotMode::hop:
+      return "hop";
   }
   return "?";
 }
@@ -376,6 +472,13 @@ std::vector<ai::AxisHands> pilot_hands(PilotHands profile) {
     // A stick's thumb: late, settling over a tenth of a second, across its travel in a quarter.
     h[1] = {false, 0.18, 0, 0.5, 0.1, 1, 8, -1, 1, 0};
     h[2] = {false, 0.18, 0, 0.5, 0.1, 1, 8, -1, 1, 0};
+  } else if (profile == PilotHands::practised) {
+    // A movement drilled to habit: no reaction to wait for (the hand runs ahead of the eye, as a
+    // recorded pro's view stays on his velocity while it turns 200 degrees a second), a little
+    // wander, the view's turn and the keys' travel still a hand's.
+    h[0] = {false, 0, 0.3, 0.4, 0, 1, 1800, -1e9, 1e9, 0};
+    h[1] = {false, 0, 0, 0.5, 0, 1, 30, -1, 1, 0};
+    h[2] = {false, 0, 0, 0.5, 0, 1, 30, -1, 1, 0};
   }
   return h;
 }
@@ -390,6 +493,12 @@ void pilot_init(Pilot& p, const NavGraph& g, const PilotSettings& set,
   p.set = set;
   p.hands = ai::Hands(hands, hz, seed);
   p.search.reset(g.nodes.size());
+}
+
+void pilot_face(Pilot& p, float yaw) {
+  p.yaw = yaw;
+  const double at[4] = {yaw, 0, 0, 0};
+  p.hands.reset(std::span<const double>(at, p.hands.axes() < 4 ? p.hands.axes() : 4));
 }
 
 bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
@@ -434,7 +543,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       p.mode = PilotMode::arrived;
       break;
     }
-    if (p.mode == PilotMode::strafe) break;
+    if (p.mode == PilotMode::strafe || p.mode == PilotMode::hop) break;
     if (passed(p, s, p.k) || nearer_on(p, s)) {
       advance(p, s);
       continue;
@@ -452,9 +561,54 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     const NavLink* l2 = p.k + 2 < p.route.size() ? link_of(g, b, p.route[p.k + 2]) : nullptr;
     Vec3f target = B;
 
+    // The hop's stretch (an expert's), entered on the ground on a walk moving near full speed.
+    if (p.set.hop && p.mode == PilotMode::walk && s.onground &&
+        (l.kind == NavKind::walk || l.kind == NavKind::drop) && l.mover < 0 &&
+        speed >= kStrafeSpeed * s.maxspeed && !(l2 && l2->kind == NavKind::jump)) {
+      const int32_t j = hop_stretch(p, s.origin);
+      if (j >= 0) {
+        p.mode = PilotMode::hop;
+        p.strafe_end_node = j;
+        p.strafe_side = 0;
+        p.best = 1e30f;
+        p.best_s = t;
+        p.stats.hops++;
+      }
+    }
+    float hop_left = 0;
+    if (p.mode == PilotMode::hop && !p.set.hop) {
+      // The hop turned off mid-stretch (a bot that took the view to aim): walk on from here.
+      restart(p, s);
+      p.mode = PilotMode::walk;
+    }
+    if (p.mode == PilotMode::hop) {
+      hop_left = hop_follow(p, s.origin, p.strafe_end_node);
+      target = node(g, p.route[static_cast<size_t>(p.strafe_end_node)]).origin;
+      const float off =
+          off_segment(s.origin, node(g, p.route[p.k]).origin, node(g, p.route[p.k + 1]).origin);
+      if (hop_left <= p.set.hop_end ||
+          (s.onground && speed < p.set.hop_slow * s.maxspeed && !p.jump_pressed)) {
+        restart(p, s);
+        p.mode = PilotMode::walk;
+      } else if (off > p.set.lost) {
+        p.stats.lost++;
+        replanned = true;
+        replan(p, s);
+        because = "hopped off the way: plan again";
+      } else if (hop_left < p.best - 0.5f) {
+        p.best = hop_left;
+        p.best_s = t;
+      } else if (t - p.best_s > p.set.stuck_s) {
+        p.stats.stuck++;
+        replanned = true;
+        replan(p, s);
+        because = "the hop is no nearer: plan again";
+      }
+    }
+
     // The strafe stretch, entered on a level walk moving near full speed.
-    if (p.set.strafe && p.mode == PilotMode::walk && s.onground && l.kind == NavKind::walk &&
-        l.mover < 0 && speed >= kStrafeSpeed * s.maxspeed) {
+    if (!p.set.hop && p.set.strafe && p.mode == PilotMode::walk && s.onground &&
+        l.kind == NavKind::walk && l.mover < 0 && speed >= kStrafeSpeed * s.maxspeed) {
       const int32_t j = strafe_stretch(p, s.origin);
       if (j >= 0) {
         p.mode = PilotMode::strafe;
@@ -471,7 +625,57 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       }
     }
 
-    if (p.mode == PilotMode::strafe) {
+    if (replanned) {
+      // Planned again off the hop: this command coasts; the next one starts on the new route.
+      w.yaw = p.yaw;
+    } else if (p.mode == PilotMode::hop) {
+      const float vh = speed > kSlow ? heading(s.velocity.x, s.velocity.y) : p.yaw;
+      const float look = speed * p.set.hop_look_s > 64 ? speed * p.set.hop_look_s : 64;
+      const Vec3f aim = hop_aim(p, s.origin, look, p.strafe_end_node);
+      const float err = wrap(yaw_at(s.origin, aim) - vh);
+      // The side the aim lies on (the right side turns the velocity clockwise), held until the
+      // aim lies `hop_hold` the other way: arcs that weave round the route.
+      p.side_s += dt;
+      const int8_t want = err > p.set.hop_hold ? -1 : err < -p.set.hop_hold ? 1 : 0;
+      const float swing = err < 0 ? -err : err;
+      if (p.strafe_side == 0 || (want != 0 && want != p.strafe_side &&
+                                 (p.side_s >= p.set.hop_side_s || swing > p.set.hop_swing))) {
+        p.strafe_side = want != 0 ? want : 1;
+        p.side_s = 0;
+      }
+      // A wall in the arc: the other side at once, when its arc is the clearer.
+      if (s.world != nullptr && !s.onground) {
+        const float mine =
+            arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, p.set.hop_see_s);
+        if (mine < p.set.hop_see_s) {
+          const float other =
+              arc_clear(*s.world, s.origin, s.velocity, -p.strafe_side, dt, p.set.hop_see_s);
+          if (other > mine) {
+            p.strafe_side = static_cast<int8_t>(-p.strafe_side);
+            p.side_s = 0;
+          }
+        }
+      }
+      // The view on the velocity, wanted where it will have turned to when late hands get there:
+      // the most turn the move gives at this speed, the way the side held turns it.
+      const float rate = -static_cast<float>(p.strafe_side) * hop_turn_rate(speed, dt);
+      float lead = rate * p.set.lead_s;
+      if (lead > 45) lead = 45;
+      if (lead < -45) lead = -45;
+      w.yaw = unwrap(vh + lead, p.yaw);
+      w.side = static_cast<float>(p.strafe_side);
+      const float err_abs = err < 0 ? -err : err;
+      if (err_abs > p.set.hop_brake && speed > s.maxspeed) w.forward = -1;
+      if (s.onground) {
+        // The landing's own command: jump (before friction) and strafe on.
+        w.jump = !p.jump_pressed;
+        if (w.jump) p.stats.hop_jumps++;
+        because = "a landing: jump on it";
+      } else {
+        w.jump = false;  // let go in the air, so the landing's press is a fresh one
+        because = "hopping: the side key, the view on the velocity";
+      }
+    } else if (p.mode == PilotMode::strafe) {
       const float tb = yaw_at(s.origin, target);
       if (s.onground) {
         w.yaw = unwrap(tb, p.yaw);
@@ -664,6 +868,7 @@ MoveCmd pilot_next(void* ctx, const Server& sv, int slot, int msec) {
     b.now[i].absmax = e.absmax;
   }
   s.movers = b.now;
+  s.world = b.world;
   if ((p.mode == PilotMode::idle || p.mode == PilotMode::arrived) && !b.goals.empty()) {
     if (p.mode == PilotMode::arrived) b.arrivals++;
     for (int32_t& d : p.barred) d = -1;
