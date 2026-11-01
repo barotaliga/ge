@@ -100,6 +100,8 @@ restore_one() {
   t=$SECONDS
   if parts="$(parts_of "$manifest")" && [[ -n "$parts" ]] &&
     xargs -d '\n' cat <<<"$parts" | tar -xf - -C "$dir"; then
+    # The saving container's counters came along; zeroed so `ccache -s` reads this one's builds.
+    [[ "$name" == ccache ]] && ccache -z >/dev/null
     echo "ccache-share: $name restored ($(du -sh "$dir" | cut -f1), $((SECONDS - t)) s) from $share" >&2
   else
     echo "ccache-share: could not read the $name save in $share; building without it" >&2
