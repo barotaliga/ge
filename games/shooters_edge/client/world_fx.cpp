@@ -32,6 +32,8 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   place_models(l, out.models);
   out.births.clear();
   out.lights.clear();
+  out.puffs.clear();
+  out.flames.clear();
 
   // The missiles: a trail over the stretch each flew since the last frame, a rocket's glow.
   s.next.clear();
@@ -158,6 +160,26 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   if (screen.medium == fx::Medium::lava || screen.medium == fx::Medium::slime)
     screen.medium = fx::Medium::air;
   fx::screen_blend(screen, out.blend_dry);
+}
+
+bool load_held_fire(HeldFire& f, std::string* error) {
+  std::vector<fx::FireRow> rows;
+  for (const view::WeaponLook& look : view::weapon_looks())
+    rows.push_back({look.muzzle, look.muzzle_knobs});
+  return fx::fire_looks(rows, view::kBuiltScale, f.looks, error);
+}
+
+void fire_held(HeldFire& f, const view::HandFrame& hand, bool on, double now_s, FxFrame& out) {
+  const auto w = static_cast<size_t>(hand.weapon);
+  const ge::render::MuzzleLook* look = on && w < f.looks.size() ? &f.looks[w] : nullptr;
+  ge::render::MuzzlePose pose;
+  for (int k = 0; k < 3; ++k) {
+    pose.at[k] = hand.muzzle_at[k];
+    pose.dir[k] = hand.muzzle_dir[k];
+    pose.up[k] = hand.muzzle_up[k];
+  }
+  fx::step_muzzle(f.shots, look, hand.fired && hand.drawn, pose, now_s, &out.births, &out.puffs,
+                  &out.flames);
 }
 
 }  // namespace shooters_edge::client

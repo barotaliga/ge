@@ -3,6 +3,7 @@
 // ge:summary The window's world frame: the BSP map, the effects, sky, bloom, post, the overlay
 // ge:keywords world-draw bsp frame create_world_draw draw_world resize_world particles
 // ge:keywords enhanced-textures texture-cache relief normal-map parallax
+// ge:keywords muzzle-fire explosions-pass hide-hands
 // ge:skill render brush shooter
 #include "shooters_edge/client/world_draw.hpp"
 
@@ -19,6 +20,7 @@
 #include "core/output.hpp"
 #include "render/bloom.hpp"
 #include "render/clouds.hpp"
+#include "render/explosions.hpp"
 #include "render/frame.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
@@ -51,6 +53,7 @@ struct WorldDraw {
   gr::Bloom bloom;
   gr::Post post[2];
   gr::Particles particles;
+  gr::Explosions explosions;  // the weapon's muzzle fire: its flames and smoke
   WorldModels models;
   std::vector<ba::Mover> movers;  // this frame's (place_brushes)
   gr::HeldModels held;
@@ -82,6 +85,7 @@ void make_targets(ge::gpu::Device& d, WorldDraw& f) {
   for (int p = 0; p < 2; ++p)
     f.post_group[p] = gr::post_group(d, f.post[p], f.targets.hdr_view, f.bloom.view);
   gr::bind_particle_targets(d, f.particles, f.targets);
+  gr::bind_explosion_targets(d, f.explosions, f.targets);
   if (f.has_map) ba::create_bsp_targets(d, f.bsp, f.targets);
   if (f.extras) bind_extras_targets(d, *f.extras, f.targets);
 }
@@ -119,6 +123,7 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   g.fov_y = h.placement.fov_y;
   g.lamps = false;
   g.hide_flame = !h.flashing;
+  g.hide_hands = !h.hands;
   vm::Probe probe;
   float rgb[3];
   const float at[3] = {static_cast<float>(view.eye[0] / ge::brush::kUnitM),
@@ -222,6 +227,7 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
         look::post_settings(p == 0 ? look::Look::classic : look::Look::modern, picture));
   gr::set_grade(d, f->post[0], look::palette_grade(grade_palette));
   gr::create_particles(d, f->pipelines, f->particles, f->layout);
+  gr::create_explosions(d, f->pipelines, f->explosions, f->layout);
   if (!weapons.empty()) {
     if (!gr::create_viewmodel(d, f->pipelines, f->held, f->layout, weapons)) {
       error =
@@ -294,6 +300,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   }
   f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
   gr::prepare_particles(d, f.particles, dt, view.near_m);
+  gr::prepare_explosions(d, f.explosions, fx.puffs, view, f.w, f.h, fx.flames);
   if (f.has_map)
     prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
                    o.mode == ba::Mode::v2 && f.picture->ce.flames);
@@ -319,6 +326,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (f.has_map) ba::encode_bsp_veil(f.bsp, f.pipelines, f.rec, e, f.targets);
   if (f.extras) encode_extras(*f.extras, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_particles(f.particles, f.pipelines, f.rec, e, f.targets, f.frame);
+  gr::encode_explosions(f.explosions, f.pipelines, f.rec, e, f.targets, f.frame);
   encode_model_sprites(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
   if (weapon) gr::encode_viewmodel(f.held, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);

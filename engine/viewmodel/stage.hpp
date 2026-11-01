@@ -12,14 +12,21 @@
 //   flash     dark, and a muzzle flash at the gun's muzzle: the shot lights its own gun.
 //   coloured  dim, a red lamp on the left and a blue one on the right.
 //
+// THE MUZZLE FLASH (`flare`) is drawn as light added over the gun: a small white-hot core at the
+// mouth, a tongue of flame along the barrel's way that cools from yellow to red as it frays out, a
+// star of short prongs round the mouth (a shot's gas leaving a muzzle brake) and a faint halo.
+// Its size is the flame's in the view (m), so a gun drawn small gets a small flame.
+//
 // ge:summary The labs' stage for a held weapon: a corridor, named lights, one first-person frame
 // ge:keywords viewmodel lab stage corridor room scene lights day dim dark torch flash coloured
-// ge:keywords draw_stage stage_lights corridor_stage
+// ge:keywords draw_stage stage_lights corridor_stage muzzle-flash flare flame-tongue prongs
+// ge:keywords hide-hands hidden
 // ge:skill render labs
 // ge:test tests/viewmodel_raster_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -47,9 +54,15 @@ std::string_view stage_light_name(StageLight kind);
 struct StageLights {
   Probe probe;
   std::vector<PointLight> lights;
-  std::vector<float> sources;     // xyz a light the room shows as a small bright box (a torch)
-  bool flare = false;             // a muzzle flash drawn at the muzzle over the gun
-  float flare_at[3] = {0, 0, 0};  // view
+  std::vector<float> sources;      // xyz a light the room shows as a small bright box (a torch)
+  bool flare = false;              // a muzzle flash drawn at the muzzle over the gun
+  float flare_at[3] = {0, 0, 0};   // view
+  float flare_dir[3] = {0, 0, 1};  // the way the shot leaves, view (unit)
+  float flare_length_m = 0.12f;    // the tongue's length in the view
+  float flare_width_m = 0.06f;     // and its width
+  float flare_heat = 1.0f;         // how bright: 1 on the shot's frame, fading to 0
+  uint32_t flare_prongs = 5;       // the star round the mouth (0: none)
+  float flare_turn = 0.3f;         // the star's turn, rad
   float floor = 0.06f;
 };
 // The lights `kind` names for a player at `view`; a flash sits at `muzzle_view` (the
@@ -64,6 +77,7 @@ struct StageShot {
   double exposure = 1.0;
   int frame_a = 0, frame_b = 0;
   double frame_t = 0;
+  std::span<const uint8_t> hidden;  // the gun's triangles not drawn, one a triangle (empty: all)
 };
 std::vector<uint8_t> draw_stage(const Stage& stage, const StageLights& lights,
                                 const camera::Pose& view, const HeldModel& gun,

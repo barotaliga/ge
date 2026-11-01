@@ -32,6 +32,7 @@
 // ge:keywords render muzzle muzzle-flash muzzle-fire weapon gun firing shot shotgun nailgun
 // ge:keywords grenade-launcher rocket-launcher flame smoke puff sparks knobs preset recoil
 // ge:keywords muzzle_looks set_muzzle_knob flame_at smoke_of shot_births muzzle_flash_at
+// ge:keywords tuned_muzzle scale_muzzle knob-list first-person-scale
 // ge:skill render
 // ge:test tests/render_muzzle_test.cpp
 #pragma once
@@ -110,6 +111,17 @@ std::span<const MuzzleKnob> muzzle_knobs();
 // Sets the knob `name` ("smoke.<knob>" for the puff's) to `value`, clamped to its range:
 // false for no such knob.
 bool set_muzzle_knob(MuzzleLook& look, std::string_view name, double value);
+
+// A preset turned by a knob list, "knob=value,knob=value" (set_muzzle_knob's names, "smoke.<knob>"
+// the puff's), into `out`: false for a preset or a knob not known, or a value that is no number.
+// A game's table of weapons names its fire this way.
+bool tuned_muzzle(std::string_view preset, std::string_view knobs, MuzzleLook* out);
+
+// Every size of `look` times `s`: the flame's length and width, the puff's radius and speed and the
+// sparks' speed (the light's range is the room's, kept). A weapon drawn at a share of its true size
+// near the eye (a first-person model, viewmodel/place.hpp's lens match) fires a flame of the same
+// share.
+void scale_muzzle(MuzzleLook& look, double s);
 
 // Where the muzzle is this frame: the barrel's tip, the unit way it points, and the gun's up
 // (unit, square to `dir`; it turns a flame's prongs with the gun's roll).

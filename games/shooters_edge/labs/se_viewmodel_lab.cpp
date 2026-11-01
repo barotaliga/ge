@@ -2,22 +2,25 @@
 // models with no classic pack, drawn in first person on the CPU in the engine's stone corridor
 // (viewmodel/stage.hpp), every frame stepped through the game's hand (view/hand.hpp):
 //
-//   - HELD: all eight at rest by day, each on its own mount and offset; per weapon, the share of
-//     the picture its box covers and where its muzzle lands on the screen.
+//   - HELD: all eight at rest by day, each on its own mount and offset, centred (the default) and
+//     to the right (HELD-RIGHT); per weapon, the share of the picture its box covers and where its
+//     muzzle lands on the screen.
 //   - FIRED: each in the dark on the frame of a shot, lit by its own muzzle flash (the hand's
-//     light, also put in the room), beside the same frame unfired; per weapon, how much the shot
-//     lifts the picture.
+//     light, also put in the room) and showing the stage's flame at the muzzle; per weapon, how
+//     much the shot lifts the picture.
 //   - SWITCH: the shotgun put away and the rocket launcher raised on the game's weapon change, a
 //     frame each 1/30 s, and the time from the change to the new weapon up.
 //   - CVARS: the shotgun as the player's cvars move it, set through a real cvar registry: the
-//     game's place, cl_gunx -0.13 (centred), r_viewmodel_fov 50 (a narrower lens: a bigger gun),
-//     cl_gunsway 0 on a turn, r_drawviewmodel 0.
+//     game's place (centred), r_viewmodel_center 0 (to the right), r_viewmodel_hands 0 (the
+//     weapon alone), r_viewmodel_fov 50 (a narrower lens: a bigger gun), cl_gunsway 0 on a turn,
+//     cl_guny -0.03, r_drawviewmodel 0.
 //
 // CPU pictures from the engine's own arithmetic, so in the digest.
 //
 // ge:summary Lab: Shooter's Edge's held weapons: every one held, fired with its light, switched
 // ge:keywords lab se-viewmodel shooters-edge viewmodel held-weapon first-person mount switch
 // ge:keywords muzzle-flash flash-light cvars r_drawviewmodel r_viewmodel_fov cl_gunx cl_gunsway
+// ge:keywords r_viewmodel_center r_viewmodel_hands centred hide-hands
 // ge:skill render labs
 // ge:test tests/shooters_edge_view_test.cpp
 #include <algorithm>
@@ -142,16 +145,27 @@ void run(ge::lab::Lab& lab) {
   vm::StageShot shot;
   shot.width = width;
   shot.height = height;
-  const se::ViewSettings game;
+  const se::ViewSettings game_default;
+  const se::ViewSettings& game = game_default;
   int problems = 0;
 
+  std::vector<uint8_t> hidden;
   auto draw = [&](const se::HandFrame& f, vm::StageLights lights, const ge::camera::Pose& v) {
     const vm::HeldModel& m = models[static_cast<size_t>(f.weapon)];
+    const se::WeaponLook& look = se::weapon_look(f.weapon);
     if (f.flashing) {
       lights.lights.push_back(f.flash);
-      lights.flare = true;
+      lights.flare = !look.muzzle.empty();
       muzzle_view(m, f.placement, lights.flare_at);
+      vm::place_vector(f.placement, m.muzzle_dir, lights.flare_dir);
+      // The flame at the gun's drawn scale: a shotgun's short star, a launcher's longer jet.
+      lights.flare_length_m = static_cast<float>(se::kBuiltScale * 0.1 * (0.6 + look.kick));
+      lights.flare_width_m = static_cast<float>(se::kBuiltScale * 0.09);
+      lights.flare_heat = static_cast<float>(f.flash.intensity / look.flash_intensity);
+      lights.flare_prongs = look.weapon == se::Weapon::rocket_launcher ? 0 : 5;
     }
+    vm::hidden_triangles(m, true, !f.hands, hidden);
+    shot.hidden = hidden;
     if (!f.drawn) {
       // A weapon not drawn: the room alone (a model of one frame and no triangles).
       vm::HeldModel none;
@@ -161,15 +175,19 @@ void run(ge::lab::Lab& lab) {
     return to_picture(vm::draw_stage(stage, lights, v, m, f.placement, shot), width, height);
   };
 
-  // Every weapon held at rest, by day.
-  {
+  // Every weapon held at rest, by day: centred (the default) and to the right.
+  for (const bool centre : {true, false}) {
+    se::ViewSettings held_as = game_default;
+    held_as.centre = centre;
     std::vector<Picture> panels;
     std::vector<std::string> labels;
     ge::lab::LabTable table{
-        "every weapon held", {"weapon", "length m", "screen share", "muzzle x", "muzzle y"}, {}};
+        centre ? "every weapon held, centred" : "every weapon held, to the right",
+        {"weapon", "length m", "screen share", "muzzle x", "muzzle y"},
+        {}};
     for (const se::WeaponLook& look : se::weapon_looks()) {
       se::Hand hand;
-      const se::HandFrame f = settle(hand, look.weapon, game, models, view, false);
+      const se::HandFrame f = settle(hand, look.weapon, held_as, models, view, false);
       const vm::HeldModel& m = models[static_cast<size_t>(look.weapon)];
       float mv[3];
       muzzle_view(m, f.placement, mv);
@@ -183,7 +201,11 @@ void run(ge::lab::Lab& lab) {
       float lo[3], hi[3];
       vm::held_bounds(b, lo, hi, 0);
       const std::string key(look.name);
-      lab.metric("share-" + key, share, "share");
+      std::string tail = centre ? "" : "right-";
+      tail += key;
+      lab.metric(std::string("share-").append(tail), share, "share");
+      lab.metric(std::string("muzzle-x-").append(tail), at[0], "share");
+      lab.metric(std::string("muzzle-y-").append(tail), at[1], "share");
       char c[4][16];
       std::snprintf(c[0], 16, "%.3f", look.upright ? hi[1] - lo[1] : hi[2] - lo[2]);
       std::snprintf(c[1], 16, "%.3f", share);
@@ -192,9 +214,12 @@ void run(ge::lab::Lab& lab) {
       table.rows.push_back({key, c[0], c[1], c[2], c[3]});
       // Held, not a toy and not the whole picture (a built weapon at its true size in hands covers
       // more than a toy-scale one did); the muzzle (the tip) on the screen.
-      if (share < 0.04 || share > 0.4) {
+      // Centred, a gun is seen down its length and covers less.
+      const double least = centre ? 0.01 : 0.03;
+      if (share < least || share > 0.4) {
         ++problems;
-        lab.note(key + ": it covers " + c[1] + " of the picture (stated 0.04..0.4)");
+        lab.note(key + ": it covers " + c[1] + " of the picture (stated " +
+                 (centre ? "0.01" : "0.03") + "..0.4)");
       }
       if (!look.upright && (at[0] < 0.02 || at[0] > 0.98 || at[1] < 0.02 || at[1] > 0.98)) {
         ++problems;
@@ -202,13 +227,19 @@ void run(ge::lab::Lab& lab) {
       }
     }
     lab.table(table);
-    lab.shot({"held", "EVERY WEAPON HELD",
-              "Shooter's Edge's eight built weapons, held in the hands, at rest in first person by "
-              "day in the stone "
-              "corridor, each on its own mount and offset from the eye, through the hand.",
-              "every muzzle points down the corridor; each weapon sits low right at about the "
-              "same size, reads as held, and the long launcher is not bigger on screen than the "
-              "shotgun by much; the melee weapon stands upright",
+    lab.shot({centre ? "held" : "held-right",
+              centre ? "EVERY WEAPON HELD, CENTRED" : "EVERY WEAPON HELD TO THE RIGHT",
+              std::string("Shooter's Edge's eight built weapons, held in the hands, at rest in "
+                          "first person by day in the stone corridor, each on its own mount and "
+                          "offset from the eye, through the hand: ") +
+                  (centre ? "centred under the crosshair, the default (r_viewmodel_center 1)."
+                          : "to the right (r_viewmodel_center 0)."),
+              centre ? "every muzzle points down the corridor from the middle of the picture's "
+                       "lower half, below the crosshair; the weapon's top stays under the middle "
+                       "line, its back leaves the bottom edge; the melee weapon stands upright"
+                     : "every muzzle points down the corridor; each weapon sits low right with its "
+                       "top well under the middle line and its back leaving the bottom right "
+                       "corner, at about the same size; the melee weapon stands upright",
               inputs},
              sheet(panels, labels, 4));
   }
@@ -295,16 +326,19 @@ void run(ge::lab::Lab& lab) {
       const char* value;
       double turn;
     };
-    const Case cases[] = {{"GAME'S PLACE", nullptr, nullptr, 0},
-                          {"CL_GUNX -0.13", "cl_gunx", "-0.13", 0},
+    const Case cases[] = {{"GAME'S PLACE (CENTRED)", nullptr, nullptr, 0},
+                          {"R_VIEWMODEL_CENTER 0", "r_viewmodel_center", "0", 0},
+                          {"R_VIEWMODEL_HANDS 0", "r_viewmodel_hands", "0", 0},
                           {"R_VIEWMODEL_FOV 50", "r_viewmodel_fov", "50", 0},
                           {"TURNING, SWAY 1", nullptr, nullptr, 3.0},
                           {"TURNING, CL_GUNSWAY 0", "cl_gunsway", "0", 3.0},
+                          {"CL_GUNY -0.03", "cl_guny", "-0.03", 0},
                           {"R_DRAWVIEWMODEL 0", "r_drawviewmodel", "0", 0}};
     std::vector<Picture> panels;
     std::vector<std::string> labels;
     for (const Case& c : cases) {
-      for (const char* n : {"cl_gunx", "r_viewmodel_fov", "cl_gunsway", "r_drawviewmodel"})
+      for (const char* n : {"cl_guny", "r_viewmodel_fov", "cl_gunsway", "r_drawviewmodel",
+                            "r_viewmodel_center", "r_viewmodel_hands"})
         cvars.reset(*cvars.find(n), ge::console::Source::local);
       if (c.name && cvars.set(c.name, c.value, ge::console::Source::local) !=
                         ge::console::SetResult::changed) {
@@ -322,14 +356,16 @@ void run(ge::lab::Lab& lab) {
     }
     lab.shot({"cvars", "THE PLAYER'S CVARS",
               "The shotgun at the game's place, then moved by the player's cvars, each set "
-              "through a cvar registry: centred (cl_gunx), a narrower lens of its own "
-              "(r_viewmodel_fov, so it is drawn bigger), half a second into a turn with the sway "
-              "and without it (cl_gunsway), and not drawn (r_drawviewmodel).",
-              "centred, the gun's muzzle sits on the middle; at 50 degrees it is bigger and its "
-              "muzzle still points down the corridor; with no sway it does not lag the turn; the "
-              "last panel is the room alone",
+              "through a cvar registry: to the right (r_viewmodel_center 0), without the hands "
+              "and arms (r_viewmodel_hands 0), a narrower lens of its own (r_viewmodel_fov, so "
+              "it is drawn bigger), half a second into a turn with the sway and without it "
+              "(cl_gunsway), lowered 3 cm (cl_guny), and not drawn (r_drawviewmodel).",
+              "to the right, the muzzle sits right of the middle; without hands the weapon alone "
+              "floats in the same place; at 50 degrees it is bigger and its muzzle still points "
+              "down the corridor; with no sway it does not lag the turn; the last panel is the "
+              "room alone",
               inputs},
-             sheet(panels, labels, 3));
+             sheet(panels, labels, 4));
   }
 
   lab.metric("problems", problems, "count");

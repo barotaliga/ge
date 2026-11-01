@@ -7,13 +7,92 @@
 // ge:test tests/viewmodel_raster_test.cpp
 #include "viewmodel/stage.hpp"
 
+#include <algorithm>
 #include <cmath>
+
+#include "core/libm/libm.hpp"
 
 #include "viewmodel/raster.hpp"
 
 namespace ge::viewmodel {
 
 namespace {
+
+// The flame's colour at `heat` (0 its frayed red edge, 1 its white-hot core), linear.
+void flame_rgb(double heat, double out[3]) {
+  const double h = std::clamp(heat, 0.0, 1.0);
+  out[0] = 1.0;
+  out[1] = 0.18 + 0.72 * h;
+  out[2] = 0.03 + 0.62 * h * h * h;
+}
+
+// A view point onto the target (pixels), through a lens of `fov_y`; false behind the eye.
+bool on_target(const ViewTarget& t, double fov_y, const double v[3], double out[2]) {
+  if (v[2] < 1e-3) return false;
+  const double ty = core::libm::tan(0.5 * fov_y);
+  const double aspect = static_cast<double>(t.width) / t.height;
+  out[0] = (0.5 + 0.5 * v[0] / (v[2] * ty * aspect)) * t.width;
+  out[1] = (0.5 - 0.5 * v[1] / (v[2] * ty)) * t.height;
+  return true;
+}
+
+// The muzzle flash as light added into the target (stage.hpp § THE MUZZLE FLASH).
+void add_flare(ViewTarget& t, const StageLights& l, double fov_y) {
+  const double heat = std::clamp(static_cast<double>(l.flare_heat), 0.0, 1.0);
+  if (heat <= 0) return;
+  const double c[3] = {l.flare_at[0], l.flare_at[1], l.flare_at[2]};
+  double e[3];
+  for (int k = 0; k < 3; ++k) e[k] = c[k] + l.flare_dir[k] * l.flare_length_m;
+  double s0[2], s1[2];
+  if (!on_target(t, fov_y, c, s0) || !on_target(t, fov_y, e, s1)) return;
+  const double px_per_m = 0.5 * t.height / (c[2] * core::libm::tan(0.5 * fov_y));
+  const double w = std::max(1.0, l.flare_width_m * px_per_m);  // the tongue's width, px
+  double ax = s1[0] - s0[0], ay = s1[1] - s0[1];
+  double len = std::sqrt(ax * ax + ay * ay);
+  if (len < 0.5 * w) {  // seen down the barrel: a round burst
+    ax = 1;
+    ay = 0;
+    len = 0.5 * w;
+  } else {
+    ax /= len;
+    ay /= len;
+  }
+  const double reach = len + 3.0 * w;  // every term is gone by here
+  const int x0 = std::max(0, static_cast<int>(s0[0] - reach));
+  const int x1 = std::min(t.width - 1, static_cast<int>(s0[0] + reach));
+  const int y0 = std::max(0, static_cast<int>(s0[1] - reach));
+  const int y1 = std::min(t.height - 1, static_cast<int>(s0[1] + reach));
+  const double n = static_cast<double>(l.flare_prongs);
+  for (int y = y0; y <= y1; ++y) {
+    for (int x = x0; x <= x1; ++x) {
+      const double dx = x + 0.5 - s0[0], dy = y + 0.5 - s0[1];
+      const double u = (dx * ax + dy * ay) / len;  // along the tongue, 0 the mouth, 1 its end
+      const double v = (dy * ax - dx * ay) / w;    // across, in widths
+      const double r = std::sqrt(dx * dx + dy * dy) / w;
+      // The tongue: widest a third of the way out, thinning to its frayed end.
+      const double half = 0.55 * (1.0 - 0.55 * std::clamp(u, 0.0, 1.0)) + 0.08;
+      const double du = (u - 0.38) / 0.62;
+      const double tongue =
+          u < -0.15 ? 0.0 : core::libm::exp(-2.2 * du * du - (v / half) * (v / half));
+      const double core_g = core::libm::exp(-r * r / 0.09);
+      double star = 0;
+      if (n > 0) {
+        const double a = core::libm::atan2(v, u) * 0.5 * n + l.flare_turn;
+        const double petal = std::fabs(core::libm::cos(a));
+        const double p2 = petal * petal, p4 = p2 * p2;
+        star = p4 * p4 * core::libm::exp(-r * r / 0.35);
+      }
+      const double halo = core::libm::exp(-r * r / 0.9);
+      const double hot = std::clamp(1.4 * core_g + tongue * (0.85 - 0.6 * u), 0.0, 1.0);
+      double rgb[3];
+      flame_rgb(hot, rgb);
+      const double i = heat * (3.5 * core_g + 1.3 * tongue + 0.7 * star + 0.12 * halo);
+      if (i < 1e-4) continue;
+      float* px = &t.rgb[(static_cast<size_t>(y) * t.width + x) * 3];
+      for (int k = 0; k < 3; ++k) px[k] += static_cast<float>(i * rgb[k]);
+    }
+  }
+}
 
 constexpr double kHalfWidth = 1.75, kHeight = 3.2, kBack = -3, kFar = 24;
 
@@ -246,37 +325,10 @@ std::vector<uint8_t> draw_stage(const Stage& stage, const StageLights& lights,
   g.skin = gun.skin.image.rgba.empty() ? nullptr : &gun.skin;
   g.fov_y = place.fov_y > 0 ? place.fov_y : view.fov_y;
   g.near_m = 0.01;
+  g.hidden = shot.hidden;
   draw_lit(t, g, lit);
 
-  // A muzzle flash: a small star of bright quads facing the eye at the muzzle.
-  if (lights.flare) {
-    Stage s;
-    const float* c = lights.flare_at;
-    const float facing[3] = {0, 0, -1};
-    const float hot[3] = {1.0f, 0.85f, 0.5f};
-    for (int k = 0; k < 2; ++k) {
-      const double r = k == 0 ? 0.05 : 0.03, w = k == 0 ? 0.012 : 0.03;
-      const double a[3] = {c[0] - r, c[1] - w, c[2]}, b[3] = {c[0] - r, c[1] + w, c[2]},
-                   e[3] = {c[0] + r, c[1] + w, c[2]}, f[3] = {c[0] + r, c[1] - w, c[2]};
-      quad(s, a, b, e, f, facing, hot);
-      const double a2[3] = {c[0] - w, c[1] - r, c[2]}, b2[3] = {c[0] - w, c[1] + r, c[2]},
-                   e2[3] = {c[0] + w, c[1] + r, c[2]}, f2[3] = {c[0] + w, c[1] - r, c[2]};
-      quad(s, a2, b2, e2, f2, facing, hot);
-    }
-    Lighting self;
-    for (int k = 0; k < 3; ++k) self.ambient[k] = 3.0f;
-    self.gloss = 0;
-    clear_depth(t);
-    DrawLit df = g;
-    df.positions = s.positions;
-    df.normals = s.normals;
-    df.indices = s.indices;
-    df.colour = s.colour;
-    df.uv = {};
-    df.skin = nullptr;
-    df.cull_back = false;
-    draw_lit(t, df, self);
-  }
+  if (lights.flare) add_flare(t, lights, g.fov_y);
   return resolve(t, shot.exposure);
 }
 

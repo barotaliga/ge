@@ -30,11 +30,25 @@ void add_view_cvars(con::Cvars& c, ViewSettings& out) {
           "the held weapon's sway, stride swing and breath, share of the game's (0 still)",
           con::CvarKind::number, 0, 2},
          &out.sway);
+  c.bind({"r_viewmodel_center", "1", con::kArchive,
+          "hold the weapon in the middle under the crosshair, the classic arena way (0: to the "
+          "right)",
+          con::CvarKind::boolean},
+         &out.centre);
+  c.bind(
+      {"r_viewmodel_hands", "1", con::kArchive,
+       "draw the hands and arms holding the weapon (0: the weapon alone)", con::CvarKind::boolean},
+      &out.hands);
 }
 
 vm::PlaceRow held_row(const WeaponLook& look, const ViewSettings& s, const vm::PlaceRow& base) {
   vm::PlaceRow r = base;
   for (int k = 0; k < 3; ++k) r.offset_m[k] = look.offset_m[k] + s.gun_m[k];
+  if (s.centre && !look.upright) {  // a melee weapon swings from the right either way
+    r.offset_m[0] = s.gun_m[0];
+    r.offset_m[1] += kCentreRiseM;
+    r.offset_m[2] -= kCentreNearM;
+  }
   r.fov_y = s.fov_deg * ge::core::kPi / 180;
   r.sway_max = base.sway_max * s.sway;
   r.sway_shift = base.sway_shift * s.sway;
@@ -71,6 +85,8 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   f.placement = vm::frame_viewmodel(row, pin, hand.place, dt, motion);
   f.switching = hand.held != hand.wanted || hand.place.lowered > 0;
   f.drawn = s.draw && hand.place.lowered < 1.0;
+  f.hands = s.hands;
+  f.fired = in.fired;
 
   if (in.fired && look.flash_s > 0) hand.flash_left = look.flash_s;
   if (hand.flash_left > 0 && look.flash_s > 0 && static_cast<size_t>(hand.held) < models.size()) {
@@ -98,6 +114,10 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
       hand.fire_t += dt;
       if (hand.fire_t * c.fps > c.count - 1) hand.fire_t = -1;
     }
+  }
+  if (static_cast<size_t>(hand.held) < models.size()) {
+    vm::muzzle_to_world(models[static_cast<size_t>(hand.held)], f.frame_a, f.frame_b, f.frame_t,
+                        f.placement, row.fov_y, view, f.muzzle_at, f.muzzle_dir, f.muzzle_up);
   }
   return f;
 }

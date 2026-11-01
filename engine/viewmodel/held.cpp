@@ -300,6 +300,33 @@ HeldModel held_with_clips(const assets::Model& model, double fps) {
   return out;
 }
 
+bool mark_hands(HeldModel& model, const assets::Model& source, std::string_view marker) {
+  model.hand.assign(model.indices.size() / 3, 0);
+  size_t tri = 0;
+  bool any = false;
+  for (const assets::Mesh& mesh : source.meshes) {
+    const size_t n = mesh.indices.size() / 3;
+    const bool hand = !marker.empty() && mesh.name.find(marker) != std::string::npos;
+    for (size_t i = 0; i < n && tri < model.hand.size(); ++i, ++tri) model.hand[tri] = hand ? 1 : 0;
+    any = any || (hand && n > 0);
+  }
+  if (!any) model.hand.clear();
+  return any;
+}
+
+void hidden_triangles(const HeldModel& model, bool flame, bool hands, std::vector<uint8_t>& out) {
+  out.clear();
+  const bool f = flame && !model.flame.empty(), h = hands && !model.hand.empty();
+  if (!f && !h) return;
+  const size_t tris = model.indices.size() / 3;
+  out.assign(tris, 0);
+  for (size_t t = 0; t < tris; ++t) {
+    const bool fl = f && t < model.flame.size() && model.flame[t] != 0;
+    const bool hd = h && t < model.hand.size() && model.hand[t] != 0;
+    out[t] = fl || hd ? 1 : 0;
+  }
+}
+
 int find_held_clip(const HeldModel& model, std::string_view name) {
   for (size_t i = 0; i < model.clips.size(); ++i)
     if (model.clips[i].name == name) return static_cast<int>(i);
