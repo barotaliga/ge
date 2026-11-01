@@ -574,7 +574,6 @@ int run_main(int argc, char** argv) {
     vsync = true;
     surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync);
     if (bench.quit_after) quit = true;
-    // The listen server's world again, its models with it.
     return rebuild_world(
         *listen.map,
         listen.server != nullptr ? cl::ModelLoad{listen.server->models, {}} : cl::ModelLoad{},
@@ -824,8 +823,7 @@ int run_main(int argc, char** argv) {
         if (!end_bench(step == cl::TimedemoStep::error ? error : "", t)) return 1;
         continue;
       }
-      // A client recording's model list may still grow after its level started: the world is
-      // made again with the whole list, so every model it names is drawn.
+      // A client recording's model list may grow after its level started: the world made again.
       if (bench_map && ds.models.size() != bench_models) {
         const cl::SearchPath& from = bench_folder.path ? *bench_folder.path : files;
         if (!rebuild_world(*bench_map, {ds.models, {}}, from)) return 1;
