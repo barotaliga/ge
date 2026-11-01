@@ -1933,12 +1933,17 @@ drain and dry by the wind and the sun). The picture reads the same numbers:
   and downwind, kept within 75 degrees of the vertical), the surface nearest the sky in each
   texel. A particle deeper than it is faded out and a splash whose spot is deeper is not set, so
   the rain falls in a courtyard and through a window as far as the wind slants it, and not in the
-  room behind the wall. Without one everything is open. The edge is a soft shadow's
-  (`PrecipShelter::spread`, the tangent of the fall's scatter): a blocker search finds how far
-  below the opening a point lies, the penumbra widens with that depth, and eight comparison taps
-  rotated by a hash of the position break it into spots, so a fall scatters out from where the
-  slant puts it instead of landing as the window's square. A particle is kept by its open share
-  against a hash of its own, so the edge thins rather than fades.
+  room behind the wall. Without one everything is open. The edge comes from the fall's scatter
+  (`PrecipShelter::spread`, the tangent of the cone of ways the gusts and eddies bring it on):
+  `render/wgsl/fall_shelter.wgsl`'s `fall_share` marches the way back up toward the sky for
+  several ways over that cone, seven steps each from 0.12 m to 10 m, and a way is open only when
+  no step lies under a surface, so a window's patch scatters out from where the slant puts it
+  and thins at its edge, rotated by a hash of the position. A soft shadow's filter (taps round
+  the point compared against its own depth) is NOT used: under a roof its taps reach out over
+  the open ground beside the building and let the weather in through the roof; a marched way
+  under a roof is shut at its first step. The particles (4 ways), the splashes (6) and a BSP
+  map's faces (8) all read the one function. A particle is kept by its open share against a
+  hash of its own, so the edge thins rather than fades.
 - THE RAIN ON WATER (M36d): `Weather::rain` (mm/h of liquid) rides in the frame's `mist.zw` as
   the drops of 2 mm and more landing a square metre a second (`wind::drops_per_m2s`) and their
   mean size (`wind::mean_drop_over`); `water.wgsl`'s `rain_rings` deals them to cells and rings
@@ -1958,8 +1963,8 @@ it in every face's material (`weathered` in `bsp.wgsl`): what faces the fall and
 is wet, a flat's low noise pools into puddles that the drops ring while it rains, what faces up
 gathers the snow in drifts (a thin cover in the hollows first, the floor showing between), and a
 flash lights what is open overhead and a little round the rooms. The open sky and the windows
-decide all of it, through a soft edge whose spread is the eddies over the fall's pace (snow,
-slow, scatters wider than rain), with the wet and the snow struck in noise spots across it: lab `gpu-bsp-weather` (the weather fixture, a hall with windows onto a yard and
+decide all of it, through a cone of ways marched through the map whose spread is the eddies
+over the fall's pace (snow, slow, scatters wider than rain), with the wet and the snow struck in noise spots across it: lab `gpu-bsp-weather` (the weather fixture, a hall with windows onto a yard and
 a store behind it) shows eight weathers in four views and checks, with no GPU, that a ray back up
 the fall leaves by the sky from the yard and the window's patch and is stopped from the store.
 

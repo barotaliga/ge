@@ -14,12 +14,13 @@
 //   ground a pixel covers).
 //
 // Under a SHELTER map (`sp.shelter_info.x` 1) a particle and a splash are kept by how open the
-// way they fell is: like a soft shadow, the edge of what the fall reaches widens with how far
-// below the face that shelters it a point lies (`spread`, the way the gusts and eddies scatter the
-// drops), and that share of the particles and splashes is kept, scattered. Premultiplied over the picture; the motion target's reactive channel only.
+// way they fell is: the share of a cone of ways round the fall (`spread`, the way the gusts and
+// eddies scatter the drops) that reach them from the sky, each marched back up through the map
+// (render/wgsl/fall_shelter.wgsl), and that share of the particles and splashes is kept, scattered. Premultiplied over the picture; the motion target's reactive channel only.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/terrain_common.wgsl"
 #include "render/wgsl/precip_types.wgsl"
+#include "render/wgsl/fall_shelter.wgsl"
 
 @group(1) @binding(0) var<uniform> ground: TerrainParams;
 @group(1) @binding(1) var horizon0: texture_2d<f32>;
@@ -50,51 +51,17 @@ fn culled() -> VertexOut {
   return out;
 }
 
-// How open the way the fall came to the world point `p` is: 1 with no shelter map or off its
-// edge, else the share of four taps a texel apart that see the sky along the fall.
-fn open_to_fall(p: vec3f) -> f32 {
+// How open the way the fall came to the world point `p` is: 1 with no shelter map, else the
+// share of `rays` ways round the fall that reach it from the sky (render/wgsl/fall_shelter.wgsl,
+// the same test the game's renderer wets and snows its faces by).
+fn open_to_fall(p: vec3f, rays: i32) -> f32 {
   if (sp.shelter_info.x < 0.5) {
     return 1.0;
   }
-  let q = p - sp.shelter_o.xyz;
-  let half = sp.shelter_o.w;
-  let uv = vec2f(0.5 + 0.5 * dot(q, sp.shelter_x.xyz) / half,
-                 0.5 - 0.5 * dot(q, sp.shelter_y.xyz) / half);
-  if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) {
-    return 1.0;
-  }
-  let depth = sp.shelter_info.y;
-  let z = (dot(q, sp.shelter_z.xyz) + depth) / (2.0 * depth) - 0.002;
-  let layer = i32(sp.shelter_info.z);
-  let spread = sp.shelter_x.w;
-  let size = f32(textureDimensions(shelter_maps).x);
-  // The blocker: the faces nearer the sky than `p` within the widest edge the spread could give.
-  let reach_m = min(spread * 10.0, 4.0);
-  var blocker = 0.0;
-  var blocked = 0.0;
-  for (var k = 0; k < 9; k++) {
-    let o = vec2f(f32(k % 3) - 1.0, f32(k / 3) - 1.0) * reach_m * 0.5 / half;
-    let t = clamp(vec2i((uv + o) * size), vec2i(0), vec2i(i32(size) - 1));
-    let d = textureLoad(shelter_maps, t, layer, 0);
-    if (d < z) {
-      blocker += d;
-      blocked += 1.0;
-    }
-  }
-  if (blocked < 0.5) {
-    return 1.0;
-  }
-  // The edge widens with how far below its blocker `p` lies along the fall.
-  let below = max(z - blocker / blocked, 0.0) * 2.0 * depth;
-  let edge = max(below * spread, sp.shelter_info.w) * 0.5 / half;
-  var seen = 0.0;
-  for (var k = 0; k < 8; k++) {
-    let r = sqrt((f32(k) + 0.5) / 8.0);
-    let a = f32(k) * 2.3999632;
-    seen += textureSampleCompareLevel(shelter_maps, shelter_cmp,
-                                      uv + vec2f(cos(a), sin(a)) * r * edge, layer, z);
-  }
-  return seen / 8.0;
+  let m = FallMap(sp.shelter_o.xyz, sp.shelter_x.xyz, sp.shelter_y.xyz, sp.shelter_z.xyz,
+                  sp.shelter_o.w, sp.shelter_info.y, i32(sp.shelter_info.z));
+  let turn = fract(sin(dot(floor(p * 23.0), vec3f(12.9898, 78.233, 37.719))) * 43758.5453);
+  return fall_share(shelter_maps, shelter_cmp, m, p, sp.shelter_x.w, rays, turn * 6.2831853);
 }
 
 fn hash2(n: u32) -> vec2f {
@@ -144,7 +111,7 @@ fn splash_vertex(s: u32, vid: u32) -> VertexOut {
     return culled();
   }
   // Only where the fall reaches: lifted a little toward the sky, off the surface it lands on.
-  let reached = open_to_fall(rel + frame.eye.xyz - sp.shelter_z.xyz * 0.08 + n * 0.02);
+  let reached = open_to_fall(rel + frame.eye.xyz - sp.shelter_z.xyz * 0.08 + n * 0.02, 6);
   if (reached < hash2(cycle * 13u + s).x) {
     return culled();
   }
@@ -183,7 +150,7 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
   var fade = (1.0 - smoothstep(0.7, 1.0, edge)) * smoothstep(0.25, 0.8, dist);
   if (fade > 0.0) {
     // Where only a share of the fall reaches, that share of the particles: scattered, not faded.
-    let share = open_to_fall(f.xyz);
+    let share = open_to_fall(f.xyz, 4);
     fade *= smoothstep(0.0, 0.15, share - hash2(iid * 2654435761u + 17u).x * 0.9);
   }
   if (fade <= 0.0) {
