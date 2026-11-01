@@ -284,7 +284,7 @@ characters.
 | `engine/texgen/` | Procedural textures (`ge::texgen`, `docs/textures.md`): the `.tex` recipe, tileable noise, the layer kinds, the bake to maps and its disk cache; `library/` the specimens | `textures` |
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
-| `engine/vfs/` | Content files (`ge::vfs`): the pack archive's checked directory and its files as views into it; search paths, zips and directories to come (M18a) | `vfs` |
+| `engine/vfs/` | Content files (`ge::vfs`): packs, zips, the search path, wads; the one file inside gzip, zstd, xz, tar, zip or 7z; the zstd stream recordings are packed with (M18a, M23j) | `vfs` |
 | `engine/input/` | Input devices (`ge::input`, `docs/input.md`): the device model, events, state, dead zones, actions and bindings, rebinding, wheels' roles, touch, players, feedback, the event log, simulated devices | `input` |
 | `engine/camera/` | The camera (`ge::camera`, `docs/camera.md`): poses, followers, the rigs (first person, boom, mounted, orbit, planted, free), shake, transitions, the stack, the scripted subjects | `camera` |
 | `engine/viewmodel/` | The first-person held weapon (`ge::viewmodel`, `docs/rendering.md` § The view model): its form and grip mount, its place in the view, its light from the world, the CPU reference | `render`, `camera` |

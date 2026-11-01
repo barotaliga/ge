@@ -54,11 +54,12 @@ struct TeamMatchOptions {
   std::string locs_from;  // where it was read from
   const ge::progs::Progs* progs = nullptr;  // the baseline mod, compiled
   TeamSide teams[2] = {TeamSide("red", 4), TeamSide("blue", 13)};
-  int frames = 46154;  // server frames of 13 ms (ten minutes)
-  int timelimit = 0;   // minutes the mod ends the match at (0: none)
-  uint32_t seed = 1;   // the mod's generator; fighter k's hands seed + 31 k
-  bool record = true;  // keep the multiview recording
-  int path_every = 8;  // a path point every this many frames
+  int frames = 46154;   // server frames of 13 ms (ten minutes)
+  int timelimit = 0;    // minutes the mod ends the match at (0: none)
+  uint32_t seed = 1;    // the mod's generator; fighter k's hands seed + 31 k
+  bool record = true;   // keep the multiview recording
+  bool packed = false;  // record it packed (classic_record.hpp: a `.mvdz`)
+  int path_every = 8;   // a path point every this many frames
 };
 
 struct TeamPlayer {

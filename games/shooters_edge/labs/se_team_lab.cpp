@@ -9,7 +9,8 @@
 // strip (hold, rush, carry, free, dead); and each team's frags against time. The table gives each
 // player's frags, deaths, shots, shots held for a teammate, backpacks, his share of time in each
 // role and the weapon he held most; the teams' rows their totals, rushes and quads. The recording
-// is attached (`match.mvd`); `--out` writes it to a path as well.
+// is attached (`match.mvd`); `--save` writes it to a path as well, packed as it is recorded when
+// the path ends in `z` (`.mvdz`: net/classic_record.hpp).
 //
 // ge:summary Lab: a recorded 4on4 of bots on teamplay: roles, key areas, frags by team, the MVD
 // ge:keywords lab se-team team-game 4on4 teamplay roles hold rush carry quad key-area mvd record
@@ -130,6 +131,8 @@ void run(gl::Lab& lab) {
   o.locs_from = locs_from;
   o.progs = &progs;
   o.seed = seed;
+  const std::string save = lab.arg("save");
+  o.packed = save.ends_with("z");  // a `.mvdz`: recorded packed as it goes
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
   if (!r.ok) {
@@ -448,8 +451,8 @@ void run(gl::Lab& lab) {
       gl::to_picture(gl::line_chart(ch).plot));
 
   if (!r.mvd.empty()) {
-    lab.attach("match.mvd", r.mvd, gl::Det::deterministic);
-    const std::string out = lab.arg("save");
+    lab.attach(o.packed ? "match.mvdz" : "match.mvd", r.mvd, gl::Det::deterministic);
+    const std::string& out = save;
     if (!out.empty()) {
       std::ofstream f(out, std::ios::binary);
       f.write(reinterpret_cast<const char*>(r.mvd.data()),
@@ -476,7 +479,7 @@ const gl::LabSpec kSpec{
         {"game", ge::classicenhance::kProfiles[0].base_dir.data(),
          "the game folder under --basedir"},
         {"map", "", "with --basedir: the map (e1m2 when empty)"},
-        {"save", "", "also write the recording to this path"},
+        {"save", "", "also write the recording to this path (ending in z, .mvdz: packed)"},
         {"locs", "",
          "the map's place names (a .loc file); else the game folder's locs/<map>.loc, else the "
          "items'"},

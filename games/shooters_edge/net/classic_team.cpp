@@ -27,6 +27,7 @@
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/classic_server.hpp"
@@ -311,7 +312,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   if (!classic_start(*server, *qc, st, cfg, r.error)) return r;
   MultiviewRecorder mvd;
   if (opt.record) {
-    mvd_start(mvd, false);
+    mvd_start(mvd, false, opt.packed ? cl::kDefaultPackLevel : 0);
     server->mvd = &mvd;
   }
 

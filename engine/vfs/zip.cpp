@@ -3,12 +3,14 @@
 // read for where the data really starts.
 //
 // ge:summary The zip reader and the stored-zip writer for tests
-// ge:keywords zip central directory local header eocd deflate crc32
+// ge:keywords zip central directory local header eocd deflate crc32 zip-lzma zip-zstd method
 // ge:skill vfs
 // ge:test tests/vfs_zip_test.cpp
 #include "vfs/zip.hpp"
 
 #include "core/inflate.hpp"
+#include "vfs/lzma.hpp"
+#include "vfs/zstd.hpp"
 
 namespace ge::vfs {
 
@@ -105,9 +107,10 @@ bool read_zip(std::span<const uint8_t> bytes, Zip* out, std::string* error) {
       *error = where + " ('" + e.name + "') is encrypted";
       return false;
     }
-    if (e.method != 0 && e.method != 8) {
+    if (e.method != 0 && e.method != 8 && e.method != 14 && e.method != 93) {
       *error = where + " ('" + e.name + "') uses method " + std::to_string(e.method) +
-               "; only stored (0) and deflated (8) are read";
+               "; only stored (0), deflated (8), LZMA (14) and zstd (93) are read; next: "
+               "repack it with one of those";
       return false;
     }
     if (uint64_t(local) + 30 > bytes.size() || u32(bytes, local) != 0x04034b50) {
@@ -143,6 +146,17 @@ bool zip_unpack(std::span<const uint8_t> bytes, const ZipEntry& entry, std::vect
       return false;
     }
     out->assign(packed.begin(), packed.end());
+  } else if (entry.method == 93 || entry.method == 14) {
+    bool truncated = false;
+    std::string why;
+    const bool ok = entry.method == 93 ? zstd_unpack(packed, *out, truncated, why, entry.size)
+                                       : zip_lzma_unpack(packed, entry.size, *out, why);
+    if (!ok || truncated || out->size() != entry.size) {
+      *error = "zip: entry '" + entry.name + "' does not unpack to its " +
+               std::to_string(entry.size) + " bytes (" + (ok ? "cut short" : why) +
+               "); the archive is damaged: fetch it again";
+      return false;
+    }
   } else {
     auto bytes_out = core::inflate_raw(packed, entry.size);
     if (!bytes_out) {

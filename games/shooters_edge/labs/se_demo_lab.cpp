@@ -275,7 +275,8 @@ const gl::LabSpec kSpec{
     "What does a recorded game hold: does every frame read, who played, where did each player go "
     "and what happened to his health?",
     {
-        {"file", "", "a demo's path (plain or gzip); empty: a multiview recording written in code"},
+        {"file", "",
+         "a demo's path (plain, packed or in an archive); empty: a recording written in code"},
         {"track", "-1",
          "the slot the view rides in a multiview recording (-1: the lowest playing)"},
     },
