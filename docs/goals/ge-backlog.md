@@ -244,6 +244,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge qc build/disasm/run/trace/profile/diff/assemble/builtins` (our QC compiler; a progs disassembled, run, traced a step at a time, timed by function, diffed against another build by the functions and fields that changed, and assembled from a text listing; `ge qc builtins <progs>`: the builtin numbers a progs calls, checked against the game's catalogue, so "will this mod run here" is one command)
 - `ge server --map --bots --for` (a headless dedicated server with bots, writing an input log for `ge replay`, `ge state` and `ge diverge`; run, replayed and diffed from a game repo as well, which the lobby and hosting thread asked for)
 - `ge demo info/frames/shot/diff` (a client or MVD demo decoded frame by frame, a frame pictured, two demos to their first difference)
+- `ge demo shot <demo> --at=<s> --video` (one frame of `-demovideo` at a given time written as a PNG, its overlays (voice, team, captions) drawn as the export draws them, with no encoder and no full run, so an overlay is checked in seconds; demo video thread)
 - `ge net inspect --protocol=<name>` (pluggable decoders, so a capture of the classic protocol reads as its messages)
 - `ge pmove <scenario>` (a movement scenario's trajectory as a table and a chart, against its parity recording)
 - `ge console <target> "<command>"` (a console command or cvar run in a headless server or client, its output returned)
