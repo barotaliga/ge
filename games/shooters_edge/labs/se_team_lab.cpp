@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "brush/write.hpp"
+#include "classicenhance/profile.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
@@ -411,7 +412,8 @@ const gl::LabSpec kSpec{
         {"minutes", "10", "the match's length"},
         {"seed", "1", "the mod's and the fighters' seed"},
         {"basedir", "", "a folder holding a game folder: play one of its maps"},
-        {"game", "id1", "the game folder under --basedir"},
+        {"game", ge::classicenhance::kProfiles[0].base_dir.data(),
+         "the game folder under --basedir"},
         {"map", "", "with --basedir: the map (e1m2 when empty)"},
         {"save", "", "also write the recording to this path"},
         {"locs", "",

@@ -462,6 +462,13 @@ by `se-campaign --progs=games/shooters_edge/qc/campaign/progs.src`. What both va
   `se-mod` lab is the front end: `make lab LAB=se-mod ARGS="--progs=<file> --bots=4
   --timelimit=1"` plays a match against bots on the test arena and draws it. The game window
   takes it as `-progs <file>` (§ Playing it); the dedicated server (M18f) takes the same flag.
+- **Or ship it in the mod's folder**: with no `-progs`, the window looks through the game's
+  files (the mod's folder over the base game's, § Playing it) for the game profile's
+  multiplayer program files in order, `qwprogs.dat` and then `progs.dat`
+  (`games/shooters_edge/profiles/game_profile.hpp`), and runs the first of the multiplayer
+  form; so `-game mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
+  over (the base game's own `progs.dat` is its campaign, found the same way for SINGLE
+  PLAYER), and with none the baseline mod runs; the status line says which.
 - **Line numbers in faults**: put the line table beside the file as `<file>.lines` (a line
   number per statement, the sidecar `ge qc` reads: `parse_lines` in `plugins/progs/file.hpp`). Without it a fault names the function and the
   statement.
