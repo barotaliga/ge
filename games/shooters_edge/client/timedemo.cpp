@@ -279,6 +279,14 @@ TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
     if (r == DemoRead::error) return TimedemoStep::error;
     if (r == DemoRead::end) return TimedemoStep::end;
     const DemoState& s = t.demo.state;
+    if (t.hear) {  // the frame's own sounds and lines, kept for the next draw
+      DemoHeard& h = t.heard;
+      h.started.insert(h.started.end(), s.started.begin(), s.started.end());
+      h.stopped.insert(h.stopped.end(), s.stopped.begin(), s.stopped.end());
+      h.voice.insert(h.voice.end(), s.voice.begin(), s.voice.end());
+      h.prints.insert(h.prints.end(), s.prints.begin(), s.prints.end());
+      if (!s.centre.empty()) h.centre = s.centre;
+    }
     if (s.map.empty()) continue;  // the signon before the level's map is named: nothing to draw
     if (s.levels != t.levels) {
       t.levels = s.levels;
@@ -338,6 +346,7 @@ TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error) {
   }
   t.clock = t.demo.state.time;
   t.skip = 0;
+  t.heard.clear();  // what the seek read past is not played
   if (out == TimedemoStep::end) return out;
   return t.levels != level_before || t.demo.state.map != map_before ? TimedemoStep::new_level
                                                                     : TimedemoStep::frame;

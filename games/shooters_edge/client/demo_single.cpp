@@ -272,8 +272,12 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           s.time = m.f32();
           break;
         case kPrint:
-        case kStuffText:
+          s.prints.push_back({2, m.str()});
+          break;
         case kCenterPrint:
+          s.centre = m.str();
+          break;
+        case kStuffText:
         case kFinale:
         case kCutscene:
           m.str();

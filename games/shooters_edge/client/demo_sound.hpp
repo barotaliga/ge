@@ -26,6 +26,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -59,6 +60,12 @@ class DemoSounds {
   // The frame just read: its sounds started and stopped, every sound on an entity moved with it,
   // the listener at the eye riding `listener` (its own sounds centred); `dt` moves the ambience.
   void frame(const DemoState& s, int listener, float dt);
+  // The same with the sounds started and stopped given apart from the frame: a window that reads
+  // several demo frames a draw plays what they all carried (timedemo.hpp's `DemoHeard`).
+  void frame(const DemoState& s, std::span<const DemoSound> started,
+             std::span<const std::pair<int, int>> stopped, int listener, float dt);
+  // Every sound and loop stopped and the ambience silenced (the demo stopped).
+  void silence();
 
   const DemoSoundStats& stats() const { return stats_; }
 
