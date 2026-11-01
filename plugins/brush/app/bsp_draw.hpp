@@ -197,6 +197,7 @@ struct BspDraw {
   uint32_t range[kKinds][2] = {};
   wgpu::Texture atlas, light;
   wgpu::Texture surface;  // the textures' relief (Scene::surface), or a 1 x 1 flat stand-in
+  wgpu::Texture cover;    // how solid each texel is (Scene::cover), or a 1 x 1 solid stand-in
   // The scene's rebaked light (RGB9E5) and its direction (RGBA8), or 1 x 1 stand-ins.
   wgpu::Texture rebake_rgb, rebake_dir, rebake_bounce;
   wgpu::Buffer uniform, lights, jobs;

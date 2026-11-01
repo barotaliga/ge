@@ -198,7 +198,7 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     // The map's textures as the game's adapter reads them.
     std::vector<uint8_t> picture_store;
     const std::vector<ge::brush::MapPicture> pictures =
-        game.map_textures(game, files, map.file, picture_store);
+        game.map_textures(game, files, map.name, map.file, picture_store);
     source.pictures = &pictures;
     ba::Pack pack;  // the map file alone, as the scene reader takes it
     pack.bytes = map.file;

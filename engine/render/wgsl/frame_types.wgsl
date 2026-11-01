@@ -3,36 +3,61 @@
 // with an infinite far plane (1 at the near plane, 0 at infinity).
 
 struct Frame {
-  view_proj: mat4x4f,      // camera-relative world -> clip, jittered
-  inv_view_proj: mat4x4f,  // clip -> camera-relative world, jittered
-  prev_view_proj: mat4x4f, // the last frame's camera-relative world -> clip, unjittered
-  eye: vec4f,              // world xyz (m); w: the eye's altitude over the sea, km
-  sun: vec4f,              // unit direction toward the key light; w: its illuminance, pre-exposed
-  size: vec4f,             // render width, height, 1/width, 1/height
-  time: vec4f,             // seconds, frame number, the lamps' light the eye adapted to (a white
+  // camera-relative world -> clip, jittered
+  view_proj: mat4x4f,
+  // clip -> camera-relative world, jittered
+  inv_view_proj: mat4x4f,
+  // the last frame's camera-relative world -> clip, unjittered
+  prev_view_proj: mat4x4f,
+  // world xyz (m); w: the eye's altitude over the sea, km
+  eye: vec4f,
+  // unit direction toward the key light; w: its illuminance, pre-exposed
+  sun: vec4f,
+  // render width, height, 1/width, 1/height
+  size: vec4f,
+  // seconds, frame number, the lamps' light the eye adapted to (a white
+  time: vec4f,
                            // face's luminance, the frame's units: render/view.hpp's lamp_lux), the
                            // scene's own light the eye adapts to (pre-exposed: FrameView::adapt_cd)
-  world: vec4f,            // y = 0's altitude over the sea (km), the pre-exposure (light's stored
+  // y = 0's altitude over the sea (km), the pre-exposure (light's stored
+  world: vec4f,
                            // scale), the moon's direct light while the sun keys, 1: the haze is the moon's
-  planes: array<vec4f, 6>, // the frustum: left, right, bottom, top, near (and one zero)
-  eye_delta: vec4f,        // this eye minus the last frame's, m
-  jitter: vec4f,           // the sub-pixel offset: render pixels (x right, y down), then uv
-  weather: vec4f,          // the sun's pass, the deck's cover, the fog's extinction (1/m), the hidden
-  deck: vec4f,             // rgb: the deck's tint times its light; w: its grey overhead over the horizon's
-  moon: vec4f,             // unit direction toward the moon; w: its illuminance, pre-exposed
-  moon_light: vec4f,       // the lit surface's luminance, the earthlit part's, the angular radius, 1 if the key
-  night_sun: vec4f,        // unit direction toward the real sun; w: its illuminance, pre-exposed
-  night: vec4f,            // the dark sky's zenith luminance, its light, the sidereal angle, latitude
-  cloud_info: vec4f,       // the cloud's layers drawn, the share of the march's steps, 1 if spread, the stamp
-  clouds: array<vec4f, 24>, // six a layer (render/clouds.hpp's `cloud_rows`)
-  moon_pole: vec4f,        // the moon's north pole (world); w: the umbra's angular radius
-  moon_prime: vec4f,       // toward its 0 N 0 E; w: the penumbra's angular radius
-  moon_east: vec4f,        // toward its 0 N 90 E; w: the disc's brightest light under the shadow
-  moon_shadow: vec4f,      // toward the Earth's shadow's axis; w: the albedo map's scale
-  mist: vec4f,             // x, y: the reach's mist: where it begins and where it closes, m (0: none);
+  // the frustum: left, right, bottom, top, near (and one zero)
+  planes: array<vec4f, 6>,
+  // this eye minus the last frame's, m
+  eye_delta: vec4f,
+  // the sub-pixel offset: render pixels (x right, y down), then uv
+  jitter: vec4f,
+  // the sun's pass, the deck's cover, the fog's extinction (1/m), the hidden
+  weather: vec4f,
+  // rgb: the deck's tint times its light; w: its grey overhead over the horizon's
+  deck: vec4f,
+  // unit direction toward the moon; w: its illuminance, pre-exposed
+  moon: vec4f,
+  // the lit surface's luminance, the earthlit part's, the angular radius, 1 if the key
+  moon_light: vec4f,
+  // unit direction toward the real sun; w: its illuminance, pre-exposed
+  night_sun: vec4f,
+  // the dark sky's zenith luminance, its light, the sidereal angle, latitude
+  night: vec4f,
+  // the cloud's layers drawn, the share of the march's steps, 1 if spread, the stamp
+  cloud_info: vec4f,
+  // six a layer (render/clouds.hpp's `cloud_rows`)
+  clouds: array<vec4f, 24>,
+  // the moon's north pole (world); w: the umbra's angular radius
+  moon_pole: vec4f,
+  // toward its 0 N 0 E; w: the penumbra's angular radius
+  moon_prime: vec4f,
+  // toward its 0 N 90 E; w: the disc's brightest light under the shadow
+  moon_east: vec4f,
+  // toward the Earth's shadow's axis; w: the albedo map's scale
+  moon_shadow: vec4f,
+  // x, y: the reach's mist: where it begins and where it closes, m (0: none);
+  mist: vec4f,
                            // z: the rain's drops of 2 mm and more landing a m^2 a
                            // second; w: their mean size, mm
-  wet: vec4f,              // the wet ground: the film's share, the puddles' share; the snow's
+  // the wet ground: the film's share, the puddles' share; the snow's
+  wet: vec4f,
                            // cover on what faces up; a lightning flash's light over the open sky
   // The sky's style (render/sky_style.hpp's `style_rows`): 0 the Rayleigh scales, the dust's;
   // 1 the dust's absorption scales, the ozone's; 2 the sun's disc's tint, its size; 3 toward the
@@ -46,7 +71,8 @@ struct Frame {
   // at its phase, pre-exposed; 3 its tint, Lambert's share; 4 its semi-axes against the longest,
   // its dents; 5 its haze.
   moons: array<vec4f, 24>,
-  fog: vec4f,              // the fog in areas (render/fog.hpp): its range (m; 0: none), its slices
+  // the fog in areas (render/fog.hpp): its range (m; 0: none), its slices
+  fog: vec4f,
   // The sea of fog in the valleys (render/valley_fog.hpp): 0 its top over the eye (m), its
   // extinction (1/m; 0 none), its edge (m), its wave (m); 1 one over the noise's tile (1/m), the
   // noise's offset at the eye (x, z), its albedo.

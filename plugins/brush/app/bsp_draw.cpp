@@ -56,7 +56,7 @@ void upload(gpu::Device& device, const wgpu::Texture& t, const Atlas& a) {
     dst.mipLevel = k;
     wgpu::TexelCopyBufferLayout layout{};
     const uint32_t w = a.width >> k, h = a.height >> k;
-    layout.bytesPerRow = w * 4;
+    layout.bytesPerRow = uint32_t(a.levels[k].size() / std::max(h, 1u));  // 4 bytes a texel, or 1
     layout.rowsPerImage = h;
     const wgpu::Extent3D size{w, h, 1};
     device.queue.WriteTexture(&dst, a.levels[k].data(), a.levels[k].size(), &layout, &size);
@@ -220,6 +220,21 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
       upload(device, d.surface, flat);
     }
   }
+  {
+    // The cover (draw_data.hpp's Scene::cover), or a 1 x 1 solid stand-in the shader skips.
+    const bool has = !scene.cover.levels.empty();
+    const uint32_t w = has ? scene.cover.width : 1, h = has ? scene.cover.height : 1;
+    d.cover = r::make_texture(device, "bsp.cover", w, h, 1, wgpu::TextureFormat::R8Unorm, sampled,
+                              has ? scene.cover.mips : 1);
+    if (has) {
+      upload(device, d.cover, scene.cover);
+    } else {
+      Atlas solid;
+      solid.width = solid.height = 1;
+      solid.levels.push_back({255});
+      upload(device, d.cover, solid);
+    }
+  }
   d.light = r::make_texture(device, "bsp.lightmaps", scene.light.width, scene.light.height, 1,
                             wgpu::TextureFormat::RGBA8Unorm, sampled);
   upload(device, d.light, scene.light);
@@ -301,13 +316,14 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
       device, "bsp",
       {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler, Slot::storage_read,
        Slot::depth_array, Slot::compare, Slot::depth_array, Slot::texture, Slot::texture,
-       Slot::storage_read, Slot::storage_read, Slot::texture, Slot::texture},
+       Slot::storage_read, Slot::storage_read, Slot::texture, Slot::texture, Slot::texture},
       both);
-  d.group = r::make_group(
-      device, "bsp", d.layout,
-      {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler, d.lights,
-       d.cubes_view, d.compare, d.orthos_view, d.rebake_rgb.CreateView(), d.rebake_dir.CreateView(),
-       d.frames, d.movers, d.surface.CreateView(), d.rebake_bounce.CreateView()});
+  d.group =
+      r::make_group(device, "bsp", d.layout,
+                    {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler,
+                     d.lights, d.cubes_view, d.compare, d.orthos_view, d.rebake_rgb.CreateView(),
+                     d.rebake_dir.CreateView(), d.frames, d.movers, d.surface.CreateView(),
+                     d.rebake_bounce.CreateView(), d.cover.CreateView()});
   d.fix_layout = r::make_layout(device, "bsp.sky", {Slot::texture, Slot::uniform},
                                 wgpu::ShaderStage::Fragment);
   d.shadow_layout = r::make_layout(device, "bsp.shadows", {Slot::storage_read}, both);
