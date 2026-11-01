@@ -13,15 +13,21 @@
 // within `kStray` m, with its width at each bend (straight across to the edges of the narrowest
 // mapped piste area it lies in), and the woods: the forest the map draws rasterised onto the
 // face's height grid and binned by height into the tree line (the top of the highest of
-// `kLineBins` bins still `kLineCover` wooded) and `kWoodsBands` bands' cover. `--write` writes
+// `kLineBins` bins still `kLineCover` wooded) and `kWoodsBands` bands' cover. The LAKES are every
+// standing water the map draws (a lake, a reservoir, a pond; a river's or a canal's area is
+// flowing water and is not one), each its outer shore: a closed way, or a multipolygon's outer
+// members joined into rings, clipped to the map's square, thinned to the bends that keep it within
+// `kShoreStray` m, and kept where `kSmallestLake` m² or more of it lies on the map, the largest
+// first, `kMostLakes` at most. `--water` bakes the lakes alone into the hints the tree has, the
+// lifts, the pistes and the woods kept bit for bit. `--write` writes
 // the faces baked and the index (plugins/mountain/mapgen/real_hints/), run from the repository's
 // root. A hint file is GENERATED: never edited by hand. Nothing is kept by name.
 //
 // The map data: © OpenStreetMap contributors, under the Open Database Licence (ODbL 1.0); the
 // baked hints are a derived database under the same licence.
 //
-// ge:summary Lab: the real faces' lifts, pistes and woods, read, drawn and baked off the map data
-// ge:keywords lab real-hints bake openstreetmap lifts pistes woods tree-line r25 picture
+// ge:summary Lab: the real faces' lifts, pistes, woods and lakes, read, drawn and baked off the map
+// ge:keywords lab real-hints bake openstreetmap lifts pistes woods tree-line r25 picture lakes
 // ge:skill mountain labs
 // ge:test tests/lab_runner_test.cpp
 #include <algorithm>
@@ -71,6 +77,10 @@ constexpr int kLineBins = 48;
 constexpr int kLineCells = 12;
 constexpr double kLineCover = 0.05;
 constexpr double kLeast = 0.01;
+// The lakes: how far a shore may stray, m; the least of one on the map, m²; the most kept a face.
+constexpr double kShoreStray = 4;
+constexpr double kSmallestLake = 2500;
+constexpr size_t kMostLakes = 24;
 
 using Pt = mg::PlanPoint;
 using Ring = std::vector<Pt>;
@@ -428,24 +438,193 @@ std::optional<mg::HintWoods> woods_by_height(const std::vector<uint8_t>& wooded,
   return out;
 }
 
+// Whether a way's or a relation's tags draw standing water.
+bool is_lake(const std::map<std::string, std::string>& tags) {
+  const auto at = [&](const char* k) {
+    const auto it = tags.find(k);
+    return it == tags.end() ? std::string() : it->second;
+  };
+  const std::string water = at("water");
+  if (water == "river" || water == "canal" || water == "stream" || water == "ditch" ||
+      water == "drain" || water == "wastewater" || water == "lock" || water == "fish_pass")
+    return false;
+  return at("natural") == "water" || at("landuse") == "reservoir";
+}
+
+// The area a ring holds, m² (its sign its winding).
+double signed_area(const Ring& ring) {
+  double a = 0;
+  for (size_t i = 0, j = ring.size() - 1; i < ring.size(); j = i++) {
+    a += ring[j].x * ring[i].z - ring[i].x * ring[j].z;
+  }
+  return a / 2;
+}
+
+// The ring clipped to the map's square (Sutherland–Hodgman, one edge of the square at a time).
+Ring clip_to_map(const Ring& ring) {
+  Ring out = ring;
+  const auto pass = [&](auto in_side, auto cut) {
+    Ring next;
+    for (size_t i = 0; i < out.size(); i++) {
+      const Pt a = out[(i + out.size() - 1) % out.size()];
+      const Pt b = out[i];
+      if (in_side(b)) {
+        if (!in_side(a)) next.push_back(cut(a, b));
+        next.push_back(b);
+      } else if (in_side(a)) {
+        next.push_back(cut(a, b));
+      }
+    }
+    out = std::move(next);
+  };
+  const auto at_x = [](double x) {
+    return [x](Pt a, Pt b) { return Pt{x, a.z + (b.z - a.z) * (x - a.x) / (b.x - a.x)}; };
+  };
+  const auto at_z = [](double z) {
+    return [z](Pt a, Pt b) { return Pt{a.x + (b.x - a.x) * (z - a.z) / (b.z - a.z), z}; };
+  };
+  pass([](Pt p) { return p.x >= 0; }, at_x(0));
+  if (!out.empty()) pass([](Pt p) { return p.x <= kSize; }, at_x(kSize));
+  if (!out.empty()) pass([](Pt p) { return p.z >= 0; }, at_z(0));
+  if (!out.empty()) pass([](Pt p) { return p.z <= kSize; }, at_z(kSize));
+  return out;
+}
+
+// A closed ring thinned (Douglas–Peucker on its two halves, split at the point farthest from its
+// first), unclosed.
+Ring thin_ring(const Ring& ring, double tol) {
+  if (ring.size() < 4) return ring;
+  size_t far = 0;
+  double most = -1;
+  for (size_t i = 1; i < ring.size(); i++) {
+    const double d = ge::core::hypot(ring[i].x - ring[0].x, ring[i].z - ring[0].z);
+    if (d > most) {
+      most = d;
+      far = i;
+    }
+  }
+  std::vector<Pt> a = thin({ring.begin(), ring.begin() + long(far) + 1}, tol);
+  std::vector<Pt> second(ring.begin() + long(far), ring.end());
+  second.push_back(ring[0]);
+  const std::vector<Pt> b = thin(second, tol);
+  a.pop_back();
+  a.insert(a.end(), b.begin(), b.end() - 1);
+  return a;
+}
+
+// Ways' node lists joined end to end into closed rings; a chain that never closes is dropped.
+std::vector<std::vector<int64_t>> join_rings(std::vector<std::vector<int64_t>> parts) {
+  std::vector<std::vector<int64_t>> rings;
+  while (!parts.empty()) {
+    std::vector<int64_t> cur = std::move(parts.back());
+    parts.pop_back();
+    bool grew = true;
+    while (cur.size() > 1 && cur.front() != cur.back() && grew) {
+      grew = false;
+      for (size_t i = 0; i < parts.size(); i++) {
+        std::vector<int64_t>& p = parts[i];
+        if (p.empty()) continue;
+        if (p.back() == cur.back()) std::reverse(p.begin(), p.end());
+        if (p.front() != cur.back()) continue;
+        cur.insert(cur.end(), p.begin() + 1, p.end());
+        parts.erase(parts.begin() + long(i));
+        grew = true;
+        break;
+      }
+    }
+    if (cur.size() >= 4 && cur.front() == cur.back()) rings.push_back(std::move(cur));
+  }
+  return rings;
+}
+
+// Every lake of a face's map data, clipped, thinned and kept by size (the module comment); a
+// multipolygon whose members the boxes left out is read whole, `missing` counting those that
+// could not be.
+std::vector<mg::HintLake> lakes_of(const mg::FaceCrop& f, const OsmData& d,
+                                   ge::mountain::labs::OsmCache& osm, bool fetch, int& missing,
+                                   std::string& error) {
+  struct Found {
+    Ring shore;
+    double area;
+  };
+  std::vector<Found> found;
+  const auto keep = [&](const OsmData& src, const std::vector<int64_t>& refs) {
+    Ring ring;
+    for (size_t i = 1; i < refs.size(); i++) {
+      const auto it = src.nodes.find(refs[i]);
+      if (it == src.nodes.end()) return;  // a way cut short: no shore to trust
+      const auto [x, z] = mg::map_at(f, it->second.first, it->second.second);
+      ring.push_back({x, z});
+    }
+    ring = clip_to_map(ring);
+    if (ring.size() < 3) return;
+    const double area = std::abs(signed_area(ring));
+    if (area < kSmallestLake) return;
+    ring = thin_ring(ring, kShoreStray);
+    if (ring.size() >= 3) found.push_back({std::move(ring), area});
+  };
+  for (const auto& [id, w] : d.ways) {
+    if (is_lake(w.tags) && w.closed()) keep(d, w.refs);
+  }
+  for (const auto& [id, r] : d.relations) {
+    if (r.tag("type") != "multipolygon" || !is_lake(r.tags)) continue;
+    const auto whole = [&](const OsmData& src) {
+      return std::all_of(r.members.begin(), r.members.end(),
+                         [&](int64_t m) { return src.ways.count(m) > 0; });
+    };
+    const OsmData* src = &d;
+    OsmData full;
+    if (!whole(d)) {
+      if (!osm.relation_full(id, fetch, full, error) || !whole(full)) {
+        if (!error.empty()) return {};
+        missing++;
+        continue;
+      }
+      src = &full;
+    }
+    std::vector<std::vector<int64_t>> outer;
+    for (size_t k = 0; k < r.members.size(); k++) {
+      if (r.roles[k] == "inner") continue;
+      outer.push_back(src->ways.at(r.members[k]).refs);
+    }
+    for (const std::vector<int64_t>& ring : join_rings(std::move(outer))) keep(*src, ring);
+  }
+  std::sort(found.begin(), found.end(), [](const Found& a, const Found& b) {
+    if (a.area != b.area) return a.area > b.area;
+    return a.shore[0].x != b.shore[0].x ? a.shore[0].x < b.shore[0].x : a.shore[0].z < b.shore[0].z;
+  });
+  if (found.size() > kMostLakes) found.resize(kMostLakes);
+  std::vector<mg::HintLake> out;
+  out.reserve(found.size());
+  for (Found& l : found) out.push_back({std::move(l.shore)});
+  return out;
+}
+
 // A face baked: its hints, its data as kept, and what the bake could not read.
 struct Baked {
   mg::RealHints hints;
   std::string data;
   double wooded = 0;  // the share of the window the map draws as forest
-  int missing = 0;    // forest relations left out for want of members
+  int missing = 0;    // forest and lake relations left out for want of members
 };
 
+// With `kept` (--water), the lakes alone baked into the tree's hints, the rest kept as it is.
 bool bake(const mg::FaceCrop& f, const mg::RealFace& face, ge::mountain::labs::OsmCache& osm,
-          bool fetch, Baked& out, std::string& error) {
+          bool fetch, const mg::RealHints* kept, Baked& out, std::string& error) {
   const OsmData d = osm.read_face(f);
-  lifts_and_pistes(f, d, face, out.hints);
-  const auto polys = forests(f, d, osm, fetch, out.missing, error);
+  if (kept) {
+    out.hints = *kept;
+  } else {
+    lifts_and_pistes(f, d, face, out.hints);
+    const auto polys = forests(f, d, osm, fetch, out.missing, error);
+    if (!error.empty()) return false;
+    out.hints.woods = woods_by_height(rasterise(polys), face.heights, out.wooded);
+    // A face its crop marks BARE stands wholly above its trees: no forest on its map is no forest
+    // on the mountain, not an unmapped one.
+    if (!out.hints.woods && f.bare) out.hints.woods = mg::HintWoods{0, {}};
+  }
+  out.hints.lakes = lakes_of(f, d, osm, fetch, out.missing, error);
   if (!error.empty()) return false;
-  out.hints.woods = woods_by_height(rasterise(polys), face.heights, out.wooded);
-  // A face its crop marks BARE stands wholly above its trees: no forest on its map is no forest on
-  // the mountain, not an unmapped one.
-  if (!out.hints.woods && f.bare) out.hints.woods = mg::HintWoods{0, {}};
   out.data = mg::encode_hints(out.hints);
   // What a reader gets back: the kept data decoded, on the grain.
   std::optional<mg::RealHints> back = mg::decode_hints(out.data);
@@ -583,6 +762,14 @@ ge::lab::Picture draw_hints(const mg::RealFace& face, const mg::RealHints& h, in
     }
   }
   const double s = px / kSize;
+  for (const mg::HintLake& l : h.lakes) {
+    for (int py = 0; py < px; py++) {
+      for (int pxx = 0; pxx < px; pxx++) {
+        if (inside(l.shore, (pxx + 0.5) / s, (py + 0.5) / s))
+          ge::lab::set_pixel(pic, pxx, py, {70, 120, 190});
+      }
+    }
+  }
   for (const mg::HintPiste& p : h.pistes) {
     for (size_t i = 1; i < p.points.size(); i++) {
       ge::lab::draw_line(pic, p.points[i - 1].x * s, p.points[i - 1].z * s, p.points[i].x * s,
@@ -602,6 +789,7 @@ void run(ge::lab::Lab& lab) {
   const int px = static_cast<int>(lab.arg_num("size"));
   const bool baking = lab.arg_bool("bake");
   const bool fetch = lab.arg_bool("fetch");
+  const bool water = lab.arg_bool("water");
   ge::mountain::labs::OsmCache osm(lab.arg("osm"));
   std::vector<std::vector<std::string>> rows;
   std::vector<std::pair<mg::RealFace, mg::RealHints>> drawn;
@@ -609,6 +797,7 @@ void run(ge::lab::Lab& lab) {
   int lifts = 0;
   int pistes = 0;
   int wooded = 0;
+  int lakes = 0;
   for (const mg::FaceCrop* f : faces) {
     const std::string id = f->id;
     const auto face = mg::real_face(id);
@@ -633,8 +822,13 @@ void run(ge::lab::Lab& lab) {
                  "next: add --fetch to download it (skill: mountain).");
         continue;
       }
+      if (water && !h) {
+        lab.fail(id + " has no hints in the tree to bake its lakes into",
+                 "next: bake them whole first, without --water (skill: mountain).");
+        continue;
+      }
       Baked b;
-      if (!bake(*f, *face, osm, fetch, b, error)) {
+      if (!bake(*f, *face, osm, fetch, water ? &*h : nullptr, b, error)) {
         lab.fail(std::string(id).append(": ").append(error),
                  "next: check the network, then run again with --fetch.");
         continue;
@@ -672,6 +866,9 @@ void run(ge::lab::Lab& lab) {
     lifts += int(h->lifts.size());
     pistes += int(h->pistes.size());
     wooded += woods ? 1 : 0;
+    lakes += int(h->lakes.size());
+    double water_m2 = 0;
+    for (const mg::HintLake& l : h->lakes) water_m2 += std::abs(signed_area(l.shore));
     std::string bands;
     if (woods) {
       for (const double b : woods->bands) bands += (bands.empty() ? "" : " ") + f2(b);
@@ -686,12 +883,15 @@ void run(ge::lab::Lab& lab) {
                                      "/" + std::to_string(grades[4]),
                                  f0(metres),
                                  woods ? f0(woods->line) : "-",
-                                 bands.empty() ? "-" : bands};
+                                 bands.empty() ? "-" : bands,
+                                 std::to_string(h->lakes.size()),
+                                 f2(water_m2 / 1e4)};
     row.insert(row.end(), extra.begin(), extra.end());
     rows.push_back(std::move(row));
     lab.metric(id + ".lifts", double(h->lifts.size()), "count");
     lab.metric(id + ".pistes", double(h->pistes.size()), "count");
     if (woods) lab.metric(id + ".tree-line", woods->line, "m");
+    if (!h->lakes.empty()) lab.metric(id + ".lakes", double(h->lakes.size()), "count");
     if (faces.size() <= 4) drawn.emplace_back(*face, std::move(*h));
   }
   if (written > 0) {
@@ -701,12 +901,14 @@ void run(ge::lab::Lab& lab) {
   }
   std::vector<std::string> head{"face",     "region",      "chairs",
                                 "gondolas", "drags",       "pistes g/b/r/k/route",
-                                "piste m",  "tree line m", "cover by band, bottom first"};
+                                "piste m",  "tree line m", "cover by band, bottom first",
+                                "lakes",    "water ha"};
   if (baking) head.insert(head.end(), {"wooded", "missing", "base64 bytes", "vs the tree"});
   lab.table({"the real faces' hints (the tree's; with --bake, the bake's)", head, rows});
   lab.metric("lifts", lifts, "count");
   lab.metric("pistes", pistes, "count");
   lab.metric("wooded", wooded, "count");
+  lab.metric("lakes", lakes, "count");
   for (const auto& [face, h] : drawn) {
     const std::string id = face.crop->id;
     lab.shot({id,
@@ -714,7 +916,8 @@ void run(ge::lab::Lab& lab) {
               "The real face " + id +
                   " shaded by height and lit from the north-west, tinted green as wooded as its "
                   "map draws each height below its tree line; the real pistes drawn in their "
-                  "colours (orange a ski route) and the real lifts in white edged black.",
+                  "colours (orange a ski route), the real lifts in white edged black and the "
+                  "lakes in blue.",
               "the lifts climb from the valley to tops on the ridge and its shoulders, the pistes "
               "fall from the lifts' tops down the spurs and gullies, the woods fill the lower "
               "face and stop at a line",
@@ -737,6 +940,7 @@ const ge::lab::LabSpec kSpec{
         {"bake", "", "bake the hints off the map data and compare them with the tree's", true},
         {"fetch", "", "with --bake: download the map data not yet kept in --osm", true},
         {"write", "", "with --bake: write the faces baked and the index into the tree", true},
+        {"water", "", "with --bake: bake the lakes alone into the tree's hints", true},
         {"osm", ".cache/osm", "where the map data is kept"},
     },
     "--faces=alpine-1,fell-1 --size=192",

@@ -207,7 +207,7 @@ void run(ge::lab::Lab& lab) {
          {"view", view},
          {"ice", fixed(ice * 100, 1) + " cm"},
          {"thaw", fixed(thaw, 2)},
-         {"bears", tn::bears(mg::MapLake{.ice = ice, .thaw = thaw}) ? "yes" : "no"}},
+         {"bears", tn::bears(mg::MapLake{.ice = ice, .thaw = thaw, .shore = {}}) ? "yes" : "no"}},
     };
   };
 
@@ -267,7 +267,7 @@ void run(ge::lab::Lab& lab) {
       const ge::lab::Picture pic = draw(v);
       // Without the lake: its ice taken off (the sheet is made already, so no shore is read),
       // then its water hidden; then both put back.
-      const int sheet = frame->ice_body;
+      const int sheet = frame->ice_bodies.empty() ? -1 : frame->ice_bodies[0];
       if (sheet >= 0) fall_line::app::freeze_water(*device, *frame, sheet, ge::water::Body{}, 0);
       for (auto& b : frame->water.bodies) b.hidden = true;
       const ge::lab::Picture dry = draw(v);

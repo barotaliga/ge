@@ -16,6 +16,7 @@
 // ge:summary The real faces' hints: the packing, the codec, every face decoded, a golden
 // ge:keywords test real-hints packed varint base64 decode-hints encode-hints face-woods golden
 // ge:skill testing mountain
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -128,7 +129,31 @@ TEST(hints_are_encoded_and_decoded_back) {
   CHECK(!mg::decode_hints("not base64!"));
   mg::RealHints bare;
   const auto none = mg::decode_hints(mg::encode_hints(bare));
-  CHECK(none && none->lifts.empty() && none->pistes.empty() && !none->woods);
+  CHECK(none && none->lifts.empty() && none->pistes.empty() && !none->woods && none->lakes.empty());
+}
+
+TEST(a_face_s_lakes_ride_after_its_woods) {
+  mg::RealHints h;
+  h.woods = mg::HintWoods{0.5, {}};
+  const std::string dry = mg::encode_hints(h);
+  h.lakes = {{{{100, 200}, {300, 210}, {280, 400}, {120, 380}}},
+             {{{2000, 2000}, {2050, 2004}, {2010, 2080}}}};
+  const std::string wet = mg::encode_hints(h);
+  // Hints with no lakes are the bytes they were before lakes were kept; with them, more follow.
+  const auto dry_bytes = mg::packed::from_base64(dry);
+  const auto wet_bytes = mg::packed::from_base64(wet);
+  CHECK(dry_bytes && wet_bytes && wet_bytes->size() > dry_bytes->size());
+  if (dry_bytes && wet_bytes) {
+    CHECK(std::equal(dry_bytes->begin(), dry_bytes->end(), wet_bytes->begin()));
+  }
+  const auto back = mg::decode_hints(wet);
+  CHECK(back && back->lakes.size() == 2 && back->woods);
+  if (!back || back->lakes.size() != 2) return;
+  CHECK(back->lakes[0].shore.size() == 4 && back->lakes[1].shore.size() == 3);
+  CHECK(back->lakes[0].shore[2].x == 280 && back->lakes[0].shore[2].z == 400);
+  CHECK(back->lakes[1].shore[1].x == 2050 && back->lakes[1].shore[1].z == 2004);
+  CHECK(mg::encode_hints(*back) == wet);
+  CHECK(!mg::decode_hints(wet.substr(0, wet.size() - 8)));
 }
 
 TEST(a_face_s_woods_are_read_by_its_height) {
@@ -160,6 +185,7 @@ TEST(every_face_has_hints_that_stand_on_its_map) {
   if (!write) CHECK_MSG(!want.empty(), std::string(kGolden) + " is empty; see the header");
   std::vector<std::string> got;
   int wooded = 0;
+  int lakes = 0;
   for (const mg::HintData* data : baked) {
     const std::string id = data->id;
     const auto h = mg::real_hints(id);
@@ -183,15 +209,22 @@ TEST(every_face_has_hints_that_stand_on_its_map) {
                     mg::face_height(*face, p.points.back().x, p.points.back().z),
                 id + ": a piste climbs from its first bend to its last");
     }
+    for (const mg::HintLake& l : h->lakes) {
+      bool on = l.shore.size() >= 3;
+      for (const mg::PlanPoint& q : l.shore) on = on && on_map(q);
+      CHECK_MSG(on, id + ": a lake's shore stands off the map");
+    }
+    lakes += int(h->lakes.size());
     const auto woods = mg::face_woods(*face, *h);
     if (woods) {
       wooded++;
       CHECK_MSG(woods->line >= woods->lo && woods->line <= woods->hi,
                 id + ": its tree line stands outside its relief");
     }
-    got.push_back(id + " lifts=" + std::to_string(h->lifts.size()) +
-                  " pistes=" + std::to_string(h->pistes.size()) + " line=" +
-                  (woods ? f0(woods->line) : std::string("-")) + " hash=" + hash_of(data->data));
+    got.push_back(id + " lifts=" + std::to_string(h->lifts.size()) + " pistes=" +
+                  std::to_string(h->pistes.size()) + " lakes=" + std::to_string(h->lakes.size()) +
+                  " line=" + (woods ? f0(woods->line) : std::string("-")) +
+                  " hash=" + hash_of(data->data));
     const size_t at = got.size() - 1;
     if (!write && at < want.size()) {
       CHECK_MSG(got[at] == want[at], id + ": the hints moved:\n  got  " + got[at] + "\n  want " +
@@ -201,10 +234,12 @@ TEST(every_face_has_hints_that_stand_on_its_map) {
   }
   // Most real ski areas stand in woods or by them.
   CHECK_MSG(wooded * 2 > int(baked.size()), std::to_string(wooded) + " faces have woods");
+  // Most mountains hold a lake somewhere on their face.
+  CHECK_MSG(lakes > int(baked.size()), std::to_string(lakes) + " lakes on the faces");
   if (!write) CHECK(got.size() == want.size());
   if (write) {
     std::ofstream out(ge::test::root_path(kGolden));
-    out << "# face, then its hints' lift and piste counts, tree line (m) and the data's hash "
+    out << "# face, then its hints' lift, piste and lake counts, tree line (m) and the data's hash "
            "(mountain_real_hints_test)\n";
     for (const auto& r : got) out << r << "\n";
     std::printf("  wrote %zu rows to %s\n", got.size(), kGolden);
