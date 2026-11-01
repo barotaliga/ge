@@ -36,12 +36,14 @@
 // ge:keywords percentile frame-time find_demo bench_stats bench_report timedemo_start
 // ge:keywords timedemo_step timedemo_mark demo_view demo_status unlocked-fps vsync-off
 // ge:keywords gpu-span span_add span_report price prices price_report switch-off-pricing
+// ge:keywords demo_game_dir demo_folder gamedir game-folder mod-folder fortress
 // ge:keywords playdemo playdemo_step cl_demospeed demo-pace timeline demo_seek seek demo-timeline
 // ge:skill shooter perf
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -110,6 +112,29 @@ double median_of(std::vector<double> v);
 bool find_demo(const SearchPath& files, const std::string& name,
                std::span<const std::string_view> extensions, std::vector<uint8_t>& out,
                std::string& found, std::string& error);
+
+// THE DEMO'S GAME FOLDER: a multiplayer recording names the game folder its server ran
+// (`DemoState::game`: "fortress" for a team mod), and the mod's models,
+// sounds and maps live there. The folder to play it from, given the window opened on `opened`
+// (the `-game` asked, the base folder when none was) under `basedir`: `recorded` when the window
+// is on the base folder and `<basedir>/<recorded>` exists (the base kept under it, as `-game`
+// mounts it); else `opened`, so a `-game` asked wins. `note` is the console's line when the
+// recorded folder is not there (empty otherwise): the demo then plays on the folder opened.
+std::string demo_game_dir(const std::string& basedir, const std::string& opened,
+                          const std::string& recorded, std::string& note);
+
+// The window's side of it: the folder a demo's level loads from, kept across its levels. At each
+// level start `demo_folder` mounts `demo_game_dir`'s answer when it changed (`path`, null while
+// the demo plays from `window`), the lines for the console in `say` (the folder mounted, the note
+// once, a folder that did not open), and returns the search path to load from.
+struct DemoFolder {
+  std::unique_ptr<SearchPath> path;
+  std::string game;  // the folder `path` is ("": the window's)
+  std::string note;  // the last note said
+};
+const SearchPath& demo_folder(DemoFolder& f, const std::string& basedir, const std::string& opened,
+                              const DemoState& s, const SearchPath& window,
+                              std::vector<std::string>& say);
 
 // THE TIMELINE: the seconds a play bar, a seek and a highlight are placed on. The demo's own
 // clock starts over at each level and may stall (a long pause in a recording), so the timeline

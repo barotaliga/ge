@@ -16,6 +16,7 @@
 #include <fstream>
 #include <iterator>
 
+#include "classicenhance/profile.hpp"
 #include "shooters_edge/client/view.hpp"
 
 namespace shooters_edge::client {
@@ -206,6 +207,49 @@ bool find_demo(const SearchPath& files, const std::string& name,
           " in the game's packs or folder, nor on disk; next: name a "
           "demo the packs hold (demo1, demo1.dem) or a file's path";
   return false;
+}
+
+std::string demo_game_dir(const std::string& basedir, const std::string& opened,
+                          const std::string& recorded, std::string& note) {
+  note.clear();
+  const std::string base(ge::classicenhance::classic_profile().base_dir);
+  if (recorded.empty() || recorded == opened || recorded == base || opened != base) return opened;
+  // A folder name only: a recording naming a path is not followed out of the base folder.
+  if (recorded.find_first_of("/\\:") != std::string::npos || recorded == "." || recorded == "..")
+    return opened;
+  const fs::path dir = fs::path(basedir.empty() ? "." : basedir) / recorded;
+  std::error_code ec;
+  if (fs::is_directory(dir, ec)) return recorded;
+  note = "the demo was recorded in the game folder " + recorded + ", and " + dir.string() +
+         " is not there, so a model or sound of its own may be missing; next: put the mod's "
+         "folder beside " +
+         base + ", or pass -game " + recorded;
+  return opened;
+}
+
+const SearchPath& demo_folder(DemoFolder& f, const std::string& basedir, const std::string& opened,
+                              const DemoState& s, const SearchPath& window,
+                              std::vector<std::string>& say) {
+  std::string note;
+  const std::string want = demo_game_dir(basedir, opened, s.game, note);
+  if (!note.empty() && note != f.note) say.push_back(note);
+  f.note = note;
+  const std::string have = f.path ? f.game : opened;
+  if (want == have) return f.path ? *f.path : window;
+  f.path.reset();
+  f.game.clear();
+  if (want != opened) {
+    auto from = std::make_unique<SearchPath>();
+    std::string error;
+    if (open_game_dir(basedir, want, *from, error)) {
+      say.push_back("the demo's game folder " + from->folder);
+      f.path = std::move(from);
+      f.game = want;
+    } else {
+      say.push_back(error);
+    }
+  }
+  return f.path ? *f.path : window;
 }
 
 bool timedemo_start(const SearchPath& files, const std::string& name, Timedemo& t,
