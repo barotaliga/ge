@@ -117,8 +117,8 @@ false`, so one row's golden failure shows alongside the others.
   run's hits. The packaging jobs restore the release row's cache of their OS and build with Ninja
   into `build/release` like it, so the compile lines match. Locally, `cmake/CompilerCache.cmake`
   picks ccache up from PATH, `cmake/Linker.cmake` links with mold or LLD on Linux, and
-  `tools/ccache-share.sh` carries a cloud container's cache to the next one (docs/architecture.md
-  § Build has the measurements). On a pull
+  `tools/ccache-share.sh` carries a cloud container's compiler cache and deps to the next one,
+  in parts the shared folder keeps (docs/architecture.md § Build has the measurements). On a pull
   request `lint` checks only what the change reaches (`tools/lint.sh BUILD BASE`: each changed
   `.cpp`, and each `.cpp` whose object includes a changed header, read off Ninja's deps); a
   change to `.clang-tidy`, `tools/lint.sh` or the CMake lints everything (main is never linted

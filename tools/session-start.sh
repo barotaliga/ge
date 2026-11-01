@@ -9,8 +9,13 @@
 # when nothing is missing), switching the Ubuntu archive to its HTTPS mirrors first because the
 # cloud session's proxy passes HTTPS alone, then runs `make build` into build/debug, reusing it,
 # so a second session or a resumed one rebuilds only what changed; a new container's first build
-# takes its objects from the shared compiler cache (tools/ccache-share.sh), which it then saves. One worker at a time (a lock); a hook fired while
-# one runs does nothing.
+# takes its objects and its deps from the shared build caches (tools/ccache-share.sh), which it
+# then saves. One worker at a time (a lock); a hook fired while one runs does nothing.
+#
+# The hook is read only when the session starts in this checkout; a session started above it (a
+# project with several repositories) runs this script by hand (AGENTS.md). A container snapshot
+# taken while a worker ran leaves `running` with no worker: the next hook or --worker starts one,
+# and --wait names it dead after 30 s.
 #
 # Where to look: build/session-start.log (the whole output) and build/session-start.status
 # (one line: `running <started>`, `ok <finished>` or `failed <exit code> <finished>`). Before
