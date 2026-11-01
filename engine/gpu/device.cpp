@@ -9,6 +9,8 @@
 // ge:test tests/gpu_device_test.cpp
 #include "gpu/device.hpp"
 
+#include <cstdlib>
+#include <cstring>
 #include <vector>
 
 #include "core/output.hpp"
@@ -102,6 +104,20 @@ std::string system32_dir() {
 }
 #endif
 
+// Whether an environment variable is "1" (MSVC deprecates std::getenv in favour of its own).
+bool env_on(const char* name) {
+#ifdef _MSC_VER
+  char* v = nullptr;
+  size_t n = 0;
+  const bool on = _dupenv_s(&v, &n, name) == 0 && v != nullptr && std::strcmp(v, "1") == 0;
+  std::free(v);
+  return on;
+#else
+  const char* v = std::getenv(name);
+  return v && std::strcmp(v, "1") == 0;
+#endif
+}
+
 }  // namespace
 
 std::string to_string(wgpu::StringView s) {
@@ -163,6 +179,13 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
   dev->report.driver = to_string(info.description);
   dev->report.backend = std::string(backend_name(info.backendType));
   dev->report.software = info.adapterType == wgpu::AdapterType::CPU;
+  // GE_GPU_NO_SOFTWARE=1 refuses a software adapter: CI's Windows row sets it, because its only
+  // adapter is D3D12's CPU one (WARP), too slow for the GPU labs in the row's time limit.
+  if (dev->report.software && env_on("GE_GPU_NO_SOFTWARE")) {
+    out::info("gpu: no device: the only adapter is software (" + dev->report.name +
+              ") and GE_GPU_NO_SOFTWARE=1 refuses it; unset it to draw on the CPU; skill: gpu.");
+    return nullptr;
+  }
   dev->adapter.GetLimits(&dev->limits);
 
   std::vector<wgpu::FeatureName> wanted;

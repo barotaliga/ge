@@ -365,6 +365,9 @@ jobs:
       # beside the source, not in the build directory. The checkout's path never changes, so the
       # base directory bought nothing on this row.
       CCACHE_DEPEND: "1"
+      # The runner's only GPU adapter is D3D12's software one (WARP), which runs the GPU labs too
+      # slowly for this row's limit: the GPU tests and labs skip here, as where no adapter exists.
+      GE_GPU_NO_SOFTWARE: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: actions/cache@v4
