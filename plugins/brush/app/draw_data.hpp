@@ -102,8 +102,12 @@ struct Portal {
 // How a light entity's brightness moves (our own functions, picked by the entity's style number).
 enum class Flicker : uint8_t { steady, candle, pulse, strobe, buzz };
 
-// The fire a light entity's model stands for, drawn as burning gas (bsp_flames.hpp).
-enum class Fire : uint8_t { none, wall_torch, large };
+// The fire a light entity's model stands for, drawn as burning gas (bsp_flames.hpp): a wall
+// torch; a large flame with room over it (a brazier on the floor, which burns as a bonfire under
+// ce_bonfires); a large flame with no such room (a lantern's cage round it, or a low roof), which
+// burns bigger under ce_bonfires; or a small flame, drawn as a large one's. `place_fires` tells
+// the large ones apart.
+enum class Fire : uint8_t { none, wall_torch, large, flame, lantern };
 
 struct PointLight {
   double pos[3] = {0, 0, 0};  // engine metres
@@ -114,6 +118,7 @@ struct PointLight {
   uint32_t seed = 0;       // the flicker's phase
   bool flame = false;      // a torch or a flame (warmer)
   Fire fire = Fire::none;  // the fire drawn at it (bsp_flames.hpp)
+  float sky = 0;           // the share of open sky over its fire, 0..1 (bsp_flames' place_fires)
   bool physical = false;   // `value` is a luminous intensity, cd (a glowing liquid's light)
 };
 // The light's share of its brightness at time t, s.

@@ -182,6 +182,9 @@ void set_text_input(Window& window, bool on) {
 
 std::vector<Display> displays() {
   std::vector<Display> out;
+  // Held for the call (SDL counts each hold), so the list is there before a window opens: a `+`
+  // word on the command line asks before the client's window exists.
+  if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) return out;
   int count = 0;
   SDL_DisplayID* ids = SDL_GetDisplays(&count);
   for (int i = 0; ids != nullptr && i < count; ++i) {
@@ -196,6 +199,7 @@ std::vector<Display> displays() {
     out.push_back(d);
   }
   SDL_free(ids);
+  SDL_QuitSubSystem(SDL_INIT_VIDEO);
   return out;
 }
 

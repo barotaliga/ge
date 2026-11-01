@@ -9,7 +9,7 @@
 //
 //   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>]
 //                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH]
-//                 [-demovideo <demo> <file> [--fps=N] [--resolution=<WxH|1080p|4k>] ...]
+//                 [-demovideo <demo> <file> [--from=m:ss --to=m:ss | --highlight=N] ...]
 //                 [+<command> ...]
 //
 // `-basedir` is the folder that holds the game folder (`id1` unless `-game` names another) with its
@@ -47,8 +47,8 @@
 // nothing timed, `cl_demospeed <x>` (0..20, 0 pauses) its speed; `demo_track <slot>` picks the
 // player a multiview recording's view rides (-1: the lowest playing). Every format plays, `.gz`
 // included, and the voice formats (`.qwdv`, `.mvdv`) with their voices. A played demo is watched
-// like a video (client/demo_playback.hpp: a play bar, seeking, highlights); `-demovideo <demo>
-// <file>` turns one into a video with no window and quits (client/demo_video.hpp).
+// like a video (client/demo_playback.hpp); `-demovideo <demo> <file>` turns one, or a clip of it,
+// into a video or a GIF with no window and quits (client/demo_video.hpp).
 //
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console relative-
@@ -77,6 +77,7 @@
 #include "input/state.hpp"
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
+#include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_video.hpp"
@@ -116,23 +117,8 @@ void print_line(const out::LogLine& line, void*) {
   std::fprintf(to, "%.*s\n", static_cast<int>(line.message.size()), line.message.data());
 }
 
-struct Args {
-  std::string basedir = ".";
-  std::string game = "id1";
-  std::string progs;             // a mod's progs file ("": the baseline mod)
-  std::string models;            // the held weapons' folder ("": the tree's)
-  std::string timedemo;          // a demo to benchmark, then quit ("": none)
-  std::string demovideo, video;  // a demo to turn into the video file `video`, then quit
-  double fps = 30, seconds = 0;
-  std::string codec = "auto";
-  std::string playdemo;  // a demo to play at its own pace ("": none)
-  long frames = 0;       // 0: until quit
-  int width = 1280, height = 720;
-  std::vector<std::string> plus;  // the command line from the first `+` word on
-};
-
 // `-demovideo`: the demo turned into a video with no window, the report printed. The exit code.
-int demo_video_main(const Args& args, const cl::SearchPath& files,
+int demo_video_main(const cl::Args& args, const cl::SearchPath& files,
                     const shooters_edge::look::Picture& picture, int track) {
   auto device = ge::gpu::create_device({.label = "demovideo", .validation = 0});
   if (!device) {
@@ -146,7 +132,10 @@ int demo_video_main(const Args& args, const cl::SearchPath& files,
   o.height = args.height & ~1;
   o.fps = args.fps;
   o.codec = args.codec == "none" ? "" : args.codec;
-  o.seconds = args.seconds;
+  o.seconds = args.to > args.from ? args.to - args.from : args.seconds;
+  o.from_s = args.from;
+  o.highlight = args.highlight;
+  o.gif_width = args.gif_width;
   o.track = track;
   o.picture = &picture;
   cl::DemoVideoReport r;
@@ -161,97 +150,8 @@ int demo_video_main(const Args& args, const cl::SearchPath& files,
                "; see docs/shooters-edge.md § A demo as a video");
     return 2;
   }
-  out::status("demovideo: " + r.found + " (" + r.format + ") -> " + args.video);
-  const auto num = [](double v) {
-    char b[32];
-    std::snprintf(b, sizeof b, "%g", v);
-    return std::string(b);
-  };
-  out::status("demovideo: " + std::to_string(r.frames) + " pictures, " + num(r.seconds) + " s, " +
-              std::to_string(r.levels) + " levels, " + std::to_string(o.width) + "x" +
-              std::to_string(o.height) + " at " + num(o.fps) + " fps, " + r.container + " " +
-              r.codec + ", " + std::to_string(r.bytes) + " bytes, on " + r.adapter);
-  out::status("demovideo: " + std::to_string(r.sounds) + " sounds, " + std::to_string(r.loops) +
-              " loops, " + std::to_string(r.missing_sounds) + " names no pack has; voice " +
-              std::to_string(r.voice_frames) + " frames in " + std::to_string(r.voice_messages) +
-              " messages, " + std::to_string(r.voice_concealed) + " concealed");
+  for (const std::string& line : cl::demo_video_lines(o, r)) out::status(line);
   return 0;
-}
-
-// `~` or `~/...` as the home folder (a shell leaves a quoted one as it is).
-std::string expand_home(const std::string& p) {
-  if (p.empty() || p[0] != '~' || (p.size() > 1 && p[1] != '/')) return p;
-#ifdef _WIN32
-  const char* home = std::getenv("USERPROFILE");  // NOLINT(concurrency-mt-unsafe): at start
-#else
-  const char* home = std::getenv("HOME");  // NOLINT(concurrency-mt-unsafe): at start
-#endif
-  return home == nullptr ? p : std::string(home) + p.substr(1);
-}
-
-// A size as `WxH` (`1920x1080`) or a name: 480p, 720p, 1080p, 1440p, 4k (2160p). False for
-// anything else, or a side under 16 or over 8192.
-bool size_named(std::string_view v, int& w, int& h) {
-  static constexpr struct {
-    const char* name;
-    int w, h;
-  } kNamed[] = {{"480p", 854, 480},    {"720p", 1280, 720},   {"1080p", 1920, 1080},
-                {"1440p", 2560, 1440}, {"2160p", 3840, 2160}, {"4k", 3840, 2160}};
-  for (const auto& n : kNamed) {
-    if (v == n.name) {
-      w = n.w;
-      h = n.h;
-      return true;
-    }
-  }
-  const size_t x = v.find('x');
-  if (x == std::string_view::npos) return false;
-  const int pw = std::atoi(std::string(v.substr(0, x)).c_str());
-  const int ph = std::atoi(std::string(v.substr(x + 1)).c_str());
-  if (pw < 16 || ph < 16 || pw > 8192 || ph > 8192) return false;
-  w = pw;
-  h = ph;
-  return true;
-}
-
-bool parse(int argc, char** argv, Args& a) {
-  for (int i = 1; i < argc; ++i) {
-    const std::string_view arg = argv[i];
-    // The flags are read wherever they stand, a console line's words (`+r_look modern`) running
-    // from a `+` to the next flag or `+`, so `+r_look modern -timedemo demo1` is a look and a
-    // benchmark, not one console line of four words.
-    if ((arg == "-basedir" || arg == "--basedir") && i + 1 < argc) {
-      a.basedir = expand_home(argv[++i]);
-    } else if ((arg == "-progs" || arg == "--progs") && i + 1 < argc) {
-      a.progs = expand_home(argv[++i]);
-    } else if ((arg == "-models" || arg == "--models") && i + 1 < argc) {
-      a.models = expand_home(argv[++i]);
-    } else if ((arg == "-timedemo" || arg == "--timedemo") && i + 1 < argc) {
-      a.timedemo = expand_home(argv[++i]);
-    } else if ((arg == "-demovideo" || arg == "--demovideo") && i + 2 < argc) {
-      a.demovideo = expand_home(argv[++i]);
-      a.video = expand_home(argv[++i]);
-    } else if (arg.rfind("--fps=", 0) == 0) {
-      a.fps = std::strtod(argv[i] + 6, nullptr);
-    } else if (arg.rfind("--seconds=", 0) == 0) {
-      a.seconds = std::strtod(argv[i] + 10, nullptr);
-    } else if (arg.rfind("--codec=", 0) == 0) {
-      a.codec = std::string(arg.substr(8));
-    } else if ((arg == "-playdemo" || arg == "--playdemo") && i + 1 < argc) {
-      a.playdemo = expand_home(argv[++i]);
-    } else if ((arg == "-game" || arg == "--game") && i + 1 < argc) {
-      a.game = argv[++i];
-    } else if (arg.rfind("--frames=", 0) == 0) {
-      a.frames = std::strtol(argv[i] + 9, nullptr, 10);
-    } else if (arg.rfind("--size=", 0) == 0 || arg.rfind("--resolution=", 0) == 0) {
-      if (!size_named(arg.substr(arg.find('=') + 1), a.width, a.height)) return false;
-    } else if (!a.plus.empty() || (!arg.empty() && arg[0] == '+')) {
-      a.plus.emplace_back(arg);
-    } else {
-      return false;
-    }
-  }
-  return true;
 }
 
 }  // namespace
@@ -300,14 +200,15 @@ static void draw_scores(ge::ui::DrawList& dl, const cl::Listen& l,
 
 int run_main(int argc, char** argv) {
   out::set_output_sink(print_line);
-  Args args;
-  if (!parse(argc, argv, args)) {
-    out::error(
-        "shooters_edge: unknown flag. Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
-        "[-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] [--frames=N] "
-        "[--size=WxH] [-demovideo <demo> <file> [--fps=N] [--resolution=<WxH|720p|1080p|1440p|4k>] "
-        "[--codec=<c>] [--seconds=S]] "
-        "[+<command> ...]; next: rerun with those flags only.");
+  cl::Args args;
+  if (std::string why; !cl::parse(argc, argv, args, why)) {
+    out::error("shooters_edge: the command line was refused: " + why +
+               " Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
+               "[-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] "
+               "[--frames=N] [--size=WxH] [-demovideo <demo> <file> [--fps=N] "
+               "[--resolution=<WxH|720p|1080p|1440p|4k>] [--from=m:ss] [--to=m:ss] [--highlight=N] "
+               "[--gif-width=N] [--codec=<c>] [--seconds=S]] "
+               "[+<command> ...]; next: rerun with only those flags.");
     return 2;
   }
 
@@ -360,7 +261,9 @@ int run_main(int argc, char** argv) {
                        &display);
   console.add_command("vid_displays", "list the displays vid_display numbers",
                       [&](Con& c, const CArgs&) {
-                        for (const ge::platform::Display& d : ge::platform::displays())
+                        const std::vector<ge::platform::Display> all = ge::platform::displays();
+                        if (all.empty()) c.print("vid_displays: the desktop named no display");
+                        for (const ge::platform::Display& d : all)
                           c.print(std::to_string(d.number) + ": " + d.name + ", " +
                                   std::to_string(d.width_px) + "x" + std::to_string(d.height_px));
                       });
@@ -370,7 +273,7 @@ int run_main(int argc, char** argv) {
                         if (a.size() < 2)
                           c.print("timedemo: name a demo (timedemo demo1)");
                         else
-                          bench_ask = expand_home(a[1]);
+                          bench_ask = cl::expand_home(a[1]);
                       });
   bool play_ask = false;  // the demo asked for is played at its own pace, not benchmarked
   console.add_command("playdemo", "playdemo <demo>: play a demo at its own pace",
@@ -378,7 +281,7 @@ int run_main(int argc, char** argv) {
                         if (a.size() < 2) {
                           c.print("playdemo: name a demo (playdemo demo1, playdemo match.mvd)");
                         } else {
-                          bench_ask = expand_home(a[1]);
+                          bench_ask = cl::expand_home(a[1]);
                           play_ask = true;
                         }
                       });

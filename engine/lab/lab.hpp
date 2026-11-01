@@ -217,9 +217,16 @@ class Lab {
   const std::vector<std::string>& failures() const { return failures_; }
   const std::vector<std::pair<std::string, std::string>>& args() const { return args_; }
   uint64_t digest() const { return digest_; }
+  // WHAT THE DIGEST HASHED, one line an input in the order it was hashed: "kind\tname\tvalue",
+  // kind one of metric, columns, row, shot, file. A table row is named "<title> / <first cell>"
+  // (with "#n" for a repeat) and its value is its cells, tab-separated; a shot's or a file's value
+  // is its bytes' own hash ("measured" when they are not hashed). Written as digest.tsv beside the
+  // report, so `ge digest <lab> --why` names what moved between two runs (digest_why.hpp).
+  const std::vector<std::string>& ledger() const { return ledger_; }
 
  private:
   void hash(const void* bytes, size_t n);
+  void record(std::string_view kind, std::string_view name, std::string_view value);
   const LabSpec* spec_;
   std::vector<std::pair<std::string, std::string>> args_;
   std::vector<Metric> metrics_;
@@ -234,6 +241,7 @@ class Lab {
   mutable bool cvars_read_ = false;
   std::string stage_pak_;
   mutable bool stage_pak_read_ = false;
+  std::vector<std::string> ledger_;
   uint64_t digest_ = 0xcbf29ce484222325ull;
 };
 

@@ -324,6 +324,7 @@ Outcome run(const Args& a) {
     d.diff = has_flag(a, "diff");
     d.affected = has_flag(a, "affected");
     d.list = has_flag(a, "list");
+    d.why = has_flag(a, "why");
     d.base = flag_value(a, "base", "origin/main");
     return run_digest(build_options(a), d);
   }

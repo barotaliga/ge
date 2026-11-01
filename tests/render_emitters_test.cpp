@@ -1,10 +1,11 @@
 // engine/render/emitters.hpp: a drip falls from its ceiling at its rate, once a slot, and two spans
 // that meet give each birth once, bit for bit as one span; embers are born over the floor, rise,
-// glow and cool; motes fill the box; steam lifts off the floor; a long pause keeps its latest
-// births only; the embers over a glowing volume stand on its floor at a rate its glow gives.
+// glow and cool; a bonfire's sparks fly up hot and drift with the wind; motes fill the box; steam
+// lifts off the floor; a long pause keeps its latest births only; the embers over a glowing volume
+// stand on its floor at a rate its glow gives.
 //
 // ge:summary Tests for the area emitters: the cadence, each kind's births, the embers over a glow
-// ge:keywords test render emitter embers motes drips steam emit_area embers_over cadence
+// ge:keywords test render emitter embers motes drips steam emit_area embers_over cadence sparks
 // ge:skill render testing
 #include <array>
 #include <bit>
@@ -134,4 +135,25 @@ TEST(the_embers_over_a_glow_stand_on_its_floor_at_its_rate) {
   CHECK(e.rate >= 4 && e.rate <= 60);
   v.glow[0] = v.glow[1] = v.glow[2] = 0;
   CHECK(r::embers_over(v, 100).rate == 4);
+}
+
+TEST(a_bonfires_sparks_fly_up_hot_and_go_with_the_wind) {
+  r::AreaEmitter e = box(r::AreaEmitter::Kind::sparks, 30);
+  std::vector<r::Particle> still;
+  r::emit_area(e, 0, 10, still);
+  e.air[0] = 5;  // a wind toward +x
+  std::vector<r::Particle> windy;
+  r::emit_area(e, 0, 10, windy);
+  CHECK(still.size() == windy.size() && still.size() > 250);
+  double drift = 0;
+  for (size_t i = 0; i < still.size(); ++i) {
+    const r::Particle& p = still[i];
+    CHECK(p.kelvin >= 2900.0f && p.kelvin <= 3400.0f && p.fall < 0.0f);
+    // Thrown up out of the bed, faster than an ember rises.
+    if (p.age < 0.02f) CHECK(p.v[1] > 1.4f);
+    // The same spark in the wind: the same climb, carried downwind.
+    CHECK(std::fabs(windy[i].p[1] - p.p[1]) < 1e-4f);
+    drift += windy[i].p[0] - p.p[0];
+  }
+  CHECK(drift / static_cast<double>(still.size()) > 0.5);
 }

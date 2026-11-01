@@ -39,6 +39,7 @@ std::vector<LightEntity> light_entities(const Map& map) {
     l.reach = l.value / wait * kUnitM;
     l.torch = cls.find("torch") != std::string::npos;
     l.flame = l.torch || cls.find("flame") != std::string::npos;
+    l.large = l.flame && !l.torch && cls.find("large") != std::string::npos;
     l.style = int(number(e.get("style"), 0));
     static const double kFlame[3] = {1.0, 0.56, 0.24}, kBulb[3] = {1.0, 0.8, 0.58},
                         kTube[3] = {0.86, 0.95, 1.0};

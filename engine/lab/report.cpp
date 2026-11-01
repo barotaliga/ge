@@ -193,6 +193,9 @@ bool write_report(const Lab& lab, const std::string& dir, std::string& error) {
   }
   j += "],\n  \"digest\": " + json_str(hex64(lab.digest())) + "\n}\n";
   if (!write_text(dir + "/report.json", j, error)) return false;
+  std::string ledger = "# kind\tname\tvalue: what the digest hashed, in order (digest_why.hpp)\n";
+  for (const std::string& line : lab.ledger()) ledger.append(line).append("\n");
+  if (!write_text(dir + "/digest.tsv", ledger, error)) return false;
 
   for (const auto& f : lab.files()) {
     const std::string path = dir + "/" + f.name;

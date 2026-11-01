@@ -27,7 +27,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge bench --ab=<option>` (one frame option against another in the same build, interleaved rounds, the least median kept: a quality ladder priced without a bespoke loop)
 - `ge profile --compare` (per zone and per pass, GPU and CPU deltas, outliers flagged)
 - `ge lab bench <lab> --runs=N --base=main` (each metric's median and spread over N runs, this tree beside the base)
-- `ge digest <lab> --why` (which table row and which columns moved when a digest did; for a lab that hashes the command catalog or another input, name that input: "cli-loop moved because a command or flag was added")
+- `ge digest <lab> --why` (which table row and which columns moved when a digest did; for a lab that hashes the command catalog or another input, name that input: "cli-loop moved because a command or flag was added"; done: every run writes `digest.tsv`, the inputs the digest hashed, and `--why` compares it with `--base`'s run, a kept tag or the lab built at a ref: each metric's two values, each row's cells by column, what came and went)
 - `ge lab diff` for a lab's tables and `--stash`
 - `ge lab sheet <lab> --grid=2x2 [shots]` (shots on one image) and `--watch`
 - `ge lab grid <lab> --vary=cfg:a,b,c` (one composite picture of the same view under several settings, each tile captioned with its setting; asked again as `ge lab sheet <lab> --view=<v> --vary=cfg:...`)
@@ -87,7 +87,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - precheck running a lab's full flags, not only its smoke flags, when a change reaches that lab's subject (`ge lab run --full-for=<lab>`: the smoke run stopped short of the moment that moved; #156)
 - precheck naming the goldens and digests main already fails (`--known-red`, off main's last CI run), so a red that is main's own is ruled out without a second full run (#267)
 - `ge ci <run> --lab-log` (a failed lab's per-view metrics read out of a CI job's log, so a flake names its view without a rerun; #233)
-- `ge digest --affected` following the running `ge`'s preset (the release `ge` still ran the debug labs), and `--only-moved-by=<symbol>` (only the labs whose digest a named symbol can move: a `state.hpp` change reached 67 labs, over 25 minutes in debug; #231)
+- `ge digest --affected` following the running `ge`'s preset (the release `ge` still ran the debug labs), and `--only-moved-by=<symbol>` (only the labs whose digest a named symbol can move: a `state.hpp` change reached 67 labs, over 25 minutes in debug; #231; a brush, app or render change reached about 85 labs, past a 4-core container's 30-minute window: precheck running only the labs a change can move, bonfires thread, #402)
 - `ge digest --affected --write` (only the digests the change moved rewritten, each named with why, in place of one lab at a time; #270), and `ge digest --affected` resuming after an interrupt (a container restart lost a half-written set; #279)
 
 ## Inspecting a run
@@ -236,8 +236,10 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 ## Shooter's Edge (M18, docs/shooters-edge.md § The `ge` tooling it needs)
 
+- one command-line reader for every game window and tool `ge new` scaffolds (`ge::play` or `engine/cli`): flags read wherever they stand, a `+` console line ending at the next flag, an unknown flag refused with the console line it followed, and a renamed flag naming its new name (Shooter's Edge's client does this by hand since the timedemo thread; a Mac run waited ten minutes on `-benchmark` swallowed into a console line)
 - `ge pmove <scenario> --line=N` (one recorded movement scenario stepped against `engine/move`, stopping at the first line that differs, with both sides' state there; classic game loop thread)
 - `ge bsp info/ents/shot` (a map's lumps and limits, its entity lump, a CPU picture of leaves, the PVS from a point and the hulls)
+- `ge lab views --map=<pak map> --near=<classname>` (eye positions framing every entity of a class, such as a large flame light, printed ready to paste into a lab's `--views`, so a lab's views are not found by reading the entity lump by hand; bonfires thread, #402)
 - `ge qc build/disasm/run/trace/profile/diff/assemble/builtins` (our QC compiler; a progs disassembled, run, traced a step at a time, timed by function, diffed against another build by the functions and fields that changed, and assembled from a text listing; `ge qc builtins <progs>`: the builtin numbers a progs calls, checked against the game's catalogue, so "will this mod run here" is one command)
 - `ge server --map --bots --for` (a headless dedicated server with bots, writing an input log for `ge replay`, `ge state` and `ge diverge`; run, replayed and diffed from a game repo as well, which the lobby and hosting thread asked for)
 - `ge demo info/frames/shot/diff` (a client or MVD demo decoded frame by frame, a frame pictured, two demos to their first difference)

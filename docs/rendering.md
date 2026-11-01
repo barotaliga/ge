@@ -858,7 +858,10 @@ the presets under the noon sun and under one lamp at night.
 **As built (M39f)** (`render/flame.hpp`, `render/flame.wgsl`). Fire is drawn as burning gas, not
 a sprite or a model: one quad a flame facing the eye over its bounding sphere, and per pixel a
 march of 28 steps through the gas, stopped at the scene's depth so a bracket or a wall in front
-of it hides it (the `gpu-flames` lab holds a flame behind a wall to changing no byte). The gas is
+of it hides it (the `gpu-flames` lab holds a flame behind a wall to changing no byte). A step
+no eddy can carry gas to (past the largest sway the noise gives at its height, and again once the
+sway is known) returns before any noise is drawn: those points' light is exactly zero, so the
+picture is the same and the gas costs about half (round 4 of the timedemo's price). The gas is
 a teardrop on its fuel (widest an eighth of the way up, a point at its tip), its edge a Gaussian
 in its radius so it fades over decades of light, torn by three octaves of value noise carried up
 at the gas's rise and growing toward the tip, where the tongues tear loose. Its temperature is
@@ -877,7 +880,7 @@ wall beside it from the whole fire rather than a point and falls off softly; fli
 with the flame's seed), and
 `prepare_flames` swells and brightens the gas with that light's level. A game puts the light in
 its lights list. `Flame::wind` bends the flame downwind against its rise, and its light leans
-with it. The presets are a torch, a candle, a brazier and a camp fire.
+with it. The presets are a torch, a candle, a brazier, a camp fire and a bonfire.
 
 **In brush maps (M39g)** (`plugins/brush/app/bsp_flames.hpp`). A classic map's wall torches and
 large flames are light entities; `bsp_fires` stands a torch or a brazier flame where each one's
@@ -888,6 +891,22 @@ the flame's height (`fire_light_lift`, `fire_light_size`), as `flame_light` does
 lit in its lightmaps' units rather than the sun's, so the gas's core is set by `Flame::relative`:
 `kFireGlow` (30) times a white face under the map's own light. The `gpu-bsp` lab draws them in
 its real-time panel.
+
+**Bonfires (M41l)** (`FireLook::bonfires`, classic-enhance's `ce_bonfires`). A large flame on the
+floor (a brazier; `Fire::large`, the entities named large) burns as a bonfire: `bonfire_flame`'s
+broad body (2 m, 80 units) with four lesser tongues round its bed, its light from higher up,
+softer and 1.6 times as bright (`Options::bonfires`). `bonfire_sparks` throws sparks out of its
+bed at 40 a second (`render/emitters.hpp`'s `sparks`: thrown up at 1.5 to 4 m/s, 2900 to 3400 K,
+lofted by the plume and slowed by the air) into the particle pool, which lights them and cools
+them as it does every glowing particle. The air at a fire (`fire_air`) bends its flames and is
+what its sparks are born moving with: the map's wind times the share of open sky over the fire
+(`PointLight::sky`, `place_fires` looking up the map's tree once a map) and a slow draught of its own, so a fire in a
+closed hall wavers and one under the sky streams its sparks downwind. A large flame
+without a bonfire's room over and round it (a lantern's cage, a low roof: `place_fires`,
+`kBonfireRoom` 2.2 m up and `kBonfireReach` 0.6 m round) is a `Fire::lantern`: it burns 1.4 times
+as tall (58 units) and 1.5 times as wide as the pack's flame, filling its cage, its light 1.25
+times as bright (`fire_light_gain`), with no sparks. Wall torches and small flames stay as they
+were.
 
 **Shadows use three techniques, one for each scale:**
 

@@ -83,8 +83,8 @@ stage that failed and how to go on. The player can leave the page; the run goes 
 Every enhancement is a switch (`switches.hpp`), off meaning the classic original as the pack has
 it: the textures (enhanced, the trained upscaler, the relief, the glow), the light (rebaked, live
 lights, shadows), the world (round arches, bevels, rubble, clutter, decals), the liquids and the
-sky (water, lava, slime, teleporters, skies), the effects (fire, muzzle fire, explosions, flares,
-bubbles, lightning beams), the air (fog, low clouds, wind, weather), the picture (reflections,
+sky (water, lava, slime, teleporters, skies), the effects (fire, bonfires, muzzle fire, explosions,
+flares, bubbles, lightning beams), the air (fog, low clouds, wind, weather), the picture (reflections,
 bloom), the models (enhanced skins, smooth shading, rounded models, lit weapons) and the sound
 (enhanced sounds, room acoustics). Each is a cvar `ce_<id>` (`bind_switches`: boolean, saved with
 the player's settings), so the console and a config set it as the menu does (`ce_decals 0`); the
@@ -94,6 +94,9 @@ whatever draws or plays the thing; two change the cache (`apply_bakes`: the trai
 leaves the kernel, rounding on rounds the models) and want ENHANCE again. `ce_skies` is read by
 the modern look (`brush/app/bsp_draw.hpp`'s `pack_sky`): on, the sky faces show our sky, its
 clouds and its night; off, the pack's own two scrolling layers under the modern look's lights.
+`ce_bonfires` burns the braziers (a map's large flames on the floor) as bonfires throwing sparks
+into the wind and the lanterns' caged flames bigger (`brush/app/bsp_flames.hpp`, M41l); off,
+they burn at the pack's flame sizes. The wall torches are torches either way.
 `ce_relief` and `ce_parallax` light the enhanced textures with their maps under the modern look
 (`brush/app/bsp_draw.hpp`'s `relief`, `specular` and `parallax`; the game reads the maps beside
 each albedo with `cached.hpp`'s `cached_surface` into the scene's surface atlas). `ce_relief` puts
