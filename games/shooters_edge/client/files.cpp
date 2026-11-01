@@ -86,16 +86,16 @@ std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name
   return store;
 }
 
-std::vector<std::string> map_names(const SearchPath& path) {
-  const ge::classicenhance::AssetKind& maps = ge::classicenhance::classic_profile().maps;
+std::vector<std::string> map_names(const SearchPath& path,
+                                   const ge::classicenhance::Profile& content) {
+  const ge::classicenhance::AssetKind& maps = content.maps;
   std::set<std::string> names;
   for (const ge::vfs::Listed& l : ge::vfs::list(path.vfs)) {
     const std::string_view n = ge::classicenhance::asset_name(maps, l.name);
     if (!n.empty() && n.find('/') == std::string_view::npos) names.emplace(n);
   }
   std::vector<std::string> out;
-  if (names.erase(std::string(ge::classicenhance::classic_profile().start_map)) > 0)
-    out.emplace_back(ge::classicenhance::classic_profile().start_map);
+  if (names.erase(std::string(content.start_map)) > 0) out.emplace_back(content.start_map);
   out.insert(out.end(), names.begin(), names.end());
   return out;
 }

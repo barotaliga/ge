@@ -70,42 +70,7 @@ struct Shelf {
 
 uint32_t up_to(uint32_t v, uint32_t m) { return (v + m - 1) / m * m; }
 
-// The map's miptex records, mip by mip: lump 2 of a version 29 file.
-struct Mips {
-  uint32_t width = 0, height = 0;
-  const uint8_t* level[4] = {nullptr, nullptr, nullptr, nullptr};
-};
-
-std::vector<Mips> read_mips(std::span<const uint8_t> file) {
-  std::vector<Mips> out;
-  Cursor head{file};
-  head.u32();
-  for (int i = 0; i < 2; ++i) head.u32(), head.u32();
-  const uint32_t ofs = head.u32(), len = head.u32();
-  if (head.bad || ofs > file.size() || len > file.size() - ofs || len < 4) return out;
-  const std::span<const uint8_t> lump = file.subspan(ofs, len);
-  Cursor c{lump};
-  const uint32_t count = c.u32();
-  for (uint32_t i = 0; i < count && !c.bad; ++i) {
-    const int32_t at = c.i32();
-    Mips m;
-    if (at >= 0 && uint32_t(at) + 40 <= len) {
-      Cursor r{lump};
-      r.at = size_t(at);
-      r.name(16);
-      m.width = r.u32();
-      m.height = r.u32();
-      for (int k = 0; k < 4; ++k) {
-        const uint32_t o = r.u32();
-        const uint64_t bytes = uint64_t(m.width >> k) * (m.height >> k);
-        if (o != 0 && uint64_t(at) + o + bytes <= len) m.level[k] = lump.data() + at + o;
-      }
-      if (!m.level[0]) m.width = m.height = 0;
-    }
-    out.push_back(m);
-  }
-  return out;
-}
+using Mips = MapPicture;
 
 // How a liquid is drawn, by the mark its map's reader set.
 Kind kind_of(Liquid l) {
@@ -274,9 +239,12 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
   // A source may hand a texture larger than the map's (2, 4 or 8 times across: an upscaled copy);
   // its rectangle is that much larger and its faces' texture coordinates scaled to match. The
   // frames of an animated sequence keep one scale, or all fall back to the map's own.
-  // Only 29 and BSP2 carry their pictures; another family's come from the source or are checks.
-  const std::vector<Mips> mips =
-      m.family == Family::v29 || m.family == Family::bsp2 ? read_mips(file) : std::vector<Mips>{};
+  // The pictures: the game's own reader's (`TextureSource::pictures`), else what the file carries
+  // (only 29 and BSP2 do; another family's come from the source or are checks).
+  std::vector<Mips> read;
+  if (source.pictures == nullptr && (m.family == Family::v29 || m.family == Family::bsp2))
+    read = read_map_pictures(file);
+  const std::vector<Mips>& mips = source.pictures != nullptr ? *source.pictures : read;
   const TextureAnims anims = build_texture_anims(m);
   struct Placed {
     uint32_t x = 0, y = 0, w = 16, h = 16;

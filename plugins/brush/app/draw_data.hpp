@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "brush/map.hpp"
+#include "brush/pictures.hpp"
 #include "brush/rebake.hpp"
 
 namespace ge::brush::app {
@@ -193,6 +194,10 @@ struct TextureSource {
   void* user = nullptr;
   bool (*surface)(void* user, std::string_view name, uint32_t w, uint32_t h,
                   std::vector<uint8_t>* rgba) = nullptr;
+  // The map's pictures as the game read them (its own reader of its textures, one entry a texture
+  // in the map's order, views valid through `load_scene`); null: what the file carries itself
+  // (`read_map_pictures`, 29 and BSP2).
+  const std::vector<MapPicture>* pictures = nullptr;
 };
 // A texel of `Scene::surface` where a texture has no relief: flat, at the top, fairly rough.
 inline constexpr uint8_t kFlatSurface[4] = {128, 128, 255, 191};
