@@ -17,7 +17,9 @@
 //
 // ge:summary The way out of a map's water: a breadth-first field over wet cells to the exits
 // ge:keywords swim water pool underwater escape flow-field wet-cell exit swim_field swim_next
-// swim_wet swim_steps dive ge:skill shooter bots ge:test tests/shooter_swim_test.cpp
+// ge:keywords swim_wet swim_steps dive
+// ge:skill shooter bots
+// ge:test tests/shooter_swim_test.cpp
 #pragma once
 
 #include <cstdint>

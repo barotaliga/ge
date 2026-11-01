@@ -56,8 +56,9 @@
 // ge:keywords nav navigation nav-graph navmesh waypoint waypoints node link walk drop jump
 // ge:keywords running-jump moving-jump run-up prove prove_link build_nav nav_route nav_nearest
 // ge:keywords nav_add_links nav_close_entries teleport-link nav_reach nav_hash map_world
-// reachability mover door plat ride route path a-star bot ge:skill shooter bots ge:test
-// tests/shooter_nav_test.cpp
+// ge:keywords reachability mover door plat ride route path a-star bot
+// ge:skill shooter bots
+// ge:test tests/shooter_nav_test.cpp
 #pragma once
 
 #include <cstdint>
