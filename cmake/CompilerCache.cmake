@@ -17,8 +17,23 @@ option(GE_CCACHE "Compile through ccache (or sccache) when one is on PATH" ON)
 if(GE_CCACHE AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
   find_program(GE_CCACHE_PROGRAM NAMES ccache sccache)
   if(GE_CCACHE_PROGRAM)
-    set(CMAKE_CXX_COMPILER_LAUNCHER "${GE_CCACHE_PROGRAM}")
-    set(CMAKE_C_COMPILER_LAUNCHER "${GE_CCACHE_PROGRAM}")
+    set(ge_launcher "${GE_CCACHE_PROGRAM}")
+    # ccache 4.8+ takes settings before the compiler. Two make the keys the same on every machine
+    # that builds this tree: base_dir hashes paths under the checkout as relative ones (another
+    # checkout path, a worktree), and compiler_check=content hashes the compiler by its bytes,
+    # not by its file's time (the same compiler installed on another day in another container).
+    # Without them a cache carried to a new container (tools/ccache-share.sh) can miss on every
+    # compile.
+    get_filename_component(ge_launcher_name "${GE_CCACHE_PROGRAM}" NAME_WE)
+    if(ge_launcher_name STREQUAL "ccache")
+      execute_process(COMMAND "${GE_CCACHE_PROGRAM}" --version OUTPUT_VARIABLE ge_ccache_out
+                      ERROR_QUIET)
+      if(ge_ccache_out MATCHES "version ([0-9]+\\.[0-9]+)" AND CMAKE_MATCH_1 VERSION_GREATER_EQUAL 4.8)
+        list(APPEND ge_launcher "base_dir=${PROJECT_SOURCE_DIR}" "compiler_check=content")
+      endif()
+    endif()
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${ge_launcher}")
+    set(CMAKE_C_COMPILER_LAUNCHER "${ge_launcher}")
   endif()
 endif()
 if(CMAKE_CXX_COMPILER_LAUNCHER AND NOT CMAKE_C_COMPILER_LAUNCHER)

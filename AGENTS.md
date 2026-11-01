@@ -220,6 +220,12 @@ make shaders-check # every embedded WGSL shader compiled by Tint offline (needs 
 too) and then `make build` (the debug preset, reusing `build/debug/`) in the background while you read. Before you
 rely on the build, `tools/session-start.sh --wait` blocks until it is done and exits with its
 result; the output is `build/session-start.log`, the one-line state `build/session-start.status`.
+**The hook fires only when the session starts IN this checkout:** a project thread that starts
+above it (several repositories side by side) never reads this tree's `.claude/settings.json`, so
+there, run `tools/session-start.sh` yourself as your first command. Every build in a new cloud
+container starts warm either way: `make build` installs ccache if it is missing and restores the
+compiler cache and `.cache/deps/` from the shared project folder (`tools/ccache-share.sh`), and
+a good build saves them back.
 
 **Linux is checked here, before the push; CI runs only what can differ elsewhere.** `make
 precheck` is the Linux gate (GCC debug+ASan on Mesa's lavapipe: the build, the lint, the shaders,

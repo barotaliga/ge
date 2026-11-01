@@ -7,12 +7,14 @@ SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.
 .PHONY: build test fmt fmt-check lint agents-check index find lessons labs lab sim play labs-smoke \
 	labs-digests libm-check release-check shaders-check precheck ge clean
 
-# A new cloud container first takes the shared compiler cache (tools/ccache-share.sh; a no-op
-# elsewhere and once the local cache has entries).
+# A new cloud container first takes the shared build caches (tools/ccache-share.sh: the compiler
+# cache and .cache/deps; a no-op elsewhere and once the local caches have entries), and a good
+# build puts them back for the next container (in the background, at most every half hour).
 build:
 	@tools/ccache-share.sh restore
 	cmake --preset $(PRESET)
 	cmake --build --preset $(PRESET)
+	@tools/ccache-share.sh save
 
 # Every test case in parallel, one per core (CTEST_PARALLEL_LEVEL overrides). T=<regex> runs only
 # the tests it names and builds only their targets (each test is its own executable).
@@ -25,6 +27,7 @@ test:
 	  [ -n "$$targets" ] || { echo "make test: no test matches T=$(T); ctest --preset $(PRESET) -N lists them." >&2; exit 1; }; \
 	  cmake --build --preset $(PRESET) --target $$targets; \
 	else cmake --build --preset $(PRESET); fi
+	@tools/ccache-share.sh save
 	ctest --preset $(PRESET) $(if $(T),-R "$(T)") -j $${CTEST_PARALLEL_LEVEL:-$$(nproc 2>/dev/null || sysctl -n hw.ncpu)}
 
 fmt:
