@@ -84,6 +84,7 @@
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
@@ -338,7 +339,10 @@ int run_main(int argc, char** argv) {
   if (!args.demovideo.empty()) return demo_video_main(args, files, picture, playback.track);
   // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
   // enhance offers.
-  shooters_edge::menu::Host menu_host{.console = &console, .maps = cl::map_names(files)};
+  const cl::GameAdapter& adapter = cl::adapter_of(shooters_edge::profiles::classic_game());
+  shooters_edge::menu::Host menu_host{.console = &console,
+                                      .maps = adapter.list_maps(adapter, files)};
+  cl::add_adapter_commands(console, adapter, files, args.basedir);
   menu_host.maps.emplace_back("arena");
   // ce_pictures: the menu's and the status bar's pictures enhanced from the packs' cache; read
   // again when it flips and when a map loads (client/classic_pictures.hpp).
@@ -375,10 +379,12 @@ int run_main(int argc, char** argv) {
   if (!args.progs.empty()) {
     mod_loaded = shooters_edge::server::load_mod(args.progs, progs, source, error);
   } else {
-    std::string found, why;
-    if (cl::find_program(files, game.multiplayer_programs, false, progs, found, why)) {
-      out::status("shooters_edge: the game's multiplayer program " + found + " runs (-progs " +
-                  "names another)");
+    cl::FoundProgram found;
+    std::string why;
+    if (adapter.find_program(adapter, files, false, found, why)) {
+      out::status("shooters_edge: the game's multiplayer program " + std::string(found.file.name) +
+                  " runs (-progs names another)");
+      progs = std::move(found.progs);
       mod_loaded = true;
     } else {
       if (!why.empty()) out::status("shooters_edge: the baseline mod runs (" + why + ")");
@@ -395,9 +401,12 @@ int run_main(int argc, char** argv) {
   ge::progs::Progs pack_progs;
   const ge::progs::Progs* campaign_progs = cl::single_player(progs) ? &progs : nullptr;
   if (campaign_progs == nullptr) {
-    std::string found, why;
-    if (cl::find_program(files, game.single_player_programs, true, pack_progs, found, why))
+    cl::FoundProgram found;
+    std::string why;
+    if (adapter.find_program(adapter, files, true, found, why)) {
+      pack_progs = std::move(found.progs);
       campaign_progs = &pack_progs;
+    }
   }
   cl::ListenOptions listen_opt;
   listen_opt.files = &files;
@@ -745,7 +754,7 @@ int run_main(int argc, char** argv) {
     // at its pace keeps vsync.
     if (!bench_ask.empty()) {
       const bool quit_after = bench_ask == args.timedemo || bench_ask == args.playdemo;
-      if (!cl::timedemo_start(files, bench_ask, bench, error)) {
+      if (!cl::timedemo_start(files, bench_ask, bench, error, adapter)) {
         console.print("timedemo: " + error);
         if (quit_after) {
           out::error("shooters_edge: the timedemo did not start: " + error +
