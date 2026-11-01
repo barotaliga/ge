@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 
+#include "assets/tga.hpp"
 #include "brush/pictures.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
@@ -30,6 +31,7 @@ namespace cl = shooters_edge::client;
 namespace pf = shooters_edge::profiles;
 namespace pg = ge::progs;
 namespace fs = std::filesystem;
+namespace as = ge::assets;
 
 namespace {
 
@@ -133,7 +135,7 @@ TEST(a_maps_info_and_textures_are_read_off_its_file) {
   CHECK(error.find("maps/nowhere.bsp") != std::string::npos);
 
   std::vector<uint8_t> store;
-  const std::vector<ge::brush::MapPicture> pics = a.map_textures(a, files, map, store);
+  const std::vector<ge::brush::MapPicture> pics = a.map_textures(a, files, "room", map, store);
   CHECK(pics.size() == info.textures);
   const std::vector<ge::brush::MapPicture> direct = ge::brush::read_map_pictures(map);
   CHECK(pics.size() == direct.size());
@@ -141,10 +143,30 @@ TEST(a_maps_info_and_textures_are_read_off_its_file) {
     CHECK(pics[i].name == direct[i].name && pics[i].width == 64 && pics[i].height == 64);
     CHECK(pics[i].level[0] == direct[i].level[0] && pics[i].level[3] != nullptr);
   }
+  // A TGA in the game's files stands in for a texture by its name, alpha and all; a map's own
+  // folder first.
+  as::Image tga;
+  tga.width = 4;
+  tga.height = 2;
+  tga.rgba.assign(size_t{4} * 2 * 4, 9);
+  std::vector<uint8_t> tga_pak;
+  as::Image only_map = tga;
+  only_map.rgba.assign(size_t{4} * 2 * 4, 77);
+  CHECK(ge::vfs::write_pak({{"textures/" + direct[0].name + ".tga", as::encode_tga(tga)},
+                            {"textures/room/" + direct[0].name + ".tga", as::encode_tga(only_map)},
+                            {"textures/" + direct[1].name + ".tga", {1, 2, 3}}},
+                           &tga_pak, &error));
+  CHECK_MSG(cl::add_archive(files, "pak1.pak", std::move(tga_pak), error), error);
+  const std::vector<ge::brush::MapPicture> swapped = a.map_textures(a, files, "room", map, store);
+  CHECK(swapped[0].rgba_width == 4 && swapped[0].rgba_height == 2);
+  CHECK(swapped[0].rgba == only_map.rgba && swapped[0].level[0] == direct[0].level[0]);
+  CHECK(swapped[1].rgba.empty());  // a file that does not read: the map's own is drawn
+  CHECK(a.map_textures(a, files, "other", map, store)[0].rgba == tga.rgba);
+
   // A family that keeps its pictures in other files gives none from the map.
   std::vector<uint8_t> v38;
   CHECK(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v38, &v38, &error));
-  CHECK(a.map_textures(a, files, v38, store).empty());
+  CHECK(a.map_textures(a, files, "room", v38, store).empty());
 }
 
 TEST(the_demos_are_listed_and_found_by_a_bare_name) {
