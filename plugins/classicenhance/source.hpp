@@ -41,6 +41,8 @@
 #include <string>
 #include <vector>
 
+#include "classicenhance/profile.hpp"
+
 namespace ge::classicenhance {
 
 struct KnownFile {
@@ -73,6 +75,9 @@ struct LaterPack {
 };
 
 struct Source {
+  // The classic game the packs are (profile.hpp): found by the base folder an install keeps them
+  // in, the path an archive stores the first pack under, or the files the pack holds.
+  const Profile* profile = &classic_profile();
   Route route = Route::pack_file;
   std::string path;                // the file the pack was read from (a zip or the pack itself)
   std::string zip_sha256;          // the zip's digest, when the route went through one
@@ -95,13 +100,15 @@ bool open_source(const std::string& path, Source* out, std::string* error,
 // The pack inside a release zip's bytes (through its LHA archive when it has one), verified.
 bool pack_from_zip(std::span<const uint8_t> zip, Source* out, std::string* error,
                    std::span<const KnownFile> packs = kKnownPacks);
-// The later packs in `dir` (pak1.pak, pak2.pak ... in any case) read into `out->later`, and
-// `out->merged` and `out->set_sha256` set; false when one does not read as a pack.
+// The later packs in `dir` (the profile's numbered packs from 1: pak1.pak, pak2.pak ... in any
+// case) read into `out->later`, and `out->merged` and `out->set_sha256` set; false when one does
+// not read as a pack.
 bool add_later_packs(const std::string& dir, Source* out, std::string* error,
                      std::span<const KnownFile> packs = kKnownPacks);
 
-// Whether `out->pack` reads as a pack; sets `out->pack_sha256`, and `out->known` when it is one
-// of `packs` (nullptr: the player's own copy, unverified).
+// Whether `out->pack` reads as a pack; sets `out->pack_sha256`, `out->profile` (the first row
+// whose palette the pack holds; the first row when none does) and `out->known` when it is one of
+// `packs` (nullptr: the player's own copy, unverified).
 bool verify_pack(Source* out, std::string* error, std::span<const KnownFile> packs = kKnownPacks);
 
 }  // namespace ge::classicenhance

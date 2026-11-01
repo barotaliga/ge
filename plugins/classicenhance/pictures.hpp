@@ -37,6 +37,7 @@
 #include <vector>
 
 #include "assets/image.hpp"
+#include "classicenhance/profile.hpp"
 #include "classicenhance/texture.hpp"
 #include "vfs/wad.hpp"
 
@@ -53,7 +54,7 @@ struct PackPicture {
 // palette; false with the reason when the pack has no palette or no gfx.wad, or the wad is
 // damaged. A wad lump that is neither a picture nor the font sheet is skipped.
 bool pack_pictures(std::span<const uint8_t> pack, Palette* palette, std::vector<PackPicture>* out,
-                   std::string* error);
+                   std::string* error, const Profile& profile = classic_profile());
 
 // The picture in the palette's colours, `transparent` drawn with alpha 0.
 assets::Image picture_rgba(const vfs::IndexedPicture& picture, const Palette& palette,
