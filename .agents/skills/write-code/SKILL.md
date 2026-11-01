@@ -72,8 +72,10 @@ leading comment with a block of `ge:` lines, which `make index` turns into
 | `ge:test` | when one exists | The test file(s) that hold it; each must exist. |
 
 - Use `#` instead of `//` in shell scripts. Tags must sit in the first 60 lines.
-- A tag line stays within 100 columns (clang-format reflows a longer comment, and the wrapped
-  half loses its `ge:` prefix). Wrap by repeating the tag: repeated tags' values are joined.
+- A tag line stays within 100 columns. Wrap by repeating the tag: repeated tags' values are
+  joined. `.clang-format`'s `CommentPragmas` keeps `make fmt` from reflowing a `ge:` line (it used
+  to wrap an over-long `ge:keywords` line into an untagged comment, pull the next tag up into it,
+  and agents-check then failed with "missing ge:skill"), so a long line stays long: wrap it by hand.
 - Keywords name what the file HAS, not what it skipped.
 - `docs/index.md` is gitignored: `make index` (or `make agents-check`) rewrites it in your
   checkout after a tag changes, and nothing commits it.
