@@ -54,6 +54,7 @@ struct Room {
   sv::Lobby lobby;
   std::array<std::unique_ptr<RoomBot>, sv::kLobbySeats> bots;  // by slot (null: no bot)
   std::unique_ptr<sh::NavGraph> graph;                         // the bots' map's
+  std::unique_ptr<sh::MoveWorld> world;                        // its solids (the hop's look)
   std::string graph_of;                                        // the map it was built for
   uint32_t seed = 1;
   int bots_named = 0;               // bots ever seated (their names count up)

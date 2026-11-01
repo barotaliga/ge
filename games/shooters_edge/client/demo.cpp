@@ -374,6 +374,8 @@ DemoRead next_frame(Demo& d, std::string& error) {
   d.state.started.clear();
   d.state.stopped.clear();
   d.state.voice.clear();
+  d.state.prints.clear();
+  d.state.centre.clear();
   if (d.state.format == DemoFormat::client) return next_client(d, error);
   if (d.state.format == DemoFormat::multiview) {
     const DemoRead r = next_multiview(d, error);

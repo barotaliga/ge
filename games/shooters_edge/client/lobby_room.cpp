@@ -35,7 +35,8 @@ bool ensure_graph(Room& r, const sv::QcServer& s, const sv::MapSpec& map, std::s
     error = "the map " + map.name + " has no world model to walk on; next: load a map first";
     return false;
   }
-  sh::MoveWorld world;
+  auto w = std::make_unique<sh::MoveWorld>();
+  sh::MoveWorld& world = *w;
   sh::map_world(map.models[0], world);
   std::vector<sh::NavMover> movers;
   if (map.name == "arena" && map.models.size() > 2) {
@@ -61,6 +62,7 @@ bool ensure_graph(Room& r, const sv::QcServer& s, const sv::MapSpec& map, std::s
     return false;
   }
   r.graph = std::move(g);
+  r.world = std::move(w);
   r.graph_of = map.name;
   return true;
 }
@@ -75,6 +77,7 @@ void make_fighter(Room& r, const sv::QcServer& s, const sv::MapSpec& map, int sl
   bots::fighter_init(b.fighter, *r.graph, s, slot, map.entities.c_str(), b.skill, kBotHz,
                      bot_seed(r, slot));
   b.fighter.bot.yaw = s.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
+  b.fighter.bot.pilot.world = r.world.get();  // the hop looks ahead through the map
 }
 
 }  // namespace

@@ -118,6 +118,7 @@ FightReport run_fight(const FightOptions& opt) {
     fighter_init(f, graph, s, k, server::kBaselineArenaEntities, opt.skills[static_cast<size_t>(k)],
                  kHz, opt.seed + 31u * static_cast<uint32_t>(k));
     f.bot.yaw = s.sv.edicts[static_cast<size_t>(k) + 1].v_angle.y;
+    f.bot.pilot.world = &world;  // the hop looks ahead through the map
     if (k == 0) f.bot.pilot.why = opt.why;
   }
 

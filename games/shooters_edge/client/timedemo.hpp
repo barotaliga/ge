@@ -150,6 +150,19 @@ struct DemoTimeline {
   void frame(const DemoState& s, bool new_level);
 };
 
+// WHAT THE FRAMES READ SINCE THE LAST DRAW CARRIED, kept while `Timedemo::hear` is on (playdemo):
+// a drawn frame reads several demo frames, and each frame's sounds, voices, prints and centre
+// message last only until the next is read (demo.hpp), so they are gathered here for the window
+// to play and show (demo_heard.hpp), then emptied. A seek drops what it read past.
+struct DemoHeard {
+  std::vector<DemoSound> started;
+  std::vector<std::pair<int, int>> stopped;
+  std::vector<DemoVoice> voice;
+  std::vector<DemoPrint> prints;
+  std::string centre;  // the last centre message; empty when none
+  void clear() { *this = {}; }
+};
+
 struct Timedemo {
   std::string name;   // as asked
   std::string found;  // where it was read from
@@ -165,6 +178,8 @@ struct Timedemo {
   bool quit_after = false;  // the command line's run: quit with the report
   bool paced = false;       // played at the demo's pace (playdemo), not flat out
   double clock = -1;        // the paced run's demo clock, s (-1: not started)
+  bool hear = false;        // gather each frame's sounds and prints into `heard`
+  DemoHeard heard;
 };
 
 // `name` found and opened by the game's adapter (game_adapter.hpp); the run begins at the next

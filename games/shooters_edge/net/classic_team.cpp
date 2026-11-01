@@ -401,6 +401,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       bt::fighter_init(seat.fighter, graph, s, slot, map->spec.entities.c_str(), seat.skill, kHz,
                        opt.seed + 31u * static_cast<uint32_t>(k));
       seat.fighter.bot.yaw = s.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
+      seat.fighter.bot.pilot.world = &world;  // the hop looks ahead through the map
       seat.fighter.name = r.players[static_cast<size_t>(k)].name;
       if (locs.points.empty()) {
         if (!opt.locs.empty() && sh::parse_locs(opt.locs, locs) > 0) {
