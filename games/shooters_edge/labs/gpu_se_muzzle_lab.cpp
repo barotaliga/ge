@@ -198,10 +198,7 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    // The same digest as the device's branch: the shots' ids, then the two GPU counts.
-    placeholders(lab, {"fire", "day"}, w, h);
-    lab.metric("gpu-errors", 0, "count");
-    lab.metric("pipelines-after-load", 0, "count");
+    placeholders(lab, {"fire", "day"}, w, h);  // the shots' ids and the two GPU counts at 0
     return;
   }
   es::Scene s;
