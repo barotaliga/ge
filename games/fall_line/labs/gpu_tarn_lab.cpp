@@ -2,7 +2,8 @@
 // Fall Line's own frame (app/lakes.hpp's `show_lakes`, which `create_frame` calls): the tarn laid
 // on a seed's free-ride map as the map's day leaves it, and the same site laid three more ways,
 // OPEN (a summer's water over the dug bowl), THIN (3 cm of young black ice over it, which does not
-// bear a skier) and FROZEN (40 cm, snowed over, filled flat to bear him), each from below its lip
+// bear a skier), FROZEN (40 cm, snowed over, filled flat to bear him) and THAWING (6 cm of rotten
+// ice late in the spring's melt, standing off the shore over a moat), each from below its lip
 // (app/views.hpp's `tarn`) and from high over the slope below it (`tarn-high`).
 //
 // The rows: the site, the surface, the winter so far and the ice on the map's day, whether it
@@ -12,9 +13,10 @@
 // Without an adapter it notes that and draws placeholders, so the digest is the same on every row;
 // GE_GPU_REQUIRE=1 fails instead. Built only with GE_GPU.
 //
-// ge:summary Lab: the free ride's tarn in Fall Line's frame: the map's day, open, thin, frozen
+// ge:summary Lab: the tarn in the game's frame: the map's day, open, thin, frozen, thawing
 // ge:keywords lab tarn lake lake-ice thin-ice frozen-lake free-ride show_lakes picture in-game
 // ge:skill render water labs
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -30,6 +32,7 @@
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
+#include "mountain/app/ice_look.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "mountain/tarn/tarn.hpp"
 #include "water/world.hpp"
@@ -75,6 +78,7 @@ double changed(const ge::lab::Picture& a, const ge::lab::Picture& b) {
 struct State {
   std::string id, title, look_for;
   double ice;
+  double thaw = 0;  // 0..1 through the spring's melt
 };
 
 const std::vector<State> kStates = {
@@ -92,17 +96,24 @@ const std::vector<State> kStates = {
      "Forty centimetres: snow over it but for the wind's swept patches of grey-blue glass, on "
      "ground filled flat.",
      0.4},
+    {"thawing", "Thawing",
+     "Late in the spring's melt: six centimetres of rotten ice, grey wet slush on it and dark "
+     "glass where it was swept, standing off the shore over a moat of open water. It does not "
+     "bear a skier.",
+     0.06, 0.85},
 };
 
-// The free ride's map for `seed`, its tarn laid with `ice` m (the map's day's when negative).
-std::shared_ptr<const mg::Level> laid(double seed, int version, double ice) {
+// The free ride's map for `seed`, its tarn laid with `ice` m (the map's day's when negative),
+// `thaw` through the spring's melt.
+std::shared_ptr<const mg::Level> laid(double seed, int version, double ice, double thaw = 0) {
   if (ice < 0) return std::make_shared<const mg::Level>(fall_line::sim::free_map(seed, version));
   mg::GenerateOptions opts;
   opts.version = version;
   mg::Level level = mg::generate_level(seed, opts);
   if (std::optional<mg::MapLake> lake = tn::find_tarn(level, fall_line::sim::kTarnRadius)) {
     lake->ice = ice;
-    tn::dig_basin(level, *lake, tn::kTarnDepth, tn::bears(ice));
+    lake->thaw = thaw;
+    tn::dig_basin(level, *lake, tn::kTarnDepth, tn::bears(*lake));
     level.lakes.push_back(*lake);
   }
   return std::make_shared<const mg::Level>(std::move(level));
@@ -142,15 +153,16 @@ void run(ge::lab::Lab& lab) {
   lab.metric("tarn.depth", lake.depth, "m");
   lab.metric("winter-days", tn::winter_days(*day), "days");
   lab.metric("ice", lake.ice * 100, "cm");
-  lab.metric("bears", tn::bears(lake.ice) ? 1 : 0, "bool");
+  lab.metric("bears", tn::bears(lake) ? 1 : 0, "bool");
+  lab.metric("thaw", lake.thaw, "share");
   lab.note("Seed " + seed_s + "'s tarn: " + fixed(2 * lake.radius, 0) + " m across at " +
            fixed(lake.level, 0) + " m, day " + fixed(day->sun.day_of_year, 0) + " of the year, " +
            fixed(tn::winter_days(*day), 0) + " days of winter, " + fixed(lake.ice * 100, 1) +
-           " cm of ice" +
-           (tn::bears(lake.ice) ? " that bears a skier" : ", which does not bear one") + ".");
+           " cm of ice" + (tn::bears(lake) ? " that bears a skier" : ", which does not bear one") +
+           ".");
 
   const std::vector<std::string> views = {"tarn", "tarn-high"};
-  auto shot_of = [&](const State& s, const std::string& view, double ice) {
+  auto shot_of = [&](const State& s, const std::string& view, double ice, double thaw) {
     return ge::lab::Shot{
         s.id + "-" + view,
         s.title + (view == "tarn" ? ", from below its lip" : ", from high over the slope"),
@@ -160,7 +172,8 @@ void run(ge::lab::Lab& lab) {
         {{"seed", seed_s},
          {"view", view},
          {"ice", fixed(ice * 100, 1) + " cm"},
-         {"bears", tn::bears(ice) ? "yes" : "no"}},
+         {"thaw", fixed(thaw, 2)},
+         {"bears", tn::bears(mg::MapLake{.ice = ice, .thaw = thaw}) ? "yes" : "no"}},
     };
   };
 
@@ -175,7 +188,8 @@ void run(ge::lab::Lab& lab) {
       for (const std::string& view : views) {
         ge::lab::Picture none = ge::lab::create_picture(width, height, {40, 40, 48});
         ge::lab::draw_text(none, 4, 4, "NO GPU ADAPTER", {230, 230, 230});
-        lab.shot(shot_of(s, view, s.ice < 0 ? lake.ice : s.ice), none, Det::measured);
+        lab.shot(shot_of(s, view, s.ice < 0 ? lake.ice : s.ice, s.ice < 0 ? lake.thaw : s.thaw),
+                 none, Det::measured);
       }
     }
     lab.metric("gpu-errors", 0, "count");
@@ -188,8 +202,31 @@ void run(ge::lab::Lab& lab) {
   // pipeline, so a pipeline made after the load is counted over the first state's shots alone.
   uint32_t late = 0;
   for (const State& s : kStates) {
-    const std::shared_ptr<const mg::Level> level = s.ice < 0 ? day : laid(seed, version, s.ice);
+    const std::shared_ptr<const mg::Level> level =
+        s.ice < 0 ? day : laid(seed, version, s.ice, s.thaw);
     const double ice = level->lakes.empty() ? 0 : level->lakes[0].ice;
+    const double thaw = level->lakes.empty() ? 0 : level->lakes[0].thaw;
+    // The moat keeps the water drawn round the sheet (none round ice on ground filled flat).
+    const double moat =
+        level->lakes.empty() || level->lakes[0].depth == 0 ? 0 : tn::moat_of(level->lakes[0]);
+    // The sheet's share of the lake inside its shore: the moat's water is the rest.
+    if (!level->lakes.empty() && ice > 0) {
+      const mg::MapLake& l = level->lakes[0];
+      const std::vector<ge::water::Point> shore = tn::shore_of(l);
+      const ge::render::MeshData sheet =
+          ge::mountain::app::ice_mesh(shore, l.level, 0, false, moat);
+      double sheet_m2 = 0, lake_m2 = 0;
+      for (size_t v = 0; v + 2 < sheet.parts.size(); v += 3) {
+        const float* p = &sheet.positions[v * 3];
+        sheet_m2 += 0.5 * std::abs((p[3] - p[0]) * (p[8] - p[2]) - (p[5] - p[2]) * (p[6] - p[0]));
+      }
+      for (size_t i = 0; i < shore.size(); ++i) {
+        const ge::water::Point& a = shore[i];
+        const ge::water::Point& b = shore[(i + 1) % shore.size()];
+        lake_m2 += 0.5 * (a.x * b.z - b.x * a.z);
+      }
+      lab.metric(s.id + ".sheet-share", sheet_m2 / std::abs(lake_m2), "share");
+    }
     auto frame = fall_line::app::create_frame(*device, *level, static_cast<uint32_t>(width),
                                               static_cast<uint32_t>(height),
                                               wgpu::TextureFormat::RGBA8Unorm);
@@ -220,7 +257,10 @@ void run(ge::lab::Lab& lab) {
       for (auto& b : frame->water.bodies) b.hidden = true;
       const ge::lab::Picture dry = draw(v);
       for (auto& b : frame->water.bodies) b.hidden = false;
-      if (sheet >= 0) fall_line::app::freeze_water(*device, *frame, sheet, ge::water::Body{}, ice);
+      if (sheet >= 0) {
+        fall_line::app::freeze_water(*device, *frame, sheet, ge::water::Body{}, ice, false, moat,
+                                     thaw);
+      }
       const double share = changed(pic, dry);
       lab.metric(s.id + "-" + view + ".lake-share", share, "share", Det::measured);
       if (share < 0.02) {
@@ -228,7 +268,7 @@ void run(ge::lab::Lab& lab) {
                      fixed(share * 100, 1) + "% of the picture changed by its water and ice)",
                  "Check app/views.cpp's tarn views and app/lakes.cpp's show_lakes. Skill: render.");
       }
-      lab.shot(shot_of(s, view, ice), pic, Det::measured);
+      lab.shot(shot_of(s, view, ice, thaw), pic, Det::measured);
     }
     if (&s == &kStates.front()) late = device->pipelines_after_load;
   }
@@ -253,7 +293,7 @@ const ge::lab::LabSpec kSpec{
     "games/fall_line/app/lakes.cpp's show_lakes in the game's frame",
     "render",
     "Does the free ride's tarn read as a lake laid high in the mountain, on the map's day and "
-    "open, under thin black ice and frozen to bear a skier?",
+    "open, under thin black ice, frozen to bear a skier and thawing over a moat?",
     {
         {"seed", "38", "the map's seed"},
         {"version", "10", "the generator's version (the free ride's ski area: 8 or later)"},

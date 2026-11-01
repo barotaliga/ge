@@ -172,7 +172,7 @@ TEST(the_free_ride_lays_the_tarn_the_module_finds) {
   const mg::MapLake& laid = level.lakes[0];
   CHECK(laid.x == found->x && laid.z == found->z);
   CHECK(laid.ice == tn::tarn_ice(level, laid));
-  CHECK((laid.depth == 0) == tn::bears(laid.ice));
+  CHECK((laid.depth == 0) == tn::bears(laid));
   // A dealt race map lays none.
   CHECK(mg::generate_level(38, opts).lakes.empty());
 }

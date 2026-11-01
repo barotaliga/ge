@@ -127,11 +127,25 @@ double winter_days(const mg::Level& level) {
   return days < kWinter ? days : 0;
 }
 
+double thaw_of(const mg::Level& level) {
+  const double days = winter_days(level);
+  return std::clamp((days - (kWinter - kThawDays)) / kThawDays, 0.0, 1.0);
+}
+
 double tarn_ice(const mg::Level& level, const mg::MapLake& lake) {
-  return air::lake_ice(level, lake.level, winter_days(level));
+  const double days = winter_days(level);
+  return air::lake_ice(level, lake.level, std::min(days, kWinter - kThawDays)) *
+         (1 - thaw_of(level));
 }
 
 bool bears(double ice, double kg) { return wind::ice_bears(ice) >= kg; }
+
+bool bears(const mg::MapLake& lake, double kg) {
+  // What ice carries goes as its thickness squared (Gold): rotten ice is thinner sound ice.
+  return bears(lake.ice * std::sqrt(1 - (1 - kRotten) * lake.thaw), kg);
+}
+
+double moat_of(const mg::MapLake& lake) { return kMoat * lake.thaw; }
 
 void dig_basin(mg::Level& level, mg::MapLake& lake, double depth, bool flat) {
   lake.level = rim_of(level, lake);
@@ -184,7 +198,8 @@ void dig_basin(mg::Level& level, mg::MapLake& lake, double depth, bool flat) {
 
 void lay_tarn(mg::Level& level, mg::MapLake lake) {
   lake.ice = tarn_ice(level, lake);
-  dig_basin(level, lake, kTarnDepth, bears(lake.ice));
+  lake.thaw = lake.ice > 0 ? thaw_of(level) : 0;
+  dig_basin(level, lake, kTarnDepth, bears(lake));
   level.lakes.push_back(lake);
 }
 

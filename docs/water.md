@@ -752,9 +752,20 @@ The generator lays no water, so no dealt map moves; a game lays it after, as a `
   the water. Drowning, at swim failure or after 90 s he is reset as if he had asked. The
   swimmer's state is the racer's, so a run in the water replays.
 - **Heard**: going in and climbing out are each the water's splash (`play_splash`, the body's
-  size and speed) on the effects bus. The bot's free-ride lines keep off the open tarn (no run
-  passes within the 30 m it is kept clear). The ice's own crack, the ice sheet clipped to the
-  lobed shore and the thawing ice are still open; the real faces' lakes and streams are M24l2.
+  size and speed) on the effects bus; through ice, the sheet cracks first (the bank's
+  `ice_crack`: a white crack, then the falling whistle a thin sheet carries off across the
+  lake, twice, over the slab's knock). The bot's free-ride lines keep off the open tarn (no run
+  passes within the 30 m it is kept clear).
+- **The sheet as drawn** (`mountain/app/ice_look.hpp`): clipped to the shore, every corner of
+  its grid outside drawn in to the nearest point of the shore, so its edge is the lobed shore's
+  own line and never a stair of cells.
+- **The thaw** (`tarn::thaw_of`): over the winter's last 40 days the ice grown by then melts away
+  to nothing and goes ROTTEN, its strength falling to half of sound ice's (`bears(lake)` takes
+  it as thinner sound ice, Gold's load going as the thickness squared), so spring ice that is
+  thick enough by the tape may not bear. Drawn, the snow on it goes to grey wet slush and the
+  swept glass to dark rotten ice, both wet; where it no longer bears (over the dug bowl) it
+  stands off the shore over a MOAT of open water up to 6 m wide (`moat_of`), the shore melting
+  first. `MapLake::thaw` carries it. The real faces' lakes and streams are M24l2.
 
 ## Determinism (G1)
 
@@ -779,7 +790,7 @@ never read back by the simulation.
 | `gpu-water` | picture | M24g, M24g2, M24i, M36d | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a boat's wake from behind and from the side, crates dropped in, the lake in a light and a heavy rain, a river, a waterfall, sunset glitter, night; the distance-band diff |
 | `lake` | picture | M24g, M24h, M51f | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it, frozen |
 | `tarn-ride` | drive | M24l3 | A skier onto seed 38's open tarn from its south bank at a ladder of speeds: how he met the water, how far he skimmed, where he went in, his time in the water and the metres swum, how it ended; the tarn from above with every ride's line, white on skis, yellow skimming, blue swimming |
-| `tarn` | picture | M24l | The free ride's tarn on a seed in the game's frame: on the map's day, open, under thin black ice and frozen to bear a skier, from below its lip and from high over it; its site, surface and ice as rows |
+| `tarn` | picture | M24l, M24l3 | The free ride's tarn on a seed in the game's frame: on the map's day, open, under thin black ice, frozen to bear a skier and thawing over a moat, from below its lip and from high over it; its site, surface, ice and thaw as rows |
 | `gpu-underwater` | picture | M24h, M24h3 | Every look's view round a scene under water, the presets, Snell's window measured, a dive through the surface; then the caustics and the shafts |
 | `gpu-plunge` | picture | M24h2 | A first-person player in the classic move jumping off a bank into a dirty pond: the plunge from his eyes, the splash from the bank (crater, crown, jet, rings), under the water, surfacing through the waterline into the wet lens; four bodies of different mass dropped in; the player straight in against running in; the entry's numbers |
 | `water-lod` | picture | M24f, M24g | The tiers round an actor and round the camera as maps; a flow region coarsened and refined with its volume held; the picture diff per distance band across a slow fly-out (no band pops); the cost against distance |
