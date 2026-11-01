@@ -43,6 +43,7 @@
 // ge:keywords match-restart restarted
 // ge:keywords listen_campaign campaign single-player map_changed level-change
 // ge:keywords listen_save listen_load savegame listen_save_text listen_load_text classic-save
+// ge:keywords find_program qwprogs program-file mod-program
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -181,6 +182,11 @@ bool listen_load_text(Listen& l, const ge::progs::Progs& progs, const ListenOpti
                       std::unique_ptr<LoadedMap> map = nullptr);
 // Whether a program is a single-player one (its layout's form).
 bool single_player(const ge::progs::Progs& progs);
+// The first of `names` the search path holds whose program loads and is of the single-player
+// form when `single` (else of another form), loaded into `out` and named in `found`. False when
+// none is: `why` then names each file passed over and why ("" when none of them is there).
+bool find_program(const SearchPath& files, std::span<const std::string_view> names, bool single,
+                  ge::progs::Progs& out, std::string& found, std::string& why);
 // Whether the server's lines ask for a single-player game: the last `deathmatch` set is 0 (the
 // menu's SINGLE PLAYER ▸ NEW GAME sets it so, a match's rules set it to 1 or more).
 bool wants_campaign(const ListenOptions& opt);

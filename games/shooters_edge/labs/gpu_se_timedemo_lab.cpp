@@ -29,6 +29,7 @@
 #include <vector>
 
 #include "brush/write.hpp"
+#include "classicenhance/profile.hpp"
 #include "classicenhance/switches.hpp"
 #include "core/output.hpp"
 #include "gpu/device.hpp"
@@ -380,7 +381,7 @@ const gl::LabSpec kSpec{
     {{"size", "960,540", "the frame's width and height, px"},
      {"format", "single", "the written demo's format: single, client or multiview"},
      {"basedir", "", "a folder holding a game folder: play its demo instead of the fixture"},
-     {"game", "id1", "the game folder under --basedir"},
+     {"game", ge::classicenhance::kProfiles[0].base_dir.data(), "the game folder under --basedir"},
      {"demo", "demo1", "the demo to play, by name or path"},
      {"look", "", "r_look for the run: classic or modern (empty: the game's default)"},
      {"price", "0",

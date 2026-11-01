@@ -99,6 +99,7 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/view/weapons.hpp"
@@ -356,30 +357,46 @@ int run_main(int argc, char** argv) {
   };
   bool pictures_enhanced = load_pictures(true);
   game_menu.set_packs(cl::archive_paths(files));
+  const shooters_edge::profiles::GameProfile& game = shooters_edge::profiles::classic_game();
+  const ge::classicenhance::Profile& content = shooters_edge::profiles::content_of(game);
+  const std::string start_map(content.start_map);
   if (next_map.empty()) {
     std::vector<uint8_t> store;
-    next_map = cl::find_file(files, "maps/start.bsp", store).empty() ? "arena" : "start";
+    next_map =
+        cl::find_file(files, ge::classicenhance::asset_path(content.maps, start_map), store).empty()
+            ? std::string(game.fallback_map)
+            : start_map;
   }
+  // The multiplayer program: -progs, else the game's own multiplayer program files (a mod's
+  // folder first), else the baseline mod.
   ge::progs::Progs progs;
   std::string source;
-  if (!(args.progs.empty() ? cl::baseline_progs(progs, error)
-                           : shooters_edge::server::load_mod(args.progs, progs, source, error))) {
+  bool mod_loaded = false;
+  if (!args.progs.empty()) {
+    mod_loaded = shooters_edge::server::load_mod(args.progs, progs, source, error);
+  } else {
+    std::string found, why;
+    if (cl::find_program(files, game.multiplayer_programs, false, progs, found, why)) {
+      out::status("shooters_edge: the game's multiplayer program " + found + " runs (-progs " +
+                  "names another)");
+      mod_loaded = true;
+    } else {
+      if (!why.empty()) out::status("shooters_edge: the baseline mod runs (" + why + ")");
+      mod_loaded = cl::baseline_progs(progs, error);
+    }
+  }
+  if (!mod_loaded) {
     out::error("shooters_edge: the mod did not load: " + error +
                "; see docs/shooters-edge.md § Running your own mod");
     return 2;
   }
-  // The campaign: a single-player program given with -progs, else the packs' own progs.dat when
-  // it is one. With it, SINGLE PLAYER ▸ NEW GAME (`newgame`) is lit.
+  // The campaign: a single-player program given with -progs, else the game's own single-player
+  // program files. With it, SINGLE PLAYER ▸ NEW GAME (`newgame`) is lit.
   ge::progs::Progs pack_progs;
   const ge::progs::Progs* campaign_progs = cl::single_player(progs) ? &progs : nullptr;
   if (campaign_progs == nullptr) {
-    std::vector<uint8_t> store;
-    const std::span<const uint8_t> bytes = cl::find_file(files, "progs.dat", store);
-    std::string why;
-    if (!bytes.empty() &&
-        ge::progs::load_progs(bytes.data(), bytes.size(), pack_progs, why,
-                              ge::progs::every_form()) &&
-        cl::single_player(pack_progs))
+    std::string found, why;
+    if (cl::find_program(files, game.single_player_programs, true, pack_progs, found, why))
       campaign_progs = &pack_progs;
   }
   cl::ListenOptions listen_opt;
@@ -390,14 +407,14 @@ int run_main(int argc, char** argv) {
   listen_opt.lobby_settings = listen.opt.lobby_settings;
   {
     std::vector<uint8_t> store;
-    listen_opt.registered = !cl::find_file(files, "gfx/pop.lmp", store).empty();
+    listen_opt.registered = !cl::find_file(files, content.full_game, store).empty();
   }
   if (campaign_progs != nullptr)
-    console.add_command("newgame", "newgame: a new single-player game from the map start",
+    console.add_command("newgame", "newgame: a new single-player game from the start map",
                         [&](Con&, const CArgs&) {
                           listen.opt.console.emplace_back("deathmatch 0");
                           listen.opt.console.emplace_back("coop 0");
-                          next_map = "start";
+                          next_map = start_map;
                         });
   // The saves (the campaign's whole game: listen.hpp's `listen_save`), `<game>/saves/<name>.save`.
   std::string load_ask;  // a save the console asked to load (loaded where a map change is made)

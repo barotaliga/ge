@@ -29,6 +29,7 @@
 
 #include "audio/pcm.hpp"
 #include "brush/write.hpp"
+#include "classicenhance/profile.hpp"
 #include "core/output.hpp"
 #include "gpu/device.hpp"
 #include "lab/chart.hpp"
@@ -389,7 +390,7 @@ const gl::LabSpec kSpec{
      {"codec", "auto", "the video's codec: auto, h264, hevc, av1, or empty for uncompressed"},
      {"ticks", "1500", "the match's length in 13 ms ticks"},
      {"basedir", "", "a folder holding a game folder: turn its demo into a video instead"},
-     {"game", "id1", "the game folder under --basedir"},
+     {"game", ge::classicenhance::kProfiles[0].base_dir.data(), "the game folder under --basedir"},
      {"demo", "demo1", "the demo to turn into a video, by name or path"},
      {"game-volume", "0.5", "the game's sounds under the voices, 0..1 (0: the voices alone)"},
      {"map", "", "with --basedir: play the match on this map of the game folder's instead"},
