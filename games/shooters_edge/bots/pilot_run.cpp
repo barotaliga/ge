@@ -7,6 +7,9 @@
 // ge:test tests/shooter_pilot_test.cpp
 #include "shooters_edge/bots/pilot_run.hpp"
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
+
 #include <cstring>
 #include <string>
 
@@ -66,8 +69,13 @@ sh::PilotSettings course_strafe_settings() {
 
 RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sh::PilotHands hands,
                      uint32_t seed, const sh::PilotSettings& set, float limit_s) {
+  return run_route(c.world, c.graph, from, to, hands, seed, set, limit_s);
+}
+
+RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f from, sh::Vec3f to,
+                    sh::PilotHands hands, uint32_t seed, const sh::PilotSettings& set,
+                    float limit_s, sh::Vec3f start_velocity) {
   RunResult r;
-  const sh::NavGraph& g = c.graph;
   const int32_t a = sh::nav_nearest(g, from), b = sh::nav_nearest(g, to);
   if (a < 0 || b < 0) return r;
   ge::ai::Search search;
@@ -85,12 +93,17 @@ RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sh::PilotHan
   // One command standing still so the move categorises the ground under the player.
   sh::MoveCmd still;
   still.msec = kPilotMsec;
-  sh::run_command(st, still, move, c.world);
+  sh::run_command(st, still, move, world);
+  st.velocity = start_velocity;
+  if (start_velocity.x != 0 || start_velocity.y != 0)
+    sh::pilot_face(p, static_cast<float>(ge::core::libm::atan2(start_velocity.y, start_velocity.x) *
+                                         (180.0 / ge::core::kPi)));
   auto sense = [&] {
     s.origin = st.origin;
     s.velocity = st.velocity;
     s.onground = st.ground >= 0;
     s.maxspeed = st.maxspeed;
+    s.world = &world;
   };
   sense();
   if (!sh::pilot_go(p, b, s)) return r;
@@ -109,7 +122,7 @@ RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sh::PilotHan
       r.arrived = p.mode == sh::PilotMode::arrived;
       break;
     }
-    sh::run_command(st, cmd, move, c.world);
+    sh::run_command(st, cmd, move, world);
     sense();
     hash = fold(fold(hash, st.origin), st.velocity);
     r.trail.push_back(st.origin);
