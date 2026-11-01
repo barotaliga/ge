@@ -5,7 +5,8 @@
 // Every stage writes what its header says into a temporary cache; a rerun skips every stage; a
 // changed option reruns only the textures; --force reruns all; `only` runs the one asked; and a
 // source that was never verified is refused before anything is written; every stage reports its
-// start, its items and its end, a cancel stops the stage running, and the job runs on its thread.
+// start, its items and its end, a cancel stops the stage running, a rerun resumes it from its
+// journal, and the job runs on its thread.
 //
 // ge:summary Tests the pipeline's stages, cache layout, reruns and refusals on a fixture pack
 // ge:keywords test classicenhance pipeline cache stages rerun skip force lightmaps textures sounds
@@ -253,9 +254,10 @@ TEST(pipeline_reports_every_stage_and_stops_when_cancelled) {
   CHECK(seen.size() == 6);
   for (const ce::Progress& p : seen) CHECK(p.kind == ce::Progress::Kind::skipped);
 
-  // Cancelled on the first texture: the stage fails as cancelled and nothing after it runs.
+  // Cancelled on the first texture of a fresh cache: the stage fails as cancelled and nothing
+  // after it runs.
+  fs::remove_all(root);
   std::atomic<bool> stop{false};
-  opts.force = true;
   opts.cancel = &stop;
   seen.clear();
   opts.progress = [&](const ce::Progress& p) {
@@ -265,6 +267,28 @@ TEST(pipeline_reports_every_stage_and_stops_when_cancelled) {
   CHECK(!ce::run_pipeline(src, root, opts, &report, &error));
   CHECK(error.find("cancelled") != std::string::npos);
   CHECK(seen.back().kind == ce::Progress::Kind::failed && seen.back().stage == ce::Stage::textures);
+
+  // Run again with the same options: the textures stage resumes from its journal, keeping the
+  // texture the cut-off run finished, and writes the index an uncut run wrote.
+  const fs::path dir = ce::pack_dir(root, sha);
+  CHECK(fs::exists(dir / "textures.partial"));
+  CHECK(read_text(dir / "textures.partial").starts_with("key "));
+  opts.cancel = nullptr;
+  opts.progress = nullptr;
+  CHECK_MSG(ce::run_pipeline(src, root, opts, &report, &error), error);
+  bool resumed = false;
+  for (const ce::StageResult& r : report.stages) {
+    if (r.stage == ce::Stage::textures) {
+      resumed = r.ran && r.note.find("1 kept from a run cut off before") != std::string::npos;
+    }
+  }
+  CHECK_MSG(resumed, "the textures stage should resume one texture");
+  const std::string resumed_index = read_text(dir / "textures" / "index.txt");
+  CHECK(!fs::exists(dir / "textures.partial"));
+  opts.force = true;
+  CHECK_MSG(ce::run_pipeline(src, root, opts, &report, &error), error);
+  CHECK(read_text(dir / "textures" / "index.txt") == resumed_index);
+  opts.force = false;
 
   // The job runs it on its own thread and its board ends ready.
   fs::remove_all(root);
