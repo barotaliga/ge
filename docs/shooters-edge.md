@@ -465,8 +465,9 @@ by `se-campaign --progs=games/shooters_edge/qc/campaign/progs.src`. What both va
 - **Or ship it in the mod's folder**: with no `-progs`, the window looks through the game's
   files (the mod's folder over the base game's, § Playing it) for the game profile's
   multiplayer program files in order, `qwprogs.dat` and then `progs.dat`
-  (`games/shooters_edge/profiles/game_profile.hpp`), and runs the first of the multiplayer
-  form; so `-game mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
+  (`games/shooters_edge/profiles/game_profile.hpp`, looked for by the game's adapter, § The game
+  adapter), and runs the first of the multiplayer form; the console's `mods` lists the mod
+  folders there are; so `-game mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
   over (the base game's own `progs.dat` is its campaign, found the same way for SINGLE
   PLAYER), and with none the baseline mod runs; the status line says which.
 - **Line numbers in faults**: put the line table beside the file as `<file>.lines` (a line
@@ -557,6 +558,41 @@ weapons and armour are a fourth choice, § Weapons and armour):
   (`porting/shooters-edge/frame-move.md` has both halves and who jumps in each mix). Built:
   `plugins/shooter/framemove.hpp` and `ServerSettings::playermove`; the mod server's
   `sv_playermove` (`auto` follows the program's form), `edgefriction` and `sv_nostep`.
+
+### The game adapter: one set of calls, one implementation per game
+
+The profile rows hold what is only names (folders, packs, file names, extensions). What a game
+does with them differs from game to game, so each classic game has an **adapter**
+(`games/shooters_edge/client/game_adapter.hpp`): one table of calls the window, the console,
+the menus and the labs ask a game's files through, implemented once per game in a file of its
+own. The first game's is `client/classic_adapter.cpp`; a later game's is a second file with the
+same calls and nothing of the first game's in it. Below the adapters stay the readers a family of
+files shares: `engine/vfs` (folders, packs, zips, loose files, a mod over the base) and
+`plugins/brush` (every map family into one view).
+
+| Call | The classic game | Its sequel | The third |
+| --- | --- | --- | --- |
+| **mods** (`list_mods`) | folders over the base with numbered packs, zips or loose files | the same folders and the same pack format | folders of zips, read in name order, with a description file each |
+| **programs** (`find_program`) | one QC program for the server (`qwprogs.dat`, then `progs.dat`) | a native library of the server's rules | up to three bytecode programs inside its zips, one a side: the server's rules, the client's half (its HUD and prediction), the menus; or native libraries |
+| **maps** (`list_maps`, `map_info`) | BSP 29 or BSP2, the title the world's message | BSP 38 | BSP 46 |
+| **textures** (`map_textures`) | the map carries its pictures (`plugins/brush/pictures.hpp`) | its own picture files beside the map, by the texture's name | shaders over picture files |
+| **demos** (`list_demos`, `find_demo`, `open_demo`) | the single-player, client and multiview recordings (`client/demo.hpp`) | its own recording format | its own |
+
+**Every program file names its form and its side** (`ProgramFile` in `profiles/game_profile.hpp`:
+QC bytecode, a native game library, a sandboxed bytecode, the engine's C++ mod; server, client
+or menus). A form this build has no runner for is named when found and passed over
+(`runs_form`), never read as another; today only QC runs. The engine's C++ mods (§ C++ mods) are
+hooks over whichever program runs, so they stay a choice of their own.
+
+**Still to move behind calls of their own**, each in its own change: textures and skins as PNG
+and TGA with alpha (a replacement by name over the map's own); the models (the world's, the
+player's and its skins, the held weapons, the items) and the sounds; the HUD's and the menus'
+pictures; the config files and the location files.
+
+**The next seam, when the sequel starts: a rules runner.** The listen server and the dedicated
+server hold the QC server (`server/qc_server.hpp`) itself today. A second program form needs them
+to hold a runner (start a map, run a frame, connect and drop a player, the server's commands) that
+the QC server is one implementation of; the sequel's rules are the second, run by the same host.
 
 ### Weapons and armour: an arsenal of their own
 
