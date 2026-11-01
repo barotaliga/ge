@@ -738,11 +738,23 @@ The generator lays no water, so no dealt map moves; a game lays it after, as a `
   of bare ice are drawn on it. Thinner ice, or none, lies over a bowl dug 6 m under the rim and
   drawn as the water (`add_lake`, the dug ground its bed) or as young black ice over it
   (`freeze_water`).
-- **Through it** (`sim/lake.hpp`): a skier whose skis go 0.3 m under the surface inside the shore
-  is in the water: a `sank` event, the water's drag (4 per second), and after 2.5 s he is stood
-  back on his run as if he had asked. Swimming in the clothed preset, the ice's crack and the
-  splash, skimming and the bot keeping off thin ice are M24l3; the real faces' own lakes and
-  streams are M24l2.
+- **Onto open water** (`sim/lake.hpp`, M24l3): a skier whose skis reach the surface inside an
+  open tarn's shore either skims it or goes in. Faster than 13 m/s and on his feet he SKIMS (a
+  `skim` event): his skis plane on the surface, held on it, turned by his steer and slowed by
+  the water's drag (0.012 per metre times the speed squared, so from 15 m/s he goes in about
+  50 m on); he reaches the far bank on his skis, or drops under 8 m/s and goes in. Slower, or
+  down, he goes IN (a `sank` event, `value` the ice that broke).
+- **In the water**: the engine's swimmer in the body regime (§ Swimming), dressed as a skier
+  (`skier/swim.hpp`'s `dressed_skier`), in water at `tarn::kTarnWater` (4 degrees). He floats on
+  his jacket's air, takes the cold shock and swims flat out for the nearest shore, his feet never
+  under the dug bed; at the shore, or where the water is under 0.9 m deep, he climbs out (an
+  `ashore` event, `value` his seconds in the water) and is stood on the bank facing away from
+  the water. Drowning, at swim failure or after 90 s he is reset as if he had asked. The
+  swimmer's state is the racer's, so a run in the water replays.
+- **Heard**: going in and climbing out are each the water's splash (`play_splash`, the body's
+  size and speed) on the effects bus. The bot's free-ride lines keep off the open tarn (no run
+  passes within the 30 m it is kept clear). The ice's own crack, the ice sheet clipped to the
+  lobed shore and the thawing ice are still open; the real faces' lakes and streams are M24l2.
 
 ## Determinism (G1)
 
@@ -766,6 +778,7 @@ never read back by the simulation.
 | `flow` | picture | M24f | Dam break against the analytic solution, a basin emptying through a breach against Torricelli, a river to steady state, a waterfall's sheet; depth filmstrips; the volume held |
 | `gpu-water` | picture | M24g, M24g2, M24i, M36d | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a boat's wake from behind and from the side, crates dropped in, the lake in a light and a heavy rain, a river, a waterfall, sunset glitter, night; the distance-band diff |
 | `lake` | picture | M24g, M24h, M51f | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it, frozen |
+| `tarn-ride` | drive | M24l3 | A skier onto seed 38's open tarn from its south bank at a ladder of speeds: how he met the water, how far he skimmed, where he went in, his time in the water and the metres swum, how it ended; the tarn from above with every ride's line, white on skis, yellow skimming, blue swimming |
 | `tarn` | picture | M24l | The free ride's tarn on a seed in the game's frame: on the map's day, open, under thin black ice and frozen to bear a skier, from below its lip and from high over it; its site, surface and ice as rows |
 | `gpu-underwater` | picture | M24h, M24h3 | Every look's view round a scene under water, the presets, Snell's window measured, a dive through the surface; then the caustics and the shafts |
 | `gpu-plunge` | picture | M24h2 | A first-person player in the classic move jumping off a bank into a dirty pond: the plunge from his eyes, the splash from the bank (crater, crown, jet, rings), under the water, surfacing through the waterline into the wet lens; four bodies of different mass dropped in; the player straight in against running in; the entry's numbers |

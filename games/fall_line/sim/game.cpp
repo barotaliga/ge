@@ -191,6 +191,12 @@ void log_step(const GameState& state) {
         line +=
             " through lake " + std::to_string(e.gate) + "'s ice, " + f(e.value * 100, 1) + " cm";
         break;
+      case EventKind::skim:
+        line += " onto lake " + std::to_string(e.gate) + " at " + f(e.value * 3.6, 1) + " km/h";
+        break;
+      case EventKind::ashore:
+        line += " out of lake " + std::to_string(e.gate) + " after " + f(e.value, 1) + " s";
+        break;
     }
     line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
     out::log_on(ch, out::Level::debug, line);
@@ -290,6 +296,10 @@ const char* event_name(EventKind kind) {
       return "building";
     case EventKind::sank:
       return "sank";
+    case EventKind::skim:
+      return "skim";
+    case EventKind::ashore:
+      return "ashore";
   }
   return "?";
 }
@@ -351,6 +361,12 @@ void step(GameState& state, std::span<const Controls> controls) {
       step_lift(state, i);
       continue;
     }
+    // Skimming a tarn or in it, the step is the water's (lake.hpp): his skis and his run wait.
+    if (state.mode == Mode::free && on_water(state, i)) {
+      GE_ZONE("lake");
+      if (step_on_water(state, i, c.ski.steer, kDt)) reset(state, i);
+      continue;
+    }
     // Under the paramotor's wing the machine press lets the rig go, and is not read again.
     if (state.mode == Mode::free) para_press(state, i, c);
     // On the helicopter's skid or the snowmobile's boards the step is the machine's: his skis,
@@ -392,10 +408,7 @@ void step(GameState& state, std::span<const Controls> controls) {
       GE_ZONE("free");
       step_free(state, i, x0, z0);
       board_lift(state, i);
-      if (!state.level->lakes.empty() && step_lake(state, i, kDt)) {
-        reset(state, i);
-        continue;
-      }
+      if (state.water) enter_lake(state, i);
     } else {
       GE_ZONE("course");
       step_course(state, i, x0, z0);

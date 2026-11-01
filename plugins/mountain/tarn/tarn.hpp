@@ -45,6 +45,7 @@ inline constexpr double kTarnClear = 30;    // m from every run's and lift's lin
 inline constexpr double kTarnRelief = 0.8;  // of the radius: the most the site's ground may spread
 inline constexpr double kTarnDepth = 6;     // m: the bowl's deepest water
 inline constexpr double kSkierKg = 90;      // a skier and his gear
+inline constexpr double kTarnWater = 4;     // C: the water under a tarn's ice, or just thawed
 inline constexpr double kTarnLobe2 = 0.12;  // of the radius: the shore's two lobes
 inline constexpr double kTarnLobe3 = 0.07;  // its three
 inline constexpr double kTarnBulge = 1 + kTarnLobe2 + kTarnLobe3;  // the shore's farthest reach
