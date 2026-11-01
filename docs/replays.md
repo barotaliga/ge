@@ -162,8 +162,11 @@ Shooter's Edge's demos are the first user (`docs/shooters-edge.md` § Watching a
 scanned once when it starts (`client/demo_scan.hpp`: 41,820 frames of a real 621 s match in about
 a second), its rules (`client/demo_highlights.hpp`) find multi kills, long rockets, air kills and
 air gibs, annihilated stacks, telefrags and streaks, and the window's bar seeks, pauses, changes
-speed, skips and jumps between them. The `se-highlights` lab pictures every player's bar and the
-watched player's view at each of his moments.
+speed, skips and jumps between them. A highlight is cut into a clip by the demo's video export
+(`-demovideo <demo> <file> --highlight=N`, or `--from` and `--to` on the bar's clock): the frames
+before its window are read and not drawn, and a `.gif` file is an animated GIF off
+`engine/lab/gif.hpp`, which needs no encoder. The `se-highlights` lab pictures every player's bar,
+the watched player's view at each of his moments, and his first highlight cut as a GIF and a WebM.
 
 ## Video with sound (M23d)
 

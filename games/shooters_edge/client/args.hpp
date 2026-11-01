@@ -26,6 +26,9 @@ struct Args {
   std::string timedemo;          // a demo to benchmark, then quit ("": none)
   std::string demovideo, video;  // a demo to turn into the video file `video`, then quit
   double fps = 30, seconds = 0;
+  double from = 0, to = -1;  // -demovideo's clip on the demo's timeline, s (to < 0: the end)
+  int highlight = 0;         // -demovideo's clip: the tracked player's Nth highlight
+  int gif_width = 480;       // -demovideo to a .gif: its width in pixels
   std::string codec = "auto";
   std::string playdemo;  // a demo to play at its own pace ("": none)
   long frames = 0;       // 0: until quit

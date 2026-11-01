@@ -260,9 +260,12 @@ std::vector<std::string> highlight_lines(const DemoPlayback& p, bool all) {
   const gr::Highlights everyone = all ? demo_highlights(p.scan, -1) : gr::Highlights{};
   const std::vector<gr::Highlight>& list = all ? everyone.list : p.highlights.list;
   out.reserve(list.size() + 1);
-  for (const gr::Highlight& h : list)
-    out.push_back(gu::play_clock(h.at_s) + "  " + player_name(p.scan.names, h.subject) + "  " +
+  for (size_t i = 0; i < list.size(); i++) {  // numbered as -demovideo's --highlight=N takes them
+    const gr::Highlight& h = list[i];
+    out.push_back((all ? std::string() : "#" + std::to_string(i + 1) + "  ") +
+                  gu::play_clock(h.at_s) + "  " + player_name(p.scan.names, h.subject) + "  " +
                   h.text);
+  }
   if (out.empty()) out.push_back("demo_highlights: none found");
   return out;
 }
