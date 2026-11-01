@@ -36,6 +36,7 @@ edges. `docs/shooters-edge.md` is the design;
 | `shooter/pilot.hpp/.cpp` | The pilot: a route played one command at a time (pursuit, the jump's run-up, the strafe jump, the bunny hop, waits and bars, the ride), hands (human, practised), the stuck and lost checks, a slot's command source |
 | `shooter/hops.hpp/.cpp` | A track (a demo's player, a bot's run) read as a bunny hopper's: velocity, ground, chained jumps, the air's turn against `max_turn`, the view's lag, the summary |
 | `games/shooters_edge/labs/se_moves_lab.cpp`, `se_hop_lab.cpp`, `move_study.hpp`, `wire_view.hpp`, `wire_inside.hpp` | The `se-moves` and `se-hop` labs: a demo's player on a real map as wireframes (above, at an angle, from inside), his trips against the pilot's ways, tricks flagged |
+| `games/shooters_edge/labs/se_kills_lab.cpp` | The `se-kills` lab: many demos of one map compiled into kill lines and rocket flights over its wireframe, gold shots (xyz) by weapon, heat of deaths and landings, `gold.tsv` for bots |
 | `games/shooters_edge/bots/pilot_run.hpp`, `labs/se_pilot_lab.cpp`, `labs/nav_top.hpp` | The pilot's runs on the nav course and the server's arena, and the `se-pilot` lab: trails from above, times against proven, humanness |
 | `shooter/senses.hpp/.cpp` | The bot's senses: what a client is sent (`client_view`), sight in the view's cone by the hull trace, the sounds heard, contacts on `ai/memory` |
 | `shooter/aim.hpp/.cpp`, `shooter/bot.hpp/.cpp` | Aim by skill on `ai/hands`, `aim_angles`, `turn_axes`; the bot: the pilot with senses and aim, a slot's command source |

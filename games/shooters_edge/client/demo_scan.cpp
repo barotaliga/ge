@@ -59,11 +59,6 @@ struct Gain {
   int left = 0;  // frags not yet given to a death
 };
 
-struct Rocket {
-  sh::Vec3f first, last;
-  double t_end = 0;
-};
-
 }  // namespace
 
 bool scan_demo(const Demo& opened, DemoScan& out, std::string& error) {
@@ -82,9 +77,9 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error) {
   jumped.fill(-1e9);
   std::vector<Death> deaths;
   std::vector<Gain> gains;
-  std::vector<Rocket> rockets;
+  std::vector<DemoFlight>& rockets = out.flights;
   std::vector<int> live_rocket;  // by entity number: an index into `flying` + 1 (0: none)
-  std::vector<Rocket> flying;
+  std::vector<DemoFlight> flying;
   std::vector<int> flying_entity;
 
   const auto stat_of = [&](int slot, int stat) -> int32_t {
@@ -111,32 +106,49 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error) {
       live_rocket.clear();
     }
     out.tracked = s.player;
-    // The rockets in flight: each missile entity followed while it is in the list.
+    // The rockets and grenades in flight: each followed while it is in the list.
     live_rocket.resize(s.entities.size(), 0);
     std::vector<bool> seen(flying.size(), false);
     for (size_t n = 1; n < s.entities.size(); n++) {
       const DemoEntity& e = s.entities[n];
-      const bool missile =
-          e.present && e.model > 0 && static_cast<size_t>(e.model) < s.models.size() &&
-          s.models[static_cast<size_t>(e.model)].find("missile") != std::string::npos;
+      const std::string* model =
+          e.present && e.model > 0 && static_cast<size_t>(e.model) < s.models.size()
+              ? &s.models[static_cast<size_t>(e.model)]
+              : nullptr;
+      const bool missile = model != nullptr && model->find("missile") != std::string::npos;
+      const bool grenade = model != nullptr && model->find("grenade") != std::string::npos;
       int& at = live_rocket[n];
-      if (!missile) continue;
+      if (!missile && !grenade) continue;
       if (at == 0) {
-        flying.push_back({e.origin, e.origin, now});
+        DemoFlight f;
+        f.t0 = f.t1 = now;
+        f.from = f.to = e.origin;
+        f.grenade = grenade;
+        float nearest = kShooterReach;
+        for (size_t k = 0; k < static_cast<size_t>(kSlots) && k < s.players.size(); k++) {
+          const DemoEntity& p = s.players[k];
+          if (!p.present || p.dead) continue;
+          const float dp = dist(p.origin, e.origin);
+          if (dp <= nearest) {
+            nearest = dp;
+            f.shooter = static_cast<int>(k);
+          }
+        }
+        flying.push_back(f);
         flying_entity.push_back(static_cast<int>(n));
         seen.push_back(true);
         at = static_cast<int>(flying.size());
-        out.rockets++;
+        if (missile) out.rockets++;
       } else {
-        flying[static_cast<size_t>(at - 1)].last = e.origin;
-        flying[static_cast<size_t>(at - 1)].t_end = now;
+        flying[static_cast<size_t>(at - 1)].to = e.origin;
+        flying[static_cast<size_t>(at - 1)].t1 = now;
         seen[static_cast<size_t>(at - 1)] = true;
       }
     }
     for (size_t i = flying.size(); i-- > 0;) {  // gone this frame: landed
       if (seen[i]) continue;
       rockets.push_back(flying[i]);
-      rockets.back().t_end = now;
+      rockets.back().t1 = now;
       live_rocket[static_cast<size_t>(flying_entity[i])] = 0;
       flying.erase(flying.begin() + static_cast<std::ptrdiff_t>(i));
       flying_entity.erase(flying_entity.begin() + static_cast<std::ptrdiff_t>(i));
@@ -206,8 +218,9 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error) {
       was_frags[static_cast<size_t>(k)] = s.frags[static_cast<size_t>(k)];
     }
   }
-  for (const Rocket& r : flying) rockets.push_back(r);
+  for (const DemoFlight& r : flying) rockets.push_back(r);
   out.length_s = t.timeline.t;
+  out.map = s.map;
 
   // Each death given the nearest frag in time of another player within kKillMatchS.
   for (const Death& dd : deaths) {
@@ -219,6 +232,7 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error) {
     k.stack = dd.stack;
     k.stack_armour = dd.stack_armour;
     k.stack_s = dd.stack_s;
+    k.victim_at = dd.victim_at;
     Gain* best = nullptr;
     for (Gain& g : gains) {
       if (g.left <= 0 || g.slot == dd.victim || std::fabs(g.t - dd.t) > kKillMatchS) continue;
@@ -230,17 +244,22 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error) {
       best->left--;
       k.killer = best->slot;
       k.weapon = weapon_of(dd.weapons[static_cast<size_t>(k.killer)]);
-      k.distance = dist(dd.origins[static_cast<size_t>(k.killer)], dd.victim_at);
+      k.killer_at = dd.origins[static_cast<size_t>(k.killer)];
+      k.distance = dist(k.killer_at, dd.victim_at);
       k.telefrag = k.distance <= kTelefragReach &&
                    dd.t - dd.jumped[static_cast<size_t>(k.killer)] <= kTelefragS;
-      if (k.weapon == hud::Weapon::rocket_launcher) {
+      const bool rl = k.weapon == hud::Weapon::rocket_launcher;
+      if (rl || k.weapon == hud::Weapon::grenade_launcher) {
         float nearest = kRocketReach;
-        for (const Rocket& r : rockets) {
-          if (std::fabs(r.t_end - dd.t) > kRocketWindowS) continue;
-          const float dv = dist(r.last, dd.victim_at);
+        for (const DemoFlight& r : rockets) {
+          if (r.grenade == rl || std::fabs(r.t1 - dd.t) > kRocketWindowS) continue;
+          const float dv = dist(r.to, dd.victim_at);
           if (dv <= nearest) {
             nearest = dv;
-            k.rocket_flight = dist(r.first, r.last);
+            k.shot = true;
+            k.shot_from = r.from;
+            k.shot_to = r.to;
+            if (rl) k.rocket_flight = dist(r.from, r.to);
           }
         }
       }
