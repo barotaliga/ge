@@ -76,6 +76,8 @@ struct TeamPlayer {
   std::string last;             // where he stood at the end, and what he was going for
   std::vector<sh::Vec3f> path;  // every path_every frames
   std::vector<uint8_t> roles;   // beside it: its role, 255 dead
+  std::vector<int16_t> known;   // beside it: how many items it knows (recalls) of the map's
+  int64_t said = 0;             // team messages it said
 };
 
 struct TeamTotals {
@@ -83,6 +85,7 @@ struct TeamTotals {
   int deaths = 0;
   int64_t plans = 0, rushes = 0, quads = 0, held_shots = 0, callouts = 0;
   int64_t quad_pickups = 0;  // the quad taken by a member
+  int64_t messages = 0;      // team messages said
 };
 
 struct TeamMatchReport {
@@ -93,6 +96,7 @@ struct TeamMatchReport {
   std::vector<TeamPlayer> players;
   TeamTotals teams[2];
   std::vector<std::string> frag_log;
+  std::vector<std::string> chat;     // every team message, "t team name: words", in time order
   std::vector<float> team_frags[2];  // every path_every frames
   std::vector<sh::Vec3f> item_at;    // the items as the fighters know them, for a picture
   std::vector<std::string> item_name;

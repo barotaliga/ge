@@ -75,32 +75,44 @@ enum class ItemKind : uint8_t {
   cells,
   weapon,
   quad,
+  pent,  // the shield (no damage taken)
 };
 
+// How well a player knows the map (knowledge.hpp): where its items are and when they come back.
+enum class MapSense : uint8_t { novice, average, expert };
+
 struct ItemSpot {
-  int ent = -1;  // the server's entity for it, -1 when none matched
-  ItemKind kind = ItemKind::health;
-  int32_t weapon = 0;    // a weapon's W_ bit
-  float amount = 0;      // health given, or ammunition (doubled by spawnflags 1)
-  float respawn_s = 20;  // gone this long once taken
-  sh::Vec3f at;          // where it stands (the middle of its box on the floor)
-  int32_t node = -1;     // the nav node nearest it
-  bool present = true;   // sent this frame
-  double back_at = 0;    // when it is expected back (while gone)
-  std::string name;      // its classname (a health box by its size)
-  // Behind a door a button opens (the map's text: a button whose target is the door's name): the
-  // button touched first while the door stands shut.
-  int door_ent = -1;    // the door's entity (-1: none)
-  sh::Vec3f door_rest;  // its origin while shut
-  sh::Vec3f button_at;  // the button's middle
-  int32_t button_node = -1;
-  int button_ent = -1;        // the button's entity
-  bool button_shoot = false;  // opened by a shot (it has health), not a touch
+  std::string name;  // its classname (a health box by its size)
   // In a pocket only the water reaches (no route leads in): dived for from `dive_node` on the
   // field that leads through the water to the pocket (`dive`); none when no route is needed.
   const ge::shooter::SwimField* dive = nullptr;
+  // What this player believes of it (knowledge.hpp), not what the server holds.
+  double back_at = 0;       // when it is expected back (while believed gone)
+  double last_seen = -1e9;  // when it was last seen there
+  sh::Vec3f at;             // where it stands (the middle of its box on the floor)
+  // Behind a door a button opens (the map's text: a button whose target is the door's name): the
+  // button touched first while the door stands shut.
+  sh::Vec3f door_rest;   // the door's origin while shut
+  sh::Vec3f button_at;   // the button's middle
+  int ent = -1;          // the server's entity for it, -1 when none matched
+  int32_t weapon = 0;    // a weapon's W_ bit
+  float amount = 0;      // health given, or ammunition (doubled by spawnflags 1)
+  float respawn_s = 20;  // gone this long once taken
+  int32_t node = -1;     // the nav node nearest it
+  int door_ent = -1;     // the door's entity (-1: none)
+  int32_t button_node = -1;
+  int button_ent = -1;                      // the button's entity
   int32_t dive_node = -1, dive_entry = -1;  // and the node in the water it drops or steps to
   float dive_s = 0;                         // the swim's time, s (its steps at a swimmer's pace)
+  int32_t sightings = 0;                    // separate times it was seen (kSightingGap_s apart)
+  ItemKind kind = ItemKind::health;
+  bool button_shoot = false;  // opened by a shot (it has health), not a touch
+  bool present = true;        // believed there
+  bool known = true;          // where it is, recalled from anywhere (a novice learns it by sight)
+  bool timed = false;         // `back_at` is its real time back (seen taken by one who times)
+  bool confirmed = true;      // seen there since it was last gone (or the match's start)
+  bool in_sight = false;      // its spot in sight at the last think
+  bool watched = false;       // and the item there with it
 };
 
 enum class FightMode : uint8_t { roam, fight, chase, retreat };
@@ -127,10 +139,15 @@ struct Fighter {
   std::vector<ItemSpot> items;
   ge::ai::Search reach;  // every node it can get to from where it stood at `reach_at`
   FighterStats stats;
-  double held = 0;         // in the mode this long
-  double next_think = 0;   // server time of the next choice
-  double impulse_at = -1;  // when the last impulse went
-  double reach_at = -1;    // when `reach` was worked out (-1: never)
+  // Its team messages (team.hpp's `team_say`), sent as `say_team` by whoever drives its client.
+  std::vector<std::string> outbox;
+  double held = 0;          // in the mode this long
+  double next_think = 0;    // server time of the next choice
+  double impulse_at = -1;   // when the last impulse went
+  double reach_at = -1;     // when `reach` was worked out (-1: never)
+  double said_at = -1e9;    // its last team message
+  double called_at = -1e9;  // its last enemy callout
+  double under_since = -1;  // when its head last went under the water (-1: not under)
   ge::ai::Why* why = nullptr;
   Team* team = nullptr;                          // its side (team.hpp); null in a free-for-all
   const ge::shooter::SwimField* swim = nullptr;  // the map's way out of its water (none: no water)
@@ -141,14 +158,17 @@ struct Fighter {
   int32_t goal_node = -1;
   int32_t want_weapon = 0;  // the number (1..8) asked for; 0 none pending
   int slot = -1;
-  int32_t pack_ent = -1;   // a backpack gone for
-  int32_t lost_to = -1;    // off the graph or in a pool it cannot leave by its links: the node
-                           // walked (or swum) straight at to get back (-1: none)
-  int32_t reach_n = 0;     // how many nodes `reach` holds
-  int32_t diving = -1;     // the item it dives for (in the water on `dive`), -1 none
-  int32_t last_dive = -1;  // the item the last think dived for
+  int32_t pack_ent = -1;      // a backpack gone for
+  int32_t lost_to = -1;       // off the graph or in a pool it cannot leave by its links: the node
+                              // walked (or swum) straight at to get back (-1: none)
+  int32_t reach_n = 0;        // how many nodes `reach` holds
+  int32_t diving = -1;        // the item it dives for (in the water on `dive`), -1 none
+  int32_t last_dive = -1;     // the item the last think dived for
+  int32_t explore_node = -1;  // a novice with nothing known walks the map to learn it
+  uint32_t rng = 1;           // its own draws (where it explores), seeded off the bot's seed
   FightMode mode = FightMode::roam;
   Role role = Role::free;
+  MapSense sense = MapSense::expert;  // how well it knows the map (off its skill)
   bool was_dead = false;
   bool unlocking = false;  // on the way to the goal item's button
   bool swimming = false;   // in water no route leaves: following the swim field

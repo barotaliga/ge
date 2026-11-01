@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 namespace shooters_edge::bots {
 
@@ -30,6 +31,19 @@ sh::Vec3f origin_of(const server::QcServer& s, const Fighter& f) {
 }
 
 }  // namespace
+
+bool team_say(Fighter& f, double t, const std::string& text) {
+  if (!f.team || t - f.said_at < kSayGap_s) return false;
+  Team& tm = *f.team;
+  if (text == tm.last_text && t - tm.last_text_at < kRepeat_s) return false;
+  f.said_at = t;
+  tm.last_text = text;
+  tm.last_text_at = t;
+  tm.stats.messages++;
+  tm.log.push_back({t, f.slot, text});
+  f.outbox.push_back(text);
+  return true;
+}
 
 void team_init(Team& t) {
   t.friends = 0;
@@ -98,13 +112,20 @@ void team_plan(Team& t, const server::QcServer& s) {
 
   // The rush: the quad due soon (or there) and nobody on the team carrying it.
   std::vector<Fighter*> rushers;
+  Fighter* timer = nullptr;  // the member whose knowledge set the quad's time
+  double quad_due = 0;
   if (t.quad_item >= 0 && !carrier) {
     const ItemSpot& q = items[static_cast<size_t>(t.quad_item)];
-    // Every member times it; the team takes the earliest it is due back.
+    // When it is due back: the earliest a member knows of (one who saw it there since it was last
+    // gone, or one who timed it going); a quad nobody can time is not rushed.
     double due = 1e30;
-    for (const Fighter* f : t.members) {
+    for (Fighter* f : t.members) {
       const ItemSpot& mine = f->items[static_cast<size_t>(t.quad_item)];
-      due = std::min(due, mine.present ? now : mine.back_at);
+      const double at = mine.present && mine.confirmed ? now : mine.timed ? mine.back_at : 1e30;
+      if (at < due) {
+        due = at;
+        timer = f;
+      }
     }
     if (due - now <= kRushAhead_s) {
       std::vector<std::pair<float, Fighter*>> by;
@@ -114,6 +135,7 @@ void team_plan(Team& t, const server::QcServer& s) {
         return a.first < b.first || (a.first == b.first && a.second->slot < b.second->slot);
       });
       for (size_t i = 0; i < by.size() && i < 2; i++) rushers.push_back(by[i].second);
+      quad_due = due - now;
     }
   }
 
@@ -137,6 +159,20 @@ void team_plan(Team& t, const server::QcServer& s) {
     }
     f->role = r;
   }
+
+  // What the plan says out loud: the rush called by whoever timed the quad, the carry and its loss.
+  if (!rushers.empty() && !t.rushing) {
+    Fighter* caller = timer && alive(s, *timer) ? timer : rushers[0];
+    const int in = static_cast<int>(std::lround(quad_due));
+    team_say(*caller, now,
+             in >= 2 ? "quad in " + std::to_string(in) + ", get quad!" : std::string("get quad!"));
+    if (rushers[0] != caller) team_say(*rushers[0], now, "going quad");
+  }
+  t.rushing = !rushers.empty();
+  if (carrier && carrier != t.last_carrier) team_say(*carrier, now, "have quad!");
+  if (!carrier && t.last_carrier && !alive(s, *t.last_carrier))
+    team_say(*t.last_carrier, now, "lost quad");
+  t.last_carrier = carrier;
 }
 
 }  // namespace shooters_edge::bots

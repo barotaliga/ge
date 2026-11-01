@@ -885,6 +885,13 @@ of our server and records the match as a multiview demo; the `se-team` lab runs 
 the demo with `--save`, which the game plays with `-playdemo` and turns into a video with
 `-demovideo`.
 
+**What a bot knows, and what a team says (M18r8).** A bot knows the map by its skill
+(`bots/knowledge.hpp`): the expert knows every item and times the key ones he sees taken, the
+average player knows every item but times only the small ones, and the novice learns the map by
+sight over the match. A team talks over `say_team` ("quad in 10, get quad!", "have quad!",
+"enemy at RA", "need help", "took RA"); the server sends a team's words to its own players and
+the multiview recording keeps them, so a demo shows the team talk in each player's view.
+
 ## Modern features
 
 Today's community clients and servers added much since the original release. Grouped by what a
