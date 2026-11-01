@@ -14,13 +14,17 @@
 //   `skill`) is dimmed with the reason in its hint.
 // - **Events** (`apply_event`): a setting changed runs its line at once (the client's) or waits
 //   for START (the server's rules, run as `sv <cvar> <value>` before the map); an action runs its
-//   line and says whether the menu closes. The classic-enhance entry and the help pages are the
-//   game menu's (game_menu.hpp).
+//   line and says whether the menu closes. CLASSIC ENHANCED ▸ ENHANCE A PACK, the help pages and
+//   CUSTOMIZE CONTROLS' waiting for a key are the game menu's (game_menu.hpp).
+// - **CLASSIC ENHANCED** holds the modern picture's settings a player will want to change, page by
+//   subject (textures and models; light and shadow; water, lava and sky; fire and wind; weather):
+//   the `ce_` switches, the `r_` cvars and the weather's; the rest stay console-only.
 //
 // ge:summary Shooter's Edge's main menu model: the classic pages, entries wired to cvars, dimming
 // ge:keywords menu main-menu escape single-player multiplayer options help quit new-game setup
 // ge:keywords video dimmed disabled cvar console-line needs togglemenu shooters-edge
-// ge:keywords load-page save-page save-slots
+// ge:keywords load-page save-page save-slots customize-controls controls bind_control bound_keys
+// ge:keywords classic-enhanced ce_ graphics weather held-weapon gamma brightness
 // ge:skill ui console
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -32,6 +36,7 @@
 #include <vector>
 
 #include "console/console.hpp"
+#include "shooters_edge/menu/controls_page.hpp"
 #include "ui/menu.hpp"
 
 namespace shooters_edge::menu {
@@ -62,6 +67,8 @@ struct Entry {                 // NOLINT(clang-analyzer-optin.performance.Paddin
   std::string_view needs = {};  // a cvar or command the console must know, or "" (always there)
   bool built = true;            // false: dimmed even when `needs` is known (the hint says why)
   bool closes = false;          // action: the menu closes after the line runs
+  bool reversed =
+      false;  // slider: shown 0..100 % from max (left) to min (right), as gamma brightens
   Target target = Target::none;
   std::span<const Choice> choices = {};  // choice
   double min = 0, max = 1, step = 0.1;   // slider
@@ -97,9 +104,11 @@ bool host_knows(const Host& host, std::string_view name);
 std::string host_value(const Host& host, std::string_view name);
 
 // The pages: `main` (the root), `single`, `multi`, `host` (NEW GAME), `setup`, `options`,
-// `video`, `help`, `quit`, and the slot pages `load` and `save` (rows `s0`..`s11`, then BACK; a
-// slot activated runs `load s<i>` or `save s<i>` and closes the menu; an empty slot is dimmed on
-// LOAD).
+// `video` and its `weapon`, `enhanced` (CLASSIC ENHANCED) and its `ce_art`, `ce_light`,
+// `ce_liquids`, `ce_fire` and `ce_weather`, `help`, `quit`; the slot pages `load` and `save` (rows
+// `s0`..`s11`, then BACK; a slot activated runs `load s<i>` or `save s<i>` and closes the menu; an
+// empty slot is dimmed on LOAD); and `controls` (CUSTOMIZE CONTROLS: a row `c<i>` a move of
+// `controls()`, its value the keys bound to it).
 ge::ui::Menu build_menu();
 
 // Every entry's dimming and value read from the host (on opening, and after the console changed
@@ -108,7 +117,9 @@ ge::ui::Menu build_menu();
 void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back = false);
 
 // What an event asks of the game menu.
-enum class Outcome : uint8_t { none, close, classic_enhance, back_at_root };
+// `bind_key`: a CUSTOMIZE CONTROLS row was pressed; the game menu waits for the key (the event's
+// item names the row).
+enum class Outcome : uint8_t { none, close, classic_enhance, back_at_root, bind_key };
 
 // One menu event applied: a client setting's line run, NEW GAME's START running the rules and the
 // map, an action's line run. Returns whether the menu closes or opens something it owns.

@@ -11,12 +11,13 @@
 // picks the look, and r_fx_lights, r_fx_glow and r_bloom set how much light the effects throw, how
 // bright a spark glows and how much bloom the modern look mixes in, r_lava_glow and r_slime_glow
 // how much the pools light the walls round them (the classic keeps its own: full lights, full glow,
-// no bloom, and the pools' light baked in the lightmaps).
+// no bloom, and the pools' light baked in the lightmaps); `gamma` brightens either look through
+// the post pass's grade (`gamma_grade`).
 //
 // ge:summary Shooter's Edge's classic and modern looks: the world's options, the post's, the
 // palette grade
 // ge:keywords look classic modern r_look r_fx_lights r_fx_glow r_bloom r_lava_glow ce-switches
-// r_slime_glow cvars palette grade quantize
+// r_slime_glow cvars palette grade quantize gamma brightness gamma_grade
 // crisp bloom shooter picture
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
@@ -50,12 +51,13 @@ struct Picture {
   double bloom = 0.3;           // r_bloom: the bloom's share, 0 none
   double lava_glow = 0.2;       // r_lava_glow: the lava's light on the walls round it, 0 none
   double slime_glow = 1;        // r_slime_glow: the slime's faint green light, 0 none
+  double gamma = 1;             // gamma: the picture's brightness, below 1 brighter
   // The ce_ switches: each enhancement the modern look draws over the pack, on or off.
   ge::classicenhance::Switches ce;
   ge::brush::app::WeatherCvars weather;  // r_weather and its kin: the rain and the storm
 };
-// Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, every ce_ switch
-// and the weather's cvars over `picture` (it must outlive `con`).
+// Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma, every ce_
+// switch and the weather's cvars over `picture` (it must outlive `con`).
 void add_cvars(ge::console::Console& con, Picture& picture);
 // r_look's look; modern for a word it does not know.
 Look look_of(const Picture& picture);
@@ -72,5 +74,9 @@ ge::render::PostSettings post_settings(Look look, const Picture& picture = {});
 // The classic grade: every entry the nearest (in sRGB) of `palette`'s colours (768 bytes, RGB), in
 // render/post.hpp's `identity_grade` layout. An empty palette gives the identity.
 std::vector<float> palette_grade(std::span<const uint8_t> palette);
+// The grade `table` brightened by `gamma` (each entry raised to it: 1 unchanged, 0.5 brighter),
+// after the palette's pick, so the classic look keeps its 256 colours' choice and is lit like the
+// classic game's own brightness slider.
+std::vector<float> gamma_grade(std::vector<float> table, double gamma);
 
 }  // namespace shooters_edge::look

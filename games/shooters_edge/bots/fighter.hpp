@@ -44,6 +44,7 @@
 #include <vector>
 
 #include "ai/path.hpp"
+#include "core/prng.hpp"
 #include "shooter/bot.hpp"
 #include "shooter/hearing.hpp"
 #include "shooter/swim.hpp"
@@ -148,6 +149,8 @@ struct FighterStats {
   int64_t heard_spawns = 0;         // players heard spawning on a point it knows
   int64_t spam_shots = 0;           // rockets fired at a spot enemies come in by
   int64_t pokes = 0;                // buttons a novice tried on a whim
+  int64_t dives_given_up = 0;       // dives turned back (late, or short of air)
+  double dive_wet_s = 0;            // time in the water on a dive
 };
 
 struct Fighter {
@@ -167,17 +170,19 @@ struct Fighter {
   sh::HearSkill ears;  // what it takes in of the sounds it is sent (hearing.hpp)
   // Its team messages (team.hpp's `team_say`), sent as `say_team` by whoever drives its client.
   std::vector<std::string> outbox;
-  double held = 0;           // in the mode this long
-  double heard_t = -1;       // the server time whose sounds were last taken in
-  double spam_fired = -1e9;  // its last rocket at a spot
-  double poke_until = -1e9;  // a novice on a button until then (buttons.hpp)
-  double next_poke = 0;      // and his next whim
-  double next_think = 0;     // server time of the next choice
-  double impulse_at = -1;    // when the last impulse went
-  double reach_at = -1;      // when `reach` was worked out (-1: never)
-  double said_at = -1e9;     // its last team message
-  double called_at = -1e9;   // its last enemy callout
-  double under_since = -1;   // when its head last went under the water (-1: not under)
+  double held = 0;             // in the mode this long
+  double heard_t = -1;         // the server time whose sounds were last taken in
+  double spam_fired = -1e9;    // its last rocket at a spot
+  double poke_until = -1e9;    // a novice on a button until then (buttons.hpp)
+  double next_poke = 0;        // and his next whim
+  double next_think = 0;       // server time of the next choice
+  double impulse_at = -1;      // when the last impulse went
+  double reach_at = -1;        // when `reach` was worked out (-1: never)
+  double said_at = -1e9;       // its last team message
+  double called_at = -1e9;     // its last enemy callout
+  double under_since = -1;     // when its head last went under the water (-1: not under)
+  double dive_wet_since = -1;  // when the dive under way went into the water (-1: none)
+  double dive_off_until = -1;  // until when the dive given up (`dive_off`) is not tried again
   ge::ai::Why* why = nullptr;
   Team* team = nullptr;                          // its side (team.hpp); null in a free-for-all
   const ge::shooter::Locs* locs = nullptr;       // the map's place names (none: no names)
@@ -204,7 +209,8 @@ struct Fighter {
   int32_t diving = -1;        // the item it dives for (in the water on `dive`), -1 none
   int32_t last_dive = -1;     // the item the last think dived for
   int32_t explore_node = -1;  // a novice with nothing known walks the map to learn it
-  uint32_t rng = 1;           // its own draws (where it explores), seeded off the bot's seed
+  int32_t dive_off = -1;      // the item whose dive it last gave up (-1: none)
+  ge::core::Rng rng{1};       // its own draws (where it explores), seeded off the bot's seed
   FightMode mode = FightMode::roam;
   Role role = Role::free;
   MapSense sense = MapSense::expert;  // how well it knows the map (off its skill)

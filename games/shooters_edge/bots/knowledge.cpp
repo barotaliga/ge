@@ -336,11 +336,9 @@ int32_t explore_node(Fighter& f, sh::Vec3f me) {
   if (ok(f.explore_node) && dist(g.nodes[static_cast<size_t>(f.explore_node)].origin, me) > 96)
     return f.explore_node;
   // A new far node: draws off the fighter's own stream until one is reachable and far enough.
-  const auto n = static_cast<uint32_t>(g.nodes.size());
-  if (n == 0) return -1;
+  if (g.nodes.empty()) return -1;
   for (int k = 0; k < 64; k++) {
-    f.rng = f.rng * 1664525u + 1013904223u;
-    const auto c = static_cast<int32_t>((f.rng >> 8) % n);
+    const auto c = static_cast<int32_t>(ge::core::pick_index(f.rng, g.nodes.size()));
     if (ok(c) && dist(g.nodes[static_cast<size_t>(c)].origin, me) >= kExploreFar) {
       f.explore_node = c;
       return c;

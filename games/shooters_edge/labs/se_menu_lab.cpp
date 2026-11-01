@@ -41,10 +41,12 @@
 #include "console/console.hpp"
 #include "lab/lab.hpp"
 #include "shooters_edge/client/controls.hpp"
+#include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/scoreboard.hpp"
+#include "shooters_edge/view/hand.hpp"
 #include "ui/raster.hpp"
 #include "vfs/pak.hpp"
 
@@ -166,11 +168,23 @@ ge::lab::Picture picture_of(ui::Image img) {
   return p;
 }
 
+// The window's cvars the lab cannot register from their owners (those are GPU code), at the
+// window's defaults: so the rows the window lights are lit here too.
+constexpr std::pair<const char*, const char*> kWindowCvars[] = {
+    {"r_look", "modern"},   {"r_fx_lights", "0.2"}, {"r_fx_glow", "0.15"}, {"r_bloom", "0.3"},
+    {"r_lava_glow", "0.2"}, {"r_slime_glow", "1"},  {"gamma", "1"},        {"vid_fullscreen", "0"},
+    {"sv_weather", "0"},    {"sv_rain", "1"},       {"sv_precip", "0.5"},  {"sv_wind", "4"},
+    {"r_lightning", "1"},   {"r_snowcover", "1"},   {"r_wet", "1"},        {"topcolor", "4"},
+    {"bottomcolor", "12"},
+};
+
 // The window's console: what the menu's rows read and run.
 struct Game {
   ge::console::Console con;
   shooters_edge::client::ControlSettings controls;
   shooters_edge::hud::Hud hud = shooters_edge::hud::make_hud();
+  shooters_edge::view::ViewSettings view;
+  std::string hud_art = "auto";
   ge::console::Cvars server{true};
   sm::GameMenu menu;
   sm::Host host;
@@ -180,8 +194,15 @@ struct Game {
       con.add_command(c, "", [](ge::console::Console&, const CArgs&) {});
     con.add_command("toggleconsole", "", [](ge::console::Console&, const CArgs&) {});
     shooters_edge::client::add_cvars(con, controls);
+    shooters_edge::client::default_binds(con);
     shooters_edge::hud::add_cvars(con, hud);
+    shooters_edge::view::add_view_cvars(con.cvars(), view);
     menu.add_cvars(con);
+    // The window's picture, weather and user-info cvars (app/look.cpp, brush/app/bsp_weather.cpp
+    // and client/main.cpp register them on the GPU's side) as stand-ins at their defaults.
+    for (const auto& [name, value] : kWindowCvars)
+      con.cvars().add({.name = name, .fallback = value});
+    shooters_edge::hud::add_art_cvar(con, &hud_art);
     for (const char* c : {"deathmatch", "fraglimit", "timelimit", "teamplay", "skill"})
       server.add({.name = c, .fallback = "0"});
     server.set("deathmatch", "1", ge::console::Source::local);
@@ -217,15 +238,39 @@ constexpr PageShot kPages[] = {
     {"multi", "host",
      "MULTIPLAYER: JOIN A GAME dimmed until the client plays over the network; NEW GAME and "
      "SETUP."},
-    {"host", "fraglimit",
-     "NEW GAME: the server's rules read from its cvars (deathmatch 1, 20 frags, 15 minutes); "
-     "MAX PLAYERS, TEAMPLAY and SKILL dimmed (no remote players yet, the baseline mod reads "
-     "neither)."},
-    {"options", "sensitivity",
-     "OPTIONS: GO TO CONSOLE, RESET TO DEFAULTS, MOUSE SPEED and INVERT MOUSE work; the rows "
-     "whose cvar the game has not got are dimmed."},
-    {"video", "hud_style",
-     "VIDEO: the HUD's look and the menu's look (WORLD LOOK lights up once `r_look` is a cvar)."},
+    {"host", "teamplay",
+     "NEW GAME: the server's rules read from its cvars (deathmatch 1, 20 frags, 15 minutes), "
+     "TEAMPLAY and SKILL with them; MAX PLAYERS dimmed until others can join over the network."},
+    {"setup", "topcolor",
+     "SETUP: the name, and the shirt's and pants' colours (`topcolor`, `bottomcolor`) the "
+     "player's model wears."},
+    {"options", "gamma",
+     "OPTIONS: every row lit but the two volumes (the window plays no sound yet); BRIGHTNESS "
+     "is `gamma` drawn the classic way round, brighter to the right."},
+    {"controls", "c1",
+     "CUSTOMIZE CONTROLS: each move and the keys bound to it (the console's binds); ENTER, then "
+     "a key, binds it."},
+    {"video", "weapon",
+     "VIDEO: the world's look, the HUD and its pictures, the menu's look, fullscreen and the "
+     "held weapon's page."},
+    {"weapon", "r_viewmodel_hands",
+     "HELD WEAPON: shown or not, the hands and arms, centred or to the right, the sway, the "
+     "muzzle fire."},
+    {"enhanced", "art",
+     "CLASSIC ENHANCED: ENHANCE A PACK (classic-enhance's own menu), then a page a subject."},
+    {"ce_art", "ce_relief",
+     "TEXTURES AND MODELS: the enhanced textures and skins, the relief and the depth, smooth "
+     "shading, the 2D art."},
+    {"ce_light", "r_fx_lights",
+     "LIGHT AND SHADOW: the rebaked light, the shadows, the effects' light, the sparks' glow, "
+     "the bloom."},
+    {"ce_liquids", "r_lava_glow",
+     "WATER, LAVA AND SKY: each liquid on or off with its light, the teleporters, the sky and "
+     "the low clouds."},
+    {"ce_fire", "ce_bonfires", "FIRE AND WIND: the live fire, the bonfires and the wind."},
+    {"ce_weather", "sv_rain",
+     "WEATHER: on or off, rain or snow, how hard, the wind, the lightning, the snow cover, the "
+     "wet and the fog."},
     {"help", "",
      "HELP: the keys (in the classic look, the pack's help pages, turned with the "
      "arrows)."},
@@ -363,15 +408,23 @@ void run(ge::lab::Lab& lab) {
         snap(g, v, cat({look, "-", art, "-help-2-", v.name()}), "THE CLASSIC HELP, PAGE 2",
              "The help pages are the pack's own pictures, one at a time.", look, art, det);
       } else {
-        // Classic enhance's own menu, mounted under OPTIONS.
-        g.menu.show(g.host, "options");
-        g.menu.main().focus("classic");
+        // CUSTOMIZE CONTROLS waiting for the key of the row pressed.
+        g.menu.show(g.host, "controls");
+        g.menu.main().focus("c5");
         ui::MenuInput accept;
         accept.accept = true;
         g.menu.update(accept, false, g.host, 1.0 / 60);
-        snap(g, v, "modern-classic-enhance-" + v.name(), "OPTIONS: CLASSIC ENHANCE",
+        snap(g, v, "modern-controls-waiting-" + v.name(), "CUSTOMIZE CONTROLS: PRESS A KEY",
+             "JUMP pressed: the row waits for the key (ESCAPE leaves it as it was, BACKSPACE "
+             "clears it).",
+             look, art, det);
+        // Classic enhance's own menu, mounted under CLASSIC ENHANCED.
+        g.menu.show(g.host, "enhanced");
+        g.menu.main().focus("enhance");
+        g.menu.update(accept, false, g.host, 1.0 / 60);
+        snap(g, v, "modern-classic-enhance-" + v.name(), "CLASSIC ENHANCED: ENHANCE A PACK",
              "Classic enhance's own menu in the main menu's place: the pack, ENHANCE, the "
-             "switches. Back at its root returns to OPTIONS.",
+             "switches. Back at its root returns to CLASSIC ENHANCED.",
              look, art, det);
       }
       if (pass <= 0) lab.metric(look + "." + v.name() + ".dimmed-rows", dimmed, "count");

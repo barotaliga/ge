@@ -37,6 +37,7 @@
 #include <string_view>
 #include <vector>
 
+#include "core/prng.hpp"
 #include "shooter/aim.hpp"
 #include "shooter/senses.hpp"
 
@@ -85,9 +86,9 @@ struct HearStats {
 
 // The sounds of `view` that the listener at `ear` takes in this frame, in `out` (cleared first);
 // `viewer` is his own entity (his own sounds are not heard), `fighting` whether he is in a fight.
-// `rng` is the caller's stream (a 32-bit LCG state), advanced once a sound considered.
+// `rng` is the caller's stream, advanced once a sound considered (twice a sound taken in).
 void hear(const ClientView& view, int viewer, Vec3f ear, const HearSkill& skill,
-          std::span<const SoundMeaning> table, bool fighting, uint32_t& rng,
+          std::span<const SoundMeaning> table, bool fighting, core::Rng& rng,
           std::vector<HeardSound>& out, HearStats* stats = nullptr);
 
 }  // namespace ge::shooter

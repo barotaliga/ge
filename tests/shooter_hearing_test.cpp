@@ -24,7 +24,7 @@ sh::ClientView view_of(const char* sample, float x, int n) {
 }
 
 int64_t taken(sh::AimSkill skill, const char* sample, float x, bool fighting = false) {
-  uint32_t rng = 7;
+  ge::core::Rng rng = ge::core::make_rng(7);
   std::vector<sh::HeardSound> out;
   sh::HearStats st;
   sh::hear(view_of(sample, x, 400), 1, {0, 0, 0}, sh::hear_skill_of(skill), kTable, fighting, rng,
@@ -36,7 +36,7 @@ int64_t taken(sh::AimSkill skill, const char* sample, float x, bool fighting = f
 }  // namespace
 
 TEST(an_expert_takes_in_and_reads_every_sound) {
-  uint32_t rng = 1;
+  ge::core::Rng rng = ge::core::make_rng(1);
   std::vector<sh::HeardSound> out;
   sh::hear(view_of("pickup.wav", 900, 50), 1, {0, 0, 0}, sh::hear_skill_of(sh::AimSkill::expert),
            kTable, true, rng, out);
@@ -59,7 +59,7 @@ TEST(an_average_ear_favours_close_and_unique_sounds) {
 
 TEST(a_novice_hears_only_what_is_close_and_not_what_it_means) {
   CHECK(taken(sh::AimSkill::novice, "pickup.wav", 900) == 0);
-  uint32_t rng = 3;
+  ge::core::Rng rng = ge::core::make_rng(3);
   std::vector<sh::HeardSound> out;
   sh::hear(view_of("pickup.wav", 200, 200), 1, {0, 0, 0}, sh::hear_skill_of(sh::AimSkill::novice),
            kTable, false, rng, out);
@@ -72,7 +72,7 @@ TEST(a_novice_hears_only_what_is_close_and_not_what_it_means) {
 }
 
 TEST(a_players_own_sounds_are_not_heard) {
-  uint32_t rng = 1;
+  ge::core::Rng rng = ge::core::make_rng(1);
   std::vector<sh::HeardSound> out;
   sh::hear(view_of("shot.wav", 10, 5), 2, {0, 0, 0}, sh::hear_skill_of(sh::AimSkill::expert),
            kTable, false, rng, out);

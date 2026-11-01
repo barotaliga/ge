@@ -9,6 +9,7 @@
 
 #include <cmath>
 
+#include "core/prng.hpp"
 #include "shooter/senses.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
@@ -42,10 +43,7 @@ double mate_fresh_s(const Fighter& f) {
   return f.sense == MapSense::expert ? kExpertMateFresh_s : kMateFresh_s;
 }
 
-double draw(Fighter& f) {
-  f.rng = f.rng * 1664525u + 1013904223u;
-  return static_cast<double>(f.rng >> 8) / 16777216.0;
-}
+double draw(Fighter& f) { return ge::core::next(f.rng); }
 
 Mate& mate_named(Fighter& f, const std::string& name) {
   for (Mate& m : f.mind.mates)

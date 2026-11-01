@@ -10,15 +10,6 @@
 
 namespace ge::shooter {
 
-namespace {
-
-float draw(uint32_t& rng) {
-  rng = rng * 1664525u + 1013904223u;
-  return static_cast<float>(rng >> 8) / 16777216.f;
-}
-
-}  // namespace
-
 const char* sound_class_name(SoundClass c) {
   switch (c) {
     case SoundClass::other:
@@ -76,7 +67,7 @@ const SoundMeaning* sound_meaning(std::span<const SoundMeaning> table, std::stri
 }
 
 void hear(const ClientView& view, int viewer, Vec3f ear, const HearSkill& skill,
-          std::span<const SoundMeaning> table, bool fighting, uint32_t& rng,
+          std::span<const SoundMeaning> table, bool fighting, core::Rng& rng,
           std::vector<HeardSound>& out, HearStats* stats) {
   out.clear();
   for (const ViewSound& snd : view.sounds) {
@@ -91,7 +82,7 @@ void hear(const ClientView& view, int viewer, Vec3f ear, const HearSkill& skill,
                           : (close ? skill.common_near : skill.common_far);
     if (fighting) chance *= skill.fight_scale;
     if (stats) stats->sounds++;
-    const float roll = draw(rng);
+    const auto roll = static_cast<float>(core::next(rng));
     if (chance < 1 && roll >= chance) {
       if (stats) stats->missed++;
       continue;
@@ -101,7 +92,7 @@ void hear(const ClientView& view, int viewer, Vec3f ear, const HearSkill& skill,
     h.at = snd.origin;
     h.dist = dist;
     // The direction is heard true; the distance is off by up to `range_error` of it.
-    const float off = 1 + skill.range_error * (2 * draw(rng) - 1);
+    const float off = 1 + skill.range_error * static_cast<float>(core::range(rng, -1, 1));
     h.guess = ear + d * off;
     // A novice knows a shot and a cry for what they are; nothing else.
     const bool readable = m && (skill.knows_samples || m->cls == SoundClass::fire ||

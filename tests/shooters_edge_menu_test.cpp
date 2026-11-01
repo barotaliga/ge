@@ -10,6 +10,7 @@
 // ge:keywords test menu main-menu dimmed cvar console new-game start escape classic modern layout
 // ge:skill ui testing
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -102,13 +103,14 @@ TEST(rows_dim_until_the_console_knows_what_they_need) {
   w.con.add_command("newgame", "", [](ge::console::Console&, const ge::console::Args&) {});
   sm::refresh(m, host);
   CHECK(!item(m, "single", "new")->disabled);
-  // A server cvar the mod ignores stays dimmed although the server has it.
+  // The server's rules light when the server has them; MAX PLAYERS waits for network play.
   ge::console::Cvars server(true);
   server.add({.name = "skill", .fallback = "1"});
   server.add({.name = "fraglimit", .fallback = "20"});
   host.server = &server;
   sm::refresh(m, host);
-  CHECK(item(m, "host", "skill")->disabled);
+  CHECK(!item(m, "host", "skill")->disabled);
+  CHECK(item(m, "host", "maxclients")->disabled);
   CHECK(!item(m, "host", "fraglimit")->disabled);
   CHECK(item(m, "host", "fraglimit")
             ->choices[static_cast<size_t>(item(m, "host", "fraglimit")->choice)] == "20");
@@ -152,7 +154,7 @@ TEST(new_game_start_runs_the_rules_then_the_map) {
   for (const MenuEvent& e : press(m, "start")) out = sm::apply_event(e, m, host);
   CHECK(out == sm::Outcome::close);
   CHECK(std::find(w.ran.begin(), w.ran.end(), "sv fraglimit 0") != w.ran.end());
-  CHECK(std::find(w.ran.begin(), w.ran.end(), "sv teamplay 0") == w.ran.end());  // dimmed
+  CHECK(std::find(w.ran.begin(), w.ran.end(), "sv teamplay 0") != w.ran.end());
   CHECK(!w.ran.empty() && w.ran.back() == "map dm1");
 }
 
@@ -180,6 +182,89 @@ TEST(escape_opens_the_menu_and_backs_out_of_it) {
   CHECK(g.open() && g.main().top().id == "quit");
   g.update(accept, false, host, 0.016);  // YES
   CHECK(!w.ran.empty() && w.ran.back() == "quit");
+}
+
+TEST(customize_controls_shows_the_binds_and_binds_the_next_key) {
+  World w;
+  w.con.add_button("forward", "");
+  w.con.add_button("jump", "");
+  w.con.execute("bind w +forward; bind up +forward; bind space +jump");
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  sm::Host host{.console = &w.con};
+  CHECK(sm::bound_keys(w.con.binds(), "+forward") == (std::vector<std::string>{"up", "w"}));
+  CHECK(sm::keys_text(sm::bound_keys(w.con.binds(), "+forward")) == "UP, W");
+  CHECK(sm::keys_text({}) == "---");
+  g.show(host, "controls");
+  CHECK(item(g.main(), "controls", "c1")->choices[0] == "UP, W");  // MOVE FORWARD
+  CHECK(item(g.main(), "controls", "c0")->disabled);               // no +attack button here
+  CHECK(g.main().focus("c5"));                                     // JUMP
+  MenuInput accept;
+  accept.accept = true;
+  g.update(accept, false, host, 0.016);
+  CHECK(g.waiting_key());
+  CHECK(item(g.main(), "controls", "c5")->choices[0] == "PRESS A KEY");
+  g.press_key("enter", host);  // the frame's own ENTER binds nothing
+  CHECK(g.waiting_key());
+  g.update({}, false, host, 0.016);
+  g.press_key("mouse2", host);
+  CHECK(!g.waiting_key());
+  CHECK(w.con.binds().get(ge::console::BindMode::game, "mouse2") == "+jump");
+  CHECK(item(g.main(), "controls", "c5")->choices[0] == "MOUSE2");  // "MOUSE2, SPACE" is too wide
+  // A third key replaces both; BACKSPACE clears; ESCAPE leaves the move as it was.
+  CHECK(sm::bind_control(w.con, "+jump", "e"));
+  CHECK(sm::bound_keys(w.con.binds(), "+jump") == std::vector<std::string>{"e"});
+  CHECK(!sm::bind_control(w.con, "+jump", "nosuchkey"));
+  g.update(accept, false, host, 0.016);
+  g.update({}, false, host, 0.016);
+  g.press_key("escape", host);
+  CHECK(sm::bound_keys(w.con.binds(), "+jump") == std::vector<std::string>{"e"});
+  g.update(accept, false, host, 0.016);
+  g.update({}, false, host, 0.016);
+  g.press_key("backspace", host);
+  CHECK(sm::bound_keys(w.con.binds(), "+jump").empty());
+  CHECK(item(g.main(), "controls", "c5")->choices[0] == "---");
+}
+
+TEST(brightness_is_gamma_drawn_brighter_to_the_right) {
+  World w;
+  double gamma = 1;
+  w.con.cvars().bind({.name = "gamma", .fallback = "1", .min = 0.3, .max = 1.5}, &gamma);
+  Menu m = sm::build_menu();
+  sm::Host host{.console = &w.con};
+  sm::refresh(m, host);
+  CHECK(item(m, "options", "gamma")->value == 0);  // gamma 1: the slider's left end, 0 %
+  m.open("options");
+  CHECK(m.focus("gamma"));
+  MenuInput right;
+  right.right = true;
+  for (const MenuEvent& e : m.input(right)) sm::apply_event(e, m, host);
+  CHECK(std::fabs(gamma - 0.95) < 1e-9);  // a step right (10 %) is brighter: a lower gamma
+  w.con.execute("gamma 0.5");
+  sm::refresh(m, host);
+  CHECK(item(m, "options", "gamma")->value == 100);
+}
+
+TEST(classic_enhanced_pages_set_their_cvars_and_open_the_enhance_menu) {
+  World w;
+  sm::GameMenu g;
+  g.add_cvars(w.con);  // the ce_ switches
+  sm::Host host{.console = &w.con};
+  g.show(host, "enhanced");
+  for (const char* row : {"enhance", "art", "light", "liquids", "fire"})
+    CHECK_MSG(!item(g.main(), "enhanced", row)->disabled, row);
+  CHECK(item(g.main(), "enhanced", "weather")->disabled);  // no sv_weather on this console
+  g.show(host, "ce_liquids");
+  CHECK(item(g.main(), "ce_liquids", "ce_water")->on);
+  CHECK(g.main().focus("ce_water"));
+  MenuInput accept;
+  accept.accept = true;
+  g.update(accept, false, host, 0.016);
+  CHECK(w.con.cvars().find("ce_water")->value == "0");
+  g.show(host, "enhanced");
+  CHECK(g.main().focus("enhance"));
+  g.update(accept, false, host, 0.016);
+  CHECK(g.in_enhance());
 }
 
 TEST(classic_pictures_are_read_from_the_packs_files) {
@@ -254,8 +339,9 @@ TEST(both_looks_lay_every_page_out_clean) {
   CHECK(sm::load_classic_art(fixture_find(files), &art, &error));
   for (const char* look : {"modern", "classic"}) {
     if (std::string(look) == "classic") g.set_art(art);
-    for (const char* page : {"main", "single", "multi", "host", "setup", "options", "video", "help",
-                             "quit", "load", "save"}) {
+    for (const char* page : {"main", "single", "multi", "host", "setup", "options", "video",
+                             "weapon", "controls", "enhanced", "ce_art", "ce_light", "ce_liquids",
+                             "ce_fire", "ce_weather", "help", "quit", "load", "save"}) {
       for (const auto& [width, height] : {std::pair{1280, 720}, std::pair{390, 844}}) {
         g.show(host, page);
         CHECK(g.classic() == (std::string(look) == "classic"));

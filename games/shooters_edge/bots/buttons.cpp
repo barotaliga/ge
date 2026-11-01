@@ -6,6 +6,8 @@
 // ge:test tests/shooters_edge_team_test.cpp
 #include "shooters_edge/bots/buttons.hpp"
 
+#include "core/prng.hpp"
+
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -34,10 +36,7 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
   return std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
 }
 
-float draw(Fighter& f) {
-  f.rng = f.rng * 1664525u + 1013904223u;
-  return static_cast<float>(f.rng >> 8) / 16777216.f;
-}
+float draw(Fighter& f) { return static_cast<float>(ge::core::next(f.rng)); }
 
 sh::Vec3f middle(const sh::Edict& e) {
   return {(e.absmin.x + e.absmax.x) * 0.5f, (e.absmin.y + e.absmax.y) * 0.5f,

@@ -255,6 +255,16 @@ Outcome run(const Args& a) {
     }
     return run_lab_publish(fs::absolute(repo_of(a)), p);
   }
+  if (name == "lab before") {
+    LabBeforeOptions before;
+    before.ids = a.words;
+    if (const std::string ref = flag_value(a, "ref"); !ref.empty()) before.ref = ref;
+    if (const std::string tag = flag_value(a, "tag"); !tag.empty()) before.tag = tag;
+    before.shots = flag_value(a, "shots");
+    before.full = has_flag(a, "full");
+    before.passthrough = a.passthrough;
+    return run_lab_before(build_options(a), before);
+  }
   if (name == "lab pair") {
     LabPairOptions pair;
     pair.id = a.words[0];

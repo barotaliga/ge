@@ -27,4 +27,5 @@ experts believing half the arena empty. A common sound places the player and no 
 
 A scarcity weight (the map's lone big armour) is a TEAM plan. Applied to a weak player's or a lone
 deathmatch player's choice it kept an expert walking at an item on a lift held up top for the whole
-match. Weigh only the team's wants, and let go of a goal held 30 s in vain.
+match. Weigh only the team's wants, and let go of a goal held 30 s in vain (8 s when weak: a
+retreat cannot wait at the foot of a lift held up top).

@@ -12,6 +12,7 @@
 #include <map>
 
 #include "assets/sha256.hpp"
+#include "classicenhance/cache.hpp"
 #include "classicenhance/lha.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/zip.hpp"
@@ -21,9 +22,6 @@ namespace ge::classicenhance {
 namespace fs = std::filesystem;
 
 namespace {
-
-constexpr const char* kPackName = "pak0.pak";
-constexpr const char* kPackInArchive = "id1/pak0.pak";
 
 bool read_file(const fs::path& p, std::vector<uint8_t>* out, std::string* error) {
   std::ifstream f(p, std::ios::binary);
@@ -63,9 +61,28 @@ const KnownFile* known_in(std::span<const KnownFile> list, const std::string& sh
   return nullptr;
 }
 
-constexpr const char* kWhatToGive =
-    "give a release zip as published, an installed game folder, or its id1/pak0.pak "
-    "(skill: classicenhance)";
+// What to give instead, naming every profile's first pack ("id1/pak0.pak").
+std::string what_to_give() {
+  std::string packs;
+  for (const Profile& p : kProfiles) packs += (packs.empty() ? "" : " or ") + first_pack_path(p);
+  return "give a release zip as published, an installed game folder, or its " + packs +
+         " (skill: classicenhance)";
+}
+
+// Whether the archive path `name` (any case, '/' or '\\') is a profile's first pack in an install;
+// sets `*profile` to it.
+bool first_pack_in(std::string_view name, const Profile** profile) {
+  for (const Profile& p : kProfiles) {
+    const std::string at = first_pack_path(p);
+    if (vfs::same_name(name, at) ||
+        (name.size() > at.size() && vfs::same_name(name.substr(name.size() - at.size()), at) &&
+         (name[name.size() - at.size() - 1] == '/' || name[name.size() - at.size() - 1] == '\\'))) {
+      *profile = &p;
+      return true;
+    }
+  }
+  return false;
+}
 
 }  // namespace
 
@@ -89,7 +106,7 @@ bool add_later_packs(const std::string& dir, Source* out, std::string* error,
   out->merged.clear();
   out->set_sha256 = out->pack_sha256;
   for (int n = 1;; n++) {
-    const fs::path at = child_any_case(dir, "pak" + std::to_string(n) + ".pak");
+    const fs::path at = child_any_case(dir, lower(pack_name(*out->profile, n)));
     if (at.empty()) break;
     LaterPack p;
     p.name = at.filename().string();
@@ -125,13 +142,13 @@ bool add_later_packs(const std::string& dir, Source* out, std::string* error,
     }
   };
   take(out->pack);
-  std::string ids = out->pack_sha256;
+  std::vector<std::string> digests = {out->pack_sha256};
   for (const LaterPack& p : out->later) {
     take(p.bytes);
-    ids += " " + p.sha256;
+    digests.push_back(p.sha256);
   }
   if (!vfs::write_pak(files, &out->merged, error)) return false;
-  out->set_sha256 = assets::sha256_hex({reinterpret_cast<const uint8_t*>(ids.data()), ids.size()});
+  out->set_sha256 = set_key(digests);
   return true;
 }
 
@@ -146,10 +163,20 @@ bool verify_pack(Source* out, std::string* error, std::span<const KnownFile> pac
   if (!vfs::read_pak(out->pack, &pak, &why)) {
     *error = "the pack (" + std::to_string(out->pack.size()) + " bytes, SHA-256 " +
              out->pack_sha256 + ") does not read as a pack (" + why +
-             "), so nothing was written. " + kWhatToGive;
+             "), so nothing was written. " + what_to_give();
     out->pack_sha256.clear();
     out->set_sha256.clear();
     return false;
+  }
+  // A pack found by its install's or its archive's path keeps that profile; a pack alone is the
+  // first row whose palette it holds.
+  if (vfs::pak_find(pak, out->profile->palette) == nullptr) {
+    for (const Profile& p : kProfiles) {
+      if (vfs::pak_find(pak, p.palette) != nullptr) {
+        out->profile = &p;
+        break;
+      }
+    }
   }
   return true;
 }
@@ -162,17 +189,15 @@ bool pack_from_zip(std::span<const uint8_t> bytes, Source* out, std::string* err
   if (!vfs::read_zip(bytes, &zip, error)) return false;
   // The pack stored in the zip itself, as some repackaged downloads carry it.
   for (const vfs::ZipEntry& e : zip.entries) {
-    const std::string name = lower(e.name);
-    if (name == kPackInArchive || name.ends_with("/" + std::string(kPackInArchive)) ||
-        name.ends_with("\\id1\\pak0.pak")) {
+    if (first_pack_in(e.name, &out->profile)) {
       if (!vfs::zip_unpack(bytes, e, &out->pack, error)) return false;
       return verify_pack(out, error, packs);
     }
   }
   const vfs::ZipEntry* res = vfs::zip_find(zip, "resource.1");
   if (res == nullptr) {
-    *error = "the zip holds neither an installer archive (resource.1) nor id1/pak0.pak; " +
-             std::string(kWhatToGive);
+    *error = "the zip holds neither an installer archive (resource.1) nor a game's first pack; " +
+             what_to_give();
     return false;
   }
   std::vector<uint8_t> archive;
@@ -180,12 +205,12 @@ bool pack_from_zip(std::span<const uint8_t> bytes, Source* out, std::string* err
   std::vector<LhaEntry> entries;
   if (!read_lha(archive, &entries, error)) return false;
   for (const LhaEntry& e : entries) {
-    if (vfs::same_name(e.name, kPackInArchive)) {
+    if (first_pack_in(e.name, &out->profile)) {
       if (!lha_unpack(archive, e, &out->pack, error)) return false;
       return verify_pack(out, error, packs);
     }
   }
-  *error = "the installer archive holds no id1\\pak0.pak; " + std::string(kWhatToGive);
+  *error = "the installer archive holds no game's first pack; " + what_to_give();
   return false;
 }
 
@@ -197,10 +222,21 @@ bool open_source(const std::string& path, Source* out, std::string* error,
   if (fs::is_directory(file, ec)) {
     out->route = Route::folder;
     fs::path found;
-    if (const fs::path id1 = child_any_case(file, "id1"); !id1.empty()) {
-      found = child_any_case(id1, kPackName);
+    // An install: a profile's base folder holding its first pack.
+    for (const Profile& p : kProfiles) {
+      if (const fs::path base = child_any_case(file, lower(std::string(p.base_dir)));
+          !base.empty()) {
+        found = child_any_case(base, lower(pack_name(p, 0)));
+      }
+      if (!found.empty()) {
+        out->profile = &p;
+        break;
+      }
     }
-    if (found.empty()) found = child_any_case(file, kPackName);
+    // The first pack itself, of any profile.
+    for (size_t i = 0; found.empty() && i < std::size(kProfiles); i++) {
+      found = child_any_case(file, lower(pack_name(kProfiles[i], 0)));
+    }
     if (found.empty()) {
       // A release zip dropped in the folder: the first zip that holds a pack.
       for (const auto& e : fs::directory_iterator(file, ec)) {
@@ -213,13 +249,13 @@ bool open_source(const std::string& path, Source* out, std::string* error,
           return true;
         }
       }
-      *error =
-          "no id1/pak0.pak, pak0.pak or release zip holding it in '" + path + "'; " + kWhatToGive;
+      *error = "no game's first pack, nor a release zip holding one, in '" + path + "'; " +
+               what_to_give();
       return false;
     }
     file = found;
   } else if (!fs::is_regular_file(file, ec)) {
-    *error = "'" + path + "' is neither a file nor a folder; " + kWhatToGive;
+    *error = "'" + path + "' is neither a file nor a folder; " + what_to_give();
     return false;
   }
   std::vector<uint8_t> bytes;
@@ -241,17 +277,17 @@ bool open_source(const std::string& path, Source* out, std::string* error,
     std::string why;
     if (!read_lha(bytes, &entries, &why)) {
       *error = "'" + file.string() + "' is neither a zip, an installer archive nor a pack; " +
-               kWhatToGive;
+               what_to_give();
       return false;
     }
     out->route = Route::installer;
     for (const LhaEntry& e : entries) {
-      if (vfs::same_name(e.name, kPackInArchive)) {
+      if (first_pack_in(e.name, &out->profile)) {
         if (!lha_unpack(bytes, e, &out->pack, error)) return false;
         return verify_pack(out, error, packs);
       }
     }
-    *error = "the installer archive holds no id1\\pak0.pak; " + std::string(kWhatToGive);
+    *error = "the installer archive holds no game's first pack; " + what_to_give();
     return false;
   }
   return true;

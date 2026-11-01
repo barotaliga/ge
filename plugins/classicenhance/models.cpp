@@ -187,25 +187,25 @@ morph::Model drop_glowing(const morph::Model& m) {
 
 bool enhance_models(std::span<const uint8_t> pack, const Palette& palette, const fs::path& dir,
                     const ModelOptions& opts, const EnhanceOptions& textures, ModelStats* stats,
-                    std::string* error) {
+                    std::string* error, const Profile& profile) {
   *stats = {};
   vfs::Pak pak;
   if (!vfs::read_pak(pack, &pak, error)) return false;
-  std::vector<const vfs::PakEntry*> files;
-  for (const vfs::PakEntry& e : pak.entries) {
-    if (e.path.rfind("progs/", 0) == 0 && (e.path.ends_with(".mdl") || e.path.ends_with(".spr")))
-      files.push_back(&e);
-  }
+  std::vector<const vfs::PakEntry*> files = assets_of(pak, profile.models);
+  for (const vfs::PakEntry* e : assets_of(pak, profile.sprites)) files.push_back(e);
   std::sort(files.begin(), files.end(), [](auto* a, auto* b) { return a->path < b->path; });
   std::string index = "# kind name path vertices triangles frames clips skins replaced-by\n";
   if (opts.each && !opts.each({}, 0, uint32_t(files.size()))) return false;
   uint32_t done = 0;
   for (const vfs::PakEntry* e : files) {
-    const bool ok = e->path.ends_with(".mdl")
+    const bool ok = !asset_name(profile.models, e->path).empty()
                         ? write_model(*e, pack, palette, dir, opts, textures, index, stats, error)
                         : write_sprite(*e, pack, palette, dir, index, stats, error);
     if (!ok) return false;
-    if (opts.each && !opts.each(e->path.substr(6), ++done, uint32_t(files.size()))) return false;
+    const std::string_view kind_dir =
+        !asset_name(profile.models, e->path).empty() ? profile.models.dir : profile.sprites.dir;
+    if (opts.each && !opts.each(e->path.substr(kind_dir.size()), ++done, uint32_t(files.size())))
+      return false;
   }
   std::string replaced = "# path effect keeps-glowing why\n";
   for (const Replacement& r : kReplacements) {
