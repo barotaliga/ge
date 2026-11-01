@@ -18,6 +18,7 @@
 #include "progs/layout.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/usercmd.hpp"
+#include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/team.hpp"
 
 namespace shooters_edge::bots {
@@ -33,6 +34,7 @@ constexpr int32_t kWScatter = 1, kWDouble = 2, kWSpiker = 4, kWHeavy = 8, kWGren
 constexpr int32_t kWRockets = 32, kWArc = 64, kWBlade = 4096;
 constexpr float kAmmoMax = 100;
 constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit
+constexpr int32_t kItPent = 1048576;  // the shield's
 
 constexpr float kRetreatBelow = 50;  // health plus armour's protection: weak under this
 constexpr float kStrongAgain = 80;   // and strong again at this
@@ -42,6 +44,11 @@ constexpr double kWait_s = 20;     // an item back within this is worth going to
 constexpr double kHealWait_s = 3;  // but a retreat goes for health that is there
 constexpr double kKeepGoal = 1.5;  // the goal's score is held up by this against the others
 constexpr float kRun = 320;        // units/s, the run to an item
+constexpr double kAir_s = 6;  // under this long, the shorter way out of the water (drowning at 12)
+constexpr double kDiveMost_s = 8;   // no dive whose swim is longer than this
+constexpr double kCallAgain_s = 4;  // an enemy in sight is called out again after this
+constexpr double kHelp_s = 6;       // a call for help holds this long
+constexpr float kCallNear = 600;    // an enemy is called by an item this near it, units
 
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
 
@@ -156,6 +163,12 @@ bool item_of(const char* cn, int spawnflags, ItemSpot& it) {
       it.name = a.cn;
       return true;
     }
+  if (std::strcmp(cn, "item_artifact_invulnerability") == 0) {
+    it.kind = ItemKind::pent;
+    it.respawn_s = 60;
+    it.name = "pent";
+    return true;
+  }
   if (std::strcmp(cn, "item_artifact_super_damage") == 0) {
     it.kind = ItemKind::quad;
     it.respawn_s = 60;
@@ -215,6 +228,8 @@ double item_value(const ItemSpot& it, const Stats& st) {
       return std::fmax(0.f, protection(0.8f, 200) - worn) * 1.2;
     case ItemKind::quad:
       return (st.items & kItQuad) ? 0 : 150;
+    case ItemKind::pent:
+      return (st.items & kItPent) ? 0 : 130;
     case ItemKind::weapon: {
       if (st.items & it.weapon) return 4;
       switch (it.weapon) {
@@ -319,9 +334,13 @@ int32_t best_item(const Fighter& f, const server::QcServer& s, const Stats& st, 
   const auto score = [&](int32_t i) {
     const ItemSpot& it = f.items[static_cast<size_t>(i)];
     if (it.node < 0 || (heal && !heals(it))) return 0.0;
+    // Only what it knows of (or sees). One gone is waited for at its time back as the player
+    // knows it: exact when timed, a guess (late) when not (knowledge.hpp).
+    if (!item_in_mind(f, i)) return 0.0;
     // No way there from here, unless by its dive (from a node there is a way to).
     const bool by_dive = f.reach_at >= 0 && !f.reach.reached(it.node);
-    if (by_dive && (!it.dive || !f.reach.reached(it.dive_node))) return 0.0;
+    if (by_dive && (!it.dive || !f.reach.reached(it.dive_node) || it.dive_s > kDiveMost_s))
+      return 0.0;
     if (door_shut(s, it) &&
         (it.button_node < 0 || (f.reach_at >= 0 && !f.reach.reached(it.button_node))))
       return 0.0;  // shut, and its button out of reach
@@ -330,9 +349,7 @@ int32_t best_item(const Fighter& f, const server::QcServer& s, const Stats& st, 
     const double run = dist(me, it.at) / kRun + (by_dive ? it.dive_s : 0);
     const double wait = it.present ? 0 : it.back_at - t;
     // Only the items a game turns on are waited for; the rest are taken when they are there.
-    const bool key = it.kind == ItemKind::armor2 || it.kind == ItemKind::armor3 ||
-                     it.kind == ItemKind::mega || it.kind == ItemKind::quad ||
-                     (it.kind == ItemKind::weapon && it.weapon == kWRockets);
+    const bool key = key_item(it);
     if (wait > (heal || (!key && f.team) ? kHealWait_s : kWait_s)) return 0.0;
     double sc = v / (1 + std::fmax(run, wait));
     if (i == f.goal_item) sc *= kKeepGoal;  // the goal held unless another is clearly better
@@ -370,6 +387,24 @@ int32_t pack_near(const Fighter& f, const server::QcServer& s, const Stats& st, 
     }
   }
   return best;
+}
+
+// The callout for an enemy at `there`: by the landmark nearest it that the player knows (a key item
+// or a weapon: "enemy at RA", "enemy at RL"), the key items counted nearer; empty with none near.
+std::string enemy_call(const Fighter& f, sh::Vec3f there) {
+  int32_t best = -1;
+  float best_d = kCallNear;
+  for (size_t i = 0; i < f.items.size(); i++) {
+    const ItemSpot& it = f.items[i];
+    if (!it.known || (!key_item(it) && it.kind != ItemKind::weapon)) continue;
+    const float d = dist(it.at, there) * (key_item(it) ? 0.5f : 1.f);
+    if (d < best_d) {
+      best_d = d;
+      best = static_cast<int32_t>(i);
+    }
+  }
+  return best < 0 ? std::string()
+                  : std::string("enemy at ") + item_call(f.items[static_cast<size_t>(best)]);
 }
 
 // The role's goal (team.hpp), true when it set one; false leaves the goal to the items.
@@ -434,6 +469,13 @@ bool team_goal(Fighter& f, const server::QcServer& s, const Stats& st, sh::Vec3f
       note("carry", "no enemy called out: through the held area");
       return true;
     case Role::free:
+      // A teammate's call for help is answered by a player strong enough to give it.
+      if (f.mode != FightMode::retreat && t < tm.help_until && strength(st) >= 120 &&
+          dist(tm.help_at, me) < 1500) {
+        go_to(f, sh::nav_nearest(g, tm.help_at));
+        note("free", "a teammate called for help");
+        return true;
+      }
       // A teammate's callout is chased when this player is strong and has nothing in sight.
       if (f.mode == FightMode::roam && tm.enemy_seen >= 0 && t - tm.enemy_seen < 3 &&
           strength(st) >= 150 && (st.items & kWRockets) != 0 && dist(tm.enemy_at, me) < 1200) {
@@ -460,6 +502,8 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
   bool escaping = false;  // on the way out of a pocket: no other goal this think
   // A dive is chosen again every think (go_item); one under way keeps the escape out of it.
   const bool was_diving = f.diving >= 0;
+  // A dive once in the water is swum to its end: no other goal turns it round under water.
+  const int32_t committed = was_diving && self.waterlevel >= 1 ? f.diving : -1;
   f.diving = -1;
   // Off the graph (knocked onto a ledge no proof stands on): back to the nearest node by sight
   // of the plan, below rather than above, walked straight at with a hop now and then.
@@ -538,17 +582,17 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
     }
   }
 
-  // The items: one no longer sent was taken (timed from now), one sent again is back.
-  for (ItemSpot& it : f.items) {
-    if (it.ent < 0) continue;
-    bool sent = false;
-    for (const sh::ViewEntity& v : f.bot.view.entities) sent |= v.ent == it.ent;
-    if (it.present && !sent) {
-      it.back_at = t + it.respawn_s;
-      f.stats.taken++;
-      if (dist(it.at, self.origin) < 64 && st.health > 0) f.stats.pickups++;
+  // The items, as far as it can see them (knowledge.hpp); a key item taken is called out.
+  const ItemNews news = knowledge_update(f, s, me, eye, t);
+  if (news.taken >= 0) {
+    const ItemSpot& it = f.items[static_cast<size_t>(news.taken)];
+    if (key_item(it) && news.by_me) {
+      team_say(f, t, std::string("took ") + item_call(it));
+    } else if (key_item(it) && it.timed) {
+      team_say(
+          f, t,
+          std::string(item_call(it)) + " in " + std::to_string(static_cast<int>(it.respawn_s)));
     }
-    it.present = sent;
   }
 
   const sh::Contact* c = sh::freshest(f.bot.senses, eye);
@@ -563,6 +607,10 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
   const int32_t heal_at =
       c && weak ? best_item(f, s, st, self.origin, t, true, &enemy, nullptr) : -1;
   if (heal_at >= 0 && item_value(f.items[static_cast<size_t>(heal_at)], st) > 0) {
+    if (f.mode != FightMode::retreat && f.team && team_say(f, t, "need help")) {
+      f.team->help_at = self.origin;
+      f.team->help_until = t + kHelp_s;
+    }
     set_mode(f, FightMode::retreat, why, "weak with someone about: health or armour first");
   } else if (seen_now) {
     set_mode(f, FightMode::fight, why, "a contact in sight");
@@ -572,15 +620,28 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
     set_mode(f, FightMode::roam, why, "no one known");
   }
 
-  // A sighting is the team's.
+  // A sighting is the team's once it is called out (where, by the item it is nearest).
   if (f.team && seen_now) {
-    if (f.team->enemy_seen < t) f.team->stats.callouts++;
-    f.team->enemy_at = at_of(c->seen);
-    f.team->enemy_seen = t;
+    const sh::Vec3f there = at_of(c->seen);
+    // Called out unless a teammate just called the same place.
+    const bool called = f.team->enemy_seen >= 0 && t - f.team->enemy_seen < kCallAgain_s &&
+                        dist(f.team->enemy_at, there) < 400;
+    const std::string words = enemy_call(f, there);
+    if (!called && !words.empty() && t - f.called_at >= kCallAgain_s && team_say(f, t, words))
+      f.called_at = t;
+    if (t - f.called_at < kCallAgain_s) {
+      if (f.team->enemy_seen < t) f.team->stats.callouts++;
+      f.team->enemy_at = there;
+      f.team->enemy_seen = t;
+    }
   }
 
   // The goal: the role's first, then the items.
-  if (!escaping && !team_goal(f, s, st, self.origin, t, c, why)) {
+  if (committed >= 0) {
+    // Kept on the dive's field whatever the reach from the water says (the nearest node under
+    // water may stand in the pocket already).
+    f.diving = f.last_dive = committed;
+  } else if (!escaping && !team_goal(f, s, st, self.origin, t, c, why)) {
     if (f.mode == FightMode::chase && c) {
       go_to(f, sh::nav_nearest(*f.bot.pilot.pilot.g, at_of(c->seen)));
     } else {
@@ -589,6 +650,9 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
       if (i >= 0) {
         if (f.team) f.team->claimed[static_cast<size_t>(i)] = f.slot;
         go_item(f, s, i);
+      } else if (f.sense == MapSense::novice && (!f.team || f.team->hold_item < 0)) {
+        // Nothing in mind: a novice walks the map to learn it.
+        go_to(f, explore_node(f, self.origin));
       } else if (f.team && f.team->hold_item >= 0 &&
                  f.reach.reached(f.items[static_cast<size_t>(f.team->hold_item)].node)) {
         // Nothing worth having: back to the held area, beside the holder.
@@ -605,7 +669,8 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
     float best = 0;
     for (size_t i = 0; i < f.items.size(); i++) {
       const ItemSpot& it = f.items[i];
-      if (it.node < 0 || !f.reach.reached(it.node)) continue;
+      if (it.node < 0 || !f.reach.reached(it.node) || !item_in_mind(f, static_cast<int32_t>(i)))
+        continue;
       const float d = dist(it.at, self.origin);
       if (d < 200) continue;
       if (pick < 0 || d < best) {
@@ -613,7 +678,11 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
         best = d;
       }
     }
-    if (pick >= 0) go_item(f, s, pick);
+    if (pick >= 0) {
+      go_item(f, s, pick);
+    } else {
+      go_to(f, explore_node(f, self.origin));  // nothing it knows of: it walks to learn the map
+    }
   }
 
   if (f.diving < 0) f.last_dive = -1;
@@ -724,6 +793,8 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, 
                   const char* entities, sh::AimSkill skill, double hz, uint32_t seed) {
   sh::bot_init(f.bot, g, sh::PilotSettings{}, sh::PilotHands::human, skill, hz, seed);
   f.slot = slot;
+  f.sense = map_sense_of(skill);
+  f.rng = seed * 2654435761u + 12345u;
   const int me = slot + 1;
   sh::client_view(s.sv, me, f.bot.view);
   std::vector<pg::EntityBlock> blocks;
@@ -798,6 +869,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, 
       }
     }
   }
+  knowledge_init(f);
 }
 
 sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int msec) {
@@ -869,7 +941,20 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
 
   sh::Vec3f way;
   const sh::Edict& body = s.sv.edicts[static_cast<size_t>(me)];
+  // Its air: the head under this long, it takes whichever way out of the water is shorter, the
+  // dive's on or the way back, so it never drowns on a swim.
+  if (body.waterlevel >= 3) {
+    if (f.under_since < 0) f.under_since = t;
+  } else {
+    f.under_since = -1;
+  }
+  const bool short_of_air = f.under_since >= 0 && t - f.under_since > kAir_s;
   const ItemSpot* dive_for = f.diving >= 0 ? &f.items[static_cast<size_t>(f.diving)] : nullptr;
+  // A walk along a pool's floor turns up and out by the field at kAir_s. A dive is left to finish:
+  // none is planned longer than kDiveMost_s, so its way on is the way to air.
+  const bool on_dive = dive_for && dive_for->dive;
+  if (short_of_air && f.swim && !on_dive && sh::swim_steps(*f.swim, body.origin) >= 0)
+    f.swimming = true;
   // Diving: in the water, or at the dive's node (arrived, or within a step of it).
   const bool dive_now =
       dive_for && dive_for->dive &&

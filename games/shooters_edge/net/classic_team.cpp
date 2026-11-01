@@ -21,6 +21,7 @@
 #include "shooter/nav.hpp"
 #include "shooter/swim.hpp"
 #include "shooters_edge/bots/fighter.hpp"
+#include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -339,7 +340,12 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         Seat* sp = &seat;
         cc.brain = [sp, c, &s](int) -> sh::MoveCmd {
           if (!sp->ready) return {};
-          return bt::fighter_command(sp->fighter, s, c->playernum, bt::kPilotMsec);
+          const sh::MoveCmd cmd = bt::fighter_command(sp->fighter, s, c->playernum, bt::kPilotMsec);
+          // The fighter's team messages, as a player types them.
+          for (const std::string& line : sp->fighter.outbox)
+            client_command(*c, "say_team \"" + line + "\"");
+          sp->fighter.outbox.clear();
+          return cmd;
         };
         client_start(*c, ct[static_cast<size_t>(k)], gn::sim_address(0, kPortServer), cc, 0);
       }
@@ -460,6 +466,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       if (frame % opt.path_every == 0) {
         p.path.push_back(d.origin);
         p.roles.push_back(live ? static_cast<uint8_t>(seat.fighter.role) : 255);
+        p.known.push_back(static_cast<int16_t>(bt::items_known(seat.fighter)));
       }
       if (live) {
         p.role_commands[static_cast<int>(seat.fighter.role)]++;
@@ -556,6 +563,27 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].quads = ts.quads;
     r.teams[t].held_shots = ts.held_shots;
     r.teams[t].callouts = ts.callouts;
+    r.teams[t].messages = ts.messages;
+  }
+  // The teams' messages, merged in time order (a tie: the first team first).
+  {
+    std::vector<std::pair<double, std::string>> lines;
+    for (int t = 0; t < 2; t++)
+      for (const bt::TeamLine& l : teams[t].log) {
+        std::string who = "?";
+        for (const TeamPlayer& p : r.players)
+          if (p.slot == l.slot) who = p.name;
+        char at[32];
+        std::snprintf(at, sizeof at, "%6.1f ", l.t);
+        lines.push_back({l.t, at + teams[t].name + " " + who + ": " + l.text});
+      }
+    std::stable_sort(lines.begin(), lines.end(),
+                     [](const auto& a, const auto& b) { return a.first < b.first; });
+    for (auto& l : lines) r.chat.push_back(std::move(l.second));
+    for (const bt::TeamLine& l : teams[0].log)
+      for (TeamPlayer& p : r.players) p.said += p.slot == l.slot ? 1 : 0;
+    for (const bt::TeamLine& l : teams[1].log)
+      for (TeamPlayer& p : r.players) p.said += p.slot == l.slot ? 1 : 0;
   }
   r.hold_item = teams[0].hold_item;
   r.quad_item = teams[0].quad_item;

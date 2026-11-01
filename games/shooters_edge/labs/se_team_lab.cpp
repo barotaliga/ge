@@ -27,6 +27,7 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "shooter/nav.hpp"
+#include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -37,6 +38,7 @@ namespace {
 namespace gl = ge::lab;
 namespace sh = ge::shooter;
 namespace cn = shooters_edge::net;
+namespace bt = shooters_edge::bots;
 namespace cl = shooters_edge::client;
 using ge::core::num::to_fixed;
 using In = std::vector<std::pair<std::string, std::string>>;
@@ -153,19 +155,42 @@ void run(gl::Lab& lab) {
                        share(4)});
   }
   lab.table(pt);
-  gl::LabTable tt{"each team",
-                  {"team", "frags", "deaths", "quads taken", "rushes", "shots held", "callouts"},
-                  {}};
+  gl::LabTable tt{
+      "each team",
+      {"team", "frags", "deaths", "quads taken", "rushes", "shots held", "callouts", "messages"},
+      {}};
   for (int k = 0; k < 2; k++) {
     const cn::TeamTotals& tm = r.teams[k];
     tt.rows.push_back({o.teams[k].name, to_fixed(tm.frags, 0), std::to_string(tm.deaths),
                        std::to_string(tm.quad_pickups), std::to_string(tm.rushes),
-                       std::to_string(tm.held_shots), std::to_string(tm.callouts)});
+                       std::to_string(tm.held_shots), std::to_string(tm.callouts),
+                       std::to_string(tm.messages)});
     const std::string key = "team." + o.teams[k].name;
     lab.metric(key + ".frags", tm.frags, "count");
     lab.metric(key + ".quads", static_cast<double>(tm.quad_pickups), "count");
+    lab.metric(key + ".messages", static_cast<double>(tm.messages), "count");
   }
   lab.table(tt);
+  // What each player knew of the map's items, at the start, at the half and at the end.
+  gl::LabTable kt{"each player's map: items known (recalled from anywhere)",
+                  {"player", "knows the map as", "start", "half", "end", "of", "messages"},
+                  {}};
+  for (const cn::TeamPlayer& p : r.players) {
+    const auto at = [&](size_t k) {
+      return p.known.empty() ? 0 : p.known[std::min(k, p.known.size() - 1)];
+    };
+    kt.rows.push_back({p.name, bt::map_sense_name(bt::map_sense_of(p.skill)), std::to_string(at(0)),
+                       std::to_string(at(p.known.size() / 2)), std::to_string(at(p.known.size())),
+                       std::to_string(r.item_at.size()), std::to_string(p.said)});
+  }
+  lab.table(kt);
+  // The team messages: the first lines in the report, all of them as a file.
+  {
+    std::string all;
+    for (const std::string& l : r.chat) all += l + "\n";
+    lab.attach("chat.txt", std::vector<uint8_t>(all.begin(), all.end()), gl::Det::deterministic);
+    for (size_t k = 0; k < r.chat.size() && k < 24; k++) lab.note(r.chat[k]);
+  }
   lab.metric("team.frags-per-minute", (r.teams[0].frags + r.teams[1].frags) / (secs / 60),
              "per-min");
   lab.metric("team.faults", static_cast<double>(r.faults), "count");

@@ -2,12 +2,15 @@
 // four fighters, each at the controls of a classic client of our server, play the baseline mod
 // with `teamplay 1` on the fixture halls furnished for it (kTeamHallsEntities) for a minute. Both
 // teams score; no player is ever fragged by a teammate; each team has a holder and rushes the quad;
-// the players hold shots for teammates in the line; the mod never faults; the multiview recording
-// opens and its frames carry all eight players; and a match replays to the bit and matches its
-// golden (tests/golden/shooters_edge_team.txt, GE_GOLDEN_WRITE=1 rewrites it; the PR says why).
+// the players hold shots for teammates in the line; both teams talk (team messages, the quad's
+// call among them, carried in the recording); a novice starts knowing none of the map's items and
+// an expert all of them; the mod never faults; the multiview recording opens and its frames carry
+// all eight players; and a match replays to the bit and matches its golden
+// (tests/golden/shooters_edge_team.txt, GE_GOLDEN_WRITE=1 rewrites it; the PR says why).
 //
 // ge:summary Tests: a 4on4 of bots on teamplay: both score, no team kills, roles, the MVD, bits
 // ge:keywords test team-game 4on4 teamplay roles hold rush mvd recording golden replay
+// ge:keywords say_team team-messages map-knowledge novice expert
 // ge:skill shooter bots testing
 #include <cstdio>
 #include <cstdlib>
@@ -99,6 +102,29 @@ TEST(a_team_game_of_bots_plays_as_teams_and_records) {
   CHECK_MSG(r.hold_item >= 0 && r.quad_item >= 0, "the key areas were not found");
   for (const std::string& line : r.frag_log)
     CHECK_MSG(!team_kill(line), "a teammate fragged a teammate under teamplay: " + line);
+
+  // Both teams talk, the quad among it, and the words are in the recording.
+  for (int t = 0; t < 2; t++)
+    CHECK_MSG(r.teams[t].messages > 0, "team " + std::to_string(t) + " said nothing");
+  bool quad_call = false;
+  for (const std::string& l : r.chat) quad_call |= l.find("quad") != std::string::npos;
+  CHECK_MSG(quad_call, "nobody called the quad");
+  if (!r.chat.empty()) {
+    const std::string& first = r.chat.front();
+    const std::string words = first.substr(first.find(": ") + 2);
+    const std::string bytes(r.mvd.begin(), r.mvd.end());
+    CHECK_MSG(bytes.find(words) != std::string::npos,
+              "the team message '" + words + "' is not in the recording");
+  }
+  // A novice starts the match knowing none of the items, an expert all of them.
+  for (const cn::TeamPlayer& p : r.players) {
+    if (p.known.empty()) continue;
+    if (p.skill == ge::shooter::AimSkill::novice)
+      CHECK_MSG(p.known.front() == 0, p.name + " (a novice) knew the map at the start");
+    if (p.skill == ge::shooter::AimSkill::expert)
+      CHECK_MSG(p.known.front() == static_cast<int16_t>(r.item_at.size()),
+                p.name + " (an expert) did not know every item at the start");
+  }
 
   // The recording opens and its frames carry every player.
   cl::Demo d;

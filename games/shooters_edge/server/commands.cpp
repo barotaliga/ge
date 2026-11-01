@@ -68,7 +68,16 @@ void run_server_command(QcServer& s, int slot, const pg::Words& w) {
     if (s.named.chat_message > 0 && call_hook(s, HookId::chat_message, s.named.chat_message, e,
                                               {text, team ? 1.0f : 0.0f}) != 0)
       return;
-    print_to(s, all_clients(s), 3, info_value(c.userinfo, "name") + ": " + text + "\n");
+    // A team's words go to its own (the same `team` in their user info), its name in brackets.
+    uint32_t to = all_clients(s);
+    if (team) {
+      const std::string mine = info_value(c.userinfo, "team");
+      to = 0;
+      for (size_t k = 0; k < 32; k++)
+        if (s.clients[k].active && info_value(s.clients[k].userinfo, "team") == mine) to |= 1u << k;
+    }
+    const std::string who = info_value(c.userinfo, "name");
+    print_to(s, to, 3, (team ? "(" + who + ")" : who) + ": " + text + "\n");
   } else if (std::strcmp(cmd, "pause") == 0) {
     request_pause(s, slot, !s.paused);
   } else if (std::strcmp(cmd, "setinfo") == 0) {
