@@ -17,6 +17,7 @@
 #include "audio/voice.hpp"
 #include "camera/first_person.hpp"
 #include "capture/av_export.hpp"
+#include "core/output.hpp"
 #include "gpu/target.hpp"
 #include "lab/gif.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
@@ -314,6 +315,44 @@ std::vector<std::string> demo_video_lines(const DemoVideoOptions& o, const DemoV
                 std::to_string(r.voice_frames) + " frames in " + std::to_string(r.voice_messages) +
                 " messages, " + std::to_string(r.voice_concealed) + " concealed");
   return out;
+}
+
+namespace out = ge::core::output;
+
+int demo_video_main(const Args& args, const SearchPath& files,
+                    const shooters_edge::look::Picture& picture, int track) {
+  auto device = ge::gpu::create_device({.label = "demovideo", .validation = 0});
+  if (!device) {
+    out::error("shooters_edge: no GPU device for -demovideo; see docs/rendering.md");
+    return 1;
+  }
+  DemoVideoOptions o;
+  o.demo = args.demovideo;
+  o.file = args.video;
+  o.width = args.width & ~1;
+  o.height = args.height & ~1;
+  o.fps = args.fps;
+  o.codec = args.codec == "none" ? "" : args.codec;
+  o.seconds = args.to > args.from ? args.to - args.from : args.seconds;
+  o.from_s = args.from;
+  o.highlight = args.highlight;
+  o.gif_width = args.gif_width;
+  o.track = track;
+  o.picture = &picture;
+  DemoVideoReport r;
+  std::string error;
+  const auto shown = [](int64_t frame, double t, const ge::lab::Picture&) {
+    if (frame % 300 == 0)
+      out::status("demovideo: picture " + std::to_string(frame) + " at " +
+                  std::to_string(static_cast<int>(t)) + " s");
+  };
+  if (!demo_video(*device, files, o, r, error, shown)) {
+    out::error("shooters_edge: -demovideo " + args.demovideo + ": " + error +
+               "; see docs/shooters-edge.md § A demo as a video");
+    return 2;
+  }
+  for (const std::string& line : demo_video_lines(o, r)) out::status(line);
+  return 0;
 }
 
 }  // namespace shooters_edge::client

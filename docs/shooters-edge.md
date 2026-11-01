@@ -279,8 +279,16 @@ their colours, the items, the missiles, the level's statics), as `-demovideo` dr
 (`fortress` for a team mod). When the window was opened on the base folder (no `-game`) and that
 folder is beside it under `-basedir`, the demo plays from it, the base under it, so the mod's own
 models, skins and maps are found; a `-game` you pass always wins. A folder that is not there is
-named in the console with what to do. Not yet in the window: the demo's sounds, voices and
-messages (deaths, chat), which only `-demovideo` plays.
+named in the console with what to do.
+
+**Heard and read.** A played demo is heard on the window's audio device: its sounds (the pack's
+recordings, moving with what makes them, the level's loops and ambience) and the players' voices,
+the same players `-demovideo` renders (`client/demo_heard.hpp`), at `volume` (0..1, 0.7; the
+menu's SOUND VOLUME). The lines the server printed to the player the view rides (the deaths, the
+chat and team chat, the pickups) go to the HUD's feed and the console as plain words (the charset's
+coloured letters and the colour marks clients write into chat taken out), and a centre message to
+the HUD's centre for two seconds. A seek plays nothing of what it skipped. The game's own sound
+outside a demo is not played yet.
 
 ```sh
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \

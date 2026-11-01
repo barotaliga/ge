@@ -6,12 +6,11 @@
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_pack.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-
-#include "core/inflate.hpp"
 
 namespace shooters_edge::client {
 
@@ -282,15 +281,16 @@ bool voice_name(const std::string& path) {
 
 bool open_demo(std::vector<uint8_t> bytes, Demo& out, std::string& error) {
   out = Demo{};
-  if (bytes.size() >= 2 && bytes[0] == 0x1f && bytes[1] == 0x8b) {
-    auto unpacked = ge::core::inflate_gzip(bytes);
-    if (!unpacked) {
-      error =
-          "the file is a gzip file that does not unpack (torn, or its checksum is off); next: "
-          "download it again, or unpack it and name the recording inside";
+  if (ge::vfs::wrapping_of(bytes) != ge::vfs::Wrapping::none) {
+    ge::vfs::Unpacked u;
+    if (!ge::vfs::unpack_one(std::move(bytes), u, error, demo_name)) {
+      error = "the demo does not unpack: " + error;
       return false;
     }
-    bytes = std::move(*unpacked);
+    bytes = std::move(u.bytes);
+    out.layers = std::move(u.layers);
+    out.inner_name = std::move(u.name);
+    out.truncated = u.truncated;
   }
   int voice_base = 0;  // the voice header's base format (1 client, 2 multiview), 0: none
   if (bytes.size() >= kVoiceHeader && std::equal(kVoiceMagic, kVoiceMagic + 4, bytes.begin())) {
@@ -374,6 +374,8 @@ DemoRead next_frame(Demo& d, std::string& error) {
   d.state.started.clear();
   d.state.stopped.clear();
   d.state.voice.clear();
+  d.state.prints.clear();
+  d.state.centre.clear();
   if (d.state.format == DemoFormat::client) return next_client(d, error);
   if (d.state.format == DemoFormat::multiview) {
     const DemoRead r = next_multiview(d, error);

@@ -41,6 +41,7 @@
 #include "gpu/device.hpp"
 #include "lab/raster.hpp"
 #include "shooters_edge/app/look.hpp"
+#include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/world_models.hpp"
@@ -107,5 +108,11 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
 // The report as `-demovideo` prints it: where from and to, the clip, the pictures, the file, the
 // sounds, a line each.
 std::vector<std::string> demo_video_lines(const DemoVideoOptions& o, const DemoVideoReport& r);
+
+// `-demovideo <demo> <file>` on the window's command line: `args`' demo turned into a video with
+// no window on a device of its own, the view riding `track`, the report printed. The exit code: 0
+// done, 1 no GPU device, 2 the export failed.
+int demo_video_main(const Args& args, const SearchPath& files,
+                    const shooters_edge::look::Picture& picture, int track);
 
 }  // namespace shooters_edge::client
