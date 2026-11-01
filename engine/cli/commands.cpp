@@ -100,6 +100,14 @@ constexpr FlagSpec kLabPairFlags[] = {
     {"smoke", "", "run at the lab's smoke flags"},
     kEngine,
     kRepo};
+constexpr FlagSpec kLabBeforeFlags[] = {
+    kPreset,
+    {"ref", "<ref>", "the git ref the labs run at (default origin/main)"},
+    {"tag", "<name>", "the tag the runs are kept under, previews/<id>@<name>/ (default before)"},
+    {"shots", "<id,...>", "draw only these shots"},
+    {"full", "", "run at the labs' full flags, not their smoke flags"},
+    kEngine,
+    kRepo};
 constexpr FlagSpec kPrecheckFlags[] = {
     {"preset", "<debug|release>", "only this preset (default: both, as CI runs them)"},
     kEngine,
@@ -615,6 +623,10 @@ const CommandSpec kCommands[] = {
      "diff every picture of a lab's last run against a kept run: PSNR, SSIM and the share "
      "changed per distance band, each band held to its floor, a four-panel sheet a shot",
      kLabDiffFlags, "ge lab diff world --run -- --views=start,vista", "labs"},
+    {"lab before", "<id>...", 1, -1, "see",
+     "the labs at origin/main (or --ref), built once in a scratch worktree and run at their "
+     "smoke flags, kept under the tag before: a change's before with nothing stashed",
+     kLabBeforeFlags, "ge lab before se-world se-models", "labs"},
     {"lab pair", "<id>", 1, 1, "see",
      "a lab drawn twice, under the --before cvars and the --after ones (the runner's --cvars), "
      "every shot's two side by side in a sheet with what changed between them",
@@ -967,11 +979,12 @@ std::optional<std::string> check_args(const Args& a) {
            std::to_string(n) + " word(s)";
   }
   static constexpr std::string_view kPassing[] = {
-      "lab",    "lab diff", "lab pair", "lab sweep", "play",  "sim", "shot",
-      "record", "bench",    "profile",  "mem",       "leaks", "load"};
+      "lab",  "lab before", "lab diff", "lab pair", "lab sweep", "play",  "sim",
+      "shot", "record",     "bench",    "profile",  "mem",       "leaks", "load"};
   if (!a.passthrough.empty() &&
       std::find(std::begin(kPassing), std::end(kPassing), c.name) == std::end(kPassing)) {
-    return "only ge lab, lab diff, lab pair, lab sweep, play, sim, shot, record, bench, profile, "
+    return "only ge lab, lab before, lab diff, lab pair, lab sweep, play, sim, shot, record, "
+           "bench, profile, "
            "mem, "
            "leaks and load pass words after --";
   }
