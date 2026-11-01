@@ -138,6 +138,17 @@ and `felled_trees` reads which of the map's trees go. The caller keeps the plan;
 on the `Level`. `tests/mountain_village_test.cpp` holds the loop, the clearances, the graph, the
 ground and the reference seeds' golden; the `village` lab draws it.
 
+## A tarn (`mountain/tarn`, M24l)
+
+The generator lays no water; a game lays it after, as a `MapLake` in `Level::lakes`, so no dealt
+map moves. `find_tarn(level, radius)` takes the flattest open site in the 0.45-0.85 band of the
+mountain's height whose reshaped reach (twice the shore out, `kTarnBulge`) is `kTarnClear` m clear
+of every run, route and lift line; the surface is the lobed shore's lowest ground (`reach_of`), so
+the slope above is cut into a headwall. `lay_tarn` reads the ice off `winter_days` and
+`air::lake_ice`: ice that `bears` a skier is filled flat (`dig_basin(..., flat)`), anything thinner
+dug into a bowl. `on_lake` and `shore_of` read the same shape. Fall Line's free ride lays one
+(`sim/free.cpp`); `tests/mountain_tarn_test.cpp` holds the site, the winter, the fill and the bowl.
+
 ## The village's traffic (`mountain/village`, M13h)
 
 `furnish_streets` (`furniture.hpp`) reads the street plan for what drives and parks on it: the

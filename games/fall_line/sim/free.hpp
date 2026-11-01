@@ -12,6 +12,8 @@
 //   he was last on it, facing down it, or at the head of his first run before he was on any.
 //   It is his (`Controls::reset`) and the run's (down or stuck, as in a race).
 // - On a map with no ski area (the single piste) the piste is the one run.
+// - THE TARN (`free_map`): a small lake laid high on the mountain, frozen flat where its ice bears
+//   a skier; through thin ice he sinks (lake.hpp).
 //
 // The free ride draws nothing and allocates nothing in a step.
 //
@@ -42,8 +44,13 @@ inline constexpr double kHeadIn = 5;
 // How far a run's line is looked for about him, m (more than the widest run's half).
 inline constexpr double kRunLook = 60;
 
+// The tarn the free ride lays in a cirque high on the mountain (mountain/tarn/tarn.hpp), its
+// radius, m.
+inline constexpr double kTarnRadius = 60;
+
 // The map for `seed` as the free ride rides it: the ski area at the generator's current version
-// unless `version` names another (throws the generator's GenerateError).
+// unless `version` names another (throws the generator's GenerateError), and a tarn laid on it
+// where there is open ground for one (`kTarnRadius`; its ice by the map's day).
 ge::mountain::mapgen::Level free_map(double seed, std::optional<int> version = {});
 
 // The ski area's runs as lines, in the map's order (the single piste where it has none), each

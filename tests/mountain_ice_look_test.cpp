@@ -1,7 +1,7 @@
 // plugins/mountain/app/ice_look.hpp: the sheet covers the lake inside its shore and no further
 // than a cell past it, lies flat a hand's breadth over the water and faces up, and carries both
-// the snow and the swept patches; young ice is dark and glossy, old ice under snow bright and
-// matte with its swept patches still glass.
+// the snow and the swept patches (or, on ground filled flat, the swept patches alone); young ice is
+// dark and glossy, old ice under snow bright and matte with its swept patches still glass.
 //
 // ge:summary Test: a frozen lake as drawn: the sheet's cover and its look by thickness
 // ge:keywords test lake-ice ice_mesh ice_surfaces swept snow-on-ice black-ice
@@ -48,6 +48,13 @@ TEST(the_sheet_covers_the_lake_and_faces_up) {
   // The same seed, the same patches; no shore, no sheet.
   CHECK(mapp::ice_mesh(shore, 1234, 38).parts == m.parts);
   CHECK(mapp::ice_mesh({}, 0, 1).vertex_count() == 0);
+  // On ground filled flat, the swept patches alone, more of them.
+  const ge::render::MeshData swept = mapp::ice_mesh(shore, 1234, 38, true);
+  const double swept_area =
+      static_cast<double>(swept.vertex_count()) / 6.0 * mapp::kIceCellFlat * mapp::kIceCellFlat;
+  CHECK(swept_area > bare / 6.0 * mapp::kIceCell * mapp::kIceCell);
+  CHECK(swept_area < 0.8 * lake);
+  for (const uint8_t part : swept.parts) CHECK(part == mapp::kIceBare);
 }
 
 TEST(young_ice_is_dark_and_old_ice_lies_under_snow) {

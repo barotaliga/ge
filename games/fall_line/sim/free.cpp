@@ -24,6 +24,7 @@
 #include "fall_line/sim/wanted.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "mountain/mapgen/query.hpp"
+#include "mountain/tarn/tarn.hpp"
 #include "skier/skier.hpp"
 
 namespace fall_line::sim {
@@ -65,7 +66,10 @@ void stand_on(GameState& state, int32_t i, int32_t run, double s) {
 mg::Level free_map(double seed, std::optional<int> version) {
   mg::GenerateOptions opts;
   opts.version = version;
-  return mg::generate_level(seed, opts);
+  mg::Level level = mg::generate_level(seed, opts);
+  if (const std::optional<mg::MapLake> lake = ge::mountain::tarn::find_tarn(level, kTarnRadius))
+    ge::mountain::tarn::lay_tarn(level, *lake);
+  return level;
 }
 
 std::shared_ptr<const std::vector<mg::Track>> run_tracks(const mg::Level& level) {
@@ -216,6 +220,7 @@ void reset_free(GameState& state, int32_t i) {
   } else {
     stand_on(state, i, f.start, kHeadIn);
   }
+  f.soaked = 0;
   r.progress.stuck = 0;
   r.progress.resets++;
   state.events.push_back(GameEvent{EventKind::reset, i, f.run, 0});

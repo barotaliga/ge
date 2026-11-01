@@ -182,6 +182,8 @@ std::string_view view_caption(std::string_view name) {
     return "A long lens on one of the other worlds' moons (sv_moons), its face and its phase.";
   }
   if (name == "aerial") return "From high over a corner of the map, the whole mountain.";
+  if (name == "tarn") return "Below a laid tarn's lip at eye height, over it to its headwall.";
+  if (name == "tarn-high") return "High over the slope below a laid tarn, down onto it.";
   if (name == "corduroy") {
     return "Close over the groomed piste in the sun, looking down it at the comb's ribs and the "
            "machine's lanes.";
@@ -330,6 +332,16 @@ bool make_view(const Level& level, std::string_view name, ge::render::FrameView&
     v.eye[1] = m.summit.y + 150;
     v.heading = std::atan2(m.base.x - m.summit.x, m.base.z - m.summit.z);
     v.pitch = -18 * kDeg;
+  } else if (name == "tarn" || name == "tarn-high") {
+    // From below the tarn's lip (toward the mountain's foot), looking up over it at its headwall.
+    if (level.lakes.empty()) return false;
+    const ge::mountain::mapgen::MapLake& l = level.lakes[0];
+    const double dx = m.base.x - l.x, dz = m.base.z - l.z, d = std::max(std::hypot(dx, dz), 1.0);
+    const bool high = name == "tarn-high";
+    const double back = l.radius * (high ? 2.2 : 1.25);
+    place(level, l.x + dx / d * back, l.z + dz / d * back, high ? 70 : 1.8, v);
+    v.heading = std::atan2(-dx, -dz);
+    v.pitch = -std::atan2(v.eye[1] - l.level, back) * (high ? 1.0 : 0.6);
   } else if (name == "aerial") {
     const double c = level.size * 0.5;
     const double x = -0.15 * level.size, z = -0.15 * level.size;

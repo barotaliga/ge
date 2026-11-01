@@ -13,6 +13,7 @@
 #include "core/num.hpp"
 #include "core/output.hpp"
 #include "fall_line/app/ladder.hpp"
+#include "fall_line/app/lakes.hpp"
 #include "fall_line/app/lamps.hpp"
 #include "fall_line/app/look.hpp"
 #include "fall_line/app/mists.hpp"
@@ -358,6 +359,7 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::bind_particle_shadows(f->particles, f->shadows.group);
   r::bind_fog_shadows(f->fog, f->shadows.group);
   make_targets(device, *f, width, height);
+  show_lakes(device, *f);  // the lakes a game laid on the map (lakes.hpp)
   f->recorder.init(device, "frame.timer", kPasses);
   return f;
 }
@@ -372,7 +374,7 @@ void set_water(ge::gpu::Device& device, GameFrame& f, int index, const ge::water
 }
 
 void freeze_water(ge::gpu::Device& device, GameFrame& f, int index, const ge::water::Body& body,
-                  double h) {
+                  double h, bool swept_only) {
   namespace ma = ge::mountain::app;
   if (index < 0 || static_cast<size_t>(index) >= f.water.bodies.size()) return;
   if (f.ice_body >= 0 && f.ice_body != index) return;
@@ -382,7 +384,8 @@ void freeze_water(ge::gpu::Device& device, GameFrame& f, int index, const ge::wa
     if (!frozen) return;
     r::MeshSource sheet;
     sheet.lods.push_back(
-        {ma::ice_mesh(body.shore, body.level, ge::core::num::to_uint32(f.level->seed)), 0.0f});
+        {ma::ice_mesh(body.shore, body.level, ge::core::num::to_uint32(f.level->seed), swept_only),
+         0.0f});
     r::create_family(device, f.instancing, f.ice, "water.ice",
                      std::span<const r::MeshSource>(&sheet, 1), ma::ice_surfaces(h), 1);
     r::bind_family_hiz(device, f.instancing, f.ice, f.hiz);

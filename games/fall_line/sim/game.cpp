@@ -30,6 +30,7 @@
 #include "fall_line/sim/free.hpp"
 #include "fall_line/sim/gunfire.hpp"
 #include "fall_line/sim/heli_ride.hpp"
+#include "fall_line/sim/lake.hpp"
 #include "fall_line/sim/lift_ride.hpp"
 #include "fall_line/sim/para_ride.hpp"
 #include "fall_line/sim/sled_ride.hpp"
@@ -186,6 +187,10 @@ void log_step(const GameState& state) {
       case EventKind::building:
         line += " building " + std::to_string(e.gate) + " at " + f(e.value, 1) + " m/s";
         break;
+      case EventKind::sank:
+        line +=
+            " through lake " + std::to_string(e.gate) + "'s ice, " + f(e.value * 100, 1) + " cm";
+        break;
     }
     line += " at x " + f(s.x, 1) + " z " + f(s.z, 1) + ", " + f(s.speed * 3.6, 1) + " km/h";
     out::log_on(ch, out::Level::debug, line);
@@ -283,6 +288,8 @@ const char* event_name(EventKind kind) {
       return "army-vehicle";
     case EventKind::building:
       return "building";
+    case EventKind::sank:
+      return "sank";
   }
   return "?";
 }
@@ -385,6 +392,10 @@ void step(GameState& state, std::span<const Controls> controls) {
       GE_ZONE("free");
       step_free(state, i, x0, z0);
       board_lift(state, i);
+      if (!state.level->lakes.empty() && step_lake(state, i, kDt)) {
+        reset(state, i);
+        continue;
+      }
     } else {
       GE_ZONE("course");
       step_course(state, i, x0, z0);

@@ -102,6 +102,7 @@ enum class EventKind : uint8_t {
   army_para,  // an army paramotor (`gate` its ArmyParaChange, `value` its id; army_para.hpp)
   building,  // met a wall of the village (`gate` the building's id, `value` the closing speed, m/s)
   army_vehicle,  // an army vehicle (`gate` its ArmyVehicleChange, `value` its id; army_vehicle.hpp)
+  sank,  // through a tarn's thin ice into the water (`gate` the lake, `value` its ice, m; lake.hpp)
 };
 
 const char* event_name(EventKind kind);
@@ -192,6 +193,7 @@ struct FreeRide {
   bool arrived = false;        // at a run's foot (since the last lift let him go)
   double arrived_at = 0;       // s, the clock when he got there
   OnLift lift;                 // the lift that has him, and the lifts ridden
+  double soaked = 0;           // s in a tarn's water (lake.hpp), 0 out of it
   template <class Io>
   friend void describe(Io& io, FreeRide& v) {
     io(v.start);
@@ -203,6 +205,7 @@ struct FreeRide {
     io(v.arrived);
     io(v.arrived_at);
     io(v.lift);
+    io(v.soaked);
   }
 };
 

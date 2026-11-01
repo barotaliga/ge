@@ -3,7 +3,8 @@
 // `Kicker`, `Cliff`, `Drift`, `Weather`, `Mountain`, `GenerateOptions`, `TrackHit`) and the ski
 // area a course's map is raced down (`ResortMap`: its runs, lifts, courses, village, hub and wind
 // tunnels), a ski jumping hill built over a map (`SkiJumpHill`) and a venue's analytic surface
-// (`VenueSurface`). The other venues and the water arrive with the milestones that build them
+// (`VenueSurface`). The lakes a game lays on a map after the generator are `MapLake`s
+// (plugins/mountain/tarn); the other venues arrive with the milestones that build them
 // (docs/goals.md).
 //
 // A field `generate_level` always sets is a plain member; one it sets only sometimes is a
@@ -588,6 +589,17 @@ struct Track {
   }
 };
 
+// A LAKE a game lays on the map after the generator has built it (plugins/mountain/tarn's
+// `lay_tarn`: Fall Line's free ride digs a tarn into a cirque). Round, its shore `radius` m from
+// its middle; `ice` the ice on it on the map's day.
+struct MapLake {
+  double x = 0, z = 0;  // its middle, m
+  double radius = 0;    // its shore's, m
+  double level = 0;     // its surface, m
+  double depth = 0;     // its deepest water under the surface, m (0: frozen to bear, filled flat)
+  double ice = 0;       // m of ice on it on the map's day (0: open water)
+};
+
 struct Level {
   double seed = 0;
   double size = 0;               // the world is [0, size]² m
@@ -617,6 +629,7 @@ struct Level {
   std::optional<RaceCourse> race;              // a course set over the map (R31–); else absent
   std::optional<SkiJumpHill> ski_jump;         // a ski jumping hill built over it (R43)
   std::shared_ptr<const VenueSurface> venue;   // a venue's analytic surface (R37), else none
+  std::vector<MapLake> lakes;  // laid by a game after the generator; none on a dealt map
 
   // The snow's height: a venue's own surface where it answers, the grid everywhere else.
   double ground_at(double x, double z) const {

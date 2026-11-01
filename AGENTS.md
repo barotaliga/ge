@@ -298,6 +298,7 @@ characters.
 | `plugins/mountain/lifts/` | The lifts run (`ge::mountain::lifts`): every carrier round its loop as a pure function of the clock | `mountain` |
 | `plugins/mountain/air/` | The air at run time (`ge::mountain::air`): the wind's gusts and veer, the fall's squalls and the visual range, as pure functions of the map and the clock | `mountain` |
 | `plugins/mountain/app/` | The mountain as drawn (`ge_mountain_app`, with the GPU): the snow's material, the trail map, the trees, the weather's look | `mountain`, `render` |
+| `plugins/mountain/tarn/` | A tarn a game lays on a map (`ge::mountain::tarn`): the site in a cirque, the lobed shore, the basin dug or filled flat, its ice on the map's day | `mountain` |
 | `plugins/mountain/analysis/` | The rule book re-checked on a finished map (`ge::mountain::analysis`) | `mountain` |
 | `plugins/mountain/village/` | The village's streets (`ge::mountain::village`): the street plan below the hub, the ground under it, the trees felled for it | `mountain` |
 | `plugins/skier/` | The skier on the snow (`ge::skier`): the step, the snow, the limits, the skis and tuning, the trees, the body and its injuries, the hand-built maps, the ride scenarios | `skier` |
