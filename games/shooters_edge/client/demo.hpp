@@ -27,8 +27,7 @@
 // THE AXES are the map's: units, z up, angles in degrees with the pitch down positive and the
 // yaw counter-clockwise from +x (view.hpp converts to the engine's).
 //
-// WHAT IS KEPT: the game folder the server ran (a multiplayer recording's serverdata names it:
-// the window mounts it to find the mod's models, timedemo.hpp's `demo_game_dir`), the precache
+// WHAT IS KEPT: the game folder the server ran (timedemo.hpp's `demo_game_dir`), the precache
 // lists, every entity's last origin, angles, model and frame (so a renderer of entities can draw
 // them), the static entities and the static (looping) sounds of the level, the stats, each player's
 // frags, name and colours (client and multiview), the demo's clock; and, for the frame just read
@@ -56,8 +55,7 @@
 // ge:keywords serverinfo serverdata playerinfo packet-entities clientdata view-entity open_demo
 // ge:keywords next_frame demo-format demo-state stats intermission multiview mvd gzip track
 // ge:keywords voice-format qwdv mvdv voice-header sound-events static-sounds read_voice
-// ge:keywords updatefrags frags updateuserinfo player-names dead gib topcolor bottomcolor
-// ge:keywords setinfo gamedir game-folder
+// ge:keywords updatefrags frags updateuserinfo player-names dead gib topcolor setinfo gamedir
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once

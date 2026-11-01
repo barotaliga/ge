@@ -440,10 +440,23 @@ TEST(a_demo_plays_from_the_game_folder_its_server_ran_unless_another_was_asked) 
   // A folder that is not there: the window's, with a line saying what to do.
   CHECK(cl::demo_game_dir(base, "id1", "ctf", note) == "id1");
   CHECK(note.find("ctf") != std::string::npos && note.find("next:") != std::string::npos);
-  // The plain game's own folder, when an install has none, is not worth a line.
-  CHECK(cl::demo_game_dir(base, "id1", "qw", note) == "id1" && note.empty());
   // A recording naming a path is never followed out of the base folder.
   CHECK(cl::demo_game_dir(base, "id1", "../fortress", note) == "id1");
   CHECK(cl::demo_game_dir(base, "id1", "..", note) == "id1");
+  // The window's side: the mod's folder mounted once, said once, and let go for the base again.
+  cl::SearchPath window;
+  std::string error;
+  CHECK_MSG(cl::open_game_dir(base, "id1", window, error), error);
+  cl::DemoFolder f;
+  cl::DemoState s;
+  s.game = "fortress";
+  std::vector<std::string> say;
+  const cl::SearchPath* from = &cl::demo_folder(f, base, "id1", s, window, say);
+  CHECK(from != &window && f.game == "fortress" && say.size() == 1);
+  CHECK(from->folder == (root / "fortress").string());
+  CHECK(&cl::demo_folder(f, base, "id1", s, window, say) == from && say.size() == 1);
+  s.game = "ctf";  // not there: the window's, the note said once over two levels
+  CHECK(&cl::demo_folder(f, base, "id1", s, window, say) == &window && !f.path);
+  CHECK(&cl::demo_folder(f, base, "id1", s, window, say) == &window && say.size() == 2);
   fs::remove_all(root);
 }

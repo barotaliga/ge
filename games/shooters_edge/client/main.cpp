@@ -508,12 +508,8 @@ int run_main(int argc, char** argv) {
   bool vsync = true;
   bool full_applied = false;  // what the window was last set to; vid_fullscreen is the ask
   std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
-  // The demo's own game folder when it names one the window is not on (timedemo.hpp's
-  // demo_game_dir: a team mod's models), null while it plays from the window's; and the folder
-  // and the model list's length the demo's world was made with (the list grows in a signon).
-  std::unique_ptr<cl::SearchPath> bench_files;
-  std::string bench_game = args.game, bench_note;
-  size_t bench_models = 0;
+  cl::DemoFolder bench_folder;               // the demo's game folder (timedemo.hpp's demo_folder)
+  size_t bench_models = 0;         // the model list's length the demo's world was made with
   cl::FxFrame bench_fx;            // the demo's entities and players this frame (demo_video.hpp)
   ge::gpu::Target bench_off;       // the benchmark's frames that are not shown
   uint64_t bench_shown_ns = 0;     // when the benchmark last showed a frame
@@ -564,9 +560,7 @@ int run_main(int argc, char** argv) {
     bench_off = {};
     bench.active = false;
     bench_map.reset();
-    bench_files.reset();
-    bench_game = args.game;
-    bench_note.clear();
+    bench_folder = {};
     bench_models = 0;
     vsync = true;
     surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync);
@@ -806,22 +800,10 @@ int run_main(int argc, char** argv) {
       const cl::DemoState& ds = bench.demo.state;
       if (step == cl::TimedemoStep::new_level) {
         // The game folder the recording's server ran, mounted when the window is not on it.
-        std::string note;
-        const std::string want = cl::demo_game_dir(args.basedir, args.game, ds.game, note);
-        if (note != bench_note && !note.empty()) console.print("playdemo: " + note);
-        bench_note = note;
-        if (want != bench_game) {
-          auto from = std::make_unique<cl::SearchPath>();
-          if (want != args.game && cl::open_game_dir(args.basedir, want, *from, error)) {
-            console.print("playdemo: the demo's game folder " + from->folder);
-            bench_files = std::move(from);
-          } else {
-            if (want != args.game) console.print("playdemo: " + error);
-            bench_files.reset();
-          }
-          bench_game = bench_files ? want : args.game;
-        }
-        const cl::SearchPath& from = bench_files ? *bench_files : files;
+        std::vector<std::string> lines;
+        const cl::SearchPath& from =
+            cl::demo_folder(bench_folder, args.basedir, args.game, ds, files, lines);
+        for (const std::string& line : lines) console.print("playdemo: " + line);
         bench_map = cl::load_named_map(from, ds.map, error);
         if (!bench_map) {
           if (!end_bench("the demo's map " + ds.map + ": " + error, t)) return 1;
@@ -836,8 +818,8 @@ int run_main(int argc, char** argv) {
       // A client recording's model list may still grow after its level started: the world is
       // made again with the whole list, so every model it names is drawn.
       if (bench_map && ds.models.size() != bench_models) {
-        if (!rebuild_world(*bench_map, {ds.models, {}}, bench_files ? *bench_files : files))
-          return 1;
+        const cl::SearchPath& from = bench_folder.path ? *bench_folder.path : files;
+        if (!rebuild_world(*bench_map, {ds.models, {}}, from)) return 1;
         bench_models = ds.models.size();
       }
       ge::render::FrameView view =
