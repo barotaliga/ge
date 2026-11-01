@@ -1,18 +1,20 @@
 // FIGHTERS ON THE BASELINE MOD (games/shooters_edge/bots/fighter.hpp, fight_run.hpp): four
 // fighters (two expert aims, two novice) play the baseline mod's deathmatch on the arena for two
 // minutes, on four seeds. Every one scores and dies, picks items up, switches weapons and holds one
-// better than the starting scattergun for a while, and spends time in each of its four modes; the
-// mod never faults; the experts outscore the novices over the four seeds (one seed is a coin toss);
-// aggressive novices fight and die more than cowardly ones (shooter/temper.hpp); and a match
-// replays to the bit and matches its golden (tests/golden/shooters_edge_fight.txt,
-// GE_GOLDEN_WRITE=1 rewrites it; the PR says why).
+// better than the starting scattergun for a while, and over the four seeds spends time in each of
+// its four modes; the mod never faults; the experts outscore the novices over the four seeds (one
+// seed is a coin toss); aggressive novices fight and die more than cowardly ones
+// (shooter/temper.hpp); and a match replays to the bit and matches its golden
+// (tests/golden/shooters_edge_fight.txt, GE_GOLDEN_WRITE=1 rewrites it; the PR says why).
 //
 // ge:summary Tests: fighters play the baseline mod's deathmatch: score, items, modes, skill, bits
 // ge:keywords test fighter deathmatch frags deaths items weapon modes skill golden replay
 // ge:skill shooter bots testing
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <map>
 #include <string>
 
 #include "check.hpp"
@@ -45,6 +47,9 @@ fb::FightOptions duel_of_skills(uint32_t seed, int frames) {
 
 TEST(fighters_play_the_baseline_mod_and_aim_tells) {
   float expert = 0, novice = 0;
+  // Each player's commands in each mode over the four seeds: a balanced novice goes after no fresh
+  // enemy (shooter/temper.hpp), so in one two-minute match he may never chase.
+  std::map<std::string, std::array<int64_t, 4>> modes;
   for (uint32_t seed = 1; seed <= 4; seed++) {
     const fb::FightReport r = fb::run_fight(duel_of_skills(seed, 9000));
     CHECK_MSG(r.ok, r.error);
@@ -62,13 +67,16 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
       int64_t better = 0;
       for (int w = 3; w <= 8; w++) better += s.weapon_commands[w];
       CHECK_MSG(better >= 200, name + " never held a weapon better than the scattergun for long");
-      for (int m = 0; m < 4; m++)
-        CHECK_MSG(s.mode_commands[m] > 0,
-                  name + " never entered " + fb::fight_mode_name(static_cast<fb::FightMode>(m)));
+      for (int m = 0; m < 4; m++) modes[p.name][static_cast<size_t>(m)] += s.mode_commands[m];
       (p.skill == sh::AimSkill::expert ? expert : novice) += p.frags;
     }
     std::printf("seed %u: experts %.0f novices %.0f so far\n", seed, expert, novice);
   }
+  for (const auto& [name, m] : modes)
+    for (size_t k = 0; k < 4; k++)
+      CHECK_MSG(m[k] > 0, name + " never entered " +
+                              fb::fight_mode_name(static_cast<fb::FightMode>(k)) +
+                              " in four seeds");
   CHECK_MSG(expert > novice, "over four seeds the experts scored " + std::to_string(expert) +
                                  ", the novices " + std::to_string(novice));
 }

@@ -42,6 +42,7 @@ struct Bot {
   ai::Hands aim_hands;
   bool aiming = false;       // the view is the aim's, not the pilot's
   bool strafe = true;        // the pilot's own strafe setting, put back when the view is let go
+  bool hop = false;          // and its hop setting, the same
   int32_t target = -1;       // the contact's entity the view is on
   float yaw = 0, pitch = 0;  // the view last pressed, degrees (yaw unwrapped)
   double wanted[2] = {}, pressed[2] = {};  // the aim's last yaw and pitch, wanted and pressed

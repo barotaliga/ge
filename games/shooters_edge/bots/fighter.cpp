@@ -51,6 +51,7 @@ constexpr double kTired = 0.2;        // its worth meanwhile, as a share
 constexpr float kRetakeStrong = 120;  // strength (a launcher counted) to go and take an area back
 constexpr double kRetake_s = 20;      // a key area believed lost this long ago is still retaken
 constexpr double kHeardChase_s = 2;   // and one heard this long ago is gone after
+constexpr float kCornered = 192;      // units: an enemy in sight this near is fought
 constexpr double kImpulseGap_s = 0.5;
 constexpr double kWait_s = 20;      // an item back within this is worth going to wait for
 constexpr double kHealWait_s = 3;   // but a retreat goes for health that is there
@@ -565,7 +566,9 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
   // anyone else hears it, keeps away from it and goes on with his items.
   const float mine = sh::might(own_might(st));
   const float theirs = c ? foe_might(f, c->ent, t) : 0;
-  const bool engage = c && sh::takes_fight(f.temper, f.skill, mine, theirs);
+  // An enemy in sight this close is fought whatever the odds: turning away only shows him a back.
+  const bool cornered = seen_now && dist(eye, at_of(c->seen)) < kCornered;
+  const bool engage = c && (cornered || sh::takes_fight(f.temper, f.skill, mine, theirs));
   const bool recent = c && ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s && engage) ||
                             (by_ear && ai::age(c->heard, t) <= kHeardChase_s &&
                              sh::chases_sound(f.temper, f.skill, mine, theirs)));
@@ -731,7 +734,18 @@ Stats read_stats(const server::QcServer& s, int ent) {
 
 void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, int slot,
                   const char* entities, sh::AimSkill skill, double hz, uint32_t seed) {
-  sh::bot_init(f.bot, g, sh::PilotSettings{}, sh::PilotHands::human, skill, hz, seed);
+  // An expert moves as a pro does: the bunny hop on practised hands (shooter/pilot.hpp); an
+  // average player hops the simple way (forward and the side key of the turn) on steady hands;
+  // a novice walks and strafes on a person's hands.
+  const bool expert = skill == sh::AimSkill::expert || skill == sh::AimSkill::perfect;
+  const bool average = skill == sh::AimSkill::average;
+  sh::PilotSettings ps;
+  ps.hop = expert || average;
+  ps.hop_simple = average;
+  const sh::PilotHands hands = expert    ? sh::PilotHands::practised
+                               : average ? sh::PilotHands::steady
+                                         : sh::PilotHands::human;
+  sh::bot_init(f.bot, g, ps, hands, skill, hz, seed);
   f.slot = slot;
   f.sense = map_sense_of(skill);
   f.skill = skill;

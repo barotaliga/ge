@@ -30,6 +30,7 @@
 
 #include "progs/file.hpp"
 #include "shooter/aim.hpp"
+#include "shooter/pilot.hpp"
 #include "shooter/temper.hpp"
 #include "shooter/vec.hpp"
 
@@ -77,7 +78,8 @@ struct TeamPlayer {
   double dive_wet_s = 0;       // time in the water on a dive
   int64_t mode_commands[4] = {}, role_commands[4] = {};
   int64_t weapon_commands[9] = {};
-  int64_t pilot_modes[9] = {};  // live commands in each pilot mode (shooter/pilot.hpp)
+  int64_t pilot_modes[sh::kPilotModes] =
+      {};  // live commands in each pilot mode (shooter/pilot.hpp)
   int64_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0;
   float travelled = 0;            // units along the path
   std::string last;               // where he stood at the end, and what he was going for
