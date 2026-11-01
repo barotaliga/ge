@@ -8,6 +8,9 @@
 #include "shooters_edge/bots/knowledge.hpp"
 
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
+#include <string>
 
 #include "shooter/senses.hpp"
 
@@ -25,6 +28,98 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 }
 
 }  // namespace
+
+bool parse_vec(const char* text, sh::Vec3f& out) {
+  if (!text) return false;
+  char* end = nullptr;
+  out.x = std::strtof(text, &end);
+  out.y = std::strtof(end, &end);
+  out.z = std::strtof(end, &end);
+  return true;
+}
+
+// The map's item from its classname, or false.
+bool item_of(const char* cn, int spawnflags, ItemSpot& it) {
+  const bool twice = (spawnflags & 1) != 0;
+  struct Ammo4 {
+    const char* cn;
+    ItemKind kind;
+    float amount;
+  };
+  static const Ammo4 kAmmo[4] = {{"item_shells", ItemKind::shells, 20},
+                                 {"item_spikes", ItemKind::nails, 25},
+                                 {"item_rockets", ItemKind::rockets, 5},
+                                 {"item_cells", ItemKind::cells, 6}};
+  for (const Ammo4& a : kAmmo)
+    if (std::strcmp(cn, a.cn) == 0) {
+      it.kind = a.kind;
+      it.amount = a.amount * (twice ? 2.f : 1.f);
+      it.name = a.cn;
+      return true;
+    }
+  if (std::strcmp(cn, "item_artifact_invulnerability") == 0) {
+    it.kind = ItemKind::pent;
+    it.respawn_s = 60;
+    it.name = "pent";
+    return true;
+  }
+  if (std::strcmp(cn, "item_artifact_super_damage") == 0) {
+    it.kind = ItemKind::quad;
+    it.respawn_s = 60;
+    it.name = "quad";
+    return true;
+  }
+  if (std::strcmp(cn, "item_health") == 0) {
+    it.kind = (spawnflags & 2) ? ItemKind::mega : ItemKind::health;
+    it.amount = (spawnflags & 2) ? 100.f : (spawnflags & 1) ? 15.f : 25.f;
+    it.name = (spawnflags & 2) ? "mega health" : "health";
+    return true;
+  }
+  if (std::strcmp(cn, "item_armor1") == 0)
+    it.kind = ItemKind::armor1;
+  else if (std::strcmp(cn, "item_armor2") == 0)
+    it.kind = ItemKind::armor2;
+  else if (std::strcmp(cn, "item_armorInv") == 0)
+    it.kind = ItemKind::armor3;
+  if (std::strncmp(cn, "item_armor", 10) == 0) {
+    it.name = cn;
+    return true;
+  }
+  struct Gun {
+    const char* cn;
+    int32_t bit;
+  };
+  static const Gun kGuns[6] = {{"weapon_supershotgun", 2},    {"weapon_nailgun", 4},
+                               {"weapon_supernailgun", 8},    {"weapon_grenadelauncher", 16},
+                               {"weapon_rocketlauncher", 32}, {"weapon_lightning", 64}};
+  for (const Gun& g : kGuns)
+    if (std::strcmp(cn, g.cn) == 0) {
+      it.kind = ItemKind::weapon;
+      it.weapon = g.bit;
+      it.respawn_s = 30;
+      it.name = cn;
+      return true;
+    }
+  return false;
+}
+
+// The callout for an enemy at `there`: by the landmark nearest it that the player knows (a key item
+// or a weapon: "enemy at RA", "enemy at RL"), the key items counted nearer; empty with none near.
+std::string enemy_call(const Fighter& f, sh::Vec3f there) {
+  int32_t best = -1;
+  float best_d = kCallNear;
+  for (size_t i = 0; i < f.items.size(); i++) {
+    const ItemSpot& it = f.items[i];
+    if (!it.known || (!key_item(it) && it.kind != ItemKind::weapon)) continue;
+    const float d = dist(it.at, there) * (key_item(it) ? 0.5f : 1.f);
+    if (d < best_d) {
+      best_d = d;
+      best = static_cast<int32_t>(i);
+    }
+  }
+  return best < 0 ? std::string()
+                  : std::string("enemy at ") + item_call(f.items[static_cast<size_t>(best)]);
+}
 
 MapSense map_sense_of(sh::AimSkill skill) {
   switch (skill) {

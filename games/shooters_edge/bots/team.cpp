@@ -163,7 +163,7 @@ void team_plan(Team& t, const server::QcServer& s) {
   // What the plan says out loud: the rush called by whoever timed the quad, the carry and its loss.
   if (!rushers.empty() && !t.rushing) {
     Fighter* caller = timer && alive(s, *timer) ? timer : rushers[0];
-    const int in = static_cast<int>(quad_due + 0.5);
+    const int in = static_cast<int>(std::lround(quad_due));
     team_say(*caller, now,
              in >= 2 ? "quad in " + std::to_string(in) + ", get quad!" : std::string("get quad!"));
     if (rushers[0] != caller) team_say(*rushers[0], now, "going quad");

@@ -23,6 +23,8 @@
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
 
+#include <string>
+
 #include "shooters_edge/bots/fighter.hpp"
 
 namespace shooters_edge::bots {
@@ -31,6 +33,7 @@ constexpr int32_t kLearnSightings = 3;  // a novice recalls an item seen this ma
 constexpr double kSightingGap_s = 15;   // sightings this far apart count separately
 constexpr float kItemSight = 1500;      // an item's spot is made out within this, units
 constexpr float kGuessLate = 1.5f;      // an untimed item is guessed back after this × its time
+constexpr float kCallNear = 600;        // an enemy is called by an item this near it, units
 
 // How well a player of aim `skill` knows the map: the expert's aim is the expert's map.
 MapSense map_sense_of(sh::AimSkill skill);
@@ -41,6 +44,15 @@ bool key_item(const ItemSpot& it);
 
 // The item as a player calls it out: "RA", "quad", "RL", "mega" and so on.
 const char* item_call(const ItemSpot& it);
+
+// A vector in a map's text ("x y z"); false on none.
+bool parse_vec(const char* text, sh::Vec3f& out);
+// The map's item from its classname and spawnflags, or false.
+bool item_of(const char* cn, int spawnflags, ItemSpot& it);
+
+// The callout for an enemy at `there`: by the landmark nearest it that the player knows (a key item
+// or a weapon: "enemy at RA", "enemy at RL"), the key items counted nearer; empty with none near.
+std::string enemy_call(const Fighter& f, sh::Vec3f there);
 
 // What the player starts the match knowing (call after the items are read).
 void knowledge_init(Fighter& f);
