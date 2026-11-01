@@ -6,11 +6,11 @@
 // - **modern**: the engine's menu view (ui/menu_view.hpp) over the darkened game, the game's name
 //   at the top of the column, the dimmed rows' reason in the footer.
 //
-// OPTIONS ▸ CLASSIC ENHANCE opens classic-enhance's own menu (plugins/classicenhance/menu.hpp) in
-// its place: the pack to enhance (the packs on the search path), ENHANCE run on a thread into the
-// local cache and watched stage by stage, every `ce_` switch on its own page. Back at its root
-// returns to OPTIONS. Its pages keep the modern look in both looks, since its progress panel is
-// drawn for that view.
+// OPTIONS ▸ CLASSIC ENHANCED ▸ ENHANCE A PACK opens classic-enhance's own menu
+// (plugins/classicenhance/menu.hpp) in its place: the pack to enhance (the packs on the search
+// path), ENHANCE run on a thread into the local cache and watched stage by stage, every `ce_`
+// switch on its own page. Back at its root returns to CLASSIC ENHANCED. Its pages keep the modern
+// look in both looks, since its progress panel is drawn for that view.
 //
 // The commands it registers: `togglemenu` (what ESCAPE does), `menu_main`, `menu_options`,
 // `menu_quit` (the menu opened on that page); the cvar `menu_look` (auto, classic, modern).
@@ -19,7 +19,8 @@
 //
 // ge:summary The main menu over the game: ESCAPE, the presses, the classic or modern look, enhance
 // ge:keywords menu main-menu escape togglemenu menu_look classic modern look overlay pointer
-// ge:keywords classic-enhance enhance job switches help-pages window shooters-edge
+// ge:keywords classic-enhance enhance job switches help-pages window shooters-edge press_key
+// ge:keywords waiting-key rebind customize-controls
 // ge:skill ui console classicenhance
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -69,6 +70,13 @@ class GameMenu {
   // The menu over a `width` x `height` frame; `t` turns the classic cursor.
   void draw(ge::ui::DrawList& list, int width, int height, double t);
 
+  // CUSTOMIZE CONTROLS waits for a key (a row was pressed): the window hands it every key, mouse
+  // button and wheel turn that goes down, by its bind name, to `press_key`, and none of its
+  // presses to `update`. `escape` stops waiting, `backspace` and `del` clear the move's keys, any
+  // other binds it (the frame the row was pressed on is skipped, so its own ENTER binds nothing).
+  bool waiting_key() const { return !waiting_.empty(); }
+  void press_key(std::string_view key, Host& host);
+
   // The next draw settles every animation where it is going (a lab's still).
   void settle() { settle_ = true; }
   // The look the menu draws in now.
@@ -99,6 +107,9 @@ class GameMenu {
   std::string toggle_page_ = "main";
   int help_page_ = 0;
   double dt_ = 1.0 / 60;  // the last frame's, s
+
+  std::string waiting_;         // the CUSTOMIZE CONTROLS row waiting for a key, or ""
+  bool waiting_fresh_ = false;  // it started this frame
 
   bool in_enhance_ = false;
   ge::classicenhance::Switches switches_;

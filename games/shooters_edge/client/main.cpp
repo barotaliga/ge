@@ -20,20 +20,22 @@
 // `+` words are console lines run at start: `+map dm6` loads that map (`map arena` is the built-in
 // test arena); with none, the map `start` when the packs have it, else the arena.
 //
-// THE KEYS: W A S D move, SPACE jumps, the left button fires, 1..8 pick a weapon, the wheel the
-// next one; TAB held shows the scores (client/scores.hpp; `scr_levelstats 0|1`); the mouse looks
-// (captured while the window has it; a click takes it back); ESCAPE opens the main menu
-// (menu/game_menu.hpp: drawn in the pack's own pictures when the packs carry them, the rows the
-// game cannot do yet dimmed), and ESCAPE again goes back out of it; the key under ESCAPE drops the
-// console, where `map <name>` changes the map, `sv <line>` is a line for the server's console (`sv
-// timelimit 10`), `save <name>` and `load <name>` keep and bring back a single-player game (`<game
-// folder>/saves/<name>.save`; `<name>.sav` the classic text save in the game folder, which `load`
-// also finds by the bare name), `sensitivity <deg a count>` and `m_invert 0|1` set the look,
-// `r_look classic|modern` and the other picture cvars (app/look.hpp: `r_fx_lights`, `r_fx_glow`,
-// `r_bloom`, `r_lava_glow`, `r_slime_glow`) the world's look, the view-model cvars (view/hand.hpp:
-// `r_drawviewmodel`, `r_viewmodel_fov`, `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon
-// in hand, `vid_fullscreen 0|1` the window over the whole screen (`vid_display n` which one, of
-// those `vid_displays` lists), and `quit` quits.
+// THE KEYS are binds (controls.hpp: W A S D, SPACE jumps, the left button fires, SHIFT walks, 1..8
+// and the wheel the weapons; OPTIONS ▸ CUSTOMIZE CONTROLS); TAB held shows the scores
+// (client/scores.hpp; `scr_levelstats 0|1`); the mouse looks (captured while the window has it; a
+// click takes it back); ESCAPE opens the main menu (menu/game_menu.hpp: drawn in the pack's own
+// pictures when the packs carry them, the rows the game cannot do yet dimmed), and ESCAPE again
+// goes back out of it; the key under ESCAPE drops the console, where `map <name>` changes the map,
+// `sv <line>` is a line for the server's console (`sv timelimit 10`), `save <name>` and `load
+// <name>` keep and bring back a single-player game (`<game folder>/saves/<name>.save`; `<name>.sav`
+// the classic text save in the game folder, which `load` also finds by the bare name), `sensitivity
+// <deg a count>` and `m_invert 0|1` set the look, `r_look classic|modern` and the other picture
+// cvars (app/look.hpp: `r_fx_lights`, `r_fx_glow`, `r_bloom`, `r_lava_glow`, `r_slime_glow`) the
+// world's look, the view-model cvars (view/hand.hpp: `r_drawviewmodel`, `r_viewmodel_fov`,
+// `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the
+// window over the whole screen (`vid_display n` which one, of those `vid_displays` lists), `gamma`
+// the brightness, `topcolor` and `bottomcolor` the player's colours, and `quit` quits; the
+// settings are kept in `<game folder>/settings/config.cfg` (client/settings.hpp).
 //
 // THE LOBBY: a match opens each map in warmup until everyone is ready; F1 ready or break, F2 the
 // other team, F3 the roster (client/lobby_console.hpp lists the words and the settings).
@@ -49,13 +51,12 @@
 // included, and the voice formats (`.qwdv`, `.mvdv`) with their voices. A played demo is watched
 // like a video (client/demo_playback.hpp); `-demovideo <demo> <file>` turns one, or a clip of it,
 // into a video or a GIF with no window and quits (client/demo_video.hpp).
-//
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console relative-
 // ge:keywords mouse mouse-look hud first-person effects r_look quit shooters-edge benchmark
 // ge:keywords timedemo demo vsync-off fps playdemo demo_track cl_demospeed demovideo main-menu
 // ge:keywords escape vid_fullscreen fullscreen offscreen vid_display vid_displays lobby scores-key
-// ge:keywords scoreboard scr_levelstats
+// ge:keywords scoreboard scr_levelstats settings config-cfg topcolor bottomcolor gamma binds
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
 #include <cstdio>
@@ -88,6 +89,7 @@
 #include "shooters_edge/client/lobby_console.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/scores.hpp"
+#include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
@@ -242,10 +244,13 @@ int run_main(int argc, char** argv) {
                       });
   cl::add_lobby_commands(console, listen);
   cl::add_cvars(console, controls);
+  cl::default_binds(console);  // before the configs, which rebind what the player changed
   shooters_edge::look::add_cvars(console, picture);
   shooters_edge::view::ViewSettings view_settings;
   shooters_edge::view::add_view_cvars(console.cvars(), view_settings);
   console.add_command("quit", "quit the game", [&](Con&, const CArgs&) { quit = true; });
+  cl::UserInfo user_info;  // SETUP's colours (and the console's `name`), sent as they change
+  cl::add_user_info_cvars(console, user_info);
   bool fullscreen = false;  // vid_fullscreen; the window follows it each frame
   console.cvars().bind({.name = "vid_fullscreen",
                         .fallback = "0",
@@ -313,6 +318,9 @@ int run_main(int argc, char** argv) {
   // The HUD's feed shows the game's messages (hud.notify, below), so the console's own lines at
   // the top of the screen would show each a second time; a cfg or a + word can turn them back on.
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
+  // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
+  console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
+  const auto save_settings = [&console] { cl::save_settings(console); };
   ge::console::start(console, args.plus);
   console.cvars().apply_latched();
 
@@ -381,6 +389,8 @@ int run_main(int argc, char** argv) {
   }
   cl::ListenOptions listen_opt;
   listen_opt.files = &files;
+  if (const ge::console::Cvar* n = console.cvars().find("name"); n != nullptr && !n->value.empty())
+    listen_opt.player = n->value;
   listen_opt.lobby = listen.opt.lobby;  // the lobby's settings, as the console set them
   listen_opt.lobby_settings = listen.opt.lobby_settings;
   {
@@ -563,7 +573,10 @@ int run_main(int argc, char** argv) {
     const double wall = static_cast<double>(now - last) * 1e-9;
     const double t = static_cast<double>(now - first_ns) * 1e-9;
     last = now;
-    if (input.quit) break;
+    if (input.quit) {
+      save_settings();
+      break;
+    }
     if (fullscreen != full_applied) {  // the size follows through `input.resized`
       if (!ge::platform::set_fullscreen(*window, fullscreen, display)) fullscreen = full_applied;
       full_applied = fullscreen;
@@ -603,6 +616,23 @@ int run_main(int argc, char** argv) {
           menu_host.saves[static_cast<size_t>(i)] = cl::save_label(files, "s" + std::to_string(i));
       }
       game_menu.update(mi, opening, menu_host, wall);
+      cl::keys_to_menu(game_menu, menu_host, queue, held);  // CUSTOMIZE CONTROLS' key
+      if (was_open && !game_menu.open()) {
+        save_settings();  // what the menu changed is kept
+        // A setting the world reads once (the enhanced textures and skins, the rebaked light, the
+        // bloom) changed: the world made again, as a map change makes it.
+        if (world && listen.server != nullptr && listen.map && cl::world_stale(*world)) {
+          world.reset();
+          world = cl::create_world_draw(*device, files, *listen.map, static_cast<uint32_t>(w),
+                                        static_cast<uint32_t>(h), surface.format(), picture,
+                                        weapons, error, {listen.server->models, {}});
+          if (!world) {
+            out::error("shooters_edge: the world draw did not load again: " + error +
+                       "; see docs/rendering.md");
+            return 1;
+          }
+        }
+      }
     }
     // The mouse is the look's while captured: the console, the menu or the focus lost lets it go;
     // the menu closing or a click in the window takes it again.
@@ -617,7 +647,15 @@ int run_main(int argc, char** argv) {
       captured = true;
       ge::platform::set_relative_mouse(*window, true);
     }
-    const ge::input::InputState& played = con_keys.held || !captured || was_open ? idle : held;
+    const bool playing = !(con_keys.held || !captured || was_open);
+    const ge::input::InputState& played = playing ? held : idle;
+    // The mouse's buttons and wheel to the game's binds (the keyboard's went with the console's
+    // keys above); the moves let go while the menu or the console has the keys.
+    if (playing && !game_menu.open()) {
+      cl::mouse_to_binds(console, held);
+    } else {
+      cl::release_buttons(controls);
+    }
     if (input.resized) {
       w = input.width_px;
       h = input.height_px;
@@ -659,6 +697,7 @@ int run_main(int argc, char** argv) {
         fx_state = {};
         in_hand = {};
         held_fire.shots = {};
+        user_info.sent_to = nullptr;  // the new server hears the user info again
       }
     }
 
@@ -791,6 +830,7 @@ int run_main(int argc, char** argv) {
       continue;
     }
 
+    cl::send_user_info(listen, console, user_info);  // the name and colours, as they change
     // The lobby's keys (F1 ready or break, F2 the other team, F3 the roster), then the player's
     // hands, then the server's frames.
     {
@@ -799,8 +839,9 @@ int run_main(int argc, char** argv) {
       cl::lobby_keys(listen, keys && input.tapped(Key::f1), keys && input.tapped(Key::f2),
                      keys && input.tapped(Key::f3), lobby_roster);
     }
-    cl::turn_view(played, controls, listen.view);
-    const ge::shooter::MoveCmd cmd = cl::read_controls(played, controls);
+    const cl::Moves moves = playing ? cl::button_moves(controls) : cl::Moves{};
+    cl::turn_view(played, moves, controls, wall, listen.view);
+    const ge::shooter::MoveCmd cmd = cl::read_controls(moves, played, controls);
     if (listen.server != nullptr) {
       const cl::PlayerState me = cl::player_state(listen);
       cl::spring_view(played, controls, me.on_ground, cmd, me.ideal_pitch, wall, listen.view);
@@ -821,6 +862,7 @@ int run_main(int argc, char** argv) {
       fx_state = {};
       in_hand = {};
       held_fire.shots = {};
+      user_info.sent_to = nullptr;  // the new server hears the user info again
     }
     if (listen.restarted) {  // the lobby's countdown ran out: the match on a new server
       listen.restarted = false;
@@ -828,6 +870,7 @@ int run_main(int argc, char** argv) {
       fx_state = {};
       in_hand = {};
       held_fire.shots = {};
+      user_info.sent_to = nullptr;  // the new server hears the user info again
     }
     if (listen.campaign.sellscreen) {  // the shareware episode's end: the help pages
       listen.campaign.sellscreen = false;
@@ -876,6 +919,7 @@ int run_main(int argc, char** argv) {
     surface.present();
     ++presented;
   }
+  if (quit) save_settings();
   const double seconds = static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
   char line[160];
   std::snprintf(line, sizeof line,

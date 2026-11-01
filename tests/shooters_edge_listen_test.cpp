@@ -33,6 +33,7 @@
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "vfs/pak.hpp"
 
@@ -273,6 +274,73 @@ TEST(keys_and_the_mouse_make_the_command_and_turn_the_view) {
   cl::turn_view(in, c, view);
   CHECK(std::fabs(view.y - (10 - 6.6f)) < 1e-3f);  // right is clockwise
   CHECK(std::fabs(view.x + 3.3f) < 1e-3f);         // up is a negative pitch
+}
+
+TEST(the_binds_buttons_make_the_command_walk_run_and_sidestep) {
+  ge::console::Console con;
+  cl::ControlSettings c;
+  cl::add_cvars(con, c);
+  cl::default_binds(con);
+  CHECK(con.binds().get(ge::console::BindMode::game, "w") == "+forward");
+  CHECK(con.binds().get(ge::console::BindMode::game, "mouse1") == "+attack");
+  con.execute("bind w +back");  // the player's own bind is kept over the default
+  cl::default_binds(con);
+  CHECK(con.binds().get(ge::console::BindMode::game, "w") == "+back");
+  con.key("w", true);
+  con.key("mouse1", true);
+  con.key("7", true);
+  con.run();
+  ge::input::InputState in;
+  sh::MoveCmd cmd = cl::read_controls(cl::button_moves(c), in, c);
+  CHECK(cmd.forward == -400);  // cl_run 1: running
+  CHECK(cmd.buttons == sh::kButtonAttack);
+  CHECK(cmd.impulse == 7);
+  CHECK(cl::button_moves(c).impulse == 0);  // the impulse is sent once
+  con.key("shift", true);                   // +speed walks
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -200);
+  con.execute("cl_run 0");  // off, +speed runs
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -400);
+  con.key("shift", false);
+  con.run();
+  CHECK(cl::read_controls(cl::button_moves(c), in, c).forward == -200);
+  // lookstrafe: the mouse's sideways counts sidestep and leave the yaw alone.
+  in.mouse.dx = 50;
+  sh::Vec3f view{0, 90, 0};
+  con.execute("lookstrafe 1");
+  const cl::Moves m = cl::button_moves(c);
+  cl::turn_view(in, m, c, 0.01, view);
+  CHECK(view.y == 90);
+  CHECK(cl::read_controls(m, in, c).side > 0);
+  // The menu took the keys: everything let go.
+  cl::release_buttons(c);
+  CHECK(cl::read_controls(cl::button_moves(c), {}, c).forward == 0);
+  // +left turns at cl_yawspeed.
+  con.execute("lookstrafe 0");
+  con.key("left", true);
+  con.run();
+  sh::Vec3f turned{0, 90, 0};
+  cl::turn_view({}, cl::button_moves(c), c, 0.5, turned);
+  CHECK(std::fabs(turned.y - 160) < 1e-3f);
+}
+
+TEST(setup_s_name_and_colours_reach_the_server_as_they_change) {
+  cl::Listen l;
+  if (!start(l)) return;
+  ge::console::Console con;
+  con.cvars().add({.name = "name", .fallback = "player", .kind = ge::console::CvarKind::text});
+  cl::UserInfo info;
+  cl::add_user_info_cvars(con, info);
+  con.execute("name ranger; topcolor 4; bottomcolor 12");
+  cl::send_user_info(l, con, info);
+  const auto& ui = l.server->clients[0].userinfo;
+  CHECK(shooters_edge::server::info_value(ui, "name") == "ranger");
+  CHECK(shooters_edge::server::info_value(ui, "topcolor") == "4");
+  CHECK(shooters_edge::server::info_value(ui, "bottomcolor") == "12");
+  CHECK(l.opt.player == "ranger");  // the next map's connect uses it
+  con.execute("topcolor 99");       // clamped to the 14 colours
+  cl::send_user_info(l, con, info);
+  CHECK(shooters_edge::server::info_value(l.server->clients[0].userinfo, "topcolor") == "13");
 }
 
 TEST(the_hud_reads_the_launcher_and_its_rockets) {
