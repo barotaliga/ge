@@ -122,6 +122,44 @@ TEST(the_packs_glyph_sheet_is_read_with_index_0_see_through_and_drawn) {
   CHECK(!cl::caption_glyphs_from_png("no/such/conchars.png", &missing));
 }
 
+TEST(the_prints_become_notify_lines_and_the_chat_lasts_longer) {
+  cl::DemoState s;
+  s.printed = {
+      {0, "You got the "}, {0, "shells\n"}, {3, "(red1): \x90quad\x91 low\n"}, {1, "  \n"}};
+  cl::DemoNotices n;
+  n.take(s, 10);
+  std::vector<cl::CaptionLine> got = n.at(10);
+  CHECK(got.size() == 2);
+  CHECK(got[0].text == "You got the shells" && !got[0].gold);
+  CHECK(got[1].gold);
+  CHECK(cl::plain_text(got[1].text) == "(red1): [quad] low");
+  CHECK(n.at(10 + cl::kNoticeSeconds + 0.1).size() == 1);  // the pickup gone, the chat kept
+  CHECK(n.at(10 + cl::kChatSeconds + 0.1).empty());
+
+  s.printed.clear();
+  for (int k = 0; k < 6; k++) s.printed.push_back({2, "line " + std::to_string(k) + "\n"});
+  s.centred = true;
+  s.centre = "The Slipgate Complex\n";
+  n.take(s, 20);
+  got = n.at(20);
+  CHECK(got.size() == cl::kNoticeLines);
+  CHECK(got.back().text == "line 5");
+  CHECK(n.centre_until >= 20 + cl::kCentreSeconds);
+
+  ge::ui::DrawList dl;
+  dl.begin(640, 360);
+  cl::draw_centre(dl, ge::ui::Image{}, 640, 360, n.centre);
+  CHECK(dl.size() > 0);
+
+  // A line printed in pieces is one line once its end comes.
+  cl::PrintJoin join;
+  CHECK(join.feed({0, "You got the "}).empty());
+  CHECK(join.feed({0, "Nailgun"}).empty());
+  const std::vector<cl::DemoPrint> done = join.feed({0, "\n\nnext"});
+  CHECK(done.size() == 1 && done[0].text == "You got the Nailgun");
+  CHECK(join.pending == "next");
+}
+
 TEST(video_cfg_puts_back_the_newer_look_then_reads_the_players_file_then_the_command_line) {
   ge::console::Console con;
   std::string look = "modern";

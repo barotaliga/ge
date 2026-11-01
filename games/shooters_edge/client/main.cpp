@@ -81,6 +81,7 @@
 #include "platform/window.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/controls.hpp"
+#include "shooters_edge/client/demo_caption.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -147,6 +148,7 @@ int demo_video_main(const cl::Args& args, const cl::SearchPath& files,
   o.hud = video.hud;
   o.hud_art = hud_art;
   o.text = video.text;
+  o.messages = video.messages;
   o.seconds = args.to > args.from ? args.to - args.from : args.seconds;
   o.from_s = args.from;
   o.highlight = args.highlight;
@@ -510,6 +512,7 @@ int run_main(int argc, char** argv) {
   std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
   size_t bench_models = 0;         // the demo's model list's length the world was made with
   cl::FxFrame bench_fx;            // the demo's models standing in the world this frame
+  cl::PrintJoin bench_prints;      // the demo's prints joined into lines
   ge::gpu::Target bench_off;       // the benchmark's frames that are not shown
   uint64_t bench_shown_ns = 0;     // when the benchmark last showed a frame
   wgpu::Future bench_in_flight{};  // the frame before this one, waited before the next
@@ -775,6 +778,15 @@ int run_main(int argc, char** argv) {
         bench_models = bench.demo.state.models.size();
       }
       cl::demo_placed(bench.demo.state, bench_fx.models);
+      // What the recorded player read: the prints and chat as notify lines, the centre prints.
+      for (const cl::DemoPrint& p : bench.demo.state.printed)
+        for (const cl::DemoPrint& line : bench_prints.feed(p))
+          hud.notify.push(cl::plain_text(line.text),
+                          line.level >= 3 ? ge::ui::hex(0xf2c060) : se::hud_style().ink, t);
+      if (bench.demo.state.centred) {
+        hud.centre = cl::plain_text(bench.demo.state.centre);
+        hud.centre_until = t + cl::kCentreSeconds;
+      }
       ge::render::FrameView view =
           cl::demo_view(bench.demo.state, ge::camera::FirstPersonRow{}.fov_y, t);
       view.frame = static_cast<uint64_t>(presented);

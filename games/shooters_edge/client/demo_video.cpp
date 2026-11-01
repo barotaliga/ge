@@ -181,7 +181,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   const se::HudArt& art = se::pick_art(o.hud_art, classic_art, free_art);
   report.hud_art = &art == &free_art ? "free" : "packs";
   ge::ui::Image glyphs;
-  if (o.text) caption_type(files, glyphs, report.text_font);
+  if (o.text || o.messages) caption_type(files, glyphs, report.text_font);
+  DemoNotices notices;  // the prints and the centre print the recorded player read
   const auto w = static_cast<uint32_t>(o.width), h = static_cast<uint32_t>(o.height);
   ge::gpu::Target out = ge::gpu::create_target(device, "demo-video.frame", w, h);
   std::unique_ptr<LoadedMap> map;
@@ -217,6 +218,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     const double dt = last < 0 ? 0 : std::clamp(s.time - last, 0.0, kMostDemoGap);
     last = s.time;
     vt += dt;
+    if (o.messages) notices.take(s, vt);
     if (o.sound && !gif) {
       sounds.level(s, map ? &map->bsp.map : nullptr);
       if (vt >= from) {  // the clip's sounds, on the clip's own clock
@@ -271,10 +273,14 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
       hud.layout.draw(overlay, hud.layout.frame(o.width, o.height, se::hud_style()),
                       se::hud_style());
     }
-    if (o.text) {
+    if (o.text || o.messages) {
       const std::string title =
           map->bsp.map.entities.empty() ? "" : map->bsp.map.entities[0].get("message");
-      draw_caption(overlay, glyphs, o.width, o.height, demo_caption(s, title, at));
+      draw_caption(overlay, glyphs, o.width, o.height,
+                   o.text ? demo_caption(s, title, at) : std::vector<CaptionLine>{},
+                   o.messages ? notices.at(at) : std::vector<CaptionLine>{});
+      if (o.messages && at < notices.centre_until)
+        draw_centre(overlay, glyphs, o.width, o.height, notices.centre);
     }
     demo_placed(s, fx.models);
     draw_world(device, *world, view, fx, nullptr, 1.0 / o.fps, overlay, out.view);

@@ -22,8 +22,10 @@
 // of 256 colours, no sound), which needs no encoder; every other name is a video as above.
 //
 // THE WORDS: with `text`, the upper left says the map, the clock, whose eyes and the score
-// (demo_caption.hpp), in the packs' own console font when they carry one (classic-enhance's copy
-// in the pack's cache first). The HUD draws the packs' status bar pictures when they have them
+// (demo_caption.hpp), and with `messages` the recorded player's notify lines (pickups, deaths,
+// `say` and `say_team`) under them and the centre prints in the middle, in the packs' own console
+// font when they carry one (classic-enhance's copy in the pack's cache first). The HUD draws the
+// packs' status bar pictures when they have them
 // (`hud_art`, as the window does), else the free set.
 //
 // The run's report (`DemoVideoReport`) says what went in: pictures, seconds, levels, the sounds
@@ -71,7 +73,8 @@ struct DemoVideoOptions {
   int track = -1;       // a multiview recording's player (-1: the lowest playing)
   bool hud = true;
   std::string hud_art = "auto";  // hud_art: the packs' status bar pictures when they have them
-  bool text = true;  // the words in the upper left (demo_caption.hpp: the packs' console font)
+  bool text = true;      // the words in the upper left (demo_caption.hpp: the packs' console font)
+  bool messages = true;  // the prints, the chat and the centre prints the recorded player read
   bool sound = true;
   float volume = 0.5f;                     // the game's sounds, under the voices
   float voice_volume = 1.5f;               // the players' voices, over the game as voice chat is

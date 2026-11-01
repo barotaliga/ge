@@ -33,6 +33,7 @@
 #include "audio/pcm.hpp"
 #include "brush/write.hpp"
 #include "charset/charset.hpp"
+#include "classicenhance/switches.hpp"
 #include "core/output.hpp"
 #include "gpu/device.hpp"
 #include "lab/chart.hpp"
@@ -284,7 +285,11 @@ bool video(gl::Lab& lab, ge::gpu::Device* device, const cl::SearchPath& files,
     o.volume = static_cast<float>(lab.arg_nums("game-volume")[0]);
   // The look: the video's default (modern, every classic-enhance switch on) or the classic.
   shooters_edge::look::Picture look;
-  if (lab.arg("look") == "classic") look.look = "classic";
+  if (lab.arg("look") == "classic") {  // the pack as it is: every enhancement off
+    look.look = "classic";
+    for (const ge::classicenhance::SwitchSpec& sw : ge::classicenhance::switches())
+      look.ce.*sw.field = false;
+  }
   o.picture = &look;
   std::vector<uint8_t> video_bytes;
   o.memory = &video_bytes;
@@ -447,7 +452,7 @@ const gl::LabSpec kSpec{
      {"voices", "", "a folder of <name>.wav (red1, red2, blue1, blue2) the clients speak"},
      {"font", "packs", "the words' type: packs (a stand-in pack's glyph sheet) or charset"},
      {"look", "modern",
-      "the picture: modern (the video's default, classic-enhance on) or classic"}},
+      "the picture: modern (the video's default, classic-enhance on) or classic (every ce_ off)"}},
     "--size=160,90 --seconds=2 --ticks=1000",
     run,
 };

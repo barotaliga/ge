@@ -348,6 +348,14 @@ video shows), else the engine's charset, a whole number of screen pixels to a fo
 line at 360 lines, 24 at 1080). The status bar is drawn in the packs' pictures when they have them,
 as in the window (`hud_art`).
 
+**The messages.** Under the words go the notify lines the recorded player read, as the classic
+client showed them: the pickups, the deaths, the server's words and the chat (`say` and
+`say_team`; a team's lines are in its own players' recordings only), the newest last, four at
+most, a line for 4 s and a chat line (in gold) for 6 s. A print the game sends in pieces is shown
+once its line ends. A centre print, and an episode's closing text, is drawn in the middle for 2 s
+or longer for a long text. `playdemo` in the window shows the same in the HUD's own notify feed
+and centre message.
+
 **video.cfg.** A video is drawn in the newer look whatever the player plays with
 (`client/video_cfg.hpp`). After the usual startup (`default.cfg`, `config.cfg`, `autoexec.cfg`,
 the `+` lines), `-demovideo` resets `r_look` (modern), the look's other `r_` cvars and every
@@ -361,6 +369,7 @@ and the flags `--resolution`, `--fps` and `--codec` win over the cvars a video.c
 | `demovideo_fps` | `60` | pictures a second |
 | `demovideo_codec` | `auto` | auto, h264, hevc, av1, none |
 | `demovideo_text` | `1` | the words in the upper left |
+| `demovideo_messages` | `1` | the chat, the notify lines and the centre prints |
 | `demovideo_hud` | `1` | the status bar |
 
 ```

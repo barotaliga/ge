@@ -37,6 +37,12 @@ void add_video_cvars(con::Console& c, VideoSettings* out) {
                    "left, in the packs' console font when they have one",
            .kind = con::CvarKind::boolean},
           &out->text);
+  cv.bind({.name = "demovideo_messages",
+           .fallback = "1",
+           .help = "1: -demovideo shows what the recorded player read: the chat (say, say_team), "
+                   "the pickups and deaths under the words, the centre prints in the middle",
+           .kind = con::CvarKind::boolean},
+          &out->messages);
   cv.bind({.name = "demovideo_hud",
            .fallback = "1",
            .help = "1: -demovideo draws the status bar off the demo's stats",

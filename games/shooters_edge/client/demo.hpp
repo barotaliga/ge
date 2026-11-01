@@ -126,6 +126,15 @@ struct DemoSound {
 inline float byte_volume(int b) { return static_cast<float>(b) / 255.0f; }
 inline float byte_attenuation(int b) { return static_cast<float>(b) / 64.0f; }
 
+// Text the frame printed for the player (the protocol's print): what the classic client shows in
+// its notify lines. `level` 0 low (pickups), 1 medium (deaths), 2 high (the server's), 3 chat
+// (`say` and `say_team`, both arrive as level 3 to whoever may read them). The text is as sent:
+// bytes from 128 are the font's second (gold) half, `\n` ends a line.
+struct DemoPrint {
+  int level = 2;
+  std::string text;
+};
+
 // A looping sound the level placed (spawnstaticsound).
 struct DemoStaticSound {
   sh::Vec3f origin;
@@ -167,6 +176,9 @@ struct DemoState {
   std::vector<DemoSound> started;            // sounds started, in order
   std::vector<std::pair<int, int>> stopped;  // (entity, channel) stopped
   std::vector<DemoVoice> voice;              // voice messages, in order
+  std::vector<DemoPrint> printed;            // prints, in order (a multiview: the tracked one's)
+  bool centred = false;                      // a centre print or the finale came: `centre`
+  std::string centre;                        // the last centre print or finale text
   int64_t frames = 0;                        // frames read
 };
 

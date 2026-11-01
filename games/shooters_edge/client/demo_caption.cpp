@@ -152,37 +152,134 @@ bool caption_glyphs_from_png(const std::filesystem::path& path, ge::ui::Image* o
   return true;
 }
 
-void draw_caption(ge::ui::DrawList& dl, const ge::ui::Image& glyphs, int width, int height,
-                  std::span<const CaptionLine> lines) {
-  (void)width;
-  const int size = caption_size(height);
-  const auto px = static_cast<float>(size);
-  const float margin = px, step = std::round(px * 1.25f);
+std::string plain_text(std::string_view text) {
+  std::string out;
+  out.reserve(text.size());
+  for (const char raw : text) {
+    const auto c = static_cast<unsigned char>(static_cast<unsigned char>(raw) & 0x7f);
+    if (c >= 32 && c < 127)
+      out += static_cast<char>(c);
+    else if (c == 16)
+      out += '[';
+    else if (c == 17)
+      out += ']';
+    else if (c >= 29 && c <= 31)
+      out += '-';
+    else if (c == 5 || c == 14 || c == 15 || c == 28)
+      out += '.';
+  }
+  return out;
+}
+
+std::vector<DemoPrint> PrintJoin::feed(const DemoPrint& p) {
+  std::vector<DemoPrint> out;
+  if (pending.empty()) level = p.level;
+  for (const char c : p.text) {
+    if (c != '\n') {
+      pending += c;
+      continue;
+    }
+    if (plain_text(pending).find_first_not_of(' ') != std::string::npos)
+      out.push_back({level, std::move(pending)});
+    pending.clear();
+    level = p.level;
+  }
+  return out;
+}
+
+void DemoNotices::take(const DemoState& s, double t) {
+  for (const DemoPrint& p : s.printed)
+    for (DemoPrint& line : join.feed(p))
+      lines.push_back({std::move(line.text), line.level >= 3, t});
+  while (lines.size() > kNoticeLines) lines.erase(lines.begin());
+  if (s.centred) {
+    centre = s.centre;
+    // Long enough to read: two seconds, or a twentieth of a second a character.
+    centre_until = t + std::max(kCentreSeconds, static_cast<double>(centre.size()) / 20.0);
+  }
+}
+
+std::vector<CaptionLine> DemoNotices::at(double t) {
+  std::erase_if(lines, [t](const Notice& n) {
+    return t - n.born > (n.chat ? kChatSeconds : kNoticeSeconds) || t < n.born;
+  });
+  std::vector<CaptionLine> out;
+  out.reserve(lines.size());
+  for (const Notice& n : lines) out.push_back({n.text, n.chat});
+  return out;
+}
+
+namespace {
+
+// One line at (x, baseline) in the sheet (its own bytes; `gold` sets the second half) or the
+// charset (plain ASCII, tinted). Returns its advance.
+void draw_line(ge::ui::DrawList& dl, const ge::ui::Image& glyphs, float px, float x, float baseline,
+               const CaptionLine& l, ge::ui::Align align) {
   const ge::ui::Color shadow = ge::ui::hex(0x000000, 0.75f);
   const float drop = std::max(1.0f, px / 8);
-  float baseline = margin + px;
   if (!glyphs.empty()) {
-    // The sheet's own colours, white untinted; a gold line from its second half.
-    const ge::hud::Face face = ge::hud::Face::glyph_sheet(glyphs);
-    for (const CaptionLine& l : lines) {
-      std::string text = l.text;
-      if (l.gold)
-        for (char& c : text)
-          if (c != ' ') c = static_cast<char>(static_cast<unsigned char>(c) | 0x80);
-      ge::hud::draw_shadowed(dl, face, px, margin, baseline, text, ge::ui::hex(0xffffff), shadow,
-                             drop);
-      baseline += step;
-    }
+    std::string text = l.text;
+    if (l.gold)
+      for (char& c : text)
+        if (c != ' ') c = static_cast<char>(static_cast<unsigned char>(c) | 0x80);
+    ge::hud::draw_shadowed(dl, ge::hud::Face::glyph_sheet(glyphs), px, x, baseline, text,
+                           ge::ui::hex(0xffffff), shadow, drop, align);
     return;
   }
   // The charset's cell is twice as tall as wide: a line of `px` reads as the sheet's 8 x 8 does
-  // at about 1.4 times the height.
-  const ge::hud::Face face = ge::hud::Face::bitmap(ge::charset::FontId::rounded);
-  const float cs = std::round(px * 1.4f);
+  // at about 1.4 times the height. Its gold is a tint, and the sheet's own gold bytes are too.
+  bool gold = l.gold;
+  for (const char c : l.text) gold = gold || (static_cast<unsigned char>(c) & 0x80) != 0;
+  ge::hud::draw_shadowed(dl, ge::hud::Face::bitmap(ge::charset::FontId::rounded),
+                         std::round(px * 1.4f), x, baseline, plain_text(l.text),
+                         gold ? ge::ui::hex(0xf2c060) : ge::ui::hex(0xf4f4f4), shadow, drop, align);
+}
+
+// A line's step down the picture in either type.
+float line_step(const ge::ui::Image& glyphs, float px) {
+  return glyphs.empty() ? std::round(px * 1.4f * 1.1f) : std::round(px * 1.25f);
+}
+
+}  // namespace
+
+void draw_caption(ge::ui::DrawList& dl, const ge::ui::Image& glyphs, int width, int height,
+                  std::span<const CaptionLine> lines, std::span<const CaptionLine> notices) {
+  (void)width;
+  const auto px = static_cast<float>(caption_size(height));
+  const float step = line_step(glyphs, px), margin = px;
+  float baseline = margin + (glyphs.empty() ? std::round(px * 1.4f) : px);
   for (const CaptionLine& l : lines) {
-    ge::hud::draw_shadowed(dl, face, cs, margin, baseline, l.text,
-                           l.gold ? ge::ui::hex(0xf2c060) : ge::ui::hex(0xf4f4f4), shadow, drop);
-    baseline += std::round(cs * 1.1f);
+    draw_line(dl, glyphs, px, margin, baseline, l, ge::ui::Align::left);
+    baseline += step;
+  }
+  if (!lines.empty()) baseline += step / 2;
+  for (const CaptionLine& l : notices) {
+    draw_line(dl, glyphs, px, margin, baseline, l, ge::ui::Align::left);
+    baseline += step;
+  }
+}
+
+void draw_centre(ge::ui::DrawList& dl, const ge::ui::Image& glyphs, int width, int height,
+                 std::string_view text) {
+  std::vector<std::string> rows;
+  size_t from = 0;
+  while (from <= text.size()) {
+    size_t to = text.find('\n', from);
+    if (to == std::string_view::npos) to = text.size();
+    rows.emplace_back(text.substr(from, to - from));
+    from = to + 1;
+  }
+  while (!rows.empty() && plain_text(rows.back()).empty()) rows.pop_back();
+  if (rows.empty()) return;
+  const auto px = static_cast<float>(caption_size(height));
+  const float step = line_step(glyphs, px);
+  float baseline =
+      std::round(static_cast<float>(height) * 0.35f - step * static_cast<float>(rows.size()) / 2) +
+      px;
+  for (const std::string& r : rows) {
+    draw_line(dl, glyphs, px, static_cast<float>(width) / 2, baseline, {r, false},
+              ge::ui::Align::center);
+    baseline += step;
   }
 }
 

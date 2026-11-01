@@ -418,15 +418,19 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 6:
         sound(s, m, w);
         break;
-      case 8:
-        m.u8();
-        m.str();
-        break;  // print
+      case 8: {  // print: the level, the text
+        const int level = m.u8();
+        s.printed.push_back({level, m.str()});
+        break;
+      }
       case 9:
-      case 26:
-      case 31:
         m.str();
-        break;    // stufftext, centerprint, finale
+        break;  // stufftext
+      case 26:
+      case 31:  // centerprint, finale
+        s.centre = m.str();
+        s.centred = true;
+        break;
       case 10: {  // setangle; a multiview recording's names the player it turns first
         if (s.format == DemoFormat::multiview) m.u8();
         if ((d.ext_mvd & kMvdHighLagTeleport) != 0) m.u8();

@@ -15,7 +15,8 @@
 // THE CVARS (`add_video_cvars`, not archived: they belong in video.cfg, not config.cfg):
 // `demovideo_size` (`1080p`, or `WxH`, or 480p, 720p, 1440p, 4k), `demovideo_fps` (60),
 // `demovideo_codec` (auto, h264, hevc, av1, none), `demovideo_text` (1: the words in the upper
-// left, demo_caption.hpp) and `demovideo_hud` (1: the status bar).
+// left, demo_caption.hpp), `demovideo_messages` (1: the chat, the notify lines and the centre
+// prints) and `demovideo_hud` (1: the status bar).
 //
 // ge:summary video.cfg: the newer look and the size, rate, codec and words a demo video uses
 // ge:keywords video-cfg video_cfg demovideo demovideo_size demovideo_fps demovideo_codec
@@ -44,6 +45,7 @@ struct VideoSettings {
   double fps = 60;             // demovideo_fps
   std::string codec = "auto";  // demovideo_codec
   bool text = true;            // demovideo_text
+  bool messages = true;        // demovideo_messages
   bool hud = true;             // demovideo_hud
 };
 
