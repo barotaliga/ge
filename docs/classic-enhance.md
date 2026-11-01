@@ -41,6 +41,13 @@ ge tool classicenhance -- run <src> --device=cpu          # the trained upscaler
 ge tool classicenhance -- status <src>               # what the cache holds for this pack
 ```
 
+A stage cut off between items (a cancel, a killed process, a failure) resumes on the next run
+with the same options: each stage but the pack and the models keeps a journal,
+`<stage>.partial` in the pack's cache folder (its key, then a line for each item whose files
+are written), and the rerun skips every item the journal holds. A long CPU bake stopped at 186
+of 217 pictures does the last 31. Changed options (a new key) or `--force` start the stage over;
+the journal is removed once the stage is recorded.
+
 `ge tool <plugin>` builds the plugin's `tool/` executable and relays its one JSON answer. The
 cache is `GE_CLASSIC_CACHE` when set, else the platform's cache folder (`XDG_CACHE_HOME` or
 `~/.cache`, `~/Library/Caches`, `%LOCALAPPDATA%`) under `ge/classicenhance/<digest>/`.

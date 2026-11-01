@@ -21,11 +21,15 @@
 // reruns it. `RunOptions::only` runs the named stages alone (the ones before them must have run).
 // A report says per stage whether it ran, what it wrote and how long it took. While it runs it
 // reports each stage's start, items and end to `RunOptions::progress` (progress.hpp draws them),
-// and stops between items once `RunOptions::cancel` is set.
+// and stops between items once `RunOptions::cancel` is set. A stage cut off between items (the
+// cancel, a kill, a failure) resumes: its journal (`<stage>.partial`, its key and each finished
+// item) lets a rerun with the same key skip every item already written, so a long bake goes on
+// where it stopped; a changed key or `force` starts the stage over. The pack and models stages
+// have no journal.
 //
 // ge:summary The enhancement pipeline's stages, pack to pictures, into the cache
 // ge:keywords pipeline stage pack textures lightmaps sounds models run skip force cache enhance
-// ge:keywords pictures
+// ge:keywords pictures resume journal partial cut-off
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #pragma once
