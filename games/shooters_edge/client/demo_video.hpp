@@ -21,13 +21,18 @@
 // A file named `.gif` is an animated GIF (engine/lab/gif.hpp: shrunk to `gif_width`, one palette
 // of 256 colours, no sound), which needs no encoder; every other name is a video as above.
 //
+// THE WORDS: with `text`, the upper left says the map, the clock, whose eyes and the score
+// (demo_caption.hpp), in the packs' own console font when they carry one (classic-enhance's copy
+// in the pack's cache first). The HUD draws the packs' status bar pictures when they have them
+// (`hud_art`, as the window does), else the free set.
+//
 // The run's report (`DemoVideoReport`) says what went in: pictures, seconds, levels, the sounds
 // played and the names no pack had, the voices heard, the file's bytes and its codec.
 //
 // ge:summary A demo turned into a video: pictures on the GPU, its sounds and voices, one file
 // ge:keywords demo-video demovideo export video mp4 webm mkv record demo-to-video frame-clock
 // ge:keywords sound voice qwdv mvdv capture h264 av1 opus offscreen readback
-// ge:keywords clip gif animated-gif highlight from-to start-end excerpt
+// ge:keywords clip gif animated-gif highlight from-to start-end excerpt caption text conchars
 // ge:skill shooter replay render
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -64,6 +69,8 @@ struct DemoVideoOptions {
   int gif_width = 480;  // a GIF's width, px (the height in proportion)
   int track = -1;       // a multiview recording's player (-1: the lowest playing)
   bool hud = true;
+  std::string hud_art = "auto";  // hud_art: the packs' status bar pictures when they have them
+  bool text = true;  // the words in the upper left (demo_caption.hpp: the packs' console font)
   bool sound = true;
   float volume = 0.5f;                     // the game's sounds, under the voices
   float voice_volume = 1.5f;               // the players' voices, over the game as voice chat is
@@ -86,6 +93,8 @@ struct DemoVideoReport {
   std::string adapter;
   double from_s = 0, to_s = 0;  // the clip's window on the demo's timeline, s
   std::string highlight;        // the highlight that made it ("": none)
+  std::string text_font;        // the words' type: cache, packs or charset ("": no words)
+  std::string hud_art;          // the status bar's pictures: packs or free
 };
 
 // Called with each picture as it goes into the file (a lab's strip): its index and its time on

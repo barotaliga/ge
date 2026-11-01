@@ -48,24 +48,26 @@
 // player a multiview recording's view rides (-1: the lowest playing). Every format plays, `.gz`
 // included, and the voice formats (`.qwdv`, `.mvdv`) with their voices. A played demo is watched
 // like a video (client/demo_playback.hpp); `-demovideo <demo> <file>` turns one, or a clip of it,
-// into a video or a GIF with no window and quits (client/demo_video.hpp).
+// into a video or a GIF with no window and quits (client/demo_video.hpp, client/video_cfg.hpp).
 //
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console relative-
 // ge:keywords mouse mouse-look hud first-person effects r_look quit shooters-edge benchmark
 // ge:keywords timedemo demo vsync-off fps playdemo demo_track cl_demospeed demovideo main-menu
 // ge:keywords escape vid_fullscreen fullscreen offscreen vid_display vid_displays lobby scores-key
-// ge:keywords scoreboard scr_levelstats
+// ge:keywords scoreboard scr_levelstats video-cfg
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <exception>
+#include <filesystem>
 #include <memory>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include "console/cfg.hpp"
@@ -88,6 +90,7 @@
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/timedemo.hpp"
+#include "shooters_edge/client/video_cfg.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -119,7 +122,8 @@ void print_line(const out::LogLine& line, void*) {
 
 // `-demovideo`: the demo turned into a video with no window, the report printed. The exit code.
 int demo_video_main(const cl::Args& args, const cl::SearchPath& files,
-                    const shooters_edge::look::Picture& picture, int track) {
+                    const shooters_edge::look::Picture& picture, int track,
+                    const cl::VideoSettings& video, const std::string& hud_art) {
   auto device = ge::gpu::create_device({.label = "demovideo", .validation = 0});
   if (!device) {
     out::error("shooters_edge: no GPU device for -demovideo; see docs/rendering.md");
@@ -128,10 +132,21 @@ int demo_video_main(const cl::Args& args, const cl::SearchPath& files,
   cl::DemoVideoOptions o;
   o.demo = args.demovideo;
   o.file = args.video;
-  o.width = args.width & ~1;
-  o.height = args.height & ~1;
-  o.fps = args.fps;
-  o.codec = args.codec == "none" ? "" : args.codec;
+  // The flags given win; video.cfg's cvars (video_cfg.hpp) fill the rest.
+  int width = args.width, height = args.height;
+  if (!args.size_given && !cl::size_named(video.size, width, height)) {
+    out::error("shooters_edge: demovideo_size \"" + video.size +
+               "\" is not WxH or 480p, 720p, 1080p, 1440p, 4k; next: fix it in video.cfg");
+    return 2;
+  }
+  const std::string codec = args.codec_given ? args.codec : video.codec;
+  o.width = width & ~1;
+  o.height = height & ~1;
+  o.fps = args.fps_given ? args.fps : video.fps;
+  o.codec = codec == "none" ? "" : codec;
+  o.hud = video.hud;
+  o.hud_art = hud_art;
+  o.text = video.text;
   o.seconds = args.to > args.from ? args.to - args.from : args.seconds;
   o.from_s = args.from;
   o.highlight = args.highlight;
@@ -242,6 +257,8 @@ int run_main(int argc, char** argv) {
   cl::add_lobby_commands(console, listen);
   cl::add_cvars(console, controls);
   shooters_edge::look::add_cvars(console, picture);
+  cl::VideoSettings video;  // video.cfg's demovideo_ cvars, read by -demovideo alone
+  cl::add_video_cvars(console, &video);
   shooters_edge::view::ViewSettings view_settings;
   shooters_edge::view::add_view_cvars(console.cvars(), view_settings);
   console.add_command("quit", "quit the game", [&](Con&, const CArgs&) { quit = true; });
@@ -325,7 +342,18 @@ int run_main(int argc, char** argv) {
     out::status("shooters_edge: " + std::to_string(files.archives.size()) + " packs in " +
                 files.folder);
   }
-  if (!args.demovideo.empty()) return demo_video_main(args, files, picture, playback.track);
+  if (!args.demovideo.empty()) {
+    // A video draws in the newer look, then video.cfg, then the + words again (video_cfg.hpp).
+    std::error_code ec;
+    const std::filesystem::path cfg = cl::apply_video_cfg(
+        console, {std::filesystem::path(files.folder), std::filesystem::current_path(ec)},
+        args.plus);
+    out::status("shooters_edge: -demovideo in r_look " + picture.look + ", " +
+                (cfg.empty() ? std::string("video.cfg's built-in defaults (no video.cfg in the "
+                                           "game folder or here)")
+                             : "video.cfg from " + cfg.string()));
+    return demo_video_main(args, files, picture, playback.track, video, hud_art);
+  }
   // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
   // enhance offers.
   shooters_edge::menu::Host menu_host{.console = &console, .maps = cl::map_names(files)};

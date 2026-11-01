@@ -33,6 +33,9 @@ struct Args {
   std::string playdemo;  // a demo to play at its own pace ("": none)
   long frames = 0;       // 0: until quit
   int width = 1280, height = 720;
+  // Whether --fps, --codec and --size (--resolution) were given: -demovideo takes video.cfg's
+  // demovideo_fps, demovideo_codec and demovideo_size for those that were not (video_cfg.hpp).
+  bool fps_given = false, codec_given = false, size_given = false;
   std::vector<std::string> plus;  // the command line from the first `+` word on
 };
 

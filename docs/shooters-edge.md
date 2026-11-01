@@ -323,7 +323,7 @@ the view).
 
 `-demovideo <demo> <file>` turns a recorded game of any format into a video and quits; no window
 opens (`client/demo_video.hpp`). The demo is played at its own pace on a fixed frame clock of
-`--fps=N` pictures a second (30 by default; 60, 24, 25 or any rate over 0, fractions too), each
+`--fps=N` pictures a second (video.cfg's 60 by default; 30, 24, 25 or any rate over 0, fractions too), each
 picture drawn offscreen on the GPU by the window's own world frame: the map
 from the recorded eye, the entities, doors and other players where the demo has them, the level's
 statics and the HUD off the recorded stats. Its sound is the demo's own: every sound message
@@ -333,10 +333,42 @@ all. A sound starts on the sample its frame's time falls on, so what is heard an
 a frame of each other however slowly the machine draws. The file is written by `engine/capture`:
 `.mp4` (H.264 or HEVC from the platform's encoder), `.webm` (AV1 and Opus) or `.mkv` (any;
 `--codec=none` uncompressed); `--codec` auto, h264, hevc or av1; `--resolution` the picture,
-as `WxH` (each side 16 to 8192, an odd side rounded down to even) or a name: `480p`, `720p` (the
-default), `1080p`, `1440p`, `4k` (`--size` is the same flag);
-`--seconds` the most video. The `+` lines run first, so `+r_look modern` and `+demo_track 2`
+as `WxH` (each side 16 to 8192, an odd side rounded down to even) or a name: `480p`, `720p`,
+`1080p` (video.cfg's default, below), `1440p`, `4k` (`--size` is the same flag);
+`--seconds` the most video. The `+` lines run first, so `+r_look classic` and `+demo_track 2`
 shape it.
+
+**The words and the HUD.** The picture's upper left says what the video shows
+(`client/demo_caption.hpp`): the map and its title in gold, the clock on the play bar's timeline,
+whose eyes it is and their frags (a single-player level: the kills and secrets out of its totals),
+and the match: the teams' frags summed, best first, or a free-for-all's leader. The words are in the
+packs' own console font when they carry one (`conchars` in `gfx.wad`, or classic-enhance's copy in
+the pack's cache, `pictures/enhanced/conchars.png` first, which wins, so an enhanced font is what a
+video shows), else the engine's charset, a whole number of screen pixels to a font pixel (8 px a
+line at 360 lines, 24 at 1080). The status bar is drawn in the packs' pictures when they have them,
+as in the window (`hud_art`).
+
+**video.cfg.** A video is drawn in the newer look whatever the player plays with
+(`client/video_cfg.hpp`). After the usual startup (`default.cfg`, `config.cfg`, `autoexec.cfg`,
+the `+` lines), `-demovideo` resets `r_look` (modern), the look's other `r_` cvars and every
+`ce_` switch to the engine's defaults, then reads the player's own `video.cfg` from the game
+folder (`<basedir>/<game>/video.cfg`), or else the current folder, then runs the `+` lines again,
+and the flags `--resolution`, `--fps` and `--codec` win over the cvars a video.cfg sets:
+
+| cvar | default | what |
+| --- | --- | --- |
+| `demovideo_size` | `1080p` | the picture: `WxH` or 480p, 720p, 1080p, 1440p, 4k |
+| `demovideo_fps` | `60` | pictures a second |
+| `demovideo_codec` | `auto` | auto, h264, hevc, av1, none |
+| `demovideo_text` | `1` | the words in the upper left |
+| `demovideo_hud` | `1` | the status bar |
+
+```
+// ~/Games/classic/id1/video.cfg: 1440p at 60, more bloom, the map's own sky
+demovideo_size 1440p
+r_bloom 0.45
+ce_skies 0
+```
 
 **A clip.** `--from=m:ss --to=m:ss` cuts the part between two times on the play bar's clock (the
 times `playdemo`'s bar and `demo_seek` use), and `--highlight=N` cuts the tracked player's Nth
@@ -348,7 +380,7 @@ encoder; `.webm`, `.mp4` and `.mkv` are videos with sound as above.
 
 ```sh
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
-    -demovideo demo1 ~/Movies/demo1.mp4 --resolution=1080p --fps=60
+    -demovideo demo1 ~/Movies/demo1.mp4
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
     -demovideo ~/Downloads/match.mvdv ~/Movies/match.mp4 +demo_track 3
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \

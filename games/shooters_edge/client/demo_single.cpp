@@ -184,6 +184,7 @@ bool server_info(Demo& d, DemoMsg& m, std::string& error) {
   s.map = s.models.size() > 1 ? map_of_model(s.models[1]) : "";
   s.levels++;
   s.intermission = false;
+  s.stats[kStatMonsters] = s.stats[kStatSecrets] = 0;  // the new level's counts start over
   s.entities.clear();
   s.statics.clear();
   s.static_sounds.clear();
@@ -330,8 +331,12 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
         case kSignonNum:
           m.u8();
           break;
-        case kKilledMonster:
-        case kFoundSecret:
+        case kKilledMonster:  // the level's count of kills, kept by the client
+          s.stats[kStatMonsters]++;
+          break;
+        case kFoundSecret:  // and of secrets found
+          s.stats[kStatSecrets]++;
+          break;
         case kSellScreen:
           break;
         case kSpawnStaticSound: {

@@ -17,8 +17,10 @@
 #include "audio/voice.hpp"
 #include "camera/first_person.hpp"
 #include "capture/av_export.hpp"
+#include "classicenhance/cached.hpp"
 #include "gpu/target.hpp"
 #include "lab/gif.hpp"
+#include "shooters_edge/client/demo_caption.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
 #include "shooters_edge/client/demo_sound.hpp"
@@ -26,6 +28,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_draw.hpp"
+#include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
 
 namespace shooters_edge::client {
@@ -93,6 +96,26 @@ bool write_file(const std::string& path, const std::vector<uint8_t>& bytes, std:
   return true;
 }
 
+// The words' type: classic-enhance's copy of the packs' glyph sheet in the first pack's cache, else
+// the packs' own; `from` says which ("charset" with neither: `glyphs` left empty).
+void caption_type(const SearchPath& files, ge::ui::Image& glyphs, std::string& from) {
+  if (!files.archives.empty()) {
+    const std::filesystem::path cache = ge::classicenhance::find_cache(files.archives[0].bytes);
+    // The enhanced sheet (upscaled, still 16 x 16 cells) first, then the cache's original.
+    if (!cache.empty() &&
+        (caption_glyphs_from_png(cache / "pictures" / "enhanced" / "conchars.png", &glyphs) ||
+         caption_glyphs_from_png(cache / "pictures" / "conchars.png", &glyphs))) {
+      from = "cache";
+      return;
+    }
+  }
+  const CaptionFind find = [&files](std::string_view p, std::vector<uint8_t>& store) {
+    return find_file(files, p, store);
+  };
+  std::string why;
+  from = caption_glyphs_from_packs(find, &glyphs, &why) ? "packs" : "charset";
+}
+
 }  // namespace
 
 bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVideoOptions& o,
@@ -147,8 +170,20 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   const look::Picture look_default;
   const look::Picture& look = o.picture ? *o.picture : look_default;
   se::Hud hud = se::make_hud();
-  se::HudArt art = se::free_art();
-  art.finish();
+  se::HudArt free_art = se::free_art();
+  free_art.finish();
+  se::HudArt classic_art;
+  if (o.hud && o.hud_art != "free") {
+    const se::FileFind find = [&files](std::string_view p, std::vector<uint8_t>& store) {
+      return find_file(files, p, store);
+    };
+    std::string why;
+    se::classic_art_from_packs(find, &classic_art, &why);
+  }
+  const se::HudArt& art = se::pick_art(o.hud_art, classic_art, free_art);
+  report.hud_art = &art == &free_art ? "free" : "packs";
+  ge::ui::Image glyphs;
+  if (o.text) caption_type(files, glyphs, report.text_font);
   const auto w = static_cast<uint32_t>(o.width), h = static_cast<uint32_t>(o.height);
   ge::gpu::Target out = ge::gpu::create_target(device, "demo-video.frame", w, h);
   std::unique_ptr<LoadedMap> map;
@@ -238,6 +273,11 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
       hud.layout.draw(overlay, hud.layout.frame(o.width, o.height, se::hud_style()),
                       se::hud_style());
     }
+    if (o.text) {
+      const std::string title =
+          map->bsp.map.entities.empty() ? "" : map->bsp.map.entities[0].get("message");
+      draw_caption(overlay, glyphs, o.width, o.height, demo_caption(s, title, at));
+    }
     demo_placed(s, fx.models);
     draw_world(device, *world, view, fx, nullptr, 1.0 / o.fps, overlay, out.view);
     const ge::gpu::Image img = ge::gpu::read_now(device, out);
@@ -306,6 +346,14 @@ std::vector<std::string> demo_video_lines(const DemoVideoOptions& o, const DemoV
                 " loops, " + std::to_string(r.missing_sounds) + " names no pack has; voice " +
                 std::to_string(r.voice_frames) + " frames in " + std::to_string(r.voice_messages) +
                 " messages, " + std::to_string(r.voice_concealed) + " concealed");
+  const std::string words = r.text_font == "cache"   ? "the packs' console font, enhanced"
+                            : r.text_font == "packs" ? "the packs' console font"
+                            : r.text_font.empty()    ? ""
+                                                     : "the engine's charset";
+  out.push_back("demovideo: the words " + (words.empty() ? "off" : "in " + words) +
+                ", the status bar " +
+                (o.hud ? (r.hud_art == "packs" ? "in the packs' pictures" : "in the free pictures")
+                       : std::string("off")));
   return out;
 }
 

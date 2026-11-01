@@ -98,6 +98,10 @@ enum DemoStat : uint8_t {
   kStatRockets = 8,
   kStatCells = 9,
   kStatActiveWeapon = 10,
+  kStatTotalSecrets = 11,   // the level's secrets
+  kStatTotalMonsters = 12,  // the level's monsters
+  kStatSecrets = 13,        // found so far
+  kStatMonsters = 14,       // killed so far
   kStatItems = 15,
   kStatCount = 32,
 };
@@ -156,6 +160,7 @@ struct DemoState {
   std::vector<DemoEntity> players;          // client, multiview: by slot (32)
   std::array<int32_t, 32> frags{};          // client, multiview: each slot's frags (updatefrags)
   std::array<std::string, 32> names;        // client, multiview: each slot's name (its userinfo)
+  std::array<std::string, 32> teams;        // client, multiview: each slot's team ("": none)
   std::vector<DemoEntity> statics;          // the level's static entities, in order
   std::vector<DemoStaticSound> static_sounds;  // the level's looping sounds, in order
   // This frame's alone (emptied when the next one is read):
