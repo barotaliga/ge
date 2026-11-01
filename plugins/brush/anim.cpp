@@ -1,7 +1,8 @@
-// Texture sequences (anim.hpp): the sets told by name, and the frame at a moment.
+// Texture sequences (anim.hpp): the sets told by name or chained by the map, and the frame at a
+// moment.
 //
 // ge:summary Texture sequences built from names; the frame a surface shows at a moment
-// ge:keywords texture animated cycle random frame build_texture_anims texture_at
+// ge:keywords texture animated cycle random frame build_texture_anims texture_at chain next
 // ge:skill brush
 // ge:test tests/brush_anim_test.cpp
 #include "brush/anim.hpp"
@@ -45,7 +46,36 @@ TextureAnims build_texture_anims(const Map& map) {
   TextureAnims a;
   a.set_of.assign(map.textures.size(), -1);
   a.is_alt.assign(map.textures.size(), false);
-  if (map.family != Family::v29 && map.family != Family::bsp2) return a;
+  if (map.family != Family::v29 && map.family != Family::bsp2) {
+    // The families that chain their frames: each closed chain one cycle, from its lowest texture.
+    const size_t n = map.textures.size();
+    for (size_t t = 0; t < n; ++t) {
+      if (map.textures[t].next < 0 || a.set_of[t] >= 0) continue;
+      std::vector<uint32_t> chain;
+      std::vector<bool> on(n, false);
+      int64_t at = int64_t(t);
+      while (at >= 0 && size_t(at) < n && !on[size_t(at)] && a.set_of[size_t(at)] < 0) {
+        on[size_t(at)] = true;
+        chain.push_back(uint32_t(at));
+        at = map.textures[size_t(at)].next;
+      }
+      if (at != int64_t(t)) {
+        if (at < 0 || size_t(at) >= n || a.set_of[size_t(at)] < 0)
+          a.notes.push_back(map.textures[t].name +
+                            ": its animation's chain does not close, so it "
+                            "is drawn still");
+        continue;
+      }
+      if (chain.size() < 2) continue;
+      TextureSet set;
+      set.name = map.textures[t].name;
+      set.frames = chain;
+      const auto k = int32_t(a.sets.size());
+      for (uint32_t f : set.frames) a.set_of[f] = k;
+      a.sets.push_back(std::move(set));
+    }
+    return a;
+  }
 
   struct Slots {
     std::string name;

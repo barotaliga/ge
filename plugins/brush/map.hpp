@@ -39,6 +39,7 @@
 // ge:keywords bsp brush map family v29 bsp2 v38 v46 surface lightmap leaf cluster pvs visibility
 // ge:keywords node plane entity model patch to_engine ambient ambient-level clip-hull clipnode
 // ge:keywords phs hearable build_phs cluster_hears hull_contents bspx rgblighting bspx_lump
+// ge:keywords sky liquid liquid-kind teleport lava slime water next-frame texture-mark
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #pragma once
@@ -77,6 +78,10 @@ struct Surface {
   uint8_t style[4] = {255, 255, 255, 255};
 };
 
+// What a liquid surface is, as the reader marks it: the renderer, the light bake and a game read
+// this mark, never the texture's name, so every family's liquids draw and glow alike.
+enum class Liquid : uint8_t { none, water, slime, lava, teleport, other };
+
 struct Texture {
   std::string name;
   uint32_t width = 0, height = 0;  // 0 when the family does not store it (38, 46)
@@ -84,7 +89,23 @@ struct Texture {
   // The full-size picture as palette indices, rows of `width` (29, BSP2, when the map carries its
   // pixels; empty otherwise). The palette is not in the map: a game's files hold it.
   std::vector<uint8_t> indexed;
+  // THE MARKS, set by each family's reader from what that family stores, so nothing downstream
+  // reads a name or a family's flags (not in `map_digest`: each follows from what is read):
+  // - `sky`: drawn as the sky (29: a name starting "sky"; 38 and 46: the sky flag).
+  // - `liquid`: a warped liquid's kind (29: a `*` name, by `liquid_by_name`; 38: the warp flag,
+  //   the kind from the contents of the brushes it sides, else by name; 46: its shader's
+  //   contents); `none` on any other texture.
+  // - `next`: the next frame of the texture's animation, a texture of this map, or -1 (38: the
+  //   texinfo's chain; 29 names its frames instead: anim.hpp).
+  bool sky = false;
+  Liquid liquid = Liquid::none;
+  int32_t next = -1;
 };
+
+// A liquid's kind told by its texture's name, where the family stores nothing better: "lava",
+// "slime", "water", "tele" in it (any case, in that order), else `other`.
+Liquid liquid_by_name(std::string_view name);
+const char* liquid_name(Liquid l);
 
 struct Lightmap {
   uint32_t width = 0, height = 0;

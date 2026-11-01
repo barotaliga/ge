@@ -148,6 +148,11 @@ The view, stated once in `plugins/brush/map.hpp`:
 - **Surfaces**: triangles over the map's vertices, counter-clockwise seen from the side they
   face (each family's own winding is checked against its plane or normals and turned when it
   disagrees), with a texture, a lightmap and a kind (planar, patch, mesh, liquid, sky).
+- **Marks**: each texture says whether it is the sky, which liquid it is (water, slime, lava,
+  teleport, another) and its animation's next frame, set by the family's reader from what that
+  family stores (29: the names; 38: the texinfo's flags and chain and the brushes' contents; 46:
+  the shader's flags and contents). The renderer, the light bake and the games read the marks,
+  never a name, so a map of any family draws its sky, liquids and frames alike.
 - **Coordinates** are the file's (map units, z up); `to_engine` turns them into the engine's frame
   in metres at 1/40 m a unit.
 - **Lightmaps**: three bytes a luxel in one buffer; a 29 map's grey luxels are repeated three

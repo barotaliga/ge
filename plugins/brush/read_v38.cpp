@@ -49,10 +49,14 @@ constexpr std::array<const char*, 19> kNames = {
 // Surface flags a face's texinfo carries: sky and warped (liquid) faces have no lightmap.
 constexpr int32_t kSky = 0x4, kWarp = 0x8, kNoDraw = 0x80;
 
+// A brush's contents bits that name a liquid's kind.
+constexpr int32_t kLavaContents = 0x8, kSlimeContents = 0x10, kWaterContents = 0x20;
+
 struct Texinfo {
   float v[2][4];
   int32_t flags;
   uint32_t texture;
+  int32_t next;  // the next texinfo of its animation, or -1
 };
 
 }  // namespace
@@ -104,10 +108,26 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
       t.flags = c.i32();
       c.skip(4);
       const std::string name = c.name(32);
-      c.skip(4);
+      t.next = c.i32();
       const auto [it, added] = by_name.emplace(name, uint32_t(m.textures.size()));
-      if (added) m.textures.push_back(Texture{name, 0, 0, uint32_t(t.flags), {}});
+      if (added) {
+        Texture tex;
+        tex.name = name;
+        tex.flags = uint32_t(t.flags);
+        m.textures.push_back(tex);
+      }
       t.texture = it->second;
+      // The marks: any texinfo of the name that is sky or warped marks its texture so.
+      Texture& tex = m.textures[t.texture];
+      tex.sky = tex.sky || (t.flags & kSky) != 0;
+      if ((t.flags & kWarp) && tex.liquid == Liquid::none) tex.liquid = Liquid::other;
+    }
+    // The animation: a texinfo's chain, as textures (the first texinfo of a name sets its next).
+    for (const Texinfo& t : texinfo) {
+      Texture& tex = m.textures[t.texture];
+      if (tex.next < 0 && t.next >= 0 && size_t(t.next) < texinfo.size() &&
+          texinfo[size_t(t.next)].texture != t.texture)
+        tex.next = int32_t(texinfo[size_t(t.next)].texture);
     }
   }
 
@@ -200,6 +220,38 @@ bool read_v38(std::span<const uint8_t> file, Map* out, std::string* err) {
 
   if (!detail::count_of(L[kBrushes], 12, f, &n, err)) return false;
   m.brushes = uint32_t(n);
+  {
+    // A warped texture's liquid kind: the contents of the brushes it sides, else its name.
+    size_t sides = 0;
+    if (!detail::count_of(L[kBrushsides], 4, f, &sides, err)) return false;
+    std::vector<int32_t> side_texinfo(sides);
+    Cursor s = lump(kBrushsides);
+    for (int32_t& x : side_texinfo) {
+      s.skip(2);
+      x = s.i16();
+    }
+    std::vector<int32_t> contents_of(m.textures.size(), 0);
+    Cursor c = lump(kBrushes);
+    for (size_t i = 0; i < n; ++i) {
+      const int32_t first = c.i32(), count = c.i32(), contents = c.i32();
+      if (first < 0 || count < 0 || size_t(first) > sides || size_t(count) > sides - size_t(first))
+        continue;  // a brush whose sides are out of range marks nothing (the view keeps no brush)
+      for (int32_t k = 0; k < count; ++k) {
+        const int32_t ti = side_texinfo[size_t(first) + size_t(k)];
+        if (ti >= 0 && size_t(ti) < texinfo.size())
+          contents_of[texinfo[size_t(ti)].texture] |= contents;
+      }
+    }
+    for (size_t t = 0; t < m.textures.size(); ++t) {
+      Texture& tex = m.textures[t];
+      if (tex.liquid == Liquid::none) continue;
+      const int32_t k = contents_of[t];
+      tex.liquid = (k & kLavaContents)    ? Liquid::lava
+                   : (k & kSlimeContents) ? Liquid::slime
+                   : (k & kWaterContents) ? Liquid::water
+                                          : liquid_by_name(tex.name);
+    }
+  }
 
   // The visibility: the cluster count, two offsets a cluster, the rows they point at.
   const auto vis = file.subspan(L[kVisibility].off, L[kVisibility].len);
