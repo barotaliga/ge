@@ -101,7 +101,7 @@ sh::Vec3f player_angles(const Listen& l, int e) {
 
 std::string user_info(const sv::ClientInfo& c) {
   std::string s;
-  for (const auto& [k, v] : c.userinfo) s += "\\" + k + "\\" + v;
+  for (const auto& [k, v] : c.userinfo) s.append("\\").append(k).append("\\").append(v);
   return s;
 }
 

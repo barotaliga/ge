@@ -66,8 +66,9 @@ void run(gl::Lab& lab) {
   ge::progs::Progs progs;
   cl::Listen l;
   std::unique_ptr<cl::LoadedMap> map;
-  if (!cl::add_archive(files, "pak0.pak", pak, error) ||
-      !(map = cl::load_named_map(files, "halls", error)) || !cl::baseline_progs(progs, error) ||
+  if (cl::add_archive(files, "pak0.pak", pak, error))
+    map = cl::load_named_map(files, "halls", error);
+  if (!map || !cl::baseline_progs(progs, error) ||
       !cl::listen_start(l, progs, std::move(map), {}, error)) {
     lab.fail("se-record: the listen server did not start: " + error,
              "next: run tests/shooters_edge_listen_test.cpp");
