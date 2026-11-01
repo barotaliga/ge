@@ -18,7 +18,8 @@ namespace shooters_edge::bots {
 
 namespace {
 
-constexpr int32_t kWRockets = 32;   // the rocket launcher's W_ bit (games/shooters_edge/qc)
+constexpr int32_t kWRockets = 32;  // the rocket launcher's W_ bit (games/shooters_edge/qc)
+constexpr int32_t kWGrenades = 16, kWArc = 64;  // the grenade launcher's and the arc's
 constexpr float kOwnPickup = 64;    // an item gone this near the player is its own pickup, units
 constexpr float kExploreFar = 600;  // a novice explores to a node at least this far, units
 
@@ -204,6 +205,64 @@ void knowledge_init(Fighter& f) {
     it.in_sight = it.watched = false;
   }
   f.explore_node = -1;
+  map_weights(f);
+}
+
+void mega_taken(Fighter& f, int32_t i, double t, bool by_me) {
+  ItemSpot& it = f.items[static_cast<size_t>(i)];
+  if (it.kind != ItemKind::mega) return;
+  // Its clock starts when its taker is back down to 100: nobody else can know when that is.
+  it.timed = false;
+  it.back_at = t + kMegaGuess_s;
+  if (by_me && f.sense == MapSense::expert) f.mega_watch = i;
+}
+
+void mega_watch(Fighter& f, float health, double t) {
+  if (f.mega_watch < 0) return;
+  ItemSpot& it = f.items[static_cast<size_t>(f.mega_watch)];
+  if (health > 100) {
+    it.back_at = std::fmax(it.back_at, t + it.respawn_s + 1);  // not before its clock starts
+    return;
+  }
+  it.back_at = t + it.respawn_s;  // down to 100 (or dead): back after its own wait, to the second
+  it.timed = true;
+  f.mega_watch = -1;
+}
+
+void map_weights(Fighter& f) {
+  for (ItemSpot& it : f.items) it.weight = 1;
+  if (f.sense != MapSense::expert) return;  // the rest rate an item the same on every map
+  int n[13] = {};
+  int launchers = 0;
+  bool lg = false;
+  for (const ItemSpot& it : f.items) {
+    n[static_cast<int>(it.kind)]++;
+    launchers += it.kind == ItemKind::weapon && it.weapon == kWRockets;
+    lg |= it.kind == ItemKind::weapon && it.weapon == kWArc;
+  }
+  const bool rl = launchers > 0;
+  const int ra = n[static_cast<int>(ItemKind::armor3)], ya = n[static_cast<int>(ItemKind::armor2)];
+  for (ItemSpot& it : f.items) {
+    const int same = n[static_cast<int>(it.kind)];
+    switch (it.kind) {
+      case ItemKind::armor3:
+        it.weight = same == 1 ? 1.4f : 1.f;  // the one 200 on the map: whoever holds it wins
+        break;
+      case ItemKind::armor2:
+        if (ra == 0) it.weight = same == 1 ? 1.6f : 1.3f;  // the best armour there is
+        break;
+      case ItemKind::mega:
+        if (ra + ya == 0) it.weight = 1.5f;  // no big armour: the mega is the stack
+        break;
+      case ItemKind::weapon:
+        if (!rl && it.weapon == kWGrenades) it.weight = 2.f;  // the splash there is
+        if (!rl && it.weapon == kWArc) it.weight = 1.4f;
+        if (it.weapon == kWRockets) it.weight = (lg ? 1.f : 1.2f) * (launchers == 1 ? 1.2f : 1.f);
+        break;
+      default:
+        break;
+    }
+  }
 }
 
 ItemNews knowledge_update(Fighter& f, const server::QcServer& s, int me, sh::Vec3f eye, double t) {
@@ -245,6 +304,7 @@ ItemNews knowledge_update(Fighter& f, const server::QcServer& s, int me, sh::Vec
       news.taken = static_cast<int32_t>(i);
       news.by_me = underfoot && saw_it_go;
       if (news.by_me) f.stats.pickups++;
+      mega_taken(f, static_cast<int32_t>(i), t, news.by_me);
     } else if (!it.present && t >= it.back_at) {
       // Out of sight and its time come (or the guess's): believed back, not yet seen back.
       it.present = true;

@@ -40,6 +40,9 @@ constexpr double kRepeat_s = 8;       // the team says the same words again only
 struct TeamStats {
   int64_t plans = 0, rushes = 0, quads = 0, held_shots = 0, claims = 0, callouts = 0;
   int64_t messages = 0;           // team messages said
+  int64_t lost_seen = 0;          // key areas an expert worked out were lost (no mate in them)
+  int64_t retakes = 0;            // goes to take a lost area back
+  int64_t spam_shots = 0;         // rockets fired at a spot enemies come in by
   int64_t role_commands[4] = {};  // members' commands in each role
 };
 

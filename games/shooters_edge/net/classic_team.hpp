@@ -76,21 +76,34 @@ struct TeamPlayer {
   int64_t weapon_commands[9] = {};
   int64_t pilot_modes[9] = {};  // live commands in each pilot mode (shooter/pilot.hpp)
   int64_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0;
-  float travelled = 0;           // units along the path
-  std::string last;              // where he stood at the end, and what he was going for
-  std::vector<sh::Vec3f> path;   // every path_every frames
-  std::vector<uint8_t> roles;    // beside it: its role, 255 dead
-  std::vector<int16_t> known;    // beside it: how many items it knows (recalls) of the map's
-  int64_t said = 0;              // team messages it said
-  int64_t read = 0, missed = 0;  // its mates' team lines it read, and missed
+  float travelled = 0;            // units along the path
+  std::string last;               // where he stood at the end, and what he was going for
+  std::vector<sh::Vec3f> path;    // every path_every frames
+  std::vector<uint8_t> roles;     // beside it: its role, 255 dead
+  std::vector<int16_t> known;     // beside it: how many items it knows (recalls) of the map's
+  int64_t said = 0;               // team messages it said
+  int64_t read = 0, missed = 0;   // its mates' team lines it read, and missed
+  int64_t sounds = 0, heard = 0;  // sounds that reached it, and those it took in (hearing.hpp)
+  int64_t heard_taken = 0, heard_spawns = 0;  // items heard taken, players heard spawning
+  int64_t spam_shots = 0;                     // rockets at the ways into its area
 };
 
 struct TeamTotals {
   float frags = 0;
   int deaths = 0;
   int64_t plans = 0, rushes = 0, quads = 0, held_shots = 0, callouts = 0;
-  int64_t quad_pickups = 0;  // the quad taken by a member
-  int64_t messages = 0;      // team messages said
+  int64_t quad_pickups = 0;                            // the quad taken by a member
+  int64_t messages = 0;                                // team messages said
+  int64_t lost_seen = 0, retakes = 0, spam_shots = 0;  // areas worked out lost, retaken; spam
+};
+
+// A button on the map, as the fighters read it (bots/buttons.hpp).
+struct TeamButton {
+  sh::Vec3f at;
+  bool shoot = false;              // opened by a shot, not a touch
+  std::vector<sh::Vec3f> doors;    // the middles of the doors it opens
+  std::vector<std::string> opens;  // the items behind them
+  sh::Vec3f from;                  // where a player presses (or shoots) it from
 };
 
 struct TeamMatchReport {
@@ -105,6 +118,7 @@ struct TeamMatchReport {
   std::vector<float> team_frags[2];  // every path_every frames
   std::vector<sh::Vec3f> item_at;    // the items as the fighters know them, for a picture
   std::vector<std::string> item_name;
+  std::vector<TeamButton> buttons;      // the map's buttons and what each opens
   std::vector<sh::Vec3f> item_node_at;  // the nav node each item is gone for at
   std::vector<bool> item_routed;        // whether a route leads to it from the map's main part
   sh::Vec3f lo, hi;                     // the nav grid's bounds

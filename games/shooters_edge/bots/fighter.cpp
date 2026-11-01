@@ -18,7 +18,10 @@
 #include "progs/layout.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/usercmd.hpp"
+#include "shooters_edge/bots/buttons.hpp"
+#include "shooters_edge/bots/ears.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
+#include "shooters_edge/bots/spam.hpp"
 #include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/bots/water.hpp"
 
@@ -37,9 +40,16 @@ constexpr float kAmmoMax = 100;
 constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit
 constexpr int32_t kItPent = 1048576;  // the shield's
 
-constexpr float kRetreatBelow = 50;  // health plus armour's protection: weak under this
-constexpr float kStrongAgain = 80;   // and strong again at this
-constexpr double kChase_s = 3;       // a contact lost this long ago is still chased
+constexpr float kRetreatBelow = 50;   // health plus armour's protection: weak under this
+constexpr float kStrongAgain = 80;    // and strong again at this
+constexpr double kChase_s = 3;        // a contact lost this long ago is still chased
+constexpr double kGoalTire_s = 30;    // one goal item held this long in vain is let go of
+constexpr double kHealTire_s = 8;     // and sooner by a weak player, who cannot wait for it
+constexpr double kTired_s = 20;       // for this long
+constexpr double kTired = 0.2;        // its worth meanwhile, as a share
+constexpr float kRetakeStrong = 120;  // strength (a launcher counted) to go and take an area back
+constexpr double kRetake_s = 20;      // a key area believed lost this long ago is still retaken
+constexpr double kHeardChase_s = 2;   // and one heard this long ago is gone after
 constexpr double kImpulseGap_s = 0.5;
 constexpr double kWait_s = 20;      // an item back within this is worth going to wait for
 constexpr double kHealWait_s = 3;   // but a retreat goes for health that is there
@@ -136,7 +146,7 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 float protection(float type, float value) { return type * value; }
 
 // What item `it` is worth to a player with `st` now (0: nothing).
-double item_value(const ItemSpot& it, const Stats& st) {
+double raw_value(const ItemSpot& it, const Stats& st) {
   const float worn = protection(st.armortype, st.armor);
   switch (it.kind) {
     case ItemKind::health:
@@ -184,6 +194,9 @@ double item_value(const ItemSpot& it, const Stats& st) {
   if (!uses || have >= kAmmoMax) return 1;
   return 30.0 * (kAmmoMax - have) / kAmmoMax;
 }
+
+// What an item is worth to it now, as it rates the map.
+double item_value(const ItemSpot& it, const Stats& st) { return raw_value(it, st) * it.weight; }
 
 bool heals(const ItemSpot& it) {
   return it.kind == ItemKind::health || it.kind == ItemKind::mega || it.kind == ItemKind::armor1 ||
@@ -261,7 +274,9 @@ int32_t best_item(const Fighter& f, const server::QcServer& s, const Stats& st, 
     if (door_shut(s, it) &&
         (it.button_node < 0 || (f.reach_at >= 0 && !f.reach.reached(it.button_node))))
       return 0.0;  // shut, and its button out of reach
-    const double v = item_value(it, st);
+    // The map's weights are a team's plan (what to hold); a weak player, or one alone, wants
+    // what does him good soonest.
+    const double v = heal || !f.team ? raw_value(it, st) : item_value(it, st);
     if (v <= 0) return 0.0;
     const double run = dist(me, it.at) / kRun + (by_dive ? it.dive_s : 0);
     const double wait = it.present ? 0 : it.back_at - t;
@@ -270,6 +285,7 @@ int32_t best_item(const Fighter& f, const server::QcServer& s, const Stats& st, 
     if (wait > (heal || (!key && f.team) ? kHealWait_s : kWait_s)) return 0.0;
     double sc = v / (1 + std::fmax(run, wait));
     if (i == f.goal_item) sc *= kKeepGoal;  // the goal held unless another is clearly better
+    if (i == f.tired_item && t < f.tired_until) sc *= kTired;  // gone for in vain lately
     if (enemy && heal && dist(*enemy, it.at) < dist(me, it.at)) sc *= 0.2;
     // A teammate who said he goes for it has it; one in sight it is no use to, or the quad's
     // carrier, gets it; a strong player leaves health to the others; a point is followed.
@@ -355,6 +371,12 @@ bool team_goal(Fighter& f, const server::QcServer& s, const Stats& st, sh::Vec3f
         note("hold", "chasing within the leash");
         return true;
       }
+      // The item gone and not due for a while: out to fire at the ways in (spam.hpp).
+      if (spam_plan(f, s, st, t)) {
+        go_to(f, f.spam_node);
+        note("hold", "out to fire at a way in while the item is away");
+        return true;
+      }
       // The item gone and back soon, or there: wait on it; else the items near it.
       const int32_t i = best_item(f, s, st, me, t, false, nullptr, nullptr);
       if (i >= 0 && dist(at(i), at(area)) < kLeash * 0.6f) {
@@ -397,6 +419,14 @@ bool team_goal(Fighter& f, const server::QcServer& s, const Stats& st, sh::Vec3f
           dist(mn.help_at, me) < 1500) {
         go_to(f, sh::nav_nearest(g, mn.help_at));
         note("free", "a teammate called for help");
+        return true;
+      }
+      // A key area believed lost (worked out, or a mate's `lost`) is taken back by a strong player.
+      if ((f.mode == FightMode::roam || f.mode == FightMode::chase) && mn.retake >= 0 &&
+          t - mn.retake_t < kRetake_s && strength(st) >= kRetakeStrong && can_reach(mn.retake)) {
+        if (f.goal_item != mn.retake) f.team->stats.retakes++;
+        go_item(f, s, mn.retake);
+        note("free", "taking back a key area no teammate is in");
         return true;
       }
       // A teammate's callout is chased when this player is strong and has nothing in sight.
@@ -507,7 +537,10 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
   }
 
   // The items, as far as it can see them (knowledge.hpp); a key item taken is called out.
-  const ItemNews news = knowledge_update(f, s, me, eye, t);
+  ItemNews news = knowledge_update(f, s, me, eye, t);
+  // And as far as it can hear them (ears.hpp): a pickup heard is an item taken, its taker placed.
+  const EarNews ears = fighter_hear(f, s, me, eye, t, f.mode == FightMode::fight);
+  if (news.taken < 0) news.taken = ears.taken;
   if (news.taken >= 0) {
     const ItemSpot& it = f.items[static_cast<size_t>(news.taken)];
     Said said;
@@ -524,8 +557,16 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
 
   const sh::Contact* c = sh::freshest(f.bot.senses, eye);
   const bool seen_now = c && c->visible;
-  const bool recent = c && ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s;
-  const sh::Vec3f enemy = c ? at_of(ai::known(c->seen) ? c->seen : c->heard) : sh::Vec3f{};
+  // Lost from sight a moment ago, or heard a moment ago (the newer of the two is where it is).
+  const bool by_ear = c && ai::known(c->heard) && (!ai::known(c->seen) || c->heard.at > c->seen.at);
+  // A sound is chased only by a player strong enough to want the fight (a launcher counted);
+  // anyone else hears it, keeps away from it and goes on with his items.
+  const bool recent =
+      c &&
+      ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s) ||
+       (by_ear && ai::age(c->heard, t) <= kHeardChase_s && fighter_strength(st) >= kRetakeStrong));
+  const sh::Vec3f enemy =
+      c ? at_of(by_ear || !ai::known(c->seen) ? c->heard : c->seen) : sh::Vec3f{};
   const float range = c ? dist(eye, enemy) : 400;
 
   // The mode.
@@ -533,19 +574,20 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
   const bool weak = f.mode == FightMode::retreat ? strong < kStrongAgain : strong < kRetreatBelow;
   const int32_t heal_at =
       c && weak ? best_item(f, s, st, self.origin, t, true, &enemy, nullptr) : -1;
+  // Help is called over a key area being lost (bots/mind.hpp `wants_help`).
+  if (f.team && t - f.mind.help_said_at >= 15 && wants_help(f, self.origin, weak, t)) {
+    f.mind.help_said_at = t;
+    Said help;
+    help.kind = SayKind::help;
+    help.status = status_of(st);
+    mind_say(f, t, help, self.origin);
+  }
   if (heal_at >= 0 && item_value(f.items[static_cast<size_t>(heal_at)], st) > 0) {
-    if (f.mode != FightMode::retreat && f.team && t - f.mind.help_said_at >= 15) {
-      f.mind.help_said_at = t;
-      Said help;
-      help.kind = SayKind::help;
-      help.status = status_of(st);
-      mind_say(f, t, help, self.origin);
-    }
     set_mode(f, FightMode::retreat, why, "weak with someone about: health or armour first");
   } else if (seen_now) {
     set_mode(f, FightMode::fight, why, "a contact in sight");
   } else if (recent) {
-    set_mode(f, FightMode::chase, why, "lost from sight a moment ago");
+    set_mode(f, FightMode::chase, why, "lost from sight or heard a moment ago");
   } else {
     set_mode(f, FightMode::roam, why, "no one known");
   }
@@ -570,7 +612,9 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
     f.diving = f.last_dive = committed;
   } else if (!escaping && !team_goal(f, s, st, self.origin, t, c, why)) {
     if (f.mode == FightMode::chase && c) {
-      go_to(f, sh::nav_nearest(*f.bot.pilot.pilot.g, at_of(c->seen)));
+      go_to(f, sh::nav_nearest(*f.bot.pilot.pilot.g, enemy));
+    } else if (f.mode == FightMode::roam && button_poke(f, s, me, t)) {
+      go_to(f, f.button_spots[static_cast<size_t>(f.poke)].node);  // a novice's whim
     } else {
       const bool heal = f.mode == FightMode::retreat;
       const int32_t i = best_item(f, s, st, self.origin, t, heal, c ? &enemy : nullptr, why);
@@ -650,34 +694,6 @@ float fighter_strength(const Stats& st) {
   return st.health + protection(st.armortype, st.armor) + ((st.items & kWRockets) ? 50.f : 0.f);
 }
 
-const char* role_name(Role r) {
-  switch (r) {
-    case Role::free:
-      return "free";
-    case Role::hold:
-      return "hold";
-    case Role::rush:
-      return "rush";
-    case Role::carry:
-      return "carry";
-  }
-  return "?";
-}
-
-const char* fight_mode_name(FightMode m) {
-  switch (m) {
-    case FightMode::roam:
-      return "roam";
-    case FightMode::fight:
-      return "fight";
-    case FightMode::chase:
-      return "chase";
-    case FightMode::retreat:
-      return "retreat";
-  }
-  return "?";
-}
-
 Stats read_stats(const server::QcServer& s, int ent) {
   const pg::LayoutFields& f = s.q.layout->f;
   const int kHealth = f.health, kItems = f.items, kArmor = f.armorvalue, kType = f.armortype;
@@ -694,25 +710,6 @@ Stats read_stats(const server::QcServer& s, int ent) {
   st.rockets = field(s, ent, kRockets);
   st.cells = field(s, ent, kCells);
   return st;
-}
-
-// The node a button is pressed from: the nearest within reach whose line to the button meets the
-// button itself, so a node behind the wall the button is set in is never chosen.
-static int button_node(const sh::NavGraph& g, const server::QcServer& s, int button, sh::Vec3f at,
-                       float reach) {
-  int best = -1;
-  float best_d = reach;
-  for (size_t n = 0; n < g.nodes.size(); n++) {
-    const sh::Vec3f o = g.nodes[n].origin;
-    const float d = dist(o, at);
-    if (d >= best_d) continue;
-    const sh::Vec3f eye{o.x, o.y, o.z + 22};
-    const sh::HullTrace tr = sh::trace_move(s.sv, eye, {}, {}, at, sh::kTraceNoMonsters, -1);
-    if (tr.fraction < 1 && tr.ent != button) continue;
-    best = static_cast<int>(n);
-    best_d = d;
-  }
-  return best >= 0 ? best : sh::nav_nearest(g, at);
 }
 
 void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, int slot,
@@ -754,48 +751,10 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, 
     it.node = sh::nav_nearest(g, {it.at.x, it.at.y, it.at.z + 24});
     f.items.push_back(it);
   }
-  // Doors a button opens, and the items behind them.
-  const auto entity_on = [&](const char* model) {
-    for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
-      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
-      if (!d.free && d.modelindex > 0 && static_cast<size_t>(d.modelindex) < s.models.size() &&
-          s.models[static_cast<size_t>(d.modelindex)] == model)
-        return e;
-    }
-    return -1;
-  };
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* target = pg::block_value(b, "target");
-    const char* model = pg::block_value(b, "model");
-    if (!cn || std::strcmp(cn, "func_button") != 0 || !target || !model) continue;
-    const int button = entity_on(model);
-    if (button < 0) continue;
-    for (const pg::EntityBlock& d : blocks) {
-      const char* dc = pg::block_value(d, "classname");
-      const char* dn = pg::block_value(d, "targetname");
-      const char* dm = pg::block_value(d, "model");
-      if (!dc || std::strcmp(dc, "func_door") != 0 || !dn || std::strcmp(dn, target) != 0 || !dm)
-        continue;
-      const int door = entity_on(dm);
-      if (door < 0) continue;
-      const sh::Edict& de = s.sv.edicts[static_cast<size_t>(door)];
-      const sh::Edict& be = s.sv.edicts[static_cast<size_t>(button)];
-      const sh::Vec3f mid{(de.absmin.x + de.absmax.x) * 0.5f, (de.absmin.y + de.absmax.y) * 0.5f,
-                          (de.absmin.z + de.absmax.z) * 0.5f};
-      for (ItemSpot& it : f.items) {
-        if (dist(it.at, mid) > 160) continue;
-        it.door_ent = door;
-        it.door_rest = de.origin;
-        it.button_at = {(be.absmin.x + be.absmax.x) * 0.5f, (be.absmin.y + be.absmax.y) * 0.5f,
-                        (be.absmin.z + be.absmax.z) * 0.5f};
-        it.button_shoot = pg::block_value(b, "health") != nullptr;
-        it.button_ent = button;
-        it.button_node = button_node(g, s, button, it.button_at, it.button_shoot ? 900.f : 256.f);
-      }
-    }
-  }
   knowledge_init(f);
+  buttons_init(f, g, s, entities);
+  ears_init(f, skill, entities);
+  spam_init(f, entities);
 }
 
 sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int msec) {
@@ -812,7 +771,19 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
   }
   f.was_dead = dead;
 
-  mind_plan(f, s, me, st, t);  // its role and its calls, off its own beliefs (mind.hpp)
+  // A goal held too long without getting it (a lift held up top, a way that keeps failing) is
+  // let go of for a while: whatever it is worth, nothing else would be had meanwhile.
+  if (f.goal_item != f.goal_was) {
+    f.goal_was = f.goal_item;
+    f.goal_since = t;
+  } else if (f.goal_item >= 0 &&
+             t - f.goal_since > (f.mode == FightMode::retreat ? kHealTire_s : kGoalTire_s)) {
+    f.tired_item = f.goal_item;
+    f.tired_until = t + kTired_s;
+    f.goal_since = t;
+  }
+  mega_watch(f, st.health, t);  // the mega it took, timed from its own health (knowledge.hpp)
+  mind_plan(f, s, me, st, t);   // its role and its calls, off its own beliefs (mind.hpp)
   if (!dead && t >= f.next_think) {
     f.next_think = t + kThink_s;
     think(f, s, me, st, why);
@@ -910,6 +881,9 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
     f.impulse_at = t;
     f.stats.switches++;
   }
+
+  if (!dead) spam_fire(f, s, me, st, t, cmd);
+  if (!dead) button_poke_cmd(f, s, me, t, cmd);
 
   // The trigger: a contact in sight, the view on the aim within the weapon's width at the range.
   const sh::Contact* c = nullptr;

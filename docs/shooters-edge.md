@@ -927,6 +927,26 @@ teammate near it when he has no use for it (armour no better than his, a weapon 
 he is full on), and the best armour, the launcher and the lightning gun to a teammate with the
 quad, pointing at it with his status; the quad's carrier sweeps the key areas.
 
+**Ears, a map of the team, and an area kept (M18r10).** A bot hears what his client is sent, by
+his skill (`plugins/shooter/hearing.hpp`, the game's samples in `bots/ears.hpp`): an expert takes in
+every sound, knows every sample and judges the distance to a tenth; an average player takes in a
+close or unique sound (a pickup, a power, a spawn) most of the time and a far shot seldom; a novice
+hears only what is close and never what a sample means. A pickup heard is put on the item of that
+pickup nearest where it seemed to come from, so the listener knows which armour went, times it as
+if he had seen it, and knows where its taker is; a spawn (the baseline mod plays the fog's sound
+where a deathmatch player comes in) is put on the spawn point. An enemy heard is chased for a
+moment like one lost from sight. The mega health is timed only by an expert who took it, from the
+moment his own health is back down to 100. An expert keeps where each teammate last was for ten
+seconds; knowing where all of them are, he knows where they are not, and a key area none of them
+is in is likely lost, to be taken back by a strong free player (an average player goes by a
+teammate's `lost` line). An expert holding an area whose item is away and not due for a while,
+with 20 or more rockets, steps out to fire at the teleporters' exits and the powers' spawns near it
+(`bots/spam.hpp`). Each map's key items are rated by how scarce they are, by an expert only (a lone
+200 armour, the 150 where there is no 200, the grenades where there is no launcher). A map's
+buttons (`bots/buttons.hpp`) come off its own entities: a `func_button` with health over 0 is shot,
+the rest touched, and the items within reach of the doors it opens are gone for through it by an
+average or expert player; a novice now and then shoots at, or walks into, any button he sees.
+
 **Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
 community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the
 `$loc_name_<key>` macros expanded) and names any point by its nearest. The files themselves are
