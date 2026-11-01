@@ -8,8 +8,10 @@
 //     titles, the strips with the spinning cursor, the glyph rows with their values, the help
 //     pages and the quit box. The lab's pictures are the fixture set painted in code
 //     (classic_art.hpp); `--pack=<path>` (the release zip, an installed folder or its pack) draws
-//     them again in the player's own pack. Those pictures are the pack's: they stay on this
-//     machine and on a private page, and are left out of the digest.
+//     them again in the player's own pack, and once more enhanced when classic-enhance's pictures
+//     stage has run on that pack on this machine (`ce_pictures`: its cache's upscaled copies).
+//     Those pictures are the pack's: they stay on this machine and on a private page, and are
+//     left out of the digest.
 //
 // THE CAMPAIGN'S SCREENS (level_screens.hpp) and THE SCOREBOARD (scoreboard.hpp) are drawn too, in
 // the engine's type, the fixture and the pack: the intermission, an episode's finale typed part
@@ -34,6 +36,7 @@
 #include <utility>
 #include <vector>
 
+#include "classicenhance/cached.hpp"
 #include "classicenhance/source.hpp"
 #include "console/console.hpp"
 #include "lab/lab.hpp"
@@ -282,6 +285,20 @@ void run(ge::lab::Lab& lab) {
                "give --pack the release zip, an installed folder or its pak0.pak. Skill: ui.");
     else
       sets.push_back({"pack", std::move(art), ge::lab::Det::measured});
+    // And enhanced, when classic-enhance's pictures stage has run on the pack here.
+    const std::filesystem::path cache = ge::classicenhance::find_cache(pack.src.pack);
+    const sm::PictureUpgrade upgrade = [&cache](std::string_view name, int w, int h,
+                                                ui::Image* out) {
+      ge::assets::Image big;
+      const uint32_t k = ge::classicenhance::cached_picture(cache, name, static_cast<uint32_t>(w),
+                                                            static_cast<uint32_t>(h), &big);
+      if (k != 0) *out = {big.width, big.height, std::move(big.rgba)};
+      return k;
+    };
+    sm::ClassicArt enhanced;
+    if (!cache.empty() && sets.back().name == "pack" &&
+        sm::load_classic_art(pack.find(), &enhanced, &error, upgrade) && enhanced.density > 1)
+      sets.push_back({"enhanced", std::move(enhanced), ge::lab::Det::measured});
   }
 
   int problems = 0;

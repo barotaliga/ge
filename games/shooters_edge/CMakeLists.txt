@@ -113,7 +113,8 @@ add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
 target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_bots shooters_edge_hud
                                                   shooters_edge_view shooters_edge_sound ge_vfs
                                                   ge_brush ge_camera ge_input ge_audio ge_net
-                                                  ge_ui ge_replay ge_morph)
+                                                  ge_ui ge_replay ge_morph shooters_edge_menu
+                                                  ge_classicenhance)
 include(${PROJECT_SOURCE_DIR}/cmake/EmbedBinary.cmake)
 # Each source as `<variant>_<file>` (qc/<variant>/<file>.qc): the arena variant's and the shared.
 foreach(qc arena_engine common_defs arena_glue common_util common_combat common_weapons

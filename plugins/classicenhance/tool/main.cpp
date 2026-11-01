@@ -265,7 +265,8 @@ static int run_main(int argc, char** argv) {
   const bool pictures =
       opts.only.empty() ||
       std::find(opts.only.begin(), opts.only.end(), Stage::textures) != opts.only.end() ||
-      std::find(opts.only.begin(), opts.only.end(), Stage::models) != opts.only.end();
+      std::find(opts.only.begin(), opts.only.end(), Stage::models) != opts.only.end() ||
+      std::find(opts.only.begin(), opts.only.end(), Stage::pictures) != opts.only.end();
   if (f.upscaler == "network" && f.scale == 4 && pictures) {
     if (!network(f, &upscaler, &weights, &error)) return fail(error);
     opts.textures.network = &upscaler;

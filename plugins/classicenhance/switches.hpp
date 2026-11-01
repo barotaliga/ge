@@ -17,7 +17,7 @@
 // ge:summary Every classic-enhance effect a switch: the catalog, the values, the ce_ cvars
 // ge:keywords classicenhance switches settings toggle cvar ce_ decals flames skies water lava
 // ge:keywords muzzle teleports rubble fog bloom reflections sounds models upscaler options menu
-// ge:keywords relief parallax bonfires ce_bonfires
+// ge:keywords relief parallax bonfires ce_bonfires ce_pictures pictures hud-art
 // ge:skill classicenhance
 // ge:test tests/classicenhance_switches_test.cpp
 #pragma once
@@ -33,7 +33,8 @@ namespace ge::classicenhance {
 
 struct Switches {
   // Textures
-  bool textures = true, upscaler = true, relief = true, parallax = true, glow = true;
+  bool textures = true, upscaler = true, relief = true, parallax = true, glow = true,
+       pictures = true;
   // Light
   bool rebake = true, flicker = true, shadows = true;
   // World

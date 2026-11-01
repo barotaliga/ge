@@ -30,6 +30,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <string>
@@ -73,6 +74,9 @@ struct ClientConfig {
   Ext ask = first_tier();          // what it understands
   std::vector<std::string> files;  // the files it already has ("skins/base.pcx")
   ClientScript script = &default_script;
+  // A bot at the controls: when set, each move's command is asked of it (the tick) in place of
+  // `script`. It may read anything its owner gives it; the client sends what it returns.
+  std::function<sh::MoveCmd(int tick)> brain;
   bool voice = false;                          // ask for voice and speak while `talk` says so
   ClientTalk talk = nullptr;                   // null: never speaks
   const std::vector<float>* speech = nullptr;  // 48 kHz mono to speak (null: a voice of its own)

@@ -219,6 +219,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 - `ge pak ls|extract|build|convert|sum` (done: pak and pk3 listed with CRC-32 and SHA-256, files extracted, a directory packed, pak to pk3 and back, a file's sums kept and checked; `ge pak ls <gamedir> [--mods=a,b] [--hidden]` done too (each file's winning source and what it hides, over engine/vfs/search.hpp, .pk3dir included); next, a deflated .pk3 when the engine has a deflate writer; asked for by the classic-enhance and weapons threads and Niclas)
 - `ge tool classicenhance -- extract <kind> <names>` (a pack's original textures or skins written at 1x as PNG to scratch, and the enhanced ones read back out of the cached glTF, in place of a throwaway pak, BSP and MDL reader per experiment)
+- `ge tool classicenhance -- run --only=<stage>` resuming per item (a 30-minute CPU bake cut off at 186 of 217 pictures started over; 2D art thread, #415; done: each stage but the pack and the models journals its finished items in `<stage>.partial`, and a rerun with the same key skips them)
 - `ge bsp info|ents|shot` (lumps and limits, the entity lump as text, a top-down CPU picture of the leaves, the PVS from a point, the hulls)
 - `ge progs build|disasm|run|trace|profile|diff` (the engine's own compiler for the game's VM language, and the `progs` VM inspected)
 - `ge server --map --bots --for` (a headless dedicated server with bots, its input log written for replay, `ge state` and diverge)
@@ -245,6 +246,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge qc build/disasm/run/trace/profile/diff/assemble/builtins` (our QC compiler; a progs disassembled, run, traced a step at a time, timed by function, diffed against another build by the functions and fields that changed, and assembled from a text listing; `ge qc builtins <progs>`: the builtin numbers a progs calls, checked against the game's catalogue, so "will this mod run here" is one command)
 - `ge server --map --bots --for` (a headless dedicated server with bots, writing an input log for `ge replay`, `ge state` and `ge diverge`; run, replayed and diffed from a game repo as well, which the lobby and hosting thread asked for)
 - `ge demo info/frames/shot/diff` (a client or MVD demo decoded frame by frame, a frame pictured, two demos to their first difference)
+- `ge mvd obituaries <file>` (every death in a demo by cause, killer and victim, with times and per-cause totals, so a bot change's fights read without watching it; 4v4 team bots thread)
+- `ge mvd chat <file>` (a demo's chat lines with their times, senders and teams, so the bots' team talk is read as text; 4v4 team bots thread)
 - `ge demo shot <demo> --at=<s> --video` (one frame of `-demovideo` at a given time written as a PNG, its overlays (voice, team, captions) drawn as the export draws them, with no encoder and no full run, so an overlay is checked in seconds; demo video thread)
 - `ge net inspect --protocol=<name>` (pluggable decoders, so a capture of the classic protocol reads as its messages)
 - `ge pmove <scenario>` (a movement scenario's trajectory as a table and a chart, against its parity recording)

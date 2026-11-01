@@ -105,8 +105,8 @@ ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int wi
     if (!drawn(it) || help) continue;
     if (l.strip) {
       if (it.kind == ui::ItemKind::back) continue;
-      l.items[i] = rect(72, kRowTop + 20 * static_cast<float>(strip_row++),
-                        static_cast<float>(strip->width), 20);
+      l.items[i] =
+          rect(72, kRowTop + 20 * static_cast<float>(strip_row++), art.width_of(*strip), 20);
       continue;
     }
     l.items[i] = rect(16, row, kScreenW - 32, 8);
@@ -157,7 +157,7 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
   if (page.id == "quit") {
     // The question in its box, no title.
   } else if (title != nullptr) {
-    pen.picture(title, std::floor((kScreenW - static_cast<float>(title->width)) / 2), 4);
+    pen.picture(title, std::floor((kScreenW - art.width_of(*title)) / 2), 4);
   } else if (!page.title.empty()) {
     const std::string s = sentence(page.title);
     pen.text(s, std::floor((kScreenW - 8 * static_cast<float>(s.size())) / 2), 12, true);
