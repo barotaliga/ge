@@ -45,6 +45,29 @@ TEST(every_command_has_its_help_and_a_consumer_skill) {
               "ge help " + name + " leaves out its example");
     CHECK_MSG(help_text(nullptr).find("ge " + name) != std::string::npos,
               "ge help leaves out ge " + name);
+    // The example is a command line ge accepts: its words, flags and passing words after --.
+    // Split as a shell would: spaces between words, none inside double quotes, the quotes dropped.
+    std::vector<std::string> words{""};
+    bool quoted = false;
+    for (const char ch : c.example.substr(3)) {
+      if (ch == '"') {
+        quoted = !quoted;
+      } else if (ch == ' ' && !quoted) {
+        if (!words.back().empty()) words.emplace_back();
+      } else {
+        words.back() += ch;
+      }
+    }
+    if (words.back().empty()) words.pop_back();
+    std::vector<const char*> argv;
+    argv.reserve(words.size());
+    for (const std::string& w : words) argv.push_back(w.c_str());
+    const Args ex = parse(argv);
+    CHECK_MSG(ex.command && ex.command->name == c.name,
+              "ge " + name + "'s example parses as another command");
+    CHECK_MSG(!check_args(ex).has_value(),
+              "ge " + name + "'s example is refused: " + check_args(ex).value_or("") +
+                  "; next: fix the example or what ge accepts");
     for (const FlagSpec& f : c.flags) {
       CHECK_MSG(f.help.size() > 8, "ge " + name + " --" + std::string(f.name) + ": its help");
     }
