@@ -198,7 +198,10 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
+    // The same digest as the device's branch: the shots' ids, then the two GPU counts.
     placeholders(lab, {"fire", "day"}, w, h);
+    lab.metric("gpu-errors", 0, "count");
+    lab.metric("pipelines-after-load", 0, "count");
     return;
   }
   es::Scene s;
@@ -258,7 +261,7 @@ void run(gl::Lab& lab) {
               {}},
              es::sheet_of(pics, names, 4), Det::measured);
   }
-  lab.metric("flames-seen", flames_seen, "count");
+  lab.metric("flames-seen", flames_seen, "count", Det::measured);  // drawn only with a GPU
   if (flames_seen == 0) {
     lab.fail("no shot's flame was staged at any moment",
              "next: check step_muzzle in games/shooters_edge/app/muzzle.cpp and the looks' life.");
