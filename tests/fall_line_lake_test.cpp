@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -131,9 +132,10 @@ TEST(the_bot_keeps_off_the_open_tarn) {
   // The runs nearest the open tarn, skied by the bot from their heads: never on the water.
   const std::shared_ptr<const mg::Level> level = with_tarn(false);
   const mg::MapLake& lake = level->lakes[0];
-  CHECK(level->resort.has_value());
-  if (!level->resort) return;
-  const std::vector<mg::Run>& runs = level->resort->runs;
+  const std::optional<mg::ResortMap>& resort = level->resort;
+  CHECK(resort.has_value());
+  if (!resort.has_value()) return;
+  const std::vector<mg::Run>& runs = resort->runs;
   std::vector<std::pair<double, int32_t>> near;
   for (size_t k = 0; k < runs.size(); ++k) {
     double best = 1e30;

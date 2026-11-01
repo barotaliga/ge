@@ -746,7 +746,7 @@ The generator lays no water, so no dealt map moves; a game lays it after, as a `
   down, he goes IN (a `sank` event, `value` the ice that broke).
 - **In the water**: the engine's swimmer in the body regime (§ Swimming), dressed as a skier
   (`skier/swim.hpp`'s `dressed_skier`), in water at `tarn::kTarnWater` (4 degrees). He floats on
-  his jacket's air, takes the cold shock and swims flat out for the nearest shore, his feet never
+  his jacket's air, takes the cold shock and swims flat out for the shore straight out from the tarn's middle, his feet never
   under the dug bed; at the shore, or where the water is under 0.9 m deep, he climbs out (an
   `ashore` event, `value` his seconds in the water) and is stood on the bank facing away from
   the water. Drowning, at swim failure or after 90 s he is reset as if he had asked. The

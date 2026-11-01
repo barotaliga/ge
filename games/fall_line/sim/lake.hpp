@@ -13,11 +13,11 @@
 //   drops under `kSinkSpeed` and goes in.
 // - IN THE WATER: the engine's swimmer in the body regime, dressed as a skier
 //   (skier/swim.hpp's `dressed_skier`): he floats on his jacket's air, soaks, takes the cold
-//   shock of `mountain::tarn::kTarnWater`, and swims flat out for the nearest shore, his feet
-//   never under the dug bed. At the shore, or where the water is shallow enough to stand in
-//   (`kWade`), he climbs out (an `ashore` event, `value` the seconds in the water) and is stood
-//   on the bank facing away from the water. Drowning, at swim failure, or after `kSwimReset` s,
-//   he is reset as if he had asked.
+//   shock of `mountain::tarn::kTarnWater`, and swims flat out for the shore straight out from the
+//   tarn's middle, his feet never under the dug bed. At the shore, or where the water is shallow
+//   enough to stand in (`kWade`), he climbs out (an `ashore` event, `value` the seconds in the
+//   water) and is stood on the bank facing away from the water. Drowning, at swim failure, or
+//   after `kSwimReset` s, he is reset as if he had asked.
 //
 // The swimmer's state is the racer's (`FreeRide::swim`), so a run in the water replays.
 // Allocates nothing in a step.
