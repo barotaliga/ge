@@ -75,7 +75,7 @@ TEST(the_palette_comes_from_the_profiles_path) {
   CHECK_MSG(ge::vfs::read_pak(bytes, &pak, &error), error);
   ce::Palette palette;
   CHECK_MSG(ce::read_palette(p, pak, bytes, &palette, &error), error);
-  CHECK(palette.rgb[3] == 21 && palette.rgb[767] == uint8_t(767 * 7));
+  CHECK(palette.rgb[3] == 21 && palette.rgb[767] == rgb[767]);
 
   std::vector<uint8_t> none;
   CHECK_MSG(ge::vfs::write_pak({{"gfx/other.lmp", rgb}}, &none, &error), error);
