@@ -573,7 +573,8 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
   if (c.stage == ClientStage::active) {
     c.cmds[0] = c.cmds[1];
     c.cmds[1] = c.cmds[2];
-    sh::MoveCmd cmd = usercmd_grid(c.cfg.script(c.tick, c.cfg.seed));
+    sh::MoveCmd cmd =
+        usercmd_grid(c.cfg.brain ? c.cfg.brain(c.tick) : c.cfg.script(c.tick, c.cfg.seed));
     cmd.msec = 13;
     c.cmds[2] = cmd;
     const int loss =

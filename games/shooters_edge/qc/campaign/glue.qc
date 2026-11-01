@@ -32,6 +32,10 @@ void(entity killer, entity killed) note_frag = {};
 
 void(entity m) missile_now = {};
 
+// The campaign has no teams and leaves no backpacks.
+float(entity a, entity b) same_team = { return FALSE; };
+void() drop_on_death = {};
+
 // --- spawn parms: the inventory carried from map to map ---
 // parm1 the items, parm2 health, parm3 armour, parm4..7 shells, nails, rockets and cells, parm8 the
 // weapon held, parm9 the armour's share x 100.

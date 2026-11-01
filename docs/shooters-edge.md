@@ -874,6 +874,17 @@ memory, aim and movement on `ai/hands` with skill profiles, the fights and items
 recorded for `ge why`, and its play is measured against people's input logs with `ai/human`,
 so a change to a bot is shown before and after: frags, deaths, items held and humanness.
 
+**Bots as a team (M18r7).** With `teamplay 1` the bots of one team share a plan
+(`games/shooters_edge/bots/team.hpp`), redone every half second, built on how a team game is
+won: equipment and survival before frags, the best armour's area held, the quad timed and taken
+before the other team, the quad carried to where the enemy was last called out, items left to
+the teammate who needs them, backpacks taken to stack ammunition, and no shot fired across a
+teammate. Each player's part is a role (hold, rush, carry or free), and the rest of his choices
+stay his own fighter's. `run_team_match` (`net/classic_team.hpp`) plays eight of them as clients
+of our server and records the match as a multiview demo; the `se-team` lab runs it and writes
+the demo with `--save`, which the game plays with `-playdemo` and turns into a video with
+`-demovideo`.
+
 ## Modern features
 
 Today's community clients and servers added much since the original release. Grouped by what a

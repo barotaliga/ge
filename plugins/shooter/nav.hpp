@@ -55,9 +55,9 @@
 // ge:summary Navigation proven by the move: floor nodes off the hulls, links proven by player_move
 // ge:keywords nav navigation nav-graph navmesh waypoint waypoints node link walk drop jump
 // ge:keywords running-jump moving-jump run-up prove prove_link build_nav nav_route nav_nearest
-// ge:keywords nav_reach nav_hash map_world reachability mover door plat ride route path a-star bot
-// ge:skill shooter bots
-// ge:test tests/shooter_nav_test.cpp
+// ge:keywords nav_add_links nav_close_entries teleport-link nav_reach nav_hash map_world
+// reachability mover door plat ride route path a-star bot ge:skill shooter bots ge:test
+// tests/shooter_nav_test.cpp
 #pragma once
 
 #include <cstdint>
@@ -91,6 +91,7 @@ struct NavMover {
   // ride takes (its wait at rest, then the travel), s. Without a model it is only an obstacle.
   const BrushModel* model = nullptr;
   Vec3f travel;
+  Vec3f rest;  // where its model stands at rest (a map's plat is built at its top and lowered)
   float ride_s = 0;
 };
 
@@ -174,6 +175,23 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
 // Every node a player at node `from` can get to (`search.reached(n)` after; costs the links'
 // times), and how many, `from` itself included.
 int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search);
+
+// A link a map adds that no proof finds (a teleporter: from every node its trigger holds to the
+// node at its destination), at `time_s`.
+struct NavExtraLink {
+  int32_t from = 0, to = 0;
+  NavKind kind = NavKind::walk;
+  float time_s = 0.1f;
+};
+// Adds `extra` to each node's run of links (after the proven ones), keeping the runs contiguous.
+void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra);
+
+// Closes the nodes `closed` marks (one byte a node, nonzero closed) to entry from the rest: every
+// link from an open node into a closed one is cut, the links out of them and among them kept (a
+// pool no route should lead into, left by its own way out). Returns how many links were cut, and
+// lists them in `cut_links` when given (the ways in, for a caller that enters on purpose).
+int64_t nav_close_entries(NavGraph& g, std::span<const uint8_t> closed,
+                          std::vector<NavExtraLink>* cut_links = nullptr);
 
 // The graph's bits: every node's origin and mover (and the mover it rides, where any does), every
 // link's target, kind, time, mover and speed.
