@@ -50,7 +50,7 @@ inline constexpr double kBank = 2;          // m up the bank he is stood, out of
 
 // The engine's water world of `level`'s open lakes (none frozen to bear a skier); null for none.
 std::shared_ptr<const ge::water::World> lake_water(
-    std::shared_ptr<const ge::mountain::mapgen::Level> level);
+    const std::shared_ptr<const ge::mountain::mapgen::Level>& level);
 // The open lake (x, z) is inside the shore of, or -1.
 int32_t open_lake_at(const GameState& state, double x, double z);
 // Whether racer `i` is skimming the water or in it: his step is `step_on_water`'s.

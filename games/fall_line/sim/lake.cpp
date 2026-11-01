@@ -60,7 +60,7 @@ void go_in(GameState& state, int32_t i, int32_t k) {
 
 }  // namespace
 
-std::shared_ptr<const ge::water::World> lake_water(std::shared_ptr<const mg::Level> level) {
+std::shared_ptr<const ge::water::World> lake_water(const std::shared_ptr<const mg::Level>& level) {
   bool open = false;
   for (const mg::MapLake& lake : level->lakes) open = open || lake.depth > 0;
   if (!open) return nullptr;

@@ -131,10 +131,13 @@ TEST(the_bot_keeps_off_the_open_tarn) {
   // The runs nearest the open tarn, skied by the bot from their heads: never on the water.
   const std::shared_ptr<const mg::Level> level = with_tarn(false);
   const mg::MapLake& lake = level->lakes[0];
+  CHECK(level->resort.has_value());
+  if (!level->resort) return;
+  const std::vector<mg::Run>& runs = level->resort->runs;
   std::vector<std::pair<double, int32_t>> near;
-  for (size_t k = 0; k < level->resort->runs.size(); ++k) {
+  for (size_t k = 0; k < runs.size(); ++k) {
     double best = 1e30;
-    for (const mg::TrackPoint& p : level->resort->runs[k].points)
+    for (const mg::TrackPoint& p : runs[k].points)
       best = std::min(best, std::hypot(p.x - lake.x, p.z - lake.z));
     near.emplace_back(best, static_cast<int32_t>(k));
   }

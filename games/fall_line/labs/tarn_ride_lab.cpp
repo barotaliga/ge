@@ -12,6 +12,7 @@
 // ge:keywords lab tarn-ride tarn lake skim sank ashore swim step_on_water skim-speed sink-speed
 // ge:skill sim labs
 // ge:test tests/fall_line_lake_test.cpp
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <span>
@@ -42,7 +43,7 @@ std::string fixed(double v, int d) { return ge::core::num::to_fixed(v, d); }
 // Where he stands, in radii south of the tarn's middle (past its south shore).
 constexpr double kFrom = 1.25;
 
-enum class Phase { skis, skim, swim };
+enum class Phase : uint8_t { skis, skim, swim };
 
 struct Mark {
   double x, z;
@@ -56,7 +57,7 @@ struct Ride {
   std::vector<Mark> line;
 };
 
-Ride ride(std::shared_ptr<const mg::Level> level, double speed, double off, double limit) {
+Ride ride(const std::shared_ptr<const mg::Level>& level, double speed, double off, double limit) {
   fs::GameState state = fs::create_free_ride(level, 0);
   const mg::MapLake& lake = state.level->lakes[0];
   state.racers[0].skier =
