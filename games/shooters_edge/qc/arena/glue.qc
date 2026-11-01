@@ -29,6 +29,22 @@ void(entity killer, entity killed) note_frag = { logfrag(killer, killed); };
 
 void(entity m) missile_now = { newmis = m; };
 
+// --- teams ---
+
+// Two players on the same named team while `teamplay` is on: a teammate is not harmed.
+float(entity a, entity b) same_team = {
+  local string t;
+  if (!teamplay || a == b) return FALSE;
+  if (a.classname != "player" || b.classname != "player") return FALSE;
+  t = infokey(a, "team");
+  if (t == "") return FALSE;
+  return t == infokey(b, "team");
+};
+
+// A dead player leaves a backpack (items.qc) with his ammunition and the weapon he held.
+void() backpack_drop;
+void() drop_on_death = { backpack_drop(); };
+
 // --- spawn parms (kept by the server across a map change; deathmatch starts everyone fresh) ---
 
 void() SetNewParms = {

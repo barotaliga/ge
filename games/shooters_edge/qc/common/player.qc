@@ -69,6 +69,7 @@ void() player_die = {
   self.super_damage_finished = 0;
   self.invincible_finished = 0;
   self.items = self.items - (self.items & (IT_QUAD | IT_INVULNERABILITY));
+  drop_on_death();
   self.respawn_ready = time + 1;
   if (self.health < -40) sound(self, CHAN_VOICE, "player/udeath.wav", 1, ATTN_NONE);
   else sound(self, CHAN_VOICE, "player/death1.wav", 1, ATTN_NORM);

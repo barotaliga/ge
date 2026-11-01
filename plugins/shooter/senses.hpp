@@ -28,7 +28,7 @@
 //
 // ge:summary The bot's senses: what a client is sent, sight by the hull trace in a cone, sounds
 // ge:keywords senses sight hearing client-view sent entities sounds attenuation fov cone
-// ge:keywords line-of-sight trace memory contact forget seen heard velocity pvs
+// ge:keywords line-of-sight trace memory contact forget seen heard velocity pvs friends team
 // ge:skill shooter bots
 // ge:test tests/shooter_senses_test.cpp
 #pragma once
@@ -91,6 +91,9 @@ struct SenseStats {
 
 struct Senses {
   SenseSettings set;
+  // Players this bot does not take as contacts (its team): bit k is the player in slot k (entity
+  // k + 1). A teammate is neither seen nor heard as someone to fight.
+  uint32_t friends = 0;
   std::vector<Contact> contacts;
   SenseStats stats;
 };

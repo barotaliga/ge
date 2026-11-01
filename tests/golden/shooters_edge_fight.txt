@@ -1,2 +1,2 @@
 # games/shooters_edge/bots/fight_run.hpp: four fighters (expert, novice, expert, novice) on the baseline mod, seed 3, 3000 frames: the last frame's digest (tests/shooters_edge_fight_test.cpp)
-cc4224704d28c2f3
+6940c083dedd2ca1

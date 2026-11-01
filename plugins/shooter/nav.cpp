@@ -369,7 +369,7 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
     Solid& s = there.solids[there.count++];
     s = Solid{};
     s.kind = SolidKind::brush;
-    s.origin = m.travel;
+    s.origin = m.rest + m.travel;
     s.point_hull = m.model->hulls[0];
     s.clip_hull = m.model->hulls[1];
     s.mins = m.model->mins;
@@ -537,6 +537,56 @@ int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search) {
   for (size_t a = 0; a < g.nodes.size(); a++)
     if (search.reached(static_cast<int32_t>(a))) count++;
   return count;
+}
+
+void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra) {
+  if (extra.empty()) return;
+  std::vector<NavLink> links;
+  links.reserve(g.links.size() + extra.size());
+  for (size_t a = 0; a < g.nodes.size(); a++) {
+    NavNode& n = g.nodes[a];
+    const int32_t first = static_cast<int32_t>(links.size());
+    for (int32_t k = 0; k < n.links; k++)
+      links.push_back(g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)]);
+    for (const NavExtraLink& e : extra) {
+      if (e.from != static_cast<int32_t>(a) || e.to < 0 ||
+          static_cast<size_t>(e.to) >= g.nodes.size())
+        continue;
+      NavLink l;
+      l.to = e.to;
+      l.kind = e.kind;
+      l.time_s = e.time_s;
+      links.push_back(l);
+    }
+    n.first_link = first;
+    n.links = static_cast<int32_t>(links.size()) - first;
+  }
+  g.links = std::move(links);
+}
+
+int64_t nav_close_entries(NavGraph& g, std::span<const uint8_t> closed,
+                          std::vector<NavExtraLink>* cut_links) {
+  if (closed.size() != g.nodes.size()) return 0;
+  std::vector<NavLink> links;
+  links.reserve(g.links.size());
+  int64_t cut = 0;
+  for (size_t a = 0; a < g.nodes.size(); a++) {
+    NavNode& n = g.nodes[a];
+    const int32_t first = static_cast<int32_t>(links.size());
+    for (int32_t k = 0; k < n.links; k++) {
+      const NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+      if (!closed[a] && closed[static_cast<size_t>(l.to)]) {
+        cut++;
+        if (cut_links) cut_links->push_back({static_cast<int32_t>(a), l.to, l.kind, l.time_s});
+        continue;
+      }
+      links.push_back(l);
+    }
+    n.first_link = first;
+    n.links = static_cast<int32_t>(links.size()) - first;
+  }
+  g.links = std::move(links);
+  return cut;
 }
 
 uint64_t nav_hash(const NavGraph& g) {
