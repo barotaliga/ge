@@ -374,25 +374,26 @@ void set_water(ge::gpu::Device& device, GameFrame& f, int index, const ge::water
 }
 
 void freeze_water(ge::gpu::Device& device, GameFrame& f, int index, const ge::water::Body& body,
-                  double h, bool swept_only) {
+                  double h, bool swept_only, double moat, double thaw) {
   namespace ma = ge::mountain::app;
   if (index < 0 || static_cast<size_t>(index) >= f.water.bodies.size()) return;
   if (f.ice_body >= 0 && f.ice_body != index) return;
   const bool frozen = h >= ma::kIceShows;
-  f.water.bodies[static_cast<size_t>(index)].hidden = frozen;
+  // A moat of open water round thawing ice: the water stays drawn, the sheet over it.
+  f.water.bodies[static_cast<size_t>(index)].hidden = frozen && moat <= 0;
   if (f.ice_body < 0) {
     if (!frozen) return;
     r::MeshSource sheet;
-    sheet.lods.push_back(
-        {ma::ice_mesh(body.shore, body.level, ge::core::num::to_uint32(f.level->seed), swept_only),
-         0.0f});
+    sheet.lods.push_back({ma::ice_mesh(body.shore, body.level,
+                                       ge::core::num::to_uint32(f.level->seed), swept_only, moat),
+                          0.0f});
     r::create_family(device, f.instancing, f.ice, "water.ice",
-                     std::span<const r::MeshSource>(&sheet, 1), ma::ice_surfaces(h), 1);
+                     std::span<const r::MeshSource>(&sheet, 1), ma::ice_surfaces(h, thaw), 1);
     r::bind_family_hiz(device, f.instancing, f.ice, f.hiz);
     f.families.push_back(&f.ice);
     f.ice_body = index;
   }
-  r::set_family_surfaces(device, f.ice, ma::ice_surfaces(h));
+  r::set_family_surfaces(device, f.ice, ma::ice_surfaces(h, thaw));
   r::Instance at;
   if (!frozen) at.scale[0] = at.scale[1] = at.scale[2] = 0;
   r::set_instances(device, f.ice, 0, std::span<const r::Instance>(&at, 1));

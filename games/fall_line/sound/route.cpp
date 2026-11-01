@@ -150,6 +150,8 @@ void run_sound_step(RunSound& sound, ge::audio::Synth& synth, const sim::GameSta
       case EventKind::ashore: {
         // Into a tarn, or hauled out of it: the water's own splash (water/sound.hpp), a body's
         // size, at his speed through the surface; the bubbles going down with him.
+        // Through ice (`value` its thickness), the sheet cracks first.
+        if (e.kind == EventKind::sank && e.value > 0) play(synth, kIceCrack, ear, 1.0f);
         const ge::water::Splash splash{
             me.x, me.y, me.z, std::max(me.speed, 1.0), kBodySize, e.kind == EventKind::sank};
         ge::water::play_splash(synth, sound.rng, splash, 0, kBusEffects);

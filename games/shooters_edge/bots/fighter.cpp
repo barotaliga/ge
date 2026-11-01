@@ -48,8 +48,8 @@ constexpr double kAir_s = 6;  // under this long, the shorter way out of the wat
 constexpr double kDiveMost_s = 8;    // no dive whose swim is longer than this
 constexpr double kDiveLate_s = 3;    // a dive this far behind its swim's time is given up
 constexpr double kDiveRetry_s = 30;  // and not tried again for this long
-constexpr double kCallAgain_s = 4;   // an enemy in sight is called out again after this
-constexpr double kHelp_s = 6;        // a call for help holds this long
+constexpr double kCallAgain_s = 8;   // an enemy in sight is called out again after this
+constexpr double kTold_s = 10;       // a point at an item is followed this long
 
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
 
@@ -200,13 +200,6 @@ bool alive_slot(const server::QcServer& s, int slot) {
          s.sv.edicts[static_cast<size_t>(slot) + 1].health > 0;
 }
 
-// A living teammate's slot that has claimed item `i` (-1: none).
-int claimed_by_mate(const Fighter& f, const server::QcServer& s, int32_t i) {
-  if (!f.team || i < 0 || static_cast<size_t>(i) >= f.team->claimed.size()) return -1;
-  const int c = f.team->claimed[static_cast<size_t>(i)];
-  return c >= 0 && c != f.slot && alive_slot(s, c) ? c : -1;
-}
-
 sh::Vec3f at_of(const ai::Memory& m) {
   return {static_cast<float>(m.x), static_cast<float>(m.y), static_cast<float>(m.z)};
 }
@@ -281,12 +274,15 @@ int32_t best_item(const Fighter& f, const server::QcServer& s, const Stats& st, 
     double sc = v / (1 + std::fmax(run, wait));
     if (i == f.goal_item) sc *= kKeepGoal;  // the goal held unless another is clearly better
     if (enemy && heal && dist(*enemy, it.at) < dist(me, it.at)) sc *= 0.2;
-    // A teammate going for it has it; a strong player leaves health and armour to the others.
-    if (claimed_by_mate(f, s, i) >= 0) sc *= 0.15;
+    // A teammate who said he goes for it has it; one in sight it is no use to, or the quad's
+    // carrier, gets it; a strong player leaves health to the others; a point is followed.
+    if (mate_going(f, i, t)) sc *= 0.15;
+    if (gives_up(f, s, f.slot + 1, i, st, t)) return 0.0;
     if (f.team && heals(it) && it.kind != ItemKind::mega && strength(st) >= 150) sc *= 0.3;
-    // A weak player falls back to his own: health near the held area is worth more.
-    if (f.team && heal && f.team->hold_item >= 0 &&
-        dist(it.at, f.items[static_cast<size_t>(f.team->hold_item)].at) < kLeash)
+    if (f.mind.told == i && t - f.mind.told_t < kTold_s) sc *= 4;
+    // A weak player falls back to his own: health near his area is worth more.
+    if (f.team && heal && f.mind.claim >= 0 &&
+        dist(it.at, f.items[static_cast<size_t>(f.mind.claim)].at) < kLeash)
       sc *= 1.5;
     return sc;
   };
@@ -331,64 +327,85 @@ bool team_goal(Fighter& f, const server::QcServer& s, const Stats& st, sh::Vec3f
     }
   }
   if (!f.team || f.mode == FightMode::retreat) return false;
-  const Team& tm = *f.team;
+  const Mind& mn = f.mind;
   const auto node_of = [&](int32_t i) { return f.items[static_cast<size_t>(i)].node; };
   const auto can_reach = [&](int32_t i) {
     return i >= 0 && (f.reach_at < 0 || f.reach.reached(node_of(i)));
   };
-  if (!can_reach(tm.hold_item) && f.role != Role::rush) return false;
   const auto at = [&](int32_t i) { return f.items[static_cast<size_t>(i)].at; };
   const auto note = [&](const char* role, const char* because) {
     if (!why) return;
     why->decide("role_goal");
     why->choose(role, because);
   };
+  // The quad item and the areas a carrier sweeps (the best armour's, the launcher's).
+  int32_t quad = -1, armour = -1, launcher = -1;
+  for (size_t i = 0; i < f.items.size(); i++) {
+    const ItemSpot& it = f.items[i];
+    if (it.node < 0) continue;
+    const auto ii = static_cast<int32_t>(i);
+    if (it.kind == ItemKind::quad && quad < 0) quad = ii;
+    if (it.kind == ItemKind::armor3 || (it.kind == ItemKind::armor2 && armour < 0)) armour = ii;
+    if (it.kind == ItemKind::weapon && it.weapon == kWRockets && launcher < 0) launcher = ii;
+  }
   switch (f.role) {
     case Role::hold: {
-      if (tm.hold_item < 0 || strength(st) < kHoldStrong) return false;
+      const int32_t area = mn.claim;
+      if (!can_reach(area) || strength(st) < kHoldStrong) return false;
       // He chases out of his area no further than the leash; else he stands on it.
-      if (f.mode == FightMode::chase && c && dist(at_of(c->seen), at(tm.hold_item)) < kLeash) {
+      if (f.mode == FightMode::chase && c && dist(at_of(c->seen), at(area)) < kLeash) {
         go_to(f, sh::nav_nearest(g, at_of(c->seen)));
         note("hold", "chasing within the leash");
         return true;
       }
-      // The armour gone and back soon, or there: wait on it; else the items near it.
+      // The item gone and back soon, or there: wait on it; else the items near it.
       const int32_t i = best_item(f, s, st, me, t, false, nullptr, nullptr);
-      if (i >= 0 && dist(at(i), at(tm.hold_item)) < kLeash * 0.6f) {
+      if (i >= 0 && dist(at(i), at(area)) < kLeash * 0.6f) {
         go_item(f, s, i);
       } else {
-        go_item(f, s, tm.hold_item);
+        go_item(f, s, area);
       }
-      note("hold", "on the held area");
+      note("hold", "on the area it claimed");
       return true;
     }
     case Role::rush:
-      if (!can_reach(tm.quad_item)) return false;
-      go_item(f, s, tm.quad_item);
+      if (!can_reach(quad)) return false;
+      go_item(f, s, quad);
       note("rush", "the quad is due: waiting on it");
       return true;
-    case Role::carry:
-      if (tm.enemy_seen >= 0 && t - tm.enemy_seen < 6) {
-        go_to(f, sh::nav_nearest(g, tm.enemy_at));
+    case Role::carry: {
+      if (c && ai::known(c->seen) && ai::age(c->seen, t) < 3) {
+        go_to(f, sh::nav_nearest(g, at_of(c->seen)));
+        note("carry", "the quad at the enemy in sight");
+        return true;
+      }
+      // The key areas cleared in turn: the one it is not at.
+      int32_t sweep = -1;
+      for (int32_t i : {armour, launcher})
+        if (can_reach(i) && dist(at(i), me) > 250 && (sweep < 0 || i == f.goal_item)) sweep = i;
+      if (sweep < 0 && mn.enemy_t > t - 6) {
+        go_to(f, sh::nav_nearest(g, mn.enemy_at));
         note("carry", "the quad to the enemy last called out");
         return true;
       }
-      if (tm.hold_item < 0) return false;
-      go_to(f, node_of(tm.hold_item));
-      note("carry", "no enemy called out: through the held area");
+      if (sweep < 0) return false;
+      f.goal_item = sweep;
+      go_to(f, node_of(sweep));
+      note("carry", "the quad through the key areas");
       return true;
+    }
     case Role::free:
       // A teammate's call for help is answered by a player strong enough to give it.
-      if (f.mode != FightMode::retreat && t < tm.help_until && strength(st) >= 120 &&
-          dist(tm.help_at, me) < 1500) {
-        go_to(f, sh::nav_nearest(g, tm.help_at));
+      if (f.mode != FightMode::retreat && t < mn.help_until && strength(st) >= 120 &&
+          dist(mn.help_at, me) < 1500) {
+        go_to(f, sh::nav_nearest(g, mn.help_at));
         note("free", "a teammate called for help");
         return true;
       }
       // A teammate's callout is chased when this player is strong and has nothing in sight.
-      if (f.mode == FightMode::roam && tm.enemy_seen >= 0 && t - tm.enemy_seen < 3 &&
-          strength(st) >= 150 && (st.items & kWRockets) != 0 && dist(tm.enemy_at, me) < 1200) {
-        go_to(f, sh::nav_nearest(g, tm.enemy_at));
+      if (f.mode == FightMode::roam && t - mn.enemy_t < 3 && strength(st) >= 150 &&
+          (st.items & kWRockets) != 0 && dist(mn.enemy_at, me) < 1200) {
+        go_to(f, sh::nav_nearest(g, mn.enemy_at));
         note("free", "a teammate's callout, strong enough to help");
         return true;
       }
@@ -496,12 +513,15 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
   const ItemNews news = knowledge_update(f, s, me, eye, t);
   if (news.taken >= 0) {
     const ItemSpot& it = f.items[static_cast<size_t>(news.taken)];
+    Said said;
+    said.item = item_call(it);
     if (key_item(it) && news.by_me) {
-      team_say(f, t, std::string("took ") + item_call(it));
+      said.kind = SayKind::took;
+      mind_say(f, t, said, it.at);
     } else if (key_item(it) && it.timed) {
-      team_say(
-          f, t,
-          std::string(item_call(it)) + " in " + std::to_string(static_cast<int>(it.respawn_s)));
+      said.kind = SayKind::timer;
+      said.secs = static_cast<int>(it.respawn_s);
+      mind_say(f, t, said, it.at);
     }
   }
 
@@ -517,9 +537,12 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
   const int32_t heal_at =
       c && weak ? best_item(f, s, st, self.origin, t, true, &enemy, nullptr) : -1;
   if (heal_at >= 0 && item_value(f.items[static_cast<size_t>(heal_at)], st) > 0) {
-    if (f.mode != FightMode::retreat && f.team && team_say(f, t, "need help")) {
-      f.team->help_at = self.origin;
-      f.team->help_until = t + kHelp_s;
+    if (f.mode != FightMode::retreat && f.team && t - f.mind.help_said_at >= 15) {
+      f.mind.help_said_at = t;
+      Said help;
+      help.kind = SayKind::help;
+      help.status = status_of(st);
+      mind_say(f, t, help, self.origin);
     }
     set_mode(f, FightMode::retreat, why, "weak with someone about: health or armour first");
   } else if (seen_now) {
@@ -530,19 +553,16 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
     set_mode(f, FightMode::roam, why, "no one known");
   }
 
-  // A sighting is the team's once it is called out (where, by the item it is nearest).
-  if (f.team && seen_now) {
+  // A sighting is the team's once it is called out (where, by its place's name), unless it was
+  // called lately, or a mate's line just said so.
+  if (f.team && seen_now && t - f.called_at >= kCallAgain_s) {
     const sh::Vec3f there = at_of(c->seen);
-    // Called out unless a teammate just called the same place.
-    const bool called = f.team->enemy_seen >= 0 && t - f.team->enemy_seen < kCallAgain_s &&
-                        dist(f.team->enemy_at, there) < 400;
-    const std::string words = enemy_call(f, there);
-    if (!called && !words.empty() && t - f.called_at >= kCallAgain_s && team_say(f, t, words))
+    Said en;
+    en.kind = SayKind::enemy;
+    en.loc = place_of(f, there);
+    if (!en.loc.empty() && mind_say(f, t, en, there)) {
       f.called_at = t;
-    if (t - f.called_at < kCallAgain_s) {
-      if (f.team->enemy_seen < t) f.team->stats.callouts++;
-      f.team->enemy_at = there;
-      f.team->enemy_seen = t;
+      f.team->stats.callouts++;
     }
   }
 
@@ -558,15 +578,14 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
       const bool heal = f.mode == FightMode::retreat;
       const int32_t i = best_item(f, s, st, self.origin, t, heal, c ? &enemy : nullptr, why);
       if (i >= 0) {
-        if (f.team) f.team->claimed[static_cast<size_t>(i)] = f.slot;
         go_item(f, s, i);
-      } else if (f.sense == MapSense::novice && (!f.team || f.team->hold_item < 0)) {
+      } else if (f.sense == MapSense::novice && (!f.team || f.mind.claim < 0)) {
         // Nothing in mind: a novice walks the map to learn it.
         go_to(f, explore_node(f, self.origin));
-      } else if (f.team && f.team->hold_item >= 0 &&
-                 f.reach.reached(f.items[static_cast<size_t>(f.team->hold_item)].node)) {
-        // Nothing worth having: back to the held area, beside the holder.
-        go_to(f, f.items[static_cast<size_t>(f.team->hold_item)].node);
+      } else if (f.team && f.mind.claim >= 0 &&
+                 f.reach.reached(f.items[static_cast<size_t>(f.mind.claim)].node)) {
+        // Nothing worth having: back to its own area.
+        go_to(f, f.items[static_cast<size_t>(f.mind.claim)].node);
       }
     }
   }
@@ -796,6 +815,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
   }
   f.was_dead = dead;
 
+  mind_plan(f, s, me, st, t);  // its role and its calls, off its own beliefs (mind.hpp)
   if (!dead && t >= f.next_think) {
     f.next_think = t + kThink_s;
     think(f, s, me, st, why);

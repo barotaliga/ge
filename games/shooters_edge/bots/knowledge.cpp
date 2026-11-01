@@ -155,19 +155,19 @@ const char* item_call(const ItemSpot& it) {
     case ItemKind::health:
       return "health";
     case ItemKind::mega:
-      return "mega";
+      return "mh";
     case ItemKind::armor1:
-      return "GA";
+      return "ga";
     case ItemKind::armor2:
-      return "YA";
+      return "ya";
     case ItemKind::armor3:
-      return "RA";
+      return "ra";
     case ItemKind::shells:
       return "shells";
     case ItemKind::nails:
       return "nails";
     case ItemKind::rockets:
-      return "rockets";
+      return "rox";
     case ItemKind::cells:
       return "cells";
     case ItemKind::quad:
@@ -179,17 +179,17 @@ const char* item_call(const ItemSpot& it) {
   }
   switch (it.weapon) {
     case 2:
-      return "SSG";
+      return "ssg";
     case 4:
-      return "NG";
+      return "ng";
     case 8:
-      return "SNG";
+      return "sng";
     case 16:
-      return "GL";
+      return "gl";
     case 32:
-      return "RL";
+      return "rl";
     default:
-      return "LG";
+      return "lg";
   }
 }
 

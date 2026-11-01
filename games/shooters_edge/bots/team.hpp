@@ -1,35 +1,22 @@
-// A TEAM OF FIGHTERS: what turns four fighters (fighter.hpp) into a side of a team game, as the
-// team game is played: survival and equipment before frags, the strongest player holding the
-// map's key area, the quad taken on its timer by the players nearest it, the armour and the health
-// left for the teammate who needs them most, the weak falling back to their own, and no shot taken
-// through a teammate.
+// A TEAM OF FIGHTERS: four fighters (fighter.hpp) on one side of a team game, each with a mind of
+// his own (mind.hpp). The team is a ROSTER and nothing more: who is on the side (as a scoreboard
+// shows it: each member's slot and name), so a player knows who not to shoot through and whose
+// lines are his team's. Nothing any member believes is shared: what one knows reaches another only
+// as a team message (`team_say`, a `say_team` his client sends), read or missed by the other's
+// skill.
 //
-// THE KEY AREAS come off the map's items (the map's text, as every fighter reads it): the area held
-// is the best armour's (the 200 armour, else the 150, else the 100), and the quad's. Nothing is
-// named per map: a map whose quad stands by its best armour, as the classic small team map's does,
-// gets one area held and a quad taken from it.
+// THE ROLES each member takes, by his own plan every `kPlan_s` (mind.hpp):
+// - `hold`: on the key area he claimed (the best armour, the launcher or the quad), fighting from
+//   there and chasing no further than `kLeash`;
+// - `rush`: the quad believed due within `kRushAhead_s`, and he one of the two believed nearest;
+// - `carry`: he has the quad: the key areas swept, the enemy hunted;
+// - `free`: the rest: what he lacks, a call for help answered, a point followed.
 //
-// THE PLAN, every `kPlan_s` (each decision on `ai::Why` when a member has one), gives each living
-// member a ROLE:
-// - `hold`: one player, the strongest (health plus armour's protection, a launcher counted extra):
-//   to the held area and stays on it, fighting from there, chasing no further than `kLeash`;
-// - `rush`: the quad due within `kRushAhead_s` (or there) and no teammate carrying it: the two
-//   members nearest it (the holder last) go and wait on it;
-// - `carry`: a member with the quad hunts: to the enemy last seen by anyone on the team, else to
-//   the held area;
-// - `free`: the rest gather what they lack (each item claimed by one member, the one it is worth
-//   most to) and come back to the held area when there is nothing worth having.
-// THE MESSAGES are the team's voice and its wires: a member's sighting is the team's only once he
-// calls it out ("enemy at RA"), a call for help ("need help") brings a strong free member, the one
-// who timed the quad calls the rush ("quad in 10, get quad!"), the carrier calls "have quad!" and
-// "lost quad", and a key item taken is called ("took RA", or by an expert who saw it go,
-// "RA in 20"). Each is sent as a `say_team` by the member's client, so the recording carries it.
+// The rest of the struct is the record a lab draws (the lines said, the counts, the key areas);
+// no fighter reads it.
 //
-// Deterministic: a pure function of the server as the last frame left it and the members' state.
-//
-// ge:summary A team of fighters: roles, the held area, the quad's timer, claims and callouts
-// ge:keywords team teamplay roles hold rush carry free key-area quad-timer stacking claims
-// ge:keywords callout 4on4 team-game fighter regroup
+// ge:summary A team of fighters: the roster, the roles' names, the lines said and the lab's record
+// ge:keywords team teamplay roster roles hold rush carry free key-area 4on4 team-game team_say
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
@@ -66,31 +53,21 @@ struct TeamLine {
 struct Team {
   // Ordered by size, largest first, so the struct packs tight.
   std::string name;
-  std::string last_text;          // the last words said (at `last_text_at`)
   std::vector<TeamLine> log;      // every message said, in order (for the labs)
-  std::vector<Fighter*> members;  // in slot order
-  std::vector<int> claimed;       // per item: the slot going for it (-1: nobody)
+  std::vector<Fighter*> members;  // the roster, in slot order (slots and names only are read)
   TeamStats stats;
-  double last_text_at = -1e9;
-  double enemy_seen = -1;  // when an enemy was last called out (-1: never)
-  double help_until = -1;  // until when a call for help holds
-  double next_plan = 0;
-  Fighter* last_carrier = nullptr;  // who had the quad at the last plan
-  sh::Vec3f enemy_at;               // where the enemy last called out was
-  sh::Vec3f help_at;                // where a member last called for help
-  uint32_t friends = 0;             // the members' slots as bits
-  int32_t hold_item = -1;           // the item whose area is held (an index of the members' items)
-  int32_t quad_item = -1;
-  bool rushing = false;  // a rush was on at the last plan
+  uint32_t friends = 0;    // the members' slots as bits
+  int32_t hold_item = -1;  // the key areas for the labs' map: the best armour's
+  int32_t quad_item = -1;  // and the quad's
 };
 
 // Member `f` says `text` to its team (a `say_team` its client sends), unless it spoke within
-// `kSayGap_s` or the team said the same within `kRepeat_s`; true when said. Nothing on no team.
+// `kSayGap_s` or it was sent the same words within `kRepeat_s`; true when said. Nothing on no team.
 bool team_say(Fighter& f, double t, const std::string& text);
 
-// The team's key areas off its members' items (every member's list is the same map's).
+// The roster's bits and the labs' key areas off the members' items (one map's list).
 void team_init(Team& t);
-// The roles, when due, off the server `s` as the last frame left it.
-void team_plan(Team& t, const server::QcServer& s);
+// The lab's count of the commands spent in each role (the roles are each member's own).
+void team_count(Team& t);
 
 }  // namespace shooters_edge::bots

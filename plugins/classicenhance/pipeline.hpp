@@ -3,6 +3,9 @@
 //
 // 1. **pack**: the pack itself, unchanged, with `source.txt` (how it was found and verified) and
 //    `NOTICE.txt`.
+// Every stage finds its assets by the source's content profile (profile.hpp): the paths below
+// are the first game's row.
+//
 // 2. **textures**: every texture of every map in the pack (`maps/*.bsp`), once each by name,
 //    enhanced (texture.hpp) into `textures/<name>/`, with `textures/index.txt`. Textures nobody
 //    sees drawn (`never_drawn`) are left out.
@@ -112,9 +115,9 @@ struct PackTexture {
   int width = 0, height = 0;
   std::vector<uint8_t> indexed;
 };
-// The palette and every drawn texture of every map in `pack`, once each by name, in the order
-// the maps (sorted by path) and their texture lumps give; false with the reason.
+// The palette and every drawn texture of every map in `pack` (the profile's maps), once each by
+// name, in the order the maps (sorted by path) and their texture lumps give; false with the reason.
 bool pack_textures(std::span<const uint8_t> pack, Palette* palette, std::vector<PackTexture>* out,
-                   std::string* error);
+                   std::string* error, const Profile& profile = classic_profile());
 
 }  // namespace ge::classicenhance

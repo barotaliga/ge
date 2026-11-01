@@ -598,6 +598,7 @@ struct MapLake {
   double level = 0;     // its surface, m
   double depth = 0;     // its deepest water under the surface, m (0: frozen to bear, filled flat)
   double ice = 0;       // m of ice on it on the map's day (0: open water)
+  double thaw = 0;      // 0..1 of the way through the spring's melt (rotten ice, a moat round it)
 };
 
 struct Level {

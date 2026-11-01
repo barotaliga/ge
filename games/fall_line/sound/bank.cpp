@@ -138,6 +138,40 @@ constexpr SoundVoice kLandPowderVoices[] = {
                  .hold_ms = 120}),
 };
 
+// Thin ice giving way: the sheet's own crack, then the sound it carries off across the lake (a
+// thin plate rings its high notes first: the dispersive "pew" falling from 3 kHz), then the slab
+// tipping under a body.
+constexpr SoundVoice kIceCrackVoices[] = {
+    noise_voice({.duration_ms = 14,
+                 .volume = 0.07f,
+                 .filter = {.type = FilterType::highpass, .hz = 1800},
+                 .echo = 0.3f}),
+    tone_voice({.wave = Wave::sine,
+                .from_hz = 3200,
+                .to_hz = 260,
+                .duration_ms = 320,
+                .volume = 0.03f,
+                .delay_ms = 4,
+                .echo = 0.45f,
+                .filter = {.type = FilterType::bandpass, .hz = 1200, .q = 0.7f}}),
+    tone_voice({.wave = Wave::sine,
+                .from_hz = 2400,
+                .to_hz = 300,
+                .duration_ms = 260,
+                .volume = 0.018f,
+                .delay_ms = 70,
+                .echo = 0.45f,
+                .filter = {.type = FilterType::bandpass, .hz = 900, .q = 0.7f}}),
+    tone_voice({.wave = Wave::triangle,
+                .from_hz = 95,
+                .to_hz = 70,
+                .duration_ms = 180,
+                .volume = 0.04f,
+                .delay_ms = 20,
+                .filter = {.type = FilterType::lowpass, .hz = 500},
+                .drive = 0.5f}),
+};
+
 constexpr SoundVoice kHitTreeVoices[] = {
     noise_voice({.duration_ms = 18,
                  .volume = 0.06f,
@@ -431,6 +465,12 @@ constexpr SoundDef kDefs[] = {
      "body's hollow driven thump; then the tree answers, its load shaken down a beat later as a "
      "pink sheet. The woods echo the crack, not the fall.",
      kHitTreeVoices},
+    {kIceCrack,
+     "Thin ice giving way under a skier: a white crack too short to hear as noise, then the lake "
+     "answering with the falling laser whistle a thin sheet carries off (twice, the second "
+     "quieter and later), over the dull driven knock of the slab tipping. The splash is the "
+     "water's own and comes with it.",
+     kIceCrackVoices},
     {kBrushTree,
      "A trunk brushed, not met: the shoulder through the lowest boughs, a soft pink swish, a light "
      "knock on the bark with no crack in it, and a little snow sifting down after. The warning, "

@@ -17,6 +17,7 @@
 // ge:test tests/shooters_edge_team_test.cpp
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -71,6 +72,21 @@ void run(gl::Lab& lab) {
   std::string error;
   std::vector<uint8_t> bytes;
   std::string name = "halls";
+  std::string locs_text, locs_from;
+  if (!lab.arg("locs").empty()) {
+    std::FILE* lf = std::fopen(lab.arg("locs").c_str(), "rb");
+    if (!lf) {
+      lab.fail("se-team: cannot read " + lab.arg("locs"),
+               "next: pass --locs=<a .loc file that exists>, or leave it out to name places off "
+               "the items");
+      return;
+    }
+    char buf[4096];
+    size_t got = 0;
+    while ((got = std::fread(buf, 1, sizeof buf, lf)) > 0) locs_text.append(buf, got);
+    std::fclose(lf);
+    locs_from = lab.arg("locs");
+  }
   if (!basedir.empty()) {
     cl::SearchPath files;
     if (!cl::open_game_dir(basedir, lab.arg("game"), files, error)) {
@@ -86,6 +102,13 @@ void run(gl::Lab& lab) {
       return;
     }
     bytes.assign(f.begin(), f.end());
+    // The map's place names, when the game folder holds them (locs/<map>.loc).
+    std::vector<uint8_t> loc_store;
+    const std::span<const uint8_t> lf = cl::find_file(files, "locs/" + name + ".loc", loc_store);
+    if (!lf.empty()) {
+      locs_text.assign(lf.begin(), lf.end());
+      locs_from = "locs/" + name + ".loc";
+    }
   } else if (!ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bytes,
                                    &error)) {
     lab.fail("se-team: the fixture halls: " + error, "next: run tests/brush_write_test.cpp");
@@ -102,6 +125,8 @@ void run(gl::Lab& lab) {
   o.map = bytes;
   o.map_name = name;
   if (basedir.empty()) o.entities = cn::kTeamHallsEntities;
+  o.locs = locs_text;
+  o.locs_from = locs_from;
   o.progs = &progs;
   o.seed = seed;
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
@@ -194,6 +219,10 @@ void run(gl::Lab& lab) {
   lab.metric("team.frags-per-minute", (r.teams[0].frags + r.teams[1].frags) / (secs / 60),
              "per-min");
   lab.metric("team.faults", static_cast<double>(r.faults), "count");
+  lab.metric("team.place-names", static_cast<double>(r.locs), "count");
+  lab.note("place names: " + std::to_string(r.locs) + " from " + r.locs_from);
+  lab.metric("team.lines-read", static_cast<double>(r.lines_read), "count");
+  lab.metric("team.lines-missed", static_cast<double>(r.lines_missed), "count");
   lab.metric("team.nav-nodes", static_cast<double>(r.nav_nodes), "count");
   lab.metric("team.teleport-links", static_cast<double>(r.teleport_links), "count");
   lab.metric("team.movers", static_cast<double>(r.movers), "count");
@@ -385,6 +414,9 @@ const gl::LabSpec kSpec{
         {"game", "id1", "the game folder under --basedir"},
         {"map", "", "with --basedir: the map (e1m2 when empty)"},
         {"save", "", "also write the recording to this path"},
+        {"locs", "",
+         "the map's place names (a .loc file); else the game folder's locs/<map>.loc, else the "
+         "items'"},
         {"items", "key",
          "the items noted with the nearest a player came: key (the held armour, the quad) or all"},
     },

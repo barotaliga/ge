@@ -15,7 +15,11 @@
 //   reach must lie `kTarnClear` m clear of every run, ski route, piste and lift line.
 // - THE ICE (`tarn_ice`): `air::lake_ice` at its surface over the winter so far (`winter_days`:
 //   the days since the freeze-up, mid-November in the north and mid-May in the south, none in the
-//   summer half), the map's day's mean taken for the whole winter.
+//   summer half), the map's day's mean taken for the whole winter. THE THAW (`thaw_of`): over the
+//   winter's last `kThawDays` the ice grown by then melts away to nothing, ROTTEN as it goes (its
+//   strength falling to `kRotten` of sound ice's, so it bears less than its thickness says,
+//   `bears(lake)`), the shore melting first into a MOAT of open water (`moat_of`, to `kMoat` m;
+//   drawn only round ice that no longer bears, which lies over the dug bowl).
 // - THE BASIN (`lay_tarn`): the ground inside the shore dug into a bowl `kTarnDepth` m under the
 //   rim's lowest point (its floor flat in the middle, shelving up over the outer 0.7 of the
 //   radius), the ground outside raised to just over the water out to the corners of its box and
@@ -26,7 +30,7 @@
 //
 // ge:summary A tarn in a cirque laid on a map: its site, its basin, the ice on the map's day
 // ge:keywords tarn lake cirque find_tarn lay_tarn tarn_ice winter_days lake-ice thin-ice bears
-// ge:keywords map-lake basin dig freeze-up shore reach_of lobes
+// ge:keywords map-lake basin dig freeze-up shore reach_of lobes thaw rotten-ice moat thaw_of
 // ge:skill mountain
 // ge:test tests/mountain_tarn_test.cpp
 #pragma once
@@ -49,16 +53,25 @@ inline constexpr double kTarnWater = 4;     // C: the water under a tarn's ice, 
 inline constexpr double kTarnLobe2 = 0.12;  // of the radius: the shore's two lobes
 inline constexpr double kTarnLobe3 = 0.07;  // its three
 inline constexpr double kTarnBulge = 1 + kTarnLobe2 + kTarnLobe3;  // the shore's farthest reach
+inline constexpr double kThawDays = 40;  // days: the spring's melt, the winter's last
+inline constexpr double kRotten = 0.5;   // rotten ice's strength at the melt's end, of sound ice's
+inline constexpr double kMoat = 6;       // m of open water round the ice at the melt's end
 
 // The site for a tarn `radius` m round, its surface the rim's lowest ground; none if there is no
 // open, flat enough ground for it.
 std::optional<mapgen::MapLake> find_tarn(const mapgen::Level& level, double radius);
 // The days of winter so far on the map's day of the year: since the freeze-up, 0 in summer.
 double winter_days(const mapgen::Level& level);
-// The ice on `lake` on the map's day, m.
+// How far through the spring's melt the map's day is, 0 (none) .. 1.
+double thaw_of(const mapgen::Level& level);
+// The ice on `lake` on the map's day, m (melting through the thaw).
 double tarn_ice(const mapgen::Level& level, const mapgen::MapLake& lake);
-// Whether ice `ice` m thick bears `kg`.
+// Whether sound ice `ice` m thick bears `kg`.
 bool bears(double ice, double kg = kSkierKg);
+// Whether `lake`'s ice bears `kg`, rotten as far as its thaw.
+bool bears(const mapgen::MapLake& lake, double kg = kSkierKg);
+// The open water between `lake`'s ice and its shore, m.
+double moat_of(const mapgen::MapLake& lake);
 // Dig `lake` into the map (or fill it flat where its ice bears a skier), fell the trees in it and
 // add it to `level.lakes`; its `depth` set to the bowl's deepest water.
 void lay_tarn(mapgen::Level& level, mapgen::MapLake lake);
