@@ -209,6 +209,45 @@ void run(gl::Lab& lab) {
                        std::to_string(r.item_at.size()), std::to_string(p.said)});
   }
   lab.table(kt);
+  gl::LabTable bt_{"the map's buttons: where, how, and what each opens",
+                   {"button at (x y z)", "how", "doors", "opens", "used from (x y z)"},
+                   {}};
+  const auto xyz = [](sh::Vec3f a) {
+    return to_fixed(a.x, 0) + " " + to_fixed(a.y, 0) + " " + to_fixed(a.z, 0);
+  };
+  for (const cn::TeamButton& b : r.buttons) {
+    std::string opens;
+    for (const std::string& n : b.opens) opens += (opens.empty() ? "" : ", ") + n;
+    bt_.rows.push_back({xyz(b.at), b.shoot ? "shoot" : "touch", std::to_string(b.doors.size()),
+                        opens.empty() ? "(a way through)" : opens, xyz(b.from)});
+  }
+  lab.table(bt_);
+  lab.metric("team.buttons", static_cast<double>(r.buttons.size()), "count");
+  gl::LabTable et{
+      "each player's ears and area play",
+      {"player", "ears", "sounds", "taken in", "items heard taken", "spawns heard", "spam rockets"},
+      {}};
+  int64_t heard_taken = 0, spawns = 0, sounds = 0, heard = 0;
+  for (const cn::TeamPlayer& p : r.players) {
+    et.rows.push_back({p.name, bt::map_sense_name(bt::map_sense_of(p.skill)),
+                       std::to_string(p.sounds), std::to_string(p.heard),
+                       std::to_string(p.heard_taken), std::to_string(p.heard_spawns),
+                       std::to_string(p.spam_shots)});
+    heard_taken += p.heard_taken;
+    spawns += p.heard_spawns;
+    sounds += p.sounds;
+    heard += p.heard;
+  }
+  lab.table(et);
+  lab.metric("team.sounds-taken-in", static_cast<double>(heard), "count");
+  lab.metric("team.sounds-missed", static_cast<double>(sounds - heard), "count");
+  lab.metric("team.items-heard-taken", static_cast<double>(heard_taken), "count");
+  lab.metric("team.spawns-heard", static_cast<double>(spawns), "count");
+  lab.metric("team.areas-lost-seen",
+             static_cast<double>(r.teams[0].lost_seen + r.teams[1].lost_seen), "count");
+  lab.metric("team.retakes", static_cast<double>(r.teams[0].retakes + r.teams[1].retakes), "count");
+  lab.metric("team.spam-rockets",
+             static_cast<double>(r.teams[0].spam_shots + r.teams[1].spam_shots), "count");
   // The team messages: the first lines in the report, all of them as a file.
   {
     std::string all;
@@ -303,6 +342,27 @@ void run(gl::Lab& lab) {
         n.find("super") != std::string::npos || n == "mega health")
       gl::draw_text(p, static_cast<int>(v.px(a.x)) + s + 4, static_cast<int>(v.py(a.y)) - 4, n,
                     kInk);
+  }
+  // The buttons: a square (red for a shot, blue for a touch), a line to each door it opens (a
+  // ring) and on to every item behind it, and a dot where a player uses it from.
+  for (const cn::TeamButton& b : r.buttons) {
+    const gl::Rgba c = b.shoot ? gl::Rgba{220, 40, 40, 255} : gl::Rgba{40, 90, 220, 255};
+    for (const sh::Vec3f& d : b.doors) {
+      gl::draw_line(p, v.px(b.at.x), v.py(b.at.y), v.px(d.x), v.py(d.y), c, 2);
+      gl::draw_ring(p, v.px(d.x), v.py(d.y), 9, c);
+      for (size_t i = 0; i < r.item_at.size(); i++)
+        for (const std::string& n : b.opens)
+          if (n == r.item_name[i]) {
+            const sh::Vec3f a = r.item_at[i];
+            const sh::Vec3f e = a - d;
+            if (e.x * e.x + e.y * e.y < 400 * 400)
+              gl::draw_line(p, v.px(d.x), v.py(d.y), v.px(a.x), v.py(a.y), c, 1);
+          }
+    }
+    gl::fill_rect(p, static_cast<int>(v.px(b.at.x)) - 6, static_cast<int>(v.py(b.at.y)) - 6, 12, 12,
+                  c);
+    gl::fill_rect(p, static_cast<int>(v.px(b.from.x)) - 2, static_cast<int>(v.py(b.from.y)) - 2, 4,
+                  4, c);
   }
   int x = v.margin;
   for (int k = 0; k < 2; k++) {

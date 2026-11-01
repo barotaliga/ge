@@ -528,6 +528,22 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
                                                   : sh::Vec3f{});
             r.item_routed.push_back(it.node >= 0 && best_n > 0 && best.reached(it.node));
           }
+          r.buttons.clear();
+          for (const bt::ButtonSpot& b : seat.fighter.button_spots) {
+            TeamButton tb;
+            tb.at = b.at;
+            tb.shoot = b.shoot;
+            for (int d : b.doors) {
+              const sh::Edict& de = s.sv.edicts[static_cast<size_t>(d)];
+              tb.doors.push_back({(de.absmin.x + de.absmax.x) * 0.5f,
+                                  (de.absmin.y + de.absmax.y) * 0.5f,
+                                  (de.absmin.z + de.absmax.z) * 0.5f});
+            }
+            for (int32_t i : b.opens)
+              tb.opens.push_back(seat.fighter.items[static_cast<size_t>(i)].name);
+            if (b.node >= 0) tb.from = graph.nodes[static_cast<size_t>(b.node)].origin;
+            r.buttons.push_back(std::move(tb));
+          }
           known_items = &r.item_at;
           break;
         }
@@ -596,11 +612,20 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].held_shots = ts.held_shots;
     r.teams[t].callouts = ts.callouts;
     r.teams[t].messages = ts.messages;
+    r.teams[t].lost_seen = ts.lost_seen;
+    r.teams[t].retakes = ts.retakes;
+    r.teams[t].spam_shots = ts.spam_shots;
   }
   for (size_t k = 0; k < seats.size(); k++) {
     const bt::Mind& mn = seats[k].fighter.mind;
     r.players[k].read = mn.read;
     r.players[k].missed = mn.missed;
+    const bt::Fighter& fi = seats[k].fighter;
+    r.players[k].sounds = fi.hear_stats.sounds;
+    r.players[k].heard = fi.hear_stats.taken;
+    r.players[k].heard_taken = fi.stats.heard_taken;
+    r.players[k].heard_spawns = fi.stats.heard_spawns;
+    r.players[k].spam_shots = fi.stats.spam_shots;
     r.lines_read += mn.read;
     r.lines_missed += mn.missed;
   }

@@ -49,4 +49,32 @@ void team_count(Team& t) {
   for (Fighter* f : t.members) t.stats.role_commands[static_cast<int>(f->role)]++;
 }
 
+const char* role_name(Role r) {
+  switch (r) {
+    case Role::free:
+      return "free";
+    case Role::hold:
+      return "hold";
+    case Role::rush:
+      return "rush";
+    case Role::carry:
+      return "carry";
+  }
+  return "?";
+}
+
+const char* fight_mode_name(FightMode m) {
+  switch (m) {
+    case FightMode::roam:
+      return "roam";
+    case FightMode::fight:
+      return "fight";
+    case FightMode::chase:
+      return "chase";
+    case FightMode::retreat:
+      return "retreat";
+  }
+  return "?";
+}
+
 }  // namespace shooters_edge::bots

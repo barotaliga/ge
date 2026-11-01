@@ -48,8 +48,9 @@
 
 namespace shooters_edge::bots {
 
-constexpr double kRepeatWindow_s = 12;  // a line said again within this reads as a repeat
-constexpr double kMateFresh_s = 15;     // a mate's place or status this old is still believed
+constexpr double kRepeatWindow_s = 12;     // a line said again within this reads as a repeat
+constexpr double kMateFresh_s = 15;        // a mate's place or status this old is still believed
+constexpr double kExpertMateFresh_s = 10;  // an expert drops a mate's place this old
 constexpr double kReport_s[3] = {40, 20, 12};  // a report this often: novice, average, expert
 
 // What a player believes of one teammate.
@@ -95,6 +96,8 @@ struct Mind {
   int32_t told = -1;             // an item a mate pointed it at ("you take it")
   int32_t claim = -1;            // the key item whose area it claimed (-1: none)
   int32_t gave = -1;             // the item it gave up last
+  int32_t retake = -1;           // a key area believed lost: to take back (-1: none)
+  double retake_t = -1e9;        // when it was last believed lost
   bool claimed_said = false;
   bool opened = false;  // its first plan alive is behind it
 };
@@ -114,6 +117,11 @@ bool mind_say(Fighter& f, double t, Said said, ge::shooter::Vec3f at);
 
 // The name of the place `p` is in ("" with no place names).
 std::string place_of(const Fighter& f, ge::shooter::Vec3f p);
+
+// Whether the player at `at` (weak or not) should call for help: an expert only over his own key
+// area being lost (two enemies on it, or one while he is low), an average player whenever an enemy
+// threatens him by a key item, a novice never.
+bool wants_help(const Fighter& f, ge::shooter::Vec3f at, bool weak, double t);
 
 // Whether a teammate is believed to be going for item `i` now.
 bool mate_going(const Fighter& f, int32_t i, double t);
