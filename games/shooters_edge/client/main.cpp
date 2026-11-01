@@ -89,7 +89,6 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
 #include "shooters_edge/client/present.hpp"
-#include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/timedemo.hpp"
@@ -297,8 +296,6 @@ int run_main(int argc, char** argv) {
   cl::Timedemo bench;
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
   cl::add_playback_commands(console, playback, bench);
-  cl::RecordSettings record_settings;  // demo_pack, demo_pack_level (record_cvars.hpp)
-  cl::bind_record_cvars(console, record_settings);
   se::Hud hud = se::make_hud();
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
