@@ -9,7 +9,11 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <map>
 #include <set>
 
 #include "brush/read.hpp"
@@ -78,7 +82,9 @@ std::string stage_key(Stage s, const RunOptions& o) {
             " sharpen " + num(e.sharpen) + " grain " + num(e.grain) + " relief " + num(e.relief) +
             network_key(e);
   } else if (s == Stage::pictures) {
-    text += " v" + std::to_string(kPictureStageVersion);
+    const EnhanceOptions& e = o.textures;
+    text += " v" + std::to_string(kPictureStageVersion) + " scale " + std::to_string(e.scale) +
+            " sharpen " + num(e.sharpen) + " grain " + num(e.grain) + network_key(e);
   } else {
     text += " v1";
   }
@@ -103,12 +109,64 @@ std::string map_name(const std::string& path) {
   return path.substr(5, path.size() - 9);  // "maps/" ... ".bsp"
 }
 
+// A STAGE'S RESUME JOURNAL, <dir>/<stage>.partial: its key on the first line, then one line an
+// item finished ("<name>\t<what the stage keeps of it>"), appended as each item's files are
+// written. A stage cut off (cancelled, killed, a failure) and run again with the same key skips
+// every item the journal holds and takes its kept line instead of redoing the work; a changed key
+// or --force starts the stage over. The journal goes once the stage's record is written.
+struct Journal {
+  fs::path path;
+  std::map<std::string, std::string> done;
+  std::ofstream out;
+
+  void open(const fs::path& dir, const char* stage, const std::string& key, bool force) {
+    path = dir / (std::string(stage) + ".partial");
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    if (!force) {
+      std::ifstream in(path);
+      std::string line;
+      if (std::getline(in, line) && line == "key " + key) {
+        while (std::getline(in, line)) {
+          const size_t tab = line.find('\t');
+          if (tab != std::string::npos) done[line.substr(0, tab)] = line.substr(tab + 1);
+        }
+      }
+    }
+    out.open(path, std::ios::trunc);
+    out << "key " << key << "\n";
+    for (const auto& [name, kept] : done) out << name << "\t" << kept << "\n";
+    out.flush();
+  }
+  void finish() {
+    out.close();
+    std::error_code ec;
+    fs::remove(path, ec);
+  }
+};
+
 // The run's reports: a stage starting with its item count, and each item done. `item` is false
-// once the run has been asked to stop, with the reason in `*error`.
+// once the run has been asked to stop, with the reason in `*error`. `resumed(name)` is the kept
+// line of an item an earlier cut-off run of this stage finished (the journal above), else null;
+// `keep(name, line)` journals an item once its files are written.
 struct Reports {
   const RunOptions& o;
   Stage stage;
-  uint32_t total = 0, done = 0;
+  Journal* journal = nullptr;
+  uint32_t total = 0, done = 0, skipped = 0;
+
+  const std::string* resumed(const std::string& name) {
+    if (journal == nullptr) return nullptr;
+    const auto it = journal->done.find(name);
+    if (it == journal->done.end()) return nullptr;
+    skipped++;
+    return &it->second;
+  }
+  void keep(const std::string& name, const std::string& line) {
+    if (journal == nullptr || !journal->out) return;
+    journal->out << name << "\t" << line << "\n";
+    journal->out.flush();
+  }
 
   void started(size_t items) {
     total = uint32_t(items);
@@ -170,7 +228,18 @@ bool run_textures(const Source& src, const fs::path& dir, const RunOptions& o, R
   std::string index = "# name folder width height material glows (first map)\n";
   uint32_t glowing = 0;
   for (const PackTexture& t : textures) {
+    if (const std::string* kept = rep.resumed(t.name)) {
+      // "<files written> <its index line>"
+      const size_t space = kept->find(' ');
+      r.files += uint32_t(std::strtoul(kept->c_str(), nullptr, 10));
+      const std::string line = space == std::string::npos ? "" : kept->substr(space + 1);
+      index += line + "\n";
+      if (line.find(" glows ") != std::string::npos) glowing++;
+      if (!rep.item(t.name, error)) return false;
+      continue;
+    }
     const Enhanced e = enhance_texture(t.name, t.indexed, t.width, t.height, palette, o.textures);
+    const uint32_t files_before = r.files;
     const std::string folder = safe_name(t.name);
     const fs::path at = dir / "textures" / folder;
     bool ok = save_png(at / "albedo.png", e.albedo);
@@ -189,9 +258,11 @@ bool run_textures(const Source& src, const fs::path& dir, const RunOptions& o, R
       *error = "cannot write the maps of texture '" + t.name + "' under " + at.string();
       return false;
     }
-    index += t.name + " " + folder + " " + std::to_string(t.width) + " " +
-             std::to_string(t.height) + " " + material_name(e.material) + " " +
-             (e.glows ? "glows" : "-") + " " + t.map + "\n";
+    const std::string line = t.name + " " + folder + " " + std::to_string(t.width) + " " +
+                             std::to_string(t.height) + " " + material_name(e.material) + " " +
+                             (e.glows ? "glows" : "-") + " " + t.map;
+    index += line + "\n";
+    rep.keep(t.name, std::to_string(r.files - files_before) + " " + line);
     if (o.progress) {
       const assets::Image source = to_rgba(t.indexed, t.width, t.height, palette);
       if (!rep.item(t.name, error, &source, &e.albedo)) return false;
@@ -226,6 +297,16 @@ bool run_lightmaps(const Source& src, const fs::path& dir, const RunOptions& o, 
   rep.started(maps.size());
   uint64_t luxels = 0, bytes = 0;
   for (const vfs::PakEntry* e : maps) {
+    if (const std::string* kept = rep.resumed(map_name(e->path))) {
+      unsigned long long l = 0, b = 0;
+      if (std::sscanf(kept->c_str(), "%llu %llu", &l, &b) == 2) {
+        luxels += l;
+        bytes += b;
+      }
+      r.files++;
+      if (!rep.item(map_name(e->path), error)) return false;
+      continue;
+    }
     brush::Map map;
     if (!brush::read_bsp(vfs::pak_file(src.content(), *e), &map, error)) {
       *error = e->path + ": " + *error;
@@ -241,6 +322,8 @@ bool run_lightmaps(const Source& src, const fs::path& dir, const RunOptions& o, 
     luxels += baked.stats.luxels;
     bytes += size;
     r.files++;
+    rep.keep(map_name(e->path),
+             std::to_string(uint64_t(baked.stats.luxels)) + " " + std::to_string(uint64_t(size)));
     if (!rep.item(map_name(e->path), error)) return false;
   }
   r.note = std::to_string(r.files) + " maps rebaked, " + std::to_string(luxels / 1000) +
@@ -260,6 +343,12 @@ bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, Rep
   reports.started(sounds.size());
   std::string index = "# path seconds loop-start source-hz noise-db removed-db added-db\n";
   for (const vfs::PakEntry* e : sounds) {
+    if (const std::string* kept = reports.resumed(e->path.substr(6))) {
+      index += *kept + "\n";
+      r.files++;
+      if (!reports.item(e->path.substr(6), error)) return false;
+      continue;
+    }
     Pcm in;
     if (!read_wav(vfs::pak_file(src.content(), *e), &in, error)) {
       *error = e->path + ": " + *error;
@@ -274,9 +363,11 @@ bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, Rep
     }
     r.files++;
     const double seconds = out.rate > 0 ? double(out.samples.size()) / out.rate : 0.0;
-    index += rel + " " + num(seconds) + " " + std::to_string(out.loop_start) + " " +
-             num(rep.source_hz) + " " + num(rep.noise_db) + " " + num(rep.removed_db) + " " +
-             num(rep.added_db) + "\n";
+    const std::string line = rel + " " + num(seconds) + " " + std::to_string(out.loop_start) + " " +
+                             num(rep.source_hz) + " " + num(rep.noise_db) + " " +
+                             num(rep.removed_db) + " " + num(rep.added_db);
+    index += line + "\n";
+    reports.keep(rel, line);
     if (!reports.item(rel, error)) return false;
   }
   if (!write_text(dir / "sounds" / "index.txt", index)) {
@@ -316,31 +407,48 @@ bool run_models(const Source& src, const fs::path& dir, const RunOptions& o, Rep
   return true;
 }
 
-bool run_pictures(const Source& src, const fs::path& dir, Reports& rep, StageResult& r,
-                  std::string* error) {
+bool run_pictures(const Source& src, const fs::path& dir, const RunOptions& o, Reports& rep,
+                  StageResult& r, std::string* error) {
   Palette palette;
   std::vector<PackPicture> pictures;
   if (!pack_pictures(src.pack, &palette, &pictures, error)) return false;
   rep.started(pictures.size());
   std::string index = "# name width height transparent-index from\n";
+  const int scale = std::clamp(o.textures.scale, 1, 8);
   for (const PackPicture& p : pictures) {
+    if (const std::string* kept = rep.resumed(p.name)) {
+      index += *kept + "\n";
+      r.files += 2;
+      if (!rep.item(p.name, error)) return false;
+      continue;
+    }
     const fs::path at = dir / "pictures" / (p.name + ".png");
-    if (!save_png(at, picture_rgba(p.picture, palette, p.transparent))) {
+    const fs::path big = dir / "pictures" / "enhanced" / (p.name + ".png");
+    const assets::Image before = picture_rgba(p.picture, palette, p.transparent);
+    const assets::Image after = enhance_picture(p, palette, o.textures);
+    if (!save_png(at, before)) {
       *error = "cannot write " + at.string();
       return false;
     }
-    r.files++;
-    index += p.name + " " + std::to_string(p.picture.width) + " " +
-             std::to_string(p.picture.height) + " " + std::to_string(p.transparent) + " " + p.from +
-             "\n";
-    if (!rep.item(p.name, error)) return false;
+    if (!save_png(big, after)) {
+      *error = "cannot write " + big.string();
+      return false;
+    }
+    r.files += 2;
+    const std::string line = p.name + " " + std::to_string(p.picture.width) + " " +
+                             std::to_string(p.picture.height) + " " +
+                             std::to_string(p.transparent) + " " + p.from;
+    index += line + "\n";
+    rep.keep(p.name, line);
+    if (!rep.item(p.name, error, &before, &after)) return false;
   }
   if (!write_text(dir / "pictures" / "index.txt", index)) {
     *error = "cannot write " + (dir / "pictures" / "index.txt").string();
     return false;
   }
   r.files++;
-  r.note = std::to_string(pictures.size()) + " pictures, unscaled";
+  r.note = std::to_string(pictures.size()) + " pictures, as the pack has them and at " +
+           std::to_string(scale) + "x" + (o.textures.network != nullptr ? " by the network" : "");
   return true;
 }
 
@@ -429,10 +537,17 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
       continue;
     }
     if (!opts.force && recorded_key(report->dir, stage_name(s)) == key) {
+      std::error_code gone;  // a journal left by a cut-off forced rerun of a current stage
+      fs::remove(report->dir / (std::string(stage_name(s)) + ".partial"), gone);
       skip("up to date");
       continue;
     }
-    Reports rep{opts, s};
+    // The pack and the models stages have no journal: the pack is one item, and the models stage
+    // writes its files inside enhance_models.
+    Journal journal;
+    const bool journaled = s != Stage::pack && s != Stage::models;
+    if (journaled) journal.open(report->dir, stage_name(s), key, opts.force);
+    Reports rep{opts, s, journaled ? &journal : nullptr};
     const auto t0 = std::chrono::steady_clock::now();
     bool ok = false;
     switch (s) {
@@ -452,7 +567,7 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
         ok = run_models(source, report->dir, opts, rep, r, error);
         break;
       case Stage::pictures:
-        ok = run_pictures(source, report->dir, rep, r, error);
+        ok = run_pictures(source, report->dir, opts, rep, r, error);
         break;
     }
     r.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
@@ -468,6 +583,11 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
       *error =
           "cannot record the " + std::string(stage_name(s)) + " stage in " + report->dir.string();
       return false;
+    }
+    if (journaled) journal.finish();
+    if (rep.skipped > 0) {
+      report->stages.back().note +=
+          "; " + std::to_string(rep.skipped) + " kept from a run cut off before";
     }
     if (opts.progress)
       opts.progress({Progress::Kind::finished, s, rep.done, rep.total, r.note, nullptr, nullptr});

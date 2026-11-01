@@ -19,6 +19,7 @@
 #include "capture/av_export.hpp"
 #include "gpu/target.hpp"
 #include "lab/gif.hpp"
+#include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
 #include "shooters_edge/client/demo_sound.hpp"
@@ -147,7 +148,10 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   const look::Picture look_default;
   const look::Picture& look = o.picture ? *o.picture : look_default;
   se::Hud hud = se::make_hud();
-  se::HudArt art = se::free_art();
+  // The status bar as the window's `hud_art auto` draws it: the packs' own pictures (enhanced
+  // when ce_pictures is on and the cache has them), else the free art.
+  se::HudArt art = load_classic_pictures(files, look.ce.pictures).hud;
+  if (art.bar.empty()) art = se::free_art();
   art.finish();
   const auto w = static_cast<uint32_t>(o.width), h = static_cast<uint32_t>(o.height);
   ge::gpu::Target out = ge::gpu::create_target(device, "demo-video.frame", w, h);

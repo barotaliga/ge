@@ -13,18 +13,23 @@
 //    as glTF with enhanced skins under `models/`, sprites' frames under `sprites/`, and
 //    `replaced.txt`: what the engine draws in their place (replace.hpp).
 // 6. **pictures**: the pack's 2D art (pictures.hpp: the wad's pictures and font sheet, the
-//    `gfx/` pictures) in the palette's colours under `pictures/<name>.png`, unscaled, with
-//    `pictures/index.txt`.
+//    `gfx/` pictures) in the palette's colours under `pictures/<name>.png`, unscaled, and
+//    upscaled the textures' way (`enhance_picture`, at the textures' scale and by their upscaler)
+//    under `pictures/enhanced/<name>.png`, with `pictures/index.txt`.
 //
 // A stage whose recorded key (its version and options) matches is skipped; `RunOptions::force`
 // reruns it. `RunOptions::only` runs the named stages alone (the ones before them must have run).
 // A report says per stage whether it ran, what it wrote and how long it took. While it runs it
 // reports each stage's start, items and end to `RunOptions::progress` (progress.hpp draws them),
-// and stops between items once `RunOptions::cancel` is set.
+// and stops between items once `RunOptions::cancel` is set. A stage cut off between items (the
+// cancel, a kill, a failure) resumes: its journal (`<stage>.partial`, its key and each finished
+// item) lets a rerun with the same key skip every item already written, so a long bake goes on
+// where it stopped; a changed key or `force` starts the stage over. The pack and models stages
+// have no journal.
 //
 // ge:summary The enhancement pipeline's stages, pack to pictures, into the cache
 // ge:keywords pipeline stage pack textures lightmaps sounds models run skip force cache enhance
-// ge:keywords pictures
+// ge:keywords pictures resume journal partial cut-off
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #pragma once
@@ -54,7 +59,7 @@ bool stage_named(const std::string& name, Stage* out);
 
 inline constexpr int kTextureStageVersion = 1;
 inline constexpr int kSoundStageVersion = 1;
-inline constexpr int kPictureStageVersion = 1;
+inline constexpr int kPictureStageVersion = 2;  // 2: each picture also enhanced (enhance_picture)
 
 // What the pipeline reports while it works (progress.hpp's board reads it): a stage started
 // (with its item count), an item done, a stage finished, skipped or failed.

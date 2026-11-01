@@ -86,4 +86,11 @@ assets::Image to_rgba(std::span<const uint8_t> indexed, int width, int height,
 Enhanced enhance_texture(std::string_view name, std::span<const uint8_t> indexed, int width,
                          int height, const Palette& palette, const EnhanceOptions& options = {});
 
+// A picture's colours (`rgb`'s alpha ignored) upscaled `options.scale` times the way a texture's
+// albedo is: the trained network's picture when it is set at that factor, else the kernel's with
+// its sharpening and grain (seeded by `name`). The picture is read as wrapping round its edges,
+// so a picture that does not tile is padded first (pictures.hpp's `enhance_picture` does).
+assets::Image upscale_albedo(const assets::Image& rgb, std::string_view name,
+                             const EnhanceOptions& options = {});
+
 }  // namespace ge::classicenhance

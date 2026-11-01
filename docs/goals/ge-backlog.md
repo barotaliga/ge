@@ -219,6 +219,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 - `ge pak ls|extract|build|convert|sum` (done: pak and pk3 listed with CRC-32 and SHA-256, files extracted, a directory packed, pak to pk3 and back, a file's sums kept and checked; `ge pak ls <gamedir> [--mods=a,b] [--hidden]` done too (each file's winning source and what it hides, over engine/vfs/search.hpp, .pk3dir included); next, a deflated .pk3 when the engine has a deflate writer; asked for by the classic-enhance and weapons threads and Niclas)
 - `ge tool classicenhance -- extract <kind> <names>` (a pack's original textures or skins written at 1x as PNG to scratch, and the enhanced ones read back out of the cached glTF, in place of a throwaway pak, BSP and MDL reader per experiment)
+- `ge tool classicenhance -- run --only=<stage>` resuming per item (a 30-minute CPU bake cut off at 186 of 217 pictures started over; 2D art thread, #415; done: each stage but the pack and the models journals its finished items in `<stage>.partial`, and a rerun with the same key skips them)
 - `ge bsp info|ents|shot` (lumps and limits, the entity lump as text, a top-down CPU picture of the leaves, the PVS from a point, the hulls)
 - `ge progs build|disasm|run|trace|profile|diff` (the engine's own compiler for the game's VM language, and the `progs` VM inspected)
 - `ge server --map --bots --for` (a headless dedicated server with bots, its input log written for replay, `ge state` and diverge)
