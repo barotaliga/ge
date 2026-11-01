@@ -714,13 +714,18 @@ Stats read_stats(const server::QcServer& s, int ent) {
 
 void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, int slot,
                   const char* entities, sh::AimSkill skill, double hz, uint32_t seed) {
-  // An expert moves as a pro does: the bunny hop on practised hands (shooter/pilot.hpp); the
-  // others walk and strafe on a person's hands.
+  // An expert moves as a pro does: the bunny hop on practised hands (shooter/pilot.hpp); an
+  // average player hops the simple way (forward and the side key of the turn) on steady hands;
+  // a novice walks and strafes on a person's hands.
   const bool expert = skill == sh::AimSkill::expert || skill == sh::AimSkill::perfect;
+  const bool average = skill == sh::AimSkill::average;
   sh::PilotSettings ps;
-  ps.hop = expert;
-  sh::bot_init(f.bot, g, ps, expert ? sh::PilotHands::practised : sh::PilotHands::human, skill, hz,
-               seed);
+  ps.hop = expert || average;
+  ps.hop_simple = average;
+  const sh::PilotHands hands = expert    ? sh::PilotHands::practised
+                               : average ? sh::PilotHands::steady
+                                         : sh::PilotHands::human;
+  sh::bot_init(f.bot, g, ps, hands, skill, hz, seed);
   f.slot = slot;
   f.sense = map_sense_of(skill);
   f.rng = ge::core::make_rng(seed * 2654435761u + 12345u);

@@ -69,11 +69,13 @@ struct Way {
   gl::Rgba colour;
   sh::PilotHands hands;
   bool strafe, hop;
+  bool simple = false;
 };
 constexpr Way kWays[] = {
     {"walk", {150, 150, 150, 255}, sh::PilotHands::human, false, false},
     {"strafe", {40, 90, 220, 255}, sh::PilotHands::human, true, false},
     {"hop", {240, 120, 20, 255}, sh::PilotHands::practised, true, true},
+    {"hop-simple", {0, 170, 190, 255}, sh::PilotHands::steady, true, true, true},
     {"hop-late", {200, 60, 60, 255}, sh::PilotHands::human, true, true},
     {"hop-sharp", {20, 160, 90, 255}, sh::PilotHands::none, true, true},
 };
@@ -245,6 +247,7 @@ void run(gl::Lab& lab) {
       sh::PilotSettings ps;
       ps.strafe = kWays[w].strafe;
       ps.hop = kWays[w].hop;
+      ps.hop_simple = kWays[w].simple;
       t.runs[w] =
           bo::run_route(*m.world, graph, t.from, t.to, kWays[w].hands, seed, ps, limit, t.velocity);
       const std::vector<sh::TrackPoint> tr = run_track(t.runs[w]);

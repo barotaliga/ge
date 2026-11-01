@@ -171,7 +171,12 @@ from where the route lies against the velocity (held 12 degrees and `hop_side_s`
 when the route lies 45 degrees off), sets the view ahead of the velocity by the turn it can make,
 and, given the map's solids, flips side when the arc it is on meets a wall within 0.12 s. It
 leaves the mode near the route's end, slowed on the ground or aiming at a player. Expert and
-perfect bots hop with practised hands (no delay, no settle); the rest walk. On the pro's own
+perfect bots hop with practised hands (no delay, no settle). Average bots hop the SIMPLE way
+(`hop_simple`, steady hands): forward held with the side key of the way the route turns, the
+view kept so the two keys' wish lies across the velocity at the angle that gives the turn the
+route asks for, the side picked at each jump; it keeps its speed on a straight and gains in the
+curves (speed p90 372 on the pro's trips, against the walk's 368 and the expert's 450). Novices
+walk. On the pro's own
 trips over a real map the expert hop takes about 1.2 times his time, the walk 1.6 times.
 
 The labs: `se-moves` (any demo, any player: the map as a wireframe from above and at an angle,

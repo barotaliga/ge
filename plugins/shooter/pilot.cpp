@@ -23,6 +23,7 @@ constexpr float kJumpOver = 1.15f;  // and at most this share (and 16 u/s) of it
 constexpr float kJumpAim = 0.95f;   // with the velocity within this cosine of the jump's way
 constexpr float kPastStart = 24;    // past a jump's start this far without its speed: run up
 constexpr float kStrafeHold = 2;    // the strafe's side holds until the target is this far off, deg
+constexpr float kSimpleSide = 3;    // the simple hop takes the side the route is this far off, deg
 constexpr float kStrafeSpeed = 0.8f;  // a strafe starts moving at least this share of maxspeed
 constexpr float kLevel = 2;           // a strafe stretch's nodes lie within this of one height
 constexpr float kClear = 4;           // a player waits this far clear of a mover's box, units
@@ -479,11 +480,19 @@ std::vector<ai::AxisHands> pilot_hands(PilotHands profile) {
     h[0] = {false, 0, 0.3, 0.4, 0, 1, 1800, -1e9, 1e9, 0};
     h[1] = {false, 0, 0, 0.5, 0, 1, 30, -1, 1, 0};
     h[2] = {false, 0, 0, 0.5, 0, 1, 30, -1, 1, 0};
+  } else if (profile == PilotHands::steady) {
+    // A movement known but not drilled: a little late (steered from that far ahead), a
+    // wandering view, no spring (a spring this quick rings at the command rate).
+    h[0] = {false, 0.03, 1.5, 0.6, 0, 1, 2400, -1e9, 1e9, 0};
+    h[1] = {false, 0.03, 0, 0.5, 0, 1, 20, -1, 1, 0};
+    h[2] = {false, 0.03, 0, 0.5, 0, 1, 20, -1, 1, 0};
   }
   return h;
 }
 
-float pilot_lead_s(PilotHands profile) { return profile == PilotHands::human ? 0.15f : 0.0f; }
+float pilot_lead_s(PilotHands profile) {
+  return profile == PilotHands::human ? 0.15f : profile == PilotHands::steady ? 0.03f : 0.0f;
+}
 
 void pilot_init(Pilot& p, const NavGraph& g, const PilotSettings& set,
                 std::span<const ai::AxisHands> hands, double hz, uint32_t seed) {
@@ -638,13 +647,20 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       p.side_s += dt;
       const int8_t want = err > p.set.hop_hold ? -1 : err < -p.set.hop_hold ? 1 : 0;
       const float swing = err < 0 ? -err : err;
-      if (p.strafe_side == 0 || (want != 0 && want != p.strafe_side &&
-                                 (p.side_s >= p.set.hop_side_s || swing > p.set.hop_swing))) {
+      if (!p.set.hop_simple &&
+          (p.strafe_side == 0 || (want != 0 && want != p.strafe_side &&
+                                  (p.side_s >= p.set.hop_side_s || swing > p.set.hop_swing)))) {
         p.strafe_side = want != 0 ? want : 1;
         p.side_s = 0;
       }
+      if (p.set.hop_simple && (s.onground || p.strafe_side == 0)) {
+        // The simple hop: the side the route turns to, chosen at each jump and held through
+        // the air (a swap of side swings the view 90 degrees, so it is not done in flight).
+        p.strafe_side = err > kSimpleSide ? -1 : err < -kSimpleSide ? 1 : p.strafe_side;
+        if (p.strafe_side == 0) p.strafe_side = 1;
+      }
       // A wall in the arc: the other side at once, when its arc is the clearer.
-      if (s.world != nullptr && !s.onground) {
+      if (!p.set.hop_simple && s.world != nullptr && !s.onground) {
         const float mine =
             arc_clear(*s.world, s.origin, s.velocity, p.strafe_side, dt, p.set.hop_see_s);
         if (mine < p.set.hop_see_s) {
@@ -659,13 +675,36 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       // The view on the velocity, wanted where it will have turned to when late hands get there:
       // the most turn the move gives at this speed, the way the side held turns it.
       const float rate = -static_cast<float>(p.strafe_side) * hop_turn_rate(speed, dt);
-      float lead = rate * p.set.lead_s;
+      float lead = rate * p.set.lead_s;  // (the simple hop leads by its own turn)
       if (lead > 45) lead = 45;
       if (lead < -45) lead = -45;
-      w.yaw = unwrap(vh + lead, p.yaw);
       w.side = static_cast<float>(p.strafe_side);
-      const float err_abs = err < 0 ? -err : err;
-      if (err_abs > p.set.hop_brake && speed > s.maxspeed) w.forward = -1;
+      if (p.set.hop_simple) {
+        // Forward and the side key: their wish lies 45 degrees off the view toward the side. Its
+        // angle off the velocity steers: at acos(30 / v) the air adds nothing, at 90 it adds 30
+        // across (the most turn); between, the turn the route asks for (its error made good in
+        // `hop_look_s`), and only as much speed as that turn brings: it keeps its speed on a
+        // straight and gains in the curves (a gentle weave on a straight lost more to walls and
+        // late hands than it gained, measured on the se-hop lab's trips).
+        const double side = static_cast<double>(p.strafe_side);
+        const double toward = -side * static_cast<double>(err) * (core::kPi / 180);
+        double add = static_cast<double>(speed) * toward * static_cast<double>(dt) /
+                     static_cast<double>(p.set.hop_look_s);
+        add = add < 0 ? 0 : add > 30 ? 30 : add;
+        double c = speed > 30 ? (30 - add) / static_cast<double>(speed) : 0;
+        c = c < 0 ? 0 : c > 1 ? 1 : c;
+        const double across = core::libm::acos(c) * (180 / core::kPi);
+        const float rate_simple = static_cast<float>(add) / (speed > 1 ? speed : 1) / dt *
+                                  static_cast<float>(180 / core::kPi);
+        w.yaw = unwrap(vh - static_cast<float>(side * (across - 45)) -
+                           static_cast<float>(side) * rate_simple * p.set.lead_s,
+                       p.yaw);
+        w.forward = 1;
+      } else {
+        w.yaw = unwrap(vh + lead, p.yaw);
+        const float err_abs = err < 0 ? -err : err;
+        if (err_abs > p.set.hop_brake && speed > s.maxspeed) w.forward = -1;
+      }
       if (s.onground) {
         // The landing's own command: jump (before friction) and strafe on.
         w.jump = !p.jump_pressed;

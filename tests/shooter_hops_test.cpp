@@ -4,7 +4,7 @@
 // a walker reads as no jumps; a step of hundreds of units and a dead player cut the track; the
 // air's most turn at 300 units/s and 77 commands a second is about 440 degrees a second. On the
 // nav course the pilot's hop mode, with practised hands, runs the long straight faster than its
-// walk.
+// walk; the simple hop (forward and the side key, steady hands) keeps about its speed there.
 //
 // ge:summary Tests: the hop reader on an ideal hopper and a walker, cuts, max_turn, the pilot hop
 // ge:keywords test hops bunny-hop read_hops chain max_turn turn-share lag cut pilot-hop
@@ -160,4 +160,23 @@ TEST(the_pilot_hops_the_long_straight_faster_than_it_walks) {
   CHECK_MSG(b.top_speed > a.top_speed + 20, "hopping reached " + std::to_string(b.top_speed) +
                                                 " u/s against walking's " +
                                                 std::to_string(a.top_speed));
+}
+
+TEST(the_simple_hop_keeps_about_its_speed_on_the_long_straight) {
+  const std::unique_ptr<pr::Course> c = pr::make_course();
+  const pr::CourseRoute r = pr::course_long_straight(*c);
+  sh::PilotSettings walk = pr::course_strafe_settings();
+  walk.strafe = false;
+  sh::PilotSettings hop = walk;
+  hop.hop = true;
+  hop.hop_simple = true;
+  const pr::RunResult a = pr::run_course(*c, r.from, r.to, sh::PilotHands::human, 1, walk);
+  const pr::RunResult b = pr::run_course(*c, r.from, r.to, sh::PilotHands::steady, 1, hop);
+  CHECK(a.arrived && b.arrived);
+  CHECK_MSG(b.stats.hop_jumps >= 2,
+            "the simple hop jumped " + std::to_string(b.stats.hop_jumps) + " times");
+  // It gains only in curves, so on a straight it keeps about the speed it set off at.
+  CHECK_MSG(b.top_speed > 0.85f * a.top_speed,
+            "the simple hop reached " + std::to_string(b.top_speed) + " u/s against walking's " +
+                std::to_string(a.top_speed));
 }

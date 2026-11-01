@@ -39,19 +39,18 @@
 //               landing's command (no friction taken). With the map's solids in the sense, a
 //               side whose arc meets a wall within `hop_see_s` gives way to the other. Left
 //               `hop_end` units before the stretch ends, or landing under `hop_slow` x maxspeed.
+//               `hop_simple` (an average player) holds forward and the side the route turns to.
 // STUCK: no nearer the target for `stuck_s` on the ground plans again from the node nearest where
 // it stands; LOST (more than `lost` units from the link, on the ground) the same. Every decision
 // is recorded on the `ai::Why` handed in (`link`: the mode chosen, with its facts), and the intent
 // before the hands (`hands`: yaw, forward, side).
 //
 // THE HANDS (`ai::Hands`): yaw, forward and side pass through them, the jump untouched.
-// `none` presses what the pilot wants; `human` reacts about 0.15 s late and moves as a hand does
-// (it cannot hold a hop's speed); `practised` (an expert's movement) has no reaction to wait for
-// and no settle, as a pro's view stays within a few degrees of his velocity while it turns.
+// `none` presses what the pilot wants; `human` reacts about 0.15 s late (too late to hop);
+// `practised` (an expert's) no reaction or settle; `steady` (an average's) a little late.
 //
-// Allocates only when it plans (the route's vector); deterministic to the bit (floats in the
-// move's order, angles through core's libm). Held by tests/shooter_pilot_test.cpp, drawn by the
-// `se-pilot` lab.
+// Allocates only when it plans; deterministic to the bit (angles through core's libm). Drawn by
+// the `se-pilot` and `se-hop` labs.
 //
 // ge:summary The pilot: a nav route played one command at a time through the player move
 // ge:keywords pilot bot route follow usercmd command jump run-up ride plat door wait strafe-jump
@@ -95,12 +94,17 @@ struct PilotSettings {
   float hop_brake = 70;     // the aim this far off the velocity: the back key pressed too, deg
   float hop_slow = 0.75f;   // landed under this share of maxspeed: the hop ends (run instead)
   float hop_see_s = 0.12f;  // the arc ahead checked for a wall this long, s (with a world)
+  // The SIMPLE hop (an average player's): forward held with the side key of the way the route
+  // turns, the view kept 45 degrees outside the velocity so the two keys' wish lies across it;
+  // no side switch to weave, no look ahead for walls, no brake.
+  bool hop_simple = false;
 };
 
 enum class PilotMode : uint8_t { idle, walk, run_up, jump, air, wait, ride, strafe, arrived, hop };
+inline constexpr int kPilotModes = 10;  // PilotMode's count: a table indexed by mode is this long
 const char* pilot_mode_name(PilotMode m);
 
-enum class PilotHands : uint8_t { none, human, practised };
+enum class PilotHands : uint8_t { none, human, practised, steady };
 // The hands' axes: yaw (degrees), forward and side (shares of maxspeed), jump.
 std::vector<ai::AxisHands> pilot_hands(PilotHands profile);
 // How far ahead a pilot with these hands steers from (their delay), s.

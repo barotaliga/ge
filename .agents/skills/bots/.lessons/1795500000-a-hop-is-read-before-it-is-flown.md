@@ -22,3 +22,10 @@ corridors: look 0.12 s ahead and only flip the side.
 
 Without `PilotBot.world` the hop flies blind: in the arena an expert with no world picked up one
 item in two minutes; with it, experts outscored novices 124 to 86.
+
+A simpler hop for an average player (forward with the side key of the turn) steers by the wish's
+angle off the velocity: at acos(30 / v) the air adds nothing, at 90 degrees it adds 30 across.
+Pick the angle that gives the turn the route asks for. Forcing a minimum turn to gain on
+straights (a gentle weave) and giving it the expert's arc check both made it SLOWER on the real
+trips (walls and late hands); a side change swings this view 90 degrees, so change side only at
+a jump.
