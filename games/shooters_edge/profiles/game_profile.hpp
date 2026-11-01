@@ -12,6 +12,7 @@
 // - **The fallback map**: where the window starts when the content holds no start map (the
 //   content row's `start_map`): the built-in arena.
 // - **The full game** is the content row's `full_game` file being in the packs.
+// - **Items, their words and the sounds** a bot reads (items.hpp).
 //
 // ge:summary A classic game's game half as data: each mode's program files, the fallback map
 // ge:keywords game-profile profile classic program progs qwprogs multiplayer single-player
@@ -24,6 +25,7 @@
 #include <string_view>
 
 #include "classicenhance/profile.hpp"
+#include "shooters_edge/profiles/items.hpp"
 
 namespace shooters_edge::profiles {
 
@@ -32,6 +34,7 @@ struct GameProfile {
   std::span<const std::string_view> multiplayer_programs;    // looked for in order
   std::span<const std::string_view> single_player_programs;  // looked for in order
   std::string_view fallback_map;                             // with no start map in the content
+  ItemTables tables;  // its items, their words and the sounds a bot reads (items.hpp)
 };
 
 inline constexpr std::string_view kClassicMultiplayer[] = {"qwprogs.dat", "progs.dat"};
@@ -41,7 +44,8 @@ inline constexpr GameProfile kGameProfiles[] = {
     {.id = "classic",
      .multiplayer_programs = kClassicMultiplayer,
      .single_player_programs = kClassicSinglePlayer,
-     .fallback_map = "arena"},
+     .fallback_map = "arena",
+     .tables = kClassicTables},
 };
 
 // The first row: the classic game, the one every reader uses until a choice of game is made.
