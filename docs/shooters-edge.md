@@ -104,11 +104,12 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
 
 - **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
   with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). **`-game <folder>`**
-  picks a game folder other than `id1`. **`-progs <file>`** runs a mod's progs in place of the
+  plays a mod: its folder is mounted over `id1`, so the mod's files win and everything it does
+  not ship comes from the base game (saves go to the mod's folder). **`-progs <file>`** runs a mod's progs in place of the
   baseline mod (§ Running your own mod), and **`-models <dir>`** names the held weapons' folder
-  (by default the tree's `games/shooters_edge/content/models/view`). Its packs are read in order (`pak0.pak`, `pak1.pak`, ...
-  until a number is missing; any case), and a loose file in the folder (`maps/mymap.bsp`)
-  overrides the packs (`client/files.hpp`).
+  (by default the tree's `games/shooters_edge/content/models/view`). Each folder's packs are read in number order (`pak0.pak`, `pak1.pak`,
+  ...; any case), then its zips (`*.pk3`) and unpacked zips (`*.pk3dir`), and a loose file in the
+  folder (`maps/mymap.bsp`) overrides them all (`client/files.hpp`, over `engine/vfs/search.hpp`).
 - **`+<command>`**: console lines run at start. `+map dm6` loads that map; `+map arena` the
   built-in test arena (no packs needed, only the sky drawn). With no `+map`, the map `start`
   when the packs have it, else the arena. `--size=WxH` sets the window's size, `--frames=N`
@@ -400,8 +401,17 @@ server's frames go on under it). Its pages are the classic game's:
 | SINGLE PLAYER | NEW GAME (`newgame`: the packs' campaign from `start`), LOAD and SAVE (twelve slots `s0`..`s11`, each its save's line: `load s<i>`, `save s<i>`) |
 | MULTIPLAYER | JOIN A GAME, NEW GAME (the rules, then START), SETUP (name, shirt and pants colours) |
 | NEW GAME | MAX PLAYERS, GAME TYPE (`deathmatch`), TEAMPLAY, SKILL, FRAG LIMIT, TIME LIMIT, MAP, START |
-| OPTIONS | CUSTOMIZE CONTROLS, GO TO CONSOLE, RESET TO DEFAULTS, SCREEN SIZE, BRIGHTNESS, MOUSE SPEED (`sensitivity`), MUSIC VOLUME, SOUND VOLUME, ALWAYS RUN, INVERT MOUSE (`m_invert`), LOOKSPRING, LOOKSTRAFE, VIDEO OPTIONS, CLASSIC ENHANCE |
-| VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN |
+| SETUP | NAME, SHIRT COLOUR (`topcolor`), PANTS COLOUR (`bottomcolor`): the player's user info, sent to the server as it changes |
+| OPTIONS | CUSTOMIZE CONTROLS, GO TO CONSOLE, RESET TO DEFAULTS, SCREEN SIZE, BRIGHTNESS (`gamma`), MOUSE SPEED (`sensitivity`), MUSIC VOLUME, SOUND VOLUME, ALWAYS RUN (`cl_run`), INVERT MOUSE (`m_invert`), LOOKSPRING, LOOKSTRAFE, VIDEO OPTIONS, CLASSIC ENHANCED |
+| CUSTOMIZE CONTROLS | ATTACK, MOVE FORWARD, MOVE BACK, STEP LEFT, STEP RIGHT, JUMP, WALK / RUN (`+speed`), SIDESTEP (`+strafe`), TURN LEFT, TURN RIGHT, NEXT WEAPON: each the keys bound to it; ENTER, then the key (BACKSPACE clears, ESCAPE leaves it, a third key replaces both) |
+| VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN, HUD PICTURES (`hud_art`), HELD WEAPON |
+| HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`) |
+| CLASSIC ENHANCED | ENHANCE A PACK (classic-enhance's own menu), TEXTURES AND MODELS, LIGHT AND SHADOW, WATER, LAVA AND SKY, FIRE AND WIND, WEATHER |
+| TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures` |
+| LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
+| WATER, LAVA AND SKY | `ce_water`, `ce_lava`, `r_lava_glow`, `ce_slime`, `r_slime_glow`, `ce_teleports`, `ce_skies`, `ce_clouds` |
+| FIRE AND WIND | `ce_flames`, `ce_bonfires`, `ce_wind` |
+| WEATHER | `sv_weather`, `sv_rain` (snow, sleet, rain), `sv_precip`, `sv_wind`, `r_lightning`, `r_snowcover`, `r_wet`, `ce_fog` |
 | HELP | the keys (in the classic look, the pack's help pages) |
 | QUIT | YES (`quit`), NO |
 
@@ -411,16 +421,24 @@ server's frames go on under it). Its pages are the classic game's:
   `map`. An action is a console line.
 - **What the game cannot do yet is dimmed**, shown and skipped by the focus. A row names the cvar
   or command it needs (`kEntries` in `menu/main_menu.cpp`) and lights up by itself the day the
-  console has it (`load`, `connect`, `volume`, `viewsize` ...); TEAMPLAY and SKILL stay dimmed
-  while the baseline mod reads neither.
+  console has it (`connect`, `volume`, `maxclients` ...). Dimmed today: JOIN A GAME and MAX
+  PLAYERS (network play), MUSIC VOLUME and SOUND VOLUME (the window plays no sound yet).
+- **CLASSIC ENHANCED is the modern picture's page**: only what a player will want to change, a
+  page a subject; every other `ce_`, `r_` and `sv_` setting stays the console's (`cvarlist ce_`).
+  A switch the window does not draw yet (`ce_decals`, `ce_reflections`, `ce_flicker` ...) is left
+  off the pages until it does. `ce_textures`, `ce_models`, `ce_rebake`, `ce_bloom` and `r_bloom`
+  are read when the world is made, so the window makes it again when the menu closes.
+- **The settings are kept**: every archived cvar and bind goes to `<game folder>/settings/config.cfg`
+  when the menu closes and when the game quits, and is read back at the next start.
 - **Two looks** (`menu_look`): with `auto` (the default) the menu is drawn in the pack's own
   pictures whenever the packs on the search path carry them (`gfx/mainmenu.lmp` and the rest,
   coloured by `gfx/palette.lmp`, the glyphs from `gfx.wad`): the plaque, the titles, the strips
   with the spinning cursor, the glyph rows, the help pages and the quit box on the classic
   320 x 200 screen at a whole-number scale. Without them, or with `menu_look modern`, it is the
   engine's menu view over the darkened game. Nothing of the pack is copied or committed.
-- **OPTIONS ▸ CLASSIC ENHANCE** opens classic-enhance's own menu in its place: the pack (the packs
-  on the search path), ENHANCE into the local cache watched stage by stage, every `ce_` switch.
+- **CLASSIC ENHANCED ▸ ENHANCE A PACK** opens classic-enhance's own menu in its place: the pack
+  (the packs on the search path), ENHANCE into the local cache watched stage by stage, every `ce_`
+  switch.
 - `togglemenu`, `menu_main`, `menu_options` and `menu_quit` open it from the console or a bind.
   The `se-menu` lab pictures every page in both looks, and the campaign's screens.
 
@@ -444,6 +462,13 @@ by `se-campaign --progs=games/shooters_edge/qc/campaign/progs.src`. What both va
   `se-mod` lab is the front end: `make lab LAB=se-mod ARGS="--progs=<file> --bots=4
   --timelimit=1"` plays a match against bots on the test arena and draws it. The game window
   takes it as `-progs <file>` (§ Playing it); the dedicated server (M18f) takes the same flag.
+- **Or ship it in the mod's folder**: with no `-progs`, the window looks through the game's
+  files (the mod's folder over the base game's, § Playing it) for the game profile's
+  multiplayer program files in order, `qwprogs.dat` and then `progs.dat`
+  (`games/shooters_edge/profiles/game_profile.hpp`), and runs the first of the multiplayer
+  form; so `-game mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
+  over (the base game's own `progs.dat` is its campaign, found the same way for SINGLE
+  PLAYER), and with none the baseline mod runs; the status line says which.
 - **Line numbers in faults**: put the line table beside the file as `<file>.lines` (a line
   number per statement, the sidecar `ge qc` reads: `parse_lines` in `plugins/progs/file.hpp`). Without it a fault names the function and the
   statement.
@@ -908,6 +933,26 @@ again every few seconds while no teammate is believed near it. A player gives an
 teammate near it when he has no use for it (armour no better than his, a weapon he holds, rockets
 he is full on), and the best armour, the launcher and the lightning gun to a teammate with the
 quad, pointing at it with his status; the quad's carrier sweeps the key areas.
+
+**Ears, a map of the team, and an area kept (M18r10).** A bot hears what his client is sent, by
+his skill (`plugins/shooter/hearing.hpp`, the game's samples in `bots/ears.hpp`): an expert takes in
+every sound, knows every sample and judges the distance to a tenth; an average player takes in a
+close or unique sound (a pickup, a power, a spawn) most of the time and a far shot seldom; a novice
+hears only what is close and never what a sample means. A pickup heard is put on the item of that
+pickup nearest where it seemed to come from, so the listener knows which armour went, times it as
+if he had seen it, and knows where its taker is; a spawn (the baseline mod plays the fog's sound
+where a deathmatch player comes in) is put on the spawn point. An enemy heard is chased for a
+moment like one lost from sight. The mega health is timed only by an expert who took it, from the
+moment his own health is back down to 100. An expert keeps where each teammate last was for ten
+seconds; knowing where all of them are, he knows where they are not, and a key area none of them
+is in is likely lost, to be taken back by a strong free player (an average player goes by a
+teammate's `lost` line). An expert holding an area whose item is away and not due for a while,
+with 20 or more rockets, steps out to fire at the teleporters' exits and the powers' spawns near it
+(`bots/spam.hpp`). Each map's key items are rated by how scarce they are, by an expert only (a lone
+200 armour, the 150 where there is no 200, the grenades where there is no launcher). A map's
+buttons (`bots/buttons.hpp`) come off its own entities: a `func_button` with health over 0 is shot,
+the rest touched, and the items within reach of the doors it opens are gone for through it by an
+average or expert player; a novice now and then shoots at, or walks into, any button he sees.
 
 **Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
 community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the

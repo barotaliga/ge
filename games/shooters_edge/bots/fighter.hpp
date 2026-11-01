@@ -44,9 +44,12 @@
 #include <vector>
 
 #include "ai/path.hpp"
+#include "core/prng.hpp"
 #include "shooter/bot.hpp"
+#include "shooter/hearing.hpp"
 #include "shooter/swim.hpp"
 #include "shooters_edge/bots/mind.hpp"
+#include "shooters_edge/profiles/items.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
 namespace shooters_edge::bots {
@@ -64,20 +67,8 @@ struct Stats {
 };
 Stats read_stats(const server::QcServer& s, int ent);
 
-enum class ItemKind : uint8_t {
-  health,
-  mega,
-  armor1,
-  armor2,
-  armor3,
-  shells,
-  nails,
-  rockets,
-  cells,
-  weapon,
-  quad,
-  pent,  // the shield (no damage taken)
-};
+// What an item is, the game profile's vocabulary (profiles/items.hpp).
+using ItemKind = shooters_edge::profiles::ItemKind;
 
 // How well a player knows the map (knowledge.hpp): where its items are and when they come back.
 enum class MapSense : uint8_t { novice, average, expert };
@@ -98,6 +89,7 @@ struct ItemSpot {
   int ent = -1;          // the server's entity for it, -1 when none matched
   int32_t weapon = 0;    // a weapon's W_ bit
   float amount = 0;      // health given, or ammunition (doubled by spawnflags 1)
+  float weight = 1;      // how much it matters on this map, as the player rates it (knowledge.hpp)
   float respawn_s = 20;  // gone this long once taken
   int32_t node = -1;     // the nav node nearest it
   int door_ent = -1;     // the door's entity (-1: none)
@@ -116,6 +108,16 @@ struct ItemSpot {
   bool watched = false;       // and the item there with it
 };
 
+// A button on the map (buttons.hpp).
+struct ButtonSpot {
+  sh::Vec3f at;                // its middle
+  std::vector<int> doors;      // the door entities it opens
+  std::vector<int32_t> opens;  // the items behind them (indices into the fighter's items)
+  int ent = -1;
+  int32_t node = -1;   // where it is pressed (or shot) from
+  bool shoot = false;  // opened by a shot (health over 0), not a touch
+};
+
 enum class FightMode : uint8_t { roam, fight, chase, retreat };
 const char* fight_mode_name(FightMode m);
 
@@ -132,25 +134,44 @@ struct FighterStats {
   int64_t weapon_commands[9] = {};  // commands holding each weapon, by its number (1..8)
   int64_t packs = 0;                // backpacks gone for
   int64_t held_fire = 0;            // shots held for a teammate in the line of fire
+  int64_t heard_taken = 0;          // items heard taken (ears.hpp)
+  int64_t heard_spawns = 0;         // players heard spawning on a point it knows
+  int64_t spam_shots = 0;           // rockets fired at a spot enemies come in by
+  int64_t pokes = 0;                // buttons a novice tried on a whim
+  int64_t dives_given_up = 0;       // dives turned back (late, or short of air)
+  double dive_wet_s = 0;            // time in the water on a dive
 };
 
 struct Fighter {
   // Ordered by size, largest first, so the struct packs tight.
   sh::Bot bot;
   std::vector<ItemSpot> items;
+  std::vector<sh::Vec3f> spawns;         // the map's spawn points (ears.hpp)
+  std::vector<sh::HeardSound> heard;     // this frame's sounds taken in
+  std::vector<sh::Vec3f> spam_spots;     // where enemies come in by (spam.hpp)
+  std::vector<int32_t> spam_from;        // per spot, the node near its area it is fired from
+  std::vector<ButtonSpot> button_spots;  // the map's buttons (buttons.hpp)
   Mind mind;             // what it believes of its team, its claim, its calls (mind.hpp)
   std::string name;      // its player name, as its teammates see it in their team lines
   ge::ai::Search reach;  // every node it can get to from where it stood at `reach_at`
   FighterStats stats;
+  sh::HearStats hear_stats;
+  sh::HearSkill ears;  // what it takes in of the sounds it is sent (hearing.hpp)
   // Its team messages (team.hpp's `team_say`), sent as `say_team` by whoever drives its client.
   std::vector<std::string> outbox;
-  double held = 0;          // in the mode this long
-  double next_think = 0;    // server time of the next choice
-  double impulse_at = -1;   // when the last impulse went
-  double reach_at = -1;     // when `reach` was worked out (-1: never)
-  double said_at = -1e9;    // its last team message
-  double called_at = -1e9;  // its last enemy callout
-  double under_since = -1;  // when its head last went under the water (-1: not under)
+  double held = 0;             // in the mode this long
+  double heard_t = -1;         // the server time whose sounds were last taken in
+  double spam_fired = -1e9;    // its last rocket at a spot
+  double poke_until = -1e9;    // a novice on a button until then (buttons.hpp)
+  double next_poke = 0;        // and his next whim
+  double next_think = 0;       // server time of the next choice
+  double impulse_at = -1;      // when the last impulse went
+  double reach_at = -1;        // when `reach` was worked out (-1: never)
+  double said_at = -1e9;       // its last team message
+  double called_at = -1e9;     // its last enemy callout
+  double under_since = -1;     // when its head last went under the water (-1: not under)
+  double dive_wet_since = -1;  // when the dive under way went into the water (-1: none)
+  double dive_off_until = -1;  // until when the dive given up (`dive_off`) is not tried again
   ge::ai::Why* why = nullptr;
   Team* team = nullptr;                          // its side (team.hpp); null in a free-for-all
   const ge::shooter::Locs* locs = nullptr;       // the map's place names (none: no names)
@@ -159,6 +180,14 @@ struct Fighter {
   int64_t dives = 0;                             // dives begun
   int64_t lost = 0;                              // thinks spent off the graph
   int32_t goal_item = -1;
+  int32_t goal_was = -1;    // the goal item held since `goal_since`
+  int32_t tired_item = -1;  // an item gone for too long in vain, worth less until `tired_until`
+  double goal_since = 0, tired_until = 0;
+  int32_t spam_for = -1;    // the claim `spam_from` was found for (-1: none yet)
+  int32_t spam_node = -1;   // where it fires at a spot from now (-1: not out)
+  int32_t spam_spot = -1;   // and at which
+  int32_t poke = -1;        // the button a novice is on
+  int32_t mega_watch = -1;  // the mega it took, its timer waiting on its health (knowledge.hpp)
   int32_t goal_node = -1;
   int32_t want_weapon = 0;  // the number (1..8) asked for; 0 none pending
   int slot = -1;
@@ -169,7 +198,8 @@ struct Fighter {
   int32_t diving = -1;        // the item it dives for (in the water on `dive`), -1 none
   int32_t last_dive = -1;     // the item the last think dived for
   int32_t explore_node = -1;  // a novice with nothing known walks the map to learn it
-  uint32_t rng = 1;           // its own draws (where it explores), seeded off the bot's seed
+  int32_t dive_off = -1;      // the item whose dive it last gave up (-1: none)
+  ge::core::Rng rng{1};       // its own draws (where it explores), seeded off the bot's seed
   FightMode mode = FightMode::roam;
   Role role = Role::free;
   MapSense sense = MapSense::expert;  // how well it knows the map (off its skill)

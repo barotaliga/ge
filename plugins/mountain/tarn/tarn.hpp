@@ -79,11 +79,14 @@ void lay_tarn(mapgen::Level& level, mapgen::MapLake lake);
 // rim's lowest ground), or with `flat` filled level at it; the trees in it felled and the rest set
 // on the new ground; `lake.depth` the deepest water dug.
 void dig_basin(mapgen::Level& level, mapgen::MapLake& lake, double depth, bool flat);
-// How far `lake`'s shore lies from its middle at `angle` (radians from +x toward +z), m.
+// How far `lake`'s shore lies from its middle at `angle` (radians from +x toward +z), m (a
+// mapped shore: the nearest of its edges met along that ray).
 double reach_of(const mapgen::MapLake& lake, double angle);
-// The lake's shore, `points` round.
+// The lake's shore, `points` round (a mapped lake's own points, however many).
 std::vector<water::Point> shore_of(const mapgen::MapLake& lake, int points = 64);
-// Whether (x, z) is inside the shore.
+// Whether (x, z) is inside the shore (its mapped one where it has one).
 bool on_lake(const mapgen::MapLake& lake, double x, double z);
+// Whether (x, z) is inside a shore given as its points once round (even-odd).
+bool inside_shore(const std::vector<mapgen::PlanPoint>& shore, double x, double z);
 
 }  // namespace ge::mountain::tarn

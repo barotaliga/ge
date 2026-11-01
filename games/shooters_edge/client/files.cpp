@@ -1,9 +1,9 @@
 // The client's search path (files.hpp).
 //
 // ge:summary The client's search path over a game folder's loose files and numbered packs
-// ge:keywords search-path pak open_game_dir find_file add_archive write_save read_save
+// ge:keywords search-path pak open_game_dir find_file add_archive write_save read_save mod
 // ge:skill vfs shooter
-// ge:test tests/shooters_edge_listen_test.cpp
+// ge:test tests/shooters_edge_files_test.cpp
 #include "shooters_edge/client/files.hpp"
 
 #include <filesystem>
@@ -12,6 +12,7 @@
 #include <set>
 #include <system_error>
 
+#include "classicenhance/profile.hpp"
 #include "save/file.hpp"
 
 namespace shooters_edge::client {
@@ -27,96 +28,108 @@ bool read_whole(const fs::path& p, std::vector<uint8_t>& out) {
   return true;
 }
 
-// `dir/name` when it exists as written, else the entry whose name matches it ignoring case (a
-// pack copied off a disc can be PAK0.PAK).
-fs::path find_ci(const fs::path& dir, const std::string& name) {
-  std::error_code ec;
-  if (fs::exists(dir / name, ec)) return dir / name;
-  for (const fs::directory_entry& e : fs::directory_iterator(dir, ec)) {
-    std::string n = e.path().filename().string();
-    if (n.size() != name.size()) continue;
-    bool same = true;
-    for (size_t i = 0; i < n.size() && same; i++) {
-      const char a = static_cast<char>(n[i] >= 'A' && n[i] <= 'Z' ? n[i] + 32 : n[i]);
-      same = a == name[i];
-    }
-    if (same) return e.path();
-  }
-  return {};
-}
-
 }  // namespace
 
-bool add_archive(SearchPath& path, std::string name, std::vector<uint8_t> bytes,
+bool add_archive(SearchPath& path, const std::string& name, std::vector<uint8_t> bytes,
                  std::string& error) {
-  SearchPath::Archive a;
-  a.path = std::move(name);
-  a.bytes = std::move(bytes);
   std::string why;
-  if (!ge::vfs::read_pak(a.bytes, &a.dir, &why)) {
-    error = a.path + " is not a pack the game can read: " + why +
+  if (!ge::vfs::add_archive(&path.vfs, name, std::move(bytes), "", &why)) {
+    error = name + " is not an archive the game can read: " + why +
             "; next: replace it with an undamaged copy, or move it out of the game folder";
     return false;
   }
-  path.archives.push_back(std::move(a));
   return true;
 }
 
 bool open_game_dir(const std::string& basedir, const std::string& game, SearchPath& out,
                    std::string& error) {
   out = SearchPath{};
-  const fs::path dir = fs::path(basedir.empty() ? "." : basedir) / game;
+  const fs::path root = basedir.empty() ? "." : basedir;
+  const std::string base(ge::classicenhance::classic_profile().base_dir);
   std::error_code ec;
-  if (!fs::is_directory(dir, ec)) {
-    error = "the game folder " + dir.string() +
-            " does not exist; next: pass -basedir <the folder that holds " + game + "/pak0.pak>";
+  if (!fs::is_directory(root / game, ec)) {
+    error = "the game folder " + (root / game).string() +
+            " does not exist; next: pass -basedir <the folder that holds " + base + "/" +
+            ge::classicenhance::pack_name(ge::classicenhance::classic_profile(), 0) + ">";
     return false;
   }
-  out.folder = dir.string();
-  for (int n = 0;; n++) {
-    const fs::path p = find_ci(dir, "pak" + std::to_string(n) + ".pak");
-    if (p.empty()) break;
-    std::vector<uint8_t> bytes;
-    if (!read_whole(p, bytes)) {
-      error = "cannot read " + p.string() + "; next: check its permissions";
-      return false;
-    }
-    if (!add_archive(out, p.string(), std::move(bytes), error)) return false;
+  std::string why;
+  // The base game under a mod: its files are the mod's unless the mod has its own.
+  if (game != base && fs::is_directory(root / base, ec) &&
+      !ge::vfs::add_game(&out.vfs, root.string(), base, &why)) {
+    error =
+        why + "; next: replace the damaged archive, or move it out of " + (root / base).string();
+    return false;
   }
+  if (!ge::vfs::add_game(&out.vfs, root.string(), game, &why)) {
+    error =
+        why + "; next: replace the damaged archive, or move it out of " + (root / game).string();
+    return false;
+  }
+  out.folder = (root / game).string();
   return true;
 }
 
 std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name,
                                    std::vector<uint8_t>& store) {
+  // A loose file in the game folder first, as it is on disk now (one written since the mount).
   if (!path.folder.empty()) {
     const fs::path loose = fs::path(path.folder) / std::string(name);
     std::error_code ec;
     if (fs::is_regular_file(loose, ec) && read_whole(loose, store)) return store;
   }
-  for (size_t i = path.archives.size(); i-- > 0;) {
-    const SearchPath::Archive& a = path.archives[i];
-    if (const ge::vfs::PakEntry* e = ge::vfs::pak_find(a.dir, name))
-      return ge::vfs::pak_file(a.bytes, *e);
-  }
-  return {};
+  const ge::vfs::FileRef* ref = ge::vfs::find(path.vfs, name);
+  if (ref == nullptr) return {};
+  if (const std::span<const uint8_t> v = ge::vfs::view(path.vfs, *ref); !v.empty()) return v;
+  std::string why;
+  if (!ge::vfs::read(path.vfs, *ref, &store, &why)) return {};
+  return store;
 }
 
 std::vector<std::string> map_names(const SearchPath& path) {
+  const ge::classicenhance::AssetKind& maps = ge::classicenhance::classic_profile().maps;
   std::set<std::string> names;
-  const auto take = [&](std::string_view p) {
-    if (p.rfind("maps/", 0) != 0 || p.size() <= 9 || p.substr(p.size() - 4) != ".bsp") return;
-    const std::string_view n = p.substr(5, p.size() - 9);
-    if (n.find('/') == std::string_view::npos) names.emplace(n);
-  };
-  for (const SearchPath::Archive& a : path.archives)
-    for (const ge::vfs::PakEntry& e : a.dir.entries) take(e.path);
-  std::error_code ec;
-  if (!path.folder.empty())
-    for (const fs::directory_entry& e : fs::directory_iterator(fs::path(path.folder) / "maps", ec))
-      if (e.is_regular_file(ec)) take("maps/" + e.path().filename().string());
+  for (const ge::vfs::Listed& l : ge::vfs::list(path.vfs)) {
+    const std::string_view n = ge::classicenhance::asset_name(maps, l.name);
+    if (!n.empty() && n.find('/') == std::string_view::npos) names.emplace(n);
+  }
   std::vector<std::string> out;
-  if (names.erase("start") > 0) out.emplace_back("start");
+  if (names.erase(std::string(ge::classicenhance::classic_profile().start_map)) > 0)
+    out.emplace_back(ge::classicenhance::classic_profile().start_map);
   out.insert(out.end(), names.begin(), names.end());
+  return out;
+}
+
+std::vector<std::string> archive_paths(const SearchPath& path) {
+  std::vector<std::string> out;
+  for (const ge::vfs::Source& s : path.vfs.sources)
+    if (s.kind != ge::vfs::SourceKind::directory) out.push_back(s.path);
+  return out;
+}
+
+std::vector<std::span<const uint8_t>> content_packs(const SearchPath& path) {
+  const ge::classicenhance::Profile& p = ge::classicenhance::classic_profile();
+  // A numbered pack by its file name ("pak3.pak", any case); a stand-in pack is not one.
+  const auto numbered = [&p](const std::string& at) {
+    std::string n = fs::path(at).filename().string();
+    for (char& c : n) c = c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c;
+    if (n.size() <= p.pack_stem.size() + p.pack_ext.size() || !n.starts_with(p.pack_stem) ||
+        !n.ends_with(p.pack_ext))
+      return false;
+    const std::string_view digits = std::string_view(n).substr(
+        p.pack_stem.size(), n.size() - p.pack_stem.size() - p.pack_ext.size());
+    for (const char c : digits)
+      if (c < '0' || c > '9') return false;
+    return true;
+  };
+  std::vector<std::span<const uint8_t>> out;
+  const std::string* game = nullptr;
+  for (const ge::vfs::Source& s : path.vfs.sources) {
+    if (s.kind != ge::vfs::SourceKind::pack || !numbered(s.path)) continue;
+    if (game == nullptr) game = &s.game;
+    if (s.game != *game) break;
+    out.emplace_back(s.bytes);
+  }
   return out;
 }
 

@@ -141,6 +141,7 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
     s.stats.seen++;
   }
   for (const ViewSound& snd : view.sounds) {
+    if (!s.set.hear_players) break;
     if (!is_player(sv, snd.ent) || snd.ent == viewer || friendly(snd.ent)) continue;
     bool dead = false;  // a death cry is no contact
     for (const ViewEntity& v : view.entities) dead |= v.ent == snd.ent && v.dead;
@@ -174,6 +175,19 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
       s.stats.forgotten++;
       c.ent = -1;
     }
+  }
+}
+
+void sense_heard(Senses& s, int ent, int viewer, Vec3f at, double t, ai::Why* why) {
+  if (ent < 1 || ent == viewer || (ent <= 32 && (s.friends >> (ent - 1) & 1u) != 0)) return;
+  Contact& c = contact_for(s, ent);
+  ai::see(c.heard, at.x, at.y, at.z, t);
+  if (!c.visible) c.since = t;
+  s.stats.heard++;
+  if (why && !c.visible) {
+    why->decide("hearing");
+    why->fact("ent", ent);
+    why->choose("heard", "taken in by its ears");
   }
 }
 

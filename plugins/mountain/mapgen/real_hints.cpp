@@ -1,7 +1,7 @@
 // The definitions behind real_hints.hpp.
 //
 // ge:summary R25 a real face's hints decoded and encoded, the woods laid on its heights
-// ge:keywords real-hints decode-hints encode-hints face-woods face-cover-at
+// ge:keywords real-hints decode-hints encode-hints face-woods face-cover-at hint-lake
 // ge:skill mountain
 // ge:test tests/mountain_real_hints_test.cpp
 #include "mountain/mapgen/real_hints.hpp"
@@ -75,6 +75,23 @@ std::optional<RealHints> decode_hints(std::string_view data) {
   } else if (wooded != 0) {
     return std::nullopt;
   }
+  if (in.ok && !in.done()) {
+    const int64_t lakes = in.get();
+    if (!in.ok || lakes < 1 || lakes > 10000) return std::nullopt;
+    for (int64_t i = 0; i < lakes; i++) {
+      const int64_t n = in.get();
+      if (n < 3 || n > 100000) return std::nullopt;
+      HintLake l;
+      int64_t x = 0;
+      int64_t z = 0;
+      for (int64_t k = 0; k < n; k++) {
+        x += in.get();
+        z += in.get();
+        l.shore.push_back({double(x) * kHintGrain, double(z) * kHintGrain});
+      }
+      h.lakes.push_back(std::move(l));
+    }
+  }
   if (!in.ok || !in.done()) return std::nullopt;
   return h;
 }
@@ -112,6 +129,22 @@ std::string encode_hints(const RealHints& h) {
     for (const double b : h.woods->bands) out.put(byte(b));
   } else {
     out.put(0);
+  }
+  if (!h.lakes.empty()) {
+    out.put(int64_t(h.lakes.size()));
+    for (const HintLake& l : h.lakes) {
+      out.put(int64_t(l.shore.size()));
+      int64_t px = 0;
+      int64_t pz = 0;
+      for (const PlanPoint& p : l.shore) {
+        const int64_t x = on_grain(p.x, kHintGrain);
+        const int64_t z = on_grain(p.z, kHintGrain);
+        out.put(x - px);
+        out.put(z - pz);
+        px = x;
+        pz = z;
+      }
+    }
   }
   return packed::to_base64(out.bytes);
 }

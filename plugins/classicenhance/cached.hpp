@@ -4,7 +4,8 @@
 // against the size the game has for it, so a stale or foreign cache never draws a wrong picture:
 // anything missing or mismatched leaves the pack's own.
 //
-// - `find_cache`: the folder of the pack (cache.hpp's `pack_dir` of its SHA-256 under the root),
+// - `find_cache`: the folder of the packs (cache.hpp's `pack_dir` of their `set_key` under the
+// root),
 //   when its textures' stage has finished there.
 // - `cached_texture`: textures/<name>/albedo.png at 1, 2, 4 or 8 times the pack's size, as sRGB
 //   RGBA with alpha 255 where emissive.png glows (the classic's fullbright texels: lit by nothing
@@ -43,6 +44,10 @@ namespace ge::classicenhance {
 // The cache folder of the pack with these bytes under `root` (default_cache_root() when empty);
 // an empty path when its textures were never enhanced there.
 std::filesystem::path find_cache(std::span<const uint8_t> pack,
+                                 const std::filesystem::path& root = {});
+// The same for a set of packs, first to last (the full game's pak0, pak1 ...), keyed as the
+// pipeline keys them (cache.hpp's `set_key`), so the full game finds its own cache.
+std::filesystem::path find_cache(std::span<const std::span<const uint8_t>> packs,
                                  const std::filesystem::path& root = {});
 
 // The enhanced copy of texture `name` (the pack's w x h) into `rgba`: (w k) x (h k) x 4, k the

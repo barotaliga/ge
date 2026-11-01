@@ -181,15 +181,17 @@ bool find_demo(const SearchPath& files, const std::string& name, std::vector<uin
       return true;
     }
   }
-  if (!has_ext) {  // a file of that name with any extension, newest pack first
-    for (size_t i = files.archives.size(); i-- > 0;) {
-      for (const ge::vfs::PakEntry& e : files.archives[i].dir.entries) {
-        if (stem_of(e.path) != name || e.path.find('/') != std::string::npos) continue;
-        const std::span<const uint8_t> b = find_file(files, e.path, store);
-        out.assign(b.begin(), b.end());
-        found = e.path + " in " + files.archives[i].path;
-        return true;
-      }
+  if (!has_ext) {  // a file of that name with any extension, in the folder's top level
+    std::string folded = name;
+    for (char& c : folded) c = c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c;
+    for (const ge::vfs::Listed& l : ge::vfs::list(files.vfs)) {
+      if (l.name.find('/') != std::string_view::npos || stem_of(std::string(l.name)) != folded)
+        continue;
+      const std::span<const uint8_t> b = find_file(files, l.name, store);
+      out.assign(b.begin(), b.end());
+      found = std::string(ge::vfs::stored_name(files.vfs, l.ref)) + " in " +
+              files.vfs.sources[l.ref.source].path;
+      return true;
     }
   }
   for (const std::string& path : tries) {

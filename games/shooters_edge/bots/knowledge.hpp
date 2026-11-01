@@ -33,6 +33,7 @@ constexpr int32_t kLearnSightings = 3;  // a novice recalls an item seen this ma
 constexpr double kSightingGap_s = 15;   // sightings this far apart count separately
 constexpr float kItemSight = 1500;      // an item's spot is made out within this, units
 constexpr float kGuessLate = 1.5f;      // an untimed item is guessed back after this × its time
+constexpr double kMegaGuess_s = 90;     // a mega someone else took is guessed back this long after
 constexpr float kCallNear = 600;        // an enemy is called by an item this near it, units
 
 // How well a player of aim `skill` knows the map: the expert's aim is the expert's map.
@@ -47,12 +48,26 @@ const char* item_call(const ItemSpot& it);
 
 // A vector in a map's text ("x y z"); false on none.
 bool parse_vec(const char* text, sh::Vec3f& out);
-// The map's item from its classname and spawnflags, or false.
+// The map's item from its classname and spawnflags, by the game profile's rows
+// (profiles/items.hpp), or false.
 bool item_of(const char* cn, int spawnflags, ItemSpot& it);
 
 // The callout for an enemy at `there`: by the landmark nearest it that the player knows (a key item
 // or a weapon: "enemy at ra", "enemy at rl"), the key items counted nearer; empty with none near.
 std::string enemy_call(const Fighter& f, sh::Vec3f there);
+
+// The mega health taken (item `i`, at `t`, by this player or not): its wait starts only once its
+// taker's health is back down to 100, so only the taker can time it, and only an expert does
+// (`mega_watch`); the rest guess `kMegaGuess_s`.
+void mega_taken(Fighter& f, int32_t i, double t, bool by_me);
+// The taker's watch on his own health: at 100 or under, the mega's timer starts.
+void mega_watch(Fighter& f, float health, double t);
+
+// How much each item matters on this map (`ItemSpot::weight`): an EXPERT rates the map's key items
+// by how scarce they are (a lone 200 armour over one of two; the 150 when there is no 200, the mega
+// when there is neither; the grenades and the lightning gun on a map without a launcher), the rest
+// rate an item the same on every map.
+void map_weights(Fighter& f);
 
 // What the player starts the match knowing (call after the items are read).
 void knowledge_init(Fighter& f);

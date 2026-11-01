@@ -391,7 +391,10 @@ With no body shown both rows run empty. What it draws:
 - **Geometry**: `WaterDraw::levels` nested squares of 64 quads round the eye, each snapped to
   twice its spacing and morphed into the next at its seam, the last level's rim pushed out to
   the horizon, every vertex clamped into the body's box; a lake's shore is where the ground
-  stands over the water, feathered over its last 15 cm of depth.
+  stands over the water, feathered over its last 15 cm of depth. A lake is drawn only inside
+  its SHORE'S MASK (`shore_mask`: its outline filled on at most 1024 texels a side over its box,
+  grown a texel all round), so a box that takes in lower ground beyond the shore (a valley below
+  an outlet, a lake's neighbour) leaves it dry.
 - **Waves**: the simulation's own components in the same second-order formula, so the drawn
   crest is the one a float rides (the `gpu-water` lab reads it back: 0.8133 m drawn against
   0.8139 m simulated). A vertex keeps a component at least four of its level's spacings long;
@@ -765,7 +768,36 @@ The generator lays no water, so no dealt map moves; a game lays it after, as a `
   thick enough by the tape may not bear. Drawn, the snow on it goes to grey wet slush and the
   swept glass to dark rotten ice, both wet; where it no longer bears (over the dug bowl) it
   stands off the shore over a MOAT of open water up to 6 m wide (`moat_of`), the shore melting
-  first. `MapLake::thaw` carries it. The real faces' lakes and streams are M24l2.
+  first. `MapLake::thaw` carries it.
+
+## A real face's lakes (`plugins/mountain/tarn/mapped.hpp`, M24l2)
+
+A real face's standing water comes off the open map data with its hints (`real_hints.hpp`'s
+`HintLake`, baked by `make lab LAB=real-hints ARGS="--bake --fetch --water --write"`): every
+lake, reservoir and pond the map draws (a river's or a canal's area is flowing water and is not
+one), each its outer shore, clipped to the face's square, thinned to 4 m and kept from 2500 m²,
+the largest 24 a face. They ride after the woods in a face's packed hints, so the lifts, pistes
+and woods baked before are kept bit for bit. The generator builds no water and reads none of
+it: a game lays them after it, as the free ride lays its tarn.
+
+- **The lake** (`mapped_lakes`): the shore as mapped (`MapLake::shore`; `shore_of`, `on_lake`
+  and `reach_of` read it in place of the tarn's lobes), its middle the centroid, its `radius` the
+  circle's of its area. The elevation model reads a lake flat, but the generator lays its own
+  mountain over the face, and the ground it leaves inside a shore can rise 25 m across it; the
+  surface is set at the ground's lowest 30 % there and the rest cut down to it.
+- **The ice**: the tarn's (`tarn_ice`, `thaw_of`) at the lake's own height, so a valley lake
+  opens while a high one still bears. Ice that bears fills the shore flat at the surface; open
+  water lies over a bowl a tenth of the lake's radius deep (2 to 12 m), shelving over 40 m
+  inside the shore.
+- **The banks**: the ground stands 30 cm over the water out to an 8 m lip, then rises or falls to
+  the ground round it no steeper than 0.6, out to 80 m past the lip, so the water stands in its
+  shore and a lake set lower than its ground is cut into it. The trees in it are felled.
+- **Drawn**: every laid lake through `app/lakes.hpp`, each with its own ice sheet
+  (`freeze_water` keeps one a body), inside its shore's mask. `make lab LAB=world
+  ARGS="--face=alpine-1 --views=tarn-high --day=200"` shows a face's largest lake open in
+  summer; `--day=40` frozen.
+
+Not yet (M24l5): the streams' channels and the valley's reservoir.
 
 ## Determinism (G1)
 
@@ -798,6 +830,8 @@ never read back by the simulation.
 | `rain-audition` | sim | M36d | The rain's sound metered and written as WAV: a drizzle, a light rain and a downpour in the open and by a lake, the downpour under a roof, a blizzard and still snow; each voice's level against the rate |
 | `water-cost` | bench | M24f, M24g | The CPU's costs per step (sample, floats, the flow grid) and the GPU's per pass |
 | `free --water` | drive | M24l3 | Fall Line: the bot near and into water on the free ride |
+| `real-hints` | picture | M24l2 | Each real face's lifts, pistes, woods and lakes (the lakes' count and area); a face named alone drawn with its lakes in blue; `--bake --water` reads the lakes off the open map data into the tree's hints |
+| `world --face` | picture | M24l2 | Fall Line's frame on a real face's ski area with its mapped lakes laid, iced by `--day`; the `tarn` views frame the largest |
 | `liquids`, `gpu-lava`, `gpu-slime` | picture | M30 | The other liquids: lava and slime (`docs/liquids.md` § Labs) |
 
 ## Sources

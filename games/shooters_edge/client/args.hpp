@@ -16,11 +16,13 @@
 #include <string_view>
 #include <vector>
 
+#include "classicenhance/profile.hpp"
+
 namespace shooters_edge::client {
 
 struct Args {
   std::string basedir = ".";
-  std::string game = "id1";
+  std::string game{ge::classicenhance::classic_profile().base_dir};  // the base game's folder
   std::string progs;             // a mod's progs file ("": the baseline mod)
   std::string models;            // the held weapons' folder ("": the tree's)
   std::string timedemo;          // a demo to benchmark, then quit ("": none)

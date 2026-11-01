@@ -56,6 +56,9 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& device, const SearchPath& files,
                                std::span<const ge::viewmodel::HeldModel> weapons,
                                std::string& error, const ModelLoad& models = {});
 void resize_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_t height);
+// Whether a setting read only when the world is made changed since it was made (`ce_textures`,
+// `ce_models`, `ce_rebake`, `ce_bloom`, `r_bloom`): the window makes it again (the menu closed).
+bool world_stale(const WorldDraw& w);
 
 // One frame of `dt` s from `view` (its eye and look set; the sky is the map's own) with this
 // frame's effects `fx` and its models (`fx.models`) and the weapon in hand `held` (null: none),

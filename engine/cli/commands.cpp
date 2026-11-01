@@ -979,11 +979,11 @@ std::optional<std::string> check_args(const Args& a) {
            std::to_string(n) + " word(s)";
   }
   static constexpr std::string_view kPassing[] = {
-      "lab",  "lab before", "lab diff", "lab pair", "lab sweep", "play",  "sim",
+      "lab",  "lab before", "lab diff", "lab pair", "lab sweep", "tool",  "play", "sim",
       "shot", "record",     "bench",    "profile",  "mem",       "leaks", "load"};
   if (!a.passthrough.empty() &&
       std::find(std::begin(kPassing), std::end(kPassing), c.name) == std::end(kPassing)) {
-    return "only ge lab, lab before, lab diff, lab pair, lab sweep, play, sim, shot, record, "
+    return "only ge lab, lab before, lab diff, lab pair, lab sweep, tool, play, sim, shot, record, "
            "bench, profile, "
            "mem, "
            "leaks and load pass words after --";

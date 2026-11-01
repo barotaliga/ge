@@ -52,6 +52,9 @@ struct WorldDraw {
   gr::CloudPass clouds;
   gr::Bloom bloom;
   gr::Post post[2];
+  std::vector<uint8_t> grade_palette;  // the classic grade's colours (none: the identity)
+  double gamma = 1;                    // the gamma the grades were last made with
+  look::Picture made;                  // the picture as it was when the world was made
   gr::Particles particles;
   gr::Explosions explosions;  // the weapon's muzzle fire: its flames and smoke
   WorldModels models;
@@ -162,10 +165,11 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
   d.loading = true;
   WorldDrawPtr f(new WorldDraw);
   f->picture = &picture;
+  f->made = picture;
   f->w = std::max(1u, width);
   f->h = std::max(1u, height);
   std::vector<uint8_t> palette_copy;
-  std::vector<uint8_t> grade_palette;  // the classic grade's colours (none: the identity)
+  std::vector<uint8_t>& grade_palette = f->grade_palette;
   if (map.from_file) {
     std::vector<uint8_t> store;
     std::span<const uint8_t> palette = find_file(files, "gfx/palette.lmp", store);
@@ -182,8 +186,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     // ENHANCE); the cache is keyed by the first pack's bytes.
     std::filesystem::path cache;
     ba::TextureSource source;
-    if (picture.ce.textures && !files.archives.empty())
-      cache = ge::classicenhance::find_cache(files.archives[0].bytes);
+    if (picture.ce.textures && !content_packs(files).empty())
+      cache = ge::classicenhance::find_cache(content_packs(files));
     if (!cache.empty()) {
       source.replace = from_cache;
       source.surface = surface_from_cache;
@@ -199,9 +203,9 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     }
     // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
     // adds its bounce under the live lights (look.cpp).
-    if (picture.ce.rebake && !files.archives.empty()) {
+    if (picture.ce.rebake && !content_packs(files).empty()) {
       const std::filesystem::path dir =
-          cache.empty() ? ge::classicenhance::find_cache(files.archives[0].bytes) : cache;
+          cache.empty() ? ge::classicenhance::find_cache(content_packs(files)) : cache;
       ge::brush::Rebaked baked;
       if (ge::classicenhance::cached_rebake(dir, map.name, f->scene.map.vertices.size(), &baked)) {
         ba::attach_rebake(f->scene, std::move(baked));
@@ -225,7 +229,9 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     gr::create_post(
         d, f->pipelines, f->post[p], f->layout, format,
         look::post_settings(p == 0 ? look::Look::classic : look::Look::modern, picture));
-  gr::set_grade(d, f->post[0], look::palette_grade(grade_palette));
+  f->gamma = picture.gamma;
+  gr::set_grade(d, f->post[0], look::gamma_grade(look::palette_grade(grade_palette), f->gamma));
+  gr::set_grade(d, f->post[1], look::gamma_grade(gr::identity_grade(), f->gamma));
   gr::create_particles(d, f->pipelines, f->particles, f->layout);
   gr::create_explosions(d, f->pipelines, f->explosions, f->layout);
   if (!weapons.empty()) {
@@ -243,8 +249,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     ba::create_bsp(d, f->pipelines, f->bsp, f->scene, f->layout);
     // ce_models: the models' enhanced skins, when this pack's were enhanced.
     ModelLoad load = models;
-    if (picture.ce.models && !files.archives.empty())
-      load.cache = ge::classicenhance::find_cache(files.archives[0].bytes);
+    if (picture.ce.models && !content_packs(files).empty())
+      load.cache = ge::classicenhance::find_cache(content_packs(files));
     create_models(d, f->pipelines, f->models, f->layout, files, palette_copy, f->scene.map, load);
     f->extras = create_extras(d, f->pipelines, f->layout, f->scene, picture.ce, picture.weather);
   }
@@ -265,11 +271,23 @@ void resize_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t hei
   make_targets(d, f);
 }
 
+bool world_stale(const WorldDraw& f) {
+  const look::Picture& a = f.made;
+  const look::Picture& b = *f.picture;
+  return a.ce.textures != b.ce.textures || a.ce.models != b.ce.models ||
+         a.ce.rebake != b.ce.rebake || a.ce.bloom != b.ce.bloom || a.bloom != b.bloom;
+}
+
 void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFrame& fx,
                 const shooters_edge::view::HandFrame* held, double dt,
                 const ge::ui::DrawList& overlay, const wgpu::TextureView& target) {
   const look::Look lk = look::look_of(*f.picture);
   const int p = lk == look::Look::classic ? 0 : 1;
+  if (f.picture->gamma != f.gamma) {  // the brightness changed (the menu's slider, `gamma`)
+    f.gamma = f.picture->gamma;
+    gr::set_grade(d, f.post[0], look::gamma_grade(look::palette_grade(f.grade_palette), f.gamma));
+    gr::set_grade(d, f.post[1], look::gamma_grade(gr::identity_grade(), f.gamma));
+  }
   // The map's own sky (its pick), keeping the eye and the look the caller set.
   ba::dress_sky(view, f.sky, f.top_y, view.time_s);
   view.altitude_m = 100;

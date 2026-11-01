@@ -9,16 +9,19 @@
 
 #include <cmath>
 #include <cstdlib>
-#include <cstring>
 #include <string>
 
 #include "shooter/senses.hpp"
+#include "shooters_edge/profiles/items.hpp"
 
 namespace shooters_edge::bots {
 
+namespace pf = shooters_edge::profiles;
+
 namespace {
 
-constexpr int32_t kWRockets = 32;   // the rocket launcher's W_ bit (games/shooters_edge/qc)
+constexpr int32_t kWRockets = 32;  // the rocket launcher's W_ bit (games/shooters_edge/qc)
+constexpr int32_t kWGrenades = 16, kWArc = 64;  // the grenade launcher's and the arc's
 constexpr float kOwnPickup = 64;    // an item gone this near the player is its own pickup, units
 constexpr float kExploreFar = 600;  // a novice explores to a node at least this far, units
 
@@ -38,69 +41,16 @@ bool parse_vec(const char* text, sh::Vec3f& out) {
   return true;
 }
 
-// The map's item from its classname, or false.
+// The map's item from its classname, by the game profile's rows (profiles/items.hpp), or false.
 bool item_of(const char* cn, int spawnflags, ItemSpot& it) {
-  const bool twice = (spawnflags & 1) != 0;
-  struct Ammo4 {
-    const char* cn;
-    ItemKind kind;
-    float amount;
-  };
-  static const Ammo4 kAmmo[4] = {{"item_shells", ItemKind::shells, 20},
-                                 {"item_spikes", ItemKind::nails, 25},
-                                 {"item_rockets", ItemKind::rockets, 5},
-                                 {"item_cells", ItemKind::cells, 6}};
-  for (const Ammo4& a : kAmmo)
-    if (std::strcmp(cn, a.cn) == 0) {
-      it.kind = a.kind;
-      it.amount = a.amount * (twice ? 2.f : 1.f);
-      it.name = a.cn;
-      return true;
-    }
-  if (std::strcmp(cn, "item_artifact_invulnerability") == 0) {
-    it.kind = ItemKind::pent;
-    it.respawn_s = 60;
-    it.name = "pent";
-    return true;
-  }
-  if (std::strcmp(cn, "item_artifact_super_damage") == 0) {
-    it.kind = ItemKind::quad;
-    it.respawn_s = 60;
-    it.name = "quad";
-    return true;
-  }
-  if (std::strcmp(cn, "item_health") == 0) {
-    it.kind = (spawnflags & 2) ? ItemKind::mega : ItemKind::health;
-    it.amount = (spawnflags & 2) ? 100.f : (spawnflags & 1) ? 15.f : 25.f;
-    it.name = (spawnflags & 2) ? "mega health" : "health";
-    return true;
-  }
-  if (std::strcmp(cn, "item_armor1") == 0)
-    it.kind = ItemKind::armor1;
-  else if (std::strcmp(cn, "item_armor2") == 0)
-    it.kind = ItemKind::armor2;
-  else if (std::strcmp(cn, "item_armorInv") == 0)
-    it.kind = ItemKind::armor3;
-  if (std::strncmp(cn, "item_armor", 10) == 0) {
-    it.name = cn;
-    return true;
-  }
-  struct Gun {
-    const char* cn;
-    int32_t bit;
-  };
-  static const Gun kGuns[6] = {{"weapon_supershotgun", 2},    {"weapon_nailgun", 4},
-                               {"weapon_supernailgun", 8},    {"weapon_grenadelauncher", 16},
-                               {"weapon_rocketlauncher", 32}, {"weapon_lightning", 64}};
-  for (const Gun& g : kGuns)
-    if (std::strcmp(cn, g.cn) == 0) {
-      it.kind = ItemKind::weapon;
-      it.weapon = g.bit;
-      it.respawn_s = 30;
-      it.name = cn;
-      return true;
-    }
-  return false;
+  const pf::ItemRow* r = pf::item_row(pf::kClassicTables.items, cn, spawnflags);
+  if (r == nullptr) return false;
+  if (r->sets_kind) it.kind = r->kind;
+  if (r->amount >= 0) it.amount = r->amount * (r->doubles && (spawnflags & 1) != 0 ? 2.f : 1.f);
+  if (r->respawn_s >= 0) it.respawn_s = r->respawn_s;
+  if (r->weapon != 0) it.weapon = r->weapon;
+  it.name = r->name.empty() ? std::string(cn) : std::string(r->name);
+  return true;
 }
 
 // The callout for an enemy at `there`: by the landmark nearest it that the player knows (a key item
@@ -151,46 +101,8 @@ bool key_item(const ItemSpot& it) {
 }
 
 const char* item_call(const ItemSpot& it) {
-  switch (it.kind) {
-    case ItemKind::health:
-      return "health";
-    case ItemKind::mega:
-      return "mh";
-    case ItemKind::armor1:
-      return "ga";
-    case ItemKind::armor2:
-      return "ya";
-    case ItemKind::armor3:
-      return "ra";
-    case ItemKind::shells:
-      return "shells";
-    case ItemKind::nails:
-      return "nails";
-    case ItemKind::rockets:
-      return "rox";
-    case ItemKind::cells:
-      return "cells";
-    case ItemKind::quad:
-      return "quad";
-    case ItemKind::pent:
-      return "pent";
-    case ItemKind::weapon:
-      break;
-  }
-  switch (it.weapon) {
-    case 2:
-      return "ssg";
-    case 4:
-      return "ng";
-    case 8:
-      return "sng";
-    case 16:
-      return "gl";
-    case 32:
-      return "rl";
-    default:
-      return "lg";
-  }
+  const pf::ItemWords* w = pf::item_words(pf::kClassicTables.words, it.kind, it.weapon);
+  return w != nullptr ? w->call.data() : "";
 }
 
 void knowledge_init(Fighter& f) {
@@ -204,6 +116,64 @@ void knowledge_init(Fighter& f) {
     it.in_sight = it.watched = false;
   }
   f.explore_node = -1;
+  map_weights(f);
+}
+
+void mega_taken(Fighter& f, int32_t i, double t, bool by_me) {
+  ItemSpot& it = f.items[static_cast<size_t>(i)];
+  if (it.kind != ItemKind::mega) return;
+  // Its clock starts when its taker is back down to 100: nobody else can know when that is.
+  it.timed = false;
+  it.back_at = t + kMegaGuess_s;
+  if (by_me && f.sense == MapSense::expert) f.mega_watch = i;
+}
+
+void mega_watch(Fighter& f, float health, double t) {
+  if (f.mega_watch < 0) return;
+  ItemSpot& it = f.items[static_cast<size_t>(f.mega_watch)];
+  if (health > 100) {
+    it.back_at = std::fmax(it.back_at, t + it.respawn_s + 1);  // not before its clock starts
+    return;
+  }
+  it.back_at = t + it.respawn_s;  // down to 100 (or dead): back after its own wait, to the second
+  it.timed = true;
+  f.mega_watch = -1;
+}
+
+void map_weights(Fighter& f) {
+  for (ItemSpot& it : f.items) it.weight = 1;
+  if (f.sense != MapSense::expert) return;  // the rest rate an item the same on every map
+  int n[13] = {};
+  int launchers = 0;
+  bool lg = false;
+  for (const ItemSpot& it : f.items) {
+    n[static_cast<int>(it.kind)]++;
+    launchers += it.kind == ItemKind::weapon && it.weapon == kWRockets;
+    lg |= it.kind == ItemKind::weapon && it.weapon == kWArc;
+  }
+  const bool rl = launchers > 0;
+  const int ra = n[static_cast<int>(ItemKind::armor3)], ya = n[static_cast<int>(ItemKind::armor2)];
+  for (ItemSpot& it : f.items) {
+    const int same = n[static_cast<int>(it.kind)];
+    switch (it.kind) {
+      case ItemKind::armor3:
+        it.weight = same == 1 ? 1.4f : 1.f;  // the one 200 on the map: whoever holds it wins
+        break;
+      case ItemKind::armor2:
+        if (ra == 0) it.weight = same == 1 ? 1.6f : 1.3f;  // the best armour there is
+        break;
+      case ItemKind::mega:
+        if (ra + ya == 0) it.weight = 1.5f;  // no big armour: the mega is the stack
+        break;
+      case ItemKind::weapon:
+        if (!rl && it.weapon == kWGrenades) it.weight = 2.f;  // the splash there is
+        if (!rl && it.weapon == kWArc) it.weight = 1.4f;
+        if (it.weapon == kWRockets) it.weight = (lg ? 1.f : 1.2f) * (launchers == 1 ? 1.2f : 1.f);
+        break;
+      default:
+        break;
+    }
+  }
 }
 
 ItemNews knowledge_update(Fighter& f, const server::QcServer& s, int me, sh::Vec3f eye, double t) {
@@ -245,6 +215,7 @@ ItemNews knowledge_update(Fighter& f, const server::QcServer& s, int me, sh::Vec
       news.taken = static_cast<int32_t>(i);
       news.by_me = underfoot && saw_it_go;
       if (news.by_me) f.stats.pickups++;
+      mega_taken(f, static_cast<int32_t>(i), t, news.by_me);
     } else if (!it.present && t >= it.back_at) {
       // Out of sight and its time come (or the guess's): believed back, not yet seen back.
       it.present = true;
@@ -276,11 +247,9 @@ int32_t explore_node(Fighter& f, sh::Vec3f me) {
   if (ok(f.explore_node) && dist(g.nodes[static_cast<size_t>(f.explore_node)].origin, me) > 96)
     return f.explore_node;
   // A new far node: draws off the fighter's own stream until one is reachable and far enough.
-  const auto n = static_cast<uint32_t>(g.nodes.size());
-  if (n == 0) return -1;
+  if (g.nodes.empty()) return -1;
   for (int k = 0; k < 64; k++) {
-    f.rng = f.rng * 1664525u + 1013904223u;
-    const auto c = static_cast<int32_t>((f.rng >> 8) % n);
+    const auto c = static_cast<int32_t>(ge::core::pick_index(f.rng, g.nodes.size()));
     if (ok(c) && dist(g.nodes[static_cast<size_t>(c)].origin, me) >= kExploreFar) {
       f.explore_node = c;
       return c;

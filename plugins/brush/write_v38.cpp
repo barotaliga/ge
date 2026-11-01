@@ -1,5 +1,6 @@
 // The version 38 fixture writer: the compile laid out in nineteen lumps, one texinfo a face
-// naming its texture (`fixture/<name>`), RGB luxels, leaves naming their clusters and area, and
+// naming its texture (`fixture/<name>`) with the sky or warp flag its name asks for and a
+// `+<digit>` frame's chain to the next, RGB luxels, leaves naming their clusters and area, and
 // the visibility's cluster count, offsets and run-length rows.
 //
 // ge:summary Writes a fixture as a version 38 map: named texinfo, RGB luxels, clusters and rows
@@ -7,6 +8,8 @@
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #include <array>
+#include <string>
+#include <vector>
 
 #include "brush/write_parts.hpp"
 
@@ -40,6 +43,23 @@ bool write_v38(const Fixture& fx, const Compiled& c, Out* out, std::string* err)
     planes.i32(p.axis);
   }
 
+  // A texture's first face (its texinfo), for the frames' chain.
+  std::vector<int32_t> first_face(c.textures.size(), -1);
+  for (size_t i = c.faces.size(); i-- > 0;) first_face[c.faces[i].texture] = int32_t(i);
+  // The next frame of a `+<digit><name>` texture: frame d + 1, else frame 0, when a face shows it.
+  const auto next_of = [&](uint32_t texture) {
+    const std::string& n = c.textures[texture];
+    if (n.size() < 3 || n[0] != '+' || n[1] < '0' || n[1] > '9') return int32_t{-1};
+    for (const char d : {char(n[1] + 1), '0'}) {
+      for (size_t t = 0; t < c.textures.size(); ++t) {
+        if (t != texture && c.textures[t].size() == n.size() && c.textures[t][0] == '+' &&
+            c.textures[t][1] == d && c.textures[t].compare(2, std::string::npos, n, 2) == 0)
+          return first_face[t];
+      }
+    }
+    return int32_t{-1};
+  };
+
   edges.u32(0);
   uint32_t vertex_count = 0, edge_count = 1, surfedge_count = 0;
   for (size_t i = 0; i < c.faces.size(); ++i) {
@@ -47,10 +67,12 @@ bool write_v38(const Fixture& fx, const Compiled& c, Out* out, std::string* err)
     for (int a = 0; a < 2; ++a) {
       for (int k = 0; k < 4; ++k) texinfo.f32(f.vecs[a][k]);
     }
+    // The flags from the name as the fixture spells it: `sky...` the sky, `*...` a warped liquid.
+    const std::string& name = c.textures[f.texture];
+    texinfo.i32(name.rfind("sky", 0) == 0 ? 0x4 : !name.empty() && name[0] == '*' ? 0x8 : 0);
     texinfo.i32(0);
-    texinfo.i32(0);
-    texinfo.name("fixture/" + c.textures[f.texture], 32);
-    texinfo.i32(-1);
+    texinfo.name("fixture/" + name, 32);
+    texinfo.i32(next_of(f.texture));
 
     const uint32_t first_edge = surfedge_count;
     const auto m = uint32_t(f.poly.size());
