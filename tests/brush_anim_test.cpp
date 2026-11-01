@@ -1,10 +1,11 @@
 // Texture sequences (plugins/brush/anim.hpp): a '+' cycle turns at five frames a second, its
 // alternate cycle when asked, every surface together; a '-' set gives each surface one frame for
 // good; names match in any case; a gap keeps the frames below it and is noted; a texture of no
-// set, and every texture of a family that animates otherwise, is its own frame.
+// set, and every texture of a family that animates otherwise, is its own frame; a family that
+// chains its frames turns each closed chain, and an open one stands still and is noted.
 //
 // ge:summary Test: + cycles and alternates by time, - random sets by surface, gaps noted
-// ge:keywords test texture animated cycle alternate random frame gap
+// ge:keywords test texture animated cycle alternate random frame gap chain next
 // ge:skill brush testing
 #include <string>
 #include <vector>
@@ -67,4 +68,19 @@ TEST(a_family_that_animates_otherwise_has_no_sets) {
   const br::TextureAnims a = br::build_texture_anims(m);
   CHECK(a.sets.empty());
   CHECK(br::texture_at(a, 0, 0.2, false, 0) == 0);
+}
+
+TEST(a_family_that_chains_its_frames_turns_each_closed_chain) {
+  // 0 wall, 1 a, 2 b, 3 c (a -> b -> c -> a), 4 d -> 5 e -> nothing (open), 6 f -> 6 itself
+  br::Map m = named({"wall", "a", "b", "c", "d", "e", "f"}, br::Family::v38);
+  m.textures[1].next = 2, m.textures[2].next = 3, m.textures[3].next = 1;
+  m.textures[4].next = 5, m.textures[6].next = 6;
+  const br::TextureAnims a = br::build_texture_anims(m);
+  CHECK(a.sets.size() == 1);
+  CHECK(a.sets.size() == 1 && a.sets[0].frames == std::vector<uint32_t>({1, 2, 3}));
+  CHECK(a.set_of[2] == 0 && a.set_of[4] == -1 && a.set_of[6] == -1);
+  CHECK(a.notes.size() == 1);  // d's chain does not close
+  CHECK(br::texture_at(a, 2, 0.0, false, 0) == 1);
+  CHECK(br::texture_at(a, 3, 0.45, false, 0) == 3);  // frame 2 at five a second
+  CHECK(br::texture_at(a, 4, 1.0, false, 0) == 4);
 }

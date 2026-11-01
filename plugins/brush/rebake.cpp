@@ -30,11 +30,20 @@ constexpr double kPoolDepth = 3.0;   // m: how deep under a surface a sunk light
 constexpr double kPoolLift = 0.25;   // m: a sunk light's height over its pool once raised
 constexpr double kPoolSpread = 0.6;  // m: its size once raised (the surface spreads its light)
 
-// How a liquid's surface glows, a share of its texture's colour, by its name.
-double glow_of(const std::string& name) {
-  if (name.find("lava") != std::string::npos) return 8.0;
-  if (name.find("slime") != std::string::npos) return 0.35;
-  if (name.find("tele") != std::string::npos) return 0.6;
+// How a liquid's surface glows, a share of its texture's colour, by the reader's mark.
+double glow_of(Liquid l) {
+  switch (l) {
+    case Liquid::lava:
+      return 8.0;
+    case Liquid::slime:
+      return 0.35;
+    case Liquid::teleport:
+      return 0.6;
+    case Liquid::none:
+    case Liquid::water:
+    case Liquid::other:
+      break;
+  }
   return 0;
 }
 
@@ -148,7 +157,7 @@ bool rebake_map(const Map& map, const RebakeInput& input, const RebakeOptions& o
         for (const uint32_t t : tris) scene.tri_material[t] = below[mat];
         continue;
       }
-      const double g = mat < map.textures.size() ? glow_of(map.textures[mat].name) : 0;
+      const double g = mat < map.textures.size() ? glow_of(map.textures[mat].liquid) : 0;
       for (int k = 0; k < 3; k++) m.emit[k] = static_cast<float>(m.albedo[k] * g);
       if (n[1] > 0 && !tris.empty()) {
         Pool pool;

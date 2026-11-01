@@ -1,7 +1,8 @@
 // The classic BSP families: the sample fixture written as a map of every family reads back into
 // the one view with its rooms, faces, leaves, visibility, lightmaps and entities; the bytes and the
-// view hold golden (tests/golden/brush_read.txt); every triangle faces into its room; and the
-// reader refuses what it cannot read with a reason and a next step.
+// view hold golden (tests/golden/brush_read.txt); every triangle faces into its room; each
+// family's reader marks the sky, the liquids' kinds and the frames' chain alike; and the reader
+// refuses what it cannot read with a reason and a next step.
 //
 // A deliberate change to a writer or a reader moves the golden: rewrite it with
 // `GE_GOLDEN_WRITE=1 build/<preset>/tests/brush_read_test`, run the `bsp` lab before and after
@@ -9,6 +10,7 @@
 //
 // ge:summary Test: fixture maps of every BSP family read back, hold golden, face in, refuse damage
 // ge:keywords test brush bsp v29 bsp2 v38 v46 fixture read write golden leaf cluster pvs refuse
+// ge:keywords sky liquid-kind texture-mark next-frame
 // ge:skill brush testing
 #include <algorithm>
 #include <cstdio>
@@ -236,6 +238,59 @@ TEST(the_29_family_and_bsp2_read_to_the_same_geometry) {
   const br::Map c = read(br::Family::v38);
   CHECK(a.indices == c.indices);
   CHECK(a.light_rgb == c.light_rgb);
+}
+
+// The sample fixture with a sky, two liquids and a two-frame cycle: each family's reader marks
+// them from what it stores (29: names; 38: the texinfo's flags and chain), and alike.
+TEST(the_readers_mark_sky_liquids_and_frames_alike) {
+  br::Fixture fx = br::sample_fixture();
+  fx.rooms[0].ceiling = "sky1";     // hall
+  fx.rooms[2].floor = "*lava1";     // side room
+  fx.rooms[6].floor = "*teleport";  // vault
+  fx.rooms[4].wall = "+0light";     // corridor
+  fx.rooms[0].wall = "+1light";     // hall
+  for (br::Family f : {br::Family::v29, br::Family::v38}) {
+    std::vector<uint8_t> bytes;
+    std::string error;
+    CHECK_MSG(br::write_bsp(fx, f, &bytes, &error), error);
+    br::Map m;
+    CHECK_MSG(br::read_bsp(bytes, &m, &error), error);
+    const auto mark = [&](const std::string& name) -> const br::Texture* {
+      for (const br::Texture& t : m.textures) {
+        if (t.name == name || t.name == "fixture/" + name) return &t;
+      }
+      return nullptr;
+    };
+    const br::Texture* sky = mark("sky1");
+    const br::Texture* lava = mark("*lava1");
+    const br::Texture* tele = mark("*teleport");
+    const br::Texture* frame0 = mark("+0light");
+    const br::Texture* frame1 = mark("+1light");
+    const br::Texture* wall = mark("metal");
+    CHECK(sky && lava && tele && frame0 && frame1 && wall);
+    if (!(sky && lava && tele && frame0 && frame1 && wall)) continue;
+    CHECK(sky->sky && sky->liquid == br::Liquid::none);
+    CHECK(lava->liquid == br::Liquid::lava && !lava->sky);
+    CHECK(tele->liquid == br::Liquid::teleport);
+    CHECK(!wall->sky && wall->liquid == br::Liquid::none && wall->next == -1);
+    // 38 chains the frames; 29 names them (anim.hpp reads the names).
+    if (f == br::Family::v38) {
+      CHECK(m.textures[size_t(frame0->next)].name == frame1->name);
+      CHECK(m.textures[size_t(frame1->next)].name == frame0->name);
+    }
+    int skies = 0, liquids = 0;
+    for (const br::Surface& s : m.surfaces) {
+      const br::Texture& t = m.textures[s.texture];
+      skies += s.kind == br::SurfaceKind::sky;
+      liquids += s.kind == br::SurfaceKind::liquid;
+      CHECK((s.kind == br::SurfaceKind::sky) == t.sky);
+      CHECK((s.kind == br::SurfaceKind::liquid) == (t.liquid != br::Liquid::none));
+    }
+    CHECK(skies > 0 && liquids > 0);
+  }
+  CHECK(br::liquid_by_name("*WATER4") == br::Liquid::water);
+  CHECK(br::liquid_by_name("*04mwat1") == br::Liquid::other);
+  CHECK(std::string(br::liquid_name(br::Liquid::teleport)) == "teleport");
 }
 
 TEST(a_lit_file_drops_into_a_29_map) {

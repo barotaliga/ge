@@ -46,8 +46,9 @@ constexpr std::array<const char*, 17> kNames = {
     "leafbrushes", "models",  "brushes",   "brushsides", "vertexes", "meshverts",
     "effects",     "faces",   "lightmaps", "lightvols",  "visdata"};
 
-constexpr int32_t kSkyFlag = 0x4;               // a shader's surface flag
-constexpr int32_t kLiquid = 0x8 | 0x10 | 0x20;  // lava, slime, water contents
+constexpr int32_t kSkyFlag = 0x4;  // a shader's surface flag
+constexpr int32_t kLavaContents = 0x8, kSlimeContents = 0x10, kWaterContents = 0x20;
+constexpr int32_t kLiquid = kLavaContents | kSlimeContents | kWaterContents;
 constexpr uint32_t kPage = 128, kPageBytes = 128 * 128 * 3;
 // A patch's tessellation is bounded so a hostile file cannot ask for unbounded memory.
 constexpr uint64_t kMaxVertices = 1u << 23;
@@ -158,6 +159,16 @@ bool read_v46(std::span<const uint8_t> file, Map* out, std::string* err, const R
     for (int32_t& x : shader_contents) {
       c.skip(68);
       x = c.i32();
+    }
+    // The marks: the sky by its flag, a liquid's kind by its contents (else by its name).
+    for (size_t i = 0; i < m.textures.size(); ++i) {
+      Texture& t = m.textures[i];
+      const int32_t k = shader_contents[i];
+      t.sky = (t.flags & kSkyFlag) != 0;
+      t.liquid = (k & kLavaContents)    ? Liquid::lava
+                 : (k & kSlimeContents) ? Liquid::slime
+                 : (k & kWaterContents) ? Liquid::water
+                                        : Liquid::none;
     }
   }
 
