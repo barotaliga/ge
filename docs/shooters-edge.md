@@ -271,7 +271,24 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 demo ends) plays a recorded game **at its own pace**: vsync on, nothing timed, each drawn frame
 moving the demo's clock on by the frame's wall time (at most a tenth of a second, so a stall
 slows the demo instead of skipping it). `cl_demospeed <x>` sets the speed (1 by default, up to
-20; 0 pauses). ESCAPE stops it. The demo is found and drawn as the benchmark finds and draws it.
+20; 0 pauses). ESCAPE stops it. The demo is found and drawn as the benchmark finds and draws it:
+the map from the recorded eye, the HUD, and every entity the demo holds (the other players in
+their colours, the items, the missiles, the level's statics), as `-demovideo` draws them.
+
+**The demo's game folder.** A multiplayer recording names the game folder its server ran
+(`fortress` for a team mod). When the window was opened on the base folder (no `-game`) and that
+folder is beside it under `-basedir`, the demo plays from it, the base under it, so the mod's own
+models, skins and maps are found; a `-game` you pass always wins. A folder that is not there is
+named in the console with what to do.
+
+**Heard and read.** A played demo is heard on the window's audio device: its sounds (the pack's
+recordings, moving with what makes them, the level's loops and ambience) and the players' voices,
+the same players `-demovideo` renders (`client/demo_heard.hpp`), at `volume` (0..1, 0.7; the
+menu's SOUND VOLUME). The lines the server printed to the player the view rides (the deaths, the
+chat and team chat, the pickups) go to the HUD's feed and the console as plain words (the charset's
+coloured letters and the colour marks clients write into chat taken out), and a centre message to
+the HUD's centre for two seconds. A seek plays nothing of what it skipped. The game's own sound
+outside a demo is not played yet.
 
 ```sh
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
@@ -1051,6 +1068,8 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-pilot` | scenario | Whether the pilot plays a nav route through the move as fast as the graph proved it: every course route with plain and human hands, the trails from above coloured by mode, times against proven, the strafe jump's speed on a straight, the human axes against a person's bands; on the server's arena the pilot in a bot slot through the door, up the plat and barring the door shut from the east (built, M18r2) |
 | `se-senses` | scenario | Whether a bot sees only what a player's client could and aims by its skill: on the server's arena a seer and a runner visit the goals once per aim skill; the trails from above with a sight line every quarter second it saw, the aim's error against time, how often it saw when a line joined them, the error's median and p90, the reaction and the goals kept (built, M18r3) |
 | `se-bots` | scenario | Whether fighters play the baseline mod's deathmatch like players: four fighters on the arena, the trails, items and deaths from above, each one's mode through the match as a strip, the frags against time, and a table of frags, deaths, shots, pickups, switches, the share in each mode and the weapon held most (built, M18r4) |
+| `se-moves` | sim | A demo's player followed through a real map (`--file`, `--player`, `--map` or `--basedir`): the map as a wireframe from above and at an angle with his path coloured by speed and his jumps marked chained or not, the longest chain close up with the view's ticks, the chain's speed and turn against the most the move allows, a chase view from inside the map and its GIF, every player's hops tabled, the lag and ground-frame histograms; on the fixture halls without a demo (built, M18r12) |
+| `se-hop` | scenario | The demo player's longest trips replayed by the pilot from his start and speed: walk, strafe, the expert hop, the average's simple hop, the hop with human hands, the ideal hop, each one's time and hop reading against his; the trips from above and from inside; trips his time beats the bots' by a quarter flagged as tricks or shortcuts (built, M18r12) |
 | `se-lobby` | sim | The warmup on the listen server: bots seated on teams, the free roam, ready, break, the countdown and the map restarted for a clean match (built, M18q1); later clients find a hosted game on the LAN and through the rendezvous, fill the lobby, chat, start, play and return, and a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections (the compatible server half built, M18g: scripted clients under every preset, bytes a second, loss, downloads, the digest) |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |

@@ -163,13 +163,14 @@ void run(gl::Lab& lab) {
     lab.metric("team." + p.name + ".deaths", p.deaths, "count");
   }
   lab.table(t);
-  gl::LabTable pt{"each player's legs",
-                  {"player", "travelled", "plans", "stuck", "lost", "waits", "barred", "dives",
-                   "given up", "dive s", "off graph", "walk", "wait", "arrived", "idle", "air"},
-                  {}};
+  gl::LabTable pt{
+      "each player's legs",
+      {"player", "travelled", "plans", "stuck", "lost", "waits", "barred", "dives", "given up",
+       "dive s", "off graph", "walk", "wait", "arrived", "idle", "air", "hop"},
+      {}};
   for (const cn::TeamPlayer& p : r.players) {
     int64_t live = 0;
-    for (int k = 0; k < 9; k++) live += p.pilot_modes[k];
+    for (int k = 0; k < sh::kPilotModes; k++) live += p.pilot_modes[k];
     const auto share = [&](int k) {
       return to_fixed(
           live > 0 ? static_cast<double>(p.pilot_modes[k]) / static_cast<double>(live) : 0, 2);
@@ -178,7 +179,7 @@ void run(gl::Lab& lab) {
         {p.name, to_fixed(p.travelled, 0), std::to_string(p.plans), std::to_string(p.stuck),
          std::to_string(p.lost), std::to_string(p.waits), std::to_string(p.barred),
          std::to_string(p.dives), std::to_string(p.dives_given_up), to_fixed(p.dive_wet_s, 0),
-         std::to_string(p.off_graph), share(1), share(5), share(8), share(0), share(4)});
+         std::to_string(p.off_graph), share(1), share(5), share(8), share(0), share(4), share(9)});
   }
   lab.table(pt);
   gl::LabTable tt{

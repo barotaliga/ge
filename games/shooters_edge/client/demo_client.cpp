@@ -41,6 +41,17 @@ std::string info_field(const std::string& info, const std::string& key) {
   return "";
 }
 
+// A colour key's value (`topcolor`, `bottomcolor`) as the palette's colour row, 0..13: its
+// leading digits, held to the rows a player can wear; 0 when it has none.
+int colour_of(const std::string& v) {
+  int n = 0;
+  for (char ch : v) {
+    if (ch < '0' || ch > '9' || n > 99) break;
+    n = n * 10 + (ch - '0');
+  }
+  return std::clamp(n, 0, 13);
+}
+
 // Extension families' tags, the four letters read little-endian.
 constexpr uint32_t kFamilyFte = 0x58455446, kFamilyFte2 = 0x32455446, kFamilyMvd = 0x3144564D;
 // Their bits that change how a message reads.
@@ -287,7 +298,7 @@ bool server_data(Demo& d, DemoMsg& m, std::string& error) {
     return false;
   }
   m.i32();  // the spawn count
-  m.str();  // the game folder
+  s.game = m.str();
   if (s.format == DemoFormat::multiview) {
     m.f32();  // the server's time where a client's recording has its slot
   } else {
@@ -417,15 +428,18 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 6:
         sound(s, m, w);
         break;
-      case 8:
-        m.u8();
-        m.str();
-        break;  // print
+      case 8: {  // print: a level, the text
+        const int level = m.u8();
+        s.prints.push_back({level, m.str()});
+        break;
+      }
+      case 26:  // centerprint
+        s.centre = m.str();
+        break;
       case 9:
-      case 26:
       case 31:
         m.str();
-        break;    // stufftext, centerprint, finale
+        break;    // stufftext, finale
       case 10: {  // setangle; a multiview recording's names the player it turns first
         if (s.format == DemoFormat::multiview) m.u8();
         if ((d.ext_mvd & kMvdHighLagTeleport) != 0) m.u8();
@@ -534,7 +548,12 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         const int slot = m.u8();
         m.i32();
         const std::string info = m.str();
-        if (slot < 32) s.names[static_cast<size_t>(slot)] = info_field(info, "name");
+        if (slot < 32) {
+          const size_t k = static_cast<size_t>(slot);
+          s.names[k] = info_field(info, "name");
+          s.top[k] = colour_of(info_field(info, "topcolor"));
+          s.bottom[k] = colour_of(info_field(info, "bottomcolor"));
+        }
         break;
       }
       case 41: {  // download: under chunked downloads a chunk number first (-1: a transfer's start)
@@ -581,12 +600,18 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 49:
       case 50:
         m.f32();
-        break;  // maxspeed, entgravity
-      case 51:
-        m.u8();
-        m.str();
-        m.str();
-        break;  // setinfo
+        break;    // maxspeed, entgravity
+      case 51: {  // setinfo: one key of a slot's info changed
+        const int slot = m.u8();
+        const std::string key = m.str(), value = m.str();
+        if (slot < 32) {
+          const size_t k = static_cast<size_t>(slot);
+          if (key == "name") s.names[k] = value;
+          if (key == "topcolor") s.top[k] = colour_of(value);
+          if (key == "bottomcolor") s.bottom[k] = colour_of(value);
+        }
+        break;
+      }
       case 52:
         m.str();
         m.str();

@@ -36,12 +36,14 @@
 // ge:keywords percentile frame-time find_demo bench_stats bench_report timedemo_start
 // ge:keywords timedemo_step timedemo_mark demo_view demo_status unlocked-fps vsync-off
 // ge:keywords gpu-span span_add span_report price prices price_report switch-off-pricing
+// ge:keywords demo_game_dir demo_folder gamedir game-folder mod-folder fortress
 // ge:keywords playdemo playdemo_step cl_demospeed demo-pace timeline demo_seek seek demo-timeline
 // ge:skill shooter perf
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -111,6 +113,29 @@ bool find_demo(const SearchPath& files, const std::string& name,
                std::span<const std::string_view> extensions, std::vector<uint8_t>& out,
                std::string& found, std::string& error);
 
+// THE DEMO'S GAME FOLDER: a multiplayer recording names the game folder its server ran
+// (`DemoState::game`: "fortress" for a team mod), and the mod's models,
+// sounds and maps live there. The folder to play it from, given the window opened on `opened`
+// (the `-game` asked, the base folder when none was) under `basedir`: `recorded` when the window
+// is on the base folder and `<basedir>/<recorded>` exists (the base kept under it, as `-game`
+// mounts it); else `opened`, so a `-game` asked wins. `note` is the console's line when the
+// recorded folder is not there (empty otherwise): the demo then plays on the folder opened.
+std::string demo_game_dir(const std::string& basedir, const std::string& opened,
+                          const std::string& recorded, std::string& note);
+
+// The window's side of it: the folder a demo's level loads from, kept across its levels. At each
+// level start `demo_folder` mounts `demo_game_dir`'s answer when it changed (`path`, null while
+// the demo plays from `window`), the lines for the console in `say` (the folder mounted, the note
+// once, a folder that did not open), and returns the search path to load from.
+struct DemoFolder {
+  std::unique_ptr<SearchPath> path;
+  std::string game;  // the folder `path` is ("": the window's)
+  std::string note;  // the last note said
+};
+const SearchPath& demo_folder(DemoFolder& f, const std::string& basedir, const std::string& opened,
+                              const DemoState& s, const SearchPath& window,
+                              std::vector<std::string>& say);
+
 // THE TIMELINE: the seconds a play bar, a seek and a highlight are placed on. The demo's own
 // clock starts over at each level and may stall (a long pause in a recording), so the timeline
 // moves on by each frame's step of the demo's clock, held to 0..`kTimelineGap`, and not at all at
@@ -123,6 +148,19 @@ struct DemoTimeline {
   double last = -1;  // the last frame's own demo time (-1: a level's first frame next)
   // A frame read; `new_level` when it starts a level.
   void frame(const DemoState& s, bool new_level);
+};
+
+// WHAT THE FRAMES READ SINCE THE LAST DRAW CARRIED, kept while `Timedemo::hear` is on (playdemo):
+// a drawn frame reads several demo frames, and each frame's sounds, voices, prints and centre
+// message last only until the next is read (demo.hpp), so they are gathered here for the window
+// to play and show (demo_heard.hpp), then emptied. A seek drops what it read past.
+struct DemoHeard {
+  std::vector<DemoSound> started;
+  std::vector<std::pair<int, int>> stopped;
+  std::vector<DemoVoice> voice;
+  std::vector<DemoPrint> prints;
+  std::string centre;  // the last centre message; empty when none
+  void clear() { *this = {}; }
 };
 
 struct Timedemo {
@@ -140,6 +178,8 @@ struct Timedemo {
   bool quit_after = false;  // the command line's run: quit with the report
   bool paced = false;       // played at the demo's pace (playdemo), not flat out
   double clock = -1;        // the paced run's demo clock, s (-1: not started)
+  bool hear = false;        // gather each frame's sounds and prints into `heard`
+  DemoHeard heard;
 };
 
 // `name` found and opened by the game's adapter (game_adapter.hpp); the run begins at the next
