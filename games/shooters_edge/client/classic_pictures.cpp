@@ -17,8 +17,8 @@ ClassicPictures load_classic_pictures(const SearchPath& files, bool enhance,
                                       const std::filesystem::path& cache_root) {
   ClassicPictures out;
   out.enhanced = enhance;
-  if (enhance && !files.archives.empty())
-    out.cache = ge::classicenhance::find_cache(files.archives[0].bytes, cache_root);
+  if (enhance && !content_packs(files).empty())
+    out.cache = ge::classicenhance::find_cache(content_packs(files), cache_root);
   const auto find = [&files](std::string_view p, std::vector<uint8_t>& store) {
     return find_file(files, p, store);
   };

@@ -182,8 +182,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     // ENHANCE); the cache is keyed by the first pack's bytes.
     std::filesystem::path cache;
     ba::TextureSource source;
-    if (picture.ce.textures && !files.archives.empty())
-      cache = ge::classicenhance::find_cache(files.archives[0].bytes);
+    if (picture.ce.textures && !content_packs(files).empty())
+      cache = ge::classicenhance::find_cache(content_packs(files));
     if (!cache.empty()) {
       source.replace = from_cache;
       source.surface = surface_from_cache;
@@ -199,9 +199,9 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     }
     // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
     // adds its bounce under the live lights (look.cpp).
-    if (picture.ce.rebake && !files.archives.empty()) {
+    if (picture.ce.rebake && !content_packs(files).empty()) {
       const std::filesystem::path dir =
-          cache.empty() ? ge::classicenhance::find_cache(files.archives[0].bytes) : cache;
+          cache.empty() ? ge::classicenhance::find_cache(content_packs(files)) : cache;
       ge::brush::Rebaked baked;
       if (ge::classicenhance::cached_rebake(dir, map.name, f->scene.map.vertices.size(), &baked)) {
         ba::attach_rebake(f->scene, std::move(baked));
@@ -243,8 +243,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     ba::create_bsp(d, f->pipelines, f->bsp, f->scene, f->layout);
     // ce_models: the models' enhanced skins, when this pack's were enhanced.
     ModelLoad load = models;
-    if (picture.ce.models && !files.archives.empty())
-      load.cache = ge::classicenhance::find_cache(files.archives[0].bytes);
+    if (picture.ce.models && !content_packs(files).empty())
+      load.cache = ge::classicenhance::find_cache(content_packs(files));
     create_models(d, f->pipelines, f->models, f->layout, files, palette_copy, f->scene.map, load);
     f->extras = create_extras(d, f->pipelines, f->layout, f->scene, picture.ce, picture.weather);
   }

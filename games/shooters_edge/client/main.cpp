@@ -323,8 +323,8 @@ int run_main(int argc, char** argv) {
                "; see docs/shooters-edge.md § Playing it");
     if (next_map != "arena") return 2;
   } else {
-    out::status("shooters_edge: " + std::to_string(files.archives.size()) + " packs in " +
-                files.folder);
+    out::status("shooters_edge: " + std::to_string(cl::archive_paths(files).size()) +
+                " archives on the search path of " + files.folder);
   }
   if (!args.demovideo.empty()) return demo_video_main(args, files, picture, playback.track);
   // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
@@ -342,17 +342,12 @@ int run_main(int argc, char** argv) {
     if (!classic_art.bar.empty())
       out::status("shooters_edge: the HUD draws the packs' own status bar pictures (hud_art)" +
                   std::string(classic_art.density > 1 ? ", enhanced (ce_pictures)" : ""));
-    else if (!files.archives.empty())
+    else if (!cl::archive_paths(files).empty())
       out::status("shooters_edge: the HUD draws the free art: " + pics.hud_why);
     return pics.enhanced;
   };
   bool pictures_enhanced = load_pictures(true);
-  {
-    std::vector<std::string> packs;
-    packs.reserve(files.archives.size());
-    for (const cl::SearchPath::Archive& a : files.archives) packs.push_back(a.path);
-    game_menu.set_packs(std::move(packs));
-  }
+  game_menu.set_packs(cl::archive_paths(files));
   if (next_map.empty()) {
     std::vector<uint8_t> store;
     next_map = cl::find_file(files, "maps/start.bsp", store).empty() ? "arena" : "start";

@@ -1,16 +1,20 @@
 // THE GAME'S FILES: where the client finds a map, a palette or a picture by its path in the game
-// ("maps/dm6.bsp", "gfx/palette.lmp"). A SEARCH PATH over one game folder under the base folder
-// (`-basedir <dir>`, the game folder `id1` by default): the folder's loose files first, then its
-// numbered pack archives newest first (`pak0.pak`, `pak1.pak`, ... read while they run on; the
-// first missing number ends the list), so a later pack or a loose file overrides an earlier one.
-// The archives are read through engine/vfs's pack reader (every directory checked before a file
-// is handed out) and kept in memory; a file is a view into its archive.
+// ("maps/dm6.bsp", "gfx/palette.lmp"). The engine's search path (engine/vfs/search.hpp) over the
+// classic game's folders under the base folder (`-basedir <dir>`): the content profile's base
+// folder first (`id1` for the first game, classicenhance/profile.hpp), then the game folder
+// `-game` names over it when that is another (a mod), so a mod's file of the same path wins and
+// everything else comes from the base. Each folder mounts its numbered packs in number order,
+// then its zips (`*.pk3`) and unpacked zips (`*.pk3dir`), then its loose files, a later one
+// winning; names are matched ignoring case. A loose file written into the game folder after it
+// was opened (a demo just recorded) is found too: the game folder on disk is looked at first.
+// Archives are read whole at mount and checked; a file is a view into its archive where it is
+// stored unpacked.
 //
-// ge:summary The client's search path: a game folder's loose files and its numbered packs
-// ge:keywords search-path basedir game-folder pak pack archive find_file open_game_dir files
-// ge:keywords loose-files palette maps map_names
+// ge:summary The client's search path: the base folder and a mod folder over it, packs, pk3s
+// ge:keywords search-path basedir game-folder mod gamedir pak pk3 pack archive find_file files
+// ge:keywords open_game_dir loose-files palette maps map_names content_packs archive_paths
 // ge:skill vfs shooter
-// ge:test tests/shooters_edge_listen_test.cpp
+// ge:test tests/shooters_edge_files_test.cpp
 #pragma once
 
 #include <cstdint>
@@ -19,27 +23,24 @@
 #include <string_view>
 #include <vector>
 
-#include "vfs/pak.hpp"
+#include "vfs/search.hpp"
 
 namespace shooters_edge::client {
 
 struct SearchPath {
-  struct Archive {
-    std::string path;  // on disk
-    std::vector<uint8_t> bytes;
-    ge::vfs::Pak dir;
-  };
-  std::string folder;             // the game folder on disk ("" none: archives added by hand)
-  std::vector<Archive> archives;  // in the order read; searched newest first
+  std::string folder;       // the game folder on disk, the mod's when one is named ("" none)
+  ge::vfs::SearchPath vfs;  // every source mounted, the last winning
 };
 
-// The game folder `<basedir>/<game>` and its packs. False with the reason and the next step when
-// the folder is missing or a pack does not read.
+// The base folder `<basedir>/<the profile's base folder>` and, when `game` names another, the mod
+// folder `<basedir>/<game>` over it. False with the reason and the next step when the game folder
+// is missing or an archive does not read.
 bool open_game_dir(const std::string& basedir, const std::string& game, SearchPath& out,
                    std::string& error);
 
-// Adds a pack held in memory (a test's or a lab's), searched before the ones added earlier.
-bool add_archive(SearchPath& path, std::string name, std::vector<uint8_t> bytes,
+// Adds an archive held in memory (a pack or a zip: a test's, a lab's or a stand-in), searched
+// before the ones added earlier.
+bool add_archive(SearchPath& path, const std::string& name, std::vector<uint8_t> bytes,
                  std::string& error);
 
 // The file at `path` ('/' separated, as the game names it): a loose file's bytes copied into
@@ -47,9 +48,15 @@ bool add_archive(SearchPath& path, std::string name, std::vector<uint8_t> bytes,
 std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name,
                                    std::vector<uint8_t>& store);
 
-// The maps the search path holds (`maps/<name>.bsp`, loose or in a pack), by name, `start` first
-// and the rest in order.
+// The maps the search path holds (`maps/<name>.bsp`, loose or in an archive), by name, `start`
+// first and the rest in order.
 std::vector<std::string> map_names(const SearchPath& path);
+
+// Every archive mounted (packs and zips), by its path, in mount order.
+std::vector<std::string> archive_paths(const SearchPath& path);
+// The numbered packs of the first folder mounted (the base game's: pak0, pak1, ...), in order:
+// what classic-enhance keys its cache by (classicenhance/cached.hpp's `find_cache`).
+std::vector<std::span<const uint8_t>> content_packs(const SearchPath& path);
 
 // THE SAVES: ours `<game folder>/saves/<name>.save`; with `classic`, the classic text save
 // `<game folder>/<name>.sav`, where the classic game keeps its own (the name letters, digits, `_`
