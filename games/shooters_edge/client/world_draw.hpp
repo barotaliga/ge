@@ -49,12 +49,14 @@ using WorldDrawPtr = std::unique_ptr<WorldDraw, WorldDrawDeleter>;
 // width x height into a surface of `format`, drawn in `picture`'s look (read every frame: it must
 // outlive the frame), with `weapons` (view/weapons.hpp's load_weapon_models, in `view::Weapon`
 // order; empty: no weapon is drawn) and the models on `models.names` (the server's list:
-// world_models.hpp) standing in it. Null with the reason in `error`.
+// world_models.hpp) standing in it; the map's textures come from the game's adapter
+// (game_adapter.hpp's `map_textures`). Null with the reason in `error`.
 WorldDrawPtr create_world_draw(ge::gpu::Device& device, const SearchPath& files,
                                const LoadedMap& map, uint32_t width, uint32_t height,
                                wgpu::TextureFormat format, const look::Picture& picture,
                                std::span<const ge::viewmodel::HeldModel> weapons,
-                               std::string& error, const ModelLoad& models = {});
+                               std::string& error, const ModelLoad& models = {},
+                               const GameAdapter& game = classic_adapter());
 void resize_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_t height);
 // Whether a setting read only when the world is made changed since it was made (`ce_textures`,
 // `ce_models`, `ce_rebake`, `ce_bloom`, `r_bloom`): the window makes it again (the menu closed).

@@ -23,6 +23,7 @@
 #include <string_view>
 #include <vector>
 
+#include "classicenhance/profile.hpp"
 #include "vfs/search.hpp"
 
 namespace shooters_edge::client {
@@ -48,9 +49,11 @@ bool add_archive(SearchPath& path, const std::string& name, std::vector<uint8_t>
 std::span<const uint8_t> find_file(const SearchPath& path, std::string_view name,
                                    std::vector<uint8_t>& store);
 
-// The maps the search path holds (`maps/<name>.bsp`, loose or in an archive), by name, `start`
-// first and the rest in order.
-std::vector<std::string> map_names(const SearchPath& path);
+// The maps the search path holds (the content row's maps: `maps/<name>.bsp` for the first game),
+// loose or in an archive, by name, the row's start map first and the rest in order.
+std::vector<std::string> map_names(
+    const SearchPath& path,
+    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
 
 // Every archive mounted (packs and zips), by its path, in mount order.
 std::vector<std::string> archive_paths(const SearchPath& path);

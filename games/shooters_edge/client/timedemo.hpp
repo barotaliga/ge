@@ -52,6 +52,7 @@
 #include "render/view.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/hud/status.hpp"
 
 namespace shooters_edge::client {
@@ -107,7 +108,9 @@ double median_of(std::vector<double> v);
 
 // The demo `name` (see above) as bytes; `found` says where it came from. False with the places
 // tried and the next step.
-bool find_demo(const SearchPath& files, const std::string& name, std::vector<uint8_t>& out,
+// `extensions` are tried in order on a name without one (the game's, profiles/game_profile.hpp).
+bool find_demo(const SearchPath& files, const std::string& name,
+               std::span<const std::string_view> extensions, std::vector<uint8_t>& out,
                std::string& found, std::string& error);
 
 // THE DEMO'S GAME FOLDER: a multiplayer recording names the game folder its server ran
@@ -164,9 +167,10 @@ struct Timedemo {
   double clock = -1;        // the paced run's demo clock, s (-1: not started)
 };
 
-// `name` found and opened; the run begins at the next step.
+// `name` found and opened by the game's adapter (game_adapter.hpp); the run begins at the next
+// step.
 bool timedemo_start(const SearchPath& files, const std::string& name, Timedemo& t,
-                    std::string& error);
+                    std::string& error, const GameAdapter& game = classic_adapter());
 
 enum class TimedemoStep : uint8_t {
   frame,      // draw this frame
