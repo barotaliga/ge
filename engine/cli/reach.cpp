@@ -37,7 +37,7 @@ std::string relative(const fs::path& repo, const std::string& file) {
 
 }  // namespace
 
-void reach_from_deps(const fs::path& repo, std::string_view deps,
+void reach_from_deps(const fs::path& repo, const fs::path& build, std::string_view deps,
                      const std::set<std::string>& libraries, Reach& r) {
   struct Object {
     std::string target, source;
@@ -46,6 +46,10 @@ void reach_from_deps(const fs::path& repo, std::string_view deps,
   std::vector<Object> objects;
   std::error_code ec;
   const std::string prefix = fs::weakly_canonical(repo, ec).generic_string() + "/";
+  const fs::path built = fs::weakly_canonical(build, ec);
+  // The same few thousand headers recur in every object: each path outside the repository's
+  // prefix is made canonical once (a syscall each), never once a line.
+  std::map<std::string, std::string> seen;
   for (const std::string_view view : split_lines(deps)) {
     const std::string line(view);
     if (!line.starts_with("    ")) {
@@ -61,9 +65,20 @@ void reach_from_deps(const fs::path& repo, std::string_view deps,
     }
     if (objects.empty() || objects.back().target.empty()) continue;
     Object& o = objects.back();
-    // Ninja's paths are absolute: the repository's prefix cut off as text, canonical only when not.
-    const std::string path = line.substr(4);
-    std::string dep = path.starts_with(prefix) ? path.substr(prefix.size()) : relative(repo, path);
+    // Ninja's paths are absolute, or relative to the build directory when it lies inside the
+    // repository ("../../games/g/x.hpp"): either way the repository's prefix is cut off as text,
+    // and a path that does not start with it is made canonical.
+    const std::string raw = line.substr(4);
+    const std::string path =
+        fs::path(raw).is_absolute() ? raw : (built / raw).lexically_normal().generic_string();
+    std::string dep;
+    if (path.starts_with(prefix)) {
+      dep = path.substr(prefix.size());
+    } else {
+      auto it = seen.find(path);
+      if (it == seen.end()) it = seen.emplace(path, relative(repo, path)).first;
+      dep = it->second;
+    }
     if (o.source.empty()) o.source = dep;
     o.deps.push_back(std::move(dep));
   }
@@ -159,7 +174,7 @@ bool change_reach(const fs::path& repo, const fs::path& build, const std::string
   fs::remove(dump, ec);
   const Logged deps = run_to_log("ninja -C " + in_quotes(build) + " -t deps", dump);
   if (deps.code == 0) {
-    reach_from_deps(repo, deps.output,
+    reach_from_deps(repo, build, deps.output,
                     targets.code == 0 ? libraries_of(targets.output) : std::set<std::string>{}, r);
   }
   return true;
