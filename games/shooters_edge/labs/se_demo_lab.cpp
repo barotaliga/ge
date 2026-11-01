@@ -6,12 +6,13 @@
 // What it shows: the file (its format, protocol, map, records, frames, the demo's clock, the
 // records no client sees), a table of every player seen (frames written, the ground covered, the
 // health he fell to and how often he was down), every player's path from above (a point every
-// tenth frame), and every player's health and the view's own over the demo's clock. Everything
-// but the read's wall time is deterministic.
+// tenth frame), every player's health and the view's own over the demo's clock, and the lines the
+// view's player was printed (deaths, chat) by level. Everything but the read's wall time is
+// deterministic.
 //
 // ge:summary Lab: a demo of any format read headless: its players' paths, health and counts
 // ge:keywords lab se-demo demo multiview mvd recording players paths health track gzip
-// ge:keywords demo-info frames records hidden
+// ge:keywords demo-info frames records hidden prints deaths chat obituary
 // ge:skill shooter labs
 // ge:test tests/shooters_edge_demo_test.cpp
 #include <algorithm>
@@ -28,6 +29,7 @@
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_heard.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 
 namespace {
@@ -83,8 +85,24 @@ void run(gl::Lab& lab) {
   gl::Trace view_health{"the view's health", {}, {}};
   cl::DemoRead r;
   int64_t frames = 0;
+  // What the view's player was printed, by the protocol's level: a running count over the clock
+  // each, and the first lines of the deaths and the chat.
+  const char* kinds[4] = {"pickups (0)", "deaths (1)", "high (2)", "chat (3)"};
+  gl::Trace printed[4];
+  int64_t printed_n[4] = {};
+  gl::LabTable lines{"the first deaths and chat lines the view's player was printed",
+                     {"t s", "level", "line"},
+                     {}};
   while ((r = cl::next_frame(d, error)) == cl::DemoRead::frame) {
     const cl::DemoState& s = d.state;
+    for (const cl::DemoPrint& p : s.prints) {
+      const int k = std::clamp(p.level, 0, 3);
+      printed[k].x.push_back(s.time);
+      printed[k].y.push_back(static_cast<double>(++printed_n[k]));
+      if ((k == 1 || k == 3) && lines.rows.size() < 12)
+        for (const std::string& line : cl::print_lines(p.text))
+          lines.rows.push_back({to_fixed(s.time, 1), std::to_string(p.level), line});
+    }
     if (s.map.empty()) continue;
     frames++;
     const bool every_tenth = frames % 10 == 0;
@@ -134,7 +152,8 @@ void run(gl::Lab& lab) {
                {"levels", std::to_string(s.levels)},
                {"frames", std::to_string(frames)},
                {"demo clock s", to_fixed(s.time, 2)},
-               {"bytes", std::to_string(d.bytes.size())}};
+               {"bytes", std::to_string(d.bytes.size())},
+               {"game folder", s.game.empty() ? "(none named)" : s.game}};
   if (s.format == cl::DemoFormat::multiview) {
     info.rows.push_back({"records", std::to_string(d.records)});
     info.rows.push_back({"records no client sees", std::to_string(d.hidden)});
@@ -188,6 +207,26 @@ void run(gl::Lab& lab) {
   }
   lab.table(players);
   lab.metric("players.seen", static_cast<double>(players.rows.size()), "count");
+  lab.metric("prints.deaths", static_cast<double>(printed_n[1]), "count");
+  lab.metric("prints.chat", static_cast<double>(printed_n[3]), "count");
+  lab.metric("prints.all",
+             static_cast<double>(printed_n[0] + printed_n[1] + printed_n[2] + printed_n[3]),
+             "count");
+  if (!lines.rows.empty()) lab.table(lines);
+  gl::LineChart said;
+  said.spikes = false;
+  said.frame = {"WHAT THE VIEW'S PLAYER WAS PRINTED",
+                "a running count of each level's lines over the demo's clock (" +
+                    std::string(format_name(s.format)) + " on " + s.map + ")",
+                "t (s)",
+                "lines",
+                960,
+                420};
+  for (int k = 0; k < 4; k++) {
+    if (printed[k].x.empty()) continue;
+    printed[k].label = kinds[k];
+    said.traces.push_back(printed[k]);
+  }
   if (players.rows.empty()) {
     lab.fail("se-demo: no player was written in the demo",
              "next: a single-player demo has no players; pass a multiplayer recording");
@@ -202,6 +241,15 @@ void run(gl::Lab& lab) {
        "jump across the map.",
        "the lines trace the map's rooms and corridors; every slot the table lists has a line", in},
       gl::to_picture(above.plot));
+  if (!said.traces.empty()) {
+    const gl::Chart c = gl::line_chart(said);
+    lab.shot({"printed", c.title,
+              "Every line the server printed to the player the view rides, counted by the "
+              "protocol's level as the demo's clock runs: the deaths, the chat and team chat, the "
+              "pickups. The window shows them in the HUD's feed and the console as the demo plays.",
+              "deaths rise through the match in steps; chat in bursts (the start, the end)", in},
+             gl::to_picture(c.plot));
+  }
   if (!health.traces.empty()) {
     view_health.y.push_back(kNan);
     view_health.x.push_back(s.time);

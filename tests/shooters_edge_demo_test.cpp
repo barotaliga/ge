@@ -19,9 +19,11 @@
 #include <string>
 #include <vector>
 
+#include "audio/synth.hpp"
 #include "check.hpp"
 #include "core/inflate.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_heard.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/timedemo.hpp"
@@ -459,4 +461,72 @@ TEST(a_demo_plays_from_the_game_folder_its_server_ran_unless_another_was_asked) 
   CHECK(&cl::demo_folder(f, base, "id1", s, window, say) == &window && !f.path);
   CHECK(&cl::demo_folder(f, base, "id1", s, window, say) == &window && say.size() == 2);
   fs::remove_all(root);
+}
+
+TEST(a_demo_keeps_each_frame_s_printed_lines_for_the_player_it_follows) {
+  std::string error;
+  // The single-player demo prints once, halfway.
+  cl::Demo single;
+  CHECK_MSG(cl::open_demo(cl::write_single_demo(script()), single, error), error);
+  std::vector<std::string> printed;
+  while (cl::next_frame(single, error) == cl::DemoRead::frame)
+    for (const cl::DemoPrint& p : single.state.prints) printed.push_back(p.text);
+  CHECK(printed.size() == 1 && printed[0] == "halfway\n");
+  // A multiview recording's print to slot 3 alone reaches the view riding slot 3, not slot 0.
+  for (const int track : {0, 3}) {
+    cl::Demo d;
+    CHECK_MSG(cl::open_demo(cl::write_multiview_demo(script()), d, error), error);
+    d.track = track;
+    int seen = 0;
+    while (cl::next_frame(d, error) == cl::DemoRead::frame)
+      for (const cl::DemoPrint& p : d.state.prints)
+        seen += p.text == "for slot 3\n" && p.level == 2;
+    CHECK(seen == (track == 3 ? 1 : 0));
+  }
+}
+
+TEST(a_played_demo_gathers_what_the_frames_between_draws_carried) {
+  cl::SearchPath files;
+  std::string error;
+  std::vector<uint8_t> pak;
+  CHECK(ge::vfs::write_pak({{"match.rec", cl::write_multiview_demo(script())}}, &pak, &error));
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  cl::Timedemo t;
+  CHECK_MSG(cl::timedemo_start(files, "match", t, error), error);
+  t.demo.track = 3;
+  t.hear = true;
+  CHECK(cl::playdemo_step(t, 0, 1, error) == cl::TimedemoStep::new_level);
+  // Each draw reads several frames (a tenth of a second at the 14 ms frames): the print halfway
+  // is among what one of them gathered, and nothing else was printed before it.
+  int draws = 0;
+  while (t.heard.prints.empty() && draws++ < 100)
+    CHECK(cl::playdemo_step(t, 0.1, 1, error) == cl::TimedemoStep::frame);
+  CHECK(draws > 1 && t.demo.state.frames > draws);
+  CHECK(t.heard.prints.size() == 1 && t.heard.prints[0].text == "for slot 3\n");
+  // The window plays it and shows its line; what was gathered is emptied.
+  ge::audio::Synth synth;
+  cl::DemoHearing hearing(synth);
+  std::vector<std::string> lines;
+  std::string centre;
+  CHECK(!hearing.frame(t.demo.state, t.heard, 0.1f, lines, centre));
+  CHECK(lines.size() == 1 && lines[0] == "for slot 3" && centre.empty());
+  CHECK(t.heard.prints.empty() && t.heard.started.empty());
+  // A seek back drops what it read past.
+  CHECK(cl::demo_seek(t, 0, error) != cl::TimedemoStep::error);
+  CHECK(t.heard.prints.empty());
+}
+
+TEST(a_printed_line_shows_without_the_charset_s_own_letters) {
+  // A death and a chat line: the second colour's letters (high bit), the bracket and digit glyphs,
+  // a chat marker, two lines and an empty one.
+  const std::string text = std::string("\x01") + "\xD3niket" + " rides \x10" + "\x13\x12" + "\x11" +
+                           "'s rocket\n\nDoomer: gg\n";
+  const std::vector<std::string> lines = cl::print_lines(text);
+  CHECK(lines.size() == 2);
+  CHECK(lines.size() == 2 && lines[0] == "Sniket rides [10]'s rocket");
+  CHECK(lines.size() == 2 && lines[1] == "Doomer: gg");
+  // A team line with a client's colour marks: the words stay.
+  const std::vector<std::string> team =
+      cl::print_lines("(sai): {&c80fsai}{&cfff} {&c05fquad&cfff} at [{quad}]&r\n");
+  CHECK(team.size() == 1 && team[0] == "(sai): sai quad at [quad]");
 }

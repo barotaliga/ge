@@ -6,6 +6,8 @@
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo_sound.hpp"
 
+#include <algorithm>
+
 #include <cmath>
 
 namespace shooters_edge::client {
@@ -67,7 +69,22 @@ void DemoSounds::level(const DemoState& s, const ge::brush::Map* map) {
   }
 }
 
+void DemoSounds::silence() {
+  std::vector<int> entities;  // every entity sounding, once (stopping changes the slots)
+  for (const au::Channels::Slot& slot : channels_.slots())
+    if (slot.voice.valid() &&
+        std::find(entities.begin(), entities.end(), slot.entity) == entities.end())
+      entities.push_back(slot.entity);
+  for (int e : entities) channels_.stop(e);
+  if (ambience_) ambience_->silence(synth_);
+}
+
 void DemoSounds::frame(const DemoState& s, int listener, float dt) {
+  frame(s, s.started, s.stopped, listener, dt);
+}
+
+void DemoSounds::frame(const DemoState& s, std::span<const DemoSound> started,
+                       std::span<const std::pair<int, int>> stopped, int listener, float dt) {
   // The level's loops as they arrive (the signon sends them after the level starts).
   for (; statics_started_ < s.static_sounds.size(); statics_started_++) {
     const DemoStaticSound& st = s.static_sounds[statics_started_];
@@ -81,8 +98,8 @@ void DemoSounds::frame(const DemoState& s, int listener, float dt) {
     e.loop = au::Loop::file;
     if (channels_.play(*pcm, e).valid()) stats_.loops++;
   }
-  for (const auto& [entity, channel] : s.stopped) channels_.stop(entity, channel);
-  for (const DemoSound& d : s.started) {
+  for (const auto& [entity, channel] : stopped) channels_.stop(entity, channel);
+  for (const DemoSound& d : started) {
     const au::Pcm* pcm = recording(d.sound);
     if (!pcm) continue;
     au::Emit e;
