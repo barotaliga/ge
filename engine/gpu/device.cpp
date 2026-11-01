@@ -144,6 +144,14 @@ std::string_view feature_name(Feature f) {
 }
 
 std::unique_ptr<Device> create_device(const DeviceOptions& options) {
+  // GE_GPU_OFF=1 makes no device, so GPU tests and labs skip as on a machine with no adapter. CI's
+  // Windows row sets it: its runner's adapter (no GPU, drawn on the CPU) runs the GPU labs past the
+  // row's time limit.
+  if (env_on("GE_GPU_OFF")) {
+    out::info(
+        "gpu: no device: GE_GPU_OFF=1 is set; unset it to use this machine's adapter; skill: gpu.");
+    return nullptr;
+  }
   auto dev = std::make_unique<Device>();
   static constexpr wgpu::InstanceFeatureName kTimedWait = wgpu::InstanceFeatureName::TimedWaitAny;
   wgpu::InstanceDescriptor instance_desc{};
@@ -179,13 +187,6 @@ std::unique_ptr<Device> create_device(const DeviceOptions& options) {
   dev->report.driver = to_string(info.description);
   dev->report.backend = std::string(backend_name(info.backendType));
   dev->report.software = info.adapterType == wgpu::AdapterType::CPU;
-  // GE_GPU_NO_SOFTWARE=1 refuses a software adapter: CI's Windows row sets it, because its only
-  // adapter is D3D12's CPU one (WARP), too slow for the GPU labs in the row's time limit.
-  if (dev->report.software && env_on("GE_GPU_NO_SOFTWARE")) {
-    out::info("gpu: no device: the only adapter is software (" + dev->report.name +
-              ") and GE_GPU_NO_SOFTWARE=1 refuses it; unset it to draw on the CPU; skill: gpu.");
-    return nullptr;
-  }
   dev->adapter.GetLimits(&dev->limits);
 
   std::vector<wgpu::FeatureName> wanted;

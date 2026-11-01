@@ -31,10 +31,11 @@ there before the first edit.
   validator, which the archive lacks) beside every executable (`ge_dxc_beside_executables`,
   cmake/Dawn.cmake). A device that fails with `DynamicLib.Open: <name> Windows Error` has lost
   one of them.
-- **`GE_GPU_NO_SOFTWARE=1` refuses a software adapter** (`create_device` returns null, so GPU
-  tests and labs skip). CI's Windows row sets it: its only adapter is WARP, D3D12's CPU one, and
-  the GPU labs on it outrun the row's 60 minutes. Never set it on Linux, where lavapipe is the
-  adapter the goldens are made on.
+- **`GE_GPU_OFF=1` makes no device** (`create_device` returns null, so GPU tests and labs skip).
+  CI's Windows row sets it: the runner has no GPU, and the adapter Dawn finds there draws on the
+  CPU, running the GPU labs past the row's 60 minutes. A first try refused only adapters typed CPU
+  and changed nothing there (0 tests skipped), so the switch is all or nothing. Never set it on
+  Linux, where lavapipe is the adapter the goldens are made on.
 
 ## What is built (M6), and where
 
