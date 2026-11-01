@@ -81,6 +81,22 @@ double rim_of(const mg::Level& level, const mg::MapLake& lake) {
 }  // namespace
 
 double reach_of(const mg::MapLake& lake, double angle) {
+  if (!lake.shore.empty()) {
+    // A mapped shore: the nearest of its edges met along the ray out from the middle.
+    const double dx = lm::cos(angle), dz = lm::sin(angle);
+    double best = 1e30;
+    const std::vector<mg::PlanPoint>& s = lake.shore;
+    for (size_t i = 0, j = s.size() - 1; i < s.size(); j = i++) {
+      const double ex = s[i].x - s[j].x, ez = s[i].z - s[j].z;
+      const double den = dx * ez - dz * ex;
+      if (std::abs(den) < 1e-12) continue;
+      const double ax = s[j].x - lake.x, az = s[j].z - lake.z;
+      const double t = (ax * ez - az * ex) / den;
+      const double u = (ax * dz - az * dx) / den;
+      if (t > 0 && u >= 0 && u <= 1) best = std::min(best, t);
+    }
+    return best < 1e30 ? best : 0;
+  }
   // The phases off the site, so every tarn has its own shape and the same site the same one.
   const double p2 = kTau * core::num::mod(lake.x * 0.0137 + lake.z * 0.0291, 1.0);
   const double p3 = kTau * core::num::mod(lake.x * 0.0219 - lake.z * 0.0173, 1.0);
@@ -147,6 +163,15 @@ bool bears(const mg::MapLake& lake, double kg) {
 
 double moat_of(const mg::MapLake& lake) { return kMoat * lake.thaw; }
 
+bool inside_shore(const std::vector<mg::PlanPoint>& shore, double x, double z) {
+  bool odd = false;
+  for (size_t i = 0, j = shore.size() - 1; i < shore.size(); j = i++) {
+    const mg::PlanPoint a = shore[i], b = shore[j];
+    if ((a.z > z) != (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) odd = !odd;
+  }
+  return odd;
+}
+
 void dig_basin(mg::Level& level, mg::MapLake& lake, double depth, bool flat) {
   lake.level = rim_of(level, lake);
   const double most = kTarnBulge * lake.radius;
@@ -205,6 +230,10 @@ void lay_tarn(mg::Level& level, mg::MapLake lake) {
 
 std::vector<water::Point> shore_of(const mg::MapLake& lake, int points) {
   std::vector<water::Point> out;
+  if (!lake.shore.empty()) {
+    for (const mg::PlanPoint& p : lake.shore) out.push_back({p.x, p.z});
+    return out;
+  }
   out.reserve(static_cast<size_t>(points));
   for (int i = 0; i < points; ++i) {
     const double a = kTau * i / points;
@@ -215,6 +244,7 @@ std::vector<water::Point> shore_of(const mg::MapLake& lake, int points) {
 }
 
 bool on_lake(const mg::MapLake& lake, double x, double z) {
+  if (!lake.shore.empty()) return inside_shore(lake.shore, x, z);
   const double dx = x - lake.x, dz = z - lake.z;
   const double most = kTarnBulge * lake.radius;
   if (dx * dx + dz * dz >= most * most) return false;

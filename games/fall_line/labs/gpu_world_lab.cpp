@@ -29,6 +29,10 @@
 // window draws it (frame.hpp's `ui` row: ui/console.hpp's list through the 2D pass after post): a
 // few lines in its scrollback and a command half typed, its suggestions under the panel.
 //
+// --face lays the ski area off a real face instead of a dealt mountain, with the face's mapped
+// lakes laid on it (mountain/tarn/mapped.hpp; the `tarn` views frame the largest), each iced by
+// the map's day (--day moves it).
+//
 // --cfg runs console commands over Fall Line's cvars first (cfg/cvars.hpp), so a sky a server
 // picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_clouddensity,
 // sv_cloudheight, sv_cloudspeed, sv_hour, sv_skyrate), r_clouds and the lamps after dark
@@ -73,6 +77,7 @@
 #include "lab/png.hpp"
 #include "lab/raster.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "mountain/tarn/mapped.hpp"
 #include "render/shadows.hpp"
 #include "render/taa.hpp"
 #include "ui/console.hpp"
@@ -316,7 +321,25 @@ void run(ge::lab::Lab& lab) {
 
   ge::mountain::mapgen::GenerateOptions opts;
   opts.version = fall_line::app::kMapVersion;
-  ge::mountain::mapgen::Level built = ge::mountain::mapgen::generate_level(seed, opts);
+  const std::string& face = lab.arg("face");
+  if (!face.empty()) {
+    opts.face = face;
+    opts.version.reset();  // a face is laid only by a generator that builds a ski area
+  }
+  ge::mountain::mapgen::Level built;
+  try {
+    built = ge::mountain::mapgen::generate_level(seed, opts);
+  } catch (const ge::mountain::mapgen::GenerateError& e) {
+    lab.fail("seed " + std::to_string(static_cast<long long>(seed)) +
+                 (face.empty() ? "" : " on --face=" + face) + " built no map: " + e.what(),
+             "Run `make lab LAB=real-maps ARGS=--faces=" + face + "` (skill: mountain).");
+    return;
+  }
+  if (!face.empty()) {
+    // The face's mapped lakes, iced by the day the map is lit on (the free ride's free_map).
+    if (lab.arg_num("day") > 0) built.sun.day_of_year = lab.arg_num("day");
+    ge::mountain::tarn::lay_mapped_lakes(built);
+  }
   if (lab.arg_num("day") > 0) built.sun.day_of_year = lab.arg_num("day");
   if (const std::string problem = fall_line::sim::server_sky(cvars, built); !problem.empty()) {
     lab.fail("--cfg: " + problem, "Skill: console.");
@@ -460,6 +483,7 @@ void run(ge::lab::Lab& lab) {
         "stands on its skis on the snow; far ridges bluer and paler than near ones; the sun's "
         "side brighter than the shadow side; no NaN (black or magenta) pixels",
         {{"seed", seed_s},
+         {"face", lab.arg("face").empty() ? "none" : lab.arg("face")},
          {"view", sc.name},
          {"hour", hour_s},
          {"size", std::to_string(width) + "x" + std::to_string(height)},
@@ -575,7 +599,20 @@ void run(ge::lab::Lab& lab) {
                  Det::measured);
     }
     double with = 0, without = 0;
+    // The probe reads the ground's and the instances' depth: the water drawn over them (a laid
+    // lake) writes its own, so its frame is drawn again dry first.
+    std::vector<bool> was_hidden;
+    for (auto& b : frame->water.bodies) {
+      was_hidden.push_back(b.hidden);
+      b.hidden = true;
+    }
+    if (!was_hidden.empty()) {
+      sc.view.frame = static_cast<uint64_t>(settle + 1);
+      fall_line::app::draw(*device, *frame, sc.view, {.skiers = sc.skiers, .subject = sc.subject},
+                           target.view);
+    }
     overdraw(*device, *frame, count, count_view, &with, &without);
+    for (size_t k = 0; k < was_hidden.size(); ++k) frame->water.bodies[k].hidden = was_hidden[k];
     lab.metric(name + ".shaded-per-pixel", with, "count", Det::measured);
     lab.metric(name + ".overdraw-without-prepass", without, "count", Det::measured);
     // Over 1 only where two surfaces lie at the very same depth (two clipmap levels meeting at a
@@ -726,6 +763,9 @@ const ge::lab::LabSpec kSpec{
     "What does Fall Line's frame draw from each named view of a seed's map?",
     {
         {"seed", "38", "the map's seed"},
+        {"face", "",
+         "a real face's id (mapgen/real_face_crops.hpp): its ski area, its mapped lakes laid on "
+         "it (the tarn views frame the largest)"},
         {"views", "all", "the views to shoot, comma-separated (games/fall_line/app/views.hpp)"},
         {"hour", "-1", "the solar hour to light the map at; negative: the map's own"},
         {"day", "0", "the day of the year the map is lit on (its moon with it); 0: the map's own"},

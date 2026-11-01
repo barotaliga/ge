@@ -62,6 +62,7 @@
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <optional>
 #include <span>
@@ -254,9 +255,11 @@ struct GameFrame {
   ge::mountain::app::StormLights lightning;
   double lightning_time = 0;
   ge::render::CloudPass clouds;
-  ge::render::Water water;         // its bodies, `add_water`'s; none: the passes draw nothing
-  ge::render::InstanceFamily ice;  // `freeze_water`'s sheet, over body `ice_body`
-  int ice_body = -1;
+  ge::render::Water water;  // its bodies, `add_water`'s; none: the passes draw nothing
+  // `freeze_water`'s sheets, each over the body of the same place in `ice_bodies` (a deque: the
+  // frame's family list points at them).
+  std::deque<ge::render::InstanceFamily> ices;
+  std::vector<int> ice_bodies;
   ge::render::Underwater under;  // the view when the eye is under a body (`under.look`)
   std::vector<ge::skier::SprayPen> spray_pens;    // each racer's, by his place in the scene
   std::vector<ge::skier::BreathPen> breath_pens;  // each racer's, by his place in the scene
@@ -375,7 +378,8 @@ int add_water(ge::gpu::Device& device, GameFrame& frame, const ge::water::Body& 
 void set_water(ge::gpu::Device& device, GameFrame& frame, int index, const ge::water::Body& body);
 // THE ICE on lake `index` (`body` its water), `h` m thick (mountain/air/marks.hpp's `lake_ice`):
 // from mountain/app/ice_look.hpp's `kIceShows` its water is not drawn and the ice sheet is, its
-// look by `h`; thinner, open water again. One lake a frame freezes (the first asked). `swept_only`
+// look by `h`; thinner, open water again. Each lake has its own sheet, made the first time it is
+// asked frozen. `swept_only`
 // (read when the sheet is made): only the wind's bare patches, for ice on ground filled flat, whose
 // own snow is the snow on the ice. Thawing (`thaw` 0..1, its look): the sheet stands `moat` m off
 // the shore (read when it is made) and the water stays drawn round it.
