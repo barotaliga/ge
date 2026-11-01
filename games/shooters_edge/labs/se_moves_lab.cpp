@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "lab/chart.hpp"
 #include "lab/gif.hpp"
@@ -71,7 +72,7 @@ bool longest_chain(const sh::HopReading& r, int32_t& from, int32_t& to, int32_t&
 // short of any wall between the player's eye and it (the map's point hull), as a chase camera.
 la::InsideCamera chase_camera(const sh::MoveWorld& world, sh::Vec3f at, float heading, float back,
                               float up, int w, int h) {
-  const float a = heading * static_cast<float>(M_PI / 180);
+  const float a = heading * static_cast<float>(ge::core::kPi / 180);
   const sh::Vec3f eye{at.x, at.y, at.z + 22};
   const sh::Vec3f want{at.x - back * static_cast<float>(ge::core::libm::cos(a)),
                        at.y - back * static_cast<float>(ge::core::libm::sin(a)), at.z + 22 + up};
@@ -81,7 +82,7 @@ la::InsideCamera chase_camera(const sh::MoveWorld& world, sh::Vec3f at, float he
   c.eye = {eye.x + (want.x - eye.x) * f, eye.y + (want.y - eye.y) * f,
            eye.z + (want.z - eye.z) * f};
   c.yaw = heading;
-  c.pitch = -ge::core::libm::atan2(up * f + 22, back * f + 60) * 180 / M_PI * 0.6;
+  c.pitch = -ge::core::libm::atan2(up * f + 22, back * f + 60) * 180 / ge::core::kPi * 0.6;
   c.width = w;
   c.height = h;
   return c;
@@ -271,7 +272,7 @@ void run(gl::Lab& lab) {
       // The view every fourth frame: a short line along the yaw.
       for (int32_t i = c0; i <= c1; i += 4) {
         const sh::HopFrame& f = r.frames[static_cast<size_t>(i)];
-        const float a = f.yaw * static_cast<float>(M_PI / 180);
+        const float a = f.yaw * static_cast<float>(ge::core::kPi / 180);
         const sh::Vec3f tip{f.origin.x + 40 * static_cast<float>(ge::core::libm::cos(a)),
                             f.origin.y + 40 * static_cast<float>(ge::core::libm::sin(a)),
                             f.origin.z};

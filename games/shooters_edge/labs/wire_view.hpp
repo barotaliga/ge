@@ -28,6 +28,7 @@
 
 #include "brush/map.hpp"
 #include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "lab/raster.hpp"
 #include "shooter/vec.hpp"
 
@@ -112,11 +113,11 @@ struct WireView {
 
   // The turned and tilted point: screen x, screen y (up), depth (further larger).
   void turned(sh::Vec3f p, double& sx, double& sy, double& depth) const {
-    const double c = ge::core::libm::cos(yaw * M_PI / 180),
-                 s = ge::core::libm::sin(yaw * M_PI / 180);
+    const double c = ge::core::libm::cos(yaw * ge::core::kPi / 180),
+                 s = ge::core::libm::sin(yaw * ge::core::kPi / 180);
     const double rx = p.x * c + p.y * s, ry = -p.x * s + p.y * c;
-    const double ce = ge::core::libm::cos(elevation * M_PI / 180),
-                 se = ge::core::libm::sin(elevation * M_PI / 180);
+    const double ce = ge::core::libm::cos(elevation * ge::core::kPi / 180),
+                 se = ge::core::libm::sin(elevation * ge::core::kPi / 180);
     sx = rx;
     sy = ry * se + p.z * ce;
     depth = ry * ce - p.z * se;

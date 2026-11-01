@@ -23,6 +23,7 @@
 
 #include "brush/map.hpp"
 #include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "lab/raster.hpp"
 #include "shooters_edge/labs/wire_view.hpp"
 
@@ -38,13 +39,13 @@ struct InsideCamera {
 class InsideView {
  public:
   explicit InsideView(const InsideCamera& c) : c_(c) {
-    const double y = c.yaw * M_PI / 180, p = c.pitch * M_PI / 180;
+    const double y = c.yaw * ge::core::kPi / 180, p = c.pitch * ge::core::kPi / 180;
     fwd_[0] = ge::core::libm::cos(p) * ge::core::libm::cos(y),
     fwd_[1] = ge::core::libm::cos(p) * ge::core::libm::sin(y), fwd_[2] = ge::core::libm::sin(p);
     right_[0] = ge::core::libm::sin(y), right_[1] = -ge::core::libm::cos(y), right_[2] = 0;
     up_[0] = -ge::core::libm::sin(p) * ge::core::libm::cos(y),
     up_[1] = -ge::core::libm::sin(p) * ge::core::libm::sin(y), up_[2] = ge::core::libm::cos(p);
-    focal_ = (c.width / 2.0) / ge::core::libm::tan(c.fov * M_PI / 360);
+    focal_ = (c.width / 2.0) / ge::core::libm::tan(c.fov * ge::core::kPi / 360);
     depth_.assign(static_cast<size_t>(c.width) * static_cast<size_t>(c.height), 1e30);
     pic_ = gl::create_picture(c.width, c.height, {236, 238, 242, 255});
   }

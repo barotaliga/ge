@@ -477,8 +477,9 @@ void run(gl::Lab& lab) {
     const std::vector<sh::Vec3f>& hop = t.runs[2].trail;
     const sh::Vec3f b = hop[std::min(hop.size() - 1, static_cast<size_t>(40))];
     la::InsideCamera c;
-    const float hd = static_cast<float>(ge::core::libm::atan2(b.y - a.y, b.x - a.x) * 180 / M_PI);
-    const float r = static_cast<float>(hd * M_PI / 180);
+    const float hd =
+        static_cast<float>(ge::core::libm::atan2(b.y - a.y, b.x - a.x) * 180 / ge::core::kPi);
+    const float r = static_cast<float>(hd * ge::core::kPi / 180);
     const sh::Vec3f eye0{a.x, a.y, a.z + 22};
     const sh::Vec3f want{a.x - 120 * static_cast<float>(ge::core::libm::cos(r)),
                          a.y - 120 * static_cast<float>(ge::core::libm::sin(r)), a.z + 70};
