@@ -523,6 +523,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.packs = fs.packs;
     p.held_fire = fs.held_fire;
     p.dives = seat.fighter.dives;
+    p.dives_given_up = fs.dives_given_up;
+    p.dive_wet_s = fs.dive_wet_s;
     p.off_graph = seat.fighter.lost;
     for (int m = 0; m < 4; m++) p.mode_commands[m] = fs.mode_commands[m];
     for (int w = 0; w < 9; w++) p.weapon_commands[w] = fs.weapon_commands[w];

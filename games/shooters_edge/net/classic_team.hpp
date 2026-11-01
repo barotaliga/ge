@@ -67,7 +67,9 @@ struct TeamPlayer {
   int deaths = 0;
   int64_t shots = 0, pickups = 0, switches = 0, packs = 0, held_fire = 0;
   int64_t dives = 0,
-          off_graph = 0;  // dives begun into a pocket; thinks spent off the graph or in a pool
+          off_graph = 0;       // dives begun into a pocket; thinks spent off the graph or in a pool
+  int64_t dives_given_up = 0;  // dives turned back, late or short of air
+  double dive_wet_s = 0;       // time in the water on a dive
   int64_t mode_commands[4] = {}, role_commands[4] = {};
   int64_t weapon_commands[9] = {};
   int64_t pilot_modes[9] = {};  // live commands in each pilot mode (shooter/pilot.hpp)

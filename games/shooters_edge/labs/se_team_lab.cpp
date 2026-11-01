@@ -139,7 +139,7 @@ void run(gl::Lab& lab) {
   lab.table(t);
   gl::LabTable pt{"each player's legs",
                   {"player", "travelled", "plans", "stuck", "lost", "waits", "barred", "dives",
-                   "off graph", "walk", "wait", "arrived", "idle", "air"},
+                   "given up", "dive s", "off graph", "walk", "wait", "arrived", "idle", "air"},
                   {}};
   for (const cn::TeamPlayer& p : r.players) {
     int64_t live = 0;
@@ -148,11 +148,11 @@ void run(gl::Lab& lab) {
       return to_fixed(
           live > 0 ? static_cast<double>(p.pilot_modes[k]) / static_cast<double>(live) : 0, 2);
     };
-    pt.rows.push_back({p.name, to_fixed(p.travelled, 0), std::to_string(p.plans),
-                       std::to_string(p.stuck), std::to_string(p.lost), std::to_string(p.waits),
-                       std::to_string(p.barred), std::to_string(p.dives),
-                       std::to_string(p.off_graph), share(1), share(5), share(8), share(0),
-                       share(4)});
+    pt.rows.push_back(
+        {p.name, to_fixed(p.travelled, 0), std::to_string(p.plans), std::to_string(p.stuck),
+         std::to_string(p.lost), std::to_string(p.waits), std::to_string(p.barred),
+         std::to_string(p.dives), std::to_string(p.dives_given_up), to_fixed(p.dive_wet_s, 0),
+         std::to_string(p.off_graph), share(1), share(5), share(8), share(0), share(4)});
   }
   lab.table(pt);
   gl::LabTable tt{
@@ -201,6 +201,18 @@ void run(gl::Lab& lab) {
   lab.metric("team.swim-wet-cells", static_cast<double>(r.swim_wet), "count");
   lab.metric("team.swim-leading-cells", static_cast<double>(r.swim_leading), "count");
   lab.metric("team.dive-pockets", static_cast<double>(r.dives), "count");
+  {
+    int64_t begun = 0, given_up = 0;
+    double wet_s = 0;
+    for (const cn::TeamPlayer& p : r.players) {
+      begun += p.dives;
+      given_up += p.dives_given_up;
+      wet_s += p.dive_wet_s;
+    }
+    lab.metric("team.dives", static_cast<double>(begun), "count");
+    lab.metric("team.dives-given-up", static_cast<double>(given_up), "count");
+    lab.metric("team.dive-wet-s", wet_s, "s");
+  }
   lab.metric("team.nav-build-ms", r.nav_build_ms, "ms", gl::Det::measured);
   lab.metric("team.mvd-bytes", static_cast<double>(r.mvd.size()), "bytes");
   for (int key = 0; key < static_cast<int>(r.item_at.size()); key++) {

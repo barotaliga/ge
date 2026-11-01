@@ -44,6 +44,7 @@
 #include <vector>
 
 #include "ai/path.hpp"
+#include "core/prng.hpp"
 #include "shooter/bot.hpp"
 #include "shooter/swim.hpp"
 #include "shooters_edge/server/qc_server.hpp"
@@ -131,6 +132,8 @@ struct FighterStats {
   int64_t weapon_commands[9] = {};  // commands holding each weapon, by its number (1..8)
   int64_t packs = 0;                // backpacks gone for
   int64_t held_fire = 0;            // shots held for a teammate in the line of fire
+  int64_t dives_given_up = 0;       // dives turned back (late, or short of air)
+  double dive_wet_s = 0;            // time in the water on a dive
 };
 
 struct Fighter {
@@ -141,13 +144,15 @@ struct Fighter {
   FighterStats stats;
   // Its team messages (team.hpp's `team_say`), sent as `say_team` by whoever drives its client.
   std::vector<std::string> outbox;
-  double held = 0;          // in the mode this long
-  double next_think = 0;    // server time of the next choice
-  double impulse_at = -1;   // when the last impulse went
-  double reach_at = -1;     // when `reach` was worked out (-1: never)
-  double said_at = -1e9;    // its last team message
-  double called_at = -1e9;  // its last enemy callout
-  double under_since = -1;  // when its head last went under the water (-1: not under)
+  double held = 0;             // in the mode this long
+  double next_think = 0;       // server time of the next choice
+  double impulse_at = -1;      // when the last impulse went
+  double reach_at = -1;        // when `reach` was worked out (-1: never)
+  double said_at = -1e9;       // its last team message
+  double called_at = -1e9;     // its last enemy callout
+  double under_since = -1;     // when its head last went under the water (-1: not under)
+  double dive_wet_since = -1;  // when the dive under way went into the water (-1: none)
+  double dive_off_until = -1;  // until when the dive given up (`dive_off`) is not tried again
   ge::ai::Why* why = nullptr;
   Team* team = nullptr;                          // its side (team.hpp); null in a free-for-all
   const ge::shooter::SwimField* swim = nullptr;  // the map's way out of its water (none: no water)
@@ -165,7 +170,8 @@ struct Fighter {
   int32_t diving = -1;        // the item it dives for (in the water on `dive`), -1 none
   int32_t last_dive = -1;     // the item the last think dived for
   int32_t explore_node = -1;  // a novice with nothing known walks the map to learn it
-  uint32_t rng = 1;           // its own draws (where it explores), seeded off the bot's seed
+  int32_t dive_off = -1;      // the item whose dive it last gave up (-1: none)
+  ge::core::Rng rng{1};       // its own draws (where it explores), seeded off the bot's seed
   FightMode mode = FightMode::roam;
   Role role = Role::free;
   MapSense sense = MapSense::expert;  // how well it knows the map (off its skill)

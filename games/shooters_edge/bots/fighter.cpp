@@ -45,9 +45,11 @@ constexpr double kHealWait_s = 3;  // but a retreat goes for health that is ther
 constexpr double kKeepGoal = 1.5;  // the goal's score is held up by this against the others
 constexpr float kRun = 320;        // units/s, the run to an item
 constexpr double kAir_s = 6;  // under this long, the shorter way out of the water (drowning at 12)
-constexpr double kDiveMost_s = 8;   // no dive whose swim is longer than this
-constexpr double kCallAgain_s = 4;  // an enemy in sight is called out again after this
-constexpr double kHelp_s = 6;       // a call for help holds this long
+constexpr double kDiveMost_s = 8;    // no dive whose swim is longer than this
+constexpr double kDiveLate_s = 3;    // a dive this far behind its swim's time is given up
+constexpr double kDiveRetry_s = 30;  // and not tried again for this long
+constexpr double kCallAgain_s = 4;   // an enemy in sight is called out again after this
+constexpr double kHelp_s = 6;        // a call for help holds this long
 
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
 
@@ -263,7 +265,8 @@ int32_t best_item(const Fighter& f, const server::QcServer& s, const Stats& st, 
     if (!item_in_mind(f, i)) return 0.0;
     // No way there from here, unless by its dive (from a node there is a way to).
     const bool by_dive = f.reach_at >= 0 && !f.reach.reached(it.node);
-    if (by_dive && (!it.dive || !f.reach.reached(it.dive_node) || it.dive_s > kDiveMost_s))
+    if (by_dive && (!it.dive || !f.reach.reached(it.dive_node) || it.dive_s > kDiveMost_s ||
+                    (i == f.dive_off && t < f.dive_off_until)))
       return 0.0;
     if (door_shut(s, it) &&
         (it.button_node < 0 || (f.reach_at >= 0 && !f.reach.reached(it.button_node))))
@@ -408,7 +411,8 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
   bool escaping = false;  // on the way out of a pocket: no other goal this think
   // A dive is chosen again every think (go_item); one under way keeps the escape out of it.
   const bool was_diving = f.diving >= 0;
-  // A dive once in the water is swum to its end: no other goal turns it round under water.
+  // A dive once in the water is swum to its end: no other goal turns it round under water (only
+  // fighter_command gives it up, late or short of air).
   const int32_t committed = was_diving && self.waterlevel >= 1 ? f.diving : -1;
   f.diving = -1;
   // Off the graph (knocked onto a ledge no proof stands on): back to the nearest node by sight
@@ -700,7 +704,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, 
   sh::bot_init(f.bot, g, sh::PilotSettings{}, sh::PilotHands::human, skill, hz, seed);
   f.slot = slot;
   f.sense = map_sense_of(skill);
-  f.rng = seed * 2654435761u + 12345u;
+  f.rng = ge::core::make_rng(seed * 2654435761u + 12345u);
   const int me = slot + 1;
   sh::client_view(s.sv, me, f.bot.view);
   std::vector<pg::EntityBlock> blocks;
@@ -856,9 +860,43 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
   }
   const bool short_of_air = f.under_since >= 0 && t - f.under_since > kAir_s;
   const ItemSpot* dive_for = f.diving >= 0 ? &f.items[static_cast<size_t>(f.diving)] : nullptr;
-  // A walk along a pool's floor turns up and out by the field at kAir_s. A dive is left to finish:
-  // none is planned longer than kDiveMost_s, so its way on is the way to air.
-  const bool on_dive = dive_for && dive_for->dive;
+  bool on_dive = dive_for && dive_for->dive;
+  // A dive is given up when it has been in the water `kDiveLate_s` longer than its swim's time
+  // (held under a ledge it cannot climb, or lost), or when it is short of air and the way back out
+  // is shorter than the way on. That item's dive is not tried again for `kDiveRetry_s`, and the
+  // map's way out of the water takes it up.
+  if (on_dive && body.waterlevel >= 1) {
+    if (f.dive_wet_since < 0) f.dive_wet_since = t;
+    f.stats.dive_wet_s += msec / 1000.0;
+    const int32_t on = sh::swim_steps(*dive_for->dive, body.origin);
+    const int32_t back = f.swim ? sh::swim_steps(*f.swim, body.origin) : -1;
+    const bool late = t - f.dive_wet_since > dive_for->dive_s + kDiveLate_s;
+    const bool turn = short_of_air && back >= 0 && (on < 0 || back < on);
+    if (why) {
+      why->decide("dive");
+      why->fact("wet_s", t - f.dive_wet_since);
+      why->fact("planned_s", dive_for->dive_s);
+      why->fact("steps_on", on);
+      why->fact("steps_back", back);
+      why->choose(late || turn ? "give_up" : "swim_on",
+                  late   ? "in the water longer than its swim's time and the margin"
+                  : turn ? "short of air, and the way back is shorter than the way on"
+                         : "within its swim's time");
+    }
+    if (late || turn) {
+      f.stats.dives_given_up++;
+      f.dive_off = f.diving;
+      f.dive_off_until = t + kDiveRetry_s;
+      f.diving = f.last_dive = -1;
+      f.dive_wet_since = -1;
+      f.swimming = f.swim && back >= 0;
+      dive_for = nullptr;
+      on_dive = false;
+    }
+  } else {
+    f.dive_wet_since = -1;
+  }
+  // A walk along a pool's floor turns up and out by the field at kAir_s.
   if (short_of_air && f.swim && !on_dive && sh::swim_steps(*f.swim, body.origin) >= 0)
     f.swimming = true;
   // Diving: in the water, or at the dive's node (arrived, or within a step of it).
@@ -876,8 +914,8 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
                  (way =
                       f.bot.pilot.pilot.g->nodes[static_cast<size_t>(dive_for->dive_entry)].origin,
                   true));
-  if (!dead && (dive_now ||
-                (f.swimming && sh::swim_next(*f.swim, *f.bot.pilot.pilot.g, body.origin, way)))) {
+  if (!dead && (dive_now || (f.swimming && f.swim &&
+                             sh::swim_next(*f.swim, *f.bot.pilot.pilot.g, body.origin, way)))) {
     // Swimming the field's way out: the view on the next cell (pitch down positive), forward,
     // and jump held, which rises in water and climbs out over the edge at the top.
     const sh::Vec3f me_at = s.sv.edicts[static_cast<size_t>(me)].origin;
