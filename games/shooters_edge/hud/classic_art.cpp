@@ -131,7 +131,7 @@ bool classic_art(const std::filesystem::path& dir, HudArt* out, std::string* err
     // The cache's enhanced folder (`pictures/enhanced/`) holds the same pictures at a whole
     // multiple of their size: the bar (320 art pixels wide) says which.
     if (out->bar.width >= 640 && out->bar.width % 320 == 0) {
-      out->density = static_cast<float>(out->bar.width / 320);
+      out->density = static_cast<float>(out->bar.width) / 320.0f;
       out->finish();
     }
     return true;
