@@ -49,7 +49,7 @@ constexpr const char* kHelp =
     "into a local "
     "cache\n"
     "  verify <path>     find the pack in <path> (the release zip, an installed folder or its "
-    "pak0.pak, with any later packs) and say which release each is\n"
+    "pak0.pak, with any later packs) and say which game (its profile) and release each is\n"
     "  run <path> [--cache=<dir>] [--only=pack,textures,lightmaps,sounds,models,pictures] "
     "[--force] "
     "[--scale=<1..8>] [--limit=<n>] [--round=<0..4>] [--upscaler=network|kernel] "
@@ -82,7 +82,8 @@ int fail(const std::string& error, int code = 1) {
 }
 
 std::string source_json(const Source& s) {
-  std::string j = "{\"route\":" + esc(route_name(s.route)) + ",\"path\":" + esc(s.path) +
+  std::string j = "{\"profile\":" + esc(std::string(s.profile->id)) +
+                  ",\"route\":" + esc(route_name(s.route)) + ",\"path\":" + esc(s.path) +
                   ",\"pack_sha256\":" + esc(s.pack_sha256) +
                   ",\"pack_bytes\":" + std::to_string(s.pack.size()) +
                   ",\"pack\":" + (s.known ? esc(s.known->what) : std::string("null")) +

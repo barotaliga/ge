@@ -909,6 +909,30 @@ sight over the match. A team talks over `say_team` ("quad in 10, get quad!", "ha
 "enemy at RA", "need help", "took RA"); the server sends a team's words to its own players and
 the multiview recording keeps them, so a demo shows the team talk in each player's view.
 
+**A mind of his own, team messages and place names (M18r9).** No two bots share anything: each
+reads the team lines his own client is sent, a person's as well as a bot's, and plans his own role
+from what he saw and read (`bots/mind.hpp`). The words are a team game's usual message keys
+(`bots/talk.hpp`): a status report (`ra:150 h:100 rl [quad]`), `took ra`, `safe [ra]`, `lost
+[ra]`, `help [mh]`, `coming quad`, a point (`rl at [rl]`: "you take it"), `enemy at [quad-low]`,
+`have quad`, `get quad`, `quad over` and timers (`quad in 20`, `ra in 10`), read back in whatever
+order and spelling a person types them, colour codes and braces included. An expert reads every
+line and times the key items exactly; an average player misses half the lines said once but
+reads a repeated one, and his timers are a few seconds out; a novice reads one line in six, only a
+line said three times with any care, and nothing in a fight. At the start each expert or average
+player takes on the nearest of the launcher, the best armour and the quad that no teammate called
+`coming` for, and calls it `safe` once he stands on it; the quad is called by whoever timed it,
+again every few seconds while no teammate is believed near it. A player gives an item up to a
+teammate near it when he has no use for it (armour no better than his, a weapon he holds, rockets
+he is full on), and the best armour, the launcher and the lightning gun to a teammate with the
+quad, pointing at it with his status; the quad's carrier sweeps the key areas.
+
+**Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
+community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the
+`$loc_name_<key>` macros expanded) and names any point by its nearest. The files themselves are
+the community's and carry no licence this repository can take, so none is committed: a game folder
+with `locs/<map>.loc` in it is read (the `se-team` lab's `--locs` names a file), and a map without
+one is named off its own items (`ra`, `rl`, `quad`, `mh`).
+
 ## Modern features
 
 Today's community clients and servers added much since the original release. Grouped by what a

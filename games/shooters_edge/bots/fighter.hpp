@@ -46,6 +46,7 @@
 #include "ai/path.hpp"
 #include "shooter/bot.hpp"
 #include "shooter/swim.hpp"
+#include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
 namespace shooters_edge::bots {
@@ -137,6 +138,8 @@ struct Fighter {
   // Ordered by size, largest first, so the struct packs tight.
   sh::Bot bot;
   std::vector<ItemSpot> items;
+  Mind mind;             // what it believes of its team, its claim, its calls (mind.hpp)
+  std::string name;      // its player name, as its teammates see it in their team lines
   ge::ai::Search reach;  // every node it can get to from where it stood at `reach_at`
   FighterStats stats;
   // Its team messages (team.hpp's `team_say`), sent as `say_team` by whoever drives its client.
@@ -150,6 +153,7 @@ struct Fighter {
   double under_since = -1;  // when its head last went under the water (-1: not under)
   ge::ai::Why* why = nullptr;
   Team* team = nullptr;                          // its side (team.hpp); null in a free-for-all
+  const ge::shooter::Locs* locs = nullptr;       // the map's place names (none: no names)
   const ge::shooter::SwimField* swim = nullptr;  // the map's way out of its water (none: no water)
   int64_t buttons = 0;                           // buttons gone to
   int64_t dives = 0;                             // dives begun

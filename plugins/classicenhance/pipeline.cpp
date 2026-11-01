@@ -95,20 +95,6 @@ bool save_png(const fs::path& path, const assets::Image& img) {
   return write_whole(path, lab::encode_png({img.width, img.height, img.rgba}));
 }
 
-// The maps in the pack, sorted by path.
-std::vector<const vfs::PakEntry*> maps_of(const vfs::Pak& pak) {
-  std::vector<const vfs::PakEntry*> out;
-  for (const vfs::PakEntry& e : pak.entries) {
-    if (e.path.rfind("maps/", 0) == 0 && e.path.ends_with(".bsp")) out.push_back(&e);
-  }
-  std::sort(out.begin(), out.end(), [](auto* a, auto* b) { return a->path < b->path; });
-  return out;
-}
-
-std::string map_name(const std::string& path) {
-  return path.substr(5, path.size() - 9);  // "maps/" ... ".bsp"
-}
-
 // A STAGE'S RESUME JOURNAL, <dir>/<stage>.partial: its key on the first line, then one line an
 // item finished ("<name>\t<what the stage keeps of it>"), appended as each item's files are
 // written. A stage cut off (cancelled, killed, a failure) and run again with the same key skips
@@ -189,7 +175,8 @@ constexpr const char* kUnverified = "unverified: the player's own copy";
 bool run_pack(const Source& src, const fs::path& dir, Reports& rep, StageResult& r,
               std::string* error) {
   rep.started(1);
-  bool copied = write_whole(dir / "pack" / "pak0.pak", src.pack);
+  const std::string first = pack_name(*src.profile, 0);
+  bool copied = write_whole(dir / "pack" / first, src.pack);
   for (const LaterPack& p : src.later)
     copied = copied && write_whole(dir / "pack" / p.name, p.bytes);
   if (!copied || !write_text(dir / "NOTICE.txt", kNotice)) {
@@ -215,14 +202,14 @@ bool run_pack(const Source& src, const fs::path& dir, Reports& rep, StageResult&
   r.note = src.known != nullptr ? std::string("the pack, verified: ") + src.known->what
                                 : std::string("the pack, ") + kUnverified;
   if (!src.later.empty()) r.note += "; and " + std::to_string(src.later.size()) + " later pack(s)";
-  return rep.item("pak0.pak", error);
+  return rep.item(first, error);
 }
 
 bool run_textures(const Source& src, const fs::path& dir, const RunOptions& o, Reports& rep,
                   StageResult& r, std::string* error) {
   Palette palette;
   std::vector<PackTexture> textures;
-  if (!pack_textures(src.content(), &palette, &textures, error)) return false;
+  if (!pack_textures(src.content(), &palette, &textures, error, *src.profile)) return false;
   if (o.texture_limit > 0 && textures.size() > o.texture_limit) textures.resize(o.texture_limit);
   rep.started(textures.size());
   std::string index = "# name folder width height material glows (first map)\n";
@@ -289,22 +276,24 @@ bool run_lightmaps(const Source& src, const fs::path& dir, const RunOptions& o, 
                    StageResult& r, std::string* error) {
   vfs::Pak pak;
   if (!vfs::read_pak(src.content(), &pak, error)) return false;
-  const std::vector<const vfs::PakEntry*> maps = maps_of(pak);
+  const Profile& profile = *src.profile;
+  const std::vector<const vfs::PakEntry*> maps = assets_of(pak, profile.maps);
   std::span<const uint8_t> palette;
-  if (const vfs::PakEntry* pal = vfs::pak_find(pak, "gfx/palette.lmp"); pal && pal->size >= 768) {
+  if (const vfs::PakEntry* pal = vfs::pak_find(pak, profile.palette); pal && pal->size >= 768) {
     palette = vfs::pak_file(src.content(), *pal).first(768);
   }
   rep.started(maps.size());
   uint64_t luxels = 0, bytes = 0;
   for (const vfs::PakEntry* e : maps) {
-    if (const std::string* kept = rep.resumed(map_name(e->path))) {
+    const std::string name(asset_name(profile.maps, e->path));
+    if (const std::string* kept = rep.resumed(name)) {
       unsigned long long l = 0, b = 0;
       if (std::sscanf(kept->c_str(), "%llu %llu", &l, &b) == 2) {
         luxels += l;
         bytes += b;
       }
       r.files++;
-      if (!rep.item(map_name(e->path), error)) return false;
+      if (!rep.item(name, error)) return false;
       continue;
     }
     brush::Map map;
@@ -315,16 +304,15 @@ bool run_lightmaps(const Source& src, const fs::path& dir, const RunOptions& o, 
     const std::vector<std::array<float, 3>> albedo = texture_means(map, dir, palette);
     brush::Rebaked baked;
     size_t size = 0;
-    if (!light_map(map, map_name(e->path), dir / "lightmaps", albedo, error, o.lightmaps, &baked,
-                   &size)) {
+    if (!light_map(map, name, dir / "lightmaps", albedo, error, o.lightmaps, &baked, &size)) {
       return false;
     }
     luxels += baked.stats.luxels;
     bytes += size;
     r.files++;
-    rep.keep(map_name(e->path),
+    rep.keep(name,
              std::to_string(uint64_t(baked.stats.luxels)) + " " + std::to_string(uint64_t(size)));
-    if (!rep.item(map_name(e->path), error)) return false;
+    if (!rep.item(name, error)) return false;
   }
   r.note = std::to_string(r.files) + " maps rebaked, " + std::to_string(luxels / 1000) +
            " thousand luxels, " + std::to_string(bytes / (uint64_t{1024} * 1024)) + " MB";
@@ -335,18 +323,15 @@ bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, Rep
                 StageResult& r, std::string* error) {
   vfs::Pak pak;
   if (!vfs::read_pak(src.content(), &pak, error)) return false;
-  std::vector<const vfs::PakEntry*> sounds;
-  for (const vfs::PakEntry& e : pak.entries) {
-    if (e.path.rfind("sound/", 0) == 0 && e.path.ends_with(".wav")) sounds.push_back(&e);
-  }
-  std::sort(sounds.begin(), sounds.end(), [](auto* a, auto* b) { return a->path < b->path; });
+  const size_t past = src.profile->sounds.dir.size();  // a sound's path below the sounds' folder
+  const std::vector<const vfs::PakEntry*> sounds = assets_of(pak, src.profile->sounds);
   reports.started(sounds.size());
   std::string index = "# path seconds loop-start source-hz noise-db removed-db added-db\n";
   for (const vfs::PakEntry* e : sounds) {
-    if (const std::string* kept = reports.resumed(e->path.substr(6))) {
+    if (const std::string* kept = reports.resumed(e->path.substr(past))) {
       index += *kept + "\n";
       r.files++;
-      if (!reports.item(e->path.substr(6), error)) return false;
+      if (!reports.item(e->path.substr(past), error)) return false;
       continue;
     }
     Pcm in;
@@ -356,7 +341,7 @@ bool run_sounds(const Source& src, const fs::path& dir, const RunOptions& o, Rep
     }
     SoundReport rep;
     const Pcm out = enhance_sound(in, o.sounds, &rep);
-    const std::string rel = e->path.substr(6);  // past "sound/"
+    const std::string rel = e->path.substr(past);
     if (!write_whole(dir / "sounds" / rel, write_wav(out))) {
       *error = "cannot write " + (dir / "sounds" / rel).string();
       return false;
@@ -383,13 +368,8 @@ bool run_models(const Source& src, const fs::path& dir, const RunOptions& o, Rep
                 StageResult& r, std::string* error) {
   vfs::Pak pak;
   if (!vfs::read_pak(src.content(), &pak, error)) return false;
-  const vfs::PakEntry* pal = vfs::pak_find(pak, "gfx/palette.lmp");
-  if (pal == nullptr || pal->size < 768) {
-    *error = "the pack has no gfx/palette.lmp of 768 bytes; it is not the classic pack";
-    return false;
-  }
   Palette palette;
-  std::copy_n(vfs::pak_file(src.content(), *pal).data(), 768, palette.rgb.data());
+  if (!read_palette(*src.profile, pak, src.content(), &palette, error)) return false;
   ModelStats stats;
   ModelOptions models = o.models;
   models.each = [&](const std::string& name, uint32_t done, uint32_t total) {
@@ -399,7 +379,8 @@ bool run_models(const Source& src, const fs::path& dir, const RunOptions& o, Rep
     }
     return rep.item(name, error);
   };
-  if (!enhance_models(src.content(), palette, dir, models, o.textures, &stats, error)) return false;
+  if (!enhance_models(src.content(), palette, dir, models, o.textures, &stats, error, *src.profile))
+    return false;
   r.files = stats.files;
   r.note = std::to_string(stats.models) + " models as glTF, skins at " +
            std::to_string(o.models.skin_scale) + "x, " + std::to_string(stats.sprites) +
@@ -411,7 +392,7 @@ bool run_pictures(const Source& src, const fs::path& dir, const RunOptions& o, R
                   StageResult& r, std::string* error) {
   Palette palette;
   std::vector<PackPicture> pictures;
-  if (!pack_pictures(src.pack, &palette, &pictures, error)) return false;
+  if (!pack_pictures(src.pack, &palette, &pictures, error, *src.profile)) return false;
   rep.started(pictures.size());
   std::string index = "# name width height transparent-index from\n";
   const int scale = std::clamp(o.textures.scale, 1, 8);
@@ -483,18 +464,13 @@ bool stage_named(const std::string& name, Stage* out) {
 }
 
 bool pack_textures(std::span<const uint8_t> pack_bytes, Palette* palette,
-                   std::vector<PackTexture>* out, std::string* error) {
+                   std::vector<PackTexture>* out, std::string* error, const Profile& profile) {
   out->clear();
   vfs::Pak pak;
   if (!vfs::read_pak(pack_bytes, &pak, error)) return false;
-  const vfs::PakEntry* pal = vfs::pak_find(pak, "gfx/palette.lmp");
-  if (pal == nullptr || pal->size < 768) {
-    *error = "the pack has no gfx/palette.lmp of 768 bytes; it is not the classic pack";
-    return false;
-  }
-  std::memcpy(palette->rgb.data(), vfs::pak_file(pack_bytes, *pal).data(), 768);
+  if (!read_palette(profile, pak, pack_bytes, palette, error)) return false;
   std::set<std::string> seen;
-  for (const vfs::PakEntry* e : maps_of(pak)) {
+  for (const vfs::PakEntry* e : assets_of(pak, profile.maps)) {
     brush::Map map;
     if (!brush::read_bsp(vfs::pak_file(pack_bytes, *e), &map, error)) {
       *error = e->path + ": " + *error;
@@ -502,7 +478,8 @@ bool pack_textures(std::span<const uint8_t> pack_bytes, Palette* palette,
     }
     for (const brush::Texture& t : map.textures) {
       if (t.indexed.empty() || never_drawn(t.name) || !seen.insert(t.name).second) continue;
-      out->push_back({t.name, map_name(e->path), int(t.width), int(t.height), t.indexed});
+      out->push_back({t.name, std::string(asset_name(profile.maps, e->path)), int(t.width),
+                      int(t.height), t.indexed});
     }
   }
   return true;
