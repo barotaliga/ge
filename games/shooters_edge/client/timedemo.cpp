@@ -153,7 +153,8 @@ std::vector<std::string> price_report(std::span<const PriceRun> bases,
   return out;
 }
 
-bool find_demo(const SearchPath& files, const std::string& name, std::vector<uint8_t>& out,
+bool find_demo(const SearchPath& files, const std::string& name,
+               std::span<const std::string_view> extensions, std::vector<uint8_t>& out,
                std::string& found, std::string& error) {
   // A file's path (absolute, or from the working folder) is read from disk and nowhere else: the
   // game's folder joined with an absolute path is that path again, which is not the game's file.
@@ -172,7 +173,8 @@ bool find_demo(const SearchPath& files, const std::string& name, std::vector<uin
   std::vector<uint8_t> store;
   const bool has_ext = stem_of(name) != name.substr(name.find_last_of('/') + 1);
   std::vector<std::string> tries = {name};
-  if (!has_ext) tries.push_back(name + ".dem");
+  if (!has_ext)
+    for (const std::string_view ext : extensions) tries.push_back(name + std::string(ext));
   for (const std::string& path : tries) {
     const std::span<const uint8_t> b = find_file(files, path, store);
     if (!b.empty()) {
@@ -207,12 +209,12 @@ bool find_demo(const SearchPath& files, const std::string& name, std::vector<uin
 }
 
 bool timedemo_start(const SearchPath& files, const std::string& name, Timedemo& t,
-                    std::string& error) {
+                    std::string& error, const GameAdapter& game) {
   t = Timedemo{};
   t.name = name;
   std::vector<uint8_t> bytes;
-  if (!find_demo(files, name, bytes, t.found, error)) return false;
-  if (!open_demo(std::move(bytes), t.demo, error)) {
+  if (!game.find_demo(game, files, name, bytes, t.found, error)) return false;
+  if (!game.open_demo(game, std::move(bytes), t.demo, error)) {
     error = t.found + ": " + error;
     return false;
   }
