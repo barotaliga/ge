@@ -149,6 +149,11 @@ struct Scene {
   // height (255 the top) and the roughness, linear bytes; a texture with none is flat at the top
   // with a roughness of 0.75. Empty (no levels) when no texture has one.
   Atlas surface;
+  // THE COVER: how solid each texel is, one byte a texel (255 solid, 0 see-through) in the same
+  // places and mips as `textures`; a face is cut where its texel's cover is under a half. From a
+  // full-colour picture's alpha (`MapPicture::rgba`) and a fence texture's (a name starting `{`)
+  // index 255. Empty (no levels) when every texel is solid.
+  Atlas cover;
   // The lightmaps, a luxel's border round each, in `light_layers` layers stacked down the atlas:
   // layer k holds every face's k-th style (a face's place the same in each).
   Atlas light;

@@ -40,11 +40,16 @@
 @group(0) @binding(5) var aerial_volume: texture_3d<f32>;
 
 struct SkyLight {
-  irradiance_up: vec4f,  // the sun's sky's irradiance on an up-facing surface, per unit sun
-  sun_at_eye: vec4f,     // the sun's transmittance to the eye
-  moon_up: vec4f,        // the moon's sky's, per unit of its light (zero by day)
-  moon_at_eye: vec4f,    // the moon's transmittance to the eye
-  eye: vec4f,            // the eye's adaptation (render/eye.hpp): x the stops it has opened
+  // the sun's sky's irradiance on an up-facing surface, per unit sun
+  irradiance_up: vec4f,
+  // the sun's transmittance to the eye
+  sun_at_eye: vec4f,
+  // the moon's sky's, per unit of its light (zero by day)
+  moon_up: vec4f,
+  // the moon's transmittance to the eye
+  moon_at_eye: vec4f,
+  // the eye's adaptation (render/eye.hpp): x the stops it has opened
+  eye: vec4f,
                          // past the sky's exposure; zero (the eye at rest) unless it runs
 }
 @group(0) @binding(6) var<storage, read> sky_light: SkyLight;
@@ -95,12 +100,18 @@ fn radius_at(world_y: f32) -> f32 {
 
 // THE CLOUD'S LAYERS (render/clouds.hpp): layer `i`'s six rows of `frame.clouds`.
 struct CloudRows {
-  shape: vec4f,  // base, top (world m), the noise's cut, one over the cell (1/m)
-  wind: vec4f,   // the heading (cos, sin), the drift and the age in the noise's tile
-  look: vec4f,   // one over the stretch, the dome (1 a heap), the density (1/m), the shadow's depth
-  form: vec4f,   // the anvil, the detail's bite, its comb along the wind, the patches
-  glow: vec4f,   // its particles' radius (um), their sizes' spread, the 22 degree halo, the deck
-  thick: vec4f,  // the thinnest patches' share of the extinction, one over a patch's cells, the bias
+  // base, top (world m), the noise's cut, one over the cell (1/m)
+  shape: vec4f,
+  // the heading (cos, sin), the drift and the age in the noise's tile
+  wind: vec4f,
+  // one over the stretch, the dome (1 a heap), the density (1/m), the shadow's depth
+  look: vec4f,
+  // the anvil, the detail's bite, its comb along the wind, the patches
+  form: vec4f,
+  // its particles' radius (um), their sizes' spread, the 22 degree halo, the deck
+  glow: vec4f,
+  // the thinnest patches' share of the extinction, one over a patch's cells, the bias
+  thick: vec4f,
 }
 
 fn cloud_layer(i: i32) -> CloudRows {

@@ -19,8 +19,10 @@
 // - **list_maps** and **map_info**: the maps the files hold (the start map first), and one map's
 //   name, title (the world's message), family and texture count.
 // - **map_textures**: a map's textures' pixels, one entry a texture in the map's order. The first
-//   game's maps carry them (plugins/brush/pictures.hpp); a later game's live in other files of its
-//   own and its adapter finds them by the map's texture names.
+//   game's maps carry them (plugins/brush/pictures.hpp), and a PNG or TGA in the game's files
+//   stands in for one by its name, alpha and all: `textures/<map>/<name>` first, then
+//   `textures/<name>`, `.png` before `.tga`, a `*` in the name written `#`. A later game's
+//   pictures live in other files of its own and its adapter finds them by the texture names.
 // - **list_demos**, **find_demo** and **open_demo**: the recordings in the game's files, a demo
 //   found by a name (with the game's demo extensions tried in order when it has none) or a path,
 //   and its bytes opened for playback (client/demo.hpp, the formats told by their first bytes).
@@ -36,6 +38,7 @@
 // ge:keywords game-adapter adapter classic-game list_mods find_program list_maps map_info
 // ge:keywords map_textures list_demos find_demo open_demo mod-folder program-form program-side
 // ge:keywords per-game sequel add_adapter_commands console-mods console-maps console-demos
+// ge:keywords replacement-texture png tga alpha
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #pragma once
@@ -92,9 +95,11 @@ struct GameAdapter {
   // The map `name` read; false with the reason.
   bool (*map_info)(const GameAdapter& self, const SearchPath& files, std::string_view name,
                    MapInfo& out, std::string& error) = nullptr;
-  // The map's textures' pixels (views into `map_file` or `store`, which must outlive them).
+  // The textures of the map `map` (its name, "dm6"): their pixels (views into `map_file` or
+  // `store`, which must outlive them), and a full-colour picture with alpha where the game's files
+  // hold one in a texture's place.
   std::vector<ge::brush::MapPicture> (*map_textures)(const GameAdapter& self,
-                                                     const SearchPath& files,
+                                                     const SearchPath& files, std::string_view map,
                                                      std::span<const uint8_t> map_file,
                                                      std::vector<uint8_t>& store) = nullptr;
   // The recordings the files hold, by path.

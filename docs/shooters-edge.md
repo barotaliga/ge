@@ -575,7 +575,7 @@ files shares: `engine/vfs` (folders, packs, zips, loose files, a mod over the ba
 | **mods** (`list_mods`) | folders over the base with numbered packs, zips or loose files | the same folders and the same pack format | folders of zips, read in name order, with a description file each |
 | **programs** (`find_program`) | one QC program for the server (`qwprogs.dat`, then `progs.dat`) | a native library of the server's rules | up to three bytecode programs inside its zips, one a side: the server's rules, the client's half (its HUD and prediction), the menus; or native libraries |
 | **maps** (`list_maps`, `map_info`) | BSP 29 or BSP2, the title the world's message | BSP 38 | BSP 46 |
-| **textures** (`map_textures`) | the map carries its pictures (`plugins/brush/pictures.hpp`) | its own picture files beside the map, by the texture's name | shaders over picture files |
+| **textures** (`map_textures`) | the map carries its pictures (`plugins/brush/pictures.hpp`); a PNG or TGA by the texture's name stands in, alpha and all (`textures/<map>/<name>`, then `textures/<name>`) | its own picture files beside the map, by the texture's name | shaders over picture files |
 | **demos** (`list_demos`, `find_demo`, `open_demo`) | the single-player, client and multiview recordings (`client/demo.hpp`) | its own recording format | its own |
 
 **Every program file names its form and its side** (`ProgramFile` in `profiles/game_profile.hpp`:
@@ -584,10 +584,13 @@ or menus). A form this build has no runner for is named when found and passed ov
 (`runs_form`), never read as another; today only QC runs. The engine's C++ mods (§ C++ mods) are
 hooks over whichever program runs, so they stay a choice of their own.
 
-**Still to move behind calls of their own**, each in its own change: textures and skins as PNG
-and TGA with alpha (a replacement by name over the map's own); the models (the world's, the
-player's and its skins, the held weapons, the items) and the sounds; the HUD's and the menus'
-pictures; the config files and the location files.
+A stand-in picture's alpha cuts the face where it is under a half, as a fence texture's holes do
+(`docs/rendering.md` § See-through texels on a BSP map); the TGA reader is
+`engine/assets/tga.hpp`, the PNG reader `engine/assets/image.hpp`.
+
+**Still to move behind calls of their own**, each in its own change: the models (the world's,
+the player's and its skins with alpha, the held weapons, the items) and the sounds; the HUD's and
+the menus' pictures; the config files and the location files.
 
 **The next seam, when the sequel starts: a rules runner.** The listen server and the dedicated
 server hold the QC server (`server/qc_server.hpp`) itself today. A second program form needs them
