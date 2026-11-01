@@ -14,6 +14,9 @@
 //   one RGBA picture the albedo's size: the normal's x and y (tangent space, +Y up the picture),
 //   the height (255 the top) and the roughness, from normal.png, height.png and roughness.png.
 // - `cached_skins`: models/<name>/skin<k>.png, each skin of a model, the same size rule.
+// - `cached_picture`: pictures/enhanced/<name>.png, a 2D picture of the pack's (the status bar's,
+//   the menus', the font sheet; pictures.hpp's names) upscaled with its see-through texels at alpha
+//   0, the same size rule; a HUD or a menu draws it at that many picture pixels a pixel.
 // - `cached_rebake`: lightmaps/<map>.gerb, the map's light rebaked (lightmaps.hpp), when it is
 //   whole and made for a map of the same vertices.
 //
@@ -21,6 +24,7 @@
 // ge:keywords classicenhance cache read find_cache cached_texture cached_skins albedo emissive
 // ge:keywords cached_surface normal-map height-map roughness relief parallax
 // ge:keywords upscaled texture skin replace renderer atlas cached_rebake gerb rebake bounce
+// ge:keywords cached_picture pictures 2d-art hud menu conchars density
 // ge:skill classicenhance
 // ge:test tests/classicenhance_cached_test.cpp
 #pragma once
@@ -57,6 +61,12 @@ bool cached_surface(const std::filesystem::path& dir, std::string_view name, uin
 // at a multiple of the pack's `w` x `h`; false when the cache has none.
 bool cached_skins(const std::filesystem::path& dir, std::string_view name, uint32_t w, uint32_t h,
                   std::vector<assets::Image>* skins);
+
+// The enhanced copy of picture `name` (pictures.hpp's: `sbar`, `conchars`, `gfx/qplaque`; the
+// pack's `w` x `h`) into `*out`; the multiple of `w` x `h` it is at (1, 2, 4 or 8), 0 (and `*out`
+// untouched) when the cache has none of a size that fits.
+uint32_t cached_picture(const std::filesystem::path& dir, std::string_view name, uint32_t w,
+                        uint32_t h, assets::Image* out);
 
 // The rebaked light of map `name` (the file's stem, "e1m1" for maps/e1m1.bsp) made for a map of
 // `vertices` vertices; false (and `out` untouched) when the cache has none, it does not read, or it

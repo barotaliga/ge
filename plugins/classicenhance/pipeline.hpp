@@ -13,8 +13,9 @@
 //    as glTF with enhanced skins under `models/`, sprites' frames under `sprites/`, and
 //    `replaced.txt`: what the engine draws in their place (replace.hpp).
 // 6. **pictures**: the pack's 2D art (pictures.hpp: the wad's pictures and font sheet, the
-//    `gfx/` pictures) in the palette's colours under `pictures/<name>.png`, unscaled, with
-//    `pictures/index.txt`.
+//    `gfx/` pictures) in the palette's colours under `pictures/<name>.png`, unscaled, and
+//    upscaled the textures' way (`enhance_picture`, at the textures' scale and by their upscaler)
+//    under `pictures/enhanced/<name>.png`, with `pictures/index.txt`.
 //
 // A stage whose recorded key (its version and options) matches is skipped; `RunOptions::force`
 // reruns it. `RunOptions::only` runs the named stages alone (the ones before them must have run).
@@ -54,7 +55,7 @@ bool stage_named(const std::string& name, Stage* out);
 
 inline constexpr int kTextureStageVersion = 1;
 inline constexpr int kSoundStageVersion = 1;
-inline constexpr int kPictureStageVersion = 1;
+inline constexpr int kPictureStageVersion = 2;  // 2: each picture also enhanced (enhance_picture)
 
 // What the pipeline reports while it works (progress.hpp's board reads it): a stage started
 // (with its item count), an item done, a stage finished, skipped or failed.

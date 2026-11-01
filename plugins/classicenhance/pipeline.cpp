@@ -78,7 +78,9 @@ std::string stage_key(Stage s, const RunOptions& o) {
             " sharpen " + num(e.sharpen) + " grain " + num(e.grain) + " relief " + num(e.relief) +
             network_key(e);
   } else if (s == Stage::pictures) {
-    text += " v" + std::to_string(kPictureStageVersion);
+    const EnhanceOptions& e = o.textures;
+    text += " v" + std::to_string(kPictureStageVersion) + " scale " + std::to_string(e.scale) +
+            " sharpen " + num(e.sharpen) + " grain " + num(e.grain) + network_key(e);
   } else {
     text += " v1";
   }
@@ -316,31 +318,40 @@ bool run_models(const Source& src, const fs::path& dir, const RunOptions& o, Rep
   return true;
 }
 
-bool run_pictures(const Source& src, const fs::path& dir, Reports& rep, StageResult& r,
-                  std::string* error) {
+bool run_pictures(const Source& src, const fs::path& dir, const RunOptions& o, Reports& rep,
+                  StageResult& r, std::string* error) {
   Palette palette;
   std::vector<PackPicture> pictures;
   if (!pack_pictures(src.pack, &palette, &pictures, error)) return false;
   rep.started(pictures.size());
   std::string index = "# name width height transparent-index from\n";
+  const int scale = std::clamp(o.textures.scale, 1, 8);
   for (const PackPicture& p : pictures) {
     const fs::path at = dir / "pictures" / (p.name + ".png");
-    if (!save_png(at, picture_rgba(p.picture, palette, p.transparent))) {
+    const fs::path big = dir / "pictures" / "enhanced" / (p.name + ".png");
+    const assets::Image before = picture_rgba(p.picture, palette, p.transparent);
+    const assets::Image after = enhance_picture(p, palette, o.textures);
+    if (!save_png(at, before)) {
       *error = "cannot write " + at.string();
       return false;
     }
-    r.files++;
+    if (!save_png(big, after)) {
+      *error = "cannot write " + big.string();
+      return false;
+    }
+    r.files += 2;
     index += p.name + " " + std::to_string(p.picture.width) + " " +
              std::to_string(p.picture.height) + " " + std::to_string(p.transparent) + " " + p.from +
              "\n";
-    if (!rep.item(p.name, error)) return false;
+    if (!rep.item(p.name, error, &before, &after)) return false;
   }
   if (!write_text(dir / "pictures" / "index.txt", index)) {
     *error = "cannot write " + (dir / "pictures" / "index.txt").string();
     return false;
   }
   r.files++;
-  r.note = std::to_string(pictures.size()) + " pictures, unscaled";
+  r.note = std::to_string(pictures.size()) + " pictures, as the pack has them and at " +
+           std::to_string(scale) + "x" + (o.textures.network != nullptr ? " by the network" : "");
   return true;
 }
 
@@ -452,7 +463,7 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
         ok = run_models(source, report->dir, opts, rep, r, error);
         break;
       case Stage::pictures:
-        ok = run_pictures(source, report->dir, rep, r, error);
+        ok = run_pictures(source, report->dir, opts, rep, r, error);
         break;
     }
     r.seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();

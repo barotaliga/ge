@@ -159,6 +159,12 @@ TEST(pipeline_writes_every_stage_and_skips_what_is_current) {
       CHECK(png.rgba[11] == 0);                                            // index 255
     }
     CHECK(fs::exists(dir / "pictures" / "gfx" / "ranking.png"));
+    // And each enhanced at the textures' scale, the see-through index still clear.
+    const auto big = ge::lab::read_png((dir / "pictures" / "enhanced" / "sbar.png").string());
+    CHECK(big.has_value() && big->width == 8 && big->height == 4);
+    if (big && big->rgba.size() == 128) CHECK(big->rgba[3] == 255 && big->rgba[4 * 4 + 3] < 128);
+    CHECK(fs::exists(dir / "pictures" / "enhanced" / "conchars.png") &&
+          fs::exists(dir / "pictures" / "enhanced" / "gfx" / "ranking.png"));
   }
 
   // Every drawn texture of the fixture once, its maps beside it, named in the index.
@@ -174,14 +180,14 @@ TEST(pipeline_writes_every_stage_and_skips_what_is_current) {
     CHECK(index.find(t.name + " ") != std::string::npos);
   }
 
-  // A rerun skips every stage; a new scale reruns the textures and the rebake that reads their
-  // colours; --force reruns all.
+  // A rerun skips every stage; a new scale reruns the textures, the rebake that reads their
+  // colours and the pictures upscaled at it; --force reruns all.
   CHECK(ce::run_pipeline(src, root, opts, &report, &error));
   for (const ce::StageResult& r : report.stages) CHECK(!r.ran && r.note == "up to date");
   opts.textures.scale = 3;
   CHECK(ce::run_pipeline(src, root, opts, &report, &error));
   CHECK(!report.stages[0].ran && report.stages[1].ran && report.stages[2].ran &&
-        !report.stages[3].ran && !report.stages[4].ran && !report.stages[5].ran);
+        !report.stages[3].ran && !report.stages[4].ran && report.stages[5].ran);
   opts.force = true;
   opts.only = {ce::Stage::lightmaps};
   CHECK(ce::run_pipeline(src, root, opts, &report, &error));
