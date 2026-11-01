@@ -137,7 +137,10 @@ checked out into a scratch worktree (`build/before/<sha>/`, kept for the next ca
 commit), built with this build's `GE_*` options and its downloads, its lab run into
 `previews/<id>@before/`, then this tree's run compared with it. With ccache on PATH the two trees
 share the cache (`CCACHE_BASEDIR`), so the ref's build compiles only what differs; without it the
-first build at a ref is a whole build of the labs.
+first build at a ref is a whole build of the labs. `ge lab before <id>...` keeps only the before,
+for several labs at once: each run at origin/main (or `--ref`) at its smoke flags (`--full` for its
+full ones) and kept as `previews/<id>@before/` (or `--tag`), so a refactor's after is one
+`--compare=before` a lab, or `ge digest <id> --why --base=before`, with nothing stashed.
 `ge lab publish <id>... [--before=<tag>]` puts the last run (of one lab, or of several one after
 another) on one self-contained page for a report or a pull request (`engine/cli/publish.hpp`). Each picture loses its caption band, which the page
 sets as text, and is shrunk to `--width` (720 px) and inlined as a 256-colour GIF

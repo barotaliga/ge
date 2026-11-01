@@ -670,6 +670,46 @@ std::string shell_word(const std::string& s) {
 
 }  // namespace
 
+Outcome run_lab_before(const BuildOptions& o, const LabBeforeOptions& before) {
+  Outcome out;
+  if (before.tag.empty() || before.tag.find_first_of("/\\ ") != std::string::npos) {
+    out.findings.push_back({Severity::error, "--tag=" + before.tag + " is not a plain name",
+                            "the flags", "name the kept runs with a word: --tag=before"});
+    out.exit = 2;
+    return out;
+  }
+  std::vector<std::string> kept;
+  for (const std::string& id : before.ids) {
+    LabOptions lab;
+    lab.id = id;
+    lab.smoke = !before.full;
+    lab.shots = before.shots;
+    lab.before = before.ref;
+    lab.passthrough = before.passthrough;
+    Outcome one;
+    if (!run_at_ref(o, lab, before.tag, one)) {
+      out.findings.insert(out.findings.end(), one.findings.begin(), one.findings.end());
+      if (one.exit != 0) out.exit = one.exit;
+      continue;
+    }
+    out.text += one.text;
+    kept.push_back(id);
+  }
+  std::vector<std::string> names;
+  names.reserve(kept.size());
+  for (const std::string& id : kept) names.push_back(json_str("previews/" + id + "@" + before.tag));
+  out.result = json_obj(
+      {{"ref", json_str(before.ref)}, {"tag", json_str(before.tag)}, {"kept", json_arr(names)}});
+  out.summary = std::to_string(kept.size()) + " of " + std::to_string(before.ids.size()) +
+                " lab(s) run at " + before.ref + " and kept under the tag " + before.tag;
+  if (!kept.empty()) {
+    out.next = "make the change, then ge lab " + kept[0] + (before.full ? "" : " --smoke") +
+               " --compare=" + before.tag + " (each lab), or ge digest " + kept[0] +
+               " --why --base=" + before.tag;
+  }
+  return out;
+}
+
 Outcome run_lab_pair(const BuildOptions& o, const LabPairOptions& asked) {
   Outcome out;
   LabPairOptions pair = asked;
