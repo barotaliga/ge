@@ -297,7 +297,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   if (!classic_start(*server, *qc, st, cfg, r.error)) return r;
   MultiviewRecorder mvd;
   if (opt.record) {
-    mvd_start(mvd, false);
+    mvd_start(mvd, false, opt.packed);
     server->mvd = &mvd;
   }
 

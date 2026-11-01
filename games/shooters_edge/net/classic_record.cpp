@@ -192,15 +192,46 @@ void player(const ClassicServer& s, int k, gn::Writer& w) {
   write_byte(w, static_cast<int>(field(s, k + 1, s.f_weaponframe)));
 }
 
+// A packed recorder's new plain bytes fed to its stream (flushed every kPackFlushBytes).
+template <typename R>
+void feed(R& r) {
+  if (!r.packed || r.bytes.empty()) return;
+  ge::vfs::zstd_write(r.pack, r.bytes);
+  r.plain += static_cast<int64_t>(r.bytes.size());
+  r.bytes.clear();
+  if (r.plain - r.flushed_at >= kPackFlushBytes) {
+    ge::vfs::zstd_flush(r.pack);
+    r.flushed_at = r.plain;
+  }
+}
+
+template <typename R>
+void begin_pack(R& r, bool packed) {
+  r.packed = packed;
+  if (packed) ge::vfs::zstd_begin(r.pack);
+}
+
+// A packed recorder's stream ended and its file moved into `bytes`.
+template <typename R>
+void end_pack(R& r) {
+  if (!r.packed || r.pack.ended) return;
+  feed(r);
+  ge::vfs::zstd_end(r.pack);
+  r.bytes = std::move(r.pack.out);
+}
+
 }  // namespace
 
 // ---- the client's recording ----
 
-void record_start(ClientRecorder& r, bool voice) {
+void record_start(ClientRecorder& r, bool voice, bool packed) {
   r = ClientRecorder{};
   r.voice = voice;
   if (voice) r.bytes = cl::voice_header(cl::DemoFormat::client);
+  begin_pack(r, packed);
 }
+
+void record_stop(ClientRecorder& r) { end_pack(r); }
 
 void record_packet(ClientRecorder& r, double time, std::span<const uint8_t> header,
                    std::span<const uint8_t> payload,
@@ -224,6 +255,7 @@ void record_packet(ClientRecorder& r, double time, std::span<const uint8_t> head
   put_i32(r.bytes, static_cast<int32_t>(kept.size()));
   r.bytes.insert(r.bytes.end(), kept.begin(), kept.end());
   r.packets++;
+  feed(r);
 }
 
 void record_command(ClientRecorder& r, double time, const sh::MoveCmd& cmd) {
@@ -240,6 +272,7 @@ void record_command(ClientRecorder& r, double time, const sh::MoveCmd& cmd) {
   put_u8(r.bytes, cmd.impulse);
   for (int i = 0; i < 3; i++) put_f32(r.bytes, cmd.angles[i]);  // the view's
   r.commands++;
+  feed(r);
 }
 
 void record_own_voice(ClientRecorder& r, int slot, const ClcMsg& m) {
@@ -257,10 +290,11 @@ void record_own_voice(ClientRecorder& r, int slot, const ClcMsg& m) {
 
 // ---- the server's multiview recording ----
 
-void mvd_start(MultiviewRecorder& r, bool voice) {
+void mvd_start(MultiviewRecorder& r, bool voice, bool packed) {
   r = MultiviewRecorder{};
   r.voice = voice;
   if (voice) r.bytes = cl::voice_header(cl::DemoFormat::multiview);
+  begin_pack(r, packed);
 }
 
 void mvd_events(ClassicServer& s, MultiviewRecorder& r) {
@@ -384,6 +418,7 @@ void mvd_frame(ClassicServer& s, MultiviewRecorder& r) {
     put_record(r.bytes, 0, h.kind, h.target, h.mask, h.msg);
   r.held.clear();
   r.frames++;
+  feed(r);
 }
 
 void mvd_stop(MultiviewRecorder& r) {
@@ -391,6 +426,7 @@ void mvd_stop(MultiviewRecorder& r) {
   write_byte(o.w, svc::disconnect);
   write_string(o.w, "EndOfDemo");
   put_record(r.bytes, 1, kRecAll, 0, 0, o.bytes());
+  end_pack(r);
 }
 
 }  // namespace shooters_edge::net

@@ -4,11 +4,13 @@
 // (`.qwdv`) and another plainly, the server records the multiview voice format (`.mvdv`); then
 // each recording is read back by the demo reader (client/demo.hpp) to its end: the client's holds
 // its own voice and its team-mate's and nobody else's, the plain one holds none, the server's holds
-// every talker's, and a second session records the same bytes.
+// every talker's, and a second session records the same bytes. Packed as they go, the three
+// recordings unpack to the plain ones' bytes and play the same; a recording plays out of every
+// archive (gzip, zstd, xz, tar.gz, zip, 7z), a readme beside it in the archive ignored.
 //
 // ge:summary Tests: client and multiview recordings with voice, by team, read back to the end
 // ge:keywords test record recorder voice qwdv mvdv team-voice client-recording multiview
-// ge:keywords voice-relay demo-reader
+// ge:keywords voice-relay demo-reader packed zstd archive 7z zip tar-gz qwdz mvdz
 // ge:skill net shooter testing
 #include <memory>
 #include <set>
@@ -27,6 +29,11 @@
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
+#include "vfs/lzma.hpp"
+#include "vfs/tar.hpp"
+#include "vfs/unpack.hpp"
+#include "vfs/zip.hpp"
+#include "vfs/zstd.hpp"
 
 namespace cn = shooters_edge::net;
 namespace cl = shooters_edge::client;
@@ -53,6 +60,7 @@ struct Session {
   cn::ClientRecorder voiced, plain;  // client 0's (voice format) and client 1's (plain)
   cn::MultiviewRecorder mvd;
   int64_t now = 0;
+  bool packed = false;  // every recorder packs as it goes
 
   bool run() {
     std::string error;
@@ -73,7 +81,7 @@ struct Session {
     cn::ServerConfig cfg;
     cfg.voice = true;
     if (!cn::classic_start(server, *qc, st, cfg, error)) return false;
-    cn::mvd_start(mvd, true);
+    cn::mvd_start(mvd, true, packed);
     server.mvd = &mvd;
     for (int i = 0; i < kClients; i++) {
       gn::open_sim_transport(ct[i], net,
@@ -87,8 +95,8 @@ struct Session {
       cc.talk = &talk;
       cn::client_start(c[i], ct[i], gn::sim_address(0, cn::kPortServer), cc, 0);
     }
-    cn::record_start(voiced, true);
-    cn::record_start(plain, false);
+    cn::record_start(voiced, true, packed);
+    cn::record_start(plain, false, packed);
     c[0].record = &voiced;
     c[1].record = &plain;
     for (int f = 0; f < kTicks; f++) {
@@ -98,6 +106,8 @@ struct Session {
       for (cn::ClassicClientEnd& k : c) cn::client_tick(k, now);
     }
     cn::mvd_stop(mvd);
+    cn::record_stop(voiced);
+    cn::record_stop(plain);
     return true;
   }
 };
@@ -229,4 +239,64 @@ TEST(a_session_records_the_same_bytes_twice) {
   CHECK(a->run() && b->run());
   CHECK(a->voiced.bytes == b->voiced.bytes);
   CHECK(a->mvd.bytes == b->mvd.bytes);
+}
+
+TEST(a_packed_session_unpacks_to_the_plain_bytes_and_plays) {
+  auto a = std::make_unique<Session>();
+  auto b = std::make_unique<Session>();
+  b->packed = true;
+  CHECK(a->run() && b->run());
+  const std::pair<const std::vector<uint8_t>*, const std::vector<uint8_t>*> pairs[] = {
+      {&a->voiced.bytes, &b->voiced.bytes},
+      {&a->plain.bytes, &b->plain.bytes},
+      {&a->mvd.bytes, &b->mvd.bytes}};
+  for (const auto& [plain, packed] : pairs) {
+    CHECK(ge::vfs::is_zstd(*packed));
+    CHECK_MSG(packed->size() * 2 < plain->size(),
+              std::to_string(packed->size()) + " of " + std::to_string(plain->size()));
+    std::vector<uint8_t> back;
+    bool cut = true;
+    std::string error;
+    CHECK_MSG(ge::vfs::zstd_unpack(*packed, back, cut, error), error);
+    CHECK(!cut);
+    CHECK(back == *plain);
+    const Read r = read_back(*packed), want = read_back(*plain);
+    CHECK_MSG(r.ended, r.error);
+    CHECK(r.format == want.format && r.voice_format == want.voice_format);
+    CHECK(r.frames == want.frames && r.voice_messages == want.voice_messages);
+  }
+  CHECK(b->mvd.plain == static_cast<int64_t>(a->mvd.bytes.size()));
+}
+
+TEST(a_recording_plays_out_of_every_archive) {
+  auto a = std::make_unique<Session>();
+  CHECK(a->run());
+  const std::vector<uint8_t>& mvdv = a->mvd.bytes;
+  const Read want = read_back(mvdv);
+  const auto tar =
+      ge::vfs::write_tar({{"notes.txt", {'h', 'i'}}, {"shot.png", {1}}, {"match.mvdv", mvdv}});
+  const std::vector<std::vector<uint8_t>> files = {
+      ge::vfs::write_gzip(mvdv, "match.mvdv"),
+      ge::vfs::zstd_pack(mvdv),
+      ge::vfs::xz_pack(mvdv, 6),
+      ge::vfs::write_gzip(tar),
+      ge::vfs::write_stored_zip({{"readme.txt", {'x'}}, {"demos/MATCH.MVDV", mvdv}}),
+      ge::vfs::write_7z("match.mvdv", mvdv),
+  };
+  for (const auto& f : files) {
+    const Read r = read_back(f);
+    CHECK_MSG(r.ended, r.error);
+    CHECK(r.frames == want.frames && r.voice_messages == want.voice_messages);
+  }
+  cl::Demo d;
+  std::string error;
+  CHECK(cl::open_demo(ge::vfs::write_gzip(tar), d, error));
+  CHECK(d.inner_name == "match.mvdv");
+  CHECK((d.layers == std::vector{ge::vfs::Wrapping::gzip, ge::vfs::Wrapping::tar}));
+  // Two recordings in one archive: refused, naming them.
+  const auto two = ge::vfs::write_7z("a.mvd", mvdv);
+  const auto both = ge::vfs::write_tar({{"a.mvdv", mvdv}, {"b.qwdvz", mvdv}});
+  CHECK(cl::open_demo(two, d, error));
+  CHECK(!cl::open_demo(both, d, error));
+  CHECK_MSG(error.find("a.mvdv, b.qwdvz") != std::string::npos, error);
 }
