@@ -18,10 +18,12 @@
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "progs/entity_text.hpp"
+#include "shooter/locs.hpp"
 #include "shooter/nav.hpp"
 #include "shooter/swim.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
+#include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -196,7 +198,19 @@ struct Seat {
   int team = 0, index = 0;
   sh::AimSkill skill = sh::AimSkill::average;
   bool had_quad = false;
+  size_t heard = 0;  // its client's prints read so far
 };
+
+// Place names off the items, for a map with no place names file: each key item, weapon and mega
+// health's spot by its callout ("ra", "rl", "mh").
+void locs_from_items(const std::vector<bt::ItemSpot>& items, sh::Locs& out) {
+  for (const bt::ItemSpot& it : items) {
+    if (!bt::key_item(it) && it.kind != bt::ItemKind::weapon && it.kind != bt::ItemKind::mega)
+      continue;
+    out.points.push_back({bt::item_call(it), it.at});
+  }
+  out.from = "the map's items";
+}
 
 }  // namespace
 
@@ -309,6 +323,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     return r;
   }
   std::vector<Seat> seats(static_cast<size_t>(n));
+  sh::Locs locs;  // the map's place names, every fighter's
   std::vector<gn::Transport> ct(static_cast<size_t>(n));
   auto clients = std::make_unique<ClassicClientEnd[]>(static_cast<size_t>(n));
   bt::Team teams[2];
@@ -340,6 +355,12 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         Seat* sp = &seat;
         cc.brain = [sp, c, &s](int) -> sh::MoveCmd {
           if (!sp->ready) return {};
+          // The team lines its client was sent, read (or missed) by its own mind.
+          for (; sp->heard < c->prints.size(); sp->heard++) {
+            std::string who, words;
+            if (bt::split_team_line(c->prints[sp->heard], who, words))
+              bt::mind_hear(sp->fighter, who, words, s.sv.time);
+          }
           const sh::MoveCmd cmd = bt::fighter_command(sp->fighter, s, c->playernum, bt::kPilotMsec);
           // The fighter's team messages, as a player types them.
           for (const std::string& line : sp->fighter.outbox)
@@ -379,6 +400,17 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       bt::fighter_init(seat.fighter, graph, s, slot, map->spec.entities.c_str(), seat.skill, kHz,
                        opt.seed + 31u * static_cast<uint32_t>(k));
       seat.fighter.bot.yaw = s.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
+      seat.fighter.name = r.players[static_cast<size_t>(k)].name;
+      if (locs.points.empty()) {
+        if (!opt.locs.empty() && sh::parse_locs(opt.locs, locs) > 0) {
+          locs.from = opt.locs_from;
+        } else {
+          locs_from_items(seat.fighter.items, locs);
+        }
+        r.locs_from = locs.from;
+        r.locs = static_cast<int64_t>(locs.points.size());
+      }
+      seat.fighter.locs = &locs;
       seat.ready = true;
       if (!dives_made && swim.leading > 0 && best_n > 0) {
         dives_made = true;
@@ -447,7 +479,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       bt::team_init(tm);
       for (bt::Fighter* f : tm.members) f->bot.senses.friends = tm.friends;
     }
-    for (bt::Team& tm : teams) bt::team_plan(tm, s);
+    for (bt::Team& tm : teams) bt::team_count(tm);
     for (int k = 0; k < n; k++) client_tick(clients[k], now);
     r.frames = frame + 1;
 
@@ -564,6 +596,13 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].held_shots = ts.held_shots;
     r.teams[t].callouts = ts.callouts;
     r.teams[t].messages = ts.messages;
+  }
+  for (size_t k = 0; k < seats.size(); k++) {
+    const bt::Mind& mn = seats[k].fighter.mind;
+    r.players[k].read = mn.read;
+    r.players[k].missed = mn.missed;
+    r.lines_read += mn.read;
+    r.lines_missed += mn.missed;
   }
   // The teams' messages, merged in time order (a tie: the first team first).
   {

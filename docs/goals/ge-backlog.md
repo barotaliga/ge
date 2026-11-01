@@ -21,6 +21,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 ## Before and after across refs
 
 - `ge lab run <id> --before=<ref>` (the lab built at `<ref>`, default origin/main, in a scratch worktree sharing the compiler cache, and run tagged `before`, then this tree's run beside it: the before-and-after shots without a manual checkout, rebuild and restore; TAB scoreboard thread; done: `ge lab <id> --before=<ref>`, the worktree under build/before/<sha>/, this build's GE_* options and downloads, ccache's base dir)
+- `ge lab before <ids...>` (several labs at origin/main's smoke flags in the scratch worktree, kept under the tag `before`, so a refactor's before and after need no stash and no second build here; classic profiles thread; done: `--ref`, `--tag`, `--shots`, `--full`)
 - `ge lab pair <lab> --before=<cvars>` (any picture lab's frames drawn twice, once under a changed cvar set, and paired side by side: se-client got a one-off `--before` for this; one flag family with `--before=<ref>`, the before taken from a ref or from a cvar set; relief-maps thread, #388; done: `ge lab pair <id> --before=<cvars> [--after=<cvars>]` over the runner's `--cvars` and `lab.cvars()`, read by the world and Shooter's Edge client, world and models labs)
 - `ge lab compare --switch=<cvar>` (any lab's views with a cvar off and on, side by side with the luminance difference: the classic texture rebake thread wrote a PIL script for it twice; done: `ge lab pair <id> --switch=<cvar>`)
 - `ge bench ab --base=<ref>` (or `--ab <binA> <binB>`: two builds interleaved N times with statistics, since a container's timings wander by about 5%; for a bench lab too: `ge ab <lab> --before=<binary> --runs=3`, the median of each metric; also `--rounds=3`, each side's best and the delta printed beside the measured noise band, the second binary built or reused off `--before=<ref>`: the approximation study; asked again by the map-build profiling, #307: the means and their spread) and `ge compare <ref>` (both builds, one table)
@@ -109,6 +110,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge stage --put=skier --beside=<entity:id> --off=<m> --speed=<m/s>` (the player set down mid-run beside a live entity, at an offset and a speed, to stage a meeting without scripting a run up to it)
 - `ge trace <test> --rows=<series> --every=<s>` (one actor's state, a pursuer's say, as a table every N seconds from a scripted test, without adding prints to the test)
 - `ge cvar ls --module=<module>` (an engine module's cvars, their defaults and ranges, without a game: today `ge cvar` reads only a game's play console)
+- `ge cvar ls --window=<game>` / `--unread` (a game window's registered cvars and commands listed without opening a window, and which ones no code reads: 15 of 39 `ce_` switches were read by nothing; options-menu thread)
 - `ge lab <lab> --cfg=<script>` for every lab (any lab run under a cfg script's cvars, the runner applying it, instead of a --cfg flag each lab adds)
 - `ge sim --human --compare=<tag>` (the humanness report beside a kept run's, each metric's move)
 - `ge sim find <seed> --when "<predicate>"`

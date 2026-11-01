@@ -92,7 +92,6 @@ TEST(a_team_game_of_bots_plays_as_teams_and_records) {
   for (int t = 0; t < 2; t++) {
     CHECK_MSG(r.teams[t].frags >= 3,
               "team " + std::to_string(t) + " scored " + std::to_string(r.teams[t].frags));
-    CHECK_MSG(r.teams[t].plans > 50, "team " + std::to_string(t) + " never planned");
     int64_t hold = 0;
     for (const cn::TeamPlayer& p : r.players)
       if (p.team == t) hold += p.role_commands[1];
@@ -115,6 +114,13 @@ TEST(a_team_game_of_bots_plays_as_teams_and_records) {
     const std::string bytes(r.mvd.begin(), r.mvd.end());
     CHECK_MSG(bytes.find(words) != std::string::npos,
               "the team message '" + words + "' is not in the recording");
+  }
+  // Each reads his mates' lines by his own skill: an expert all of them, a novice few.
+  for (const cn::TeamPlayer& p : r.players) {
+    if (p.skill == ge::shooter::AimSkill::expert)
+      CHECK_MSG(p.read > 0 && p.missed == 0, p.name + " (an expert) missed a team line");
+    if (p.skill == ge::shooter::AimSkill::novice)
+      CHECK_MSG(p.missed > p.read, p.name + " (a novice) read most of the team's lines");
   }
   // A novice starts the match knowing none of the items, an expert all of them.
   for (const cn::TeamPlayer& p : r.players) {
