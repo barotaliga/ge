@@ -20,6 +20,7 @@
 // ge:test tests/shooters_edge_demo_test.cpp
 #include <algorithm>
 #include <string>
+#include <utility>
 
 #include "shooters_edge/client/demo.hpp"
 
@@ -417,15 +418,19 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 6:
         sound(s, m, w);
         break;
-      case 8:
-        m.u8();
-        m.str();
-        break;  // print
+      case 8: {  // print: the level, the text
+        const int level = m.u8();
+        s.printed.push_back({level, m.str()});
+        break;
+      }
       case 9:
-      case 26:
-      case 31:
         m.str();
-        break;    // stufftext, centerprint, finale
+        break;  // stufftext
+      case 26:
+      case 31:  // centerprint, finale
+        s.centre = m.str();
+        s.centred = true;
+        break;
       case 10: {  // setangle; a multiview recording's names the player it turns first
         if (s.format == DemoFormat::multiview) m.u8();
         if ((d.ext_mvd & kMvdHighLagTeleport) != 0) m.u8();
@@ -534,7 +539,10 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         const int slot = m.u8();
         m.i32();
         const std::string info = m.str();
-        if (slot < 32) s.names[static_cast<size_t>(slot)] = info_field(info, "name");
+        if (slot < 32) {
+          s.names[static_cast<size_t>(slot)] = info_field(info, "name");
+          s.teams[static_cast<size_t>(slot)] = info_field(info, "team");
+        }
         break;
       }
       case 41: {  // download: under chunked downloads a chunk number first (-1: a transfer's start)
@@ -581,12 +589,15 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 49:
       case 50:
         m.f32();
-        break;  // maxspeed, entgravity
-      case 51:
-        m.u8();
-        m.str();
-        m.str();
-        break;  // setinfo
+        break;    // maxspeed, entgravity
+      case 51: {  // setinfo: one key of a slot's userinfo
+        const int slot = m.u8();
+        const std::string key = m.str();
+        std::string value = m.str();
+        if (slot < 32 && key == "name") s.names[static_cast<size_t>(slot)] = std::move(value);
+        if (slot < 32 && key == "team") s.teams[static_cast<size_t>(slot)] = std::move(value);
+        break;
+      }
       case 52:
         m.str();
         m.str();

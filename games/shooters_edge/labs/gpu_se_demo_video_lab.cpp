@@ -7,7 +7,9 @@
 // `--demo`) turns a real game folder's demo into a video instead, `demo1` by default; with `--map`
 // too, the match is played on that map of the game folder's (its models and sounds in the video).
 // `--voices=<dir>` has each client speak `<dir>/<name>.wav` (red1, red2, blue1, blue2: any rate,
-// mono or more) in place of its own synthetic voice; nothing it reads is kept.
+// mono or more) in place of its own synthetic voice; nothing it reads is kept. The match's pack
+// carries a stand-in glyph sheet, so the words in the videos' corner are in a pack's own console
+// font (`--font=charset`: the engine's charset in its place).
 //
 // What it shows: who talks when in each recording (the client's holds its own team, the server's
 // everyone), three pictures of each video, and what went into each file. The recordings' counts
@@ -18,6 +20,7 @@
 // ge:keywords lab se-demo-video demo-video demovideo qwdv mvdv voice team-voice video mp4 webm
 // ge:keywords record multiview client-recording strip
 // ge:skill shooter replay labs
+#include <algorithm>
 #include <cstdio>
 #include <memory>
 #include <set>
@@ -29,6 +32,8 @@
 
 #include "audio/pcm.hpp"
 #include "brush/write.hpp"
+#include "charset/charset.hpp"
+#include "classicenhance/switches.hpp"
 #include "core/output.hpp"
 #include "gpu/device.hpp"
 #include "lab/chart.hpp"
@@ -47,6 +52,7 @@
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "vfs/pak.hpp"
+#include "vfs/wad.hpp"
 
 namespace {
 
@@ -228,6 +234,42 @@ void talk_chart(gl::Lab& lab, const std::string& id, const std::string& title,
 }
 
 // One recording turned into a video: three pictures and the report, the file attached.
+// A stand-in for a pack's console font: the palette the world draws when a pack has none (a grey
+// ramp) with one gold entry, and a gfx.wad whose 128 x 128 glyph sheet is the engine's 8 x 16
+// pixel charset halved to 8 x 8 cells, white from 0 and gold from 128, index 0 see-through.
+bool stand_in_font(std::vector<std::pair<std::string, std::vector<uint8_t>>>& entries,
+                   std::string& error) {
+  constexpr uint8_t kGold = 254, kWhite = 255;
+  std::vector<uint8_t> palette(768);
+  for (int i = 0; i < 256; i++)
+    palette[static_cast<size_t>(i) * 3] = palette[static_cast<size_t>(i) * 3 + 1] =
+        palette[static_cast<size_t>(i) * 3 + 2] = static_cast<uint8_t>(i);
+  palette[kGold * 3] = 0xf2;
+  palette[kGold * 3 + 1] = 0xc0;
+  palette[kGold * 3 + 2] = 0x60;
+  const ge::charset::Atlas atlas = ge::charset::build_atlas(ge::charset::FontId::terminal, 128);
+  std::vector<uint8_t> sheet(128 * 128, 0);
+  for (int code = 33; code < 127; code++) {
+    const ge::charset::CellRect c = ge::charset::cell_rect(128, static_cast<uint8_t>(code));
+    for (int half = 0; half < 2; half++) {
+      const int k = code + half * 128;
+      for (int y = 0; y < 8; y++)
+        for (int x = 0; x < 8; x++) {
+          const int ink =
+              std::max(atlas.at(c.x + x, c.y + 2 * y), atlas.at(c.x + x, c.y + 2 * y + 1));
+          if (ink >= 128)
+            sheet[static_cast<size_t>(((k >> 4) * 8 + y) * 128 + (k & 15) * 8 + x)] =
+                half == 0 ? kWhite : kGold;
+        }
+    }
+  }
+  std::vector<uint8_t> wad;
+  if (!ge::vfs::write_wad({{"conchars", ge::vfs::kRawLump, sheet}}, &wad, &error)) return false;
+  entries.push_back({"gfx/palette.lmp", std::move(palette)});
+  entries.push_back({"gfx.wad", std::move(wad)});
+  return true;
+}
+
 bool video(gl::Lab& lab, ge::gpu::Device* device, const cl::SearchPath& files,
            const std::string& demo, const std::string& tag) {
   const auto size = lab.arg_nums("size");
@@ -241,6 +283,14 @@ bool video(gl::Lab& lab, ge::gpu::Device* device, const cl::SearchPath& files,
   o.container = "mkv";
   if (!lab.arg_nums("game-volume").empty())
     o.volume = static_cast<float>(lab.arg_nums("game-volume")[0]);
+  // The look: the video's default (modern, every classic-enhance switch on) or the classic.
+  shooters_edge::look::Picture look;
+  if (lab.arg("look") == "classic") {  // the pack as it is: every enhancement off
+    look.look = "classic";
+    for (const ge::classicenhance::SwitchSpec& sw : ge::classicenhance::switches())
+      look.ce.*sw.field = false;
+  }
+  o.picture = &look;
   std::vector<uint8_t> video_bytes;
   o.memory = &video_bytes;
   const std::string ids[3] = {tag + "-start", tag + "-middle", tag + "-end"};
@@ -364,6 +414,12 @@ void run(gl::Lab& lab) {
   std::vector<std::pair<std::string, std::vector<uint8_t>>> entries = {{"red1.qwdv", m.qwdv},
                                                                        {"match.mvdv", m.mvdv}};
   if (!m.bsp.empty()) entries.push_back({"maps/halls.bsp", m.bsp});
+  // The words' type: a stand-in console font in the pack as a real pack carries its own
+  // (client/demo_caption.hpp); without it (--font=charset) the engine's charset.
+  if (lab.arg("font") == "packs" && !stand_in_font(entries, error)) {
+    lab.fail(error, "Read the reason above. Skill: shooter.");
+    return;
+  }
   if (!ge::vfs::write_pak(entries, &pak, &error) ||
       !cl::add_archive(files, "pak0.pak", std::move(pak), error)) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
@@ -393,7 +449,10 @@ const gl::LabSpec kSpec{
      {"demo", "demo1", "the demo to turn into a video, by name or path"},
      {"game-volume", "0.5", "the game's sounds under the voices, 0..1 (0: the voices alone)"},
      {"map", "", "with --basedir: play the match on this map of the game folder's instead"},
-     {"voices", "", "a folder of <name>.wav (red1, red2, blue1, blue2) the clients speak"}},
+     {"voices", "", "a folder of <name>.wav (red1, red2, blue1, blue2) the clients speak"},
+     {"font", "packs", "the words' type: packs (a stand-in pack's glyph sheet) or charset"},
+     {"look", "modern",
+      "the picture: modern (the video's default, classic-enhance on) or classic (every ce_ off)"}},
     "--size=160,90 --seconds=2 --ticks=1000",
     run,
 };

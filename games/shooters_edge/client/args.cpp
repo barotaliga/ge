@@ -82,6 +82,7 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       a.video = expand_home(argv[++i]);
     } else if (arg.rfind("--fps=", 0) == 0) {
       a.fps = std::strtod(argv[i] + 6, nullptr);
+      a.fps_given = true;
     } else if (arg.rfind("--seconds=", 0) == 0) {
       a.seconds = std::strtod(argv[i] + 10, nullptr);
     } else if (arg.rfind("--from=", 0) == 0 || arg.rfind("--to=", 0) == 0) {
@@ -98,6 +99,7 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       a.gif_width = static_cast<int>(std::strtol(argv[i] + 12, nullptr, 10));
     } else if (arg.rfind("--codec=", 0) == 0) {
       a.codec = std::string(arg.substr(8));
+      a.codec_given = true;
     } else if ((arg == "-playdemo" || arg == "--playdemo") && i + 1 < argc) {
       a.playdemo = expand_home(argv[++i]);
     } else if ((arg == "-game" || arg == "--game") && i + 1 < argc) {
@@ -111,6 +113,7 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
               "rerun with one of those.";
         return false;
       }
+      a.size_given = true;
     } else if (flag_like(arg)) {
       why = "unknown flag " + std::string(arg) +
             (a.plus.empty() ? std::string()

@@ -184,6 +184,7 @@ bool server_info(Demo& d, DemoMsg& m, std::string& error) {
   s.map = s.models.size() > 1 ? map_of_model(s.models[1]) : "";
   s.levels++;
   s.intermission = false;
+  s.stats[kStatMonsters] = s.stats[kStatSecrets] = 0;  // the new level's counts start over
   s.entities.clear();
   s.statics.clear();
   s.static_sounds.clear();
@@ -271,11 +272,20 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
         case kTime:
           s.time = m.f32();
           break;
-        case kPrint:
-        case kStuffText:
+        case kPrint: {  // no level in this protocol: a chat line starts with byte 1
+          std::string text = m.str();
+          const bool chat = !text.empty() && text[0] == 1;
+          if (chat) text.erase(0, 1);
+          s.printed.push_back({chat ? 3 : 2, std::move(text)});
+          break;
+        }
         case kCenterPrint:
         case kFinale:
         case kCutscene:
+          s.centre = m.str();
+          s.centred = true;
+          break;
+        case kStuffText:
           m.str();
           break;
         case kSetAngle:
@@ -330,8 +340,12 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
         case kSignonNum:
           m.u8();
           break;
-        case kKilledMonster:
-        case kFoundSecret:
+        case kKilledMonster:  // the level's count of kills, kept by the client
+          s.stats[kStatMonsters]++;
+          break;
+        case kFoundSecret:  // and of secrets found
+          s.stats[kStatSecrets]++;
+          break;
         case kSellScreen:
           break;
         case kSpawnStaticSound: {

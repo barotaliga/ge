@@ -98,6 +98,10 @@ enum DemoStat : uint8_t {
   kStatRockets = 8,
   kStatCells = 9,
   kStatActiveWeapon = 10,
+  kStatTotalSecrets = 11,   // the level's secrets
+  kStatTotalMonsters = 12,  // the level's monsters
+  kStatSecrets = 13,        // found so far
+  kStatMonsters = 14,       // killed so far
   kStatItems = 15,
   kStatCount = 32,
 };
@@ -121,6 +125,15 @@ struct DemoSound {
 // The protocol's volume byte (255 full) and attenuation byte (64 a normal sound) as factors.
 inline float byte_volume(int b) { return static_cast<float>(b) / 255.0f; }
 inline float byte_attenuation(int b) { return static_cast<float>(b) / 64.0f; }
+
+// Text the frame printed for the player (the protocol's print): what the classic client shows in
+// its notify lines. `level` 0 low (pickups), 1 medium (deaths), 2 high (the server's), 3 chat
+// (`say` and `say_team`, both arrive as level 3 to whoever may read them). The text is as sent:
+// bytes from 128 are the font's second (gold) half, `\n` ends a line.
+struct DemoPrint {
+  int level = 2;
+  std::string text;
+};
 
 // A looping sound the level placed (spawnstaticsound).
 struct DemoStaticSound {
@@ -156,12 +169,16 @@ struct DemoState {
   std::vector<DemoEntity> players;          // client, multiview: by slot (32)
   std::array<int32_t, 32> frags{};          // client, multiview: each slot's frags (updatefrags)
   std::array<std::string, 32> names;        // client, multiview: each slot's name (its userinfo)
+  std::array<std::string, 32> teams;        // client, multiview: each slot's team ("": none)
   std::vector<DemoEntity> statics;          // the level's static entities, in order
   std::vector<DemoStaticSound> static_sounds;  // the level's looping sounds, in order
   // This frame's alone (emptied when the next one is read):
   std::vector<DemoSound> started;            // sounds started, in order
   std::vector<std::pair<int, int>> stopped;  // (entity, channel) stopped
   std::vector<DemoVoice> voice;              // voice messages, in order
+  std::vector<DemoPrint> printed;            // prints, in order (a multiview: the tracked one's)
+  bool centred = false;                      // a centre print or the finale came: `centre`
+  std::string centre;                        // the last centre print or finale text
   int64_t frames = 0;                        // frames read
 };
 
