@@ -24,6 +24,7 @@
 #include "core/inflate.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_heard.hpp"
+#include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/timedemo.hpp"
@@ -410,6 +411,18 @@ TEST(a_voice_format_opens_on_its_header_and_a_wrong_header_is_refused) {
   CHECK(cl::voice_name("match.mvdv") && cl::voice_name("RED1.QWDV"));
   CHECK(!cl::voice_name("match.mvd") && !cl::voice_name("v"));
   CHECK(cl::voice_extension(cl::DemoFormat::multiview) == ".mvdv");
+}
+
+TEST(packed_names_and_the_archive_pick) {
+  CHECK(cl::packed_extension(cl::DemoFormat::multiview, false) == ".mvdz");
+  CHECK(cl::packed_extension(cl::DemoFormat::multiview, true) == ".mvdvz");
+  CHECK(cl::packed_extension(cl::DemoFormat::client, true) == ".qwdvz");
+  CHECK(cl::packed_extension(cl::DemoFormat::single, false) == ".demz");
+  for (const char* yes : {"match.mvd", "DEMOS/Final.MVDVZ", "duel", "a.qwdz", "x.dem"})
+    CHECK_MSG(cl::demo_name(yes), yes);
+  for (const char* no : {"README", "readme.txt", "dir/notes.TXT", "file_id.diz", "shot.png",
+                         "match.mvd.sha256", "info.nfo", "LICENSE"})
+    CHECK_MSG(!cl::demo_name(no), no);
 }
 
 TEST(a_recording_keeps_its_server_s_game_folder_and_each_player_s_colours) {

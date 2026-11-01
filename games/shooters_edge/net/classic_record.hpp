@@ -23,12 +23,21 @@
 // `single`. In voice format, every voice message the server relayed, whoever it was routed to, as
 // an `all` record: a multiview recording hears every team. `mvd_stop` ends it with a disconnect.
 //
+// PACKED (a zstd level over 0 at the start; record_cvars.hpp's `demo_pack` and `demo_pack_level`
+// give it): the same bytes, given as they are written to a zstd stream (engine/vfs/zstd.hpp), so
+// `bytes` holds only what the next record call has not yet fed and `pack.out` the packed file so
+// far; the stream is flushed every `kPackFlushBytes` of recording, so a file saved from `pack.out`
+// mid-match (or left by a crash) plays to the last flush. `record_stop` and `mvd_stop` end the
+// stream and leave the whole packed file in `bytes`, which unpacks to exactly the plain recording's
+// bytes (client/demo.hpp's `packed_extension` names it: `.qwdz`, `.mvdz`, `.qwdvz`, `.mvdvz`).
+//
 // Nothing reads a clock but the server's and the network's, so a session over the simulated
 // network records the same bytes every run.
 //
 // ge:summary Our client's and server's recordings, plain or with voice (.qwdv, .mvdv)
 // ge:keywords record recorder client-recording multiview mvd mvdv qwdv voice-format demo-record
 // ge:keywords own-voice team-voice signon packet command stats events mvd_frame mvd_stop
+// ge:keywords packed zstd qwdz mvdz qwdvz mvdvz record_stop flush
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_record_test.cpp
 #pragma once
@@ -39,20 +48,32 @@
 
 #include "shooter/pmove.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
+#include "vfs/zstd.hpp"
 
 namespace shooters_edge::net {
 
 struct ClassicServer;
 
+// A packed recording's stream is flushed after this many plain bytes (about half a minute of a
+// four-player match).
+inline constexpr int64_t kPackFlushBytes = int64_t{1} << 20;
+
 struct ClientRecorder {
-  bool voice = false;          // the voice format: the header, voice kept, own voice spliced in
-  std::vector<uint8_t> bytes;  // the file so far
-  std::vector<uint8_t> own;    // own voice messages for the next packet's record
+  bool voice = false;   // the voice format: the header, voice kept, own voice spliced in
+  bool packed = false;  // the packed form (above)
+  std::vector<uint8_t>
+      bytes;                 // the file so far (packed: the bytes not yet fed; whole once stopped)
+  ge::vfs::ZstdStream pack;  // packed: the stream and its output
+  int64_t plain = 0, flushed_at = 0;  // packed: plain bytes fed, and at the last flush
+  std::vector<uint8_t> own;           // own voice messages for the next packet's record
   int64_t packets = 0, commands = 0, voice_messages = 0, own_messages = 0, stripped = 0;
 };
 
-// A recording begun (the voice header written when `voice`).
-void record_start(ClientRecorder& r, bool voice);
+// A recording begun (the voice header written when `voice`), packed as it goes at zstd level
+// `pack_level` (0: plain; record_cvars.hpp's `record_pack_level` reads the cvars).
+void record_start(ClientRecorder& r, bool voice, int pack_level = 0);
+// The recording ended: a packed one's stream ended, its whole file in `bytes`.
+void record_stop(ClientRecorder& r);
 // A packet received at `time`: its channel header and its messages, each a span of the payload.
 // Voice messages are dropped from a plain recording; own voice is appended to a voice one.
 void record_packet(ClientRecorder& r, double time, std::span<const uint8_t> header,
@@ -65,7 +86,10 @@ void record_own_voice(ClientRecorder& r, int slot, const ClcMsg& m);
 
 struct MultiviewRecorder {
   bool voice = false;                  // the voice format: the header and every voice relayed
-  std::vector<uint8_t> bytes;          // the file so far
+  bool packed = false;                 // the packed form (above)
+  std::vector<uint8_t> bytes;          // the file so far (packed: as ClientRecorder's)
+  ge::vfs::ZstdStream pack;            // packed: the stream and its output
+  int64_t plain = 0, flushed_at = 0;   // packed: plain bytes fed, and at the last flush
   int spawncount = -1;                 // the level the signon was written for (-1: none yet)
   int64_t written_ms = 0;              // the milliseconds the records' clock has summed
   double start_time = 0;               // the server's time at the signon
@@ -82,15 +106,16 @@ struct MultiviewRecorder {
   int64_t frames = 0, events = 0, voice_messages = 0, dropped = 0;
 };
 
-// A recording begun (the voice header written when `voice`); the signon follows at the next frame.
-void mvd_start(MultiviewRecorder& r, bool voice);
+// A recording begun (the voice header written when `voice`), packed as it goes at zstd level
+// `pack_level` (0: plain); the signon follows at the next frame.
+void mvd_start(MultiviewRecorder& r, bool voice, int pack_level = 0);
 // The frame's events, read before the server routes them (classic_frame.cpp's route_events).
 void mvd_events(ClassicServer& s, MultiviewRecorder& r);
 // A voice message the server relayed (`m.ints`: the slot, the generation, the sequence).
 void mvd_voice(MultiviewRecorder& r, const SvcMsg& m);
 // The server frame just run: the signon when the level is new, then the frame.
 void mvd_frame(ClassicServer& s, MultiviewRecorder& r);
-// The recording ended with a disconnect.
+// The recording ended with a disconnect (a packed one's stream ended, its whole file in `bytes`).
 void mvd_stop(MultiviewRecorder& r);
 
 }  // namespace shooters_edge::net
