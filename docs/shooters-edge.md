@@ -104,11 +104,12 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
 
 - **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
   with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). **`-game <folder>`**
-  picks a game folder other than `id1`. **`-progs <file>`** runs a mod's progs in place of the
+  plays a mod: its folder is mounted over `id1`, so the mod's files win and everything it does
+  not ship comes from the base game (saves go to the mod's folder). **`-progs <file>`** runs a mod's progs in place of the
   baseline mod (§ Running your own mod), and **`-models <dir>`** names the held weapons' folder
-  (by default the tree's `games/shooters_edge/content/models/view`). Its packs are read in order (`pak0.pak`, `pak1.pak`, ...
-  until a number is missing; any case), and a loose file in the folder (`maps/mymap.bsp`)
-  overrides the packs (`client/files.hpp`).
+  (by default the tree's `games/shooters_edge/content/models/view`). Each folder's packs are read in number order (`pak0.pak`, `pak1.pak`,
+  ...; any case), then its zips (`*.pk3`) and unpacked zips (`*.pk3dir`), and a loose file in the
+  folder (`maps/mymap.bsp`) overrides them all (`client/files.hpp`, over `engine/vfs/search.hpp`).
 - **`+<command>`**: console lines run at start. `+map dm6` loads that map; `+map arena` the
   built-in test arena (no packs needed, only the sky drawn). With no `+map`, the map `start`
   when the packs have it, else the arena. `--size=WxH` sets the window's size, `--frames=N`

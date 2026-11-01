@@ -12,6 +12,7 @@
 #include <map>
 
 #include "assets/sha256.hpp"
+#include "classicenhance/cache.hpp"
 #include "classicenhance/lha.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/zip.hpp"
@@ -141,13 +142,13 @@ bool add_later_packs(const std::string& dir, Source* out, std::string* error,
     }
   };
   take(out->pack);
-  std::string ids = out->pack_sha256;
+  std::vector<std::string> digests = {out->pack_sha256};
   for (const LaterPack& p : out->later) {
     take(p.bytes);
-    ids += " " + p.sha256;
+    digests.push_back(p.sha256);
   }
   if (!vfs::write_pak(files, &out->merged, error)) return false;
-  out->set_sha256 = assets::sha256_hex({reinterpret_cast<const uint8_t*>(ids.data()), ids.size()});
+  out->set_sha256 = set_key(digests);
   return true;
 }
 
