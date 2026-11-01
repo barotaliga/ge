@@ -257,7 +257,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     ModelLoad load = models;
     if (picture.ce.models && !content_packs(files).empty())
       load.cache = ge::classicenhance::find_cache(content_packs(files));
-    create_models(d, f->pipelines, f->models, f->layout, files, palette_copy, f->scene.map, load);
+    create_models(d, f->pipelines, f->models, f->layout, files, palette_copy, f->scene.map, load,
+                  game);
     f->extras = create_extras(d, f->pipelines, f->layout, f->scene, picture.ce, picture.weather);
   }
   if (!f->pipelines.finish(d)) {
