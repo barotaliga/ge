@@ -122,35 +122,36 @@ struct FighterStats {
 };
 
 struct Fighter {
+  // Ordered by size, largest first, so the struct packs tight.
   sh::Bot bot;
   std::vector<ItemSpot> items;
-  FightMode mode = FightMode::roam;
-  double held = 0;        // in the mode this long
-  double next_think = 0;  // server time of the next choice
+  ge::ai::Search reach;  // every node it can get to from where it stood at `reach_at`
+  FighterStats stats;
+  double held = 0;         // in the mode this long
+  double next_think = 0;   // server time of the next choice
+  double impulse_at = -1;  // when the last impulse went
+  double reach_at = -1;    // when `reach` was worked out (-1: never)
+  ge::ai::Why* why = nullptr;
+  Team* team = nullptr;                          // its side (team.hpp); null in a free-for-all
+  const ge::shooter::SwimField* swim = nullptr;  // the map's way out of its water (none: no water)
+  int64_t buttons = 0;                           // buttons gone to
+  int64_t dives = 0;                             // dives begun
+  int64_t lost = 0;                              // thinks spent off the graph
   int32_t goal_item = -1;
   int32_t goal_node = -1;
   int32_t want_weapon = 0;  // the number (1..8) asked for; 0 none pending
-  double impulse_at = -1;   // when the last impulse went
-  bool was_dead = false;
-  ge::ai::Why* why = nullptr;
-  FighterStats stats;
   int slot = -1;
-  Team* team = nullptr;  // its side (team.hpp); null in a free-for-all
-  Role role = Role::free;
   int32_t pack_ent = -1;   // a backpack gone for
-  ge::ai::Search reach;    // every node it can get to from where it stood at `reach_at`
-  double reach_at = -1;    // when that was worked out (-1: never)
-  bool unlocking = false;  // on the way to the goal item's button
-  int64_t buttons = 0;     // buttons gone to
   int32_t lost_to = -1;    // off the graph or in a pool it cannot leave by its links: the node
                            // walked (or swum) straight at to get back (-1: none)
   int32_t reach_n = 0;     // how many nodes `reach` holds
-  const ge::shooter::SwimField* swim = nullptr;  // the map's way out of its water (none: no water)
-  bool swimming = false;   // in water no route leaves: following the swim field
   int32_t diving = -1;     // the item it dives for (in the water on `dive`), -1 none
   int32_t last_dive = -1;  // the item the last think dived for
-  int64_t dives = 0;       // dives begun
-  int64_t lost = 0;        // thinks spent off the graph
+  FightMode mode = FightMode::roam;
+  Role role = Role::free;
+  bool was_dead = false;
+  bool unlocking = false;  // on the way to the goal item's button
+  bool swimming = false;   // in water no route leaves: following the swim field
 };
 
 // The fighter's strength: health and armour's protection, a launcher counted on top.

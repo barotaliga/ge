@@ -184,13 +184,11 @@ bool swim_next(const SwimField& f, const NavGraph& g, Vec3f p, Vec3f& to) {
     to = g.nodes[static_cast<size_t>(f.exit_node[c])].origin;
     return true;
   }
-  to = {f.lo.x + (static_cast<float>(go % static_cast<size_t>(f.nx)) + 0.5f) * f.cell,
-        f.lo.y + (static_cast<float>((go / static_cast<size_t>(f.nx)) % static_cast<size_t>(f.ny)) +
-                  0.5f) *
-                     f.cell,
-        f.lo.z + (static_cast<float>(go / (static_cast<size_t>(f.nx) * static_cast<size_t>(f.ny))) +
-                  0.5f) *
-                     f.cell};
+  const size_t nx = static_cast<size_t>(f.nx), ny = static_cast<size_t>(f.ny);
+  const size_t gi = go % nx, gj = (go / nx) % ny, gk = go / (nx * ny);
+  to = {f.lo.x + (static_cast<float>(gi) + 0.5f) * f.cell,
+        f.lo.y + (static_cast<float>(gj) + 0.5f) * f.cell,
+        f.lo.z + (static_cast<float>(gk) + 0.5f) * f.cell};
   return true;
 }
 
