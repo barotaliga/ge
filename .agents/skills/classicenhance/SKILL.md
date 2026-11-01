@@ -34,6 +34,9 @@ maps) and `morph` (the models and sprites):
   any game could use goes in the engine or the plugin that owns it (the light baker: `engine/`
   and `plugins/brush`, row M40; fog, reflections, glow, eye adaptation: the renderer), and this
   plugin calls it.
+- **Paths come from the profile.** A stage or reader never writes a folder, an archive name or
+  an asset path itself: it asks the source's profile (`profile.hpp`), so a second classic game is a
+  second row. A file kind the engine has no reader for is a new reader, not a branch in a stage.
 - **Never name the classic game** outside `porting/shooters-edge/` (`make agents-check`): say
   "the classic shareware pack", "the release zip". The release's own file names inside its
   archive (`resource.1`, `id1/pak0.pak`) are matched by the code and are fine.
@@ -41,6 +44,7 @@ maps) and `morph` (the models and sprites):
 | File | What |
 | --- | --- |
 | `classicenhance/source.hpp/.cpp` | `open_source`: a path to the release zip, an installed folder or the pack, found by every route and verified (`kKnownPacks`, `kKnownZips`); `pack_from_zip`, `verify_pack` |
+| `classicenhance/profile.hpp/.cpp` | The content profiles (`kProfiles`): a classic game's base folder, numbered packs, asset kinds (maps, sounds, models, sprites, pictures) and named files (palette, wad, start map, full-game marker); `classic_profile`, `find_profile`, `asset_name`, `assets_of`, `read_palette`. Every stage finds its files through `Source::profile`, never a path of its own |
 | `classicenhance/lha.hpp/.cpp` | The LHA archive the release's installer is: headers of level 0 and 1 found behind a self-extractor's program, `-lh0-` and `-lh5-` unpacked, CRC-16 checked |
 | `classicenhance/texture.hpp/.cpp` | One texture enhanced: the kernel-regression upscale with one round of back-projection, sharpening and grain; height, normal, roughness and emissive; `material_of`, `never_drawn` |
 | `classicenhance/upscaler.hpp/.cpp` | The trained texture upscaler (M41g): `kUpscalerWeights` (where the tool fetches them, their SHA-256), `load_upscaler`, `open_upscaler`, `upscale` on the CPU, `seeded_upscaler_weights` (the small network the tests and labs run), `UpscaleDevice` |
