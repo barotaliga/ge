@@ -44,8 +44,27 @@ int listener_of(const DemoState& s) {
   return s.format == DemoFormat::single ? s.view_entity : s.player + 1;
 }
 
-// What the demo has standing in the world this frame: its entities with a model (not the eye's
-// own), the other players, the level's statics.
+bool ends_with(std::string_view s, std::string_view tail) {
+  return s.size() >= tail.size() && s.substr(s.size() - tail.size()) == tail;
+}
+
+// `bytes` into `path`. False with the reason.
+bool write_file(const std::string& path, const std::vector<uint8_t>& bytes, std::string& error) {
+  std::FILE* f = std::fopen(path.c_str(), "wb");
+  if (f == nullptr) {
+    error = "cannot write " + path + "; next: check the folder exists and is writable";
+    return false;
+  }
+  const bool ok = std::fwrite(bytes.data(), 1, bytes.size(), f) == bytes.size();
+  if (std::fclose(f) != 0 || !ok) {
+    error = "writing " + path + " failed part way; next: check the disk has room";
+    return false;
+  }
+  return true;
+}
+
+}  // namespace
+
 void demo_placed(const DemoState& s, std::vector<Placed>& out) {
   out.clear();
   const int models = static_cast<int>(s.models.size());
@@ -69,32 +88,16 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
   }
   if (s.format != DemoFormat::single) {
     for (size_t k = 0; k < s.players.size(); k++)
-      if (static_cast<int>(k) != s.player && s.players[k].present)
+      if (static_cast<int>(k) != s.player && s.players[k].present) {
         put(static_cast<int>(k) + 1, s.players[k]);
+        if (!out.empty() && out.back().entity == static_cast<int>(k) + 1 && k < s.top.size()) {
+          out.back().top = static_cast<uint32_t>(s.top[k]);
+          out.back().bottom = static_cast<uint32_t>(s.bottom[k]);
+        }
+      }
   }
   for (size_t i = 0; i < s.statics.size(); i++) put(-1 - static_cast<int>(i), s.statics[i]);
 }
-
-bool ends_with(std::string_view s, std::string_view tail) {
-  return s.size() >= tail.size() && s.substr(s.size() - tail.size()) == tail;
-}
-
-// `bytes` into `path`. False with the reason.
-bool write_file(const std::string& path, const std::vector<uint8_t>& bytes, std::string& error) {
-  std::FILE* f = std::fopen(path.c_str(), "wb");
-  if (f == nullptr) {
-    error = "cannot write " + path + "; next: check the folder exists and is writable";
-    return false;
-  }
-  const bool ok = std::fwrite(bytes.data(), 1, bytes.size(), f) == bytes.size();
-  if (std::fclose(f) != 0 || !ok) {
-    error = "writing " + path + " failed part way; next: check the disk has room";
-    return false;
-  }
-  return true;
-}
-
-}  // namespace
 
 bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVideoOptions& o,
                 DemoVideoReport& report, std::string& error, const DemoVideoPicture& picture) {

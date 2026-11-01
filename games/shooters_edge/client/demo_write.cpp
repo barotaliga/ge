@@ -463,7 +463,8 @@ std::vector<uint8_t> write_multiview_match(const MatchScript& s) {
     lists.u8(40);  // updateuserinfo
     lists.u8(static_cast<int>(k));
     lists.i32(static_cast<int32_t>(k + 1));
-    lists.str("\\name\\" + s.players[k].name + "\\team\\red");
+    lists.str("\\name\\" + s.players[k].name + "\\team\\red\\topcolor\\" + std::to_string(k + 2) +
+              "\\bottomcolor\\" + std::to_string(k + 3));
   }
   multiview_record(file, 0, kAll, 0, lists);
 
