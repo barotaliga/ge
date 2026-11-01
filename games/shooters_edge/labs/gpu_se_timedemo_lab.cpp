@@ -3,8 +3,10 @@
 // frame, every frame timed but the first after a level start), drawn into an offscreen target by
 // the window's own world frame and HUD. By default the demo is written in code (demo_write.hpp):
 // a walk round the fixture halls (plugins/brush) in the format `--format` names, in a pack on
-// the search path. `--basedir` (and `--game`) opens a game folder instead and `--demo` names its
-// demo (`demo1`), so the same lab measures a real recording on any machine.
+// the search path; `--format=match` is the highlight finder's four-player match instead (with
+// `--stage-pak=fixture`, the other players drawn as the window draws them). `--basedir` (and
+// `--game`) opens a game folder instead and `--demo` names its demo (`demo1`), so the same lab
+// measures a real recording on any machine.
 //
 // What it shows: three frames of the run (its start, the middle, the end), the frame time and the
 // GPU span of every timed frame as lines with the median and the 99th percentile as rules, and
@@ -37,6 +39,7 @@
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/liquid_scene.hpp"
+#include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
@@ -74,7 +77,8 @@ bool fixture_pack(const std::string& format, std::vector<uint8_t>& out, std::str
   const cl::DemoScript s = cl::loop_script("halls", {256, 192, 24}, 120, 600);
   std::vector<uint8_t> demo = format == "client"      ? cl::write_client_demo(s)
                               : format == "multiview" ? cl::write_multiview_demo(s)
-                                                      : cl::write_single_demo(s);
+                              : format == "match" ? cl::write_multiview_match(cl::highlight_match())
+                                                  : cl::write_single_demo(s);
   return ge::vfs::write_pak({{"maps/halls.bsp", bsp}, {"demo1.dem", demo}}, &out, &error);
 }
 
@@ -106,6 +110,8 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
   }
   cl::Timedemo& bench = p.bench;
   cl::WorldDrawPtr world;
+  size_t world_models = 0;  // the model list's length the world was made with
+  cl::FxFrame fx;
   std::unique_ptr<cl::LoadedMap> map;
   se::Hud hud = se::make_hud();
   se::HudArt art = se::free_art();
@@ -133,13 +139,26 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
       }
       if (device) {
         world.reset();
-        world = cl::create_world_draw(*device, rig.files, *map, w, h,
-                                      wgpu::TextureFormat::RGBA8Unorm, picture, {}, error);
+        world =
+            cl::create_world_draw(*device, rig.files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm,
+                                  picture, {}, error, {bench.demo.state.models, {}});
+        world_models = bench.demo.state.models.size();
         if (!world) {
           lab.fail(error, "Read the gpu: lines above. Skill: render.");
           return false;
         }
       }
+    }
+    // A client recording's model list may grow after its level started: the window's rule.
+    if (device && world && map && bench.demo.state.models.size() != world_models) {
+      world.reset();
+      world = cl::create_world_draw(*device, rig.files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm,
+                                    picture, {}, error, {bench.demo.state.models, {}});
+      if (!world) {
+        lab.fail(error, "Read the gpu: lines above. Skill: render.");
+        return false;
+      }
+      world_models = bench.demo.state.models.size();
     }
     const double t = static_cast<double>(now_ns() - first_ns) * 1e-9;
     if (device && world) {
@@ -154,20 +173,23 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
                         hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
                         se::hud_style());
       }
-      cl::draw_world(*device, *world, view, cl::FxFrame{}, nullptr, 0, overlay, rig.out->view);
+      cl::demo_placed(bench.demo.state, fx.models);  // the players and entities, as the window
+      cl::draw_world(*device, *world, view, fx, nullptr, 0, overlay, rig.out->view);
       if (bench.skip == 0) cl::record_span(*world, bench.passes);
       if (shot < 3 && p.frames == picks[shot]) {
         const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
-        lab.shot({ids[shot],
-                  "DEMO FRAME " + std::to_string(p.frames) + " OF " + std::to_string(total),
-                  "The benchmark's frame " + std::to_string(p.frames) + " of " + bench.name +
-                      " on " + bench.demo.state.map +
-                      ", drawn by the window's world frame and "
-                      "HUD from the demo's eye.",
-                  "the map from the recorded eye, the HUD's stats from the demo",
-                  {{"demo", bench.name}, {"size", lab.arg("size")}}},
-                 gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
-                 gl::Det::measured);
+        lab.shot(
+            {ids[shot],
+             "DEMO FRAME " + std::to_string(p.frames) + " OF " + std::to_string(total),
+             "The benchmark's frame " + std::to_string(p.frames) + " of " + bench.name + " on " +
+                 bench.demo.state.map +
+                 ", drawn by the window's world frame and "
+                 "HUD from the demo's eye.",
+             "the map from the recorded eye, the other players where the demo has them, the HUD's "
+             "stats from the demo",
+             {{"demo", bench.name}, {"size", lab.arg("size")}}},
+            gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+            gl::Det::measured);
         shot++;
       } else {
         // Each frame finished before the next is timed, as a present waits for a free image.
@@ -379,7 +401,8 @@ const gl::LabSpec kSpec{
     "shooter",
     "How fast does the window's frame play a demo back, and how even are its frames?",
     {{"size", "960,540", "the frame's width and height, px"},
-     {"format", "single", "the written demo's format: single, client or multiview"},
+     {"format", "single",
+      "the written demo's format: single, client, multiview, or match (four players)"},
      {"basedir", "", "a folder holding a game folder: play its demo instead of the fixture"},
      {"game", ge::classicenhance::kProfiles[0].base_dir.data(), "the game folder under --basedir"},
      {"demo", "demo1", "the demo to play, by name or path"},

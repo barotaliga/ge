@@ -409,3 +409,54 @@ TEST(a_voice_format_opens_on_its_header_and_a_wrong_header_is_refused) {
   CHECK(!cl::voice_name("match.mvd") && !cl::voice_name("v"));
   CHECK(cl::voice_extension(cl::DemoFormat::multiview) == ".mvdv");
 }
+
+TEST(a_recording_keeps_its_server_s_game_folder_and_each_player_s_colours) {
+  cl::Demo d;
+  std::string error;
+  CHECK_MSG(cl::open_demo(cl::write_multiview_match(cl::highlight_match()), d, error), error);
+  CHECK_MSG(cl::next_frame(d, error) == cl::DemoRead::frame, error);
+  CHECK(d.state.game == "baseline");
+  for (size_t k = 0; k < 4; k++) {  // the writer's colours: slot k wears k + 2 over k + 3
+    CHECK(d.state.top[k] == static_cast<int>(k) + 2);
+    CHECK(d.state.bottom[k] == static_cast<int>(k) + 3);
+  }
+  CHECK(d.state.players[1].present && d.state.players[1].model > 0);  // drawn, not the eye
+}
+
+TEST(a_demo_plays_from_the_game_folder_its_server_ran_unless_another_was_asked) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "se_demo_game_dir_test";
+  fs::remove_all(root);
+  fs::create_directories(root / "id1");
+  fs::create_directories(root / "fortress");
+  const std::string base = root.string();
+  std::string note;
+  // The mod's folder is there: the demo plays from it.
+  CHECK(cl::demo_game_dir(base, "id1", "fortress", note) == "fortress" && note.empty());
+  // A -game asked wins; the base and an unnamed folder change nothing.
+  CHECK(cl::demo_game_dir(base, "arena", "fortress", note) == "arena" && note.empty());
+  CHECK(cl::demo_game_dir(base, "id1", "id1", note) == "id1" && note.empty());
+  CHECK(cl::demo_game_dir(base, "id1", "", note) == "id1" && note.empty());
+  // A folder that is not there: the window's, with a line saying what to do.
+  CHECK(cl::demo_game_dir(base, "id1", "ctf", note) == "id1");
+  CHECK(note.find("ctf") != std::string::npos && note.find("next:") != std::string::npos);
+  // A recording naming a path is never followed out of the base folder.
+  CHECK(cl::demo_game_dir(base, "id1", "../fortress", note) == "id1");
+  CHECK(cl::demo_game_dir(base, "id1", "..", note) == "id1");
+  // The window's side: the mod's folder mounted once, said once, and let go for the base again.
+  cl::SearchPath window;
+  std::string error;
+  CHECK_MSG(cl::open_game_dir(base, "id1", window, error), error);
+  cl::DemoFolder f;
+  cl::DemoState s;
+  s.game = "fortress";
+  std::vector<std::string> say;
+  const cl::SearchPath* from = &cl::demo_folder(f, base, "id1", s, window, say);
+  CHECK(from != &window && f.game == "fortress" && say.size() == 1);
+  CHECK(from->folder == (root / "fortress").string());
+  CHECK(&cl::demo_folder(f, base, "id1", s, window, say) == from && say.size() == 1);
+  s.game = "ctf";  // not there: the window's, the note said once over two levels
+  CHECK(&cl::demo_folder(f, base, "id1", s, window, say) == &window && !f.path);
+  CHECK(&cl::demo_folder(f, base, "id1", s, window, say) == &window && say.size() == 2);
+  fs::remove_all(root);
+}

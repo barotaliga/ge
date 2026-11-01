@@ -27,12 +27,12 @@
 // THE AXES are the map's: units, z up, angles in degrees with the pitch down positive and the
 // yaw counter-clockwise from +x (view.hpp converts to the engine's).
 //
-// WHAT IS KEPT: the precache lists, every entity's last origin, angles, model and frame (so a
-// renderer of entities can draw them), the static entities and the static (looping) sounds of the
-// level, the stats, each player's frags and name (client and multiview), the demo's clock; and, for
-// the frame just read only (`DemoState::started`, `stopped`, `voice`: emptied at the next frame),
-// the sounds it started and stopped and the voice it carried. Prints and effects are read and
-// skipped.
+// WHAT IS KEPT: the game folder the server ran (timedemo.hpp's `demo_game_dir`), the precache
+// lists, every entity's last origin, angles, model and frame (so a renderer of entities can draw
+// them), the static entities and the static (looping) sounds of the level, the stats, each player's
+// frags, name and colours (client and multiview), the demo's clock; and, for the frame just read
+// only (`DemoState::started`, `stopped`, `voice`: emptied at the next frame), the sounds it started
+// and stopped and the voice it carried. Prints and effects are read and skipped.
 //
 // THE VOICE FORMATS (`.qwdv`, `.mvdv`): a client or multiview recording with the players' voice in
 // it is a format of its own, so a player that knows only the plain formats never meets a message
@@ -55,7 +55,7 @@
 // ge:keywords serverinfo serverdata playerinfo packet-entities clientdata view-entity open_demo
 // ge:keywords next_frame demo-format demo-state stats intermission multiview mvd gzip track
 // ge:keywords voice-format qwdv mvdv voice-header sound-events static-sounds read_voice
-// ge:keywords updatefrags frags updateuserinfo player-names dead gib
+// ge:keywords updatefrags frags updateuserinfo player-names dead gib topcolor setinfo gamedir
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -156,7 +156,9 @@ struct DemoState {
   std::vector<DemoEntity> players;          // client, multiview: by slot (32)
   std::array<int32_t, 32> frags{};          // client, multiview: each slot's frags (updatefrags)
   std::array<std::string, 32> names;        // client, multiview: each slot's name (its userinfo)
-  std::vector<DemoEntity> statics;          // the level's static entities, in order
+  std::array<int, 32> top{}, bottom{};      // client, multiview: each slot's colours (0..13)
+  std::string game;  // client, multiview: the game folder the server ran ("fortress"; "" unnamed)
+  std::vector<DemoEntity> statics;             // the level's static entities, in order
   std::vector<DemoStaticSound> static_sounds;  // the level's looping sounds, in order
   // This frame's alone (emptied when the next one is read):
   std::vector<DemoSound> started;            // sounds started, in order
