@@ -20,10 +20,11 @@
 # on the Windows PowerShell 5.1 every Windows 10 and 11 has, and on PowerShell 7.
 #
 # What it brings, and how:
-#   1. MSVC: Visual Studio 2022's Build Tools with the C++ workload (MSVC, the Windows SDK), by
+#   1. MSVC: Visual Studio 2026's Build Tools with the C++ workload (MSVC, the Windows SDK), by
 #      winget; an existing Build Tools without the workload is modified to add it, and an MSVC
-#      without a Windows SDK gets one. Any Visual Studio 2022 or later that has MSVC counts; CI
-#      builds with 2022's. MSVC is the only Windows compiler the tree is tested with;
+#      without a Windows SDK gets one. Any Visual Studio 2026 or later that has MSVC counts (the
+#      prebuilt Dawn links against its STL, and 2022's lacks symbols it calls). MSVC is the only
+#      Windows compiler the tree is tested with;
 #   2. by winget (https://aka.ms/getwinget, part of Windows 11 and of Windows 10's App Installer):
 #      Git for Windows (git, and Git Bash: tools/*.sh and the Makefile's recipes run in it), CMake
 #      3.25+, Ninja (the presets' generator), ccache 4.10+ (CI's Windows row pins 4.10.2; it caches
@@ -42,7 +43,7 @@
 # checksummed, into .cache\deps\ on the first configure. Blender (`ge asset`) is optional and not
 # installed here (GE_BLENDER, the `assets` skill).
 #
-# BUILDING AFTERWARDS: in MSVC's x64 environment ("x64 Native Tools Command Prompt for VS 2022",
+# BUILDING AFTERWARDS: in MSVC's x64 environment ("x64 Native Tools Command Prompt for VS",
 # or the Launch-VsDevShell.ps1 line printed at the end), on the release preset only (the prebuilt
 # Dawn is a release library; the sanitizers are GCC's and Clang's); Git Bash started from it runs make.
 #
@@ -127,12 +128,13 @@ $Tools = @(
   (Tool 'gh' '2.0' 'GitHub.cli' -Dirs @("$PF\GitHub CLI"))
 )
 if ($X64) {
-  $Tools += (Tool 'nasm' '2.13' 'NASM.NASM' -VersionArg '-v' -Dirs @("$PF\NASM", "$env:LOCALAPPDATA\bin\NASM"))
+  # NASM 2: libaom's configure refuses NASM 3 (its `-hf` help no longer lists -Ox).
+  $Tools += (Tool 'nasm' '2' 'NASM.NASM' -Exact -Version '2.16.03' -VersionArg '-v' -Dirs @("$PF\NASM", "$env:LOCALAPPDATA\bin\NASM"))
 }
-# Visual Studio 2022's Build Tools and the C++ workload (MSVC, the Windows SDK, CMake's MSVC bits).
-$VsId = 'Microsoft.VisualStudio.2022.BuildTools'
+# Visual Studio 2026's Build Tools and the C++ workload (MSVC, the Windows SDK, CMake's MSVC bits).
+$VsId = 'Microsoft.VisualStudio.BuildTools'
 $VsWorkload = @('--add', 'Microsoft.VisualStudio.Workload.VCTools', '--includeRecommended')
-$VsSdk = 'Microsoft.VisualStudio.Component.Windows11SDK.22621'
+$VsSdk = 'Microsoft.VisualStudio.Component.Windows11SDK.26100'
 $PF86 = ${env:ProgramFiles(x86)}
 if (-not $PF86) { $PF86 = $PF }  # a 32-bit Windows; the x64 note below says it is untested
 $VsInstallerDir = Join-Path $PF86 'Microsoft Visual Studio\Installer'
@@ -220,9 +222,9 @@ function Invoke-VsWhere([string[]]$VsArgs) {
   return $vs[0]
 }
 
-# The newest Visual Studio 2022+ with MSVC's x64 tools, or $null.
+# The newest Visual Studio 2026+ with MSVC's x64 tools, or $null.
 function Find-Msvc {
-  $vs = Invoke-VsWhere @('-products', '*', '-version', '17.0',
+  $vs = Invoke-VsWhere @('-products', '*', '-version', '18.0',
     '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64')
   if (-not $vs) { return $null }
   if (-not (Test-Path -LiteralPath (Join-Path $vs.installationPath 'VC\Auxiliary\Build\vcvars64.bat'))) {
@@ -231,9 +233,9 @@ function Find-Msvc {
   return $vs
 }
 
-# A Build Tools 2022+ without MSVC, to modify rather than install beside; or $null.
+# A Build Tools 2026+ without MSVC, to modify rather than install beside; or $null.
 function Find-BuildTools {
-  Invoke-VsWhere @('-products', 'Microsoft.VisualStudio.Product.BuildTools', '-version', '17.0')
+  Invoke-VsWhere @('-products', 'Microsoft.VisualStudio.Product.BuildTools', '-version', '18.0')
 }
 
 # True when a Windows 10/11 SDK's headers are installed.
@@ -325,7 +327,7 @@ function Invoke-Scan {
   $script:Msvc = Find-Msvc
   if (-not $script:Msvc) {
     $script:MsvcFix = 'install'
-    [void]$Why.Add("MSVC missing (Visual Studio 2022's Build Tools with the C++ workload)")
+    [void]$Why.Add("MSVC missing (Visual Studio 2026's Build Tools with the C++ workload)")
   } elseif (-not (Test-WinSdk)) {
     $script:MsvcFix = 'sdk'
     [void]$Why.Add("the Windows SDK missing (MSVC is in $($script:Msvc.installationPath))")
@@ -606,7 +608,7 @@ if (-not $Why.Count) {
   Write-Host 'setup-windows: open a new terminal so it sees the new PATH. Build in MSVC''s x64 environment:'
   Write-Host "  & '$devShell' -Arch amd64 -HostArch amd64 -SkipAutomaticLocation"
   Write-Host '  cmake --preset release; cmake --build --preset release; ctest --preset release'
-  Write-Host '  (or "x64 Native Tools Command Prompt for VS 2022"; start Git Bash from it for make PRESET=release)'
+  Write-Host '  (or "x64 Native Tools Command Prompt for VS"; start Git Bash from it for make PRESET=release)'
 }
 Write-Notes
 
