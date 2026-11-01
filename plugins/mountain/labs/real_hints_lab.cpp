@@ -595,6 +595,7 @@ std::vector<mg::HintLake> lakes_of(const mg::FaceCrop& f, const OsmData& d,
   });
   if (found.size() > kMostLakes) found.resize(kMostLakes);
   std::vector<mg::HintLake> out;
+  out.reserve(found.size());
   for (Found& l : found) out.push_back({std::move(l.shore)});
   return out;
 }

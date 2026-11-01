@@ -607,7 +607,7 @@ void run(ge::lab::Lab& lab) {
       b.hidden = true;
     }
     if (!was_hidden.empty()) {
-      sc.view.frame = static_cast<uint64_t>(settle + 1);
+      sc.view.frame = static_cast<uint64_t>(settle) + 1;
       fall_line::app::draw(*device, *frame, sc.view, {.skiers = sc.skiers, .subject = sc.subject},
                            target.view);
     }
