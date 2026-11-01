@@ -2,7 +2,7 @@
 title: Team bots share only their words; plan each one alone, and stagger the plans
 date: 2026-11-01
 scope: games/shooters_edge/bots/mind.cpp, games/shooters_edge/bots/talk.cpp, games/shooters_edge/net/classic_team.cpp
-concepts: [team-message, separate-brains, read-by-skill, claims, rush, loc, say_team]
+concepts: [team-message, separate-brains, read-by-skill, claims, rush, loc, say-team]
 ---
 
 A team planner that reads every member's state plays like one mind and does not look human. Give

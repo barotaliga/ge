@@ -77,7 +77,8 @@ void run(gl::Lab& lab) {
     std::FILE* lf = std::fopen(lab.arg("locs").c_str(), "rb");
     if (!lf) {
       lab.fail("se-team: cannot read " + lab.arg("locs"),
-               "Pass --locs=<a .loc file>, or leave it out to name places off the items.");
+               "next: pass --locs=<a .loc file that exists>, or leave it out to name places off "
+               "the items");
       return;
     }
     char buf[4096];
