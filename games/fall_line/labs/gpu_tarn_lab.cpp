@@ -74,6 +74,32 @@ double changed(const ge::lab::Picture& a, const ge::lab::Picture& b) {
   return static_cast<double>(n) * 4 / static_cast<double>(a.rgba.size());
 }
 
+// The open water a lake's thawing sheet stands off its shore by (none round ice on ground filled
+// flat, which keeps no water under it).
+double moat_for(const mg::Level& level) {
+  return level.lakes.empty() || level.lakes[0].depth == 0 ? 0 : tn::moat_of(level.lakes[0]);
+}
+
+// The ice sheet's share of the lake inside its shore (the moat's water is the rest); 0 for none.
+double sheet_share(const mg::Level& level) {
+  if (level.lakes.empty() || level.lakes[0].ice <= 0) return 0;
+  const mg::MapLake& l = level.lakes[0];
+  const std::vector<ge::water::Point> shore = tn::shore_of(l);
+  const ge::render::MeshData sheet =
+      ge::mountain::app::ice_mesh(shore, l.level, 0, false, moat_for(level));
+  double sheet_m2 = 0, lake_m2 = 0;
+  for (size_t v = 0; v + 2 < sheet.parts.size(); v += 3) {
+    const float* p = &sheet.positions[v * 3];
+    sheet_m2 += 0.5 * std::abs((p[3] - p[0]) * (p[8] - p[2]) - (p[5] - p[2]) * (p[6] - p[0]));
+  }
+  for (size_t i = 0; i < shore.size(); ++i) {
+    const ge::water::Point& a = shore[i];
+    const ge::water::Point& b = shore[(i + 1) % shore.size()];
+    lake_m2 += 0.5 * (a.x * b.z - b.x * a.z);
+  }
+  return sheet_m2 / std::abs(lake_m2);
+}
+
 // One way the tarn is laid: `ice` m (negative: the map's day's, as the free ride lays it).
 struct State {
   std::string id, title, look_for;
@@ -161,6 +187,14 @@ void run(ge::lab::Lab& lab) {
            " cm of ice" + (tn::bears(lake) ? " that bears a skier" : ", which does not bear one") +
            ".");
 
+  // Every state's map, and its sheet's share of the lake (measured with or without a GPU, so the
+  // digest is the same on every row).
+  std::vector<std::shared_ptr<const mg::Level>> levels;
+  for (const State& s : kStates) {
+    levels.push_back(s.ice < 0 ? day : laid(seed, version, s.ice, s.thaw));
+    if (levels.back()->lakes.empty() || levels.back()->lakes[0].ice <= 0) continue;
+    lab.metric(s.id + ".sheet-share", sheet_share(*levels.back()), "share");
+  }
   const std::vector<std::string> views = {"tarn", "tarn-high"};
   auto shot_of = [&](const State& s, const std::string& view, double ice, double thaw) {
     return ge::lab::Shot{
@@ -202,31 +236,12 @@ void run(ge::lab::Lab& lab) {
   // pipeline, so a pipeline made after the load is counted over the first state's shots alone.
   uint32_t late = 0;
   for (const State& s : kStates) {
-    const std::shared_ptr<const mg::Level> level =
-        s.ice < 0 ? day : laid(seed, version, s.ice, s.thaw);
+    const std::shared_ptr<const mg::Level>& level =
+        levels[static_cast<size_t>(&s - kStates.data())];
     const double ice = level->lakes.empty() ? 0 : level->lakes[0].ice;
     const double thaw = level->lakes.empty() ? 0 : level->lakes[0].thaw;
-    // The moat keeps the water drawn round the sheet (none round ice on ground filled flat).
-    const double moat =
-        level->lakes.empty() || level->lakes[0].depth == 0 ? 0 : tn::moat_of(level->lakes[0]);
-    // The sheet's share of the lake inside its shore: the moat's water is the rest.
-    if (!level->lakes.empty() && ice > 0) {
-      const mg::MapLake& l = level->lakes[0];
-      const std::vector<ge::water::Point> shore = tn::shore_of(l);
-      const ge::render::MeshData sheet =
-          ge::mountain::app::ice_mesh(shore, l.level, 0, false, moat);
-      double sheet_m2 = 0, lake_m2 = 0;
-      for (size_t v = 0; v + 2 < sheet.parts.size(); v += 3) {
-        const float* p = &sheet.positions[v * 3];
-        sheet_m2 += 0.5 * std::abs((p[3] - p[0]) * (p[8] - p[2]) - (p[5] - p[2]) * (p[6] - p[0]));
-      }
-      for (size_t i = 0; i < shore.size(); ++i) {
-        const ge::water::Point& a = shore[i];
-        const ge::water::Point& b = shore[(i + 1) % shore.size()];
-        lake_m2 += 0.5 * (a.x * b.z - b.x * a.z);
-      }
-      lab.metric(s.id + ".sheet-share", sheet_m2 / std::abs(lake_m2), "share");
-    }
+    // The moat keeps the water drawn round the sheet.
+    const double moat = moat_for(*level);
     auto frame = fall_line::app::create_frame(*device, *level, static_cast<uint32_t>(width),
                                               static_cast<uint32_t>(height),
                                               wgpu::TextureFormat::RGBA8Unorm);
