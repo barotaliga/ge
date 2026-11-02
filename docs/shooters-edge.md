@@ -594,6 +594,7 @@ files shares: `engine/vfs` (folders, packs, zips, loose files, a mod over the ba
 | **maps** (`list_maps`, `map_info`) | BSP 29 or BSP2, the title the world's message | BSP 38 | BSP 46 |
 | **textures** (`map_textures`) | the map carries its pictures (`plugins/brush/pictures.hpp`); a PNG or TGA by the texture's name stands in, alpha and all (`textures/<map>/<name>`, then `textures/<name>`) | its own picture files beside the map, by the texture's name | shaders over picture files |
 | **models** (`open_model`) | `.mdl` into the shared vertex-animated form (`plugins/morph`), `.spr` sprites, `.bsp` items; a PNG or TGA beside a model stands in for a skin, alpha and all (`progs/player.mdl_0.png`) | its own model files (with `.pcx` skins in a folder a player model) read into the same form | its own model files (a body of head, upper and lower parts, `.skin` files) read into the same form |
+| **pictures** (`pictures`) | the graphics archive's lumps and `gfx/*.lmp` in the palette's colours; a PNG or TGA of a picture's name under `gfx/` stands in, alpha and all, at its size or a whole multiple of it | its own picture files (`.pcx`) | its own picture files and shaders |
 | **sounds** (`open_sound`) | WAV files under `sound/` | WAV files under `sound/` | WAV files and other formats under `sound/` |
 | **demos** (`list_demos`, `find_demo`, `open_demo`) | the single-player, client and multiview recordings (`client/demo.hpp`) | its own recording format | its own |
 
@@ -612,9 +613,14 @@ Morph meshes), and a skin picture carries no tint rows, so it is drawn in its ow
 weapons lying about, the players and their skins. A later game's model families are new readers
 into the same shared forms, so the window that draws them does not change.
 
+The HUD's and the menus' pictures come through `pictures`: a picture file of a picture's name
+wins over classic-enhance's upscaled copy, and the set keeps one density (the first picture's
+scale; a copy at a whole step under it is scaled up nearest, any other picture is the pack's
+scaled up), so a player can swap the status bar or the glyph sheet alone (lab `se-pictures`).
+
 **Still to move behind calls of their own**, each in its own change: the held weapons' models
-from the game's files (the window holds the game's own set today); the HUD's and the menus'
-pictures; the config files and the location files.
+from the game's files (the window holds the game's own set today); the config files and the
+location files.
 
 **The next seam, when the sequel starts: a rules runner.** The listen server and the dedicated
 server hold the QC server (`server/qc_server.hpp`) itself today. A second program form needs them

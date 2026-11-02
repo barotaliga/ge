@@ -36,10 +36,15 @@
 //   ammo), the weapons lying about and the players and their skins all come through here.
 // - **open_sound**: a sound the server or a demo names ("weapons/rocket1i.wav") read to samples;
 //   the first game's are WAV files under `sound/`.
+// - **pictures**: the HUD's and the menus' pictures (client/classic_pictures.hpp's set): the first
+//   game's are the lumps of its graphics archive and its `gfx/*.lmp` files in its palette's
+//   colours, each swapped for a PNG or TGA of the same name where the game's files hold one
+//   (`gfx/sbar.png`, `gfx/conchars.tga`, `gfx/qplaque.png`; alpha kept, its size a whole multiple
+//   of the picture's), else for classic-enhance's upscaled copy when asked.
 //
 // Not yet here (each moves behind a call of its own, in its own change): the held weapons' models
-// from the game's files (the window holds the game's own today); the HUD's and the menus'
-// pictures; the config files and the location files.
+// from the game's files (the window holds the game's own today); the config files and the
+// location files.
 //
 // These are load-time calls, never a frame's: a table of plain function pointers, no state. The
 // console's `mods`, `maps` and `demos` print their answers (`add_adapter_commands`).
@@ -49,12 +54,13 @@
 // ge:keywords map_textures list_demos find_demo open_demo mod-folder program-form program-side
 // ge:keywords per-game sequel add_adapter_commands console-mods console-maps console-demos
 // ge:keywords replacement-texture png tga alpha open_model open_sound model-form skin-stand-in
-// ge:keywords replacement-skin
+// ge:keywords replacement-skin pictures hud-pictures menu-pictures replacement-picture
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <span>
 #include <string>
 #include <string_view>
@@ -67,6 +73,7 @@
 #include "console/console.hpp"
 #include "morph/model.hpp"
 #include "progs/file.hpp"
+#include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
@@ -136,6 +143,11 @@ struct GameAdapter {
   // The sound `name` (as the server or a demo names it) read; false as open_model is.
   bool (*open_sound)(const GameAdapter& self, const SearchPath& files, const std::string& name,
                      ge::audio::Pcm& out, std::string& error) = nullptr;
+  // The HUD's and the menus' pictures the files hold, each from a picture file of its name when
+  // there is one, else classic-enhance's upscaled copy when `enhance` (the packs' cache under
+  // `cache_root`, empty: its own folder), else the game's own.
+  ClassicPictures (*pictures)(const GameAdapter& self, const SearchPath& files, bool enhance,
+                              const std::filesystem::path& cache_root) = nullptr;
   // The recordings the files hold, by path.
   std::vector<std::string> (*list_demos)(const GameAdapter& self,
                                          const SearchPath& files) = nullptr;
