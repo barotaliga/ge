@@ -571,6 +571,7 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
   const bool engage = c && (cornered || sh::takes_fight(f.temper, f.edge, mine, theirs));
   const bool recent = c && ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s && engage) ||
                             (by_ear && ai::age(c->heard, t) <= kHeardChase_s &&
+                             ai::age(c->heard, t) >= f.hear_react_s &&
                              sh::chases_sound(f.temper, f.edge, f.rash, mine, theirs)));
   const sh::Vec3f enemy =
       c ? at_of(by_ear || !ai::known(c->seen) ? c->heard : c->seen) : sh::Vec3f{};
@@ -767,6 +768,11 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, 
   f.camp = map_sense_of(sh::tier_of(traits[sh::Trait::camping]));
   f.rash = sh::tier_of(traits[sh::Trait::discipline]) == sh::AimSkill::novice;
   f.edge = sh::edge_of(sh::mean_aim(traits));
+  f.hear_react_s =
+      f.bot.aim.react_med > 0
+          ? f.bot.aim.react_med +
+                static_cast<float>(sh::scale(traits[sh::Trait::reaction], {0.2, 0.15, 0.1, 0.08}))
+          : 0;
   f.rng = ge::core::make_rng(seed * 2654435761u + 12345u);
   const int me = slot + 1;
   sh::client_view(s.sv, me, f.bot.view);
@@ -955,7 +961,9 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
     const float d = dist(eye, at_of(c->seen));
     const float tol = static_cast<float>(
         ge::core::libm::atan2(held->width, std::fmax(d, 1.f)) * (180.0 / ge::core::kPi) + 1.5);
-    bool fire = d <= held->range && sh::bot_aim_off(f.bot) <= tol;
+    // Not before the reaction to him is over (shooter/bot.hpp), however the view lies.
+    const bool reacting = sh::bot_reacting(f.bot, s.sv.time);
+    bool fire = !reacting && d <= held->range && sh::bot_aim_off(f.bot) <= tol;
     if (fire && mate_in_line(f, s, eye, at_of(c->seen))) {
       fire = false;
       f.stats.held_fire++;
@@ -970,7 +978,9 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
       why->fact("range", d);
       why->fact("off", sh::bot_aim_off(f.bot));
       why->fact("tolerance", tol);
-      why->choose(fire ? "fire" : "hold", fire ? "on the target within its width" : "off it");
+      why->choose(fire ? "fire" : "hold", fire       ? "on the target within its width"
+                                          : reacting ? "still reacting to him"
+                                                     : "off it");
     }
   }
   return cmd;

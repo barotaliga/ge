@@ -579,6 +579,9 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.switches = fs.switches;
     p.packs = fs.packs;
     p.held_fire = fs.held_fire;
+    p.reactions = seat.fighter.bot.stats.reactions;
+    p.pre_aimed = seat.fighter.bot.stats.pre_aimed;
+    p.react_s = seat.fighter.bot.stats.react_s;
     p.dives = seat.fighter.dives;
     p.dives_given_up = fs.dives_given_up;
     p.dive_wet_s = fs.dive_wet_s;

@@ -6,7 +6,13 @@
 // the search path; `--format=match` is the highlight finder's four-player match instead (with
 // `--stage-pak=fixture`, the other players drawn as the window draws them). `--basedir` (and
 // `--game`) opens a game folder instead and `--demo` names its demo (`demo1`), so the same lab
-// measures a real recording on any machine.
+// measures a real recording on any machine. Frames are paced as the window paces them: at most one
+// in flight, the frame before waited for once this one is submitted, so the CPU's part overlaps
+// the GPU's; the three pictures' frames (each waits for its read back) are not timed.
+//
+// THE CPU (`cpu by zone`): every timed frame's timing zones (prof/zones.hpp: the demo's step, the
+// HUD, the world's prepares, its encode and submit, the wait for the frame before), each zone's
+// median a frame, as a note and as `cpu.<zone>` metrics.
 //
 // What it shows: three frames of the run (its start, the middle, the end), the frame time and the
 // GPU span of every timed frame as lines with the median and the 99th percentile as rules, and
@@ -20,7 +26,7 @@
 //
 // ge:summary Lab: the demo benchmark headless: a demo played flat out, its frames and fps chart
 // ge:keywords lab se-timedemo timedemo benchmark demo fps frame-time one-percent-low chart gpu
-// ge:keywords offscreen price switch-off-pricing
+// ge:keywords offscreen price switch-off-pricing cpu-zones frame-in-flight
 // ge:skill shooter perf labs
 #include <algorithm>
 #include <chrono>
@@ -39,6 +45,7 @@
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/liquid_scene.hpp"
+#include "prof/zones.hpp"
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -88,6 +95,10 @@ struct Played {
   cl::Timedemo bench;
   int64_t frames = 0;
   std::string stop;
+  // With `zones` asked for: each timing zone's ms in every timed frame (prof/zones.hpp), the
+  // zones in the order they first opened.
+  bool zones = false;
+  std::vector<std::pair<uint32_t, std::vector<double>>> zone_ms;
 };
 
 struct Rig {
@@ -124,14 +135,31 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
   const uint32_t w = rig.w, h = rig.h;
   ge::gpu::Device* device = rig.device;
   const uint64_t first_ns = now_ns();
+  // At most one frame in flight, as the window keeps it (client/main.cpp): the frame before this
+  // one is waited for after this one is submitted, so the CPU's part overlaps the GPU's.
+  wgpu::Future in_flight{};
+  const auto settle = [&] {
+    if (device && in_flight.id != 0) ge::gpu::wait(*device, in_flight);
+    in_flight = {};
+  };
+  std::vector<ge::prof::ZoneTotal> rows;
+  if (p.zones) {
+    ge::prof::start(4096);
+    rows.reserve(64);
+  }
   for (;;) {
-    const cl::TimedemoStep st = cl::timedemo_step(bench, error);
+    cl::TimedemoStep st;
+    {
+      GE_ZONE("demo.step");
+      st = cl::timedemo_step(bench, error);
+    }
     if (st == cl::TimedemoStep::end) break;
     if (st == cl::TimedemoStep::error) {
       p.stop = error;
       break;
     }
     if (st == cl::TimedemoStep::new_level) {
+      settle();
       map = cl::load_named_map(rig.files, bench.demo.state.map, error);
       if (!map) {
         p.stop = "the demo's map " + bench.demo.state.map + ": " + error;
@@ -151,6 +179,7 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
     }
     // A client recording's model list may grow after its level started: the window's rule.
     if (device && world && map && bench.demo.state.models.size() != world_models) {
+      settle();
       world.reset();
       world = cl::create_world_draw(*device, rig.files, *map, w, h, wgpu::TextureFormat::RGBA8Unorm,
                                     picture, {}, error, {bench.demo.state.models, {}});
@@ -168,15 +197,22 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
       ge::ui::DrawList overlay;
       overlay.begin(static_cast<int>(w), static_cast<int>(h));
       if (!no_hud) {
+        GE_ZONE("hud");
         se::fill_hud(hud, cl::demo_status(bench.demo.state, t), art);
         hud.layout.draw(overlay,
                         hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
                         se::hud_style());
       }
-      cl::demo_placed(bench.demo.state, fx.models);  // the players and entities, as the window
+      {
+        GE_ZONE("placed");
+        cl::demo_placed(bench.demo.state, fx.models);  // the players and entities, as the window
+      }
       cl::draw_world(*device, *world, view, fx, nullptr, 0, overlay, rig.out->view);
+      // A picture's frame waits for its read back, which a window never does: not timed.
+      if (shot < 3 && p.frames == picks[shot]) bench.skip = std::max(bench.skip, 1);
       if (bench.skip == 0) cl::record_span(*world, bench.passes);
       if (shot < 3 && p.frames == picks[shot]) {
+        settle();
         const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
         lab.shot(
             {ids[shot],
@@ -192,17 +228,33 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
             gl::Det::measured);
         shot++;
       } else {
-        // Each frame finished before the next is timed, as a present waits for a free image.
-        ge::gpu::wait(*device, device->queue.OnSubmittedWorkDone(
-                                   wgpu::CallbackMode::WaitAnyOnly,
-                                   [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {}));
+        const wgpu::Future done = device->queue.OnSubmittedWorkDone(
+            wgpu::CallbackMode::WaitAnyOnly, [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {});
+        GE_ZONE("gpu.wait");
+        settle();
+        in_flight = done;
       }
     } else if (!device && shot < 3 && p.frames == picks[shot]) {
       ls::placeholders(lab, {ids[shot++]});
     }
+    // The frame's zones, kept when it is timed (the frames a level's load holds back are not).
+    if (p.zones) {
+      if (bench.skip == 0) {
+        ge::prof::totals(ge::prof::spans(), rows);
+        for (const ge::prof::ZoneTotal& z : rows) {
+          auto at = std::find_if(p.zone_ms.begin(), p.zone_ms.end(),
+                                 [&](const auto& e) { return e.first == z.name; });
+          if (at == p.zone_ms.end()) at = p.zone_ms.insert(p.zone_ms.end(), {z.name, {}});
+          at->second.push_back(static_cast<double>(z.incl_ns) * 1e-6);
+        }
+      }
+      ge::prof::clear();
+    }
     cl::timedemo_mark(bench, now_ns());
     p.frames++;
   }
+  settle();
+  if (p.zones) ge::prof::stop();
   return true;
 }
 
@@ -276,6 +328,7 @@ void run(gl::Lab& lab) {
   }
   Rig rig{lab, files, name, device ? device.get() : nullptr, &out, w, h, total};
   Played base;
+  base.zones = true;
   if (!play(rig, picture, false, true, base)) return;
   if (!base.stop.empty()) lab.fail(base.stop, "Read the reason above. Skill: shooter.");
   const cl::Timedemo& bench = base.bench;
@@ -286,6 +339,17 @@ void run(gl::Lab& lab) {
       (device ? ", " + device->report.name + " on " + device->report.backend : ", no GPU");
   for (const std::string& line : cl::bench_report(bench.name, setup, s)) lab.note(line);
   lab.note(cl::span_report(bench.passes));
+  // Where the CPU's part of a frame goes: each zone's median a timed frame (nested zones inside
+  // their parent's), the frame's own median beside them.
+  {
+    std::string line = "cpu by zone, medians (ms): frame " + fixed(s.p50_ms, 3);
+    for (const auto& [zone, ms] : base.zone_ms) {
+      const double m = cl::median_of(ms);
+      line += "; " + std::string(ge::prof::zone_name(zone)) + " " + fixed(m, 3);
+      lab.metric("cpu." + std::string(ge::prof::zone_name(zone)), m, "ms", gl::Det::measured);
+    }
+    lab.note(line);
+  }
   lab.metric("demo.frames", static_cast<double>(base.frames), "count");
   lab.metric("demo.levels", levels, "count");
   lab.metric("fps.average", s.avg_fps, "fps", gl::Det::measured);

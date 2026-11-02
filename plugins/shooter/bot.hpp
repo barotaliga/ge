@@ -4,9 +4,10 @@
 //    as it last pressed it;
 // 2. the pilot's command for the route (it reads only its own player and the movers, as before);
 // 3. the view: with a contact seen, or lost under the profile's `hold_s` ago, the yaw and pitch
-//    at its predicted middle through the skill's hands (the pilot does not strafe jump while the
-//    view is held: the strafe needs the view along the velocity); with none, the view turns back
-//    to the pilot's yaw and is handed back within `kRelease` degrees;
+//    at its predicted middle through the skill's hands, a new contact first waiting a reaction
+//    drawn for it (half of it when the view was already on him: pre-aimed) (the pilot does not
+//    strafe jump while the view is held: the strafe needs the view along the velocity); with none,
+//    the view turns back to the pilot's yaw and is handed back within `kRelease` degrees;
 // 4. the pilot's forward and side turned under that view (`turn_axes`), so the route is run the
 //    same whichever way it looks; the jump and every other button as the pilot pressed them.
 // Every decision is on the `ai::Why` (the pilot's `link`, the senses', and `aim`), and the aim's
@@ -24,6 +25,7 @@
 
 #include <cstdint>
 
+#include "core/prng.hpp"
 #include "shooter/aim.hpp"
 #include "shooter/pilot.hpp"
 #include "shooter/senses.hpp"
@@ -32,6 +34,8 @@ namespace ge::shooter {
 
 struct BotStats {
   int64_t commands = 0, aiming = 0, holding = 0;
+  int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and of them, ones pre-aimed at
+  double react_s = 0;                    // the reaction times drawn, summed
 };
 
 struct Bot {
@@ -48,6 +52,13 @@ struct Bot {
   double wanted[2] = {}, pressed[2] = {};  // the aim's last yaw and pitch, wanted and pressed
   float shot_speed = 0;                    // the held weapon's projectile, units/s; 0 a hitscan
   float aim_dz = 0;                        // the aim point over the target's middle, units
+  // The reaction to the sighting in hand (aim.hpp `draw_reaction`): the view held where it was
+  // until `freeze_until` (the hands' own lag then makes up the rest), and no shot before
+  // `react_until`.
+  double freeze_until = -1e9, react_until = -1e9;
+  double target_seen_at = -1e9;  // when the one in hand was last in sight
+  double freeze_view[2] = {};
+  core::Rng react_rng{1};  // the reactions' draws, off the bot's seed
   BotStats stats;
 };
 
@@ -65,5 +76,7 @@ void bot_goal(Bot& b, int32_t goal);
 void bot_aim(Bot& b, const AimProfile& aim);
 // How far the view is off the aim's wanted angles, degrees (0 while not aiming).
 float bot_aim_off(const Bot& b);
+// Whether the bot is still reacting to the contact it took up at server time `t` (no shot yet).
+bool bot_reacting(const Bot& b, double t);
 
 }  // namespace ge::shooter

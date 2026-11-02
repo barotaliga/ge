@@ -32,6 +32,9 @@ TEST(a_presets_aim_is_its_skills_to_the_bit_and_between_lies_between) {
     const uint8_t v = sh::traits_of(k, sh::Temper::balanced)[sh::Trait::aim_rl];
     const sh::AimProfile a = sh::aim_profile(k), b = sh::aim_profile(v, v);
     CHECK_BITS(a.lead_s, b.lead_s);
+    CHECK_BITS(a.react_lo, b.react_lo);
+    CHECK_BITS(a.react_med, b.react_med);
+    CHECK_BITS(a.react_hi, b.react_hi);
     for (size_t h = 0; h < 2; h++) {
       CHECK_BITS(a.hands[h].delay_s, b.hands[h].delay_s);
       CHECK_BITS(a.hands[h].wander, b.hands[h].wander);
@@ -45,6 +48,16 @@ TEST(a_presets_aim_is_its_skills_to_the_bit_and_between_lies_between) {
   CHECK(six.hands[0].wander < 1.5 && six.hands[0].wander > 0.6);
   CHECK(sh::aim_profile(8, 10).hands[0].delay_s < sh::aim_profile(8, 8).hands[0].delay_s);
   CHECK(sh::edge_of(8) == sh::self_edge(sh::AimSkill::expert));
+  // A reaction lies in its spread, half of the draws under the median, the slow side the longer.
+  const sh::AimProfile ex = sh::aim_profile(sh::AimSkill::expert);
+  CHECK(sh::draw_reaction(ex, 0) == ex.react_lo);
+  CHECK(sh::draw_reaction(ex, 0.5) == ex.react_med);
+  CHECK(sh::draw_reaction(ex, 0.999) < ex.react_hi && sh::draw_reaction(ex, 0.999) > 0.21);
+  CHECK(ex.react_hi - ex.react_med > ex.react_med - ex.react_lo);
+  CHECK(sh::aim_profile(sh::AimSkill::perfect).react_med == 0);
+  // Every hand's own lag is under the fastest reaction it draws.
+  for (uint8_t v = 1; v <= 10; v++)
+    CHECK(sh::aim_profile(v, v).hands[0].delay_s < sh::aim_profile(v, v).react_lo);
   CHECK(sh::edge_of(10) == sh::self_edge(sh::AimSkill::perfect));
 }
 

@@ -37,9 +37,7 @@
 // ge:keywords set_movers movers moving-brush-models doors plats
 // ge:keywords relief normal-map parallax-occlusion roughness specular ggx surface-atlas
 // ge:keywords shadow-cache shadow-slot fresh_slots fresh_cubes shadow-budget shadow-hitch
-// ge:keywords light-grid light-cull lights-per-pixel
 // ge:skill brush render
-// ge:test tests/brush_bsp_light_grid_test.cpp
 #pragma once
 
 #include <array>
@@ -51,6 +49,7 @@
 
 #include "brush/app/bsp_cull.hpp"
 #include "brush/app/draw_data.hpp"
+#include "brush/app/light_grid.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "render/frame.hpp"
@@ -149,15 +148,6 @@ inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side
 inline constexpr uint32_t kOrthoSize = 2048;  // the sun's and the zenith's maps
 inline constexpr int kMaxShadowed = 48;
 inline constexpr uint32_t kOrthos = 3;  // the sun's, the zenith's and the fall's
-// THE LIGHT GRID (v2 lit in real time): world cells round the eye, kGridCell m a side, each
-// listing the frame's lights whose reach touches it, in the lights' own order; a pixel reads only
-// its cell's (one outside the grid reads every light). A light left out of a cell is one its
-// pixels skip anyway, and the rest are added in the same order, so the picture is the same.
-inline constexpr double kGridCell = 4.0;
-inline constexpr uint32_t kGridX = 32, kGridY = 16, kGridZ = 32;  // bsp.wgsl repeats them
-inline constexpr uint32_t kGridCells = kGridX * kGridY * kGridZ;
-inline constexpr uint32_t kMaxGridRefs = 65536;  // the cells' lists in all; past it, no grid
-
 // A DYNAMIC LIGHT: one a game lights for a moment (a muzzle's flash, a rocket's glow, an
 // explosion, a glowing pickup), set each frame (`set_dynamic_lights`). The classic path adds it
 // to the lightmaps' light as the classic did, falling off in a straight line to nothing at its
@@ -166,12 +156,6 @@ struct DynamicLight {
   double pos[3] = {0, 0, 0};     // engine metres
   double radius = 5;             // m: where its light ends
   double colour[3] = {1, 1, 1};  // its light at its middle, the lightmaps' units (1: as baked 'm')
-};
-
-struct GpuLight {
-  float pos[4];
-  float colour[4];
-  float info[4];
 };
 
 struct GpuJob {
@@ -200,14 +184,6 @@ struct GpuBsp {
   float grid[4];  // the light grid's corner, world m; its cell, m (0: no grid this frame)
   float styles[kLightStyles];  // each light style's level now (draw_data.hpp)
 };
-
-// THE LIGHT GRID binned: into `rows`, each cell's first entry (kGridCells + 1, the last the
-// lists' end), then the lists, each light's index in `lights` in ascending order, for every cell
-// whose box `lights[i]`'s reach (pos[3]) comes within a margin of; `grid` gets the grid's corner
-// round `eye` and its cell (w 0 when the lists would pass kMaxGridRefs: no grid). Returns the
-// lists' entries (0 with no grid). Sizes `rows` the first time only.
-uint32_t bin_light_grid(std::span<const GpuLight> lights, const double eye[3],
-                        std::vector<uint32_t>& rows, float grid[4]);
 
 struct BspDraw {
   const Scene* scene = nullptr;

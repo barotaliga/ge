@@ -86,6 +86,14 @@ the server's frame with no network between. It reads the maps out of your own co
 classic game's packs: point `-basedir` at the folder that holds `id1/pak0.pak` (and `pak1.pak`
 for the full game's maps). The packs are never copied or committed (§ Content and test data).
 
+**The short way, on any machine** (`make setup` once installs what the build needs; README.md §
+Run a game):
+
+```sh
+make run:shooters_edge                                         # the built-in arena, no packs
+make run:shooters_edge ARGS="-basedir ~/Games/classic +map dm6"  # your packs' maps
+```
+
 **On a Mac (Apple silicon; Metal through Dawn):**
 
 ```sh
@@ -253,7 +261,12 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 - **Headless**: `make lab LAB=se-timedemo` runs the same loop into an offscreen target, on a
   demo written in code round the fixture halls (`--format=client` or `--format=multiview` for the
   other formats), or on a real one with `ARGS="--basedir=<dir> --demo=demo1"`, and charts every
-  frame's time and GPU span (`--look=classic|modern` picks the look).
+  frame's time and GPU span (`--look=classic|modern` picks the look). It paces the frames as the
+  window does, one in flight, and leaves its three pictures' frames untimed; until round 8 of the
+  timedemo it waited for every frame before starting the next, which added the GPU's round trip
+  (about 0.6 ms on the M3 Max) to every frame. `cpu by zone` lists each timing zone's median a
+  frame: the CPU's part of the world's frame is about 0.6 ms at 720p, most of it Dawn's submit
+  (the frame's commands made into Metal's) and the BSP's prepare.
 - **The price** (`ARGS="... --look=modern --price=1"`): the demo played again with each drawn
   `ce_` switch off in turn and once without the HUD, each run between two runs with everything on;
   a switch's saving is read against the mean of the all-on runs either side (so a machine warming
@@ -1134,6 +1147,18 @@ discipline (3 and below runs at every sound) and aggression (the temperament). T
 reaction are read smoothly, the hands taken up anew with each kind of weapon. The labs take
 `--traits` (each player's changes over his preset, `aim_rl=9/timing=3`) and print every bot's
 traits.
+
+**Reactions (M18r11c).** A reaction is drawn for each sighting (`plugins/shooter/aim.hpp`
+`draw_reaction`): another enemy taken up, or the same one back after 0.3 s out of sight. Half of
+the draws lie evenly between the low and the median, the rest thin out to the high, since people's
+reaction times are skewed to the slow side: a reaction trait of 8 draws 140 to 220 ms round 160, a
+5 180 to 300 round 230, a 2 240 to 420 round 300 (10: 120 to 190 round 140). The view holds where it
+was until the hands' own tracking lag (120 ms at 8, 150 at 5, 200 at 2) makes up the rest, and the
+fighter does not fire before the reaction is over (`bot_reacting`). A sighting the view was already
+on, within 5 degrees (pre-aimed at a doorway), takes half the draw: the only way under 100 ms. A
+sound takes longer to act on than a sight: a chase after an enemy only heard starts the median
+reaction plus 100 ms (a quick player, trait 8) to 200 ms (a slow one, trait 2) after the sound.
+`se-team` prints each player's sightings, their mean reaction and the share pre-aimed.
 
 **Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
 community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the
