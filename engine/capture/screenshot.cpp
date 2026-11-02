@@ -7,13 +7,13 @@
 // ge:test tests/capture_screenshot_test.cpp
 #include "capture/screenshot.hpp"
 
-#include <cstdio>
 #include <filesystem>
 #include <system_error>
 #include <utility>
 
 #include "console/console.hpp"
 #include "console/cvar.hpp"
+#include "core/num_text.hpp"
 #include "lab/png.hpp"
 
 namespace ge::capture {
@@ -34,18 +34,20 @@ std::tm local_now() {
 }
 
 std::string megabytes(size_t bytes) {
-  char text[32];
-  std::snprintf(text, sizeof text, "%.1f MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
-  return text;
+  return core::num::to_fixed(static_cast<double>(bytes) / (1024.0 * 1024.0), 1) + " MB";
 }
 
 }  // namespace
 
 std::string screenshot_stem(std::string_view prefix, const std::tm& t) {
-  char when[32];
-  std::snprintf(when, sizeof when, "-%04d-%02d-%02d-%02d%02d%02d", t.tm_year + 1900, t.tm_mon + 1,
-                t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
-  return std::string(prefix) + when;
+  // Each field at least `digits` wide, zero-padded (no format buffer for a compiler to doubt).
+  const auto padded = [](int v, size_t digits) {
+    std::string d = std::to_string(v);
+    return d.size() < digits ? std::string(digits - d.size(), '0') + d : d;
+  };
+  return std::string(prefix) + "-" + padded(t.tm_year + 1900, 4) + "-" + padded(t.tm_mon + 1, 2) +
+         "-" + padded(t.tm_mday, 2) + "-" + padded(t.tm_hour, 2) + padded(t.tm_min, 2) +
+         padded(t.tm_sec, 2);
 }
 
 void add_screenshot_cvars(console::Cvars& cvars, ScreenshotSettings& s) {
