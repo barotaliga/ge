@@ -123,8 +123,8 @@ byte the same (`se-client` on e1m1 and on the fixture, against `main`'s, on the 
 | The draw's pipeline made twice from one shader: a frame of v2 lit in real time with no weather takes the one compiled with only that path (`kLitOnly`, a WGSL override), so it carries no lightmap, rebake or weather code | 5.02 → 4.85 | 6.26 → 6.05 (both rows) | 157 → 163 | `brush/app/bsp_draw.cpp`, `bsp.wgsl` |
 | Two small trades, judged by eye (the first rows to change the picture): the flames' march in 14 steps, not 28 (`gpu-flames`: 32 to 100 dB, a finer grain on the `wind` shot's thin tongues in a still frame), and the parallax's in two steps a texel the ray crosses, at most as many as before (e1m1: 0.00 to 0.03% of pixels, 55 dB and up) | 4.34 → 4.04 | | | `render/flame.wgsl`, `brush/app/bsp.wgsl` |
 
-At 1280x720 the span went from 2.15 to 1.75 ms, but the frame stayed at 3.0 ms: there the
-frame waits on the CPU.
+At 1280x720 the span went from 2.15 to 1.75 ms, but the frame stayed at 3.0 ms: the lab then
+waited for every frame before the next, so its frame held the GPU's round trip (below).
 
 The CPU's side, from the timedemo's own zones (`cpu by zone`, round 8): the world's frame is
 about 0.6 ms at 720p and 0.9 ms at 1440p (it shares the memory with a busy GPU), of which Dawn's
