@@ -123,8 +123,18 @@ byte the same (`se-client` on e1m1 and on the fixture, against `main`'s, on the 
 | The draw's pipeline made twice from one shader: a frame of v2 lit in real time with no weather takes the one compiled with only that path (`kLitOnly`, a WGSL override), so it carries no lightmap, rebake or weather code | 5.02 → 4.85 | 6.26 → 6.05 (both rows) | 157 → 163 | `brush/app/bsp_draw.cpp`, `bsp.wgsl` |
 | Two small trades, judged by eye (the first rows to change the picture): the flames' march in 14 steps, not 28 (`gpu-flames`: 32 to 100 dB, a finer grain on the `wind` shot's thin tongues in a still frame), and the parallax's in two steps a texel the ray crosses, at most as many as before (e1m1: 0.00 to 0.03% of pixels, 55 dB and up) | 4.34 → 4.04 | | | `render/flame.wgsl`, `brush/app/bsp.wgsl` |
 
-At 1280x720 the span went from 2.15 to 1.75 ms, but the frame stayed at 3.0 ms: there the
-frame waits on the CPU.
+At 1280x720 the span went from 2.15 to 1.75 ms, but the frame stayed at 3.0 ms: the lab then
+waited for every frame before the next, so its frame held the GPU's round trip (below).
+
+The CPU's side, from the timedemo's own zones (`cpu by zone`, round 8): the world's frame is
+about 0.6 ms at 720p and 0.9 ms at 1440p (it shares the memory with a busy GPU), of which Dawn's
+submit is 0.26 to 0.40, the BSP's prepare 0.13 to 0.24 and the encode 0.08 to 0.13. The lab now
+paces frames as the window does (one in flight), so its frame times from round 8 on are about the
+GPU's round trip (0.6 ms on the M3 Max) shorter than before at the same GPU cost.
+
+| Change (CPU) | `bsp.grid` (median ms, 720p / 1440p) | Where |
+| --- | --- | --- |
+| The light grid binned by runs: each row of cells along x a light's reach touches is one run from one square root, not a sphere test a cell, and the lists are the same lights in the same order (every picture the same) | 0.124 / 0.206 → 0.072 / 0.116 | `brush/app/bsp_draw.cpp` |
 
 What the relief still costs at 1440p is its work: the parallax's march 0.41 ms (its steps 0.28,
 the loop's presence the rest; a coarser mip for the march saves nothing), the highlights 0.26,

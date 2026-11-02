@@ -1,5 +1,5 @@
-// plugins/brush/app/bsp_draw.hpp's light grid (`bin_light_grid`): every light whose reach takes in
-// a point is listed in that point's cell, the lists keep the lights' order, the grid sits round
+// plugins/brush/app/light_grid.hpp's light grid (`bin_light_grid`): every light whose reach takes
+// in a point is listed in that point's cell, the lists keep the lights' order, the grid sits round
 // the eye, and lists past their cap turn the grid off (every pixel then reads every light).
 //
 // ge:summary Tests for the BSP light grid: no reaching light left out, the order kept, the cap
@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "brush/app/bsp_draw.hpp"
+#include "brush/app/light_grid.hpp"
 #include "check.hpp"
 #include "core/prng.hpp"
 

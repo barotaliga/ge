@@ -3,10 +3,9 @@
 //
 // ge:summary The BSP renderer: buffers, atlases, pipelines, the lights a frame and their shadows
 // ge:keywords bsp brush render renderer classic v2 point-light cube-shadow sun-shadow lava-light
-// ge:keywords light-grid bin_light_grid
 // ge:skill brush render
-// ge:test tests/brush_bsp_light_grid_test.cpp
 #include "brush/app/bsp_draw.hpp"
+#include "prof/zones.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -101,65 +100,6 @@ bool parse_mode(std::string_view word, Mode* out) {
   else
     return false;
   return true;
-}
-
-// A cell lists a light when the light's reach comes within kGridMargin of its box: more than the
-// shader's rounding of a point into its cell or of its distance, so no light a pixel would add is
-// left out. Two walks over the same cells, the first counting, the second placing, so each list
-// keeps the lights' order.
-namespace {
-constexpr double kGridMargin = 0.05;
-}  // namespace
-
-uint32_t bin_light_grid(std::span<const GpuLight> lights, const double eye[3],
-                        std::vector<uint32_t>& rows, float grid[4]) {
-  const uint32_t dims[3] = {kGridX, kGridY, kGridZ};
-  double corner[3];
-  for (int k = 0; k < 3; ++k)
-    corner[k] = (std::floor(eye[k] / kGridCell) - double(dims[k]) / 2) * kGridCell;
-  if (rows.size() != size_t(kGridCells) + 1 + kMaxGridRefs)
-    rows.assign(size_t(kGridCells) + 1 + kMaxGridRefs, 0);
-  std::fill(rows.begin(), rows.begin() + kGridCells + 1, 0u);
-  // Each cell of light `l`'s box its reach touches: `visit(cell)`.
-  const auto walk = [&](const GpuLight& l, auto&& visit) {
-    const double r = double(l.pos[3]) + kGridMargin;
-    int lo[3], hi[3];
-    for (int k = 0; k < 3; ++k) {
-      lo[k] = std::max(int(std::floor((double(l.pos[k]) - r - corner[k]) / kGridCell)), 0);
-      hi[k] = std::min(int(std::floor((double(l.pos[k]) + r - corner[k]) / kGridCell)),
-                       int(dims[k]) - 1);
-      if (lo[k] > hi[k]) return;
-    }
-    for (int z = lo[2]; z <= hi[2]; ++z)
-      for (int y = lo[1]; y <= hi[1]; ++y)
-        for (int x = lo[0]; x <= hi[0]; ++x) {
-          const int at[3] = {x, y, z};
-          double gap2 = 0;
-          for (int k = 0; k < 3; ++k) {
-            const double a = corner[k] + at[k] * kGridCell, b = a + kGridCell;
-            const double c = double(l.pos[k]);
-            const double g = c < a ? a - c : c > b ? c - b : 0;
-            gap2 += g * g;
-          }
-          if (gap2 <= r * r) visit(uint32_t(x) + kGridX * (uint32_t(y) + kGridY * uint32_t(z)));
-        }
-  };
-  for (const GpuLight& l : lights) walk(l, [&](uint32_t c) { ++rows[c + 1]; });
-  for (uint32_t c = 0; c < kGridCells; ++c) rows[c + 1] += rows[c];
-  const uint32_t refs = rows[kGridCells];
-  if (refs > kMaxGridRefs) {
-    set4(grid, 0, 0, 0, 0);
-    return 0;
-  }
-  // Placing: each cell's start serves as its next entry and ends at the next cell's start, so the
-  // starts are shifted back by one cell afterwards.
-  uint32_t* const list = rows.data() + kGridCells + 1;
-  for (uint32_t i = 0; i < lights.size(); ++i)
-    walk(lights[i], [&](uint32_t c) { list[rows[c]++] = i; });
-  for (uint32_t c = kGridCells; c > 0; --c) rows[c] = rows[c - 1];
-  rows[0] = 0;
-  set4(grid, corner[0], corner[1], corner[2], kGridCell);
-  return refs;
 }
 
 namespace {
@@ -554,6 +494,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   };
   std::vector<Pick> picks;
   if (lights) {
+    GE_ZONE("bsp.pick");
     const auto consider = [&](const PointLight& l) {
       const double reach = l.physical ? l.reach : l.reach * 1.5;
       const double dx = l.pos[0] - view.eye[0], dy = l.pos[1] - view.eye[1],
@@ -763,12 +704,14 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers,
        relief ? std::max(o.relief_strength, 1e-3) : 0, parallax);
   if (lights) {
+    GE_ZONE("bsp.grid");
     d.grid_refs = bin_light_grid(d.frame_lights, view.eye, d.grid_rows, d.staged.grid);
   } else {
     d.grid_refs = 0;
     set4(d.staged.grid, 0, 0, 0, 0);
   }
   if (o.cull) {
+    GE_ZONE("bsp.cull");
     prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0, o.pvs);
     ++d.culled_frames;
   } else {
@@ -787,6 +730,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       }
     }
   }
+  GE_ZONE("bsp.upload");
   device.queue.WriteBuffer(d.uniform, 0, &d.staged, sizeof d.staged);
   if (!d.frame_lights.empty()) {
     device.queue.WriteBuffer(d.lights, 0, d.frame_lights.data(),
