@@ -144,17 +144,18 @@ fn shade_water(n: vec3f, rel: vec3f, xz: vec2f, position: vec3f, level: f32, los
 fn shade_water_roofed(n: vec3f, rel: vec3f, xz: vec2f, position: vec3f, level: f32, lost: f32,
                       refract: f32, o: Optics, foam: f32, open: f32, room_share: f32) -> vec3f {
   return shade_water_lit(n, rel, xz, position, level, lost, refract, o, foam, open, room_share,
-                         open, vec4f(0.0), 1.0);
+                         open, vec4f(0.0), 1.0, 1.0);
 }
 
 // The whole of it: the sun and the sky light the water itself by `day` (a courtyard's pool sees
 // the sky overhead, but its walls keep most of the day off it); and a caller with a planar mirror
 // hands in what it shows along the reflected ray (`mirror`: rgb, its weight in a; 0: march the
 // screen instead) and the share of the sun's glitter it lets through (`sun_seen`: 0 where the
-// mirror shows a wall where the sun would be).
+// mirror shows a wall where the sun would be); `bed_light` scales what is seen through the water
+// (the caustics the surface throws on the bed: 1 none).
 fn shade_water_lit(n: vec3f, rel: vec3f, xz: vec2f, position: vec3f, level: f32, lost: f32,
                    refract: f32, o: Optics, foam: f32, open: f32, room_share: f32, day: f32,
-                   mirror: vec4f, sun_seen: f32) -> vec3f {
+                   mirror: vec4f, sun_seen: f32, bed_light: f32) -> vec3f {
   let dist = length(rel);
   let v = -rel / dist;
   let cos_v = max(dot(n, v), 1e-3);
@@ -190,7 +191,7 @@ fn shade_water_lit(n: vec3f, rel: vec3f, xz: vec2f, position: vec3f, level: f32,
   }
   let bed_depth = max(level - (behind.y + frame.eye.y), 0.0);
   let through = exp(-o.c * depth_view) * exp(-o.kd * bed_depth);
-  let seen = textureSampleLevel(scene_colour, linear_clamp, at, 0.0).rgb;
+  let seen = textureSampleLevel(scene_colour, linear_clamp, at, 0.0).rgb * bed_light;
   let sun = sun_light(world_y, xz) * day;
   let light = sun * max(frame.sun.y, 0.0) + sky_irradiance(vec3f(0.0, 1.0, 0.0)) * day +
               room * PI;

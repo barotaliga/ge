@@ -38,14 +38,14 @@ bool underwater_look(std::string_view name, UnderwaterLook& out) {
     l.tint[2] = 0.75;
     l.tint_mix = 0.6;
     l.motes = 0;
+    l.caustics = 0;
+    l.shafts = 0;
   } else if (name == "pool") {
-    // Clear water under a lit room: the light read off the room, the caustics on the walls, the
-    // floor and the ceiling as rough as the surface is.
+    // Clear water under a lit room: the light read off the room.
     l.fog = 0.15;
     l.blur = 2;
     l.motes = 0.1;
     l.ambient = 1;
-    l.caustics = 1;
   } else {
     return false;
   }
@@ -55,10 +55,10 @@ bool underwater_look(std::string_view name, UnderwaterLook& out) {
 
 void create_underwater(gpu::Device& device, gpu::PipelineSet& pipelines, Underwater& under,
                        const wgpu::BindGroupLayout& frame) {
-  under.layout =
-      make_layout(device, "water.under",
-                  {Slot::uniform, Slot::texture, Slot::texture_raw, Slot::texture, Slot::texture},
-                  wgpu::ShaderStage::Fragment);
+  under.layout = make_layout(device, "water.under",
+                             {Slot::uniform, Slot::texture, Slot::texture_raw, Slot::texture,
+                              Slot::texture, Slot::uniform, Slot::storage_shade},
+                             wgpu::ShaderStage::Fragment);
   under.uniform = make_buffer(device, "water.under", sizeof(UnderGpu), wgpu::BufferUsage::Uniform);
   const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::underwater, "water.under");
   // Premultiplied over the frame: the share under the waterline replaces what was drawn.
@@ -83,10 +83,10 @@ void create_underwater(gpu::Device& device, gpu::PipelineSet& pipelines, Underwa
   under.p_under = pipelines.add_render(device, desc);
 }
 
-void bind_underwater(gpu::Device& device, Underwater& under, const Water& water) {
-  under.group = make_group(device, "water.under", under.layout,
-                           {under.uniform, water.scene_colour_view, water.scene_depth_view,
-                            water.below_view, water.below_veil_view});
+void bind_underwater(gpu::Device& /*device*/, Underwater& under, const Water& water) {
+  // Made in prepare_underwater, for the body the eye is in.
+  under.water = &water;
+  under.group_body = -1;
 }
 
 void prepare_underwater(gpu::Device& device, Underwater& under, const Water& water,
@@ -97,6 +97,13 @@ void prepare_underwater(gpu::Device& device, Underwater& under, const Water& wat
   under.active = body >= 0;
   if (!under.active) return;
   const Water::Slot& slot = water.bodies[static_cast<size_t>(body)];
+  if (under.group_body != body || under.water != &water) {
+    under.group = make_group(device, "water.under", under.layout,
+                             {under.uniform, water.scene_colour_view, water.scene_depth_view,
+                              water.below_view, water.below_veil_view, slot.uniform, slot.waves});
+    under.group_body = body;
+    under.water = &water;
+  }
   UnderGpu& u = under.staged;
   const bool given = line && line->body == body;
   const double surface = given ? line->surface : slot.staged.info[0];
@@ -129,10 +136,8 @@ void prepare_underwater(gpu::Device& device, Underwater& under, const Water& wat
   u.motes[2] = static_cast<float>(l.waterline);
   u.motes[3] = 0;
   u.lit[0] = static_cast<float>(l.ambient);
-  // The caustics as strong as the surface is rough: full at a slope of about 0.06 rms (a breeze's
-  // ripples), next to none off a still pool's stir.
-  u.lit[1] = static_cast<float>(l.caustics * std::clamp(std::sqrt(slot.mss) / 0.06, 0.0, 1.0));
-  u.lit[2] = 0;
+  u.lit[1] = static_cast<float>(l.caustics);
+  u.lit[2] = static_cast<float>(l.shafts);
   u.lit[3] = 0;
   device.queue.WriteBuffer(under.uniform, 0, &u, sizeof u);
 }

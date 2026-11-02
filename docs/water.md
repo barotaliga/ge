@@ -522,12 +522,33 @@ with its veil looking down. `water.under` lays the underside in where the eye's 
 the scene, fogged over the way there; the eye's own three fixed ripples and its flat-window test
 are gone. A look with `window` 0 (the classic tint) sees through the surface as through air.
 
-Under a lit room (the "pool" look: `ambient`, `caustics`) the water's light is read off the room
-seen round the eye, in a third of the water's hue, and the eye adapts to it (at most three times),
-so the window is a few times brighter than the water rather than a lamp in a black sea. The
-caustics are thin bright lines round dimmer cells laid on what stands under the surface, as strong
-as the surface is rough (`Water::Slot::mss`: full at a slope of 0.06 rms, a breeze's ripples), so a
-still pool throws next to none.
+Under a lit room (the "pool" look: `ambient`) the water's light is read off the room seen round
+the eye, in a third of the water's hue, and the eye adapts to it (at most three times), so the
+window is a few times brighter than the water rather than a lamp in a black sea. Seen from below,
+the surface's coarse rings lift the vertices a finer ring covers (from above they sink): sunk, they
+hung between the eye and the bed and hid it.
+
+**Built (M24h3, the caustics and the shafts; `render/wgsl/water_body.wgsl`).** THE CAUSTICS are the
+real surface's: a ray through it is bent by its slope (by 1 - 1/n, about a quarter), so the patch of
+surface over a point maps onto the bed with the Jacobian I + s H (H the height's curvature summed
+over the same components the surface draws, gusts included; s a quarter of the way down along the
+sun's refracted ray), and the light there is 1 / |det|, clamped to between a fifth and five times
+the mean: bright lines where the crests focus the sun, dimmer cells between. The sun's half-degree
+disc blurs it over the depth, so a wave shorter than the blur is left out: near the surface the net
+is fine and sharp, deep down coarse and soft, and a still surface throws none. Only the sun's share
+of a face's light is moved about (a level face's under the open sky), times the share of the
+surface the sun reaches (`WaterDraw::sunlit`; a classic map's found by rays to the sun through its
+leaves, again as the sun moves). They lie on what stands under the surface seen from below (a wall
+at its slant to the sun) and on the bed seen through the surface from above. THE SHAFTS: the eye's
+ray under the water is marched in sixteen steps out to 24 m (offset per pixel and frame for the
+resolve), each step lit by the same focusing off a net four times softer (the light is scattered
+through the volume), dimmed per band over the way down and the way back, times Henyey-Greenstein's
+forward scattering (g 0.8, capped at the peak): shafts fanning down toward the sun's side and
+swaying with the waves, darker water between (never by more than a third). The `gpu-underwater`
+lab shows each off beside on (`caustics`, `shafts`) and fails when either adds no contrast; the
+window is measured as the radius where the mean luma round a ring crosses halfway (the waves break
+its rim into fragments). `UnderwaterLook::caustics` and `shafts` scale them (1 in every look but the
+classic tint).
 
 **Built (M24h3, part: a game's own views; `WaterViews`, `set_water_views`).** A game that can draw
 its world again hands the water two pictures for one body. THE PLANAR MIRROR: the world drawn with
@@ -552,9 +573,8 @@ the share of the sun's and the sky's light on the water itself, apart from the s
 mirrors (`open_sky`): a courtyard's pool sees the sky overhead, but its walls keep most of the day
 off it.
 
-Not built yet (M24h3): light shafts, caustics from the real surface's slopes (these are a pattern,
-scaled by the surface's roughness). The detail waves' interference shows as a regular hatch in the
-glitter a few centimetres under an eye at the surface; the GPU detail FFT (M24g2) replaces them.
+The detail waves' interference shows as a regular hatch in the glitter a few centimetres under an
+eye at the surface; the GPU detail FFT (M24g2) replaces them.
 
 ## A classic map's pools (`plugins/brush/app/bsp_liquids.hpp`, `bsp_views.hpp`)
 
@@ -879,7 +899,7 @@ never read back by the simulation.
 | `lake` | picture | M24g, M24h, M51f | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it, frozen |
 | `tarn-ride` | drive | M24l3 | A skier onto seed 38's open tarn from its south bank at a ladder of speeds: how he met the water, how far he skimmed, where he went in, his time in the water and the metres swum, how it ended; the tarn from above with every ride's line, white on skis, yellow skimming, blue swimming |
 | `tarn` | picture | M24l, M24l3 | The free ride's tarn on a seed in the game's frame: on the map's day, open, under thin black ice, frozen to bear a skier and thawing over a moat, from below its lip and from high over it; its site, surface, ice and thaw as rows |
-| `gpu-underwater` | picture | M24h, M24h3 | Every look's view round a scene under water, the presets, Snell's window measured, a dive through the surface; then the caustics and the shafts |
+| `gpu-underwater` | picture | M24h, M24h3 | Every look's view round a scene under water, the presets, Snell's window measured by ring means, the caustics and the shafts each off beside on (each must add contrast), a dive through the surface |
 | `gpu-plunge` | picture | M24h2 | A first-person player in the classic move jumping off a bank into a dirty pond: the plunge from his eyes, the splash from the bank (crater, crown, jet, rings), under the water, surfacing through the waterline into the wet lens; four bodies of different mass dropped in; the player straight in against running in; the entry's numbers |
 | `water-lod` | picture | M24f, M24g | The tiers round an actor and round the camera as maps; a flow region coarsened and refined with its volume held; the picture diff per distance band across a slow fly-out (no band pops); the cost against distance |
 | `water-audition` | sound | M24j | Every water voice, metered and written as WAV: the bank, splashes from a pebble to a boulder, eleven places (a calm and a fresh lake from the shore, a boat and under it, a gale on a beach, a slow river and a stream, a waterfall from 15 and 60 m and under its pool, nowhere), the roar against distance beside 1 / r, a swim |

@@ -18,7 +18,7 @@ struct Under {
   fog: vec4f,   // the fog's scale, the eye's adaptation (the veil's luma it lifts to; 0 off)
   surface: vec4f,  // the surface at the eye (m), its slope dx, dz, 1 when the eye is under it
   motes: vec4f,    // the specks' share of cells, their radius (m), the lens plate's height (m)
-  lit: vec4f,      // the room's share of the light, the caustics (times the surface's roughness)
+  lit: vec4f,      // the room's share of the light, the caustics, the shafts
 }
 
 @group(1) @binding(0) var<uniform> under: Under;
@@ -28,6 +28,11 @@ struct Under {
 // none), and the share of it the veil fills.
 @group(1) @binding(3) var below: texture_2d<f32>;
 @group(1) @binding(4) var below_veil: texture_2d<f32>;
+// The body the eye is in, its waves: the caustics and the shafts read the real surface.
+@group(1) @binding(5) var<uniform> body: WaterBody;
+@group(1) @binding(6) var<storage, read> waves: array<Wave>;
+
+#include "render/wgsl/water_body.wgsl"
 
 struct VertexOut {
   @builtin(position) position: vec4f,
@@ -136,42 +141,38 @@ fn fresnel_exit(cos_i: f32) -> f32 {
   return 0.5 * (rs * rs + rp * rp);
 }
 
-// The caustics' net at a point of the plan, 0..about 2: the rippled surface focuses the light
-// into bright thin lines round dimmer cells, as on a pool's floor; the lines are the cells'
-// edges (the gap between the nearest two of points that wander in a grid), two scales, drifting.
-fn caustic_cells(p: vec2f, t: f32, k: i32) -> f32 {
-  let base = floor(p);
-  var f1 = 9.0;
-  var f2 = 9.0;
-  for (var j = -1; j <= 1; j++) {
-    for (var i = -1; i <= 1; i++) {
-      let c = base + vec2f(f32(i), f32(j));
-      let h = hash4(vec3i(vec2i(c), 7), k);
-      let q = c + 0.5 + 0.38 * vec2f(sin(t * (0.6 + h.z) + h.x * 6.28),
-                                     cos(t * (0.5 + h.w) + h.y * 6.28));
-      let d = length(p - q);
-      if (d < f1) {
-        f2 = f1;
-        f1 = d;
-      } else if (d < f2) {
-        f2 = d;
-      }
+// THE LIGHT SHAFTS along the eye's ray out to `path` m (at most 24): sixteen steps (offset per
+// pixel and frame, so the resolve smooths the steps away), each the sun's light the waves focus
+// there over its mean, dimmed per band over the way down from the surface and the way back to the
+// eye, off a net four times softer than the bed's (the light is scattered through the volume); times
+// the forward scattering toward the eye. What they add over the veil (bright shafts and
+// the darker water between them).
+fn light_shafts(ray: vec3f, path: f32, pixel: vec2f, t: f32, px_angle: f32) -> vec3f {
+  let down = sun_down();
+  let reach = min(path, 24.0);
+  let jitter = fract(52.9829189 * fract(dot(pixel, vec2f(0.06711056, 0.00583715))) +
+                     0.618034 * frame.time.y);
+  let step = reach / 16.0;
+  var sum = vec3f(0.0);
+  for (var k = 0; k < 16; k++) {
+    let along = (f32(k) + jitter) * step;
+    let p = frame.eye.xyz + ray * along;
+    let depth = under.info.x - p.y;
+    if (depth <= 0.0) {
+      continue;
     }
+    let focus = caustic_at(p.xz, depth, down, t, 4.0, along * px_angle) - 1.0;
+    sum += focus * exp(-under.c.rgb * under.fog.x * (along + depth / max(-down.y, 0.2))) * step;
   }
-  return pow(1.0 - smoothstep(0.0, 0.16, f2 - f1), 2.0);
-}
-
-// The net laid on a face by its normal's share of each plane (a wall takes it upright).
-fn caustic_on(p: vec3f, n: vec3f, t: f32) -> f32 {
-  let w = n / max(n.x + n.y + n.z, 1e-4);
-  return w.y * caustic_net(p.xz, t) + w.z * caustic_net(p.xy + 3.3, t) +
-         w.x * caustic_net(p.zy + 7.1, t);
-}
-
-fn caustic_net(p: vec2f, t: f32) -> f32 {
-  // The lines wobble with the swells, then the two scales cross.
-  let w = p + 0.12 * vec2f(sin(p.y * 2.3 + t * 1.1), cos(p.x * 2.1 - t * 0.9));
-  return caustic_cells(w * 1.3, t * 0.8, 1) + 0.6 * caustic_cells(w * 2.6 + 4.7, t, 2);
+  // Henyey-Greenstein, g 0.8: a water's particles scatter mostly forward.
+  let g = 0.8;
+  let c = -dot(down, ray);
+  // Capped a little off the peak, which the sun's own disc in the window already stands for.
+  let phase = min((1.0 - g * g) / (4.0 * PI * pow(1.0 + g * g - 2.0 * g * c, 1.5)), 1.2);
+  let sun = sun_light(under.info.x, frame.eye.xz) * max(frame.sun.y, 0.0) * body.sun.x;
+  // About a quarter of a clear water's attenuation is scattering, and of what it scatters into the
+  // shafts' pattern (over the mean the veil carries) the eye takes about two thirds.
+  return sun * 0.15 * under.c.rgb * phase * sum;
 }
 
 // The room's light round the eye: the mean of the scene seen at a grid over the screen.
@@ -196,9 +197,9 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   let tan_half = length(edge / dot(edge, fwd) - fwd);
   let focal = 0.5 * frame.size.y / tan_half;
   // The face under this pixel's normal (from the scene's points' screen derivatives, taken
-  // here in uniform control flow): the caustics are laid on it from its three planes.
+  // here in uniform control flow): a wall takes the sun's caustics at a slant.
   let p0 = frame.eye.xyz + ray0 * min(scene_distance(uv0), 1e3);
-  let face_n = abs(normalize(cross(dpdx(p0), dpdy(p0)) + vec3f(0.0, 1e-6, 0.0)));
+  let face_n = normalize(cross(dpdx(p0), dpdy(p0)) + vec3f(0.0, 1e-6, 0.0));
 
   // THE WATERLINE: this pixel's point on the lens plate against the surface there (the plane
   // through the surface at the eye, tilted by its slope, lapping a centimetre).
@@ -274,14 +275,22 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   // What stands under the surface was lit by the day dimmed on its way down.
   let point_depth = under.info.x - (frame.eye.y + ray.y * min(path, 1e4));
   seen *= exp(-under.kd.rgb * max(point_depth, 0.0));
-  // The caustics on what stands under the surface, fading with its depth.
-  if (under.lit.y > 0.0 && !through && point_depth > 0.0 && dist < 1e5) {
+  // THE CAUSTICS on what stands under the surface: the sun's share of its light gathered and
+  // spread by the waves over it (water_body.wgsl's `caustic_at`), a wall's at its slant to the sun.
+  if (under.lit.y > 0.0 && !through && point_depth > 0.0 && dist < 1e5 && body.sun.x > 0.0) {
     let p = frame.eye.xyz + ray * path;
-    seen *= 1.0 + under.lit.y * 1.4 * caustic_on(p * 0.8, face_n, t) *
-                      exp(-point_depth * 0.25);
+    let down = sun_down();
+    let slant = clamp(abs(dot(face_n, down)) / max(-down.y, 0.2), 0.0, 1.0);
+    let share = sun_share(under.info.x, p.xz) * body.sun.x * slant * under.lit.y;
+    let foot = path * 2.0 * tan_half / frame.size.y / max(abs(dot(face_n, ray)), 0.2);
+    seen *= 1.0 + (caustic_at(p.xz, point_depth, down, t, 1.0, foot) - 1.0) * share;
   }
   let tr = exp(-under.c.rgb * under.fog.x * path);
   var colour = seen * tr + veil * (1.0 - tr);
+  if (under.lit.z > 0.0 && body.sun.x > 0.0 && frame.sun.y > 0.0) {
+    // The water between the shafts darker, never by more than a third.
+    colour = max(colour + under.lit.z * light_shafts(ray, path, in.position.xy, t, 2.0 * tan_half / frame.size.y), 0.67 * colour);
+  }
   // The specks, lit by the light in the water, each fogged over its own distance.
   if (under.motes.x > 0.0) {
     let s = specks(frame.eye.xyz, ray, path, focal, t);

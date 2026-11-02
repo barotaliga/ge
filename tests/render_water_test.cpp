@@ -80,10 +80,12 @@ TEST(the_underwater_presets_are_named_and_differ_where_they_should) {
   CHECK(mask.blur < open.blur && mask.magnify > 1.3);  // a mask: sharp and a third larger
   CHECK(murky.fog > open.fog);                         // murky: the view closes in
   CHECK(classic.window == 0 && classic.tint_mix > 0);  // classic: no window, a flat tint
-  // A pool under a lit room: lit by the room, with caustics as rough as its surface; the open look
-  // keeps none of it. Both see the surface from below (the water pass's underside).
-  CHECK(pool.ambient > 0 && pool.caustics > 0 && pool.window == 1);
-  CHECK(open.ambient == 0 && open.caustics == 0 && open.window == 1);
+  // The real surface's caustics and shafts in every natural look; the classic tint keeps none.
+  CHECK(open.caustics == 1 && open.shafts == 1 && classic.caustics == 0 && classic.shafts == 0);
+  // A pool under a lit room: lit by the room; the open look is lit by the day. Both see the
+  // surface from below (the water pass's underside).
+  CHECK(pool.ambient > 0 && pool.window == 1);
+  CHECK(open.ambient == 0 && open.window == 1);
 }
 
 TEST(the_detail_band_carries_the_spectrum_past_the_simulations_waves) {

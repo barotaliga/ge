@@ -123,11 +123,41 @@ PoolSite pool_site(const Map& map, const LiquidPatch& p, double from) {
   return site;
 }
 
+double pool_sunlit(const Map& map, const LiquidPatch& p, const double sun[3]) {
+  if (sun[1] <= 0.02) return 0;
+  int seen = 0, lit = 0;
+  for (int i = 0; i < 4; ++i) {
+    for (int j = 0; j < 4; ++j) {
+      const double x = p.box[0] + (i + 0.5) / 4 * (p.box[2] - p.box[0]);
+      const double z = p.box[1] + (j + 0.5) / 4 * (p.box[3] - p.box[1]);
+      const double y = p.level + 0.05;
+      const Leaf& here = leaf_of(map, x, y, z);
+      if (here.solid || here.contents == kSolidLeaf) continue;  // in a wall over the pool
+      ++seen;
+      lit += reaches_sky(map, x, y, z, sun[0], sun[1], sun[2], 256) ? 1 : 0;
+    }
+  }
+  return seen > 0 ? double(lit) / seen : 0.0;
+}
+
+void light_pools_by_sun(render::Water& water, const Map& map, LiquidWorld& lw,
+                        const double sun[3]) {
+  const double turned = lw.sun[0] * sun[0] + lw.sun[1] * sun[1] + lw.sun[2] * sun[2];
+  if (turned > 0.99996) return;  // within half a degree of the last
+  for (int k = 0; k < 3; ++k) lw.sun[k] = sun[k];
+  int slot = 0;
+  for (size_t i = 0; i < lw.kinds.size(); ++i) {
+    if (lw.kinds[i] != kWater) continue;
+    if (slot >= int(water.bodies.size())) break;
+    render::set_water_sunlit(water, slot++, pool_sunlit(map, lw.patches[i], sun));
+  }
+}
+
 LiquidWorld liquid_world(const Scene& scene, const LiquidRows& rows, double wind, double from) {
   ge::wind::Field f;
   f.mean = wind;
   f.from = from;
-  LiquidWorld out{water::World(f), {}, {}, {}, wind, from};
+  LiquidWorld out{water::World(f), {}, {}, {}, {}, {0, 0, 0}, wind, from};
   water::World& world = out.world;
   const LightProbe probe = make_light_probe(scene.map);
   int waters = 0;
@@ -170,6 +200,7 @@ LiquidWorld liquid_world(const Scene& scene, const LiquidRows& rows, double wind
     out.kinds.push_back(p.kind);
     out.open.push_back(open_sky_of(scene.map, p));
     out.sites.push_back(site);
+    out.patches.push_back(p);
   }
   return out;
 }
@@ -262,6 +293,7 @@ void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids&
       // only through what of the dome is sky, and the walls' shade the map's own light keeps.
       draw.open_sky = lw.open[i];
       draw.daylight = lw.sites[i].sky;
+      draw.sunlit = 0;  // none until light_pools_by_sun finds where the sun reaches
       draw.room = rows.room;
       draw.stir = rows.stir;
       // The wind's gusts break the water into patches of ripples and calm as it reaches it.
