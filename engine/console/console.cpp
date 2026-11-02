@@ -37,6 +37,8 @@ void Console::add_command(std::string_view name, std::string_view help, CommandF
 
 bool Console::has_command(std::string_view name) const { return commands_.count(lower(name)) != 0; }
 
+bool Console::remove_command(std::string_view name) { return commands_.erase(lower(name)) != 0; }
+
 void Console::add_macro(std::string_view name, std::function<std::string()> fn) {
   macros_[lower(name)] = std::move(fn);
 }

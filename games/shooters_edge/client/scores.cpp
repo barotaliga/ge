@@ -1,7 +1,7 @@
 // What the scores key shows, read off the game playing (scores.hpp).
 //
 // ge:summary Reads the scoreboard's rows and the level's statistics off the listen server
-// ge:keywords scores_of level_stats_of scores_screen userinfo frags-field entered_at
+// ge:keywords scores_of level_stats_of scores_screen userinfo frags-field entered_at draw_scores
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_scores_test.cpp
 #include "shooters_edge/client/scores.hpp"
@@ -75,6 +75,43 @@ ScoresScreen scores_screen(const Listen& l, bool held) {
   const PlayerState p = player_state(l);
   if (p.dead) return ScoresScreen::teams;
   return ScoresScreen::none;
+}
+
+void draw_scores(ge::ui::DrawList& dl, const Listen& l, const shooters_edge::menu::ClassicArt& art,
+                 int w, int h, bool held, bool level_stats, shooters_edge::menu::BoardView& board) {
+  const CampaignView& c = l.campaign;
+  if (l.campaign_host && c.end == LevelEnd::intermission) {
+    menu::draw_intermission(dl, art, w, h, level_stats_of(l));
+    return;
+  }
+  if (l.campaign_host && c.end != LevelEnd::none) {
+    menu::draw_level_text(dl, art, w, h, c.text, typed_chars(c, l.server->sv.time));
+    return;
+  }
+  switch (scores_screen(l, held)) {
+    case ScoresScreen::solo: {
+      const menu::LevelStats st = level_stats_of(l);
+      if (level_stats) menu::draw_level_stats(dl, art, w, h, map_title(l), st);
+      // The modern look's level card already holds the strip's figures.
+      if (!level_stats || !art.glyphs.empty())
+        menu::draw_solo_scorebar(dl, art, w, h, map_title(l), st);
+      break;
+    }
+    case ScoresScreen::players: {
+      const menu::Scoreboard b = scores_of(l);
+      menu::draw_scoreboard(dl, art, w, h, b, board);
+      menu::draw_scorebar(dl, art, w, h, b);
+      break;
+    }
+    case ScoresScreen::teams: {
+      const menu::Scoreboard b = scores_of(l);
+      menu::draw_team_scoreboard(dl, art, w, h, b, board);
+      menu::draw_scorebar(dl, art, w, h, b);
+      break;
+    }
+    case ScoresScreen::none:
+      break;
+  }
 }
 
 }  // namespace shooters_edge::client

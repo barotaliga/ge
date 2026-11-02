@@ -263,6 +263,18 @@ bool listen_start(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMap> 
   return start_map(l, error);
 }
 
+void listen_stop(Listen& l) {
+  ListenOptions opt = std::move(l.opt);
+  l.room.reset();
+  l.server = nullptr;
+  l.match.reset();  // the servers' views into the maps go before the maps do
+  l.campaign_host.reset();
+  l.next.reset();
+  l.map.reset();
+  l = Listen{};
+  l.opt = std::move(opt);
+}
+
 bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error) {
   if (l.campaign_host) {
     const std::string name = map->name;

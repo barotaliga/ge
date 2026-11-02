@@ -14,9 +14,10 @@
 //   `skill`) is dimmed with the reason in its hint.
 // - **Events** (`apply_event`): a setting changed runs its line at once (the client's) or waits
 //   for START (the server's rules, run as `sv <cvar> <value>` before the map); an action runs its
-//   line and says whether the menu closes. CLASSIC ENHANCED ▸ ENHANCE A PACK, the help pages and
-//   CUSTOMIZE CONTROLS' waiting for a key are the game menu's (game_menu.hpp).
-// - **CLASSIC ENHANCED** holds the modern picture's settings a player will want to change, page by
+//   line and says whether the menu closes. CLASSIC ENHANCED ▸ LOAD GAME and ENHANCE, the help pages
+//   and CUSTOMIZE CONTROLS' waiting for a key are the game menu's (game_menu.hpp).
+// - **CLASSIC ENHANCED** starts with LOAD GAME (the game's install, lit by the console's `basedir`)
+//   and ENHANCE, then holds the modern picture's settings a player will want to change, page by
 //   subject (textures and models; light and shadow; water, lava and sky; fire and wind; weather):
 //   the `ce_` switches, the `r_` cvars and the weather's; the rest stay console-only.
 //
@@ -24,7 +25,7 @@
 // ge:keywords menu main-menu escape single-player multiplayer options help quit new-game setup
 // ge:keywords video dimmed disabled cvar console-line needs togglemenu shooters-edge
 // ge:keywords load-page save-page save-slots customize-controls controls bind_control bound_keys
-// ge:keywords classic-enhanced ce_ graphics weather held-weapon gamma brightness
+// ge:keywords classic-enhanced ce_ graphics weather held-weapon gamma brightness load-game
 // ge:skill ui console
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -139,8 +140,9 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back = false);
 
 // What an event asks of the game menu.
 // `bind_key`: a CUSTOMIZE CONTROLS row was pressed; the game menu waits for the key (the event's
-// item names the row).
-enum class Outcome : uint8_t { none, close, classic_enhance, back_at_root, bind_key };
+// item names the row). `load_game`: LOAD GAME, the window shows the desktop's folder chooser.
+// `classic_enhance`: ENHANCE, the enhancing watched.
+enum class Outcome : uint8_t { none, close, classic_enhance, load_game, back_at_root, bind_key };
 
 // One menu event applied: a client setting's line run, NEW GAME's START running the rules and the
 // map, an action's line run. Returns whether the menu closes or opens something it owns.
