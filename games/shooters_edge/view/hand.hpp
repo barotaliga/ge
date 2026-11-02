@@ -85,7 +85,7 @@ struct Hand {
   Weapon held = Weapon::shotgun;    // in the hand now
   Weapon wanted = Weapon::shotgun;  // the game's
   bool fresh = true;
-  vm::PlaceState place;
+  vm::PlaceState place{};
   double flash_left = 0;  // s of the last shot's light still to fade
   double fire_t = -1;     // s into the `fire` clip (-1: at rest)
   // The models are a classic game's own (GameAdapter::held_weapons), authored at the eye: placed
