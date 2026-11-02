@@ -95,7 +95,7 @@ EarNews fighter_hear(Fighter& f, const server::QcServer& s, int me, sh::Vec3f ea
         ItemSpot& it = f.items[static_cast<size_t>(pick)];
         place = it.at;
         const bool times =
-            f.sense == MapSense::expert || (f.sense == MapSense::average && !key_item(it));
+            f.timing == MapSense::expert || (f.timing == MapSense::average && !key_item(it));
         it.present = it.confirmed = false;
         it.timed = times;
         it.back_at = t + it.respawn_s * (it.timed ? 1.f : kGuessLate);

@@ -48,9 +48,15 @@ constexpr float kCowardRatio = 2.5f;  // a coward's might over the enemy's befor
 // How much better than the average player a player of `skill` is in a fight, and believes he is.
 float self_edge(AimSkill skill);
 
-// Takes the fight with an enemy of might `theirs`, being of might `mine`.
+// The same edge off an aim trait (traits.hpp, 1 to 10; the mean of a player's aims): the novice's,
+// the average's, the expert's and the perfect player's at 2, 5, 8 and 10.
+float edge_of(double aim);
+
+// Takes the fight with an enemy of might `theirs`, being of might `mine`, his aim worth `edge`.
+bool takes_fight(Temper t, float edge, float mine, float theirs);
 bool takes_fight(Temper t, AimSkill skill, float mine, float theirs);
-// Goes toward an enemy he only heard.
+// Goes toward an enemy he only heard; a `rash` player (a novice's discipline) goes at every one.
+bool chases_sound(Temper t, float edge, bool rash, float mine, float theirs);
 bool chases_sound(Temper t, AimSkill skill, float mine, float theirs);
 // Turns from a fight for health or armour at this body (health and armour's saving) and below.
 float retreat_below(Temper t);

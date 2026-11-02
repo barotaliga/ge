@@ -46,6 +46,9 @@ struct AimProfile {
   float hold_s = 1;                  // keeps aiming at a contact lost this long
 };
 AimProfile aim_profile(AimSkill s);
+// The hands of an aim trait `aim` and a reaction trait `reaction` (traits.hpp, 1 to 10): the
+// novice's, the average's and the expert's rows at 2, 5 and 8, read smoothly between.
+AimProfile aim_profile(uint8_t aim, uint8_t reaction);
 
 // The yaw and pitch (degrees; pitch down positive) from `eye` to `at`.
 void aim_angles(Vec3f eye, Vec3f at, float& yaw, float& pitch);

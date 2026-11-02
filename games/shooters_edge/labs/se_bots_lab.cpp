@@ -94,6 +94,7 @@ void run(gl::Lab& lab) {
     }
     o.tempers.push_back(tp);
   }
+  for (const std::string& w : split(lab.arg("traits"))) o.traits.push_back(w);
   const fb::FightReport r = fb::run_fight(o);
   if (!r.ok) {
     lab.fail("se-bots: " + r.error, "next: run tests/shooters_edge_fight_test.cpp");
@@ -134,6 +135,15 @@ void run(gl::Lab& lab) {
   lab.metric("fight.frags-per-minute", total / (secs / 60), "per-min");
   lab.metric("fight.faults", static_cast<double>(r.faults), "count");
   lab.table(t);
+  gl::LabTable traits_table{"each fighter's traits (1 to 10; shooter/traits.hpp)", {"fighter"}, {}};
+  for (size_t i = 0; i < sh::kTraits; i++)
+    traits_table.columns.push_back(sh::trait_name(static_cast<sh::Trait>(i)));
+  for (const fb::FightPlayer& p : r.players) {
+    std::vector<std::string> row{p.name};
+    for (uint8_t v : p.traits.v) row.push_back(std::to_string(v));
+    traits_table.rows.push_back(row);
+  }
+  lab.table(traits_table);
 
   // The arena from above.
   sh::MoveWorld world;
@@ -255,6 +265,9 @@ const gl::LabSpec kSpec{
         {"tempers", "",
          "the fighters' temperaments, comma separated: aggressive, balanced or coward (a, b, c); "
          "missing: balanced"},
+        {"traits", "",
+         "the fighters' traits over their presets, comma separated, each name=value joined by / "
+         "(aim_rl=9/timing=3); empty: the preset"},
     },
     "--frames=2000",
     run,

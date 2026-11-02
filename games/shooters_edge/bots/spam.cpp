@@ -86,7 +86,7 @@ void spam_init(Fighter& f, const char* entities) {
 bool spam_plan(Fighter& f, const server::QcServer& s, const Stats& st, double t) {
   f.spam_node = f.spam_spot = -1;
   const int32_t area = f.mind.claim;
-  if (!f.team || f.sense != MapSense::expert || f.role != Role::hold || area < 0) return false;
+  if (!f.team || f.camp != MapSense::expert || f.role != Role::hold || area < 0) return false;
   if (f.mode != FightMode::roam || f.spam_spots.empty()) return false;
   if (st.rockets < kSpamRockets || (st.items & kWRockets) == 0) return false;
   const ItemSpot& it = f.items[static_cast<size_t>(area)];
