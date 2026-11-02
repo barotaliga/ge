@@ -856,9 +856,9 @@ int run_main(int argc, char** argv) {
                                              static_cast<uint32_t>(h), surface.format());
         target = bench_off.view;
       }
-      // The demo's entities and the other players stand in it; its effects are not read yet.
-      cl::demo_placed(ds, bench_fx.models);
-      cl::draw_world(*device, *world, view, bench_fx, nullptr, wall, overlay, target);
+      cl::demo_placed(ds, bench_fx.models);  // its entities and other players, not its effects yet
+      const auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
+      cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
       if (!bench.paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) surface.present();
       if (bench.paced) {  // playback: every frame shown, nothing timed

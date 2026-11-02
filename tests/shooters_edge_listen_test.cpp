@@ -434,6 +434,28 @@ TEST(the_hand_raises_the_launcher_and_sees_one_shot_a_rocket) {
   CHECK(held.shots == 1);
 }
 
+TEST(a_demo_s_hand_holds_the_recorder_s_weapon_and_none_without_a_view_model_or_dead) {
+  cl::DemoState s;
+  s.stats[cl::kStatHealth] = 100;
+  s.stats[cl::kStatWeapon] = 5;         // a view model's index
+  s.stats[cl::kStatActiveWeapon] = 32;  // the rocket launcher's item bit
+  cl::HeldState held;
+  const shooters_edge::view::ViewSettings settings;
+  const ge::render::FrameView frame;
+  const auto step = [&] { return cl::step_demo_held(s, held, settings, {}, frame, 0, 0.013); };
+  const shooters_edge::view::HandFrame f = step();
+  CHECK(f.drawn);
+  CHECK(f.weapon == shooters_edge::view::Weapon::rocket_launcher);
+  s.stats[cl::kStatWeapon] = 0;  // a spectator's recording
+  CHECK(!step().drawn);
+  s.stats[cl::kStatWeapon] = 5;
+  s.stats[cl::kStatHealth] = 0;
+  CHECK(!step().drawn);
+  s.stats[cl::kStatHealth] = 100;
+  s.intermission = true;
+  CHECK(!step().drawn);
+}
+
 TEST(the_hud_counts_down_the_quad_and_the_shield_and_drops_them_when_they_run_out) {
   cl::Listen l;
   if (!start(l)) return;

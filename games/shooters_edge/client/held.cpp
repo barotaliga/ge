@@ -10,6 +10,7 @@
 
 #include "brush/map.hpp"
 #include "core/output.hpp"
+#include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
 
 namespace shooters_edge::client {
@@ -62,6 +63,25 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
   if (p.on_ground && in.place.ground_speed > kWalking) s.stride_s += dt;
   in.place.stride_s = s.stride_s;
   return view::step_hand(s.hand, in, settings, models, v.pose, dt);
+}
+
+view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::ViewSettings& settings,
+                               std::span<const ge::viewmodel::HeldModel> models,
+                               const ge::render::FrameView& frame, double t, double dt) {
+  ge::camera::Pose pose;
+  pose.eye = {frame.eye[0], frame.eye[1], frame.eye[2]};
+  pose.yaw = frame.heading;
+  pose.pitch = frame.pitch;
+  pose.fov_y = frame.fov_y;
+  pose.near_m = frame.near_m;
+  view::HandInput in;
+  in.weapon = static_cast<view::Weapon>(demo_status(s, t).weapon);
+  in.place.look_yaw = pose.yaw;
+  in.place.look_pitch = pose.pitch;
+  in.place.grounded = true;
+  view::HandFrame f = view::step_hand(h.hand, in, settings, models, pose, dt);
+  f.drawn = f.drawn && s.stats[kStatWeapon] != 0 && s.stats[kStatHealth] > 0 && !s.intermission;
+  return f;
 }
 
 }  // namespace shooters_edge::client
