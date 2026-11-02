@@ -63,6 +63,32 @@ installs only `ninja ccache` (it builds release and runs no gate). On macOS `too
 clang-tidy the SDK (`-isysroot`) and llvm@18's own libc++ headers (`-nostdinc++ -isystem`): Apple
 Clang's compile database names no SDK, and the SDK's libc++ is newer than clang-tidy 18 parses.
 
+## The Windows tools
+
+`tools/setup-windows.ps1` is the ONE list of Windows tools (`$Tools`: a command, its minimum, the
+winget package and where its installer puts it). It runs on Windows PowerShell 5.1 and 7, as the
+user and not elevated (`powershell -ExecutionPolicy Bypass -File tools\setup-windows.ps1`; the
+installers that need an administrator raise UAC themselves). MSVC comes first: any Visual Studio
+2026+ with `VC.Tools.x86.x64` (found by vswhere) and a Windows SDK counts; otherwise Build Tools 2026
+is installed with the `VCTools` workload, or an existing Build Tools is modified to add it. Not
+2022: Dawn's prebuilt Windows library is built with 2026's MSVC and calls STL internals
+(`__std_rotate`, `__std_min_element_4u`, ...) that 2022's `msvcprt.lib` lacks, so every link
+fails. Then winget installs what is missing or too old, a tool installed but off PATH (LLVM, NASM)
+gets its directory first in the user PATH, and `python3` gets a real `python3.exe` beside
+`python.exe` (Windows' own is a Store alias). clang-format and clang-tidy are LLVM 18 pinned to
+`18.1.8`, and nasm is 2 pinned to `2.16.03` (libaom's configure refuses NASM 3; cmake/Codecs.cmake
+then builds libaom without its assembly, and hands it Git for Windows' perl when none is on PATH);
+an LLVM of another major in `Program Files\LLVM` stops the script rather than being replaced. Git
+Bash (Git for Windows' `bin\bash.exe`, never `System32\bash.exe`, which is WSL) is where the
+Makefile and `tools/*.sh` run, so a `*.sh` checked out with CRLF (Git for Windows' default
+`core.autocrlf=true`, before `.gitattributes` said `*.sh text eol=lf`) is checked out again with LF
+when it has no local change. Symlinks checked out as plain files are reported, not fixed (they need
+Developer Mode and `core.symlinks`). Same flags as the other two: `--check`, `--list`, `--verify`
+(the release preset in vcvars64's environment with `GE_GPU_REQUIRE=1`), `--quiet`. Windows builds
+the release preset only: the prebuilt Dawn is a release library (cmake/Dawn.cmake stops an MSVC
+debug build with the GPU on) and the sanitizers are GCC's and Clang's. CI's Windows row installs
+only ccache (the runner image has the rest).
+
 ## Adding a dependency
 
 Only when a milestone needs it (G4). Use `FetchContent_Declare` with `GIT_TAG` set to

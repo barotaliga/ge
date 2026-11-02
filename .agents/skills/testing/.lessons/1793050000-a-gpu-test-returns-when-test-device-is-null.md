@@ -10,5 +10,5 @@ not stop the test, so it returns null and the caller must return. A helper that 
 around it (`make_rig`) has to return null too, and every test that calls the helper has to
 return when it gets null. Otherwise the test dereferences the null device and crashes. The
 pull-request row never shows this, because Linux always has lavapipe. The merge queue's Windows
-row does show it: there Dawn sometimes cannot load its DLLs, every other GPU test skips, and
-the one without the guard crashes and gets the PR ejected.
+row did, when no device could be made there: every other GPU test skipped, and the one without
+the guard crashed and got the PR ejected.
