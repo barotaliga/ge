@@ -2,12 +2,14 @@
 // packs, zips and loose files with QC programs for the server, its maps carry their textures'
 // pixels, its models are the classic families (plugins/morph, plugins/brush) with a picture file
 // standing in for a skin, its sounds WAV files under `sound/`, and its demos are the recordings
-// client/demo.hpp reads.
+// client/demo.hpp reads; its config files are console text in its packs and its place names
+// `locs/<map>.loc`.
 //
 // ge:summary The first classic game's adapter: mod folders, QC programs, maps, pictures, demos
 // ge:keywords classic-adapter list_mods find_program list_maps map_info map_textures list_demos
 // ge:keywords find_demo open_demo mod-folder qwprogs replacement-texture png tga open_model
 // ge:keywords open_sound replacement-skin mdl spr wav pictures replacement-picture gfx-wad lmp
+// ge:keywords find_config cfg open_locations loc-file
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #include <algorithm>
@@ -226,6 +228,29 @@ bool open_sound(const GameAdapter&, const SearchPath& files, const std::string& 
   return ge::audio::read_wav(bytes, path, &out, &error);
 }
 
+bool find_config(const GameAdapter&, const SearchPath& files, std::string_view name,
+                 std::string& text) {
+  if (name.empty() || name.find("..") != std::string_view::npos) return false;  // in the files
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> bytes = find_file(files, name, store);
+  if (bytes.empty()) return false;
+  text.assign(bytes.begin(), bytes.end());
+  return true;
+}
+
+bool open_locations(const GameAdapter&, const SearchPath& files, std::string_view map,
+                    ge::shooter::Locs& out) {
+  std::string path = "locs/";
+  path.append(map).append(".loc");
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> bytes = find_file(files, path, store);
+  if (bytes.empty()) return false;
+  const std::string_view text(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+  if (ge::shooter::parse_locs(text, out) == 0) return false;
+  out.from = path;
+  return true;
+}
+
 std::vector<ge::brush::MapPicture> map_textures(const GameAdapter&, const SearchPath& files,
                                                 std::string_view map,
                                                 std::span<const uint8_t> map_file,
@@ -317,6 +342,8 @@ const GameAdapter kClassic{.game = &pf::kGameProfiles[0],
                            .open_model = open_model,
                            .open_sound = open_sound,
                            .pictures = pictures,
+                           .find_config = find_config,
+                           .open_locations = open_locations,
                            .list_demos = list_demos,
                            .find_demo = find_demo_,
                            .open_demo = open_demo_};

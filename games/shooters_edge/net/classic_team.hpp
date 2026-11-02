@@ -30,6 +30,7 @@
 
 #include "progs/file.hpp"
 #include "shooter/aim.hpp"
+#include "shooter/locs.hpp"
 #include "shooter/pilot.hpp"
 #include "shooter/temper.hpp"
 #include "shooter/vec.hpp"
@@ -51,9 +52,8 @@ struct TeamSide {
 struct TeamMatchOptions {
   std::span<const uint8_t> map;  // the map file
   std::string map_name = "halls";
-  std::string entities;   // in place of the map's entity text (empty: the map's own)
-  std::string locs;       // the map's place names file's text (empty: named off its items)
-  std::string locs_from;  // where it was read from
+  std::string entities;  // in place of the map's entity text (empty: the map's own)
+  sh::Locs locs;         // the map's place names, `from` where (none: named off its items)
   const ge::progs::Progs* progs = nullptr;  // the baseline mod, compiled
   TeamSide teams[2] = {TeamSide("red", 4), TeamSide("blue", 13)};
   int frames = 46154;   // server frames of 13 ms (ten minutes)

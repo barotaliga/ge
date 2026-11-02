@@ -406,8 +406,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       seat.fighter.bot.pilot.world = &world;  // the hop looks ahead through the map
       seat.fighter.name = r.players[static_cast<size_t>(k)].name;
       if (locs.points.empty()) {
-        if (!opt.locs.empty() && sh::parse_locs(opt.locs, locs) > 0) {
-          locs.from = opt.locs_from;
+        if (!opt.locs.points.empty()) {
+          locs = opt.locs;
         } else {
           locs_from_items(seat.fighter.items, locs);
         }

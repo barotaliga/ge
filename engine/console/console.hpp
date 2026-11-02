@@ -29,6 +29,7 @@
 // ge:summary The console: the command buffer, commands, aliases, macros, exec, keys, problems
 // ge:keywords console command commands buffer append insert run wait alias aliases macro exec
 // ge:keywords cfg config autoexec problem problems stuff stuffcmd kstuffable source depth
+// ge:keywords set_fallback_reader fallback-reader
 // ge:keywords complete completion key press release button command-line plus-set
 // ge:skill console
 // ge:test tests/console_console_test.cpp tests/console_script_test.cpp
@@ -141,6 +142,9 @@ class Console {
   using Reader = std::function<bool(std::string_view name, std::string& text)>;
   using Writer = std::function<bool(std::string_view name, std::string_view text)>;
   void set_files(Reader read, Writer write);
+  // A host's reader tried after the directories find nothing (a game's packs, say); the
+  // directories still come first and writes still go to the first of them.
+  void set_fallback_reader(Reader read);
   bool read_file(std::string_view name, std::string& text) const;
   bool write_file(std::string_view name, std::string_view text) const;
 
@@ -243,6 +247,7 @@ class Console {
   std::deque<Entry> buffer_;
   std::vector<std::filesystem::path> search_;
   Reader reader_;
+  Reader fallback_;
   Writer writer_;
   std::function<void(std::string_view)> sink_;
   std::vector<std::string> output_;
