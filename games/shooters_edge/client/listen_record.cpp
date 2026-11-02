@@ -42,9 +42,9 @@ struct Out {
     std::memcpy(&u, &f, sizeof u);
     i32(static_cast<int32_t>(u));
   }
-  void str(const std::string& s) {
-    b.insert(b.end(), s.begin(), s.end());
-    u8(0);
+  void str(const std::string& s) {  // the text and its terminating zero, in one insert
+    const char* c = s.c_str();
+    b.insert(b.end(), c, c + s.size() + 1);
   }
   // A coordinate in eighths of a unit, an angle in 1/256 of a turn, a player's angle in 1/65536.
   void coord(float f) { i16(static_cast<int>(std::lround(f * 8))); }

@@ -183,7 +183,8 @@ TEST(a_recording_plays_back_as_the_server_had_it) {
 
 TEST(record_and_stop_write_a_file_that_plays_by_name) {
   const fs::path root = fs::temp_directory_path() / "ge_listen_record_test";
-  fs::remove_all(root);
+  std::error_code stale;
+  fs::remove_all(root, stale);  // a failed run's folder, if any
   fs::create_directories(root / "id1");
   {
     std::vector<uint8_t> pak;
@@ -217,9 +218,11 @@ TEST(record_and_stop_write_a_file_that_plays_by_name) {
   CHECK(!r.on);
   CHECK_MSG(con.output().back().find("recorded ") == 0, con.output().back());
   CHECK(fs::file_size(r.path) == static_cast<uintmax_t>(r.written));
-  std::ifstream in(r.path, std::ios::binary);
-  const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)),
-                                   std::istreambuf_iterator<char>());
+  std::vector<uint8_t> bytes;
+  {
+    std::ifstream in(r.path, std::ios::binary);  // closed here: Windows removes no open file
+    bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+  }
   CHECK(r.frames == packed().frames);  // the same session, a frame for each server frame
   // Played by its name, as `playdemo match1` finds it.
   std::vector<uint8_t> found_bytes;
@@ -240,5 +243,8 @@ TEST(record_and_stop_write_a_file_that_plays_by_name) {
   cl::ListenRecorder r2;
   CHECK(!cl::record_open(r2, l, none, "m", s, error));
   CHECK_MSG(error.find("-basedir") != std::string::npos, error);
-  fs::remove_all(root);
+  // The game folder's pack may still be open (Windows refuses to remove an open file): the
+  // error_code form leaves the scratch folder for the next run's remove_all instead of throwing.
+  std::error_code ec;
+  fs::remove_all(root, ec);
 }
