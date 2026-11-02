@@ -19,3 +19,9 @@ concepts: [gpu-cost, knockout, light-loop, light-grid, bilinear, wrap, division,
   order. `se-timedemo`'s pictures differ run to run on Metal (the flames and particles); judge
   sameness with `se-client --game=<packs> --map=e1m1` and `--game=fixture --map=arena`, which
   repeat byte for byte, against a build of `main`.
+- Register pressure is cheap to test: delete the paths a frame never takes and time it. In
+  `bsp.wgsl` the lightmaps', rebake's and weather's code cost 0.16 ms at 1440p though no pixel ran
+  them; a second pipeline from the same file with a WGSL `override` (`kLitOnly`) takes it back
+  exactly. Keep per-face paths (the teleporter's liquid) in both: only frame-wide modes can go.
+- A loop's mere presence costs too: the parallax march run for one step still cost a third of
+  the full march. Fewer steps by the texels crossed saved little (the upscaled textures are dense).

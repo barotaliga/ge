@@ -133,6 +133,11 @@ fn grid_cell(p: vec3f) -> i32 {
   return -1;
 }
 
+// The pipeline's paths (bsp_draw.cpp makes two from this file): false, every path; true, only
+// v2 lit in real time with no weather (the modern look's usual frame), so its shader carries no
+// code for the lightmaps', the rebake's or the weather's paths. The picture is the same either way.
+override kLitOnly: bool = false;
+
 const kSolid = 0u;
 const kSky = 1u;
 const kWater = 2u;
@@ -614,7 +619,7 @@ fn weathered(p: vec3f, n: vec3f, albedo: vec3f, eye_dir: vec3f) -> Weathered {
   w.sheen = vec3f(0.0);
   w.n = n;
   w.flash = 0.0;
-  if (bsp.weather.x < 0.5) {
+  if (kLitOnly || bsp.weather.x < 0.5) {
     return w;
   }
   let fall = bsp.ortho[2].z.xyz;
@@ -695,7 +700,7 @@ fn shade(in: VsOut) -> FsOut {
   var out: FsOut;
   out.motion = vec4f(0.0);
   out.mask = vec4f(0.0);
-  let classic = bsp.info.x < 0.5;
+  let classic = !kLitOnly && bsp.info.x < 0.5;
   let t = bsp.info2.x;
   var st = in.st;
   let warped = in.kind == kWater || in.kind == kSlime || in.kind == kLava || in.kind == kWarp ||
@@ -788,7 +793,7 @@ fn shade(in: VsOut) -> FsOut {
   let n = ng;
 
   // ── Rebaked: the map's light worked out again (rebake.hpp), shaded by the light's direction ──
-  if (!classic && bsp.info.y > 1.5 && in.lm2.x >= 0.0) {
+  if (!kLitOnly && !classic && bsp.info.y > 1.5 && in.lm2.x >= 0.0) {
     let raw = textureSampleLevel(rebake_dir, light_sampler, in.lm2, 0.0).xyz;
     let d = raw * (255.0 / 127.5) - vec3f(128.0 / 127.5);
     // The face's normal as the map has it (its light's direction is read against that side).
@@ -803,7 +808,7 @@ fn shade(in: VsOut) -> FsOut {
     return out;
   }
 
-  if (classic || bsp.info.y < 0.5) {
+  if (classic || (!kLitOnly && bsp.info.y < 0.5)) {
     var lit = lightmap(in.lm, in.styles) + dynamic_light(in.world);
     if (classic) {
       lit = mix(lit, max(lit, vec3f(1.0)), glow);
@@ -859,6 +864,10 @@ fn shade(in: VsOut) -> FsOut {
     var fall = window / (d2 + max(l.info.y, 0.04));
     if (l.info.x >= 0.0) {
       fall *= cube_shadow(q, reach, i32(l.info.x));
+      // wholly in its shadow: every sum below would add 0
+      if (fall <= 0.0) {
+        continue;
+      }
     }
     var spec = 0.0;
     if (shine > 0.0) {

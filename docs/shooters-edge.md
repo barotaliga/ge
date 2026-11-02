@@ -270,6 +270,10 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
   cell is one the pixel would have skipped by its reach, and the rest are summed in the same
   order, so the picture is byte for byte the same (`se-client` on e1m1 and the fixture, on the
   M3 Max). 2 m cells saved another 0.1 ms of GPU and cost more than that in binning.
+- **The lean pipeline** (the modern look): the map's draw is compiled twice from one shader, and
+  a frame lit in real time with no weather takes the copy with only that path (`bsp.wgsl`'s
+  `kLitOnly`), so its shader carries none of the lightmaps', the rebake's or the weather's code;
+  a light wholly in its cube's shadow is skipped before its highlight. The same pixels again.
 
 ### Watching a demo
 

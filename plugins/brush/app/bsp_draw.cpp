@@ -436,6 +436,15 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     desc.depthStencil = &depth;
     desc.fragment = &fragment;
     d.p_draw = pipelines.add_render(device, desc);
+    // The same with only the real-time lights' path (bsp.wgsl's kLitOnly), for the frames that
+    // take no other.
+    wgpu::ConstantEntry lit_only{};
+    lit_only.key = "kLitOnly";
+    lit_only.value = 1;
+    fragment.constantCount = 1;
+    fragment.constants = &lit_only;
+    desc.label = "bsp.draw.lit";
+    d.p_draw_lit = pipelines.add_render(device, desc);
   }
   {
     const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::bsp_fix, "bsp.sky");
@@ -891,7 +900,10 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
     desc.colorAttachments = colours;
     desc.depthStencilAttachment = &depth;
     wgpu::RenderPassEncoder pass = rec.render(encoder, desc, name);
-    pass.SetPipeline(pipelines.render(d.p_draw));
+    // v2 lit in real time with no weather (the uniform as bsp.wgsl reads it): the lean pipeline.
+    const bool lit_only =
+        d.staged.info[0] > 0.5f && d.staged.info[1] == 1.0f && d.staged.weather[0] < 0.5f;
+    pass.SetPipeline(pipelines.render(lit_only ? d.p_draw_lit : d.p_draw));
     pass.SetBindGroup(0, frame);
     pass.SetBindGroup(1, d.group);
     pass.SetVertexBuffer(0, d.vertices);
