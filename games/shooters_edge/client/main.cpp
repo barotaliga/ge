@@ -581,7 +581,6 @@ int run_main(int argc, char** argv) {
   cl::FxFrame fx;
   cl::HeldState in_hand;
   in_hand.hand.at_eye = weapons_at_eye;
-  cl::HeldState demo_hand;  // the recording player's, fresh at each of a demo's levels
   size_t printed = 0;
   const uint64_t first_ns = ge::platform::now_ns();
   uint64_t last = first_ns;
@@ -797,8 +796,6 @@ int run_main(int argc, char** argv) {
       for (const std::string& line : said) console.print(line);
       const cl::DemoState& ds = bench.demo.state;
       if (step == cl::TimedemoStep::new_level) {
-        demo_hand = {};
-        demo_hand.hand.at_eye = weapons_at_eye;
         // The game folder the recording's server ran, mounted when the window is not on it.
         std::vector<std::string> lines;
         const cl::SearchPath& from =
@@ -859,11 +856,9 @@ int run_main(int argc, char** argv) {
                                              static_cast<uint32_t>(h), surface.format());
         target = bench_off.view;
       }
-      // The demo's entities and the other players stand in it; its effects are not read yet.
-      cl::demo_placed(ds, bench_fx.models);
-      const shooters_edge::view::HandFrame demo_held =
-          cl::step_demo_held(ds, demo_hand, view_settings, weapons, view, t, wall);
-      cl::draw_world(*device, *world, view, bench_fx, &demo_held, wall, overlay, target);
+      cl::demo_placed(ds, bench_fx.models);  // its entities and other players, not its effects yet
+      const auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
+      cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
       if (!bench.paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) surface.present();
       if (bench.paced) {  // playback: every frame shown, nothing timed
