@@ -579,7 +579,6 @@ int run_main(int argc, char** argv) {
   ge::ui::Vec2 last_pointer;
   cl::FxState fx_state;
   cl::FxFrame fx;
-  // Each level's hand starts from this one, its models placed as their set was authored.
   const cl::HeldState fresh_hand{.hand = {.at_eye = weapons_at_eye}};
   cl::HeldState in_hand = fresh_hand;
   size_t printed = 0;
