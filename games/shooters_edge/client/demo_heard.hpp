@@ -46,7 +46,8 @@ class DemoHearing {
   // A level of the demo starts: its sounds read through `files` (made again when the folder
   // changed), the level's loops and the ambience over `map`.
   void level(const DemoState& s, const SearchPath& files, const ge::brush::Map* map);
-  // One drawn frame: what `h` gathered played, its lines appended to `lines` and its centre
+  // One drawn frame: what `h` gathered played, its ended lines appended to `lines` (a line's
+  // start printed without its newline waits for the rest, from later prints) and its centre
   // message (if any, its lines on one line) in `centre`; `h` emptied. `dt` moves the ambience, s.
   // True when a centre message came (the caller shows it for a while).
   bool frame(const DemoState& s, DemoHeard& h, float dt, std::vector<std::string>& lines,
@@ -59,6 +60,7 @@ class DemoHearing {
   const SearchPath* files_ = nullptr;
   std::unique_ptr<DemoSounds> sounds_;
   std::unique_ptr<DemoVoices> voices_;
+  std::string partial_;  // printed text not yet ended by a newline
 };
 
 }  // namespace shooters_edge::client
