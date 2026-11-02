@@ -115,6 +115,9 @@ struct WaterDraw {
 struct WaterViews {
   int body = -1;       // the body they are of; -1: none
   bool below = false;  // the mirror is of the water under the level (the eye is under it)
+  // m: the level the mirror lies in; from over the surface every body at this level (within a
+  // centimetre: a pool a bridge splits into two) reads it, since one plane mirrors them all.
+  double level = 0;
   bool has_mirror = false, has_up = false;
   wgpu::TextureView mirror, mirror_depth, up;
   float up_view_proj[16] = {};

@@ -186,6 +186,7 @@ r::WaterViews water_views(const BspViews& views) {
   if (!views.mirror.on) return w;
   w.body = views.body;
   w.below = views.below;
+  w.level = views.level;
   w.has_mirror = true;
   w.mirror = views.mirror.colour_view;
   w.mirror_depth = views.mirror.depth_view;

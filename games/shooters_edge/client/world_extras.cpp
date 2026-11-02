@@ -174,7 +174,7 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   ba::prepare_bsp_views(d, x.views, uniforms, body, level, body >= 0 && eye_in == body);
   const gr::WaterViews handed = ba::water_views(x.views);
   if (handed.body != x.handed.body || handed.below != x.handed.below ||
-      handed.has_up != x.handed.has_up) {
+      handed.has_up != x.handed.has_up || handed.level != x.handed.level) {
     x.handed = handed;
     gr::set_water_views(d, x.water, x.handed);
   }

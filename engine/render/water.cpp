@@ -115,13 +115,21 @@ void upload_waves(gpu::Device& device, Water::Slot& slot, const water::Body& bod
 
 // A body's group: its uniform, waves and rings, the scene's copies, its shore, and the game's views
 // where they are of it (else the blank stand-ins).
+// Whether the game's mirror serves this body: it is the one the views are of, or (seen from over
+// the surface) it lies in the mirror's plane.
+bool mirrored(const WaterViews& v, const Water::Slot& slot, int index) {
+  if (!v.has_mirror) return false;
+  if (v.body == index) return true;
+  return !v.below && std::fabs(slot.staged.info[0] - v.level) < 0.01;
+}
+
 void bind_body(gpu::Device& device, const Water& water, Water::Slot& slot, int index) {
   if (!water.scene_colour_view) return;
   const WaterViews& v = water.views;
   const bool ours = v.body == index;
-  const wgpu::TextureView mirror = ours && v.has_mirror ? v.mirror : water.blank_colour_view;
-  const wgpu::TextureView mirror_depth =
-      ours && v.has_mirror ? v.mirror_depth : water.blank_depth_view;
+  const bool mirror_on = mirrored(v, slot, index);
+  const wgpu::TextureView mirror = mirror_on ? v.mirror : water.blank_colour_view;
+  const wgpu::TextureView mirror_depth = mirror_on ? v.mirror_depth : water.blank_depth_view;
   const wgpu::TextureView up = ours && v.has_up ? v.up : water.blank_colour_view;
   slot.group =
       make_group(device, "water", water.layout,
@@ -468,7 +476,7 @@ void prepare_water(gpu::Device& device, Water& water, const FrameView& view, int
     if (index == water.eye_under) slot.shown = false;
     const WaterViews& v = water.views;
     const bool ours = v.body == index;
-    b.view[0] = ours && v.has_mirror ? (v.below ? 2.0f : 1.0f) : 0.0f;
+    b.view[0] = mirrored(v, slot, index) ? (v.below ? 2.0f : 1.0f) : 0.0f;
     b.view[1] = ours && v.has_up ? 1.0f : 0.0f;
     std::memcpy(b.up_view_proj, v.up_view_proj, sizeof b.up_view_proj);
     if (slot.shown && inside && view.eye[1] < b.info[0] + kWaterlineBand && water.eye_near < 0) {
