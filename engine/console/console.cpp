@@ -225,6 +225,8 @@ void Console::set_files(Reader read, Writer write) {
   writer_ = std::move(write);
 }
 
+void Console::set_fallback_reader(Reader read) { fallback_ = std::move(read); }
+
 bool Console::read_file(std::string_view name, std::string& text) const {
   if (reader_) return reader_(name, text);
   std::vector<std::filesystem::path> dirs = search_;
@@ -237,7 +239,7 @@ bool Console::read_file(std::string_view name, std::string& text) const {
     text = ss.str();
     return true;
   }
-  return false;
+  return fallback_ && fallback_(name, text);
 }
 
 bool Console::write_file(std::string_view name, std::string_view text) const {

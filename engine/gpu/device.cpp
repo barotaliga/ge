@@ -9,9 +9,18 @@
 // ge:test tests/gpu_device_test.cpp
 #include "gpu/device.hpp"
 
+#include <cstdlib>
+#include <cstring>
 #include <vector>
 
 #include "core/output.hpp"
+
+#if defined(_WIN32)
+#define NOMINMAX
+#include <windows.h>
+
+#include <dawn/native/DawnNative.h>
+#endif
 
 namespace ge::gpu {
 
@@ -83,6 +92,32 @@ wgpu::Adapter request_adapter(wgpu::Instance& instance, bool fallback) {
   return adapter;
 }
 
+#if defined(_WIN32)
+// Dawn opens a library at each of its search paths plus the name, the last path being none, and
+// Windows refuses a bare name with the flags Dawn passes (error 87). So d3dcompiler_47.dll and
+// vulkan-1.dll load only from a path named in full: System32, ending in its separator.
+std::string system32_dir() {
+  char dir[MAX_PATH];
+  const UINT n = GetSystemDirectoryA(dir, MAX_PATH);
+  if (n == 0 || n >= MAX_PATH) return {};
+  return std::string(dir, n) + "\\";
+}
+#endif
+
+// Whether an environment variable is "1" (MSVC deprecates std::getenv in favour of its own).
+bool env_on(const char* name) {
+#ifdef _MSC_VER
+  char* v = nullptr;
+  size_t n = 0;
+  const bool on = _dupenv_s(&v, &n, name) == 0 && v != nullptr && std::strcmp(v, "1") == 0;
+  std::free(v);
+  return on;
+#else
+  const char* v = std::getenv(name);
+  return v && std::strcmp(v, "1") == 0;
+#endif
+}
+
 }  // namespace
 
 std::string to_string(wgpu::StringView s) {
@@ -109,11 +144,26 @@ std::string_view feature_name(Feature f) {
 }
 
 std::unique_ptr<Device> create_device(const DeviceOptions& options) {
+  // GE_GPU_OFF=1 makes no device, so GPU tests and labs skip as on a machine with no adapter. CI's
+  // Windows row sets it: its runner's adapter (no GPU, drawn on the CPU) runs the GPU labs past the
+  // row's time limit.
+  if (env_on("GE_GPU_OFF")) {
+    out::info(
+        "gpu: no device: GE_GPU_OFF=1 is set; unset it to use this machine's adapter; skill: gpu.");
+    return nullptr;
+  }
   auto dev = std::make_unique<Device>();
   static constexpr wgpu::InstanceFeatureName kTimedWait = wgpu::InstanceFeatureName::TimedWaitAny;
   wgpu::InstanceDescriptor instance_desc{};
   instance_desc.requiredFeatureCount = 1;
   instance_desc.requiredFeatures = &kTimedWait;
+#if defined(_WIN32)
+  const std::string system32 = system32_dir();
+  std::string_view search_paths[] = {system32};
+  dawn::native::DawnInstanceDescriptor dawn_desc;
+  dawn_desc.additionalRuntimeSearchPaths = search_paths;
+  instance_desc.nextInChain = &dawn_desc;
+#endif
   dev->instance = wgpu::CreateInstance(&instance_desc);
   if (!dev->instance) {
     out::error(

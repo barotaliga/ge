@@ -109,6 +109,20 @@ Measured with `build/release/labs se-timedemo --basedir=<the shareware game> --d
 What is left is the map's colour pass (`bsp`, 76 ms of the 127 here): the filtered texels, up to
 160 lights a pixel and their cube shadows, and the sun's and the sky's maps.
 
+On the M3 Max (Metal), `--size=2560,1440 --look=modern` on the shareware game's demo1, release
+build, the GPU span's median over three runs each. The parts were found by switching each off in
+a scratch build: every light's test in the loop 2.6 ms of 7.5, the parallax march 0.38, the
+highlights 0.27, the albedo's filter taps 0.23. Both rows draw every picture byte for byte the
+same (`se-client` on e1m1 and on the fixture, against `main`'s, on the Mac).
+
+| Change | GPU span (median ms) | Frame (median ms) | Average fps | Where |
+| --- | --- | --- | --- | --- |
+| A bilinear tap wraps its texel once and finds its neighbours by compare, not four wraps of two divisions each (the albedo's filter and the relief's march) | 7.52 → 7.36 | | | `brush/app/bsp.wgsl` |
+| The light grid: a pixel loops over the lights its 4 m world cell lists, not all of the frame's up to 160 (2 m cells: 0.1 ms less GPU, more than that in binning) | 7.36 → 5.08 | 8.48 → 6.26 | 114 → 157 | `brush/app/bsp_draw.cpp`, `bsp.wgsl` |
+
+At 1280x720 the span went from 2.15 to 1.75 ms, but the frame stayed at 3.0 ms: there the
+frame waits on the CPU.
+
 ## The flow step on threads
 
 `water::step_flow` splits its rows over `core::parallel_bands`. On the persistent pool a call

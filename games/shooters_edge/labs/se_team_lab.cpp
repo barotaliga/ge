@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "brush/write.hpp"
@@ -33,6 +34,7 @@
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/classic_team.hpp"
 
@@ -74,7 +76,7 @@ void run(gl::Lab& lab) {
   std::string error;
   std::vector<uint8_t> bytes;
   std::string name = "halls";
-  std::string locs_text, locs_from;
+  ge::shooter::Locs locs;  // the place names: --locs's file, else the game's (its adapter's)
   if (!lab.arg("locs").empty()) {
     std::FILE* lf = std::fopen(lab.arg("locs").c_str(), "rb");
     if (!lf) {
@@ -83,11 +85,12 @@ void run(gl::Lab& lab) {
                "the items");
       return;
     }
+    std::string text;
     char buf[4096];
     size_t got = 0;
-    while ((got = std::fread(buf, 1, sizeof buf, lf)) > 0) locs_text.append(buf, got);
+    while ((got = std::fread(buf, 1, sizeof buf, lf)) > 0) text.append(buf, got);
     std::fclose(lf);
-    locs_from = lab.arg("locs");
+    if (ge::shooter::parse_locs(text, locs) > 0) locs.from = lab.arg("locs");
   }
   if (!basedir.empty()) {
     cl::SearchPath files;
@@ -104,13 +107,9 @@ void run(gl::Lab& lab) {
       return;
     }
     bytes.assign(f.begin(), f.end());
-    // The map's place names, when the game folder holds them (locs/<map>.loc).
-    std::vector<uint8_t> loc_store;
-    const std::span<const uint8_t> lf = cl::find_file(files, "locs/" + name + ".loc", loc_store);
-    if (!lf.empty()) {
-      locs_text.assign(lf.begin(), lf.end());
-      locs_from = "locs/" + name + ".loc";
-    }
+    // The map's place names, when the game's files hold them (the first game's locs/<map>.loc).
+    const cl::GameAdapter& game = cl::classic_adapter();
+    if (locs.points.empty()) game.open_locations(game, files, name, locs);
   } else if (!ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bytes,
                                    &error)) {
     lab.fail("se-team: the fixture halls: " + error, "next: run tests/brush_write_test.cpp");
@@ -127,8 +126,7 @@ void run(gl::Lab& lab) {
   o.map = bytes;
   o.map_name = name;
   if (basedir.empty()) o.entities = cn::kTeamHallsEntities;
-  o.locs = locs_text;
-  o.locs_from = locs_from;
+  o.locs = std::move(locs);
   o.progs = &progs;
   o.seed = seed;
   // The temperaments, red's then blue's, a letter or a word each (a, b, c), comma separated.

@@ -88,7 +88,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/held.hpp"
-#include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/scores.hpp"
@@ -302,6 +302,8 @@ int run_main(int argc, char** argv) {
   console.cvars().apply_latched();
 
   cl::SearchPath files;
+  cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
+  cl::add_record_commands(console, recorder, listen, files, playback.record);
   std::string error;
   if (!cl::open_game_dir(args.basedir, args.game, files, error)) {
     out::error("shooters_edge: the game folder did not open: " + error +
@@ -318,6 +320,7 @@ int run_main(int argc, char** argv) {
   shooters_edge::menu::Host menu_host{.console = &console,
                                       .maps = adapter.list_maps(adapter, files)};
   cl::add_adapter_commands(console, adapter, files, args.basedir);
+  cl::read_configs_from(console, adapter, files);  // `exec` finds a cfg in the game's packs too
   menu_host.maps.emplace_back("arena");
   // ce_pictures: the menu's and the status bar's pictures enhanced from the packs' cache; read
   // again when it flips and when a map loads (client/classic_pictures.hpp).
@@ -893,6 +896,7 @@ int run_main(int argc, char** argv) {
     // A single-player game waits while the console or the menu is up.
     const bool paused = listen.campaign_host && (con_view.open() || game_menu.open());
     const int frames = paused ? 0 : cl::listen_advance(listen, wall, cmd);
+    cl::record_tick(recorder, listen, frames, console);
     if (!listen.failed.empty()) {
       out::error("shooters_edge: the campaign's next map did not start: " + listen.failed +
                  "; see docs/shooters-edge.md § Playing it");

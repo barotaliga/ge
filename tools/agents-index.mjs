@@ -27,7 +27,7 @@ const SKILLS = ".agents/skills";
 // Which tracked files must carry a block. Everything an agent edits as code.
 const TAGGED = [
   "engine/**.hpp", "engine/**.cpp", "plugins/**.hpp", "plugins/**.cpp", "games/**.hpp", "games/**.cpp",
-  "tests/*.hpp", "tests/*.cpp", "tools/**.mjs", "tools/**.sh", "porting/**.mjs",
+  "tests/*.hpp", "tests/*.cpp", "tools/**.mjs", "tools/**.sh", "tools/**.ps1", "porting/**.mjs",
 ];
 const REQUIRED = ["summary", "keywords", "skill"];
 const KNOWN = new Set([...REQUIRED, "test"]);

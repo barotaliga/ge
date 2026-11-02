@@ -175,8 +175,8 @@ bool classic_art_from_packs(const FileFind& find, HudArt* out, std::string* erro
     ui::Image big;
     const uint32_t k = upgrade ? upgrade(name, p.width, p.height, &big) : 0;
     if (density == 0) density = k == 0 ? 1 : k;
-    if (k == density && k > 1)
-      *img = std::move(big);
+    if (k > 0 && density % k == 0)  // a copy at the set's density, or a whole step under it
+      *img = ui::scaled_nearest(big, static_cast<int>(density / k));
     else
       *img = ui::scaled_nearest(*img, static_cast<int>(density));
     return true;

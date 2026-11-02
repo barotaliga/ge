@@ -91,3 +91,46 @@ get_filename_component(Dawn_DIR "${ge_dawn_config}" DIRECTORY)
 find_package(Threads REQUIRED)
 find_package(Dawn CONFIG REQUIRED NO_DEFAULT_PATH PATHS "${Dawn_DIR}")
 find_program(GE_TINT NAMES tint PATHS "${GE_DAWN_DIR}/bin" NO_DEFAULT_PATH)
+
+# Dawn's D3D12 backend compiles shaders with DXC: it loads dxcompiler.dll from beside the
+# executable, and dxcompiler.dll loads its validator, dxil.dll, the same way. The prebuilt archive
+# carries neither, so the Windows SDK's copies go beside every executable, as a shipped game
+# carries them. Called at the end of the top-level CMakeLists.txt, once every executable exists.
+function(ge_dxc_beside_executables)
+  file(TO_CMAKE_PATH "$ENV{WindowsSdkVerBinPath}x64" sdk_bin)
+  find_file(GE_DXCOMPILER dxcompiler.dll HINTS "${GE_DAWN_DIR}/bin" "${sdk_bin}" NO_DEFAULT_PATH)
+  find_file(GE_DXIL dxil.dll HINTS "${GE_DAWN_DIR}/bin" "${sdk_bin}" NO_DEFAULT_PATH)
+  if(NOT GE_DXCOMPILER OR NOT GE_DXIL)
+    message(WARNING "ge: no dxcompiler.dll and dxil.dll in the Windows SDK (${sdk_bin}), so "
+      "Dawn's D3D12 backend creates no device. Configure in MSVC's x64 environment (vcvars64), "
+      "which names the SDK; skill: gpu.")
+    return()
+  endif()
+  _ge_executable_dirs("${PROJECT_SOURCE_DIR}" dirs)
+  list(REMOVE_DUPLICATES dirs)
+  foreach(dir IN LISTS dirs)
+    file(COPY "${GE_DXCOMPILER}" "${GE_DXIL}" DESTINATION "${dir}")
+  endforeach()
+endfunction()
+
+# Where the executables defined in a directory and the directories under it are written.
+function(_ge_executable_dirs dir out)
+  set(dirs "")
+  get_property(targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+  foreach(t IN LISTS targets)
+    get_target_property(type ${t} TYPE)
+    if(type STREQUAL "EXECUTABLE")
+      get_target_property(exe_dir ${t} RUNTIME_OUTPUT_DIRECTORY)
+      if(NOT exe_dir)
+        get_target_property(exe_dir ${t} BINARY_DIR)
+      endif()
+      list(APPEND dirs "${exe_dir}")
+    endif()
+  endforeach()
+  get_property(subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+  foreach(sub IN LISTS subdirs)
+    _ge_executable_dirs("${sub}" sub_exe_dirs)
+    list(APPEND dirs ${sub_exe_dirs})
+  endforeach()
+  set(${out} ${dirs} PARENT_SCOPE)
+endfunction()

@@ -39,6 +39,16 @@ set(GE_DEPS_DIR "${PROJECT_SOURCE_DIR}/.cache/deps" CACHE PATH
 # x86 assembly needs nasm (tools/setup-ubuntu.sh installs it). Without it libaom is built as
 # plain C: the same bitstream, several times slower to encode.
 find_program(GE_NASM nasm)
+# libaom's configure refuses a nasm whose `-hf` help lists no -Ox (NASM 3), so that one counts as
+# none rather than stopping the configure.
+if(GE_NASM)
+  execute_process(COMMAND "${GE_NASM}" -hf OUTPUT_VARIABLE _ge_nasm_help ERROR_QUIET)
+  if(NOT _ge_nasm_help MATCHES "-Ox")
+    message(STATUS "ge: ${GE_NASM} is a nasm libaom ${GE_AOM_VERSION} refuses (NASM 3); install "
+      "NASM 2.16 for its x86 assembly (tools/setup-windows.ps1 pins it)")
+    set(GE_NASM "")
+  endif()
+endif()
 set(_ge_codec_cpu "")
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|i.86)$" AND NOT GE_NASM)
   set(_ge_codec_cpu "generic")
@@ -112,6 +122,11 @@ if(GE_NASM)
 endif()
 if(_ge_codec_cpu)
   list(APPEND _ge_aom_args -DAOM_TARGET_CPU=${_ge_codec_cpu})
+endif()
+# libaom's configure needs perl; a Windows with none on PATH has Git for Windows' own.
+find_program(GE_PERL perl PATHS "$ENV{ProgramW6432}/Git/usr/bin" "$ENV{ProgramFiles}/Git/usr/bin")
+if(GE_PERL)
+  list(APPEND _ge_aom_args "-DPERL_EXECUTABLE=${GE_PERL}")
 endif()
 ge_codec_build(aom ${GE_AOM_VERSION} ${GE_AOM_SHA256}
   "https://storage.googleapis.com/aom-releases/libaom-${GE_AOM_VERSION}.tar.gz" ${_ge_aom_args})

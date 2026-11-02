@@ -2,12 +2,14 @@
 // packs, zips and loose files with QC programs for the server, its maps carry their textures'
 // pixels, its models are the classic families (plugins/morph, plugins/brush) with a picture file
 // standing in for a skin, its sounds WAV files under `sound/`, and its demos are the recordings
-// client/demo.hpp reads.
+// client/demo.hpp reads; its config files are console text in its packs and its place names
+// `locs/<map>.loc`.
 //
 // ge:summary The first classic game's adapter: mod folders, QC programs, maps, pictures, demos
 // ge:keywords classic-adapter list_mods find_program list_maps map_info map_textures list_demos
 // ge:keywords find_demo open_demo mod-folder qwprogs replacement-texture png tga open_model
-// ge:keywords open_sound replacement-skin mdl spr wav
+// ge:keywords open_sound replacement-skin mdl spr wav pictures replacement-picture gfx-wad lmp
+// ge:keywords find_config cfg open_locations loc-file
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #include <algorithm>
@@ -20,12 +22,15 @@
 #include "assets/image.hpp"
 #include "assets/tga.hpp"
 #include "brush/read.hpp"
+#include "classicenhance/cached.hpp"
 #include "core/output.hpp"
 #include "morph/read.hpp"
 #include "progs/layout.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/timedemo.hpp"
+#include "shooters_edge/hud/classic_art.hpp"
+#include "shooters_edge/menu/classic_art.hpp"
 #include "vfs/search.hpp"
 
 namespace shooters_edge::client {
@@ -223,6 +228,29 @@ bool open_sound(const GameAdapter&, const SearchPath& files, const std::string& 
   return ge::audio::read_wav(bytes, path, &out, &error);
 }
 
+bool find_config(const GameAdapter&, const SearchPath& files, std::string_view name,
+                 std::string& text) {
+  if (name.empty() || name.find("..") != std::string_view::npos) return false;  // in the files
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> bytes = find_file(files, name, store);
+  if (bytes.empty()) return false;
+  text.assign(bytes.begin(), bytes.end());
+  return true;
+}
+
+bool open_locations(const GameAdapter&, const SearchPath& files, std::string_view map,
+                    ge::shooter::Locs& out) {
+  std::string path = "locs/";
+  path.append(map).append(".loc");
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> bytes = find_file(files, path, store);
+  if (bytes.empty()) return false;
+  const std::string_view text(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+  if (ge::shooter::parse_locs(text, out) == 0) return false;
+  out.from = path;
+  return true;
+}
+
 std::vector<ge::brush::MapPicture> map_textures(const GameAdapter&, const SearchPath& files,
                                                 std::string_view map,
                                                 std::span<const uint8_t> map_file,
@@ -231,6 +259,54 @@ std::vector<ge::brush::MapPicture> map_textures(const GameAdapter&, const Search
   std::vector<ge::brush::MapPicture> out = ge::brush::read_map_pictures(map_file);
   for (ge::brush::MapPicture& p : out)
     if (!p.name.empty()) replace_picture(files, map, p);
+  return out;
+}
+
+ClassicPictures pictures(const GameAdapter&, const SearchPath& files, bool enhance,
+                         const fs::path& cache_root) {
+  ClassicPictures out;
+  out.enhanced = enhance;
+  if (enhance && !content_packs(files).empty())
+    out.cache = ge::classicenhance::find_cache(content_packs(files), cache_root);
+  const auto find = [&files](std::string_view p, std::vector<uint8_t>& store) {
+    return find_file(files, p, store);
+  };
+  const fs::path& dir = out.cache;
+  // A picture's copy by its cache name ("sbar", "conchars", "gfx/qplaque"): a PNG or TGA of its
+  // name under gfx/ when its size is a whole multiple of the pack's, else the cache's.
+  const auto upgrade = [&files, &dir](std::string_view name, int w, int h, ge::ui::Image* img) {
+    std::string base(name);
+    if (base.rfind("gfx/", 0) == 0) base.erase(0, 4);
+    const std::string stem[] = {"gfx/" + base};
+    std::optional<ge::assets::Image> own = stand_in(files, stem, "the pack's own " + base);
+    if (own && w > 0 && h > 0) {
+      const int k = own->width / w;
+      if (k >= 1 && own->width == k * w && own->height == k * h) {
+        img->width = own->width;
+        img->height = own->height;
+        img->rgba = std::move(own->rgba);
+        return static_cast<uint32_t>(k);
+      }
+      ge::core::output::status("shooters_edge: gfx/" + base + "'s picture is " +
+                               std::to_string(own->width) + " x " + std::to_string(own->height) +
+                               ", not a whole multiple of the pack's " + std::to_string(w) + " x " +
+                               std::to_string(h) +
+                               "; next: save it at that size or a "
+                               "multiple of it");
+    }
+    if (dir.empty()) return uint32_t{0};
+    ge::assets::Image big;
+    const uint32_t k = ge::classicenhance::cached_picture(dir, name, static_cast<uint32_t>(w),
+                                                          static_cast<uint32_t>(h), &big);
+    if (k == 0) return k;
+    img->width = big.width;
+    img->height = big.height;
+    img->rgba = std::move(big.rgba);
+    return k;
+  };
+  std::string error;
+  if (!menu::load_classic_art(find, &out.menu, &error, upgrade)) out.menu = {};
+  if (!hud::classic_art_from_packs(find, &out.hud, &out.hud_why, upgrade)) out.hud = {};
   return out;
 }
 
@@ -265,6 +341,9 @@ const GameAdapter kClassic{.game = &pf::kGameProfiles[0],
                            .map_textures = map_textures,
                            .open_model = open_model,
                            .open_sound = open_sound,
+                           .pictures = pictures,
+                           .find_config = find_config,
+                           .open_locations = open_locations,
                            .list_demos = list_demos,
                            .find_demo = find_demo_,
                            .open_demo = open_demo_};

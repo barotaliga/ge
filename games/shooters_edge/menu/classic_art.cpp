@@ -231,7 +231,8 @@ bool load_classic_art(const FindFile& find, ClassicArt* out, std::string* error,
     ui::Image big;
     const uint32_t k = upgrade ? upgrade(cache_name, p.width, p.height, &big) : 0;
     if (density == 0) density = k == 0 ? 1 : k;
-    if (k == density && k > 1) return big;
+    if (k > 0 && density % k == 0)  // a copy at the set's density, or a whole step under it
+      return ui::scaled_nearest(big, static_cast<int>(density / k));
     return ui::scaled_nearest(img, static_cast<int>(density));
   };
   out->glyphs = picture("conchars", glyphs, 0);

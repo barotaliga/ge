@@ -264,6 +264,12 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
   and kept while it stays; at most two new cubes a frame (`Options::fresh_cubes`), the rest of a
   room's torches unshadowed for the frames until their turn, so walking into a room costs no
   frame more than two cubes; a dynamic light (a flash, a rocket) lights without a shadow.
+- **The light grid** (the modern look): the frame's up to 160 lights are binned on the CPU into
+  4 m world cells round the eye (32 x 16 x 32), each cell listing the lights whose reach touches
+  it, in order; a pixel loops over its cell's lights only, not all of them. A light left out of a
+  cell is one the pixel would have skipped by its reach, and the rest are summed in the same
+  order, so the picture is byte for byte the same (`se-client` on e1m1 and the fixture, on the
+  M3 Max). 2 m cells saved another 0.1 ms of GPU and cost more than that in binning.
 
 ### Watching a demo
 
@@ -594,7 +600,10 @@ files shares: `engine/vfs` (folders, packs, zips, loose files, a mod over the ba
 | **maps** (`list_maps`, `map_info`) | BSP 29 or BSP2, the title the world's message | BSP 38 | BSP 46 |
 | **textures** (`map_textures`) | the map carries its pictures (`plugins/brush/pictures.hpp`); a PNG or TGA by the texture's name stands in, alpha and all (`textures/<map>/<name>`, then `textures/<name>`) | its own picture files beside the map, by the texture's name | shaders over picture files |
 | **models** (`open_model`) | `.mdl` into the shared vertex-animated form (`plugins/morph`), `.spr` sprites, `.bsp` items; a PNG or TGA beside a model stands in for a skin, alpha and all (`progs/player.mdl_0.png`) | its own model files (with `.pcx` skins in a folder a player model) read into the same form | its own model files (a body of head, upper and lower parts, `.skin` files) read into the same form |
+| **pictures** (`pictures`) | the graphics archive's lumps and `gfx/*.lmp` in the palette's colours; a PNG or TGA of a picture's name under `gfx/` stands in, alpha and all, at its size or a whole multiple of it | its own picture files (`.pcx`) | its own picture files and shaders |
 | **sounds** (`open_sound`) | WAV files under `sound/` | WAV files under `sound/` | WAV files and other formats under `sound/` |
+| **config files** (`find_config`) | console text at the top of its packs and its mod folder (`exec mymod.cfg`) | the same | the same, inside its zips |
+| **place names** (`open_locations`) | `locs/<map>.loc` (`plugins/shooter/locs.hpp`'s format) | none of its own: named off the map's items | none of its own: named off the map's items |
 | **demos** (`list_demos`, `find_demo`, `open_demo`) | the single-player, client and multiview recordings (`client/demo.hpp`) | its own recording format | its own |
 
 **Every program file names its form and its side** (`ProgramFile` in `profiles/game_profile.hpp`:
@@ -612,14 +621,78 @@ Morph meshes), and a skin picture carries no tint rows, so it is drawn in its ow
 weapons lying about, the players and their skins. A later game's model families are new readers
 into the same shared forms, so the window that draws them does not change.
 
-**Still to move behind calls of their own**, each in its own change: the held weapons' models
-from the game's files (the window holds the game's own set today); the HUD's and the menus'
-pictures; the config files and the location files.
+The HUD's and the menus' pictures come through `pictures`: a picture file of a picture's name
+wins over classic-enhance's upscaled copy, and the set keeps one density (the first picture's
+scale; a copy at a whole step under it is scaled up nearest, any other picture is the pack's
+scaled up), so a player can swap the status bar or the glyph sheet alone (lab `se-pictures`).
 
-**The next seam, when the sequel starts: a rules runner.** The listen server and the dedicated
-server hold the QC server (`server/qc_server.hpp`) itself today. A second program form needs them
-to hold a runner (start a map, run a frame, connect and drop a player, the server's commands) that
-the QC server is one implementation of; the sequel's rules are the second, run by the same host.
+A config file the console's `exec` names is looked for in the player's settings folder, then the
+folder the game runs in, then the game's files through `find_config` (`read_configs_from`, the
+console's fallback reader), so a mod's own cfg in its pack runs and the player's copy of a name
+wins. The startup files (`default.cfg`, `config.cfg`, `autoexec.cfg`) run before the game's
+files open, so the pack's own startup files never replace the game's defaults or the player's
+binds. A map's place names (the teamplay callouts, the bots' talk) come through
+`open_locations` into `ge::shooter::Locs`; with none, the bots name places off the map's items.
+
+**Still to move behind a call of its own**, in its own change: the held weapons' models from the
+game's files (the window holds the game's own set today).
+
+### The rules runner: the next seam (designed, not built)
+
+The adapter answers what a game's FILES hold. What its RULES do is the other half: the listen
+server, the dedicated server, the campaign, the bots and the recorder all hold the QC server
+(`server/qc_server.hpp`) itself today. A second program form (the sequel's native rules, a
+sandboxed bytecode, the engine's C++ mod as the whole game) needs them to hold a **runner**
+instead, of which the QC server is the first implementation. This is the design; it is built when
+the sequel's rules start (M18t4), not before.
+
+**What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
+groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start
+maps, run frames, connect and drop players and read the model and sound lists, the static
+entities, the clients' info, the server info and the message sink. The bots (`bots/`) read each
+entity's origin, bounds, view angle and health off the loop's entities (`sv.edicts`, about 60 places)
+and a few fields straight out of the VM (`q.vm`, `q.layout`: frags, the weapon frame). The
+scoreboard and the recorder (`client/scores.cpp`, `net/classic_record.cpp`) read the frags and
+each entity's model, frame, skin, colours and effects through the program's layout.
+
+**The runner is a table of calls, like the adapter**, chosen by the program form `find_program`
+found (`runs_form` grows a runner per form):
+
+| Call | What it does | The QC server's answer |
+| --- | --- | --- |
+| `start` | a map loaded under the settings, its spawn functions run | `load_map` |
+| `connect`, `drop` | a player or spectator joins or leaves a slot | `connect`, `disconnect` |
+| `frame` | one server frame over the frame's packets, in slot order | `qc_frame` |
+| `command` | a client's command or a console line | `commands.hpp` |
+| `carry` | the players' state kept across a level change | `save_change_parms` |
+| `world` | the shared view below, filled at the end of each frame | built from `sv`, `q.vm` |
+
+**The shared view (`RulesWorld`) is what every reader moves onto.** One struct the runner fills
+and the host, the bots, the wire and the recorder only read: the map's name; the model, sound and
+visible-weapon lists; the static entities and sounds; the light styles; the server info; each
+client's info, frags, stats and slot; and one row an entity (origin, angles, bounds, velocity,
+model index, frame, skin, colours, effects, alpha, health, free or not), in the entity's index
+order, so a later game's entities map onto the same rows. The rows live in arrays sized once at
+`start` and rewritten in place each frame: no allocation and no virtual call on the frame's path,
+and the copy is measured with `se-loop` before and after. The message sink stays the wire's: the
+runner writes the same messages, so the client and the demos do not change.
+
+**It lands in steps, each with the digests unchanged** (the QC server stays the only runner until
+the last):
+
+1. `RulesWorld` and the QC server filling it each frame (`se-loop`, `se-server` digests the same,
+   the frame's cost measured).
+2. The scoreboard, the recorder and the wire's entity states read the view, never the layout.
+3. The bots read the view (`se-bots`, `se-team`, `se-hop` digests the same): the largest group.
+4. The host holds a runner (a table pointer and its state) where it held a `QcServer`; the
+   campaign and the dedicated server the same.
+5. The sequel's rules as a second runner (M18t4), with its own program form; nothing in steps 1
+   to 4 names it.
+
+**What stays QC-only**: the QC VM's own tools (`ge qc`, the profile, the fault traces), the
+extension catalogue and the C++ mods' hooks over a QC program (§ C++ mods), which are hooks on the
+QC runner, not on every runner. A runner a later game brings reports its own faults through the
+same `out::` lines.
 
 ### Weapons and armour: an arsenal of their own
 
@@ -1108,6 +1181,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-bots` | scenario | Whether fighters play the baseline mod's deathmatch like players: four fighters on the arena, the trails, items and deaths from above, each one's mode through the match as a strip, the frags against time, and a table of frags, deaths, shots, pickups, switches, the share in each mode and the weapon held most (built, M18r4) |
 | `se-moves` | sim | A demo's player followed through a real map (`--file`, `--player`, `--map` or `--basedir`): the map as a wireframe from above and at an angle with his path coloured by speed and his jumps marked chained or not, the longest chain close up with the view's ticks, the chain's speed and turn against the most the move allows, a chase view from inside the map and its GIF, every player's hops tabled, the lag and ground-frame histograms; on the fixture halls without a demo (built, M18r12) |
 | `se-hop` | scenario | The demo player's longest trips replayed by the pilot from his start and speed: walk, strafe, the expert hop, the average's simple hop, the hop with human hands, the ideal hop, each one's time and hop reading against his; the trips from above and from inside; trips his time beats the bots' by a quarter flagged as tricks or shortcuts (built, M18r12) |
+| `se-kills` | sim | Kills and rocket flights compiled from many demos of one map (`--dir`, `--map`, `--weapon`): every kill as a line from killer to victim over the wireframe, added up into a density, from above and at an angle; the GOLD SHOTS (killer and victim in the same `--cell` cubes at least `--gold` times) as numbered arrows with their xyz tabled; one small map a weapon; heat of deaths and of rocket and grenade landings; every flight, hit or miss, with the lanes flown most; the top gold shot from inside the map; distances by weapon; `kills.tsv` and `gold.tsv` for a bot's tables; four scripted matches on the fixture halls without demos (built, M18r13) |
 | `se-lobby` | sim | The warmup on the listen server: bots seated on teams, the free roam, ready, break, the countdown and the map restarted for a clean match (built, M18q1); later clients find a hosted game on the LAN and through the rendezvous, fill the lobby, chat, start, play and return, and a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections (the compatible server half built, M18g: scripted clients under every preset, bytes a second, loss, downloads, the digest) |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |

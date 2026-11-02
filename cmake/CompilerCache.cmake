@@ -4,7 +4,7 @@
 #
 # A launcher already chosen wins: -DCMAKE_CXX_COMPILER_LAUNCHER=..., or the environment variable
 # of the same name (CI sets it). -DGE_CCACHE=OFF compiles without a cache. Install one with
-# `tools/setup-macos.sh` (macOS), `tools/setup-ubuntu.sh` (Linux) or `choco install ccache`
+# `tools/setup-macos.sh` (macOS), `tools/setup-ubuntu.sh` (Linux) or `tools/setup-windows.ps1`
 # (Windows); `ccache --show-stats` says how many compiles it saved. docs/architecture.md § The
 # build has the measurements.
 #
