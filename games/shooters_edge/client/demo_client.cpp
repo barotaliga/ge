@@ -237,7 +237,8 @@ void player_info(Demo& d, DemoMsg& m) {
   }
   for (int i = 0; i < 3; i++)
     if ((flags & (0x4 << i)) != 0) m.i16();  // velocity
-  p.model = (flags & 0x20) != 0 ? m.u8() : 0;
+  // A model left out is the server's player model (`progs/player.mdl`), not none.
+  p.model = (flags & 0x20) != 0 ? m.u8() : d.player_model;
   if ((flags & 0x40) != 0) p.skin = m.u8();
   if ((flags & 0x80) != 0) p.effects = m.u8();
   if ((flags & 0x100) != 0) m.u8();      // weapon frame
@@ -590,6 +591,10 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 60:  // modellist (60: a 16-bit start)
         name_list(m, s.models, id == 60);
         if (s.models.size() > 1 && s.map.empty()) s.map = map_of_model(s.models[1]);
+        {
+          const auto pm = std::find(s.models.begin(), s.models.end(), "progs/player.mdl");
+          d.player_model = pm == s.models.end() ? 0 : static_cast<int>(pm - s.models.begin());
+        }
         break;
       case 46:
       case 56:
