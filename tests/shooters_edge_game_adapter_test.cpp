@@ -4,11 +4,13 @@
 // form this build has no runner for, each with its reason; a map's info and textures are read off
 // its file (the pictures the same views `read_map_pictures` gives, so the drawn map is unchanged);
 // the demos are listed and found by a bare name with the game's extensions; a model is read into
-// its form with a picture beside it standing in for a skin; a sound is read from `sound/`.
+// its form with a picture beside it standing in for a skin; a sound is read from `sound/`; the
+// menus' pictures are the packs' with a PNG or TGA of a picture's name standing in for it.
 //
 // ge:summary Tests the first game's adapter: mods, programs by form, map info, textures, demos
 // ge:keywords test shooters-edge game-adapter list_mods find_program program-form map_info
 // ge:keywords map_textures list_demos find_demo qwprogs open_model open_sound replacement-skin
+// ge:keywords pictures replacement-picture
 // ge:skill shooter testing
 #include <filesystem>
 #include <fstream>
@@ -28,6 +30,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "vfs/pak.hpp"
 
@@ -239,4 +242,48 @@ TEST(a_sound_is_read_from_the_sound_folder) {
   CHECK_MSG(a.open_sound(a, files, "weapons/r_exp3.wav", pcm, error), error);
   CHECK(pcm.rate == 11025 && pcm.samples.size() == tone.size());
   CHECK(!a.open_sound(a, files, "weapons/none.wav", pcm, error) && error.empty());
+}
+
+TEST(a_picture_file_of_a_menu_pictures_name_stands_in_for_it) {
+  // The packs' menu pictures, with the plaque and the glyph sheet each in a TGA of their name.
+  const auto fixture = shooters_edge::menu::fixture_files();
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> listed(fixture.begin(), fixture.end());
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(ge::vfs::write_pak(listed, &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  const cl::GameAdapter& a = cl::classic_adapter();
+  const cl::ClassicPictures own = a.pictures(a, files, false, {});
+  CHECK(own.menu.loaded() && own.menu.density == 1);
+  const ge::ui::Image* plaque = own.menu.find("qplaque");
+  CHECK(plaque != nullptr);
+  // The glyph sheet at twice its size sets the set's density; the plaque at its own size is
+  // scaled up to it, alpha kept; a picture of the wrong size is passed over for the pack's own.
+  as::Image glyphs, qplaque, wrong;
+  glyphs.width = glyphs.height = 256;
+  glyphs.rgba.assign(size_t{256} * 256 * 4, 40);
+  qplaque.width = plaque->width;
+  qplaque.height = plaque->height;
+  qplaque.rgba.assign(size_t(plaque->width) * size_t(plaque->height) * 4, 200);
+  qplaque.rgba[3] = 0;
+  const ge::ui::Image* title = own.menu.find("ttl_main");
+  CHECK(title != nullptr);
+  wrong.width = title->width + 1;
+  wrong.height = title->height;
+  wrong.rgba.assign(size_t(wrong.width) * size_t(wrong.height) * 4, 7);
+  std::vector<uint8_t> extra;
+  CHECK(ge::vfs::write_pak({{"gfx/conchars.tga", as::encode_tga(glyphs)},
+                            {"gfx/qplaque.tga", as::encode_tga(qplaque, true)},
+                            {"gfx/ttl_main.tga", as::encode_tga(wrong)}},
+                           &extra, &error));
+  CHECK_MSG(cl::add_archive(files, "pak1.pak", std::move(extra), error), error);
+  const cl::ClassicPictures stood = a.pictures(a, files, false, {});
+  CHECK(stood.menu.loaded() && stood.menu.density == 2);
+  CHECK(stood.menu.glyphs.rgba == glyphs.rgba);
+  const ge::ui::Image* big = stood.menu.find("qplaque");
+  CHECK(big != nullptr && big->width == plaque->width * 2 && big->height == plaque->height * 2);
+  CHECK(big->rgba[0] == 200 && big->rgba[3] == 0 && big->rgba[7] == 0);  // one texel, two pixels
+  const ge::ui::Image* kept = stood.menu.find("ttl_main");
+  CHECK(kept != nullptr && kept->rgba == ge::ui::scaled_nearest(*title, 2).rgba);
 }
