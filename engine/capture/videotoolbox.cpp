@@ -199,7 +199,12 @@ struct PlatformEncoder::Impl {
     VTSessionSetProperty(session, kVTCompressionPropertyKey_MaxKeyFrameIntervalDuration,
                          number(o.key_seconds).get());
     VTSessionSetProperty(session, kVTCompressionPropertyKey_ExpectedFrameRate, number(o.fps).get());
-    VTSessionSetProperty(session, kVTCompressionPropertyKey_AverageBitRate, number(bitrate).get());
+    if (o.quality > 0)
+      VTSessionSetProperty(session, kVTCompressionPropertyKey_Quality,
+                           number(std::min(o.quality, 1.0)).get());
+    else
+      VTSessionSetProperty(session, kVTCompressionPropertyKey_AverageBitRate,
+                           number(bitrate).get());
     // The pictures are BT.709 at limited range (capture/yuv.hpp).
     VTSessionSetProperty(session, kVTCompressionPropertyKey_ColorPrimaries,
                          kCVImageBufferColorPrimaries_ITU_R_709_2);
@@ -219,7 +224,7 @@ struct PlatformEncoder::Impl {
     CFTypeRef v = nullptr;
     if (VTSessionCopyProperty(session,
                               kVTCompressionPropertyKey_UsingHardwareAcceleratedVideoEncoder,
-                              nullptr, &v) != noErr ||
+                              nullptr, reinterpret_cast<void*>(&v)) != noErr ||
         !v) {
       return false;
     }
@@ -386,9 +391,9 @@ bool PlatformDecoder::open(PlatformCodec c, std::span<const uint8_t> config, int
   cb.decompressionOutputCallback = [](void* self, void*, OSStatus status, VTDecodeInfoFlags,
                                       CVImageBufferRef image, CMTime,
                                       CMTime) { static_cast<Impl*>(self)->decoded(status, image); };
-  cb.decompressionOutputRefCon = impl_.get();
-  s = VTDecompressionSessionCreate(nullptr, impl_->format, nullptr, attrs.get(), &cb,
-                                   &impl_->session);
+  Impl& im = *impl_;
+  cb.decompressionOutputRefCon = &im;
+  s = VTDecompressionSessionCreate(nullptr, im.format, nullptr, attrs.get(), &cb, &im.session);
   if (s != noErr) {
     error = failed("VideoToolbox's decompression session", s);
     impl_.reset();

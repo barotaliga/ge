@@ -36,6 +36,7 @@ bool VideoEncoder::open(std::string_view word, const VideoEncoderOptions& o, std
     p.fps = o.fps;
     p.bitrate = o.bitrate;
     p.key_seconds = o.key_seconds;
+    p.quality = o.still ? o.quality : 0;
     const PlatformCodec pc = word == "hevc" ? PlatformCodec::kHevc : PlatformCodec::kH264;
     std::string why;
     if (platform_.open(pc, p, why)) {
@@ -56,6 +57,7 @@ bool VideoEncoder::open(std::string_view word, const VideoEncoderOptions& o, std
   a.speed = o.speed;
   a.threads = o.threads;
   a.key_seconds = o.key_seconds;
+  a.still = o.still;
   if (!av1_.open(a, error)) return false;
   codec_ = VideoCodec::kAv1;
   private_ = av1_codec_private(av1_.sequence_header());

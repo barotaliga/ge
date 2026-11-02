@@ -105,25 +105,32 @@ bool write_file(const std::string& path, std::span<const uint8_t> bytes) {
   return ok;
 }
 
-std::vector<uint8_t> encode_png_grey(int width, int height, std::span<const uint8_t> grey) {
-  const size_t w = static_cast<size_t>(width);
-  // Each row under the filter (none, sub, up, paeth) whose bytes sum smallest as signed values:
-  // the usual guess at what deflates best.
+namespace {
+
+// `height` rows of `width` pixels of `channels` bytes each as a PNG of `color_type` (0 grey, 2
+// RGB), each row under the filter (none, sub, up, paeth) whose bytes sum smallest as signed
+// values, the usual guess at what deflates best; `pixel(x, y, c)` gives a pixel's channel.
+template <class Pixel>
+std::vector<uint8_t> encode_filtered(int width, int height, int channels, uint8_t color_type,
+                                     Pixel&& pixel) {
+  const size_t bpp = static_cast<size_t>(channels);
+  const size_t row_bytes = static_cast<size_t>(width) * bpp;
   std::vector<uint8_t> raw;
-  raw.reserve((w + 1) * height);
-  std::vector<uint8_t> trial(w), best(w);
+  raw.reserve((row_bytes + 1) * static_cast<size_t>(height));
+  std::vector<uint8_t> row(row_bytes), up(row_bytes, 0), trial(row_bytes), best(row_bytes);
   for (int y = 0; y < height; ++y) {
-    const uint8_t* row = &grey[y * w];
-    const uint8_t* up = y > 0 ? &grey[(y - 1) * w] : nullptr;
+    for (int x = 0; x < width; ++x)
+      for (int c = 0; c < channels; ++c) row[x * bpp + c] = pixel(x, y, c);
     long best_cost = -1;
     uint8_t best_type = 0;
     for (const uint8_t type : {uint8_t{0}, uint8_t{1}, uint8_t{2}, uint8_t{4}}) {
       long cost = 0;
-      for (size_t x = 0; x < w; ++x) {
-        const int a = x > 0 ? row[x - 1] : 0, b = up ? up[x] : 0, c = x > 0 && up ? up[x - 1] : 0;
+      for (size_t i = 0; i < row_bytes; ++i) {
+        const int a = i >= bpp ? row[i - bpp] : 0, b = y > 0 ? up[i] : 0,
+                  c = i >= bpp && y > 0 ? up[i - bpp] : 0;
         const int pred = type == 0 ? 0 : type == 1 ? a : type == 2 ? b : paeth(a, b, c);
-        trial[x] = static_cast<uint8_t>(row[x] - pred);
-        cost += trial[x] < 128 ? trial[x] : 256 - trial[x];
+        trial[i] = static_cast<uint8_t>(row[i] - pred);
+        cost += trial[i] < 128 ? trial[i] : 256 - trial[i];
       }
       if (best_cost < 0 || cost < best_cost) {
         best_cost = cost;
@@ -133,16 +140,32 @@ std::vector<uint8_t> encode_png_grey(int width, int height, std::span<const uint
     }
     raw.push_back(best_type);
     raw.insert(raw.end(), best.begin(), best.end());
+    up.swap(row);
   }
   std::vector<uint8_t> png{0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
   std::vector<uint8_t> ihdr;
   put32(ihdr, static_cast<uint32_t>(width));
   put32(ihdr, static_cast<uint32_t>(height));
-  ihdr.insert(ihdr.end(), {8, 0, 0, 0, 0});  // 8-bit grey, deflate, adaptive, no interlace
+  ihdr.insert(ihdr.end(), {8, color_type, 0, 0, 0});  // 8-bit, deflate, adaptive, no interlace
   chunk(png, "IHDR", ihdr);
   chunk(png, "IDAT", deflate_zlib(raw));
   chunk(png, "IEND", {});
   return png;
+}
+
+}  // namespace
+
+std::vector<uint8_t> encode_png_grey(int width, int height, std::span<const uint8_t> grey) {
+  const size_t w = static_cast<size_t>(width);
+  return encode_filtered(width, height, 1, 0,
+                         [&](int x, int y, int) { return grey[static_cast<size_t>(y) * w + x]; });
+}
+
+std::vector<uint8_t> encode_png_rgb(int width, int height, std::span<const uint8_t> rgba) {
+  const size_t w = static_cast<size_t>(width);
+  return encode_filtered(width, height, 3, 2, [&](int x, int y, int c) {
+    return rgba[(static_cast<size_t>(y) * w + static_cast<size_t>(x)) * 4 + c];
+  });
 }
 
 std::optional<Picture> decode_png(std::span<const uint8_t> bytes) {

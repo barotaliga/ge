@@ -47,6 +47,10 @@ struct VideoEncoderOptions {
   int threads = 4;
   // The platform's: bits a second; 0 is its default (capture/platform_video.hpp).
   int64_t bitrate = 0;
+  // One picture to keep (capture/still.hpp): AV1 as a keyframe at `crf` and `speed`, the
+  // platform's at the constant `quality` (0..1) in place of a bitrate.
+  bool still = false;
+  double quality = 0;
 };
 
 class VideoEncoder {
