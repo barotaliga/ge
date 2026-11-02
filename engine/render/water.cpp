@@ -13,6 +13,7 @@
 #include "core/libm/libm.hpp"
 #include "core/prng.hpp"
 #include "render/water.wgsl.hpp"
+#include "render/water_below.wgsl.hpp"
 #include "render/water_copy.wgsl.hpp"
 #include "render/water_stream.hpp"
 #include "render/water_stream.wgsl.hpp"
@@ -75,6 +76,7 @@ void stage_body(Water::Slot& slot, const water::Body& body) {
   put(slot.veil, o.veil);
   const WaterDraw& d = slot.draw;
   b.air[0] = static_cast<float>(d.daylight < 0 ? d.open_sky : d.daylight);
+  b.sun[0] = static_cast<float>(d.sunlit < 0 ? b.air[0] : d.sunlit);
   b.air[1] = static_cast<float>(d.stir);
   b.air[2] = static_cast<float>(d.gusts);
   // The gusts drift downwind at about the speed of the waves the wind grows most (the peak's
@@ -251,13 +253,27 @@ void create_water(gpu::Device& device, gpu::PipelineSet& pipelines, Water& water
     desc.fragment = &fragment;
     water.p_draw = pipelines.add_render(device, desc);
     // From below: the same geometry into the `below` targets, tested against the opaque depth
-    // (a ceiling over a flooded passage hides the surface beyond it) and writing none.
+    // (a ceiling over a flooded passage hides the surface beyond it) and writing its own.
+    // Its own module (render/water_below.wgsl over the same shared half): the two fragment stages
+    // together would pass the embedding's 60 KB cap.
+    const wgpu::ShaderModule below_module =
+        gpu::create_shader(device, wgsl::water_below, "water.below");
     wgpu::ColorTargetState below[2] = {};
     below[0].format = wgpu::TextureFormat::RGBA16Float;
     below[1].format = wgpu::TextureFormat::R8Unorm;
+    fragment.module = below_module;
     fragment.entryPoint = "fs_below";
     fragment.targets = below;
-    depth.depthWriteEnabled = false;
+    desc.vertex.module = below_module;
+    // Its covered coarse vertices rise rather than sink (water_surface.wgsl's kBelow), and the
+    // nearest fragment, the true surface, is kept.
+    wgpu::ConstantEntry below_grid[2]{};
+    below_grid[0].key = "kGrid";
+    below_grid[0].value = kWaterGrid;
+    below_grid[1].key = "kBelow";
+    below_grid[1].value = 1;
+    desc.vertex.constantCount = 2;
+    desc.vertex.constants = below_grid;
     desc.label = "water.below";
     water.p_below = pipelines.add_render(device, desc);
   }
@@ -425,6 +441,12 @@ int add_water_body(gpu::Device& device, Water& water, const water::Body& body,
   bind_body(device, water, slot, static_cast<int>(water.bodies.size()));
   water.bodies.push_back(std::move(slot));
   return static_cast<int>(water.bodies.size()) - 1;
+}
+
+void set_water_sunlit(Water& water, int index, double share) {
+  Water::Slot& slot = water.bodies[static_cast<size_t>(index)];
+  slot.draw.sunlit = share;
+  slot.staged.sun[0] = static_cast<float>(share);
 }
 
 void set_water_body(gpu::Device& device, Water& water, int index, const water::Body& body) {

@@ -101,6 +101,9 @@ struct WaterDraw {
   // The share of the sun's and the sky's light on the water itself (its colour and glitter); < 0:
   // `open_sky`'s. A pool in a courtyard sees the sky overhead but the walls keep the sun off.
   double daylight = -1;
+  // The share of the surface the sun itself reaches (its caustics and the shafts under it); < 0:
+  // the day's share. A courtyard's pool under the open sky may lie in a wall's shade.
+  double sunlit = -1;
   double stir = 0;   // a still surface's own wandering slope (rad, about): 0 glass
   double gusts = 0;  // 0..1: how strongly the gusts' patches raise and lay the short waves
 };
@@ -141,6 +144,7 @@ struct WaterGpuBody {
   float c[4], kd[4], deep[4], emission[4];
   float wake[4];  // rings, their life (s), the shortest wave kept (m), 0
   float air[4];   // the day's share on the water, the stir's slope, the gusts, the wind (m/s)
+  float sun[4];   // the share of the surface the sun reaches (the caustics, the shafts), 0, 0, 0
   float view[4];  // the mirror (0 none, 1 over, 2 under), the view up (1), its heading's cos, sin
   float up_view_proj[16];
   float levels[kWaterLevels][4];
@@ -199,6 +203,8 @@ void create_water_targets(gpu::Device& device, Water& water, const FrameTargets&
 // A body to draw (its waves, box, level and optics read now); its index.
 int add_water_body(gpu::Device& device, Water& water, const water::Body& body,
                    const WaterDraw& draw = {});
+// The share of body `index`'s surface the sun reaches now (WaterDraw::sunlit), as the sun moves.
+void set_water_sunlit(Water& water, int index, double share);
 // The body read again (a lake whose waves were laid again, a new look).
 void set_water_body(gpu::Device& device, Water& water, int index, const water::Body& body);
 // The body's wake rings (water/wake.hpp: the rings of `body` in the world's `wakes`, the newest

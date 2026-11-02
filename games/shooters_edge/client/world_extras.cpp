@@ -166,6 +166,9 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
     ba::relay_liquid_wind(d, x.water, x.world, wind, from);
   }
   ba::light_rooms(x.water, x.liquids, x.world, x.rows, options.minlight, options.brightness);
+  // The caustics and the shafts only where the sun reaches the water (found again as it moves).
+  const double sun[3] = {uniforms.sun[0], uniforms.sun[1], uniforms.sun[2]};
+  ba::light_pools_by_sun(x.water, x.scene->map, x.world, sun);
   // The eye in the water when the map's leaf there is water: at any depth, in any passage.
   const int eye_in = ba::eye_water_body(x.scene->map, x.world, view.eye);
   const bool water_on = v2 && on.water;

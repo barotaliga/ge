@@ -15,6 +15,8 @@
 // - THE ROOM'S LIGHT (`light_rooms`): what the map's lightmaps say the pool's bed is lit by (the
 //   light probe, plugins/brush/light_probe.hpp), floored like the walls, so the water's own colour
 //   is the room's light in it and never the day's outside.
+// - THE SUN ON THE WATER (`light_pools_by_sun`): the share of each pool the sun itself reaches,
+//   the way to it marched through the leaves, for the caustics and the shafts.
 //
 // ge:summary A classic map's water, lava and slime tops made bodies of our water and liquids
 // ge:keywords bsp brush liquids water lava slime body volume hull v2 add_bsp_liquids
@@ -79,7 +81,9 @@ struct LiquidWorld {
   std::vector<Kind> kinds;   // a body's: kWater, kSlime or kLava
   std::vector<double> open;  // the share of its surface the sky is over (open_sky_of)
   std::vector<PoolSite> sites;
-  double wind = 0, from = 0;  // the open map's air the waves were laid under (m/s, rad)
+  std::vector<LiquidPatch> patches;  // each body's top, as the map gave it
+  double sun[3] = {0, 0, 0};         // the sun the pools' sunlit shares were last found for
+  double wind = 0, from = 0;         // the open map's air the waves were laid under (m/s, rad)
 };
 
 // The share of the points over a pool's top from which straight up is the sky (a leaf of sky
@@ -89,6 +93,14 @@ double open_sky_of(const Map& map, const LiquidPatch& patch);
 // and its bed's light, read off `map`.
 PoolSite pool_site(const Map& map, const LiquidPatch& patch, double from);
 
+// The share of a pool's top the sun reaches along `sun` (unit, toward it): points on a grid over
+// it from which the way to the sun meets the sky before a wall.
+double pool_sunlit(const Map& map, const LiquidPatch& patch, const double sun[3]);
+// Each water body's sunlit share (render/water.hpp's set_water_sunlit) for the sun along `sun`,
+// found again only when it has moved half a degree: the caustics and the shafts only where the sun
+// reaches the water, never in a wall's shade under the open sky.
+void light_pools_by_sun(render::Water& water, const Map& map, LiquidWorld& world,
+                        const double sun[3]);
 // The bodies (at most render::kWaterBodies of water, the largest), each under its share of
 // `wind` m/s from `from` (rad: the bearing it blows from; the weather's sv_wind and sv_winddir).
 LiquidWorld liquid_world(const Scene& scene, const LiquidRows& rows, double wind = 3,

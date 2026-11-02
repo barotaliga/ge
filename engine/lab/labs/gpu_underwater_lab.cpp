@@ -4,13 +4,15 @@
 // named look from that eye (the fog in each water's own colour, the markers fading out by its
 // visibility); the four presets (eyes open, a mask, murky, the classic tint and warp); the surface
 // from below, looking straight up from 5 m down, where Snell's window is measured off the picture
-// (more than 3 degrees from 48.6 fails); and a dive from 1 m over the surface to 3 m under it. It
+// (more than 3 degrees from 48.6 fails); the caustics on the bed and the light shafts, each off
+// beside on under a breeze (each must raise the picture's contrast); and a dive from 1 m over the
+// surface to 3 m under it. It
 // fails on a GPU error or a pipeline made after the load. Without an adapter it notes that, with no
 // pictures.
 //
-// ge:summary Lab: the view under water: every look, the presets, Snell's window, a dive
+// ge:summary Lab: under water: every look, the presets, Snell's window, caustics, shafts, a dive
 // ge:keywords lab gpu underwater fog visibility snell window presets mask murky classic dive
-// ge:keywords picture software-adapter
+// ge:keywords picture software-adapter caustics light-shafts god-rays
 // ge:skill render water labs
 // ge:test tests/render_water_test.cpp
 #include <algorithm>
@@ -69,9 +71,9 @@ float pool_ground(double x, double z) {
                             (on_marker(x, z) ? 3.0 : 0.0));
 }
 
-gw::World pool_world(const std::string& look) {
+gw::World pool_world(const std::string& look, double wind = 2) {
   ge::wind::Field field;
-  field.mean = 2;
+  field.mean = wind;
   field.from = 1.5 * kPi;
   gw::World world(field);
   std::vector<gw::Point> shore;
@@ -102,6 +104,23 @@ double luma_at(const gl::Picture& p, int x, int y) {
   return 0.2126 * p.rgba[i] + 0.7152 * p.rgba[i + 1] + 0.0722 * p.rgba[i + 2];
 }
 
+// The spread of the luma over a box of the picture against its mean (its standard deviation
+// over the mean): how much a light pattern varies across it.
+double contrast(const gl::Picture& p, int x0, int y0, int x1, int y1) {
+  double sum = 0, sq = 0;
+  int n = 0;
+  for (int y = y0; y < y1; ++y) {
+    for (int x = x0; x < x1; ++x) {
+      const double l = luma_at(p, x, y);
+      sum += l;
+      sq += l * l;
+      ++n;
+    }
+  }
+  const double mean = sum / std::max(n, 1);
+  return std::sqrt(std::max(sq / std::max(n, 1) - mean * mean, 0.0)) / std::max(mean, 1e-6);
+}
+
 void run(gl::Lab& lab) {
   const auto w = static_cast<uint32_t>(lab.arg_num("width"));
   const auto h = static_cast<uint32_t>(lab.arg_num("height"));
@@ -118,7 +137,7 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    placeholders(lab, {"looks", "presets", "window", "dive"}, w, h);
+    placeholders(lab, {"looks", "presets", "window", "caustics", "shafts", "dive"}, w, h);
     return;
   }
   Scene s;
@@ -148,8 +167,8 @@ void run(gl::Lab& lab) {
     }
     return out;
   };
-  auto set_look = [&](const std::string& look) {
-    gw::World world = pool_world(look);
+  auto set_look = [&](const std::string& look, double wind = 2) {
+    gw::World world = pool_world(look, wind);
     if (s.water.bodies.empty()) {
       gr::add_water_body(*device, s.water, world.bodies[0]);
     } else {
@@ -211,34 +230,43 @@ void run(gl::Lab& lab) {
              sheet, Det::measured);
   }
 
-  // SNELL'S WINDOW: straight up from 5 m down, the window's edge measured down the centre
-  // column, where the picture's luma crosses halfway between the window's and the mirror's.
+  // SNELL'S WINDOW: straight up from 5 m down, the window's edge measured as the radius where the
+  // mean luma round a ring about the centre crosses halfway between the window's and the mirror's
+  // (the waves break the rim into bright and dark fragments, so one column would stop early).
   {
     set_look("tropical-shallows");
     gr::UnderwaterLook still = s.under.look;
     still.warp = 0;
     still.blur = 0;
+    still.caustics = 0;  // the window's edge measured alone (the shafts and the net move its luma)
+    still.shafts = 0;
     s.under.look = still;
     gr::FrameView up = view_at(kMid, kLevel - 5, kMid, 0, 1.5607, 0.9, 2.4, 2.0);
     up.fov_y = 2.2;
     const gl::Picture pic = draw(*device, s, up);
-    const int cx = static_cast<int>(w / 2), cy = static_cast<int>(h / 2);
-    const double inside = luma_at(pic, cx, cy);
-    const double outside = 0.5 * (luma_at(pic, cx, 2) + luma_at(pic, cx, static_cast<int>(h) - 3));
+    const double cx = 0.5 * w, cy = 0.5 * h;
+    const auto ring = [&](double r) {
+      double sum = 0;
+      for (int k = 0; k < 96; ++k) {
+        const double a = 2 * kPi * k / 96;
+        const int x = std::clamp(static_cast<int>(cx + r * lm::cos(a)), 0, static_cast<int>(w) - 1);
+        const int y = std::clamp(static_cast<int>(cy + r * lm::sin(a)), 0, static_cast<int>(h) - 1);
+        sum += luma_at(pic, x, y);
+      }
+      return sum / 96;
+    };
+    const double inside = ring(0.05 * h);
+    const double outside = ring(0.49 * h);
     const double mid = 0.5 * (inside + outside);
-    int top = cy, bottom = cy;
-    while (top > 0 && (luma_at(pic, cx, top) - mid) * (inside - mid) > 0) --top;
-    while (bottom < static_cast<int>(h) - 1 &&
-           (luma_at(pic, cx, bottom) - mid) * (inside - mid) > 0)
-      ++bottom;
+    double half_px = 0.05 * h;
+    while (half_px < 0.49 * h && (ring(half_px) - mid) * (inside - mid) > 0) half_px += 0.5;
     const double focal = 0.5 * h / lm::tan(0.5 * up.fov_y);
-    const double half_px = 0.5 * (bottom - top);
     const double angle = lm::atan(half_px / focal) * 180 / kPi;
     lab.metric("window.angle", angle, "deg", Det::measured);
     if (std::fabs(angle - 48.6) > 3) {
       lab.fail("Snell's window spans " + fixed(angle, 1) + " degrees from straight up, not 48.6",
-               "Check the window's edge in engine/render/underwater.wgsl (cos 48.6 = 0.661). "
-               "Skill: render.");
+               "Check the refraction out through the surface in engine/render/water.wgsl's "
+               "fs_below (n = 1.333, the critical angle 48.6). Skill: render.");
     }
     gr::underwater_look("eyes-open", s.under.look);
     lab.shot({"window",
@@ -252,6 +280,51 @@ void run(gl::Lab& lab) {
               {{"angle", fixed(angle, 1) + " deg"}}},
              pic, Det::measured);
   }
+
+  // THE CAUSTICS AND THE SHAFTS, each off beside on, in tropical water under a fresh breeze.
+  const auto off_on = [&](const std::string& id, const gr::FrameView& v, bool shafts_view,
+                          const std::string& title, const std::string& caption,
+                          const std::string& look_for) {
+    set_look("tropical-shallows", 6);
+    gr::underwater_look("eyes-open", s.under.look);
+    gl::Picture sheet = gl::create_picture(2 * tw + 30, th + 24, {250, 250, 248});
+    double c[2] = {0, 0};
+    for (int i = 0; i < 2; ++i) {
+      s.under.look.caustics = shafts_view ? 0 : i;
+      s.under.look.shafts = shafts_view ? i : 0;
+      const gl::Picture pic = draw(*device, s, v);
+      c[i] = contrast(pic, static_cast<int>(w / 4), static_cast<int>(h / 4),
+                      static_cast<int>(3 * w / 4), static_cast<int>(3 * h / 4));
+      const int ox = 10 + i * (tw + 10);
+      gl::draw_text(sheet, ox, 4, i == 0 ? "OFF" : "ON", {24, 26, 32});
+      paste(sheet, half(pic), ox, 14);
+    }
+    gr::underwater_look("eyes-open", s.under.look);
+    lab.metric(id + ".contrast_off", c[0], "", Det::measured);
+    lab.metric(id + ".contrast_on", c[1], "", Det::measured);
+    if (!(c[1] > c[0] * 1.15)) {
+      lab.fail("the " + id + " add no pattern: the picture's contrast " + fixed(c[1], 3) +
+                   " with them against " + fixed(c[0], 3) + " without",
+               "Check caustic_at in engine/render/wgsl/water_body.wgsl and its callers in "
+               "engine/render/underwater.wgsl. Skill: render.");
+    }
+    lab.shot({id,
+              title,
+              caption + " Contrast " + fixed(c[0], 3) + " off, " + fixed(c[1], 3) + " on.",
+              look_for,
+              {}},
+             sheet, Det::measured);
+  };
+  off_on("caustics", view_at(kMid, 93, kEyeZ, 0, -1.25, 1.0, 2.4, 2.0), false, "THE CAUSTICS",
+         "Looking down at the sand from 2 m over it, 9 m under a 6 m/s breeze's waves in tropical "
+         "water, the sun 57 degrees up: the light the waves focus on the bed, off and on.",
+         "a net of bright wavering lines over the sand where the crests gather the sun, the "
+         "darker sand between; the same sand evenly lit with them off");
+  off_on("shafts", view_at(kMid, kLevel - 4, kEyeZ, 2.4, 0.55, 0.6, 2.4, 2.0), true, "THE SHAFTS",
+         "From 4 m down looking up toward the sun (34 degrees up, so its way through the water "
+         "leans), the same breeze: the light the waves focus scattered toward the eye, off and on.",
+         "bright shafts fanning down from the surface toward the sun's side and the darker "
+         "water between them; an even veil with them off");
 
   // THE DIVE: from 1 m over the surface to 3 m under it.
   {

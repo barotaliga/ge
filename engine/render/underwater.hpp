@@ -34,18 +34,27 @@
 //   over 2 per metre, so a brown lake is thick with them and a pool has next to none.
 //
 // Presets (`underwater_look`): "eyes-open", "mask", "murky", "classic" (a flat tint and a screen
-// warp, no blur, a short clear view), "pool". The lens's drops on leaving the water are
-// render/wet_lens.hpp's. Not yet: light shafts.
-// - A POOL UNDER A LIT ROOM (`ambient`, `caustics`; "pool"): the water's light read off the room
-//   seen round the eye rather than the day, so the window is not a bright hole in a black sea;
-//   and the caustics, the surface's focused light playing over what stands under it, as strong
-//   as the surface is rough (`Water::Slot::mss`): a still pool throws next to none.
+// warp, no blur, a short clear view, no caustics or shafts), "pool". The lens's drops on leaving
+// the water are render/wet_lens.hpp's.
+// - THE CAUSTICS (`caustics`): the sun's light the real surface focuses on what stands under it
+//   (render/wgsl/water_body.wgsl's `caustic_at`: the bed's net of bright lines from the waves'
+//   own curvature, sharp near the surface and soft deep down, none under a still surface), its
+//   sun's share of the light moved about, as far as the day reaches the water.
+// - THE LIGHT SHAFTS (`shafts`): the eye's ray marched through the water (sixteen steps out to 24
+// m),
+//   each step lit by the sun's light that the waves focus there, scattered forward toward the eye
+//   (Henyey-Greenstein, g 0.8) and dimmed over the way down and the way back: bright shafts
+//   leaning along the sun's refracted way, swaying with the waves, strongest looking toward the
+//   light, and none where the day does not reach (a pool under a roof).
+// - A POOL UNDER A LIT ROOM (`ambient`; "pool"): the water's light read off the room seen round
+//   the eye rather than the day, so the window is not a bright hole in a black sea.
 //
 // ge:summary The view under water: the water's fog, blur by distance, Snell's window, presets
 // ge:keywords render underwater under-water fog veil blur snell window total-internal-reflection
 // ge:keywords mask goggles magnify warp tint classic murky create_underwater prepare_underwater
 // ge:keywords encode_underwater underwater_look waterline meniscus split half-submerged motes
-// ge:keywords suspended-matter specks particles caustics pool water-below underside
+// ge:keywords suspended-matter specks particles caustics pool water-below underside light-shafts
+// ge:keywords god-rays shafts caustic_at henyey-greenstein
 // ge:skill render water
 // ge:test tests/render_water_test.cpp
 #pragma once
@@ -76,8 +85,11 @@ struct UnderwaterLook {
   double mote_size = 0.0025;  // m: a speck's radius
   // A pool under a lit room (a pool indoors, a flooded hall): each 0 is the plain look above, so
   // an open lake under the day keeps it.
-  double ambient = 0;   // the share of the water's light read off the scene round it, not the day
-  double caustics = 0;  // the rough surface's focused light on what stands under and over it
+  double ambient = 0;  // the share of the water's light read off the scene round it, not the day
+  // The surface's focused sunlight on what stands under it, and the shafts it lights in the water,
+  // each times what the waves and the day give (0: none).
+  double caustics = 1;
+  double shafts = 1;
 };
 
 // The surface where the eye is, from the caller's `water::sample` at the eye: the waterline
@@ -100,7 +112,7 @@ struct UnderGpu {
   float fog[4];      // the fog's scale, the adaptation's target, 0, 0
   float surface[4];  // the surface at the eye, its slope dx, dz, 1 when the eye is under it
   float motes[4];    // the specks' share, their radius (m), the lens plate's height (m), 0
-  float lit[4];      // ambient, the caustics (times the surface's roughness), 0, 0
+  float lit[4];      // ambient, the caustics, the shafts, 0
 };
 
 struct Underwater {
@@ -109,6 +121,8 @@ struct Underwater {
   uint32_t p_under = 0;
   wgpu::Buffer uniform;
   wgpu::BindGroup group;
+  int group_body = -1;  // the body whose uniform and waves `group` binds (-1: made anew)
+  const Water* water = nullptr;
   UnderGpu staged{};
   bool active = false;  // this frame's: the eye is under a body
 };
