@@ -312,8 +312,9 @@ fn surf_bilinear(st: vec2f, rect: vec4f, k: u32) -> vec4f {
 
 // THE PARALLAX: `st` moved to where the eye's ray, entering the face there, first meets the
 // texture's height field `depth` m deep (height 1 the face, 0 the deepest). `per` is the texture
-// coordinates' step a metre of depth along the ray; the ray is marched in `n` even steps (fewer
-// the more squarely the face is seen) and the crossing found between the last two.
+// coordinates' step a metre of depth along the ray; the ray is marched in even steps, two a texel
+// it crosses and at most `n` (fewer the more squarely the face is seen), and the crossing found
+// between the last two.
 fn parallax(st: vec2f, rect: vec4f, k: u32, per: vec2f, depth: f32, n: i32) -> vec2f {
   let reach = per * depth;
   var d = 0.0;
@@ -322,8 +323,11 @@ fn parallax(st: vec2f, rect: vec4f, k: u32, per: vec2f, depth: f32, n: i32) -> v
   if (gap <= 0.0) {
     return st;
   }
-  for (var i = 1; i <= n; i++) {
-    let d1 = f32(i) / f32(n);
+  // Two steps a texel the ray crosses (at mip k), at most `n`: a bilinear field holds no detail
+  // finer than that, and a ray across a few texels needs few steps.
+  let m = clamp(i32(ceil(2.0 * length(reach) / f32(1u << k))), 1, n);
+  for (var i = 1; i <= m; i++) {
+    let d1 = f32(i) / f32(m);
     let gap1 = 1.0 - surf_bilinear(st + reach * d1, rect, k).z - d1;
     if (gap1 <= 0.0) {
       d = mix(d, d1, gap / max(gap - gap1, 1e-5));
