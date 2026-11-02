@@ -1,7 +1,8 @@
 // The adapter's choice per game and the console's commands on it (game_adapter.hpp).
 //
-// ge:summary Picks a game row's adapter, says which program forms run, adds mods, maps, demos
+// ge:summary Picks a game row's adapter, says which forms run, adds mods, maps, demos, game cfgs
 // ge:keywords game-adapter adapter_of runs_form add_adapter_commands mods maps demos console
+// ge:keywords read_configs_from exec config-file
 // ge:skill shooter console
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #include "shooters_edge/client/game_adapter.hpp"
@@ -47,6 +48,13 @@ void add_adapter_commands(ge::console::Console& con, const GameAdapter& adapter,
                     if (demos.empty()) c.print("demos: none in the game's files");
                     for (const std::string& d : demos) c.print(d);
                   });
+}
+
+void read_configs_from(ge::console::Console& con, const GameAdapter& adapter,
+                       const SearchPath& files) {
+  con.set_fallback_reader([&adapter, &files](std::string_view name, std::string& text) {
+    return adapter.find_config(adapter, files, name, text);
+  });
 }
 
 }  // namespace shooters_edge::client

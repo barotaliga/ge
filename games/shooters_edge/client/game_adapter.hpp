@@ -27,26 +27,20 @@
 //   found by a name (with the game's demo extensions tried in order when it has none) or a path,
 //   and its bytes opened for playback (client/demo.hpp, the formats told by their first bytes).
 //
-// - **open_model**: a model the server names ("progs/armor.mdl", "maps/b_bh25.bsp") read into
-//   one of the shared FORMS the window draws: a vertex-animated model (plugins/morph's `Model`,
-//   the form a later game's model families read into too), a sprite, or a brush item (a small map
-//   of its own). With it, a full-colour picture with alpha for each of a model's skins where the
-//   game's files hold one: the first game's is `<model>_<skin>.png` (or `.tga`) beside the model
-//   ("progs/player.mdl_0.png"); its transparent texels are not drawn. The items (armour, health,
-//   ammo), the weapons lying about and the players and their skins all come through here.
-// - **open_sound**: a sound the server or a demo names ("weapons/rocket1i.wav") read to samples;
-//   the first game's are WAV files under `sound/`.
-// - **pictures**: the HUD's and the menus' pictures (client/classic_pictures.hpp's set): the first
-//   game's are the lumps of its graphics archive and its `gfx/*.lmp` files in its palette's
-//   colours, each swapped for a PNG or TGA of the same name where the game's files hold one
-//   (`gfx/sbar.png`, `gfx/conchars.tga`, `gfx/qplaque.png`; alpha kept, its size a whole multiple
-//   of the picture's), else for classic-enhance's upscaled copy when asked.
+// - **open_model**: a model the server names ("progs/armor.mdl") read into a shared FORM the
+//   window draws (plugins/morph's `Model`, a sprite, a brush item), with a picture with alpha for
+//   each skin the files hold one for (the first game's `progs/player.mdl_0.png`, or `.tga`).
+// - **open_sound**: a sound the server or a demo names read to samples (`sound/*.wav`).
+// - **pictures**: the HUD's and the menus' pictures (client/classic_pictures.hpp), each from a PNG
+//   or TGA of its name where the files hold one (`gfx/sbar.png`; alpha kept, its size a whole
+//   multiple), else classic-enhance's upscaled copy when asked, else the pack's lump.
+// - **find_config**: a config file `exec` names, from the game's files after the player's folders
+//   (`read_configs_from`); the startup files run before the game's files open.
+// - **open_locations**: a map's place names into plugins/shooter/locs.hpp's `Locs` (the first
+//   game's `locs/<map>.loc`); with none, a game names places off the map's items.
 //
-// Not yet here (each moves behind a call of its own, in its own change): the held weapons' models
-// from the game's files (the window holds the game's own today); the config files and the
-// location files.
-//
-// These are load-time calls, never a frame's: a table of plain function pointers, no state. The
+// Not yet here: the held weapons' models from the game's files. These are load-time calls, never
+// a frame's: plain function pointers, no state (docs/shooters-edge.md § The game adapter). The
 // console's `mods`, `maps` and `demos` print their answers (`add_adapter_commands`).
 //
 // ge:summary A classic game's adapter: mods, programs by form and side, maps, textures, demos
@@ -55,6 +49,8 @@
 // ge:keywords per-game sequel add_adapter_commands console-mods console-maps console-demos
 // ge:keywords replacement-texture png tga alpha open_model open_sound model-form skin-stand-in
 // ge:keywords replacement-skin pictures hud-pictures menu-pictures replacement-picture
+// ge:keywords find_config config-file cfg exec open_locations loc-file place-names
+// ge:keywords read_configs_from
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #pragma once
@@ -73,6 +69,7 @@
 #include "console/console.hpp"
 #include "morph/model.hpp"
 #include "progs/file.hpp"
+#include "shooter/locs.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -148,6 +145,13 @@ struct GameAdapter {
   // `cache_root`, empty: its own folder), else the game's own.
   ClassicPictures (*pictures)(const GameAdapter& self, const SearchPath& files, bool enhance,
                               const std::filesystem::path& cache_root) = nullptr;
+  // The config file `name` ("mymod.cfg") the files hold: its text; false when they hold none.
+  bool (*find_config)(const GameAdapter& self, const SearchPath& files, std::string_view name,
+                      std::string& text) = nullptr;
+  // The place names of the map `map` ("dm6") the files hold, added to `out` (`out.from`: the file
+  // they were read from); false when the files hold none, or none that reads as a point.
+  bool (*open_locations)(const GameAdapter& self, const SearchPath& files, std::string_view map,
+                         ge::shooter::Locs& out) = nullptr;
   // The recordings the files hold, by path.
   std::vector<std::string> (*list_demos)(const GameAdapter& self,
                                          const SearchPath& files) = nullptr;
@@ -172,5 +176,11 @@ bool runs_form(profiles::ProgramForm form);
 // install's folder the mods are beside; `adapter` and `files` must outlive the console).
 void add_adapter_commands(ge::console::Console& con, const GameAdapter& adapter,
                           const SearchPath& files, const std::string& basedir);
+
+// The console's `exec` finding a config file in the game's files too, through `adapter`'s
+// find_config, once its search directories hold none of the name (`adapter` and `files` must
+// outlive the console's reads).
+void read_configs_from(ge::console::Console& con, const GameAdapter& adapter,
+                       const SearchPath& files);
 
 }  // namespace shooters_edge::client

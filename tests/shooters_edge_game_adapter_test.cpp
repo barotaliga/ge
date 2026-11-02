@@ -5,12 +5,14 @@
 // its file (the pictures the same views `read_map_pictures` gives, so the drawn map is unchanged);
 // the demos are listed and found by a bare name with the game's extensions; a model is read into
 // its form with a picture beside it standing in for a skin; a sound is read from `sound/`; the
-// menus' pictures are the packs' with a PNG or TGA of a picture's name standing in for it.
+// menus' pictures are the packs' with a PNG or TGA of a picture's name standing in for it; a
+// config file in the packs runs through `exec` after the player's own; a map's place names are
+// read from its loc file.
 //
 // ge:summary Tests the first game's adapter: mods, programs by form, map info, textures, demos
 // ge:keywords test shooters-edge game-adapter list_mods find_program program-form map_info
 // ge:keywords map_textures list_demos find_demo qwprogs open_model open_sound replacement-skin
-// ge:keywords pictures replacement-picture
+// ge:keywords pictures replacement-picture find_config read_configs_from open_locations
 // ge:skill shooter testing
 #include <filesystem>
 #include <fstream>
@@ -24,9 +26,11 @@
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "classicenhance/profile.hpp"
+#include "console/console.hpp"
 #include "morph/write.hpp"
 #include "progs/assembler.hpp"
 #include "progs/layout.hpp"
+#include "shooter/locs.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -286,4 +290,55 @@ TEST(a_picture_file_of_a_menu_pictures_name_stands_in_for_it) {
   CHECK(big->rgba[0] == 200 && big->rgba[3] == 0 && big->rgba[7] == 0);  // one texel, two pixels
   const ge::ui::Image* kept = stood.menu.find("ttl_main");
   CHECK(kept != nullptr && kept->rgba == ge::ui::scaled_nearest(*title, 2).rgba);
+}
+
+TEST(a_config_file_in_the_games_packs_runs_through_exec_after_the_players_own) {
+  std::vector<uint8_t> pak;
+  std::string error;
+  const auto text = [](std::string_view t) { return std::vector<uint8_t>(t.begin(), t.end()); };
+  CHECK(ge::vfs::write_pak({{"mymod.cfg", text("set se_test_cfg pack\n")},
+                            {"mine.cfg", text("set se_test_cfg pack-mine\n")}},
+                           &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  const cl::GameAdapter& a = cl::classic_adapter();
+  std::string got;
+  CHECK(a.find_config(a, files, "mymod.cfg", got) && got == "set se_test_cfg pack\n");
+  CHECK(!a.find_config(a, files, "none.cfg", got));
+  CHECK(!a.find_config(a, files, "../mymod.cfg", got));
+  // The player's folder first: its mine.cfg wins over the pack's; mymod comes from the pack.
+  const fs::path dir = fs::temp_directory_path() / "ge_se_game_adapter_cfg";
+  fs::remove_all(dir);
+  write(dir / "mine.cfg", text("set se_test_cfg player\n"));
+  ge::console::Console con;
+  con.cvars().add({.name = "se_test_cfg", .kind = ge::console::CvarKind::text});
+  con.set_search_path({dir});
+  cl::read_configs_from(con, a, files);
+  CHECK(con.exec_file("mymod"));
+  con.run();
+  CHECK(con.cvars().find("se_test_cfg")->value == "pack");
+  CHECK(con.exec_file("mine.cfg"));
+  con.run();
+  CHECK(con.cvars().find("se_test_cfg")->value == "player");
+  CHECK(!con.exec_file("none.cfg"));
+}
+
+TEST(a_maps_place_names_are_read_from_its_loc_file) {
+  std::vector<uint8_t> pak;
+  std::string error;
+  const std::string loc = "4096 0 256 ra\n-800 1600 0 $loc_name_mh$loc_name_separatorlow\nbad\n";
+  CHECK(ge::vfs::write_pak(
+      {{"locs/dm6.loc", std::vector<uint8_t>(loc.begin(), loc.end())}, {"locs/empty.loc", {}}},
+      &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  const cl::GameAdapter& a = cl::classic_adapter();
+  ge::shooter::Locs locs;
+  CHECK(a.open_locations(a, files, "dm6", locs));
+  CHECK(locs.points.size() == 2 && locs.from == "locs/dm6.loc");
+  CHECK(locs.points[0].name == "ra" && locs.points[0].at.x == 512.0f);
+  CHECK(locs.points[1].name == "mh-low");
+  ge::shooter::Locs none;
+  CHECK(!a.open_locations(a, files, "empty", none) && none.points.empty());
+  CHECK(!a.open_locations(a, files, "e1m1", none));
 }

@@ -318,6 +318,7 @@ int run_main(int argc, char** argv) {
   shooters_edge::menu::Host menu_host{.console = &console,
                                       .maps = adapter.list_maps(adapter, files)};
   cl::add_adapter_commands(console, adapter, files, args.basedir);
+  cl::read_configs_from(console, adapter, files);  // `exec` finds a cfg in the game's packs too
   menu_host.maps.emplace_back("arena");
   // ce_pictures: the menu's and the status bar's pictures enhanced from the packs' cache; read
   // again when it flips and when a map loads (client/classic_pictures.hpp).
