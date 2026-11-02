@@ -40,7 +40,7 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 // How long a teammate's place stays believed: an expert keeps his team's map fresh and drops a
 // place he has not had news of for `kExpertMateFresh_s`.
 double mate_fresh_s(const Fighter& f) {
-  return f.sense == MapSense::expert ? kExpertMateFresh_s : kMateFresh_s;
+  return f.comms == MapSense::expert ? kExpertMateFresh_s : kMateFresh_s;
 }
 
 double draw(Fighter& f) { return ge::core::next(f.rng); }
@@ -206,7 +206,7 @@ std::string place_of(const Fighter& f, sh::Vec3f p) {
 
 bool mind_say(Fighter& f, double t, Said said, sh::Vec3f at) {
   // A novice just plays: now and then his status, as a key pressed, and nothing else.
-  if (f.sense == MapSense::novice && said.kind != SayKind::report) return false;
+  if (f.comms == MapSense::novice && said.kind != SayKind::report) return false;
   if (said.loc.empty() && said.kind != SayKind::get && said.kind != SayKind::over &&
       said.kind != SayKind::timer)
     said.loc = place_of(f, at);
@@ -214,7 +214,7 @@ bool mind_say(Fighter& f, double t, Said said, sh::Vec3f at) {
 }
 
 bool wants_help(const Fighter& f, sh::Vec3f at, bool weak, double t) {
-  if (f.sense == MapSense::novice) return false;
+  if (f.teamwork == MapSense::novice) return false;
   // The enemies about: seen in the last moments within reach of a fight.
   int near = 0;
   for (const sh::Contact& c : f.bot.senses.contacts)
@@ -224,7 +224,7 @@ bool wants_help(const Fighter& f, sh::Vec3f at, bool weak, double t) {
              at) < kHelpNear)
       near++;
   if (near == 0) return false;
-  if (f.sense == MapSense::expert) {
+  if (f.teamwork == MapSense::expert) {
     // His own area being lost: two on him, or one while he is low.
     const int32_t area = f.mind.claim;
     if (f.role != Role::hold || area < 0 ||
@@ -263,9 +263,9 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
   // Read, or missed, by how well it plays and whether it is fighting.
   const bool fighting = f.mode == FightMode::fight;
   double chance = 1;
-  if (f.sense == MapSense::average) {
+  if (f.comms == MapSense::average) {
     chance = count >= 2 ? 0.9 : fighting ? 0.25 : 0.5;
-  } else if (f.sense == MapSense::novice) {
+  } else if (f.comms == MapSense::novice) {
     chance = count >= 3 ? (fighting ? 0.3 : 0.6) : fighting ? 0 : 0.15;
   }
   if (chance < 1 && draw(f) >= chance) {
@@ -311,9 +311,9 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
       if (i >= 0) {
         ItemSpot& it = f.items[static_cast<size_t>(i)];
         it.present = it.confirmed = false;
-        it.timed = f.sense != MapSense::novice;
+        it.timed = f.timing != MapSense::novice;
         double back = it.respawn_s * (it.timed ? 1.0 : kGuessLate);
-        if (f.sense == MapSense::average && key_item(it)) back += (draw(f) - 0.5) * 10;
+        if (f.timing == MapSense::average && key_item(it)) back += (draw(f) - 0.5) * 10;
         it.back_at = t + back;
         it.known = it.known || f.sense != MapSense::novice;
         mega_taken(f, i, t, false);
@@ -354,7 +354,7 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
         mn.enemy_t = t;
         // An area to take back (what an average player goes by: he keeps no map of his team).
         const int32_t area = key_near(f, p, 600);
-        if (area >= 0 && f.sense != MapSense::novice) {
+        if (area >= 0 && f.teamwork != MapSense::novice) {
           mn.retake = area;
           mn.retake_t = t;
         }
@@ -405,8 +405,8 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
 
 bool gives_up(const Fighter& f, const server::QcServer& s, int me, int32_t i, const Stats& st,
               double t) {
-  if (!f.team || f.sense == MapSense::novice) return false;       // a novice takes what he finds
-  if (f.temper == ge::shooter::Temper::aggressive) return false;  // he takes all he can carry
+  if (!f.team || f.teamwork == MapSense::novice) return false;  // a novice takes what he finds
+  if (ge::shooter::selfish(f.traits)) return false;             // he takes all he can carry
   const ItemSpot& it = f.items[static_cast<size_t>(i)];
   const bool mine_quad = (st.items & kItQuad) != 0;
   // No use to this player.
@@ -486,7 +486,7 @@ void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, d
   // mate said he is coming for; later the best armour's area when no mate is believed to hold it.
   if (mn.claim >= 0 && mn.claim == q && !f.items[static_cast<size_t>(q)].present && !quad_mine)
     mn.claim = -1;  // the quad gone: the claim is free again
-  if (mn.claim < 0 && f.sense != MapSense::novice && !quad_mine && f.reach_at >= 0) {
+  if (mn.claim < 0 && f.teamwork != MapSense::novice && !quad_mine && f.reach_at >= 0) {
     const auto taken = [&](int32_t i) {
       for (const Mate& m : mn.mates)
         if ((m.holds == i && t - m.holds_t < kHoldsFresh_s) ||
@@ -495,7 +495,7 @@ void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, d
       return false;
     };
     int32_t pick = -1;
-    if (opening || f.sense == MapSense::expert) {
+    if (opening || f.teamwork == MapSense::expert) {
       float best = 0;
       for (int32_t i : {rl, ra, q}) {
         if (!reachable(f, i) || taken(i)) continue;
@@ -528,7 +528,7 @@ void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, d
   Role r = Role::free;
   if (quad_mine) {
     r = Role::carry;
-  } else if (q >= 0 && f.sense != MapSense::novice && reachable(f, q) &&
+  } else if (q >= 0 && f.teamwork != MapSense::novice && reachable(f, q) &&
              due_of(f, q, t) - t <= kRushAhead_s) {
     // Among the two of its team it believes nearest the quad (those going for it counted).
     const float mine = dist(at, f.items[static_cast<size_t>(q)].at);
@@ -547,8 +547,7 @@ void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, d
     mind_say(f, t, c, at);
   }
   // An aggressive player holds nothing: he goes where the frags are.
-  if (r == Role::free && mn.claim >= 0 && f.temper != ge::shooter::Temper::aggressive)
-    r = Role::hold;
+  if (r == Role::free && mn.claim >= 0 && !ge::shooter::selfish(f.traits)) r = Role::hold;
   if (r == Role::rush && was != Role::rush) f.team->stats.rushes++;
   if (r == Role::carry && was != Role::carry) {
     f.team->stats.quads++;
@@ -561,7 +560,7 @@ void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, d
 
   // An expert who knows where all his team is knows where it is not: a key area none of them is
   // in (nor he) is likely the enemy's, the most valuable of them the one to take back.
-  if (f.sense == MapSense::expert) {
+  if (f.comms == MapSense::expert) {
     int fresh = 0;
     for (const Mate& m : mn.mates) fresh += t - m.at_t < mate_fresh_s(f);
     const int others = static_cast<int>(f.team->members.size()) - 1;
@@ -585,7 +584,7 @@ void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, d
   }
 
   // The calls. Its status now and then, as players press their report key.
-  if (t - mn.reported_at >= kReport_s[static_cast<int>(f.sense)]) {
+  if (t - mn.reported_at >= kReport_s[static_cast<int>(f.comms)]) {
     say_status(f, t, SayKind::report, st, at);
     mn.reported_at = t;
   }
@@ -600,7 +599,7 @@ void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, d
     if (mind_say(f, t, sf, at)) mn.safe_at = t;
   }
   // The timers it keeps, called as the item comes due (an expert's only: the rest guess).
-  if (f.sense == MapSense::expert && t - mn.timer_call_at >= 5) {
+  if (f.timing == MapSense::expert && t - mn.timer_call_at >= 5) {
     for (const ItemSpot& it : f.items) {
       if (!key_item(it) || it.present || !it.timed) continue;
       const double left = it.back_at - t;
@@ -618,7 +617,7 @@ void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, d
   // The powers: "get quad" when due, said again every few seconds while no mate is near it (the
   // more often the further away the team is), by whoever believes it due.
   const auto call_power = [&](int32_t i, double& last) {
-    if (i < 0 || f.sense == MapSense::novice) return;
+    if (i < 0 || f.comms == MapSense::novice) return;
     const ItemSpot& it = f.items[static_cast<size_t>(i)];
     // Called by a player who timed it, as it comes due.
     if (it.present || !it.timed || it.back_at - t > 5) return;

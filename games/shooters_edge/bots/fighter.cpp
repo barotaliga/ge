@@ -568,10 +568,10 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
   const float theirs = c ? foe_might(f, c->ent, t) : 0;
   // An enemy in sight this close is fought whatever the odds: turning away only shows him a back.
   const bool cornered = seen_now && dist(eye, at_of(c->seen)) < kCornered;
-  const bool engage = c && (cornered || sh::takes_fight(f.temper, f.skill, mine, theirs));
+  const bool engage = c && (cornered || sh::takes_fight(f.temper, f.edge, mine, theirs));
   const bool recent = c && ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s && engage) ||
                             (by_ear && ai::age(c->heard, t) <= kHeardChase_s &&
-                             sh::chases_sound(f.temper, f.skill, mine, theirs)));
+                             sh::chases_sound(f.temper, f.edge, f.rash, mine, theirs)));
   const sh::Vec3f enemy =
       c ? at_of(by_ear || !ai::known(c->seen) ? c->heard : c->seen) : sh::Vec3f{};
   const float range = c ? dist(eye, enemy) : 400;
@@ -733,22 +733,40 @@ Stats read_stats(const server::QcServer& s, int ent) {
 }
 
 void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, int slot,
-                  const char* entities, sh::AimSkill skill, double hz, uint32_t seed) {
-  // An expert moves as a pro does: the bunny hop on practised hands (shooter/pilot.hpp); an
-  // average player hops the simple way (forward and the side key of the turn) on steady hands;
-  // a novice walks and strafes on a person's hands.
-  const bool expert = skill == sh::AimSkill::expert || skill == sh::AimSkill::perfect;
-  const bool average = skill == sh::AimSkill::average;
+                  const char* entities, sh::AimSkill skill, const sh::Traits& traits, double hz,
+                  uint32_t seed) {
+  // Moves: an expert's the bunny hop on practised hands (shooter/pilot.hpp); an average player's
+  // the simple hop (forward and the side key of the turn) on steady hands; a novice's a walk and a
+  // strafe on a person's hands.
+  const sh::AimSkill moves = sh::tier_of(traits[sh::Trait::moves]);
+  const bool expert = moves == sh::AimSkill::expert;
+  const bool average = moves == sh::AimSkill::average;
   sh::PilotSettings ps;
   ps.hop = expert || average;
   ps.hop_simple = average;
   const sh::PilotHands hands = expert    ? sh::PilotHands::practised
                                : average ? sh::PilotHands::steady
                                          : sh::PilotHands::human;
-  sh::bot_init(f.bot, g, ps, hands, skill, hz, seed);
+  // The aim: the scattergun's to start with, another weapon's taken up as it is
+  // (`fighter_command`).
+  f.aim_slot = 0;
+  sh::bot_init(f.bot, g, ps, hands,
+               skill == sh::AimSkill::perfect
+                   ? sh::aim_profile(skill)
+                   : sh::aim_profile(traits[sh::Trait::aim_sg], traits[sh::Trait::reaction]),
+               hz, seed);
   f.slot = slot;
-  f.sense = map_sense_of(skill);
   f.skill = skill;
+  f.traits = traits;
+  f.temper = sh::temper_of(traits);
+  f.sense = map_sense_of(sh::tier_of(traits[sh::Trait::knowledge]));
+  f.timing = map_sense_of(sh::tier_of(traits[sh::Trait::timing]));
+  f.comms = map_sense_of(sh::tier_of(traits[sh::Trait::comms]));
+  f.teamwork = map_sense_of(sh::tier_of(traits[sh::Trait::teamplay]));
+  f.hearing = map_sense_of(sh::tier_of(traits[sh::Trait::hearing]));
+  f.camp = map_sense_of(sh::tier_of(traits[sh::Trait::camping]));
+  f.rash = sh::tier_of(traits[sh::Trait::discipline]) == sh::AimSkill::novice;
+  f.edge = sh::edge_of(sh::mean_aim(traits));
   f.rng = ge::core::make_rng(seed * 2654435761u + 12345u);
   const int me = slot + 1;
   sh::client_view(s.sv, me, f.bot.view);
@@ -785,7 +803,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, 
   }
   knowledge_init(f);
   buttons_init(f, g, s, entities);
-  ears_init(f, skill, entities);
+  ears_init(f, sh::tier_of(traits[sh::Trait::hearing]), entities);
   spam_init(f, entities);
 }
 
@@ -823,6 +841,16 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
   if (!dead && f.bot.pilot.pilot.mode == sh::PilotMode::arrived) f.next_think = 0;
 
   const WeaponRow* held = row_of(st.weapon);
+  // Another kind of weapon taken up is held as its aim trait holds it.
+  const int slot_of_aim = !held               ? f.aim_slot
+                          : held->number <= 3 ? 0
+                          : held->number <= 5 ? 1
+                                              : held->number - 4;
+  if (slot_of_aim != f.aim_slot && f.skill != sh::AimSkill::perfect) {
+    f.aim_slot = slot_of_aim;
+    sh::bot_aim(f.bot, sh::aim_profile(f.traits.v[static_cast<size_t>(slot_of_aim)],
+                                       f.traits[sh::Trait::reaction]));
+  }
   f.bot.shot_speed = held ? held->shot_speed : 0;
   f.bot.aim_dz = held ? held->aim_dz : 0;
 

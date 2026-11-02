@@ -32,6 +32,7 @@
 #include "shooter/aim.hpp"
 #include "shooter/pilot.hpp"
 #include "shooter/temper.hpp"
+#include "shooter/traits.hpp"
 #include "shooter/vec.hpp"
 
 namespace shooters_edge::net {
@@ -45,7 +46,10 @@ struct TeamSide {
   std::vector<sh::AimSkill> skills = {sh::AimSkill::expert, sh::AimSkill::average,
                                       sh::AimSkill::average, sh::AimSkill::novice};
   std::vector<sh::Temper> tempers;  // each player's temperament (missing: balanced)
-  std::vector<std::string> names;   // the players' (empty: the team's name and a number)
+  // Each player's traits over his skill's and temperament's preset ("aim_rl=9/timing=3",
+  // shooter/traits.hpp; missing or empty: the preset).
+  std::vector<std::string> traits;
+  std::vector<std::string> names;  // the players' (empty: the team's name and a number)
 };
 
 struct TeamMatchOptions {
@@ -70,6 +74,7 @@ struct TeamPlayer {
   int slot = -1;
   sh::AimSkill skill = sh::AimSkill::average;
   sh::Temper temper = sh::Temper::balanced;
+  sh::Traits traits;  // what he played with
   float frags = 0;
   int deaths = 0;
   int64_t shots = 0, pickups = 0, switches = 0, packs = 0, held_fire = 0;

@@ -1032,6 +1032,22 @@ goes after a sound and turns at 70. A bot outmatched by an enemy he sees turns f
 reach away from that enemy, or for his nearest teammate. An enemy in sight within 192 units is fought whatever the
 odds: turning away only shows him a back. The labs take `--tempers` (`a`, `b`, `c`).
 
+**Personalities (M18r11b).** A bot is a set of traits (`plugins/shooter/traits.hpp`), each from 1
+to 10: its aim with each kind of weapon (the scattergun, the spikers, the grenades, the rockets, the
+arc), its reaction, its timing of items, its knowledge of the map, camping, discipline, moves,
+hearing, communication, teamplay and aggression. Novice, average, expert and perfect are presets
+(every trait 2, 5, 8 or 10), and the temperament sets aggression (9, 5 or 2) and an aggressive
+player's teamplay at most 3, so the presets play exactly as the skills did. A trait read in steps
+reads 1 to 3 as a novice, 4 to 6 as average and 7 and up as an expert: knowledge (where items and
+buttons are and what they are worth), timing (which items are timed, from sight, sound and a
+mate's line), communication (what is said and read, the team's map), teamplay (areas held, help,
+the quad's rush, items left to a mate; 3 and below plays for himself), hearing (what a sound
+means), camping (rockets at the spots an enemy comes in), moves (the hop and its hands),
+discipline (3 and below runs at every sound) and aggression (the temperament). The aim and the
+reaction are read smoothly, the hands taken up anew with each kind of weapon. The labs take
+`--traits` (each player's changes over his preset, `aim_rl=9/timing=3`) and print every bot's
+traits.
+
 **Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
 community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the
 `$loc_name_<key>` macros expanded) and names any point by its nearest. The files themselves are

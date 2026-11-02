@@ -125,7 +125,7 @@ void mega_taken(Fighter& f, int32_t i, double t, bool by_me) {
   // Its clock starts when its taker is back down to 100: nobody else can know when that is.
   it.timed = false;
   it.back_at = t + kMegaGuess_s;
-  if (by_me && f.sense == MapSense::expert) f.mega_watch = i;
+  if (by_me && f.timing == MapSense::expert) f.mega_watch = i;
 }
 
 void mega_watch(Fighter& f, float health, double t) {
@@ -207,7 +207,7 @@ ItemNews knowledge_update(Fighter& f, const server::QcServer& s, int me, sh::Vec
       // Seen going only when it was there at the last look (one found gone is not timed).
       const bool saw_it_go = it.watched;
       const bool times =
-          f.sense == MapSense::expert || (f.sense == MapSense::average && !key_item(it));
+          f.timing == MapSense::expert || (f.timing == MapSense::average && !key_item(it));
       it.present = it.confirmed = false;
       it.timed = saw_it_go && times;
       it.back_at = t + it.respawn_s * (it.timed ? 1.f : kGuessLate);

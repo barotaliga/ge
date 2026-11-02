@@ -345,6 +345,11 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         p.team = t;
         p.skill = seat.skill;
         if (i < side.tempers.size()) p.temper = side.tempers[i];
+        p.traits = sh::traits_of(p.skill, p.temper);
+        if (i < side.traits.size() && !sh::apply_traits(side.traits[i], p.traits, r.error)) {
+          r.error = p.name + ": " + r.error;
+          return r;
+        }
         gn::open_sim_transport(ct[static_cast<size_t>(k)], net,
                                gn::sim_address(static_cast<uint32_t>(k + 1), kPortClient));
         ClientConfig cc;
@@ -399,10 +404,10 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       Seat& seat = seats[static_cast<size_t>(k)];
       const int slot = clients[k].playernum;
       if (seat.ready || slot < 0 || !server->clients[slot].qc_active) continue;
-      bt::fighter_init(seat.fighter, graph, s, slot, map->spec.entities.c_str(), seat.skill, kHz,
+      bt::fighter_init(seat.fighter, graph, s, slot, map->spec.entities.c_str(), seat.skill,
+                       r.players[static_cast<size_t>(k)].traits, kHz,
                        opt.seed + 31u * static_cast<uint32_t>(k));
       seat.fighter.bot.yaw = s.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
-      seat.fighter.temper = r.players[static_cast<size_t>(k)].temper;
       seat.fighter.bot.pilot.world = &world;  // the hop looks ahead through the map
       seat.fighter.name = r.players[static_cast<size_t>(k)].name;
       if (locs.points.empty()) {

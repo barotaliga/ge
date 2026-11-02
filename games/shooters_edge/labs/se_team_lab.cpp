@@ -149,6 +149,19 @@ void run(gl::Lab& lab) {
       at = end + 1;
     }
   }
+  // The traits over each player's preset, red's then blue's, comma separated, each its changes
+  // joined by '/' ("aim_rl=9/timing=3"; empty: the preset).
+  {
+    const std::string& list = lab.arg("traits");
+    size_t at = 0, k = 0;
+    while (!list.empty() && at <= list.size()) {
+      const size_t end = std::min(list.find(',', at), list.size());
+      cn::TeamSide& side = o.teams[k < o.teams[0].skills.size() ? 0 : 1];
+      side.traits.push_back(list.substr(at, end - at));
+      k++;
+      at = end + 1;
+    }
+  }
   const std::string save = lab.arg("save");
   o.packed = save.ends_with("z");  // a `.mvdz`: recorded packed as it goes
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
@@ -273,6 +286,15 @@ void run(gl::Lab& lab) {
                         to_fixed(static_cast<double>(p.sound_chases) * bt::kPilotMsec / 1000, 0)});
   }
   lab.table(tt_);
+  gl::LabTable traits_table{"each player's traits (1 to 10; shooter/traits.hpp)", {"player"}, {}};
+  for (size_t i = 0; i < sh::kTraits; i++)
+    traits_table.columns.push_back(sh::trait_name(static_cast<sh::Trait>(i)));
+  for (const cn::TeamPlayer& p : r.players) {
+    std::vector<std::string> row{p.name};
+    for (uint8_t v : p.traits.v) row.push_back(std::to_string(v));
+    traits_table.rows.push_back(row);
+  }
+  lab.table(traits_table);
   lab.metric("team.sounds-taken-in", static_cast<double>(heard), "count");
   lab.metric("team.sounds-missed", static_cast<double>(sounds - heard), "count");
   lab.metric("team.items-heard-taken", static_cast<double>(heard_taken), "count");
@@ -515,6 +537,9 @@ const gl::LabSpec kSpec{
         {"tempers", "",
          "each player's temperament, red's then blue's, comma separated: aggressive, balanced or "
          "coward (a, b, c); missing: balanced"},
+        {"traits", "",
+         "each player's traits over his preset, red's then blue's, comma separated, each "
+         "name=value joined by / (aim_rl=9/timing=3); empty: the preset"},
         {"items", "key",
          "the items noted with the nearest a player came: key (the held armour, the quad) or all"},
     },
