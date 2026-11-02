@@ -159,7 +159,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
                                uint32_t width, uint32_t height, wgpu::TextureFormat format,
                                const look::Picture& picture,
                                std::span<const ge::viewmodel::HeldModel> weapons,
-                               std::string& error, const ModelLoad& models) {
+                               std::string& error, const ModelLoad& models,
+                               const GameAdapter& game) {
   // A map's frame is made while the map loads, the first and every later one: its pipelines are
   // the load's, not a hitch mid-run.
   d.loading = true;
@@ -194,6 +195,11 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
       source.user = &cache;
       ge::core::output::status("shooters_edge: the enhanced textures from " + cache.string());
     }
+    // The map's textures as the game's adapter reads them.
+    std::vector<uint8_t> picture_store;
+    const std::vector<ge::brush::MapPicture> pictures =
+        game.map_textures(game, files, map.name, map.file, picture_store);
+    source.pictures = &pictures;
     ba::Pack pack;  // the map file alone, as the scene reader takes it
     pack.bytes = map.file;
     pack.files.push_back({"maps/" + map.name + ".bsp", 0, static_cast<uint32_t>(map.file.size())});
@@ -251,7 +257,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     ModelLoad load = models;
     if (picture.ce.models && !content_packs(files).empty())
       load.cache = ge::classicenhance::find_cache(content_packs(files));
-    create_models(d, f->pipelines, f->models, f->layout, files, palette_copy, f->scene.map, load);
+    create_models(d, f->pipelines, f->models, f->layout, files, palette_copy, f->scene.map, load,
+                  game);
     f->extras = create_extras(d, f->pipelines, f->layout, f->scene, picture.ce, picture.weather);
   }
   if (!f->pipelines.finish(d)) {

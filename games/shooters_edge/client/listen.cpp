@@ -415,31 +415,6 @@ bool single_player(const pg::Progs& progs) {
   return progs.layout != nullptr && progs.layout->single_player;
 }
 
-bool find_program(const SearchPath& files, std::span<const std::string_view> names, bool single,
-                  pg::Progs& out, std::string& found, std::string& why) {
-  why.clear();
-  for (const std::string_view name : names) {
-    std::vector<uint8_t> store;
-    const std::span<const uint8_t> bytes = find_file(files, name, store);
-    if (bytes.empty()) continue;
-    pg::Progs p;
-    std::string error;
-    if (!pg::load_progs(bytes.data(), bytes.size(), p, error, pg::every_form())) {
-      why += (why.empty() ? "" : "; ") + std::string(name) + " did not load (" + error + ")";
-      continue;
-    }
-    if (single_player(p) != single) {
-      why += (why.empty() ? "" : "; ") + std::string(name) + " is a " +
-             (single ? "multiplayer" : "single-player") + " program";
-      continue;
-    }
-    out = std::move(p);
-    found = std::string(name);
-    return true;
-  }
-  return false;
-}
-
 bool wants_campaign(const ListenOptions& opt) {
   bool campaign = false;
   for (const std::string& line : opt.console) {

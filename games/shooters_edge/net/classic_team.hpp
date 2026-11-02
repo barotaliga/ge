@@ -30,6 +30,7 @@
 
 #include "progs/file.hpp"
 #include "shooter/aim.hpp"
+#include "shooter/pilot.hpp"
 #include "shooter/vec.hpp"
 
 namespace shooters_edge::net {
@@ -53,11 +54,12 @@ struct TeamMatchOptions {
   std::string locs_from;  // where it was read from
   const ge::progs::Progs* progs = nullptr;  // the baseline mod, compiled
   TeamSide teams[2] = {TeamSide("red", 4), TeamSide("blue", 13)};
-  int frames = 46154;  // server frames of 13 ms (ten minutes)
-  int timelimit = 0;   // minutes the mod ends the match at (0: none)
-  uint32_t seed = 1;   // the mod's generator; fighter k's hands seed + 31 k
-  bool record = true;  // keep the multiview recording
-  int path_every = 8;  // a path point every this many frames
+  int frames = 46154;   // server frames of 13 ms (ten minutes)
+  int timelimit = 0;    // minutes the mod ends the match at (0: none)
+  uint32_t seed = 1;    // the mod's generator; fighter k's hands seed + 31 k
+  bool record = true;   // keep the multiview recording
+  bool packed = false;  // record it packed (classic_record.hpp: a `.mvdz`)
+  int path_every = 8;   // a path point every this many frames
 };
 
 struct TeamPlayer {
@@ -74,7 +76,8 @@ struct TeamPlayer {
   double dive_wet_s = 0;       // time in the water on a dive
   int64_t mode_commands[4] = {}, role_commands[4] = {};
   int64_t weapon_commands[9] = {};
-  int64_t pilot_modes[9] = {};  // live commands in each pilot mode (shooter/pilot.hpp)
+  int64_t pilot_modes[sh::kPilotModes] =
+      {};  // live commands in each pilot mode (shooter/pilot.hpp)
   int64_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0;
   float travelled = 0;            // units along the path
   std::string last;               // where he stood at the end, and what he was going for

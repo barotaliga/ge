@@ -1,8 +1,8 @@
-// A CLASSIC BSP MAP DRAWN (plugins/brush/app/bsp_draw.hpp): its surfaces with their textures
-// (from the atlas, wrapped inside each texture's rectangle: point-sampled at the mip the pixel's
-// footprint picks in the classic mode or v2's crisp one, else filtered by hand, bilinear between
-// texels, between two mips and with up to four taps along a slanted footprint, since an atlas
-// cannot wrap a sampler's filter) and either the map's own LIGHTMAPS or REAL-TIME LIGHTS.
+// A CLASSIC BSP MAP DRAWN (bsp_draw.hpp): its surfaces with their textures (the atlas, wrapped
+// in each texture's rectangle: point-sampled at the footprint's mip in classic or v2's crisp
+// mode, else filtered by hand, bilinear, between mips, up to four taps along a slant, as an atlas
+// cannot wrap a sampler's filter; cut where the cover says see-through) and either the map's
+// own LIGHTMAPS or REAL-TIME LIGHTS.
 //
 // - MODE 0, CLASSIC: the textures times the lightmaps (a luxel of 128 is the texture as it is),
 //   the liquids drawn as their own warped textures, unlit, and the sky faces as two scrolling
@@ -30,14 +30,14 @@
 // (`frame.wet.z`: on what faces up, settling first where the noise is highest), and a lightning
 // flash (`frame.wet.w`) lights what is open to the sky and leaks a little into the rooms.
 //
-// A light's strength is in the lightmap's units (1: a white face as the open day lights it, so
-// the classic map's balance holds whatever the hour) or, for a glowing liquid's light, physical
-// (cd); `colour.w` says which.
+// A light's strength is in the lightmap's units (1: a white face in the open day, so the map's
+// balance holds at any hour) or, for a glowing liquid's, physical (cd); `colour.w` says which.
 //
 // ge:summary A classic BSP map drawn: atlas textures, lightmaps or real-time lights, the sky mask
 // ge:keywords bsp brush render atlas mip lightmap point-light cube-shadow sun-shadow zenith
 // ge:keywords openness sky-mask classic v2 warp fullbright weather wet puddle ripples snow lightning
 // ge:keywords relief normal-map parallax-occlusion pom height-map roughness specular ggx
+// ge:keywords cover cut-out alpha fence see-through
 // ge:skill brush render
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/fall_shelter.wgsl"
@@ -113,6 +113,8 @@ struct Mover {
 @group(1) @binding(12) var surface: texture_2d<f32>;
 // the rebake's light bounced alone (rebake.hpp), or a 1 x 1 stand-in
 @group(1) @binding(13) var rebake_bounce: texture_2d<f32>;
+// how solid each texel is (Scene::cover), or a 1 x 1 stand-in
+@group(1) @binding(14) var cover: texture_2d<f32>;
 
 const kSolid = 0u;
 const kSky = 1u;
@@ -198,19 +200,29 @@ fn vs_main(v: VsIn, @builtin(vertex_index) vi: u32) -> VsOut {
 // The texel at `st` (texels of mip 0) of the texture at `rect`, at mip `lod`, wrapped.
 fn texel(st: vec2f, rect: vec4f, lod: f32) -> vec4f {
   let k = u32(clamp(lod, 0.0, f32(textureNumLevels(atlas) - 1u)));
+  return textureLoad(atlas, wrapped_at(st, rect, k), i32(k));
+}
+
+// The cover there (Scene::cover): 1 with none.
+fn cover_at(st: vec2f, rect: vec4f, lod: f32) -> f32 {
+  if (textureDimensions(cover).x <= 1u) {
+    return 1.0;
+  }
+  let k = u32(clamp(lod, 0.0, f32(textureNumLevels(cover) - 1u)));
+  return textureLoad(cover, wrapped_at(st, rect, k), i32(k)).r;
+}
+
+// `st` at mip `k` of the texture at `rect`, wrapped: its texel's place in the atlas.
+fn wrapped_at(st: vec2f, rect: vec4f, k: u32) -> vec2i {
   let s = f32(1u << k);
   let size = max(floor(rect.zw / s), vec2f(1.0));
-  var t = floor(st / s);
-  t = t - size * floor(t / size);
-  return textureLoad(atlas, vec2i(floor(rect.xy / s) + t), i32(k));
+  let t = floor(st / s);
+  return vec2i(floor(rect.xy / s) + t - size * floor(t / size));
 }
 
 // The texel at integer `t` of mip `k` of the texture at `rect`, wrapped.
 fn texel_at(t: vec2f, rect: vec4f, k: u32) -> vec4f {
-  let s = f32(1u << k);
-  let size = max(floor(rect.zw / s), vec2f(1.0));
-  let w = t - size * floor(t / size);
-  return textureLoad(atlas, vec2i(floor(rect.xy / s) + w), i32(k));
+  return textureLoad(atlas, wrapped_at(t * f32(1u << k), rect, k), i32(k));
 }
 
 // `st` (texels of mip 0) at mip `k`, bilinear between its four nearest texels.
@@ -672,6 +684,10 @@ fn shade(in: VsOut) -> FsOut {
   let lod = log2(max(max(length(dx), length(dy)), 1e-6));
   let dpx = dpdx(in.world);
   let dpy = dpdy(in.world);
+  // see-through: cut
+  if (cover_at(st, in.rect, lod) < 0.5) {
+    discard;
+  }
   // A lightmap's 1 (and a light in its units): a white face as the open day lights it, times the
   // brightness (the eye adapted to a dim room).
   let white = white_luminance() * bsp.info2.w;

@@ -271,7 +271,24 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 demo ends) plays a recorded game **at its own pace**: vsync on, nothing timed, each drawn frame
 moving the demo's clock on by the frame's wall time (at most a tenth of a second, so a stall
 slows the demo instead of skipping it). `cl_demospeed <x>` sets the speed (1 by default, up to
-20; 0 pauses). ESCAPE stops it. The demo is found and drawn as the benchmark finds and draws it.
+20; 0 pauses). ESCAPE stops it. The demo is found and drawn as the benchmark finds and draws it:
+the map from the recorded eye, the HUD, and every entity the demo holds (the other players in
+their colours, the items, the missiles, the level's statics), as `-demovideo` draws them.
+
+**The demo's game folder.** A multiplayer recording names the game folder its server ran
+(`fortress` for a team mod). When the window was opened on the base folder (no `-game`) and that
+folder is beside it under `-basedir`, the demo plays from it, the base under it, so the mod's own
+models, skins and maps are found; a `-game` you pass always wins. A folder that is not there is
+named in the console with what to do.
+
+**Heard and read.** A played demo is heard on the window's audio device: its sounds (the pack's
+recordings, moving with what makes them, the level's loops and ambience) and the players' voices,
+the same players `-demovideo` renders (`client/demo_heard.hpp`), at `volume` (0..1, 0.7; the
+menu's SOUND VOLUME). The lines the server printed to the player the view rides (the deaths, the
+chat and team chat, the pickups) go to the HUD's feed and the console as plain words (the charset's
+coloured letters and the colour marks clients write into chat taken out), and a centre message to
+the HUD's centre for two seconds. A seek plays nothing of what it skipped. The game's own sound
+outside a demo is not played yet.
 
 ```sh
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
@@ -465,8 +482,9 @@ by `se-campaign --progs=games/shooters_edge/qc/campaign/progs.src`. What both va
 - **Or ship it in the mod's folder**: with no `-progs`, the window looks through the game's
   files (the mod's folder over the base game's, § Playing it) for the game profile's
   multiplayer program files in order, `qwprogs.dat` and then `progs.dat`
-  (`games/shooters_edge/profiles/game_profile.hpp`), and runs the first of the multiplayer
-  form; so `-game mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
+  (`games/shooters_edge/profiles/game_profile.hpp`, looked for by the game's adapter, § The game
+  adapter), and runs the first of the multiplayer form; the console's `mods` lists the mod
+  folders there are; so `-game mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
   over (the base game's own `progs.dat` is its campaign, found the same way for SINGLE
   PLAYER), and with none the baseline mod runs; the status line says which.
 - **Line numbers in faults**: put the line table beside the file as `<file>.lines` (a line
@@ -557,6 +575,51 @@ weapons and armour are a fourth choice, § Weapons and armour):
   (`porting/shooters-edge/frame-move.md` has both halves and who jumps in each mix). Built:
   `plugins/shooter/framemove.hpp` and `ServerSettings::playermove`; the mod server's
   `sv_playermove` (`auto` follows the program's form), `edgefriction` and `sv_nostep`.
+
+### The game adapter: one set of calls, one implementation per game
+
+The profile rows hold what is only names (folders, packs, file names, extensions). What a game
+does with them differs from game to game, so each classic game has an **adapter**
+(`games/shooters_edge/client/game_adapter.hpp`): one table of calls the window, the console,
+the menus and the labs ask a game's files through, implemented once per game in a file of its
+own. The first game's is `client/classic_adapter.cpp`; a later game's is a second file with the
+same calls and nothing of the first game's in it. Below the adapters stay the readers a family of
+files shares: `engine/vfs` (folders, packs, zips, loose files, a mod over the base) and
+`plugins/brush` (every map family into one view).
+
+| Call | The classic game | Its sequel | The third |
+| --- | --- | --- | --- |
+| **mods** (`list_mods`) | folders over the base with numbered packs, zips or loose files | the same folders and the same pack format | folders of zips, read in name order, with a description file each |
+| **programs** (`find_program`) | one QC program for the server (`qwprogs.dat`, then `progs.dat`) | a native library of the server's rules | up to three bytecode programs inside its zips, one a side: the server's rules, the client's half (its HUD and prediction), the menus; or native libraries |
+| **maps** (`list_maps`, `map_info`) | BSP 29 or BSP2, the title the world's message | BSP 38 | BSP 46 |
+| **textures** (`map_textures`) | the map carries its pictures (`plugins/brush/pictures.hpp`); a PNG or TGA by the texture's name stands in, alpha and all (`textures/<map>/<name>`, then `textures/<name>`) | its own picture files beside the map, by the texture's name | shaders over picture files |
+| **models** (`open_model`) | `.mdl` into the shared vertex-animated form (`plugins/morph`), `.spr` sprites, `.bsp` items; a PNG or TGA beside a model stands in for a skin, alpha and all (`progs/player.mdl_0.png`) | its own model files (with `.pcx` skins in a folder a player model) read into the same form | its own model files (a body of head, upper and lower parts, `.skin` files) read into the same form |
+| **sounds** (`open_sound`) | WAV files under `sound/` | WAV files under `sound/` | WAV files and other formats under `sound/` |
+| **demos** (`list_demos`, `find_demo`, `open_demo`) | the single-player, client and multiview recordings (`client/demo.hpp`) | its own recording format | its own |
+
+**Every program file names its form and its side** (`ProgramFile` in `profiles/game_profile.hpp`:
+QC bytecode, a native game library, a sandboxed bytecode, the engine's C++ mod; server, client
+or menus). A form this build has no runner for is named when found and passed over
+(`runs_form`), never read as another; today only QC runs. The engine's C++ mods (§ C++ mods) are
+hooks over whichever program runs, so they stay a choice of their own.
+
+A stand-in picture's alpha cuts the face where it is under a half, as a fence texture's holes do
+(`docs/rendering.md` § See-through texels on a BSP map); the TGA reader is
+`engine/assets/tga.hpp`, the PNG reader `engine/assets/image.hpp`. A model's skin picture does
+the same on the model: a texel under half opaque is a hole (`kMarkHole`, `docs/rendering.md` §
+Morph meshes), and a skin picture carries no tint rows, so it is drawn in its own colours (lab
+`se-skins`). Every model comes through `open_model`: the items (armour, health, ammunition), the
+weapons lying about, the players and their skins. A later game's model families are new readers
+into the same shared forms, so the window that draws them does not change.
+
+**Still to move behind calls of their own**, each in its own change: the held weapons' models
+from the game's files (the window holds the game's own set today); the HUD's and the menus'
+pictures; the config files and the location files.
+
+**The next seam, when the sequel starts: a rules runner.** The listen server and the dedicated
+server hold the QC server (`server/qc_server.hpp`) itself today. A second program form needs them
+to hold a runner (start a map, run a frame, connect and drop a player, the server's commands) that
+the QC server is one implementation of; the sequel's rules are the second, run by the same host.
 
 ### Weapons and armour: an arsenal of their own
 
@@ -1012,6 +1075,8 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-pilot` | scenario | Whether the pilot plays a nav route through the move as fast as the graph proved it: every course route with plain and human hands, the trails from above coloured by mode, times against proven, the strafe jump's speed on a straight, the human axes against a person's bands; on the server's arena the pilot in a bot slot through the door, up the plat and barring the door shut from the east (built, M18r2) |
 | `se-senses` | scenario | Whether a bot sees only what a player's client could and aims by its skill: on the server's arena a seer and a runner visit the goals once per aim skill; the trails from above with a sight line every quarter second it saw, the aim's error against time, how often it saw when a line joined them, the error's median and p90, the reaction and the goals kept (built, M18r3) |
 | `se-bots` | scenario | Whether fighters play the baseline mod's deathmatch like players: four fighters on the arena, the trails, items and deaths from above, each one's mode through the match as a strip, the frags against time, and a table of frags, deaths, shots, pickups, switches, the share in each mode and the weapon held most (built, M18r4) |
+| `se-moves` | sim | A demo's player followed through a real map (`--file`, `--player`, `--map` or `--basedir`): the map as a wireframe from above and at an angle with his path coloured by speed and his jumps marked chained or not, the longest chain close up with the view's ticks, the chain's speed and turn against the most the move allows, a chase view from inside the map and its GIF, every player's hops tabled, the lag and ground-frame histograms; on the fixture halls without a demo (built, M18r12) |
+| `se-hop` | scenario | The demo player's longest trips replayed by the pilot from his start and speed: walk, strafe, the expert hop, the average's simple hop, the hop with human hands, the ideal hop, each one's time and hop reading against his; the trips from above and from inside; trips his time beats the bots' by a quarter flagged as tricks or shortcuts (built, M18r12) |
 | `se-lobby` | sim | The warmup on the listen server: bots seated on teams, the free roam, ready, break, the countdown and the map restarted for a clean match (built, M18q1); later clients find a hosted game on the LAN and through the rendezvous, fill the lobby, chat, start, play and return, and a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections (the compatible server half built, M18g: scripted clients under every preset, bytes a second, loss, downloads, the digest) |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |

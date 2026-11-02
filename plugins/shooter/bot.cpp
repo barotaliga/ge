@@ -57,7 +57,9 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       const std::array<double, 2> from{b.yaw, b.pitch};
       b.aim_hands.reset(from);
       b.strafe = b.pilot.pilot.set.strafe;
+      b.hop = b.pilot.pilot.set.hop;
       b.pilot.pilot.set.strafe = false;
+      b.pilot.pilot.set.hop = false;
     }
     b.aiming = true;
     b.target = c->ent;
@@ -83,6 +85,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         b.aiming = false;
         b.target = -1;
         b.pilot.pilot.set.strafe = b.strafe;
+        b.pilot.pilot.set.hop = b.hop;
         if (why) {
           why->decide("aim");
           why->choose("release", "no contact: the view back on the pilot's way");
@@ -124,6 +127,7 @@ void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands ha
   b.aim = aim_profile(skill);
   b.aim_hands = ai::Hands(b.aim.hands, hz, seed ^ 0x5bd1e995u);
   b.strafe = ps.strafe;
+  b.hop = ps.hop;
 }
 
 CmdSource bot_source(Bot& b) { return {&b, bot_next}; }

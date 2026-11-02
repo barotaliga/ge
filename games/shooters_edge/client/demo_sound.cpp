@@ -6,6 +6,8 @@
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo_sound.hpp"
 
+#include <algorithm>
+
 #include <cmath>
 
 namespace shooters_edge::client {
@@ -20,25 +22,22 @@ ge::core::Vec3 at_of(sh::Vec3f p) { return {p.x, p.y, p.z}; }
 
 }  // namespace
 
-DemoSounds::DemoSounds(au::Synth& synth, const SearchPath& files, float volume, int bus)
+DemoSounds::DemoSounds(au::Synth& synth, const SearchPath& files, float volume, int bus,
+                       const GameAdapter& game)
     : synth_(synth),
       files_(files),
+      game_(game),
       volume_(volume),
       bus_(bus),
       channels_(synth, kDemoChannels, bus) {}
 
-const au::Pcm* DemoSounds::load(const std::string& path) {
-  auto it = loaded_.find(path);
+const au::Pcm* DemoSounds::load(const std::string& name) {
+  auto it = loaded_.find(name);
   if (it != loaded_.end()) return it->second.get();
-  std::vector<uint8_t> store;
-  const std::span<const uint8_t> bytes = find_file(files_, path, store);
-  std::unique_ptr<au::Pcm> pcm;
-  if (!bytes.empty()) {
-    pcm = std::make_unique<au::Pcm>();
-    std::string error;
-    if (!au::read_wav(bytes, path, pcm.get(), &error)) pcm.reset();
-  }
-  return loaded_.emplace(path, std::move(pcm)).first->second.get();
+  auto pcm = std::make_unique<au::Pcm>();
+  std::string error;
+  if (!game_.open_sound(game_, files_, name, *pcm, error)) pcm.reset();
+  return loaded_.emplace(name, std::move(pcm)).first->second.get();
 }
 
 const au::Pcm* DemoSounds::recording(int index) {
@@ -51,7 +50,7 @@ void DemoSounds::level(const DemoState& s, const ge::brush::Map* map) {
     names_ = s.sounds;
     list_.assign(names_.size(), nullptr);
     for (size_t i = 1; i < names_.size(); i++) {
-      list_[i] = load("sound/" + names_[i]);
+      list_[i] = load(names_[i]);
       if (!list_[i]) stats_.missing++;
     }
   }
@@ -61,13 +60,28 @@ void DemoSounds::level(const DemoState& s, const ge::brush::Map* map) {
     map_ = map;
     if (ambience_) ambience_->silence(synth_);
     ambience_.reset();
-    const au::Pcm* water = load("sound/ambience/water1.wav");
-    const au::Pcm* sky = load("sound/ambience/wind2.wav");
+    const au::Pcm* water = load("ambience/water1.wav");
+    const au::Pcm* sky = load("ambience/wind2.wav");
     if (map && water && sky) ambience_.emplace(*water, *sky, bus_);
   }
 }
 
+void DemoSounds::silence() {
+  std::vector<int> entities;  // every entity sounding, once (stopping changes the slots)
+  for (const au::Channels::Slot& slot : channels_.slots())
+    if (slot.voice.valid() &&
+        std::find(entities.begin(), entities.end(), slot.entity) == entities.end())
+      entities.push_back(slot.entity);
+  for (int e : entities) channels_.stop(e);
+  if (ambience_) ambience_->silence(synth_);
+}
+
 void DemoSounds::frame(const DemoState& s, int listener, float dt) {
+  frame(s, s.started, s.stopped, listener, dt);
+}
+
+void DemoSounds::frame(const DemoState& s, std::span<const DemoSound> started,
+                       std::span<const std::pair<int, int>> stopped, int listener, float dt) {
   // The level's loops as they arrive (the signon sends them after the level starts).
   for (; statics_started_ < s.static_sounds.size(); statics_started_++) {
     const DemoStaticSound& st = s.static_sounds[statics_started_];
@@ -81,8 +95,8 @@ void DemoSounds::frame(const DemoState& s, int listener, float dt) {
     e.loop = au::Loop::file;
     if (channels_.play(*pcm, e).valid()) stats_.loops++;
   }
-  for (const auto& [entity, channel] : s.stopped) channels_.stop(entity, channel);
-  for (const DemoSound& d : s.started) {
+  for (const auto& [entity, channel] : stopped) channels_.stop(entity, channel);
+  for (const DemoSound& d : started) {
     const au::Pcm* pcm = recording(d.sound);
     if (!pcm) continue;
     au::Emit e;
