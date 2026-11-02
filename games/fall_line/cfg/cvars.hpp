@@ -19,6 +19,7 @@
 //   rung of Fall Line's)                 the camera's settings (engine/camera/cvars.hpp, A)
 //   volume s_wind s_effects s_mute s_thunder
 //                                       the sound's faders, and the storm's thunder heard (A)
+//   scr_format scr_quality scr_chroma   F12's screenshots (engine/capture/screenshot.hpp, A)
 //   sv_seed sv_hour                     the run's map and hour (the server's, server info)
 //   sv_weather sv_snowfall sv_snowline sv_fog sv_wind sv_winddir sv_cover sv_clouddensity
 //   sv_skyrate sv_cloudheight sv_cloudthickness sv_cloudspeed sv_storm
@@ -44,7 +45,7 @@
 // ge:keywords sv_lethal sv_armyfire sv_helis sv_paras hunt army
 // ge:keywords r_sharpen r_sunrays r_flare r_vignette r_chromatic r_grain r_lensdirt r_contrast
 // ge:keywords r_saturation r_temperature r_tint r_gamma post-effects
-// ge:keywords r_motionblur r_ao r_dof r_dof_focus depth-of-field
+// ge:keywords r_motionblur r_ao r_dof r_dof_focus depth-of-field scr_format scr_quality scr_chroma
 // ge:skill console sim
 // ge:test tests/fall_line_cvars_test.cpp
 #pragma once
@@ -53,6 +54,7 @@
 #include <string>
 
 #include "camera/cvars.hpp"
+#include "capture/screenshot.hpp"
 #include "console/console.hpp"
 
 namespace fall_line::cfg {
@@ -123,6 +125,8 @@ struct Settings {
   bool army_fire = true;
   bool helis = true;
   bool paras = true;
+  // F12's screenshots (the window's writer reads them each time one is handed in).
+  ge::capture::ScreenshotSettings screenshot;
 };
 
 // Every cvar above, bound to `s`'s fields (which take the defaults now).

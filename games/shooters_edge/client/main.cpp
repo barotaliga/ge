@@ -21,10 +21,10 @@
 // test arena); with none, the map `start` when the packs have it, else the arena.
 //
 // THE KEYS are binds (controls.hpp: W A S D, SPACE jumps, the left button fires, SHIFT walks, 1..8
-// and the wheel the weapons; OPTIONS ▸ CUSTOMIZE CONTROLS); TAB held shows the scores
-// (client/scores.hpp; `scr_levelstats 0|1`); the mouse looks (captured while the window has it; a
-// click takes it back); ESCAPE opens the main menu (menu/game_menu.hpp: drawn in the pack's own
-// pictures when the packs carry them, the rows the game cannot do yet dimmed), and ESCAPE again
+// and the wheel the weapons, F12 a screenshot; OPTIONS ▸ CUSTOMIZE CONTROLS); TAB held shows the
+// scores (client/scores.hpp; `scr_levelstats 0|1`); the mouse looks (captured while the window has
+// it; a click takes it back); ESCAPE opens the main menu (menu/game_menu.hpp: drawn in the pack's
+// own pictures when the packs carry them, the rows the game cannot do yet dimmed), and ESCAPE again
 // goes back out of it; the key under ESCAPE drops the console, where `map <name>` changes the map,
 // `sv <line>` is a line for the server's console (`sv timelimit 10`), `save <name>` and `load
 // <name>` keep and bring back a single-player game (`<game folder>/saves/<name>.save`; `<name>.sav`
@@ -34,8 +34,8 @@
 // world's look, the view-model cvars (view/hand.hpp: `r_drawviewmodel`, `r_viewmodel_fov`,
 // `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`) the weapon in hand, `vid_fullscreen 0|1` the
 // window over the whole screen (`vid_display n` which one, of those `vid_displays` lists), `gamma`
-// the brightness, `topcolor` and `bottomcolor` the player's colours, and `quit` quits; the
-// settings are kept in `<game folder>/settings/config.cfg` (client/settings.hpp).
+// the brightness, `topcolor` and `bottomcolor` the player's colours, and `quit` quits; the settings
+// are kept in `<game folder>/settings/config.cfg` (client/settings.hpp).
 //
 // THE LOBBY: a match opens each map in warmup until everyone is ready; F1 ready or break, F2 the
 // other team, F3 the roster (client/lobby_console.hpp lists the words and the settings).
@@ -56,7 +56,7 @@
 // ge:keywords mouse mouse-look hud first-person effects r_look quit shooters-edge benchmark
 // ge:keywords timedemo demo vsync-off fps playdemo demo_track cl_demospeed demovideo main-menu
 // ge:keywords escape vid_fullscreen fullscreen offscreen vid_display vid_displays lobby scores-key
-// ge:keywords scoreboard scr_levelstats settings config-cfg topcolor bottomcolor gamma binds
+// ge:keywords scoreboard scr_levelstats settings config-cfg topcolor bottomcolor gamma binds f12
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
 #include <cstdio>
@@ -69,6 +69,7 @@
 #include <string_view>
 #include <vector>
 
+#include "capture/screenshot.hpp"
 #include "console/cfg.hpp"
 #include "console/view.hpp"
 #include "core/output.hpp"
@@ -79,6 +80,7 @@
 #include "platform/audio.hpp"
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
+#include "render/screenshot_copy.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/controls.hpp"
@@ -258,6 +260,14 @@ int run_main(int argc, char** argv) {
   cl::choose_folder(args, prefs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
   console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
+  // F12's screenshots (engine/capture/screenshot.hpp), in <game folder>/screenshots/ beside its
+  // recordings, saves/ and settings/; made before the + lines so `+screenshot` takes the first.
+  ge::capture::ScreenshotSettings shot_settings;  // scr_format, scr_quality, scr_chroma
+  ge::capture::Screenshots shots(
+      (cl::settings_dir(args.basedir, args.game).parent_path() / "screenshots").string(),
+      "shooters_edge", &shot_settings);
+  ge::capture::add_screenshot_cvars(console.cvars(), shot_settings);
+  ge::capture::add_screenshot_command(console, shots, "<game folder>/screenshots/");
   const auto save_settings = [&console] { cl::save_settings(console); };
   ge::console::start(console, args.plus);
   console.cvars().apply_latched();
@@ -373,6 +383,7 @@ int run_main(int argc, char** argv) {
   if (!device) return 1;
   ge::gpu::Surface surface;
   if (!surface.create(*device, window->native())) return 1;
+  ge::render::ScreenshotCopy shot_copy;  // the frames `screenshot` takes, copied back
   int w = 0, h = 0;
   window->pixel_size(w, h);
   // The pointer comes in the window's logical units; the menu is laid out in pixels.
@@ -840,7 +851,10 @@ int run_main(int argc, char** argv) {
       const auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
       if (!bench.paced && bench.skip == 0) cl::record_span(*world, bench.passes);
-      if (bench_shown_ns == frame_ns) surface.present();
+      if (bench_shown_ns == frame_ns) {
+        shot_copy.frame(*device, surface.frame_target(), shots, console);
+        surface.present();
+      }
       if (bench.paced) {  // playback: every frame shown, nothing timed
         ++presented;
         continue;
@@ -943,6 +957,7 @@ int run_main(int argc, char** argv) {
     wgpu::TextureView target = surface.acquire(*device);
     if (!target) continue;
     cl::draw_world(*device, *world, view, fx, &hand, wall, overlay, target);
+    shot_copy.frame(*device, surface.frame_target(), shots, console);
     surface.present();
     ++presented;
   }

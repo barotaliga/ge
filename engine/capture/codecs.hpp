@@ -48,6 +48,9 @@ struct Av1Options {
   int speed = 9;  // libaom's realtime speed, 7..11: higher is faster and larger
   int threads = 4;
   double key_seconds = 2;
+  // One picture to keep (a screenshot, capture/still.hpp): every picture a keyframe. libaom is
+  // built realtime only (cmake/Codecs.cmake), so a still is coded by the same mode at `speed`.
+  bool still = false;
 };
 
 class Av1Encoder {

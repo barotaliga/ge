@@ -295,6 +295,7 @@ TEST(the_binds_buttons_make_the_command_walk_run_and_sidestep) {
   cl::default_binds(con);
   CHECK(con.binds().get(ge::console::BindMode::game, "w") == "+forward");
   CHECK(con.binds().get(ge::console::BindMode::game, "mouse1") == "+attack");
+  CHECK(con.binds().get(ge::console::BindMode::game, "f12") == "screenshot");
   con.execute("bind w +back");  // the player's own bind is kept over the default
   cl::default_binds(con);
   CHECK(con.binds().get(ge::console::BindMode::game, "w") == "+back");

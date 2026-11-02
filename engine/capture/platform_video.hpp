@@ -47,6 +47,8 @@ struct PlatformVideoOptions {
   double fps = 30;
   int64_t bitrate = 0;  // bits a second; 0: 0.1 bit a pixel a frame (2.8 Mbit/s at 720p30)
   double key_seconds = 2;
+  // Over 0 (up to 1): a constant quality in place of the bitrate, for a still (capture/still.hpp).
+  double quality = 0;
 };
 
 class PlatformEncoder {
