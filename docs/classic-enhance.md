@@ -30,9 +30,10 @@ leaves it; the full game is the player's own copy, for them alone. So the pipeli
   whole, the nearest is named with what of it is missing or changed. The startup script is
   listed by its contents alone, at any path: its name is one this tree does not spell.
   `ge tool classicenhance -- manifest <path>` prints a source's files as a set's rows;
-- leaves a **remade release** alone where it has remade its own: the remaster's sounds and models
-  are not enhanced, and its textures keep their own pixels at their own size, only their height,
-  normal, roughness and glow maps made (the lightmaps follow; the 2D art is still upscaled);
+- leaves a **release's remade sounds** alone: the remaster's sounds (44.1 kHz 16-bit, against the
+  original's 11 kHz 8-bit) are not enhanced. Its textures, models and 2D art are the original's
+  byte for byte (its maps are rebuilt and relit around the same textures), so every other stage
+  runs as for any pack;
 - writes everything it reads or makes to the player's **local cache** and nowhere else, beside a
   `NOTICE.txt` that says not to share it;
 - ships the **code** and never the output. Nothing read from the pack or made from it is

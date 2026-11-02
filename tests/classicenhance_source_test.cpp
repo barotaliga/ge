@@ -426,7 +426,7 @@ TEST(source_knows_a_release_by_its_files_in_any_packs) {
   fs::remove(dir / "zip" / "id1" / "pak1.pak");
   CHECK_MSG(ce::open_source((dir / "zip").string(), &s, &error, {}, sets), error);
   CHECK(!s.content_zip && s.set != nullptr && std::string(s.set->id) == "fixture-remaster" &&
-        s.set->remade);
+        s.set->remade_sounds);
 
   // A file missing and one changed: no set, the nearest named with what differs.
   auto broken = full.files;
@@ -458,8 +458,8 @@ TEST(the_known_sets_list_every_file_once_sorted) {
     }
     CHECK(nameless == 1);
   }
-  // Only the remaster is remade; neither set matches the fixture pack.
-  CHECK(!ce::kKnownSets[0].remade && ce::kKnownSets[1].remade);
+  // Only the remaster's sounds are remade; neither set matches the fixture pack.
+  CHECK(!ce::kKnownSets[0].remade_sounds && ce::kKnownSets[1].remade_sounds);
   const ce::SetMatch m = ce::match_sets(fixture_pack(), ce::kKnownSets);
   CHECK(!m.whole() && m.held <= 1);
 }

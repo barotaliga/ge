@@ -96,7 +96,7 @@ std::string source_json(const Source& s) {
                   ",\"verified\":" + (s.known ? "true" : "false") +
                   ",\"set\":" + (s.set ? esc(s.set->id) : std::string("null")) +
                   ",\"set_what\":" + (s.set ? esc(s.set->what) : std::string("null")) +
-                  ",\"remade\":" + (s.set && s.set->remade ? "true" : "false");
+                  ",\"remade_sounds\":" + (s.set && s.set->remade_sounds ? "true" : "false");
   if (!s.set_note.empty()) j += ",\"set_note\":" + esc(s.set_note);
   if (s.content_zip) j += ",\"content_zip\":true";
   if (!s.zip_sha256.empty()) {

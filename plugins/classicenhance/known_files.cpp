@@ -441,7 +441,7 @@ constexpr KnownEntry kFullGame106[] = {
 };
 
 // The remastered release of 2021: the full game's paths as it holds them (423: no default
-// config), its maps rebuilt and its sounds remade.
+// config), its maps rebuilt and its sounds remade; its textures and models the original's.
 constexpr KnownEntry kRemastered[] = {
     {"demo1.dem", 184471, "893e5279e3a84fed0416a1101dfc2b6b"},
     {"demo2.dem", 152705, "150e6fc54c24a70a44012ba71473a5cb"},

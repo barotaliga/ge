@@ -10,22 +10,22 @@
 // - `the full game of release 1.06`: its first pack's files (the shareware pack's) and its
 //   second's.
 // - `the remastered release`: the paths of the full game's files as the 2021 remaster holds them
-//   (its maps rebuilt, its sounds remade, its default config gone). The remaster's own new files
-//   are not listed.
+//   (its maps rebuilt and relit, its sounds remade at 44.1 kHz 16-bit, its default config gone;
+//   its textures and models the original's, byte for byte). The remaster's own new files are not
+//   listed.
 //
 // One file of each is listed by its contents alone (a null path): the startup script, whose file
 // name is one this tree does not spell (`make agents-check`). It matches a file of its size and
 // digest at any path.
 //
-// A set marked `remade` holds its own remade assets: the pipeline leaves its sounds and models as
-// the packs hold them and makes its textures' maps (height, normal, roughness, glow) from the
-// pack's own pixels at their own size, upscaling nothing (pipeline.hpp).
+// A set marked `remade_sounds` holds sounds remade already: the pipeline leaves them as the packs
+// hold them and enhances everything else as for any pack (pipeline.hpp).
 //
 // `ge tool classicenhance -- manifest <path>` prints a source's files as rows of a set.
 //
 // ge:summary The known file sets: a release found by every file the packs hold, extras ignored
 // ge:keywords known-set manifest full-game registered repack single-pack pak0 pk3 remaster
-// ge:keywords remade verify sha256 file-digest match_set extra-files
+// ge:keywords remade-sounds verify sha256 file-digest match_set extra-files
 // ge:skill classicenhance
 // ge:test tests/classicenhance_source_test.cpp
 #pragma once
@@ -47,7 +47,7 @@ struct KnownSet {
   const char* id;    // as a message or the tool's JSON names it
   const char* what;  // in the engine's words, for the report
   std::span<const KnownEntry> files;
-  bool remade = false;  // its assets are already remade: the pipeline enhances no sound or model
+  bool remade_sounds = false;  // its sounds are remade already: the pipeline leaves them
 };
 
 // The sets the source search matches, in order (known_files.cpp holds their rows).

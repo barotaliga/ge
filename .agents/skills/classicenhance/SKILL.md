@@ -36,8 +36,8 @@ maps) and `morph` (the models and sprites):
   set's rows are digests and paths, never content: make them with
   `ge tool classicenhance -- manifest <path>` from the player's own packs, and list a file whose
   name trips `make agents-check` (the startup script) by its contents alone (a null path). A
-  `remade` set (the remaster) skips the sounds and models stages and keeps its textures at their
-  own size; the pictures stage still upscales.
+  `remade_sounds` set (the remaster: 44.1 kHz 16-bit sounds) skips only the sounds stage; its
+  textures and models are the original's, byte for byte, and are enhanced like any pack's.
 - **Only the classic pack's own steps live here**: finding it, its palette's conventions (the
   fullbright range), what its texture names mean, and wiring its maps to the cache. A technique
   any game could use goes in the engine or the plugin that owns it (the light baker: `engine/`

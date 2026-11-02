@@ -172,10 +172,10 @@ struct Reports {
 
 constexpr const char* kUnverified = "unverified: the player's own copy";
 
-// A stage a remade set needs nothing of: nothing written, its key recorded.
+// The sounds stage of a set whose sounds are remade: nothing written, its key recorded.
 bool leave_as_held(const KnownSet& set, Reports& rep, StageResult& r) {
   rep.started(0);
-  r.note = std::string("left as the packs hold them: ") + set.what + " remade its own";
+  r.note = std::string("left as the packs hold them: ") + set.what + " remade its sounds";
   return true;
 }
 
@@ -511,27 +511,18 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
     return false;
   }
   report->dir = pack_dir(root, source.set_sha256.empty() ? source.pack_sha256 : source.set_sha256);
-  // A remade set's assets are its own already (known_sets.hpp): its sounds and models are left as
-  // the packs hold them, and its textures keep their own pixels at their own size, only their
-  // maps made. The pictures stage still upscales the 2D art.
-  const KnownSet* remade = source.set != nullptr && source.set->remade ? source.set : nullptr;
-  RunOptions own = opts;
-  if (remade != nullptr) {
-    own.textures.scale = 1;
-    own.textures.sharpen = 0;
-    own.textures.grain = 0;
-    own.textures.network = nullptr;
-    own.textures.device = nullptr;
-  }
+  // A set whose sounds are remade already (known_sets.hpp): its sounds are left as the packs hold
+  // them; every other stage runs as for any pack.
+  const KnownSet* remade =
+      source.set != nullptr && source.set->remade_sounds ? source.set : nullptr;
   for (const Stage s : kStages) {
     StageResult r;
     r.stage = s;
     const bool asked =
         opts.only.empty() || std::find(opts.only.begin(), opts.only.end(), s) != opts.only.end();
-    const bool left = remade != nullptr && (s == Stage::sounds || s == Stage::models);
-    const RunOptions& use = s == Stage::textures || s == Stage::lightmaps ? own : opts;
+    const bool left = remade != nullptr && s == Stage::sounds;
     const std::string key =
-        left ? fnv_hex(std::string(stage_name(s)) + " left as " + remade->id) : stage_key(s, use);
+        left ? fnv_hex(std::string(stage_name(s)) + " left as " + remade->id) : stage_key(s, opts);
     auto skip = [&](const char* why) {
       r.note = why;
       report->stages.push_back(r);
@@ -552,7 +543,7 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
     Journal journal;
     const bool journaled = s != Stage::pack && s != Stage::models && !left;
     if (journaled) journal.open(report->dir, stage_name(s), key, opts.force);
-    Reports rep{use, s, journaled ? &journal : nullptr};
+    Reports rep{opts, s, journaled ? &journal : nullptr};
     const auto t0 = std::chrono::steady_clock::now();
     bool ok = false;
     switch (s) {
@@ -560,18 +551,17 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
         ok = run_pack(source, report->dir, rep, r, error);
         break;
       case Stage::textures:
-        ok = run_textures(source, report->dir, use, rep, r, error);
+        ok = run_textures(source, report->dir, opts, rep, r, error);
         break;
       case Stage::lightmaps:
-        ok = run_lightmaps(source, report->dir, use, rep, r, error);
+        ok = run_lightmaps(source, report->dir, opts, rep, r, error);
         break;
       case Stage::sounds:
         ok = left ? leave_as_held(*remade, rep, r)
                   : run_sounds(source, report->dir, opts, rep, r, error);
         break;
       case Stage::models:
-        ok = left ? leave_as_held(*remade, rep, r)
-                  : run_models(source, report->dir, opts, rep, r, error);
+        ok = run_models(source, report->dir, opts, rep, r, error);
         break;
       case Stage::pictures:
         ok = run_pictures(source, report->dir, opts, rep, r, error);
