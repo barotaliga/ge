@@ -21,13 +21,20 @@
 // A file named `.gif` is an animated GIF (engine/lab/gif.hpp: shrunk to `gif_width`, one palette
 // of 256 colours, no sound), which needs no encoder; every other name is a video as above.
 //
+// THE WORDS: with `text`, the upper left says the map, the clock, whose eyes and the score
+// (demo_caption.hpp), and with `messages` the recorded player's notify lines (pickups, deaths,
+// `say` and `say_team`) under them and the centre prints in the middle, in the packs' own console
+// font when they carry one (classic-enhance's copy in the pack's cache first). The HUD draws the
+// packs' status bar pictures when they have them (client/classic_pictures.hpp, as the window
+// does), else the free set.
+//
 // The run's report (`DemoVideoReport`) says what went in: pictures, seconds, levels, the sounds
 // played and the names no pack had, the voices heard, the file's bytes and its codec.
 //
 // ge:summary A demo turned into a video: pictures on the GPU, its sounds and voices, one file
 // ge:keywords demo-video demovideo export video mp4 webm mkv record demo-to-video frame-clock
 // ge:keywords sound voice qwdv mvdv capture h264 av1 opus offscreen readback
-// ge:keywords clip gif animated-gif highlight from-to start-end excerpt
+// ge:keywords clip gif animated-gif highlight from-to start-end excerpt caption text conchars
 // ge:keywords demo_placed demo-players other-players player-colours
 // ge:skill shooter replay render
 // ge:test tests/shooters_edge_demo_test.cpp
@@ -43,6 +50,7 @@
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/world_models.hpp"
 
@@ -67,6 +75,8 @@ struct DemoVideoOptions {
   int gif_width = 480;  // a GIF's width, px (the height in proportion)
   int track = -1;       // a multiview recording's player (-1: the lowest playing)
   bool hud = true;
+  bool text = true;      // the words in the upper left (demo_caption.hpp: the packs' console font)
+  bool messages = true;  // the prints, the chat and the centre prints the recorded player read
   bool sound = true;
   float volume = 0.5f;                     // the game's sounds, under the voices
   float voice_volume = 1.5f;               // the players' voices, over the game as voice chat is
@@ -89,18 +99,20 @@ struct DemoVideoReport {
   std::string adapter;
   double from_s = 0, to_s = 0;  // the clip's window on the demo's timeline, s
   std::string highlight;        // the highlight that made it ("": none)
+  std::string text_font;        // the words' type: cache, packs or charset ("": no words)
+  std::string hud_art;          // the status bar's pictures: packs or free
 };
 
 // Called with each picture as it goes into the file (a lab's strip): its index and its time on
 // the demo's timeline.
 using DemoVideoPicture = std::function<void(int64_t frame, double t, const ge::lab::Picture&)>;
 
-// `o.demo` from `files` into `o.file` on `device`. False with the reason and the next step.
 // What a demo has standing in the world this frame, for `FxFrame::models`: its entities with a
 // model (not the eye's own), the other players in their colours, the level's statics. The video
 // and the window's playback (`playdemo`, `timedemo`) both draw these.
 void demo_placed(const DemoState& s, std::vector<Placed>& out);
 
+// `o.demo` from `files` into `o.file` on `device`. False with the reason and the next step.
 bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVideoOptions& o,
                 DemoVideoReport& report, std::string& error,
                 const DemoVideoPicture& picture = nullptr);
@@ -110,9 +122,12 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
 std::vector<std::string> demo_video_lines(const DemoVideoOptions& o, const DemoVideoReport& r);
 
 // `-demovideo <demo> <file>` on the window's command line: `args`' demo turned into a video with
-// no window on a device of its own, the view riding `track`, the report printed. The exit code: 0
-// done, 1 no GPU device, 2 the export failed.
-int demo_video_main(const Args& args, const SearchPath& files,
-                    const shooters_edge::look::Picture& picture, int track);
+// no window on a device of its own, the view riding `playback.track`, the report printed. First
+// `console` is put in the newer look and reads video.cfg from the game folder or the current
+// folder, then `args`' + words again (video_cfg.hpp's `apply_video_cfg`); the size, rate, codec,
+// words and HUD are then `playback.video`'s (its cvars) where `args` gives no flag. The exit code:
+// 0 done, 1 no GPU device, 2 the export failed or `playback.video` names no size.
+int demo_video_main(ge::console::Console& console, const Args& args, const SearchPath& files,
+                    const shooters_edge::look::Picture& picture, const DemoPlayback& playback);
 
 }  // namespace shooters_edge::client

@@ -101,6 +101,10 @@ enum DemoStat : uint8_t {
   kStatRockets = 8,
   kStatCells = 9,
   kStatActiveWeapon = 10,
+  kStatTotalSecrets = 11,   // the level's secrets
+  kStatTotalMonsters = 12,  // the level's monsters
+  kStatSecrets = 13,        // found so far
+  kStatMonsters = 14,       // killed so far
   kStatItems = 15,
   kStatCount = 32,
 };
@@ -132,7 +136,9 @@ struct DemoStaticSound {
   float volume = 1, attenuation = 1;
 };
 
-// A line the server printed to the player (the protocol's print): deaths, chat, pickups.
+// A line the server printed to the player (the protocol's print): deaths, chat, pickups. `say` and
+// `say_team` both arrive as level 3 to whoever may read them (a single-player recording's chat
+// is known by its leading byte). Bytes from 128 are the font's second (gold) half.
 struct DemoPrint {
   int level = 2;     // the multiplayer protocol's level: 0 a pickup, 1 a death, 2 high, 3 chat
   std::string text;  // as sent: may hold several lines and the charset's coloured letters
@@ -165,6 +171,7 @@ struct DemoState {
   std::vector<DemoEntity> players;          // client, multiview: by slot (32)
   std::array<int32_t, 32> frags{};          // client, multiview: each slot's frags (updatefrags)
   std::array<std::string, 32> names;        // client, multiview: each slot's name (its userinfo)
+  std::array<std::string, 32> teams;        // client, multiview: each slot's team ("": none)
   std::array<int, 32> top{}, bottom{};      // client, multiview: each slot's colours (0..13)
   std::string game;  // client, multiview: the game folder the server ran ("fortress"; "" unnamed)
   std::vector<DemoEntity> statics;             // the level's static entities, in order
@@ -173,9 +180,9 @@ struct DemoState {
   std::vector<DemoSound> started;            // sounds started, in order
   std::vector<std::pair<int, int>> stopped;  // (entity, channel) stopped
   std::vector<DemoVoice> voice;              // voice messages, in order
-  std::vector<DemoPrint> prints;             // lines printed (the single-player's at level 2)
-  std::string centre;                        // a centre message (the last); empty when none
-  int64_t frames = 0;                        // frames read
+  std::vector<DemoPrint> prints;             // lines printed (a multiview: the tracked one's)
+  std::string centre;  // a centre message or the finale's text (the last); empty when none
+  int64_t frames = 0;  // frames read
 };
 
 struct Demo {

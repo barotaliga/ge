@@ -20,6 +20,7 @@
 // ge:test tests/shooters_edge_demo_test.cpp
 #include <algorithm>
 #include <string>
+#include <utility>
 
 #include "shooters_edge/client/demo.hpp"
 
@@ -434,13 +435,13 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.prints.push_back({level, m.str()});
         break;
       }
-      case 26:  // centerprint
+      case 9:
+        m.str();
+        break;  // stufftext
+      case 26:
+      case 31:  // centerprint, finale
         s.centre = m.str();
         break;
-      case 9:
-      case 31:
-        m.str();
-        break;    // stufftext, finale
       case 10: {  // setangle; a multiview recording's names the player it turns first
         if (s.format == DemoFormat::multiview) m.u8();
         if ((d.ext_mvd & kMvdHighLagTeleport) != 0) m.u8();
@@ -552,6 +553,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         if (slot < 32) {
           const size_t k = static_cast<size_t>(slot);
           s.names[k] = info_field(info, "name");
+          s.teams[k] = info_field(info, "team");
           s.top[k] = colour_of(info_field(info, "topcolor"));
           s.bottom[k] = colour_of(info_field(info, "bottomcolor"));
         }
@@ -612,6 +614,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         if (slot < 32) {
           const size_t k = static_cast<size_t>(slot);
           if (key == "name") s.names[k] = value;
+          if (key == "team") s.teams[k] = value;
           if (key == "topcolor") s.top[k] = colour_of(value);
           if (key == "bottomcolor") s.bottom[k] = colour_of(value);
         }

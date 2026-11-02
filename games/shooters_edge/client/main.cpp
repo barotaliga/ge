@@ -50,7 +50,7 @@
 // player a multiview recording's view rides (-1: the lowest playing). Every format plays, `.gz`
 // included, and the voice formats (`.qwdv`, `.mvdv`) with their voices. A played demo is watched
 // like a video (client/demo_playback.hpp); `-demovideo <demo> <file>` turns one, or a clip of it,
-// into a video or a GIF with no window and quits (client/demo_video.hpp).
+// into a video or a GIF with no window and quits (client/demo_video.hpp, client/video_cfg.hpp).
 // ge:summary Shooter's Edge's window: the listen server, the keys and mouse, the world and the HUD
 // ge:keywords app main window listen-server basedir game-folder plus-commands map console relative-
 // ge:keywords mouse mouse-look hud first-person effects r_look quit shooters-edge benchmark
@@ -316,7 +316,7 @@ int run_main(int argc, char** argv) {
     out::status("shooters_edge: " + std::to_string(cl::archive_paths(files).size()) +
                 " archives on the search path of " + files.folder);
   }
-  if (!args.demovideo.empty()) return cl::demo_video_main(args, files, picture, playback.track);
+  if (!args.demovideo.empty()) return cl::demo_video_main(console, args, files, picture, playback);
   // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
   // enhance offers.
   const cl::GameAdapter& adapter = cl::adapter_of(shooters_edge::profiles::classic_game());
