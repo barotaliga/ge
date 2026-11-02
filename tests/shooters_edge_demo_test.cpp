@@ -106,6 +106,7 @@ TEST(a_client_recording_reads_back_frame_for_frame) {
   CHECK(r.last.entities.size() > 40 && r.last.entities[40].present);
   CHECK(r.last.entities[40].model == 3);  // its baseline's model, kept through the deltas
   CHECK(r.last.entities[40].origin.x == s.origins.back().x + 89);
+  CHECK(r.last.players[0].model == 2);  // no model sent: progs/player.mdl, drawn when not the eye
   CHECK(cl::demo_status(r.last, 1.0).weapon == shooters_edge::hud::Weapon::rocket_launcher);
 }
 

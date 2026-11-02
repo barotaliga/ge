@@ -190,6 +190,7 @@ struct Demo {
   uint32_t incoming = 0;              // the last packet's sequence
   uint32_t ext_fte = 0, ext_mvd = 0;  // the client format's protocol extensions
   int cmd_size = 0;                   // the client format's usercmd struct: 24 or 28 (0: unknown)
+  int player_model = 0;  // the client format's `progs/player.mdl` index: a playerinfo's default
   bool ended = false;
   // The multiview format: the player the view rides (-1: the lowest slot playing), each player's
   // own stats (the stats records write them; the tracked one's are copied to `state.stats`).
