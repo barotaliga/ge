@@ -686,6 +686,13 @@ struct FsOut {
   @location(2) mask: vec4f,
 };
 
+// A SECOND VIEW of the map (bsp_views.hpp: the water's planar mirror, the view up from under it)
+// carries its clip plane in the frame's sixth plane, all zero in the frame's own view: what lies
+// on its far side is dropped, and the sky's pixels keep an alpha of 0 for the reader to fill.
+fn second_view() -> bool {
+  return any(frame.planes[5] != vec4f(0.0));
+}
+
 // THE FOG IN AN AREA (render/fog.hpp; bsp_fog.hpp's volumes): under v2 every face but the sky's
 // mask seen through it, the dust of a hall, the haze over a pool of lava. With no volume in reach
 // `local_fog` hands the colour back as it came, so a map with no fog draws the bits it drew.
@@ -696,6 +703,14 @@ fn fs_main(in: VsOut) -> FsOut {
     let rel = in.world - frame.eye.xyz;
     out.colour = vec4f(local_fog(out.colour.rgb, in.clip.xy * frame.size.zw, length(rel)),
                        out.colour.a);
+  }
+  if (second_view()) {
+    if (dot(frame.planes[5].xyz, in.world) + frame.planes[5].w < 0.0) {
+      discard;
+    }
+    if (out.mask.x > 0.5) {
+      out.colour.a = 0.0;
+    }
   }
   return out;
 }

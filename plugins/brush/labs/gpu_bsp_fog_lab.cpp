@@ -113,7 +113,7 @@ gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, gr::FrameView v, boo
     ba::prepare_bsp(d, m.bsp, v, o);
     ba::prepare_bsp_fog_shadow(d, m.shadow, m.bsp, v);
     gr::bind_fog_shadows(f.fog, m.shadow.group);
-    ba::light_rooms(m.water, m.liquids, m.rows, o.minlight, o.brightness);
+    ba::light_rooms(m.water, m.liquids, m.world, m.rows, o.minlight, o.brightness);
     gr::prepare_water(d, m.water, v);
     gr::prepare_liquid(d, m.liquids, v);
     wgpu::CommandEncoder e = d.device.CreateCommandEncoder();

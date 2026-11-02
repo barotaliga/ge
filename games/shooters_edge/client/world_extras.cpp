@@ -5,10 +5,12 @@
 // ge:skill render shooter classicenhance
 #include "shooters_edge/client/world_extras.hpp"
 
+#include <cmath>
 #include <vector>
 
 #include "brush/app/bsp_flames.hpp"
 #include "brush/app/bsp_liquids.hpp"
+#include "brush/app/bsp_views.hpp"
 #include "render/flame.hpp"
 #include "render/liquid.hpp"
 #include "render/precip.hpp"
@@ -20,6 +22,8 @@ namespace shooters_edge::client {
 namespace ba = ge::brush::app;
 namespace gr = ge::render;
 
+constexpr double kDegree = 3.14159265358979323846 / 180;
+
 struct WorldExtras {
   const ba::Scene* scene = nullptr;
   const ge::classicenhance::Switches* on = nullptr;
@@ -27,8 +31,12 @@ struct WorldExtras {
   ba::LiquidRows rows;
   ba::LiquidWorld world;
   gr::Water water;
-  gr::Underwater under;  // the view from under the water's level
-  uint32_t height = 1;   // the targets' rows
+  gr::Underwater under;              // the view from under the water's level
+  ba::BspViews views;                // the map drawn again for the water: its mirror, the view up
+  gr::WaterViews handed;             // what the water was last handed of them
+  const ba::BspDraw* bsp = nullptr;  // this frame's (prepare_extras), for the views' pass
+  double wind = -1, from = 0;        // the air the waves were last laid under (m/s, rad)
+  uint32_t height = 1;               // the targets' rows
   gr::Liquids liquids;
   std::vector<ba::Kind> liquid_kinds;  // each liquid slot's: kLava or kSlime
   gr::Flames flames;
@@ -46,7 +54,7 @@ void WorldExtrasDeleter::operator()(WorldExtras* x) const { delete x; }
 WorldExtrasPtr create_extras(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines,
                              const wgpu::BindGroupLayout& frame, const ba::Scene& scene,
                              const ge::classicenhance::Switches& switches,
-                             const ba::WeatherCvars& weather) {
+                             const ba::WeatherCvars& weather, const gr::Sky& sky) {
   WorldExtrasPtr x(new WorldExtras);
   x->scene = &scene;
   x->on = &switches;
@@ -64,8 +72,12 @@ WorldExtrasPtr create_extras(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines
   gr::PrecipSettings precip;
   precip.particles = ba::weather_particles(precip, weather.density);
   gr::create_precip(d, pipelines, x->precip, frame, precip);
-  x->world = ba::liquid_world(scene, x->rows);
+  // The waves under the weather's wind as far as each pool is open to it (re-laid when it changes).
+  x->wind = switches.wind ? weather.wind : 0;
+  x->from = weather.wind_from * kDegree;
+  x->world = ba::liquid_world(scene, x->rows, x->wind, x->from);
   ba::add_bsp_liquids(d, x->water, x->liquids, x->world, x->rows);
+  ba::create_bsp_views(d, x->views, frame, sky);
   // The liquid slots in the order add_bsp_liquids made them: every body that is not water and
   // whose row is known.
   for (const ba::Kind k : x->world.kinds) {
@@ -79,6 +91,9 @@ WorldExtrasPtr create_extras(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines
 void bind_extras_targets(ge::gpu::Device& d, WorldExtras& x, const gr::FrameTargets& targets) {
   gr::create_water_targets(d, x.water, targets);
   gr::bind_underwater(d, x.under, x.water);
+  ba::create_bsp_view_targets(d, x.views, targets.width, targets.height);
+  x.handed = {};
+  gr::set_water_views(d, x.water, x.handed);
   x.height = targets.height;
   gr::create_liquid_targets(d, x.liquids, targets);
   gr::bind_flame_targets(d, x.flames, targets);
@@ -111,17 +126,59 @@ void dress_extras(WorldExtras& x, gr::FrameView& view, ba::Options& options, dou
   x.now.draw.near_m = view.near_m;
 }
 
+// The body the water's views are drawn for this frame: the one the eye is in, else the nearest
+// over whose level the eye stands (-1: none drawn, or none within reach).
+int view_body(const WorldExtras& x, const gr::FrameView& view, int eye_in) {
+  if (eye_in >= 0) return eye_in;
+  int best = -1;
+  double best_d = 60 * 60;  // m^2: past 60 m a pool's reflection is a few pixels
+  for (size_t i = 0; i < x.water.bodies.size(); ++i) {
+    const gr::Water::Slot& s = x.water.bodies[i];
+    if (s.hidden || view.eye[1] <= s.staged.info[0]) continue;
+    const double dx = std::max({s.staged.box[0] - view.eye[0], 0.0, view.eye[0] - s.staged.box[2]});
+    const double dz = std::max({s.staged.box[1] - view.eye[2], 0.0, view.eye[2] - s.staged.box[3]});
+    const double dy = view.eye[1] - s.staged.info[0];
+    const double d = dx * dx + dz * dz + dy * dy;
+    if (d < best_d) {
+      best_d = d;
+      best = int(i);
+    }
+  }
+  return best;
+}
+
 void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
-                    const gr::FrameView& view, const ba::Options& options) {
+                    const gr::FrameView& view, const ba::Options& options,
+                    const gr::FrameUniforms& uniforms) {
   const ge::classicenhance::Switches& on = *x.on;
   const bool v2 = options.mode == ba::Mode::v2;
+  x.bsp = &bsp;
   for (gr::Water::Slot& s : x.water.bodies) s.hidden = !v2 || !on.water;
   for (size_t i = 0; i < x.liquids.bodies.size() && i < x.liquid_kinds.size(); ++i) {
     const bool shown = x.liquid_kinds[i] == ba::kLava ? on.lava : on.slime;
     x.liquids.bodies[i].hidden = !v2 || !shown;
   }
-  ba::light_rooms(x.water, x.liquids, x.rows, options.minlight, options.brightness);
-  gr::prepare_water(d, x.water, view);
+  // The weather's wind changed (sv_wind, sv_winddir, ce_wind): the waves laid again under it.
+  const double wind = on.wind ? x.weather->wind : 0, from = x.weather->wind_from * kDegree;
+  if (wind != x.wind || from != x.from) {
+    x.wind = wind;
+    x.from = from;
+    ba::relay_liquid_wind(d, x.water, x.world, wind, from);
+  }
+  ba::light_rooms(x.water, x.liquids, x.world, x.rows, options.minlight, options.brightness);
+  // The eye in the water when the map's leaf there is water: at any depth, in any passage.
+  const int eye_in = ba::eye_water_body(x.scene->map, x.world, view.eye);
+  const bool water_on = v2 && on.water;
+  const int body = water_on ? view_body(x, view, eye_in) : -1;
+  const double level = body >= 0 ? x.water.bodies[size_t(body)].staged.info[0] : 0;
+  ba::prepare_bsp_views(d, x.views, uniforms, body, level, body >= 0 && eye_in == body);
+  const gr::WaterViews handed = ba::water_views(x.views);
+  if (handed.body != x.handed.body || handed.below != x.handed.below ||
+      handed.has_up != x.handed.has_up || handed.level != x.handed.level) {
+    x.handed = handed;
+    gr::set_water_views(d, x.water, x.handed);
+  }
+  gr::prepare_water(d, x.water, view, eye_in);
   gr::prepare_underwater(d, x.under, x.water, view, x.height);
   gr::prepare_liquid(d, x.liquids, view);
   x.fires.clear();
@@ -155,6 +212,7 @@ void encode_extras_sim(const WorldExtras& x, const ge::gpu::PipelineSet& pipelin
 void encode_extras(const WorldExtras& x, const ge::gpu::PipelineSet& pipelines,
                    gr::FrameRecorder& rec, wgpu::CommandEncoder& e, const gr::FrameTargets& targets,
                    const wgpu::BindGroup& frame) {
+  if (x.bsp) ba::encode_bsp_views(*x.bsp, x.views, pipelines, rec, e);
   gr::encode_flames(x.flames, pipelines, rec, e, targets, frame);
   gr::encode_water(x.water, pipelines, rec, e, targets, frame);
   gr::encode_underwater(x.under, pipelines, rec, e, targets, frame);
