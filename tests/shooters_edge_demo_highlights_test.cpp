@@ -3,11 +3,12 @@
 // (demo_write.hpp's `highlight_match`) scanned into its kills with the right killers, weapons,
 // rocket flights, air, gibs, stacks and telefrags; the highlights found for the watched player and
 // for another; the timeline's seek forward and back landing on the straight read; the playback's
-// keys, skips, jumps, speeds and pause; the console's clock.
+// keys, skips, jumps, speeds and pause; the console's clock. The scan also keeps where killer
+// and victim stood and every rocket's flight with its shooter (the `se-kills` lab's input).
 //
 // ge:summary Tests: a demo's kills and highlights found, the timeline's seek, the playback controls
 // ge:keywords test demo highlights scan kills multi-kill long-shot air-kill annihilation telefrag
-// ge:keywords streak seek timeline playback skip jump speed pause parse_clock
+// ge:keywords streak seek timeline playback skip jump speed pause parse_clock flights shooter
 // ge:skill shooter replay testing
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #include <cmath>
@@ -88,6 +89,30 @@ TEST(the_match_scans_into_its_kills) {
   CHECK(s.kills[6].victim == 0 && s.kills[6].killer == 3 && s.kills[6].rocket_flight > 1000);
   CHECK(s.kills[7].telefrag && s.kills[7].killer == 0 && s.kills[7].victim == 1);
   CHECK(!s.kills[3].telefrag && !s.kills[6].telefrag);
+}
+
+TEST(the_scan_keeps_where_each_kill_stood_and_every_flight_with_its_shooter) {
+  const cl::DemoScan& s = scanned();
+  CHECK(s.map == "halls");
+  // 10 s: from the hall's south-west corner onto the far end of the vault.
+  const cl::DemoKill& k = s.kills[2];
+  CHECK(near(k.killer_at.x, 40, 1) && near(k.killer_at.y, 40, 1));
+  CHECK(near(k.victim_at.x, 735, 1) && near(k.victim_at.y, 795, 1));
+  CHECK_MSG(k.shot && near(k.shot_from.x, 40, 40) && near(k.shot_to.x, 730, 60) &&
+                near(k.shot_to.y, 790, 60),
+            "the rocket matched went from " + std::to_string(k.shot_from.x) + " to " +
+                std::to_string(k.shot_to.x) + " " + std::to_string(k.shot_to.y));
+  CHECK(!s.kills[4].shot && !s.kills[5].shot);  // the beam and the shotgun fly nothing
+  // Every rocket flown is kept with the player it left from: slot 0's three, slot 3's one.
+  CHECK(s.flights.size() == 4);
+  int by0 = 0, by3 = 0;
+  for (const cl::DemoFlight& f : s.flights) {
+    CHECK(!f.grenade && f.t1 > f.t0);
+    by0 += f.shooter == 0 ? 1 : 0;
+    by3 += f.shooter == 3 ? 1 : 0;
+  }
+  CHECK_MSG(by0 == 3 && by3 == 1, "the shooters read " + std::to_string(by0) + " for slot 0 and " +
+                                      std::to_string(by3) + " for slot 3");
 }
 
 TEST(the_watched_players_highlights) {
