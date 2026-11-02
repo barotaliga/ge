@@ -78,6 +78,8 @@ struct GameProfile {
   std::string_view fallback_map;                        // with no start map in the content
   std::span<const std::string_view> demo_extensions;    // tried in order on a bare demo name
   ItemTables tables;  // its items, their words and the sounds a bot reads (items.hpp)
+  // Its first-person weapons' model files, in the order of the number keys (view::Weapon's).
+  std::span<const std::string_view> held_weapons;
 };
 
 inline constexpr ProgramFile kClassicMultiplayer[] = {{.name = "qwprogs.dat"},
@@ -86,13 +88,18 @@ inline constexpr ProgramFile kClassicSinglePlayer[] = {{.name = "progs.dat"}};
 inline constexpr std::string_view kClassicDemos[] = {".dem",  ".mvd",  ".qwdv",  ".mvdv",
                                                      ".mvdz", ".qwdz", ".mvdvz", ".qwdvz"};
 
+inline constexpr std::string_view kClassicHeld[] = {
+    "progs/v_axe.mdl",   "progs/v_shot.mdl", "progs/v_shot2.mdl", "progs/v_nail.mdl",
+    "progs/v_nail2.mdl", "progs/v_rock.mdl", "progs/v_rock2.mdl", "progs/v_light.mdl"};
+
 inline constexpr GameProfile kGameProfiles[] = {
     {.id = "classic",
      .multiplayer_programs = kClassicMultiplayer,
      .single_player_programs = kClassicSinglePlayer,
      .fallback_map = "arena",
      .demo_extensions = kClassicDemos,
-     .tables = kClassicTables},
+     .tables = kClassicTables,
+     .held_weapons = kClassicHeld},
 };
 
 // The first row: the classic game, the one every reader uses until a choice of game is made.

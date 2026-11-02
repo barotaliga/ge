@@ -608,6 +608,7 @@ files shares: `engine/vfs` (folders, packs, zips, loose files, a mod over the ba
 | **sounds** (`open_sound`) | WAV files under `sound/` | WAV files under `sound/` | WAV files and other formats under `sound/` |
 | **config files** (`find_config`) | console text at the top of its packs and its mod folder (`exec mymod.cfg`) | the same | the same, inside its zips |
 | **place names** (`open_locations`) | `locs/<map>.loc` (`plugins/shooter/locs.hpp`'s format) | none of its own: named off the map's items | none of its own: named off the map's items |
+| **held weapons** (`held_weapons`) | `progs/v_*.mdl`, authored at the eye, the firing frames a `fire` clip | its own weapon models in a folder a weapon | its own weapon models |
 | **demos** (`list_demos`, `find_demo`, `open_demo`) | the single-player, client and multiview recordings (`client/demo.hpp`) | its own recording format | its own |
 
 **Every program file names its form and its side** (`ProgramFile` in `profiles/game_profile.hpp`:
@@ -638,8 +639,14 @@ files open, so the pack's own startup files never replace the game's defaults or
 binds. A map's place names (the teamplay callouts, the bots' talk) come through
 `open_locations` into `ge::shooter::Locs`; with none, the bots name places off the map's items.
 
-**Still to move behind a call of its own**, in its own change: the held weapons' models from the
-game's files (the window holds the game's own set today).
+**A classic game is played with its own things alone.** With a classic game's folder open, the
+window draws that game's own held weapons through `held_weapons` (`client/held.hpp`'s
+`load_held_set`), placed at the eye where its files author them (`view::Hand::at_eye`, the
+classic row with no offset; lab `se-held`); when its files lack one, no weapon is drawn and the
+status line names the missing file. Shooter's Edge's own weapons, HUD art and other assets are
+for its own content (its own maps and mod), never a stand-in for a classic game's, so changing
+them never changes a classic game. Playing one classic game with another's parts is classic
+remix, a feature of classic-enhance (M18u), shown only when two full games are loaded.
 
 ### The rules runner: the next seam (designed, not built)
 

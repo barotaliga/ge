@@ -7,12 +7,13 @@
 // its form with a picture beside it standing in for a skin; a sound is read from `sound/`; the
 // menus' pictures are the packs' with a PNG or TGA of a picture's name standing in for it; a
 // config file in the packs runs through `exec` after the player's own; a map's place names are
-// read from its loc file.
+// read from its loc file; the game's own held weapons are its first-person models, all or none.
 //
 // ge:summary Tests the first game's adapter: mods, programs by form, map info, textures, demos
 // ge:keywords test shooters-edge game-adapter list_mods find_program program-form map_info
 // ge:keywords map_textures list_demos find_demo qwprogs open_model open_sound replacement-skin
 // ge:keywords pictures replacement-picture find_config read_configs_from open_locations
+// ge:keywords held_weapons
 // ge:skill shooter testing
 #include <filesystem>
 #include <fstream>
@@ -341,4 +342,45 @@ TEST(a_maps_place_names_are_read_from_its_loc_file) {
   ge::shooter::Locs none;
   CHECK(!a.open_locations(a, files, "empty", none) && none.points.empty());
   CHECK(!a.open_locations(a, files, "e1m1", none));
+}
+
+TEST(the_games_own_held_weapons_are_its_first_person_models_in_the_number_keys_order) {
+  const pf::GameProfile& g = pf::classic_game();
+  const std::vector<uint8_t> model = ge::morph::write_model(ge::morph::sample_model());
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> listed = {
+      {"gfx/palette.lmp", std::vector<uint8_t>(768, 90)}};
+  for (const std::string_view name : g.held_weapons) listed.push_back({std::string(name), model});
+  // All but the last: the set is refused with the one missing named; nothing stands in for it.
+  std::vector<uint8_t> pak;
+  std::string error;
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> short_set(listed.begin(),
+                                                                      listed.end() - 1);
+  CHECK(ge::vfs::write_pak(short_set, &pak, &error));
+  cl::SearchPath part;
+  CHECK_MSG(cl::add_archive(part, "pak0.pak", std::move(pak), error), error);
+  const cl::GameAdapter& a = cl::classic_adapter();
+  std::vector<ge::viewmodel::HeldModel> held;
+  std::string why;
+  CHECK(!a.held_weapons(a, part, held, why) && held.empty());
+  CHECK(why.find(std::string(g.held_weapons.back())) != std::string::npos);
+  // No palette: refused, saying so; a palette and no models: false with nothing to say.
+  cl::SearchPath none;
+  CHECK(!a.held_weapons(a, none, held, why) && why.find("palette") != std::string::npos);
+  CHECK(ge::vfs::write_pak({listed[0]}, &pak, &error));
+  cl::SearchPath bare;
+  CHECK_MSG(cl::add_archive(bare, "pak0.pak", std::move(pak), error), error);
+  CHECK(!a.held_weapons(a, bare, held, why) && why.empty());
+  // The whole set: eight models, each with its firing frames as the fire clip.
+  CHECK(ge::vfs::write_pak(listed, &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  CHECK_MSG(a.held_weapons(a, files, held, why), why);
+  CHECK(held.size() == g.held_weapons.size() && g.held_weapons.size() == 8);
+  for (const ge::viewmodel::HeldModel& h : held) {
+    CHECK(h.frames.size() == ge::morph::sample_model().frames.size() && !h.skin.image.rgba.empty());
+    if (h.frames.size() > 1) {
+      CHECK(ge::viewmodel::find_held_clip(h, "fire") == 0);
+      CHECK(h.clips[0].first == 1 && h.clips[0].count == int(h.frames.size()) - 1);
+    }
+  }
 }

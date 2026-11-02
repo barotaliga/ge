@@ -444,22 +444,16 @@ int run_main(int argc, char** argv) {
   }
   next_map.clear();
 
-  // The held weapons: the folder given, else the tree's from here, else from where it was built.
+  // The held weapons: a classic game's own, else ours from the folder given, the tree's from here
+  // or from where it was built (client/held.hpp).
   std::vector<ge::viewmodel::HeldModel> weapons;
-  {
-    std::vector<std::string> dirs;
-    if (!args.models.empty()) dirs.push_back(args.models);
-    dirs.emplace_back("games/shooters_edge/content/models/view");
+  std::vector<std::string> model_dirs;
+  if (!args.models.empty()) model_dirs.push_back(args.models);
+  model_dirs.emplace_back("games/shooters_edge/content/models/view");
 #ifdef SE_MODELS_DIR
-    dirs.emplace_back(SE_MODELS_DIR);
+  model_dirs.emplace_back(SE_MODELS_DIR);
 #endif
-    std::string why;
-    for (const std::string& dir : dirs)
-      if (shooters_edge::view::load_weapon_models(dir, weapons, &why)) break;
-    if (weapons.empty())
-      out::status("shooters_edge: no weapon is drawn: " + why +
-                  "; next: pass -models <the tree's games/shooters_edge/content/models/view>");
-  }
+  const bool weapons_at_eye = cl::load_held_set(adapter, files, model_dirs, weapons);
   // Each weapon's muzzle fire (world_fx.hpp), at the size its gun is drawn.
   cl::HeldFire held_fire;
   if (std::string why; !cl::load_held_fire(held_fire, &why)) {
@@ -581,6 +575,7 @@ int run_main(int argc, char** argv) {
   cl::FxState fx_state;
   cl::FxFrame fx;
   cl::HeldState in_hand;
+  in_hand.hand.at_eye = weapons_at_eye;
   size_t printed = 0;
   const uint64_t first_ns = ge::platform::now_ns();
   uint64_t last = first_ns;

@@ -9,7 +9,7 @@
 // ge:keywords classic-adapter list_mods find_program list_maps map_info map_textures list_demos
 // ge:keywords find_demo open_demo mod-folder qwprogs replacement-texture png tga open_model
 // ge:keywords open_sound replacement-skin mdl spr wav pictures replacement-picture gfx-wad lmp
-// ge:keywords find_config cfg open_locations loc-file
+// ge:keywords find_config cfg open_locations loc-file held_weapons v-mdl
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #include <algorithm>
@@ -23,6 +23,7 @@
 #include "assets/tga.hpp"
 #include "brush/read.hpp"
 #include "classicenhance/cached.hpp"
+#include "classicenhance/weapons.hpp"
 #include "core/output.hpp"
 #include "morph/read.hpp"
 #include "progs/layout.hpp"
@@ -251,6 +252,48 @@ bool open_locations(const GameAdapter&, const SearchPath& files, std::string_vie
   return true;
 }
 
+bool held_weapons(const GameAdapter& self, const SearchPath& files,
+                  std::vector<ge::viewmodel::HeldModel>& out, std::string& why) {
+  out.clear();
+  why.clear();
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> lmp = find_file(files, "gfx/palette.lmp", store);
+  ge::classicenhance::Palette palette;
+  if (lmp.size() < palette.rgb.size()) {
+    why = "no gfx/palette.lmp in the game's files to colour the held weapons' skins";
+    return false;
+  }
+  std::copy_n(lmp.begin(), palette.rgb.size(), palette.rgb.begin());
+  int found = 0;
+  std::string missing;
+  for (const std::string_view name : self.game->held_weapons) {
+    OpenedModel m;
+    std::string error;
+    if (!open_model(self, files, std::string(name), m, error) || m.form != ModelForm::morph) {
+      missing += missing.empty() ? "" : ", ";
+      missing.append(name);
+      if (!error.empty()) missing += " (" + error + ")";
+      continue;
+    }
+    found++;
+    ge::viewmodel::HeldModel h = ge::classicenhance::held_from_morph(m.morph, palette, 0);
+    if (!m.skins.empty() && m.skins[0].width > 0) {  // a picture beside it, alpha and all
+      h.skin.image = std::move(m.skins[0]);
+      h.skin.glow.clear();
+    }
+    if (h.frames.size() > 1)  // the firing frames after the rest frame, at the classic rate
+      h.clips.push_back({.name = "fire",
+                         .first = 1,
+                         .count = int(h.frames.size()) - 1,
+                         .fps = 1.0 / ge::classicenhance::kFrameSeconds});
+    out.push_back(std::move(h));
+  }
+  if (missing.empty()) return true;
+  if (found > 0) why = "the game's files lack held weapons: " + missing;
+  out.clear();
+  return false;
+}
+
 std::vector<ge::brush::MapPicture> map_textures(const GameAdapter&, const SearchPath& files,
                                                 std::string_view map,
                                                 std::span<const uint8_t> map_file,
@@ -344,6 +387,7 @@ const GameAdapter kClassic{.game = &pf::kGameProfiles[0],
                            .pictures = pictures,
                            .find_config = find_config,
                            .open_locations = open_locations,
+                           .held_weapons = held_weapons,
                            .list_demos = list_demos,
                            .find_demo = find_demo_,
                            .open_demo = open_demo_};
