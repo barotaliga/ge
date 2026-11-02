@@ -94,6 +94,12 @@ The trained upscaler's weights are fetched by the tool into the cache's `weights
 into the tree); in this repository's container fetch them into the scratchpad and pass
 `--weights`.
 
+In Shooter's Edge the player runs none of this: OPTIONS ▸ CLASSIC ENHANCED ▸ LOAD GAME (or
+`basedir <folder>`) opens their install and runs the pipeline on it in the background at once
+(`ce_auto`), the game mounting only the menu's enhancing page (`games/shooters_edge/menu/
+game_menu.hpp`, `client/game_folder.hpp`). The window's run uses the kernel upscaler; the tool's
+default is the trained network.
+
 `<path>` is the shareware release zip as published, an installed game folder (its `id1/pak0.pak`
 and any later packs, in any case), the pack file itself, or a folder holding the release zip. In this repository's
 container the pack is fetched into the scratchpad only, never into the tree.

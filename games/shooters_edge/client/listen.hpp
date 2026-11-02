@@ -39,6 +39,7 @@
 // ge:summary The listen server: the mod server and its local player in one process, no network
 // ge:keywords listen-server local-player client slot usercmd packet listen_start listen_frame
 // ge:keywords listen_advance listen_change loaded-map load_named_map baseline_progs map-change
+// ge:keywords listen_stop
 // ge:keywords forced-view mintic player_state missiles rocket-jump lobby warmup listen_lobby
 // ge:keywords match-restart restarted
 // ge:keywords listen_campaign campaign single-player map_changed level-change
@@ -153,6 +154,9 @@ bool listen_start(Listen& l, const ge::progs::Progs& progs, std::unique_ptr<Load
 // The same progs on another map (the spawn parms saved first), the player connected again; in a
 // campaign, a new game on it.
 bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error);
+// The game ended and let go (its servers, then the maps they view, then the program), the options
+// kept: another game folder may be opened, and the next start is `listen_start`'s.
+void listen_stop(Listen& l);
 // A new game of the single-player program `progs` (which must outlive the listen) on `map`, the
 // match before it (if any) ended. `opt.console`'s lines are the campaign's settings.
 bool listen_campaign(Listen& l, const ge::progs::Progs& progs, std::unique_ptr<LoadedMap> map,

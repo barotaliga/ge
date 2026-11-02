@@ -530,6 +530,29 @@ TEST(a_played_demo_gathers_what_the_frames_between_draws_carried) {
   CHECK(t.heard.prints.empty());
 }
 
+TEST(a_line_printed_in_pieces_shows_as_one_line) {
+  // A mod's death: the victim, the words, the killer (second colour) and the newline as four
+  // prints, the newline only in a later frame.
+  ge::audio::Synth synth;
+  cl::DemoHearing hearing(synth);
+  cl::DemoState s;
+  cl::DemoHeard h;
+  std::vector<std::string> lines;
+  std::string centre;
+  h.prints = {{1, "Unnamned"}, {1, " takes a bullet in the chest from "}, {1, "\xCD\xE3\xC4"}};
+  hearing.frame(s, h, 0.1f, lines, centre);
+  CHECK(lines.empty());
+  h.prints = {{1, "\n"}, {3, "Doomer: gg\nhalf"}};
+  hearing.frame(s, h, 0.1f, lines, centre);
+  CHECK(lines.size() == 2 && lines[0] == "Unnamned takes a bullet in the chest from McD");
+  CHECK(lines.size() == 2 && lines[1] == "Doomer: gg");
+  // A new demo starts without the last one's unended line.
+  hearing.stop();
+  h.prints = {{1, "next\n"}};
+  hearing.frame(s, h, 0.1f, lines, centre);
+  CHECK(lines.size() == 3 && lines[2] == "next");
+}
+
 TEST(a_printed_line_shows_without_the_charset_s_own_letters) {
   // A death and a chat line: the second colour's letters (high bit), the bracket and digit glyphs,
   // a chat marker, two lines and an empty one.

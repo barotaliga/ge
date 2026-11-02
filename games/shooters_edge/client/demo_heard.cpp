@@ -78,8 +78,14 @@ bool DemoHearing::frame(const DemoState& s, DemoHeard& h, float dt, std::vector<
   if (sounds_) sounds_->frame(s, h.started, h.stopped, listener_of(s), dt);
   if (voices_)
     for (const DemoVoice& v : h.voice) voices_->play(v);
-  for (const DemoPrint& p : h.prints)
-    for (std::string& line : print_lines(p.text)) lines.push_back(std::move(line));
+  // A line may come in several prints (a mod's death: the victim, the words, the killer, the
+  // newline), so the text after the last newline waits for the rest of its line.
+  for (const DemoPrint& p : h.prints) partial_ += p.text;
+  if (const size_t end = partial_.rfind('\n'); end != std::string::npos) {
+    for (std::string& line : print_lines(partial_.substr(0, end + 1)))
+      lines.push_back(std::move(line));
+    partial_.erase(0, end + 1);
+  }
   const bool centred = !h.centre.empty();
   if (centred) {  // the centre is one line: a message's lines side by side
     centre.clear();
@@ -95,6 +101,7 @@ void DemoHearing::stop() {
   sounds_.reset();
   voices_.reset();
   files_ = nullptr;
+  partial_.clear();
 }
 
 }  // namespace shooters_edge::client

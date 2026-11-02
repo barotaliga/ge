@@ -71,6 +71,7 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
     // benchmark, not one console line of four words.
     if ((arg == "-basedir" || arg == "--basedir") && i + 1 < argc) {
       a.basedir = expand_home(argv[++i]);
+      a.basedir_set = true;
     } else if ((arg == "-progs" || arg == "--progs") && i + 1 < argc) {
       a.progs = expand_home(argv[++i]);
     } else if ((arg == "-models" || arg == "--models") && i + 1 < argc) {
@@ -104,6 +105,7 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       a.playdemo = expand_home(argv[++i]);
     } else if ((arg == "-game" || arg == "--game") && i + 1 < argc) {
       a.game = argv[++i];
+      a.game_set = true;
     } else if (arg.rfind("--frames=", 0) == 0) {
       a.frames = std::strtol(argv[i] + 9, nullptr, 10);
     } else if (arg.rfind("--size=", 0) == 0 || arg.rfind("--resolution=", 0) == 0) {

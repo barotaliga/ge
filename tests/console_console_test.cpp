@@ -165,3 +165,12 @@ TEST(macros_expand_ahead_of_cvars) {
   c.execute("echo hp $health");
   CHECK(c.output()[0] == "hp 75" && c.output()[1] == "hp 40");
 }
+
+TEST(a_command_taken_away_is_gone) {
+  Console c;
+  c.add_command("NewGame", "a new game", [](Console& con, const Args&) { con.print("new"); });
+  CHECK(c.has_command("newgame"));
+  CHECK(c.remove_command("NEWGAME"));
+  CHECK(!c.has_command("newgame"));
+  CHECK(!c.remove_command("newgame"));
+}

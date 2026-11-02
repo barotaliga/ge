@@ -77,37 +77,36 @@ ScoresScreen scores_screen(const Listen& l, bool held) {
   return ScoresScreen::none;
 }
 
-void draw_scores(ge::ui::DrawList& dl, const Listen& l, const menu::ClassicArt& art, int w, int h,
-                 bool held, bool level_stats, menu::BoardView& board) {
-  namespace mn = shooters_edge::menu;
+void draw_scores(ge::ui::DrawList& dl, const Listen& l, const shooters_edge::menu::ClassicArt& art,
+                 int w, int h, bool held, bool level_stats, shooters_edge::menu::BoardView& board) {
   const CampaignView& c = l.campaign;
   if (l.campaign_host && c.end == LevelEnd::intermission) {
-    mn::draw_intermission(dl, art, w, h, level_stats_of(l));
+    menu::draw_intermission(dl, art, w, h, level_stats_of(l));
     return;
   }
   if (l.campaign_host && c.end != LevelEnd::none) {
-    mn::draw_level_text(dl, art, w, h, c.text, typed_chars(c, l.server->sv.time));
+    menu::draw_level_text(dl, art, w, h, c.text, typed_chars(c, l.server->sv.time));
     return;
   }
   switch (scores_screen(l, held)) {
     case ScoresScreen::solo: {
-      const mn::LevelStats st = level_stats_of(l);
-      if (level_stats) mn::draw_level_stats(dl, art, w, h, map_title(l), st);
+      const menu::LevelStats st = level_stats_of(l);
+      if (level_stats) menu::draw_level_stats(dl, art, w, h, map_title(l), st);
       // The modern look's level card already holds the strip's figures.
       if (!level_stats || !art.glyphs.empty())
-        mn::draw_solo_scorebar(dl, art, w, h, map_title(l), st);
+        menu::draw_solo_scorebar(dl, art, w, h, map_title(l), st);
       break;
     }
     case ScoresScreen::players: {
-      const mn::Scoreboard b = scores_of(l);
-      mn::draw_scoreboard(dl, art, w, h, b, board);
-      mn::draw_scorebar(dl, art, w, h, b);
+      const menu::Scoreboard b = scores_of(l);
+      menu::draw_scoreboard(dl, art, w, h, b, board);
+      menu::draw_scorebar(dl, art, w, h, b);
       break;
     }
     case ScoresScreen::teams: {
-      const mn::Scoreboard b = scores_of(l);
-      mn::draw_team_scoreboard(dl, art, w, h, b, board);
-      mn::draw_scorebar(dl, art, w, h, b);
+      const menu::Scoreboard b = scores_of(l);
+      menu::draw_team_scoreboard(dl, art, w, h, b, board);
+      menu::draw_scorebar(dl, art, w, h, b);
       break;
     }
     case ScoresScreen::none:

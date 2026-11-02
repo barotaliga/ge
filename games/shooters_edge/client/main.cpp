@@ -12,11 +12,11 @@
 //                 [-demovideo <demo> <file> [--from=m:ss --to=m:ss | --highlight=N] ...]
 //                 [+<command> ...]
 //
-// `-basedir` is the folder that holds the game folder (`id1` unless `-game` names another) with its
-// `pak0.pak`, `pak1.pak` ...; a leading `~` is the home folder, and a path with spaces is one
-// argument when quoted. `-progs` runs a mod's progs file in place of the baseline mod, and
-// `-models` names the held weapons' folder (by default the tree's
-// `games/shooters_edge/content/models/view`, from where the game runs or where it was built). The
+// `-basedir` holds the game folder (`id1`, the multiplayer client's folder over it when present;
+// `-game` names another); `~` is home. Without it, the game loaded last; LOAD GAME or `basedir
+// <folder>` loads another in place, enhanced in the background (client/game_folder.hpp). `-progs`
+// runs a mod's progs in place of the baseline mod, `-models` names the held weapons' folder (by
+// default `games/shooters_edge/content/models/view`, from where the game runs or was built). The
 // `+` words are console lines run at start: `+map dm6` loads that map (`map arena` is the built-in
 // test arena); with none, the map `start` when the packs have it, else the arena.
 //
@@ -89,6 +89,7 @@
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
+#include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
@@ -253,6 +254,10 @@ int run_main(int argc, char** argv) {
   // The HUD's feed shows the game's messages (hud.notify, below), so the console's own lines at
   // the top of the screen would show each a second time; a cfg or a + word can turn them back on.
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
+  // The install (client/game_folder.hpp): -basedir, else the one loaded last; multiplayer over
+  // `id1`.
+  const std::string prefs = ge::platform::prefs_dir("gameengine2", "shooters_edge");
+  cl::choose_folder(args, prefs);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
   console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
   // F12's screenshots (engine/capture/screenshot.hpp), in <game folder>/screenshots/ beside its
@@ -272,7 +277,8 @@ int run_main(int argc, char** argv) {
   cl::add_record_commands(console, recorder, listen, files, playback.record);
   std::string error;
   // No packs and no `+map`: the built-in arena (the start map below falls back to it).
-  if (!cl::open_game_dir(args.basedir, args.game, files, error)) {
+  const bool opened = cl::open_game_dir(args.basedir, args.game, files, error);
+  if (!opened) {
     if (!next_map.empty() && next_map != "arena") {
       out::error("shooters_edge: the game folder did not open: " + error +
                  "; see docs/shooters-edge.md § Playing it");
@@ -311,106 +317,41 @@ int run_main(int argc, char** argv) {
     return pics.enhanced;
   };
   bool pictures_enhanced = load_pictures(true);
-  game_menu.set_packs(cl::archive_paths(files));
-  const shooters_edge::profiles::GameProfile& game = shooters_edge::profiles::classic_game();
-  const ge::classicenhance::Profile& content = shooters_edge::profiles::content_of(game);
-  const std::string start_map(content.start_map);
-  if (next_map.empty()) {
-    std::vector<uint8_t> store;
-    next_map =
-        cl::find_file(files, ge::classicenhance::asset_path(content.maps, start_map), store).empty()
-            ? std::string(game.fallback_map)
-            : start_map;
-  }
-  // The multiplayer program: -progs, else the game's own multiplayer program files (a mod's
-  // folder first), else the baseline mod.
-  ge::progs::Progs progs;
-  std::string source;
-  bool mod_loaded = false;
-  if (!args.progs.empty()) {
-    mod_loaded = shooters_edge::server::load_mod(args.progs, progs, source, error);
-  } else {
-    cl::FoundProgram found;
-    std::string why;
-    if (adapter.find_program(adapter, files, false, found, why)) {
-      out::status("shooters_edge: the game's multiplayer program " + std::string(found.file.name) +
-                  " runs (-progs names another)");
-      progs = std::move(found.progs);
-      mod_loaded = true;
-    } else {
-      if (!why.empty()) out::status("shooters_edge: the baseline mod runs (" + why + ")");
-      mod_loaded = cl::baseline_progs(progs, error);
-    }
-  }
-  if (!mod_loaded) {
+  // The programs, the campaign and the first map the folder holds (client/game_folder.hpp).
+  cl::GameContent game_content;
+  if (!cl::load_programs(adapter, files, args.progs, game_content, error)) {
     out::error("shooters_edge: the mod did not load: " + error +
                "; see docs/shooters-edge.md § Running your own mod");
     return 2;
   }
-  // The campaign: a single-player program given with -progs, else the game's own single-player
-  // program files. With it, SINGLE PLAYER ▸ NEW GAME (`newgame`) is lit.
-  ge::progs::Progs pack_progs;
-  const ge::progs::Progs* campaign_progs = cl::single_player(progs) ? &progs : nullptr;
-  if (campaign_progs == nullptr) {
-    cl::FoundProgram found;
-    std::string why;
-    if (adapter.find_program(adapter, files, true, found, why)) {
-      pack_progs = std::move(found.progs);
-      campaign_progs = &pack_progs;
-    }
-  }
+  if (next_map.empty()) next_map = game_content.first_map;
   cl::ListenOptions listen_opt;
   listen_opt.files = &files;
   if (const ge::console::Cvar* n = console.cvars().find("name"); n != nullptr && !n->value.empty())
     listen_opt.player = n->value;
   listen_opt.lobby = listen.opt.lobby;  // the lobby's settings, as the console set them
   listen_opt.lobby_settings = listen.opt.lobby_settings;
-  {
-    std::vector<uint8_t> store;
-    listen_opt.registered = !cl::find_file(files, content.full_game, store).empty();
-  }
-  if (campaign_progs != nullptr)
-    console.add_command("newgame", "newgame: a new single-player game from the start map",
-                        [&](Con&, const CArgs&) {
-                          listen.opt.console.emplace_back("deathmatch 0");
-                          listen.opt.console.emplace_back("coop 0");
-                          next_map = start_map;
-                        });
+  listen_opt.registered = game_content.registered;
   // The saves (the campaign's whole game: listen.hpp's `listen_save`), `<game>/saves/<name>.save`.
   std::string load_ask;  // a save the console asked to load (loaded where a map change is made)
-  if (campaign_progs != nullptr) {
-    console.add_command(
-        "save",
-        "save <name>: the single-player game saved as saves/<name>.save (<name>.sav: the "
-        "classic text save in the game folder)",
-        [&](Con& c, const CArgs& a) {
-          if (a.size() < 2) {
-            c.print("save: save <name>");
-            return;
-          }
-          std::string why, name = a[1];
-          const bool classic = cl::classic_save_name(name);
-          std::vector<uint8_t> bytes;
-          std::string text;
-          const bool made = classic ? cl::listen_save_text(listen, text, why)
-                                    : cl::listen_save(listen, bytes, why,
-                                                      static_cast<int64_t>(std::time(nullptr)));
-          if (classic) bytes.assign(text.begin(), text.end());
-          if (!made || !cl::write_save(files, name, bytes, why, classic))
-            c.print(why);
-          else
-            c.print("saved " + a[1]);
-        });
-    console.add_command("load", "load <name>: the game saved as saves/<name>.save, else <name>.sav",
-                        [&](Con& c, const CArgs& a) {
-                          if (a.size() < 2)
-                            c.print("load: load <name>");
-                          else
-                            load_ask = a[1];
-                        });
+  cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
+  // The install's enhancing, in the background unless ce_auto is off or a run is measured.
+  if (std::string basedir, why; opened && cl::check_game_folder(args.basedir, &basedir, &why)) {
+    game_menu.set_game(basedir);
+    const bool measured = !args.timedemo.empty() || !args.playdemo.empty() || args.frames != 0;
+    if (game_menu.auto_enhance() && !measured) {
+      if (game_menu.enhance_game(false, &why))
+        out::status("shooters_edge: enhancing " + basedir +
+                    " in the background (ce_auto 0: "
+                    "only from CLASSIC ENHANCED > ENHANCE)");
+      else
+        out::warn("shooters_edge: the packs are not enhanced: " + why +
+                  "; next: CLASSIC ENHANCED > ENHANCE in the main menu");
+    }
   }
   std::unique_ptr<cl::LoadedMap> first = cl::load_named_map(files, next_map, error);
-  if (!first || !cl::listen_start(listen, progs, std::move(first), listen_opt, error)) {
+  if (!first ||
+      !cl::listen_start(listen, game_content.progs, std::move(first), listen_opt, error)) {
     out::error("shooters_edge: the first map did not start: " + error +
                "; see docs/shooters-edge.md § Playing it");
     return 2;
@@ -550,6 +491,48 @@ int run_main(int argc, char** argv) {
   cl::FxFrame fx;
   cl::HeldState in_hand;
   in_hand.hand.at_eye = weapons_at_eye;
+  // LOAD GAME's folder and the console's `basedir` (client/game_folder.hpp): the install opened in
+  // place of the one playing (the old world and servers let go first: they view its packs), its
+  // first map started where the map changes, its packs enhanced in the background, kept for the
+  // next start. False, with nothing changed, when its folder does not open.
+  std::string folder_ask;
+  console.add_command("basedir",
+                      "basedir <folder>: your game's install (the folder holding id1) loaded in "
+                      "place of this one, its packs enhanced in the background",
+                      [&](Con& c, const CArgs& a) {
+                        if (a.size() < 2)
+                          c.print("basedir: " + args.basedir + " (basedir <folder> loads another)");
+                        else
+                          folder_ask = cl::expand_home(a.size() == 2 ? a[1] : a.rest(0));
+                      });
+  const auto open_folder = [&](const std::string& basedir) {
+    cl::SearchPath fresh;
+    if (!cl::open_game_dir(basedir, cl::game_of(basedir), fresh, error)) return false;
+    world.reset();
+    cl::listen_stop(listen);
+    files = std::move(fresh);
+    args.basedir = basedir;
+    args.game = cl::game_of(basedir);
+    console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
+    if (!cl::load_programs(adapter, files, args.progs, game_content, error)) return false;
+    listen.opt.registered = game_content.registered;
+    cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
+    cl::add_adapter_commands(console, adapter, files, basedir);
+    menu_host.maps = adapter.list_maps(adapter, files);
+    menu_host.maps.emplace_back("arena");
+    pictures_enhanced = load_pictures(true);
+    weapons.clear();
+    in_hand = {};
+    in_hand.hand.at_eye = cl::load_held_set(adapter, files, model_dirs, weapons);
+    next_map = game_content.first_map;
+    game_menu.set_game(basedir);
+    cl::remember_folder(prefs, basedir);
+    save_settings();  // the player's settings go on in the new folder
+    out::status("shooters_edge: loaded " + basedir + " (" + files.folder + ")");
+    if (std::string why; game_menu.auto_enhance() && !game_menu.enhance_game(true, &why))
+      console.print("classic enhance: " + why);
+    return true;
+  };
   size_t printed = 0;
   const uint64_t first_ns = ge::platform::now_ns();
   uint64_t last = first_ns;
@@ -652,21 +635,60 @@ int run_main(int argc, char** argv) {
       cl::resize_world(*device, *world, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
     }
 
+    // A game folder asked for: LOAD GAME's chooser answered, or the console's `basedir`.
+    if (game_menu.take_load())
+      ge::platform::pick_folder(*window, "Load game: the folder holding id1", args.basedir);
+    if (std::string picked, why; ge::platform::folder_picked(*window, &picked, &why)) {
+      if (!why.empty()) game_menu.load_refused(why + "; next: basedir <folder> in the console");
+      folder_ask = picked;  // "" when the player cancelled
+    }
+    if (!folder_ask.empty() && !bench.active) {
+      std::string basedir;
+      if (!cl::check_game_folder(folder_ask, &basedir, &error)) {
+        game_menu.load_refused(error);
+        console.print("load game: " + error);
+      } else if (!open_folder(basedir)) {
+        if (!listen.map) {  // let go of the old game, then the new one did not load
+          error.insert(0, "shooters_edge: " + basedir + " did not load: ");
+          out::error(error + "; see docs/shooters-edge.md § Playing it");
+          return 2;
+        }
+        game_menu.load_refused(error);
+        console.print("load game: " + error);
+      }
+      folder_ask.clear();
+    }
+    // A run of the enhancing ended: the world drawn again from what it wrote.
+    if (game_menu.take_ended()) {
+      const ge::classicenhance::BoardView b = game_menu.job()->view();
+      console.print(b.finished ? "classic enhance: " + game_menu.game() + " enhanced"
+                               : "classic enhance: stopped: " + b.error);
+      pictures_enhanced = load_pictures(false);
+      if (world && listen.server != nullptr && listen.map && !bench.active &&
+          !rebuild_world(*listen.map, {listen.server->models, {}}, files))
+        return 1;
+    }
+
     // A map asked for (the console's `map`, or the mod's level change at its limits).
     if (next_map.empty() && !listen.pending_map.empty()) next_map = listen.pending_map;
     if (!next_map.empty()) {
       std::unique_ptr<cl::LoadedMap> m = cl::load_named_map(files, next_map, error);
       next_map.clear();
+      if (!m && !listen.map) {  // a game just loaded and its first map did not: the arena
+        console.print("map: " + error);
+        m = cl::load_named_map(files, "arena", error);
+      }
       if (!m) {
         console.print("map: " + error);
         listen.pending_map.clear();
-      } else if (!(campaign_progs != nullptr && cl::wants_campaign(listen.opt)
+      } else if (!(game_content.campaign != nullptr && cl::wants_campaign(listen.opt)
                        ? (listen.campaign_host
                               ? cl::listen_change(listen, std::move(m), error)
-                              : cl::listen_campaign(listen, *campaign_progs, std::move(m),
+                              : cl::listen_campaign(listen, *game_content.campaign, std::move(m),
                                                     listen.opt, error))
-                   : listen.campaign_host || listen.progs != &progs
-                       ? cl::listen_start(listen, progs, std::move(m), listen.opt, error)
+                   : listen.campaign_host || listen.progs != &game_content.progs
+                       ? cl::listen_start(listen, game_content.progs, std::move(m), listen.opt,
+                                          error)
                        : cl::listen_change(listen, std::move(m), error))) {
         out::error("shooters_edge: the map change failed: " + error +
                    "; see docs/shooters-edge.md § Playing it");
@@ -705,13 +727,13 @@ int run_main(int argc, char** argv) {
       else if (classic && !cl::read_save(files, base, bytes, error, true))
         bytes.clear();
       const bool loaded =
-          !bytes.empty() &&
+          !bytes.empty() && game_content.campaign != nullptr &&
           (classic
                ? cl::listen_load_text(
-                     listen, *campaign_progs, lo,
+                     listen, *game_content.campaign, lo,
                      std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()),
                      name, error)
-               : cl::listen_load(listen, *campaign_progs, lo, bytes, name, error));
+               : cl::listen_load(listen, *game_content.campaign, lo, bytes, name, error));
       if (!loaded)
         console.print("load: " + error);
       else

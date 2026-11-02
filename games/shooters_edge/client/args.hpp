@@ -23,9 +23,10 @@ namespace shooters_edge::client {
 struct Args {
   std::string basedir = ".";
   std::string game{ge::classicenhance::classic_profile().base_dir};  // the base game's folder
-  std::string progs;             // a mod's progs file ("": the baseline mod)
-  std::string models;            // the held weapons' folder ("": the tree's)
-  std::string timedemo;          // a demo to benchmark, then quit ("": none)
+  bool basedir_set = false, game_set = false;  // given on the command line (not the defaults)
+  std::string progs;                           // a mod's progs file ("": the baseline mod)
+  std::string models;                          // the held weapons' folder ("": the tree's)
+  std::string timedemo;                        // a demo to benchmark, then quit ("": none)
   std::string demovideo, video;  // a demo to turn into the video file `video`, then quit
   double fps = 30, seconds = 0;
   double from = 0, to = -1;  // -demovideo's clip on the demo's timeline, s (to < 0: the end)
