@@ -72,7 +72,7 @@ DuelResult run_duel(Duel& d, int frames) {
   const int me = d.seer_slot + 1, him = d.runner_slot + 1;
   const float vh = d.seer.senses.set.view_height;
   bool was_seen = false, reacting = false;
-  double acquired_at = 0;
+  double acquired_at = 0, last_seen = -1e9;
   for (int f = 0; f < frames; f++) {
     server::host_frame(d.host, nullptr, 0);
     r.frames++;
@@ -95,10 +95,13 @@ DuelResult run_duel(Duel& d, int frames) {
       const float dy = wrap(yaw - d.seer.yaw), dp = pitch - d.seer.pitch;
       const float err = std::sqrt(dy * dy + dp * dp);
       r.error_deg.push_back(err);
-      if (!was_seen) {
+      // A sighting is timed when he comes back after a while out of sight (a flicker at the
+      // cone's edge is tracking, not a reaction) and the view is not already on him (pre-aimed).
+      if (!was_seen && sv.time - last_seen > 0.3 && err > kOnTarget) {
         reacting = true;
         acquired_at = sv.time;
       }
+      last_seen = sv.time;
       if (reacting && err <= kOnTarget) {
         r.reaction_s.push_back(static_cast<float>(sv.time - acquired_at));
         reacting = false;

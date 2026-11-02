@@ -44,11 +44,19 @@ struct AimProfile {
   std::vector<ai::AxisHands> hands;  // yaw, pitch
   float lead_s = 0;                  // aims this far ahead along the contact's velocity
   float hold_s = 1;                  // keeps aiming at a contact lost this long
+  // The reaction to a new sighting, drawn each time (`draw_reaction`): from `react_lo`, half the
+  // draws under `react_med`, the rest thinning out to `react_hi` (a person's reaction times are
+  // skewed to the slow side). The hands' own delay is the tracking lag inside it. All 0: none.
+  float react_lo = 0, react_med = 0, react_hi = 0;
 };
 AimProfile aim_profile(AimSkill s);
 // The hands of an aim trait `aim` and a reaction trait `reaction` (traits.hpp, 1 to 10): the
 // novice's, the average's and the expert's rows at 2, 5 and 8, read smoothly between.
 AimProfile aim_profile(uint8_t aim, uint8_t reaction);
+
+// One reaction time off `p`'s spread for the draw `u` in [0, 1), seconds: `u` under a half lies
+// evenly between the low and the median, over it the time thins out from the median to the high.
+double draw_reaction(const AimProfile& p, double u);
 
 // The yaw and pitch (degrees; pitch down positive) from `eye` to `at`.
 void aim_angles(Vec3f eye, Vec3f at, float& yaw, float& pitch);

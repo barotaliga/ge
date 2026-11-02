@@ -78,6 +78,8 @@ struct TeamPlayer {
   float frags = 0;
   int deaths = 0;
   int64_t shots = 0, pickups = 0, switches = 0, packs = 0, held_fire = 0;
+  int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and pre-aimed (shooter/bot.hpp)
+  double react_s = 0;                    // the reactions' times, summed
   int64_t dives = 0,
           off_graph = 0;       // dives begun into a pocket; thinks spent off the graph or in a pool
   int64_t dives_given_up = 0;  // dives turned back, late or short of air

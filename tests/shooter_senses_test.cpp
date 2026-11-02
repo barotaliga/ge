@@ -130,6 +130,7 @@ TEST(axes_turned_under_another_view_keep_the_wish_in_the_world) {
 TEST(the_seer_sees_aims_by_skill_and_keeps_its_route) {
   const sh::AimSkill order[4] = {sh::AimSkill::perfect, sh::AimSkill::expert, sh::AimSkill::average,
                                  sh::AimSkill::novice};
+  size_t timed[4] = {};
   for (uint32_t seed = 1; seed <= 2; seed++) {
     float last = -1;
     for (const sh::AimSkill k : order) {
@@ -147,14 +148,20 @@ TEST(the_seer_sees_aims_by_skill_and_keeps_its_route) {
       CHECK_MSG(m > last, name + "'s median aim error " + std::to_string(m) +
                               " is not worse than the better skill's " + std::to_string(last));
       last = m;
-      if (k != sh::AimSkill::perfect)
-        CHECK_MSG(!r.reaction_s.empty() && median(r.reaction_s) >= 0.08f,
+      // A sighting timed (he came back into sight, the view off him) waited a reaction drawn for
+      // it: never quicker than a hand. A run he never left sight for long times none.
+      if (k != sh::AimSkill::perfect) {
+        timed[static_cast<int>(k)] += r.reaction_s.size();
+        CHECK_MSG(r.reaction_s.empty() || median(r.reaction_s) >= 0.08f,
                   name + " turned onto the runner faster than a hand can");
+      }
       CHECK_MSG(d.seer.pilot.arrivals >= 3,
                 name + " reached " + std::to_string(d.seer.pilot.arrivals) +
                     " goals while looking: read turn_axes in plugins/shooter/aim.cpp");
     }
   }
+  for (int k = 1; k <= 3; k++)
+    CHECK_MSG(timed[k] > 0, "a skill's seer timed no sighting over both runs");
 }
 
 TEST(a_watched_run_replays_to_the_bit_and_matches_its_golden) {

@@ -37,7 +37,8 @@ struct DuelResult {
   int64_t seen_frames = 0;        // frames the seer's senses saw the runner
   int64_t heard = 0;              // sounds the seer heard from the other players
   std::vector<float> error_deg;   // the view off the runner's middle, each frame it was seen
-  std::vector<float> reaction_s;  // from acquiring to the view within 5 degrees, each time
+  std::vector<float> reaction_s;  // from a sighting (out of sight 0.3 s, the view off him) to the
+                                  // view within 5 degrees
   std::vector<sh::Vec3f> seer, runner;  // where each stood, a frame a point
   std::vector<float> view_yaw;          // the seer's view, a frame a value
   std::vector<uint8_t> seen;            // 1 when seen that frame

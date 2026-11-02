@@ -195,6 +195,23 @@ void run(gl::Lab& lab) {
     lab.metric("team." + p.name + ".deaths", p.deaths, "count");
   }
   lab.table(t);
+  // The reactions drawn per sighting (shooter/aim.hpp `draw_reaction`).
+  gl::LabTable rt{
+      "each player's reactions", {"player", "reaction", "sightings", "mean ms", "pre-aimed"}, {}};
+  int64_t sightings = 0;
+  double react_s = 0;
+  for (const cn::TeamPlayer& p : r.players) {
+    const double n = static_cast<double>(p.reactions);
+    rt.rows.push_back({p.name, std::to_string(p.traits[sh::Trait::reaction]),
+                       std::to_string(p.reactions), to_fixed(n > 0 ? p.react_s / n * 1000 : 0, 0),
+                       to_fixed(n > 0 ? static_cast<double>(p.pre_aimed) / n : 0, 2)});
+    sightings += p.reactions;
+    react_s += p.react_s;
+  }
+  lab.table(rt);
+  lab.metric("team.sightings", static_cast<double>(sightings), "count");
+  lab.metric("team.reaction-mean-ms",
+             sightings > 0 ? react_s / static_cast<double>(sightings) * 1000 : 0, "ms");
   gl::LabTable pt{
       "each player's legs",
       {"player", "travelled", "plans", "stuck", "lost", "waits", "barred", "dives", "given up",
