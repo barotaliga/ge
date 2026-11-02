@@ -302,3 +302,26 @@ TEST(the_muzzle_rides_the_gun_into_the_world) {
   f = se::step_hand(hand, in, s, models(), eye(), 1.0 / 60);
   CHECK(f.fired);
 }
+
+TEST(a_classic_games_own_weapon_is_held_at_the_eye) {
+  se::ViewSettings s;
+  s.gun_m[1] = -0.02;
+  const vm::PlaceRow eye_row = se::eye_row(s);
+  CHECK(eye_row.offset_m[0] == 0 && eye_row.offset_m[1] == -0.02 && eye_row.offset_m[2] == 0);
+  // The same weapon at rest: at the eye it sits where its file put it, on a look it is moved out.
+  const std::vector<vm::HeldModel>& m = models();
+  se::Hand at_eye, on_look;
+  at_eye.at_eye = true;
+  se::HandInput in;
+  const double dt = 1.0 / 60;
+  se::HandFrame a, b;
+  for (int i = 0; i < 30; ++i) {
+    a = se::step_hand(at_eye, in, s, m, eye(), dt);
+    b = se::step_hand(on_look, in, s, m, eye(), dt);
+  }
+  float o[3] = {0, 0, 0}, pa[3], pb[3];
+  vm::place_point(a.placement, o, pa);
+  vm::place_point(b.placement, o, pb);
+  CHECK(std::fabs(pa[0]) < 1e-4f && std::fabs(pa[1] + 0.02f) < 1e-4f && std::fabs(pa[2]) < 1e-4f);
+  CHECK(pb[1] < -0.1f);  // the look's grip, well below the eye
+}

@@ -14,6 +14,9 @@
 // - THE ANIMATION: a shot plays the model's `fire` clip from its start (the pump racked, the
 //   barrels turned, the axe's swing: viewmodel::held_clip_frames), handed out as the frames to
 //   draw; a model without one draws its rest frame.
+// - A CLASSIC GAME'S OWN WEAPONS (`Hand::at_eye`): models authored at the eye, placed by the
+//   classic row (`eye_row`) with no offset of their own; the kick, the flash and the fire are
+//   still each weapon's look.
 // - THE PLAYER'S CVARS (`ViewSettings`, `add_view_cvars`), all the player's own (archived):
 //     r_drawviewmodel   draw the weapon at all (0: the hand still switches and flashes, unseen)
 //     r_viewmodel_fov   the weapon's own lens, deg vertical (0: the view's)
@@ -36,6 +39,7 @@
 // ge:keywords muzzle-light r_drawviewmodel r_viewmodel_fov cl_gunx cl_guny cl_gunz cl_gunsway
 // ge:keywords step_hand held_row add_view_cvars view-settings fire-clip animation frames
 // ge:keywords r_viewmodel_center centred-weapon centered r_viewmodel_hands hide-hands muzzle-pose
+// ge:keywords at_eye eye_row classic-weapons
 // ge:skill render shooter
 // ge:test tests/shooters_edge_view_test.cpp
 #pragma once
@@ -72,6 +76,11 @@ void add_view_cvars(ge::console::Cvars& cvars, ViewSettings& out);
 vm::PlaceRow held_row(const WeaponLook& look, const ViewSettings& settings,
                       const vm::PlaceRow& base = weapon_row());
 
+// The row a model authored at the eye is placed by under `settings`: the classic row with no
+// offset but the player's (cl_gunx..z), the lens and the sway's share (r_viewmodel_center does
+// not move it: such a model is where its game holds it).
+vm::PlaceRow eye_row(const ViewSettings& settings);
+
 struct Hand {
   Weapon held = Weapon::shotgun;    // in the hand now
   Weapon wanted = Weapon::shotgun;  // the game's
@@ -79,6 +88,9 @@ struct Hand {
   vm::PlaceState place;
   double flash_left = 0;  // s of the last shot's light still to fade
   double fire_t = -1;     // s into the `fire` clip (-1: at rest)
+  // The models are a classic game's own (GameAdapter::held_weapons), authored at the eye: placed
+  // by `eye_row`, never on a look's offset.
+  bool at_eye = false;
 };
 
 struct HandInput {

@@ -39,9 +39,11 @@
 // - **open_locations**: a map's place names into plugins/shooter/locs.hpp's `Locs` (the first
 //   game's `locs/<map>.loc`); with none, a game names places off the map's items.
 //
-// Not yet here: the held weapons' models from the game's files. These are load-time calls, never
-// a frame's: plain function pointers, no state (docs/shooters-edge.md § The game adapter). The
-// console's `mods`, `maps` and `demos` print their answers (`add_adapter_commands`).
+// - **held_weapons**: the game's own first-person weapons, authored at the eye, in the number
+//   keys' order: the first game's `progs/v_*.mdl` with its firing frames as a `fire` clip.
+//
+// These are load-time calls, never a frame's: plain function pointers, no state (docs/shooters-
+// edge.md § The game adapter). The console's `mods`, `maps` and `demos` print their answers.
 //
 // ge:summary A classic game's adapter: mods, programs by form and side, maps, textures, demos
 // ge:keywords game-adapter adapter classic-game list_mods find_program list_maps map_info
@@ -50,7 +52,7 @@
 // ge:keywords replacement-texture png tga alpha open_model open_sound model-form skin-stand-in
 // ge:keywords replacement-skin pictures hud-pictures menu-pictures replacement-picture
 // ge:keywords find_config config-file cfg exec open_locations loc-file place-names
-// ge:keywords read_configs_from
+// ge:keywords read_configs_from held_weapons first-person view-model
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #pragma once
@@ -74,6 +76,7 @@
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
+#include "viewmodel/held.hpp"
 
 namespace shooters_edge::client {
 
@@ -152,6 +155,12 @@ struct GameAdapter {
   // they were read from); false when the files hold none, or none that reads as a point.
   bool (*open_locations)(const GameAdapter& self, const SearchPath& files, std::string_view map,
                          ge::shooter::Locs& out) = nullptr;
+  // The game's own held weapons (the profile row's `held_weapons`), in view::Weapon order, each
+  // authored at the eye (the hand places it with no offset: Hand::at_eye) with its firing frames
+  // as a `fire` clip. False with `why` when the files hold none of them ("" then) or one of them
+  // is missing or does not read.
+  bool (*held_weapons)(const GameAdapter& self, const SearchPath& files,
+                       std::vector<ge::viewmodel::HeldModel>& out, std::string& why) = nullptr;
   // The recordings the files hold, by path.
   std::vector<std::string> (*list_demos)(const GameAdapter& self,
                                          const SearchPath& files) = nullptr;

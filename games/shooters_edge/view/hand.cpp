@@ -57,6 +57,18 @@ vm::PlaceRow held_row(const WeaponLook& look, const ViewSettings& s, const vm::P
   return r;
 }
 
+vm::PlaceRow eye_row(const ViewSettings& s) {
+  vm::PlaceRow r = vm::classic_row();
+  const vm::PlaceRow base = r;
+  for (int k = 0; k < 3; ++k) r.offset_m[k] = s.gun_m[k];
+  r.fov_y = s.fov_deg * ge::core::kPi / 180;
+  r.sway_max = base.sway_max * s.sway;
+  r.sway_shift = base.sway_shift * s.sway;
+  r.bob_side = base.bob_side * s.sway;
+  r.idle_m = base.idle_m * s.sway;
+  return r;
+}
+
 HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
                     std::span<const vm::HeldModel> models, const ge::camera::Pose& view, double dt,
                     double motion) {
@@ -76,7 +88,7 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   if (hand.held != before) hand.fire_t = -1;  // a new weapon comes up at rest
 
   const WeaponLook& look = weapon_look(hand.held);
-  const vm::PlaceRow row = held_row(look, s);
+  const vm::PlaceRow row = hand.at_eye ? eye_row(s) : held_row(look, s);
   vm::PlaceInput pin = in.place;
   pin.lowered = hand.held != hand.wanted ? 1.0 : 0.0;
   pin.shot = in.fired ? look.kick : 0.0;
