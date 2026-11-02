@@ -86,6 +86,14 @@ the server's frame with no network between. It reads the maps out of your own co
 classic game's packs: point `-basedir` at the folder that holds `id1/pak0.pak` (and `pak1.pak`
 for the full game's maps). The packs are never copied or committed (§ Content and test data).
 
+**The short way, on any machine** (`make setup` once installs what the build needs; README.md §
+Run a game):
+
+```sh
+make run:shooters_edge                                         # the built-in arena, no packs
+make run:shooters_edge ARGS="-basedir ~/Games/classic +map dm6"  # your packs' maps
+```
+
 **On a Mac (Apple silicon; Metal through Dawn):**
 
 ```sh

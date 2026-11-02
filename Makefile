@@ -4,8 +4,35 @@ PRESET ?= debug
 # Tracked AND new (untracked, not ignored) files, so a file not yet `git add`ed is formatted too.
 SOURCES := $(shell git ls-files --cached --others --exclude-standard '*.cpp' '*.hpp' 2>/dev/null)
 
-.PHONY: build test fmt fmt-check lint agents-check index find lessons labs lab sim play labs-smoke \
+.PHONY: setup run build test fmt fmt-check lint agents-check index find lessons labs lab sim play labs-smoke \
 	labs-digests libm-check release-check shaders-check precheck ge clean
+
+# A new machine, once: the platform's setup script installs every tool the build needs
+# (tools/setup-macos.sh, tools/setup-ubuntu.sh with sudo, tools/setup-windows.ps1); rerunning it
+# installs only what is missing or too old.
+setup:
+	@case "$$(uname -s)" in \
+	  Darwin) tools/setup-macos.sh ;; \
+	  Linux) if [ "$$(id -u)" = 0 ]; then tools/setup-ubuntu.sh; else sudo tools/setup-ubuntu.sh; fi ;; \
+	  MINGW*|MSYS*|CYGWIN*) powershell -ExecutionPolicy Bypass -File tools/setup-windows.ps1 ;; \
+	  *) echo "make setup: no setup script for $$(uname -s); README.md § Run a game lists what the build needs." >&2; exit 1 ;; \
+	esac
+
+# A game in its window: make run:<game> builds only that game's executable, on the release preset
+# (RUN_PRESET=debug for the sanitizers), then runs it with ARGS: make run:fall_line ARGS=--bot,
+# make run:shooters_edge ARGS="-basedir ~/Games/classic +map dm6". `make run` lists the games.
+GAMES := $(notdir $(wildcard games/*))
+RUN_PRESET ?= release
+run:
+	@echo "make run:<game> builds a game and opens its window; the games: $(GAMES)"
+
+run\:%:
+	@[ -d games/$* ] || { echo "make run:$*: no game named $*; the games: $(GAMES)." >&2; exit 1; }
+	@tools/ccache-share.sh restore
+	@[ -f build/$(RUN_PRESET)/build.ninja ] || cmake --preset $(RUN_PRESET)
+	cmake --build --preset $(RUN_PRESET) --target $*
+	@tools/ccache-share.sh save
+	build/$(RUN_PRESET)/games/$*/$* $(ARGS)
 
 # A new cloud container first takes the shared build caches (tools/ccache-share.sh: the compiler
 # cache and .cache/deps; a no-op elsewhere and once the local caches have entries), and a good
