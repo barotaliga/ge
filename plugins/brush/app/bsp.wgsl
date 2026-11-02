@@ -65,6 +65,8 @@ struct Bsp {
   // a lightmap layer's height in the atlas's uv, the layers, the relief's strength (0 off), the
   // parallax's depth, m
   info5: vec4f,
+  // the light grid's corner, world m; its cell, m (0: no grid this frame)
+  grid: vec4f,
   // the 64 light styles' levels now, four a vector
   styles: array<vec4f, 16>,
 };
@@ -115,6 +117,21 @@ struct Mover {
 @group(1) @binding(13) var rebake_bounce: texture_2d<f32>;
 // how solid each texel is (Scene::cover), or a 1 x 1 stand-in
 @group(1) @binding(14) var cover: texture_2d<f32>;
+// THE LIGHT GRID (bsp_draw.hpp): each cell's first entry (the last the lists' end), then the
+// lists of the lights that can reach the cell, in the lights' order
+@group(1) @binding(15) var<storage, read> grid: array<u32>;
+// bsp_draw.hpp's kGridX, kGridY, kGridZ and kGridCells
+const kGridDims = vec3f(32.0, 16.0, 32.0);
+const kGridCells = 16384u;
+
+// The grid's cell `p` lies in, -1 outside it or with no grid.
+fn grid_cell(p: vec3f) -> i32 {
+  let c = floor((p - bsp.grid.xyz) / bsp.grid.w);
+  if (bsp.grid.w > 0.0 && all(c >= vec3f(0.0)) && all(c < kGridDims)) {
+    return i32(c.x + kGridDims.x * (c.y + kGridDims.y * c.z));
+  }
+  return -1;
+}
 
 const kSolid = 0u;
 const kSky = 1u;
@@ -220,21 +237,33 @@ fn wrapped_at(st: vec2f, rect: vec4f, k: u32) -> vec2i {
   return vec2i(floor(rect.xy / s) + t - size * floor(t / size));
 }
 
-// The texel at integer `t` of mip `k` of the texture at `rect`, wrapped.
-fn texel_at(t: vec2f, rect: vec4f, k: u32) -> vec4f {
-  return textureLoad(atlas, wrapped_at(t * f32(1u << k), rect, k), i32(k));
+// The four texels about `st` (texels of mip 0) at mip `k` of the texture at `rect`: `lo` and `hi`
+// their places in the atlas on each axis (the far ones wrapped), `f` the weight toward `hi`. One
+// wrap a tap, not one a texel: the wrap divides, and a division is dear on a GPU.
+struct Quad {
+  lo: vec2i,
+  hi: vec2i,
+  f: vec2f,
+};
+
+fn quad_at(st: vec2f, rect: vec4f, k: u32) -> Quad {
+  let s = f32(1u << k);
+  let p = st / s - 0.5;
+  let i = floor(p);
+  let size = max(floor(rect.zw / s), vec2f(1.0));
+  let w = i - size * floor(i / size);
+  let o = floor(rect.xy / s);
+  return Quad(vec2i(o + w), vec2i(o + select(w + 1.0, vec2f(0.0), w + 1.0 >= size)), p - i);
 }
 
 // `st` (texels of mip 0) at mip `k`, bilinear between its four nearest texels.
 fn bilinear(st: vec2f, rect: vec4f, k: u32) -> vec4f {
-  let p = st / f32(1u << k) - 0.5;
-  let i = floor(p);
-  let f = p - i;
-  let a = texel_at(i, rect, k);
-  let b = texel_at(i + vec2f(1.0, 0.0), rect, k);
-  let c = texel_at(i + vec2f(0.0, 1.0), rect, k);
-  let d = texel_at(i + vec2f(1.0, 1.0), rect, k);
-  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+  let q = quad_at(st, rect, k);
+  let a = textureLoad(atlas, q.lo, i32(k));
+  let b = textureLoad(atlas, vec2i(q.hi.x, q.lo.y), i32(k));
+  let c = textureLoad(atlas, vec2i(q.lo.x, q.hi.y), i32(k));
+  let d = textureLoad(atlas, q.hi, i32(k));
+  return mix(mix(a, b, q.f.x), mix(c, d, q.f.x), q.f.y);
 }
 
 // `st` filtered over the pixel's footprint (`dx`, `dy`: its texels along the screen's axes):
@@ -256,29 +285,24 @@ fn filtered(st: vec2f, rect: vec4f, dx: vec2f, dy: vec2f) -> vec4f {
   var sum = vec4f(0.0);
   for (var i = 0; i < i32(taps); i++) {
     let q = st + major * ((f32(i) + 0.5) / taps - 0.5);
-    sum += mix(bilinear(q, rect, k0), bilinear(q, rect, k1), fr);
+    var a = bilinear(q, rect, k0);
+    // magnified (the mip clamped to 0): the next mip's share is exactly 0, so it is not read
+    if (fr > 0.0) {
+      a = mix(a, bilinear(q, rect, k1), fr);
+    }
+    sum += a;
   }
   return sum / taps;
 }
 
-// The relief's texel at integer `t` of mip `k` of the texture at `rect`, wrapped.
-fn surf_at(t: vec2f, rect: vec4f, k: u32) -> vec4f {
-  let s = f32(1u << k);
-  let size = max(floor(rect.zw / s), vec2f(1.0));
-  let w = t - size * floor(t / size);
-  return textureLoad(surface, vec2i(floor(rect.xy / s) + w), i32(k));
-}
-
 // The relief at `st` (texels of mip 0) at mip `k`, bilinear between its four nearest texels.
 fn surf_bilinear(st: vec2f, rect: vec4f, k: u32) -> vec4f {
-  let p = st / f32(1u << k) - 0.5;
-  let i = floor(p);
-  let f = p - i;
-  let a = surf_at(i, rect, k);
-  let b = surf_at(i + vec2f(1.0, 0.0), rect, k);
-  let c = surf_at(i + vec2f(0.0, 1.0), rect, k);
-  let d = surf_at(i + vec2f(1.0, 1.0), rect, k);
-  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+  let q = quad_at(st, rect, k);
+  let a = textureLoad(surface, q.lo, i32(k));
+  let b = textureLoad(surface, vec2i(q.hi.x, q.lo.y), i32(k));
+  let c = textureLoad(surface, vec2i(q.lo.x, q.hi.y), i32(k));
+  let d = textureLoad(surface, q.hi, i32(k));
+  return mix(mix(a, b, q.f.x), mix(c, d, q.f.x), q.f.y);
 }
 
 // THE PARALLAX: `st` moved to where the eye's ray, entering the face there, first meets the
@@ -804,8 +828,16 @@ fn shade(in: VsOut) -> FsOut {
   // the highlights, the lightmaps' units
   var es = vec3f(0.0);
   var phys_s = vec3f(0.0);
-  let count = u32(bsp.info.z);
-  for (var i = 0u; i < count; i++) {
+  // Only the lights the grid lists for p's cell (every light outside the grid), in order.
+  let cell = grid_cell(p);
+  var first = 0u;
+  var end = u32(bsp.info.z);
+  if (cell >= 0) {
+    first = grid[cell];
+    end = grid[cell + 1];
+  }
+  for (var j = first; j < end; j++) {
+    let i = select(j, grid[kGridCells + 1u + j], cell >= 0);
     let l = lights[i];
     let q = p - l.pos.xyz;
     let d2 = dot(q, q);
