@@ -253,7 +253,12 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
 - **Headless**: `make lab LAB=se-timedemo` runs the same loop into an offscreen target, on a
   demo written in code round the fixture halls (`--format=client` or `--format=multiview` for the
   other formats), or on a real one with `ARGS="--basedir=<dir> --demo=demo1"`, and charts every
-  frame's time and GPU span (`--look=classic|modern` picks the look).
+  frame's time and GPU span (`--look=classic|modern` picks the look). It paces the frames as the
+  window does, one in flight, and leaves its three pictures' frames untimed; until round 8 of the
+  timedemo it waited for every frame before starting the next, which added the GPU's round trip
+  (about 0.6 ms on the M3 Max) to every frame. `cpu by zone` lists each timing zone's median a
+  frame: the CPU's part of the world's frame is about 0.6 ms at 720p, most of it Dawn's submit
+  (the frame's commands made into Metal's) and the BSP's prepare.
 - **The price** (`ARGS="... --look=modern --price=1"`): the demo played again with each drawn
   `ce_` switch off in turn and once without the HUD, each run between two runs with everything on;
   a switch's saving is read against the mean of the all-on runs either side (so a machine warming

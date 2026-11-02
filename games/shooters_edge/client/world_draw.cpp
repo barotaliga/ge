@@ -18,6 +18,7 @@
 #include "camera/pose.hpp"
 #include "classicenhance/cached.hpp"
 #include "core/output.hpp"
+#include "prof/zones.hpp"
 #include "render/bloom.hpp"
 #include "render/clouds.hpp"
 #include "render/explosions.hpp"
@@ -288,6 +289,7 @@ bool world_stale(const WorldDraw& f) {
 void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFrame& fx,
                 const shooters_edge::view::HandFrame* held, double dt,
                 const ge::ui::DrawList& overlay, const wgpu::TextureView& target) {
+  GE_ZONE("world");
   const look::Look lk = look::look_of(*f.picture);
   const int p = lk == look::Look::classic ? 0 : 1;
   if (f.picture->gamma != f.gamma) {  // the brightness changed (the menu's slider, `gamma`)
@@ -305,30 +307,42 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   o.sky_seen = f.sky.sky_seen;
   for (int k = 0; k < 3; ++k) o.sky_tint[k] = f.sky.tint[k];
   // The switches on the options and the weather on the view, before the uniforms take the view.
-  if (f.extras) dress_extras(*f.extras, view, o, dt);
+  if (f.extras) {
+    GE_ZONE("world.dress");
+    dress_extras(*f.extras, view, o, dt);
+  }
   f.rec.begin_frame(d);
   gr::fill_uniforms(f.staged, view, f.w, f.h);
   d.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
   gr::prepare_sky(f.skypass, view);
   if (f.has_map) {
+    GE_ZONE("world.bsp");
     ba::set_dynamic_lights(f.bsp, fx.lights);
     place_brushes(f.models, fx.models, f.movers);
     ba::set_movers(f.bsp, f.movers);
     ba::prepare_bsp(d, f.bsp, view, o);
   }
-  if (f.extras) prepare_extras(d, *f.extras, f.bsp, view, o);
-  gr::emit_particles(f.particles, fx.births);
   if (f.extras) {
-    f.fire_births.clear();
-    extras_births(*f.extras, view.time_s, f.fire_births);
-    gr::emit_particles(f.particles, f.fire_births);
+    GE_ZONE("world.extras");
+    prepare_extras(d, *f.extras, f.bsp, view, o);
   }
-  f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
-  gr::prepare_particles(d, f.particles, dt, view.near_m);
-  gr::prepare_explosions(d, f.explosions, fx.puffs, view, f.w, f.h, fx.flames);
-  if (f.has_map)
+  {
+    GE_ZONE("world.effects");
+    gr::emit_particles(f.particles, fx.births);
+    if (f.extras) {
+      f.fire_births.clear();
+      extras_births(*f.extras, view.time_s, f.fire_births);
+      gr::emit_particles(f.particles, f.fire_births);
+    }
+    f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
+    gr::prepare_particles(d, f.particles, dt, view.near_m);
+    gr::prepare_explosions(d, f.explosions, fx.puffs, view, f.w, f.h, fx.flames);
+  }
+  if (f.has_map) {
+    GE_ZONE("world.models");
     prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
                    o.mode == ba::Mode::v2 && f.picture->ce.flames);
+  }
   // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.
   const bool round = f.extras && liquid_round_eye(*f.extras);
   gr::set_post_blend(d, f.post[p], round ? fx.blend_dry : fx.blend);
@@ -339,29 +353,34 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   } else {
     f.held_fresh = true;
   }
-  wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
-  gr::encode_particles_sim(f.particles, f.pipelines, f.rec, e);
-  gr::encode_sky_tables(f.skypass, f.pipelines, f.rec, e);
-  if (f.extras) encode_extras_sim(*f.extras, f.pipelines, f.rec, e);
-  if (f.has_map) ba::encode_bsp(f.bsp, f.pipelines, f.rec, e, f.targets, f.frame);
-  encode_models(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
-  gr::encode_sky(f.skypass, f.pipelines, f.rec, e, f.targets, f.frame);
-  if (f.picture->ce.clouds)
-    gr::encode_clouds(f.clouds, f.pipelines, f.rec, e, f.targets, f.frame, view, f.staged);
-  if (f.has_map) ba::encode_bsp_veil(f.bsp, f.pipelines, f.rec, e, f.targets);
-  if (f.extras) encode_extras(*f.extras, f.pipelines, f.rec, e, f.targets, f.frame);
-  gr::encode_particles(f.particles, f.pipelines, f.rec, e, f.targets, f.frame);
-  gr::encode_explosions(f.explosions, f.pipelines, f.rec, e, f.targets, f.frame);
-  encode_model_sprites(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
-  if (weapon) gr::encode_viewmodel(f.held, f.pipelines, f.rec, e, f.targets, f.frame);
-  gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);
-  gr::encode_post(f.post[p], f.pipelines, f.rec, e, f.frame, f.post_group[p], target);
-  if (overlay.size() > 0) {
-    gr::prepare_ui(d, f.ui, overlay, f.w, f.h);
-    gr::encode_ui(f.ui, f.pipelines, f.rec, e, target);
+  wgpu::CommandBuffer c;
+  {
+    GE_ZONE("world.encode");
+    wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
+    gr::encode_particles_sim(f.particles, f.pipelines, f.rec, e);
+    gr::encode_sky_tables(f.skypass, f.pipelines, f.rec, e);
+    if (f.extras) encode_extras_sim(*f.extras, f.pipelines, f.rec, e);
+    if (f.has_map) ba::encode_bsp(f.bsp, f.pipelines, f.rec, e, f.targets, f.frame);
+    encode_models(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
+    gr::encode_sky(f.skypass, f.pipelines, f.rec, e, f.targets, f.frame);
+    if (f.picture->ce.clouds)
+      gr::encode_clouds(f.clouds, f.pipelines, f.rec, e, f.targets, f.frame, view, f.staged);
+    if (f.has_map) ba::encode_bsp_veil(f.bsp, f.pipelines, f.rec, e, f.targets);
+    if (f.extras) encode_extras(*f.extras, f.pipelines, f.rec, e, f.targets, f.frame);
+    gr::encode_particles(f.particles, f.pipelines, f.rec, e, f.targets, f.frame);
+    gr::encode_explosions(f.explosions, f.pipelines, f.rec, e, f.targets, f.frame);
+    encode_model_sprites(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
+    if (weapon) gr::encode_viewmodel(f.held, f.pipelines, f.rec, e, f.targets, f.frame);
+    gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);
+    gr::encode_post(f.post[p], f.pipelines, f.rec, e, f.frame, f.post_group[p], target);
+    if (overlay.size() > 0) {
+      gr::prepare_ui(d, f.ui, overlay, f.w, f.h);
+      gr::encode_ui(f.ui, f.pipelines, f.rec, e, target);
+    }
+    f.rec.end_frame(e);
+    c = e.Finish();
   }
-  f.rec.end_frame(e);
-  wgpu::CommandBuffer c = e.Finish();
+  GE_ZONE("world.submit");
   d.queue.Submit(1, &c);
   f.rec.after_submit(d);
 }
