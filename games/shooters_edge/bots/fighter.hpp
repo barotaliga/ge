@@ -48,6 +48,7 @@
 #include "shooter/bot.hpp"
 #include "shooter/hearing.hpp"
 #include "shooter/swim.hpp"
+#include "shooter/temper.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/profiles/items.hpp"
 #include "shooters_edge/server/qc_server.hpp"
@@ -140,6 +141,15 @@ struct FighterStats {
   int64_t pokes = 0;                // buttons a novice tried on a whim
   int64_t dives_given_up = 0;       // dives turned back (late, or short of air)
   double dive_wet_s = 0;            // time in the water on a dive
+  int64_t outmatched = 0;           // commands spent turned from a fight it believed it loses
+  int64_t sound_chases = 0;         // commands spent going at an enemy it only heard
+};
+
+// What a fighter believes of one enemy (temper.hpp): his body and arms as last heard.
+struct FoeRead {
+  float body = 100, arms = 1;
+  double t = -1e9;           // when it was last heard of him
+  double quad_until = -1e9;  // his quad heard taken, believed held until then
 };
 
 struct Fighter {
@@ -150,6 +160,7 @@ struct Fighter {
   std::vector<sh::HeardSound> heard;     // this frame's sounds taken in
   std::vector<sh::Vec3f> spam_spots;     // where enemies come in by (spam.hpp)
   std::vector<int32_t> spam_from;        // per spot, the node near its area it is fired from
+  std::vector<FoeRead> foes;             // each enemy as believed, by entity (temper.hpp)
   std::vector<ButtonSpot> button_spots;  // the map's buttons (buttons.hpp)
   Mind mind;             // what it believes of its team, its claim, its calls (mind.hpp)
   std::string name;      // its player name, as its teammates see it in their team lines
@@ -202,6 +213,9 @@ struct Fighter {
   ge::core::Rng rng{1};       // its own draws (where it explores), seeded off the bot's seed
   FightMode mode = FightMode::roam;
   Role role = Role::free;
+  sh::Temper temper = sh::Temper::balanced;  // when it takes a fight (shooter/temper.hpp)
+  sh::AimSkill skill = sh::AimSkill::expert;
+  bool outmatched = false;  // turned from the fight in sight: armour, a weapon or the team first
   MapSense sense = MapSense::expert;  // how well it knows the map (off its skill)
   bool was_dead = false;
   bool unlocking = false;  // on the way to the goal item's button

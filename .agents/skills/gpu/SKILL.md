@@ -24,6 +24,18 @@ there before the first edit.
   native extension behind a tier. Never add Vulkan, Metal or D3D12 code.
 - Rows without a Dawn build yet use `GE_GPU=OFF` (everything except
   `engine/gpu`, `engine/render` and the app).
+- **On Windows, Dawn's DLLs load only from a path named in full.** Dawn opens a library at
+  each runtime search path plus its name, and Windows refuses its last try, the bare name, with
+  error 87. So `create_device` names System32 (`d3dcompiler_47.dll`, `vulkan-1.dll`), and CMake
+  copies the Windows SDK's `dxcompiler.dll` and `dxil.dll` (D3D12's shader compiler and its
+  validator, which the archive lacks) beside every executable (`ge_dxc_beside_executables`,
+  cmake/Dawn.cmake). A device that fails with `DynamicLib.Open: <name> Windows Error` has lost
+  one of them.
+- **`GE_GPU_OFF=1` makes no device** (`create_device` returns null, so GPU tests and labs skip).
+  CI's Windows row sets it: the runner has no GPU, and the adapter Dawn finds there draws on the
+  CPU, running the GPU labs past the row's 60 minutes. A first try refused only adapters typed CPU
+  and changed nothing there (0 tests skipped), so the switch is all or nothing. Never set it on
+  Linux, where lavapipe is the adapter the goldens are made on.
 
 ## What is built (M6), and where
 

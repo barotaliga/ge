@@ -27,9 +27,24 @@
 //   found by a name (with the game's demo extensions tried in order when it has none) or a path,
 //   and its bytes opened for playback (client/demo.hpp, the formats told by their first bytes).
 //
-// Not yet here (each moves behind a call of its own, in its own change): the models (the world's,
-// the player's and its skins, the held weapons, the items) and the sounds; the HUD's and the
-// menus' pictures; the config files and the location files.
+// - **open_model**: a model the server names ("progs/armor.mdl", "maps/b_bh25.bsp") read into
+//   one of the shared FORMS the window draws: a vertex-animated model (plugins/morph's `Model`,
+//   the form a later game's model families read into too), a sprite, or a brush item (a small map
+//   of its own). With it, a full-colour picture with alpha for each of a model's skins where the
+//   game's files hold one: the first game's is `<model>_<skin>.png` (or `.tga`) beside the model
+//   ("progs/player.mdl_0.png"); its transparent texels are not drawn. The items (armour, health,
+//   ammo), the weapons lying about and the players and their skins all come through here.
+// - **open_sound**: a sound the server or a demo names ("weapons/rocket1i.wav") read to samples;
+//   the first game's are WAV files under `sound/`.
+// - **pictures**: the HUD's and the menus' pictures (client/classic_pictures.hpp's set): the first
+//   game's are the lumps of its graphics archive and its `gfx/*.lmp` files in its palette's
+//   colours, each swapped for a PNG or TGA of the same name where the game's files hold one
+//   (`gfx/sbar.png`, `gfx/conchars.tga`, `gfx/qplaque.png`; alpha kept, its size a whole multiple
+//   of the picture's), else for classic-enhance's upscaled copy when asked.
+//
+// Not yet here (each moves behind a call of its own, in its own change): the held weapons' models
+// from the game's files (the window holds the game's own today); the config files and the
+// location files.
 //
 // These are load-time calls, never a frame's: a table of plain function pointers, no state. The
 // console's `mods`, `maps` and `demos` print their answers (`add_adapter_commands`).
@@ -38,21 +53,27 @@
 // ge:keywords game-adapter adapter classic-game list_mods find_program list_maps map_info
 // ge:keywords map_textures list_demos find_demo open_demo mod-folder program-form program-side
 // ge:keywords per-game sequel add_adapter_commands console-mods console-maps console-demos
-// ge:keywords replacement-texture png tga alpha
+// ge:keywords replacement-texture png tga alpha open_model open_sound model-form skin-stand-in
+// ge:keywords replacement-skin pictures hud-pictures menu-pictures replacement-picture
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "assets/image.hpp"
+#include "audio/pcm.hpp"
 #include "brush/map.hpp"
 #include "brush/pictures.hpp"
 #include "console/console.hpp"
+#include "morph/model.hpp"
 #include "progs/file.hpp"
+#include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
@@ -80,6 +101,19 @@ struct MapInfo {
   uint32_t textures = 0;
 };
 
+// The shared form a model file is read into.
+enum class ModelForm : uint8_t { none, morph, sprite, brush };
+
+// A model the game's files hold, read.
+struct OpenedModel {
+  ModelForm form = ModelForm::none;
+  ge::morph::Model morph;    // form morph
+  ge::morph::Sprite sprite;  // form sprite
+  ge::brush::Map brush;      // form brush
+  // A full-colour picture with alpha standing in for each of `morph`'s skins (width 0: none).
+  std::vector<ge::assets::Image> skins;
+};
+
 struct GameAdapter {
   const profiles::GameProfile* game = nullptr;  // the rows the calls read
   // The mod folders beside the base folder under `basedir`, by name.
@@ -102,6 +136,18 @@ struct GameAdapter {
                                                      const SearchPath& files, std::string_view map,
                                                      std::span<const uint8_t> map_file,
                                                      std::vector<uint8_t>& store) = nullptr;
+  // The model `name` read into its form. False with `error` "" when the files do not hold it,
+  // else with the reason.
+  bool (*open_model)(const GameAdapter& self, const SearchPath& files, const std::string& name,
+                     OpenedModel& out, std::string& error) = nullptr;
+  // The sound `name` (as the server or a demo names it) read; false as open_model is.
+  bool (*open_sound)(const GameAdapter& self, const SearchPath& files, const std::string& name,
+                     ge::audio::Pcm& out, std::string& error) = nullptr;
+  // The HUD's and the menus' pictures the files hold, each from a picture file of its name when
+  // there is one, else classic-enhance's upscaled copy when `enhance` (the packs' cache under
+  // `cache_root`, empty: its own folder), else the game's own.
+  ClassicPictures (*pictures)(const GameAdapter& self, const SearchPath& files, bool enhance,
+                              const std::filesystem::path& cache_root) = nullptr;
   // The recordings the files hold, by path.
   std::vector<std::string> (*list_demos)(const GameAdapter& self,
                                          const SearchPath& files) = nullptr;

@@ -160,5 +160,9 @@ endif()
 if(GE_GPU AND GE_TINT)
   ge_add_shaders_check()
 endif()
+# DXC beside every executable on Windows (cmake/Dawn.cmake), after every add_executable.
+if(GE_GPU AND WIN32)
+  ge_dxc_beside_executables()
+endif()
 
 include(cmake/Packaging.cmake)

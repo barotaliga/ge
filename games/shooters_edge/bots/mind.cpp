@@ -405,7 +405,8 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
 
 bool gives_up(const Fighter& f, const server::QcServer& s, int me, int32_t i, const Stats& st,
               double t) {
-  if (!f.team || f.sense == MapSense::novice) return false;  // a novice takes what he finds
+  if (!f.team || f.sense == MapSense::novice) return false;       // a novice takes what he finds
+  if (f.temper == ge::shooter::Temper::aggressive) return false;  // he takes all he can carry
   const ItemSpot& it = f.items[static_cast<size_t>(i)];
   const bool mine_quad = (st.items & kItQuad) != 0;
   // No use to this player.
@@ -545,7 +546,9 @@ void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, d
     c.item = "quad";
     mind_say(f, t, c, at);
   }
-  if (r == Role::free && mn.claim >= 0) r = Role::hold;
+  // An aggressive player holds nothing: he goes where the frags are.
+  if (r == Role::free && mn.claim >= 0 && f.temper != ge::shooter::Temper::aggressive)
+    r = Role::hold;
   if (r == Role::rush && was != Role::rush) f.team->stats.rushes++;
   if (r == Role::carry && was != Role::carry) {
     f.team->stats.quads++;

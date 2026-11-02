@@ -1,5 +1,7 @@
 // THE WINDOW'S CLASSIC PICTURES: the classic menu's pictures (menu/classic_art.hpp) and the classic
-// status bar's (hud/classic_art.hpp), read from the packs on the search path and, when
+// status bar's (hud/classic_art.hpp), read by the game's adapter (game_adapter.hpp's `pictures`:
+// the first game's from the packs on the search path, a PNG or TGA of a picture's name standing
+// in for it) and, when
 // `ce_pictures` is on, swapped for classic-enhance's upscaled copies in the packs' cache
 // (`cached_picture`, its pictures stage), so the menus, the status bar and the glyph sheet's text
 // are drawn from four times the pixels.
@@ -33,9 +35,13 @@ struct ClassicPictures {
   bool enhanced = false;        // asked for the enhanced copies (ce_pictures)
 };
 
-// The pictures of `files`, enhanced from the packs' cache when `enhance` is set and the cache has
-// them (an empty `cache_root` is classic-enhance's own folder).
+struct GameAdapter;
+
+// The pictures of `files` as `game` (null: the first game's adapter) reads them, enhanced from the
+// packs' cache when `enhance` is set and the cache has them (an empty `cache_root` is
+// classic-enhance's own folder).
 ClassicPictures load_classic_pictures(const SearchPath& files, bool enhance,
-                                      const std::filesystem::path& cache_root = {});
+                                      const std::filesystem::path& cache_root = {},
+                                      const GameAdapter* game = nullptr);
 
 }  // namespace shooters_edge::client

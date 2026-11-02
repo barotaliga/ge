@@ -593,6 +593,9 @@ files shares: `engine/vfs` (folders, packs, zips, loose files, a mod over the ba
 | **programs** (`find_program`) | one QC program for the server (`qwprogs.dat`, then `progs.dat`) | a native library of the server's rules | up to three bytecode programs inside its zips, one a side: the server's rules, the client's half (its HUD and prediction), the menus; or native libraries |
 | **maps** (`list_maps`, `map_info`) | BSP 29 or BSP2, the title the world's message | BSP 38 | BSP 46 |
 | **textures** (`map_textures`) | the map carries its pictures (`plugins/brush/pictures.hpp`); a PNG or TGA by the texture's name stands in, alpha and all (`textures/<map>/<name>`, then `textures/<name>`) | its own picture files beside the map, by the texture's name | shaders over picture files |
+| **models** (`open_model`) | `.mdl` into the shared vertex-animated form (`plugins/morph`), `.spr` sprites, `.bsp` items; a PNG or TGA beside a model stands in for a skin, alpha and all (`progs/player.mdl_0.png`) | its own model files (with `.pcx` skins in a folder a player model) read into the same form | its own model files (a body of head, upper and lower parts, `.skin` files) read into the same form |
+| **pictures** (`pictures`) | the graphics archive's lumps and `gfx/*.lmp` in the palette's colours; a PNG or TGA of a picture's name under `gfx/` stands in, alpha and all, at its size or a whole multiple of it | its own picture files (`.pcx`) | its own picture files and shaders |
+| **sounds** (`open_sound`) | WAV files under `sound/` | WAV files under `sound/` | WAV files and other formats under `sound/` |
 | **demos** (`list_demos`, `find_demo`, `open_demo`) | the single-player, client and multiview recordings (`client/demo.hpp`) | its own recording format | its own |
 
 **Every program file names its form and its side** (`ProgramFile` in `profiles/game_profile.hpp`:
@@ -603,11 +606,21 @@ hooks over whichever program runs, so they stay a choice of their own.
 
 A stand-in picture's alpha cuts the face where it is under a half, as a fence texture's holes do
 (`docs/rendering.md` § See-through texels on a BSP map); the TGA reader is
-`engine/assets/tga.hpp`, the PNG reader `engine/assets/image.hpp`.
+`engine/assets/tga.hpp`, the PNG reader `engine/assets/image.hpp`. A model's skin picture does
+the same on the model: a texel under half opaque is a hole (`kMarkHole`, `docs/rendering.md` §
+Morph meshes), and a skin picture carries no tint rows, so it is drawn in its own colours (lab
+`se-skins`). Every model comes through `open_model`: the items (armour, health, ammunition), the
+weapons lying about, the players and their skins. A later game's model families are new readers
+into the same shared forms, so the window that draws them does not change.
 
-**Still to move behind calls of their own**, each in its own change: the models (the world's,
-the player's and its skins with alpha, the held weapons, the items) and the sounds; the HUD's and
-the menus' pictures; the config files and the location files.
+The HUD's and the menus' pictures come through `pictures`: a picture file of a picture's name
+wins over classic-enhance's upscaled copy, and the set keeps one density (the first picture's
+scale; a copy at a whole step under it is scaled up nearest, any other picture is the pack's
+scaled up), so a player can swap the status bar or the glyph sheet alone (lab `se-pictures`).
+
+**Still to move behind calls of their own**, each in its own change: the held weapons' models
+from the game's files (the window holds the game's own set today); the config files and the
+location files.
 
 **The next seam, when the sequel starts: a rules runner.** The listen server and the dedicated
 server hold the QC server (`server/qc_server.hpp`) itself today. A second program form needs them
@@ -1009,6 +1022,21 @@ with 20 or more rockets, steps out to fire at the teleporters' exits and the pow
 buttons (`bots/buttons.hpp`) come off its own entities: a `func_button` with health over 0 is shot,
 the rest touched, and the items within reach of the doors it opens are gone for through it by an
 average or expert player; a novice now and then shoots at, or walks into, any button he sees.
+
+**Temperaments (M18r11).** Beside his skill, a bot has a temperament (`plugins/shooter/temper.hpp`)
+that decides which fights he takes, sizing each up as might against might: his body (health and
+what his armour saves) times his arms (the weapon's factor, three for the quad), against what he
+believes of the enemy's (`bots/temper.hpp`). That belief is built from what he hears: the weapon an
+enemy fires, the armour, the mega health, a weapon or the quad he takes, his pain and his death;
+it fades back to a fresh spawn's in 30 seconds, and a novice reads none of it. An AGGRESSIVE bot
+takes every fight, goes after every sound as a novice (after arming himself as a better player),
+stays in a fight down to 25 of body, never holds an area for his team and never gives an item up. A
+BALANCED bot takes a fight his skill wins (an expert's edge is twice an average player's, so a fresh
+enemy falls to his scattergun; a novice's is 0.7) and turns at 50. A COWARD fights only at two and
+a half times the enemy's might, his edge counted (the big armour, the mega and the launcher), never
+goes after a sound and turns at 70. A bot outmatched by an enemy he sees turns for any item he can
+reach away from that enemy, or for his nearest teammate. An enemy in sight within 192 units is fought whatever the
+odds: turning away only shows him a back. The labs take `--tempers` (`a`, `b`, `c`).
 
 **Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
 community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the

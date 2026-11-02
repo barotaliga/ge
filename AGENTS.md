@@ -185,6 +185,7 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 ```sh
 sudo tools/setup-ubuntu.sh  # an Ubuntu 24.04/22.04 machine brought up to what the tree needs; a no-op when it is
 tools/setup-macos.sh  # the same for a Mac, from a fresh install (Homebrew, the Command Line Tools, every tool); never sudo
+powershell -ExecutionPolicy Bypass -File tools\setup-windows.ps1  # the same for Windows (MSVC's Build Tools, every tool by winget); not elevated
 make build        # cmake --preset debug && cmake --build (PRESET=release for -O2, no sanitizers)
 make test         # build + ctest;  make test T=cli_ builds and runs only the tests the regex names
 make fmt          # clang-format in place;  make fmt-check is what CI runs

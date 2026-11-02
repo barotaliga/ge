@@ -1,2 +1,5 @@
 # The `ge` backlog is one wish a line: threads adding wishes side by side merge cleanly.
 docs/goals/ge-backlog.md merge=union
+# Shell scripts keep LF on every checkout: Git for Windows' default (core.autocrlf=true) would give
+# them CRLF, and bash stops at the first line (tools/setup-windows.ps1 repairs older checkouts).
+*.sh text eol=lf

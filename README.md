@@ -100,9 +100,18 @@ macOS: it installs Homebrew (and with it Xcode's Command Line Tools, so Apple Cl
 SDK), puts Homebrew on PATH for new shells, then installs CMake, Ninja, ccache, bash 4+,
 clang-format and clang-tidy 18, Node.js, Python 3 and gh. Run it as yourself, never with sudo.
 
+On Windows (10 or 11, x64), [`tools/setup-windows.ps1`](tools/setup-windows.ps1) installs Visual
+Studio 2026's Build Tools with the C++ workload (MSVC and the Windows SDK), then by winget Git for
+Windows (its Git Bash runs `make` and `tools/*.sh`), CMake, Ninja, ccache, GNU make, LLVM 18's
+clang-format and clang-tidy, Python 3 (with a real `python3`), Node.js, gh and nasm. Run it from an
+ordinary PowerShell; the installers that need an administrator ask. Build in MSVC's x64
+environment ("x64 Native Tools Command Prompt for VS") on the release preset, as CI's Windows
+row does.
+
 ```sh
 sudo tools/setup-ubuntu.sh   # once per machine; --check reports, --verify also builds and tests
 tools/setup-macos.sh         # the same on a Mac (no sudo; it asks for your password once)
+powershell -ExecutionPolicy Bypass -File tools\setup-windows.ps1   # the same on Windows
 ```
 
 ```sh

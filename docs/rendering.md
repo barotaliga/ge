@@ -548,6 +548,10 @@ frame a list of `MorphDraw`s.
 - **Team colours without a skin per team.** A skin texel's alpha is its **mark**:
   - plain, an sRGB colour;
   - **glow**, which lights itself (eyes, lamps, a muzzle);
+  - **hole** (`kMarkHole`), which is not drawn: a game's skin picture with alpha, its texels
+    under half opaque. The texel the point falls in decides, sharp or smooth, so the cut edge
+    is the skin's own texels. It costs one more texel read and lives in the mark's spare values,
+    so a skin with no holes draws as it did;
   - **tinted**, in region A or B with a step from 0 to 15.
 
   A tinted texel takes the instance's ramp for its region at its step. The step keeps the
