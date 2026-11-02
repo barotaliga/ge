@@ -303,10 +303,15 @@ int run_main(int argc, char** argv) {
   cl::ListenRecorder recorder;  // `record` and `stop` (listen_record.hpp)
   cl::add_record_commands(console, recorder, listen, files, playback.record);
   std::string error;
+  // No packs and no `+map`: the built-in arena (the start map below falls back to it).
   if (!cl::open_game_dir(args.basedir, args.game, files, error)) {
-    out::error("shooters_edge: the game folder did not open: " + error +
-               "; see docs/shooters-edge.md § Playing it");
-    if (next_map != "arena") return 2;
+    if (!next_map.empty() && next_map != "arena") {
+      out::error("shooters_edge: the game folder did not open: " + error +
+                 "; see docs/shooters-edge.md § Playing it");
+      return 2;
+    }
+    out::warn("shooters_edge: no game folder, so the built-in arena: " + error +
+              "; see docs/shooters-edge.md § Playing it");
   } else {
     out::status("shooters_edge: " + std::to_string(cl::archive_paths(files).size()) +
                 " archives on the search path of " + files.folder);
