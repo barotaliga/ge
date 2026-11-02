@@ -12,6 +12,7 @@
 #include <system_error>
 #include <utility>
 
+#include "console/console.hpp"
 #include "console/cvar.hpp"
 #include "lab/png.hpp"
 
@@ -74,6 +75,14 @@ void add_screenshot_cvars(console::Cvars& cvars, ScreenshotSettings& s) {
        .min = 420,
        .max = 444},
       &s.chroma);
+}
+
+void add_screenshot_command(console::Console& console, Screenshots& writer,
+                            std::string_view where) {
+  console.add_command("screenshot",
+                      "screenshot: the next frame shown written to " + std::string(where) +
+                          " in scr_format (bound to F12)",
+                      [&writer](console::Console&, const console::Args&) { writer.request(); });
 }
 
 StillOptions still_options(const ScreenshotSettings& s, std::string& note) {

@@ -109,6 +109,7 @@
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
 #include "play/inputs.hpp"
+#include "render/screenshot_copy.hpp"
 #include "ui/console.hpp"
 #include "ui/console_keys.hpp"
 #include "ui/draw.hpp"
@@ -271,11 +272,7 @@ static int run_main(int argc, char** argv) {
   ge::capture::Screenshots shots(
       ge::platform::prefs_dir("gameengine2", "fall_line") + "screenshots", "fall_line",
       &set.screenshot);  // scr_format, scr_quality, scr_chroma (cfg/cvars.hpp)
-  console.add_command(
-      "screenshot",
-      "screenshot: the next frame shown written to <the per-user folder>/screenshots/ in "
-      "scr_format (bound to F12)",
-      [&shots](ge::console::Console&, const ge::console::Args&) { shots.request(); });
+  ge::capture::add_screenshot_command(console, shots, "<the per-user folder>/screenshots/");
   for (const std::string& cmd : args.sets) console.append(cmd);
   ge::console::start(console, args.plus_args);
   console.cvars().apply_latched();
@@ -410,9 +407,7 @@ static int run_main(int argc, char** argv) {
     out::status("fall_line: capturing the window to " + args.capture +
                 (capture.encoder().empty() ? "" : " (" + capture.encoder() + ")"));
   }
-  ge::gpu::ReadbackRing shot_ring(
-      2);  // the frames `screenshot` takes, copied back like the capture's
-  ge::gpu::Image shot;
+  ge::render::ScreenshotCopy shot_copy;  // the frames `screenshot` takes, copied back
   Pull puller{&synth, capture.is_open() ? &capture : nullptr};
   std::unique_ptr<ge::platform::AudioOut> speaker;
   if (!set.mute) {
@@ -689,12 +684,7 @@ static int run_main(int argc, char** argv) {
         hand_in(capture, img, handed, static_cast<int64_t>(ms));
       });
     }
-    // Every slot still in flight: the screenshot is asked for again rather than lost.
-    if (shots.due() && !shot_ring.capture(*device, surface.frame_target(), 0)) shots.request();
-    shot_ring.poll(*device, shot, [&shots](ge::gpu::Image& img, uint64_t) {
-      shots.write(img.width, img.height, img.rgba);
-    });
-    for (const std::string& line : shots.poll()) console.print(line);
+    shot_copy.frame(*device, surface.frame_target(), shots, console);
     surface.present();
     ++presented;
   }

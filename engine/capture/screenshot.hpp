@@ -1,10 +1,11 @@
 // SCREENSHOTS (docs/replays.md § Screenshots): the frame the player asks for kept as a picture
 // file in the game's own folder, with no frame of the game waiting for it.
 //
-// - THE KEY: a game binds a key (F12 in both games) to its `screenshot` command, which calls
-//   `request`. Once a frame, after the frame is drawn and before it is presented, the game asks
-//   `due`; when it says yes the game copies the frame back with no stall (gpu/readback_ring.hpp,
-//   `Surface::frame_target`) and hands the pixels to `write` when they arrive a frame or two later.
+// - A GAME'S PART is its wiring and nothing more: the folder and the name, `add_screenshot_cvars`
+//   and `add_screenshot_command` (the console's `screenshot`, which calls `request`) before the
+//   console runs the command line, a key bound to `screenshot` (F12 in both games), and one call a
+//   frame to render/screenshot_copy.hpp's `ScreenshotCopy`, which asks `due`, copies the frame
+//   back with no stall and hands the pixels to `write` when they arrive a frame or two later.
 // - THE WRITE: `write` copies the pixels and the player's settings and returns at once. A worker
 //   thread of its own packs them in the format the settings name (capture/still.hpp: png, jpg,
 //   avif or heic, falling back when this build or machine cannot make it) and writes the file
@@ -24,7 +25,7 @@
 // ge:summary Screenshots: the key's request, the settings, the frame packed and written off-thread
 // ge:keywords screenshot f12 print-screen png still picture frame worker no-stall request due
 // ge:keywords write poll flush screenshot_stem screenshots-folder scr_format scr_quality scr_chroma
-// ge:keywords add_screenshot_cvars still_options jpeg-quality
+// ge:keywords add_screenshot_cvars add_screenshot_command still_options jpeg-quality
 // ge:skill replay
 // ge:test tests/capture_screenshot_test.cpp
 #pragma once
@@ -43,8 +44,9 @@
 #include "capture/still.hpp"
 
 namespace ge::console {
+class Console;
 class Cvars;
-}
+}  // namespace ge::console
 
 namespace ge::capture {
 
@@ -58,6 +60,11 @@ struct ScreenshotSettings {
 void add_screenshot_cvars(console::Cvars& cvars, ScreenshotSettings& s);
 // The settings as the writer's options; an unknown format is JPEG, said in `note`.
 StillOptions still_options(const ScreenshotSettings& s, std::string& note);
+
+class Screenshots;
+// The console's `screenshot`: the next frame shown taken by `writer`; `where` names its folder in
+// the command's help ("<game folder>/screenshots/").
+void add_screenshot_command(console::Console& console, Screenshots& writer, std::string_view where);
 
 // `<prefix>-YYYY-MM-DD-HHMMSS` for the local time `t`.
 std::string screenshot_stem(std::string_view prefix, const std::tm& t);

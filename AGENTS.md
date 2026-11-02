@@ -111,7 +111,12 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 - **ENGINE, PLUGIN OR GAME** (G8). Before the first edit, decide each file's home with the
   `plugins` skill: any genre would use it → `engine/`; any game of one genre or world →
   `plugins/<name>/`; only this game → `games/<game>/`. Dependencies run game → plugin →
-  engine; `make agents-check` holds them.
+  engine; `make agents-check` holds them. **Build it as generic as it can be**: a feature any
+  game would want (screenshots, saves, video capture, the console) goes in the engine whole,
+  its settings, cvars and console commands with it, and a game adds only its wiring (a key, a
+  folder, a name: a few lines). Glue that two games would write alike is the engine's too: lift
+  it there rather than copy it (`engine/capture/screenshot.hpp` and
+  `engine/render/screenshot_copy.hpp` are the pattern).
 - **ONLY WHAT THE GAME NEEDS** (G4). Before you build a component, name the Fall Line
   feature it serves. A general-purpose feature with no user is out of scope.
 - **FAST, AND PROVEN FAST** (G2). Hot paths do not allocate, branch on virtuals or chase

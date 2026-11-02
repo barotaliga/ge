@@ -417,10 +417,13 @@ smallest. On Fall Line's 1440p frame at quality 90 (the `screenshot` lab with `-
 | HEIC | 262 KB | 7.0% | 43.9 dB |
 
 THE FRAME IS NEVER HELD for it (`capture/screenshot.hpp`). The key asks for the next frame;
-once that frame is drawn and before it is presented the game copies it into a ring of two
-readbacks (`gpu/readback_ring.hpp`, the live capture's), and when the copy comes back a frame or
-two later the pixels and the settings of that moment are handed to the writer, which copies them
-and returns. The writer's own thread packs them and writes the file under a temporary name renamed
+once that frame is drawn and before it is presented the window's one call a frame
+(`render/screenshot_copy.hpp`'s `ScreenshotCopy::frame`) copies it into a ring of two readbacks
+(`gpu/readback_ring.hpp`, the live capture's), and when the copy comes back a frame or two later
+the pixels and the settings of that moment are handed to the writer, which copies them and
+returns. A game's whole part is its wiring: the folder and the name, `add_screenshot_cvars` and
+`add_screenshot_command` before the console runs the command line, a key bound to `screenshot`,
+and that one call. The writer's own thread packs them and writes the file under a temporary name renamed
 over, so a crash never leaves half a picture. Four pictures waiting is the most; a fifth is
 refused and said so. The console names each file once it is written, with its format, quality and
 size.

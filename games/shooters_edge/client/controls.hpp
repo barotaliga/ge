@@ -4,7 +4,7 @@
 // +left, +right) and `impulse <n>`, and `default_binds` gives every key the classic layout has
 // unbound (W A S D and the arrows move, SPACE jumps, the left button fires, SHIFT walks or runs,
 // ALT sidesteps with the mouse, 1..8 pick a weapon, the wheel the next one carried, F12 takes a
-// screenshot: client/screenshot.hpp), before the player's config rebinds them. OPTIONS ▸
+// screenshot: engine/capture/screenshot.hpp), before the player's config rebinds them. OPTIONS ▸
 // CUSTOMIZE CONTROLS rebinds them too.
 //
 // - `button_moves` reads the buttons (the window); `key_moves` reads the default keys straight off

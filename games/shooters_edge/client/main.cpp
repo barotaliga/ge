@@ -69,6 +69,7 @@
 #include <string_view>
 #include <vector>
 
+#include "capture/screenshot.hpp"
 #include "console/cfg.hpp"
 #include "console/view.hpp"
 #include "core/output.hpp"
@@ -79,6 +80,7 @@
 #include "platform/audio.hpp"
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
+#include "render/screenshot_copy.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/controls.hpp"
@@ -92,7 +94,6 @@
 #include "shooters_edge/client/lobby_console.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/scores.hpp"
-#include "shooters_edge/client/screenshot.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
@@ -254,7 +255,14 @@ int run_main(int argc, char** argv) {
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
   // The player's settings (client/settings.hpp); the folder the game runs in is read after them.
   console.set_search_path({cl::settings_dir(args.basedir, args.game), "."});
-  cl::Shots shots(console, args.basedir, args.game);  // `screenshot`, F12 (client/screenshot.hpp)
+  // F12's screenshots (engine/capture/screenshot.hpp), in <game folder>/screenshots/ beside its
+  // recordings, saves/ and settings/; made before the + lines so `+screenshot` takes the first.
+  ge::capture::ScreenshotSettings shot_settings;  // scr_format, scr_quality, scr_chroma
+  ge::capture::Screenshots shots(
+      (cl::settings_dir(args.basedir, args.game).parent_path() / "screenshots").string(),
+      "shooters_edge", &shot_settings);
+  ge::capture::add_screenshot_cvars(console.cvars(), shot_settings);
+  ge::capture::add_screenshot_command(console, shots, "<game folder>/screenshots/");
   const auto save_settings = [&console] { cl::save_settings(console); };
   ge::console::start(console, args.plus);
   console.cvars().apply_latched();
@@ -434,7 +442,7 @@ int run_main(int argc, char** argv) {
   if (!device) return 1;
   ge::gpu::Surface surface;
   if (!surface.create(*device, window->native())) return 1;
-  cl::ShotCopy shot_copy;  // the frames `screenshot` takes, copied back
+  ge::render::ScreenshotCopy shot_copy;  // the frames `screenshot` takes, copied back
   int w = 0, h = 0;
   window->pixel_size(w, h);
   // The pointer comes in the window's logical units; the menu is laid out in pixels.
@@ -822,7 +830,7 @@ int run_main(int argc, char** argv) {
       cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
       if (!bench.paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
-        cl::screenshot_frame(shots, shot_copy, *device, surface, console);
+        shot_copy.frame(*device, surface.frame_target(), shots, console);
         surface.present();
       }
       if (bench.paced) {  // playback: every frame shown, nothing timed
@@ -927,7 +935,7 @@ int run_main(int argc, char** argv) {
     wgpu::TextureView target = surface.acquire(*device);
     if (!target) continue;
     cl::draw_world(*device, *world, view, fx, &hand, wall, overlay, target);
-    cl::screenshot_frame(shots, shot_copy, *device, surface, console);
+    shot_copy.frame(*device, surface.frame_target(), shots, console);
     surface.present();
     ++presented;
   }
