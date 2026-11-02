@@ -19,7 +19,9 @@ struct GpuFlame {
 @group(1) @binding(1) var<storage, read> flames: array<GpuFlame>;
 @group(1) @binding(2) var scene_depth: texture_depth_2d;
 
-const kFlameSteps = 28u;
+// The march's steps: the per-pixel jitter and the resolve average their banding away, so 14 (half
+// the 28 they were) show the same fire for half the noise.
+const kFlameSteps = 14u;
 const kFlameFilm = 0.5;  // how fast each primary saturates past white
 const kFlameKnee = 0.4;   // the gas shows kFlameGlare x log2(1 + its light / this), in the
 const kFlameGlare = 0.38; // picture's units (white is about 1): every doubling a step brighter

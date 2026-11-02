@@ -25,3 +25,8 @@ concepts: [gpu-cost, knockout, light-loop, light-grid, bilinear, wrap, division,
   exactly. Keep per-face paths (the teleporter's liquid) in both: only frame-wide modes can go.
 - A loop's mere presence costs too: the parallax march run for one step still cost a third of
   the full march. Fewer steps by the texels crossed saved little (the upscaled textures are dense).
+- A visual trade is judged by `<lab> --diff=<tag>` (run the lab untagged first: the diff reads
+  the last run). The flames' march at 14 steps passed every `gpu-flames` shot but `wind` (32 dB
+  under a 40 dB floor: grain on thin tongues in one still frame); 20 steps still failed it and
+  saved under half as much, so the trade is all or nothing there. Say which shot fails and why
+  in the PR rather than loosening the floor.
