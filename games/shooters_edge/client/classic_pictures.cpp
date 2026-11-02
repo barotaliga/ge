@@ -17,4 +17,9 @@ ClassicPictures load_classic_pictures(const SearchPath& files, bool enhance,
   return g.pictures(g, files, enhance, cache_root);
 }
 
+const hud::HudArt& hud_art_of(const SearchPath& files, const hud::HudArt& game,
+                              const hud::HudArt& own) {
+  return files.folder.empty() ? own : game;
+}
+
 }  // namespace shooters_edge::client

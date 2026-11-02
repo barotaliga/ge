@@ -285,13 +285,11 @@ int run_main(int argc, char** argv) {
                         .kind = ge::console::CvarKind::boolean},
                        &level_stats);
   shooters_edge::menu::BoardView board_view;
-  // The HUD's pictures: the free set always, and the packs' own status bar pictures once the
-  // packs are open (below); `hud_art` picks between them every frame (hud/classic_art.hpp).
+  // The HUD's pictures: a classic game's own once its packs are open (below), Shooter's Edge's
+  // free set only for its own content (client/classic_pictures.hpp's hud_art_of).
   se::HudArt free_art = se::free_art();
   free_art.finish();
   se::HudArt classic_art;
-  std::string hud_art = "auto";
-  se::add_art_cvar(console, &hud_art);
   // The HUD's feed shows the game's messages (hud.notify, below), so the console's own lines at
   // the top of the screen would show each a second time; a cfg or a + word can turn them back on.
   console.cvars().set("con_notifylines", "0", ge::console::Source::code);
@@ -322,6 +320,8 @@ int run_main(int argc, char** argv) {
   cl::add_adapter_commands(console, adapter, files, args.basedir);
   cl::read_configs_from(console, adapter, files);  // `exec` finds a cfg in the game's packs too
   menu_host.maps.emplace_back("arena");
+  menu_host.table = &adapter.menu(adapter);  // the game's own pages
+  game_menu.set_table(*menu_host.table);
   // ce_pictures: the menu's and the status bar's pictures enhanced from the packs' cache; read
   // again when it flips and when a map loads (client/classic_pictures.hpp).
   const auto load_pictures = [&](bool say) {
@@ -331,10 +331,10 @@ int run_main(int argc, char** argv) {
     classic_art.finish();
     if (!say) return pics.enhanced;
     if (!classic_art.bar.empty())
-      out::status("shooters_edge: the HUD draws the packs' own status bar pictures (hud_art)" +
+      out::status("shooters_edge: the HUD draws the packs' own status bar pictures" +
                   std::string(classic_art.density > 1 ? ", enhanced (ce_pictures)" : ""));
     else if (!cl::archive_paths(files).empty())
-      out::status("shooters_edge: the HUD draws the free art: " + pics.hud_why);
+      out::status("shooters_edge: the HUD has no status bar pictures: " + pics.hud_why);
     return pics.enhanced;
   };
   bool pictures_enhanced = load_pictures(true);
@@ -829,7 +829,7 @@ int run_main(int argc, char** argv) {
       view.frame = static_cast<uint64_t>(presented);
       overlay.begin(w, h);
       se::fill_hud(hud, cl::demo_status(bench.demo.state, t),
-                   se::pick_art(hud_art, classic_art, free_art));
+                   cl::hud_art_of(files, classic_art, free_art));
       const auto placed =
           hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style());
       playback.bar_bottom_px = cl::hud_inset(placed, h);
@@ -935,7 +935,7 @@ int run_main(int argc, char** argv) {
     cl::fire_held(held_fire, hand, picture.ce.muzzles, view.time_s, fx);
     overlay.begin(w, h);
     if (listen.campaign.end == cl::LevelEnd::none) {
-      se::fill_hud(hud, cl::status_of(listen, t), se::pick_art(hud_art, classic_art, free_art));
+      se::fill_hud(hud, cl::status_of(listen, t), cl::hud_art_of(files, classic_art, free_art));
       const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
       hud.layout.draw(overlay, hf, se::hud_style());
     }

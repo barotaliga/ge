@@ -75,10 +75,27 @@ struct Entry {                 // NOLINT(clang-analyzer-optin.performance.Paddin
   std::string_view unit = {};            // slider
 };
 
-// The table, every page's rows in order.
+// A page of a menu: its id and its title ("" for the root, which shows the game's own picture).
+struct PageTitle {
+  std::string_view id;
+  std::string_view title;
+};
+
+// A GAME'S MAIN MENU: its pages in order and every page's rows. Each classic game has its own (its
+// adapter hands it out: client/game_adapter.hpp's `menu`), so a game shows its own pages, its own
+// modes (a game with no single-player campaign has no SINGLE PLAYER) and its own words. The first
+// game's is `classic_menu()`.
+struct MenuTable {
+  std::span<const PageTitle> pages;
+  std::span<const Entry> entries;
+};
+const MenuTable& classic_menu();
+
+// The first game's table, every page's rows in order.
 std::span<const Entry> entries();
-// The entry of `page` with `id`; null when none.
-const Entry* find_entry(std::string_view page, std::string_view id);
+// The entry of `page` with `id` in `table`; null when none.
+const Entry* find_entry(std::string_view page, std::string_view id,
+                        const MenuTable& table = classic_menu());
 
 // What the menu reads and drives: the client's console (its cvars, its commands, the lines run),
 // the listen server's cvars (null when no server runs), the maps NEW GAME offers.
@@ -88,7 +105,11 @@ struct Host {
   std::vector<std::string> maps = {};  // map names, `start` first when the packs hold it
   // Each save slot's line (slot i is the save `s<i>`): the save's title, "" for an empty slot.
   std::vector<std::string> saves = {};
+  const MenuTable* table = nullptr;  // the game's menu (null: classic_menu())
 };
+
+// The table `host` reads.
+const MenuTable& table_of(const Host& host);
 
 // The save slots the LOAD and SAVE pages show, and the words of an empty one.
 inline constexpr int kSaveSlots = 12;
@@ -109,7 +130,7 @@ std::string host_value(const Host& host, std::string_view name);
 // `s0`..`s11`, then BACK; a slot activated runs `load s<i>` or `save s<i>` and closes the menu; an
 // empty slot is dimmed on LOAD); and `controls` (CUSTOMIZE CONTROLS: a row `c<i>` a move of
 // `controls()`, its value the keys bound to it).
-ge::ui::Menu build_menu();
+ge::ui::Menu build_menu(const MenuTable& table = classic_menu());
 
 // Every entry's dimming and value read from the host (on opening, and after the console changed
 // something); the NEW GAME map list rebuilt from `host.maps`. `hide_back`: the classic look, which

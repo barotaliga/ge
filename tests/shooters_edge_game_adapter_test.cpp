@@ -7,13 +7,14 @@
 // its form with a picture beside it standing in for a skin; a sound is read from `sound/`; the
 // menus' pictures are the packs' with a PNG or TGA of a picture's name standing in for it; a
 // config file in the packs runs through `exec` after the player's own; a map's place names are
-// read from its loc file; the game's own held weapons are its first-person models, all or none.
+// read from its loc file; the game's own held weapons are its first-person models, all or none;
+// its menu, its modes and its HUD's pictures are its own.
 //
 // ge:summary Tests the first game's adapter: mods, programs by form, map info, textures, demos
 // ge:keywords test shooters-edge game-adapter list_mods find_program program-form map_info
 // ge:keywords map_textures list_demos find_demo qwprogs open_model open_sound replacement-skin
 // ge:keywords pictures replacement-picture find_config read_configs_from open_locations
-// ge:keywords held_weapons
+// ge:keywords held_weapons menu-table game-modes hud_art_of
 // ge:skill shooter testing
 #include <filesystem>
 #include <fstream>
@@ -32,6 +33,7 @@
 #include "progs/assembler.hpp"
 #include "progs/layout.hpp"
 #include "shooter/locs.hpp"
+#include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -383,4 +385,29 @@ TEST(the_games_own_held_weapons_are_its_first_person_models_in_the_number_keys_o
       CHECK(h.clips[0].first == 1 && h.clips[0].count == int(h.frames.size()) - 1);
     }
   }
+}
+
+TEST(a_games_menu_modes_and_hud_are_its_own) {
+  const cl::GameAdapter& a = cl::classic_adapter();
+  // The first game: its classic pages, both modes.
+  CHECK(&a.menu(a) == &shooters_edge::menu::classic_menu());
+  const cl::GameModes m = a.modes(a);
+  CHECK(m.single && m.multi);
+  // A game's own table builds its own pages: one with no campaign has no SINGLE PLAYER.
+  static constexpr shooters_edge::menu::PageTitle kPages[] = {{"main", ""}, {"multi", "MULTI"}};
+  static constexpr shooters_edge::menu::Entry kRows[] = {
+      {.page = "main", .id = "multi", .text = "MULTIPLAYER", .opens = "multi"},
+      {.page = "multi", .id = "back", .text = "BACK", .kind = ge::ui::ItemKind::back}};
+  const shooters_edge::menu::MenuTable table{kPages, kRows};
+  ge::ui::Menu built = shooters_edge::menu::build_menu(table);
+  CHECK(built.page("single") == nullptr && built.page("multi") != nullptr);
+  CHECK(shooters_edge::menu::find_entry("main", "multi", table) != nullptr);
+  CHECK(shooters_edge::menu::find_entry("main", "single", table) == nullptr);
+  // The HUD's pictures: a classic game's own whenever its folder is open, even empty.
+  shooters_edge::hud::HudArt game, own;
+  own.density = 3;
+  cl::SearchPath none, open;
+  open.folder = "base";
+  CHECK(&cl::hud_art_of(none, game, own) == &own);
+  CHECK(&cl::hud_art_of(open, game, own) == &game);
 }
