@@ -31,6 +31,7 @@ enable_language(C)
 set(GE_ZSTD_VERSION "1.5.7")
 set(GE_ZSTD_SHA256 "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3")
 set(GE_LZMA_VERSION "2501")
+set(GE_LZMA_TAG "25.01")
 set(GE_LZMA_SHA256 "cbc3babd589d971e45971d787ff100be8aaa5eab15b2694497ec3e447009e1f2")
 
 # ge_archive_unpack(<archive> <dir>): the archive's contents in <dir>, unpacked once (a stamp
@@ -57,9 +58,12 @@ ge_archive_unpack("${_ge_zstd_archive}" "${GE_DEPS_DIR}/zstd-${GE_ZSTD_VERSION}"
 set(_ge_zstd_lib "${GE_DEPS_DIR}/zstd-${GE_ZSTD_VERSION}/zstd-${GE_ZSTD_VERSION}/lib")
 set(GE_ZSTD_INCLUDE "${_ge_zstd_lib}")
 
+# The SDK from 7-Zip's own GitHub release (the same file as on its website, the same SHA-256):
+# GitHub's hosts are the ones every runner already reaches, so one site down stops no build.
 set(_ge_lzma_archive "${GE_DEPS_DIR}/lzma${GE_LZMA_VERSION}.7z")
 ge_fetch_file("the LZMA SDK ${GE_LZMA_VERSION}"
-  "https://www.7-zip.org/a/lzma${GE_LZMA_VERSION}.7z" ${GE_LZMA_SHA256} "${_ge_lzma_archive}")
+  "https://github.com/ip7z/7zip/releases/download/${GE_LZMA_TAG}/lzma${GE_LZMA_VERSION}.7z"
+  ${GE_LZMA_SHA256} "${_ge_lzma_archive}")
 ge_archive_unpack("${_ge_lzma_archive}" "${GE_DEPS_DIR}/lzma${GE_LZMA_VERSION}" ${GE_LZMA_SHA256})
 set(_ge_lzma_c "${GE_DEPS_DIR}/lzma${GE_LZMA_VERSION}/C")
 set(GE_LZMA_INCLUDE "${_ge_lzma_c}")
