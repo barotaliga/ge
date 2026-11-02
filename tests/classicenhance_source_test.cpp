@@ -3,10 +3,13 @@
 // and literals) found behind a self-extractor's program and unpacked; the pack found through a
 // release zip's installer archive, in a zip directly, as a file and in an installed folder in
 // any case; an unknown pack taken as the player's own copy, unverified; a damaged one refused,
-// with its digest, writing nothing; and the full game's later packs layered over the first.
+// with its digest, writing nothing; the full game's later packs layered over the first; and a
+// release known by its files whatever packs hold them (split, repacked into one with extras, a
+// content zip), with the nearest set and what of it differs named when none matches.
 //
 // ge:summary Tests the LHA reader and the source search: every route, unverified and later packs
 // ge:keywords test classicenhance lha lh5 source zip folder pack verify refuse sha256
+// ge:keywords known-set repack pk3 content-zip remaster
 // ge:skill classicenhance testing
 #include <filesystem>
 #include <fstream>
@@ -16,6 +19,7 @@
 
 #include "assets/sha256.hpp"
 #include "check.hpp"
+#include "classicenhance/cache.hpp"
 #include "classicenhance/lha.hpp"
 #include "classicenhance/source.hpp"
 #include "vfs/pak.hpp"
@@ -321,4 +325,141 @@ TEST(source_layers_the_full_games_later_packs) {
   CHECK(error.find("pak1.pak") != std::string::npos &&
         error.find("does not read as a pack") != std::string::npos);
   fs::remove_all(dir);
+}
+
+namespace {
+
+// A fixture release by its files: the palette, a readme and a map, and a startup script known by
+// its contents alone.
+struct FixtureSet {
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> files;
+  std::vector<std::string> digests;  // kept alive for the rows
+  std::vector<ce::KnownEntry> rows;
+  ce::KnownSet set;
+};
+
+void fixture_set(FixtureSet* f, const char* id, bool remade) {
+  std::vector<uint8_t> pal(768);
+  for (size_t i = 0; i < pal.size(); i++) pal[i] = uint8_t(i * 7);
+  f->files = {{"gfx/palette.lmp", pal},
+              {"maps/e2m1.bsp", text(std::string("map of ") + id)},
+              {"readme.txt", text("a fixture release")},
+              {"start.rc", text("exec default.cfg")}};
+  f->digests.clear();
+  for (const auto& [path, bytes] : f->files) f->digests.push_back(ce::sha128_hex(bytes));
+  f->rows.clear();
+  for (size_t i = 0; i < f->files.size(); i++) {
+    const bool by_contents = f->files[i].first == "start.rc";
+    f->rows.push_back({by_contents ? nullptr : f->files[i].first.c_str(),
+                       uint32_t(f->files[i].second.size()), f->digests[i].c_str()});
+  }
+  f->set = {id, id, f->rows, remade};
+}
+
+std::vector<uint8_t> pack_of(const std::vector<std::pair<std::string, std::vector<uint8_t>>>& f) {
+  std::vector<uint8_t> out;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak(f, &out, &error), error);
+  return out;
+}
+
+}  // namespace
+
+TEST(source_knows_a_release_by_its_files_in_any_packs) {
+  FixtureSet full, remaster;
+  fixture_set(&full, "fixture-full", false);
+  fixture_set(&remaster, "fixture-remaster", true);
+  const ce::KnownSet sets[] = {full.set, remaster.set};
+  const fs::path dir = scratch("sets");
+  ce::Source s;
+  std::string error;
+
+  // As shipped: the first pack and a second, which together hold every file.
+  write(dir / "split" / "id1" / "pak0.pak", pack_of({full.files[0], full.files[2], full.files[3]}));
+  write(dir / "split" / "id1" / "pak1.pak", pack_of({full.files[1]}));
+  CHECK_MSG(ce::open_source((dir / "split").string(), &s, &error, {}, sets), error);
+  CHECK(s.set != nullptr && std::string(s.set->id) == "fixture-full" && s.set_note.empty());
+
+  // Repackaged into one pack, the startup script under another name and files of the player's own
+  // added beside: still the release.
+  auto repack = full.files;
+  repack[3].first = "boot.rc";
+  repack.push_back({"maps/mine.bsp", text("the player's own map")});
+  repack.push_back({"gfx/extra.lmp", text("more")});
+  write(dir / "one" / "id1" / "pak0.pak", pack_of(repack));
+  CHECK_MSG(ce::open_source((dir / "one").string(), &s, &error, {}, sets), error);
+  CHECK(s.set != nullptr && std::string(s.set->id) == "fixture-full" && !s.content_zip);
+  CHECK(s.later.empty() && s.set_sha256 == s.pack_sha256);
+
+  // The same files in a content zip standing in for the first pack, its names in capitals and
+  // '\\' separated, a folder's own entry and a path too long for a pack among them.
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> zipped = {
+      {"GFX\\PALETTE.LMP", full.files[0].second},
+      {"maps/", {}},
+      {"Maps/E2M1.bsp", full.files[1].second},
+      {"readme.txt", full.files[2].second},
+      {"start.rc", full.files[3].second},
+      {"textures/" + std::string(60, 'x') + ".png", text("too long for a pack")}};
+  const std::vector<uint8_t> pk3 = ge::vfs::write_stored_zip(zipped);
+  write(dir / "zip" / "id1" / "PAK0.PK3", pk3);
+  CHECK_MSG(ce::open_source((dir / "zip").string(), &s, &error, {}, sets), error);
+  CHECK(s.route == ce::Route::folder && s.content_zip &&
+        s.zip_sha256 == ge::assets::sha256_hex(pk3));
+  CHECK(s.set != nullptr && std::string(s.set->id) == "fixture-full");
+  CHECK(s.set_sha256 == s.zip_sha256);  // keyed by the zip the game mounts
+  ge::vfs::Pak pak;
+  CHECK_MSG(ge::vfs::read_pak(s.content(), &pak, &error), error);
+  CHECK(pak.entries.size() == 4 && ge::vfs::pak_find(pak, "maps/e2m1.bsp") != nullptr);
+  // The zip as a file, and a later pack beside it layered over it.
+  CHECK_MSG(ce::open_source((dir / "zip" / "id1" / "PAK0.PK3").string(), &s, &error, {}, sets),
+            error);
+  CHECK(s.route == ce::Route::pack_file && s.content_zip && s.set != nullptr);
+  write(dir / "zip" / "id1" / "pak1.pak", pack_of({{"readme.txt", text("changed by pak1")}}));
+  CHECK_MSG(ce::open_source((dir / "zip").string(), &s, &error, {}, sets), error);
+  CHECK(s.later.size() == 1 && s.set == nullptr);
+  CHECK(s.set_sha256 == ce::set_key(std::vector<std::string>{s.zip_sha256, s.later[0].sha256}));
+  CHECK_MSG(s.set_note.find("3 of the 4 files of fixture-full") != std::string::npos &&
+                s.set_note.find("1 changed (readme.txt)") != std::string::npos,
+            s.set_note);
+  // A pack and a content zip both: the pack is the first.
+  write(dir / "zip" / "id1" / "pak0.pak", pack_of(remaster.files));
+  fs::remove(dir / "zip" / "id1" / "pak1.pak");
+  CHECK_MSG(ce::open_source((dir / "zip").string(), &s, &error, {}, sets), error);
+  CHECK(!s.content_zip && s.set != nullptr && std::string(s.set->id) == "fixture-remaster" &&
+        s.set->remade);
+
+  // A file missing and one changed: no set, the nearest named with what differs.
+  auto broken = full.files;
+  broken[1].second = text("a map changed");
+  broken.erase(broken.begin() + 3);
+  write(dir / "broken" / "pak0.pak", pack_of(broken));
+  CHECK_MSG(ce::open_source((dir / "broken" / "pak0.pak").string(), &s, &error, {}, sets), error);
+  CHECK(s.set == nullptr);
+  CHECK_MSG(s.set_note.find("1 missing (a file of 16 bytes)") != std::string::npos &&
+                s.set_note.find("1 changed (maps/e2m1.bsp)") != std::string::npos,
+            s.set_note);
+  fs::remove_all(dir);
+}
+
+TEST(the_known_sets_list_every_file_once_sorted) {
+  CHECK(ce::kKnownSets.size() == 2);
+  for (const ce::KnownSet& set : ce::kKnownSets) {
+    CHECK(set.files.size() > 400);
+    std::string last;
+    size_t nameless = 0;
+    for (const ce::KnownEntry& e : set.files) {
+      CHECK_MSG(std::string(e.sha128).size() == 32, set.id);
+      if (e.path == nullptr) {
+        nameless++;
+        continue;
+      }
+      CHECK_MSG(nameless == 0 && std::string(e.path) > last, std::string(set.id) + ": " + e.path);
+      last = e.path;
+    }
+    CHECK(nameless == 1);
+  }
+  // Only the remaster is remade; neither set matches the fixture pack.
+  CHECK(!ce::kKnownSets[0].remade && ce::kKnownSets[1].remade);
+  const ce::SetMatch m = ce::match_sets(fixture_pack(), ce::kKnownSets);
+  CHECK(!m.whole() && m.held <= 1);
 }

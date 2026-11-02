@@ -109,10 +109,13 @@ std::vector<std::string> archive_paths(const SearchPath& path) {
 
 std::vector<std::span<const uint8_t>> content_packs(const SearchPath& path) {
   const ge::classicenhance::Profile& p = ge::classicenhance::classic_profile();
-  // A numbered pack by its file name ("pak3.pak", any case); a stand-in pack is not one.
-  const auto numbered = [&p](const std::string& at) {
+  const auto name_of = [](const std::string& at) {
     std::string n = fs::path(at).filename().string();
     for (char& c : n) c = c >= 'A' && c <= 'Z' ? char(c - 'A' + 'a') : c;
+    return n;
+  };
+  // A numbered pack by its file name ("pak3.pak", any case); a stand-in pack is not one.
+  const auto numbered = [&p](const std::string& n) {
     if (n.size() <= p.pack_stem.size() + p.pack_ext.size() || !n.starts_with(p.pack_stem) ||
         !n.ends_with(p.pack_ext))
       return false;
@@ -122,14 +125,25 @@ std::vector<std::span<const uint8_t>> content_packs(const SearchPath& path) {
       if (c < '0' || c > '9') return false;
     return true;
   };
+  if (path.vfs.sources.empty()) return {};
+  // The base game's folder: the first mounted.
+  const std::string& game = path.vfs.sources.front().game;
   std::vector<std::span<const uint8_t>> out;
-  const std::string* game = nullptr;
+  bool first = false;  // its first pack among them
+  std::span<const uint8_t> zip;
   for (const ge::vfs::Source& s : path.vfs.sources) {
-    if (s.kind != ge::vfs::SourceKind::pack || !numbered(s.path)) continue;
-    if (game == nullptr) game = &s.game;
-    if (s.game != *game) break;
-    out.emplace_back(s.bytes);
+    if (s.game != game) break;
+    const std::string n = name_of(s.path);
+    if (s.kind == ge::vfs::SourceKind::pack && numbered(n)) {
+      out.emplace_back(s.bytes);
+      first = first || n == ge::classicenhance::pack_name(p, 0);
+    } else if (s.kind == ge::vfs::SourceKind::zip && n == ge::classicenhance::zip_name(p, 0)) {
+      zip = s.bytes;
+    }
   }
+  // No first pack: the content zip standing in for it (`pak0.pk3`) is the first, as the pipeline
+  // takes it, keyed by the zip's own bytes.
+  if (!first && !zip.empty()) out.insert(out.begin(), zip);
   return out;
 }
 

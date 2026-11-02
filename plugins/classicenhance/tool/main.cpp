@@ -4,7 +4,9 @@
 // when it did what was asked, 1 when the source was refused or a stage failed (the object's "error"
 // says why and what to do), 2 on a usage error.
 //
-//   verify <path>                      find the packs in <path> and say which release each is
+//   verify <path>                      find the packs in <path> and say which release each is,
+//                                      and which known set their files are (known_sets.hpp)
+//   manifest <path>                    the packs' files as a known set's rows, sorted by path
 //   run <path> [--cache=<dir>] [--only=<stage,...>] [--force] [--scale=<n>] [--limit=<n>]
 //       [--round=<n>] [--upscaler=network|kernel] [--weights=<file>] [--device=auto|gpu|cpu]
 //                                      verify, then run the stages into the cache
@@ -20,6 +22,7 @@
 //
 // ge:summary The classicenhance tool: verify a source, run the pipeline, show the cache, as JSON
 // ge:keywords classicenhance tool executable command verify run status json cache stages
+// ge:keywords manifest known-set rows
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #include <algorithm>
@@ -35,6 +38,7 @@
 #include "classicenhance/pipeline.hpp"
 #include "classicenhance/source.hpp"
 #include "classicenhance/upscaler.hpp"
+#include "vfs/pak.hpp"
 #ifdef GE_CLASSICENHANCE_GPU
 #include "classicenhance/app/upscaler_gpu.hpp"
 #endif
@@ -49,7 +53,9 @@ constexpr const char* kHelp =
     "into a local "
     "cache\n"
     "  verify <path>     find the pack in <path> (the release zip, an installed folder or its "
-    "pak0.pak, with any later packs) and say which game (its profile) and release each is\n"
+    "pak0.pak or pak0.pk3, with any later packs) and say which game (its profile) and release "
+    "each is, and which known set their files are\n"
+    "  manifest <path>   the packs' files as a known set's rows (\"rows\"), sorted by path\n"
     "  run <path> [--cache=<dir>] [--only=pack,textures,lightmaps,sounds,models,pictures] "
     "[--force] "
     "[--scale=<1..8>] [--limit=<n>] [--round=<0..4>] [--upscaler=network|kernel] "
@@ -87,7 +93,12 @@ std::string source_json(const Source& s) {
                   ",\"pack_sha256\":" + esc(s.pack_sha256) +
                   ",\"pack_bytes\":" + std::to_string(s.pack.size()) +
                   ",\"pack\":" + (s.known ? esc(s.known->what) : std::string("null")) +
-                  ",\"verified\":" + (s.known ? "true" : "false");
+                  ",\"verified\":" + (s.known ? "true" : "false") +
+                  ",\"set\":" + (s.set ? esc(s.set->id) : std::string("null")) +
+                  ",\"set_what\":" + (s.set ? esc(s.set->what) : std::string("null")) +
+                  ",\"remade\":" + (s.set && s.set->remade ? "true" : "false");
+  if (!s.set_note.empty()) j += ",\"set_note\":" + esc(s.set_note);
+  if (s.content_zip) j += ",\"content_zip\":true";
   if (!s.zip_sha256.empty()) {
     j += ",\"zip_sha256\":" + esc(s.zip_sha256) +
          ",\"zip\":" + (s.zip ? esc(s.zip->what) : std::string("null"));
@@ -184,6 +195,26 @@ int status(const Flags& f) {
   return 0;
 }
 
+// The packs' files read merged, each as a known set's row (known_files.cpp), sorted by path.
+int manifest(const Source& src) {
+  ge::vfs::Pak pak;
+  std::string error;
+  if (!ge::vfs::read_pak(src.content(), &pak, &error)) return fail(error);
+  std::vector<const ge::vfs::PakEntry*> files;
+  files.reserve(pak.entries.size());
+  for (const ge::vfs::PakEntry& e : pak.entries) files.push_back(&e);
+  std::sort(files.begin(), files.end(), [](auto* a, auto* b) { return a->path < b->path; });
+  std::string rows;
+  for (const ge::vfs::PakEntry* e : files) {
+    const std::string row = "{\"" + e->path + "\", " + std::to_string(e->size) + ", \"" +
+                            sha128_hex(ge::vfs::pak_file(src.content(), *e)) + "\"},";
+    rows += std::string(rows.empty() ? "" : ",") + esc(row);
+  }
+  std::printf("{\"ok\":true,\"source\":%s,\"files\":%zu,\"rows\":[%s]}\n", source_json(src).c_str(),
+              files.size(), rows.c_str());
+  return 0;
+}
+
 // The trained upscaler's weights: --weights, else the cache's copy, fetched when missing.
 bool network(const Flags& f, Upscaler* out, std::string* note, std::string* error) {
   fs::path file = f.weights;
@@ -232,7 +263,7 @@ static int run_main(int argc, char** argv) {
   std::string error;
   if (!parse(argc, argv, &f, &error)) return fail(error, 2);
   if (cmd == "status") return status(f);
-  if (cmd != "verify" && cmd != "run") {
+  if (cmd != "verify" && cmd != "run" && cmd != "manifest") {
     return fail("unknown command '" + cmd + "'; `classicenhance help` lists them", 2);
   }
   if (f.words.size() != 1) {
@@ -244,6 +275,7 @@ static int run_main(int argc, char** argv) {
     std::printf("{\"ok\":true,\"source\":%s}\n", source_json(src).c_str());
     return 0;
   }
+  if (cmd == "manifest") return manifest(src);
   RunOptions opts;
   opts.force = f.force;
   opts.textures.scale = f.scale;

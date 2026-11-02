@@ -57,7 +57,8 @@ std::vector<std::string> map_names(
 
 // Every archive mounted (packs and zips), by its path, in mount order.
 std::vector<std::string> archive_paths(const SearchPath& path);
-// The numbered packs of the first folder mounted (the base game's: pak0, pak1, ...), in order:
+// The numbered packs of the first folder mounted (the base game's: pak0, pak1, ...), in order,
+// with its content zip `pak0.pk3` first when it has no `pak0.pak` (the zip standing in for it):
 // what classic-enhance keys its cache by (classicenhance/cached.hpp's `find_cache`).
 std::vector<std::span<const uint8_t>> content_packs(const SearchPath& path);
 

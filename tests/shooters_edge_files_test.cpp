@@ -3,7 +3,8 @@
 // mod folder over the base, its pack and its loose file winning and every other file still the
 // base's; a mod's zip read too; the maps listed with the start map first; a loose file written
 // after the mount found; the base game's numbered packs (and no stand-in) as the content packs,
-// whose cache key is the one classic-enhance's pipeline gives the same packs.
+// whose cache key is the one classic-enhance's pipeline gives the same packs, a content zip
+// standing in for the first pack (`pak0.pk3`) among them.
 //
 // ge:summary Tests the client's search path: base and mod folders, packs, zips, loose files
 // ge:keywords test shooters-edge search-path mod gamedir pak pk3 loose-files content_packs
@@ -139,5 +140,34 @@ TEST(the_content_packs_key_the_cache_as_the_pipeline_does) {
   const std::string key = ge::classicenhance::set_key(digests);
   CHECK(key.size() == 64 && key != digests[0]);
   CHECK(ge::classicenhance::set_key({&digests[0], 1}) == digests[0]);
+  fs::remove_all(root);
+}
+
+TEST(a_content_zip_standing_in_for_the_first_pack_keys_the_cache) {
+  const fs::path root = make_tree();
+  const fs::path base = root / std::string(ge::classicenhance::classic_profile().base_dir);
+  // The base's first pack repackaged as a content zip: the zip is the first content pack.
+  fs::remove(base / "pak0.pak");
+  const std::vector<uint8_t> zip =
+      ge::vfs::write_stored_zip({{"maps/a.bsp", bytes_of("A")}, {"maps/start.bsp", bytes_of("S")}});
+  write(base / "PAK0.PK3", zip);
+  write(base / "extra.pk3", ge::vfs::write_stored_zip({{"sound/z.wav", bytes_of("zipped")}}));
+  cl::SearchPath sp;
+  std::string error;
+  CHECK_MSG(cl::open_game_dir(root.string(), "mod", sp, error), error);
+  CHECK(text_of(sp, "maps/a.bsp") == "A");
+  auto packs = cl::content_packs(sp);
+  CHECK(packs.size() == 2);  // the zip, then pak1; not the other zip, nor the mod's pack
+  if (packs.size() == 2) {
+    CHECK(ge::assets::sha256_hex(packs[0]) == ge::assets::sha256_hex(zip));
+    CHECK(std::string(packs[1].begin(), packs[1].end()).find("later") != std::string::npos);
+  }
+  // With the first pack back beside it, the pack is the first and the zip is not a content pack.
+  write_pack(base / "pak0.pak", {{"maps/a.bsp", bytes_of("A")}});
+  cl::SearchPath again;
+  CHECK_MSG(cl::open_game_dir(root.string(), "mod", again, error), error);
+  packs = cl::content_packs(again);
+  CHECK(packs.size() == 2);
+  for (const auto p : packs) CHECK(ge::assets::sha256_hex(p) != ge::assets::sha256_hex(zip));
   fs::remove_all(root);
 }

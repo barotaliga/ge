@@ -10,7 +10,8 @@ The shareware pack may be used unchanged, as it comes in its release zip or as a
 leaves it; the full game is the player's own copy, for them alone. So the pipeline:
 
 - starts from **any pack that reads**: the release zip (and the self-extracting LHA installer
-  inside it), an installed folder, or the pack file itself. A pack whose SHA-256 is in
+  inside it), an installed folder, the pack file itself, or a content zip standing in for the
+  first pack (`pak0.pk3`: its files read into a pack, its own digest keying the cache). A pack whose SHA-256 is in
   `kKnownPacks` (`source.hpp`) is reported as that release; any other (the full game, another
   release) is taken as the player's own copy and reported **unverified** in `source.txt` and the
   tool's answer. A pack that does not read is refused, and the refusal prints the digest it saw;
@@ -20,6 +21,18 @@ leaves it; the full game is the player's own copy, for them alone. So the pipeli
   `sound/*.wav`, `progs/*.mdl` and `*.spr`), never by a list of one release's files, so the full
   game's every level, sound and model is enhanced. The cache folder is keyed by every pack's
   digest together;
+- knows a **release by its files**, whatever packs hold them (`known_sets.hpp`): the merged
+  packs are matched against each known set (the full game of release 1.06: its two packs' 424
+  files; the 2021 remaster: the 423 of those paths it holds), every file by path, size and the
+  first 128 bits of its SHA-256, and files a set does not list are ignored. The full game
+  repackaged into one `pak0.pak` or `pak0.pk3`, with or without the player's own files added, is
+  reported as the full game (`"set"` in the tool's answer, `set` in `source.txt`); with no set
+  whole, the nearest is named with what of it is missing or changed. The startup script is
+  listed by its contents alone, at any path: its name is one this tree does not spell.
+  `ge tool classicenhance -- manifest <path>` prints a source's files as a set's rows;
+- leaves a **remade release** alone where it has remade its own: the remaster's sounds and models
+  are not enhanced, and its textures keep their own pixels at their own size, only their height,
+  normal, roughness and glow maps made (the lightmaps follow; the 2D art is still upscaled);
 - writes everything it reads or makes to the player's **local cache** and nowhere else, beside a
   `NOTICE.txt` that says not to share it;
 - ships the **code** and never the output. Nothing read from the pack or made from it is
@@ -33,7 +46,8 @@ the lightmaps work's (`plugins/brush`, M40) and this plugin only calls it.
 ## Running it
 
 ```sh
-ge tool classicenhance -- verify <zip|folder|pack>   # which route, each pack's digest, known or not
+ge tool classicenhance -- verify <zip|folder|pack>   # which route, each pack's digest, known or not, the set
+ge tool classicenhance -- manifest <zip|folder|pack> # the packs' files as a known set's rows
 ge tool classicenhance -- run <zip|folder|pack>      # every stage, skipping those up to date
 ge tool classicenhance -- run <src> --only=textures --force --scale=4 --limit=8
 ge tool classicenhance -- run <src> --upscaler=kernel     # no download: the kernel at any scale
