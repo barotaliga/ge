@@ -289,15 +289,6 @@ TEST(the_classic_set_reads_straight_from_the_packs_wad_in_the_palettes_colours) 
   CHECK(error.find("gfx.wad") != std::string::npos);
 }
 
-TEST(hud_art_is_a_cvar_that_starts_on_auto) {
-  ge::console::Console con;
-  std::string value;
-  se::add_art_cvar(con, &value);
-  CHECK(value == "auto");
-  con.execute("hud_art free");
-  CHECK(value == "free");
-}
-
 TEST(viewsize_drops_the_inventory_bar_at_110_and_every_bar_at_120) {
   ge::console::Console con;
   se::Hud hud = se::make_hud();

@@ -192,7 +192,7 @@ and sparks (`app/muzzle.hpp`; `ce_muzzles 0` leaves the light alone); `r_drawvie
 default: centred under the crosshair; 0 to the right) and `r_viewmodel_hands` (0: the weapon
 without its hands) in the console); the HUD (`hud_style
 classic|modern|compact`, the classic status bar by default, drawn in the packs' own pictures when
-the packs carry them and in the game's free art when not: `hud_art auto|classic|free`; `viewsize
+a classic game is loaded, the free art only for Shooter's Edge's own content; `viewsize
 110` drops the inventory bar and `viewsize 120` every bar); the console; the main menu (below). The map's own moving brush
 models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, and one
 the game removed (a secret wall the mod does not keep) is not drawn: `brush/app/bsp_draw.hpp`'s
@@ -431,7 +431,7 @@ server's frames go on under it). Its pages are the classic game's:
 | SETUP | NAME, SHIRT COLOUR (`topcolor`), PANTS COLOUR (`bottomcolor`): the player's user info, sent to the server as it changes |
 | OPTIONS | CUSTOMIZE CONTROLS, GO TO CONSOLE, RESET TO DEFAULTS, SCREEN SIZE, BRIGHTNESS (`gamma`), MOUSE SPEED (`sensitivity`), MUSIC VOLUME, SOUND VOLUME, ALWAYS RUN (`cl_run`), INVERT MOUSE (`m_invert`), LOOKSPRING, LOOKSTRAFE, VIDEO OPTIONS, CLASSIC ENHANCED |
 | CUSTOMIZE CONTROLS | ATTACK, MOVE FORWARD, MOVE BACK, STEP LEFT, STEP RIGHT, JUMP, WALK / RUN (`+speed`), SIDESTEP (`+strafe`), TURN LEFT, TURN RIGHT, NEXT WEAPON: each the keys bound to it; ENTER, then the key (BACKSPACE clears, ESCAPE leaves it, a third key replaces both) |
-| VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN, HUD PICTURES (`hud_art`), HELD WEAPON |
+| VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN, HELD WEAPON |
 | HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`) |
 | CLASSIC ENHANCED | ENHANCE A PACK (classic-enhance's own menu), TEXTURES AND MODELS, LIGHT AND SHADOW, WATER, LAVA AND SKY, FIRE AND WIND, WEATHER |
 | TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures` |
@@ -608,6 +608,7 @@ files shares: `engine/vfs` (folders, packs, zips, loose files, a mod over the ba
 | **sounds** (`open_sound`) | WAV files under `sound/` | WAV files under `sound/` | WAV files and other formats under `sound/` |
 | **config files** (`find_config`) | console text at the top of its packs and its mod folder (`exec mymod.cfg`) | the same | the same, inside its zips |
 | **place names** (`open_locations`) | `locs/<map>.loc` (`plugins/shooter/locs.hpp`'s format) | none of its own: named off the map's items | none of its own: named off the map's items |
+| **menu** and **modes** (`menu`, `modes`) | the classic pages (`menu::classic_menu()`): single player and multiplayer | its own pages: single player and multiplayer | its own pages: multiplayer only, no campaign |
 | **held weapons** (`held_weapons`) | `progs/v_*.mdl`, authored at the eye, the firing frames a `fire` clip | its own weapon models in a folder a weapon | its own weapon models |
 | **demos** (`list_demos`, `find_demo`, `open_demo`) | the single-player, client and multiview recordings (`client/demo.hpp`) | its own recording format | its own |
 
@@ -643,7 +644,9 @@ binds. A map's place names (the teamplay callouts, the bots' talk) come through
 window draws that game's own held weapons through `held_weapons` (`client/held.hpp`'s
 `load_held_set`), placed at the eye where its files author them (`view::Hand::at_eye`, the
 classic row with no offset; lab `se-held`); when its files lack one, no weapon is drawn and the
-status line names the missing file. Shooter's Edge's own weapons, HUD art and other assets are
+status line names the missing file. The HUD's pictures are the game's own the same way
+(`hud_art_of`: no choice of the free art while a classic game is loaded), and the main menu is
+the game's own table of pages (`menu::MenuTable`, the adapter's `menu`). Shooter's Edge's own weapons, HUD art and other assets are
 for its own content (its own maps and mod), never a stand-in for a classic game's, so changing
 them never changes a classic game. Playing one classic game with another's parts is classic
 remix, a feature of classic-enhance (M18u), shown only when two full games are loaded.

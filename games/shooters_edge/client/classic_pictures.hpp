@@ -13,7 +13,7 @@
 //
 // ge:summary The window's classic menu and status bar pictures, enhanced when cached
 // ge:keywords classic-pictures menu hud status-bar glyph-sheet conchars ce_pictures enhanced
-// ge:keywords cache cached_picture upgrade density load reload
+// ge:keywords cache cached_picture upgrade density load reload hud_art_of classic-assets-only
 // ge:skill classicenhance ui
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -43,5 +43,11 @@ struct GameAdapter;
 ClassicPictures load_classic_pictures(const SearchPath& files, bool enhance,
                                       const std::filesystem::path& cache_root = {},
                                       const GameAdapter* game = nullptr);
+
+// The HUD's pictures the window draws: with a classic game's folder open (`files.folder` set)
+// that game's own (`game`, from its adapter), even when they are missing, never Shooter's Edge's
+// own set in their place; Shooter's Edge's own (`own`) only for its own content.
+const hud::HudArt& hud_art_of(const SearchPath& files, const hud::HudArt& game,
+                              const hud::HudArt& own);
 
 }  // namespace shooters_edge::client

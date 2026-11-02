@@ -9,7 +9,7 @@
 // ge:keywords classic-adapter list_mods find_program list_maps map_info map_textures list_demos
 // ge:keywords find_demo open_demo mod-folder qwprogs replacement-texture png tga open_model
 // ge:keywords open_sound replacement-skin mdl spr wav pictures replacement-picture gfx-wad lmp
-// ge:keywords find_config cfg open_locations loc-file held_weapons v-mdl
+// ge:keywords find_config cfg open_locations loc-file held_weapons v-mdl classic_menu modes
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #include <algorithm>
@@ -294,6 +294,15 @@ bool held_weapons(const GameAdapter& self, const SearchPath& files,
   return false;
 }
 
+const shooters_edge::menu::MenuTable& menu(const GameAdapter&) {
+  return shooters_edge::menu::classic_menu();
+}
+
+GameModes modes(const GameAdapter& self) {
+  return {.single = !self.game->single_player_programs.empty(),
+          .multi = !self.game->multiplayer_programs.empty()};
+}
+
 std::vector<ge::brush::MapPicture> map_textures(const GameAdapter&, const SearchPath& files,
                                                 std::string_view map,
                                                 std::span<const uint8_t> map_file,
@@ -388,6 +397,8 @@ const GameAdapter kClassic{.game = &pf::kGameProfiles[0],
                            .find_config = find_config,
                            .open_locations = open_locations,
                            .held_weapons = held_weapons,
+                           .menu = menu,
+                           .modes = modes,
                            .list_demos = list_demos,
                            .find_demo = find_demo_,
                            .open_demo = open_demo_};

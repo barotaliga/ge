@@ -35,7 +35,6 @@ constexpr Choice kHudStyle[] = {
 constexpr Choice kWorldLook[] = {{"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kMenuLook[] = {{"AUTO", "auto"}, {"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kOnOff[] = {{"OFF", "0"}, {"ON", "1"}};
-constexpr Choice kHudArt[] = {{"AUTO", "auto"}, {"CLASSIC", "classic"}, {"FREE", "free"}};
 constexpr Choice kFall[] = {{"SNOW", "0"}, {"SLEET", "0.5"}, {"RAIN", "1"}};
 
 // The menu, page by page. A row's `needs` dims it while the console knows no such name.
@@ -327,15 +326,6 @@ constexpr Entry kEntries[] = {
      .needs = "vid_fullscreen",
      .target = Target::client,
      .choices = kOnOff},
-    {.page = "video",
-     .id = "hud_art",
-     .text = "HUD PICTURES",
-     .kind = ItemKind::choice,
-     .hint =
-         "The packs' own status bar pictures (AUTO when they have them) or the game's free set.",
-     .needs = "hud_art",
-     .target = Target::client,
-     .choices = kHudArt},
     {.page = "video",
      .id = "weapon",
      .text = "HELD WEAPON",
@@ -704,7 +694,7 @@ constexpr Entry kEntries[] = {
     {.page = "quit", .id = "no", .text = "NO", .kind = ItemKind::back},
 };
 
-constexpr const char* kPages[][2] = {
+constexpr PageTitle kPages[] = {
     {"main", ""},
     {"single", "SINGLE PLAYER"},
     {"multi", "MULTIPLAYER"},
@@ -777,12 +767,21 @@ std::string item_text(const Entry& e, const ge::ui::Item& it) {
 
 }  // namespace
 
+const MenuTable& classic_menu() {
+  static const MenuTable table{kPages, kEntries};
+  return table;
+}
+
 std::span<const Entry> entries() { return kEntries; }
 
-const Entry* find_entry(std::string_view page, std::string_view id) {
-  for (const Entry& e : kEntries)
+const Entry* find_entry(std::string_view page, std::string_view id, const MenuTable& table) {
+  for (const Entry& e : table.entries)
     if (e.page == page && e.id == id) return &e;
   return nullptr;
+}
+
+const MenuTable& table_of(const Host& host) {
+  return host.table != nullptr ? *host.table : classic_menu();
 }
 
 bool host_knows(const Host& host, std::string_view name) {
@@ -800,11 +799,12 @@ std::string host_value(const Host& host, std::string_view name) {
   return {};
 }
 
-ge::ui::Menu build_menu() {
+ge::ui::Menu build_menu(const MenuTable& table) {
   ge::ui::Menu m;
-  for (const auto& [id, title] : kPages) {
-    ge::ui::Page& page = m.add_page(id, title);
-    for (const Entry& e : kEntries) {
+  for (const PageTitle& p : table.pages) {
+    const std::string_view id = p.id;
+    ge::ui::Page& page = m.add_page(std::string(id), std::string(p.title));
+    for (const Entry& e : table.entries) {
       if (e.page != id) continue;
       ge::ui::Item it{.id = std::string(e.id), .text = std::string(e.text), .kind = e.kind};
       it.hint = std::string(e.hint);
@@ -843,11 +843,12 @@ ge::ui::Menu build_menu() {
 }
 
 void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
-  for (const auto& [id, title] : kPages) {
+  for (const PageTitle& p : table_of(host).pages) {
+    const std::string_view id = p.id;
     ge::ui::Page* page = menu.page(id);
     if (page == nullptr) continue;
     for (ge::ui::Item& it : page->items) {
-      const Entry* e = find_entry(id, it.id);
+      const Entry* e = find_entry(id, it.id, table_of(host));
       if (e == nullptr) continue;
       if (e->kind == ItemKind::back) {
         it.disabled = hide_back && e->page != "quit";
@@ -945,7 +946,7 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
     return e.kind == ge::ui::EventKind::changed && control_of(e.item) != nullptr ? Outcome::bind_key
                                                                                  : Outcome::none;
   }
-  const Entry* entry = find_entry(e.page, e.item);
+  const Entry* entry = find_entry(e.page, e.item, table_of(host));
   ge::ui::Page* page = menu.page(e.page);
   if (entry == nullptr || page == nullptr) return Outcome::none;
   const ge::ui::Item* it = page->find(e.item);
@@ -964,7 +965,7 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   }
   if (e.page == "host" && e.item == "start") {
     for (const ge::ui::Item& row : page->items) {
-      const Entry* r = find_entry("host", row.id);
+      const Entry* r = find_entry("host", row.id, table_of(host));
       if (r == nullptr || r->target != Target::server || row.disabled) continue;
       con.execute("sv " + std::string(r->id) + " " + item_text(*r, row));
     }
@@ -979,7 +980,7 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
 
 void reset_defaults(Host& host) {
   if (host.console == nullptr) return;
-  for (const Entry& e : kEntries) {
+  for (const Entry& e : table_of(host).entries) {
     if (e.target != Target::client) continue;
     if (ge::console::Cvar* c = host.console->cvars().find(e.id))
       host.console->cvars().reset(*c, ge::console::Source::local);

@@ -39,6 +39,9 @@
 // - **open_locations**: a map's place names into plugins/shooter/locs.hpp's `Locs` (the first
 //   game's `locs/<map>.loc`); with none, a game names places off the map's items.
 //
+// - **menu** and **modes**: the game's own main menu (menu/main_menu.hpp's `MenuTable`: its
+//   pages and rows, the first game's classic pages) and the modes it has (a single-player
+//   campaign, multiplayer: the third game has no campaign, so no SINGLE PLAYER).
 // - **held_weapons**: the game's own first-person weapons, authored at the eye, in the number
 //   keys' order: the first game's `progs/v_*.mdl` with its firing frames as a `fire` clip.
 //
@@ -52,7 +55,8 @@
 // ge:keywords replacement-texture png tga alpha open_model open_sound model-form skin-stand-in
 // ge:keywords replacement-skin pictures hud-pictures menu-pictures replacement-picture
 // ge:keywords find_config config-file cfg exec open_locations loc-file place-names
-// ge:keywords read_configs_from held_weapons first-person view-model
+// ge:keywords read_configs_from held_weapons first-person view-model menu-table game-modes
+// ge:keywords single-player multiplayer
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #pragma once
@@ -75,6 +79,7 @@
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/menu/main_menu.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "viewmodel/held.hpp"
 
@@ -103,6 +108,12 @@ struct MapInfo {
 
 // The shared form a model file is read into.
 enum class ModelForm : uint8_t { none, morph, sprite, brush };
+
+// The modes a game has.
+struct GameModes {
+  bool single = false;  // a single-player campaign
+  bool multi = false;   // multiplayer
+};
 
 // A model the game's files hold, read.
 struct OpenedModel {
@@ -161,6 +172,10 @@ struct GameAdapter {
   // is missing or does not read.
   bool (*held_weapons)(const GameAdapter& self, const SearchPath& files,
                        std::vector<ge::viewmodel::HeldModel>& out, std::string& why) = nullptr;
+  // The game's own main menu: its pages and their rows.
+  const menu::MenuTable& (*menu)(const GameAdapter& self) = nullptr;
+  // The modes the game has (the profile row's program files for each).
+  GameModes (*modes)(const GameAdapter& self) = nullptr;
   // The recordings the files hold, by path.
   std::vector<std::string> (*list_demos)(const GameAdapter& self,
                                          const SearchPath& files) = nullptr;
