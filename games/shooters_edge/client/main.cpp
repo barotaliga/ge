@@ -57,19 +57,16 @@
 // ge:keywords timedemo demo vsync-off fps playdemo demo_track cl_demospeed demovideo main-menu
 // ge:keywords escape vid_fullscreen fullscreen offscreen vid_display vid_displays lobby scores-key
 // ge:keywords scoreboard scr_levelstats settings config-cfg topcolor bottomcolor gamma binds
-// ge:keywords video-cfg
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <exception>
-#include <filesystem>
 #include <memory>
 #include <span>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <vector>
 
 #include "console/cfg.hpp"
@@ -97,7 +94,6 @@
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/timedemo.hpp"
-#include "shooters_edge/client/video_cfg.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -217,8 +213,6 @@ int run_main(int argc, char** argv) {
   cl::add_cvars(console, controls);
   cl::default_binds(console);  // before the configs, which rebind what the player changed
   shooters_edge::look::add_cvars(console, picture);
-  cl::VideoSettings video;  // video.cfg's demovideo_ cvars, read by -demovideo alone
-  cl::add_video_cvars(console, &video);
   shooters_edge::view::ViewSettings view_settings;
   shooters_edge::view::add_view_cvars(console.cvars(), view_settings);
   console.add_command("quit", "quit the game", [&](Con&, const CArgs&) { quit = true; });
@@ -322,18 +316,7 @@ int run_main(int argc, char** argv) {
     out::status("shooters_edge: " + std::to_string(cl::archive_paths(files).size()) +
                 " archives on the search path of " + files.folder);
   }
-  if (!args.demovideo.empty()) {
-    // A video draws in the newer look, then video.cfg, then the + words again (video_cfg.hpp).
-    std::error_code ec;
-    const std::filesystem::path cfg = cl::apply_video_cfg(
-        console, {std::filesystem::path(files.folder), std::filesystem::current_path(ec)},
-        args.plus);
-    out::status("shooters_edge: -demovideo in r_look " + picture.look + ", " +
-                (cfg.empty() ? std::string("video.cfg's built-in defaults (no video.cfg in the "
-                                           "game folder or here)")
-                             : "video.cfg from " + cfg.string()));
-    return cl::demo_video_main(args, files, picture, playback.track, video);
-  }
+  if (!args.demovideo.empty()) return cl::demo_video_main(console, args, files, picture, playback);
   // The main menu's maps, its classic pictures when the packs carry them, and the packs classic
   // enhance offers.
   const cl::GameAdapter& adapter = cl::adapter_of(shooters_edge::profiles::classic_game());

@@ -25,6 +25,7 @@ namespace cl = shooters_edge::client;
 
 std::vector<std::string> texts(const std::vector<cl::CaptionLine>& lines) {
   std::vector<std::string> out;
+  out.reserve(lines.size());
   for (const cl::CaptionLine& l : lines) out.push_back(l.text);
   return out;
 }

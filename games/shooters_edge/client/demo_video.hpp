@@ -50,8 +50,8 @@
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/files.hpp"
-#include "shooters_edge/client/video_cfg.hpp"
 #include "shooters_edge/client/world_models.hpp"
 
 namespace shooters_edge::client {
@@ -122,11 +122,12 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
 std::vector<std::string> demo_video_lines(const DemoVideoOptions& o, const DemoVideoReport& r);
 
 // `-demovideo <demo> <file>` on the window's command line: `args`' demo turned into a video with
-// no window on a device of its own, the view riding `track`, the report printed. Its size, rate,
-// codec, words and HUD are `video`'s (video.cfg's cvars) where `args` gives no flag. The exit
-// code: 0 done, 1 no GPU device, 2 the export failed or `video` names no size.
-int demo_video_main(const Args& args, const SearchPath& files,
-                    const shooters_edge::look::Picture& picture, int track,
-                    const VideoSettings& video);
+// no window on a device of its own, the view riding `playback.track`, the report printed. First
+// `console` is put in the newer look and reads video.cfg from the game folder or the current
+// folder, then `args`' + words again (video_cfg.hpp's `apply_video_cfg`); the size, rate, codec,
+// words and HUD are then `playback.video`'s (its cvars) where `args` gives no flag. The exit code:
+// 0 done, 1 no GPU device, 2 the export failed or `playback.video` names no size.
+int demo_video_main(ge::console::Console& console, const Args& args, const SearchPath& files,
+                    const shooters_edge::look::Picture& picture, const DemoPlayback& playback);
 
 }  // namespace shooters_edge::client

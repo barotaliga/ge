@@ -240,15 +240,16 @@ void talk_chart(gl::Lab& lab, const std::string& id, const std::string& title,
 bool stand_in_font(std::vector<std::pair<std::string, std::vector<uint8_t>>>& entries,
                    std::string& error) {
   constexpr uint8_t kGold = 254, kWhite = 255;
+  constexpr size_t kGoldAt = size_t{kGold} * 3;
   std::vector<uint8_t> palette(768);
   for (int i = 0; i < 256; i++)
     palette[static_cast<size_t>(i) * 3] = palette[static_cast<size_t>(i) * 3 + 1] =
         palette[static_cast<size_t>(i) * 3 + 2] = static_cast<uint8_t>(i);
-  palette[kGold * 3] = 0xf2;
-  palette[kGold * 3 + 1] = 0xc0;
-  palette[kGold * 3 + 2] = 0x60;
+  palette[kGoldAt] = 0xf2;
+  palette[kGoldAt + 1] = 0xc0;
+  palette[kGoldAt + 2] = 0x60;
   const ge::charset::Atlas atlas = ge::charset::build_atlas(ge::charset::FontId::terminal, 128);
-  std::vector<uint8_t> sheet(128 * 128, 0);
+  std::vector<uint8_t> sheet(size_t{128} * 128, 0);
   for (int code = 33; code < 127; code++) {
     const ge::charset::CellRect c = ge::charset::cell_rect(128, static_cast<uint8_t>(code));
     for (int half = 0; half < 2; half++) {
@@ -257,9 +258,9 @@ bool stand_in_font(std::vector<std::pair<std::string, std::vector<uint8_t>>>& en
         for (int x = 0; x < 8; x++) {
           const int ink =
               std::max(atlas.at(c.x + x, c.y + 2 * y), atlas.at(c.x + x, c.y + 2 * y + 1));
-          if (ink >= 128)
-            sheet[static_cast<size_t>(((k >> 4) * 8 + y) * 128 + (k & 15) * 8 + x)] =
-                half == 0 ? kWhite : kGold;
+          const size_t row = (static_cast<size_t>(k >> 4) * 8) + static_cast<size_t>(y);
+          const size_t col = (static_cast<size_t>(k & 15) * 8) + static_cast<size_t>(x);
+          if (ink >= 128) sheet[(row * 128) + col] = half == 0 ? kWhite : kGold;
         }
     }
   }

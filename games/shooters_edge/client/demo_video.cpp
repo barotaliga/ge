@@ -9,8 +9,10 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <memory>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include "audio/synth.hpp"
@@ -365,9 +367,17 @@ std::vector<std::string> demo_video_lines(const DemoVideoOptions& o, const DemoV
 
 namespace out = ge::core::output;
 
-int demo_video_main(const Args& args, const SearchPath& files,
-                    const shooters_edge::look::Picture& picture, int track,
-                    const VideoSettings& video) {
+int demo_video_main(ge::console::Console& console, const Args& args, const SearchPath& files,
+                    const shooters_edge::look::Picture& picture, const DemoPlayback& playback) {
+  const VideoSettings& video = playback.video;
+  // A video draws in the newer look, then video.cfg, then the + words again (video_cfg.hpp).
+  std::error_code ec;
+  const std::filesystem::path cfg = apply_video_cfg(
+      console, {std::filesystem::path(files.folder), std::filesystem::current_path(ec)}, args.plus);
+  out::status("shooters_edge: -demovideo in r_look " + picture.look + ", " +
+              (cfg.empty() ? std::string("video.cfg's built-in defaults (no video.cfg in the game "
+                                         "folder or here)")
+                           : "video.cfg from " + cfg.string()));
   auto device = ge::gpu::create_device({.label = "demovideo", .validation = 0});
   if (!device) {
     out::error("shooters_edge: no GPU device for -demovideo; see docs/rendering.md");
@@ -395,7 +405,7 @@ int demo_video_main(const Args& args, const SearchPath& files,
   o.from_s = args.from;
   o.highlight = args.highlight;
   o.gif_width = args.gif_width;
-  o.track = track;
+  o.track = playback.track;
   o.picture = &picture;
   DemoVideoReport r;
   std::string error;

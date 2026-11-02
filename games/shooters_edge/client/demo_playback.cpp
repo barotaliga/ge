@@ -91,6 +91,7 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
   using Con = ge::console::Console;
   using CArgs = ge::console::Args;
   bind_record_cvars(console, p.record);
+  add_video_cvars(console, &p.video);
   console.add_command("cl_demospeed", "cl_demospeed <x>: a played demo's speed, 0..20 (0 pauses)",
                       [&p](Con& c, const CArgs& a) {
                         if (a.size() > 1) p.speed = std::clamp(std::atof(a[1].c_str()), 0.0, 20.0);
