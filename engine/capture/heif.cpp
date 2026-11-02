@@ -6,6 +6,7 @@
 // ge:test tests/capture_heif_test.cpp
 #include "capture/heif.hpp"
 
+#include <algorithm>
 #include <cstring>
 
 namespace ge::capture {
@@ -21,20 +22,36 @@ void put32(std::vector<uint8_t>& b, uint32_t v) {
   put16(b, v >> 16);
   put16(b, v);
 }
-void put4cc(std::vector<uint8_t>& b, const char* t) { b.insert(b.end(), t, t + 4); }
+void put4cc(std::vector<uint8_t>& b, const char* t) {
+  for (int i = 0; i < 4; ++i) put8(b, static_cast<uint8_t>(t[i]));
+}
 
+// A box: its size and type, then `body`. Sized once and written in place: GCC 13 at -O3 reads a
+// small vector grown by inlined inserts as an overflow (-Wstringop-overflow), which -Werror stops.
 std::vector<uint8_t> box(const char* type, const std::vector<uint8_t>& body) {
+  const auto size = static_cast<uint32_t>(body.size() + 8);
+  std::vector<uint8_t> b(size);
+  for (size_t i = 0; i < 4; ++i) {
+    b[i] = static_cast<uint8_t>(size >> (24 - 8 * i));
+    b[4 + i] = static_cast<uint8_t>(type[i]);
+  }
+  std::copy(body.begin(), body.end(), b.begin() + 8);
+  return b;
+}
+
+// A body to write into, grown from room for a small box rather than from a few bytes (the same
+// GCC warning as `box`).
+std::vector<uint8_t> fresh() {
   std::vector<uint8_t> b;
-  put32(b, static_cast<uint32_t>(body.size() + 8));
-  put4cc(b, type);
-  b.insert(b.end(), body.begin(), body.end());
+  b.reserve(64);
   return b;
 }
 
 // A full box's body starts with its version and 24 bits of flags.
 std::vector<uint8_t> full(uint8_t version, uint32_t flags = 0) {
-  std::vector<uint8_t> b;
-  put32(b, uint32_t{version} << 24 | flags);
+  std::vector<uint8_t> b{version, static_cast<uint8_t>(flags >> 16),
+                         static_cast<uint8_t>(flags >> 8), static_cast<uint8_t>(flags)};
+  b.reserve(64);  // the body put after it grows from here, not from a few bytes
   return b;
 }
 
@@ -74,7 +91,7 @@ std::vector<uint8_t> meta(const HeifStill& s, uint32_t offset) {
   put16(iinf, 1);
   append(iinf, box("infe", infe));
   append(m, box("iinf", iinf));
-  std::vector<uint8_t> ipco;
+  std::vector<uint8_t> ipco = fresh();
   append(ipco, box(avif ? "av1C" : "hvcC", s.config));
   std::vector<uint8_t> ispe = full(0);
   put32(ispe, static_cast<uint32_t>(s.width));
@@ -84,7 +101,7 @@ std::vector<uint8_t> meta(const HeifStill& s, uint32_t offset) {
   put8(pixi, 3);
   for (int i = 0; i < 3; ++i) put8(pixi, 8);
   append(ipco, box("pixi", pixi));
-  std::vector<uint8_t> colr;
+  std::vector<uint8_t> colr = fresh();
   put4cc(colr, "nclx");
   put16(colr, 1);   // BT.709 primaries
   put16(colr, 13);  // the sRGB transfer
@@ -130,7 +147,7 @@ bool each_box(const Reader& r, size_t begin, size_t end, Fn&& fn) {
 
 std::vector<uint8_t> write_heif(const HeifStill& s) {
   const bool avif = s.kind == HeifKind::kAvif;
-  std::vector<uint8_t> ftyp;
+  std::vector<uint8_t> ftyp = fresh();
   put4cc(ftyp, avif ? "avif" : "heic");
   put32(ftyp, 0);
   put4cc(ftyp, avif ? "avif" : "heic");
