@@ -1982,9 +1982,20 @@ fixture (the weather fixture's hall filled with dust by a `fog_volume` entity, a
 its store, and a pond in its yard steaming under an evening's air, § Fog from the air) with its
 fog and without, and a pack's maps with `--pak`.
 
+**See-through texels on a BSP map.** A map's faces are cut where their texture is see-through:
+`Scene::cover` (`plugins/brush/app/draw_data.hpp`) is a one-byte-a-texel atlas in the textures'
+places and mips, from a full-colour picture's alpha (`MapPicture::rgba`: a game's own PNG or TGA
+standing in for a map's texture, the adapter's `map_textures` in Shooter's Edge) and a fence
+texture's holes (a name starting `{`, index 255), averaged down the mips; `bsp.wgsl` reads it
+nearest at the face's mip and discards under a half. A map with none binds a 1 x 1 stand-in the
+shader skips, so its pictures do not move. The sun's and the lamps' shadow maps do not read it
+yet: a cut face casts a whole shadow. Lab `gpu-bsp-cutout` draws the fixture halls with their brick
+handed as a lattice with alpha and their floor as a fence texture, beside the map's own.
+
 Every shader's whole-line comments are left out of what is embedded (`cmake/WgslEmbed.cmake`), so
 a material that includes `frame.wgsl` stays under the 60 KB literal cap however well it is
-explained.
+explained. A comment after code on the same line IS embedded: in a file many shaders include
+(`render/wgsl/frame_types.wgsl`, `frame.wgsl`) put every comment on a line of its own.
 - **Skinning** uses bone palettes in a storage buffer. A figure drawn in more than one
   view (the player in the main view, the sun's cascade and the shadow atlas) is skinned
   once by a compute pass into a vertex buffer that every view reads. Crowd members,
