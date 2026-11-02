@@ -30,10 +30,12 @@ uint32_t seed_for(const World& world, size_t index) {
   return world.seed ^ (static_cast<uint32_t>(index + 1) * 0x9e3779b1u);
 }
 
-// The waves laid for a body: its sea grown over `fetch` by the world's mean wind.
-Waves waves_for(const World& world, size_t index, double fetch, double depth) {
-  const double toward = world.wind.from + kPi;
-  Sea sea = grow(world.wind.mean, fetch, toward);
+// The waves laid for a body: its sea grown over `fetch` by `wind` m/s from `from` (the world's
+// mean wind, or a sheltered body's own).
+Waves waves_for(const World& world, size_t index, double fetch, double depth, double wind,
+                double from) {
+  const double toward = from + kPi;
+  Sea sea = grow(wind, fetch, toward);
   sea.depth = depth;
   Lay how = world.lay;
   how.seed = seed_for(world, index);
@@ -254,12 +256,12 @@ namespace {
 
 // A viscous liquid's waves cut by its viscosity, and its drift downwind over `depth` m (a thin
 // liquid's untouched: no drift is added to its samples, so water keeps its bits).
-void thicken(const World& world, Body& body, double depth) {
+void thicken(double wind, double from, Body& body, double depth) {
   const Liquid& liquid = body.stuff.liquid;
   if (liquid.viscosity <= 0) return;
-  damp_waves(body.waves, liquid, body.stuff.density, world.wind.mean);
-  const double toward = world.wind.from + kPi;
-  const double d = drift(liquid, world.wind.mean, depth);
+  damp_waves(body.waves, liquid, body.stuff.density, wind);
+  const double toward = from + kPi;
+  const double d = drift(liquid, wind, depth);
   body.drift[0] = d * core::libm::sin(toward);
   body.drift[1] = d * core::libm::cos(toward);
 }
@@ -300,8 +302,9 @@ int add_lake(World& world, std::span<const Point> shore, double level, Stuff stu
   }
   body.fetch = bake_fetch(shore, world.wind.from + kPi);
   body.fetch_ref = body.fetch.longest;
-  body.waves = waves_for(world, world.bodies.size(), body.fetch_ref, depth);
-  thicken(world, body, depth);
+  body.waves = waves_for(world, world.bodies.size(), body.fetch_ref, depth, world.wind.mean,
+                         world.wind.from);
+  thicken(world.wind.mean, world.wind.from, body, depth);
   world.bodies.push_back(std::move(body));
   return static_cast<int>(world.bodies.size()) - 1;
 }
@@ -315,8 +318,9 @@ int add_ocean(World& world, double level, Stuff stuff, Bed bed, double fetch) {
   body.bed = bed;
   box_of(body, -kFar, -kFar, kFar, kFar);
   body.fetch_ref = fetch;
-  body.waves = waves_for(world, world.bodies.size(), fetch, kOceanDepth);
-  thicken(world, body, kOceanDepth);
+  body.waves =
+      waves_for(world, world.bodies.size(), fetch, kOceanDepth, world.wind.mean, world.wind.from);
+  thicken(world.wind.mean, world.wind.from, body, kOceanDepth);
   world.bodies.push_back(std::move(body));
   return static_cast<int>(world.bodies.size()) - 1;
 }
@@ -347,8 +351,9 @@ int add_river(World& world, std::span<const ChannelPoint> centreline, double dis
   // A ripple of its own: the wind's sea over the channel's width.
   body.fetch_ref = widest;
   body.depth = deepest;
-  body.waves = waves_for(world, world.bodies.size(), widest, deepest);
-  thicken(world, body, deepest);
+  body.waves =
+      waves_for(world, world.bodies.size(), widest, deepest, world.wind.mean, world.wind.from);
+  thicken(world.wind.mean, world.wind.from, body, deepest);
   world.bodies.push_back(std::move(body));
   return static_cast<int>(world.bodies.size()) - 1;
 }
@@ -375,6 +380,10 @@ int add_flow(World& world, Flow flow, Stuff stuff) {
 }
 
 void lay_waves(World& world, int index, double fetch) {
+  lay_waves(world, index, fetch, world.wind.mean, world.wind.from);
+}
+
+void lay_waves(World& world, int index, double fetch, double wind, double from) {
   Body& body = world.bodies[static_cast<size_t>(index)];
   double depth = body.depth;
   if (body.kind == Kind::volume) {
@@ -390,12 +399,13 @@ void lay_waves(World& world, int index, double fetch) {
     }
   }
   body.fetch_ref = fetch;
-  body.waves = waves_for(world, static_cast<size_t>(index), fetch, core::num::max(depth, 0.01));
+  body.waves =
+      waves_for(world, static_cast<size_t>(index), fetch, core::num::max(depth, 0.01), wind, from);
   if (body.stuff.liquid.viscosity > 0) {
-    thicken(world, body, depth);
+    thicken(wind, from, body, depth);
   } else {
-    const double toward = world.wind.from + kPi;
-    const double d = kDriftShare * world.wind.mean;
+    const double toward = from + kPi;
+    const double d = kDriftShare * wind;
     body.drift[0] = d * core::libm::sin(toward);
     body.drift[1] = d * core::libm::cos(toward);
   }

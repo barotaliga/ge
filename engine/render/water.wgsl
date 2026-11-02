@@ -28,6 +28,23 @@
 // near water is all rings. A ring's crests too short for the pixel go to the glitter's
 // roughness, as a wave's do, so a lake far off in the rain is dulled rather than ringed.
 //
+// THE GUSTS AND THE STIR: the short waves (the detail band, its tail) raised and laid by a field of
+// gusts that drifts downwind and changes as it goes (value noise in the plan and in time, two
+// sizes), so patches of ripples cross calmer water and nothing repeats; and a still surface's
+// stir, a faint slope off a noise that wanders in time.
+//
+// THE MIRROR: a body the game drew a planar mirror for (render/water.hpp's WaterViews) reads each
+// pixel's reflected ray where its mirror image lands on the mirror's picture (the reflected leg's
+// length off the mirror's own depth), the sky's model where the mirror shows the sky.
+//
+// FROM BELOW (`fs_below`, "water.below"): the same surface seen from under it: the view refracted
+// out through the surface within Snell's window, the world above read along the bent ray (the
+// game's view up, else marched in screen space, else the sky's model), total internal reflection
+// past it mirroring the water below (the mirror under the surface, else marched), weighed by the
+// exact Fresnel terms for light leaving water; what the reflection finds is fogged over its own
+// way through the water, and the share it lacks (nothing to mirror, the water's own light) goes
+// out beside it for the view under water to fill with its veil.
+//
 // THE LIGHT is render/wgsl/water_light.wgsl's `shade_water`, the moving water's too.
 #include "render/wgsl/frame.wgsl"
 
@@ -43,6 +60,10 @@ struct WaterBody {
   deep: vec4f,       // deep water's colour, pi Rrs, rgb
   emission: vec4f,   // a body's own glow, rgb (white = a white face in daylight)
   wake: vec4f,       // rings, their life (s), the shortest wave kept (m), 0
+  air: vec4f,        // the day's share on the water, the stir's slope, the gusts, their drift (m/s)
+  view: vec4f,       // the mirror (0 none, 1 over the surface, 2 under it), the view up (1), the
+                     // wind's heading (sin, cos)
+  up_view_proj: mat4x4f,  // the view up: world relative to the surface over the eye -> its clip
   levels: array<vec4f, 12>,  // origin x, z, spacing, 0
 }
 
@@ -67,6 +88,9 @@ struct Wave {
 @group(1) @binding(3) var scene_depth: texture_2d<f32>;      // R32F: the opaque depth
 @group(1) @binding(4) var<storage, read> rings: array<Ring>;  // the body's wake, newest first
 @group(1) @binding(5) var shore: texture_2d<f32>;  // R8: where on its box it may be drawn
+@group(1) @binding(6) var mirror: texture_2d<f32>;  // the planar mirror (a 0: sky), or a blank
+@group(1) @binding(7) var mirror_depth: texture_depth_2d;
+@group(1) @binding(8) var up_view: texture_2d<f32>;  // the view straight up (a 0: sky), or a blank
 
 #include "render/wgsl/water_light.wgsl"
 
@@ -269,6 +293,145 @@ fn rain_rings(xz: vec2f, t: f32, foot: f32) -> vec3f {
   return out;
 }
 
+
+// A lattice point's value, 0..1: an integer hash, the same on every GPU.
+fn lattice(c: vec3i) -> f32 {
+  var h = bitcast<vec3u>(c) * vec3u(1664525u, 22695477u, 1103515245u) + 1013904223u;
+  h.x += h.y * h.z;
+  h.y += h.z * h.x;
+  h.z += h.x * h.y;
+  h ^= h >> vec3u(16u);
+  h.x += h.y * h.z;
+  return f32(h.x >> 8u) * (1.0 / 16777216.0);
+}
+
+// Value noise in 3D with its gradient (x: the value 0..1; y, z, w: d/dx, d/dy, d/dz), smoothed by
+// the quintic so the gradient is continuous.
+fn value_noise(p: vec3f) -> vec4f {
+  let i = vec3i(floor(p));
+  let f = fract(p);
+  let u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+  let du = 30.0 * f * f * (f * (f - 2.0) + 1.0);
+  let a = lattice(i);
+  let b = lattice(i + vec3i(1, 0, 0));
+  let c = lattice(i + vec3i(0, 1, 0));
+  let d = lattice(i + vec3i(1, 1, 0));
+  let e = lattice(i + vec3i(0, 0, 1));
+  let g = lattice(i + vec3i(1, 0, 1));
+  let h = lattice(i + vec3i(0, 1, 1));
+  let k = lattice(i + vec3i(1, 1, 1));
+  let k1 = b - a;
+  let k2 = c - a;
+  let k3 = e - a;
+  let k4 = a - b - c + d;
+  let k5 = a - c - e + h;
+  let k6 = a - b - e + g;
+  let k7 = -a + b + c - d + e - g - h + k;
+  let v = a + k1 * u.x + k2 * u.y + k3 * u.z + k4 * u.x * u.y + k5 * u.y * u.z +
+          k6 * u.z * u.x + k7 * u.x * u.y * u.z;
+  let grad = du * vec3f(k1 + k4 * u.y + k6 * u.z + k7 * u.y * u.z,
+                        k2 + k5 * u.z + k4 * u.x + k7 * u.z * u.x,
+                        k3 + k6 * u.x + k5 * u.y + k7 * u.x * u.y);
+  return vec4f(v, grad);
+}
+
+// THE GUSTS at a point of the plan: the short waves' strength there now, about 1 on the mean,
+// from near calm in a lull to nearly twice it under a puff; drifting downwind and changing as it
+// goes, a puff some metres across in lulls a few times wider.
+fn gust_at(xz: vec2f, t: f32) -> f32 {
+  if (body.air.z <= 0.0) {
+    return 1.0;
+  }
+  let toward = body.view.zw;
+  let q = xz - toward * body.air.w * t;
+  let n = 0.65 * value_noise(vec3f(q / 9.0, t * 0.05)).x +
+          0.35 * value_noise(vec3f(q / 3.5 + 17.0, t * 0.12)).x;
+  let g = 0.15 + 1.85 * smoothstep(0.3, 0.72, n);
+  return mix(1.0, g, body.air.z);
+}
+
+// THE STIR: a still surface's own slope (x, z) at a point now, `air.y` the rms about: two sizes
+// of noise in the plan wandering in time, never repeating.
+fn stir_at(xz: vec2f, t: f32) -> vec2f {
+  if (body.air.y <= 0.0) {
+    return vec2f(0.0);
+  }
+  let a = value_noise(vec3f(xz / 0.9, t * 0.21));
+  let b = value_noise(vec3f(xz / 0.31 + 5.3, t * 0.37));
+  return body.air.y * 1.6 * (a.yz + 0.5 * b.yz);
+}
+
+// THE SURFACE'S SLOPE at a pixel's point: the waves its footprint `foot` m resolves (the detail
+// band's raised and laid by the gusts), the wakes, the rain's rings and the stir; x, y the slope
+// (d/dx, d/dz), z the slope variance the pixel cannot resolve.
+fn surface_slope(xz: vec2f, t: f32, foot: f32) -> vec3f {
+  var slope = vec2f(0.0);
+  let gust = gust_at(xz, t);
+  var lost = body.rough.x * gust * gust + body.rough.y;
+  let laid = u32(body.info.z);
+  let total = u32(body.info.z + body.info.w);
+  for (var i = 0u; i < total; i++) {
+    let w = waves[i];
+    let k = w.more.y;
+    let a = w.dir.z * body.info.y * select(1.0, gust, i >= laid);
+    let keep = smoothstep(2.0 * foot, 4.0 * foot, 6.2831853 / k);
+    lost += (1.0 - keep) * 0.5 * (k * a) * (k * a);
+    if (keep <= 0.0) {
+      continue;
+    }
+    let phi = dot(w.dir.xy, xz) - w.dir.w * t + w.more.x;
+    slope += keep * (a * cos(phi) + k * a * a * sin(2.0 * phi)) * w.dir.xy;
+  }
+  let wake = wake_at(xz, t, 2.0 * foot);
+  slope += wake.yz;
+  lost += wake.w;
+  let rain = rain_rings(xz, t, foot);
+  slope += rain.xy;
+  lost += rain.z;
+  // The stir's ripples are a few tens of centimetres long: a far pixel takes them as roughness.
+  let keep = smoothstep(2.0 * foot, 4.0 * foot, 0.3);
+  slope += keep * stir_at(xz, t);
+  lost += (1.0 - keep) * body.air.y * body.air.y;
+  return vec3f(slope, lost);
+}
+
+// Where a camera-relative point lands on the screen (uv), and whether it is in front (z: 1).
+fn screen_at(p: vec3f) -> vec3f {
+  let c = frame.view_proj * vec4f(p, 1.0);
+  if (c.w <= 1e-4) {
+    return vec3f(0.0);
+  }
+  return vec3f(c.x / c.w * 0.5 + 0.5, 0.5 - c.y / c.w * 0.5, 1.0);
+}
+
+// The planar mirror along the ray `r` from the surface at `rel` (`dist` m from the eye): where its
+// mirror image lands (the reflected leg's length read off the mirror's depth at the pixel's own
+// uv), its colour, and in a: 1 where the mirror shows the map, 0 where it shows a sky face, -1
+// where the image falls off the mirror's picture or on nothing drawn (the caller's room, never
+// the sky); `leg` the reflected leg's length, m.
+fn mirror_along(rel: vec3f, r: vec3f, uv: vec2f, dist: f32, leg: ptr<function, f32>) -> vec4f {
+  let size = vec2f(textureDimensions(mirror_depth));
+  let at = vec2i(clamp(uv * size, vec2f(0.0), size - 1.0));
+  let z = textureLoad(mirror_depth, at, 0);
+  var far = 60.0;
+  if (z > 0.0) {
+    let ndc = vec2f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+    let p = frame.inv_view_proj * vec4f(ndc, z, 1.0);
+    far = length(p.xyz / p.w);
+  }
+  *leg = clamp(far - dist, 0.05, 200.0);
+  // The ray's mirror image: its height turned over about the level.
+  let s = screen_at(rel + vec3f(r.x, -r.y, r.z) * *leg);
+  if (s.z < 0.5 || any(s.xy < vec2f(0.0)) || any(s.xy > vec2f(1.0))) {
+    return vec4f(0.0, 0.0, 0.0, -1.0);
+  }
+  let there = vec2i(clamp(s.xy * size, vec2f(0.0), size - 1.0));
+  if (textureLoad(mirror_depth, there, 0) <= 0.0) {
+    return vec4f(0.0, 0.0, 0.0, -1.0);
+  }
+  return textureSampleLevel(mirror, linear_clamp, s.xy, 0.0);
+}
+
 @vertex
 fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) level: u32) -> VertexOut {
   let n = kGrid + 1u;
@@ -325,37 +488,141 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     discard;
   }
   let t = frame.time.x;
-  var slope = vec2f(0.0);
-  var lost = body.rough.x + body.rough.y;
-  let total = u32(body.info.z + body.info.w);
-  for (var i = 0u; i < total; i++) {
-    let w = waves[i];
-    let k = w.more.y;
-    let a = w.dir.z * body.info.y;
-    let keep = smoothstep(2.0 * foot, 4.0 * foot, 6.2831853 / k);
-    lost += (1.0 - keep) * 0.5 * (k * a) * (k * a);
-    if (keep <= 0.0) {
-      continue;
-    }
-    let phi = dot(w.dir.xy, in.xz) - w.dir.w * t + w.more.x;
-    slope += keep * (a * cos(phi) + k * a * a * sin(2.0 * phi)) * w.dir.xy;
-  }
-  let wake = wake_at(in.xz, t, 2.0 * foot);
-  slope += wake.yz;
-  lost += wake.w;
-  let rain = rain_rings(in.xz, t, foot);
-  slope += rain.xy;
-  lost += rain.z;
-  let n = normalize(vec3f(-slope.x, 1.0, -slope.y));
+  let sl = surface_slope(in.xz, t, foot);
+  let lost = sl.z;
+  let n = normalize(vec3f(-sl.x, 1.0, -sl.y));
   let dist = length(in.rel);
   let uv = in.position.xy * frame.size.zw;
+  // The planar mirror where the game drew one: the reflected ray read where its image lands, the
+  // sky's model where the mirror shows the sky, and the sun's glitter only there.
+  var seen = vec4f(0.0);
+  var sun_seen = 1.0;
+  if (body.view.x > 0.5 && body.view.x < 1.5) {
+    let v = -in.rel / dist;
+    let r0 = reflect(-v, n);
+    let r = normalize(vec3f(r0.x, max(r0.y, 0.01), r0.z));
+    var leg = 0.0;
+    let m = mirror_along(in.rel, r, uv, dist, &leg);
+    if (m.a >= 0.0) {
+      seen = vec4f(mix(sky_luminance(r), m.rgb, m.a), 1.0);
+      sun_seen = 1.0 - m.a;
+    } else {
+      // Off the mirror's picture: the room's walls, lit as the room is; no sun.
+      seen = vec4f(vec3f(white_luminance() * body.emission.w * kRoomAlbedo), 1.0);
+      sun_seen = 0.0;
+    }
+  }
   // A body under a roof (a cave's pool) sees the sky through `open` of its dome (rough.w) and the
-  // room's own light, a share of a white face's (emission.w), over the rest.
-  let c = shade_water_roofed(n, in.rel, in.xz, in.position.xyz, body.info.x, lost, body.rough.z,
-                             Optics(body.c.rgb, body.kd.rgb, body.deep.rgb, body.emission.rgb),
-                             0.0, body.rough.w, body.emission.w);
+  // room's own light, a share of a white face's (emission.w), over the rest; the day lights the
+  // water itself by its own share (air.x).
+  let c = shade_water_lit(n, in.rel, in.xz, in.position.xyz, body.info.x, lost, body.rough.z,
+                          Optics(body.c.rgb, body.kd.rgb, body.deep.rgb, body.emission.rgb), 0.0,
+                          body.rough.w, body.emission.w, body.air.x, seen, sun_seen);
   var out: FragmentOut;
   out.colour = vec4f(haze(c, uv, dist), 1.0);
   out.motion = vec4f(screen_motion(frame, vec4f(in.rel, 1.0), in.position.xy), 0.0, 0.0);
+  return out;
+}
+
+// The view up's reach: the tangent, sine and cosine of 72 degrees off straight up, inside the 75
+// degrees its square reaches along its sides (brush/app/bsp_views.hpp's kUpFov).
+const kUpRim = 3.0776835;
+const kUpRimSin = 0.9510565;
+const kUpRimCos = 0.3090170;
+
+struct BelowOut {
+  @location(0) colour: vec4f,  // the surface's light, its distance from the eye (m)
+  @location(1) veil: vec4f,    // the share of it the water's own light fills
+}
+
+// Light leaving water into air at `cos_i` to the normal: the exact Fresnel reflectance of the two
+// polarisations, averaged; 1 past the critical angle (total internal reflection).
+fn fresnel_exit(cos_i: f32) -> f32 {
+  let eta = 1.333;
+  let s2 = eta * eta * max(1.0 - cos_i * cos_i, 0.0);
+  if (s2 >= 1.0) {
+    return 1.0;
+  }
+  let ct = sqrt(1.0 - s2);
+  let rs = (eta * cos_i - ct) / (eta * cos_i + ct);
+  let rp = (eta * ct - cos_i) / (eta * ct + cos_i);
+  return 0.5 * (rs * rs + rp * rp);
+}
+
+@fragment
+fn fs_below(in: VertexOut) -> BelowOut {
+  let foot = max(length(dpdx(in.xz)), length(dpdy(in.xz)));
+  if (any(in.xz < body.box.xy) || any(in.xz > body.box.zw)) {
+    discard;
+  }
+  let cells = vec2f(textureDimensions(shore));
+  let on_box = (in.xz - body.box.xy) / max(body.box.zw - body.box.xy, vec2f(1e-3));
+  if (textureLoad(shore, vec2i(clamp(on_box * cells, vec2f(0.0), cells - 1.0)), 0).r < 0.5) {
+    discard;
+  }
+  let t = frame.time.x;
+  let sl = surface_slope(in.xz, t, foot);
+  let n = normalize(vec3f(-sl.x, 1.0, -sl.y));  // up, out of the water
+  let dist = length(in.rel);
+  let d = in.rel / dist;  // the eye's ray, up toward the surface
+  let uv = in.position.xy * frame.size.zw;
+  let cos_i = clamp(dot(d, n), 0.0, 1.0);
+  let refl = fresnel_exit(cos_i);
+  let room = vec3f(white_luminance() * body.emission.w);
+  let open = body.rough.w;
+
+  // OUT THROUGH THE WINDOW: the ray bent away from the normal by Snell's law.
+  var above = vec3f(0.0);
+  if (refl < 1.0) {
+    let tr = refract(d, -n, 1.333);
+    let sky = mix(room * kRoomAlbedo, sky_luminance(normalize(vec3f(tr.x, max(tr.y, 0.01), tr.z))),
+                  open);
+    if (body.view.y > 0.5) {
+      // The game's view up, its camera on the surface straight over the eye: the point a few
+      // metres along the bent ray. A ray bent out nearer level than the view reaches is read at
+      // its rim along the same bearing (the walls at the waterline are much like those just over
+      // them), so the window's last ring is never a hole.
+      var up_ray = tr;
+      let across = length(tr.xz);
+      if (across > kUpRim * max(tr.y, 0.0) && across > 1e-5) {
+        up_ray = vec3f(tr.x / across * kUpRimSin, kUpRimCos, tr.z / across * kUpRimSin);
+      }
+      let c = body.up_view_proj *
+              vec4f(in.rel + vec3f(0.0, frame.eye.y - body.info.x, 0.0) + up_ray * 6.0, 1.0);
+      let st = clamp(vec2f(c.x / c.w * 0.5 + 0.5, 0.5 - c.y / c.w * 0.5), vec2f(0.0), vec2f(1.0));
+      let u = textureSampleLevel(up_view, linear_clamp, st, 0.0);
+      above = mix(sky, u.rgb, u.a);
+    } else {
+      var hit = 0.0;
+      let m = march_scene(in.rel, tr, max(0.02 * dist, 0.25), &hit);
+      // Nearly level and found on no screen: the walls round the water, lit as the room is.
+      let low = mix(room * kRoomAlbedo, sky, open * smoothstep(0.05, 0.3, tr.y));
+      above = mix(low, m.rgb, m.a);
+    }
+  }
+
+  // BACK DOWN: what the surface mirrors of the water below, fogged over its way through it.
+  var below = vec3f(0.0);
+  var veil = refl;
+  let r = reflect(d, -n);
+  if (body.view.x > 1.5) {
+    var leg = 0.0;
+    let m = mirror_along(in.rel, normalize(vec3f(r.x, min(r.y, -0.01), r.z)), uv, dist, &leg);
+    let found = max(m.a, 0.0);
+    let through = exp(-body.c.rgb * leg);
+    below = m.rgb * found * through;
+    veil = refl * (1.0 - found * dot(through, vec3f(0.2126, 0.7152, 0.0722)));
+  } else {
+    var hit = 0.0;
+    let m = march_scene(in.rel, r, max(0.02 * dist, 0.25), &hit);
+    if (m.a > 0.0) {
+      let through = exp(-body.c.rgb * hit);
+      below = m.rgb * m.a * through;
+      veil = refl * (1.0 - m.a * dot(through, vec3f(0.2126, 0.7152, 0.0722)));
+    }
+  }
+  var out: BelowOut;
+  out.colour = vec4f(above * (1.0 - refl) + below * refl, dist);
+  out.veil = vec4f(veil, 0.0, 0.0, 0.0);
   return out;
 }

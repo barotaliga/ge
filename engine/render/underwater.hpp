@@ -9,10 +9,12 @@
 // - THE BLUR: the bare eye loses most of its focusing power in water, so the scene is blurred
 //   by its distance (`blur` px at 1080 rows, half of it at `blur_range` m); a mask sharpens it
 //   and magnifies by about a third (`magnify`).
-// - THE SURFACE FROM BELOW: a ray reaching the surface before the scene sees through it only
-//   within Snell's window, 48.6 degrees round straight up (the world above, dimmed by Fresnel
-//   and the water over the eye); beyond it the surface mirrors the water below (total internal
-//   reflection: the veil).
+// - THE SURFACE FROM BELOW: drawn by the water's own pass ("water.below", render/water.hpp) off
+//   the same waves as from above: Snell's window, the world above bent through it, total
+//   internal reflection past it; this pass lays it in where the eye's ray meets it before the
+//   scene, fogged over the way there, the veil filling the share of it that mirrors nothing, so
+//   the surface is seen from any depth the water lets light through. A look with no window (the
+//   classic tint) sees through the surface as through clear air.
 // - THE EYE ADAPTS: the picture lifted (at most six times) so the veil's luma reaches `adapt`,
 //   as an eye or a camera does in the dark under a brown lake.
 // - THE WOBBLE (`warp`, `warp_hz`) and a flat stylised tint (`tint`, `tint_mix`) for a game
@@ -31,21 +33,19 @@
 //   through it, so none pops); the share is the look's times the water's beam attenuation
 //   over 2 per metre, so a brown lake is thick with them and a pool has next to none.
 //
-// Presets (`underwater_look`): "eyes-open", "mask", "murky", "classic", "pool" (a flat tint and a
-// screen warp, no blur, a short clear view). The lens's drops on leaving the water are
+// Presets (`underwater_look`): "eyes-open", "mask", "murky", "classic" (a flat tint and a screen
+// warp, no blur, a short clear view), "pool". The lens's drops on leaving the water are
 // render/wet_lens.hpp's. Not yet: light shafts.
-// - A RIPPLED SURFACE OVER A LIT ROOM (`ambient`, `ripple`, `mirror`, `caustics`; "pool"): the
-//   water's light read off the room seen round the eye rather than the day, so the window is not
-//   a bright hole in a black sea; the surface rippled, so the window's edge wobbles and the world
-//   through it bends by refraction; past the window the water below mirrored (what an eye under
-//   a pool sees there: the floor and the walls); and the caustics: the surface's focused light
-//   playing over what stands under it, and its reflected light over the ceiling above it.
+// - A POOL UNDER A LIT ROOM (`ambient`, `caustics`; "pool"): the water's light read off the room
+//   seen round the eye rather than the day, so the window is not a bright hole in a black sea;
+//   and the caustics, the surface's focused light playing over what stands under it, as strong
+//   as the surface is rough (`Water::Slot::mss`): a still pool throws next to none.
 //
 // ge:summary The view under water: the water's fog, blur by distance, Snell's window, presets
 // ge:keywords render underwater under-water fog veil blur snell window total-internal-reflection
 // ge:keywords mask goggles magnify warp tint classic murky create_underwater prepare_underwater
 // ge:keywords encode_underwater underwater_look waterline meniscus split half-submerged motes
-// ge:keywords suspended-matter specks particles caustics ripple pool mirror
+// ge:keywords suspended-matter specks particles caustics pool water-below underside
 // ge:skill render water
 // ge:test tests/render_water_test.cpp
 #pragma once
@@ -67,20 +67,17 @@ struct UnderwaterLook {
   double magnify = 1;     // a mask's 1.33
   double warp = 0.0015;   // the wobble, of the screen's height
   double warp_hz = 0.25;  // its rate
-  double window = 1;      // Snell's window and the mirror past it (0: the surface as clear air)
+  double window = 1;      // the surface from below (0: seen through as clear air)
   double adapt = 0.08;    // the veil's luma the eye adapts toward (at most 6x); 0: none
   double tint[3] = {1, 1, 1};
   double tint_mix = 0;        // 0: none .. 1: the picture's luma in the tint alone
   double waterline = 0.12;    // m: the lens plate's height (0: no split, the whole picture flips)
   double motes = 0.2;         // the specks' share of cells at 2/m of attenuation (0: none)
   double mote_size = 0.0025;  // m: a speck's radius
-  // A rippled surface over a lit room (a pool indoors, a flooded hall): each 0 is the plain
-  // look above, so an open lake under the day keeps it.
+  // A pool under a lit room (a pool indoors, a flooded hall): each 0 is the plain look above, so
+  // an open lake under the day keeps it.
   double ambient = 0;   // the share of the water's light read off the scene round it, not the day
-  double ripple = 0;    // the surface's slope (rad, about): the window's edge wobbles, the world
-                        // through it bends by the refraction, the mirror past it by reflection
-  double mirror = 0;    // past the window, the water below mirrored (total internal reflection)
-  double caustics = 0;  // the rippled surface's focused light on what stands under and over it
+  double caustics = 0;  // the rough surface's focused light on what stands under and over it
 };
 
 // The surface where the eye is, from the caller's `water::sample` at the eye: the waterline
@@ -103,7 +100,7 @@ struct UnderGpu {
   float fog[4];      // the fog's scale, the adaptation's target, 0, 0
   float surface[4];  // the surface at the eye, its slope dx, dz, 1 when the eye is under it
   float motes[4];    // the specks' share, their radius (m), the lens plate's height (m), 0
-  float lit[4];      // ambient, ripple, mirror, caustics
+  float lit[4];      // ambient, the caustics (times the surface's roughness), 0, 0
 };
 
 struct Underwater {
@@ -118,7 +115,8 @@ struct Underwater {
 
 void create_underwater(gpu::Device& device, gpu::PipelineSet& pipelines, Underwater& under,
                        const wgpu::BindGroupLayout& frame);
-// Bound to the water's copies (again whenever create_water_targets made new ones).
+// Bound to the water's copies and its surface from below (again whenever create_water_targets
+// made new ones).
 void bind_underwater(gpu::Device& device, Underwater& under, const Water& water);
 // After prepare_water: the body the eye is under (or at the waterline of), its optics and the
 // look, uploaded. `line`, when given for that body, is the surface at the eye.

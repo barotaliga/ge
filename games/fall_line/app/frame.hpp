@@ -31,7 +31,7 @@
 //   clouds               -> hdr (the cloud's layers, behind depth)
 //   water.copy           -> water.scene (the opaque colour and depth the water reads through)
 //   water                -> hdr motion depth (every body of water added, render/water.hpp)
-//   water.under          -> hdr (the view under water, when the eye is under a body)
+//   water.below, water.under -> water.below, hdr (the surface from under it, the view under water)
 //   particles            -> hdr motion (the spray, over the picture; the motion's reactive b)
 //   precip               -> hdr motion (the snow and rain round the eye, the rain's splashes)
 //   bolts                -> hdr motion (the lightning's channels, render/bolts.hpp)

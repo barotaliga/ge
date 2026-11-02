@@ -478,9 +478,8 @@ way down; the bare eye's blur by distance; a ray that meets the surface first se
 within Snell's window (48.6 degrees round straight up, measured 48.9 off the `gpu-underwater`
 lab's picture) and the water mirrored past it; the eye adapts to the dark (the picture lifted up to
 six times so the veil reaches `adapt`); the wobble and a flat tint. The four presets below are
-`underwater_look`'s; a game sets `Underwater::look` (Fall Line's frame owns one). The world above
-is seen through the window unbent: the screen holds only what the camera saw, and the low
-horizon a real window squeezes into its rim lies off it.
+`underwater_look`'s; a game sets `Underwater::look` (Fall Line's frame owns one). Since M24h3 the
+surface itself is the water pass's own underside (below).
 
 **Built (M24h2, `engine/render/underwater.hpp`, `engine/render/wet_lens.hpp`).** THE WATERLINE:
 the lens is a plate `waterline` m tall (0.12) across the screen's height, so an eye within that of
@@ -506,23 +505,80 @@ digests them and a replay shows the same ones. The pass (`water.lens`) runs afte
 output's size, each drop a lens of water showing the scene behind it upside down and out of focus
 with a dark rim and a highlight; post reads its target only while the lens is wet.
 
-**Built (M24h3, part: the "pool" look).** Under a lit room (an indoor pool, a flooded hall) the
-water's light is read off the room seen round the eye, in half the water's hue, and the eye adapts
-to it (at most three times), so the window is a few times brighter than the water rather than a
-lamp in a black sea. The surface is rippled (three short crossing swells, `ripple` their slope):
-the window's edge wobbles with them and the world through it bends by their part of the
-refraction (the flat surface's own fisheye would reach past the frame's edges, where the copy has
-nothing). Past the window the water below is mirrored (`mirror`: total internal reflection, the
-floor and the walls seen again, fogged over their path). The caustics (`caustics`) are thin bright
-lines round dimmer cells, the edges of cells whose points wander, at two scales; they are laid on
-what stands under the surface from its face's three planes (its normal from the scene's screen
-derivatives) and fade with depth, and on the ceiling over the water seen through the window,
-fading a few metres up. Shooter's Edge's window uses it; an open lake under the day keeps the
-plain look, since every knob is 0 by default.
+**Built (M24h3, part: the surface from below).** The surface an eye under the water looks up at is
+drawn as geometry: the `water.below` pass draws the body's own rings and waves (the same vertex
+stage, the same slopes as from above, so the window's edge breaks up with the real waves) into two
+targets, tested against the opaque depth (a ceiling over a flooded passage hides the surface past
+it). Each pixel's ray is refracted out by Snell's law (n = 1.333) and the two shares are the exact
+Fresnel terms for light leaving water, averaged over both polarisations, so the window's rim
+brightens toward total internal reflection and none is drawn as a mask. Out through the window the
+world above is read along the BENT ray: from the game's view up when it hands one in
+(`WaterViews`, below), else marched in screen space through the depth copy, else the sky's model
+over the room; so the whole hemisphere is squeezed into the 97-degree cone, the room's walls round
+its rim, from any depth. Past the window the surface mirrors the water below: the game's planar
+mirror under the surface, else marched; what the reflection finds is fogged over its own way
+through the water, and the share that finds nothing goes out beside it for `water.under` to fill
+with its veil looking down. `water.under` lays the underside in where the eye's ray meets it before
+the scene, fogged over the way there; the eye's own three fixed ripples and its flat-window test
+are gone. A look with `window` 0 (the classic tint) sees through the surface as through air.
 
-Not built yet (M24h3): light shafts, caustics from a real surface's waves (these are a pattern),
-the world above bent into the rim of Snell's window. The detail waves' interference shows as a regular hatch in the
+Under a lit room (the "pool" look: `ambient`, `caustics`) the water's light is read off the room
+seen round the eye, in a third of the water's hue, and the eye adapts to it (at most three times),
+so the window is a few times brighter than the water rather than a lamp in a black sea. The
+caustics are thin bright lines round dimmer cells laid on what stands under the surface, as strong
+as the surface is rough (`Water::Slot::mss`: full at a slope of 0.06 rms, a breeze's ripples), so a
+still pool throws next to none.
+
+**Built (M24h3, part: a game's own views; `WaterViews`, `set_water_views`).** A game that can draw
+its world again hands the water two pictures for one body. THE PLANAR MIRROR: the world drawn with
+the frame's camera turned over about the body's level (its view_proj times a flip of the height,
+its eye mirrored), with its depth, alpha 0 where it shows the sky; from above, each pixel's
+reflected ray is read where its mirror image lands (the reflected leg's length off the mirror's
+depth), the sky's model only where the mirror shows a sky face, the room where the image falls off
+the picture, and the sun glitters only where the mirror shows the sky. With the eye under the level
+it is the mirror of the water below, for the total internal reflection. THE VIEW UP: the world over
+the level drawn from the surface straight over the eye looking up across 150 degrees, read along
+each refracted ray; a ray bent out nearer level than 72 degrees is read at that rim along its
+bearing. A classic map's are `plugins/brush/app/bsp_views.hpp` (§ A classic map's pools).
+
+**Built (the gusts, the stir and the day on the water; `WaterDraw::gusts`, `stir`, `daylight`).**
+The wind never blows evenly: with `gusts` on, the short waves (the detail band and its tail's
+roughness) are raised and laid by a field of value noise in the plan and in time, two sizes (a puff
+some metres across in lulls a few times wider), drifting downwind at most of the peak's phase
+speed, from near calm in a lull to nearly twice the mean under a puff, so ripples come in patches
+and no stretch repeats. Water no wind reaches is never glass: `stir` is a faint slope off a noise
+that wanders in time (two sizes, 0.9 and 0.3 m), a far pixel taking it as roughness. `daylight` is
+the share of the sun's and the sky's light on the water itself, apart from the share of the sky it
+mirrors (`open_sky`): a courtyard's pool sees the sky overhead, but its walls keep most of the day
+off it.
+
+Not built yet (M24h3): light shafts, caustics from the real surface's slopes (these are a pattern,
+scaled by the surface's roughness). The detail waves' interference shows as a regular hatch in the
 glitter a few centimetres under an eye at the surface; the GPU detail FFT (M24g2) replaces them.
+
+## A classic map's pools (`plugins/brush/app/bsp_liquids.hpp`, `bsp_views.hpp`)
+
+A classic map's water lies level in rooms, so its pools are drawn as rooms make them:
+
+- **The site** (`pool_site`, once a map): the depth is the map's own liquid leaves marched down from
+  the top (a pool's volume reaches the deepest of it, so an eye at the bottom of a 5 m pool is in
+  it); rays from over the pool, sixteen ways at four heights and straight up, marched through the
+  leaves to the sky or a wall, give the share of the dome that is sky and the share of the low rays
+  toward the wind that reach it (a window or a doorway it blows in by). The pool's share of the open
+  map's wind is 0.8 of the second plus a quarter of the square of the first, so a closed hall's pool
+  gets none and lies still (only the stir moves it), a courtyard's a little, a pool under a window
+  facing the wind most of it.
+- **The wind** is the weather's (`sv_wind`, `sv_winddir`; `ce_wind 0` still air) times each pool's
+  share, laid by `water::lay_waves`'s own-wind form, and laid again when the cvars change.
+- **The room's light** (`light_rooms`) is what the lightmaps say the pool's bed is lit by (the
+  light probe), floored like the walls; the water's colour is that light in it, the day only by
+  the dome's share.
+- **The eye in the water** is the map's word: its leaf at the eye (`eye_water_body`), at any depth
+  and in a flooded passage beyond the top's box, handed to `prepare_water`.
+- **The mirror and the view up** (`bsp_views.hpp`, "bsp.views"): the map drawn again at half the
+  render's size for the nearest pool (the one the eye is in, else the nearest it stands over),
+  every face, those on the water's far side dropped by the frame's sixth plane (zero in the frame's
+  own view), the sky faces left at alpha 0.
 
 **Under water**, the plan: one `UnderwaterLook`, derived from the body's optics and open to
 every knob a game wants:

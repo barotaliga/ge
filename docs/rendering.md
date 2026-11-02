@@ -218,8 +218,12 @@ The order, with what each stage is for:
    depth copied (`water.copy`), then every body drawn over it (`water`), reading the copies
    for what lies under it and what it mirrors, testing and writing the depth, so what follows
    sits in front of or behind it; both rows run empty with no water in view. With the eye
-   under a body, `water.under` redraws the picture as seen through the water
-   (`render/underwater.hpp`).
+   under a body, `water.below` draws that body's surface seen from under it (Snell's window, the
+   world above bent through it, total internal reflection past it) into targets of its own, and
+   `water.under` redraws the picture as seen through the water, the underside laid in where the
+   eye's ray meets it first (`render/underwater.hpp`). A game that draws its world again for the
+   water (a classic map's `bsp.views`: a planar mirror in the pool's plane, the view up from under
+   it; `brush/app/bsp_views.hpp`) encodes it before these and hands it in (`WaterViews`).
 8. **Transparent:** particles and glows, softened against the depth buffer.
 9. **Temporal resolve:** anti-aliasing and upscaling to the output size (§ Anti-aliasing).
 10. **Post:** one compute pass for exposure, bloom, the colour grade, tone mapping, dither

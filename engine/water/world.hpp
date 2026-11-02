@@ -139,6 +139,9 @@ int add_flow(World& world, Flow flow, Stuff stuff = {});
 // liquid's viscosity (`damp_waves`), with the surface's drift (`drift`); a volume's surface
 // then carries them. A body laid by add_lake, add_ocean or add_river has them already.
 void lay_waves(World& world, int body, double fetch);
+// The same under the body's own air, `wind` m/s from the bearing `from` (rad): a pool sheltered by
+// the walls round it (a hall's: next to none), where the world's wind is the open ground's.
+void lay_waves(World& world, int body, double fetch, double wind, double from);
 // Every flow region one step of `dt` s.
 void step_flows(World& world, double dt);
 // THE ONE STEP: everything in the world that is stepped, one fixed step of `dt` s. Today that is
