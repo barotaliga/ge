@@ -19,10 +19,9 @@
 // pixel, filtered. A picture the cache lacks is the pack's own scaled up nearest to the same
 // density, so one set never mixes sizes.
 //
-// THE WINDOW'S PICK (`hud_art`): `auto` draws the packs' pictures when the packs carry the whole
-// set and the free art when they do not (the arena with no packs); `classic` asks for the packs'
-// (the free art still drawn, and the reason said, when they lack one); `free` always draws the
-// game's own. `pick_art` is that rule, for the window, the labs and the tests alike.
+// WHOSE PICTURES: the window draws a classic game's own whenever its folder is open, never the free
+// set in their place, and the free set only for Shooter's Edge's own content
+// (client/classic_pictures.hpp's `hud_art_of`). `pick_art` is a lab's choice between the two.
 //
 // Nothing here ships or is committed: the pictures are read at run time from the player's
 // packs or cache. The crosshair is the glyph sheet's '+', as the classic game drew it; the pack
@@ -30,7 +29,7 @@
 //
 // ge:summary Shooter's Edge's HUD drawn from the player's classic pictures: the packs or the cache
 // ge:keywords hud classic-art classic-enhance cache pictures png status-bar portrait digits
-// ge:keywords glyph-sheet conchars crosshair gfx-wad palette packs hud_art pick_art free-art
+// ge:keywords glyph-sheet conchars crosshair gfx-wad palette packs pick_art free-art
 // ge:keywords enhanced upgrade ce_pictures density upscaled
 // ge:skill ui
 // ge:test tests/shooters_edge_hud_test.cpp
@@ -79,11 +78,9 @@ using PictureUpgrade =
 bool classic_art_from_packs(const FileFind& find, HudArt* out, std::string* error,
                             const PictureUpgrade& upgrade = {});
 
-// The art the HUD draws by `hud_art` (`auto`, `classic`, `free`) given the packs' set (`classic`
-// empty when the packs did not carry one): the packs' set or the free one.
+// The art a lab draws by `pick` (`auto`, `classic`, `free`) given the packs' set (`classic` empty
+// when the packs did not carry one): the packs' set or the free one. The window never chooses:
+// a classic game's HUD is its own (client/classic_pictures.hpp's hud_art_of).
 const HudArt& pick_art(std::string_view hud_art, const HudArt& classic, const HudArt& free);
-
-// Registers `hud_art` over `*value` (`value` must outlive `con`).
-void add_art_cvar(ge::console::Console& con, std::string* value);
 
 }  // namespace shooters_edge::hud

@@ -80,6 +80,10 @@ class Hands {
   size_t axes() const { return count_; }
   // `wanted` (one value an axis) through the hands, into `out`; one call a step.
   void step(std::span<const double> wanted, std::span<double> out);
+  // Axis `axis` from now on moves as `spec` (a player who takes up another weapon holds it
+  // differently), where it is and what it remembers kept; the reaction delay stays the one it was
+  // made with.
+  void retune(size_t axis, const AxisHands& spec);
   // Back to rest: the hands at `at` (one value an axis), nothing remembered.
   void reset(std::span<const double> at);
 

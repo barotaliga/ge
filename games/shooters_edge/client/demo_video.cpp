@@ -152,8 +152,8 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   const look::Picture look_default;
   const look::Picture& look = o.picture ? *o.picture : look_default;
   se::Hud hud = se::make_hud();
-  // The status bar as the window's `hud_art auto` draws it: the packs' own pictures (enhanced
-  // when ce_pictures is on and the cache has them), else the free art.
+  // The status bar as the window draws it with a classic game loaded: the packs' own pictures
+  // (enhanced when ce_pictures is on and the cache has them), else the free art.
   se::HudArt art = load_classic_pictures(files, look.ce.pictures).hud;
   if (art.bar.empty()) art = se::free_art();
   art.finish();

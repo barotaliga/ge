@@ -245,7 +245,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     }
   }
   ge::gpu::Target out = ge::gpu::create_target(*device, "se-client.final", w, h);
-  // The HUD over every view, in the art `--hud` picks as the window's `hud_art` does: the packs'
+  // The HUD over every view, in the art `--hud` picks (auto, classic or free): the packs'
   // own status bar pictures (`auto`, `classic`) or the free set (`free`).
   se::Hud hud = se::make_hud();
   se::HudArt free_art = se::free_art();
@@ -524,7 +524,7 @@ const gl::LabSpec kSpec{
      {"map", "start", "with --game: the map's name"},
      {"cvars", "", "with --game: the modern side's cvars, as the console takes them"},
      {"views", "", "with --game: x,y,z,yaw,pitch;... where to stand the player (else the start)"},
-     {"hud", "auto", "with --game: the HUD's art as hud_art picks it: auto, classic or free"},
+     {"hud", "auto", "with --game: the HUD's art: auto, classic or free"},
      {"hudcvars", "",
       "with --game: the HUD's cvars (hud_style, viewsize, hud_*), as the console takes them"},
      {"progs", "",

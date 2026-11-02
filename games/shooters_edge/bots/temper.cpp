@@ -55,7 +55,7 @@ sh::Might own_might(const Stats& st) {
 }
 
 void foe_heard(Fighter& f, const sh::HeardSound& h, double t) {
-  if (f.sense == MapSense::novice || !h.meaning || h.ent < 1) return;
+  if (f.hearing == MapSense::novice || !h.meaning || h.ent < 1) return;
   const auto k = static_cast<size_t>(h.ent);
   if (f.foes.size() <= k) f.foes.resize(k + 1);
   FoeRead& r = f.foes[k];

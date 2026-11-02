@@ -1,9 +1,9 @@
 // The classic pictures read: each slot of the HUD's set by the pack's picture name, from the
-// cache's PNGs or straight from the packs' graphics archive, and `hud_art`'s pick between them and
-// the free set.
+// cache's PNGs or straight from the packs' graphics archive, and a lab's pick between them and the
+// free set.
 //
 // ge:summary The classic HUD pictures read by the pack's names from the cache or the packs
-// ge:keywords hud classic-art png decode names slots cell-of gfx-wad palette pick_art hud_art
+// ge:keywords hud classic-art png decode names slots cell-of gfx-wad palette pick_art
 // ge:skill ui
 // ge:test tests/shooters_edge_hud_test.cpp
 #include "shooters_edge/hud/classic_art.hpp"
@@ -190,16 +190,6 @@ bool classic_art_from_packs(const FileFind& find, HudArt* out, std::string* erro
 const HudArt& pick_art(std::string_view hud_art, const HudArt& classic, const HudArt& free) {
   if (hud_art == "free" || classic.bar.empty()) return free;
   return classic;
-}
-
-void add_art_cvar(ge::console::Console& con, std::string* value) {
-  con.cvars().bind({.name = "hud_art",
-                    .fallback = "auto",
-                    .help = "the HUD's pictures: auto (the packs' own status bar pictures when "
-                            "they carry them, else the game's), classic (the packs') or free "
-                            "(the game's own)",
-                    .kind = ge::console::CvarKind::text},
-                   value);
 }
 
 }  // namespace shooters_edge::hud

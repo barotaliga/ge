@@ -184,7 +184,6 @@ struct Game {
   shooters_edge::client::ControlSettings controls;
   shooters_edge::hud::Hud hud = shooters_edge::hud::make_hud();
   shooters_edge::view::ViewSettings view;
-  std::string hud_art = "auto";
   ge::console::Cvars server{true};
   sm::GameMenu menu;
   sm::Host host;
@@ -202,7 +201,6 @@ struct Game {
     // and client/main.cpp register them on the GPU's side) as stand-ins at their defaults.
     for (const auto& [name, value] : kWindowCvars)
       con.cvars().add({.name = name, .fallback = value});
-    shooters_edge::hud::add_art_cvar(con, &hud_art);
     for (const char* c : {"deathmatch", "fraglimit", "timelimit", "teamplay", "skill"})
       server.add({.name = c, .fallback = "0"});
     server.set("deathmatch", "1", ge::console::Source::local);

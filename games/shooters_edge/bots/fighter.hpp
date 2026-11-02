@@ -49,6 +49,7 @@
 #include "shooter/hearing.hpp"
 #include "shooter/swim.hpp"
 #include "shooter/temper.hpp"
+#include "shooter/traits.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/profiles/items.hpp"
 #include "shooters_edge/server/qc_server.hpp"
@@ -216,7 +217,17 @@ struct Fighter {
   sh::Temper temper = sh::Temper::balanced;  // when it takes a fight (shooter/temper.hpp)
   sh::AimSkill skill = sh::AimSkill::expert;
   bool outmatched = false;  // turned from the fight in sight: armour, a weapon or the team first
-  MapSense sense = MapSense::expert;  // how well it knows the map (off its skill)
+  sh::Traits traits = sh::traits_of(sh::AimSkill::expert, sh::Temper::balanced);  // traits.hpp
+  // Its traits read in steps (shooter/traits.hpp `tier_of`):
+  MapSense sense = MapSense::expert;     // what it knows of the map: items, buttons, their worth
+  MapSense timing = MapSense::expert;    // which items it times, and how well
+  MapSense comms = MapSense::expert;     // what it says, and reads of its team's lines
+  MapSense teamwork = MapSense::expert;  // what it does for the team: areas, help, the quad's rush
+  MapSense hearing = MapSense::expert;   // what the sounds it hears tell it
+  MapSense camp = MapSense::expert;      // the spots an enemy comes in weak, worked
+  float edge = 1;                        // its aim's worth in a fight (shooter/temper.hpp)
+  bool rash = false;                     // goes after every sound (a novice's discipline)
+  int aim_slot = -1;                     // the aim trait its hands hold now (0 the scattergun)
   bool was_dead = false;
   bool unlocking = false;  // on the way to the goal item's button
   bool swimming = false;   // in water no route leaves: following the swim field
@@ -225,10 +236,13 @@ struct Fighter {
 // The fighter's strength: health and armour's protection, a launcher counted on top.
 float fighter_strength(const Stats& st);
 
-// A fighter on graph `g` with `skill`'s aim, the map's items off `entities` (the map's text)
-// matched to what the server `s` sends client `slot`'s player now. Call after the slot connects.
+// A fighter on graph `g` with the personality `traits` (shooter/traits.hpp; `skill` perfect
+// passes its aim's hands untouched, the measuring stick), the map's items off `entities` (the
+// map's text) matched to what the server `s` sends client `slot`'s player now. Call after the
+// slot connects.
 void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, int slot,
-                  const char* entities, sh::AimSkill skill, double hz, uint32_t seed);
+                  const char* entities, sh::AimSkill skill, const sh::Traits& traits, double hz,
+                  uint32_t seed);
 
 // The fighter's next command, `msec` long, on server `s` as it stands after the last frame.
 sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int msec);

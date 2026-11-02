@@ -867,8 +867,11 @@ the presets under the noon sun and under one lamp at night.
 
 **As built (M39f)** (`render/flame.hpp`, `render/flame.wgsl`). Fire is drawn as burning gas, not
 a sprite or a model: one quad a flame facing the eye over its bounding sphere, and per pixel a
-march of 28 steps through the gas, stopped at the scene's depth so a bracket or a wall in front
-of it hides it (the `gpu-flames` lab holds a flame behind a wall to changing no byte). A step
+march of 14 steps through the gas, stopped at the scene's depth so a bracket or a wall in front
+of it hides it (the `gpu-flames` lab holds a flame behind a wall to changing no byte). The steps
+start at a per-pixel offset that changes every frame, and the resolve averages them; 14 were 28
+until round 7 of the timedemo, which halved the noise drawn for 0.23 ms at 1440p on the M3 Max,
+at the price of a finer grain on a thin wind-torn tongue in a single still frame. A step
 no eddy can carry gas to (past the largest sway the noise gives at its height, and again once the
 sway is known) returns before any noise is drawn: those points' light is exactly zero, so the
 picture is the same and the gas costs about half (round 4 of the timedemo's price). The gas is

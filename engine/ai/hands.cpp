@@ -34,6 +34,14 @@ Hands::Hands(std::span<const AxisHands> axes, double hz, uint32_t seed)
   }
 }
 
+void Hands::retune(size_t axis, const AxisHands& spec) {
+  if (axis >= count_) return;
+  Axis& a = axes_[axis];
+  const double delay_s = a.spec.delay_s;
+  a.spec = spec;
+  a.spec.delay_s = delay_s;  // the ring keeps its length
+}
+
 void Hands::reset(std::span<const double> at) {
   for (size_t k = 0; k < count_; k++) {
     Axis& a = axes_[k];

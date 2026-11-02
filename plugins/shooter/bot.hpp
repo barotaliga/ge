@@ -55,9 +55,14 @@ struct Bot {
 // hands' wander off `seed`. Goals go in `b.pilot.goals`, as for a PilotBot.
 void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands hands, AimSkill skill,
               double hz, uint32_t seed);
+// The same with the aim's hands given (traits.hpp's per weapon and reaction).
+void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands hands,
+              const AimProfile& aim, double hz, uint32_t seed);
 CmdSource bot_source(Bot& b);
 // Sends the bot's pilot to node `goal` alone from its next command (the goals list replaced).
 void bot_goal(Bot& b, int32_t goal);
+// The aim's hands from now on as `aim` holds them (another weapon taken up), kept where they are.
+void bot_aim(Bot& b, const AimProfile& aim);
 // How far the view is off the aim's wanted angles, degrees (0 while not aiming).
 float bot_aim_off(const Bot& b);
 

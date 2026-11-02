@@ -120,11 +120,16 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
 
 void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands hands, AimSkill skill,
               double hz, uint32_t seed) {
+  bot_init(b, g, set, hands, aim_profile(skill), hz, seed);
+}
+
+void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands hands,
+              const AimProfile& aim, double hz, uint32_t seed) {
   const std::vector<ai::AxisHands> h = pilot_hands(hands);
   PilotSettings ps = set;
   ps.lead_s = pilot_lead_s(hands);
   pilot_init(b.pilot.pilot, g, ps, h, hz, seed);
-  b.aim = aim_profile(skill);
+  b.aim = aim;
   b.aim_hands = ai::Hands(b.aim.hands, hz, seed ^ 0x5bd1e995u);
   b.strafe = ps.strafe;
   b.hop = ps.hop;
@@ -136,6 +141,11 @@ void bot_goal(Bot& b, int32_t goal) {
   b.pilot.goals.assign(1, goal);
   b.pilot.next_goal = 0;
   b.pilot.pilot.mode = PilotMode::idle;
+}
+
+void bot_aim(Bot& b, const AimProfile& aim) {
+  b.aim = aim;
+  for (size_t k = 0; k < aim.hands.size(); k++) b.aim_hands.retune(k, aim.hands[k]);
 }
 
 float bot_aim_off(const Bot& b) {
