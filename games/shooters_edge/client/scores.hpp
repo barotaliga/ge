@@ -11,7 +11,7 @@
 //
 // ge:summary The scoreboard's rows and the level's statistics read off the listen server
 // ge:keywords scores_of level_stats_of scores_screen scoreboard frags ping teamplay spectator
-// ge:keywords topcolor bottomcolor tab showscores dead campaign match
+// ge:keywords topcolor bottomcolor tab showscores dead campaign match draw_scores
 // ge:skill ui shooter
 // ge:test tests/shooters_edge_scores_test.cpp
 #pragma once
@@ -21,6 +21,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/scoreboard.hpp"
+#include "ui/draw.hpp"
 
 namespace shooters_edge::client {
 
@@ -32,5 +33,11 @@ menu::LevelStats level_stats_of(const Listen& l);
 enum class ScoresScreen : uint8_t { none, players, teams, solo };
 // What the scores key (`held`) and the game playing show.
 ScoresScreen scores_screen(const Listen& l, bool held);
+
+// That screen drawn over the game: a campaign's intermission or text, else its solo scorebar
+// (and the level's statistics with `level_stats`, `scr_levelstats`); a match's players' board, or
+// the teams' board when the player is dead. `board` keeps the board's columns for the session.
+void draw_scores(ge::ui::DrawList& dl, const Listen& l, const menu::ClassicArt& art, int w, int h,
+                 bool held, bool level_stats, menu::BoardView& board);
 
 }  // namespace shooters_edge::client

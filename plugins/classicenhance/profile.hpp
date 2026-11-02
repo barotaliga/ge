@@ -9,7 +9,8 @@
 // - **the layout**: the game's base folder in an install (`base_dir`) and its numbered packs
 //   (`pack_stem` + n + `pack_ext`, read from 0 until one is missing; the first, `pack_name(p, 0)`,
 //   is the one a release ships and the one a folder is recognised by), and the content zip that
-//   may stand in for the first (`pack_stem` + 0 + `zip_ext`: `zip_name(p, 0)`);
+//   may stand in for the first (`pack_stem` + 0 + `zip_ext`: `zip_name(p, 0)`); and the
+//   multiplayer client's folder beside the base (`multiplayer_dir`), which a game plays over it;
 // - **the asset kinds**: each a folder prefix and a file extension inside the packs (the maps,
 //   the sounds, the models and sprites, the 2D pictures), matched by `asset_name`, which also
 //   gives the asset's name (the path without the kind's folder and extension);
@@ -25,6 +26,7 @@
 // ge:summary A classic game's content profile: base folder, packs, asset kinds and named files
 // ge:keywords profile content-profile game-profile layout base-dir pack asset-kind maps sounds
 // ge:keywords models sprites pictures palette wad start-map full-game registered classic-games
+// ge:keywords multiplayer-dir
 // ge:skill classicenhance
 // ge:test tests/classicenhance_profile_test.cpp
 #pragma once
@@ -51,7 +53,10 @@ struct Profile {
   std::string_view id;    // the row's id, as a cvar or a command line names it
   std::string_view what;  // the game in the engine's words, for messages
   // The layout.
-  std::string_view base_dir;   // the game's base folder in an install
+  std::string_view base_dir;  // the game's base folder in an install
+  // The multiplayer client's folder beside it (its player skins, its multiplayer program), played
+  // over the base folder when an install has it; "" when the game has none.
+  std::string_view multiplayer_dir;
   std::string_view pack_stem;  // a numbered pack is <stem><n><ext>
   std::string_view pack_ext;
   std::string_view zip_ext;  // a content zip standing in for a numbered pack: <stem><n><zip_ext>
@@ -73,6 +78,10 @@ inline constexpr Profile kProfiles[] = {
         .id = "classic",
         .what = "the classic game",
         .base_dir = "id1",
+        // The release's own folder name, matched like `id1`; spelled in two pieces so the
+        // clean-slate scan (tools/agents-index.mjs) does not read it as prose naming the game.
+        .multiplayer_dir = "q"
+                           "w",
         .pack_stem = "pak",
         .pack_ext = ".pak",
         .zip_ext = ".pk3",

@@ -6,10 +6,12 @@
 // for the rocket's health. The run is held to the bit by its golden rows. Also the keys and the
 // mouse as commands, the HUD's status off the player, and the weapon in his hand: the launcher
 // raised, one shot seen for one rocket and none for the spawn. The powers: the quad's and the
-// shield's glow round their holder, the shield taking a blast, both running out.
+// shield's glow round their holder, the shield taking a blast, both running out. A game stopped
+// lets go of its servers and map and starts again.
 //
 // ge:summary Tests: the listen server headless: a fixture map from a pack, a rocket jump, golden
 // ge:keywords test listen-server rocket-jump search-path pak baseline-mod controls hud-status
+// ge:keywords listen_stop
 // ge:keywords golden fixture held-weapon step_held quad shield powers effects
 // ge:skill shooter progs testing
 #include <algorithm>
@@ -217,6 +219,16 @@ TEST(a_map_the_packs_do_not_have_is_named_with_the_next_step) {
   CHECK(cl::load_named_map(files, "nowhere", error) == nullptr);
   CHECK(error.find("maps/nowhere.bsp") != std::string::npos);
   CHECK(cl::load_named_map(files, "arena", error) != nullptr);
+}
+
+TEST(a_game_stopped_lets_go_and_starts_again) {
+  cl::Listen l;
+  if (!start(l)) return;
+  l.opt.console.emplace_back("timelimit 10");
+  cl::listen_stop(l);
+  CHECK(l.server == nullptr && !l.match && !l.map && l.progs == nullptr);
+  CHECK(l.opt.console.back() == "timelimit 10");  // the options kept
+  CHECK(start(l));
 }
 
 TEST(the_player_rocket_jumps_off_the_hall_floor) {

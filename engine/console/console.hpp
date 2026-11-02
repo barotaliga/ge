@@ -112,6 +112,8 @@ class Console {
   // A command; a second registration of a name replaces the first.
   void add_command(std::string_view name, std::string_view help, CommandFn fn, uint32_t flags = 0);
   bool has_command(std::string_view name) const;
+  // The command taken away (a game's own that only some content has); false when there was none.
+  bool remove_command(std::string_view name);
   // `$name` expands to `fn()` at run time (a team message's $health), ahead of a cvar's value.
   void add_macro(std::string_view name, std::function<std::string()> fn);
   // A settings block bound cvars write into, kept alive as long as the console (a game's

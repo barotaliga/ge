@@ -377,9 +377,15 @@ constexpr Entry kEntries[] = {
     // CLASSIC ENHANCED: what the game adds to the classic picture, page by subject. Only what a
     // player will want to change is here; every other setting is the console's (`cvarlist ce_`).
     {.page = "enhanced",
+     .id = "load",
+     .text = "LOAD GAME",
+     .hint = "Point at the folder your game is installed in (the one holding id1). It plays at "
+             "once and is enhanced in the background.",
+     .needs = "basedir"},
+    {.page = "enhanced",
      .id = "enhance",
-     .text = "ENHANCE A PACK",
-     .hint = "Pick one of your packs and enhance its textures, skins, light and sounds here.",
+     .text = "ENHANCE",
+     .hint = "The loaded game's textures, skins, light and sounds enhanced, stage by stage.",
      .needs = "ce_textures"},
     {.page = "enhanced",
      .id = "art",
@@ -957,6 +963,7 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
     return Outcome::none;
   }
   if (e.kind != ge::ui::EventKind::activated) return Outcome::none;
+  if (e.page == "enhanced" && e.item == "load") return Outcome::load_game;
   if (e.page == "enhanced" && e.item == "enhance") return Outcome::classic_enhance;
   if (e.page == "options" && e.item == "reset") {
     reset_defaults(host);

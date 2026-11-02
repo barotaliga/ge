@@ -94,6 +94,17 @@ make run:shooters_edge                                         # the built-in ar
 make run:shooters_edge ARGS="-basedir ~/Games/classic +map dm6"  # your packs' maps
 ```
 
+**Or load the game from the menu**: `make run:shooters_edge`, then ESCAPE ▸ OPTIONS ▸ CLASSIC
+ENHANCED ▸ LOAD GAME and pick the folder your game is installed in (the one holding
+`id1/pak0.pak`; picking `id1` itself works too). Only an install of the classic game is taken: a
+folder without `id1` and its first pack is refused, and LOAD GAME's line says what it lacks. The
+game is opened in place of the arena at once (its start map), its packs are enhanced in the
+background (`ce_auto 1`, the default; the enhancing page shows every stage, and the run goes on
+with the menu closed), and when the run ends the world is drawn again from the cache. The folder
+is kept (`game_folder.txt` in the platform's per-user folder) and opened at the next start when
+`-basedir` names none and the folder the game runs in holds no game. `basedir <folder>` in the
+console does the same as LOAD GAME (`client/game_folder.hpp`). Then `map dm3` plays that map.
+
 **On a Mac (Apple silicon; Metal through Dawn):**
 
 ```sh
@@ -111,7 +122,9 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
 ```
 
 - **`-basedir <dir>`**: the folder holding the game folder; `~` is your home folder, and a path
-  with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). **`-game <folder>`**
+  with spaces goes in quotes (`-basedir "/Volumes/Old Games/classic"`). When the install has the
+  multiplayer client's folder (its player skins, its multiplayer program), that folder is
+  played over `id1` unless `-game` names another. **`-game <folder>`**
   plays a mod: its folder is mounted over `id1`, so the mod's files win and everything it does
   not ship comes from the base game (saves go to the mod's folder). **`-progs <file>`** runs a mod's progs in place of the
   baseline mod (§ Running your own mod), and **`-models <dir>`** names the held weapons' folder
@@ -446,7 +459,7 @@ server's frames go on under it). Its pages are the classic game's:
 | CUSTOMIZE CONTROLS | ATTACK, MOVE FORWARD, MOVE BACK, STEP LEFT, STEP RIGHT, JUMP, WALK / RUN (`+speed`), SIDESTEP (`+strafe`), TURN LEFT, TURN RIGHT, NEXT WEAPON: each the keys bound to it; ENTER, then the key (BACKSPACE clears, ESCAPE leaves it, a third key replaces both) |
 | VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN, HELD WEAPON |
 | HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`) |
-| CLASSIC ENHANCED | ENHANCE A PACK (classic-enhance's own menu), TEXTURES AND MODELS, LIGHT AND SHADOW, WATER, LAVA AND SKY, FIRE AND WIND, WEATHER |
+| CLASSIC ENHANCED | LOAD GAME (the desktop's folder chooser: your install), ENHANCE (the loaded game's enhancing, stage by stage), TEXTURES AND MODELS, LIGHT AND SHADOW, WATER, LAVA AND SKY, FIRE AND WIND, WEATHER |
 | TEXTURES AND MODELS | `ce_textures`, `ce_relief`, `ce_parallax`, `ce_models`, `ce_smooth`, `ce_pictures` |
 | LIGHT AND SHADOW | `ce_rebake`, `ce_shadows`, `r_fx_lights`, `r_fx_glow`, `ce_bloom`, `r_bloom` |
 | WATER, LAVA AND SKY | `ce_water`, `ce_lava`, `r_lava_glow`, `ce_slime`, `r_slime_glow`, `ce_teleports`, `ce_skies`, `ce_clouds` |
@@ -476,9 +489,12 @@ server's frames go on under it). Its pages are the classic game's:
   with the spinning cursor, the glyph rows, the help pages and the quit box on the classic
   320 x 200 screen at a whole-number scale. Without them, or with `menu_look modern`, it is the
   engine's menu view over the darkened game. Nothing of the pack is copied or committed.
-- **CLASSIC ENHANCED ▸ ENHANCE A PACK** opens classic-enhance's own menu in its place: the pack
-  (the packs on the search path), ENHANCE into the local cache watched stage by stage, every `ce_`
-  switch.
+- **CLASSIC ENHANCED ▸ LOAD GAME** shows the desktop's folder chooser; the folder picked is
+  loaded as § Playing it says, and the menu shows its enhancing. **ENHANCE** (dimmed until a game
+  is loaded) shows classic-enhance's enhancing page in the menu's place, starting a run of the
+  loaded game when none is running (each stage skipped when it is current): the panel stage by
+  stage beside CANCEL, PLAY (which closes the menu) and BACK. A run that cannot start says why in
+  the panel.
 - `togglemenu`, `menu_main`, `menu_options` and `menu_quit` open it from the console or a bind.
   The `se-menu` lab pictures every page in both looks, and the campaign's screens.
 
