@@ -93,6 +93,7 @@ bool voice_name(const std::string& path);
 // classic stat numbers, so the HUD reads one table for both.
 enum DemoStat : uint8_t {
   kStatHealth = 0,
+  kStatWeapon = 2,  // the view model's index (0: nothing in hand)
   kStatAmmo = 3,
   kStatArmour = 4,
   kStatShells = 6,

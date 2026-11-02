@@ -154,7 +154,7 @@ void client_data(DemoState& s, DemoMsg& m) {
   if ((bits & kItems) != 0) s.stats[kStatItems] = m.i32();
   if ((bits & kWeaponFrame) != 0) m.u8();
   s.stats[kStatArmour] = (bits & kArmour) != 0 ? m.u8() : 0;
-  if ((bits & kWeapon) != 0) m.u8();  // the view model's index
+  s.stats[kStatWeapon] = (bits & kWeapon) != 0 ? m.u8() : 0;
   s.stats[kStatHealth] = m.i16();
   s.stats[kStatAmmo] = m.u8();
   s.stats[kStatShells] = m.u8();
