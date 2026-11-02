@@ -31,6 +31,7 @@
 #include "progs/file.hpp"
 #include "shooter/aim.hpp"
 #include "shooter/pilot.hpp"
+#include "shooter/temper.hpp"
 #include "shooter/vec.hpp"
 
 namespace shooters_edge::net {
@@ -43,7 +44,8 @@ struct TeamSide {
   int colour;  // top and bottom
   std::vector<sh::AimSkill> skills = {sh::AimSkill::expert, sh::AimSkill::average,
                                       sh::AimSkill::average, sh::AimSkill::novice};
-  std::vector<std::string> names;  // the players' (empty: the team's name and a number)
+  std::vector<sh::Temper> tempers;  // each player's temperament (missing: balanced)
+  std::vector<std::string> names;   // the players' (empty: the team's name and a number)
 };
 
 struct TeamMatchOptions {
@@ -67,6 +69,7 @@ struct TeamPlayer {
   int team = 0;
   int slot = -1;
   sh::AimSkill skill = sh::AimSkill::average;
+  sh::Temper temper = sh::Temper::balanced;
   float frags = 0;
   int deaths = 0;
   int64_t shots = 0, pickups = 0, switches = 0, packs = 0, held_fire = 0;
@@ -89,6 +92,8 @@ struct TeamPlayer {
   int64_t sounds = 0, heard = 0;  // sounds that reached it, and those it took in (hearing.hpp)
   int64_t heard_taken = 0, heard_spawns = 0;  // items heard taken, players heard spawning
   int64_t spam_shots = 0;                     // rockets at the ways into its area
+  int64_t outmatched = 0;                     // commands turned from a fight it believed it loses
+  int64_t sound_chases = 0;                   // commands going at an enemy it only heard
 };
 
 struct TeamTotals {

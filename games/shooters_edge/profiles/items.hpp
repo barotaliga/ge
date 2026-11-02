@@ -9,7 +9,8 @@
 // - **Words** (`ItemWords`): an item's call word (what a teammate says: "ra", "rl") and the word
 //   its pickup sound is heard as, by kind, and for a weapon by its bit (0 matches any).
 // - **Sounds**: the samples a listener reads (plugins/shooter/hearing.hpp's `SoundMeaning`):
-//   pickups, powers, spawns, fire, pain and death, with each pickup's heard word.
+//   pickups, powers, spawns, fire, pain and death, with each pickup's heard word and each
+//   weapon's fire as its call word (what a listener tells the enemy's weapon by).
 //
 // ge:summary A classic game's items, their call words and the sounds a bot reads, as data rows
 // ge:keywords items item-row call-word heard-word pickup sound-table item-kind spawnflags
@@ -125,14 +126,14 @@ inline constexpr ge::shooter::SoundMeaning kClassicSounds[] = {
     {"items/damage.wav", SoundClass::power, true, "quad"},
     {"items/protect.wav", SoundClass::power, true, "pent"},
     {"misc/r_tele1.wav", SoundClass::spawn, true, "spawn"},
-    {"weapons/ax1.wav", SoundClass::fire, false, ""},
-    {"weapons/guncock.wav", SoundClass::fire, false, ""},
-    {"weapons/shotgn2.wav", SoundClass::fire, false, ""},
-    {"weapons/rocket1i.wav", SoundClass::fire, false, ""},
-    {"weapons/spike2.wav", SoundClass::fire, false, ""},
-    {"weapons/grenade.wav", SoundClass::fire, false, ""},
-    {"weapons/sgun1.wav", SoundClass::fire, false, ""},
-    {"weapons/lhit.wav", SoundClass::fire, false, ""},
+    {"weapons/ax1.wav", SoundClass::fire, false, "axe"},
+    {"weapons/guncock.wav", SoundClass::fire, false, "sg"},
+    {"weapons/shotgn2.wav", SoundClass::fire, false, "ssg"},
+    {"weapons/rocket1i.wav", SoundClass::fire, false, "ng"},
+    {"weapons/spike2.wav", SoundClass::fire, false, "sng"},
+    {"weapons/grenade.wav", SoundClass::fire, false, "gl"},
+    {"weapons/sgun1.wav", SoundClass::fire, false, "rl"},
+    {"weapons/lhit.wav", SoundClass::fire, false, "lg"},
     {"player/pain1.wav", SoundClass::pain, false, ""},
     {"player/drown1.wav", SoundClass::pain, false, ""},
     {"player/death1.wav", SoundClass::death, false, ""},

@@ -27,15 +27,17 @@ namespace shooters_edge::bots {
 struct FightOptions {
   std::vector<sh::AimSkill> skills = {sh::AimSkill::expert, sh::AimSkill::average,
                                       sh::AimSkill::average, sh::AimSkill::novice};
-  int frames = 9000;           // server frames of 13 ms (about two minutes)
-  uint32_t seed = 1;           // the mod's generator; fighter k's hands seed + 31 k
-  std::string root = ".";      // the repository's root (the mod's sources)
-  ge::ai::Why* why = nullptr;  // decisions recorded for one fighter (its slot is the agent)
+  std::vector<sh::Temper> tempers;  // fighter k's temperament (missing: balanced)
+  int frames = 9000;                // server frames of 13 ms (about two minutes)
+  uint32_t seed = 1;                // the mod's generator; fighter k's hands seed + 31 k
+  std::string root = ".";           // the repository's root (the mod's sources)
+  ge::ai::Why* why = nullptr;       // decisions recorded for one fighter (its slot is the agent)
 };
 
 struct FightPlayer {
   std::string name;
   sh::AimSkill skill = sh::AimSkill::average;
+  sh::Temper temper = sh::Temper::balanced;
   std::vector<sh::Vec3f> path;  // a frame a point
   std::vector<uint8_t> mode;    // a frame its FightMode (255 while dead)
   std::vector<float> frags_at;  // a frame its frags

@@ -1017,6 +1017,21 @@ buttons (`bots/buttons.hpp`) come off its own entities: a `func_button` with hea
 the rest touched, and the items within reach of the doors it opens are gone for through it by an
 average or expert player; a novice now and then shoots at, or walks into, any button he sees.
 
+**Temperaments (M18r11).** Beside his skill, a bot has a temperament (`plugins/shooter/temper.hpp`)
+that decides which fights he takes, sizing each up as might against might: his body (health and
+what his armour saves) times his arms (the weapon's factor, three for the quad), against what he
+believes of the enemy's (`bots/temper.hpp`). That belief is built from what he hears: the weapon an
+enemy fires, the armour, the mega health, a weapon or the quad he takes, his pain and his death;
+it fades back to a fresh spawn's in 30 seconds, and a novice reads none of it. An AGGRESSIVE bot
+takes every fight, goes after every sound as a novice (after arming himself as a better player),
+stays in a fight down to 25 of body, never holds an area for his team and never gives an item up. A
+BALANCED bot takes a fight his skill wins (an expert's edge is twice an average player's, so a fresh
+enemy falls to his scattergun; a novice's is 0.7) and turns at 50. A COWARD fights only at two and
+a half times the enemy's might, his edge counted (the big armour, the mega and the launcher), never
+goes after a sound and turns at 70. A bot outmatched by an enemy he sees turns for any item he can
+reach away from that enemy, or for his nearest teammate. An enemy in sight within 192 units is fought whatever the
+odds: turning away only shows him a back. The labs take `--tempers` (`a`, `b`, `c`).
+
 **Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
 community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the
 `$loc_name_<key>` macros expanded) and names any point by its nearest. The files themselves are
