@@ -579,8 +579,9 @@ int run_main(int argc, char** argv) {
   ge::ui::Vec2 last_pointer;
   cl::FxState fx_state;
   cl::FxFrame fx;
-  cl::HeldState in_hand;
-  in_hand.hand.at_eye = weapons_at_eye;
+  // Each level's hand starts from this one, its models placed as their set was authored.
+  const cl::HeldState fresh_hand{.hand = {.at_eye = weapons_at_eye}};
+  cl::HeldState in_hand = fresh_hand;
   size_t printed = 0;
   const uint64_t first_ns = ge::platform::now_ns();
   uint64_t last = first_ns;
@@ -715,7 +716,7 @@ int run_main(int argc, char** argv) {
         }
         shown = {};
         fx_state = {};
-        in_hand = {};
+        in_hand = fresh_hand;
         held_fire.shots = {};
         user_info.sent_to = nullptr;  // the new server hears the user info again
       }
@@ -907,7 +908,7 @@ int run_main(int argc, char** argv) {
       if (!rebuild_world(*listen.map, {listen.server->models, {}}, files)) return 1;
       shown = {};
       fx_state = {};
-      in_hand = {};
+      in_hand = fresh_hand;
       held_fire.shots = {};
       user_info.sent_to = nullptr;  // the new server hears the user info again
     }
@@ -915,7 +916,7 @@ int run_main(int argc, char** argv) {
       listen.restarted = false;
       shown = {};
       fx_state = {};
-      in_hand = {};
+      in_hand = fresh_hand;
       held_fire.shots = {};
       user_info.sent_to = nullptr;  // the new server hears the user info again
     }
