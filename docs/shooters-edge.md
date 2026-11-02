@@ -264,6 +264,12 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic --size=
   and kept while it stays; at most two new cubes a frame (`Options::fresh_cubes`), the rest of a
   room's torches unshadowed for the frames until their turn, so walking into a room costs no
   frame more than two cubes; a dynamic light (a flash, a rocket) lights without a shadow.
+- **The light grid** (the modern look): the frame's up to 160 lights are binned on the CPU into
+  4 m world cells round the eye (32 x 16 x 32), each cell listing the lights whose reach touches
+  it, in order; a pixel loops over its cell's lights only, not all of them. A light left out of a
+  cell is one the pixel would have skipped by its reach, and the rest are summed in the same
+  order, so the picture is byte for byte the same (`se-client` on e1m1 and the fixture, on the
+  M3 Max). 2 m cells saved another 0.1 ms of GPU and cost more than that in binning.
 
 ### Watching a demo
 
