@@ -72,7 +72,8 @@ bool fixture(int skip, cl::SearchPath& files, std::string& error) {
   std::vector<uint8_t> palette(768);
   for (size_t i = 0; i < palette.size(); ++i) palette[i] = uint8_t((i / 3) ^ (i % 3 == 0 ? 0 : 7));
   std::vector<std::pair<std::string, std::vector<uint8_t>>> listed = {{"gfx/palette.lmp", palette}};
-  // Made small and moved out in front of the eye and below it, as a held weapon's file sits (x forward, z up).
+  // Made small and moved out in front of the eye and below it, as a held weapon's file sits (x
+  // forward, z up).
   ge::morph::Model sample = ge::morph::sample_model();
   for (ge::morph::Frame& f : sample.frames)
     for (size_t v = 0; v + 2 < f.positions.size(); v += 3) {
