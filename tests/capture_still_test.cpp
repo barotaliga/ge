@@ -76,7 +76,11 @@ TEST(each_format_reads_back_close_and_the_lossy_ones_are_smaller) {
     gc::StillFormat used{};
     std::string note, error;
     CHECK(gc::encode_still({asked, 90, false}, w, h, rgba, bytes, used, note));
-    CHECK_MSG(used == asked, std::string(gc::still_extension(asked)) + ": " + note);
+    // What this build and machine promise (HEIC falls back to AVIF where the platform has no HEVC
+    // encoder yet), and a note exactly when that is not the format asked for.
+    CHECK_MSG(used == gc::still_writable(asked) && (used == asked) == note.empty(),
+              std::string(gc::still_extension(asked)) + " gave " +
+                  std::string(gc::still_extension(used)) + ": " + note);
     const auto back = gc::decode_still(bytes, error);
     CHECK_MSG(back.has_value(), std::string(gc::still_extension(used)) + ": " + error);
     if (!back) continue;
