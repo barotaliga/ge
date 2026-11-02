@@ -234,7 +234,8 @@ struct BspDraw {
   wgpu::BindGroup group, fix_group, shadow_group;
   wgpu::Texture mask;
   wgpu::TextureView mask_view;
-  uint32_t p_draw = 0, p_fix = 0, p_veil = 0, p_shadow = 0;
+  // p_draw_lit: p_draw with only the real-time lights' path (v2, no weather; bsp.wgsl's kLitOnly)
+  uint32_t p_draw = 0, p_draw_lit = 0, p_fix = 0, p_veil = 0, p_shadow = 0;
   // This frame's (prepare_bsp).
   GpuBsp staged{};
   std::vector<GpuLight> frame_lights;
