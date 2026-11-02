@@ -228,6 +228,9 @@ struct Fighter {
   float edge = 1;                        // its aim's worth in a fight (shooter/temper.hpp)
   bool rash = false;                     // goes after every sound (a novice's discipline)
   int aim_slot = -1;                     // the aim trait its hands hold now (0 the scattergun)
+  // A sound is gone after this long after it was heard (s): its reaction to a sighting and the
+  // thought of where a sound puts him on top (100 ms for a quick player, 200 for a slow one).
+  float hear_react_s = 0;
   bool was_dead = false;
   bool unlocking = false;  // on the way to the goal item's button
   bool swimming = false;   // in water no route leaves: following the swim field

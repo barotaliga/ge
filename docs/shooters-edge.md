@@ -1135,6 +1135,18 @@ reaction are read smoothly, the hands taken up anew with each kind of weapon. Th
 `--traits` (each player's changes over his preset, `aim_rl=9/timing=3`) and print every bot's
 traits.
 
+**Reactions (M18r11c).** A reaction is drawn for each sighting (`plugins/shooter/aim.hpp`
+`draw_reaction`): another enemy taken up, or the same one back after 0.3 s out of sight. Half of
+the draws lie evenly between the low and the median, the rest thin out to the high, since people's
+reaction times are skewed to the slow side: a reaction trait of 8 draws 140 to 220 ms round 160, a
+5 180 to 300 round 230, a 2 240 to 420 round 300 (10: 120 to 190 round 140). The view holds where it
+was until the hands' own tracking lag (120 ms at 8, 150 at 5, 200 at 2) makes up the rest, and the
+fighter does not fire before the reaction is over (`bot_reacting`). A sighting the view was already
+on, within 5 degrees (pre-aimed at a doorway), takes half the draw: the only way under 100 ms. A
+sound takes longer to act on than a sight: a chase after an enemy only heard starts the median
+reaction plus 100 ms (a quick player, trait 8) to 200 ms (a slow one, trait 2) after the sound.
+`se-team` prints each player's sightings, their mean reaction and the share pre-aimed.
+
 **Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
 community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the
 `$loc_name_<key>` macros expanded) and names any point by its nearest. The files themselves are
