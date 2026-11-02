@@ -28,7 +28,7 @@
 //
 // ge:summary The bot's senses: what a client is sent, sight by the hull trace in a cone, sounds
 // ge:keywords senses sight hearing client-view sent entities sounds attenuation fov cone
-// ge:keywords line-of-sight trace memory contact forget seen heard velocity pvs
+// ge:keywords line-of-sight trace memory contact forget seen heard velocity pvs friends team
 // ge:skill shooter bots
 // ge:test tests/shooter_senses_test.cpp
 #pragma once
@@ -73,6 +73,9 @@ struct SenseSettings {
   float fov = 100;         // the view's cone across, degrees
   float range = 4096;      // units
   float forget_s = 6;      // a contact neither seen nor heard this long is forgotten
+  // Every player's sound that reaches the client is heard, exactly where it is. A bot with ears of
+  // its own (hearing.hpp) turns this off and hands in what it takes in with `sense_heard`.
+  bool hear_players = true;
 };
 
 struct Contact {
@@ -91,6 +94,9 @@ struct SenseStats {
 
 struct Senses {
   SenseSettings set;
+  // Players this bot does not take as contacts (its team): bit k is the player in slot k (entity
+  // k + 1). A teammate is neither seen nor heard as someone to fight.
+  uint32_t friends = 0;
   std::vector<Contact> contacts;
   SenseStats stats;
 };
@@ -104,6 +110,10 @@ bool sees_player(const Server& sv, const SenseSettings& set, int viewer, Vec3f e
 // `t`, from what its client was sent (`view`). The world is read only for sight's trace.
 void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3f angles, double t,
            ai::Why* why = nullptr);
+
+// A sound from the player entity `ent` taken in at time `t`, believed to come from `at`: remembered
+// as heard (a teammate's, or the bot's own, is not a contact).
+void sense_heard(Senses& s, int ent, int viewer, Vec3f at, double t, ai::Why* why = nullptr);
 
 // The contact remembered most recently (seen over heard, the nearer of two seen this frame), or
 // null when there is none.

@@ -391,7 +391,10 @@ With no body shown both rows run empty. What it draws:
 - **Geometry**: `WaterDraw::levels` nested squares of 64 quads round the eye, each snapped to
   twice its spacing and morphed into the next at its seam, the last level's rim pushed out to
   the horizon, every vertex clamped into the body's box; a lake's shore is where the ground
-  stands over the water, feathered over its last 15 cm of depth.
+  stands over the water, feathered over its last 15 cm of depth. A lake is drawn only inside
+  its SHORE'S MASK (`shore_mask`: its outline filled on at most 1024 texels a side over its box,
+  grown a texel all round), so a box that takes in lower ground beyond the shore (a valley below
+  an outlet, a lake's neighbour) leaves it dry.
 - **Waves**: the simulation's own components in the same second-order formula, so the drawn
   crest is the one a float rides (the `gpu-water` lab reads it back: 0.8133 m drawn against
   0.8139 m simulated). A vertex keeps a component at least four of its level's spacings long;
@@ -738,11 +741,63 @@ The generator lays no water, so no dealt map moves; a game lays it after, as a `
   of bare ice are drawn on it. Thinner ice, or none, lies over a bowl dug 6 m under the rim and
   drawn as the water (`add_lake`, the dug ground its bed) or as young black ice over it
   (`freeze_water`).
-- **Through it** (`sim/lake.hpp`): a skier whose skis go 0.3 m under the surface inside the shore
-  is in the water: a `sank` event, the water's drag (4 per second), and after 2.5 s he is stood
-  back on his run as if he had asked. Swimming in the clothed preset, the ice's crack and the
-  splash, skimming and the bot keeping off thin ice are M24l3; the real faces' own lakes and
-  streams are M24l2.
+- **Onto open water** (`sim/lake.hpp`, M24l3): a skier whose skis reach the surface inside an
+  open tarn's shore either skims it or goes in. Faster than 13 m/s and on his feet he SKIMS (a
+  `skim` event): his skis plane on the surface, held on it, turned by his steer and slowed by
+  the water's drag (0.012 per metre times the speed squared, so from 15 m/s he goes in about
+  50 m on); he reaches the far bank on his skis, or drops under 8 m/s and goes in. Slower, or
+  down, he goes IN (a `sank` event, `value` the ice that broke).
+- **In the water**: the engine's swimmer in the body regime (§ Swimming), dressed as a skier
+  (`skier/swim.hpp`'s `dressed_skier`), in water at `tarn::kTarnWater` (4 degrees). He floats on
+  his jacket's air, takes the cold shock and swims flat out for the shore straight out from the tarn's middle, his feet never
+  under the dug bed; at the shore, or where the water is under 0.9 m deep, he climbs out (an
+  `ashore` event, `value` his seconds in the water) and is stood on the bank facing away from
+  the water. Drowning, at swim failure or after 90 s he is reset as if he had asked. The
+  swimmer's state is the racer's, so a run in the water replays.
+- **Heard**: going in and climbing out are each the water's splash (`play_splash`, the body's
+  size and speed) on the effects bus; through ice, the sheet cracks first (the bank's
+  `ice_crack`: a white crack, then the falling whistle a thin sheet carries off across the
+  lake, twice, over the slab's knock). The bot's free-ride lines keep off the open tarn (no run
+  passes within the 30 m it is kept clear).
+- **The sheet as drawn** (`mountain/app/ice_look.hpp`): clipped to the shore, every corner of
+  its grid outside drawn in to the nearest point of the shore, so its edge is the lobed shore's
+  own line and never a stair of cells.
+- **The thaw** (`tarn::thaw_of`): over the winter's last 40 days the ice grown by then melts away
+  to nothing and goes ROTTEN, its strength falling to half of sound ice's (`bears(lake)` takes
+  it as thinner sound ice, Gold's load going as the thickness squared), so spring ice that is
+  thick enough by the tape may not bear. Drawn, the snow on it goes to grey wet slush and the
+  swept glass to dark rotten ice, both wet; where it no longer bears (over the dug bowl) it
+  stands off the shore over a MOAT of open water up to 6 m wide (`moat_of`), the shore melting
+  first. `MapLake::thaw` carries it.
+
+## A real face's lakes (`plugins/mountain/tarn/mapped.hpp`, M24l2)
+
+A real face's standing water comes off the open map data with its hints (`real_hints.hpp`'s
+`HintLake`, baked by `make lab LAB=real-hints ARGS="--bake --fetch --water --write"`): every
+lake, reservoir and pond the map draws (a river's or a canal's area is flowing water and is not
+one), each its outer shore, clipped to the face's square, thinned to 4 m and kept from 2500 m²,
+the largest 24 a face. They ride after the woods in a face's packed hints, so the lifts, pistes
+and woods baked before are kept bit for bit. The generator builds no water and reads none of
+it: a game lays them after it, as the free ride lays its tarn.
+
+- **The lake** (`mapped_lakes`): the shore as mapped (`MapLake::shore`; `shore_of`, `on_lake`
+  and `reach_of` read it in place of the tarn's lobes), its middle the centroid, its `radius` the
+  circle's of its area. The elevation model reads a lake flat, but the generator lays its own
+  mountain over the face, and the ground it leaves inside a shore can rise 25 m across it; the
+  surface is set at the ground's lowest 30 % there and the rest cut down to it.
+- **The ice**: the tarn's (`tarn_ice`, `thaw_of`) at the lake's own height, so a valley lake
+  opens while a high one still bears. Ice that bears fills the shore flat at the surface; open
+  water lies over a bowl a tenth of the lake's radius deep (2 to 12 m), shelving over 40 m
+  inside the shore.
+- **The banks**: the ground stands 30 cm over the water out to an 8 m lip, then rises or falls to
+  the ground round it no steeper than 0.6, out to 80 m past the lip, so the water stands in its
+  shore and a lake set lower than its ground is cut into it. The trees in it are felled.
+- **Drawn**: every laid lake through `app/lakes.hpp`, each with its own ice sheet
+  (`freeze_water` keeps one a body), inside its shore's mask. `make lab LAB=world
+  ARGS="--face=alpine-1 --views=tarn-high --day=200"` shows a face's largest lake open in
+  summer; `--day=40` frozen.
+
+Not yet (M24l5): the streams' channels and the valley's reservoir.
 
 ## Determinism (G1)
 
@@ -766,7 +821,8 @@ never read back by the simulation.
 | `flow` | picture | M24f | Dam break against the analytic solution, a basin emptying through a breach against Torricelli, a river to steady state, a waterfall's sheet; depth filmstrips; the volume held |
 | `gpu-water` | picture | M24g, M24g2, M24i, M36d | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a boat's wake from behind and from the side, crates dropped in, the lake in a light and a heavy rain, a river, a waterfall, sunset glitter, night; the distance-band diff |
 | `lake` | picture | M24g, M24h, M51f | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it, frozen |
-| `tarn` | picture | M24l | The free ride's tarn on a seed in the game's frame: on the map's day, open, under thin black ice and frozen to bear a skier, from below its lip and from high over it; its site, surface and ice as rows |
+| `tarn-ride` | drive | M24l3 | A skier onto seed 38's open tarn from its south bank at a ladder of speeds: how he met the water, how far he skimmed, where he went in, his time in the water and the metres swum, how it ended; the tarn from above with every ride's line, white on skis, yellow skimming, blue swimming |
+| `tarn` | picture | M24l, M24l3 | The free ride's tarn on a seed in the game's frame: on the map's day, open, under thin black ice, frozen to bear a skier and thawing over a moat, from below its lip and from high over it; its site, surface, ice and thaw as rows |
 | `gpu-underwater` | picture | M24h, M24h3 | Every look's view round a scene under water, the presets, Snell's window measured, a dive through the surface; then the caustics and the shafts |
 | `gpu-plunge` | picture | M24h2 | A first-person player in the classic move jumping off a bank into a dirty pond: the plunge from his eyes, the splash from the bank (crater, crown, jet, rings), under the water, surfacing through the waterline into the wet lens; four bodies of different mass dropped in; the player straight in against running in; the entry's numbers |
 | `water-lod` | picture | M24f, M24g | The tiers round an actor and round the camera as maps; a flow region coarsened and refined with its volume held; the picture diff per distance band across a slow fly-out (no band pops); the cost against distance |
@@ -774,6 +830,8 @@ never read back by the simulation.
 | `rain-audition` | sim | M36d | The rain's sound metered and written as WAV: a drizzle, a light rain and a downpour in the open and by a lake, the downpour under a roof, a blizzard and still snow; each voice's level against the rate |
 | `water-cost` | bench | M24f, M24g | The CPU's costs per step (sample, floats, the flow grid) and the GPU's per pass |
 | `free --water` | drive | M24l3 | Fall Line: the bot near and into water on the free ride |
+| `real-hints` | picture | M24l2 | Each real face's lifts, pistes, woods and lakes (the lakes' count and area); a face named alone drawn with its lakes in blue; `--bake --water` reads the lakes off the open map data into the tree's hints |
+| `world --face` | picture | M24l2 | Fall Line's frame on a real face's ski area with its mapped lakes laid, iced by `--day`; the `tarn` views frame the largest |
 | `liquids`, `gpu-lava`, `gpu-slime` | picture | M30 | The other liquids: lava and slime (`docs/liquids.md` § Labs) |
 
 ## Sources

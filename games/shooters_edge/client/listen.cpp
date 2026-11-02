@@ -10,6 +10,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 #include "core/num.hpp"
 #include "progs/layout.hpp"

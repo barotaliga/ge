@@ -149,6 +149,15 @@ the slope above is cut into a headwall. `lay_tarn` reads the ice off `winter_day
 dug into a bowl. `on_lake` and `shore_of` read the same shape. Fall Line's free ride lays one
 (`sim/free.cpp`); `tests/mountain_tarn_test.cpp` holds the site, the winter, the fill and the bowl.
 
+A REAL FACE'S LAKES (`mountain/tarn/mapped.hpp`, M24l2) are its hints' `HintLake`s, baked off the
+open map data by `real-hints --bake --water` (which keeps the tree's lifts, pistes and woods and
+adds only the lakes, so no face's ski area moves). `lay_mapped_lakes` lays them as the tarn is
+laid, but a mapped shore is a polygon (`MapLake::shore`, read by `shore_of`, `on_lake`,
+`reach_of`) and the generator's ground under it is NOT the elevation model's flat lake: its
+surface is set at the ground's lowest 30 % inside the shore, the rest cut to it, and the banks
+graded to the ground round it no steeper than 0.6. `tests/mountain_mapped_test.cpp` holds the
+fill, the bowl and the banks on alpine-1.
+
 ## The village's traffic (`mountain/village`, M13h)
 
 `furnish_streets` (`furniture.hpp`) reads the street plan for what drives and parks on it: the

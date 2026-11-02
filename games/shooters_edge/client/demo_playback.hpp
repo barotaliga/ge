@@ -40,6 +40,7 @@
 #include "hud/hud.hpp"
 #include "replay/highlights.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
+#include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "ui/play_bar.hpp"
 
@@ -56,6 +57,7 @@ struct DemoPlayback {
   double skip_back_s = 5;      // demo_skip_back
   int bar = 1;                 // demo_bar
   int track = -1;              // demo_track
+  RecordSettings record;       // demo_pack, demo_pack_level (record_cvars.hpp)
   // The demo playing:
   bool paused = false;
   DemoScan scan;
@@ -86,7 +88,7 @@ struct PlaybackInput {
 };
 
 // The console's demo commands and cvars (the table above), bound to `p`; `demo_track` also sets
-// `bench`'s tracked player.
+// `bench`'s tracked player; the recording's `demo_pack` cvars bind to `p.record`.
 void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench);
 
 // The demo `t` just started: scanned for its highlights. False with the reason (the demo still

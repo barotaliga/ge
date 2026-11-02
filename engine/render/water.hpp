@@ -7,7 +7,11 @@
 //   writing the depth. They run after the sky and before TAA-U (docs/rendering.md § The frame).
 // - THE GEOMETRY: `kWaterLevels`-deep nested squares of kWaterGrid quads round the eye,
 //   snapped (no vertex swims), morphed at their seams, the last level's rim out to the horizon;
-//   clamped into the body's box. A lake's shore is where the ground stands over the water.
+//   clamped into the body's box. A lake's shore is where the ground stands over the water, and
+//   the SHORE'S MASK (`shore_mask`: its outline filled on a grid of at most `kShoreMask` texels a
+//   side over its box, grown one texel all round) is where it may be drawn at all, so a lake whose
+//   box takes in lower ground beyond its shore (a valley below its outlet, another lake) draws
+//   none there.
 // - THE WAVES are the simulation's own components (water/waves.hpp), the same formula, so the
 //   drawn crest is the one a float rides; the DETAIL components (`detail_waves`) carry the
 //   spectrum on from the simulation's shortest wave to a few centimetres, for the pixels alone,
@@ -31,6 +35,7 @@
 // ge:keywords refraction ssr screen-space-reflection glitter beckmann slope-variance
 // ge:keywords detail-waves water-copy create_water add_water_body set_water_body
 // ge:keywords prepare_water encode_water detail_waves hidden wake rings set_water_wakes kelvin
+// ge:keywords shore-mask shore_mask
 // ge:skill render water
 // ge:test tests/render_water_test.cpp
 #pragma once
@@ -52,6 +57,8 @@ inline constexpr int kWaterDetailWaves = 32;   // the detail components
 inline constexpr int kWaterBodies = 8;         // bodies a Water draws
 inline constexpr int kWaterRings = 512;        // a body's wake rings drawn (the newest)
 inline constexpr double kWaterlineBand = 0.5;  // m over a level an eye is at its waterline
+inline constexpr int kShoreMask = 1024;        // a lake's shore mask's texels a side, at most
+inline constexpr double kShoreTexel = 0.5;     // m: the finest texel
 
 // The detail band past the simulation's waves: components from the laid band's top frequency
 // to waves `shortest` m long, and the slope variance of the spectrum from there to `finest` m.
@@ -78,6 +85,16 @@ struct WaterDraw {
   double room = 0;
 };
 
+// A body's SHORE MASK: 255 where it may be drawn, 0 where not, row-major from its box's (x0, z0)
+// corner, each texel `texel` m a side; the lake's outline filled even-odd and grown by one texel.
+// A body with no outline (an ocean, a volume) is one texel, drawn everywhere.
+struct ShoreMask {
+  int cols = 1, rows = 1;
+  double texel = 0;
+  std::vector<uint8_t> texels{255};
+};
+ShoreMask shore_mask(const water::Body& body);
+
 struct WaterGpuBody {
   float info[4];
   float box[4];
@@ -99,6 +116,8 @@ struct Water {
     WaterGpuBody staged{};
     WaterDraw draw;
     wgpu::Buffer uniform, waves, rings;
+    wgpu::Texture shore;  // its shore mask (`shore_mask`, R8)
+    wgpu::TextureView shore_view;
     wgpu::BindGroup group;
     bool hidden = false;  // the caller's switch: not drawn (a lab's dry picture)
     bool shown = true;    // this frame's: not hidden and seen from over its level

@@ -227,6 +227,71 @@ void() weapon_lightning = {
   weapon_start(W_ARC, "Arc Gun", "progs/g_light.mdl");
 };
 
+// --- backpacks ---
+
+// A backpack: what a dead player carried, there for two minutes or until a living player takes it
+// (its ammunition, and its weapon if he has none such).
+void() backpack_touch = {
+  local entity was_self;
+  local float had;
+  if (!can_pick_up()) return;
+  had = other.items & self.weapon;
+  ammo_give(self.ammo_shells, self.ammo_nails, self.ammo_rockets, self.ammo_cells);
+  other.items = other.items | self.weapon;
+  if (self.weapon) say_to(other, PRINT_LOW, "You got a backpack with the ", self.netname, "\n", "");
+  else say_to(other, PRINT_LOW, "You got a backpack\n", "", "", "");
+  sound(other, CHAN_ITEM, "weapons/lock4.wav", 1, ATTN_NORM);
+  stuffcmd(other, "bf\n");
+  was_self = self;
+  self = other;
+  if (!had && was_self.weapon && weapon_rank(was_self.weapon) < weapon_rank(self.weapon)) {
+    weapon_set(was_self.weapon);
+  } else {
+    weapon_show();
+  }
+  self = was_self;
+  remove(self);
+};
+
+void() backpack_gone = { remove(self); };
+
+string(float w) pack_weapon_name = {
+  if (w == W_DOUBLE) return "Double Scattergun";
+  if (w == W_SPIKER) return "Spiker";
+  if (w == W_HEAVY_SPIKER) return "Heavy Spiker";
+  if (w == W_GRENADES) return "Grenade Launcher";
+  if (w == W_ROCKETS) return "Rocket Launcher";
+  return "Arc Gun";
+};
+
+// The dead player `self` drops his pack where he fell: nothing when he carried no ammunition.
+void() backpack_drop = {
+  local entity pack;
+  if (self.ammo_shells + self.ammo_nails + self.ammo_rockets + self.ammo_cells <= 0) return;
+  pack = spawn();
+  pack.classname = "backpack";
+  pack.origin = self.origin - '0 0 24';
+  pack.ammo_shells = self.ammo_shells;
+  pack.ammo_nails = self.ammo_nails;
+  pack.ammo_rockets = self.ammo_rockets;
+  pack.ammo_cells = self.ammo_cells;
+  // The weapon in hand, unless it is one every player starts with.
+  if (self.weapon != W_BLADE && self.weapon != W_SCATTER) {
+    pack.weapon = self.weapon;
+    pack.netname = pack_weapon_name(self.weapon);
+  }
+  pack.velocity_z = 300;  // tossed straight up (no draw on the server's generator)
+  pack.flags = FL_ITEM;
+  pack.solid = SOLID_TRIGGER;
+  pack.movetype = MOVETYPE_TOSS;
+  setmodel(pack, "progs/backpack.mdl");
+  setsize(pack, '-16 -16 0', '16 16 56');
+  setorigin(pack, pack.origin);
+  pack.touch = backpack_touch;
+  pack.nextthink = time + 120;
+  pack.think = backpack_gone;
+};
+
 // --- the powers ---
 
 float POWER_TIME = 30;

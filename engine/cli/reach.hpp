@@ -39,11 +39,12 @@ struct Reach {
 bool change_reach(const fs::path& repo, const fs::path& build, const std::string& base,
                   const fs::path& log, Reach& r);
 // `ninja -t deps` output ("<dir>/CMakeFiles/<target>.dir/<file>.o: #deps ..." then one indented
-// path a line, the source first) folded into `r`: the sources compiling a changed file, and the
-// targets reached from them through the headers of reached libraries' directories. Only a target
-// in `libraries` owns the directories it compiles in (nothing links an executable); with none
-// named, every target but a test (`*_test`, all of them in tests/) does.
-void reach_from_deps(const fs::path& repo, std::string_view deps,
+// path a line, the source first, absolute or relative to `build`) folded into `r`: the sources
+// compiling a changed file, and the targets reached from them through the headers of reached
+// libraries' directories. Only a target in `libraries` owns the directories it compiles in (nothing
+// links an executable); with none named, every target but a test (`*_test`, all of them in tests/)
+// does.
+void reach_from_deps(const fs::path& repo, const fs::path& build, std::string_view deps,
                      const std::set<std::string>& libraries, Reach& r);
 // The library targets in `ninja -t targets all` output (`libge_core.a: <rule>` is ge_core).
 std::set<std::string> libraries_of(std::string_view targets);

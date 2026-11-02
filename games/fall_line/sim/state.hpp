@@ -31,6 +31,8 @@
 #include "skier/skis.hpp"
 #include "skier/trees.hpp"
 #include "snowmobile/sled.hpp"
+#include "water/swim.hpp"
+#include "water/world.hpp"
 
 #include "ai/why.hpp"
 #include "fall_line/sim/army_state.hpp"
@@ -103,6 +105,8 @@ enum class EventKind : uint8_t {
   building,  // met a wall of the village (`gate` the building's id, `value` the closing speed, m/s)
   army_vehicle,  // an army vehicle (`gate` its ArmyVehicleChange, `value` its id; army_vehicle.hpp)
   sank,  // through a tarn's thin ice into the water (`gate` the lake, `value` its ice, m; lake.hpp)
+  skim,  // planing onto a tarn's open water (`gate` the lake, `value` his speed, m/s; lake.hpp)
+  ashore,  // climbed out of a tarn (`gate` the lake, `value` the seconds in the water; lake.hpp)
 };
 
 const char* event_name(EventKind kind);
@@ -183,6 +187,25 @@ struct OnLift {
   }
 };
 
+// Every number of a swimmer (water/swim.hpp keeps no describe of its own).
+template <class Io>
+void describe_swim(Io& io, ge::water::SwimState& s) {
+  io(s.p);
+  io(s.v);
+  io(s.heading);
+  io(s.level);
+  io(s.in_water);
+  io(s.breath);
+  io(s.stamina);
+  io(s.cold);
+  io(s.jumping);
+  io(s.stroke_phase);
+  io(s.shock);
+  io(s.failed);
+  io(s.drowning);
+  io(s.carried);
+}
+
 struct FreeRide {
   int32_t start = 0;           // the run he was stood at the head of
   int32_t run = -1;            // the run under his skis, or -1 off every run
@@ -193,7 +216,12 @@ struct FreeRide {
   bool arrived = false;        // at a run's foot (since the last lift let him go)
   double arrived_at = 0;       // s, the clock when he got there
   OnLift lift;                 // the lift that has him, and the lifts ridden
-  double soaked = 0;           // s in a tarn's water (lake.hpp), 0 out of it
+  // ON A TARN (lake.hpp): the open lake he is on or in (-1 none), planing on it, in it, and the
+  // swimmer he is in it (the engine's, water/swim.hpp).
+  int32_t lake = -1;
+  bool skimming = false;
+  bool swimming = false;
+  ge::water::SwimState swim;
   template <class Io>
   friend void describe(Io& io, FreeRide& v) {
     io(v.start);
@@ -205,7 +233,10 @@ struct FreeRide {
     io(v.arrived);
     io(v.arrived_at);
     io(v.lift);
-    io(v.soaked);
+    io(v.lake);
+    io(v.skimming);
+    io(v.swimming);
+    describe_swim(io, v.swim);
   }
 };
 
@@ -341,6 +372,9 @@ struct GameState {
   std::shared_ptr<const std::vector<ge::mountain::mapgen::Track>> runs;
   // A free ride's lifts, planned at create (lift_loop.hpp); none in a race.
   std::shared_ptr<const std::vector<ge::mountain::lifts::LiftPlan>> lifts;
+  // A free ride's open tarns as the engine's water (lake.hpp's `lake_water`), built at create;
+  // none in a race or where every lake is frozen to bear a skier.
+  std::shared_ptr<const ge::water::World> water;
   ge::skier::TreeIndex trees;
   ge::skier::SkiSpec spec;
   std::vector<Racer> racers;      // the player's first; sized at create

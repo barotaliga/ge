@@ -548,6 +548,10 @@ frame a list of `MorphDraw`s.
 - **Team colours without a skin per team.** A skin texel's alpha is its **mark**:
   - plain, an sRGB colour;
   - **glow**, which lights itself (eyes, lamps, a muzzle);
+  - **hole** (`kMarkHole`), which is not drawn: a game's skin picture with alpha, its texels
+    under half opaque. The texel the point falls in decides, sharp or smooth, so the cut edge
+    is the skin's own texels. It costs one more texel read and lives in the mark's spare values,
+    so a skin with no holes draws as it did;
   - **tinted**, in region A or B with a step from 0 to 15.
 
   A tinted texel takes the instance's ramp for its region at its step. The step keeps the
@@ -863,8 +867,11 @@ the presets under the noon sun and under one lamp at night.
 
 **As built (M39f)** (`render/flame.hpp`, `render/flame.wgsl`). Fire is drawn as burning gas, not
 a sprite or a model: one quad a flame facing the eye over its bounding sphere, and per pixel a
-march of 28 steps through the gas, stopped at the scene's depth so a bracket or a wall in front
-of it hides it (the `gpu-flames` lab holds a flame behind a wall to changing no byte). A step
+march of 14 steps through the gas, stopped at the scene's depth so a bracket or a wall in front
+of it hides it (the `gpu-flames` lab holds a flame behind a wall to changing no byte). The steps
+start at a per-pixel offset that changes every frame, and the resolve averages them; 14 were 28
+until round 7 of the timedemo, which halved the noise drawn for 0.23 ms at 1440p on the M3 Max,
+at the price of a finer grain on a thin wind-torn tongue in a single still frame. A step
 no eddy can carry gas to (past the largest sway the noise gives at its height, and again once the
 sway is known) returns before any noise is drawn: those points' light is exactly zero, so the
 picture is the same and the gas costs about half (round 4 of the timedemo's price). The gas is
@@ -1933,12 +1940,17 @@ drain and dry by the wind and the sun). The picture reads the same numbers:
   and downwind, kept within 75 degrees of the vertical), the surface nearest the sky in each
   texel. A particle deeper than it is faded out and a splash whose spot is deeper is not set, so
   the rain falls in a courtyard and through a window as far as the wind slants it, and not in the
-  room behind the wall. Without one everything is open. The edge is a soft shadow's
-  (`PrecipShelter::spread`, the tangent of the fall's scatter): a blocker search finds how far
-  below the opening a point lies, the penumbra widens with that depth, and eight comparison taps
-  rotated by a hash of the position break it into spots, so a fall scatters out from where the
-  slant puts it instead of landing as the window's square. A particle is kept by its open share
-  against a hash of its own, so the edge thins rather than fades.
+  room behind the wall. Without one everything is open. The edge comes from the fall's scatter
+  (`PrecipShelter::spread`, the tangent of the cone of ways the gusts and eddies bring it on):
+  `render/wgsl/fall_shelter.wgsl`'s `fall_share` marches the way back up toward the sky for
+  several ways over that cone, seven steps each from 0.12 m to 10 m, and a way is open only when
+  no step lies under a surface, so a window's patch scatters out from where the slant puts it
+  and thins at its edge, rotated by a hash of the position. A soft shadow's filter (taps round
+  the point compared against its own depth) is NOT used: under a roof its taps reach out over
+  the open ground beside the building and let the weather in through the roof; a marched way
+  under a roof is shut at its first step. The particles (4 ways), the splashes (6) and a BSP
+  map's faces (8) all read the one function. A particle is kept by its open share against a
+  hash of its own, so the edge thins rather than fades.
 - THE RAIN ON WATER (M36d): `Weather::rain` (mm/h of liquid) rides in the frame's `mist.zw` as
   the drops of 2 mm and more landing a square metre a second (`wind::drops_per_m2s`) and their
   mean size (`wind::mean_drop_over`); `water.wgsl`'s `rain_rings` deals them to cells and rings
@@ -1958,8 +1970,8 @@ it in every face's material (`weathered` in `bsp.wgsl`): what faces the fall and
 is wet, a flat's low noise pools into puddles that the drops ring while it rains, what faces up
 gathers the snow in drifts (a thin cover in the hollows first, the floor showing between), and a
 flash lights what is open overhead and a little round the rooms. The open sky and the windows
-decide all of it, through a soft edge whose spread is the eddies over the fall's pace (snow,
-slow, scatters wider than rain), with the wet and the snow struck in noise spots across it: lab `gpu-bsp-weather` (the weather fixture, a hall with windows onto a yard and
+decide all of it, through a cone of ways marched through the map whose spread is the eddies
+over the fall's pace (snow, slow, scatters wider than rain), with the wet and the snow struck in noise spots across it: lab `gpu-bsp-weather` (the weather fixture, a hall with windows onto a yard and
 a store behind it) shows eight weathers in four views and checks, with no GPU, that a ray back up
 the fall leaves by the sky from the yard and the window's patch and is stopped from the store.
 
@@ -1977,9 +1989,20 @@ fixture (the weather fixture's hall filled with dust by a `fog_volume` entity, a
 its store, and a pond in its yard steaming under an evening's air, § Fog from the air) with its
 fog and without, and a pack's maps with `--pak`.
 
+**See-through texels on a BSP map.** A map's faces are cut where their texture is see-through:
+`Scene::cover` (`plugins/brush/app/draw_data.hpp`) is a one-byte-a-texel atlas in the textures'
+places and mips, from a full-colour picture's alpha (`MapPicture::rgba`: a game's own PNG or TGA
+standing in for a map's texture, the adapter's `map_textures` in Shooter's Edge) and a fence
+texture's holes (a name starting `{`, index 255), averaged down the mips; `bsp.wgsl` reads it
+nearest at the face's mip and discards under a half. A map with none binds a 1 x 1 stand-in the
+shader skips, so its pictures do not move. The sun's and the lamps' shadow maps do not read it
+yet: a cut face casts a whole shadow. Lab `gpu-bsp-cutout` draws the fixture halls with their brick
+handed as a lattice with alpha and their floor as a fence texture, beside the map's own.
+
 Every shader's whole-line comments are left out of what is embedded (`cmake/WgslEmbed.cmake`), so
 a material that includes `frame.wgsl` stays under the 60 KB literal cap however well it is
-explained.
+explained. A comment after code on the same line IS embedded: in a file many shaders include
+(`render/wgsl/frame_types.wgsl`, `frame.wgsl`) put every comment on a line of its own.
 - **Skinning** uses bone palettes in a storage buffer. A figure drawn in more than one
   view (the player in the main view, the sun's cascade and the shadow atlas) is skinned
   once by a compute pass into a vertex buffer that every view reads. Crowd members,

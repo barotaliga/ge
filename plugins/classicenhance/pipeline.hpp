@@ -3,6 +3,9 @@
 //
 // 1. **pack**: the pack itself, unchanged, with `source.txt` (how it was found and verified) and
 //    `NOTICE.txt`.
+// Every stage finds its assets by the source's content profile (profile.hpp): the paths below
+// are the first game's row.
+//
 // 2. **textures**: every texture of every map in the pack (`maps/*.bsp`), once each by name,
 //    enhanced (texture.hpp) into `textures/<name>/`, with `textures/index.txt`. Textures nobody
 //    sees drawn (`never_drawn`) are left out.
@@ -13,18 +16,28 @@
 //    as glTF with enhanced skins under `models/`, sprites' frames under `sprites/`, and
 //    `replaced.txt`: what the engine draws in their place (replace.hpp).
 // 6. **pictures**: the pack's 2D art (pictures.hpp: the wad's pictures and font sheet, the
-//    `gfx/` pictures) in the palette's colours under `pictures/<name>.png`, unscaled, with
-//    `pictures/index.txt`.
+//    `gfx/` pictures) in the palette's colours under `pictures/<name>.png`, unscaled, and
+//    upscaled the textures' way (`enhance_picture`, at the textures' scale and by their upscaler)
+//    under `pictures/enhanced/<name>.png`, with `pictures/index.txt`.
+//
+// **A release with remade sounds** (a known set marked `remade_sounds`, known_sets.hpp: the
+// remaster, whose sounds are 44.1 kHz 16-bit): its sounds stage writes nothing and records a key
+// of its own, the packs' sounds left as they are. Its textures and models are the original's
+// 8-bit pictures and skins, so every other stage runs as for any pack.
 //
 // A stage whose recorded key (its version and options) matches is skipped; `RunOptions::force`
 // reruns it. `RunOptions::only` runs the named stages alone (the ones before them must have run).
 // A report says per stage whether it ran, what it wrote and how long it took. While it runs it
 // reports each stage's start, items and end to `RunOptions::progress` (progress.hpp draws them),
-// and stops between items once `RunOptions::cancel` is set.
+// and stops between items once `RunOptions::cancel` is set. A stage cut off between items (the
+// cancel, a kill, a failure) resumes: its journal (`<stage>.partial`, its key and each finished
+// item) lets a rerun with the same key skip every item already written, so a long bake goes on
+// where it stopped; a changed key or `force` starts the stage over. The pack and models stages
+// have no journal.
 //
 // ge:summary The enhancement pipeline's stages, pack to pictures, into the cache
 // ge:keywords pipeline stage pack textures lightmaps sounds models run skip force cache enhance
-// ge:keywords pictures
+// ge:keywords pictures resume journal partial cut-off remade-sounds remaster left-alone
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #pragma once
@@ -54,7 +67,7 @@ bool stage_named(const std::string& name, Stage* out);
 
 inline constexpr int kTextureStageVersion = 1;
 inline constexpr int kSoundStageVersion = 1;
-inline constexpr int kPictureStageVersion = 1;
+inline constexpr int kPictureStageVersion = 2;  // 2: each picture also enhanced (enhance_picture)
 
 // What the pipeline reports while it works (progress.hpp's board reads it): a stage started
 // (with its item count), an item done, a stage finished, skipped or failed.
@@ -107,9 +120,9 @@ struct PackTexture {
   int width = 0, height = 0;
   std::vector<uint8_t> indexed;
 };
-// The palette and every drawn texture of every map in `pack`, once each by name, in the order
-// the maps (sorted by path) and their texture lumps give; false with the reason.
+// The palette and every drawn texture of every map in `pack` (the profile's maps), once each by
+// name, in the order the maps (sorted by path) and their texture lumps give; false with the reason.
 bool pack_textures(std::span<const uint8_t> pack, Palette* palette, std::vector<PackTexture>* out,
-                   std::string* error);
+                   std::string* error, const Profile& profile = classic_profile());
 
 }  // namespace ge::classicenhance

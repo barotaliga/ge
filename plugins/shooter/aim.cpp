@@ -8,6 +8,7 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "shooter/traits.hpp"
 
 namespace ge::shooter {
 
@@ -33,12 +34,14 @@ AimProfile aim_profile(AimSkill s) {
   // Each skill: the reaction, the wander, the hand's settling and overshoot, the fastest turn.
   struct Row {
     double delay_s, wander, wander_hz, settle_s, damping, slew;
-    float lead_s;
+    float lead_s, react_lo, react_med, react_hi;
   };
+  // The delay is the hands' tracking lag; a new sighting waits the reaction drawn round
+  // `react_med` (a top player about 160 ms, an average one 230, a novice 300).
   const Row rows[3] = {
-      {0.30, 3.0, 0.5, 0.15, 0.7, 360, 0.0f},   // novice
-      {0.22, 1.5, 0.6, 0.10, 0.8, 600, 0.1f},   // average
-      {0.17, 0.6, 0.7, 0.07, 0.9, 1000, 0.2f},  // expert
+      {0.20, 3.0, 0.5, 0.15, 0.7, 360, 0.0f, 0.24f, 0.30f, 0.42f},   // novice
+      {0.15, 1.5, 0.6, 0.10, 0.8, 600, 0.1f, 0.18f, 0.23f, 0.30f},   // average
+      {0.12, 0.6, 0.7, 0.07, 0.9, 1000, 0.2f, 0.14f, 0.16f, 0.22f},  // expert
   };
   const Row& r = rows[static_cast<int>(s) - 1];
   p.hands[0] = {false,     r.delay_s, r.wander, r.wander_hz, r.settle_s,
@@ -47,7 +50,39 @@ AimProfile aim_profile(AimSkill s) {
                 r.settle_s, r.damping, r.slew * 0.5,   -70,
                 80,         0};
   p.lead_s = r.lead_s;
+  p.react_lo = r.react_lo;
+  p.react_med = r.react_med;
+  p.react_hi = r.react_hi;
   return p;
+}
+
+AimProfile aim_profile(uint8_t aim, uint8_t reaction) {
+  // Each value at the traits 2, 5 and 8 is the novice's, the average's and the expert's row
+  // above; at 10 the best a person does (traits.hpp's `scale` draws straight lines between).
+  const auto at = [](uint8_t v, double a, double b, double c, double d) {
+    return scale(v, {a, b, c, d});
+  };
+  const double delay_s = at(reaction, 0.20, 0.15, 0.12, 0.10);
+  const double wander = at(aim, 3.0, 1.5, 0.6, 0.3);
+  const double wander_hz = at(aim, 0.5, 0.6, 0.7, 0.8);
+  const double settle_s = at(aim, 0.15, 0.10, 0.07, 0.05);
+  const double damping = at(aim, 0.7, 0.8, 0.9, 0.95);
+  const double slew = at(aim, 360, 600, 1000, 1400);
+  AimProfile p;
+  p.hands.resize(2);
+  p.hands[0] = {false, delay_s, wander, wander_hz, settle_s, damping, slew, -1e9, 1e9, 0};
+  p.hands[1] = {false, delay_s, wander * 0.5, wander_hz, settle_s, damping, slew * 0.5, -70, 80, 0};
+  p.lead_s = static_cast<float>(at(aim, 0.0, 0.1, 0.2, 0.25));
+  p.react_lo = static_cast<float>(at(reaction, 0.24f, 0.18f, 0.14f, 0.12f));
+  p.react_med = static_cast<float>(at(reaction, 0.30f, 0.23f, 0.16f, 0.14f));
+  p.react_hi = static_cast<float>(at(reaction, 0.42f, 0.30f, 0.22f, 0.19f));
+  return p;
+}
+
+double draw_reaction(const AimProfile& p, double u) {
+  if (u < 0.5) return p.react_lo + (p.react_med - p.react_lo) * (u * 2);
+  const double v = (u - 0.5) * 2;
+  return p.react_med + (p.react_hi - p.react_med) * v * v;
 }
 
 void aim_angles(Vec3f eye, Vec3f at, float& yaw, float& pitch) {

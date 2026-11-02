@@ -24,6 +24,7 @@
 #include <span>
 #include <string>
 
+#include "classicenhance/profile.hpp"
 #include "classicenhance/texture.hpp"
 #include "morph/model.hpp"
 
@@ -50,9 +51,11 @@ struct ModelStats {
 // Vertices no triangle uses any more are dropped.
 morph::Model drop_glowing(const morph::Model& m);
 
-// Every model and sprite in the pack into `dir` (the pack's cache folder); false with the reason.
+// Every model and sprite in the pack (the profile's kinds) into `dir` (the pack's cache folder);
+// false with the reason.
 bool enhance_models(std::span<const uint8_t> pack, const Palette& palette,
                     const std::filesystem::path& dir, const ModelOptions& opts,
-                    const EnhanceOptions& textures, ModelStats* stats, std::string* error);
+                    const EnhanceOptions& textures, ModelStats* stats, std::string* error,
+                    const Profile& profile = classic_profile());
 
 }  // namespace ge::classicenhance

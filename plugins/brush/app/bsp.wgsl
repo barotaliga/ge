@@ -1,8 +1,8 @@
-// A CLASSIC BSP MAP DRAWN (plugins/brush/app/bsp_draw.hpp): its surfaces with their textures
-// (from the atlas, wrapped inside each texture's rectangle: point-sampled at the mip the pixel's
-// footprint picks in the classic mode or v2's crisp one, else filtered by hand, bilinear between
-// texels, between two mips and with up to four taps along a slanted footprint, since an atlas
-// cannot wrap a sampler's filter) and either the map's own LIGHTMAPS or REAL-TIME LIGHTS.
+// A CLASSIC BSP MAP DRAWN (bsp_draw.hpp): its surfaces with their textures (the atlas, wrapped
+// in each texture's rectangle: point-sampled at the footprint's mip in classic or v2's crisp
+// mode, else filtered by hand, bilinear, between mips, up to four taps along a slant, as an atlas
+// cannot wrap a sampler's filter; cut where the cover says see-through) and either the map's
+// own LIGHTMAPS or REAL-TIME LIGHTS.
 //
 // - MODE 0, CLASSIC: the textures times the lightmaps (a luxel of 128 is the texture as it is),
 //   the liquids drawn as their own warped textures, unlit, and the sky faces as two scrolling
@@ -30,16 +30,17 @@
 // (`frame.wet.z`: on what faces up, settling first where the noise is highest), and a lightning
 // flash (`frame.wet.w`) lights what is open to the sky and leaks a little into the rooms.
 //
-// A light's strength is in the lightmap's units (1: a white face as the open day lights it, so
-// the classic map's balance holds whatever the hour) or, for a glowing liquid's light, physical
-// (cd); `colour.w` says which.
+// A light's strength is in the lightmap's units (1: a white face in the open day, so the map's
+// balance holds at any hour) or, for a glowing liquid's, physical (cd); `colour.w` says which.
 //
 // ge:summary A classic BSP map drawn: atlas textures, lightmaps or real-time lights, the sky mask
 // ge:keywords bsp brush render atlas mip lightmap point-light cube-shadow sun-shadow zenith
 // ge:keywords openness sky-mask classic v2 warp fullbright weather wet puddle ripples snow lightning
 // ge:keywords relief normal-map parallax-occlusion pom height-map roughness specular ggx
+// ge:keywords cover cut-out alpha fence see-through
 // ge:skill brush render
 #include "render/wgsl/frame.wgsl"
+#include "render/wgsl/fall_shelter.wgsl"
 
 struct Bsp {
   // mode (0 classic, 1 v2), lighting (0 lightmaps, 1 lights, 2 rebaked), lights, ambient
@@ -64,6 +65,8 @@ struct Bsp {
   // a lightmap layer's height in the atlas's uv, the layers, the relief's strength (0 off), the
   // parallax's depth, m
   info5: vec4f,
+  // the light grid's corner, world m; its cell, m (0: no grid this frame)
+  grid: vec4f,
   // the 64 light styles' levels now, four a vector
   styles: array<vec4f, 16>,
 };
@@ -112,6 +115,28 @@ struct Mover {
 @group(1) @binding(12) var surface: texture_2d<f32>;
 // the rebake's light bounced alone (rebake.hpp), or a 1 x 1 stand-in
 @group(1) @binding(13) var rebake_bounce: texture_2d<f32>;
+// how solid each texel is (Scene::cover), or a 1 x 1 stand-in
+@group(1) @binding(14) var cover: texture_2d<f32>;
+// THE LIGHT GRID (bsp_draw.hpp): each cell's first entry (the last the lists' end), then the
+// lists of the lights that can reach the cell, in the lights' order
+@group(1) @binding(15) var<storage, read> grid: array<u32>;
+// bsp_draw.hpp's kGridX, kGridY, kGridZ and kGridCells
+const kGridDims = vec3f(32.0, 16.0, 32.0);
+const kGridCells = 16384u;
+
+// The grid's cell `p` lies in, -1 outside it or with no grid.
+fn grid_cell(p: vec3f) -> i32 {
+  let c = floor((p - bsp.grid.xyz) / bsp.grid.w);
+  if (bsp.grid.w > 0.0 && all(c >= vec3f(0.0)) && all(c < kGridDims)) {
+    return i32(c.x + kGridDims.x * (c.y + kGridDims.y * c.z));
+  }
+  return -1;
+}
+
+// The pipeline's paths (bsp_draw.cpp makes two from this file): false, every path; true, only
+// v2 lit in real time with no weather (the modern look's usual frame), so its shader carries no
+// code for the lightmaps', the rebake's or the weather's paths. The picture is the same either way.
+override kLitOnly: bool = false;
 
 const kSolid = 0u;
 const kSky = 1u;
@@ -197,31 +222,53 @@ fn vs_main(v: VsIn, @builtin(vertex_index) vi: u32) -> VsOut {
 // The texel at `st` (texels of mip 0) of the texture at `rect`, at mip `lod`, wrapped.
 fn texel(st: vec2f, rect: vec4f, lod: f32) -> vec4f {
   let k = u32(clamp(lod, 0.0, f32(textureNumLevels(atlas) - 1u)));
-  let s = f32(1u << k);
-  let size = max(floor(rect.zw / s), vec2f(1.0));
-  var t = floor(st / s);
-  t = t - size * floor(t / size);
-  return textureLoad(atlas, vec2i(floor(rect.xy / s) + t), i32(k));
+  return textureLoad(atlas, wrapped_at(st, rect, k), i32(k));
 }
 
-// The texel at integer `t` of mip `k` of the texture at `rect`, wrapped.
-fn texel_at(t: vec2f, rect: vec4f, k: u32) -> vec4f {
+// The cover there (Scene::cover): 1 with none.
+fn cover_at(st: vec2f, rect: vec4f, lod: f32) -> f32 {
+  if (textureDimensions(cover).x <= 1u) {
+    return 1.0;
+  }
+  let k = u32(clamp(lod, 0.0, f32(textureNumLevels(cover) - 1u)));
+  return textureLoad(cover, wrapped_at(st, rect, k), i32(k)).r;
+}
+
+// `st` at mip `k` of the texture at `rect`, wrapped: its texel's place in the atlas.
+fn wrapped_at(st: vec2f, rect: vec4f, k: u32) -> vec2i {
   let s = f32(1u << k);
   let size = max(floor(rect.zw / s), vec2f(1.0));
-  let w = t - size * floor(t / size);
-  return textureLoad(atlas, vec2i(floor(rect.xy / s) + w), i32(k));
+  let t = floor(st / s);
+  return vec2i(floor(rect.xy / s) + t - size * floor(t / size));
+}
+
+// The four texels about `st` (texels of mip 0) at mip `k` of the texture at `rect`: `lo` and `hi`
+// their places in the atlas on each axis (the far ones wrapped), `f` the weight toward `hi`. One
+// wrap a tap, not one a texel: the wrap divides, and a division is dear on a GPU.
+struct Quad {
+  lo: vec2i,
+  hi: vec2i,
+  f: vec2f,
+};
+
+fn quad_at(st: vec2f, rect: vec4f, k: u32) -> Quad {
+  let s = f32(1u << k);
+  let p = st / s - 0.5;
+  let i = floor(p);
+  let size = max(floor(rect.zw / s), vec2f(1.0));
+  let w = i - size * floor(i / size);
+  let o = floor(rect.xy / s);
+  return Quad(vec2i(o + w), vec2i(o + select(w + 1.0, vec2f(0.0), w + 1.0 >= size)), p - i);
 }
 
 // `st` (texels of mip 0) at mip `k`, bilinear between its four nearest texels.
 fn bilinear(st: vec2f, rect: vec4f, k: u32) -> vec4f {
-  let p = st / f32(1u << k) - 0.5;
-  let i = floor(p);
-  let f = p - i;
-  let a = texel_at(i, rect, k);
-  let b = texel_at(i + vec2f(1.0, 0.0), rect, k);
-  let c = texel_at(i + vec2f(0.0, 1.0), rect, k);
-  let d = texel_at(i + vec2f(1.0, 1.0), rect, k);
-  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+  let q = quad_at(st, rect, k);
+  let a = textureLoad(atlas, q.lo, i32(k));
+  let b = textureLoad(atlas, vec2i(q.hi.x, q.lo.y), i32(k));
+  let c = textureLoad(atlas, vec2i(q.lo.x, q.hi.y), i32(k));
+  let d = textureLoad(atlas, q.hi, i32(k));
+  return mix(mix(a, b, q.f.x), mix(c, d, q.f.x), q.f.y);
 }
 
 // `st` filtered over the pixel's footprint (`dx`, `dy`: its texels along the screen's axes):
@@ -243,35 +290,31 @@ fn filtered(st: vec2f, rect: vec4f, dx: vec2f, dy: vec2f) -> vec4f {
   var sum = vec4f(0.0);
   for (var i = 0; i < i32(taps); i++) {
     let q = st + major * ((f32(i) + 0.5) / taps - 0.5);
-    sum += mix(bilinear(q, rect, k0), bilinear(q, rect, k1), fr);
+    var a = bilinear(q, rect, k0);
+    // magnified (the mip clamped to 0): the next mip's share is exactly 0, so it is not read
+    if (fr > 0.0) {
+      a = mix(a, bilinear(q, rect, k1), fr);
+    }
+    sum += a;
   }
   return sum / taps;
 }
 
-// The relief's texel at integer `t` of mip `k` of the texture at `rect`, wrapped.
-fn surf_at(t: vec2f, rect: vec4f, k: u32) -> vec4f {
-  let s = f32(1u << k);
-  let size = max(floor(rect.zw / s), vec2f(1.0));
-  let w = t - size * floor(t / size);
-  return textureLoad(surface, vec2i(floor(rect.xy / s) + w), i32(k));
-}
-
 // The relief at `st` (texels of mip 0) at mip `k`, bilinear between its four nearest texels.
 fn surf_bilinear(st: vec2f, rect: vec4f, k: u32) -> vec4f {
-  let p = st / f32(1u << k) - 0.5;
-  let i = floor(p);
-  let f = p - i;
-  let a = surf_at(i, rect, k);
-  let b = surf_at(i + vec2f(1.0, 0.0), rect, k);
-  let c = surf_at(i + vec2f(0.0, 1.0), rect, k);
-  let d = surf_at(i + vec2f(1.0, 1.0), rect, k);
-  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+  let q = quad_at(st, rect, k);
+  let a = textureLoad(surface, q.lo, i32(k));
+  let b = textureLoad(surface, vec2i(q.hi.x, q.lo.y), i32(k));
+  let c = textureLoad(surface, vec2i(q.lo.x, q.hi.y), i32(k));
+  let d = textureLoad(surface, q.hi, i32(k));
+  return mix(mix(a, b, q.f.x), mix(c, d, q.f.x), q.f.y);
 }
 
 // THE PARALLAX: `st` moved to where the eye's ray, entering the face there, first meets the
 // texture's height field `depth` m deep (height 1 the face, 0 the deepest). `per` is the texture
-// coordinates' step a metre of depth along the ray; the ray is marched in `n` even steps (fewer
-// the more squarely the face is seen) and the crossing found between the last two.
+// coordinates' step a metre of depth along the ray; the ray is marched in even steps, two a texel
+// it crosses and at most `n` (fewer the more squarely the face is seen), and the crossing found
+// between the last two.
 fn parallax(st: vec2f, rect: vec4f, k: u32, per: vec2f, depth: f32, n: i32) -> vec2f {
   let reach = per * depth;
   var d = 0.0;
@@ -280,8 +323,11 @@ fn parallax(st: vec2f, rect: vec4f, k: u32, per: vec2f, depth: f32, n: i32) -> v
   if (gap <= 0.0) {
     return st;
   }
-  for (var i = 1; i <= n; i++) {
-    let d1 = f32(i) / f32(n);
+  // Two steps a texel the ray crosses (at mip k), at most `n`: a bilinear field holds no detail
+  // finer than that, and a ray across a few texels needs few steps.
+  let m = clamp(i32(ceil(2.0 * length(reach) / f32(1u << k))), 1, n);
+  for (var i = 1; i <= m; i++) {
+    let d1 = f32(i) / f32(m);
     let gap1 = 1.0 - surf_bilinear(st + reach * d1, rect, k).z - d1;
     if (gap1 <= 0.0) {
       d = mix(d, d1, gap / max(gap - gap1, 1e-5));
@@ -509,55 +555,15 @@ fn ortho_lit(j: Job, layer: i32, p: vec3f, spread: f32) -> f32 {
   return lit / 9.0;
 }
 
-// THE SHARE OF THE FALL THAT REACHES `p` (0 .. 1). The drops and the flakes do not come along
-// one line: the gusts veer them and the eddies toss them, so they arrive on a spread of ways round
-// the fall's (`bsp.weather.z`, the spread's tangent: wider for snow than for rain). Like a soft
-// shadow: the faces between `p` and the sky along the fall (the blocker, searched in the fall's
-// map) stand some metres above it, and the further below its opening a point lies, the wider the
-// edge it sees: the twelve taps over that disc, turned by a hash of the place, say how much of
-// the spread gets through. So a window's patch is densest where the line through it lands and
-// thins out, scattered, round it.
+// THE SHARE OF THE FALL THAT REACHES `p` (0 .. 1): the fall's map (`bsp.ortho[2]`) marched along
+// a cone of ways round the fall's (`bsp.weather.z`, the spread's tangent: wider for snow than for
+// rain) by render/wgsl/fall_shelter.wgsl, the same test the flakes, the drops and the splashes
+// take, so a roofed room stays dry and a window's patch thins out, scattered, round its line.
 fn fall_reach(p: vec3f) -> f32 {
   let j = bsp.ortho[2];
-  let q = p - j.o.xyz;
-  let half = j.o.w;
-  let depth = j.info.y;
-  let uv = vec2f(0.5 + 0.5 * dot(q, j.x.xyz) / half, 0.5 - 0.5 * dot(q, j.y.xyz) / half);
-  let z = (dot(q, j.z.xyz) + depth) / (2.0 * depth) - 0.0015;
-  let size = f32(textureDimensions(orthos).x);
-  let spread = bsp.weather.z;
-  // The blocker: the faces nearer the sky than `p` within the widest edge this map could give.
-  let reach_m = min(spread * 10.0, 4.0);
-  var blocker = 0.0;
-  var blocked = 0.0;
-  for (var k = 0; k < 9; k++) {
-    let o = vec2f(f32(k % 3) - 1.0, f32(k / 3) - 1.0) * reach_m * 0.5 / half;
-    let t = clamp(vec2i((uv + o) * size), vec2i(0), vec2i(i32(size) - 1));
-    let d = textureLoad(orthos, t, 2, 0);
-    if (d < z) {
-      blocker += d;
-      blocked += 1.0;
-    }
-  }
-  if (blocked < 0.5) {
-    return 1.0;
-  }
-  // How far below the blocker `p` lies along the fall, m, and the edge that gives.
-  let below = max(z - blocker / blocked, 0.0) * 2.0 * depth;
-  let edge = max(below * spread, 0.03) * 0.5 / half;
+  let m = FallMap(j.o.xyz, j.x.xyz, j.y.xyz, j.z.xyz, j.o.w, j.info.y, 2);
   let turn = hash12(floor(p.xz * 40.0) + vec2f(floor(p.y * 40.0))) * 6.2831853;
-  let c = cos(turn);
-  let sn = sin(turn);
-  var lit = 0.0;
-  for (var k = 0; k < 12; k++) {
-    // A golden-angle spiral over the unit disc.
-    let r = sqrt((f32(k) + 0.5) / 12.0);
-    let a = f32(k) * 2.3999632;
-    let d = vec2f(cos(a), sin(a)) * r;
-    let o = vec2f(d.x * c - d.y * sn, d.x * sn + d.y * c) * edge;
-    lit += textureSampleCompareLevel(orthos, shadow_cmp, uv + o, 2, z);
-  }
-  return lit / 12.0;
+  return fall_share(orthos, shadow_cmp, m, p, bsp.weather.z, 8, turn);
 }
 
 // A smooth value noise in 0 .. 1 over the plane.
@@ -617,7 +623,7 @@ fn weathered(p: vec3f, n: vec3f, albedo: vec3f, eye_dir: vec3f) -> Weathered {
   w.sheen = vec3f(0.0);
   w.n = n;
   w.flash = 0.0;
-  if (bsp.weather.x < 0.5) {
+  if (kLitOnly || bsp.weather.x < 0.5) {
     return w;
   }
   let fall = bsp.ortho[2].z.xyz;
@@ -698,7 +704,7 @@ fn shade(in: VsOut) -> FsOut {
   var out: FsOut;
   out.motion = vec4f(0.0);
   out.mask = vec4f(0.0);
-  let classic = bsp.info.x < 0.5;
+  let classic = !kLitOnly && bsp.info.x < 0.5;
   let t = bsp.info2.x;
   var st = in.st;
   let warped = in.kind == kWater || in.kind == kSlime || in.kind == kLava || in.kind == kWarp ||
@@ -711,6 +717,10 @@ fn shade(in: VsOut) -> FsOut {
   let lod = log2(max(max(length(dx), length(dy)), 1e-6));
   let dpx = dpdx(in.world);
   let dpy = dpdy(in.world);
+  // see-through: cut
+  if (cover_at(st, in.rect, lod) < 0.5) {
+    discard;
+  }
   // A lightmap's 1 (and a light in its units): a white face as the open day lights it, times the
   // brightness (the eye adapted to a dim room).
   let white = white_luminance() * bsp.info2.w;
@@ -787,7 +797,7 @@ fn shade(in: VsOut) -> FsOut {
   let n = ng;
 
   // ── Rebaked: the map's light worked out again (rebake.hpp), shaded by the light's direction ──
-  if (!classic && bsp.info.y > 1.5 && in.lm2.x >= 0.0) {
+  if (!kLitOnly && !classic && bsp.info.y > 1.5 && in.lm2.x >= 0.0) {
     let raw = textureSampleLevel(rebake_dir, light_sampler, in.lm2, 0.0).xyz;
     let d = raw * (255.0 / 127.5) - vec3f(128.0 / 127.5);
     // The face's normal as the map has it (its light's direction is read against that side).
@@ -802,7 +812,7 @@ fn shade(in: VsOut) -> FsOut {
     return out;
   }
 
-  if (classic || bsp.info.y < 0.5) {
+  if (classic || (!kLitOnly && bsp.info.y < 0.5)) {
     var lit = lightmap(in.lm, in.styles) + dynamic_light(in.world);
     if (classic) {
       lit = mix(lit, max(lit, vec3f(1.0)), glow);
@@ -827,8 +837,16 @@ fn shade(in: VsOut) -> FsOut {
   // the highlights, the lightmaps' units
   var es = vec3f(0.0);
   var phys_s = vec3f(0.0);
-  let count = u32(bsp.info.z);
-  for (var i = 0u; i < count; i++) {
+  // Only the lights the grid lists for p's cell (every light outside the grid), in order.
+  let cell = grid_cell(p);
+  var first = 0u;
+  var end = u32(bsp.info.z);
+  if (cell >= 0) {
+    first = grid[cell];
+    end = grid[cell + 1];
+  }
+  for (var j = first; j < end; j++) {
+    let i = select(j, grid[kGridCells + 1u + j], cell >= 0);
     let l = lights[i];
     let q = p - l.pos.xyz;
     let d2 = dot(q, q);
@@ -850,6 +868,10 @@ fn shade(in: VsOut) -> FsOut {
     var fall = window / (d2 + max(l.info.y, 0.04));
     if (l.info.x >= 0.0) {
       fall *= cube_shadow(q, reach, i32(l.info.x));
+      // wholly in its shadow: every sum below would add 0
+      if (fall <= 0.0) {
+        continue;
+      }
     }
     var spec = 0.0;
     if (shine > 0.0) {

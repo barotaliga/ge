@@ -7,6 +7,33 @@ shares, and a game links the engine and the plugins it needs.
 The code is written by AI agents, for AI agents. Start at [AGENTS.md](AGENTS.md): it is the
 router to every rule, doc and skill in the tree.
 
+## Run a game
+
+On a fresh macOS, Ubuntu (24.04 or 22.04) or Windows machine:
+
+```sh
+git clone https://github.com/barotaliga/ge.git && cd ge
+make setup                  # once per machine: the compiler, CMake, Ninja and the other tools
+make run:fall_line          # build Fall Line if needed, then open its window
+make run:shooters_edge      # the same for Shooter's Edge
+```
+
+- **`make setup`** runs the platform's setup script (below, § Build and test). It installs only
+  what is missing or too old, so it is safe to run again. Open a new terminal afterwards so the
+  shell finds the new tools. On a fresh Mac the first `git` or `make` asks to install Xcode's
+  Command Line Tools: accept, then go on. On Windows, run `make` from Git Bash inside "x64 Native
+  Tools Command Prompt for VS" (`make setup` installs both).
+- **`make run:<game>`** builds only that game, on the optimized release preset, and opens its
+  window. The first build downloads SDL3 and Dawn and takes a while; later runs rebuild only what
+  changed. `make run` lists the games. `ARGS` goes to the game: `make run:fall_line ARGS=--bot`
+  lets the bot ski, and `RUN_PRESET=debug` builds with the sanitizers instead.
+- **Shooter's Edge** opens in its built-in test arena. For the classic maps, point it at the
+  folder holding your own copy of the classic game's packs: `make run:shooters_edge
+  ARGS="-basedir ~/Games/classic +map dm6"` ([docs/shooters-edge.md](docs/shooters-edge.md)
+  § Playing it has the keys, the console and the flags).
+- **Fall Line** starts at its menu over a generated mountain; the keys are A and D (or the
+  arrows) to steer, W to tuck, S to brake, SPACE to jump and C for the camera.
+
 ## What it is
 
 - **Deterministic.** The simulation produces the same IEEE 754 doubles for the same seed and
@@ -100,9 +127,20 @@ macOS: it installs Homebrew (and with it Xcode's Command Line Tools, so Apple Cl
 SDK), puts Homebrew on PATH for new shells, then installs CMake, Ninja, ccache, bash 4+,
 clang-format and clang-tidy 18, Node.js, Python 3 and gh. Run it as yourself, never with sudo.
 
+On Windows (10 or 11, x64), [`tools/setup-windows.ps1`](tools/setup-windows.ps1) installs Visual
+Studio 2026's Build Tools with the C++ workload (MSVC and the Windows SDK), then by winget Git for
+Windows (its Git Bash runs `make` and `tools/*.sh`), CMake, Ninja, ccache, GNU make, LLVM 18's
+clang-format and clang-tidy, Python 3 (with a real `python3`), Node.js, gh and nasm. Run it from an
+ordinary PowerShell; the installers that need an administrator ask. Build in MSVC's x64
+environment ("x64 Native Tools Command Prompt for VS") on the release preset, as CI's Windows
+row does.
+
+`make setup` picks the right one of the three for the machine it runs on.
+
 ```sh
 sudo tools/setup-ubuntu.sh   # once per machine; --check reports, --verify also builds and tests
 tools/setup-macos.sh         # the same on a Mac (no sudo; it asks for your password once)
+powershell -ExecutionPolicy Bypass -File tools\setup-windows.ps1   # the same on Windows
 ```
 
 ```sh

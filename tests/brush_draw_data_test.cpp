@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "brush/app/draw_data.hpp"
+#include "brush/pictures.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
 
@@ -128,4 +129,69 @@ TEST(a_replaced_textures_relief_lands_in_the_surface_atlas_at_its_rect) {
     }
   }
   CHECK(with > 0 && flat > 0);
+}
+
+TEST(a_full_colour_pictures_alpha_and_a_fence_textures_holes_make_the_cover) {
+  const ba::Pack pack = fixture_pack();
+  const std::vector<uint8_t> palette = grey_palette();
+  ba::Scene own;
+  std::string error;
+  CHECK_MSG(ba::load_scene(pack, "maps/hall.bsp", palette, &own, &error), error);
+  CHECK(own.cover.levels.empty());  // every texel solid: no cover, the shader's stand-in
+
+  // Texture 0 handed as a 100 x 60 picture, its left half see-through: the map's 64 x 64 times 2
+  // holds it, so its rect doubles and its cover is 0 on the left, 255 on the right.
+  std::vector<ge::brush::MapPicture> pics = ge::brush::read_map_pictures(pack.bytes);
+  CHECK(!pics.empty());
+  ge::brush::MapPicture& p = pics[0];
+  p.rgba_width = 100;
+  p.rgba_height = 60;
+  p.rgba.resize(size_t{100} * 60 * 4);
+  for (uint32_t y = 0; y < 60; ++y)
+    for (uint32_t x = 0; x < 100; ++x) {
+      uint8_t* t = &p.rgba[(size_t(y) * 100 + x) * 4];
+      t[0] = 200, t[1] = 100, t[2] = 50, t[3] = x < 50 ? 0 : 255;
+    }
+  ba::TextureSource source;
+  source.pictures = &pics;
+  ba::Scene cut;
+  CHECK_MSG(ba::load_scene(pack, "maps/hall.bsp", palette, &cut, &error, source), error);
+  CHECK(cut.cover.levels.size() == cut.textures.levels.size());
+  CHECK(cut.cover.levels[0].size() == size_t(cut.cover.width) * cut.cover.height);
+  bool seen = false;
+  for (size_t i = 0; i < cut.vertices.size() && !seen; ++i) {
+    const ba::DrawVertex& v = cut.vertices[i];
+    if (v.rect[2] != 128 || v.rect[3] != 128) continue;  // texture 0, doubled
+    seen = true;
+    const size_t row = size_t(v.rect[1] + 64) * cut.cover.width;
+    CHECK(cut.cover.levels[0][row + size_t(v.rect[0]) + 10] == 0);
+    CHECK(cut.cover.levels[0][row + size_t(v.rect[0]) + 120] == 255);
+    const size_t at = (row + size_t(v.rect[0]) + 120) * 4;
+    CHECK(cut.textures.levels[0][at] == 200 && cut.textures.levels[0][at + 3] == 0);  // no glow
+  }
+  CHECK(seen);
+
+  // A fence texture (a name starting `{`): its index 255 is a hole.
+  ge::brush::Fixture fx = ge::brush::sample_fixture();
+  for (ge::brush::FixtureRoom& r : fx.rooms) r.floor = "{grate";
+  std::vector<uint8_t> map;
+  CHECK_MSG(ge::brush::write_bsp(fx, ge::brush::Family::v29, &map, &error), error);
+  ba::Pack fence;
+  fence.bytes = map;
+  fence.files.push_back({"maps/fence.bsp", 0, uint32_t(map.size())});
+  std::vector<ge::brush::MapPicture> fp = ge::brush::read_map_pictures(map);
+  std::vector<uint8_t> holes(size_t{64} * 64, 3);
+  for (size_t t = 0; t < 64; ++t) holes[t] = 255;  // its first row
+  size_t grate = fp.size();
+  for (size_t i = 0; i < fp.size(); ++i)
+    if (fp[i].name == "{grate") grate = i, fp[i].level[0] = holes.data();
+  CHECK(grate < fp.size());
+  ba::TextureSource fs;
+  fs.pictures = &fp;
+  ba::Scene fenced;
+  CHECK_MSG(ba::load_scene(fence, "maps/fence.bsp", palette, &fenced, &error, fs), error);
+  CHECK(!fenced.cover.levels.empty());
+  size_t zeros = 0;
+  for (uint8_t c : fenced.cover.levels[0]) zeros += c == 0;
+  CHECK(zeros == 64);
 }

@@ -276,14 +276,13 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           std::string text = m.str();
           const bool chat = !text.empty() && text[0] == 1;
           if (chat) text.erase(0, 1);
-          s.printed.push_back({chat ? 3 : 2, std::move(text)});
+          s.prints.push_back({chat ? 3 : 2, std::move(text)});
           break;
         }
         case kCenterPrint:
         case kFinale:
         case kCutscene:
           s.centre = m.str();
-          s.centred = true;
           break;
         case kStuffText:
           m.str();

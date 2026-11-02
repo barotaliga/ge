@@ -177,6 +177,8 @@ bool read_v29(std::span<const uint8_t> file, bool bsp2, Map* out, std::string* e
           t.indexed.assign(from, from + std::ptrdiff_t(uint64_t(t.width) * t.height));
         }
       }
+      t.sky = is_sky(t.name);
+      if (!t.name.empty() && t.name[0] == '*') t.liquid = liquid_by_name(t.name);
       m.textures.push_back(t);
     }
   }
@@ -241,10 +243,10 @@ bool read_v29(std::span<const uint8_t> file, bool bsp2, Map* out, std::string* e
       Surface s;
       s.texture = t.texture;
       s.first = uint32_t(m.indices.size());
-      const std::string& tex = m.textures[t.texture].name;
-      s.kind = !tex.empty() && tex[0] == '*' ? SurfaceKind::liquid
-               : is_sky(tex)                 ? SurfaceKind::sky
-                                             : SurfaceKind::planar;
+      const Texture& tex = m.textures[t.texture];
+      s.kind = tex.liquid != Liquid::none ? SurfaceKind::liquid
+               : tex.sky                  ? SurfaceKind::sky
+                                          : SurfaceKind::planar;
       float nrm[3];
       for (int k = 0; k < 3; ++k) nrm[k] = side ? -m.planes[plane].n[k] : m.planes[plane].n[k];
       const uint32_t base = detail::add_polygon(&m, polys, first, count, nrm, t.v);

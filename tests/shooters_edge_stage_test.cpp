@@ -60,5 +60,5 @@ TEST(an_unknown_pack_is_refused_with_the_names_there_are) {
   std::string error;
   CHECK(!cl::stage_pak(path, "players", nullptr, error));
   CHECK_MSG(error.find("the staged packs: fixture") != std::string::npos, error);
-  CHECK(path.archives.empty());
+  CHECK(cl::archive_paths(path).empty());
 }

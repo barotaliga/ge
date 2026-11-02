@@ -35,6 +35,9 @@ namespace ge::classicenhance {
 std::filesystem::path default_cache_root();
 // The folder for the pack with digest `pack_sha256` under `root`.
 std::filesystem::path pack_dir(const std::filesystem::path& root, const std::string& pack_sha256);
+// The cache's key for a set of packs by their digests, first to last: the first's digest alone,
+// or, with later packs, the SHA-256 of every digest joined by spaces (`Source::set_sha256`).
+std::string set_key(std::span<const std::string> digests);
 
 struct StageRecord {
   std::string stage, key;

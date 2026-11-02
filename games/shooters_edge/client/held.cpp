@@ -9,6 +9,7 @@
 #include <cmath>
 
 #include "brush/map.hpp"
+#include "core/output.hpp"
 #include "shooters_edge/client/view.hpp"
 
 namespace shooters_edge::client {
@@ -18,6 +19,29 @@ namespace {
 constexpr double kWalking = 0.5;  // m/s along the ground the stride's clock runs above
 
 }  // namespace
+
+bool load_held_set(const GameAdapter& game, const SearchPath& files,
+                   std::span<const std::string> dirs, std::vector<ge::viewmodel::HeldModel>& out) {
+  namespace out_ = ge::core::output;
+  std::string why;
+  out.clear();
+  if (!files.folder.empty()) {
+    if (game.held_weapons(game, files, out, why)) {
+      out_::status("shooters_edge: the held weapons are the game's own, from its files");
+      return true;
+    }
+    out_::status("shooters_edge: no weapon is drawn: " +
+                 (why.empty() ? std::string("the game's files hold no held weapons") : why) +
+                 "; next: add the game's own packs to " + files.folder +
+                 " (a classic game draws only its own weapons)");
+    return false;
+  }
+  for (const std::string& dir : dirs)
+    if (view::load_weapon_models(dir, out, &why)) return false;
+  out_::status("shooters_edge: no weapon is drawn: " + why +
+               "; next: pass -models <the tree's games/shooters_edge/content/models/view>");
+  return false;
+}
 
 view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
                           const view::ViewSettings& settings,

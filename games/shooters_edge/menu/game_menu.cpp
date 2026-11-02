@@ -82,6 +82,7 @@ bool GameMenu::classic() const {
 
 void GameMenu::show(Host& host, std::string_view page) {
   in_enhance_ = false;
+  waiting_.clear();
   main_.reset();
   if (page != "main") main_.open(page);
   refresh(main_, host, classic());
@@ -93,6 +94,7 @@ void GameMenu::show(Host& host, std::string_view page) {
 
 void GameMenu::hide() {
   open_ = false;
+  waiting_.clear();
   in_enhance_ = false;
 }
 
@@ -138,8 +140,23 @@ void GameMenu::apply_enhance(const ui::MenuEvent& e, Host& host) {
   }
 }
 
+void GameMenu::press_key(std::string_view key, Host& host) {
+  if (waiting_.empty() || waiting_fresh_ || host.console == nullptr) return;
+  const Control* c = control_of(waiting_);
+  waiting_.clear();
+  if (c != nullptr && (key == "backspace" || key == "del")) {
+    unbind_control(*host.console, c->command);
+  } else if (c != nullptr && key != "escape") {
+    if (!bind_control(*host.console, c->command, key))
+      host.console->print("controls: '" + std::string(key) + "' names no key to bind");
+  }
+  refresh(main_, host, classic());
+}
+
 void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double dt) {
   dt_ = dt;
+  waiting_fresh_ = false;
+  if (!waiting_.empty()) return;  // the keys are press_key's until one comes
   if (toggle_) {
     toggle_ = false;
     if (open_ && toggle_page_ == "main")
@@ -167,6 +184,14 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
       case Outcome::close:
       case Outcome::back_at_root:
         hide();
+        return;
+      case Outcome::bind_key:
+        waiting_ = e.item;
+        waiting_fresh_ = true;
+        if (ui::Item* it = main_.top().find(e.item); it != nullptr) {
+          it->choices = {"PRESS A KEY"};
+          it->choice = 0;
+        }
         return;
       case Outcome::classic_enhance:
         in_enhance_ = true;

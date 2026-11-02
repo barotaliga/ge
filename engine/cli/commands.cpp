@@ -1,6 +1,7 @@
-// The catalog's rows and the command-line check; both forms of the help are commands_help.cpp.
+// The catalog's rows; the check of a command line against them is commands_check.cpp, both forms
+// of the help are commands_help.cpp.
 //
-// ge:summary The ge catalog's rows and the check of a command line against them
+// ge:summary The ge catalog's rows: every command, its words, flags, summary and example
 // ge:keywords cli ge commands catalog rows check_args find_command global_flags flags
 // ge:skill agent-interface
 // ge:test tests/cli_commands_test.cpp
@@ -98,6 +99,14 @@ constexpr FlagSpec kLabPairFlags[] = {
     {"switch", "<cvar>", "one cvar off on the left and on on the right (<cvar> 0, <cvar> 1)"},
     {"shots", "<id,...>", "pair only these shots"},
     {"smoke", "", "run at the lab's smoke flags"},
+    kEngine,
+    kRepo};
+constexpr FlagSpec kLabBeforeFlags[] = {
+    kPreset,
+    {"ref", "<ref>", "the git ref the labs run at (default origin/main)"},
+    {"tag", "<name>", "the tag the runs are kept under, previews/<id>@<name>/ (default before)"},
+    {"shots", "<id,...>", "draw only these shots"},
+    {"full", "", "run at the labs' full flags, not their smoke flags"},
     kEngine,
     kRepo};
 constexpr FlagSpec kPrecheckFlags[] = {
@@ -481,6 +490,12 @@ constexpr FlagSpec kPakSumFlags[] = {
     {"out", "<sums>", "the sums written to this file too (sha256sum's format)"},
     {"check", "<sums>", "the archive held to a sums file: a changed or missing file an error"}};
 
+constexpr FlagSpec kDemoPackFlags[] = {
+    {"level", "<1..22>", "zstd's level: 1 fastest, 22 smallest (default 19, as a game records)"},
+    {"out", "<file>", "where the packed file is written (default: <file>z beside it)"}};
+constexpr FlagSpec kDemoUnpackFlags[] = {
+    {"out", "<file>", "where the recording is written (default: its own name beside the file)"}};
+
 const CommandSpec kCommands[] = {
     {"help",
      "[<command>]",
@@ -615,6 +630,10 @@ const CommandSpec kCommands[] = {
      "diff every picture of a lab's last run against a kept run: PSNR, SSIM and the share "
      "changed per distance band, each band held to its floor, a four-panel sheet a shot",
      kLabDiffFlags, "ge lab diff world --run -- --views=start,vista", "labs"},
+    {"lab before", "<id>...", 1, -1, "see",
+     "the labs at origin/main (or --ref), built once in a scratch worktree and run at their "
+     "smoke flags, kept under the tag before: a change's before with nothing stashed",
+     kLabBeforeFlags, "ge lab before se-world se-models", "labs"},
     {"lab pair", "<id>", 1, 1, "see",
      "a lab drawn twice, under the --before cvars and the --after ones (the runner's --cvars), "
      "every shot's two side by side in a sheet with what changed between them",
@@ -908,6 +927,14 @@ const CommandSpec kCommands[] = {
      "each file's SHA-256 in sha256sum's format (--out keeps them); --check holds the archive to "
      "a sums file, naming every changed or missing file",
      kPakSumFlags, "ge pak sum pak0.pk3 --check=pak0.sums", "assets"},
+    {"demo pack", "<file>", 1, 1, "create",
+     "a recording packed as one zstd frame, as a game packs what it records (match.mvd to "
+     "match.mvdz), checked to unpack to the same bytes: the sizes, the ratio and the times",
+     kDemoPackFlags, "ge demo pack demos/match.mvd", "assets"},
+    {"demo unpack", "<file>", 1, 1, "create",
+     "the one recording inside a packed or archived file (zstd, gzip, xz, tar, zip, 7z, stacked "
+     "up to four deep) written out plain: its layers, its name and its size",
+     kDemoUnpackFlags, "ge demo unpack demos/match.tar.gz", "assets"},
 };
 
 constexpr FlagSpec kGlobal[] = {
@@ -916,16 +943,6 @@ constexpr FlagSpec kGlobal[] = {
      "summary, next)"},
     {"help", "", "this command's help"},
 };
-
-const FlagSpec* find_flag(const CommandSpec& c, std::string_view name) {
-  for (const FlagSpec& f : c.flags) {
-    if (f.name == name) return &f;
-  }
-  for (const FlagSpec& f : kGlobal) {
-    if (f.name == name) return &f;
-  }
-  return nullptr;
-}
 
 }  // namespace
 
@@ -938,44 +955,6 @@ const CommandSpec* find_command(std::string_view name) {
     if (c.name == name) return &c;
   }
   return nullptr;
-}
-
-std::optional<std::string> check_args(const Args& a) {
-  if (!a.command) return "no such command";
-  const CommandSpec& c = *a.command;
-  for (const auto& [name, value] : a.flags) {
-    const FlagSpec* f = find_flag(c, name);
-    if (!f) {
-      std::string why = "unknown flag --" + name;
-      why += " for ge ";
-      why += c.name;
-      return why;
-    }
-    if (f->value.empty() && !value.empty()) return "--" + name + " is a switch and takes no value";
-    if (!f->value.empty() && f->value[0] != '[' && value.empty()) {
-      std::string why = "--" + name + " needs a value: --";
-      why += name;
-      why += '=';
-      why += f->value;
-      return why;
-    }
-  }
-  const int n = static_cast<int>(a.words.size());
-  if (n < c.min_args || (c.max_args >= 0 && n > c.max_args)) {
-    return "ge " + std::string(c.name) + " takes " +
-           (c.args.empty() ? std::string("no arguments") : std::string(c.args)) + ", got " +
-           std::to_string(n) + " word(s)";
-  }
-  static constexpr std::string_view kPassing[] = {
-      "lab",    "lab diff", "lab pair", "lab sweep", "play",  "sim", "shot",
-      "record", "bench",    "profile",  "mem",       "leaks", "load"};
-  if (!a.passthrough.empty() &&
-      std::find(std::begin(kPassing), std::end(kPassing), c.name) == std::end(kPassing)) {
-    return "only ge lab, lab diff, lab pair, lab sweep, play, sim, shot, record, bench, profile, "
-           "mem, "
-           "leaks and load pass words after --";
-  }
-  return std::nullopt;
 }
 
 }  // namespace ge::cli

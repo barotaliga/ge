@@ -18,8 +18,10 @@
 #include "camera/first_person.hpp"
 #include "capture/av_export.hpp"
 #include "classicenhance/cached.hpp"
+#include "core/output.hpp"
 #include "gpu/target.hpp"
 #include "lab/gif.hpp"
+#include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/demo_caption.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
@@ -65,11 +67,11 @@ bool write_file(const std::string& path, const std::vector<uint8_t>& bytes, std:
   return true;
 }
 
-// The words' type: classic-enhance's copy of the packs' glyph sheet in the first pack's cache, else
+// The words' type: classic-enhance's copy of the packs' glyph sheet in the packs' cache, else
 // the packs' own; `from` says which ("charset" with neither: `glyphs` left empty).
 void caption_type(const SearchPath& files, ge::ui::Image& glyphs, std::string& from) {
-  if (!files.archives.empty()) {
-    const std::filesystem::path cache = ge::classicenhance::find_cache(files.archives[0].bytes);
+  if (!content_packs(files).empty()) {
+    const std::filesystem::path cache = ge::classicenhance::find_cache(content_packs(files));
     // The enhanced sheet (upscaled, still 16 x 16 cells) first, then the cache's original.
     if (!cache.empty() &&
         (caption_glyphs_from_png(cache / "pictures" / "enhanced" / "conchars.png", &glyphs) ||
@@ -110,8 +112,13 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
   }
   if (s.format != DemoFormat::single) {
     for (size_t k = 0; k < s.players.size(); k++)
-      if (static_cast<int>(k) != s.player && s.players[k].present)
+      if (static_cast<int>(k) != s.player && s.players[k].present) {
         put(static_cast<int>(k) + 1, s.players[k]);
+        if (!out.empty() && out.back().entity == static_cast<int>(k) + 1 && k < s.top.size()) {
+          out.back().top = static_cast<uint32_t>(s.top[k]);
+          out.back().bottom = static_cast<uint32_t>(s.bottom[k]);
+        }
+      }
   }
   for (size_t i = 0; i < s.statics.size(); i++) put(-1 - static_cast<int>(i), s.statics[i]);
 }
@@ -168,18 +175,13 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   const look::Picture look_default;
   const look::Picture& look = o.picture ? *o.picture : look_default;
   se::Hud hud = se::make_hud();
-  se::HudArt free_art = se::free_art();
-  free_art.finish();
-  se::HudArt classic_art;
-  if (o.hud && o.hud_art != "free") {
-    const se::FileFind find = [&files](std::string_view p, std::vector<uint8_t>& store) {
-      return find_file(files, p, store);
-    };
-    std::string why;
-    se::classic_art_from_packs(find, &classic_art, &why);
-  }
-  const se::HudArt& art = se::pick_art(o.hud_art, classic_art, free_art);
-  report.hud_art = &art == &free_art ? "free" : "packs";
+  // The status bar as the window draws it with a classic game loaded: the packs' own pictures
+  // (enhanced when ce_pictures is on and the cache has them), else the free art.
+  se::HudArt art;
+  if (o.hud) art = load_classic_pictures(files, look.ce.pictures).hud;
+  report.hud_art = art.bar.empty() ? "free" : "packs";
+  if (art.bar.empty()) art = se::free_art();
+  art.finish();
   ge::ui::Image glyphs;
   if (o.text || o.messages) caption_type(files, glyphs, report.text_font);
   DemoNotices notices;  // the prints and the centre print the recorded player read
@@ -359,6 +361,56 @@ std::vector<std::string> demo_video_lines(const DemoVideoOptions& o, const DemoV
                 (o.hud ? (r.hud_art == "packs" ? "in the packs' pictures" : "in the free pictures")
                        : std::string("off")));
   return out;
+}
+
+namespace out = ge::core::output;
+
+int demo_video_main(const Args& args, const SearchPath& files,
+                    const shooters_edge::look::Picture& picture, int track,
+                    const VideoSettings& video) {
+  auto device = ge::gpu::create_device({.label = "demovideo", .validation = 0});
+  if (!device) {
+    out::error("shooters_edge: no GPU device for -demovideo; see docs/rendering.md");
+    return 1;
+  }
+  DemoVideoOptions o;
+  o.demo = args.demovideo;
+  o.file = args.video;
+  // The flags given win; video.cfg's cvars (video_cfg.hpp) fill the rest.
+  int width = args.width, height = args.height;
+  if (!args.size_given && !size_named(video.size, width, height)) {
+    out::error("shooters_edge: demovideo_size \"" + video.size +
+               "\" is not WxH or 480p, 720p, 1080p, 1440p, 4k; next: fix it in video.cfg");
+    return 2;
+  }
+  const std::string codec = args.codec_given ? args.codec : video.codec;
+  o.width = width & ~1;
+  o.height = height & ~1;
+  o.fps = args.fps_given ? args.fps : video.fps;
+  o.codec = codec == "none" ? "" : codec;
+  o.hud = video.hud;
+  o.text = video.text;
+  o.messages = video.messages;
+  o.seconds = args.to > args.from ? args.to - args.from : args.seconds;
+  o.from_s = args.from;
+  o.highlight = args.highlight;
+  o.gif_width = args.gif_width;
+  o.track = track;
+  o.picture = &picture;
+  DemoVideoReport r;
+  std::string error;
+  const auto shown = [](int64_t frame, double t, const ge::lab::Picture&) {
+    if (frame % 300 == 0)
+      out::status("demovideo: picture " + std::to_string(frame) + " at " +
+                  std::to_string(static_cast<int>(t)) + " s");
+  };
+  if (!demo_video(*device, files, o, r, error, shown)) {
+    out::error("shooters_edge: -demovideo " + args.demovideo + ": " + error +
+               "; see docs/shooters-edge.md § A demo as a video");
+    return 2;
+  }
+  for (const std::string& line : demo_video_lines(o, r)) out::status(line);
+  return 0;
 }
 
 }  // namespace shooters_edge::client

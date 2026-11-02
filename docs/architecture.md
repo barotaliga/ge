@@ -408,10 +408,12 @@ cache. `tools/setup-macos.sh` and `tools/setup-ubuntu.sh` install it, and `choco
 Windows, where MSVC's debug configurations then embed their debug information (/Z7) so a cache
 can store it. CI keeps one cache per row, restored on every run and saved from main
 (the packaging jobs read the release rows'). A cloud session's container starts with an empty
-disk, so `tools/ccache-share.sh` keeps the cache as one archive in the session's shared project
-folder: `make build`, `make test` and `make precheck` restore it into a new container before
-their first compile, and a good precheck or session-start build saves it back, at most every
-half hour. On Linux every link goes through mold or LLD when one is installed
+disk, so `tools/ccache-share.sh` keeps the cache, and `.cache/deps/` beside it, in the session's
+shared project folder: `make build`, `make test` and `make precheck` restore them into a new
+container before their first compile (installing ccache first when it is missing), and a good
+build saves them back, at most every half hour. The folder silently drops a file over about
+500 MB, so each cache is saved as 200 MB parts behind a manifest written last; ccache runs with
+`base_dir` at the checkout and `compiler_check=content`, so a cache from another container hits. On Linux every link goes through mold or LLD when one is installed
 (`cmake/Linker.cmake`, `-DGE_FAST_LINKER=OFF` for the default): with the compiles cached,
 linking the tree's 500-odd executables is most of a rebuild. Measured in the cloud container
 (4 cores, the debug preset, a fresh build directory each time):
@@ -423,3 +425,5 @@ linking the tree's 500-odd executables is most of a rebuild. Measured in the clo
 | Full cache, GNU ld | 2 min 10 s (configure 26 s, link 1 min 45 s) |
 | Full cache, LLD | 1 min 41 s (configure 27 s, link 1 min 14 s) |
 | A new container: `make build` restoring the shared archive (544 MB, 2 s) | 1 min 37 s |
+| A new container, no ccache, empty disk (2026-11-01): packages, configure with the deps, compile | 20 min 22 s (18 s, 88 s, 18 min 36 s) |
+| The same container through `make build`'s restore (ccache installed, 629 MB in 4 parts and 157 MB of deps restored) | 2 min 2 s (restore 14 s, configure 24 s, build 84 s) |

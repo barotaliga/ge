@@ -4,10 +4,13 @@
 // where the server's entities and its static entities stand.
 //
 // - LOADED (`create_models`, while the world's frame is made): each name on the server's model
-//   list through the search path: a `.mdl` as one morph model a skin, a `.spr` as sprite frames,
-//   a `.bsp` item (a health box, an ammo crate) as one morph model of its faces
-//   (app/classic_models.hpp), its skins the enhanced cache's upscaled copies when `cache` names one
-//   and the atlas holds them all (else the pack's own, every one). The map's own brush models
+//   list read by the game's adapter (game_adapter.hpp's `open_model`) into its form: a
+//   vertex-animated model as one morph model a skin, a sprite as sprite frames, a brush item (a
+//   health box, an ammo crate) as one morph model of its faces (app/classic_models.hpp). A skin
+//   the game's files hold a picture for is drawn from that picture, its transparent texels holes
+//   (render/morph.hpp's `kMarkHole`); the rest are the enhanced cache's upscaled copies when
+//   `cache` names one and the atlas holds them all (else the pack's own, every one). The map's own
+//   brush models
 //   ("*1", ...) are the map's, not these. A torch's flame (`flame.mdl`, `flame2.mdl`) is also
 //   loaded bare, its stick and cage without the painted flame, for the frames whose effects burn
 //   the flame instead.
@@ -23,7 +26,7 @@
 // ge:keywords world-models create_models place_models prepare_models encode_models placed-model
 // ge:keywords items armour health weapons flames torches players statics entity-models morph
 // ge:keywords sprites bare-flames topcolor bottomcolor place_brushes doors plats
-// ge:keywords ce_models enhanced-skins cached_skins
+// ge:keywords ce_models enhanced-skins cached_skins replacement-skin skin-stand-in
 // ge:skill render shooter morph
 #pragma once
 
@@ -42,6 +45,7 @@
 #include "render/sprites.hpp"
 #include "shooters_edge/app/classic_models.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 
 namespace shooters_edge::client {
@@ -99,12 +103,12 @@ struct WorldModels {
   std::vector<std::pair<double, size_t>> near;  // scratch
 };
 
-// Loads `load.names` from the search path through `palette`; a file missing or refused is
+// Loads `load.names` through `game`'s adapter and `palette`; a file missing or refused is
 // reported once and drawn as nothing. The passes join `pipelines` (finished by the caller).
 void create_models(ge::gpu::Device& device, ge::gpu::PipelineSet& pipelines, WorldModels& m,
                    const wgpu::BindGroupLayout& frame, const SearchPath& files,
                    std::span<const uint8_t> palette, const ge::brush::Map& map,
-                   const ModelLoad& load);
+                   const ModelLoad& load, const GameAdapter& game = classic_adapter());
 // Where the map's own brush models stand this frame (doors, plats, buttons): each one an entity
 // of `placed` holds offset by that entity's origin; one no entity holds (removed by the game) is
 // hidden. Empty when the models were loaded with no server's list.

@@ -1,16 +1,48 @@
 // The map view's queries: a point's leaf down a model's tree, one cluster seeing or hearing
-// another, a point's contents in a clip hull, the engine's frame, and the view's digest.
+// another, a point's contents in a clip hull, the engine's frame, the view's digest, and a liquid's
+// kind by its name.
 //
 // ge:summary The map view's queries: leaf_at, cluster_sees, to_engine, map_digest, family names
 // ge:keywords leaf_at point leaf tree walk cluster_sees pvs to_engine frame digest fnv phs
-// ge:keywords build_phs cluster_hears hull_contents clip-hull
+// ge:keywords build_phs cluster_hears hull_contents clip-hull liquid_by_name liquid-kind
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #include <cstring>
+#include <string>
 
 #include "brush/map.hpp"
 
 namespace ge::brush {
+
+Liquid liquid_by_name(std::string_view name) {
+  std::string n(name);
+  for (char& c : n) {
+    if (c >= 'A' && c <= 'Z') c = char(c - 'A' + 'a');
+  }
+  if (n.find("lava") != std::string::npos) return Liquid::lava;
+  if (n.find("slime") != std::string::npos) return Liquid::slime;
+  if (n.find("water") != std::string::npos) return Liquid::water;
+  if (n.find("tele") != std::string::npos) return Liquid::teleport;
+  return Liquid::other;
+}
+
+const char* liquid_name(Liquid l) {
+  switch (l) {
+    case Liquid::none:
+      return "none";
+    case Liquid::water:
+      return "water";
+    case Liquid::slime:
+      return "slime";
+    case Liquid::lava:
+      return "lava";
+    case Liquid::teleport:
+      return "teleport";
+    case Liquid::other:
+      return "other";
+  }
+  return "none";
+}
 
 const char* family_name(Family f) {
   switch (f) {

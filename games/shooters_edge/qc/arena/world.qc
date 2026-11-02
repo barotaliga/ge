@@ -10,6 +10,7 @@ void() worldspawn = {
   player_precache();
   weapon_precache();
   item_precache();
+  precache_model("progs/backpack.mdl");
   precache_sound("misc/r_tele1.wav");
   precache_sound("doors/drclos4.wav");
   precache_sound("doors/doormv1.wav");
@@ -46,6 +47,7 @@ void(string why) end_match = {
 void() StartFrame = {
   local entity p;
   deathmatch = cvar("deathmatch");
+  teamplay = cvar("teamplay");
   fraglimit = cvar("fraglimit");
   timelimit = cvar("timelimit");
   if (match_over) {

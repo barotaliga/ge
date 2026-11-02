@@ -1,5 +1,7 @@
-// TEXTURE SEQUENCES: textures a map names as frames of one picture, told by the first two bytes
-// of their names (29 and BSP2; the other families animate through their own data).
+// TEXTURE SEQUENCES: textures a map shows as frames of one picture. 29 and BSP2 tell them by the
+// first two bytes of their names (below); the other families chain them (`Texture::next`, set by
+// the reader), and each chain that closes is a cycle from its lowest texture, its frames in chain
+// order (a chain that does not close is drawn still and named in `notes`).
 //
 // - A CYCLE is `+<frame><name>`: frames `0`..`9` are the main cycle, `a`..`j` (any case) the
 //   alternate one a door or a button shows once it has been used. A surface shows frame

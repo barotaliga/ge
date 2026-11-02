@@ -1,7 +1,8 @@
 // MORPH MESHES DRAWN (render/morph.hpp): one draw a model instance, its vertices pulled by index
 // from the shared buffers, its two frames blended (and the last frame's two, for its motion),
 // its skin read from the atlas texel by texel with each texel's mark resolved: a tinted texel's
-// colour comes off the instance's ramp at the texel's step, a glowing one lights itself. Sharp
+// colour comes off the instance's ramp at the texel's step, a glowing one lights itself, a hole
+// (mark 2) is not drawn: the texel the point falls in decides, sharp or smooth. Sharp
 // (the texel the point falls in) or smooth (the four nearest, each resolved, blended).
 #include "render/wgsl/frame.wgsl"
 
@@ -120,6 +121,14 @@ fn skin_at(uv: vec2f, m: Model, d: Draw) -> vec4f {
   return mix(mix(a, b, w.x), mix(c, e, w.x), w.y);
 }
 
+// Whether the texel the point falls in is a hole (kMarkHole).
+fn hole_at(uv: vec2f, m: Model) -> bool {
+  let lo = vec2i(m.rect.xy);
+  let hi = vec2i(m.rect.xy + m.rect.zw) - 1;
+  let p = clamp(lo + vec2i(floor(uv * vec2f(m.rect.zw))), lo, hi);
+  return u32(round(textureLoad(atlas, p, 0).a * 255.0)) == 2u;
+}
+
 struct FragmentOut {
   @location(0) colour: vec4f,
   @location(1) motion: vec4f,  // rg: the screen motion (uv), b: reactive (0: a solid surface)
@@ -132,6 +141,9 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   var n = normalize(in.normal);
   if (!front) {
     n = -n;
+  }
+  if (hole_at(in.uv, m)) {
+    discard;
   }
   let s = skin_at(in.uv, m, d);
   let y = in.rel.y + frame.eye.y;

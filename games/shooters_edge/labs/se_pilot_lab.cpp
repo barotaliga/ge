@@ -43,7 +43,7 @@ std::string key_of(std::string s) {
 }
 
 // The pilot's modes as drawn (PilotMode's order).
-const gl::Rgba kModeColour[9] = {
+const gl::Rgba kModeColour[sh::kPilotModes] = {
     {120, 120, 120, 255},  // idle
     {30, 30, 30, 255},     // walk
     {40, 90, 220, 255},    // run_up
@@ -53,6 +53,7 @@ const gl::Rgba kModeColour[9] = {
     {20, 150, 80, 255},    // ride
     {0, 170, 190, 255},    // strafe
     {30, 30, 30, 255},     // arrived
+    {240, 120, 20, 255},   // hop
 };
 
 void legend(gl::Picture& p) {

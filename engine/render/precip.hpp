@@ -32,7 +32,9 @@
 //   FALL (down and downwind), so a particle is drawn only where nothing stands between it and the
 //   sky the way it fell, and a splash lands only where the fall reaches. Rooms stay dry, rain
 //   slants in through a window as far as the wind carries it, a colonnade's floor is wet only at
-//   its open side. Without one (a mountain's open air) everything is open.
+//   its open side. A cone of ways round the fall is marched through the map
+//   (render/wgsl/fall_shelter.wgsl), so a roof keeps the room under it dry however wide the
+//   scatter. Without one (a mountain's open air) everything is open.
 //
 // ge:summary What falls round the eye: snow, sleet and rain in a wrapped box, the wind and its
 // ge:summary eddies, drops as clear streaks, splashes off the depth
@@ -92,7 +94,7 @@ struct PrecipShelter {
   double half = 1, depth = 1;
   uint32_t size = 1;  // the map's texels a side
   // The tangent of the spread of ways round `z` the drops and flakes come on (the gusts and the
-  // eddies): the edge of what the fall reaches widens by it with the depth below the blocker.
+  // eddies): render/wgsl/fall_shelter.wgsl marches that cone of ways back up to the sky.
   double spread = 0;
 };
 

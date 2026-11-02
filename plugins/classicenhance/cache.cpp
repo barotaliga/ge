@@ -10,6 +10,8 @@
 #include <fstream>
 #include <sstream>
 
+#include "assets/sha256.hpp"
+
 namespace ge::classicenhance {
 
 namespace fs = std::filesystem;
@@ -51,6 +53,14 @@ fs::path default_cache_root() {
 
 fs::path pack_dir(const fs::path& root, const std::string& pack_sha256) {
   return root / pack_sha256.substr(0, 16);
+}
+
+std::string set_key(std::span<const std::string> digests) {
+  if (digests.empty()) return {};
+  if (digests.size() == 1) return digests[0];
+  std::string ids = digests[0];
+  for (size_t i = 1; i < digests.size(); i++) ids += " " + digests[i];
+  return assets::sha256_hex({reinterpret_cast<const uint8_t*>(ids.data()), ids.size()});
 }
 
 std::vector<StageRecord> read_records(const fs::path& dir) {

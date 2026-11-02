@@ -124,8 +124,7 @@ TEST(the_packs_glyph_sheet_is_read_with_index_0_see_through_and_drawn) {
 
 TEST(the_prints_become_notify_lines_and_the_chat_lasts_longer) {
   cl::DemoState s;
-  s.printed = {
-      {0, "You got the "}, {0, "shells\n"}, {3, "(red1): \x90quad\x91 low\n"}, {1, "  \n"}};
+  s.prints = {{0, "You got the "}, {0, "shells\n"}, {3, "(red1): \x90quad\x91 low\n"}, {1, "  \n"}};
   cl::DemoNotices n;
   n.take(s, 10);
   std::vector<cl::CaptionLine> got = n.at(10);
@@ -136,9 +135,8 @@ TEST(the_prints_become_notify_lines_and_the_chat_lasts_longer) {
   CHECK(n.at(10 + cl::kNoticeSeconds + 0.1).size() == 1);  // the pickup gone, the chat kept
   CHECK(n.at(10 + cl::kChatSeconds + 0.1).empty());
 
-  s.printed.clear();
-  for (int k = 0; k < 6; k++) s.printed.push_back({2, "line " + std::to_string(k) + "\n"});
-  s.centred = true;
+  s.prints.clear();
+  for (int k = 0; k < 6; k++) s.prints.push_back({2, "line " + std::to_string(k) + "\n"});
   s.centre = "The Slipgate Complex\n";
   n.take(s, 20);
   got = n.at(20);

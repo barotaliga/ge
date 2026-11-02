@@ -10,7 +10,7 @@ void() ClientConnect = {
 };
 
 void() PutClientInServer = {
-  local entity spot;
+  local entity spot, p;
   self.classname = "player";
   self.health = 100;
   self.max_health = 100;
@@ -41,6 +41,20 @@ void() PutClientInServer = {
   setmodel(self, "progs/player.mdl");
   setsize(self, '-16 -16 -24', '16 16 32');
   setorigin(self, self.origin);
+  if (deathmatch) {
+    // A deathmatch spawn is heard: the fog's sound where the player comes in.
+    sound(self, CHAN_VOICE, "misc/r_tele1.wav", 1, ATTN_NORM);
+    // And it takes the spot: a living player standing on it dies (no two players ever stand
+    // stuck inside each other when every spawn point is taken).
+    p = findradius(self.origin, 48);
+    while (p) {
+      if (p != self && p.classname == "player" && p.health > 0) {
+        p.deathtype = "telefragged";
+        damage(p, self, self, 50000);
+      }
+      p = p.chain;
+    }
+  }
   if (match_over) {
     self.takedamage = DAMAGE_NO;
     self.movetype = MOVETYPE_NONE;
@@ -69,6 +83,7 @@ void() player_die = {
   self.super_damage_finished = 0;
   self.invincible_finished = 0;
   self.items = self.items - (self.items & (IT_QUAD | IT_INVULNERABILITY));
+  drop_on_death();
   self.respawn_ready = time + 1;
   if (self.health < -40) sound(self, CHAN_VOICE, "player/udeath.wav", 1, ATTN_NONE);
   else sound(self, CHAN_VOICE, "player/death1.wav", 1, ATTN_NORM);

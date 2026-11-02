@@ -125,6 +125,16 @@ TEST(lab_before_checks_the_ref_out_into_a_worktree) {
   fs::remove_all(repo);
 }
 
+// `ge lab before` refuses a tag that is not a plain name before it builds anything.
+TEST(lab_before_needs_a_plain_tag) {
+  LabBeforeOptions before;
+  before.ids = {"world"};
+  before.tag = "a/b";
+  const Outcome o = run_lab_before({kRepo, "debug", "", {}}, before);
+  CHECK(exit_of(o) == 2);
+  CHECK(!o.findings.empty() && o.findings[0].what.find("not a plain name") != std::string::npos);
+}
+
 // `ge lab pair` with nothing to change between its two runs is refused before it builds.
 TEST(lab_pair_needs_a_change) {
   LabPairOptions pair;

@@ -185,6 +185,9 @@ porting ends, and nothing outside it may depend on it except `make golden`.
 ```sh
 sudo tools/setup-ubuntu.sh  # an Ubuntu 24.04/22.04 machine brought up to what the tree needs; a no-op when it is
 tools/setup-macos.sh  # the same for a Mac, from a fresh install (Homebrew, the Command Line Tools, every tool); never sudo
+powershell -ExecutionPolicy Bypass -File tools\setup-windows.ps1  # the same for Windows (MSVC's Build Tools, every tool by winget); not elevated
+make setup        # once per machine: the setup script above that fits it (sudo on Linux)
+make run:fall_line # a game's window, its executable built first on the release preset (make run lists them; ARGS go to the game)
 make build        # cmake --preset debug && cmake --build (PRESET=release for -O2, no sanitizers)
 make test         # build + ctest;  make test T=cli_ builds and runs only the tests the regex names
 make fmt          # clang-format in place;  make fmt-check is what CI runs
@@ -220,6 +223,12 @@ make shaders-check # every embedded WGSL shader compiled by Tint offline (needs 
 too) and then `make build` (the debug preset, reusing `build/debug/`) in the background while you read. Before you
 rely on the build, `tools/session-start.sh --wait` blocks until it is done and exits with its
 result; the output is `build/session-start.log`, the one-line state `build/session-start.status`.
+**The hook fires only when the session starts IN this checkout:** a project thread that starts
+above it (several repositories side by side) never reads this tree's `.claude/settings.json`, so
+there, run `tools/session-start.sh` yourself as your first command. Every build in a new cloud
+container starts warm either way: `make build` installs ccache if it is missing and restores the
+compiler cache and `.cache/deps/` from the shared project folder (`tools/ccache-share.sh`), and
+a good build saves them back.
 
 **Linux is checked here, before the push; CI runs only what can differ elsewhere.** `make
 precheck` is the Linux gate (GCC debug+ASan on Mesa's lavapipe: the build, the lint, the shaders,
@@ -278,7 +287,7 @@ characters.
 | `engine/texgen/` | Procedural textures (`ge::texgen`, `docs/textures.md`): the `.tex` recipe, tileable noise, the layer kinds, the bake to maps and its disk cache; `library/` the specimens | `textures` |
 | `engine/snow/` | Snow over any ground (`ge::snow`, `docs/snow.md`): the layer and its cover, sparse fixed-point tiles, `sample`, `press` and imprint records, reference contacts, the snapshot | `snow` |
 | `engine/move/` | Character movement (`ge::move`, `docs/movement.md`): the knobs and presets, the step over a trace callback, the box world, the strafer, the scenarios | `move` |
-| `engine/vfs/` | Content files (`ge::vfs`): the pack archive's checked directory and its files as views into it; search paths, zips and directories to come (M18a) | `vfs` |
+| `engine/vfs/` | Content files (`ge::vfs`): packs, zips, the search path, wads; the one file inside gzip, zstd, xz, tar, zip or 7z; the zstd stream recordings are packed with (M18a, M23j) | `vfs` |
 | `engine/input/` | Input devices (`ge::input`, `docs/input.md`): the device model, events, state, dead zones, actions and bindings, rebinding, wheels' roles, touch, players, feedback, the event log, simulated devices | `input` |
 | `engine/camera/` | The camera (`ge::camera`, `docs/camera.md`): poses, followers, the rigs (first person, boom, mounted, orbit, planted, free), shake, transitions, the stack, the scripted subjects | `camera` |
 | `engine/viewmodel/` | The first-person held weapon (`ge::viewmodel`, `docs/rendering.md` § The view model): its form and grip mount, its place in the view, its light from the world, the CPU reference | `render`, `camera` |
@@ -322,6 +331,7 @@ characters.
 | `games/fall_line/app/` | Fall Line's presentation (`fall_line_app`): the pass table, the look, the scene, the views, the `fall_line` window; then the HUD | `platform`, `gpu`, `render`, `ui`, `audio` |
 | `games/shooters_edge/view/` | Shooter's Edge's held weapons (`shooters_edge_view`, no GPU): the free set's mounts, kicks and muzzle lights, the hand that switches and fires them, the view-model cvars | `render`, `shooter` |
 | `games/shooters_edge/hud/` | Shooter's Edge's HUDs (`shooters_edge_hud`, no GPU): the classic, modern and compact looks, `hud_style`, the free art, the classic set's pictures | `ui` |
+| `games/shooters_edge/profiles/` | Shooter's Edge's game half of each classic game as header-only data: programs, fallback map, items, words, sounds; beside the content row (`plugins/classicenhance`) | `shooter` |
 | `games/shooters_edge/menu/` | Shooter's Edge's main menu (`shooters_edge_menu`, no GPU): the classic pages on ESCAPE, rows wired to cvars, the rest dimmed, the pack's own pictures, classic enhance under OPTIONS | `ui` |
 | `games/shooters_edge/labs/` | Shooter's Edge's labs | `labs`, `ui` |
 | `games/shooters_edge/server/` | Shooter's Edge's server: the host, its slots and input log, the dedicated binary; the mod server (QC builtins and extensions, hooks, the test and baseline mods, a progs from a path) | `shooter`, `progs` |

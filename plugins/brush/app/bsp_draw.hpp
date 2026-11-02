@@ -49,6 +49,7 @@
 
 #include "brush/app/bsp_cull.hpp"
 #include "brush/app/draw_data.hpp"
+#include "brush/app/light_grid.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "render/frame.hpp"
@@ -147,7 +148,6 @@ inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side
 inline constexpr uint32_t kOrthoSize = 2048;  // the sun's and the zenith's maps
 inline constexpr int kMaxShadowed = 48;
 inline constexpr uint32_t kOrthos = 3;  // the sun's, the zenith's and the fall's
-
 // A DYNAMIC LIGHT: one a game lights for a moment (a muzzle's flash, a rocket's glow, an
 // explosion, a glowing pickup), set each frame (`set_dynamic_lights`). The classic path adds it
 // to the lightmaps' light as the classic did, falling off in a straight line to nothing at its
@@ -156,12 +156,6 @@ struct DynamicLight {
   double pos[3] = {0, 0, 0};     // engine metres
   double radius = 5;             // m: where its light ends
   double colour[3] = {1, 1, 1};  // its light at its middle, the lightmaps' units (1: as baked 'm')
-};
-
-struct GpuLight {
-  float pos[4];
-  float colour[4];
-  float info[4];
 };
 
 struct GpuJob {
@@ -187,6 +181,7 @@ struct GpuBsp {
   // A lightmap layer's height in the atlas's uv, the layers, the relief on (1), the parallax's
   // depth, m.
   float info5[4];
+  float grid[4];  // the light grid's corner, world m; its cell, m (0: no grid this frame)
   float styles[kLightStyles];  // each light style's level now (draw_data.hpp)
 };
 
@@ -197,9 +192,15 @@ struct BspDraw {
   uint32_t range[kKinds][2] = {};
   wgpu::Texture atlas, light;
   wgpu::Texture surface;  // the textures' relief (Scene::surface), or a 1 x 1 flat stand-in
+  wgpu::Texture cover;    // how solid each texel is (Scene::cover), or a 1 x 1 solid stand-in
   // The scene's rebaked light (RGB9E5) and its direction (RGBA8), or 1 x 1 stand-ins.
   wgpu::Texture rebake_rgb, rebake_dir, rebake_bounce;
   wgpu::Buffer uniform, lights, jobs;
+  // The light grid: each cell's first entry (kGridCells + 1: the last the lists' end), then the
+  // lists, light indices (prepare_bsp); `grid_refs` this frame's entries.
+  wgpu::Buffer grid;
+  std::vector<uint32_t> grid_rows;
+  uint32_t grid_refs = 0;
   wgpu::Texture cubes, orthos;
   std::vector<wgpu::TextureView> cube_layers;  // a view a cube face
   wgpu::TextureView ortho_layers[kOrthos];
@@ -209,7 +210,8 @@ struct BspDraw {
   wgpu::BindGroup group, fix_group, shadow_group;
   wgpu::Texture mask;
   wgpu::TextureView mask_view;
-  uint32_t p_draw = 0, p_fix = 0, p_veil = 0, p_shadow = 0;
+  // p_draw_lit: p_draw with only the real-time lights' path (v2, no weather; bsp.wgsl's kLitOnly)
+  uint32_t p_draw = 0, p_draw_lit = 0, p_fix = 0, p_veil = 0, p_shadow = 0;
   // This frame's (prepare_bsp).
   GpuBsp staged{};
   std::vector<GpuLight> frame_lights;

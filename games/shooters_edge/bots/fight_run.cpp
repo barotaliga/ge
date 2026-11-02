@@ -111,13 +111,22 @@ FightReport run_fight(const FightOptions& opt) {
     FightPlayer& p = r.players[static_cast<size_t>(k)];
     p.name = "bot" + std::to_string(k + 1);
     p.skill = opt.skills[static_cast<size_t>(k)];
+    if (static_cast<size_t>(k) < opt.tempers.size()) p.temper = opt.tempers[static_cast<size_t>(k)];
+    p.traits = sh::traits_of(p.skill, p.temper);
+    if (static_cast<size_t>(k) < opt.traits.size() &&
+        !sh::apply_traits(opt.traits[static_cast<size_t>(k)], p.traits, r.error)) {
+      r.error = p.name + ": " + r.error;
+      return r;
+    }
     server::connect(s, k, p.name, false, true);
   }
   for (int k = 0; k < n; k++) {
     Fighter& f = fighters[static_cast<size_t>(k)];
     fighter_init(f, graph, s, k, server::kBaselineArenaEntities, opt.skills[static_cast<size_t>(k)],
-                 kHz, opt.seed + 31u * static_cast<uint32_t>(k));
+                 r.players[static_cast<size_t>(k)].traits, kHz,
+                 opt.seed + 31u * static_cast<uint32_t>(k));
     f.bot.yaw = s.sv.edicts[static_cast<size_t>(k) + 1].v_angle.y;
+    f.bot.pilot.world = &world;  // the hop looks ahead through the map
     if (k == 0) f.bot.pilot.why = opt.why;
   }
 

@@ -22,6 +22,11 @@ float unwrap(float deg, float near) {
 
 float wrap(float deg) { return unwrap(deg, 0); }
 
+// A new contact this near the view (degrees) was pre-aimed at.
+constexpr float kPreAim = 5;
+// The one in hand out of sight this long is a new sighting when he shows again, s.
+constexpr double kResight_s = 0.3;
+
 MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   Bot& b = *static_cast<Bot*>(ctx);
   const int me = slot + 1;
@@ -57,12 +62,44 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       const std::array<double, 2> from{b.yaw, b.pitch};
       b.aim_hands.reset(from);
       b.strafe = b.pilot.pilot.set.strafe;
+      b.hop = b.pilot.pilot.set.hop;
       b.pilot.pilot.set.strafe = false;
+      b.pilot.pilot.set.hop = false;
+    }
+    const bool resight = c->ent == b.target && sv.time - b.target_seen_at > kResight_s;
+    if (c->visible && (!b.aiming || c->ent != b.target || resight) && b.aim.react_med > 0) {
+      // A new sighting (another enemy, or this one back after a while out of sight): the
+      // reaction drawn for it, of which the hands' lag is the last part. One the view was already
+      // on (pre-aimed at a doorway, say) is taken in half the time.
+      double r = draw_reaction(b.aim, core::next(b.react_rng));
+      const float dy = wrap(yaw - b.yaw), dp = pitch - b.pitch;
+      const bool pre = dy * dy + dp * dp <= kPreAim * kPreAim;
+      if (pre) {
+        r *= 0.5;
+        b.stats.pre_aimed++;
+      }
+      b.stats.reactions++;
+      b.stats.react_s += r;
+      b.react_until = sv.time + r;
+      b.freeze_until = sv.time + r - b.aim.hands[0].delay_s;
+      b.freeze_view[0] = b.yaw;
+      b.freeze_view[1] = b.pitch;
+      if (why) {
+        why->decide("react");
+        why->fact("reaction_s", r);
+        why->choose(pre ? "pre-aimed" : "react",
+                    pre ? "the view already on him" : "a new sighting");
+      }
     }
     b.aiming = true;
     b.target = c->ent;
+    if (c->visible) b.target_seen_at = sv.time;
     want[0] = unwrap(yaw, b.yaw);
     want[1] = pitch;
+    if (sv.time < b.freeze_until) {
+      want[0] = b.freeze_view[0];
+      want[1] = b.freeze_view[1];
+    }
     if (c->visible)
       b.stats.aiming++;
     else
@@ -83,6 +120,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         b.aiming = false;
         b.target = -1;
         b.pilot.pilot.set.strafe = b.strafe;
+        b.pilot.pilot.set.hop = b.hop;
         if (why) {
           why->decide("aim");
           why->choose("release", "no contact: the view back on the pilot's way");
@@ -117,13 +155,20 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
 
 void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands hands, AimSkill skill,
               double hz, uint32_t seed) {
+  bot_init(b, g, set, hands, aim_profile(skill), hz, seed);
+}
+
+void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands hands,
+              const AimProfile& aim, double hz, uint32_t seed) {
   const std::vector<ai::AxisHands> h = pilot_hands(hands);
   PilotSettings ps = set;
   ps.lead_s = pilot_lead_s(hands);
   pilot_init(b.pilot.pilot, g, ps, h, hz, seed);
-  b.aim = aim_profile(skill);
+  b.aim = aim;
   b.aim_hands = ai::Hands(b.aim.hands, hz, seed ^ 0x5bd1e995u);
+  b.react_rng = core::make_rng(seed ^ 0x2c1b3c6du);
   b.strafe = ps.strafe;
+  b.hop = ps.hop;
 }
 
 CmdSource bot_source(Bot& b) { return {&b, bot_next}; }
@@ -134,11 +179,18 @@ void bot_goal(Bot& b, int32_t goal) {
   b.pilot.pilot.mode = PilotMode::idle;
 }
 
+void bot_aim(Bot& b, const AimProfile& aim) {
+  b.aim = aim;
+  for (size_t k = 0; k < aim.hands.size(); k++) b.aim_hands.retune(k, aim.hands[k]);
+}
+
 float bot_aim_off(const Bot& b) {
   if (!b.aiming) return 0;
   const float dy = wrap(static_cast<float>(b.wanted[0] - b.pressed[0]));
   const float dp = static_cast<float>(b.wanted[1] - b.pressed[1]);
   return std::sqrt(dy * dy + dp * dp);
 }
+
+bool bot_reacting(const Bot& b, double t) { return b.aiming && t < b.react_until; }
 
 }  // namespace ge::shooter

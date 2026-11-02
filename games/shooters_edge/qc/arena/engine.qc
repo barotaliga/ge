@@ -179,4 +179,5 @@ void(vector where, float set) multicast = #82;
 // --- the variant's own settings, read each frame ---
 
 float deathmatch;
+float teamplay;  // 1: no harm to a teammate (the `team` key of the user info names the team)
 float MSG_EFFECT = 4;     // where an effect's bytes go: the multicast buffer

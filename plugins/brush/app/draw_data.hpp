@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "brush/map.hpp"
+#include "brush/pictures.hpp"
 #include "brush/rebake.hpp"
 
 namespace ge::brush::app {
@@ -148,6 +149,11 @@ struct Scene {
   // height (255 the top) and the roughness, linear bytes; a texture with none is flat at the top
   // with a roughness of 0.75. Empty (no levels) when no texture has one.
   Atlas surface;
+  // THE COVER: how solid each texel is, one byte a texel (255 solid, 0 see-through) in the same
+  // places and mips as `textures`; a face is cut where its texel's cover is under a half. From a
+  // full-colour picture's alpha (`MapPicture::rgba`) and a fence texture's (a name starting `{`)
+  // index 255. Empty (no levels) when every texel is solid.
+  Atlas cover;
   // The lightmaps, a luxel's border round each, in `light_layers` layers stacked down the atlas:
   // layer k holds every face's k-th style (a face's place the same in each).
   Atlas light;
@@ -193,6 +199,10 @@ struct TextureSource {
   void* user = nullptr;
   bool (*surface)(void* user, std::string_view name, uint32_t w, uint32_t h,
                   std::vector<uint8_t>* rgba) = nullptr;
+  // The map's pictures as the game read them (its own reader of its textures, one entry a texture
+  // in the map's order, views valid through `load_scene`); null: what the file carries itself
+  // (`read_map_pictures`, 29 and BSP2).
+  const std::vector<MapPicture>* pictures = nullptr;
 };
 // A texel of `Scene::surface` where a texture has no relief: flat, at the top, fairly rough.
 inline constexpr uint8_t kFlatSurface[4] = {128, 128, 255, 191};

@@ -10,6 +10,7 @@
 //
 // ge:summary Fall Line's sound bank: the ids route.hpp plays and the bank itself
 // ge:keywords bank sound-def ids landing tree gate missed finish wipeout reset bump menu-sounds
+// ge:keywords ice-crack thin-ice
 // ge:skill audio sim
 // ge:test tests/fall_line_sound_test.cpp
 #pragma once
@@ -34,6 +35,7 @@ inline constexpr std::string_view kFinish = "finish";
 inline constexpr std::string_view kWipeoutTree = "wipeout_tree";
 inline constexpr std::string_view kWipeoutNose = "wipeout_nose";
 inline constexpr std::string_view kWipeoutCatch = "wipeout_catch";
+inline constexpr std::string_view kIceCrack = "ice_crack";
 // The menus' (the front door, the pause page): the focus moved, an item pressed, a page opened
 // or closed (route.hpp's `play_menu`).
 inline constexpr std::string_view kMenuFocus = "menu_focus";

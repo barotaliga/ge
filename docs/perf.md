@@ -109,6 +109,37 @@ Measured with `build/release/labs se-timedemo --basedir=<the shareware game> --d
 What is left is the map's colour pass (`bsp`, 76 ms of the 127 here): the filtered texels, up to
 160 lights a pixel and their cube shadows, and the sun's and the sky's maps.
 
+On the M3 Max (Metal), `--size=2560,1440 --look=modern` on the shareware game's demo1, release
+build, the GPU span's median over three runs each. The parts were found by switching each off in
+a scratch build: every light's test in the loop 2.6 ms of 7.5, the parallax march 0.38, the
+highlights 0.27, the albedo's filter taps 0.23. The first four rows draw every picture byte for
+byte the same (`se-client` on e1m1 and on the fixture, against `main`'s, on the Mac).
+
+| Change | GPU span (median ms) | Frame (median ms) | Average fps | Where |
+| --- | --- | --- | --- | --- |
+| A bilinear tap wraps its texel once and finds its neighbours by compare, not four wraps of two divisions each (the albedo's filter and the relief's march) | 7.52 → 7.36 | | | `brush/app/bsp.wgsl` |
+| The light grid: a pixel loops over the lights its 4 m world cell lists, not all of the frame's up to 160 (2 m cells: 0.1 ms less GPU, more than that in binning) | 7.36 → 5.08 | 8.48 → 6.26 | 114 → 157 | `brush/app/bsp_draw.cpp`, `bsp.wgsl` |
+| A light wholly in its cube's shadow is skipped before its highlight (each sum would add 0) | 5.08 → 5.02 | | | `brush/app/bsp.wgsl` |
+| The draw's pipeline made twice from one shader: a frame of v2 lit in real time with no weather takes the one compiled with only that path (`kLitOnly`, a WGSL override), so it carries no lightmap, rebake or weather code | 5.02 → 4.85 | 6.26 → 6.05 (both rows) | 157 → 163 | `brush/app/bsp_draw.cpp`, `bsp.wgsl` |
+| Two small trades, judged by eye (the first rows to change the picture): the flames' march in 14 steps, not 28 (`gpu-flames`: 32 to 100 dB, a finer grain on the `wind` shot's thin tongues in a still frame), and the parallax's in two steps a texel the ray crosses, at most as many as before (e1m1: 0.00 to 0.03% of pixels, 55 dB and up) | 4.34 → 4.04 | | | `render/flame.wgsl`, `brush/app/bsp.wgsl` |
+
+At 1280x720 the span went from 2.15 to 1.75 ms, but the frame stayed at 3.0 ms: the lab then
+waited for every frame before the next, so its frame held the GPU's round trip (below).
+
+The CPU's side, from the timedemo's own zones (`cpu by zone`, round 8): the world's frame is
+about 0.6 ms at 720p and 0.9 ms at 1440p (it shares the memory with a busy GPU), of which Dawn's
+submit is 0.26 to 0.40, the BSP's prepare 0.13 to 0.24 and the encode 0.08 to 0.13. The lab now
+paces frames as the window does (one in flight), so its frame times from round 8 on are about the
+GPU's round trip (0.6 ms on the M3 Max) shorter than before at the same GPU cost.
+
+| Change (CPU) | `bsp.grid` (median ms, 720p / 1440p) | Where |
+| --- | --- | --- |
+| The light grid binned by runs: each row of cells along x a light's reach touches is one run from one square root, not a sphere test a cell, and the lists are the same lights in the same order (every picture the same) | 0.124 / 0.206 → 0.072 / 0.116 | `brush/app/bsp_draw.cpp` |
+
+What the relief still costs at 1440p is its work: the parallax's march 0.41 ms (its steps 0.28,
+the loop's presence the rest; a coarser mip for the march saves nothing), the highlights 0.26,
+the texel's normal 0.10. Main had moved to 4.34 ms by the trades' row.
+
 ## The flow step on threads
 
 `water::step_flow` splits its rows over `core::parallel_bands`. On the persistent pool a call

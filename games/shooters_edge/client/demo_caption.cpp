@@ -188,11 +188,11 @@ std::vector<DemoPrint> PrintJoin::feed(const DemoPrint& p) {
 }
 
 void DemoNotices::take(const DemoState& s, double t) {
-  for (const DemoPrint& p : s.printed)
+  for (const DemoPrint& p : s.prints)
     for (DemoPrint& line : join.feed(p))
       lines.push_back({std::move(line.text), line.level >= 3, t});
   while (lines.size() > kNoticeLines) lines.erase(lines.begin());
-  if (s.centred) {
+  if (!s.centre.empty()) {
     centre = s.centre;
     // Long enough to read: two seconds, or a twentieth of a second a character.
     centre_until = t + std::max(kCentreSeconds, static_cast<double>(centre.size()) / 20.0);

@@ -9,6 +9,7 @@
 //
 // ge:summary The 2D layer's RGBA8 image, its bilinear sample, a box blur, and fitting to a box
 // ge:keywords ui image rgba picture texture sample bilinear nearest sample_nearest pixel-art
+// ge:keywords scaled_nearest upscale-nearest
 // ge:keywords fit cover contain stretch focus crop zoom blur backdrop
 // ge:skill ui
 // ge:test tests/ui_raster_test.cpp
@@ -48,6 +49,10 @@ Color sample(const Image& img, float x, float y);
 // The colour of the pixel that holds (x, y), clamped at the edges: pixel art scaled by a whole
 // number stays crisp, where the bilinear sample would blur it.
 Color sample_nearest(const Image& img, float x, float y);
+
+// `img` scaled up `k` times (k of 1 or less: unchanged), each pixel a k x k block: pixel art put
+// beside pictures of `k` times its pixels without changing how it looks.
+Image scaled_nearest(const Image& img, int k);
 
 // A blur of about `radius` px: three box passes each way, which approaches a Gaussian. A
 // backdrop behind a menu panel is blurred so the panel's words stay readable over it.

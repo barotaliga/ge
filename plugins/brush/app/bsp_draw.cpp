@@ -5,6 +5,7 @@
 // ge:keywords bsp brush render renderer classic v2 point-light cube-shadow sun-shadow lava-light
 // ge:skill brush render
 #include "brush/app/bsp_draw.hpp"
+#include "prof/zones.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -56,7 +57,7 @@ void upload(gpu::Device& device, const wgpu::Texture& t, const Atlas& a) {
     dst.mipLevel = k;
     wgpu::TexelCopyBufferLayout layout{};
     const uint32_t w = a.width >> k, h = a.height >> k;
-    layout.bytesPerRow = w * 4;
+    layout.bytesPerRow = uint32_t(a.levels[k].size() / std::max(h, 1u));  // 4 bytes a texel, or 1
     layout.rowsPerImage = h;
     const wgpu::Extent3D size{w, h, 1};
     device.queue.WriteTexture(&dst, a.levels[k].data(), a.levels[k].size(), &layout, &size);
@@ -220,6 +221,21 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
       upload(device, d.surface, flat);
     }
   }
+  {
+    // The cover (draw_data.hpp's Scene::cover), or a 1 x 1 solid stand-in the shader skips.
+    const bool has = !scene.cover.levels.empty();
+    const uint32_t w = has ? scene.cover.width : 1, h = has ? scene.cover.height : 1;
+    d.cover = r::make_texture(device, "bsp.cover", w, h, 1, wgpu::TextureFormat::R8Unorm, sampled,
+                              has ? scene.cover.mips : 1);
+    if (has) {
+      upload(device, d.cover, scene.cover);
+    } else {
+      Atlas solid;
+      solid.width = solid.height = 1;
+      solid.levels.push_back({255});
+      upload(device, d.cover, solid);
+    }
+  }
   d.light = r::make_texture(device, "bsp.lightmaps", scene.light.width, scene.light.height, 1,
                             wgpu::TextureFormat::RGBA8Unorm, sampled);
   upload(device, d.light, scene.light);
@@ -292,22 +308,27 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
                            d.mover_rows.size() * sizeof(GpuMover));
   d.lights =
       r::make_buffer(device, "bsp.lights", sizeof(GpuLight) * 512, wgpu::BufferUsage::Storage);
+  d.grid = r::make_buffer(device, "bsp.grid", sizeof(uint32_t) * (kGridCells + 1 + kMaxGridRefs),
+                          wgpu::BufferUsage::Storage);
+  d.grid_rows.assign(kGridCells + 1 + kMaxGridRefs, 0);
   d.jobs = r::make_buffer(device, "bsp.jobs", sizeof(GpuJob) * (kMaxShadowed * 6 + kOrthos),
                           wgpu::BufferUsage::Storage);
 
   using r::Slot;
   const auto both = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
-  d.layout = r::make_layout(
-      device, "bsp",
-      {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler, Slot::storage_read,
-       Slot::depth_array, Slot::compare, Slot::depth_array, Slot::texture, Slot::texture,
-       Slot::storage_read, Slot::storage_read, Slot::texture, Slot::texture},
-      both);
-  d.group = r::make_group(
-      device, "bsp", d.layout,
-      {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler, d.lights,
-       d.cubes_view, d.compare, d.orthos_view, d.rebake_rgb.CreateView(), d.rebake_dir.CreateView(),
-       d.frames, d.movers, d.surface.CreateView(), d.rebake_bounce.CreateView()});
+  d.layout =
+      r::make_layout(device, "bsp",
+                     {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler,
+                      Slot::storage_read, Slot::depth_array, Slot::compare, Slot::depth_array,
+                      Slot::texture, Slot::texture, Slot::storage_read, Slot::storage_read,
+                      Slot::texture, Slot::texture, Slot::texture, Slot::storage_read},
+                     both);
+  d.group =
+      r::make_group(device, "bsp", d.layout,
+                    {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler,
+                     d.lights, d.cubes_view, d.compare, d.orthos_view, d.rebake_rgb.CreateView(),
+                     d.rebake_dir.CreateView(), d.frames, d.movers, d.surface.CreateView(),
+                     d.rebake_bounce.CreateView(), d.cover.CreateView(), d.grid});
   d.fix_layout = r::make_layout(device, "bsp.sky", {Slot::texture, Slot::uniform},
                                 wgpu::ShaderStage::Fragment);
   d.shadow_layout = r::make_layout(device, "bsp.shadows", {Slot::storage_read}, both);
@@ -355,6 +376,15 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     desc.depthStencil = &depth;
     desc.fragment = &fragment;
     d.p_draw = pipelines.add_render(device, desc);
+    // The same with only the real-time lights' path (bsp.wgsl's kLitOnly), for the frames that
+    // take no other.
+    wgpu::ConstantEntry lit_only{};
+    lit_only.key = "kLitOnly";
+    lit_only.value = 1;
+    fragment.constantCount = 1;
+    fragment.constants = &lit_only;
+    desc.label = "bsp.draw.lit";
+    d.p_draw_lit = pipelines.add_render(device, desc);
   }
   {
     const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::bsp_fix, "bsp.sky");
@@ -464,6 +494,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   };
   std::vector<Pick> picks;
   if (lights) {
+    GE_ZONE("bsp.pick");
     const auto consider = [&](const PointLight& l) {
       const double reach = l.physical ? l.reach : l.reach * 1.5;
       const double dx = l.pos[0] - view.eye[0], dy = l.pos[1] - view.eye[1],
@@ -672,7 +703,15 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
        relief ? o.specular : 0);
   set4(d.staged.info5, 1.0 / double(s.light_layers), s.light_layers,
        relief ? std::max(o.relief_strength, 1e-3) : 0, parallax);
+  if (lights) {
+    GE_ZONE("bsp.grid");
+    d.grid_refs = bin_light_grid(d.frame_lights, view.eye, d.grid_rows, d.staged.grid);
+  } else {
+    d.grid_refs = 0;
+    set4(d.staged.grid, 0, 0, 0, 0);
+  }
   if (o.cull) {
+    GE_ZONE("bsp.cull");
     prepare_bsp_cull(device, d.cull, s, view.eye, d.culled_frames > 0, o.pvs);
     ++d.culled_frames;
   } else {
@@ -691,10 +730,15 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       }
     }
   }
+  GE_ZONE("bsp.upload");
   device.queue.WriteBuffer(d.uniform, 0, &d.staged, sizeof d.staged);
   if (!d.frame_lights.empty()) {
     device.queue.WriteBuffer(d.lights, 0, d.frame_lights.data(),
                              d.frame_lights.size() * sizeof(GpuLight));
+  }
+  if (d.staged.grid[3] > 0) {
+    device.queue.WriteBuffer(d.grid, 0, d.grid_rows.data(),
+                             (size_t(kGridCells) + 1 + d.grid_refs) * sizeof(uint32_t));
   }
   device.queue.WriteBuffer(d.jobs, 0, d.frame_jobs.data(), d.frame_jobs.size() * sizeof(GpuJob));
   if (d.movers_dirty) {
@@ -800,7 +844,10 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
     desc.colorAttachments = colours;
     desc.depthStencilAttachment = &depth;
     wgpu::RenderPassEncoder pass = rec.render(encoder, desc, name);
-    pass.SetPipeline(pipelines.render(d.p_draw));
+    // v2 lit in real time with no weather (the uniform as bsp.wgsl reads it): the lean pipeline.
+    const bool lit_only =
+        d.staged.info[0] > 0.5f && d.staged.info[1] == 1.0f && d.staged.weather[0] < 0.5f;
+    pass.SetPipeline(pipelines.render(lit_only ? d.p_draw_lit : d.p_draw));
     pass.SetBindGroup(0, frame);
     pass.SetBindGroup(1, d.group);
     pass.SetVertexBuffer(0, d.vertices);

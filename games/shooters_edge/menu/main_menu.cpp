@@ -35,6 +35,7 @@ constexpr Choice kHudStyle[] = {
 constexpr Choice kWorldLook[] = {{"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kMenuLook[] = {{"AUTO", "auto"}, {"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kOnOff[] = {{"OFF", "0"}, {"ON", "1"}};
+constexpr Choice kFall[] = {{"SNOW", "0"}, {"SLEET", "0.5"}, {"RAIN", "1"}};
 
 // The menu, page by page. A row's `needs` dims it while the console knows no such name.
 constexpr Entry kEntries[] = {
@@ -117,18 +118,16 @@ constexpr Entry kEntries[] = {
      .id = "teamplay",
      .text = "TEAMPLAY",
      .kind = ItemKind::choice,
-     .hint = "Teams by colour. The baseline mod has no teams yet.",
+     .hint = "Teams by colour: a team's frags count together.",
      .needs = "teamplay",
-     .built = false,
      .target = Target::server,
      .choices = kTeamplay},
     {.page = "host",
      .id = "skill",
      .text = "SKILL",
      .kind = ItemKind::choice,
-     .hint = "How hard the monsters fight. The baseline mod has no skill levels yet.",
+     .hint = "How hard the monsters fight in a cooperative game.",
      .needs = "skill",
-     .built = false,
      .target = Target::server,
      .choices = kSkill},
     {.page = "host",
@@ -172,7 +171,7 @@ constexpr Entry kEntries[] = {
      .id = "topcolor",
      .text = "SHIRT COLOUR",
      .kind = ItemKind::choice,
-     .hint = "Your shirt's colour. Player models are not drawn yet.",
+     .hint = "Your shirt's colour, as the others see you (a team game wears the team's).",
      .needs = "topcolor",
      .target = Target::client,
      .choices = kColours},
@@ -180,7 +179,7 @@ constexpr Entry kEntries[] = {
      .id = "bottomcolor",
      .text = "PANTS COLOUR",
      .kind = ItemKind::choice,
-     .hint = "Your pants' colour. Player models are not drawn yet.",
+     .hint = "Your pants' colour, as the others see you (a team game wears the team's).",
      .needs = "bottomcolor",
      .target = Target::client,
      .choices = kColours},
@@ -189,7 +188,8 @@ constexpr Entry kEntries[] = {
     {.page = "options",
      .id = "controls",
      .text = "CUSTOMIZE CONTROLS",
-     .hint = "Bind the keys. The game's moves are not on binds yet.",
+     .hint = "Bind a key to each move: ENTER, then the key.",
+     .opens = "controls",
      .needs = "+forward"},
     {.page = "options",
      .id = "console",
@@ -218,6 +218,7 @@ constexpr Entry kEntries[] = {
      .kind = ItemKind::slider,
      .hint = "The picture's brightness.",
      .needs = "gamma",
+     .reversed = true,
      .target = Target::client,
      .min = 0.5,
      .max = 1,
@@ -236,7 +237,7 @@ constexpr Entry kEntries[] = {
      .id = "bgmvolume",
      .text = "MUSIC VOLUME",
      .kind = ItemKind::slider,
-     .hint = "The game has no music.",
+     .hint = "The music's volume. The window plays no sound yet.",
      .needs = "bgmvolume",
      .target = Target::client,
      .min = 0,
@@ -246,7 +247,7 @@ constexpr Entry kEntries[] = {
      .id = "volume",
      .text = "SOUND VOLUME",
      .kind = ItemKind::slider,
-     .hint = "The game's sound. The window plays no sound yet.",
+     .hint = "The game's sound: a played demo's sounds and voices so far.",
      .needs = "volume",
      .target = Target::client,
      .min = 0,
@@ -256,7 +257,7 @@ constexpr Entry kEntries[] = {
      .id = "cl_run",
      .text = "ALWAYS RUN",
      .kind = ItemKind::toggle,
-     .hint = "Run without holding the run key.",
+     .hint = "Run without holding the run key (SHIFT walks).",
      .needs = "cl_run",
      .target = Target::client},
     {.page = "options",
@@ -277,7 +278,7 @@ constexpr Entry kEntries[] = {
      .id = "lookstrafe",
      .text = "LOOKSTRAFE",
      .kind = ItemKind::toggle,
-     .hint = "The mouse strafes while the look key is held.",
+     .hint = "The mouse's sideways moves sidestep instead of turning.",
      .needs = "lookstrafe",
      .target = Target::client},
     {.page = "options",
@@ -287,8 +288,9 @@ constexpr Entry kEntries[] = {
      .opens = "video"},
     {.page = "options",
      .id = "classic",
-     .text = "CLASSIC ENHANCE",
-     .hint = "Your own classic packs enhanced, and every enhancement on or off.",
+     .text = "CLASSIC ENHANCED",
+     .hint = "Your classic packs enhanced, and the modern picture: light, water, sky, weather.",
+     .opens = "enhanced",
      .needs = "ce_textures"},
     {.page = "options", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
@@ -324,7 +326,343 @@ constexpr Entry kEntries[] = {
      .needs = "vid_fullscreen",
      .target = Target::client,
      .choices = kOnOff},
+    {.page = "video",
+     .id = "weapon",
+     .text = "HELD WEAPON",
+     .hint = "The weapon in your hands: shown or not, its hands, where it is held, its sway.",
+     .opens = "weapon",
+     .needs = "r_drawviewmodel"},
     {.page = "video", .id = "back", .text = "BACK", .kind = ItemKind::back},
+
+    {.page = "weapon",
+     .id = "r_drawviewmodel",
+     .text = "SHOW WEAPON",
+     .kind = ItemKind::toggle,
+     .hint = "Draw the weapon in your hands.",
+     .needs = "r_drawviewmodel",
+     .target = Target::client},
+    {.page = "weapon",
+     .id = "r_viewmodel_hands",
+     .text = "HANDS AND ARMS",
+     .kind = ItemKind::toggle,
+     .hint = "Draw the hands and arms that hold it; off, the weapon alone.",
+     .needs = "r_viewmodel_hands",
+     .target = Target::client},
+    {.page = "weapon",
+     .id = "r_viewmodel_center",
+     .text = "CENTRED",
+     .kind = ItemKind::toggle,
+     .hint = "Held in the middle under the crosshair, the arena way; off, to the right.",
+     .needs = "r_viewmodel_center",
+     .target = Target::client},
+    {.page = "weapon",
+     .id = "cl_gunsway",
+     .text = "SWAY",
+     .kind = ItemKind::slider,
+     .hint = "How much it sways, swings with your stride and breathes; 0 holds it still.",
+     .needs = "cl_gunsway",
+     .target = Target::client,
+     .min = 0,
+     .max = 2,
+     .step = 0.25},
+    {.page = "weapon",
+     .id = "ce_muzzles",
+     .text = "MUZZLE FIRE",
+     .kind = ItemKind::toggle,
+     .hint = "Each shot's flash and smoke from the barrel.",
+     .needs = "ce_muzzles",
+     .target = Target::client},
+    {.page = "weapon", .id = "back", .text = "BACK", .kind = ItemKind::back},
+
+    // CLASSIC ENHANCED: what the game adds to the classic picture, page by subject. Only what a
+    // player will want to change is here; every other setting is the console's (`cvarlist ce_`).
+    {.page = "enhanced",
+     .id = "enhance",
+     .text = "ENHANCE A PACK",
+     .hint = "Pick one of your packs and enhance its textures, skins, light and sounds here.",
+     .needs = "ce_textures"},
+    {.page = "enhanced",
+     .id = "art",
+     .text = "TEXTURES AND MODELS",
+     .hint = "The enhanced textures and skins, their relief and depth, the 2D art.",
+     .opens = "ce_art",
+     .needs = "ce_textures"},
+    {.page = "enhanced",
+     .id = "light",
+     .text = "LIGHT AND SHADOW",
+     .hint = "The rebaked light, shadows, the effects' light and the bloom.",
+     .opens = "ce_light",
+     .needs = "ce_rebake"},
+    {.page = "enhanced",
+     .id = "liquids",
+     .text = "WATER, LAVA AND SKY",
+     .hint = "Water that reflects, glowing lava and slime, teleporters, the sky and the clouds.",
+     .opens = "ce_liquids",
+     .needs = "ce_water"},
+    {.page = "enhanced",
+     .id = "fire",
+     .text = "FIRE AND WIND",
+     .hint = "Live torches, bonfires and the wind that moves them.",
+     .opens = "ce_fire",
+     .needs = "ce_flames"},
+    {.page = "enhanced",
+     .id = "weather",
+     .text = "WEATHER",
+     .hint = "Rain or snow over the open levels, the wind, storms and fog.",
+     .opens = "ce_weather",
+     .needs = "sv_weather"},
+    {.page = "enhanced", .id = "back", .text = "BACK", .kind = ItemKind::back},
+
+    {.page = "ce_art",
+     .id = "ce_textures",
+     .text = "ENHANCED TEXTURES",
+     .kind = ItemKind::toggle,
+     .hint =
+         "The walls and floors upscaled (once the pack is enhanced). From when the menu closes.",
+     .needs = "ce_textures",
+     .target = Target::client},
+    {.page = "ce_art",
+     .id = "ce_relief",
+     .text = "SURFACE RELIEF",
+     .kind = ItemKind::toggle,
+     .hint = "The surfaces' bumps and shine lit; off, flat surfaces.",
+     .needs = "ce_relief",
+     .target = Target::client},
+    {.page = "ce_art",
+     .id = "ce_parallax",
+     .text = "SURFACE DEPTH",
+     .kind = ItemKind::toggle,
+     .hint = "The mortar and the cracks sunk into the walls.",
+     .needs = "ce_parallax",
+     .target = Target::client},
+    {.page = "ce_art",
+     .id = "ce_models",
+     .text = "ENHANCED SKINS",
+     .kind = ItemKind::toggle,
+     .hint = "The monsters' and items' skins upscaled. From when the menu closes.",
+     .needs = "ce_models",
+     .target = Target::client},
+    {.page = "ce_art",
+     .id = "ce_smooth",
+     .text = "SMOOTH SHADING",
+     .kind = ItemKind::toggle,
+     .hint = "The models shaded smooth across their facets; off, flat facets.",
+     .needs = "ce_smooth",
+     .target = Target::client},
+    {.page = "ce_art",
+     .id = "ce_pictures",
+     .text = "ENHANCED 2D ART",
+     .kind = ItemKind::toggle,
+     .hint = "The status bar, the menus and the font upscaled.",
+     .needs = "ce_pictures",
+     .target = Target::client},
+    {.page = "ce_art", .id = "back", .text = "BACK", .kind = ItemKind::back},
+
+    {.page = "ce_light",
+     .id = "ce_rebake",
+     .text = "REBAKED LIGHT",
+     .kind = ItemKind::toggle,
+     .hint = "The light bounced round the rooms, coloured by the walls. From when the menu closes.",
+     .needs = "ce_rebake",
+     .target = Target::client},
+    {.page = "ce_light",
+     .id = "ce_shadows",
+     .text = "SHADOWS",
+     .kind = ItemKind::toggle,
+     .hint = "Live lights and the monsters cast shadows.",
+     .needs = "ce_shadows",
+     .target = Target::client},
+    {.page = "ce_light",
+     .id = "r_fx_lights",
+     .text = "EFFECT LIGHT",
+     .kind = ItemKind::slider,
+     .hint = "How much light the explosions, rockets and shots throw on the walls.",
+     .needs = "r_fx_lights",
+     .target = Target::client,
+     .min = 0,
+     .max = 1,
+     .step = 0.1},
+    {.page = "ce_light",
+     .id = "r_fx_glow",
+     .text = "SPARK GLOW",
+     .kind = ItemKind::slider,
+     .hint = "How bright the sparks and embers glow.",
+     .needs = "r_fx_glow",
+     .target = Target::client,
+     .min = 0,
+     .max = 1,
+     .step = 0.05},
+    {.page = "ce_light",
+     .id = "ce_bloom",
+     .text = "BLOOM",
+     .kind = ItemKind::toggle,
+     .hint = "Bright lights bleed a soft glow. From when the menu closes.",
+     .needs = "ce_bloom",
+     .target = Target::client},
+    {.page = "ce_light",
+     .id = "r_bloom",
+     .text = "BLOOM AMOUNT",
+     .kind = ItemKind::slider,
+     .hint = "How much glow the bloom mixes in. From when the menu closes.",
+     .needs = "r_bloom",
+     .target = Target::client,
+     .min = 0,
+     .max = 1,
+     .step = 0.1},
+    {.page = "ce_light", .id = "back", .text = "BACK", .kind = ItemKind::back},
+
+    {.page = "ce_liquids",
+     .id = "ce_water",
+     .text = "WATER",
+     .kind = ItemKind::toggle,
+     .hint = "Water that reflects, refracts and ripples; off, the pack's warped picture.",
+     .needs = "ce_water",
+     .target = Target::client},
+    {.page = "ce_liquids",
+     .id = "ce_lava",
+     .text = "LAVA",
+     .kind = ItemKind::toggle,
+     .hint = "Lava that glows, crusts and lights the room; off, the pack's warped picture.",
+     .needs = "ce_lava",
+     .target = Target::client},
+    {.page = "ce_liquids",
+     .id = "r_lava_glow",
+     .text = "LAVA LIGHT",
+     .kind = ItemKind::slider,
+     .hint = "How much the lava lights the walls round it.",
+     .needs = "r_lava_glow",
+     .target = Target::client,
+     .min = 0,
+     .max = 1,
+     .step = 0.1},
+    {.page = "ce_liquids",
+     .id = "ce_slime",
+     .text = "SLIME",
+     .kind = ItemKind::toggle,
+     .hint = "Slime that is thick and glows; off, the pack's warped picture.",
+     .needs = "ce_slime",
+     .target = Target::client},
+    {.page = "ce_liquids",
+     .id = "r_slime_glow",
+     .text = "SLIME LIGHT",
+     .kind = ItemKind::slider,
+     .hint = "How much the slime's green glow lights the walls round it.",
+     .needs = "r_slime_glow",
+     .target = Target::client,
+     .min = 0,
+     .max = 1,
+     .step = 0.1},
+    {.page = "ce_liquids",
+     .id = "ce_teleports",
+     .text = "TELEPORTERS",
+     .kind = ItemKind::toggle,
+     .hint = "Teleporters drawn as a shimmering field that lights the floor.",
+     .needs = "ce_teleports",
+     .target = Target::client},
+    {.page = "ce_liquids",
+     .id = "ce_skies",
+     .text = "SKIES",
+     .kind = ItemKind::toggle,
+     .hint = "A sky with depth, clouds and the evening light; off, the pack's scrolling sky.",
+     .needs = "ce_skies",
+     .target = Target::client},
+    {.page = "ce_liquids",
+     .id = "ce_clouds",
+     .text = "LOW CLOUDS",
+     .kind = ItemKind::toggle,
+     .hint = "Low cloud over the open levels.",
+     .needs = "ce_clouds",
+     .target = Target::client},
+    {.page = "ce_liquids", .id = "back", .text = "BACK", .kind = ItemKind::back},
+
+    {.page = "ce_fire",
+     .id = "ce_flames",
+     .text = "LIVE FIRE",
+     .kind = ItemKind::toggle,
+     .hint = "Torches and braziers burn as live fire; off, the pack's painted flames.",
+     .needs = "ce_flames",
+     .target = Target::client},
+    {.page = "ce_fire",
+     .id = "ce_bonfires",
+     .text = "BONFIRES",
+     .kind = ItemKind::toggle,
+     .hint = "Braziers burn as bonfires throwing sparks into the wind.",
+     .needs = "ce_bonfires",
+     .target = Target::client},
+    {.page = "ce_fire",
+     .id = "ce_wind",
+     .text = "WIND",
+     .kind = ItemKind::toggle,
+     .hint = "A wind that bends the flames and blows the sparks; off, still air.",
+     .needs = "ce_wind",
+     .target = Target::client},
+    {.page = "ce_fire", .id = "back", .text = "BACK", .kind = ItemKind::back},
+
+    {.page = "ce_weather",
+     .id = "sv_weather",
+     .text = "WEATHER",
+     .kind = ItemKind::toggle,
+     .hint = "Rain or snow, wind and storms over the open levels.",
+     .needs = "sv_weather",
+     .target = Target::client},
+    {.page = "ce_weather",
+     .id = "sv_rain",
+     .text = "RAIN OR SNOW",
+     .kind = ItemKind::choice,
+     .hint = "What falls: dry snow, sleet or rain.",
+     .needs = "sv_rain",
+     .target = Target::client,
+     .choices = kFall},
+    {.page = "ce_weather",
+     .id = "sv_precip",
+     .text = "HOW HARD",
+     .kind = ItemKind::slider,
+     .hint = "How hard it falls: light to heavy, a storm with lightning past 0.85.",
+     .needs = "sv_precip",
+     .target = Target::client,
+     .min = 0,
+     .max = 1,
+     .step = 0.05},
+    {.page = "ce_weather",
+     .id = "sv_wind",
+     .text = "WIND SPEED",
+     .kind = ItemKind::slider,
+     .hint = "The mean wind, metres a second.",
+     .needs = "sv_wind",
+     .target = Target::client,
+     .min = 0,
+     .max = 20,
+     .step = 1,
+     .unit = " M/S"},
+    {.page = "ce_weather",
+     .id = "r_lightning",
+     .text = "LIGHTNING",
+     .kind = ItemKind::toggle,
+     .hint = "A storm's lightning flashes.",
+     .needs = "r_lightning",
+     .target = Target::client},
+    {.page = "ce_weather",
+     .id = "r_snowcover",
+     .text = "SNOW COVER",
+     .kind = ItemKind::toggle,
+     .hint = "The snow settling on what faces up and is open to the sky.",
+     .needs = "r_snowcover",
+     .target = Target::client},
+    {.page = "ce_weather",
+     .id = "r_wet",
+     .text = "WET SURFACES",
+     .kind = ItemKind::toggle,
+     .hint = "The wet faces and the puddles where the rain reaches.",
+     .needs = "r_wet",
+     .target = Target::client},
+    {.page = "ce_weather",
+     .id = "ce_fog",
+     .text = "FOG",
+     .kind = ItemKind::toggle,
+     .hint = "The weather's fog and haze in the distance.",
+     .needs = "ce_fog",
+     .target = Target::client},
+    {.page = "ce_weather", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
     {.page = "help",
      .id = "keys",
@@ -356,11 +694,26 @@ constexpr Entry kEntries[] = {
     {.page = "quit", .id = "no", .text = "NO", .kind = ItemKind::back},
 };
 
-constexpr const char* kPages[][2] = {
-    {"main", ""},       {"single", "SINGLE PLAYER"}, {"multi", "MULTIPLAYER"}, {"host", "NEW GAME"},
-    {"setup", "SETUP"}, {"options", "OPTIONS"},      {"video", "VIDEO"},       {"help", "HELP"},
+constexpr PageTitle kPages[] = {
+    {"main", ""},
+    {"single", "SINGLE PLAYER"},
+    {"multi", "MULTIPLAYER"},
+    {"host", "NEW GAME"},
+    {"setup", "SETUP"},
+    {"options", "OPTIONS"},
+    {"video", "VIDEO"},
+    {"weapon", "HELD WEAPON"},
+    {"enhanced", "CLASSIC ENHANCED"},
+    {"ce_art", "TEXTURES AND MODELS"},
+    {"ce_light", "LIGHT AND SHADOW"},
+    {"ce_liquids", "WATER, LAVA AND SKY"},
+    {"ce_fire", "FIRE AND WIND"},
+    {"ce_weather", "WEATHER"},
+    {"help", "HELP"},
     {"quit", "QUIT"},
 };
+
+std::string control_id(size_t i) { return "c" + std::to_string(i); }
 
 // The slot pages, built here rather than from the table: one row a slot, its words the save's
 // line (`Host::saves`), and the slot's console line `load s<i>` or `save s<i>`.
@@ -405,7 +758,8 @@ std::string item_text(const Entry& e, const ge::ui::Item& it) {
         return std::string(e.choices[static_cast<size_t>(it.choice)].value);
       return {};
     case ItemKind::slider:
-      return ge::console::number_text(it.value);
+      return ge::console::number_text(e.reversed ? e.max - it.value / 100 * (e.max - e.min)
+                                                 : it.value);
     default:
       return {};
   }
@@ -413,12 +767,21 @@ std::string item_text(const Entry& e, const ge::ui::Item& it) {
 
 }  // namespace
 
+const MenuTable& classic_menu() {
+  static const MenuTable table{kPages, kEntries};
+  return table;
+}
+
 std::span<const Entry> entries() { return kEntries; }
 
-const Entry* find_entry(std::string_view page, std::string_view id) {
-  for (const Entry& e : kEntries)
+const Entry* find_entry(std::string_view page, std::string_view id, const MenuTable& table) {
+  for (const Entry& e : table.entries)
     if (e.page == page && e.id == id) return &e;
   return nullptr;
+}
+
+const MenuTable& table_of(const Host& host) {
+  return host.table != nullptr ? *host.table : classic_menu();
 }
 
 bool host_knows(const Host& host, std::string_view name) {
@@ -436,11 +799,12 @@ std::string host_value(const Host& host, std::string_view name) {
   return {};
 }
 
-ge::ui::Menu build_menu() {
+ge::ui::Menu build_menu(const MenuTable& table) {
   ge::ui::Menu m;
-  for (const auto& [id, title] : kPages) {
-    ge::ui::Page& page = m.add_page(id, title);
-    for (const Entry& e : kEntries) {
+  for (const PageTitle& p : table.pages) {
+    const std::string_view id = p.id;
+    ge::ui::Page& page = m.add_page(std::string(id), std::string(p.title));
+    for (const Entry& e : table.entries) {
       if (e.page != id) continue;
       ge::ui::Item it{.id = std::string(e.id), .text = std::string(e.text), .kind = e.kind};
       it.hint = std::string(e.hint);
@@ -448,8 +812,23 @@ ge::ui::Menu build_menu() {
       it.prominent = e.page == "host" && e.id == "start";
       for (const Choice& c : e.choices) it.choices.emplace_back(c.text);
       it.min = e.min, it.max = e.max, it.step = e.step, it.unit = std::string(e.unit);
+      if (e.reversed) {  // shown 0 to 100 %, the cvar's max at 0 and its min at 100
+        it.min = 0, it.max = 100, it.unit = "%";
+        it.step = 100 * e.step / (e.max - e.min);
+      }
       page.items.push_back(std::move(it));
     }
+  }
+  {
+    ge::ui::Page& page = m.add_page("controls", "CUSTOMIZE CONTROLS");
+    for (size_t i = 0; i < controls().size(); i++) {
+      ge::ui::Item it{
+          .id = control_id(i), .text = std::string(controls()[i].text), .kind = ItemKind::choice};
+      it.hint = "ENTER, then the key for it. BACKSPACE clears it; a third key replaces both.";
+      it.choices = {"---"};
+      page.items.push_back(std::move(it));
+    }
+    page.items.push_back({.id = "back", .text = "BACK", .kind = ItemKind::back});
   }
   for (const auto& [id, title] : kSlotPages) {
     ge::ui::Page& page = m.add_page(id, title);
@@ -464,11 +843,12 @@ ge::ui::Menu build_menu() {
 }
 
 void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
-  for (const auto& [id, title] : kPages) {
+  for (const PageTitle& p : table_of(host).pages) {
+    const std::string_view id = p.id;
     ge::ui::Page* page = menu.page(id);
     if (page == nullptr) continue;
     for (ge::ui::Item& it : page->items) {
-      const Entry* e = find_entry(id, it.id);
+      const Entry* e = find_entry(id, it.id, table_of(host));
       if (e == nullptr) continue;
       if (e->kind == ItemKind::back) {
         it.disabled = hide_back && e->page != "quit";
@@ -505,11 +885,32 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back) {
           if (same_value(v, e->choices[i].value)) it.choice = static_cast<int>(i);
       } else if (e->kind == ItemKind::slider) {
         double x = 0;
-        if (ge::console::parse_number(v, x)) it.value = std::fmin(e->max, std::fmax(e->min, x));
+        if (ge::console::parse_number(v, x)) {
+          x = std::fmin(e->max, std::fmax(e->min, x));
+          it.value = e->reversed ? std::round((e->max - x) / (e->max - e->min) * 100) : x;
+        }
       }
     }
     if (page->focus >= 0 && !page->items[static_cast<size_t>(page->focus)].stop())
       page->focus = -1;  // the menu moves it to the first stop
+  }
+  if (ge::ui::Page* page = menu.page("controls"); page != nullptr) {
+    for (ge::ui::Item& it : page->items) {
+      if (it.kind == ItemKind::back) {
+        it.disabled = hide_back;
+        continue;
+      }
+      const Control* c = control_of(it.id);
+      if (c == nullptr) continue;
+      // The command's first word (`impulse` of `impulse 10`) is what the console must know.
+      it.disabled =
+          host.console == nullptr || !host_knows(host, c->command.substr(0, c->command.find(' ')));
+      it.choices = {host.console != nullptr
+                        ? keys_text(bound_keys(host.console->binds(), c->command))
+                        : std::string("---")};
+      it.choice = 0;
+    }
+    if (page->focus >= 0 && !page->items[static_cast<size_t>(page->focus)].stop()) page->focus = -1;
   }
   for (const auto& [id, title] : kSlotPages) {
     ge::ui::Page* page = menu.page(id);
@@ -541,7 +942,11 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
     con.execute(e.page + " " + e.item);
     return Outcome::close;
   }
-  const Entry* entry = find_entry(e.page, e.item);
+  if (e.page == "controls") {
+    return e.kind == ge::ui::EventKind::changed && control_of(e.item) != nullptr ? Outcome::bind_key
+                                                                                 : Outcome::none;
+  }
+  const Entry* entry = find_entry(e.page, e.item, table_of(host));
   ge::ui::Page* page = menu.page(e.page);
   if (entry == nullptr || page == nullptr) return Outcome::none;
   const ge::ui::Item* it = page->find(e.item);
@@ -552,7 +957,7 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
     return Outcome::none;
   }
   if (e.kind != ge::ui::EventKind::activated) return Outcome::none;
-  if (e.page == "options" && e.item == "classic") return Outcome::classic_enhance;
+  if (e.page == "enhanced" && e.item == "enhance") return Outcome::classic_enhance;
   if (e.page == "options" && e.item == "reset") {
     reset_defaults(host);
     refresh(menu, host);
@@ -560,7 +965,7 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   }
   if (e.page == "host" && e.item == "start") {
     for (const ge::ui::Item& row : page->items) {
-      const Entry* r = find_entry("host", row.id);
+      const Entry* r = find_entry("host", row.id, table_of(host));
       if (r == nullptr || r->target != Target::server || row.disabled) continue;
       con.execute("sv " + std::string(r->id) + " " + item_text(*r, row));
     }
@@ -575,7 +980,7 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
 
 void reset_defaults(Host& host) {
   if (host.console == nullptr) return;
-  for (const Entry& e : kEntries) {
+  for (const Entry& e : table_of(host).entries) {
     if (e.target != Target::client) continue;
     if (ge::console::Cvar* c = host.console->cvars().find(e.id))
       host.console->cvars().reset(*c, ge::console::Source::local);

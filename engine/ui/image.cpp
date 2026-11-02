@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace ge::ui {
 
@@ -90,6 +91,21 @@ void box_pass(const std::vector<uint8_t>& src, std::vector<uint8_t>& dst, int co
 }
 
 }  // namespace
+
+Image scaled_nearest(const Image& img, int k) {
+  if (k <= 1 || img.empty()) return img;
+  Image out;
+  out.width = img.width * k;
+  out.height = img.height * k;
+  out.rgba.resize(static_cast<size_t>(out.width) * static_cast<size_t>(out.height) * 4);
+  for (int y = 0; y < out.height; ++y) {
+    const uint8_t* row = &img.rgba[static_cast<size_t>(y / k) * static_cast<size_t>(img.width) * 4];
+    uint8_t* dst = &out.rgba[static_cast<size_t>(y) * static_cast<size_t>(out.width) * 4];
+    for (int x = 0; x < out.width; ++x)
+      std::memcpy(dst + static_cast<size_t>(x) * 4, row + static_cast<size_t>(x / k) * 4, 4);
+  }
+  return out;
+}
 
 Image blurred(const Image& img, int radius) {
   if (radius <= 0 || img.empty()) return img;

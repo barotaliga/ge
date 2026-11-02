@@ -66,6 +66,7 @@ struct Wave {
 @group(1) @binding(2) var scene_colour: texture_2d<f32>;
 @group(1) @binding(3) var scene_depth: texture_2d<f32>;      // R32F: the opaque depth
 @group(1) @binding(4) var<storage, read> rings: array<Ring>;  // the body's wake, newest first
+@group(1) @binding(5) var shore: texture_2d<f32>;  // R8: where on its box it may be drawn
 
 #include "render/wgsl/water_light.wgsl"
 
@@ -315,6 +316,12 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   // The pixel's footprint on the water, m (before anything can discard).
   let foot = max(length(dpdx(in.xz)), length(dpdy(in.xz)));
   if (any(in.xz < body.box.xy) || any(in.xz > body.box.zw)) {
+    discard;
+  }
+  // Inside the shore's mask (water.hpp's `shore_mask`): a lake's box beyond its shore is dry.
+  let cells = vec2f(textureDimensions(shore));
+  let on_box = (in.xz - body.box.xy) / max(body.box.zw - body.box.xy, vec2f(1e-3));
+  if (textureLoad(shore, vec2i(clamp(on_box * cells, vec2f(0.0), cells - 1.0)), 0).r < 0.5) {
     discard;
   }
   let t = frame.time.x;

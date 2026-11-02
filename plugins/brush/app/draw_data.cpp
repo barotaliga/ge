@@ -11,9 +11,9 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
-#include <map>
 #include <numeric>
 
+#include "brush/anim.hpp"
 #include "brush/app/bsp_flames.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/bytes.hpp"
@@ -49,12 +49,6 @@ bool fail(std::string* error, std::string what) {
   return false;
 }
 
-std::string lower(std::string_view s) {
-  std::string out(s);
-  for (char& c : out) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-  return out;
-}
-
 // A shelf packer: rectangles placed left to right in rows of the tallest so far.
 struct Shelf {
   uint32_t width;
@@ -76,49 +70,23 @@ struct Shelf {
 
 uint32_t up_to(uint32_t v, uint32_t m) { return (v + m - 1) / m * m; }
 
-// The map's miptex records, mip by mip: lump 2 of a version 29 file.
-struct Mips {
-  uint32_t width = 0, height = 0;
-  const uint8_t* level[4] = {nullptr, nullptr, nullptr, nullptr};
-};
+using Mips = MapPicture;
 
-std::vector<Mips> read_mips(std::span<const uint8_t> file) {
-  std::vector<Mips> out;
-  Cursor head{file};
-  head.u32();
-  for (int i = 0; i < 2; ++i) head.u32(), head.u32();
-  const uint32_t ofs = head.u32(), len = head.u32();
-  if (head.bad || ofs > file.size() || len > file.size() - ofs || len < 4) return out;
-  const std::span<const uint8_t> lump = file.subspan(ofs, len);
-  Cursor c{lump};
-  const uint32_t count = c.u32();
-  for (uint32_t i = 0; i < count && !c.bad; ++i) {
-    const int32_t at = c.i32();
-    Mips m;
-    if (at >= 0 && uint32_t(at) + 40 <= len) {
-      Cursor r{lump};
-      r.at = size_t(at);
-      r.name(16);
-      m.width = r.u32();
-      m.height = r.u32();
-      for (int k = 0; k < 4; ++k) {
-        const uint32_t o = r.u32();
-        const uint64_t bytes = uint64_t(m.width >> k) * (m.height >> k);
-        if (o != 0 && uint64_t(at) + o + bytes <= len) m.level[k] = lump.data() + at + o;
-      }
-      if (!m.level[0]) m.width = m.height = 0;
-    }
-    out.push_back(m);
+// How a liquid is drawn, by the mark its map's reader set.
+Kind kind_of(Liquid l) {
+  switch (l) {
+    case Liquid::water:
+      return kWater;
+    case Liquid::slime:
+      return kSlime;
+    case Liquid::lava:
+      return kLava;
+    case Liquid::teleport:
+      return kTele;
+    case Liquid::none:
+    case Liquid::other:
+      break;
   }
-  return out;
-}
-
-Kind liquid_kind(const std::string& name) {
-  const std::string n = lower(name);
-  if (n.find("lava") != std::string::npos) return kLava;
-  if (n.find("slime") != std::string::npos) return kSlime;
-  if (n.find("water") != std::string::npos) return kWater;
-  if (n.find("tele") != std::string::npos) return kTele;
   return kWarp;  // another warped surface: drawn as it is
 }
 
@@ -271,7 +239,13 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
   // A source may hand a texture larger than the map's (2, 4 or 8 times across: an upscaled copy);
   // its rectangle is that much larger and its faces' texture coordinates scaled to match. The
   // frames of an animated sequence keep one scale, or all fall back to the map's own.
-  const std::vector<Mips> mips = read_mips(file);
+  // The pictures: the game's own reader's (`TextureSource::pictures`), else what the file carries
+  // (only 29 and BSP2 do; another family's come from the source or are checks).
+  std::vector<Mips> read;
+  if (source.pictures == nullptr && (m.family == Family::v29 || m.family == Family::bsp2))
+    read = read_map_pictures(file);
+  const std::vector<Mips>& mips = source.pictures != nullptr ? *source.pictures : read;
+  const TextureAnims anims = build_texture_anims(m);
   struct Placed {
     uint32_t x = 0, y = 0, w = 16, h = 16;
   };
@@ -280,17 +254,45 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
   std::vector<std::vector<uint8_t>> own(m.textures.size());
   std::vector<std::vector<uint8_t>> own_surface(m.textures.size());  // TextureSource::surface's
   for (size_t i = 0; i < m.textures.size(); ++i) {
-    if (s.sky_texture == UINT32_MAX && m.textures[i].name.size() >= 3 &&
-        lower(m.textures[i].name).rfind("sky", 0) == 0) {
-      s.sky_texture = uint32_t(i);
-    }
+    if (s.sky_texture == UINT32_MAX && m.textures[i].sky) s.sky_texture = uint32_t(i);
   }
   const auto size_of = [&](size_t i) {
-    const bool ok = i < mips.size() && mips[i].width > 0;
-    return std::pair<uint32_t, uint32_t>{ok ? mips[i].width : 16, ok ? mips[i].height : 16};
+    if (i < mips.size() && mips[i].width > 0)
+      return std::pair<uint32_t, uint32_t>{mips[i].width, mips[i].height};
+    if (i < mips.size() && !mips[i].rgba.empty())  // a full-colour picture with no indexed one
+      return std::pair<uint32_t, uint32_t>{mips[i].rgba_width, mips[i].rgba_height};
+    return std::pair<uint32_t, uint32_t>{16, 16};
   };
+  // The game's own full-colour pictures first (they win over the source's): each at the map's
+  // size times the least of 1, 2, 4 or 8 that holds it (8 at most), read at each texel's centre,
+  // its colour into the atlas (no glow) and its alpha into the cover.
+  std::vector<std::vector<uint8_t>> own_cover(m.textures.size());
+  for (size_t i = 0; i < m.textures.size() && i < mips.size(); ++i) {
+    const MapPicture& p = mips[i];
+    if (p.rgba.empty() || p.rgba_width == 0 || p.rgba_height == 0 ||
+        p.rgba.size() != size_t(p.rgba_width) * p.rgba_height * 4)
+      continue;
+    const auto [w, h] = size_of(i);
+    uint32_t k = 1;
+    while (k < 8 && (w * k < p.rgba_width || h * k < p.rgba_height)) k *= 2;
+    const uint32_t tw = w * k, th = h * k;
+    std::vector<uint8_t> rgba(size_t(tw) * th * 4), cover(size_t(tw) * th);
+    for (uint32_t y = 0; y < th; ++y) {
+      const uint32_t sy = uint32_t((uint64_t(y) * 2 + 1) * p.rgba_height / (uint64_t(th) * 2));
+      for (uint32_t x = 0; x < tw; ++x) {
+        const uint32_t sx = uint32_t((uint64_t(x) * 2 + 1) * p.rgba_width / (uint64_t(tw) * 2));
+        const uint8_t* src = &p.rgba[(size_t(sy) * p.rgba_width + sx) * 4];
+        uint8_t* dst = &rgba[(size_t(y) * tw + x) * 4];
+        dst[0] = src[0], dst[1] = src[1], dst[2] = src[2], dst[3] = 0;
+        cover[size_t(y) * tw + x] = src[3];
+      }
+    }
+    own[i] = std::move(rgba);
+    own_cover[i] = std::move(cover);
+    scale_of[i] = k;
+  }
   for (size_t i = 0; i < m.textures.size() && source.replace; ++i) {
-    if (i >= mips.size() || !mips[i].level[0]) continue;
+    if (i >= mips.size() || !mips[i].level[0] || !own[i].empty()) continue;
     const auto [w, h] = size_of(i);
     std::vector<uint8_t> rgba;
     if (!source.replace(source.user, m.textures[i].name, w, h, {mips[i].level[0], size_t(w) * h},
@@ -312,19 +314,18 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
       own_surface[i] = std::move(relief);
   }
   {
-    // A sequence's frames ("+0name" .. "+9name", "+aname" ..) at one scale, or none replaced.
-    std::map<std::string, std::vector<size_t>> runs;
-    for (size_t i = 0; i < m.textures.size(); ++i) {
-      const std::string& n = m.textures[i].name;
-      if (n.size() >= 3 && n[0] == '+') runs[lower(n.substr(2))].push_back(i);
-    }
-    for (const auto& [name, members] : runs) {
+    // A cycle's frames (its main and alternate ones) at one scale, or none replaced.
+    for (const TextureSet& set : anims.sets) {
+      if (set.random) continue;
+      std::vector<uint32_t> members = set.frames;
+      members.insert(members.end(), set.alt.begin(), set.alt.end());
       bool same = true;
       for (size_t i : members) same = same && scale_of[i] == scale_of[members[0]];
       if (same) continue;
       for (size_t i : members) {
         own[i].clear();
         own_surface[i].clear();
+        own_cover[i].clear();
         scale_of[i] = 1;
       }
     }
@@ -359,6 +360,28 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     const uint32_t levels = s.textures.mips;
     std::vector<std::vector<std::vector<uint8_t>>> rgba(placed.size(),
                                                         std::vector<std::vector<uint8_t>>(levels));
+    // Each texture's cover at level 0 (empty: solid): a full-colour picture's alpha, or a fence
+    // texture's index 255.
+    std::vector<std::vector<uint8_t>> cover0(placed.size());
+    for (size_t i = 0; i < placed.size(); ++i) {
+      if (!own_cover[i].empty()) {
+        cover0[i] = std::move(own_cover[i]);
+      } else if (i < mips.size() && mips[i].level[0] && !m.textures[i].name.empty() &&
+                 m.textures[i].name[0] == '{') {
+        // At the texture's rectangle (the map's size times its scale), each index read nearest.
+        const auto [w, h] = size_of(i);
+        const uint32_t k = scale_of[i];
+        cover0[i].resize(size_t(w) * k * h * k);
+        bool any = false;
+        for (uint32_t y = 0; y < h * k; ++y)
+          for (uint32_t x = 0; x < w * k; ++x) {
+            const bool hole = mips[i].level[0][size_t(y / k) * w + x / k] == 255;
+            cover0[i][size_t(y) * w * k + x] = hole ? 0 : 255;
+            any = any || hole;
+          }
+        if (!any) cover0[i].clear();
+      }
+    }
     for (size_t i = 0; i < placed.size(); ++i) {
       const Placed& p = placed[i];
       const bool replaced = !own[i].empty();
@@ -401,6 +424,42 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
         }
       }
       s.textures.levels.push_back(std::move(level));
+    }
+    // The cover in the same places: solid where a texture has none, each one's mips averaged.
+    if (std::any_of(cover0.begin(), cover0.end(),
+                    [](const std::vector<uint8_t>& v) { return !v.empty(); })) {
+      s.cover.width = s.textures.width;
+      s.cover.height = s.textures.height;
+      s.cover.mips = levels;
+      for (uint32_t k = 0; k < levels; ++k)
+        s.cover.levels.emplace_back(size_t(s.cover.width >> k) * (s.cover.height >> k), 255);
+      for (size_t i = 0; i < placed.size(); ++i) {
+        if (cover0[i].empty()) continue;
+        const Placed& p = placed[i];
+        std::vector<uint8_t> above = std::move(cover0[i]), here;
+        for (uint32_t k = 0; k < levels; ++k) {
+          const uint32_t tw = std::max(p.w >> k, 1u), th = std::max(p.h >> k, 1u);
+          if (k > 0) {
+            const uint32_t pw = std::max(p.w >> (k - 1), 1u), ph = std::max(p.h >> (k - 1), 1u);
+            here.assign(size_t(tw) * th, 0);
+            for (uint32_t y = 0; y < th; ++y)
+              for (uint32_t x = 0; x < tw; ++x) {
+                uint32_t sum = 0;
+                for (uint32_t dy = 0; dy < 2; ++dy)
+                  for (uint32_t dx = 0; dx < 2; ++dx)
+                    sum += above[size_t(std::min(y * 2 + dy, ph - 1)) * pw +
+                                 std::min(x * 2 + dx, pw - 1)];
+                here[size_t(y) * tw + x] = uint8_t((sum + 2) / 4);
+              }
+            above.swap(here);
+          }
+          std::vector<uint8_t>& level = s.cover.levels[k];
+          const uint32_t w = s.cover.width >> k;
+          for (uint32_t y = 0; y < th; ++y)
+            std::memcpy(&level[(size_t((p.y >> k) + y) * w) + (p.x >> k)], &above[size_t(y) * tw],
+                        tw);
+        }
+      }
     }
     // The relief in the same places: flat where a texture has none, each one's mips halved.
     if (std::any_of(own_surface.begin(), own_surface.end(),
@@ -476,21 +535,15 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     s.light.levels.push_back(std::move(level));
   }
 
-  // ── The animated textures: "+0name" .. "+9name", each sequence's frames together ──
+  // ── The animated textures: each cycle's main frames together (anim.hpp) ──
   std::vector<uint32_t> anim_of(m.textures.size(), 0);
   {
-    std::map<std::string, std::array<int32_t, 10>> sequences;
-    for (size_t i = 0; i < m.textures.size(); ++i) {
-      const std::string& n = m.textures[i].name;
-      if (n.size() < 3 || n[0] != '+' || n[1] < '0' || n[1] > '9') continue;
-      auto [it, added] = sequences.try_emplace(lower(n.substr(2)));
-      if (added) it->second.fill(-1);
-      it->second[size_t(n[1] - '0')] = int32_t(i);
-    }
-    for (const auto& [name, frames] : sequences) {
-      uint32_t count = 0;
-      while (count < 10 && frames[count] >= 0) ++count;  // frames run from +0 without a gap
-      if (count < 2) continue;
+    for (const TextureSet& set : anims.sets) {
+      // A cycle of two frames or more; an alternate cycle alone (its frames stand in for the
+      // main ones) and a random set are drawn still.
+      if (set.random || set.frames.size() < 2 || anims.is_alt[set.frames[0]]) continue;
+      const std::vector<uint32_t>& frames = set.frames;
+      const auto count = uint32_t(std::min<size_t>(frames.size(), 255));  // eight bits a frame
       const uint32_t first = uint32_t(s.frames.size());
       for (uint32_t k = 0; k < count; ++k) {
         const Placed& p = placed[size_t(frames[k])];
@@ -537,7 +590,7 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     else if (sf.kind == SurfaceKind::sky)
       kind = kSky;
     else if (sf.kind == SurfaceKind::liquid)
-      kind = liquid_kind(m.textures[sf.texture].name);
+      kind = kind_of(m.textures[sf.texture].liquid);
     const Placed& p = placed[sf.texture];
     const LmPlace* lp = sf.lightmap >= 0 ? &lm_at[size_t(sf.lightmap)] : nullptr;
     const Lightmap* lmap = sf.lightmap >= 0 ? &m.lightmaps[size_t(sf.lightmap)] : nullptr;

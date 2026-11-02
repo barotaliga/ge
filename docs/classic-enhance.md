@@ -10,7 +10,8 @@ The shareware pack may be used unchanged, as it comes in its release zip or as a
 leaves it; the full game is the player's own copy, for them alone. So the pipeline:
 
 - starts from **any pack that reads**: the release zip (and the self-extracting LHA installer
-  inside it), an installed folder, or the pack file itself. A pack whose SHA-256 is in
+  inside it), an installed folder, the pack file itself, or a content zip standing in for the
+  first pack (`pak0.pk3`: its files read into a pack, its own digest keying the cache). A pack whose SHA-256 is in
   `kKnownPacks` (`source.hpp`) is reported as that release; any other (the full game, another
   release) is taken as the player's own copy and reported **unverified** in `source.txt` and the
   tool's answer. A pack that does not read is refused, and the refusal prints the digest it saw;
@@ -20,6 +21,19 @@ leaves it; the full game is the player's own copy, for them alone. So the pipeli
   `sound/*.wav`, `progs/*.mdl` and `*.spr`), never by a list of one release's files, so the full
   game's every level, sound and model is enhanced. The cache folder is keyed by every pack's
   digest together;
+- knows a **release by its files**, whatever packs hold them (`known_sets.hpp`): the merged
+  packs are matched against each known set (the full game of release 1.06: its two packs' 424
+  files; the 2021 remaster: the 423 of those paths it holds), every file by path, size and the
+  first 128 bits of its SHA-256, and files a set does not list are ignored. The full game
+  repackaged into one `pak0.pak` or `pak0.pk3`, with or without the player's own files added, is
+  reported as the full game (`"set"` in the tool's answer, `set` in `source.txt`); with no set
+  whole, the nearest is named with what of it is missing or changed. The startup script is
+  listed by its contents alone, at any path: its name is one this tree does not spell.
+  `ge tool classicenhance -- manifest <path>` prints a source's files as a set's rows;
+- leaves a **release's remade sounds** alone: the remaster's sounds (44.1 kHz 16-bit, against the
+  original's 11 kHz 8-bit) are not enhanced. Its textures, models and 2D art are the original's
+  byte for byte (its maps are rebuilt and relit around the same textures), so every other stage
+  runs as for any pack;
 - writes everything it reads or makes to the player's **local cache** and nowhere else, beside a
   `NOTICE.txt` that says not to share it;
 - ships the **code** and never the output. Nothing read from the pack or made from it is
@@ -33,7 +47,8 @@ the lightmaps work's (`plugins/brush`, M40) and this plugin only calls it.
 ## Running it
 
 ```sh
-ge tool classicenhance -- verify <zip|folder|pack>   # which route, each pack's digest, known or not
+ge tool classicenhance -- verify <zip|folder|pack>   # which route, each pack's digest, known or not, the set
+ge tool classicenhance -- manifest <zip|folder|pack> # the packs' files as a known set's rows
 ge tool classicenhance -- run <zip|folder|pack>      # every stage, skipping those up to date
 ge tool classicenhance -- run <src> --only=textures --force --scale=4 --limit=8
 ge tool classicenhance -- run <src> --upscaler=kernel     # no download: the kernel at any scale
@@ -41,9 +56,37 @@ ge tool classicenhance -- run <src> --device=cpu          # the trained upscaler
 ge tool classicenhance -- status <src>               # what the cache holds for this pack
 ```
 
+A stage cut off between items (a cancel, a killed process, a failure) resumes on the next run
+with the same options: each stage but the pack and the models keeps a journal,
+`<stage>.partial` in the pack's cache folder (its key, then a line for each item whose files
+are written), and the rerun skips every item the journal holds. A long CPU bake stopped at 186
+of 217 pictures does the last 31. Changed options (a new key) or `--force` start the stage over;
+the journal is removed once the stage is recorded.
+
 `ge tool <plugin>` builds the plugin's `tool/` executable and relays its one JSON answer. The
 cache is `GE_CLASSIC_CACHE` when set, else the platform's cache folder (`XDG_CACHE_HOME` or
 `~/.cache`, `~/Library/Caches`, `%LOCALAPPDATA%`) under `ge/classicenhance/<digest>/`.
+
+## Profiles: more than one classic game
+
+Everything the pipeline reads is found through a **content profile** (`profile.hpp`): one row of
+data a classic game, holding its base folder in an install, its numbered packs, the folder and
+extension of each asset kind (maps, sounds, models, sprites, loose pictures) and its named files
+(the palette, the picture wad, the start map, the file only the full game has). The first game is
+the first row (`classic`), the default of every function that takes a profile, so it reads
+exactly as before. `open_source` finds the profile with the pack: by the base folder an install
+keeps the first pack in, by the path a zip or the installer stores it under, or for a pack on its
+own by the first row whose palette it holds. `Source::profile` carries it through every stage,
+and `ge tool classicenhance -- verify` names it (`"profile"`).
+
+A second classic game is a second row, plus a reader for any file kind the engine does not read
+yet (its models, its pictures); no stage changes. The game-side half of a profile (its programs,
+movement, arsenal, menus and HUD art) is Shooter's Edge's (`docs/shooters-edge.md` § Profiles,
+row M18t). What still names the first game's files, to move into rows as the work goes on
+(M18t): the effects drawn in place of its sprites and flames (`replace.hpp`), its held weapons'
+models (`weapons.hpp`), and the texture rules that read meaning from names (a liquid's `*`, a sky's
+`sky`, an animation's `+`, the palette's glowing range from 224), which move into the map reader so
+a format that marks them with surface flags feeds the same renderer.
 
 ## The stages
 
@@ -54,7 +97,7 @@ cache is `GE_CLASSIC_CACHE` when set, else the platform's cache folder (`XDG_CAC
 | `lightmaps` | `lightmaps/<map>.gerb`: each map's light rebaked (`brush::rebake_map`: 0.25 m luxels, two bounces off the textures' mean colours, the light's direction, and the bounce alone); the shareware pack's 21 maps take about 4 minutes on four cores and 53 MB | `kLightmapStageVersion`, the options or the textures' stage move |
 | `sounds` | `sounds/<path>.wav` (48 kHz, 16-bit, the loop start in a `cue ` chunk), `sounds/index.txt` | `kSoundStageVersion` or the options move |
 | `models` | `models/<name>.glb` (every model: enhanced skins, smooth normals, a morph target a frame, its clips), `models/<name>/skin<k>.png` and `glow<k>.png` (each skin alone, for a game drawing the pack's own model), `sprites/<name>/<frame>.png`, `models/index.txt`, `replaced.txt` | `kModelStageVersion` or the options move |
-| `pictures` | `pictures/<name>.png` (the wad's pictures and the 128x128 font sheet by lump name, `pictures/gfx/<name>.png` for the pack's own picture files), unscaled, in the palette's colours with the see-through index clear; `pictures/index.txt` | `kPictureStageVersion` moves |
+| `pictures` | `pictures/<name>.png` (the wad's pictures and the 128x128 font sheet by lump name, `pictures/gfx/<name>.png` for the pack's own picture files), unscaled, in the palette's colours with the see-through index clear; the same upscaled under `pictures/enhanced/` (`enhance_picture`); `pictures/index.txt` | `kPictureStageVersion`, the scale, the sharpening, the grain or the upscaler moves |
 
 Each stage records a key in `stages.txt`; a file is written whole (to `.part`, then renamed), so a
 stopped run never leaves half a texture that looks finished.
@@ -266,12 +309,30 @@ Sprites are written frame by frame at their source size, their transparent index
 
 ## The pictures
 
-The `pictures` stage writes the pack's 2D art as it is: the status bar, its digits and alarm
-digits, the portraits, the weapon, key and powerup icons, the 128x128 font sheet, and the menus'
-pictures. They are written unscaled, because a HUD draws them at a whole number of screen pixels
-a pixel, sampled nearest; an upscale would soften the edges the art is drawn to. Index 255 is
-see-through in a picture and index 0 in the font sheet. Shooter's Edge's classic HUD look reads
-them by their lump names in place of its own art.
+The `pictures` stage writes the pack's 2D art twice: the status bar, its digits and alarm digits,
+the portraits, the weapon, key and powerup icons, the 128x128 font sheet, and the menus' pictures.
+
+- **As it is**, under `pictures/`: unscaled, for a HUD that draws them at a whole number of screen
+  pixels a pixel, sampled nearest (`ce_pictures 0`). Index 255 is see-through in a picture and
+  index 0 in the font sheet.
+- **Enhanced**, under `pictures/enhanced/` (`enhance_picture`, `plugins/classicenhance/pictures.hpp`):
+  upscaled at the textures' scale (4) by the textures' upscaler (the trained network under
+  `ce_upscaler`, else the edge-aware kernel; `upscale_albedo` in `texture.hpp`). Before the
+  upscale the opaque texels' colours are spread into the see-through ones round them, so the
+  see-through index's colour never bleeds into an edge, and the picture is padded by its own edge
+  texels, so it is not read as a tile that wraps; the font sheet is done a glyph cell at a time, so
+  no glyph reaches into its neighbour. The alpha is the see-through mask sampled bilinearly at the
+  new size and steepened about one half: a stroke one texel wide stays one texel wide, a staircase
+  becomes a smooth edge, and the edge is about a pixel and a quarter soft.
+
+Shooter's Edge's window reads them by their names (`cached_picture` in `cached.hpp`) when
+`ce_pictures` is on (the default): its classic status bar, the counts and the crosshair in the
+glyph sheet, the classic menu's plaque, titles, strips, cursor, help pages and text box, the
+glyph text of the menu pages, the intermission and the scoreboard all come from four times the
+pixels, drawn at their classic sizes and filtered (`client/classic_pictures.hpp`). A picture the
+cache lacks is the pack's own scaled up nearest, so one set never mixes sizes. The demo video's
+status bar is drawn the same way. The `se-menu` lab (`--pack`) adds an `enhanced` set once the
+stage has run on that pack, and the `se-hud` lab reads `--classic=<cache>/pictures/enhanced`.
 
 ## The air
 

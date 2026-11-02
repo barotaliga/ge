@@ -1,8 +1,8 @@
 // The cache read back by a game (cached.hpp).
 //
-// ge:summary Reads the enhanced cache back: the pack's folder, textures and skins by name
+// ge:summary Reads the enhanced cache back: the pack's folder, textures, skins and pictures by name
 // ge:keywords classicenhance cache read find_cache cached_texture cached_skins albedo emissive
-// ge:keywords cached_surface relief
+// ge:keywords cached_surface relief cached_picture pictures enhanced hud menu conchars
 // ge:skill classicenhance
 // ge:test tests/classicenhance_cached_test.cpp
 #include "classicenhance/cached.hpp"
@@ -51,9 +51,16 @@ bool left_to_pack(std::string_view name) {
 }  // namespace
 
 fs::path find_cache(std::span<const uint8_t> pack, const fs::path& root) {
+  const std::span<const uint8_t> one[] = {pack};
+  return find_cache(std::span<const std::span<const uint8_t>>(one), root);
+}
+
+fs::path find_cache(std::span<const std::span<const uint8_t>> packs, const fs::path& root) {
   const fs::path base = root.empty() ? default_cache_root() : root;
-  if (base.empty() || pack.empty()) return {};
-  const fs::path dir = pack_dir(base, assets::sha256_hex(pack));
+  if (base.empty() || packs.empty() || packs[0].empty()) return {};
+  std::vector<std::string> digests;
+  for (const std::span<const uint8_t> p : packs) digests.push_back(assets::sha256_hex(p));
+  const fs::path dir = pack_dir(base, set_key(digests));
   return recorded_key(dir, "textures").empty() ? fs::path{} : dir;
 }
 
@@ -127,6 +134,20 @@ bool cached_rebake(const fs::path& dir, std::string_view name, size_t vertices,
   if (!brush::read_rebaked(bytes, &baked, &error) || baked.lm.size() != vertices * 2) return false;
   *out = std::move(baked);
   return true;
+}
+
+uint32_t cached_picture(const fs::path& dir, std::string_view name, uint32_t w, uint32_t h,
+                        assets::Image* out) {
+  if (dir.empty() || name.empty() || name.find("..") != std::string_view::npos) return 0;
+  const fs::path file = dir / "pictures" / "enhanced" / (std::string(name) + ".png");
+  std::error_code ec;
+  if (!fs::exists(file, ec)) return 0;
+  std::optional<lab::Picture> p = lab::read_png(file.string());
+  if (!p) return 0;
+  const uint32_t k = scale_of(*p, w, h);
+  if (k == 0) return 0;
+  *out = {p->width, p->height, std::move(p->rgba)};
+  return k;
 }
 
 }  // namespace ge::classicenhance

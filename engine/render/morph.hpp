@@ -9,7 +9,8 @@
 //   coordinates in two more, and the skins packed into one atlas (`pack_morph_atlas`), so a frame
 //   writes nothing but its draws.
 // - THE SKIN is a colour a texel (sRGB) and a MARK a texel: plain, GLOW (it lights itself: an
-//   eye, a lamp) or TINTED (`kMarkTintA` / `kMarkTintB` and a STEP 0..15 down a ramp). A tinted
+//   eye, a lamp), a HOLE (`kMarkHole`: nothing drawn there, a game's skin with alpha cut through)
+//   or TINTED (`kMarkTintA` / `kMarkTintB` and a STEP 0..15 down a ramp). A tinted
 //   texel takes its colour from the instance's ramp for that region at that step, so one skin
 //   is drawn in any team's colours with its own shading kept: the step is how light or dark the
 //   texel was painted, the ramp what colour that is. The ramps are a table of rows of
@@ -36,6 +37,7 @@
 // ge:summary Morph meshes drawn: vertex-animated models, frames blended on the GPU, tinted skins
 // ge:keywords render morph morph-mesh vertex-animation frames blend interpolation skin atlas
 // ge:keywords tint team-colours player-colours ramp glow fullbright sharp smooth nearest
+// ge:keywords hole cut-out alpha see-through mark-hole
 // ge:keywords create_morph prepare_morph encode_morph pose_morph morph_texel pack_morph_atlas
 // ge:skill render
 // ge:test tests/render_morph_test.cpp
@@ -59,6 +61,7 @@ inline constexpr uint32_t kMorphAtlasSize = 2048;
 // A skin texel's mark.
 inline constexpr uint8_t kMarkPlain = 0;
 inline constexpr uint8_t kMarkGlow = 1;
+inline constexpr uint8_t kMarkHole = 2;      // nothing drawn: the skin's alpha cut through
 inline constexpr uint8_t kMarkTintA = 0x40;  // | the step, 0..15
 inline constexpr uint8_t kMarkTintB = 0x80;  // | the step
 

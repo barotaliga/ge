@@ -25,6 +25,7 @@
 #include <string_view>
 
 #include "audio/synth.hpp"
+#include "core/prng.hpp"
 #include "fall_line/sim/state.hpp"
 #include "fall_line/sound/listener.hpp"
 #include "skier/app/ride_bed.hpp"
@@ -41,6 +42,7 @@ struct RunSound {
   ge::wind::Storm storm;  // the map's, laid for `storm_level` at `storm_thunder`
   const ge::mountain::mapgen::Level* storm_level = nullptr;
   double storm_thunder = 0;
+  ge::core::Rng rng = ge::core::make_rng(0x7a12u);  // a splash's bubbles (water/sound.hpp)
 };
 
 RunSound make_run_sound();

@@ -4,6 +4,8 @@
 // ge:test tests/shooters_edge_effects_test.cpp
 #include "shooters_edge/app/look.hpp"
 
+#include <cmath>
+
 namespace shooters_edge::look {
 
 namespace ba = ge::brush::app;
@@ -52,6 +54,14 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0,
            .max = 4},
           &picture.slime_glow);
+  cv.bind({.name = "gamma",
+           .fallback = "1",
+           .flags = gc::kArchive,
+           .help = "the picture's brightness: 1 as drawn, lower brighter (0.5 the brightest the "
+                   "menu offers)",
+           .min = 0.3,
+           .max = 1.5},
+          &picture.gamma);
   ge::classicenhance::bind_switches(cv, &picture.ce);
   ge::brush::app::add_weather_cvars(cv, picture.weather);
 }
@@ -126,6 +136,12 @@ std::vector<float> palette_grade(std::span<const uint8_t> palette) {
     }
     for (size_t k = 0; k < 3; ++k) table[e + k] = float(palette[pick * 3 + k]) / 255.0f;
   }
+  return table;
+}
+
+std::vector<float> gamma_grade(std::vector<float> table, double gamma) {
+  if (gamma == 1) return table;
+  for (float& v : table) v = static_cast<float>(std::pow(std::fmax(0.0, double(v)), gamma));
   return table;
 }
 

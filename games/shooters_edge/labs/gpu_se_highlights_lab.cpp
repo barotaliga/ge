@@ -32,6 +32,7 @@
 
 #include "brush/write.hpp"
 #include "capture/codecs.hpp"
+#include "classicenhance/profile.hpp"
 #include "gpu/device.hpp"
 #include "lab/gif.hpp"
 #include "lab/lab.hpp"
@@ -418,7 +419,8 @@ const gl::LabSpec kSpec{
         {"file", "", "a demo's path (plain or gzip); empty: the scripted match"},
         {"track", "-1", "the player whose highlights are pictured (-1: the lowest playing)"},
         {"basedir", "", "a folder holding a game folder: the demo's map from there"},
-        {"game", "id1", "the game folder under --basedir"},
+        {"game", ge::classicenhance::kProfiles[0].base_dir.data(),
+         "the game folder under --basedir"},
         {"moments", "6", "the watched player's highlights pictured with the GPU, the first n"},
         {"clip", "1", "the watched player's highlight cut out as a GIF and a WebM (0: none)"},
     },

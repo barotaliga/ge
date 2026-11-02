@@ -20,6 +20,7 @@ using namespace ge::cli;
 namespace {
 
 const fs::path kRepo = "/src/game";
+const fs::path kBuild = "/src/game/build/debug";
 
 // Four libraries, the labs executable (its main and two labs), and three tests.
 const std::string kDeps =
@@ -74,7 +75,7 @@ const std::set<std::string> kLibraries{"ge_core", "ge_wing", "g_sim", "ge_lab"};
 Reach reach_of(std::set<std::string> changed) {
   Reach r;
   r.changed = std::move(changed);
-  reach_from_deps(kRepo, kDeps, kLibraries, r);
+  reach_from_deps(kRepo, kBuild, kDeps, kLibraries, r);
   return r;
 }
 
@@ -115,6 +116,20 @@ TEST(each_object_is_reached_on_its_own_inside_one_executable) {
   // A lab's own source reaches that lab alone.
   const Reach own = reach_of({"engine/lab/labs/grid_lab.cpp"});
   CHECK((own.objects == std::set<std::string>{"engine/lab/labs/grid_lab.cpp"}));
+}
+
+TEST(paths_relative_to_the_build_directory_are_the_repositorys) {
+  // A build directory inside the repository has Ninja write its paths relative to itself.
+  std::string relative = kDeps;
+  for (size_t at = 0; (at = relative.find("    /src/game/", at)) != std::string::npos;) {
+    relative.replace(at + 4, 10, "../../");
+  }
+  Reach r;
+  r.changed = {"plugins/wing/acro.cpp"};
+  reach_from_deps(kRepo, kBuild, relative, kLibraries, r);
+  CHECK(r.targets == reach_of({"plugins/wing/acro.cpp"}).targets);
+  CHECK(r.objects.count("games/g/labs/glide_lab.cpp"));
+  CHECK(!r.objects.count("engine/lab/labs/grid_lab.cpp"));
 }
 
 TEST(the_libraries_are_read_off_ninjas_target_list) {

@@ -4,7 +4,8 @@
 // against the size the game has for it, so a stale or foreign cache never draws a wrong picture:
 // anything missing or mismatched leaves the pack's own.
 //
-// - `find_cache`: the folder of the pack (cache.hpp's `pack_dir` of its SHA-256 under the root),
+// - `find_cache`: the folder of the packs (cache.hpp's `pack_dir` of their `set_key` under the
+// root),
 //   when its textures' stage has finished there.
 // - `cached_texture`: textures/<name>/albedo.png at 1, 2, 4 or 8 times the pack's size, as sRGB
 //   RGBA with alpha 255 where emissive.png glows (the classic's fullbright texels: lit by nothing
@@ -14,6 +15,9 @@
 //   one RGBA picture the albedo's size: the normal's x and y (tangent space, +Y up the picture),
 //   the height (255 the top) and the roughness, from normal.png, height.png and roughness.png.
 // - `cached_skins`: models/<name>/skin<k>.png, each skin of a model, the same size rule.
+// - `cached_picture`: pictures/enhanced/<name>.png, a 2D picture of the pack's (the status bar's,
+//   the menus', the font sheet; pictures.hpp's names) upscaled with its see-through texels at alpha
+//   0, the same size rule; a HUD or a menu draws it at that many picture pixels a pixel.
 // - `cached_rebake`: lightmaps/<map>.gerb, the map's light rebaked (lightmaps.hpp), when it is
 //   whole and made for a map of the same vertices.
 //
@@ -21,6 +25,7 @@
 // ge:keywords classicenhance cache read find_cache cached_texture cached_skins albedo emissive
 // ge:keywords cached_surface normal-map height-map roughness relief parallax
 // ge:keywords upscaled texture skin replace renderer atlas cached_rebake gerb rebake bounce
+// ge:keywords cached_picture pictures 2d-art hud menu conchars density
 // ge:skill classicenhance
 // ge:test tests/classicenhance_cached_test.cpp
 #pragma once
@@ -40,6 +45,10 @@ namespace ge::classicenhance {
 // an empty path when its textures were never enhanced there.
 std::filesystem::path find_cache(std::span<const uint8_t> pack,
                                  const std::filesystem::path& root = {});
+// The same for a set of packs, first to last (the full game's pak0, pak1 ...), keyed as the
+// pipeline keys them (cache.hpp's `set_key`), so the full game finds its own cache.
+std::filesystem::path find_cache(std::span<const std::span<const uint8_t>> packs,
+                                 const std::filesystem::path& root = {});
 
 // The enhanced copy of texture `name` (the pack's w x h) into `rgba`: (w k) x (h k) x 4, k the
 // cache's scale. False (and `rgba` untouched) when there is none of a size that fits.
@@ -57,6 +66,12 @@ bool cached_surface(const std::filesystem::path& dir, std::string_view name, uin
 // at a multiple of the pack's `w` x `h`; false when the cache has none.
 bool cached_skins(const std::filesystem::path& dir, std::string_view name, uint32_t w, uint32_t h,
                   std::vector<assets::Image>* skins);
+
+// The enhanced copy of picture `name` (pictures.hpp's: `sbar`, `conchars`, `gfx/qplaque`; the
+// pack's `w` x `h`) into `*out`; the multiple of `w` x `h` it is at (1, 2, 4 or 8), 0 (and `*out`
+// untouched) when the cache has none of a size that fits.
+uint32_t cached_picture(const std::filesystem::path& dir, std::string_view name, uint32_t w,
+                        uint32_t h, assets::Image* out);
 
 // The rebaked light of map `name` (the file's stem, "e1m1" for maps/e1m1.bsp) made for a map of
 // `vertices` vertices; false (and `out` untouched) when the cache has none, it does not read, or it

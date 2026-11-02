@@ -36,6 +36,8 @@ make lab LAB=<id> ARGS="--seeds=38 --shots=vista"   # WHILE ITERATING one look: 
                                                        # shots drawn, the rest left as they were
 build/debug/ge lab <id> --before=origin/main -- --seeds=38   # OR BOTH AT ONCE, after the change:
                                        # the before built at the ref in build/before/<sha>/
+build/debug/ge lab before <id> <id2>   # SEVERAL BEFORES AT ONCE, at origin/main's smoke flags,
+                                       # kept as previews/<id>@before/: no stash, no rebuild here
 build/debug/ge lab pair <id> --before="ce_relief 0"   # ONE SETTING ON AND OFF, no flag of the
                                        # lab's own: its shots side by side (the lab reads lab.cvars())
 build/debug/ge lab publish <id> --before=before   # THE PICTURES FOR THE REPORT AND THE PR: one

@@ -33,6 +33,7 @@
 #include "audio/pcm.hpp"
 #include "brush/write.hpp"
 #include "charset/charset.hpp"
+#include "classicenhance/profile.hpp"
 #include "classicenhance/switches.hpp"
 #include "core/output.hpp"
 #include "gpu/device.hpp"
@@ -233,7 +234,6 @@ void talk_chart(gl::Lab& lab, const std::string& id, const std::string& title,
   lab.shot({id, chart.title, caption, look, {}}, gl::to_picture(chart.plot));
 }
 
-// One recording turned into a video: three pictures and the report, the file attached.
 // A stand-in for a pack's console font: the palette the world draws when a pack has none (a grey
 // ramp) with one gold entry, and a gfx.wad whose 128 x 128 glyph sheet is the engine's 8 x 16
 // pixel charset halved to 8 x 8 cells, white from 0 and gold from 128, index 0 see-through.
@@ -270,6 +270,7 @@ bool stand_in_font(std::vector<std::pair<std::string, std::vector<uint8_t>>>& en
   return true;
 }
 
+// One recording turned into a video: three pictures and the report, the file attached.
 bool video(gl::Lab& lab, ge::gpu::Device* device, const cl::SearchPath& files,
            const std::string& demo, const std::string& tag) {
   const auto size = lab.arg_nums("size");
@@ -445,7 +446,7 @@ const gl::LabSpec kSpec{
      {"codec", "auto", "the video's codec: auto, h264, hevc, av1, or empty for uncompressed"},
      {"ticks", "1500", "the match's length in 13 ms ticks"},
      {"basedir", "", "a folder holding a game folder: turn its demo into a video instead"},
-     {"game", "id1", "the game folder under --basedir"},
+     {"game", ge::classicenhance::kProfiles[0].base_dir.data(), "the game folder under --basedir"},
      {"demo", "demo1", "the demo to turn into a video, by name or path"},
      {"game-volume", "0.5", "the game's sounds under the voices, 0..1 (0: the voices alone)"},
      {"map", "", "with --basedir: play the match on this map of the game folder's instead"},

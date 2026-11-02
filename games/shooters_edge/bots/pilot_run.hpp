@@ -66,6 +66,13 @@ struct RunResult {
 RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sh::PilotHands hands,
                      uint32_t seed, const sh::PilotSettings& set = sh::PilotSettings{},
                      float limit_s = 20);
+// The same on any map: a player on the node nearest `from` piloted to the node nearest `to`
+// over `g` (built on `world`), moved by `run_command` with no server, already moving at
+// `start_velocity` (a run that starts where a recorded player was, at his speed).
+RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f from, sh::Vec3f to,
+                    sh::PilotHands hands, uint32_t seed,
+                    const sh::PilotSettings& set = sh::PilotSettings{}, float limit_s = 20,
+                    sh::Vec3f start_velocity = {});
 
 struct Arena {
   server::Host host;

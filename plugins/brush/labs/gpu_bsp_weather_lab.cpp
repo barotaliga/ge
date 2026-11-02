@@ -8,13 +8,15 @@
 //
 // The PROBES are the check that needs no GPU: points on the floors with a ray cast back up the
 // fall's way through the map's faces, open when it leaves by a sky face, sheltered when a wall or
-// a roof stops it, at each weather's slant. With `--pak=<file>` and `--maps=<a>,<b>` a pack's maps
-// are drawn from their starts (and `--view`s); without, the brush plugin's weather fixture (a
-// hall with two windows and a door onto an open yard, a store behind it), so CI needs no game data.
+// a roof stops it, at each weather's slant. The GPU's own picture of the roofed store is checked
+// too: under every weather but a flash it must not move from the dry one outside its door
+// (`store.<weather>.changed`). With `--pak=<file>` and `--maps=<a>,<b>` a pack's maps are drawn
+// from their starts (and `--view`s); without, the brush plugin's weather fixture (a hall with two
+// windows and a door onto an open yard, a store behind it), so CI needs no game data.
 //
 // ge:summary Lab: a BSP map under a ladder of weathers, the rain and snow kept to the open sky
 // ge:keywords lab bsp weather rain snow sleet storm lightning puddles wet wind shelter window
-// ge:keywords before-after probes gpu-bsp-weather
+// ge:keywords before-after probes gpu-bsp-weather store-leak roofed indoor
 // ge:skill brush render labs
 #include <algorithm>
 #include <cmath>
@@ -107,6 +109,27 @@ bool window_patch(const double way[3], double out[3]) {
   const double t = (mid[1] - 0.05) / -way[1];
   for (int k = 0; k < 3; ++k) out[k] = mid[k] + t * way[k];
   return out[2] > -9.4;
+}
+
+// The store's check on the GPU's own picture: the share of a pane's pixels whose luminance moved
+// by more than 24 of 255 from the dry pane, outside the columns where the store's door shows the
+// hall (a third to over a half of the width, at the store view's heading). The store is roofed
+// and walled: no flake, wet face or snow belongs on that share.
+constexpr double kStoreDoor[2] = {0.32, 0.58};
+constexpr double kStoreLeak = 0.02;
+
+double changed_share(const gl::Picture& a, const gl::Picture& dry) {
+  const auto lum = [](const uint8_t* p) { return 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]; };
+  int seen = 0, moved = 0;
+  for (int y = 0; y < a.height; ++y)
+    for (int x = 0; x < a.width; ++x) {
+      const double u = (x + 0.5) / a.width;
+      if (u > kStoreDoor[0] && u < kStoreDoor[1]) continue;
+      const size_t at = (size_t(y) * size_t(a.width) + size_t(x)) * 4;
+      ++seen;
+      if (std::fabs(lum(&a.rgba[at]) - lum(&dry.rgba[at])) > 24) ++moved;
+    }
+  return seen > 0 ? double(moved) / seen : 0;
 }
 
 struct MapState {
@@ -556,11 +579,26 @@ void run(gl::Lab& lab) {
     dress(fv, m.sky, t);
     gl::Picture sheet = gl::create_picture(int(w) * across + 10 * (across + 1),
                                            (int(h) + 30) * rows + 10, {250, 250, 248});
+    const bool store = fixture && v.id == "weather-store";
+    gl::Picture dry;
+    double leak = 0;
+    std::string leaky;
     for (int i = 0; i < kSkyCount; ++i) {
       const ba::WeatherCvars& c = set[size_t(i)];
       const double at = kSkies[i].flash ? flash_moment(c, t) : t;
       ba::WeatherFrame last;
       const gl::Picture p = draw(d, f, m, fv, c, at, frames, &last);
+      if (store && !kSkies[i].on) dry = p;
+      // A flash lights the rooms a little by design; every other weather leaves the store as dry.
+      if (store && kSkies[i].on && !kSkies[i].flash && dry.width == p.width) {
+        const double share = changed_share(p, dry);
+        lab.metric(std::string("store.") + kSkies[i].id + ".changed", share, "share",
+                   Det::measured);
+        if (share > leak) {
+          leak = share;
+          leaky = kSkies[i].id;
+        }
+      }
       const int ox = 10 + (i % across) * (int(w) + 10);
       const int oy = (i / across) * (int(h) + 30);
       gl::draw_text(sheet, ox, oy + 6, kSkies[i].label, {24, 26, 32});
@@ -585,6 +623,11 @@ void run(gl::Lab& lab) {
                {"heading", ls::fixed(v.heading / kDeg, 0)},
                {"pitch", ls::fixed(v.pitch / kDeg, 0)}}},
              sheet, Det::measured);
+    if (leak > kStoreLeak)
+      lab.fail("the weather reaches into the roofed store: under " + leaky + " " +
+                   ls::fixed(leak * 100, 1) + "% of its picture moved from the dry one",
+               "next: look at weather-store.png; the fall's shelter test "
+               "(engine/render/wgsl/fall_shelter.wgsl) lets it in. Skill: render.");
   }
   ls::checked(lab, int(d.errors.load()), int(d.pipelines_after_load));
 }

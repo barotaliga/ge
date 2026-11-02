@@ -37,7 +37,7 @@ float figures(const ClassicPen& pen, const std::vector<std::string>& names, floa
   for (const std::string& name : names) {
     const ui::Image* img = pen.art.find(name);
     const bool narrow = name == "num_colon" || name == "num_slash";
-    const float w = img != nullptr ? static_cast<float>(img->width) : narrow ? 16 : kFigureW;
+    const float w = img != nullptr ? pen.art.width_of(*img) : narrow ? 16 : kFigureW;
     if (img != nullptr) {
       pen.picture(img, x, y);
     } else {

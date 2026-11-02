@@ -3,20 +3,27 @@
 // written over headers and directories). Each mutant mounted on a search path is either refused
 // with a reason naming the archive, or read into a directory whose every file lies inside it and
 // reads (a zip entry unpacks or is refused on its checksum); a wad's every lump lies inside it and
-// every picture's pixels are there. The sanitizer rows make an out-of-range read a failure here.
+// every picture's pixels are there. Every packed and archived form `unpack_one` peels (gzip, zstd,
+// xz, tar.gz, 7z) mutated the same ways is refused with a reason or unpacked to a file. The
+// sanitizer rows make an out-of-range read a failure here.
 //
 // ge:summary Test: thousands of mutated packs, zips and wads refused naming them or read in range
 // ge:keywords test vfs fuzz mutate damage refuse bounds pak zip wad picture search-path sanitizer
+// ge:keywords unpack gzip zstd xz tar 7z
 // ge:skill vfs testing
 #include <string>
 #include <vector>
 
 #include "check.hpp"
 #include "core/prng.hpp"
+#include "vfs/lzma.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/search.hpp"
+#include "vfs/tar.hpp"
+#include "vfs/unpack.hpp"
 #include "vfs/wad.hpp"
 #include "vfs/zip.hpp"
+#include "vfs/zstd.hpp"
 
 namespace {
 
@@ -125,4 +132,32 @@ TEST(mutated_wads_are_refused_or_read_in_range) {
     }
   }
   CHECK(read > 50 && refused > 50);
+}
+
+TEST(mutated_packed_and_archived_files_are_refused_or_unpacked) {
+  std::vector<uint8_t> plain;
+  plain.reserve(6000);
+  for (int i = 0; i < 6000; i++) plain.push_back(static_cast<uint8_t>((i * 7) ^ (i >> 5)));
+  const std::vector<std::vector<uint8_t>> clean = {
+      vfs::write_gzip(plain, "a.bin"), vfs::zstd_pack(plain, {3, 0, false}), vfs::xz_pack(plain, 1),
+      vfs::write_gzip(vfs::write_tar({{"a.bin", plain}})), vfs::write_7z("a.bin", plain, 1)};
+  core::Rng rng = core::make_rng(20261101u);
+  for (const std::vector<uint8_t>& c : clean) {
+    int read = 0, refused = 0;
+    for (int trial = 0; trial < 300; ++trial) {
+      std::vector<uint8_t> b = c;
+      for (int k = core::int_in(rng, 1, 3); k > 0 && !b.empty(); --k) mutate(rng, b);
+      vfs::Unpacked u;
+      std::string error;
+      if (vfs::unpack_one(std::move(b), u, error)) {
+        ++read;
+        CHECK(u.bytes.size() <= vfs::kUnpackLimit);
+      } else {
+        ++refused;
+        CHECK(!error.empty());
+      }
+    }
+    CHECK(refused > 50);
+    CHECK(read + refused == 300);
+  }
 }

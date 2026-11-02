@@ -19,6 +19,7 @@
 #include "fall_line/sim/army_vehicle_rules.hpp"
 #include "fall_line/sim/course.hpp"
 #include "fall_line/sim/heli_ride.hpp"
+#include "fall_line/sim/lake.hpp"
 #include "fall_line/sim/sled_ride.hpp"
 #include "fall_line/sim/village.hpp"
 #include "fall_line/sim/wanted.hpp"
@@ -144,6 +145,7 @@ GameState create_free_ride(std::shared_ptr<const mg::Level> level, int32_t start
   state.level = std::move(level);
   state.mode = Mode::free;
   state.runs = run_tracks(*state.level);
+  state.water = lake_water(state.level);
   state.lifts = std::make_shared<const std::vector<ge::mountain::lifts::LiftPlan>>(
       ge::mountain::lifts::lift_plans(*state.level));
   state.trees = sk::build_tree_index(*state.level);
@@ -220,7 +222,7 @@ void reset_free(GameState& state, int32_t i) {
   } else {
     stand_on(state, i, f.start, kHeadIn);
   }
-  f.soaked = 0;
+  dry_off(state, i);
   r.progress.stuck = 0;
   r.progress.resets++;
   state.events.push_back(GameEvent{EventKind::reset, i, f.run, 0});

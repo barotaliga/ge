@@ -2,12 +2,13 @@
 // (pak.hpp; a content zip renamed .pk3 is the same thing): the end record found from the back,
 // the central directory checked whole before anything is read (every entry's local header and
 // data inside the file, every method one this reader takes), then an entry's bytes unpacked
-// (stored, or deflated through core/inflate.hpp) with its CRC-32 checked. No zip64, no
+// (stored, deflated through core/inflate.hpp, LZMA through lzma.hpp, zstd through zstd.hpp) with
+// its CRC-32 checked. No zip64, no
 // encryption, no spanning; each is refused naming the entry. Entry names are only matched,
 // never used as paths on disk.
 //
 // ge:summary Reads a zip archive from memory: the checked directory and stored or deflated entries
-// ge:keywords zip archive central directory deflate stored crc32 entry unpack refuse
+// ge:keywords zip archive central directory deflate stored crc32 entry unpack refuse lzma zstd
 // ge:skill vfs
 // ge:test tests/vfs_zip_test.cpp
 #pragma once
@@ -22,7 +23,7 @@ namespace ge::vfs {
 
 struct ZipEntry {
   std::string name;     // as stored ('/' or '\\' separators, case kept)
-  uint16_t method = 0;  // 0 stored, 8 deflated
+  uint16_t method = 0;  // 0 stored, 8 deflated, 14 LZMA, 93 zstd
   uint32_t crc = 0, packed = 0, size = 0;
   uint32_t data = 0;  // offset of the entry's packed bytes in the archive
 };

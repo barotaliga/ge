@@ -7,6 +7,7 @@
 // ge:summary Tests for the water's surface drawn: the detail band, a sea on a device
 // ge:keywords test render water detail-waves spectrum-tail slope-variance gpu sea
 // ge:skill render water testing
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -38,6 +39,33 @@ gw::World sea(double wind) {
 }
 
 }  // namespace
+
+TEST(a_lake_is_drawn_only_inside_its_shore) {
+  // An L-shaped lake: its box takes in the square's empty corner, which the mask leaves dry.
+  ge::wind::Field field;
+  gw::World world(field);
+  const std::vector<gw::Point> shore = {{0, 0},     {200, 0},   {200, 100},
+                                        {100, 100}, {100, 200}, {0, 200}};
+  gw::add_lake(world, shore, 10);
+  const gw::Body& body = world.bodies[0];
+  const r::ShoreMask m = r::shore_mask(body);
+  CHECK(m.cols >= 1 && m.rows >= 1 && m.cols <= r::kShoreMask && m.rows <= r::kShoreMask);
+  CHECK(m.texels.size() == static_cast<size_t>(m.cols) * static_cast<size_t>(m.rows));
+  const auto at = [&](double x, double z) {
+    const int c = std::clamp(static_cast<int>((x - body.box[0]) / m.texel), 0, m.cols - 1);
+    const int r = std::clamp(static_cast<int>((z - body.box[1]) / m.texel), 0, m.rows - 1);
+    return m.texels[static_cast<size_t>(r) * static_cast<size_t>(m.cols) + static_cast<size_t>(c)];
+  };
+  CHECK(at(50, 50) == 255 && at(150, 50) == 255 && at(50, 150) == 255);
+  CHECK(at(150, 150) == 0 && at(190, 190) == 0);
+  // Grown by a texel round the outline: just past the inner corner is still drawn.
+  CHECK(at(100 + 0.5 * m.texel, 100 + 0.5 * m.texel) == 255);
+  CHECK(at(100 + 3 * m.texel, 100 + 3 * m.texel) == 0);
+  // A body with no outline is drawn everywhere.
+  const gw::World seas = sea(5);
+  const r::ShoreMask open = r::shore_mask(seas.bodies[0]);
+  CHECK(open.cols == 1 && open.rows == 1 && open.texels[0] == 255);
+}
 
 TEST(the_underwater_presets_are_named_and_differ_where_they_should) {
   r::UnderwaterLook open, mask, murky, classic, pool, kept;

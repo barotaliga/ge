@@ -13,7 +13,10 @@
 //   - for a rocket kill, the ROCKET's flight: the projectile entities whose model is a missile are
 //     followed from the frame they appear to the frame they go, and the one that went nearest the
 //     victim, within `kRocketReach` and `kRocketWindowS` of the death, is his; its flight is from
-//     where it was first seen to where it went;
+//     where it was first seen to where it went (a grenade kill is matched the same way among the
+//     grenades);
+//   - where the killer and the victim stood (the victim the frame before), and for a rocket or a
+//     grenade kill where the projectile was first seen and where it went;
 //   - whether the victim was in the AIR: over the lowest he stood in the last `kAirLookS` by at
 //     least `kAirHeight`, and moving up or down at `kAirSpeed` or more over the last frames
 //     (no map is read, so a player riding a lift reads as in the air);
@@ -25,6 +28,10 @@
 //     recording carries every player's stats; a client recording only its own player's, so another
 //     player's stack is 0, unknown), and how long before the death that was.
 //
+// EVERY FLIGHT, a kill's or not (`DemoScan::flights`): each rocket and grenade from where it was
+// first seen to where it went, with its SHOOTER, the player nearest where it was first seen
+// within `kShooterReach` that frame (-1: none that near), so the shots that missed are kept too.
+//
 // Times are the timeline's seconds. The scan reads its own copy of the demo; the one playing is
 // not moved.
 //
@@ -32,7 +39,7 @@
 // ge:summary air, gib and stack, and its timeline's length
 // ge:keywords demo scan scan_demo kills frags death killer victim rocket flight airborne gib
 // ge:keywords stack armour health timeline length highlights events multiview demo-events
-// ge:keywords telefrag teleport
+// ge:keywords telefrag teleport flights grenades shooter positions
 // ge:skill shooter replay
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #pragma once
@@ -58,6 +65,7 @@ inline constexpr double kStackLookS = 3;       // the stack is his most in this 
 inline constexpr float kTeleportJump = 160;    // a frame's move this long is a teleport, units
 inline constexpr double kTelefragS = 0.3;      // a telefrag: the killer teleported this lately, s
 inline constexpr float kTelefragReach = 64;    // onto where the victim stood, within this, units
+inline constexpr float kShooterReach = 80;     // a projectile's shooter stands this near it, units
 
 struct DemoKill {
   double t = 0;     // the death, timeline s
@@ -66,12 +74,23 @@ struct DemoKill {
   hud::Weapon weapon = hud::Weapon::melee;  // the killer's weapon in hand
   float distance = 0;                       // killer to victim, units
   float rocket_flight = 0;                  // the rocket's flight, units (0: none matched)
+  ge::shooter::Vec3f killer_at, victim_at;  // where they stood (the victim the frame before)
+  bool shot = false;                        // a rocket or grenade was matched to the kill
+  ge::shooter::Vec3f shot_from, shot_to;    // where it was first seen and where it went
   bool airborne = false;
   bool gib = false;
   bool telefrag = false;  // the killer teleported onto him
   int stack = 0;          // the victim's health + armour at their most (0: unknown)
   double stack_s = 0;     // how long before the death the stack was at its most, s
   int stack_armour = 0;   // the armour part of it
+};
+
+// A rocket's or a grenade's flight.
+struct DemoFlight {
+  double t0 = 0, t1 = 0;  // first seen, gone, timeline s
+  ge::shooter::Vec3f from, to;
+  bool grenade = false;
+  int shooter = -1;  // the slot nearest where it was first seen (-1: none within kShooterReach)
 };
 
 struct DemoScan {
@@ -85,6 +104,8 @@ struct DemoScan {
   std::vector<DemoKill> kills;        // in time order
   int64_t deaths = 0, unmatched = 0;  // every death; those with no killer
   int64_t rockets = 0;                // rockets followed
+  std::vector<DemoFlight> flights;    // every rocket and grenade, in the order they went
+  std::string map;                    // the last level's map name
 };
 
 // `opened` (a demo as `open_demo` left it, at its first frame) read to its end. False with the

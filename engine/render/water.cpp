@@ -147,10 +147,10 @@ WaterDetail detail_waves(const water::Waves& laid, int count, uint32_t seed, dou
 
 void create_water(gpu::Device& device, gpu::PipelineSet& pipelines, Water& water,
                   const wgpu::BindGroupLayout& frame) {
-  water.layout = make_layout(
-      device, "water",
-      {Slot::uniform, Slot::storage_read, Slot::texture, Slot::texture_raw, Slot::storage_read},
-      wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment);
+  water.layout = make_layout(device, "water",
+                             {Slot::uniform, Slot::storage_read, Slot::texture, Slot::texture_raw,
+                              Slot::storage_read, Slot::texture},
+                             wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment);
   water.copy_layout =
       make_layout(device, "water.copy", {Slot::texture, Slot::depth}, wgpu::ShaderStage::Fragment);
 
@@ -272,10 +272,62 @@ void create_water_targets(gpu::Device& device, Water& water, const FrameTargets&
                                    {water.streams.optics, water.streams.vertices,
                                     water.scene_colour_view, water.scene_depth_view});
   for (Water::Slot& slot : water.bodies) {
-    slot.group = make_group(
-        device, "water", water.layout,
-        {slot.uniform, slot.waves, water.scene_colour_view, water.scene_depth_view, slot.rings});
+    slot.group = make_group(device, "water", water.layout,
+                            {slot.uniform, slot.waves, water.scene_colour_view,
+                             water.scene_depth_view, slot.rings, slot.shore_view});
   }
+}
+
+ShoreMask shore_mask(const water::Body& body) {
+  ShoreMask m;
+  const std::vector<water::Point>& s = body.shore;
+  const double w = body.box[2] - body.box[0], h = body.box[3] - body.box[1];
+  if (s.size() < 3 || !(w > 0) || !(h > 0)) return m;
+  m.texel = std::max(kShoreTexel, std::max(w, h) / kShoreMask);
+  m.cols = std::max(1, static_cast<int>(std::ceil(w / m.texel)));
+  m.rows = std::max(1, static_cast<int>(std::ceil(h / m.texel)));
+  m.texels.assign(static_cast<size_t>(m.cols) * static_cast<size_t>(m.rows), 0);
+  const auto at = [&](int c, int r) -> uint8_t& {
+    return m.texels[static_cast<size_t>(r) * static_cast<size_t>(m.cols) + static_cast<size_t>(c)];
+  };
+  // Filled even-odd at each texel's middle, a row at a time.
+  std::vector<double> xs;
+  for (int r = 0; r < m.rows; ++r) {
+    const double z = body.box[1] + (r + 0.5) * m.texel;
+    xs.clear();
+    for (size_t i = 0, j = s.size() - 1; i < s.size(); j = i++) {
+      if ((s[i].z > z) != (s[j].z > z))
+        xs.push_back(s[i].x + (s[j].x - s[i].x) * (z - s[i].z) / (s[j].z - s[i].z));
+    }
+    std::sort(xs.begin(), xs.end());
+    for (size_t k = 0; k + 1 < xs.size(); k += 2) {
+      const int c0 =
+          std::max(0, static_cast<int>(std::ceil((xs[k] - body.box[0]) / m.texel - 0.5)));
+      const int c1 = std::min(
+          m.cols - 1, static_cast<int>(std::floor((xs[k + 1] - body.box[0]) / m.texel - 0.5)));
+      for (int c = c0; c <= c1; ++c) at(c, r) = 255;
+    }
+  }
+  // Grown by a texel round the outline: every texel the shore passes through, and its neighbours.
+  for (size_t i = 0, j = s.size() - 1; i < s.size(); j = i++) {
+    const double ex = s[i].x - s[j].x, ez = s[i].z - s[j].z;
+    const double len = std::sqrt(ex * ex + ez * ez);
+    const int n = std::max(1, static_cast<int>(std::ceil(2 * len / m.texel)));
+    for (int k = 0; k <= n; ++k) {
+      const double t = static_cast<double>(k) / n;
+      const int c =
+          static_cast<int>(std::floor((s[j].x + t * (s[i].x - s[j].x) - body.box[0]) / m.texel));
+      const int r =
+          static_cast<int>(std::floor((s[j].z + t * (s[i].z - s[j].z) - body.box[1]) / m.texel));
+      for (int dr = -1; dr <= 1; ++dr) {
+        for (int dc = -1; dc <= 1; ++dc) {
+          if (c + dc >= 0 && c + dc < m.cols && r + dr >= 0 && r + dr < m.rows)
+            at(c + dc, r + dr) = 255;
+        }
+      }
+    }
+  }
+  return m;
 }
 
 int add_water_body(gpu::Device& device, Water& water, const water::Body& body,
@@ -290,10 +342,24 @@ int add_water_body(gpu::Device& device, Water& water, const water::Body& body,
       make_buffer(device, "water.rings", size_t{kWaterRings} * 48, wgpu::BufferUsage::Storage);
   stage_body(slot, body);
   upload_waves(device, slot, body);
+  {
+    const ShoreMask mask = shore_mask(body);
+    const auto cols = static_cast<uint32_t>(mask.cols), rows = static_cast<uint32_t>(mask.rows);
+    slot.shore = make_texture(device, "water.shore", cols, rows, 1, wgpu::TextureFormat::R8Unorm,
+                              wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst);
+    slot.shore_view = slot.shore.CreateView();
+    wgpu::TexelCopyTextureInfo dst{};
+    dst.texture = slot.shore;
+    wgpu::TexelCopyBufferLayout layout{};
+    layout.bytesPerRow = cols;
+    layout.rowsPerImage = rows;
+    const wgpu::Extent3D extent{cols, rows, 1};
+    device.queue.WriteTexture(&dst, mask.texels.data(), mask.texels.size(), &layout, &extent);
+  }
   if (water.scene_colour_view) {
-    slot.group = make_group(
-        device, "water", water.layout,
-        {slot.uniform, slot.waves, water.scene_colour_view, water.scene_depth_view, slot.rings});
+    slot.group = make_group(device, "water", water.layout,
+                            {slot.uniform, slot.waves, water.scene_colour_view,
+                             water.scene_depth_view, slot.rings, slot.shore_view});
   }
   water.bodies.push_back(std::move(slot));
   return static_cast<int>(water.bodies.size()) - 1;

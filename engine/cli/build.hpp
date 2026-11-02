@@ -70,6 +70,19 @@ struct LabPairOptions {
 };
 Outcome run_lab_pair(const BuildOptions& o, const LabPairOptions& pair);
 
+// `ge lab before <id>...`: each lab run at `ref` (built once in the scratch worktree
+// run_at_ref uses) and kept as previews/<id>@<tag>/, at its smoke flags unless `full`, so a
+// change's after is one `ge lab <id> --compare=<tag>` (or `ge digest <id> --why --base=<tag>`)
+// with nothing stashed and nothing rebuilt in this tree.
+struct LabBeforeOptions {
+  std::vector<std::string> ids;
+  std::string ref = "origin/main", tag = "before";
+  std::string shots;
+  bool full = false;
+  std::vector<std::string> passthrough;
+};
+Outcome run_lab_before(const BuildOptions& o, const LabBeforeOptions& before);
+
 // `ge lab diff <id>`: every picture of the lab's last run (or, with `run`, a run now) against
 // the run kept with --tag=<against>, through the labs' own diff (engine/lab/diff.hpp); each band
 // under its floor is an error finding pointing at its sheet.

@@ -30,6 +30,7 @@
 #include "cli/commands.hpp"
 #include "cli/credits.hpp"
 #include "cli/cvar.hpp"
+#include "cli/demo.hpp"
 #include "cli/doctor.hpp"
 #include "cli/embedded.hpp"
 #include "cli/goals.hpp"
@@ -255,6 +256,16 @@ Outcome run(const Args& a) {
     }
     return run_lab_publish(fs::absolute(repo_of(a)), p);
   }
+  if (name == "lab before") {
+    LabBeforeOptions before;
+    before.ids = a.words;
+    if (const std::string ref = flag_value(a, "ref"); !ref.empty()) before.ref = ref;
+    if (const std::string tag = flag_value(a, "tag"); !tag.empty()) before.tag = tag;
+    before.shots = flag_value(a, "shots");
+    before.full = has_flag(a, "full");
+    before.passthrough = a.passthrough;
+    return run_lab_before(build_options(a), before);
+  }
   if (name == "lab pair") {
     LabPairOptions pair;
     pair.id = a.words[0];
@@ -428,6 +439,7 @@ Outcome run(const Args& a) {
   }
   if (name.starts_with("net ")) return run_net(a);
   if (name.rfind("pak ", 0) == 0) return run_pak(a, name.substr(4));
+  if (name.starts_with("demo ")) return run_demo(a, name.substr(5));
   if (name == "save inspect") return run_save(a);
   if (name.rfind("save ", 0) == 0) return run_save_game(build_options(a), a, name.substr(5));
   if (name.starts_with("sound ")) return run_sound(a);
