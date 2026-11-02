@@ -11,6 +11,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "brush/read.hpp"
 #include "classicenhance/cached.hpp"
@@ -99,6 +100,17 @@ void enhance_skin(gr::MorphSkin& skin, const ge::assets::Image& big, uint32_t fr
   skin.marks = std::move(marks);
 }
 
+// A skin drawn from the game's full-colour picture: its colours, a texel under half opaque a hole
+// (nothing drawn), the rest plain (a picture carries no tint rows or glow).
+void stand_in_skin(gr::MorphSkin& skin, const ge::assets::Image& img) {
+  skin.width = uint32_t(img.width);
+  skin.height = uint32_t(img.height);
+  skin.rgba = img.rgba;
+  skin.marks.assign(size_t(skin.width) * skin.height, gr::kMarkPlain);
+  for (size_t i = 0; i < skin.marks.size(); i++)
+    if (img.rgba[i * 4 + 3] < 128) skin.marks[i] = gr::kMarkHole;
+}
+
 // Says once why a file on the model list is not drawn.
 void not_drawn(std::string_view kind, const std::string& name, const std::string& error) {
   std::string line = "shooters_edge: ";
@@ -152,7 +164,8 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
 
 void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldModels& m,
                    const wgpu::BindGroupLayout& frame, const SearchPath& files,
-                   std::span<const uint8_t> palette, const br::Map& map, const ModelLoad& load) {
+                   std::span<const uint8_t> palette, const br::Map& map, const ModelLoad& load,
+                   const GameAdapter& game) {
   std::vector<gr::MorphModel> morphs;
   // The skins with enhanced copies: the morph model, its pack's own skin, the copy and its scale.
   struct Enhanced {
@@ -162,6 +175,8 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
     uint32_t from;
   };
   std::vector<Enhanced> enhanced;
+  // The skins drawn from the game's pictures: the morph model and its pack's own skin.
+  std::vector<std::pair<size_t, gr::MorphSkin>> stood_in;
   uint32_t most = 0;
   std::vector<gr::SpriteFrame> frames;
   std::set<std::string> refused;
@@ -178,25 +193,31 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
       continue;
     }
     if (i == 1 || name.empty()) continue;
-    std::vector<uint8_t> store;
-    const std::span<const uint8_t> bytes = find_file(files, name, store);
-    if (bytes.empty()) continue;  // the map itself is not in the packs by this name either
+    OpenedModel opened;
     std::string error;
-    if (ends_with(name, ".mdl")) {
-      mo::Model model;
-      if (!mo::read_model(bytes, name, &model, &error)) {
-        if (refused.insert(name).second) not_drawn("model", name, error);
-        continue;
-      }
+    if (!game.open_model(game, files, name, opened, error)) {
+      // Not in the files (the map itself is not in the packs by this name either) or refused.
+      if (!error.empty() && refused.insert(name).second) not_drawn("model", name, error);
+      continue;
+    }
+    if (opened.form == ModelForm::morph) {
+      const mo::Model& model = opened.morph;
       k.is = ModelKind::Is::alias;
       k.first = uint32_t(morphs.size());
       k.frames = models::frame_groups(model);
       k.skins = models::skin_groups(model);
       k.spin = (model.flags & kSpin) != 0;
       k.synced = model.synced;
-      for (size_t s = 0; s < std::max<size_t>(1, model.skins.size()); s++)
+      bool any_stand_in = false;
+      for (size_t s = 0; s < std::max<size_t>(1, model.skins.size()); s++) {
         morphs.push_back(models::morph_from_alias(model, palette, int(s)));
-      if (!load.cache.empty() && !model.skins.empty()) {
+        if (s < opened.skins.size() && opened.skins[s].width > 0) {
+          stood_in.emplace_back(morphs.size() - 1, morphs.back().skin);
+          stand_in_skin(morphs.back().skin, opened.skins[s]);
+          any_stand_in = true;
+        }
+      }
+      if (!load.cache.empty() && !model.skins.empty() && !any_stand_in) {
         std::vector<ge::assets::Image> big;
         const std::string stem = std::filesystem::path(name).stem().string();
         if (ge::classicenhance::cached_skins(load.cache, stem, uint32_t(model.skins[0].width),
@@ -216,29 +237,31 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
         for (size_t s = 0; s < std::max<size_t>(1, bare.skins.size()); s++)
           morphs.push_back(models::morph_from_alias(bare, palette, int(s)));
       }
-    } else if (ends_with(name, ".spr")) {
-      mo::Sprite sprite;
-      if (!mo::read_sprite(bytes, name, &sprite, &error)) {
-        if (refused.insert(name).second) not_drawn("sprite", name, error);
-        continue;
-      }
+    } else if (opened.form == ModelForm::sprite) {
+      const mo::Sprite& sprite = opened.sprite;
       k.is = ModelKind::Is::sprite;
       k.first = uint32_t(frames.size());
       k.frames = models::sprite_groups(sprite);
       k.facing = models::facing_of(sprite.facing);
       for (gr::SpriteFrame& f : models::sprite_frames_of(sprite, palette))
         frames.push_back(std::move(f));
-    } else if (ends_with(name, ".bsp")) {
-      br::Map item;
-      if (!br::read_bsp(bytes, &item, &error)) {
-        if (refused.insert(name).second) not_drawn("item", name, error);
-        continue;
-      }
-      gr::MorphModel mm = models::morph_from_brush(item, palette);
+    } else if (opened.form == ModelForm::brush) {
+      gr::MorphModel mm = models::morph_from_brush(opened.brush, palette);
       if (mm.indices.empty()) continue;
       k.is = ModelKind::Is::brush;
       k.first = uint32_t(morphs.size());
       morphs.push_back(std::move(mm));
+    }
+  }
+  if (!stood_in.empty()) {
+    // The game's pictures are drawn only when the atlas holds them all; else the packs' own.
+    std::vector<gr::AtlasRect> rects;
+    if (!gr::pack_morph_atlas(morphs, rects)) {
+      for (auto& [at, own] : stood_in) morphs[at].skin = std::move(own);
+      ge::core::output::status("shooters_edge: the models' skin pictures do not fit the " +
+                               std::to_string(gr::kMorphAtlasSize) +
+                               "-texel atlas together; the packs' own skins are drawn (next: "
+                               "smaller pictures)");
     }
   }
   if (!enhanced.empty()) {
