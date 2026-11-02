@@ -8,7 +8,8 @@
 //
 // - **the layout**: the game's base folder in an install (`base_dir`) and its numbered packs
 //   (`pack_stem` + n + `pack_ext`, read from 0 until one is missing; the first, `pack_name(p, 0)`,
-//   is the one a release ships and the one a folder is recognised by);
+//   is the one a release ships and the one a folder is recognised by), and the content zip that
+//   may stand in for the first (`pack_stem` + 0 + `zip_ext`: `zip_name(p, 0)`);
 // - **the asset kinds**: each a folder prefix and a file extension inside the packs (the maps,
 //   the sounds, the models and sprites, the 2D pictures), matched by `asset_name`, which also
 //   gives the asset's name (the path without the kind's folder and extension);
@@ -53,6 +54,7 @@ struct Profile {
   std::string_view base_dir;   // the game's base folder in an install
   std::string_view pack_stem;  // a numbered pack is <stem><n><ext>
   std::string_view pack_ext;
+  std::string_view zip_ext;  // a content zip standing in for a numbered pack: <stem><n><zip_ext>
   // The asset kinds.
   AssetKind maps;
   AssetKind sounds;
@@ -73,6 +75,7 @@ inline constexpr Profile kProfiles[] = {
         .base_dir = "id1",
         .pack_stem = "pak",
         .pack_ext = ".pak",
+        .zip_ext = ".pk3",
         .maps = {"maps/", ".bsp"},
         .sounds = {"sound/", ".wav"},
         .models = {"progs/", ".mdl"},
@@ -94,6 +97,8 @@ std::string profile_ids();
 
 // The `n`th numbered pack's file name ("pak0.pak").
 std::string pack_name(const Profile& p, int n);
+// The content zip standing in for the `n`th pack ("pak0.pk3").
+std::string zip_name(const Profile& p, int n);
 // The first pack's path inside an install ("<base_dir>/<pack 0>").
 std::string first_pack_path(const Profile& p);
 

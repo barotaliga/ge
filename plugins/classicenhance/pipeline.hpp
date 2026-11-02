@@ -20,6 +20,11 @@
 //    upscaled the textures' way (`enhance_picture`, at the textures' scale and by their upscaler)
 //    under `pictures/enhanced/<name>.png`, with `pictures/index.txt`.
 //
+// **A release with remade sounds** (a known set marked `remade_sounds`, known_sets.hpp: the
+// remaster, whose sounds are 44.1 kHz 16-bit): its sounds stage writes nothing and records a key
+// of its own, the packs' sounds left as they are. Its textures and models are the original's
+// 8-bit pictures and skins, so every other stage runs as for any pack.
+//
 // A stage whose recorded key (its version and options) matches is skipped; `RunOptions::force`
 // reruns it. `RunOptions::only` runs the named stages alone (the ones before them must have run).
 // A report says per stage whether it ran, what it wrote and how long it took. While it runs it
@@ -32,7 +37,7 @@
 //
 // ge:summary The enhancement pipeline's stages, pack to pictures, into the cache
 // ge:keywords pipeline stage pack textures lightmaps sounds models run skip force cache enhance
-// ge:keywords pictures resume journal partial cut-off
+// ge:keywords pictures resume journal partial cut-off remade-sounds remaster left-alone
 // ge:skill classicenhance
 // ge:test tests/classicenhance_pipeline_test.cpp
 #pragma once

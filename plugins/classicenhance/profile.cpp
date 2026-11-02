@@ -2,7 +2,7 @@
 //
 // ge:summary The content profiles' lookups: by id, pack names, asset names and paths
 // ge:keywords profile find_profile pack_name asset_name asset_path first_pack_path assets_of
-// ge:keywords read_palette
+// ge:keywords read_palette zip_name content-zip pk3
 // ge:skill classicenhance
 // ge:test tests/classicenhance_profile_test.cpp
 #include "classicenhance/profile.hpp"
@@ -29,6 +29,10 @@ std::string profile_ids() {
 
 std::string pack_name(const Profile& p, int n) {
   return std::string(p.pack_stem) + std::to_string(n) + std::string(p.pack_ext);
+}
+
+std::string zip_name(const Profile& p, int n) {
+  return std::string(p.pack_stem) + std::to_string(n) + std::string(p.zip_ext);
 }
 
 std::string first_pack_path(const Profile& p) {

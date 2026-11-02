@@ -172,6 +172,13 @@ struct Reports {
 
 constexpr const char* kUnverified = "unverified: the player's own copy";
 
+// The sounds stage of a set whose sounds are remade: nothing written, its key recorded.
+bool leave_as_held(const KnownSet& set, Reports& rep, StageResult& r) {
+  rep.started(0);
+  r.note = std::string("left as the packs hold them: ") + set.what + " remade its sounds";
+  return true;
+}
+
 bool run_pack(const Source& src, const fs::path& dir, Reports& rep, StageResult& r,
               std::string* error) {
   rep.started(1);
@@ -190,6 +197,11 @@ bool run_pack(const Source& src, const fs::path& dir, Reports& rep, StageResult&
     text += "later " + p.name + " " + p.sha256 + " " +
             (p.known != nullptr ? p.known->what : kUnverified) + "\n";
   }
+  if (src.set != nullptr) {
+    text += "set " + std::string(src.set->id) + " " + src.set->what + "\n";
+  } else if (!src.set_note.empty()) {
+    text += "set none: " + src.set_note + "\n";
+  }
   if (!src.zip_sha256.empty()) {
     text += "zip-sha256 " + src.zip_sha256 + "\nzip " +
             (src.zip ? src.zip->what : "not a known release zip; its pack is") + "\n";
@@ -200,6 +212,7 @@ bool run_pack(const Source& src, const fs::path& dir, Reports& rep, StageResult&
   }
   r.files = 3 + uint32_t(src.later.size());
   r.note = src.known != nullptr ? std::string("the pack, verified: ") + src.known->what
+           : src.set != nullptr ? std::string("the packs' files, verified: ") + src.set->what
                                 : std::string("the pack, ") + kUnverified;
   if (!src.later.empty()) r.note += "; and " + std::to_string(src.later.size()) + " later pack(s)";
   return rep.item(first, error);
@@ -498,12 +511,18 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
     return false;
   }
   report->dir = pack_dir(root, source.set_sha256.empty() ? source.pack_sha256 : source.set_sha256);
+  // A set whose sounds are remade already (known_sets.hpp): its sounds are left as the packs hold
+  // them; every other stage runs as for any pack.
+  const KnownSet* remade =
+      source.set != nullptr && source.set->remade_sounds ? source.set : nullptr;
   for (const Stage s : kStages) {
     StageResult r;
     r.stage = s;
     const bool asked =
         opts.only.empty() || std::find(opts.only.begin(), opts.only.end(), s) != opts.only.end();
-    const std::string key = stage_key(s, opts);
+    const bool left = remade != nullptr && s == Stage::sounds;
+    const std::string key =
+        left ? fnv_hex(std::string(stage_name(s)) + " left as " + remade->id) : stage_key(s, opts);
     auto skip = [&](const char* why) {
       r.note = why;
       report->stages.push_back(r);
@@ -522,7 +541,7 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
     // The pack and the models stages have no journal: the pack is one item, and the models stage
     // writes its files inside enhance_models.
     Journal journal;
-    const bool journaled = s != Stage::pack && s != Stage::models;
+    const bool journaled = s != Stage::pack && s != Stage::models && !left;
     if (journaled) journal.open(report->dir, stage_name(s), key, opts.force);
     Reports rep{opts, s, journaled ? &journal : nullptr};
     const auto t0 = std::chrono::steady_clock::now();
@@ -538,7 +557,8 @@ bool run_pipeline(const Source& source, const fs::path& root_in, const RunOption
         ok = run_lightmaps(source, report->dir, opts, rep, r, error);
         break;
       case Stage::sounds:
-        ok = run_sounds(source, report->dir, opts, rep, r, error);
+        ok = left ? leave_as_held(*remade, rep, r)
+                  : run_sounds(source, report->dir, opts, rep, r, error);
         break;
       case Stage::models:
         ok = run_models(source, report->dir, opts, rep, r, error);

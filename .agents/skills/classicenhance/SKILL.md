@@ -29,6 +29,15 @@ maps) and `morph` (the models and sprites):
   (`pak1.pak` ...) are layered over the first (`Source::content`). No stage may list one
   release's files: find assets by path and kind, so the full game works whole. Never fetch,
   commit or publish the full game's data; only the shareware pack is ever fetched here.
+- **A release is also known by its files** (`known_sets.hpp`, rows in `known_files.cpp`): the
+  merged packs matched against each set's path, size and 128-bit digest, extra files ignored, so
+  the full game repacked into one `pak0.pak` or a `pak0.pk3` is still the full game
+  (`Source::set`). Only verification lists a release's files; a stage never reads the list. A
+  set's rows are digests and paths, never content: make them with
+  `ge tool classicenhance -- manifest <path>` from the player's own packs, and list a file whose
+  name trips `make agents-check` (the startup script) by its contents alone (a null path). A
+  `remade_sounds` set (the remaster: 44.1 kHz 16-bit sounds) skips only the sounds stage; its
+  textures and models are the original's, byte for byte, and are enhanced like any pack's.
 - **Only the classic pack's own steps live here**: finding it, its palette's conventions (the
   fullbright range), what its texture names mean, and wiring its maps to the cache. A technique
   any game could use goes in the engine or the plugin that owns it (the light baker: `engine/`
@@ -43,7 +52,8 @@ maps) and `morph` (the models and sprites):
 
 | File | What |
 | --- | --- |
-| `classicenhance/source.hpp/.cpp` | `open_source`: a path to the release zip, an installed folder or the pack, found by every route and verified (`kKnownPacks`, `kKnownZips`); `pack_from_zip`, `verify_pack` |
+| `classicenhance/source.hpp/.cpp` | `open_source`: a path to the release zip, an installed folder, the pack or a content zip (`pak0.pk3`), found by every route and verified (`kKnownPacks`, `kKnownZips`, the known sets); `pack_from_zip`, `verify_pack`, `match_known_set` |
+| `classicenhance/known_sets.hpp/.cpp`, `known_files.cpp` | The known sets: a release by every file it holds (path, size, 128-bit digest), `match_sets`, `sha128_hex`; the full game's and the remaster's rows |
 | `classicenhance/profile.hpp/.cpp` | The content profiles (`kProfiles`): a classic game's base folder, numbered packs, asset kinds (maps, sounds, models, sprites, pictures) and named files (palette, wad, start map, full-game marker); `classic_profile`, `find_profile`, `asset_name`, `assets_of`, `read_palette`. Every stage finds its files through `Source::profile`, never a path of its own |
 | `classicenhance/lha.hpp/.cpp` | The LHA archive the release's installer is: headers of level 0 and 1 found behind a self-extractor's program, `-lh0-` and `-lh5-` unpacked, CRC-16 checked |
 | `classicenhance/texture.hpp/.cpp` | One texture enhanced: the kernel-regression upscale with one round of back-projection, sharpening and grain; height, normal, roughness and emissive; `material_of`, `never_drawn` |
@@ -70,7 +80,8 @@ Beside it in the engine: `engine/vfs/zip.hpp` (the zip reader, also the `.pk3` c
 ## Running it
 
 ```sh
-ge tool classicenhance -- verify <path>      # where the pack is, its digest, which release
+ge tool classicenhance -- verify <path>      # where the pack is, its digest, which release and set
+ge tool classicenhance -- manifest <path>    # the packs' files as a known set's rows
 ge tool classicenhance -- run <path>         # every stage into the cache
 ge tool classicenhance -- run <path> --only=textures --scale=2 --limit=20   # a quick look
 ge tool classicenhance -- status             # the cache's packs and their stages

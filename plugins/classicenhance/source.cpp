@@ -61,12 +61,42 @@ const KnownFile* known_in(std::span<const KnownFile> list, const std::string& sh
   return nullptr;
 }
 
+// A content zip's files read into a pack, every path lower case and '/' separated: a folder's own
+// entry, and a path too long for a pack's entry, left out. False with the reason.
+bool pack_from_content_zip(std::span<const uint8_t> bytes, const vfs::Zip& zip,
+                           std::vector<uint8_t>* out, std::string* error) {
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> files;
+  for (const vfs::ZipEntry& e : zip.entries) {
+    std::string path = lower(e.name);
+    for (char& c : path) c = c == '\\' ? '/' : c;
+    if (path.empty() || path.back() == '/' || path.size() > 55) continue;
+    std::vector<uint8_t> file;
+    if (!vfs::zip_unpack(bytes, e, &file, error)) {
+      *error = "the content zip's " + e.name + " does not unpack (" + *error +
+               "); fetch the zip again or give the packs it was made from";
+      return false;
+    }
+    files.emplace_back(std::move(path), std::move(file));
+  }
+  return vfs::write_pak(files, out, error);
+}
+
+// Whether the zip holds a profile's palette at its top: a content zip, not a release's.
+bool is_content_zip(const vfs::Zip& zip) {
+  for (const vfs::ZipEntry& e : zip.entries) {
+    for (const Profile& p : kProfiles) {
+      if (vfs::same_name(e.name, p.palette)) return true;
+    }
+  }
+  return false;
+}
+
 // What to give instead, naming every profile's first pack ("id1/pak0.pak").
 std::string what_to_give() {
   std::string packs;
   for (const Profile& p : kProfiles) packs += (packs.empty() ? "" : " or ") + first_pack_path(p);
   return "give a release zip as published, an installed game folder, or its " + packs +
-         " (skill: classicenhance)";
+         " (or the content zip in its place) (skill: classicenhance)";
 }
 
 // Whether the archive path `name` (any case, '/' or '\\') is a profile's first pack in an install;
@@ -104,7 +134,9 @@ bool add_later_packs(const std::string& dir, Source* out, std::string* error,
                      std::span<const KnownFile> packs) {
   out->later.clear();
   out->merged.clear();
-  out->set_sha256 = out->pack_sha256;
+  // The first file's digest as it lies on disk: the pack's, or the content zip's.
+  const std::string first = out->content_zip ? out->zip_sha256 : out->pack_sha256;
+  out->set_sha256 = first;
   for (int n = 1;; n++) {
     const fs::path at = child_any_case(dir, lower(pack_name(*out->profile, n)));
     if (at.empty()) break;
@@ -142,7 +174,7 @@ bool add_later_packs(const std::string& dir, Source* out, std::string* error,
     }
   };
   take(out->pack);
-  std::vector<std::string> digests = {out->pack_sha256};
+  std::vector<std::string> digests = {first};
   for (const LaterPack& p : out->later) {
     take(p.bytes);
     digests.push_back(p.sha256);
@@ -195,9 +227,19 @@ bool pack_from_zip(std::span<const uint8_t> bytes, Source* out, std::string* err
     }
   }
   const vfs::ZipEntry* res = vfs::zip_find(zip, "resource.1");
+  if (res == nullptr && is_content_zip(zip)) {
+    // A content zip standing in for the first pack: its files are the pack's, its digest the key.
+    out->content_zip = true;
+    if (!pack_from_content_zip(bytes, zip, &out->pack, error)) return false;
+    if (!verify_pack(out, error, packs)) return false;
+    out->set_sha256 = out->zip_sha256;
+    return true;
+  }
   if (res == nullptr) {
-    *error = "the zip holds neither an installer archive (resource.1) nor a game's first pack; " +
-             what_to_give();
+    *error =
+        "the zip holds neither an installer archive (resource.1), a game's first pack nor a "
+        "game's files; " +
+        what_to_give();
     return false;
   }
   std::vector<uint8_t> archive;
@@ -214,9 +256,30 @@ bool pack_from_zip(std::span<const uint8_t> bytes, Source* out, std::string* err
   return false;
 }
 
-bool open_source(const std::string& path, Source* out, std::string* error,
-                 std::span<const KnownFile> packs) {
-  *out = Source{};
+void match_known_set(Source* out, std::span<const KnownSet> sets) {
+  const SetMatch m = match_sets(out->content(), sets);
+  out->set = m.whole() ? m.set : nullptr;
+  out->set_note.clear();
+  if (out->set != nullptr || m.set == nullptr || m.held == 0) return;
+  // The nearest set, and the first few of its files that are not there as it has them.
+  out->set_note = "holds " + std::to_string(m.held) + " of the " +
+                  std::to_string(m.set->files.size()) + " files of " + m.set->what + " unchanged; ";
+  auto some = [](const std::vector<std::string>& paths) {
+    std::string list;
+    for (size_t i = 0; i < paths.size() && i < 5; i++) list += (i ? ", " : "") + paths[i];
+    return list + (paths.size() > 5 ? " ..." : "");
+  };
+  if (!m.missing.empty())
+    out->set_note += std::to_string(m.missing.size()) + " missing (" + some(m.missing) + ")";
+  if (!m.missing.empty() && !m.changed.empty()) out->set_note += ", ";
+  if (!m.changed.empty())
+    out->set_note += std::to_string(m.changed.size()) + " changed (" + some(m.changed) + ")";
+}
+
+namespace {
+
+bool open_any(const std::string& path, Source* out, std::string* error,
+              std::span<const KnownFile> packs) {
   std::error_code ec;
   fs::path file = path;
   if (fs::is_directory(file, ec)) {
@@ -237,13 +300,23 @@ bool open_source(const std::string& path, Source* out, std::string* error,
     for (size_t i = 0; found.empty() && i < std::size(kProfiles); i++) {
       found = child_any_case(file, lower(pack_name(kProfiles[i], 0)));
     }
+    // No first pack: the content zip in its place, in an install or the folder itself.
+    for (size_t i = 0; found.empty() && i < std::size(kProfiles); i++) {
+      const Profile& p = kProfiles[i];
+      if (const fs::path base = child_any_case(file, lower(std::string(p.base_dir)));
+          !base.empty()) {
+        found = child_any_case(base, lower(zip_name(p, 0)));
+      }
+      if (found.empty()) found = child_any_case(file, lower(zip_name(p, 0)));
+      if (!found.empty()) out->profile = &p;
+    }
     if (found.empty()) {
       // A release zip dropped in the folder: the first zip that holds a pack.
       for (const auto& e : fs::directory_iterator(file, ec)) {
         if (lower(e.path().extension().string()) != ".zip") continue;
         Source s;
         std::string why;
-        if (open_source(e.path().string(), &s, &why, packs)) {
+        if (open_any(e.path().string(), &s, &why, packs)) {
           s.route = Route::folder;
           *out = std::move(s);
           return true;
@@ -265,6 +338,11 @@ bool open_source(const std::string& path, Source* out, std::string* error,
   if (is_zip(bytes)) {
     out->route = Route::release_zip;
     if (!pack_from_zip(bytes, out, error, packs)) return false;
+    if (out->content_zip) {
+      // A content zip is the first pack: the later packs sit beside it as beside the pack.
+      out->route = via == Route::folder ? Route::folder : Route::pack_file;
+      if (!add_later_packs(file.parent_path().string(), out, error, packs)) return false;
+    }
   } else if (is_pack(bytes)) {
     out->route = via == Route::folder ? Route::folder : Route::pack_file;
     out->pack = std::move(bytes);
@@ -290,6 +368,16 @@ bool open_source(const std::string& path, Source* out, std::string* error,
     *error = "the installer archive holds no game's first pack; " + what_to_give();
     return false;
   }
+  return true;
+}
+
+}  // namespace
+
+bool open_source(const std::string& path, Source* out, std::string* error,
+                 std::span<const KnownFile> packs, std::span<const KnownSet> sets) {
+  *out = Source{};
+  if (!open_any(path, out, error, packs)) return false;
+  match_known_set(out, sets);
   return true;
 }
 
