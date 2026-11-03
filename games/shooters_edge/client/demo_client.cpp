@@ -20,6 +20,7 @@
 // ge:test tests/shooters_edge_demo_test.cpp
 #include <algorithm>
 #include <string>
+#include <utility>
 
 #include "shooters_edge/client/demo.hpp"
 
@@ -236,7 +237,8 @@ void player_info(Demo& d, DemoMsg& m) {
   }
   for (int i = 0; i < 3; i++)
     if ((flags & (0x4 << i)) != 0) m.i16();  // velocity
-  p.model = (flags & 0x20) != 0 ? m.u8() : 0;
+  // A model left out is the server's player model (`progs/player.mdl`), not none.
+  p.model = (flags & 0x20) != 0 ? m.u8() : d.player_model;
   if ((flags & 0x40) != 0) p.skin = m.u8();
   if ((flags & 0x80) != 0) p.effects = m.u8();
   if ((flags & 0x100) != 0) m.u8();      // weapon frame
@@ -433,13 +435,13 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.prints.push_back({level, m.str()});
         break;
       }
-      case 26:  // centerprint
+      case 9:
+        m.str();
+        break;  // stufftext
+      case 26:
+      case 31:  // centerprint, finale
         s.centre = m.str();
         break;
-      case 9:
-      case 31:
-        m.str();
-        break;    // stufftext, finale
       case 10: {  // setangle; a multiview recording's names the player it turns first
         if (s.format == DemoFormat::multiview) m.u8();
         if ((d.ext_mvd & kMvdHighLagTeleport) != 0) m.u8();
@@ -551,6 +553,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         if (slot < 32) {
           const size_t k = static_cast<size_t>(slot);
           s.names[k] = info_field(info, "name");
+          s.teams[k] = info_field(info, "team");
           s.top[k] = colour_of(info_field(info, "topcolor"));
           s.bottom[k] = colour_of(info_field(info, "bottomcolor"));
         }
@@ -588,6 +591,10 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 60:  // modellist (60: a 16-bit start)
         name_list(m, s.models, id == 60);
         if (s.models.size() > 1 && s.map.empty()) s.map = map_of_model(s.models[1]);
+        {
+          const auto pm = std::find(s.models.begin(), s.models.end(), "progs/player.mdl");
+          d.player_model = pm == s.models.end() ? 0 : static_cast<int>(pm - s.models.begin());
+        }
         break;
       case 46:
       case 56:
@@ -607,6 +614,7 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         if (slot < 32) {
           const size_t k = static_cast<size_t>(slot);
           if (key == "name") s.names[k] = value;
+          if (key == "team") s.teams[k] = value;
           if (key == "topcolor") s.top[k] = colour_of(value);
           if (key == "bottomcolor") s.bottom[k] = colour_of(value);
         }

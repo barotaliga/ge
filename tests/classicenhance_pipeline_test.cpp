@@ -6,11 +6,12 @@
 // changed option reruns only the textures; --force reruns all; `only` runs the one asked; and a
 // source that was never verified is refused before anything is written; every stage reports its
 // start, its items and its end, a cancel stops the stage running, a rerun resumes it from its
-// journal, and the job runs on its thread.
+// journal, and the job runs on its thread. A release whose sounds are remade keeps them as the
+// packs hold them, every other stage run as for any pack.
 //
 // ge:summary Tests the pipeline's stages, cache layout, reruns and refusals on a fixture pack
 // ge:keywords test classicenhance pipeline cache stages rerun skip force lightmaps textures sounds
-// ge:keywords models sprites replaced glb pictures wad
+// ge:keywords models sprites replaced glb pictures wad remade-sounds remaster left-alone
 // ge:skill classicenhance testing
 #include <atomic>
 #include <chrono>
@@ -301,5 +302,50 @@ TEST(pipeline_reports_every_stage_and_stops_when_cancelled) {
   const ce::BoardView v = job.view();
   CHECK_MSG(v.finished && !v.failed, v.error);
   CHECK(job.report().stages.size() == 6);
+  fs::remove_all(root);
+}
+
+TEST(pipeline_leaves_a_release_with_remade_sounds_its_sounds_and_enhances_the_rest) {
+  ce::Source src;
+  src.path = "fixture";
+  src.pack = fixture_pack();
+  std::string error;
+  CHECK_MSG(ce::verify_pack(&src, &error, {}), error);
+  // The packs' files are a release whose sounds are remade (its rows are not what this test is
+  // about).
+  const ce::KnownSet remade{"fixture-remade", "the fixture's remade release", {}, true};
+  src.set = &remade;
+  const fs::path root = fs::temp_directory_path() / "ge_classicenhance_remade";
+  fs::remove_all(root);
+  ce::RunOptions opts;
+  opts.textures.scale = 2;
+  opts.sounds.extend = 0;
+  opts.lightmaps.samples = 8;
+  opts.lightmaps.bounces = 1;
+  ce::RunReport report;
+  CHECK_MSG(ce::run_pipeline(src, root, opts, &report, &error), error);
+  CHECK(report.stages.size() == 6);
+  const fs::path dir = report.dir;
+  for (const ce::StageResult& r : report.stages) {
+    const bool left = r.stage == ce::Stage::sounds;
+    CHECK_MSG(r.ran && (left ? r.files == 0 && r.note.find("left as the packs hold them") == 0
+                             : r.files > 0),
+              std::string(ce::stage_name(r.stage)) + ": " + r.note);
+  }
+  CHECK(!fs::exists(dir / "sounds"));
+  // The models and the textures enhanced as for any pack: the textures at the asked scale.
+  CHECK(fs::exists(dir / "models" / "thing.glb") && fs::exists(dir / "replaced.txt"));
+  std::vector<ce::PackTexture> textures;
+  ce::Palette pal;
+  CHECK_MSG(ce::pack_textures(src.pack, &pal, &textures, &error), error);
+  CHECK(!textures.empty());
+  for (const ce::PackTexture& t : textures) {
+    const auto albedo =
+        ge::lab::read_png((dir / "textures" / ce::safe_name(t.name) / "albedo.png").string());
+    CHECK_MSG(albedo && albedo->width == 2 * t.width && albedo->height == 2 * t.height, t.name);
+  }
+  // A rerun skips every stage, the left one too.
+  CHECK(ce::run_pipeline(src, root, opts, &report, &error));
+  for (const ce::StageResult& r : report.stages) CHECK(!r.ran && r.note == "up to date");
   fs::remove_all(root);
 }

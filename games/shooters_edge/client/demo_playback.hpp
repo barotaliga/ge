@@ -42,6 +42,7 @@
 #include "shooters_edge/client/demo_scan.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/client/timedemo.hpp"
+#include "shooters_edge/client/video_cfg.hpp"
 #include "ui/play_bar.hpp"
 
 namespace shooters_edge::client {
@@ -58,6 +59,7 @@ struct DemoPlayback {
   int bar = 1;                 // demo_bar
   int track = -1;              // demo_track
   RecordSettings record;       // demo_pack, demo_pack_level (record_cvars.hpp)
+  VideoSettings video;         // demovideo_ (video_cfg.hpp), read by -demovideo alone
   // The demo playing:
   bool paused = false;
   DemoScan scan;

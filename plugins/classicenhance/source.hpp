@@ -11,8 +11,12 @@
 //   is read the same way.
 // - **the installer's archive** taken out of the zip by hand (`resource.1`), read the same way.
 // - **a pack file**: a `pak0.pak` from an installed game.
-// - **a folder**: an installed game's folder (its `id1/pak0.pak`, names matched in any case), or
-//   a folder holding a release zip or the pack itself.
+// - **a content zip**: a `pak0.pk3` standing in for the first pack, its files at the top (it
+//   holds the profile's palette). Its files are read into a pack (`Source::pack`); a path too long
+//   for a pack's entry, or a folder's own entry, is left out. Its own digest keys the cache, so a
+//   game finds the cache from the zip it mounts.
+// - **a folder**: an installed game's folder (its `id1/pak0.pak`, else its `id1/pak0.pk3`, names
+//   matched in any case), or a folder holding a release zip or the pack itself.
 //
 // **The full game.** An installed folder may hold later packs beside the first (`pak1.pak`,
 // `pak2.pak` ... in any case, read in order until one is missing), as the registered game's does.
@@ -23,6 +27,13 @@
 // path and kind (maps, sounds, models), never by a list of one release's files, so whatever the
 // packs hold is enhanced.
 //
+// **A release by its files.** Whatever packs hold them, the packs' files read merged are matched
+// against the known sets (known_sets.hpp: the full game's files, the remaster's), each file by
+// path, size and digest, files the set does not list ignored: the full game repackaged into one
+// `pak0.pak` or `pak0.pk3`, with or without files of the player's own added, is reported as the
+// full game (`Source::set`). With no set whole, `Source::set_note` names the nearest and what of
+// it is missing or changed.
+//
 // Whichever route, the first pack must read as a pack, or it is refused with its digest and
 // nothing is written. Its SHA-256 is looked up in `kKnownPacks`: a known release is reported as
 // that release, any other (the full game, another release, the player's own copy) is accepted and
@@ -32,6 +43,7 @@
 // ge:summary Finds the classic packs in a zip, LHA archive, file or folder, verified by SHA-256
 // ge:keywords source pack pak0 pak1 shareware registered release zip lha folder installed
 // ge:keywords verify sha256 known unchanged licence refuse identity merge layered later-pack
+// ge:keywords pk3 content-zip repack single-pack known-set remaster
 // ge:skill classicenhance
 // ge:test tests/classicenhance_source_test.cpp
 #pragma once
@@ -41,6 +53,7 @@
 #include <string>
 #include <vector>
 
+#include "classicenhance/known_sets.hpp"
 #include "classicenhance/profile.hpp"
 
 namespace ge::classicenhance {
@@ -88,18 +101,26 @@ struct Source {
   std::vector<LaterPack> later;      // the later packs beside it, in order
   std::vector<uint8_t> merged;       // every pack's files, a later copy winning; empty with none
   std::string set_sha256;            // the cache's key: the pack's digest, or every pack's hashed
+  bool content_zip = false;       // the first pack was read out of a content zip (its digest keys)
+  const KnownSet* set = nullptr;  // the release every file of which the packs hold, or nullptr
+  std::string set_note;           // with no set: the nearest and what of it is missing or changed
   // What the pipeline reads: the first pack alone, or every pack merged.
   const std::vector<uint8_t>& content() const { return merged.empty() ? pack : merged; }
 };
 
-// The pack at `path` (a zip, a pack, or a folder holding either), verified against `packs`;
-// false with the reason, and the next step for the player, in `*error`. (Tests pass their own
-// fixture's digest as `packs`; everything else keeps the default.)
+// The pack at `path` (a zip, a pack, or a folder holding either), verified against `packs` and
+// its files matched against `sets`; false with the reason, and the next step for the player, in
+// `*error`. (Tests pass their own fixture's digest as `packs` and their own sets; everything else
+// keeps the defaults.)
 bool open_source(const std::string& path, Source* out, std::string* error,
-                 std::span<const KnownFile> packs = kKnownPacks);
-// The pack inside a release zip's bytes (through its LHA archive when it has one), verified.
+                 std::span<const KnownFile> packs = kKnownPacks,
+                 std::span<const KnownSet> sets = kKnownSets);
+// The pack inside a release zip's bytes (through its LHA archive when it has one; a content
+// zip's own files when it holds a profile's palette), verified.
 bool pack_from_zip(std::span<const uint8_t> zip, Source* out, std::string* error,
                    std::span<const KnownFile> packs = kKnownPacks);
+// `out->set` and `out->set_note` from the packs' files (`out->content()`) against `sets`.
+void match_known_set(Source* out, std::span<const KnownSet> sets = kKnownSets);
 // The later packs in `dir` (the profile's numbered packs from 1: pak1.pak, pak2.pak ... in any
 // case) read into `out->later`, and `out->merged` and `out->set_sha256` set; false when one does
 // not read as a pack.

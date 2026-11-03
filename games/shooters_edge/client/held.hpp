@@ -22,6 +22,8 @@
 #include <string>
 #include <vector>
 
+#include "render/view.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
@@ -49,5 +51,14 @@ bool load_held_set(const GameAdapter& game, const SearchPath& files,
 view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
                           const view::ViewSettings& settings,
                           std::span<const ge::viewmodel::HeldModel> models, double t, double dt);
+
+// The hand in a recorded game whose frame is `frame` (timedemo.hpp's demo_view): the weapon the
+// recording's HUD shows at the view's eye and look; not drawn while the recorder holds no view
+// model (a spectator), is dead or the level has ended.
+// shortcut: no shot and no stride (the recording's weapon frame and velocity are not read), so the
+// weapon neither kicks, flashes nor bobs; read them for that.
+view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::ViewSettings& settings,
+                               std::span<const ge::viewmodel::HeldModel> models,
+                               const ge::render::FrameView& frame, double t, double dt);
 
 }  // namespace shooters_edge::client

@@ -9,18 +9,22 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <memory>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include "audio/synth.hpp"
 #include "audio/voice.hpp"
 #include "camera/first_person.hpp"
 #include "capture/av_export.hpp"
+#include "classicenhance/cached.hpp"
 #include "core/output.hpp"
 #include "gpu/target.hpp"
 #include "lab/gif.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
+#include "shooters_edge/client/demo_caption.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 #include "shooters_edge/client/demo_scan.hpp"
 #include "shooters_edge/client/demo_sound.hpp"
@@ -28,6 +32,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/world_draw.hpp"
+#include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
 
 namespace shooters_edge::client {
@@ -62,6 +67,26 @@ bool write_file(const std::string& path, const std::vector<uint8_t>& bytes, std:
     return false;
   }
   return true;
+}
+
+// The words' type: classic-enhance's copy of the packs' glyph sheet in the packs' cache, else
+// the packs' own; `from` says which ("charset" with neither: `glyphs` left empty).
+void caption_type(const SearchPath& files, ge::ui::Image& glyphs, std::string& from) {
+  if (!content_packs(files).empty()) {
+    const std::filesystem::path cache = ge::classicenhance::find_cache(content_packs(files));
+    // The enhanced sheet (upscaled, still 16 x 16 cells) first, then the cache's original.
+    if (!cache.empty() &&
+        (caption_glyphs_from_png(cache / "pictures" / "enhanced" / "conchars.png", &glyphs) ||
+         caption_glyphs_from_png(cache / "pictures" / "conchars.png", &glyphs))) {
+      from = "cache";
+      return;
+    }
+  }
+  const CaptionFind find = [&files](std::string_view p, std::vector<uint8_t>& store) {
+    return find_file(files, p, store);
+  };
+  std::string why;
+  from = caption_glyphs_from_packs(find, &glyphs, &why) ? "packs" : "charset";
 }
 
 }  // namespace
@@ -154,9 +179,14 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   se::Hud hud = se::make_hud();
   // The status bar as the window draws it with a classic game loaded: the packs' own pictures
   // (enhanced when ce_pictures is on and the cache has them), else the free art.
-  se::HudArt art = load_classic_pictures(files, look.ce.pictures).hud;
+  se::HudArt art;
+  if (o.hud) art = load_classic_pictures(files, look.ce.pictures).hud;
+  report.hud_art = art.bar.empty() ? "free" : "packs";
   if (art.bar.empty()) art = se::free_art();
   art.finish();
+  ge::ui::Image glyphs;
+  if (o.text || o.messages) caption_type(files, glyphs, report.text_font);
+  DemoNotices notices;  // the prints and the centre print the recorded player read
   const auto w = static_cast<uint32_t>(o.width), h = static_cast<uint32_t>(o.height);
   ge::gpu::Target out = ge::gpu::create_target(device, "demo-video.frame", w, h);
   std::unique_ptr<LoadedMap> map;
@@ -192,6 +222,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     const double dt = last < 0 ? 0 : std::clamp(s.time - last, 0.0, kMostDemoGap);
     last = s.time;
     vt += dt;
+    if (o.messages) notices.take(s, vt);
     if (o.sound && !gif) {
       sounds.level(s, map ? &map->bsp.map : nullptr);
       if (vt >= from) {  // the clip's sounds, on the clip's own clock
@@ -245,6 +276,15 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
       se::fill_hud(hud, demo_status(s, at), art);
       hud.layout.draw(overlay, hud.layout.frame(o.width, o.height, se::hud_style()),
                       se::hud_style());
+    }
+    if (o.text || o.messages) {
+      const std::string title =
+          map->bsp.map.entities.empty() ? "" : map->bsp.map.entities[0].get("message");
+      draw_caption(overlay, glyphs, o.width, o.height,
+                   o.text ? demo_caption(s, title, at) : std::vector<CaptionLine>{},
+                   o.messages ? notices.at(at) : std::vector<CaptionLine>{});
+      if (o.messages && at < notices.centre_until)
+        draw_centre(overlay, glyphs, o.width, o.height, notices.centre);
     }
     demo_placed(s, fx.models);
     draw_world(device, *world, view, fx, nullptr, 1.0 / o.fps, overlay, out.view);
@@ -314,13 +354,30 @@ std::vector<std::string> demo_video_lines(const DemoVideoOptions& o, const DemoV
                 " loops, " + std::to_string(r.missing_sounds) + " names no pack has; voice " +
                 std::to_string(r.voice_frames) + " frames in " + std::to_string(r.voice_messages) +
                 " messages, " + std::to_string(r.voice_concealed) + " concealed");
+  const std::string words = r.text_font == "cache"   ? "the packs' console font, enhanced"
+                            : r.text_font == "packs" ? "the packs' console font"
+                            : r.text_font.empty()    ? ""
+                                                     : "the engine's charset";
+  out.push_back("demovideo: the words " + (words.empty() ? "off" : "in " + words) +
+                ", the status bar " +
+                (o.hud ? (r.hud_art == "packs" ? "in the packs' pictures" : "in the free pictures")
+                       : std::string("off")));
   return out;
 }
 
 namespace out = ge::core::output;
 
-int demo_video_main(const Args& args, const SearchPath& files,
-                    const shooters_edge::look::Picture& picture, int track) {
+int demo_video_main(ge::console::Console& console, const Args& args, const SearchPath& files,
+                    const shooters_edge::look::Picture& picture, const DemoPlayback& playback) {
+  const VideoSettings& video = playback.video;
+  // A video draws in the newer look, then video.cfg, then the + words again (video_cfg.hpp).
+  std::error_code ec;
+  const std::filesystem::path cfg = apply_video_cfg(
+      console, {std::filesystem::path(files.folder), std::filesystem::current_path(ec)}, args.plus);
+  out::status("shooters_edge: -demovideo in r_look " + picture.look + ", " +
+              (cfg.empty() ? std::string("video.cfg's built-in defaults (no video.cfg in the game "
+                                         "folder or here)")
+                           : "video.cfg from " + cfg.string()));
   auto device = ge::gpu::create_device({.label = "demovideo", .validation = 0});
   if (!device) {
     out::error("shooters_edge: no GPU device for -demovideo; see docs/rendering.md");
@@ -329,15 +386,26 @@ int demo_video_main(const Args& args, const SearchPath& files,
   DemoVideoOptions o;
   o.demo = args.demovideo;
   o.file = args.video;
-  o.width = args.width & ~1;
-  o.height = args.height & ~1;
-  o.fps = args.fps;
-  o.codec = args.codec == "none" ? "" : args.codec;
+  // The flags given win; video.cfg's cvars (video_cfg.hpp) fill the rest.
+  int width = args.width, height = args.height;
+  if (!args.size_given && !size_named(video.size, width, height)) {
+    out::error("shooters_edge: demovideo_size \"" + video.size +
+               "\" is not WxH or 480p, 720p, 1080p, 1440p, 4k; next: fix it in video.cfg");
+    return 2;
+  }
+  const std::string codec = args.codec_given ? args.codec : video.codec;
+  o.width = width & ~1;
+  o.height = height & ~1;
+  o.fps = args.fps_given ? args.fps : video.fps;
+  o.codec = codec == "none" ? "" : codec;
+  o.hud = video.hud;
+  o.text = video.text;
+  o.messages = video.messages;
   o.seconds = args.to > args.from ? args.to - args.from : args.seconds;
   o.from_s = args.from;
   o.highlight = args.highlight;
   o.gif_width = args.gif_width;
-  o.track = track;
+  o.track = playback.track;
   o.picture = &picture;
   DemoVideoReport r;
   std::string error;
