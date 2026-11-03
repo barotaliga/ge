@@ -2,8 +2,8 @@
 // layer over a painted arena standing in for the game under it, page by page at each viewport:
 //
 //   - MODERN: the engine's menu view, the game's name over the column, every row the game cannot
-//     do yet dimmed (the console knows no cvar or command it needs), and classic-enhance's own
-//     menu mounted under OPTIONS;
+//     do yet dimmed (the console knows no cvar or command it needs), and LOAD GAME and
+//     classic-enhance's enhancing page under OPTIONS ▸ CLASSIC ENHANCED;
 //   - CLASSIC: the same pages in the pack's own pictures on the 320 x 200 screen: the plaque, the
 //     titles, the strips with the spinning cursor, the glyph rows with their values, the help
 //     pages and the quit box. The lab's pictures are the fixture set painted in code
@@ -189,7 +189,7 @@ struct Game {
   sm::Host host;
   Game() {
     using CArgs = ge::console::Args;
-    for (const char* c : {"map", "sv", "quit", "newgame", "load", "save"})
+    for (const char* c : {"map", "sv", "quit", "newgame", "load", "save", "basedir"})
       con.add_command(c, "", [](ge::console::Console&, const CArgs&) {});
     con.add_command("toggleconsole", "", [](ge::console::Console&, const CArgs&) {});
     shooters_edge::client::add_cvars(con, controls);
@@ -207,7 +207,8 @@ struct Game {
     server.set("fraglimit", "20", ge::console::Source::local);
     server.set("timelimit", "15", ge::console::Source::local);
     host = {.console = &con, .server = &server, .maps = {"start", "e1m1", "dm6", "arena"}};
-    menu.set_packs({"id1/pak0.pak"});
+    menu.set_game(
+        "/games/classic");  // a game loaded (LOAD GAME), no install there: ENHANCE refused
     host.saves.assign(sm::kSaveSlots, {});
     host.saves[0] = "the lower hall, kills 4/31";
     host.saves[1] = "the gate house kills: 0/12";  // a classic text save's comment
@@ -255,7 +256,8 @@ constexpr PageShot kPages[] = {
      "HELD WEAPON: shown or not, the hands and arms, centred or to the right, the sway, the "
      "muzzle fire."},
     {"enhanced", "art",
-     "CLASSIC ENHANCED: ENHANCE A PACK (classic-enhance's own menu), then a page a subject."},
+     "CLASSIC ENHANCED: LOAD GAME (the folder the game is installed in) and ENHANCE, then a page "
+     "a subject."},
     {"ce_art", "ce_relief",
      "TEXTURES AND MODELS: the enhanced textures and skins, the relief and the depth, smooth "
      "shading, the 2D art."},
@@ -416,13 +418,24 @@ void run(ge::lab::Lab& lab) {
              "JUMP pressed: the row waits for the key (ESCAPE leaves it as it was, BACKSPACE "
              "clears it).",
              look, art, det);
-        // Classic enhance's own menu, mounted under CLASSIC ENHANCED.
+        // LOAD GAME's folder refused, then ENHANCE: classic-enhance's enhancing page mounted under
+        // CLASSIC ENHANCED, here saying why the loaded game's run did not start.
+        g.menu.show(g.host, "enhanced");
+        g.menu.main().focus("load");
+        g.menu.load_refused(
+            "/home/player/Downloads holds no id1 folder; next: pick the folder "
+            "your game is installed in");
+        snap(g, v, "modern-load-refused-" + v.name(), "CLASSIC ENHANCED: LOAD GAME REFUSED",
+             "The folder picked holds no install: LOAD GAME's hint says what it lacks.", look, art,
+             det);
+        g.menu.set_game("/games/classic");
         g.menu.show(g.host, "enhanced");
         g.menu.main().focus("enhance");
         g.menu.update(accept, false, g.host, 1.0 / 60);
-        snap(g, v, "modern-classic-enhance-" + v.name(), "CLASSIC ENHANCED: ENHANCE A PACK",
-             "Classic enhance's own menu in the main menu's place: the pack, ENHANCE, the "
-             "switches. Back at its root returns to CLASSIC ENHANCED.",
+        snap(g, v, "modern-classic-enhance-" + v.name(), "CLASSIC ENHANCED: ENHANCE",
+             "Classic enhance's enhancing page in the main menu's place: CANCEL, PLAY, BACK and "
+             "the panel, here the loaded game's packs not readable. BACK returns to CLASSIC "
+             "ENHANCED.",
              look, art, det);
       }
       if (pass <= 0) lab.metric(look + "." + v.name() + ".dimmed-rows", dimmed, "count");

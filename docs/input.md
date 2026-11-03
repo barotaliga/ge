@@ -246,10 +246,11 @@ actions on every machine, and the labs' digests hold them.
 - **The actions and the defaults** (`bindings.hpp`). The `ride` context's actions carry the play
   contract's axis names (`steer`, `tuck`, `brake`, `jump`, `reset`), so `play::bind_axes` pairs
   them with no table between. The `app` context holds what only the window does (`camera`,
-  `rebind`). The defaults are a bindings file in the source (`kDefaultBindings`): A and D or the
-  arrows steer through a ramp (a tap is a small turn), W tucks, S brakes, SPACE jumps, R resets,
-  C the camera, F5 rebinds; the left stick, the triggers, south and north on a pad; a wheel's
-  steer, throttle and brake roles. A keyboard, a pad and a wheel play at once.
+  `rebind`, `screenshot`). The defaults are a bindings file in the source (`kDefaultBindings`):
+  A and D or the arrows steer through a ramp (a tap is a small turn), W tucks, S brakes, SPACE
+  jumps, R resets, C the camera, F5 rebinds, F12 a screenshot; the left stick, the triggers,
+  south and north on a pad; a wheel's steer, throttle and brake roles. A keyboard, a pad and a
+  wheel play at once.
 - **The player's file** is `bindings.txt` in the platform's per-user directory
   (`platform::prefs_dir`), the defaults until it exists. A file that does not read keeps the
   defaults and names the line.

@@ -11,7 +11,8 @@
 //
 // THE PLAYER: the keys (A D or the arrows, W tuck, S brake, SPACE jump, R reset, C camera), a pad
 // or a wheel, all at once, as the player's bindings file says (controls/bindings.hpp; the defaults
-// until F5 walks the rebinding, controls/rebinding.hpp, and saves it). The run is written as an
+// until F5 walks the rebinding, controls/rebinding.hpp, and saves it; F12 a screenshot to the
+// per-user folder's `screenshots/`, engine/capture/screenshot.hpp). The run is written as an
 // INPUT LOG when the window closes (play/inputs.hpp), which `ge replay` plays back to the digest
 // it records. --bot hands the skis to the game's bot (the same loop, the same log).
 //
@@ -55,7 +56,7 @@
 // ge:summary Fall Line's app: the window, the frame loop on the run clock, the GPU frame
 // ge:keywords app main frame-loop window vsync present run-clock frame-pace fall-line
 // ge:keywords camera-key camera-ladder player by-hand bindings rebind rumble input-log events
-// ge:keywords drop-down-console tilde overlay front-door pause-page shell
+// ge:keywords drop-down-console tilde overlay front-door pause-page shell screenshot f12
 // ge:skill platform gpu render audio input
 #include <array>
 #include <cstdio>
@@ -74,6 +75,7 @@
 #include "audio/synth.hpp"
 #include "camera/to_view.hpp"
 #include "capture/live.hpp"
+#include "capture/screenshot.hpp"
 #include "console/cfg.hpp"
 #include "console/view.hpp"
 #include "core/num_text.hpp"
@@ -107,6 +109,7 @@
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
 #include "play/inputs.hpp"
+#include "render/screenshot_copy.hpp"
 #include "ui/console.hpp"
 #include "ui/console_keys.hpp"
 #include "ui/draw.hpp"
@@ -264,6 +267,12 @@ static int run_main(int argc, char** argv) {
   });
   fall_line::cfg::Settings set;
   fall_line::cfg::add_cvars(console, set);
+  // F12 or the console's `screenshot` (before the + lines, so `+screenshot` takes the first
+  // frame): the frame shown written to the per-user folder's screenshots/ off this thread.
+  ge::capture::Screenshots shots(
+      ge::platform::prefs_dir("gameengine2", "fall_line") + "screenshots", "fall_line",
+      &set.screenshot);  // scr_format, scr_quality, scr_chroma (cfg/cvars.hpp)
+  ge::capture::add_screenshot_command(console, shots, "<the per-user folder>/screenshots/");
   for (const std::string& cmd : args.sets) console.append(cmd);
   ge::console::start(console, args.plus_args);
   console.cvars().apply_latched();
@@ -398,6 +407,7 @@ static int run_main(int argc, char** argv) {
     out::status("fall_line: capturing the window to " + args.capture +
                 (capture.encoder().empty() ? "" : " (" + capture.encoder() + ")"));
   }
+  ge::render::ScreenshotCopy shot_copy;  // the frames `screenshot` takes, copied back
   Pull puller{&synth, capture.is_open() ? &capture : nullptr};
   std::unique_ptr<ge::platform::AudioOut> speaker;
   if (!set.mute) {
@@ -558,6 +568,8 @@ static int run_main(int argc, char** argv) {
       out::status("fall_line: " + said);
       ge::loop::pause(clock);
     }
+    if (!rebinding.active && fall_line::controls::hand_pressed(*hand, "screenshot"))
+      shots.request();
 
     // The shell: the menu up takes the presses (on the run, Escape pauses it); not while the
     // rebinding walk asks for a key or the console has the keyboard.
@@ -672,6 +684,7 @@ static int run_main(int argc, char** argv) {
         hand_in(capture, img, handed, static_cast<int64_t>(ms));
       });
     }
+    shot_copy.frame(*device, surface.frame_target(), shots, console);
     surface.present();
     ++presented;
   }

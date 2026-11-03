@@ -6,10 +6,12 @@
 // for the rocket's health. The run is held to the bit by its golden rows. Also the keys and the
 // mouse as commands, the HUD's status off the player, and the weapon in his hand: the launcher
 // raised, one shot seen for one rocket and none for the spawn. The powers: the quad's and the
-// shield's glow round their holder, the shield taking a blast, both running out.
+// shield's glow round their holder, the shield taking a blast, both running out. A game stopped
+// lets go of its servers and map and starts again.
 //
 // ge:summary Tests: the listen server headless: a fixture map from a pack, a rocket jump, golden
 // ge:keywords test listen-server rocket-jump search-path pak baseline-mod controls hud-status
+// ge:keywords listen_stop
 // ge:keywords golden fixture held-weapon step_held quad shield powers effects
 // ge:skill shooter progs testing
 #include <algorithm>
@@ -219,6 +221,16 @@ TEST(a_map_the_packs_do_not_have_is_named_with_the_next_step) {
   CHECK(cl::load_named_map(files, "arena", error) != nullptr);
 }
 
+TEST(a_game_stopped_lets_go_and_starts_again) {
+  cl::Listen l;
+  if (!start(l)) return;
+  l.opt.console.emplace_back("timelimit 10");
+  cl::listen_stop(l);
+  CHECK(l.server == nullptr && !l.match && !l.map && l.progs == nullptr);
+  CHECK(l.opt.console.back() == "timelimit 10");  // the options kept
+  CHECK(start(l));
+}
+
 TEST(the_player_rocket_jumps_off_the_hall_floor) {
   const Rjump& r = the_jump();
   CHECK_MSG(std::fabs(r.ground_z - 24) < 0.1f, "stands at z " + std::to_string(r.ground_z));
@@ -283,6 +295,7 @@ TEST(the_binds_buttons_make_the_command_walk_run_and_sidestep) {
   cl::default_binds(con);
   CHECK(con.binds().get(ge::console::BindMode::game, "w") == "+forward");
   CHECK(con.binds().get(ge::console::BindMode::game, "mouse1") == "+attack");
+  CHECK(con.binds().get(ge::console::BindMode::game, "f12") == "screenshot");
   con.execute("bind w +back");  // the player's own bind is kept over the default
   cl::default_binds(con);
   CHECK(con.binds().get(ge::console::BindMode::game, "w") == "+back");

@@ -134,7 +134,8 @@ bool Av1Encoder::open(const Av1Options& o, std::string& error) {
   c.rc_end_usage = AOM_Q;
   c.kf_mode = AOM_KF_AUTO;
   c.kf_min_dist = 0;
-  c.kf_max_dist = static_cast<unsigned>(std::max(1.0, std::round(o.key_seconds * o.fps)));
+  c.kf_max_dist =
+      o.still ? 0 : static_cast<unsigned>(std::max(1.0, std::round(o.key_seconds * o.fps)));
   if (aom_codec_enc_init(&impl_->ctx, iface, &c, 0) != AOM_CODEC_OK) {
     error = std::string("libaom did not start: ") + aom_codec_error_detail(&impl_->ctx);
     return false;

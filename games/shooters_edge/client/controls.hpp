@@ -3,8 +3,9 @@
 // moves as buttons (+forward, +back, +moveleft, +moveright, +jump, +attack, +speed, +strafe,
 // +left, +right) and `impulse <n>`, and `default_binds` gives every key the classic layout has
 // unbound (W A S D and the arrows move, SPACE jumps, the left button fires, SHIFT walks or runs,
-// ALT sidesteps with the mouse, 1..8 pick a weapon, the wheel the next one carried), before the
-// player's config rebinds them. OPTIONS ▸ CUSTOMIZE CONTROLS rebinds them too.
+// ALT sidesteps with the mouse, 1..8 pick a weapon, the wheel the next one carried, F12 takes a
+// screenshot: engine/capture/screenshot.hpp), before the player's config rebinds them. OPTIONS ▸
+// CUSTOMIZE CONTROLS rebinds them too.
 //
 // - `button_moves` reads the buttons (the window); `key_moves` reads the default keys straight off
 //   the input state (a scripted session, a test), so a session's frames make the same commands on

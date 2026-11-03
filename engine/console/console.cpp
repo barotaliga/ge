@@ -37,6 +37,8 @@ void Console::add_command(std::string_view name, std::string_view help, CommandF
 
 bool Console::has_command(std::string_view name) const { return commands_.count(lower(name)) != 0; }
 
+bool Console::remove_command(std::string_view name) { return commands_.erase(lower(name)) != 0; }
+
 void Console::add_macro(std::string_view name, std::function<std::string()> fn) {
   macros_[lower(name)] = std::move(fn);
 }
@@ -124,7 +126,13 @@ int Console::execute(std::string_view text, Source source) {
 }
 
 void Console::run_now(std::string_view command, Source source) {
-  Entry e{std::string(command), source, {}, current_depth_, current_via_};
+  // Field by field: GCC 15 reads the braced form's `{}` origin as a string used uninitialized
+  // (-Wmaybe-uninitialized), which -Werror stops.
+  Entry e;
+  e.text = std::string(command);
+  e.source = source;
+  e.depth = current_depth_;
+  e.via = current_via_;
   dispatch(e);
 }
 

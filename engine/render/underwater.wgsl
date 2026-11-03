@@ -2,9 +2,10 @@
 // passes, redrawn as an eye under the surface sees it: the water's fog by its beam
 // attenuation into its own lit veil (what stands under the surface lit by the day dimmed on its
 // way down), the eye's adaptation to the dark, the blur by distance, Snell's window and the mirror past
-// it where the view meets the surface first, the wobble and a stylised tint; the specks
-// suspended in the water; and, at the waterline, the split where the lens plate crosses the
-// surface, blended over the frame by the share under it.
+// it where the view meets the surface first (the water pass's own surface from below, "water.below",
+// fogged over the way to it), the wobble and a stylised tint; the specks suspended in the water;
+// and, at the waterline, the split where the lens plate crosses the surface, blended over the frame
+// by the share under it.
 #include "render/wgsl/frame.wgsl"
 
 struct Under {
@@ -17,12 +18,21 @@ struct Under {
   fog: vec4f,   // the fog's scale, the eye's adaptation (the veil's luma it lifts to; 0 off)
   surface: vec4f,  // the surface at the eye (m), its slope dx, dz, 1 when the eye is under it
   motes: vec4f,    // the specks' share of cells, their radius (m), the lens plate's height (m)
-  lit: vec4f,      // the room's share of the light, the ripple's slope, the mirror, the caustics
+  lit: vec4f,      // the room's share of the light, the caustics, the shafts
 }
 
 @group(1) @binding(0) var<uniform> under: Under;
 @group(1) @binding(1) var scene_colour: texture_2d<f32>;
 @group(1) @binding(2) var scene_depth: texture_2d<f32>;  // R32F: the opaque depth
+// The surface seen from below (render/water.hpp's "water.below"): its light and distance (m; 0
+// none), and the share of it the veil fills.
+@group(1) @binding(3) var below: texture_2d<f32>;
+@group(1) @binding(4) var below_veil: texture_2d<f32>;
+// The body the eye is in, its waves: the caustics and the shafts read the real surface.
+@group(1) @binding(5) var<uniform> body: WaterBody;
+@group(1) @binding(6) var<storage, read> waves: array<Wave>;
+
+#include "render/wgsl/water_body.wgsl"
 
 struct VertexOut {
   @builtin(position) position: vec4f,
@@ -118,63 +128,51 @@ fn specks(origin: vec3f, ray: vec3f, dist: f32, focal: f32, t: f32) -> vec3f {
   return light;
 }
 
-// Where a direction from the eye lands on the screen (uv), and whether it is in front.
-fn screen_of(dir: vec3f) -> vec3f {
-  let c = frame.view_proj * vec4f(dir * 100.0, 1.0);
-  if (c.w <= 1e-4) {
-    return vec3f(0.0, 0.0, 0.0);
+// Light leaving water into air at `cos_i` to the normal (render/water.wgsl's `fresnel_exit`).
+fn fresnel_exit(cos_i: f32) -> f32 {
+  let eta = 1.333;
+  let s2 = eta * eta * max(1.0 - cos_i * cos_i, 0.0);
+  if (s2 >= 1.0) {
+    return 1.0;
   }
-  let ndc = c.xy / c.w;
-  return vec3f(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5, 1.0);
+  let ct = sqrt(1.0 - s2);
+  let rs = (eta * cos_i - ct) / (eta * cos_i + ct);
+  let rp = (eta * ct - cos_i) / (eta * ct + cos_i);
+  return 0.5 * (rs * rs + rp * rp);
 }
 
-// The surface's ripple at a point of the plan: its height's slope (dh/dx, dh/dz), three short
-// crossing swells drifting at their own speeds, `amp` the steepest.
-fn ripple_slope(p: vec2f, t: f32, amp: f32) -> vec2f {
-  let d1 = vec2f(0.8, 0.6);
-  let d2 = vec2f(-0.45, 0.9);
-  let d3 = vec2f(0.95, -0.3);
-  let s = d1 * cos(dot(p, d1) * 5.1 + t * 1.7) + d2 * cos(dot(p, d2) * 7.3 - t * 2.1) * 0.7 +
-          d3 * cos(dot(p, d3) * 11.0 + t * 2.9) * 0.4;
-  return s * amp / 2.1;
-}
-
-// The caustics' net at a point of the plan, 0..about 2: the rippled surface focuses the light
-// into bright thin lines round dimmer cells, as on a pool's floor; the lines are the cells'
-// edges (the gap between the nearest two of points that wander in a grid), two scales, drifting.
-fn caustic_cells(p: vec2f, t: f32, k: i32) -> f32 {
-  let base = floor(p);
-  var f1 = 9.0;
-  var f2 = 9.0;
-  for (var j = -1; j <= 1; j++) {
-    for (var i = -1; i <= 1; i++) {
-      let c = base + vec2f(f32(i), f32(j));
-      let h = hash4(vec3i(vec2i(c), 7), k);
-      let q = c + 0.5 + 0.38 * vec2f(sin(t * (0.6 + h.z) + h.x * 6.28),
-                                     cos(t * (0.5 + h.w) + h.y * 6.28));
-      let d = length(p - q);
-      if (d < f1) {
-        f2 = f1;
-        f1 = d;
-      } else if (d < f2) {
-        f2 = d;
-      }
+// THE LIGHT SHAFTS along the eye's ray out to `path` m (at most 24): sixteen steps (offset per
+// pixel and frame, so the resolve smooths the steps away), each the sun's light the waves focus
+// there over its mean, dimmed per band over the way down from the surface and the way back to the
+// eye, off a net four times softer than the bed's (the light is scattered through the volume); times
+// the forward scattering toward the eye. What they add over the veil (bright shafts and
+// the darker water between them).
+fn light_shafts(ray: vec3f, path: f32, pixel: vec2f, t: f32, px_angle: f32) -> vec3f {
+  let down = sun_down();
+  let reach = min(path, 24.0);
+  let jitter = fract(52.9829189 * fract(dot(pixel, vec2f(0.06711056, 0.00583715))) +
+                     0.618034 * frame.time.y);
+  let step = reach / 16.0;
+  var sum = vec3f(0.0);
+  for (var k = 0; k < 16; k++) {
+    let along = (f32(k) + jitter) * step;
+    let p = frame.eye.xyz + ray * along;
+    let depth = under.info.x - p.y;
+    if (depth <= 0.0) {
+      continue;
     }
+    let focus = caustic_at(p.xz, depth, down, t, 4.0, along * px_angle) - 1.0;
+    sum += focus * exp(-under.c.rgb * under.fog.x * (along + depth / max(-down.y, 0.2))) * step;
   }
-  return pow(1.0 - smoothstep(0.0, 0.16, f2 - f1), 2.0);
-}
-
-// The net laid on a face by its normal's share of each plane (a wall takes it upright).
-fn caustic_on(p: vec3f, n: vec3f, t: f32) -> f32 {
-  let w = n / max(n.x + n.y + n.z, 1e-4);
-  return w.y * caustic_net(p.xz, t) + w.z * caustic_net(p.xy + 3.3, t) +
-         w.x * caustic_net(p.zy + 7.1, t);
-}
-
-fn caustic_net(p: vec2f, t: f32) -> f32 {
-  // The lines wobble with the swells, then the two scales cross.
-  let w = p + 0.12 * vec2f(sin(p.y * 2.3 + t * 1.1), cos(p.x * 2.1 - t * 0.9));
-  return caustic_cells(w * 1.3, t * 0.8, 1) + 0.6 * caustic_cells(w * 2.6 + 4.7, t, 2);
+  // Henyey-Greenstein, g 0.8: a water's particles scatter mostly forward.
+  let g = 0.8;
+  let c = -dot(down, ray);
+  // Capped a little off the peak, which the sun's own disc in the window already stands for.
+  let phase = min((1.0 - g * g) / (4.0 * PI * pow(1.0 + g * g - 2.0 * g * c, 1.5)), 1.2);
+  let sun = sun_light(under.info.x, frame.eye.xz) * max(frame.sun.y, 0.0) * body.sun.x;
+  // About a quarter of a clear water's attenuation is scattering, and of what it scatters into the
+  // shafts' pattern (over the mean the veil carries) the eye takes about two thirds.
+  return sun * 0.15 * under.c.rgb * phase * sum;
 }
 
 // The room's light round the eye: the mean of the scene seen at a grid over the screen.
@@ -199,9 +197,9 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   let tan_half = length(edge / dot(edge, fwd) - fwd);
   let focal = 0.5 * frame.size.y / tan_half;
   // The face under this pixel's normal (from the scene's points' screen derivatives, taken
-  // here in uniform control flow): the caustics are laid on it from its three planes.
+  // here in uniform control flow): a wall takes the sun's caustics at a slant.
   let p0 = frame.eye.xyz + ray0 * min(scene_distance(uv0), 1e3);
-  let face_n = abs(normalize(cross(dpdx(p0), dpdy(p0)) + vec3f(0.0, 1e-6, 0.0)));
+  let face_n = normalize(cross(dpdx(p0), dpdy(p0)) + vec3f(0.0, 1e-6, 0.0));
 
   // THE WATERLINE: this pixel's point on the lens plate against the surface there (the plane
   // through the surface at the eye, tilted by its slope, lapping a centimetre).
@@ -237,8 +235,8 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   // The water there glows about as bright as the room round it, in the water's own hue, so the
   // window is a few times brighter than the water, never a lamp in a black sea.
   let luma_w = vec3f(0.2126, 0.7152, 0.0722);
-  // Half the water's hue: a pool's colour reads in what it does to the room, not as a dye.
-  let hue = mix(vec3f(1.0), under.veil.rgb / max(dot(under.veil.rgb, luma_w), 1e-4), 0.5);
+  // A third of the water's hue: a pool's colour reads in what it does to the room, not as a dye.
+  let hue = mix(vec3f(1.0), under.veil.rgb / max(dot(under.veil.rgb, luma_w), 1e-4), 0.35);
   var room_veil = vec3f(0.0);
   if (under.lit.x > 0.0) {
     room_veil = hue * dot(room_light(), luma_w) * 0.7;
@@ -253,70 +251,46 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
   let radius = under.info.z * (1.0 - exp(-min(dist, 1e3) * 0.693 / max(under.info.w, 0.01)));
   var seen = blurred(uv, radius);
   var path = dist;
-  // The surface first: the world above through Snell's window, the water mirrored past it.
-  var through = false;  // the ray left the water through the surface
-  if (ray.y > 1e-4) {
-    let to_surface = eye_depth / ray.y;
-    if (to_surface < dist) {
-      path = to_surface;
-      if (under.look.w > 0.5) {
-        // The surface where the ray meets it, tilted by its ripple.
-        let hit = frame.eye.xz + ray.xz * to_surface;
-        let sl = ripple_slope(hit, t, under.lit.y);
-        let n = normalize(vec3f(-sl.x, 1.0, -sl.y));
-        let cos_i = dot(ray, n);
-        let window = smoothstep(0.645, 0.675, cos_i);  // cos 48.6 degrees, softened
-        let f = 1.0 - cos_i;
-        let fresnel = 0.02 + 0.98 * f * f * f * f * f;
-        // Through the window: the world above, bent by the refraction where the surface is
-        // rippled (a flat surface keeps the frame's own picture).
-        var above = seen;
-        if (under.lit.y > 0.0) {
-          // Only the ripple's part of the bend: the flat surface's own (the window's fisheye)
-          // would reach past the frame's edges, where the copy has nothing.
-          let flat_n = vec3f(0.0, 1.0, 0.0);
-          let bent = screen_of(refract(ray, -n, 1.333));
-          let level_bent = screen_of(refract(ray, -flat_n, 1.333));
-          let ok = select(0.0, 1.0, bent.z > 0.5 && level_bent.z > 0.5);
-          let at = clamp(uv + (bent.xy - level_bent.xy) * ok, vec2f(0.0), vec2f(1.0));
-          above = blurred(at, radius * 0.5);
-          // The ceiling's caustics: the light the rippled water throws up on what stands over
-          // it, fading a few metres up.
-          if (under.lit.w > 0.0) {
-            let d_above = scene_distance(at);
-            let p_above = frame.eye.xyz + normalize(view_ray(frame, at)) * min(d_above, 1e3);
-            let rise = max(p_above.y - under.info.x, 0.0);
-            above *= 1.0 + under.lit.w * 1.4 * caustic_net(p_above.xz * 0.9, t) * exp(-rise * 0.3);
-          }
-        }
-        // Past the window, the water below mirrored by total internal reflection.
-        var mirrored = veil;
-        if (under.lit.z > 0.0) {
-          let r = reflect(ray, n);
-          let s_r = screen_of(r);
-          if (s_r.z > 0.5 && all(s_r.xy > vec2f(0.0)) && all(s_r.xy < vec2f(1.0))) {
-            let d_r = scene_distance(s_r.xy);
-            let tr_r = exp(-under.c.rgb * under.fog.x * min(d_r, 1e3));
-            let below = blurred(s_r.xy, radius);
-            mirrored = mix(veil, below * tr_r + veil * (1.0 - tr_r), under.lit.z);
-          }
-        }
-        seen = mix(mirrored, above * (1.0 - fresnel), window);
-        through = window > 0.5;
-      }
+  // The surface first, where the eye's ray meets it before the scene: as the water pass drew it
+  // from below, its share that mirrors nothing filled by the veil looking down.
+  var through = false;
+  if (under.look.w > 0.5) {
+    // Its nearest pixel: a filtered read would blend a distance with the empty pixels round it.
+    let at = clamp(vec2i(uv * frame.size.xy), vec2i(0), vec2i(frame.size.xy) - vec2i(1));
+    let b = textureLoad(below, at, 0);
+    let veil_down = veil0 * mix(0.45, 1.5, smoothstep(-0.9, 0.9, -ray.y));
+    if (b.a > 0.0 && b.a < dist) {
+      path = b.a;
+      seen = b.rgb + veil_down * textureLoad(below_veil, at, 0).r;
+      through = true;
+    } else if (b.a <= 0.0 && ray.y > 1e-4 && eye_depth / ray.y < dist) {
+      // No surface drawn (the eye over the level, the lens plate dipping under it): the level
+      // surface, the world seen straight through it and the water mirrored past the window.
+      path = eye_depth / ray.y;
+      let refl = fresnel_exit(ray.y);
+      seen = seen * (1.0 - refl) + veil_down * refl;
+      through = true;
     }
   }
   // What stands under the surface was lit by the day dimmed on its way down.
   let point_depth = under.info.x - (frame.eye.y + ray.y * min(path, 1e4));
   seen *= exp(-under.kd.rgb * max(point_depth, 0.0));
-  // The caustics on what stands under the surface, fading with its depth.
-  if (under.lit.w > 0.0 && !through && point_depth > 0.0 && dist < 1e5) {
+  // THE CAUSTICS on what stands under the surface: the sun's share of its light gathered and
+  // spread by the waves over it (water_body.wgsl's `caustic_at`), a wall's at its slant to the sun.
+  if (under.lit.y > 0.0 && !through && point_depth > 0.0 && dist < 1e5 && body.sun.x > 0.0) {
     let p = frame.eye.xyz + ray * path;
-    seen *= 1.0 + under.lit.w * 1.4 * caustic_on(p * 0.8, face_n, t) *
-                      exp(-point_depth * 0.25);
+    let down = sun_down();
+    let slant = clamp(abs(dot(face_n, down)) / max(-down.y, 0.2), 0.0, 1.0);
+    let share = sun_share(under.info.x, p.xz) * body.sun.x * slant * under.lit.y;
+    let foot = path * 2.0 * tan_half / frame.size.y / max(abs(dot(face_n, ray)), 0.2);
+    seen *= 1.0 + (caustic_at(p.xz, point_depth, down, t, 1.0, foot) - 1.0) * share;
   }
   let tr = exp(-under.c.rgb * under.fog.x * path);
   var colour = seen * tr + veil * (1.0 - tr);
+  if (under.lit.z > 0.0 && body.sun.x > 0.0 && frame.sun.y > 0.0) {
+    // The water between the shafts darker, never by more than a third.
+    colour = max(colour + under.lit.z * light_shafts(ray, path, in.position.xy, t, 2.0 * tan_half / frame.size.y), 0.67 * colour);
+  }
   // The specks, lit by the light in the water, each fogged over its own distance.
   if (under.motes.x > 0.0) {
     let s = specks(frame.eye.xyz, ray, path, focal, t);

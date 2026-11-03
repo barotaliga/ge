@@ -11,6 +11,7 @@
 
 #include "platform/devices_sdl.hpp"
 
+#include <mutex>
 #include <string>
 
 #include "core/output.hpp"
@@ -19,9 +20,17 @@ namespace ge::platform {
 
 namespace out = core::output;
 
+// The folder chooser's answer: SDL may call back on a thread of its own.
+struct FolderPick {
+  std::mutex mutex;
+  bool open = false, answered = false;
+  std::string path, error;
+};
+
 struct Window::Impl {
   SDL_Window* window = nullptr;
   SDL_MetalView metal_view = nullptr;
+  FolderPick pick;
 };
 
 bool display_available() {
@@ -178,6 +187,46 @@ void set_text_input(Window& window, bool on) {
   } else {
     SDL_StopTextInput(window.impl_->window);
   }
+}
+
+bool pick_folder(Window& window, std::string_view title, std::string_view start) {
+  FolderPick& pick = window.impl_->pick;
+  {
+    const std::lock_guard<std::mutex> lock(pick.mutex);
+    if (pick.open) return false;
+    pick.open = true;
+    pick.answered = false;
+    pick.path.clear();
+    pick.error.clear();
+  }
+  const auto answer = [](void* user, const char* const* list, int) {
+    auto* p = static_cast<FolderPick*>(user);
+    const std::lock_guard<std::mutex> lock(p->mutex);
+    if (list == nullptr)
+      p->error =
+          std::string("the desktop could not show a folder chooser (") + SDL_GetError() + ")";
+    else if (list[0] != nullptr)
+      p->path = list[0];
+    p->answered = true;
+  };
+  const std::string t(title), at(start);
+  const SDL_PropertiesID props = SDL_CreateProperties();
+  SDL_SetPointerProperty(props, SDL_PROP_FILE_DIALOG_WINDOW_POINTER, window.impl_->window);
+  SDL_SetStringProperty(props, SDL_PROP_FILE_DIALOG_TITLE_STRING, t.c_str());
+  if (!at.empty()) SDL_SetStringProperty(props, SDL_PROP_FILE_DIALOG_LOCATION_STRING, at.c_str());
+  SDL_ShowFileDialogWithProperties(SDL_FILEDIALOG_OPENFOLDER, answer, &pick, props);
+  SDL_DestroyProperties(props);
+  return true;
+}
+
+bool folder_picked(Window& window, std::string* path, std::string* error) {
+  FolderPick& pick = window.impl_->pick;
+  const std::lock_guard<std::mutex> lock(pick.mutex);
+  if (!pick.answered) return false;
+  *path = pick.path;
+  *error = pick.error;
+  pick.open = pick.answered = false;
+  return true;
 }
 
 std::vector<Display> displays() {

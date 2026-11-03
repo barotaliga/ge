@@ -3,11 +3,12 @@
 //
 // THE ACTIONS. The `ride` context holds the play contract's axes by name (sim/play.hpp: steer,
 // tuck, brake, jump, reset), so `ge::play::bind_axes` pairs them with no table between. The `app`
-// context holds what the window does with the run (the camera key, the rebinding walk), which no
-// input log records.
+// context holds what the window does with the run (the camera key, the rebinding walk, the
+// screenshot), which no input log records.
 //
 // THE DEFAULTS (`kDefaultBindings`): every action on the keys (A and D or the arrows steer, ramped
-// in so a tap is a small turn; W tucks, S brakes, SPACE jumps, R resets, C the camera, F5 rebinds),
+// in so a tap is a small turn; W tucks, S brakes, SPACE jumps, R resets, C the camera, F5 rebinds,
+// F12 a screenshot),
 // on a gamepad (the left stick steers, the right trigger tucks, the left brakes, south jumps,
 // north resets, back the camera) and on a wheel (its steer, throttle and brake roles: the gas
 // pedal is the tuck), and on a phone's thumbs (thumbs.hpp: the edge thumb steers, the tuck

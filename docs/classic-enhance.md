@@ -121,6 +121,11 @@ clock, a row a stage with its bar, then the textures and the result: READY with 
 stage that failed and how to go on. The player can leave the page; the run goes on. The
 `classic-menu` lab pictures every page at three screen sizes over a run on the lab's fixture pack.
 
+Shooter's Edge mounts the enhancing page and not the root: there the player loads the game
+(OPTIONS ▸ CLASSIC ENHANCED ▸ LOAD GAME, the desktop's folder chooser) and the window enhances the
+install it opened in the background at once, so there is no pack to pick (`docs/shooters-edge.md`
+§ Playing it).
+
 ## The switches
 
 Every enhancement is a switch (`switches.hpp`), off meaning the classic original as the pack has

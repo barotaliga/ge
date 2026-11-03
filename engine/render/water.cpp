@@ -13,6 +13,7 @@
 #include "core/libm/libm.hpp"
 #include "core/prng.hpp"
 #include "render/water.wgsl.hpp"
+#include "render/water_below.wgsl.hpp"
 #include "render/water_copy.wgsl.hpp"
 #include "render/water_stream.hpp"
 #include "render/water_stream.wgsl.hpp"
@@ -73,6 +74,17 @@ void stage_body(Water::Slot& slot, const water::Body& body) {
   put(b.emission, o.emission);
   b.emission[3] = static_cast<float>(slot.draw.room);
   put(slot.veil, o.veil);
+  const WaterDraw& d = slot.draw;
+  b.air[0] = static_cast<float>(d.daylight < 0 ? d.open_sky : d.daylight);
+  b.sun[0] = static_cast<float>(d.sunlit < 0 ? b.air[0] : d.sunlit);
+  b.air[1] = static_cast<float>(d.stir);
+  b.air[2] = static_cast<float>(d.gusts);
+  // The gusts drift downwind at about the speed of the waves the wind grows most (the peak's
+  // phase speed, g Tp / 2 pi, is a little over the wind's own at these fetches; take most of it).
+  const water::Sea& sea = body.waves.sea;
+  b.air[3] = static_cast<float>(sea.tp > 0 ? 0.8 * water::kGravity * sea.tp / (2 * kPi) : 0.0);
+  b.view[2] = static_cast<float>(lm::sin(sea.toward));
+  b.view[3] = static_cast<float>(lm::cos(sea.toward));
 }
 
 void upload_waves(gpu::Device& device, Water::Slot& slot, const water::Body& body) {
@@ -95,7 +107,36 @@ void upload_waves(gpu::Device& device, Water::Slot& slot, const water::Body& bod
   };
   for (int c = 0; c < body.waves.count; ++c) put(body.waves.c[c]);
   for (const water::Component& c : detail.waves) put(c);
+  slot.mss = detail.mss + detail.tail_mss + slot.draw.stir * slot.draw.stir;
+  for (int c = 0; c < body.waves.count; ++c) {
+    const double ka = body.waves.c[c].k * body.waves.c[c].a;
+    slot.mss += 0.5 * ka * ka;
+  }
   device.queue.WriteBuffer(slot.waves, 0, data.data(), data.size() * sizeof(float));
+}
+
+// A body's group: its uniform, waves and rings, the scene's copies, its shore, and the game's views
+// where they are of it (else the blank stand-ins).
+// Whether the game's mirror serves this body: it is the one the views are of, or (seen from over
+// the surface) it lies in the mirror's plane.
+bool mirrored(const WaterViews& v, const Water::Slot& slot, int index) {
+  if (!v.has_mirror) return false;
+  if (v.body == index) return true;
+  return !v.below && std::fabs(slot.staged.info[0] - v.level) < 0.01;
+}
+
+void bind_body(gpu::Device& device, const Water& water, Water::Slot& slot, int index) {
+  if (!water.scene_colour_view) return;
+  const WaterViews& v = water.views;
+  const bool ours = v.body == index;
+  const bool mirror_on = mirrored(v, slot, index);
+  const wgpu::TextureView mirror = mirror_on ? v.mirror : water.blank_colour_view;
+  const wgpu::TextureView mirror_depth = mirror_on ? v.mirror_depth : water.blank_depth_view;
+  const wgpu::TextureView up = ours && v.has_up ? v.up : water.blank_colour_view;
+  slot.group =
+      make_group(device, "water", water.layout,
+                 {slot.uniform, slot.waves, water.scene_colour_view, water.scene_depth_view,
+                  slot.rings, slot.shore_view, mirror, mirror_depth, up});
 }
 
 }  // namespace
@@ -147,10 +188,18 @@ WaterDetail detail_waves(const water::Waves& laid, int count, uint32_t seed, dou
 
 void create_water(gpu::Device& device, gpu::PipelineSet& pipelines, Water& water,
                   const wgpu::BindGroupLayout& frame) {
-  water.layout = make_layout(device, "water",
-                             {Slot::uniform, Slot::storage_read, Slot::texture, Slot::texture_raw,
-                              Slot::storage_read, Slot::texture},
-                             wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment);
+  water.layout =
+      make_layout(device, "water",
+                  {Slot::uniform, Slot::storage_read, Slot::texture, Slot::texture_raw,
+                   Slot::storage_read, Slot::texture, Slot::texture, Slot::depth, Slot::texture},
+                  wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment);
+  {
+    const auto usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    water.blank_colour = make_texture(device, "water.blank", 1, 1, 1, kHdrFormat, usage);
+    water.blank_depth = make_texture(device, "water.blank.depth", 1, 1, 1, kDepthFormat, usage);
+    water.blank_colour_view = water.blank_colour.CreateView();
+    water.blank_depth_view = water.blank_depth.CreateView();
+  }
   water.copy_layout =
       make_layout(device, "water.copy", {Slot::texture, Slot::depth}, wgpu::ShaderStage::Fragment);
 
@@ -203,6 +252,30 @@ void create_water(gpu::Device& device, gpu::PipelineSet& pipelines, Water& water
     desc.depthStencil = &depth;
     desc.fragment = &fragment;
     water.p_draw = pipelines.add_render(device, desc);
+    // From below: the same geometry into the `below` targets, tested against the opaque depth
+    // (a ceiling over a flooded passage hides the surface beyond it) and writing its own.
+    // Its own module (render/water_below.wgsl over the same shared half): the two fragment stages
+    // together would pass the embedding's 60 KB cap.
+    const wgpu::ShaderModule below_module =
+        gpu::create_shader(device, wgsl::water_below, "water.below");
+    wgpu::ColorTargetState below[2] = {};
+    below[0].format = wgpu::TextureFormat::RGBA16Float;
+    below[1].format = wgpu::TextureFormat::R8Unorm;
+    fragment.module = below_module;
+    fragment.entryPoint = "fs_below";
+    fragment.targets = below;
+    desc.vertex.module = below_module;
+    // Its covered coarse vertices rise rather than sink (water_surface.wgsl's kBelow), and the
+    // nearest fragment, the true surface, is kept.
+    wgpu::ConstantEntry below_grid[2]{};
+    below_grid[0].key = "kGrid";
+    below_grid[0].value = kWaterGrid;
+    below_grid[1].key = "kBelow";
+    below_grid[1].value = 1;
+    desc.vertex.constantCount = 2;
+    desc.vertex.constants = below_grid;
+    desc.label = "water.below";
+    water.p_below = pipelines.add_render(device, desc);
   }
   {
     Water::Streams& st = water.streams;
@@ -271,11 +344,20 @@ void create_water_targets(gpu::Device& device, Water& water, const FrameTargets&
   water.streams.group = make_group(device, "water.stream", water.streams.layout,
                                    {water.streams.optics, water.streams.vertices,
                                     water.scene_colour_view, water.scene_depth_view});
-  for (Water::Slot& slot : water.bodies) {
-    slot.group = make_group(device, "water", water.layout,
-                            {slot.uniform, slot.waves, water.scene_colour_view,
-                             water.scene_depth_view, slot.rings, slot.shore_view});
-  }
+  water.below = make_texture(device, "water.below", targets.width, targets.height, 1,
+                             wgpu::TextureFormat::RGBA16Float, usage);
+  water.below_veil = make_texture(device, "water.below.veil", targets.width, targets.height, 1,
+                                  wgpu::TextureFormat::R8Unorm, usage);
+  water.below_view = water.below.CreateView();
+  water.below_veil_view = water.below_veil.CreateView();
+  for (size_t i = 0; i < water.bodies.size(); ++i)
+    bind_body(device, water, water.bodies[i], static_cast<int>(i));
+}
+
+void set_water_views(gpu::Device& device, Water& water, const WaterViews& views) {
+  water.views = views;
+  for (size_t i = 0; i < water.bodies.size(); ++i)
+    bind_body(device, water, water.bodies[i], static_cast<int>(i));
 }
 
 ShoreMask shore_mask(const water::Body& body) {
@@ -356,13 +438,15 @@ int add_water_body(gpu::Device& device, Water& water, const water::Body& body,
     const wgpu::Extent3D extent{cols, rows, 1};
     device.queue.WriteTexture(&dst, mask.texels.data(), mask.texels.size(), &layout, &extent);
   }
-  if (water.scene_colour_view) {
-    slot.group = make_group(device, "water", water.layout,
-                            {slot.uniform, slot.waves, water.scene_colour_view,
-                             water.scene_depth_view, slot.rings, slot.shore_view});
-  }
+  bind_body(device, water, slot, static_cast<int>(water.bodies.size()));
   water.bodies.push_back(std::move(slot));
   return static_cast<int>(water.bodies.size()) - 1;
+}
+
+void set_water_sunlit(Water& water, int index, double share) {
+  Water::Slot& slot = water.bodies[static_cast<size_t>(index)];
+  slot.draw.sunlit = share;
+  slot.staged.sun[0] = static_cast<float>(share);
 }
 
 void set_water_body(gpu::Device& device, Water& water, int index, const water::Body& body) {
@@ -393,19 +477,30 @@ void set_water_wakes(gpu::Device& device, Water& water, int index, const water::
   if (n > 0) device.queue.WriteBuffer(slot.rings, 0, data.data(), data.size() * sizeof(float));
 }
 
-void prepare_water(gpu::Device& device, Water& water, const FrameView& view) {
+void prepare_water(gpu::Device& device, Water& water, const FrameView& view, int eye_in) {
   water.eye_under = -1;
   water.eye_near = -1;
+  if (eye_in >= 0 && eye_in < static_cast<int>(water.bodies.size()) &&
+      !water.bodies[static_cast<size_t>(eye_in)].hidden)
+    water.eye_under = eye_in;
   for (Water::Slot& slot : water.bodies) {
     WaterGpuBody& b = slot.staged;
+    const int index = static_cast<int>(&slot - water.bodies.data());
     slot.shown = !slot.hidden && view.eye[1] > b.info[0];
     const bool inside = view.eye[0] >= b.box[0] && view.eye[0] <= b.box[2] &&
                         view.eye[2] >= b.box[1] && view.eye[2] <= b.box[3];
     // A pool's box is only its plan: an eye under the level but below the floor (a room under
-    // another pool) is not in it.
-    if (!slot.hidden && !slot.shown && inside && view.eye[1] > slot.floor && water.eye_under < 0) {
-      water.eye_under = static_cast<int>(&slot - water.bodies.data());
+    // another pool) is not in it. The game's word (`eye_in`) stands over both.
+    if (eye_in == kEyeFromBoxes && !slot.hidden && !slot.shown && inside &&
+        view.eye[1] > slot.floor && water.eye_under < 0) {
+      water.eye_under = index;
     }
+    if (index == water.eye_under) slot.shown = false;
+    const WaterViews& v = water.views;
+    const bool ours = v.body == index;
+    b.view[0] = mirrored(v, slot, index) ? (v.below ? 2.0f : 1.0f) : 0.0f;
+    b.view[1] = ours && v.has_up ? 1.0f : 0.0f;
+    std::memcpy(b.up_view_proj, v.up_view_proj, sizeof b.up_view_proj);
     if (slot.shown && inside && view.eye[1] < b.info[0] + kWaterlineBand && water.eye_near < 0) {
       water.eye_near = static_cast<int>(&slot - water.bodies.data());
     }
@@ -435,6 +530,7 @@ void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRe
   if (!drawn && water.eye_under < 0) {
     rec.compute(encoder, "water.copy").End();
     rec.compute(encoder, "water").End();
+    rec.compute(encoder, "water.below").End();
     return;
   }
   {
@@ -488,6 +584,35 @@ void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRe
     ++rec.current().draws;
   }
   pass.End();
+  if (water.eye_under < 0) {
+    rec.compute(encoder, "water.below").End();
+    return;
+  }
+  wgpu::RenderPassColorAttachment below[2]{};
+  below[0].view = water.below_view;
+  below[1].view = water.below_veil_view;
+  for (auto& c : below) {
+    c.loadOp = wgpu::LoadOp::Clear;
+    c.storeOp = wgpu::StoreOp::Store;
+    c.clearValue = {0, 0, 0, 0};
+  }
+  wgpu::RenderPassDepthStencilAttachment test{};
+  test.view = targets.depth_view;
+  test.depthLoadOp = wgpu::LoadOp::Load;
+  test.depthStoreOp = wgpu::StoreOp::Store;
+  wgpu::RenderPassDescriptor under{};
+  under.colorAttachmentCount = 2;
+  under.colorAttachments = below;
+  under.depthStencilAttachment = &test;
+  wgpu::RenderPassEncoder bp = rec.render(encoder, under, "water.below");
+  const Water::Slot& slot = water.bodies[static_cast<size_t>(water.eye_under)];
+  bp.SetPipeline(pipelines.render(water.p_below));
+  bp.SetBindGroup(0, frame);
+  bp.SetBindGroup(1, slot.group);
+  bp.SetIndexBuffer(water.indices, wgpu::IndexFormat::Uint32);
+  bp.DrawIndexed(kWaterGrid * kWaterGrid * 6, static_cast<uint32_t>(slot.staged.grid[0]));
+  ++rec.current().draws;
+  bp.End();
 }
 
 }  // namespace ge::render

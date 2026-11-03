@@ -259,7 +259,7 @@ gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, gr::FrameView v,
     const gr::PrecipShelter shelter = ba::bsp_shelter(m.bsp);
     gr::bind_precip_shelter(d, f.precip, w.on ? &shelter : nullptr);
     gr::prepare_precip(d, f.precip, pf);
-    ba::light_rooms(m.water, m.liquids, m.rows, o.minlight, o.brightness);
+    ba::light_rooms(m.water, m.liquids, m.world, m.rows, o.minlight, o.brightness);
     gr::prepare_water(d, m.water, fv);
     gr::prepare_liquid(d, m.liquids, fv);
     wgpu::CommandEncoder e = d.device.CreateCommandEncoder();

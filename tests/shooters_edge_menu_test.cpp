@@ -4,13 +4,16 @@
 // map; ESCAPE opening the menu and going back out of it; the classic pictures read from a pack's
 // files and refused without them; the classic layout's rows on the 320 x 200 screen; the modern
 // and the classic looks drawing every page clean; LOAD and SAVE's slots, their lines and the
-// console lines they run.
+// console lines they run; CLASSIC ENHANCED's LOAD GAME asking the window for a folder and showing
+// why one was refused, ENHANCE dimmed until a game is loaded.
 //
 // ge:summary Tests the main menu: pages, dimming by the console, cvars, START, ESCAPE, both looks
 // ge:keywords test menu main-menu dimmed cvar console new-game start escape classic modern layout
+// ge:keywords load-game take_load load_refused
 // ge:skill ui testing
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -251,9 +254,11 @@ TEST(classic_enhanced_pages_set_their_cvars_and_open_the_enhance_menu) {
   g.add_cvars(w.con);  // the ce_ switches
   sm::Host host{.console = &w.con};
   g.show(host, "enhanced");
-  for (const char* row : {"enhance", "art", "light", "liquids", "fire"})
+  for (const char* row : {"art", "light", "liquids", "fire"})
     CHECK_MSG(!item(g.main(), "enhanced", row)->disabled, row);
   CHECK(item(g.main(), "enhanced", "weather")->disabled);  // no sv_weather on this console
+  CHECK(item(g.main(), "enhanced", "load")->disabled);     // no `basedir`: the window's
+  CHECK(item(g.main(), "enhanced", "enhance")->disabled);  // no game loaded
   g.show(host, "ce_liquids");
   CHECK(item(g.main(), "ce_liquids", "ce_water")->on);
   CHECK(g.main().focus("ce_water"));
@@ -261,10 +266,45 @@ TEST(classic_enhanced_pages_set_their_cvars_and_open_the_enhance_menu) {
   accept.accept = true;
   g.update(accept, false, host, 0.016);
   CHECK(w.con.cvars().find("ce_water")->value == "0");
+  // A game loaded: ENHANCE shows its enhancing, here why it did not start (no install there).
+  g.set_game((std::filesystem::temp_directory_path() / "ge_se_menu_no_install").string());
   g.show(host, "enhanced");
   CHECK(g.main().focus("enhance"));
   g.update(accept, false, host, 0.016);
   CHECK(g.in_enhance());
+  CHECK(g.enhance().top().id == "enhancing");
+  CHECK(g.job() == nullptr && !g.take_ended());
+  // BACK returns to CLASSIC ENHANCED, never to classic-enhance's own pack page.
+  MenuInput back;
+  back.back = true;
+  g.update(back, false, host, 0.016);
+  CHECK(!g.in_enhance());
+  CHECK(g.main().top().id == "enhanced");
+}
+
+TEST(load_game_asks_the_window_for_a_folder_and_says_why_one_was_refused) {
+  World w;
+  w.con.add_command("basedir", "", [](ge::console::Console&, const ge::console::Args&) {});
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  CHECK(w.con.cvars().find("ce_auto")->value == "1");  // a game loaded is enhanced at once
+  sm::Host host{.console = &w.con};
+  g.show(host, "enhanced");
+  CHECK(!item(g.main(), "enhanced", "load")->disabled);
+  CHECK(!g.take_load());
+  CHECK(g.main().focus("load"));
+  MenuInput accept;
+  accept.accept = true;
+  g.update(accept, false, host, 0.016);
+  CHECK(g.take_load());
+  CHECK(!g.take_load());  // once
+  g.load_refused("no id1 folder");
+  CHECK(item(g.main(), "enhanced", "load")->hint == "NOT LOADED: no id1 folder");
+  g.set_game("/a/game");
+  g.show(host, "enhanced");
+  CHECK(item(g.main(), "enhanced", "load")->hint.find("NOT LOADED") == std::string::npos);
+  CHECK(!item(g.main(), "enhanced", "enhance")->disabled);
+  CHECK(g.game() == "/a/game");
 }
 
 TEST(classic_pictures_are_read_from_the_packs_files) {

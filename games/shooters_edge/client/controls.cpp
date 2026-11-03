@@ -37,6 +37,7 @@ constexpr const char* kDefaults[][2] = {
     {"5", "impulse 5"},         {"6", "impulse 6"},
     {"7", "impulse 7"},         {"8", "impulse 8"},
     {"mwheelup", "impulse 10"}, {"mwheeldown", "impulse 10"},
+    {"f12", "screenshot"},  // engine/capture/screenshot.hpp
 };
 
 }  // namespace

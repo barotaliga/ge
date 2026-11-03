@@ -25,6 +25,7 @@ prefix comes the thing in one word, abbreviated when it is long: `r_shadowsize`,
 | `net_` | the network's plumbing, mostly for developers | `net_fakeloss`, `net_fakelag` |
 | `con_` | the drop-down console | `con_height`, `con_speed`, `con_chat` |
 | `hud_` | the HUD | `hud_scale` |
+| `scr_` | the screen as a whole: its overlays and the screenshots taken of it | `scr_levelstats`, `scr_format`, `scr_quality` |
 | none | a few names everyone knows | `name`, `rate`, `sensitivity`, `volume` |
 
 `ge cvar ls <prefix>` lists a game's cvars with a prefix; a new name matches its neighbours'

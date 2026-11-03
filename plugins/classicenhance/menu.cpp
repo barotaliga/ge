@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <utility>
 
 #include "ui/font.hpp"
 
@@ -48,6 +49,31 @@ const char* state_word(StageState s) {
 std::string upper(std::string s) {
   for (char& c : s) c = c >= 'a' && c <= 'z' ? char(c - 'a' + 'A') : c;
   return s;
+}
+
+// `text` broken at its spaces into lines no wider than `width` at `size` (a word wider than that
+// alone on its line).
+std::vector<std::string> wrapped(const ui::Font& font, float size, const std::string& text,
+                                 float width) {
+  std::vector<std::string> lines;
+  std::string line;
+  size_t at = 0;
+  while (at < text.size()) {
+    const size_t end = std::min(text.find(' ', at), text.size());
+    const std::string word = text.substr(at, end - at);
+    std::string longer = line;
+    if (!longer.empty()) longer += ' ';
+    longer += word;
+    if (!line.empty() && font.advance(longer, size) > width) {
+      lines.push_back(line);
+      line = word;
+    } else {
+      line = std::move(longer);
+    }
+    at = end + 1;
+  }
+  if (!line.empty()) lines.push_back(line);
+  return lines;
 }
 
 void set_switch(console::Cvars& cvars, std::string_view id, bool on) {
@@ -102,7 +128,7 @@ ui::Menu classic_menu(std::span<const std::string> packs, const Switches& values
   run.items.push_back({.id = "play",
                        .text = "PLAY",
                        .kind = ui::ItemKind::action,
-                       .hint = "Start the first map with the enhanced pack.",
+                       .hint = "Play with the enhanced pack.",
                        .disabled = true,
                        .prominent = true});
   run.items.push_back({.id = "back", .text = "BACK", .kind = ui::ItemKind::back});
@@ -326,7 +352,14 @@ void draw_progress(ui::DrawList& list, const BoardView& board, ui::Rect area, co
     list.text(thin, 16 * s, x, by, "PRESS PLAY, OR TYPE MAP AND A MAP'S NAME IN THE CONSOLE",
               st.dim);
   } else if (board.failed) {
-    list.text(bold, 20 * s, x, by - 22 * s, upper(board.error), st.failed);
+    // Why, word-wrapped to the panel above the next step: its first five lines at most.
+    std::vector<std::string> lines = wrapped(bold, 20 * s, upper(board.error), w);
+    if (lines.size() > 5) {
+      lines.resize(5);
+      lines.back() += " ...";
+    }
+    for (size_t i = 0; i < lines.size(); i++)
+      list.text(bold, 20 * s, x, by - 22 * s * float(lines.size() - i), lines[i], st.failed);
     list.text(thin, 16 * s, x, by, "ENHANCE AGAIN TO GO ON: THE FINISHED STAGES ARE KEPT", st.dim);
   } else if (board.started) {
     list.text(thin, 16 * s, x, by, "YOU CAN LEAVE THIS PAGE: THE ENHANCING GOES ON", st.dim);

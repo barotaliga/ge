@@ -16,7 +16,8 @@
 // ge:keywords platform window sdl native-window surface-handles input keyboard pointer mouse
 // ge:keywords focus quit resize pixel-size hidpi input-snapshot poll clock ticks monotonic
 // ge:keywords headless display_available open_window poll_input now_ns prefs_dir prefs user-dir
-// ge:keywords fullscreen set_fullscreen displays external-monitor
+// ge:keywords fullscreen set_fullscreen displays external-monitor pick_folder folder_picked
+// ge:keywords folder-dialog file-dialog folder-chooser
 // ge:skill platform
 // ge:test tests/platform_window_test.cpp
 #pragma once
@@ -111,6 +112,8 @@ class Window {
   friend bool relative_mouse(const Window& window);
   friend void set_text_input(Window& window, bool on);
   friend bool set_fullscreen(Window& window, bool on, int display);
+  friend bool pick_folder(Window& window, std::string_view title, std::string_view start);
+  friend bool folder_picked(Window& window, std::string* path, std::string* error);
   std::unique_ptr<Impl> impl_;
 };
 
@@ -132,6 +135,13 @@ std::vector<Display> displays();
 // or more later, through `InputSnapshot::resized`. False after an agent-actionable error line when
 // the platform refuses.
 bool set_fullscreen(Window& window, bool on, int display = 0);
+
+// THE DESKTOP'S FOLDER CHOOSER over `window`, titled `title` and opened at `start` (empty: where
+// the desktop last was). It answers later, on a frame of its own: `folder_picked` is true once,
+// when it closed, with the folder in `*path` ("" when the player cancelled) or why the desktop
+// could not show one in `*error`. False when a chooser is already open.
+bool pick_folder(Window& window, std::string_view title, std::string_view start = {});
+bool folder_picked(Window& window, std::string* path, std::string* error);
 
 // Read every pending event, once per frame on the main thread, into `input` (its `pressed`
 // and per-frame flags are cleared first; `held` carries over).

@@ -260,7 +260,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
       load.cache = ge::classicenhance::find_cache(content_packs(files));
     create_models(d, f->pipelines, f->models, f->layout, files, palette_copy, f->scene.map, load,
                   game);
-    f->extras = create_extras(d, f->pipelines, f->layout, f->scene, picture.ce, picture.weather);
+    f->extras = create_extras(d, f->pipelines, f->layout, f->scene, picture.ce, picture.weather,
+                              f->skypass);
   }
   if (!f->pipelines.finish(d)) {
     error = "the world's pipelines did not build; next: read the gpu: lines above";
@@ -324,7 +325,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   }
   if (f.extras) {
     GE_ZONE("world.extras");
-    prepare_extras(d, *f.extras, f.bsp, view, o);
+    prepare_extras(d, *f.extras, f.bsp, view, o, f.staged);
   }
   {
     GE_ZONE("world.effects");

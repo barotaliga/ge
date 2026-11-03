@@ -484,6 +484,7 @@ void add_cvars(con::Console& c, Settings& s) {
           .help = "the hunt sends the army's paramotor riflemen (from four stars)",
           .kind = CvarKind::boolean},
          &s.paras);
+  ge::capture::add_screenshot_cvars(v, s.screenshot);
 }
 
 void register_cvars(con::Console& c) {

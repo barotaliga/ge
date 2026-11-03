@@ -12,9 +12,15 @@
 // is the engine's (render/underwater.hpp), and the room over the surface is drawn without the
 // map's visibility, which the map's tools often worked out with the liquids opaque.
 //
+// The water mirrors the room it lies in (the map drawn again in its plane,
+// brush/app/bsp_views.hpp), its waves grown by the weather's wind (sv_wind, sv_winddir) as far as
+// the pool is open to it (brush/app/bsp_liquids.hpp's pool site; ce_wind 0: still air), and the eye
+// is in it when the map says so (the leaf at the eye), at any depth and in a flooded passage beyond
+// the top.
+//
 // ge:summary The modern look's water, lava, slime, flames and weather in the window, by ce_ switch
 // ge:keywords world-extras water lava slime liquids flames torches weather rain snow precip
-// ge:keywords underwater warped-liquids
+// ge:keywords underwater warped-liquids planar-mirror bsp-views pool-wind
 // ge:keywords classicenhance switches ce_water ce_lava ce_slime ce_flames ce_weather ce_shadows
 // ge:keywords bonfires ce_bonfires sparks extras_births
 // ge:skill render shooter classicenhance
@@ -29,6 +35,7 @@
 #include "gpu/device.hpp"
 #include "render/frame.hpp"
 #include "render/particles.hpp"
+#include "render/sky.hpp"
 #include "render/view.hpp"
 
 namespace shooters_edge::client {
@@ -44,7 +51,8 @@ using WorldExtrasPtr = std::unique_ptr<WorldExtras, WorldExtrasDeleter>;
 WorldExtrasPtr create_extras(ge::gpu::Device& device, ge::gpu::PipelineSet& pipelines,
                              const wgpu::BindGroupLayout& frame, const ge::brush::app::Scene& scene,
                              const ge::classicenhance::Switches& switches,
-                             const ge::brush::app::WeatherCvars& weather);
+                             const ge::brush::app::WeatherCvars& weather,
+                             const ge::render::Sky& sky);
 // Again at every resize, after the frame's targets are made.
 void bind_extras_targets(ge::gpu::Device& device, WorldExtras& x,
                          const ge::render::FrameTargets& targets);
@@ -54,9 +62,11 @@ void bind_extras_targets(ge::gpu::Device& device, WorldExtras& x,
 void dress_extras(WorldExtras& x, ge::render::FrameView& view, ge::brush::app::Options& options,
                   double dt);
 // After the BSP renderer is prepared: each pass's upload (hidden by its switch or by the classic
-// look).
+// look); `uniforms` the frame's own block as filled for this frame (the water's mirror is its
+// camera turned over).
 void prepare_extras(ge::gpu::Device& device, WorldExtras& x, const ge::brush::app::BspDraw& bsp,
-                    const ge::render::FrameView& view, const ge::brush::app::Options& options);
+                    const ge::render::FrameView& view, const ge::brush::app::Options& options,
+                    const ge::render::FrameUniforms& uniforms);
 // After prepare_extras: the bonfires' sparks since the last call, to `t_s`, appended to `out` for
 // the frame's particle pool (none when ce_bonfires is off, or on the first call).
 void extras_births(WorldExtras& x, double t_s, std::vector<ge::render::Particle>& out);
@@ -68,7 +78,8 @@ inline constexpr double kUnderReach = 3;
 // Before the world: the fall's simulation.
 void encode_extras_sim(const WorldExtras& x, const ge::gpu::PipelineSet& pipelines,
                        ge::render::FrameRecorder& rec, wgpu::CommandEncoder& encoder);
-// After the world's veil: the flames, the water, the liquids and the fall.
+// After the world's veil: the water's views of the map, the flames, the water, the liquids and the
+// fall.
 void encode_extras(const WorldExtras& x, const ge::gpu::PipelineSet& pipelines,
                    ge::render::FrameRecorder& rec, wgpu::CommandEncoder& encoder,
                    const ge::render::FrameTargets& targets, const wgpu::BindGroup& frame);

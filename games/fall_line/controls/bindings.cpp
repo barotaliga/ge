@@ -52,6 +52,7 @@ bind camera key:c
 bind camera pad:back
 bind camera touch:camera
 bind rebind key:f5
+bind screenshot key:f12
 )";
 
 in::ActionMap default_map() {
@@ -64,6 +65,8 @@ in::ActionMap default_map() {
       {"reset", in::ActionKind::button, false, "stand back on the piste past the last gate"},
       {"camera", in::ActionKind::button, false, "the next camera"},
       {"rebind", in::ActionKind::button, false, "rebind the keys, one action at a time"},
+      {"screenshot", in::ActionKind::button, false,
+       "the frame shown written to a file (scr_format)"},
   };
   std::string error;
   // The defaults are the game's own text: one that does not read is a bug the tests catch.

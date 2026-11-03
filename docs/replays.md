@@ -379,6 +379,60 @@ the interleave hand both the same packets in the same order.
   ffmpeg plays at least as far (at 24 fps over 30 s, 336 of 721 pictures read and 384 played from
   a file cut in half).
 
+## Screenshots (M23k)
+
+A screenshot is the frame the player sees, kept as a picture file. Both games bind it to F12
+(Shooter's Edge's default bind `f12 screenshot`, Fall Line's `screenshot` action in its `app`
+context) and both have the console's `screenshot`. The files go where the game keeps its other
+files, in a `screenshots/` folder beside them: Shooter's Edge's `<game folder>/screenshots/` (the
+game folder holds its recordings, `saves/` and `settings/`), Fall Line's per-user folder's
+`screenshots/` (beside `runs/` and `bindings.txt`). A file is named by the local time it was
+written, `<game>-YYYY-MM-DD-HHMMSS.<ext>`, `-2`, `-3` and on when one second has more, so a folder
+lists in the order they were taken and none is written over another.
+
+THE FORMAT is the player's, three archived cvars (`capture::add_screenshot_cvars`; Fall Line
+registers them in its cvar table, Shooter's Edge with its screenshot key):
+
+| Cvar | Values | Default | What |
+| --- | --- | --- | --- |
+| `scr_format` | `png`, `jpg`, `avif`, `heic` | `jpg` | the file's format; one this build or machine cannot write falls back (HEIC to AVIF to JPEG) and the console says so |
+| `scr_quality` | 1..100 | 90 | the lossy formats' quality |
+| `scr_chroma` | 444, 420 | 444 | a JPEG's colour detail: full, or halved each way (about a quarter smaller, a coloured edge bleeds); AVIF and HEIC are always 420 |
+
+The writers are the engine's own (`capture/still.hpp`): PNG by `lab/png.hpp`'s packed writer;
+JPEG by `capture/jpeg.hpp`, a baseline encoder on an integer DCT, so the same frame is the same
+bytes on every platform; AVIF as one AV1 keyframe from the engine's libaom (realtime-only as built,
+so a still is coded at its slowest realtime speed) and HEIC as one HEVC picture from the
+platform's encoder (VideoToolbox today; the other platforms' encoders as M23d4 lands them), each
+boxed as a HEIF still by `capture/heif.hpp` with its colour stated (BT.709, the sRGB transfer,
+limited range). JPEG is the default because every viewer and every build has it; AVIF is the
+smallest. On Fall Line's 1440p frame at quality 90 (the `screenshot` lab with `--file`):
+
+| Format | Size | Of the PNG | PSNR |
+| --- | --- | --- | --- |
+| PNG | 3769 KB | 100% | exact |
+| JPEG 4:4:4 | 383 KB | 10.2% | 44.9 dB |
+| JPEG 4:2:0 | 291 KB | 7.7% | 42.0 dB |
+| AVIF | 181 KB | 4.8% | 43.4 dB |
+| HEIC | 262 KB | 7.0% | 43.9 dB |
+
+THE FRAME IS NEVER HELD for it (`capture/screenshot.hpp`). The key asks for the next frame;
+once that frame is drawn and before it is presented the window's one call a frame
+(`render/screenshot_copy.hpp`'s `ScreenshotCopy::frame`) copies it into a ring of two readbacks
+(`gpu/readback_ring.hpp`, the live capture's), and when the copy comes back a frame or two later
+the pixels and the settings of that moment are handed to the writer, which copies them and
+returns. A game's whole part is its wiring: the folder and the name, `add_screenshot_cvars` and
+`add_screenshot_command` before the console runs the command line, a key bound to `screenshot`,
+and that one call. The writer's own thread packs them and writes the file under a temporary name renamed
+over, so a crash never leaves half a picture. Four pictures waiting is the most; a fifth is
+refused and said so. The console names each file once it is written, with its format, quality and
+size.
+
+The `screenshot` lab measures every format on a smooth frame, a detailed one (fine grain over every
+pixel, every packer's worst case) and, with `--file`, a frame a game wrote: the bytes, the PSNR and
+SSIM after reading it back, the time, a sweep of `scr_quality`, and a picture of a part of each
+frame at four times its size in every format.
+
 ## Broadcasting to a video service (M23e)
 
 The services a player streams to take RTMP: plain RTMP and RTMPS carry H.264 and AAC, and Enhanced
@@ -428,6 +482,7 @@ environment or the game's own settings, never hard-coded in the engine.
 | `capture` | Does a replay export decode to its frames and its sound, is the sound in sync to a frame (a click and a flash on the same step), uncompressed and as AV1 and Opus in a WebM and an MP4, does an MP4 cut short play to its last whole fragment, and what does each encoder cost a frame? | M23d |
 | `capture-run` | Does Fall Line's race export with its own sound, every picture and every sample of it in the file, and is the sound never silence? How much smaller is it as AV1 and Opus, and how close to the uncompressed pictures? | M23d1, M23d2 |
 | `gpu-capture-live` | Does the live capture take every frame and its sound in real time, in sync, with no frame waiting on it? | M23d3 |
+| `screenshot` | How small is a screenshot in each format at a quality, how much does it lose, and how long does it take to pack? | M23k |
 | `stream` | Does an RTMP session to a test ingest in the lab carry every frame, does the bitrate follow a narrowed link and recover, and is the key never printed? | M23e |
 | `spectate` | Do spectators through a relay over every network preset step to the player's digest, how late, and at how many bytes a second? | M23f |
 | `se-highlights` | Which moments of a demo are worth watching again, does the finder find each one, and does the play bar show them where they happened? | M23i |

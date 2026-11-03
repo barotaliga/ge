@@ -122,7 +122,7 @@ gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, const gr::FrameView&
   const bool v2 = o.mode == ba::Mode::v2;
   for (auto& b : m.water.bodies) b.hidden = !v2;
   for (auto& b : m.liquids.bodies) b.hidden = !v2;
-  ba::light_rooms(m.water, m.liquids, m.rows, o.minlight, o.brightness);
+  ba::light_rooms(m.water, m.liquids, m.world, m.rows, o.minlight, o.brightness);
   gr::prepare_water(d, m.water, v);
   gr::prepare_liquid(d, m.liquids, v);
   m.fires.clear();
