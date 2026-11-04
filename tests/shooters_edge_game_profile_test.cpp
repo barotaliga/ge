@@ -58,3 +58,20 @@ TEST(the_item_rows_read_a_maps_items_and_their_words) {
   CHECK(!bt::item_of("info_player_start", 0, none));
   CHECK(pf::classic_game().tables.sounds.data() == bt::sound_table().data());
 }
+
+// The game's item names as the server's lines: one per name, under its class name, quoted, and
+// every class name one of the game's items (so a pickup finds it).
+TEST(the_item_names_become_the_servers_local_info) {
+  const pf::ItemTables& t = pf::classic_game().tables;
+  const std::vector<std::string> lines = pf::item_name_lines(t.names);
+  CHECK(lines.size() == t.names.size());
+  CHECK(!lines.empty() && lines[0] == "localinfo item_shells \"shells\"");
+  bool tb = false;
+  for (const std::string& l : lines) tb = tb || l == "localinfo weapon_lightning \"Thunderbolt\"";
+  CHECK(tb);
+  for (const pf::ItemName& n : t.names) {
+    const bool power = std::string_view(n.class_name).substr(0, 14) == "item_artifact_";
+    CHECK_MSG(power || pf::item_row(t.items, n.class_name, 0) != nullptr,
+              "no item row for " + std::string(n.class_name));
+  }
+}

@@ -95,6 +95,7 @@ std::unique_ptr<LoadedMap> load_named_map(const SearchPath& files, const std::st
 struct ListenOptions {
   uint32_t seed = 1;
   std::vector<std::string> console = {"deathmatch 1"};  // server lines before each map loads
+  std::vector<std::string> item_names;  // a match's server lines before `console` (GameContent's)
   std::string player = "player";
   const SearchPath* files = nullptr;  // where a campaign's next map is read (outlives the listen)
   bool registered = false;            // a campaign's content is the full game (gfx/pop.lmp)

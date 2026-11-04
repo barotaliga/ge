@@ -4,17 +4,21 @@
 // entity text (nothing inhibited, no unknown key or classname), and plays a deathmatch: pickups,
 // hits and frags with obituaries by weapon, missiles in the air, the door opening for a player,
 // the frag log adding up to the frags, the time limit ending the match; and the same match twice
-// is the same to the bit.
+// is the same to the bit. Its pickups name an item in the loaded game's words when the game's
+// profile gives them (`localinfo` under each class name), in its own when none is given.
 //
 // ge:summary Tests: the baseline QC mod compiles with the engine's layout and plays a deathmatch
 // ge:keywords test baseline-mod compile_baseline_mod mod-match deathmatch bots door plat frags
-// ge:keywords obituaries pickups layout-check
+// ge:keywords obituaries pickups layout-check pickup-message item-name localinfo
 // ge:skill progs shooter testing
+#include <set>
 #include <string>
+#include <vector>
 
 #include "check.hpp"
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
+#include "shooters_edge/profiles/items.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
@@ -38,14 +42,15 @@ const Built& baseline() {
   return b;
 }
 
-sv::ModMatchReport play() {
+sv::ModMatchReport play(std::vector<std::string> first_lines = {}) {
   sv::ModMatchOptions o;
   o.compiled = &baseline().progs;
   o.compiled_name = "the baseline mod";
   o.entities = sv::kBaselineArenaEntities;
   o.bots = 2;
   o.max_frames = 5100;  // the minute's match and the five seconds before the level changes
-  o.console = {"deathmatch 1", "timelimit 1"};
+  o.console = std::move(first_lines);
+  o.console.insert(o.console.end(), {"deathmatch 1", "timelimit 1"});
   return sv::run_mod_match(o);
 }
 
@@ -58,6 +63,29 @@ int prints_with(const sv::ModMatchReport& r, const std::string& part) {
   int n = 0;
   for (const std::string& p : r.prints) n += p.find(part) != std::string::npos ? 1 : 0;
   return n;
+}
+
+// The prints joined into lines (a print comes in pieces, each line's consecutive).
+std::vector<std::string> print_lines(const sv::ModMatchReport& r) {
+  std::vector<std::string> lines(1);
+  for (const std::string& p : r.prints) {
+    for (char c : p) {
+      if (c == '\n')
+        lines.emplace_back();
+      else
+        lines.back() += c;
+    }
+  }
+  return lines;
+}
+
+// What each "You got the <name>" line names.
+std::vector<std::string> names_got(const std::vector<std::string>& lines) {
+  const std::string head = "You got the ";
+  std::vector<std::string> out;
+  for (const std::string& l : lines)
+    if (l.rfind(head, 0) == 0) out.push_back(l.substr(head.size()));
+  return out;
 }
 
 const sv::MoverPath* mover(const sv::ModMatchReport& r, const char* classname) {
@@ -114,6 +142,35 @@ TEST(the_baseline_mod_plays_a_deathmatch_to_its_time_limit) {
                   prints_with(r, " drowned") + prints_with(r, " burned");
   CHECK(kills + own >= deaths);
   CHECK(static_cast<int>(frags) == kills - own);
+}
+
+TEST(the_baseline_mod_names_pickups_in_its_own_words_by_default) {
+  const std::vector<std::string> lines = print_lines(match());
+  const std::set<std::string> own = {"Double Scattergun", "Spiker",          "Heavy Spiker",
+                                     "Grenade Launcher",  "Rocket Launcher", "Arc Gun",
+                                     "Quad Damage",       "Shield"};
+  const std::vector<std::string> got = names_got(lines);
+  for (const std::string& n : got) CHECK_MSG(own.count(n) == 1, "a pickup named " + n);
+  int ammo = 0;
+  for (const std::string& l : lines) ammo += l == "You got ammunition";
+  CHECK_MSG(ammo + static_cast<int>(got.size()) >= 2,
+            "only " + std::to_string(ammo + got.size()) + " ammunition and weapon pickups");
+}
+
+TEST(the_baseline_mod_names_pickups_in_the_loaded_games_words) {
+  namespace pf = shooters_edge::profiles;
+  const sv::ModMatchReport r = play(pf::item_name_lines(pf::kClassicNames));
+  CHECK_MSG(r.ok, r.error);
+  const std::vector<std::string> lines = print_lines(r);
+  std::set<std::string> theirs;
+  for (const pf::ItemName& n : pf::kClassicNames) theirs.insert(std::string(n.name));
+  const std::vector<std::string> got = names_got(lines);
+  CHECK_MSG(got.size() >= 2, "only " + std::to_string(got.size()) + " named pickups");
+  for (const std::string& n : got) CHECK_MSG(theirs.count(n) == 1, "a pickup named " + n);
+  for (const std::string& l : lines) {
+    CHECK_MSG(l != "You got ammunition", "an ammunition pickup in the mod's own words");
+    CHECK_MSG(l.rfind("You got a backpack", 0) != 0, "a backpack in the mod's own words: " + l);
+  }
 }
 
 TEST(the_door_opens_for_a_player_and_closes_again) {
