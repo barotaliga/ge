@@ -239,6 +239,38 @@ Rocket Launcher, 20 shells, 5 rockets", the weapon only when it is new to its ta
 "You got armor" whatever its colour, as the classic game does. On the built-in arena, with no
 packs, the mod speaks its own words ("You got ammunition", "You got the Spiker").
 
+### Joining a game over the network
+
+Any server that speaks the classic protocol can be joined from a window:
+
+```sh
+build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +connect 192.168.1.20
+```
+
+The game's own dedicated server, `shooters_edge_server` (docs/servers.md), is what a machine runs
+to host one, for example dm6 from the packs with a frag limit:
+
+```sh
+build/release/shooters_edge_server --root=$HOME/games/classic --map=dm6 --port=27500 --realtime --for=0 +set fraglimit 20
+```
+
+The window's console joins and leaves (`net/classic_remote.hpp`):
+
+| Command | What |
+| --- | --- |
+| `connect <host>[:port]` | join a server (an IPv4 address or `localhost`; 27500 when no port) |
+| `disconnect` | leave it, back to your own game |
+| `reconnect` | the last server again |
+| `netstatus` | the server joined, the stage, the packets and bytes each way |
+
+Joined, the window plays the server's game with your keys, mouse, `name`, `topcolor` and
+`bottomcolor`, and draws what the server sends exactly as it draws a client demo (the map, the
+items, the other players, the HUD, the sounds, the printed lines): the connection is read as a
+recording of it while it is made. Your own game waits until you leave. Not yet: your own moves are
+not predicted, so on a network with lag you see yourself a round trip late (on a LAN it is a few
+milliseconds); and a server is found by its
+address, not yet on a list.
+
 ### Benchmarking a demo
 
 `timedemo <demo>` in the console, or `-timedemo <demo>` on the command line (which quits with

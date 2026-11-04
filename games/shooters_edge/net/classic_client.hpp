@@ -134,6 +134,8 @@ struct ClassicClientEnd {
   int frags[32] = {};
   int32_t stats[kStats] = {};
   std::vector<std::string> prints, centerprints;
+  float set_angles[3] = {};  // the server's last turn of the player (setangle), degrees
+  int64_t setangles = 0;     // turns read
   int lightstyles = 0, statics = 0, static_sounds = 0;
   int valid_frame = -1;  // the newest frame's sequence held (-1: none)
 
