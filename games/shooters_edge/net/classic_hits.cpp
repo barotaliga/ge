@@ -131,7 +131,7 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
         if (by >= 1 && by <= clients && by != e && (!missile || k != kNone)) {
           const int at = by - 1;
           const bool quad = (static_cast<int32_t>(field(s, by, f.items)) & kQuadBit) != 0;
-          const float scale = quad ? 4 : 1;
+          const float scale = quad ? 4.f : 1.f;
           if (!missile) {
             const int32_t held = static_cast<int32_t>(field(s, by, f.weapon));
             const auto many = [&](float each) {
