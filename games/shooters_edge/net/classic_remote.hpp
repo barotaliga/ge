@@ -64,29 +64,29 @@ enum class RemoteStep : uint8_t {
 };
 
 struct Remote {
-  bool active = false;
-  std::string server_name;  // as asked ("host:port")
-  gn::Address server;
-  gn::Transport own;                   // remote_connect's UDP socket
+  // In the order that packs it (the lint holds the padding).
   gn::Transport* transport = nullptr;  // what it talks over (`own`, or remote_start's)
-  ClassicClientEnd end;
+  int64_t now_us = 0;                  // the tick clock
+  double owed_s = 0;                   // wall time not yet a tick
+  int64_t setangles = 0;               // the server's turns taken
+  const std::vector<sh::BrushModel>* world = nullptr;  // prediction: the level's models ([0] world)
+  std::string server_name;                             // as asked ("host:port")
+  std::string why;                                     // why it dropped
+  gn::Transport own;                                   // remote_connect's UDP socket
   ClientRecorder recording;
-  client::Demo demo;      // the recording read back: what the window draws
-  sh::Vec3f view;         // the player's angles, degrees (sent with every move)
-  sh::MoveCmd hands;      // the window's command, sent at the next tick (an impulse held to it)
-  int64_t now_us = 0;     // the tick clock
-  double owed_s = 0;      // wall time not yet a tick
-  int levels = 0;         // level starts drawn
-  int64_t setangles = 0;  // the server's turns taken
+  client::Demo demo;  // the recording read back: what the window draws
+  ClassicClientEnd end;
+  int levels = 0;        // level starts drawn
+  int replayed = 0;      // prediction: the moves it ran past the acknowledged one
+  sh::Vec3f view;        // the player's angles, degrees (sent with every move)
+  sh::Vec3f prediction;  // the player's predicted origin, the correction not added
+  sh::Smoothing smooth;  // the prediction's correction
+  sh::MoveCmd hands;     // the window's command, sent at the next tick (an impulse held to it)
+  gn::Address server;
+  bool active = false;
   ClientStage said = ClientStage::challenge;  // the stage last reported
-  std::string why;                            // why it dropped
-  // Prediction.
-  const std::vector<sh::BrushModel>* world = nullptr;  // the level's models ([0] the world)
-  bool nopred = false;                                 // cl_nopred: draw the server's place
-  sh::Smoothing smooth;
-  bool predicted = false;  // the last step drew a prediction
-  int replayed = 0;        // the moves it ran past the acknowledged one
-  sh::Vec3f prediction;    // the player's predicted origin, the correction not added
+  bool nopred = false;                        // cl_nopred: draw the server's place
+  bool predicted = false;                     // the last step drew a prediction
 };
 
 // Joins `address` ("host", "host:port"; the classic server port when none) over a UDP socket of
