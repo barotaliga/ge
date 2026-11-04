@@ -167,6 +167,15 @@ water is cut half a grid cell past each edge (the ground read between nodes must
 brook on a 2 m grid); a frozen stream is a gully that never reaches the water.
 `tests/mountain_brook_test.cpp` holds the line, the bed and the gully on alpine-1.
 
+THE VALLEY'S RESERVOIR (`mountain/tarn/reservoir.hpp`, M24l5) is a dealt map's: `find_reservoir`
+tries a dam across the ground's fall every 32 m of the lower mountain at five heights, runs the
+crest along the contour until the sides rise to it, and FLOODS the ground behind it on an 8 m grid
+(`kept` marks what must stay dry; a flood that runs round the dam's ends or off the map is a
+leak). The generated mountain's valleys are steep and short, so the reservoirs come out small
+(3 to 6 ha over the seeds tried) and the water behind a sill can stand far deeper than the dam is
+high: the ground upstream of a site can lie lower than the site. `free_map` lays it after the
+tarn, so it must keep clear of the tarn (`Level::lakes` is read).
+
 ## The village's traffic (`mountain/village`, M13h)
 
 `furnish_streets` (`furniture.hpp`) reads the street plan for what drives and parks on it: the

@@ -621,6 +621,17 @@ struct MapStream {
   std::vector<StreamPoint> points;
 };
 
+// A DAM a game builds across a valley to hold a reservoir behind it (plugins/mountain/tarn/
+// reservoir.hpp): an earth bank whose crest runs from `a` to `b` across the valley at `crest` m,
+// the water `downhill` of it never, the reservoir `Level::lakes[lake]`.
+struct MapDam {
+  PlanPoint a, b;      // the crest's ends, m
+  PlanPoint downhill;  // the valley's fall across it, a unit vector in plan
+  double crest = 0;    // the crest's height, m
+  double height = 0;   // over the valley's floor on its line, m
+  int lake = -1;       // the reservoir it holds, an index into `Level::lakes`
+};
+
 struct Level {
   double seed = 0;
   double size = 0;               // the world is [0, size]² m
@@ -652,6 +663,7 @@ struct Level {
   std::shared_ptr<const VenueSurface> venue;   // a venue's analytic surface (R37), else none
   std::vector<MapLake> lakes;      // laid by a game after the generator; none on a dealt map
   std::vector<MapStream> streams;  // the same
+  std::vector<MapDam> dams;        // the same
 
   // The snow's height: a venue's own surface where it answers, the grid everywhere else.
   double ground_at(double x, double z) const {
