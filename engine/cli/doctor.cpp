@@ -22,7 +22,7 @@ namespace {
 
 constexpr int kLineAdvice = 1000;  // past it: a warning, split when next worked in
 constexpr int kLineCap = 2000;     // past it: an error
-constexpr int kTagLines = 60;  // a file's ge: block sits in its first 60 lines
+constexpr int kTagLines = 60;      // a file's ge: block sits in its first 60 lines
 
 struct RepoFiles {
   std::vector<fs::path> sources;  // .cpp .hpp .h
@@ -169,8 +169,8 @@ void check_source(const fs::path& repo, const fs::path& file, std::vector<Findin
     } else {
       out.push_back({Severity::warn,
                      std::to_string(line_count) + " lines, past the advised " +
-                         std::to_string(kLineAdvice) + " (the cap is " +
-                         std::to_string(kLineCap) + ")",
+                         std::to_string(kLineAdvice) + " (the cap is " + std::to_string(kLineCap) +
+                         ")",
                      rel, "split it by subject when you next work in it (skill: write-code)"});
     }
   }
