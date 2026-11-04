@@ -1,6 +1,6 @@
 ---
 name: write-code
-description: "Use on every code change in gameengine2. How C++ is written here so the next agent can find and change it: the clean-slate rule (no legacy references), file shape and naming, the ge: discovery tags and docs/index.md, data-first design, comments, the edit loop, the 1000-line cap, and the structure check."
+description: "Use on every code change in gameengine2. How C++ is written here so the next agent can find and change it: the clean-slate rule (no legacy references), file shape and naming, the ge: discovery tags and docs/index.md, data-first design, comments, the edit loop, the line cap (advised 1000, capped 2000), and the structure check."
 ---
 
 # Write code
@@ -34,8 +34,10 @@ source is written, commented and tagged as if it had been written here first:
 
 - **One subject per file.** The first comment says what the file owns and where its test
   is, then ends with the file's `ge:` tag block (§ Discovery tags).
-- **Under 1000 lines.** `tools/check-agents.sh` fails a longer file unless it carries
-  `agents:allow-large-file: <reason>`. Split by subject, not by line count.
+- **Under 1000 lines, advised; 2000, the cap.** `tools/check-agents.sh` warns about a file
+  past 1000 lines and fails one past 2000, unless it carries `agents:allow-large-file:
+  <reason>`. A warning is not a reason to split mid-task: split by subject, when a second
+  subject has grown in the file, not by line count.
 - **Headers declare the whole API with comments.** Small hot math is `inline` in the
   header. Everything else is declared in `.hpp` and defined in `.cpp`.
 - **Names**: `snake_case` for files, functions and variables; `PascalCase` for types;

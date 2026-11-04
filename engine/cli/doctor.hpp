@@ -9,7 +9,7 @@
 //   engine pin   cmake/engine.cmake pins a release, the same one this ge belongs to, ideally
 //                with its checksum
 //   build        no fast-math or FP-contraction flag in any CMake file; ge::core is linked
-//   sources      the 1000-line cap; every source file's ge: tag block (its skills and tests
+//   sources      the line cap (a warning past 1000, an error past 2000); every source file's ge: tag block (its skills and tests
 //                exist); sim/ and labs/ call no platform transcendental, and sim/ reads no clock
 //                and no unseeded random source
 //   diagnostics  every error and warning in C++ and CMake reads as a prompt (cli/diagnostic.hpp)

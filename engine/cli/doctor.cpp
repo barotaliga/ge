@@ -20,7 +20,8 @@ namespace ge::cli {
 
 namespace {
 
-constexpr int kLineCap = 1000;
+constexpr int kLineAdvice = 1000;  // past it: a warning, split when next worked in
+constexpr int kLineCap = 2000;     // past it: an error
 constexpr int kTagLines = 60;  // a file's ge: block sits in its first 60 lines
 
 struct RepoFiles {
@@ -157,13 +158,21 @@ void check_source(const fs::path& repo, const fs::path& file, std::vector<Findin
   const std::string text = read_text(file).value_or("");
   const auto lines = split_lines(text);
 
-  if (static_cast<int>(lines.size()) > kLineCap &&
-      text.find("agents:allow-large-file") == std::string::npos) {
-    out.push_back(
-        {Severity::error,
-         std::to_string(lines.size()) + " lines, over the cap of " + std::to_string(kLineCap), rel,
-         "split it by subject (skill: write-code); an honest exception carries an "
-         "`agents:allow-large-file: <reason>` comment"});
+  const int line_count = static_cast<int>(lines.size());
+  if (line_count > kLineAdvice && text.find("agents:allow-large-file") == std::string::npos) {
+    if (line_count > kLineCap) {
+      out.push_back(
+          {Severity::error,
+           std::to_string(line_count) + " lines, over the cap of " + std::to_string(kLineCap), rel,
+           "split it by subject (skill: write-code); an honest exception carries an "
+           "`agents:allow-large-file: <reason>` comment"});
+    } else {
+      out.push_back({Severity::warn,
+                     std::to_string(line_count) + " lines, past the advised " +
+                         std::to_string(kLineAdvice) + " (the cap is " +
+                         std::to_string(kLineCap) + ")",
+                     rel, "split it by subject when you next work in it (skill: write-code)"});
+    }
   }
 
   std::string summary, keywords, skills, tests;
