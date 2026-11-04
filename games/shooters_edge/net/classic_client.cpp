@@ -195,7 +195,12 @@ void on_stufftext(ClassicClientEnd& c, const std::string& text) {
     } else if (cmd == "skins") {
       start_skins(c);
     } else if (cmd == "reconnect" || cmd == "changing") {
-      if (cmd == "reconnect") client_command(c, "new");
+      // The server changed the map: the signon again, to `begin` on the new one.
+      if (cmd == "reconnect") {
+        c.begun = false;
+        if (c.stage == ClientStage::active) c.stage = ClientStage::signon;
+        client_command(c, "new");
+      }
     }
   }
 }

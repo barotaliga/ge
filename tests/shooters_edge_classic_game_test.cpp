@@ -3,11 +3,12 @@
 // over the simulated network connects to the core's server, follows the signon and plays, and the
 // core counts it seated; the settings reach the endpoint (the name in its status, the password at
 // the connect); bots are refused with the next step; a whole session replays to the bit; the mod's
-// own rules come in as settings (`+set fraglimit 20`) and reach the mod; a map read from a pack.
+// own rules come in as settings (`+set fraglimit 20`) and reach the mod; a map read from a pack;
+// the mod's changelevel takes the players to the next map (the rotation's when it has one).
 //
 // ge:summary Test: Shooter's Edge's dedicated server on the core: one digest, a client plays on it
 // ge:keywords test classic-game dedicated-server classic-client simulated-network serve net_frame
-// ge:keywords game-rules fraglimit pack-map
+// ge:keywords game-rules fraglimit pack-map changelevel map-change maprotation reconnect
 // ge:skill net shooter testing
 #include <filesystem>
 #include <fstream>
@@ -195,8 +196,26 @@ TEST(classic_game_a_map_from_the_game_folder_s_pack) {
   ServerConfig c = arena();
   c.map = "halls";
   c.root = root.string();
+  c.maprotation = "halls arena";
+  c.rules["timelimit"] = "0.05";  // 3 s, then the mod's 5 s intermission, then its changelevel
   Server s;
   CHECK_MSG(server_open(s, se::classic_game(), c, nullptr, nullptr, error), error);
-  for (int f = 0; f < 10; f++) server_frame(s);
+  CHECK(server_status(s).find("map=halls") != std::string::npos);
+  for (int f = 0; f < 800; f++) server_frame(s);  // 10.4 s
+  CHECK_MSG(server_status(s).find("map=arena") != std::string::npos, server_status(s));
   fs::remove_all(root);
+}
+
+TEST(classic_game_the_mod_s_changelevel_takes_the_players_along) {
+  ServerConfig c = arena();
+  c.rules["timelimit"] = "0.05";
+  Session r;
+  run_session(r, c, 900);  // 11.7 s: the match ends at 3 s, the map changes at about 8 s
+  CHECK(r.opened);
+  CHECK(r.client.stage == se::ClientStage::active);
+  CHECK_MSG(r.client.spawncount == 2, "spawncount " + std::to_string(r.client.spawncount));
+  CHECK_MSG(server_status(r.s).find("seated=1") != std::string::npos, server_status(r.s));
+  Session again;
+  run_session(again, c, 900);
+  CHECK(r.digest == again.digest);
 }
