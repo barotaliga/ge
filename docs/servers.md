@@ -15,12 +15,15 @@ LAN hosting round it), the dedicated process (`server_main`: `server.cfg`, then 
 running on it. M53b: `server.cfg` in layers (`engine/server/config`: the base game directory's,
 each mod's lowest first, a profile's winning copy, the command line, the console), every server
 value's file and line kept (`Cvars::set_watch`), the rest of the server's cvars, and
-`--explain`. Running one:
+`--explain`. M53a part two: a game that speaks its own protocol is handed the port
+(`ServerGame::serve`, `net_frame`), and `shooters_edge_server` now serves the game's own
+deathmatch over the classic protocol (`games/shooters_edge/net/classic_game.hpp`), so a classic
+client connects and plays (the `se-dedicated` lab). Running one:
 
 ```
 make build
-build/debug/shooters_edge_server --name="Arena Night" --description="bots only" --port=27500 \
-  --maxclients=16 --bots=8 --realtime --for=0
+build/debug/shooters_edge_server --name="Arena Night" --description="the arena" --port=27500 \
+  --maxclients=16 --realtime --for=0
 build/debug/shooters_edge_server --root=servers --mod=arena --cfg=duel --explain=sv_
 ```
 
@@ -37,7 +40,7 @@ binary's own `--explain`.
 | Hosting and the browser | `engine/net/hosting`, `directory` (M17r) | LAN answers, pings, the router's forward, the rendezvous's list, visibility; "the same for a listen and a dedicated server" |
 | Cfg files | `engine/console/cfg` (M21a) | `start_server`: `server.cfg`, then the command line; the server's tier (`kServer`, `kServerInfo`) |
 | The search path | `engine/vfs/search` (M18a) | A base game directory, then a directory per mod over it, later sources winning |
-| A dedicated server | `games/shooters_edge/server` (M18f) | Shooter's Edge's own host and `shooters_edge_server` binary, with its own flags parser, bots, input log and replay |
+| A dedicated server | `games/shooters_edge/server` (M18f) | Shooter's Edge's own host with bot slots, input log and replay (now a `ServerGame` on the core) |
 | The lobby's match flow | Shooter's Edge (the lobby row in flight) | Warmup on the map, two teams, ready and break, the leader's start, a countdown, the match restarting the map |
 
 What is missing is the part every game would otherwise write again: the server's frame and

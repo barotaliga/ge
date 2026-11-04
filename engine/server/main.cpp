@@ -272,6 +272,7 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
       c.replay = val;
     } else if (key == "--root") {
       dir = val;
+      c.root = val;
     } else if (key == "--base") {
       cfg.base = val;
     } else if (key == "--mod") {

@@ -48,9 +48,10 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 
 # The headless dedicated server (server/bin/), named `shooters_edge_server` on disk, at the build's
 # root (build/<preset>/shooters_edge_server): the engine's dedicated process (engine/server) over
-# the game's ServerGame (server/dedicated.hpp). `--help` lists its flags.
+# the game's playable ServerGame (net/classic_game.hpp: the mod's deathmatch on the classic
+# protocol). `--help` lists its flags.
 ge_add_server(shooters_edge_dedicated OUTPUT_NAME shooters_edge_server SOURCES server/bin/main.cpp
-              LINK shooters_edge_server)
+              LINK shooters_edge_classic)
 
 # Its HUD (hud/): the player's status snapshot, the HUD's pictures (the free set painted in code),
 # and the three looks over the engine's HUD layout with their hud_ cvars. No GPU: the CPU raster
