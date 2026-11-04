@@ -22,6 +22,7 @@
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -35,6 +36,7 @@
 #include "shooter/temper.hpp"
 #include "shooter/traits.hpp"
 #include "shooter/vec.hpp"
+#include "shooters_edge/net/classic_hits.hpp"
 
 namespace shooters_edge::net {
 
@@ -80,6 +82,7 @@ struct TeamPlayer {
   int64_t shots = 0, pickups = 0, switches = 0, packs = 0, held_fire = 0;
   int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and pre-aimed (shooter/bot.hpp)
   double react_s = 0;                    // the reactions' times, summed
+  std::array<HitCount, kHitWeapons> hits{};  // shots and hits by weapon (classic_hits.hpp)
   int64_t dives = 0,
           off_graph = 0;       // dives begun into a pocket; thinks spent off the graph or in a pool
   int64_t dives_given_up = 0;  // dives turned back, late or short of air
