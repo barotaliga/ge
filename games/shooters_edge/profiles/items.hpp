@@ -8,6 +8,11 @@
 //   class name). A field at -1 (or `sets_kind` false) leaves the bot's default.
 // - **Words** (`ItemWords`): an item's call word (what a teammate says: "ra", "rl") and the word
 //   its pickup sound is heard as, by kind, and for a weapon by its bit (0 matches any).
+// - **Names** (`ItemName`): what a pickup calls an item in the game's own words, by its class
+//   name ("You got the Nailgun"). The window puts them in the server's local info under each
+//   class name (`item_name_lines`), where the baseline mod's `name_of` reads them; an item the
+//   table leaves out keeps the mod's own word, and a game with no table speaks the mod's words.
+//   An ammunition's name is also its unit in a backpack's list ("20 shells").
 // - **Sounds**: the samples a listener reads (plugins/shooter/hearing.hpp's `SoundMeaning`):
 //   pickups, powers, spawns, fire, pain and death, with each pickup's heard word and each
 //   weapon's fire as its call word (what a listener tells the enemy's weapon by).
@@ -15,13 +20,16 @@
 // ge:summary A classic game's items, their call words and the sounds a bot reads, as data rows
 // ge:keywords items item-row call-word heard-word pickup sound-table item-kind spawnflags
 // ge:keywords respawn classname classic-items kclassicitems kclassicsounds
+// ge:keywords item-name pickup-message pickup-print item_name_lines kclassicnames localinfo
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_game_profile_test.cpp
 #pragma once
 
 #include <cstdint>
 #include <span>
+#include <string>
 #include <string_view>
+#include <vector>
 
 #include "shooter/hearing.hpp"
 
@@ -115,6 +123,31 @@ inline constexpr ItemWords kClassicWords[] = {
     {ItemKind::weapon, 0, "lg", "weapon"},  // any other weapon
 };
 
+struct ItemName {
+  std::string_view class_name;  // the map's class name: the local info's key
+  std::string_view name;        // what a pickup calls it
+};
+
+// The classic game's pickups: ammunition by its kind ("You got the rockets", a backpack's "5
+// rockets"), weapons and powers by their own names. Its armour is "armor" whatever its colour,
+// which is the mod's own line, so the armour rows are left out.
+inline constexpr ItemName kClassicNames[] = {
+    {"item_shells", "shells"},
+    {"item_spikes", "nails"},
+    {"item_rockets", "rockets"},
+    {"item_cells", "cells"},
+    {"weapon_supershotgun", "Super Shotgun"},
+    {"weapon_nailgun", "Nailgun"},
+    {"weapon_supernailgun", "Super Nailgun"},
+    {"weapon_grenadelauncher", "Grenade Launcher"},
+    {"weapon_rocketlauncher", "Rocket Launcher"},
+    {"weapon_lightning", "Thunderbolt"},
+    {"item_artifact_super_damage", "Quad Damage"},
+    {"item_artifact_invulnerability", "Pentagram of Protection"},
+    {"item_artifact_invisibility", "Ring of Shadows"},
+    {"item_artifact_envirosuit", "Biosuit"},
+};
+
 using ge::shooter::SoundClass;
 inline constexpr ge::shooter::SoundMeaning kClassicSounds[] = {
     {"items/armor1.wav", SoundClass::pickup, true, "armor"},
@@ -145,8 +178,19 @@ struct ItemTables {
   std::span<const ItemRow> items;                     // the map's items by class name
   std::span<const ItemWords> words;                   // their call and heard words
   std::span<const ge::shooter::SoundMeaning> sounds;  // the samples a listener reads
+  std::span<const ItemName> names;                    // what a pickup calls them
 };
-inline constexpr ItemTables kClassicTables{kClassicItems, kClassicWords, kClassicSounds};
+inline constexpr ItemTables kClassicTables{kClassicItems, kClassicWords, kClassicSounds,
+                                           kClassicNames};
+
+// The server's console lines that give the mod `names`: `localinfo <class name> "<name>"` each.
+inline std::vector<std::string> item_name_lines(std::span<const ItemName> names) {
+  std::vector<std::string> lines;
+  lines.reserve(names.size());
+  for (const ItemName& n : names)
+    lines.push_back("localinfo " + std::string(n.class_name) + " \"" + std::string(n.name) + "\"");
+  return lines;
+}
 
 // The row `class_name` with `spawnflags` matches first, or nullptr.
 inline const ItemRow* item_row(std::span<const ItemRow> rows, std::string_view class_name,

@@ -28,6 +28,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "classicenhance/profile.hpp"
 #include "console/console.hpp"
@@ -71,6 +72,10 @@ struct GameContent {
   bool registered = false;                     // the packs are the full game
   std::string start_map;                       // the profile's start map
   std::string first_map;  // the start map when the packs hold it, else the game's fallback
+  // The game's item names as server lines (profiles/items.hpp's `item_name_lines`) when the
+  // baseline mod plays the game's packs, so its pickups speak the game's words; empty when the
+  // game's own program runs (it has its own) or no packs are open (the mod's own words).
+  std::vector<std::string> item_names;
 };
 
 // `out` filled from `files` (`progs_path`: `-progs`, "" for the game's own); false with the

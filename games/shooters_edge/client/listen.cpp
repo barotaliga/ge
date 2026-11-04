@@ -106,6 +106,7 @@ bool start_map(Listen& l, std::string& error) {
   l.match = sv::make_qc_server(*l.progs, so, error);
   l.server = l.match.get();
   if (!l.server) return false;
+  for (const std::string& line : l.opt.item_names) sv::server_command(*l.server, line);
   for (const std::string& line : l.opt.console) sv::server_command(*l.server, line);
   if (!sv::load_map(*l.server, l.map->spec, error)) {
     error = "the map " + l.map->name + " did not load: " + error +

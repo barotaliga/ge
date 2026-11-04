@@ -229,6 +229,16 @@ and flames (`light_torch_small_walltorch`, `light_flame_*`) are static things th
 the modern look with `ce_flames` on, the torch's model is drawn without its painted flame and the
 engine's burning gas is the flame.
 
+**What a pickup says.** The baseline mod names an item in the loaded game's own words: the game's
+profile has a table of names by class name (`profiles/items.hpp`'s `names`; the classic game's
+`kClassicNames`: "shells", "Nailgun", "Thunderbolt", "Pentagram of Protection"), which the window
+gives the server as local info (`localinfo weapon_nailgun "Nailgun"`) when the mod plays a game's
+packs, and the mod's `name_of` (each variant's `glue.qc`) reads it under the item's class name.
+So "You got the rockets", "You got the Nailgun", and a backpack lists what was in it ("You get the
+Rocket Launcher, 20 shells, 5 rockets", the weapon only when it is new to its taker). Armour says
+"You got armor" whatever its colour, as the classic game does. On the built-in arena, with no
+packs, the mod speaks its own words ("You got ammunition", "You got the Spiker").
+
 ### Benchmarking a demo
 
 `timedemo <demo>` in the console, or `-timedemo <demo>` on the command line (which quits with
