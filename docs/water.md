@@ -830,6 +830,17 @@ The generator lays no water, so no dealt map moves; a game lays it after, as a `
   `ashore` event, `value` his seconds in the water) and is stood on the bank facing away from
   the water. Drowning, at swim failure or after 90 s he is reset as if he had asked. The
   swimmer's state is the racer's, so a run in the water replays.
+- **The snowmobile on it** (`sim/lake.hpp`'s `sled_on_lake`, M24l4): the free ride's machine,
+  ridden, its belt down at the surface inside an open tarn's shore. Faster than 11 m/s across
+  the water it PLANES (a `skim` event): held level on the surface with its belt 0.15 m under,
+  its paddles driving it on (3.9 m/s² at full throttle against 0.012 per metre times the speed
+  squared, so flat out it holds 18 m/s), the brake digging in (2.5 m/s²) and the bars turning it
+  (0.5 rad/s); over the far shore it is on the snow again with him still on. Slower than 6 m/s,
+  or onto the water slower than it planes, it GOES UNDER (a `sled` event, `sunk`): the machine
+  sinks to the dug bed, its engine drowned, and its rider is thrown into the water with the way
+  it had and swims out as above. The press cannot take a machine under the water; his reset
+  hauls it out onto the bank nearest it, stood on its belt, and puts him back on its boards. A
+  rider who hops off a planing machine goes in, and it goes under where it is.
 - **Heard**: going in and climbing out are each the water's splash (`play_splash`, the body's
   size and speed) on the effects bus; through ice, the sheet cracks first (the bank's
   `ice_crack`: a white crack, then the falling whistle a thin sheet carries off across the
@@ -948,7 +959,7 @@ never read back by the simulation.
 | `flow` | picture | M24f | Dam break against the analytic solution, a basin emptying through a breach against Torricelli, a river to steady state, a waterfall's sheet; depth filmstrips; the volume held |
 | `gpu-water` | picture | M24g, M24g2, M24i, M36d | Named views: the calm mirror, a windy lake, the sea at several Beaufort forces, surf on a beach, a boat's wake from behind and from the side, crates dropped in, the lake in a light and a heavy rain, a river, a waterfall, sunset glitter, night; the distance-band diff |
 | `lake` | picture | M24g, M24h, M51f | Fall Line's own frame with a tarn on a seed: from the shore, from over it, into the sun, in a fresh wind, at the day's end, under it and looking up from under it, frozen |
-| `tarn-ride` | drive | M24l3 | A skier onto seed 38's open tarn from its south bank at a ladder of speeds: how he met the water, how far he skimmed, where he went in, his time in the water and the metres swum, how it ended; the tarn from above with every ride's line, white on skis, yellow skimming, blue swimming |
+| `tarn-ride` | drive | M24l3, M24l4 | A skier onto seed 38's open tarn from its south bank at a ladder of speeds: how he met the water, how far he skimmed, where he went in, his time in the water and the metres swum, how it ended; the tarn from above with every ride's line, white on skis, yellow skimming, blue swimming. Then the snowmobile from the same bank, coasting at a ladder of its own and once flat out: the same table and a second picture, orange planing |
 | `tarn` | picture | M24l, M24l3 | The free ride's tarn on a seed in the game's frame: on the map's day, open, under thin black ice, frozen to bear a skier and thawing over a moat, from below its lip and from high over it; its site, surface, ice and thaw as rows |
 | `gpu-underwater` | picture | M24h, M24h3 | Every look's view round a scene under water, the presets, Snell's window measured by ring means, the caustics and the shafts each off beside on (each must add contrast), a dive through the surface |
 | `gpu-plunge` | picture | M24h2 | A first-person player in the classic move jumping off a bank into a dirty pond: the plunge from his eyes, the splash from the bank (crater, crown, jet, rings), under the water, surfacing through the waterline into the wet lens; four bodies of different mass dropped in; the player straight in against running in; the entry's numbers |
