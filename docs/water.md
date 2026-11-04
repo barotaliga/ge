@@ -902,7 +902,29 @@ kept bit for bit where a face has none.
   --views=stream,stream-high --day=200"` follows a face's longest stream in summer; `--day=40`
   shows its gully under the snow.
 
-Not yet (M24l5): the valley's reservoir on a dealt map.
+## The valley's reservoir (`plugins/mountain/tarn/reservoir.hpp`, M24l5)
+
+A dealt map has no mapped water, so the free ride builds a reservoir after its tarn: an earth
+dam across one of the mountain's valleys and the water it holds (`MapLake` in `Level::lakes`,
+`MapDam` in `Level::dams`). The generator builds no water, so no dealt map moves; `free_map`
+lays it.
+
+- **The site** (`find_reservoir`): every 32 m of the mountain's lower 60 % (above the hub) is
+  tried as the middle of a dam across the ground's fall, at 8, 12, 18, 25 and 35 m over that
+  ground: the crest runs both ways along the contour until the valley's sides rise to it, 420 m
+  at most. The water stands 2 m under the crest, and the ground under it is flooded from just
+  upstream on an 8 m grid: the flood must not run round the dam's ends or off the map, must
+  stay 30 m clear of every run, ski route, lift, the hub and a laid lake, and must cover 3 to
+  60 ha. The site that floods the most is kept.
+- **The shore**: the flooded cells' outline thinned to 5 m; its centroid and its circle's radius
+  as a mapped lake's.
+- **The dam** (`lay_reservoir`): an earth bank 8 m across its crest, its faces falling 1 in 2 to
+  the ground and run on 10 m into the valley's sides; the trees on it felled. Seed 38's holds
+  3.9 ha behind a 392 m crest 35 m over its valley.
+- **The water**: the flooded ground already lies under it; ice that bears fills the shore flat,
+  as a frozen tarn's. Drawn through `app/lakes.hpp` like every lake. `make lab LAB=world
+  ARGS="--reservoir --views=reservoir,reservoir-high --day=200"` looks up it from the dam's
+  crest and from over the valley below; `--day=40` frozen.
 
 ## Determinism (G1)
 
@@ -936,7 +958,7 @@ never read back by the simulation.
 | `water-cost` | bench | M24f, M24g | The CPU's costs per step (sample, floats, the flow grid) and the GPU's per pass |
 | `free --water` | drive | M24l3 | Fall Line: the bot near and into water on the free ride |
 | `real-hints` | picture | M24l2, M24l5 | Each real face's lifts, pistes, woods, lakes (the lakes' count and area) and streams (their count and length); a face named alone drawn with its lakes in blue and its streams in cyan; `--bake --water` reads the water off the open map data into the tree's hints |
-| `world --face` | picture | M24l2, M24l5 | Fall Line's frame on a real face's ski area with its mapped lakes and streams laid, iced by `--day`; the `tarn` views frame the largest lake, the `stream` views follow the longest stream |
+| `world --face` | picture | M24l2, M24l5 | Fall Line's frame on a real face's ski area with its mapped lakes and streams laid, iced by `--day`; the `tarn` views frame the largest lake, the `stream` views follow the longest stream; `--reservoir` lays a dealt map's reservoir and the `reservoir` views look up it from its dam |
 | `liquids`, `gpu-lava`, `gpu-slime` | picture | M30 | The other liquids: lava and slime (`docs/liquids.md` § Labs) |
 
 ## Sources

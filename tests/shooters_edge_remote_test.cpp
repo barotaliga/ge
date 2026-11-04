@@ -2,10 +2,14 @@
 // engine/net's simulated network: the classic server on the test arena, the remote client driven by
 // "hands" instead of a script. It signs on, its recording read back names the map and puts the eye
 // on the player, the server's turn (setangle) is taken by the view, walking forward moves the eye
-// the way the view faces, an impulse is sent once, and leaving frees the server's slot.
+// the way the view faces, an impulse is sent once, and leaving frees the server's slot. With the
+// level's solids handed over, the player's own moves are predicted: over a 50 ms link each
+// prediction lands where the server later says the player was, and `cl_nopred` draws the server's
+// place instead.
 //
 // ge:summary Tests: the remote client signs on, draws the server's state, walks, and leaves
 // ge:keywords test remote-client connect disconnect classic-server live-demo setangle walk
+// ge:keywords prediction cl_nopred latency
 // ge:skill net shooter testing
 #include <cmath>
 #include <memory>
@@ -40,6 +44,7 @@ struct Rig {
   std::vector<std::string> said;
   int64_t now = 0;
 
+  double latency_ms = 0.25;  // one way, each direction
   bool start() {
     std::string error;
     if (!sv::build_test_mod(progs, error)) return false;
@@ -54,6 +59,8 @@ struct Rig {
     if (!sv::load_map(*qc, map, error)) return false;
     gn::LinkConditions lan;
     gn::conditions_preset("lan", lan);
+    lan.latency_ms = latency_ms;
+    lan.jitter_ms = 0;
     net = gn::make_sim_network(1, lan);
     gn::open_sim_transport(st, net, gn::sim_address(0, cn::kPortServer));
     gn::open_sim_transport(ct, net, gn::sim_address(1, cn::kPortClient));
@@ -153,4 +160,66 @@ TEST(an_impulse_is_sent_once_and_leaving_frees_the_server_s_slot) {
   // Not connected: a step draws nothing.
   CHECK(rig.frame() == cn::RemoteStep::waiting);
   CHECK(cn::remote_status(rig.remote) == "not connected");
+}
+
+TEST(the_player_s_own_moves_are_predicted_where_the_server_later_puts_him) {
+  Rig rig;
+  rig.latency_ms = 50;
+  CHECK(rig.start());
+  CHECK(rig.join());
+  const std::vector<sh::BrushModel> models = sv::arena_models();
+  cn::remote_world(rig.remote, &models);
+  const int slot = rig.remote.end.playernum;
+  // Each prediction kept by the newest move it ran, then held to the server's answer to that move.
+  std::vector<sh::Vec3f> predicted(1 << 16);
+  std::vector<bool> kept(1 << 16, false);
+  int compared = 0, ahead = 0;
+  float worst = 0, lead = 0;
+  rig.remote.view = {0, 30, 0};
+  for (int f = 0; f < 3 * 77; f++) {
+    rig.remote.hands.forward = f < 2 * 77 ? 400 : 0;
+    rig.remote.hands.side = f % 77 < 30 ? 200 : 0;
+    rig.remote.hands.buttons = f % 40 == 0 ? sh::kButtonJump : 0;
+    rig.frame();
+    if (!rig.remote.predicted) continue;
+    const cn::ClassicClientEnd& c = rig.remote.end;
+    const uint32_t newest = c.ch.outgoing_sequence - 1;
+    predicted[newest & 0xffff] = rig.remote.prediction;
+    kept[newest & 0xffff] = true;
+    const uint32_t acked = c.ch.incoming_acknowledged;
+    if (kept[acked & 0xffff]) {
+      const sh::Vec3f d = predicted[acked & 0xffff] - c.players[slot].origin;
+      worst = std::fmax(worst, sh::length(d));
+      compared++;
+    }
+    if (rig.remote.replayed > 0) ahead++;
+    lead = std::fmax(lead, sh::length(rig.remote.prediction - c.players[slot].origin));
+  }
+  CHECK_MSG(compared > 100, "predictions compared: " + std::to_string(compared));
+  // The server's state travels on a 1/8 grid and in whole units/s: a prediction may differ by
+  // what the grid dropped, grown over the moves replayed.
+  CHECK_MSG(worst < 1, "a prediction missed the server's answer by " + std::to_string(worst));
+  CHECK_MSG(ahead > 100, "steps a move or more ahead of the server: " + std::to_string(ahead));
+  // A round trip of 100 ms at a run is many units: the prediction leads what the server sent.
+  CHECK_MSG(lead > 20, "the prediction led the server's place by at most " + std::to_string(lead));
+  // The drawn eye is the prediction (the correction aside, which a clean link never makes).
+  const shooters_edge::client::DemoState& ds = rig.remote.demo.state;
+  CHECK(std::fabs(ds.eye.x - rig.remote.prediction.x) < 1);
+}
+
+TEST(cl_nopred_draws_the_player_where_the_server_last_put_him) {
+  Rig rig;
+  rig.latency_ms = 50;
+  CHECK(rig.start());
+  CHECK(rig.join());
+  const std::vector<sh::BrushModel> models = sv::arena_models();
+  cn::remote_world(rig.remote, &models);
+  rig.remote.nopred = true;
+  rig.remote.view = {0, 0, 0};
+  rig.remote.hands.forward = 400;
+  for (int f = 0; f < 40; f++) rig.frame();
+  CHECK(!rig.remote.predicted);
+  const int slot = rig.remote.end.playernum;
+  const shooters_edge::client::DemoState& ds = rig.remote.demo.state;
+  CHECK(std::fabs(ds.eye.x - rig.remote.end.players[slot].origin.x) < 1);
 }
