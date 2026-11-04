@@ -46,6 +46,88 @@ void start(Remote& r, const ClientConfig& cfg) {
   r.setangles = 0;
   r.said = ClientStage::challenge;
   r.why.clear();
+  r.world = nullptr;
+  r.smooth = sh::Smoothing{};
+  r.predicted = false;
+  r.replayed = 0;
+}
+
+sh::MoveSettings settings_of(const ClassicClientEnd& c) {
+  sh::MoveSettings m;
+  const float* v = c.movevars;
+  m.gravity = v[0];
+  m.stopspeed = v[1];
+  m.maxspeed = v[2];
+  m.spectatormaxspeed = v[3];
+  m.accelerate = v[4];
+  m.airaccelerate = v[5];
+  m.wateraccelerate = v[6];
+  m.friction = v[7];
+  m.waterfriction = v[8];
+  return m;
+}
+
+sh::MoveType move_type_of(const PlayerState& p) {
+  switch (p.pm) {
+    case PmType::spectator:
+      return sh::MoveType::spectator;
+    case PmType::old_spectator:
+      return sh::MoveType::old_spectator;
+    case PmType::fly:
+      return sh::MoveType::fly;
+    case PmType::none:
+      return sh::MoveType::none;
+    case PmType::lock:
+      return sh::MoveType::lock;
+    default:
+      return p.dead ? sh::MoveType::dead : sh::MoveType::normal;
+  }
+}
+
+// The player's place `acked`'s reply put him (`own`), with every move sent since run through the
+// move. False when there is nothing to predict from.
+bool predict_from(const Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& out,
+                  int& replayed) {
+  const ClassicClientEnd& c = r.end;
+  if (r.nopred || r.world == nullptr || r.world->empty() || c.stage != ClientStage::active ||
+      c.playernum < 0 || !c.player_seen[c.playernum] || acked == 0)
+    return false;
+  sh::NetPlayer n;
+  const float at[3] = {own.origin.x, own.origin.y, own.origin.z};
+  const float speed[3] = {own.velocity.x, own.velocity.y, own.velocity.z};
+  for (int i = 0; i < 3; i++) {
+    n.origin8[i] = static_cast<int32_t>(at[i] * 8);
+    n.velocity[i] = static_cast<int16_t>(speed[i]);
+  }
+  n.type = move_type_of(own);
+  n.onground = own.onground;
+  n.jump_held = own.pm == PmType::normal_jump_held;
+  sh::MoveCmd cmds[64];
+  int count = 0;
+  for (uint32_t q = acked + 1; q < c.ch.outgoing_sequence && count < 64; q++)
+    if (c.sent_seq[q & 63] == q) cmds[count++] = c.sent[q & 63];
+  // The solids where the last frame put them: the movers, then the other players.
+  const std::vector<sh::BrushModel>& models = *r.world;
+  const client::DemoState& st = r.demo.state;
+  std::vector<sh::ClientModel> movers;
+  for (const client::DemoEntity& e : st.entities) {
+    if (!e.present || e.model <= 0 || static_cast<size_t>(e.model) >= st.models.size()) continue;
+    const std::string& name = st.models[static_cast<size_t>(e.model)];
+    if (name.size() < 2 || name[0] != '*') continue;
+    const int k = std::atoi(name.c_str() + 1);
+    if (k > 0 && static_cast<size_t>(k) < models.size())
+      movers.push_back({&models[static_cast<size_t>(k)], e.origin});
+  }
+  std::vector<sh::Vec3f> others;
+  for (size_t i = 0; i < st.players.size(); i++)
+    if (static_cast<int>(i) != c.playernum && st.players[i].present && !st.players[i].dead)
+      others.push_back(st.players[i].origin);
+  sh::MoveWorld world;
+  sh::client_world(models[0], movers.data(), static_cast<int>(movers.size()), others.data(),
+                   static_cast<int>(others.size()), world);
+  out = sh::predict_player(n, cmds, count, settings_of(c), world).origin;
+  replayed = count;
+  return true;
 }
 
 const char* stage_words(ClientStage s) {
@@ -98,6 +180,11 @@ void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const 
   start(r, cfg);
 }
 
+void remote_world(Remote& r, const std::vector<sh::BrushModel>* models) {
+  r.world = models;
+  r.smooth = sh::Smoothing{};
+}
+
 void remote_disconnect(Remote& r) {
   if (!r.active) return;
   if (r.end.stage == ClientStage::signon || r.end.stage == ClientStage::active) {
@@ -116,6 +203,10 @@ void remote_disconnect(Remote& r) {
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   if (!r.active) return RemoteStep::waiting;
   r.owed_s += wall_s;
+  // What the player's place was before this frame's packets, for the correction they make.
+  const int me = r.end.playernum;
+  const PlayerState own_before = me >= 0 ? r.end.players[me] : PlayerState{};
+  const uint32_t acked_before = r.end.ch.incoming_acknowledged;
   int ticks = 0;
   while (r.owed_s >= kTickUs * 1e-6) {
     r.owed_s -= kTickUs * 1e-6;
@@ -180,6 +271,23 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   d.bytes.erase(d.bytes.begin(), d.bytes.begin() + static_cast<std::ptrdiff_t>(d.pos));
   d.pos = 0;
   d.state.angles = r.view;  // the drawn view is the hands', never a tick behind
+  // The player's own place: predicted, the last correction decaying over it.
+  sh::Vec3f now;
+  r.predicted = me >= 0 && me == r.end.playernum &&
+                predict_from(r, r.end.players[me], r.end.ch.incoming_acknowledged, now, r.replayed);
+  if (r.predicted) {
+    sh::Vec3f before;
+    int unused = 0;
+    if (r.end.ch.incoming_acknowledged != acked_before &&
+        predict_from(r, own_before, acked_before, before, unused))
+      sh::smoothing_frame(r.smooth, before, now);
+    sh::smoothing_decay(r.smooth, wall_s);
+    r.prediction = now;
+    const sh::Vec3f drawn = sh::smoothed(r.smooth, now);
+    if (static_cast<size_t>(me) < d.state.players.size())
+      d.state.players[static_cast<size_t>(me)].origin = drawn;
+    if (!d.state.intermission) d.state.eye = {drawn.x, drawn.y, drawn.z + d.state.view_height};
+  }
   if (!any || d.state.map.empty()) return RemoteStep::waiting;
   if (d.state.levels != r.levels) {
     r.levels = d.state.levels;
@@ -243,15 +351,28 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                     remote_disconnect(r);
                     c.print("disconnected from " + r.server_name);
                   });
-  con.add_command("netstatus", "netstatus: the server joined, its stage and the traffic",
-                  [&r](Con& c, const Args&) {
-                    c.print(remote_status(r));
-                    if (!r.active) return;
-                    c.print("  in " + std::to_string(r.end.datagrams_in) + " packets, " +
-                            std::to_string(r.end.bytes_in) + " bytes; out " +
-                            std::to_string(r.end.bytes_out) + " bytes; " +
-                            std::to_string(r.end.ch.dropped) + " dropped");
-                  });
+  con.cvars().bind({.name = "cl_nopred",
+                    .fallback = "0",
+                    .help = "1: on a server joined, draw the player where the server last put him "
+                            "(a round trip late); 0: his own moves predicted",
+                    .kind = ge::console::CvarKind::boolean},
+                   &r.nopred);
+  con.add_command(
+      "netstatus", "netstatus: the server joined, its stage and the traffic",
+      [&r](Con& c, const Args&) {
+        c.print(remote_status(r));
+        if (!r.active) return;
+        c.print("  in " + std::to_string(r.end.datagrams_in) + " packets, " +
+                std::to_string(r.end.bytes_in) + " bytes; out " + std::to_string(r.end.bytes_out) +
+                " bytes; " + std::to_string(r.end.ch.dropped) + " dropped");
+        if (r.predicted)
+          c.print("  predicting " + std::to_string(r.replayed) + " moves ahead of the server, " +
+                  std::to_string(static_cast<int>(sh::length(r.smooth.correction))) +
+                  " units of correction left");
+        else
+          c.print(r.nopred ? "  not predicting (cl_nopred 1)"
+                           : "  not predicting yet (no level loaded or not playing)");
+      });
 }
 
 }  // namespace shooters_edge::net
