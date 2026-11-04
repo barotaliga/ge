@@ -18,12 +18,19 @@ value's file and line kept (`Cvars::set_watch`), the rest of the server's cvars,
 `--explain`. M53a part two: a game that speaks its own protocol is handed the port
 (`ServerGame::serve`, `net_frame`), and `shooters_edge_server` now serves the game's own
 deathmatch over the classic protocol (`games/shooters_edge/net/classic_game.hpp`), so a classic
-client connects and plays (the `se-dedicated` lab). Running one:
+client connects and plays (the `se-dedicated` lab). The game's own rules are settings too: a game
+names them (`ServerGame::rules`, a `GameRule` each: Shooter's Edge's `deathmatch`, `teamplay`,
+`fraglimit`, `timelimit`, `samelevel`, `sv_gravity`, `sv_maxspeed`), the core makes each a server
+cvar with an empty fallback (unset: the game's own default), every layer, `+set` and `--explain`
+reach it like the core's, and `create` gets the values in `ServerConfig::rules`. A map is read from
+the game folder's loose files or its packs. Running one:
 
 ```
 make build
 build/debug/shooters_edge_server --name="Arena Night" --description="the arena" --port=27500 \
   --maxclients=16 --realtime --for=0
+build/debug/shooters_edge_server --root=<install> --map=dm6 --port=27512 --realtime --for=0 \
+  +set fraglimit 20 +set timelimit 10
 build/debug/shooters_edge_server --root=servers --mod=arena --cfg=duel --explain=sv_
 ```
 
