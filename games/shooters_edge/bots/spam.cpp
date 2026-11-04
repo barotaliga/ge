@@ -115,7 +115,7 @@ bool spam_plan(Fighter& f, const server::QcServer& s, const Stats& st, double t)
 bool spam_fire(Fighter& f, const server::QcServer& s, int me, const Stats& st, double t,
                sh::MoveCmd& cmd) {
   if (f.spam_node < 0 || f.spam_spot < 0 || f.bot.aiming) return false;
-  const sh::Vec3f self = s.sv.edicts[static_cast<size_t>(me)].origin;
+  const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
   if (dist(self, g.nodes[static_cast<size_t>(f.spam_node)].origin) > 96) return false;
   if (st.weapon != kWRockets) {

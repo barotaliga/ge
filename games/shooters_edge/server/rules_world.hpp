@@ -33,21 +33,27 @@ struct WorldEntity {
   bool free = true;
   sh::Vec3f origin, angles, velocity;
   sh::Vec3f mins, maxs;
-  int modelindex = 0;  // the model list's index; 0 none
+  sh::Vec3f absmin, absmax;  // the box in the world, as the world links it
+  sh::Vec3f view_angles;     // a player's view, degrees
+  int flags = 0;             // the loop's flags (on the ground, in water, ...)
+  int waterlevel = 0;        // 0 dry .. 3 under
+  int modelindex = 0;        // the model list's index; 0 none
   int frame = 0, skin = 0, colormap = 0, effects = 0;
   float alpha = 1;  // 1 opaque (the extension field; 1 when the program has none)
   float health = 0;
 };
 
-// What a player carries, by meaning (a program without one of them leaves it 0).
+// What a player carries, by meaning, as the rules hold it (a program without one leaves it 0). A
+// reader that shows a whole number truncates it (`static_cast<int>`), as the wire does.
 struct PlayerNumbers {
-  int health = 0, armour = 0;
-  int ammo[4] = {};  // shells, nails, rockets, cells
-  int current_ammo = 0;
-  int weapon = 0;        // the program's weapon bit
+  float health = 0, armour = 0;
+  float armour_type = 0;  // the share of a blow the armour takes, 0..1
+  float ammo[4] = {};     // shells, nails, rockets, cells
+  float current_ammo = 0;
+  float weapon = 0;      // the program's weapon bit
   int weapon_model = 0;  // the model list's index of the held weapon; 0 none
-  int weapon_frame = 0;
-  int items = 0;     // the program's item bits
+  float weapon_frame = 0;
+  float items = 0;   // the program's item bits
   float view_z = 0;  // the eye above the origin
   float frags = 0;
 };
