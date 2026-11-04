@@ -248,7 +248,13 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +connec
 ```
 
 The game's own dedicated server, `shooters_edge_server` (docs/servers.md), is what a machine runs
-to host one. The window's console joins and leaves (`net/classic_remote.hpp`):
+to host one, for example dm6 from the packs with a frag limit:
+
+```sh
+build/release/shooters_edge_server --root=$HOME/games/classic --map=dm6 --port=27500 --realtime --for=0 +set fraglimit 20
+```
+
+The window's console joins and leaves (`net/classic_remote.hpp`):
 
 | Command | What |
 | --- | --- |
