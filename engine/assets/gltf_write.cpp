@@ -285,6 +285,9 @@ std::vector<uint8_t> write_glb(const Model& model) {
     for (int k = 0; k < 4; ++k) glb.push_back(static_cast<uint8_t>(v >> (8 * k)));
   };
   const auto total = static_cast<uint32_t>(12 + 8 + json.size() + 8 + out.bin.size());
+  // The whole container at once: no growth while the header's words go in (GCC 15's
+  // -Wstringop-overflow otherwise misreads push_back's reallocation after inlining).
+  glb.reserve(total);
   u32(0x46546C67);  // "glTF"
   u32(2);
   u32(total);
