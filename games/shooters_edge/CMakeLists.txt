@@ -45,11 +45,6 @@ file(GLOB SHOOTERS_EDGE_CLASSIC_SOURCES CONFIGURE_DEPENDS
 add_library(shooters_edge_classic STATIC ${SHOOTERS_EDGE_CLASSIC_SOURCES})
 target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters_edge_client ge_net)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
-# The host a window joins (net/bin/host.cpp), headless, at the build's root
-# (build/<preset>/shooters_edge_host): the baseline mod on a map served over UDP.
-add_executable(shooters_edge_host net/bin/host.cpp)
-target_link_libraries(shooters_edge_host PRIVATE shooters_edge_classic)
-set_target_properties(shooters_edge_host PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 
 # The headless dedicated server (server/bin/), named `shooters_edge_server` on disk, at the build's
 # root (build/<preset>/shooters_edge_server): the engine's dedicated process (engine/server) over

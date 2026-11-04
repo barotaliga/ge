@@ -231,18 +231,14 @@ engine's burning gas is the flame.
 
 ### Joining a game over the network
 
-One machine HOSTS, and every player (the host's own too) JOINS it from a window:
+Any server that speaks the classic protocol can be joined from a window:
 
 ```sh
-build/release/shooters_edge_host -basedir ~/games/classic +map dm6   # 27500; -port <n> for another
 build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +connect 192.168.1.20
 ```
 
-`shooters_edge_host` (`games/shooters_edge/net/bin/host.cpp`) is headless: the baseline mod on the
-map (`+map <name>`, `dm6` when the folder has packs, else the built-in arena) served over the
-classic protocol on UDP, its other `+` lines run on the mod server's console (`+fraglimit 20`,
-`+timelimit 10`). It prints a line as players join and leave; Ctrl-C stops it. The window's
-console joins and leaves (`net/classic_remote.hpp`):
+The game's own dedicated server, `shooters_edge_server` (docs/servers.md), is what a machine runs
+to host one. The window's console joins and leaves (`net/classic_remote.hpp`):
 
 | Command | What |
 | --- | --- |
@@ -256,7 +252,7 @@ Joined, the window plays the server's game with your keys, mouse, `name`, `topco
 items, the other players, the HUD, the sounds, the printed lines): the connection is read as a
 recording of it while it is made. Your own game waits until you leave. Not yet: your own moves are
 not predicted, so on a network with lag you see yourself a round trip late (on a LAN it is a few
-milliseconds); the host does not change the map at the mod's limits; and a server is found by its
+milliseconds); and a server is found by its
 address, not yet on a list.
 
 
