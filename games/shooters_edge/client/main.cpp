@@ -63,6 +63,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <exception>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -98,6 +99,7 @@
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/view.hpp"
+#include "shooters_edge/client/window_cvars.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/classic_art.hpp"
@@ -105,6 +107,7 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
@@ -180,46 +183,14 @@ int run_main(int argc, char** argv) {
   cl::UserInfo user_info;  // SETUP's colours (and the console's `name`), sent as they change
   cl::add_user_info_cvars(console, user_info);
   bool fullscreen = false;  // vid_fullscreen; the window follows it each frame
-  console.cvars().bind({.name = "vid_fullscreen",
-                        .fallback = "0",
-                        .help = "1: the window over the whole screen (the desktop's own mode), "
-                                "0: a window",
-                        .kind = ge::console::CvarKind::boolean},
-                       &fullscreen);
-  int display = 0;  // vid_display; read when the window goes fullscreen
-  console.cvars().bind({.name = "vid_display",
-                        .fallback = "0",
-                        .help = "the display vid_fullscreen covers: 0 the one the window is on, n "
-                                "the n-th that vid_displays lists",
-                        .kind = ge::console::CvarKind::integer},
-                       &display);
-  console.add_command("vid_displays", "list the displays vid_display numbers",
-                      [&](Con& c, const CArgs&) {
-                        const std::vector<ge::platform::Display> all = ge::platform::displays();
-                        if (all.empty()) c.print("vid_displays: the desktop named no display");
-                        for (const ge::platform::Display& d : all)
-                          c.print(std::to_string(d.number) + ": " + d.name + ", " +
-                                  std::to_string(d.width_px) + "x" + std::to_string(d.height_px));
-                      });
-  std::string bench_ask;  // a demo the console asked to benchmark
-  console.add_command("timedemo", "timedemo <demo>: play a demo flat out and report its fps",
-                      [&](Con& c, const CArgs& a) {
-                        if (a.size() < 2)
-                          c.print("timedemo: name a demo (timedemo demo1)");
-                        else
-                          bench_ask = cl::expand_home(a[1]);
-                      });
-  bool play_ask = false;  // the demo asked for is played at its own pace, not benchmarked
-  console.add_command("playdemo", "playdemo <demo>: play a demo at its own pace",
-                      [&](Con& c, const CArgs& a) {
-                        if (a.size() < 2) {
-                          c.print("playdemo: name a demo (playdemo demo1, playdemo match.mvd)");
-                        } else {
-                          bench_ask = cl::expand_home(a[1]);
-                          play_ask = true;
-                        }
-                      });
+  int display = 0;          // vid_display; read when the window goes fullscreen
+  cl::add_window_cvars(console, fullscreen, display);
+  std::string bench_ask;  // a demo the console asked to benchmark (`timedemo`) or play
+  bool play_ask = false;  // the demo asked for is played at its own pace (`playdemo`)
+  cl::add_demo_commands(console, bench_ask, play_ask);
   cl::Timedemo bench;
+  shooters_edge::net::Remote remote;  // `connect`: the window on a server elsewhere
+  shooters_edge::net::add_remote_commands(console, remote);
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
   cl::add_playback_commands(console, playback, bench);
   // The window's sound: a played demo's for now (client/demo_heard.hpp), at `volume`.
@@ -439,6 +410,7 @@ int run_main(int argc, char** argv) {
   };
   // The benchmark over: its report, vsync back, the listen server's world again.
   int bench_failed = 0;
+  std::function<bool()> back_to_listen;  // below
   const auto end_bench = [&](const std::string& why, double now_s) {
     const std::string setup = std::to_string(w) + "x" + std::to_string(h) +
                               ", drawn offscreen, shown at 30 Hz, r_look " + picture.look + ", " +
@@ -463,6 +435,11 @@ int run_main(int argc, char** argv) {
     bench_in_flight = {};
     bench_off = {};
     bench.active = false;
+    if (bench.quit_after) quit = true;
+    return back_to_listen();
+  };
+  // A demo or a server left: the listen server's world again, vsync back.
+  back_to_listen = [&] {
     bench_map.reset();
     bench_folder = {};
     bench_models = 0;
@@ -470,7 +447,6 @@ int run_main(int argc, char** argv) {
     hud.centre.clear();
     vsync = true;
     surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync);
-    if (bench.quit_after) quit = true;
     return rebuild_world(
         *listen.map,
         listen.server != nullptr ? cl::ModelLoad{listen.server->models, {}} : cl::ModelLoad{},
@@ -769,15 +745,35 @@ int run_main(int argc, char** argv) {
       args.playdemo.clear();
       bench_ask.clear();
       play_ask = false;
+      shooters_edge::net::remote_disconnect(remote);  // a demo is not played over a game joined
     }
+    // Joined to a server (`connect`): its game drawn as a played demo's is (classic_remote.hpp),
+    // from the frame its first level is known to the frame it drops, the listen server held.
+    auto joined = shooters_edge::net::RemoteStep::waiting;
+    if (remote.active || (bench_map && !bench.active)) {
+      shooters_edge::net::remote_hands(
+          remote, playing && !game_menu.open() ? cl::button_moves(controls) : cl::Moves{}, played,
+          controls, wall);
+      std::vector<std::string> lines;
+      joined = shooters_edge::net::remote_step(remote, wall, lines);
+      for (const std::string& line : lines) {
+        console.print(line);
+        hud.notify.push(line, se::hud_style().ink, t);
+      }
+      if (!remote.active && bench_map && !back_to_listen()) return 1;
+    }
+    const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
     if (bench.active && input.tapped(ge::platform::Key::escape)) {
       if (!end_bench("Escape pressed", t)) return 1;
       continue;
     }
-    if (bench.active) {
+    if (bench.active || drawn_remote) {
       std::vector<std::string> said;
+      const bool paced = bench.paced || drawn_remote;  // every frame shown, nothing timed
       const cl::TimedemoStep step =
-          bench.paced
+          drawn_remote ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
+                                                                : cl::TimedemoStep::frame)
+          : bench.paced
               ? cl::playback_step(playback, bench,
                                   {con_view.open() ? std::span<const bool>{} : input.pressed,
                                    input.pointer_x * px_per_unit, input.pointer_y * px_per_unit,
@@ -785,7 +781,7 @@ int run_main(int argc, char** argv) {
                                   w, h, wall, t, said, error)
               : cl::timedemo_step(bench, error);
       for (const std::string& line : said) console.print(line);
-      const cl::DemoState& ds = bench.demo.state;
+      const cl::DemoState& ds = drawn_remote ? remote.demo.state : bench.demo.state;
       if (step == cl::TimedemoStep::new_level) {
         // The game folder the recording's server ran, mounted when the window is not on it.
         std::vector<std::string> lines;
@@ -799,7 +795,7 @@ int run_main(int argc, char** argv) {
         }
         if (!rebuild_world(*bench_map, {ds.models, {}}, from)) return 1;
         bench_models = ds.models.size();
-        if (bench.paced) hearing.level(ds, from, &bench_map->bsp.map);
+        if (paced) hearing.level(ds, from, &bench_map->bsp.map);
       } else if (step != cl::TimedemoStep::frame) {
         if (!end_bench(step == cl::TimedemoStep::error ? error : "", t)) return 1;
         continue;
@@ -810,7 +806,7 @@ int run_main(int argc, char** argv) {
         if (!rebuild_world(*bench_map, {ds.models, {}}, from)) return 1;
         bench_models = ds.models.size();
       }
-      if (bench.paced) {  // what the frames read carried: heard, and its lines shown
+      if (paced) {  // what the frames read carried: heard, and its lines shown
         synth.bus_gain(0, static_cast<float>(volume) / cl::kDemoVolume);
         std::vector<std::string> lines;
         if (hearing.frame(ds, bench.heard, static_cast<float>(wall), lines, hud.centre))
@@ -820,23 +816,26 @@ int run_main(int argc, char** argv) {
           hud.notify.push(line, se::hud_style().ink, t);
         }
       }
-      ge::render::FrameView view =
-          cl::demo_view(bench.demo.state, ge::camera::FirstPersonRow{}.fov_y, t);
+      ge::render::FrameView view = cl::demo_view(ds, ge::camera::FirstPersonRow{}.fov_y, t);
       view.frame = static_cast<uint64_t>(presented);
       overlay.begin(w, h);
-      se::fill_hud(hud, cl::demo_status(bench.demo.state, t),
-                   cl::hud_art_of(files, classic_art, free_art));
+      se::fill_hud(hud, cl::demo_status(ds, t), cl::hud_art_of(files, classic_art, free_art));
       const auto placed =
           hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style());
       playback.bar_bottom_px = cl::hud_inset(placed, h);
       if (bench.paced) cl::playback_draw(overlay, playback, bench, w, h, t);
+      if (drawn_remote) {  // a game joined: its menu and console over it
+        game_menu.draw(overlay, w, h, t);
+        con_view.frame(wall);
+        ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
+      }
       // Every frame is drawn, but only one in kBenchShowNs is shown: the rest go to an offscreen
       // target of the surface's format. A window's present waits for the display however its
       // mode is set (macOS's compositor hands an image back once a refresh), so a frame rate
       // timed through it is the display's; drawn offscreen it is the machine's.
       const uint64_t frame_ns = ge::platform::now_ns();
       wgpu::TextureView target;
-      const bool show = bench.paced || frame_ns - bench_shown_ns >= kBenchShowNs;
+      const bool show = paced || frame_ns - bench_shown_ns >= kBenchShowNs;
       if (show) target = surface.acquire(*device);
       if (target) {
         bench_shown_ns = frame_ns;
@@ -850,12 +849,12 @@ int run_main(int argc, char** argv) {
       cl::demo_placed(ds, bench_fx.models);  // its entities and other players, not its effects yet
       const auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
-      if (!bench.paced && bench.skip == 0) cl::record_span(*world, bench.passes);
+      if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
         shot_copy.frame(*device, surface.frame_target(), shots, console);
         surface.present();
       }
-      if (bench.paced) {  // playback: every frame shown, nothing timed
+      if (paced) {  // playback: every frame shown, nothing timed
         ++presented;
         continue;
       }

@@ -45,6 +45,11 @@ file(GLOB SHOOTERS_EDGE_CLASSIC_SOURCES CONFIGURE_DEPENDS
 add_library(shooters_edge_classic STATIC ${SHOOTERS_EDGE_CLASSIC_SOURCES})
 target_link_libraries(shooters_edge_classic PUBLIC shooters_edge_server shooters_edge_client ge_net)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
+# The host a window joins (net/bin/host.cpp), headless, at the build's root
+# (build/<preset>/shooters_edge_host): the baseline mod on a map served over UDP.
+add_executable(shooters_edge_host net/bin/host.cpp)
+target_link_libraries(shooters_edge_host PRIVATE shooters_edge_classic)
+set_target_properties(shooters_edge_host PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR})
 
 # The headless dedicated server (server/bin/), named `shooters_edge_server` on disk, at the build's
 # root (build/<preset>/shooters_edge_server): the engine's dedicated process (engine/server) over
@@ -108,7 +113,7 @@ ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME
 # the GPU and the platform are built. Headers are spelled "shooters_edge/client/<file>.hpp".
 file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/client/*.cpp)
 list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX
-     "/client/(main|world_draw|world_extras|world_fx|world_models|demo_video)\\.cpp$")
+     "/client/(main|window_cvars|world_draw|world_extras|world_fx|world_models|demo_video)\\.cpp$")
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
 target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_bots shooters_edge_hud
                                                   shooters_edge_view shooters_edge_sound ge_vfs
@@ -139,8 +144,9 @@ if(GE_GPU AND TARGET ge_brush_app)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_client_gpu)
 endif()
 if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
-  add_executable(shooters_edge client/main.cpp)
-  target_link_libraries(shooters_edge PRIVATE shooters_edge_client_gpu shooters_edge_menu
+  add_executable(shooters_edge client/main.cpp client/window_cvars.cpp)
+  target_link_libraries(shooters_edge PRIVATE shooters_edge_client_gpu shooters_edge_classic
+                                              shooters_edge_menu
                                               ge_platform ge_hud ge_console)
   # The held weapons' models where the tree is, for a game run from somewhere else (-models wins).
   target_compile_definitions(shooters_edge
