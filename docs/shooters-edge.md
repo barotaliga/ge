@@ -275,10 +275,19 @@ The window's console joins and leaves (`net/classic_remote.hpp`):
 Joined, the window plays the server's game with your keys, mouse, `name`, `topcolor` and
 `bottomcolor`, and draws what the server sends exactly as it draws a client demo (the map, the
 items, the other players, the HUD, the sounds, the printed lines): the connection is read as a
-recording of it while it is made. Your own game waits until you leave. Not yet: your own moves are
-not predicted, so on a network with lag you see yourself a round trip late (on a LAN it is a few
-milliseconds); and a server is found by its
-address, not yet on a list.
+recording of it while it is made. Your own game waits until you leave.
+
+Your own moves are PREDICTED: from the newest place the server sent of you, every move sent since
+is run through the same player move as the server's (`plugins/shooter/predict.hpp`), over the
+level's solids, the movers where the last frame put them and the other players' boxes, with the
+move settings serverdata carried. So you are drawn where your keys put you, not a round trip late;
+a prediction the next frame proves 4 to 64 units wrong (a door, another player) is eased in, not
+snapped. `cl_nopred 1` draws the server's place instead, and `netstatus` says how many moves the
+prediction runs ahead. Over a 100 ms round trip the test holds every prediction to within 0.27
+units of where the server later puts the player. Not yet: the other players are drawn where the
+last frame put them, not smoothed between frames; the server info's `pm_` extras (the jump boost,
+the bunny-hop cap) are not read, so a server that sets them is predicted with their defaults; and
+a server is found by its address, not yet on a list.
 
 ### Benchmarking a demo
 

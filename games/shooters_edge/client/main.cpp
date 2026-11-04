@@ -125,6 +125,7 @@ namespace {
 namespace out = ge::core::output;
 namespace cl = shooters_edge::client;
 namespace se = shooters_edge::hud;
+namespace sn = shooters_edge::net;
 
 // A timedemo shows one frame in this many ns (30 a second) and draws the rest offscreen.
 constexpr uint64_t kBenchShowNs = 33'333'333;
@@ -192,13 +193,17 @@ int run_main(int argc, char** argv) {
   bool play_ask = false;  // the demo asked for is played at its own pace (`playdemo`)
   cl::add_demo_commands(console, bench_ask, play_ask);
   cl::Timedemo bench;
-  shooters_edge::net::Remote remote;  // `connect`: the window on a server elsewhere
-  shooters_edge::net::add_remote_commands(console, remote);
+  sn::Remote remote;  // `connect`: the window on a server elsewhere
+  sn::add_remote_commands(console, remote);
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
   cl::add_playback_commands(console, playback, bench);
   // The window's sound: a played demo's for now (client/demo_heard.hpp), at `volume`.
   ge::audio::Synth synth;  // outlives the device that pulls it (opened with the window)
   se::Hud hud = se::make_hud();
+  const auto tell = [&](const std::string& line, double at) {  // the console and the HUD's feed
+    console.print(line);
+    hud.notify.push(line, se::hud_style().ink, at);
+  };
   se::add_cvars(console, hud);
   shooters_edge::menu::GameMenu game_menu;
   game_menu.add_cvars(console);
@@ -435,10 +440,8 @@ int run_main(int argc, char** argv) {
       if (why.find("Escape") == std::string::npos && !why.empty()) bench_failed = 1;
     } else if (why.empty() || !bench.frame_s.empty())
       for (const std::string& line :
-           cl::bench_report(bench.name, setup, cl::bench_stats(bench.frame_s))) {
-        console.print(line);
-        hud.notify.push(line, se::hud_style().ink, now_s);
-      }
+           cl::bench_report(bench.name, setup, cl::bench_stats(bench.frame_s)))
+        tell(line, now_s);
     if (!bench.paced && (why.empty() || !bench.frame_s.empty()))
       console.print(cl::span_report(bench.passes));
     if (!why.empty() && !bench.paced) {
@@ -743,21 +746,18 @@ int run_main(int argc, char** argv) {
       args.playdemo.clear();
       bench_ask.clear();
       play_ask = false;
-      shooters_edge::net::remote_disconnect(remote);  // a demo is not played over a game joined
+      sn::remote_disconnect(remote);  // a demo is not played over a game joined
     }
     // Joined to a server (`connect`): its game drawn as a played demo's is (classic_remote.hpp),
     // from the frame its first level is known to the frame it drops, the listen server held.
-    auto joined = shooters_edge::net::RemoteStep::waiting;
+    auto joined = sn::RemoteStep::waiting;
     if (remote.active || (bench_map && !bench.active)) {
-      shooters_edge::net::remote_hands(
-          remote, playing && !game_menu.open() ? cl::button_moves(controls) : cl::Moves{}, played,
-          controls, wall);
+      const bool hands = playing && !game_menu.open();
+      sn::remote_hands(remote, hands ? cl::button_moves(controls) : cl::Moves{}, played, controls,
+                       wall);
       std::vector<std::string> lines;
-      joined = shooters_edge::net::remote_step(remote, wall, lines);
-      for (const std::string& line : lines) {
-        console.print(line);
-        hud.notify.push(line, se::hud_style().ink, t);
-      }
+      joined = sn::remote_step(remote, wall, lines);
+      for (const std::string& line : lines) tell(line, t);
       if (!remote.active && bench_map && !back_to_listen()) return 1;
     }
     const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
@@ -793,6 +793,7 @@ int run_main(int argc, char** argv) {
         }
         if (!rebuild_world(*bench_map, {ds.models, {}}, from)) return 1;
         bench_models = ds.models.size();
+        if (drawn_remote) sn::remote_world(remote, &bench_map->spec.models);
         if (paced) hearing.level(ds, from, &bench_map->bsp.map);
       } else if (step != cl::TimedemoStep::frame) {
         if (!end_bench(step == cl::TimedemoStep::error ? error : "", t)) return 1;
@@ -809,10 +810,7 @@ int run_main(int argc, char** argv) {
         std::vector<std::string> lines;
         if (hearing.frame(ds, bench.heard, static_cast<float>(wall), lines, hud.centre))
           hud.centre_until = t + 2;
-        for (const std::string& line : lines) {
-          console.print(line);
-          hud.notify.push(line, se::hud_style().ink, t);
-        }
+        for (const std::string& line : lines) tell(line, t);
       }
       if (!world) continue;  // no level of the demo's yet
       ge::render::FrameView view = cl::demo_view(ds, ge::camera::FirstPersonRow{}.fov_y, t);
@@ -918,11 +916,7 @@ int run_main(int argc, char** argv) {
       listen.campaign.sellscreen = false;
       game_menu.show(menu_host, "help");
     }
-    for (; printed < listen.prints.size(); printed++) {
-      const std::string& line = listen.prints[printed];
-      console.print(line);
-      hud.notify.push(line, se::hud_style().ink, t);
-    }
+    for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
     // The eyes on the player and what the world throws, then the overlay: the HUD, the console.
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
     view.frame = static_cast<uint64_t>(presented);
