@@ -3,7 +3,8 @@
 // players, the monsters, the missiles) loaded once a map from the packs, then drawn each frame
 // where the server's entities and its static entities stand.
 //
-// - LOADED (`create_models`, while the world's frame is made): each name on the server's model
+// - LOADED (`read_models` on any thread, then `create_models` on the GPU, while the world's frame
+//   is made): each name on the server's model
 //   list read by the game's adapter (game_adapter.hpp's `open_model`) into its form: a
 //   vertex-animated model as one morph model a skin, a sprite as sprite frames, a brush item (a
 //   health box, an ammo crate) as one morph model of its faces (app/classic_models.hpp). A skin
@@ -23,7 +24,8 @@
 //   his own colours. The nearest `kMaxMorphDraws` are drawn.
 //
 // ge:summary The window's models: items, weapons, flames, players, loaded from the packs and drawn
-// ge:keywords world-models create_models place_models prepare_models encode_models placed-model
+// ge:keywords world-models create_models read_models place_models prepare_models encode_models
+// ge:keywords placed-model
 // ge:keywords items armour health weapons flames torches players statics entity-models morph
 // ge:keywords sprites bare-flames topcolor bottomcolor place_brushes doors plats
 // ge:keywords ce_models enhanced-skins cached_skins replacement-skin skin-stand-in
@@ -103,12 +105,25 @@ struct WorldModels {
   std::vector<std::pair<double, size_t>> near;  // scratch
 };
 
-// Loads `load.names` through `game`'s adapter and `palette`; a file missing or refused is
-// reported once and drawn as nothing. The passes join `pipelines` (finished by the caller).
+// The models read and their skins decoded, on the CPU (any thread: it reads the files and the
+// cache, no GPU), for `create_models` to upload.
+struct ModelsRead {
+  std::vector<ModelKind> kinds;
+  std::vector<uint32_t> brush_of;
+  uint32_t brushes = 0;
+  std::vector<ge::render::MorphModel> morphs;
+  std::vector<ge::render::SpriteFrame> frames;
+  ge::render::TintRamps ramps;
+  models::LightProbe probe;
+};
+// Reads `load.names` through `game`'s adapter and `palette`; a file missing or refused is
+// reported once and drawn as nothing.
+ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette,
+                       const ge::brush::Map& map, const ModelLoad& load,
+                       const GameAdapter& game = classic_adapter());
+// The models read uploaded; the passes join `pipelines` (finished by the caller).
 void create_models(ge::gpu::Device& device, ge::gpu::PipelineSet& pipelines, WorldModels& m,
-                   const wgpu::BindGroupLayout& frame, const SearchPath& files,
-                   std::span<const uint8_t> palette, const ge::brush::Map& map,
-                   const ModelLoad& load, const GameAdapter& game = classic_adapter());
+                   const wgpu::BindGroupLayout& frame, ModelsRead read);
 // Where the map's own brush models stand this frame (doors, plats, buttons): each one an entity
 // of `placed` holds offset by that entity's origin; one no entity holds (removed by the game) is
 // hidden. Empty when the models were loaded with no server's list.

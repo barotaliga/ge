@@ -71,7 +71,8 @@ void(entity targ, entity inflictor, entity attacker, float damage) damage = {
 };
 
 // A blast at `inflictor`: everything within reach that takes damage gets `points` less half its
-// distance from the centre (the attacker himself half of that). `ignore` takes nothing.
+// distance from the centre (the attacker himself half of that, a thing with a `blast_share` that
+// share). `ignore` takes nothing.
 void(entity inflictor, entity attacker, float points, entity ignore, string how) radius_damage = {
   local entity e;
   local vector centre;
@@ -82,6 +83,7 @@ void(entity inflictor, entity attacker, float points, entity ignore, string how)
       centre = e.origin + (e.mins + e.maxs) * 0.5;
       d = points - 0.5 * vlen(inflictor.origin - centre);
       if (e == attacker) d = d * 0.5;
+      if (e.blast_share) d = d * e.blast_share;
       if (d > 0) {
         e.deathtype = how;
         damage(e, inflictor, attacker, d);

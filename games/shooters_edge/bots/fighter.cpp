@@ -15,7 +15,6 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "progs/entity_text.hpp"
-#include "progs/layout.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/bots/buttons.hpp"
@@ -133,13 +132,6 @@ double weapon_score(const WeaponRow& w, float d) {
   }
 }
 
-float field(const server::QcServer& s, int ent, int f) {
-  if (f < 0) return 0;
-  return pg::as_float(
-      s.q.vm.entities[static_cast<size_t>(ent) * static_cast<size_t>(s.q.vm.entityfields) +
-                      static_cast<size_t>(f)]);
-}
-
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
   return std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
@@ -209,7 +201,7 @@ float strength(const Stats& st) { return st.health + protection(st.armortype, st
 
 bool alive_slot(const server::QcServer& s, int slot) {
   return s.sv.clients[static_cast<size_t>(slot)].active &&
-         s.sv.edicts[static_cast<size_t>(slot) + 1].health > 0;
+         s.world.entities[static_cast<size_t>(slot) + 1].health > 0;
 }
 
 sh::Vec3f at_of(const ai::Memory& m) {
@@ -234,7 +226,7 @@ void go_to(Fighter& f, int32_t node) {
 
 bool door_shut(const server::QcServer& s, const ItemSpot& it) {
   if (it.door_ent < 0) return false;
-  const sh::Vec3f d = s.sv.edicts[static_cast<size_t>(it.door_ent)].origin - it.door_rest;
+  const sh::Vec3f d = s.world.entities[static_cast<size_t>(it.door_ent)].origin - it.door_rest;
   return d.x * d.x + d.y * d.y + d.z * d.z < 1;
 }
 
@@ -337,7 +329,7 @@ bool team_goal(Fighter& f, const server::QcServer& s, const Stats& st, sh::Vec3f
     if (pack >= 0) {
       if (pack != f.pack_ent) f.stats.packs++;
       f.pack_ent = pack;
-      go_to(f, sh::nav_nearest(g, s.sv.edicts[static_cast<size_t>(pack)].origin));
+      go_to(f, sh::nav_nearest(g, s.world.entities[static_cast<size_t>(pack)].origin));
       return true;
     }
   }
@@ -445,7 +437,7 @@ bool team_goal(Fighter& f, const server::QcServer& s, const Stats& st, sh::Vec3f
 
 void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::Why* why) {
   const double t = s.sv.time;
-  const sh::Edict& self = s.sv.edicts[static_cast<size_t>(me)];
+  const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
 
   // Where it can get to from here, worked out once a second (a teleporter or a drop is one way).
@@ -698,7 +690,7 @@ bool mate_in_line(const Fighter& f, const server::QcServer& s, sh::Vec3f eye, sh
   if (len2 < 1) return false;
   for (const Fighter* m : f.team->members) {
     if (m == &f || m->slot < 0 || !alive_slot(s, m->slot)) continue;
-    const sh::Vec3f p = s.sv.edicts[static_cast<size_t>(m->slot) + 1].origin;
+    const sh::Vec3f p = s.world.entities[static_cast<size_t>(m->slot) + 1].origin;
     const sh::Vec3f to = p - eye;
     const float u = (to.x * line.x + to.y * line.y + to.z * line.z) / len2;
     if (u <= 0 || u >= 1) continue;
@@ -716,20 +708,17 @@ float fighter_strength(const Stats& st) {
 }
 
 Stats read_stats(const server::QcServer& s, int ent) {
-  const pg::LayoutFields& f = s.q.layout->f;
-  const int kHealth = f.health, kItems = f.items, kArmor = f.armorvalue, kType = f.armortype;
-  const int kWeapon = f.weapon, kShells = f.ammo_shells, kNails = f.ammo_nails;
-  const int kRockets = f.ammo_rockets, kCells = f.ammo_cells;
+  const server::PlayerNumbers& n = s.world.clients[static_cast<size_t>(ent) - 1].numbers;
   Stats st;
-  st.health = field(s, ent, kHealth);
-  st.armor = field(s, ent, kArmor);
-  st.armortype = field(s, ent, kType);
-  st.items = static_cast<int32_t>(field(s, ent, kItems));
-  st.weapon = static_cast<int32_t>(field(s, ent, kWeapon));
-  st.shells = field(s, ent, kShells);
-  st.nails = field(s, ent, kNails);
-  st.rockets = field(s, ent, kRockets);
-  st.cells = field(s, ent, kCells);
+  st.health = n.health;
+  st.armor = n.armour;
+  st.armortype = n.armour_type;
+  st.items = static_cast<int32_t>(n.items);
+  st.weapon = static_cast<int32_t>(n.weapon);
+  st.shells = n.ammo[0];
+  st.nails = n.ammo[1];
+  st.rockets = n.ammo[2];
+  st.cells = n.ammo[3];
   return st;
 }
 
@@ -792,7 +781,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, 
     float best = 48;
     for (const sh::ViewEntity& v : f.bot.view.entities) {
       if (v.ent <= s.sv.set.maxclients) continue;
-      const sh::Edict& e = s.sv.edicts[static_cast<size_t>(v.ent)];
+      const server::WorldEntity& e = s.world.entities[static_cast<size_t>(v.ent)];
       const sh::Vec3f mid{(e.absmin.x + e.absmax.x) * 0.5f, (e.absmin.y + e.absmax.y) * 0.5f,
                           e.absmin.z};
       const float dx = v.origin.x - origin.x, dy = v.origin.y - origin.y;
@@ -868,7 +857,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
   // arrived the fighter walks the rest of the way straight at it (the axes under the view).
   if (!dead && f.bot.pilot.pilot.mode == sh::PilotMode::arrived && f.goal_item >= 0) {
     const ItemSpot& it = f.items[static_cast<size_t>(f.goal_item)];
-    const sh::Vec3f me_at = s.sv.edicts[static_cast<size_t>(me)].origin;
+    const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
     const sh::Vec3f to = f.unlocking ? it.button_at : it.at;
     const double dx = to.x - me_at.x, dy = to.y - me_at.y;
     const double reach = f.unlocking ? 160 : 96;
@@ -884,7 +873,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
   // A button opened by a shot: from where the line meets it, the view on it and the trigger.
   if (!dead && f.unlocking && f.goal_item >= 0) {
     const ItemSpot& it = f.items[static_cast<size_t>(f.goal_item)];
-    const sh::Vec3f me_at = s.sv.edicts[static_cast<size_t>(me)].origin;
+    const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
     const sh::Vec3f eye{me_at.x, me_at.y, me_at.z + 22};
     const sh::Vec3f d = it.button_at - eye;
     const double flat = std::sqrt(static_cast<double>(d.x) * d.x + static_cast<double>(d.y) * d.y);
@@ -908,7 +897,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
   if (!dead && swim) {
     // Swimming the field's way out: the view on the next cell (pitch down positive), forward,
     // and jump held, which rises in water and climbs out over the edge at the top.
-    const sh::Vec3f me_at = s.sv.edicts[static_cast<size_t>(me)].origin;
+    const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
     const double dx = way.x - me_at.x, dy = way.y - me_at.y, dz = way.z - me_at.z;
     const double flat = std::sqrt(dx * dx + dy * dy);
     cmd.angles.y = static_cast<float>(ge::core::libm::atan2(dy, dx) * (180.0 / ge::core::kPi));
@@ -918,12 +907,12 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
     if (dz > 8) cmd.buttons |= sh::kButtonJump;
   } else if (!dead && f.lost_to >= 0) {
     const sh::Vec3f to = f.bot.pilot.pilot.g->nodes[static_cast<size_t>(f.lost_to)].origin;
-    const sh::Vec3f me_at = s.sv.edicts[static_cast<size_t>(me)].origin;
+    const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
     const double rel = ge::core::libm::atan2(to.y - me_at.y, to.x - me_at.x) -
                        cmd.angles.y * (ge::core::kPi / 180.0);
     cmd.forward = sh::quantize_axis(static_cast<float>(ge::core::libm::cos(rel) * 320));
     cmd.side = sh::quantize_axis(static_cast<float>(-ge::core::libm::sin(rel) * 320));
-    const sh::Edict& self = s.sv.edicts[static_cast<size_t>(me)];
+    const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
     if (self.waterlevel >= 2) {
       // Swimming: the view pitched at it (down is positive) and jump held to rise.
       const double flat =
@@ -956,7 +945,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
   for (const sh::Contact& k : f.bot.senses.contacts)
     if (k.ent == f.bot.target && k.visible) c = &k;
   if (held && c && f.bot.aiming) {
-    const sh::Edict& self = s.sv.edicts[static_cast<size_t>(me)];
+    const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
     const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
     const float d = dist(eye, at_of(c->seen));
     const float tol = static_cast<float>(

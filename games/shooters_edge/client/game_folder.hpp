@@ -92,4 +92,15 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
 void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPath& files,
                        const GameContent& content, std::string& next_map, std::string& load_ask);
 
+// `map` started on `listen` as the window changes a map: on the campaign's host when the folder has
+// a campaign and the options ask for one (`deathmatch 0`), else as a match of `content`'s program
+// (a new server when the last was a campaign's or another program's). False with the reason.
+bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<LoadedMap> map,
+               std::string& error);
+
+// The save `name` that `load` asked for, playing on `listen` as a single-player game: ours by that
+// name, else the classic text save (`<name>.sav` names it alone). False with the reason.
+bool load_asked_save(Listen& listen, const GameContent& content, const SearchPath& files,
+                     const std::string& name, std::string& error);
+
 }  // namespace shooters_edge::client

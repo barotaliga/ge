@@ -268,6 +268,7 @@ void apply(ClassicClientEnd& c, const SvcMsg& m) {
         ExtFamily f{};
         if (family_of_magic(magic, f)) c.ext[f] = bits;
       }
+      for (size_t i = 0; i < 10 && i < m.floats.size(); i++) c.movevars[i] = m.floats[i];
       c.spawncount = m.ints[1];
       c.playernum = m.ints[2] & 0x7f;
       c.gamedir = m.strings[0];
@@ -589,6 +590,8 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
     const int loss =
         c.ch.accepted ? static_cast<int>(100 * c.ch.dropped / (c.ch.accepted + c.ch.dropped)) : 0;
     write_move(w, c.cmds, static_cast<uint8_t>(loss), c.ch.outgoing_sequence);
+    c.sent[c.ch.outgoing_sequence & 63] = cmd;
+    c.sent_seq[c.ch.outgoing_sequence & 63] = c.ch.outgoing_sequence;
     if (c.record) record_command(*c.record, c.now, cmd);
     if (c.valid_frame >= 0) {
       write_byte(w, clc::delta);

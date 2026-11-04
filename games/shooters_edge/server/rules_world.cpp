@@ -48,13 +48,14 @@ void fill_numbers(const QcServer& s, int slot, WorldClient& c) {
   const auto& f = s.q.layout->f;
   const auto& w = s.world_fields;
   PlayerNumbers& n = c.numbers;
-  n.health = static_cast<int32_t>(field(s, e, f.health));
-  n.armour = static_cast<int32_t>(field(s, e, w.armorvalue));
-  for (int k = 0; k < 4; k++) n.ammo[k] = static_cast<int32_t>(field(s, e, w.ammo[k]));
-  n.current_ammo = static_cast<int32_t>(field(s, e, w.currentammo));
-  n.weapon = static_cast<int32_t>(field(s, e, w.weapon));
-  n.weapon_frame = static_cast<int>(field(s, e, w.weaponframe));
-  n.items = static_cast<int32_t>(field(s, e, f.items));
+  n.health = field(s, e, f.health);
+  n.armour = field(s, e, w.armorvalue);
+  n.armour_type = field(s, e, f.armortype);
+  for (int k = 0; k < 4; k++) n.ammo[k] = field(s, e, w.ammo[k]);
+  n.current_ammo = field(s, e, w.currentammo);
+  n.weapon = field(s, e, w.weapon);
+  n.weapon_frame = field(s, e, w.weaponframe);
+  n.items = field(s, e, f.items);
   n.view_z = field(s, e, f.view_ofs + 2);
   n.frags = field(s, e, f.frags);
   n.weapon_model = model_index_of(
@@ -129,6 +130,11 @@ void fill_world(const QcServer& s, RulesWorld& w, bool full) {
     r.velocity = ed.velocity;
     r.mins = ed.mins;
     r.maxs = ed.maxs;
+    r.absmin = ed.absmin;
+    r.absmax = ed.absmax;
+    r.view_angles = ed.v_angle;
+    r.flags = ed.flags;
+    r.waterlevel = ed.waterlevel;
     r.health = ed.health;
     r.modelindex = static_cast<int>(field(s, e, f.modelindex));
     r.frame = static_cast<int>(field(s, e, f.frame));

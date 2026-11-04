@@ -162,11 +162,10 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
   }
 }
 
-void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldModels& m,
-                   const wgpu::BindGroupLayout& frame, const SearchPath& files,
-                   std::span<const uint8_t> palette, const br::Map& map, const ModelLoad& load,
-                   const GameAdapter& game) {
-  std::vector<gr::MorphModel> morphs;
+ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette,
+                       const br::Map& map, const ModelLoad& load, const GameAdapter& game) {
+  ModelsRead m;
+  std::vector<gr::MorphModel>& morphs = m.morphs;
   // The skins with enhanced copies: the morph model, its pack's own skin, the copy and its scale.
   struct Enhanced {
     size_t at;
@@ -178,7 +177,7 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
   // The skins drawn from the game's pictures: the morph model and its pack's own skin.
   std::vector<std::pair<size_t, gr::MorphSkin>> stood_in;
   uint32_t most = 0;
-  std::vector<gr::SpriteFrame> frames;
+  std::vector<gr::SpriteFrame>& frames = m.frames;
   std::set<std::string> refused;
   m.kinds.assign(load.names.size(), {});
   m.brush_of.assign(load.names.size(), 0);
@@ -289,9 +288,21 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
                              std::to_string(enhanced.size()) + " skins enhanced from " +
                              load.cache.string());
   }
+  m.ramps = models::palette_ramps(palette);
+  if (!map.models.empty()) m.probe = models::make_probe(map);
+  return m;
+}
+
+void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldModels& m,
+                   const wgpu::BindGroupLayout& frame, ModelsRead read) {
+  m.kinds = std::move(read.kinds);
+  m.brush_of = std::move(read.brush_of);
+  m.brushes = read.brushes;
+  m.probe = std::move(read.probe);
+  const std::vector<gr::MorphModel>& morphs = read.morphs;
+  const std::vector<gr::SpriteFrame>& frames = read.frames;
   if (!morphs.empty()) {
-    m.has_morph =
-        gr::create_morph(d, pipelines, m.morph, frame, morphs, models::palette_ramps(palette));
+    m.has_morph = gr::create_morph(d, pipelines, m.morph, frame, morphs, read.ramps);
     if (!m.has_morph)
       ge::core::output::status(
           "shooters_edge: the models' skins do not fit the atlas; models not drawn");
@@ -301,7 +312,6 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
     if (!m.has_sprites)
       ge::core::output::status("shooters_edge: the sprites do not fit the atlas; not drawn");
   }
-  if (!map.models.empty()) m.probe = models::make_probe(map);
 }
 
 void place_brushes(const WorldModels& m, std::span<const Placed> placed,

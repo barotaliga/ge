@@ -100,10 +100,19 @@ ENHANCED ▸ LOAD GAME and pick the folder your game is installed in (the one ho
 folder without `id1` and its first pack is refused, and LOAD GAME's line says what it lacks. The
 game is opened in place of the arena at once (its start map), its packs are enhanced in the
 background (`ce_auto 1`, the default; the enhancing page shows every stage, and the run goes on
-with the menu closed), and when the run ends the world is drawn again from the cache. The folder
+with the menu closed), and when the run ends having written anything the world is made again
+from the cache, behind the one drawn. The folder
 is kept (`game_folder.txt` in the platform's per-user folder) and opened at the next start when
 `-basedir` names none and the folder the game runs in holds no game. `basedir <folder>` in the
 console does the same as LOAD GAME (`client/game_folder.hpp`). Then `map dm3` plays that map.
+
+**The title and the loads.** With no `+map` the window opens at once on the title
+(`client/title.hpp`: a night with the full moon low in a total eclipse, blood red, cloud carried
+across it) with the main menu up, the start map loading behind it; ESCAPE out of the menu plays it
+once it is in. Every map loads behind the window (`client/map_load.hpp`): its file and its world's
+textures and models read on threads, its pipelines compiled while frames go on, a spinner in the
+bottom right corner naming the map and the seconds so far. A measured run (`--frames`, a
+timedemo) waits for its map before its first frame.
 
 **On a Mac (Apple silicon; Metal through Dawn):**
 
@@ -277,10 +286,19 @@ The window's console joins and leaves (`net/classic_remote.hpp`):
 Joined, the window plays the server's game with your keys, mouse, `name`, `topcolor` and
 `bottomcolor`, and draws what the server sends exactly as it draws a client demo (the map, the
 items, the other players, the HUD, the sounds, the printed lines): the connection is read as a
-recording of it while it is made. Your own game waits until you leave. Not yet: your own moves are
-not predicted, so on a network with lag you see yourself a round trip late (on a LAN it is a few
-milliseconds); and a server is found by its
-address, not yet on a list.
+recording of it while it is made. Your own game waits until you leave.
+
+Your own moves are PREDICTED: from the newest place the server sent of you, every move sent since
+is run through the same player move as the server's (`plugins/shooter/predict.hpp`), over the
+level's solids, the movers where the last frame put them and the other players' boxes, with the
+move settings serverdata carried. So you are drawn where your keys put you, not a round trip late;
+a prediction the next frame proves 4 to 64 units wrong (a door, another player) is eased in, not
+snapped. `cl_nopred 1` draws the server's place instead, and `netstatus` says how many moves the
+prediction runs ahead. Over a 100 ms round trip the test holds every prediction to within 0.27
+units of where the server later puts the player. Not yet: the other players are drawn where the
+last frame put them, not smoothed between frames; the server info's `pm_` extras (the jump boost,
+the bunny-hop cap) are not read, so a server that sets them is predicted with their defaults; and
+a server is found by its address, not yet on a list.
 
 ### Benchmarking a demo
 
@@ -774,7 +792,7 @@ for its own content (its own maps and mod), never a stand-in for a classic game'
 them never changes a classic game. Playing one classic game with another's parts is classic
 remix, a feature of classic-enhance (M18u), shown only when two full games are loaded.
 
-### The rules runner: the next seam (steps 1 and 2 landed)
+### The rules runner: the next seam (steps 1 to 3 landed)
 
 The adapter answers what a game's FILES hold. What its RULES do is the other half: the listen
 server, the dedicated server, the campaign, the bots and the recorder all hold the QC server
@@ -823,7 +841,9 @@ the last):
    between frames sees what the last call left. Every lab's digest is the same.
 2. **Landed.** The wire's entity and player states, the player's stats, the frags, the map's
    title and the recorders read the view; nothing in `net/` reads a program field for them.
-3. The bots read the view (`se-bots`, `se-team`, `se-hop` digests the same): the largest group.
+3. **Landed.** The bots read the view: each body's place, bounds, view, flags and water from its
+   row, a bot's stats and every frag from its client's numbers. They still trace the loop's world
+   (`trace_move`), which is the map's collision and no rules'. Every lab's digest is the same.
 4. The host holds a runner (a table pointer and its state) where it held a `QcServer`; the
    campaign and the dedicated server the same.
 5. The sequel's rules as a second runner (M18t4), with its own program form; nothing in steps 1
