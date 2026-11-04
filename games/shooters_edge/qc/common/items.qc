@@ -10,6 +10,9 @@
 //   item_artifact_super_damage    the QUAD: four times the damage dealt, 30 s       60 s
 //   item_artifact_invulnerability the SHIELD: no damage taken, 30 s                  60 s
 //                    (a power held glows round its player: blue, red, or both)
+//
+// What a pickup prints names the item in the loaded game's own words when its profile gives them
+// (`name_of`, the glue's: an item's class name to its name), in ours when it gives none.
 
 float MAX_SHELLS = 100;
 float MAX_NAILS = 200;
@@ -146,9 +149,12 @@ float(float shells, float nails, float rockets, float cells) ammo_give = {
 
 void() ammo_touch = {
   local entity was_self;
+  local string n;
   if (!can_pick_up()) return;
   if (!ammo_give(self.ammo_shells, self.ammo_nails, self.ammo_rockets, self.ammo_cells)) return;
-  say_to(other, PRINT_LOW, "You got ammunition\n", "", "", "");
+  n = name_of(self.classname, "");
+  if (n == "") say_to(other, PRINT_LOW, "You got ammunition\n", "", "", "");
+  else say_to(other, PRINT_LOW, "You got the ", n, "\n", "");
   item_taken();
   was_self = self;
   self = other;
@@ -182,7 +188,7 @@ void() weapon_touch = {
   had = other.items & self.weapon;
   ammo_give(self.ammo_shells, self.ammo_nails, self.ammo_rockets, self.ammo_cells);
   other.items = other.items | self.weapon;
-  say_to(other, PRINT_LOW, "You got the ", self.netname, "\n", "");
+  say_to(other, PRINT_LOW, "You got the ", name_of(self.classname, self.netname), "\n", "");
   item_taken();
   was_self = self;
   self = other;
@@ -229,6 +235,55 @@ void() weapon_lightning = {
 
 // --- backpacks ---
 
+string(float w) pack_weapon_name = {
+  if (w == W_DOUBLE) return "Double Scattergun";
+  if (w == W_SPIKER) return "Spiker";
+  if (w == W_HEAVY_SPIKER) return "Heavy Spiker";
+  if (w == W_GRENADES) return "Grenade Launcher";
+  if (w == W_ROCKETS) return "Rocket Launcher";
+  return "Arc Gun";
+};
+
+// A weapon's class name: the key its name in the loaded game's words is found by (`name_of`).
+string(float w) pack_weapon_class = {
+  if (w == W_DOUBLE) return "weapon_supershotgun";
+  if (w == W_SPIKER) return "weapon_nailgun";
+  if (w == W_HEAVY_SPIKER) return "weapon_supernailgun";
+  if (w == W_GRENADES) return "weapon_grenadelauncher";
+  if (w == W_ROCKETS) return "weapon_rocketlauncher";
+  return "weapon_lightning";
+};
+
+// One amount of a backpack's list: ", " before all but the first.
+float(float listed, float amount, string unit) pack_say_amount = {
+  if (!amount) return listed;
+  if (listed) say_to(other, PRINT_LOW, ", ", "", "", "");
+  say_to(other, PRINT_LOW, ftos(amount), " ", unit, "");
+  return TRUE;
+};
+
+// What `other` is told of the backpack `self` (`had`: he had its weapon). A game that names its
+// ammunition lists what is in it ("You get the <weapon>, 20 shells, 5 rockets": the weapon only
+// when it is new to him); ours names the weapon.
+void(float had) backpack_say = {
+  local float listed;
+  if (name_of("item_shells", "") == "") {
+    if (self.weapon) say_to(other, PRINT_LOW, "You got a backpack with the ", self.netname, "\n", "");
+    else say_to(other, PRINT_LOW, "You got a backpack\n", "", "", "");
+    return;
+  }
+  say_to(other, PRINT_LOW, "You get ", "", "", "");
+  if (self.weapon && !had) {
+    say_to(other, PRINT_LOW, "the ", name_of(pack_weapon_class(self.weapon), self.netname), "", "");
+    listed = TRUE;
+  }
+  listed = pack_say_amount(listed, self.ammo_shells, name_of("item_shells", "shells"));
+  listed = pack_say_amount(listed, self.ammo_nails, name_of("item_spikes", "nails"));
+  listed = pack_say_amount(listed, self.ammo_rockets, name_of("item_rockets", "rockets"));
+  listed = pack_say_amount(listed, self.ammo_cells, name_of("item_cells", "cells"));
+  say_to(other, PRINT_LOW, "\n", "", "", "");
+};
+
 // A backpack: what a dead player carried, there for two minutes or until a living player takes it
 // (its ammunition, and its weapon if he has none such).
 void() backpack_touch = {
@@ -238,8 +293,7 @@ void() backpack_touch = {
   had = other.items & self.weapon;
   ammo_give(self.ammo_shells, self.ammo_nails, self.ammo_rockets, self.ammo_cells);
   other.items = other.items | self.weapon;
-  if (self.weapon) say_to(other, PRINT_LOW, "You got a backpack with the ", self.netname, "\n", "");
-  else say_to(other, PRINT_LOW, "You got a backpack\n", "", "", "");
+  backpack_say(had);
   sound(other, CHAN_ITEM, "weapons/lock4.wav", 1, ATTN_NORM);
   stuffcmd(other, "bf\n");
   was_self = self;
@@ -254,15 +308,6 @@ void() backpack_touch = {
 };
 
 void() backpack_gone = { remove(self); };
-
-string(float w) pack_weapon_name = {
-  if (w == W_DOUBLE) return "Double Scattergun";
-  if (w == W_SPIKER) return "Spiker";
-  if (w == W_HEAVY_SPIKER) return "Heavy Spiker";
-  if (w == W_GRENADES) return "Grenade Launcher";
-  if (w == W_ROCKETS) return "Rocket Launcher";
-  return "Arc Gun";
-};
 
 // The dead player `self` drops his pack where he fell: nothing when he carried no ammunition.
 void() backpack_drop = {
@@ -300,10 +345,10 @@ void() power_touch = {
   if (!can_pick_up()) return;
   if (self.items == IT_QUAD) {
     other.super_damage_finished = time + POWER_TIME;
-    say_to(other, PRINT_LOW, "You got the Quad Damage\n", "", "", "");
+    say_to(other, PRINT_LOW, "You got the ", name_of(self.classname, "Quad Damage"), "\n", "");
   } else {
     other.invincible_finished = time + POWER_TIME;
-    say_to(other, PRINT_LOW, "You got the Shield\n", "", "", "");
+    say_to(other, PRINT_LOW, "You got the ", name_of(self.classname, "Shield"), "\n", "");
   }
   other.items = other.items | self.items;
   item_taken();

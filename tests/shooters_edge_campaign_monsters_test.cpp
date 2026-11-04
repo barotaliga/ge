@@ -2,11 +2,14 @@
 // on the campaign host, in the arena's west room. Each counts at spawn; a rifleman facing the
 // player notices him and shoots; one facing away notices only a player who made noise; a death
 // counts, is told and fires the monster's targets; a hound bites a player beside it; a hound on a
-// path walks it corner to corner.
+// path walks it corner to corner. The kinds that fight up close and in the air: a swordsman and a
+// brute hurt a player near them, a ghoul shrugs off a small hit and is knocked down by a big one
+// and gets up again whole, and only its whole health in one blow ends it; a flyer keeps its height
+// and spits at the player.
 //
-// ge:summary Tests: our campaign mod's monsters: counting, noticing, shooting, biting, paths
+// ge:summary Tests: our campaign mod's monsters: counting, noticing, attacking, paths, each kind
 // ge:keywords test campaign-mod monsters monster-ai rifleman hound path-corner killed-monsters
-// ge:keywords notice show-hostile
+// ge:keywords notice show-hostile swordsman brute ghoul flyer eel knockdown
 // ge:skill progs shooter testing
 #include <algorithm>
 #include <filesystem>
@@ -18,10 +21,12 @@
 #include "progs/vm.hpp"
 #include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/sim/qc_program.hpp"
 
 namespace sv = shooters_edge::server;
 namespace pg = ge::progs;
 namespace sh = ge::shooter;
+namespace se = shooters_edge::sim;
 
 namespace {
 
@@ -85,9 +90,27 @@ struct Game {
     }
     return 0;
   }
+  // One blow of `points` on `target` from `attacker`, through the program's own `damage`, called
+  // the way the host calls a hook with arguments.
+  bool hit(int target, int attacker, float points) {
+    const int fn = pg::find_function(mod(), "damage");
+    if (fn < 0) return false;
+    pg::Vm& vm = s().q.vm;
+    se::enter_qc(s().q, s().sv);
+    vm.globals[static_cast<size_t>(pg::parm(0))] =
+        static_cast<uint32_t>(pg::entity_value(vm, target));
+    vm.globals[static_cast<size_t>(pg::parm(1))] =
+        static_cast<uint32_t>(pg::entity_value(vm, attacker));
+    vm.globals[static_cast<size_t>(pg::parm(2))] =
+        static_cast<uint32_t>(pg::entity_value(vm, attacker));
+    vm.globals[static_cast<size_t>(pg::parm(3))] = pg::as_word(points);
+    const bool ok = se::run_qc(s().q, fn);
+    se::leave_qc(s().q);
+    return ok;
+  }
   const sh::Edict& ed(int e) { return s().sv.edicts[static_cast<size_t>(e)]; }
   // One host frame with the player looking along `yaw` and pressing `buttons`.
-  bool frame(float yaw = 0, uint8_t buttons = 0) {
+  bool frame(float yaw = 0, uint8_t buttons = 0, uint8_t impulse = 0) {
     sh::Packet pk;
     pk.client = 0;
     pk.sequence = ++sequence;
@@ -96,6 +119,7 @@ struct Game {
       m.msec = 14;
       m.angles = {0, yaw, 0};
       m.buttons = buttons;
+      m.impulse = impulse;
     }
     return sv::campaign_frame(c, &pk, 1, error);
   }
@@ -151,7 +175,7 @@ TEST(a_rifleman_facing_away_notices_only_a_noisy_player) {
   CHECK(g.entity_of(army, g.f().enemy) == 0);  // near, behind it and quiet: unseen
   // The player fires (away from it, into the west wall): the noise gives him away.
   for (int i = 0; i < kFrames && g.entity_of(army, g.f().enemy) == 0; i++)
-    CHECK_MSG(g.frame(180, 1), g.error);
+    CHECK_MSG(g.frame(0, 1), g.error);
   CHECK(g.entity_of(army, g.f().enemy) == 1);
   CHECK(g.s().q.faults == 0);
 }
@@ -229,5 +253,100 @@ TEST(a_hound_on_a_path_walks_it_corner_to_corner) {
   CHECK_MSG(furthest > 150, std::to_string(furthest));  // reached the far corner
   CHECK_MSG(turns >= 2, std::to_string(turns));         // and turned back at each end
   CHECK(g.entity_of(dog, g.f().enemy) == 0);
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(the_close_and_air_kinds_count_at_spawn) {
+  Game g(R"({
+"classname" "monster_knight"
+"origin" "-100 200 24"
+}
+{
+"classname" "monster_ogre"
+"origin" "-100 -200 24"
+}
+{
+"classname" "monster_zombie"
+"origin" "0 300 24"
+}
+{
+"classname" "monster_wizard"
+"origin" "0 -300 120"
+}
+{
+"classname" "monster_fish"
+"origin" "-300 300 60"
+}
+)");
+  CHECK(g.s().q.faults == 0);
+  CHECK(g.global("total_monsters") == 5);
+  CHECK(g.field(g.find("monster_knight"), g.f().health) == 75);
+  CHECK(g.field(g.find("monster_ogre"), g.f().health) == 200);
+  CHECK(g.field(g.find("monster_zombie"), g.f().health) == 60);
+  CHECK(g.field(g.find("monster_wizard"), g.f().health) == 80);
+  CHECK(g.field(g.find("monster_fish"), g.f().health) == 25);
+  CHECK(g.ed(g.find("monster_wizard")).origin.z == 120);  // a flyer stays where it is placed
+}
+
+TEST(a_swordsman_and_a_brute_hurt_a_player_near_them) {
+  for (const char* kind : {"monster_knight", "monster_ogre"}) {
+    Game g(std::string(R"({
+"classname" ")") +
+           kind + R"("
+"origin" "-200 0 24"
+"angle" "180"
+}
+)");
+    for (int i = 0; i < kFrames * 8 && g.field(1, g.f().health) == 100; i++)
+      CHECK_MSG(g.frame(180), g.error);
+    CHECK_MSG(g.field(1, g.f().health) < 100, kind);
+    CHECK_MSG(g.s().q.faults == 0, kind);
+  }
+}
+
+TEST(a_ghoul_shrugs_off_small_hits_and_is_knocked_down_by_big_ones) {
+  Game g(R"({
+"classname" "monster_zombie"
+"origin" "-200 0 24"
+"angle" "180"
+}
+)");
+  const int ghoul = g.find("monster_zombie");
+  // The scattergun's pellets, each a small hit: it keeps its health, and turns on the player.
+  CHECK_MSG(g.frame(0, 1), g.error);
+  for (int i = 0; i < 10; i++) CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.field(ghoul, g.f().health) == 60);
+  CHECK(g.field(ghoul, g.f().takedamage) != 0);
+  CHECK(g.entity_of(ghoul, g.f().enemy) == 1);
+  // A blow of 40 at once: down, not dead.
+  CHECK(g.hit(ghoul, 1, 40));
+  CHECK(g.field(ghoul, g.f().takedamage) == 0);
+  CHECK(g.global("killed_monsters") == 0);
+  // It gets up again whole.
+  for (int i = 0; i < kFrames * 7 && g.field(ghoul, g.f().takedamage) == 0; i++)
+    CHECK_MSG(g.frame(180), g.error);
+  CHECK(g.field(ghoul, g.f().takedamage) != 0);
+  CHECK(g.field(ghoul, g.f().health) == 60);
+  // A blow of its whole health at once: in pieces.
+  CHECK(g.hit(ghoul, 1, 60));
+  CHECK(g.global("killed_monsters") == 1);
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(a_flyer_keeps_its_height_and_spits_at_the_player) {
+  Game g(R"({
+"classname" "monster_wizard"
+"origin" "-150 0 100"
+"angle" "180"
+}
+)");
+  const int wizard = g.find("monster_wizard");
+  float lowest = 1000;
+  for (int i = 0; i < kFrames * 8 && g.field(1, g.f().health) == 100; i++) {
+    CHECK_MSG(g.frame(180), g.error);
+    lowest = std::min(lowest, g.ed(wizard).origin.z);
+  }
+  CHECK(g.field(1, g.f().health) < 100);
+  CHECK_MSG(lowest > 40, std::to_string(lowest));  // flying, not fallen to the floor
   CHECK(g.s().q.faults == 0);
 }
