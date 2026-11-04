@@ -35,7 +35,8 @@ void append(const fs::path& file, const std::string& text) {
 // A fresh scaffold, broken by `breaks`, then doctored: the error whose `what` holds `want` must
 // be there, at `where`, and every finding must be a whole prompt.
 void expect(const std::string& name, const std::function<void(const fs::path&)>& breaks,
-            const std::string& want, const std::string& where) {
+            const std::string& want, const std::string& where,
+            Severity severity = Severity::error) {
   const fs::path repo = fs::temp_directory_path() / ("ge_cli_doctor_test_" + name) / "game";
   fs::remove_all(repo.parent_path());
   const NewResult made = new_game({repo, "", ""});
@@ -51,7 +52,7 @@ void expect(const std::string& name, const std::function<void(const fs::path&)>&
     CHECK_MSG(
         f.severity == Severity::note || prompt_problem(format_finding("ge doctor", f)).empty(),
         name + ": a finding that does not read as a prompt: " + f.what + " / " + f.next);
-    if (f.severity == Severity::error && f.what.find(want) != std::string::npos &&
+    if (f.severity == severity && f.what.find(want) != std::string::npos &&
         f.where.starts_with(where)) {
       found = true;
     }
@@ -110,16 +111,24 @@ TEST(a_file_without_tags) {
       "no ge:summary tag", "sim/untagged.hpp");
 }
 
+// A file of `n` blank lines under a valid tag block, at sim/long.hpp.
+void write_long(const fs::path& r, int n) {
+  std::string body = "// ge:summary long\n// ge:keywords long\n// ge:skill engine\n";
+  for (int i = 0; i < n; i++) body += "\n";
+  std::string e;
+  write_text(r / "sim/long.hpp", body, e);
+}
+
+TEST(a_file_past_the_advice_is_a_warning) {
+  expect(
+      "advice", [](const fs::path& r) { write_long(r, 1001); }, "past the advised 1000",
+      "sim/long.hpp", Severity::warn);
+}
+
 TEST(a_file_over_the_cap) {
   expect(
-      "cap",
-      [](const fs::path& r) {
-        std::string body = "// ge:summary long\n// ge:keywords long\n// ge:skill engine\n";
-        for (int i = 0; i < 1001; i++) body += "\n";
-        std::string e;
-        write_text(r / "sim/long.hpp", body, e);
-      },
-      "over the cap of 1000", "sim/long.hpp");
+      "cap", [](const fs::path& r) { write_long(r, 2001); }, "over the cap of 2000",
+      "sim/long.hpp");
 }
 
 TEST(a_message_without_a_next_action) {

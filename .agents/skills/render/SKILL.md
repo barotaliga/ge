@@ -139,7 +139,7 @@ fragment shader on tile GPUs). A technique that answers no measured cost stays i
   `gpu::end_load` after, or every pipeline counts as created mid-run.
 - A generated data table is a `nullptr`-ended array of one short literal a line: Clang rejects a
   literal over 65,536 characters and MSVC caps one piece at 16 KB; GCC accepts both, so only CI's
-  other rows catch it. The 1000-line cap holds generated files too.
+  other rows catch it. The line cap (warned past 1000, failed past 2000) holds generated files too.
 
 **The pass table.**
 - A pass that is only sometimes needed still opens every frame, or the recorder's GPU times shift
