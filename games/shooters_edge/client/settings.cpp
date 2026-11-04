@@ -27,6 +27,36 @@ bool save_settings(ge::console::Console& con) {
   return false;
 }
 
+void add_window_cvars(ge::console::Console& con, WindowCvars& w) {
+  using ge::console::CvarKind;
+  con.cvars().bind({.name = "vid_fullscreen",
+                    .fallback = "0",
+                    .help = "1: the window over the whole screen (the desktop's own mode), 0: a "
+                            "window",
+                    .kind = CvarKind::boolean},
+                   &w.fullscreen);
+  con.cvars().bind({.name = "vid_display",
+                    .fallback = "0",
+                    .help = "the display vid_fullscreen covers: 0 the one the window is on, n the "
+                            "n-th that vid_displays lists",
+                    .kind = CvarKind::integer},
+                   &w.display);
+  con.cvars().bind({.name = "volume",
+                    .fallback = "0.7",
+                    .help = "the game's sound, 0..1 (a played demo's sounds and voices)",
+                    .kind = CvarKind::number,
+                    .min = 0,
+                    .max = 1},
+                   &w.volume);
+  con.cvars().bind({.name = "scr_levelstats",
+                    .fallback = "1",
+                    .flags = ge::console::kArchive,
+                    .help = "1: the scores key in a campaign also shows the level's figures "
+                            "(time, secrets, kills) as the intermission draws them",
+                    .kind = CvarKind::boolean},
+                   &w.level_stats);
+}
+
 void add_user_info_cvars(ge::console::Console& con, UserInfo& info) {
   for (const auto& [name, field, what] :
        {std::tuple{"topcolor", &info.top,

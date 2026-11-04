@@ -89,9 +89,17 @@ struct PlaybackInput {
   }
 };
 
+// A demo the console asked for: `timedemo <demo>` benchmarks it, `playdemo <demo>` plays it at its
+// own pace (`paced`); the window starts it and clears `demo`.
+struct DemoAsk {
+  std::string demo;
+  bool paced = false;
+};
 // The console's demo commands and cvars (the table above), bound to `p`; `demo_track` also sets
-// `bench`'s tracked player; the recording's `demo_pack` cvars bind to `p.record`.
-void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench);
+// `bench`'s tracked player; the recording's `demo_pack` cvars bind to `p.record`; `timedemo` and
+// `playdemo` fill `ask`.
+void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench,
+                           DemoAsk& ask);
 
 // The demo `t` just started: scanned for its highlights. False with the reason (the demo still
 // plays, with no markers).

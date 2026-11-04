@@ -551,14 +551,19 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       // The classic's light at half its reach, value / 2 of 128, matched by an inverse square:
       // the strength a metre off is that times the half reach squared.
       const double half = l.value * kUnitM / 2;
-      const double at1 = l.value / 256.0 * half * half * o.strength * flicker_at(l, view.time_s) *
-                         fire_light_gain(l, o.bonfires);
+      const double at1 = l.value / 256.0 * half * half * l.gain * o.strength *
+                         flicker_at(l, view.time_s) * fire_light_gain(l, o.bonfires);
       set4(g.pos, l.pos[0], l.pos[1] + fire_light_lift(l, o.bonfires), l.pos[2], l.reach * 1.5);
       set4(g.colour, l.colour[0] * at1, l.colour[1] * at1, l.colour[2] * at1, 0);
     }
     // A fire lights the wall behind it from its whole flame: its light softened over its height.
-    const double soft = fire_light_size(l, o.bonfires);
-    set4(g.info, -1, soft * soft, 0, 0);
+    const double soft = std::max(fire_light_size(l, o.bonfires), l.soft_m);
+    // An aimed light: full inside info.w's cosine, none outside spot.w's.
+    set4(g.info, -1, soft * soft, 0, l.spot ? l.cone_cos[0] : -1);
+    if (l.spot)
+      set4(g.spot, l.dir[0], l.dir[1], l.dir[2], l.cone_cos[1]);
+    else
+      set4(g.spot, 0, -1, 0, -2);
     // A dynamic light moves or goes out from one frame to the next, so a cube of it would be drawn
     // again every frame: it lights without a shadow.
     const bool dynamic = !d.dynamic_points.empty() && p.l >= d.dynamic_points.data() &&
@@ -644,6 +649,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       const double k = o.dynamic_strength;
       set4(g.colour, dl.colour[0] * k, dl.colour[1] * k, dl.colour[2] * k, 0);
       set4(g.info, -1, 0, 1, 0);
+      set4(g.spot, 0, -1, 0, -2);
       d.frame_lights.push_back(g);
     }
   }

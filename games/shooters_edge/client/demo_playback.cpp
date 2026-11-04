@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdlib>
 
+#include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 
 namespace shooters_edge::client {
@@ -87,9 +88,28 @@ double parse_clock(const std::string& text) {
   return parts > 3 ? -1 : total;
 }
 
-void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench) {
+void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench,
+                           DemoAsk& ask) {
   using Con = ge::console::Console;
   using CArgs = ge::console::Args;
+  console.add_command("timedemo", "timedemo <demo>: play a demo flat out and report its fps",
+                      [&ask](Con& c, const CArgs& a) {
+                        if (a.size() < 2) {
+                          c.print("timedemo: name a demo (timedemo demo1)");
+                          return;
+                        }
+                        ask.demo = expand_home(a[1]);
+                        ask.paced = false;
+                      });
+  console.add_command("playdemo", "playdemo <demo>: play a demo at its own pace",
+                      [&ask](Con& c, const CArgs& a) {
+                        if (a.size() < 2) {
+                          c.print("playdemo: name a demo (playdemo demo1, playdemo match.mvd)");
+                          return;
+                        }
+                        ask.demo = expand_home(a[1]);
+                        ask.paced = true;
+                      });
   bind_record_cvars(console, p.record);
   add_video_cvars(console, &p.video);
   console.add_command("cl_demospeed", "cl_demospeed <x>: a played demo's speed, 0..20 (0 pauses)",
