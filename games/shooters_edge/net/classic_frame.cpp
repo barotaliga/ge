@@ -210,7 +210,7 @@ PlayerState player_state(const ClassicServer& s, int about, int to) {
   p.effects = row.effects;
   if (about == to && w.weapon_frames) {
     p.has_weaponframe = true;
-    p.weaponframe = w.clients[about].numbers.weapon_frame;
+    p.weaponframe = static_cast<int>(w.clients[about].numbers.weapon_frame);
   }
   p.dead = e.health <= 0;
   p.gib = e.mins.z != -24;
@@ -225,13 +225,13 @@ PlayerState player_state(const ClassicServer& s, int about, int to) {
 void player_stats(const ClassicServer& s, int slot, int32_t st[kStats], bool view_height) {
   const sv::RulesWorld& w = s.qc->world;
   const sv::PlayerNumbers& n = w.clients[slot].numbers;
-  st[0] = n.health;
+  st[0] = static_cast<int32_t>(n.health);
   st[2] = n.weapon_model;
-  st[3] = n.current_ammo;
-  st[4] = n.armour;
-  for (int i = 0; i < 4; i++) st[6 + i] = n.ammo[i];
-  st[10] = n.weapon;
-  st[15] = n.items | (static_cast<int32_t>(w.serverflags) << 28);
+  st[3] = static_cast<int32_t>(n.current_ammo);
+  st[4] = static_cast<int32_t>(n.armour);
+  for (int i = 0; i < 4; i++) st[6 + i] = static_cast<int32_t>(n.ammo[i]);
+  st[10] = static_cast<int32_t>(n.weapon);
+  st[15] = static_cast<int32_t>(n.items) | (static_cast<int32_t>(w.serverflags) << 28);
   if (view_height) st[16] = static_cast<int32_t>(n.view_z);
 }
 

@@ -781,7 +781,7 @@ for its own content (its own maps and mod), never a stand-in for a classic game'
 them never changes a classic game. Playing one classic game with another's parts is classic
 remix, a feature of classic-enhance (M18u), shown only when two full games are loaded.
 
-### The rules runner: the next seam (steps 1 and 2 landed)
+### The rules runner: the next seam (steps 1 to 3 landed)
 
 The adapter answers what a game's FILES hold. What its RULES do is the other half: the listen
 server, the dedicated server, the campaign, the bots and the recorder all hold the QC server
@@ -830,7 +830,9 @@ the last):
    between frames sees what the last call left. Every lab's digest is the same.
 2. **Landed.** The wire's entity and player states, the player's stats, the frags, the map's
    title and the recorders read the view; nothing in `net/` reads a program field for them.
-3. The bots read the view (`se-bots`, `se-team`, `se-hop` digests the same): the largest group.
+3. **Landed.** The bots read the view: each body's place, bounds, view, flags and water from its
+   row, a bot's stats and every frag from its client's numbers. They still trace the loop's world
+   (`trace_move`), which is the map's collision and no rules'. Every lab's digest is the same.
 4. The host holds a runner (a table pointer and its state) where it held a `QcServer`; the
    campaign and the dedicated server the same.
 5. The sequel's rules as a second runner (M18t4), with its own program form; nothing in steps 1

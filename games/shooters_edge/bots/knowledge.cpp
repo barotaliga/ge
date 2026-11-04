@@ -178,7 +178,7 @@ void map_weights(Fighter& f) {
 
 ItemNews knowledge_update(Fighter& f, const server::QcServer& s, int me, sh::Vec3f eye, double t) {
   ItemNews news;
-  const sh::Vec3f self = s.sv.edicts[static_cast<size_t>(me)].origin;
+  const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   sh::SenseSettings look = f.bot.senses.set;
   look.range = kItemSight;
   const sh::Vec3f angles{f.bot.pitch, f.bot.yaw, 0};
