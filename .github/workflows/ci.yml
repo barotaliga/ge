@@ -12,8 +12,8 @@
 # changeset fragments) runs the gates alone. A pull request labelled `full-ci` also runs the Linux
 # rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and the shaders' check, and the
 # whole packaging. Once a day, at 05:00 in Stockholm, main runs all of that (the lint over the
-# whole tree), in a run nothing cancels; a push to main runs only while no pull request is open
-# (else it cancels itself and the daily run answers for it).
+# whole tree), in a run nothing cancels; a push to main runs only while the merge queue is empty
+# (else it cancels itself: the queue's next run, on the tree that lands, answers for it).
 #
 # Every queued group that changes more than prose is also compiled with Linux GCC (no tests),
 # `skip-ci` or not. A pull request labelled `skip-ci` runs nothing else, on the PR and in the
@@ -144,14 +144,21 @@ jobs:
           # is 5 less the offset, +0100 in winter and +0200 in summer); the other cancels itself
           # (a cancelled run says nothing to the main-red issue, where a skipped one would read
           # green).
-          # A PUSH TO MAIN runs only while no pull request is open (drafts aside: they run nothing),
-          # so main's runs never take runners from the PRs and the queue; the daily run answers for
-          # main the next morning. With a PR open the run cancels itself, for the same reason.
+          # A PUSH TO MAIN runs only while the merge queue is empty: a queued PR is about to land
+          # on top of it, and the queue's run on that tree answers for main (with the daily run for
+          # what the queue skips), so main's run would only take runners from it. With the queue
+          # busy the run cancels itself (a cancelled run says nothing to main-red; a skipped one
+          # would read green).
           if [ "$EVENT" = push ]; then
-            open=$(gh pr list --repo "$GH_REPO" --state open --limit 100 --json isDraft \
-              --jq '[.[] | select(.isDraft | not)] | length')
-            if [ "${open:-0}" -gt 0 ]; then
-              echo "$open pull request(s) open: main's push run gives its runners to them and cancels itself; the daily run answers for main"
+            # shellcheck disable=SC2016 # $owner and $name are the query's own variables
+            queued=$(gh api graphql -F owner="${GH_REPO%/*}" -F name="${GH_REPO#*/}" -f query='
+              query($owner: String!, $name: String!) {
+                repository(owner: $owner, name: $name) {
+                  mergeQueue(branch: "main") { entries(first: 1) { totalCount } }
+                }
+              }' --jq '.data.repository.mergeQueue.entries.totalCount // 0')
+            if [ "${queued:-0}" -gt 0 ]; then
+              echo "$queued pull request(s) in the merge queue: main's push run gives its runners to the queue and cancels itself"
               gh api -X POST "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/cancel" > /dev/null
               sleep 120
               exit 1

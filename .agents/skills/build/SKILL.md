@@ -128,9 +128,9 @@ false`, so one row's golden failure shows alongside the others.
   `needs:`, never the ruleset. A failure only the queue sees ejects the pull request from the
   queue; fix it, push, and auto-merge queues it again.
 - **Kept off the runners when it cannot change the answer** (`ci.yml`'s header): a newer push
-  cancels the older run, a PR's and main's alike; a push to main runs at all only while no
-  ready pull request is open (else its gates cancel the run, which says nothing to `main-red`),
-  so on a busy day `main-red` waits for the DAILY RUN (`ci.yml`'s schedule, 05:00 in Stockholm:
+  cancels the older run, a PR's and main's alike; a push to main runs at all only while the
+  merge queue is empty (else its gates cancel the run, which says nothing to `main-red`: the
+  queue's next run answers for that tree), so on a busy day `main-red` may wait for the DAILY RUN (`ci.yml`'s schedule, 05:00 in Stockholm:
   both 03:00 and 04:00 UTC fire and the one that is 05:00 there that day runs while the other
   cancels itself; every row, the whole-tree lint, the whole packaging, in a concurrency group of
   its own that nothing cancels); a draft runs nothing until it is marked ready; a label other than
