@@ -37,6 +37,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 namespace ge::gpu {
 
@@ -98,6 +99,9 @@ struct Device {
   uint32_t pipelines_created = 0;     // every pipeline, at load or after
   uint32_t pipelines_after_load = 0;  // each one is an error line
   bool loading = true;                // until end_load()
+  // create_shader's modules by their WGSL (pipeline.hpp): a shader is parsed once a device, so
+  // the next map's world, which makes the same passes again, does not parse them again.
+  std::unordered_map<std::string, wgpu::ShaderModule> shaders;
 };
 
 // Make a device. Returns nullptr after an agent-actionable error line when there is no

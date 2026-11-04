@@ -5,7 +5,7 @@
 //
 // ge:summary Tests for the GPU device: adapter, feature tiers, error lines, pipeline counter
 // ge:keywords test gpu device feature-tiers force_off validation-error shader-error
-// ge:keywords pipeline-counter end_load ready poll
+// ge:keywords pipeline-counter end_load ready poll shader-cache
 // ge:skill gpu testing
 #include <chrono>
 #include <string>
@@ -81,6 +81,20 @@ TEST(a_validation_error_is_counted_and_names_the_object) {
   CHECK(d->errors.load() == 1);
   CHECK(logged("test.bad-usage"));
   CHECK(logged("skill: gpu"));
+}
+
+TEST(a_shader_is_parsed_once_a_device) {
+  auto d = ge::test::test_device();
+  if (!d) return;
+  const char* kA = "@compute @workgroup_size(1) fn main() {}\n";
+  const char* kB = "@compute @workgroup_size(2) fn main() {}\n";
+  const wgpu::ShaderModule a = ge::gpu::create_shader(*d, kA, "test.a");
+  const wgpu::ShaderModule again = ge::gpu::create_shader(*d, kA, "test.a_again");
+  const wgpu::ShaderModule b = ge::gpu::create_shader(*d, kB, "test.b");
+  CHECK(a.Get() == again.Get());  // the same text: the module made the first time
+  CHECK(a.Get() != b.Get());
+  CHECK(d->shaders.size() == 2);
+  CHECK(d->errors.load() == 0);
 }
 
 TEST(a_shader_error_names_its_line) {

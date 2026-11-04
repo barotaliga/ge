@@ -53,9 +53,11 @@ struct WorldDraw {
   gr::CloudPass clouds;
   gr::Bloom bloom;
   gr::Post post[2];
-  std::vector<uint8_t> grade_palette;  // the classic grade's colours (none: the identity)
-  double gamma = 1;                    // the gamma the grades were last made with
-  look::Picture made;                  // the picture as it was when the world was made
+  // The classic look's grade to the palette (look.hpp's palette_grade; none: the identity), worked
+  // once on the read's thread.
+  std::vector<float> classic_grade;
+  double gamma = 1;    // the gamma the grades were last made with
+  look::Picture made;  // the picture as it was when the world was made
   gr::Particles particles;
   gr::Explosions explosions;  // the weapon's muzzle fire: its flames and smoke
   WorldModels models;
@@ -71,6 +73,13 @@ struct WorldDraw {
   gr::UiPass ui;
   gr::FrameRecorder rec;
   uint32_t w = 0, h = 0;
+  // The build in steps (begin_world, then a step a frame in world_compiled): the read it is made
+  // from, the steps made, what they need and the first step's error.
+  WorldReadPtr pending;
+  int built = 0;
+  wgpu::TextureFormat format = wgpu::TextureFormat::Undefined;
+  std::span<const ge::viewmodel::HeldModel> weapons;
+  std::string build_error;
 };
 
 void WorldDrawDeleter::operator()(WorldDraw* w) const { delete w; }
@@ -164,6 +173,7 @@ struct WorldRead {
   ba::SkyPick sky;
   double top_y = 0;
   std::vector<uint8_t> grade_palette;
+  std::vector<float> classic_grade;  // the classic look's grade to the palette (look.hpp)
   ge::brush::LightProbe probe;
   ModelsRead models;
 };
@@ -175,6 +185,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   GE_ZONE("world.read");
   WorldReadPtr r(new WorldRead);
   r->picture = picture;
+  r->classic_grade = look::palette_grade({});
   if (!map.from_file) return r;
   std::vector<uint8_t> store;
   std::span<const uint8_t> palette = find_file(files, "gfx/palette.lmp", store);
@@ -187,6 +198,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   }
   const std::vector<uint8_t> palette_copy(palette.begin(), palette.end());
   if (grey.empty()) r->grade_palette = palette_copy;
+  r->classic_grade = look::palette_grade(r->grade_palette);  // a search of the palette: on here
   // The enhanced cache, when this pack's were enhanced (the in-game menu's ENHANCE): keyed by the
   // packs' bytes, looked up once for the textures, the rebake and the skins.
   const bool any = picture.ce.textures || picture.ce.rebake || picture.ce.models;
@@ -234,6 +246,62 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   return r;
 }
 
+namespace {
+
+// The build's steps, each a few to twenty ms (the shaders parsed, the textures uploaded): the
+// frame's passes; the effects, the weapon and the 2D layer; the map; its models; then the extras'
+// parts.
+constexpr int kBuildSteps = 4 + kExtrasParts;
+
+void build_step(ge::gpu::Device& d, WorldDraw& f) {
+  const look::Picture& made = f.made;
+  WorldRead& read = *f.pending;
+  const int step = f.built++;
+  if (step == 0) {
+    f.uniforms = gr::make_buffer(d, "shooters_edge.uniforms", sizeof(gr::FrameUniforms),
+                                 wgpu::BufferUsage::Uniform);
+    f.layout = gr::frame_layout(d);
+    gr::create_sky(d, f.pipelines, f.skypass, f.uniforms, f.layout);
+    gr::create_clouds(d, f.pipelines, f.clouds, f.layout);
+    gr::BloomSettings bs;
+    bs.strength = made.ce.bloom ? look::post_settings(look::Look::modern, made).bloom : 0;
+    gr::create_bloom_pipelines(d, f.pipelines, f.bloom, bs);
+    for (int p = 0; p < 2; ++p)
+      gr::create_post(d, f.pipelines, f.post[p], f.layout, f.format,
+                      look::post_settings(p == 0 ? look::Look::classic : look::Look::modern, made));
+    f.gamma = f.picture->gamma;
+    f.classic_grade = std::move(read.classic_grade);
+    gr::set_grade(d, f.post[0], look::gamma_grade(f.classic_grade, f.gamma));
+    gr::set_grade(d, f.post[1], look::gamma_grade(gr::identity_grade(), f.gamma));
+  } else if (step == 1) {
+    gr::create_particles(d, f.pipelines, f.particles, f.layout);
+    gr::create_explosions(d, f.pipelines, f.explosions, f.layout);
+    if (!f.weapons.empty()) {
+      if (gr::create_viewmodel(d, f.pipelines, f.held, f.layout, f.weapons))
+        f.has_held = true;
+      else
+        f.build_error =
+            "the weapons did not upload (their skins do not fit the atlas); next: check "
+            "games/shooters_edge/content/models/view";
+    }
+    if (f.has_map) f.probe = std::move(read.probe);
+    gr::create_ui_pass(d, f.pipelines, f.ui, f.format);
+  } else if (!f.has_map) {
+    f.built = kBuildSteps;  // no map: nothing more to make
+  } else if (step == 2) {
+    ba::create_bsp(d, f.pipelines, f.bsp, f.scene, f.layout);
+  } else if (step == 3) {
+    create_models(d, f.pipelines, f.models, f.layout, std::move(read.models));
+  } else {
+    // The live switches and weather (read every frame), not the snapshot the world was made in.
+    if (!f.extras) f.extras = new_extras(f.scene, f.picture->ce, f.picture->weather);
+    create_extras_part(d, f.pipelines, f.layout, f.skypass, *f.extras, step - 4);
+  }
+  if (f.built >= kBuildSteps) f.pending.reset();
+}
+
+}  // namespace
+
 WorldDrawPtr begin_world(ge::gpu::Device& d, WorldReadPtr read, uint32_t width, uint32_t height,
                          wgpu::TextureFormat format, const look::Picture& picture,
                          std::span<const ge::viewmodel::HeldModel> weapons, std::string& error) {
@@ -249,49 +317,33 @@ WorldDrawPtr begin_world(ge::gpu::Device& d, WorldReadPtr read, uint32_t width, 
   f->scene = std::move(read->scene);
   f->sky = read->sky;
   f->top_y = read->top_y;
-  f->grade_palette = std::move(read->grade_palette);
-  const look::Picture& made = f->made;
-  f->uniforms = gr::make_buffer(d, "shooters_edge.uniforms", sizeof(gr::FrameUniforms),
-                                wgpu::BufferUsage::Uniform);
-  f->layout = gr::frame_layout(d);
-  gr::create_sky(d, f->pipelines, f->skypass, f->uniforms, f->layout);
-  gr::create_clouds(d, f->pipelines, f->clouds, f->layout);
-  gr::BloomSettings bs;
-  bs.strength = made.ce.bloom ? look::post_settings(look::Look::modern, made).bloom : 0;
-  gr::create_bloom_pipelines(d, f->pipelines, f->bloom, bs);
-  for (int p = 0; p < 2; ++p)
-    gr::create_post(d, f->pipelines, f->post[p], f->layout, format,
-                    look::post_settings(p == 0 ? look::Look::classic : look::Look::modern, made));
-  f->gamma = picture.gamma;
-  gr::set_grade(d, f->post[0], look::gamma_grade(look::palette_grade(f->grade_palette), f->gamma));
-  gr::set_grade(d, f->post[1], look::gamma_grade(gr::identity_grade(), f->gamma));
-  gr::create_particles(d, f->pipelines, f->particles, f->layout);
-  gr::create_explosions(d, f->pipelines, f->explosions, f->layout);
-  if (!weapons.empty()) {
-    if (!gr::create_viewmodel(d, f->pipelines, f->held, f->layout, weapons)) {
-      error =
-          "the weapons did not upload (their skins do not fit the atlas); next: check "
-          "games/shooters_edge/content/models/view";
-      return nullptr;
-    }
-    f->has_held = true;
-  }
-  if (f->has_map) f->probe = std::move(read->probe);
-  gr::create_ui_pass(d, f->pipelines, f->ui, format);
-  if (f->has_map) {
-    ba::create_bsp(d, f->pipelines, f->bsp, f->scene, f->layout);
-    create_models(d, f->pipelines, f->models, f->layout, std::move(read->models));
-    // The live switches and weather (read every frame), not the snapshot the world was made in.
-    f->extras = create_extras(d, f->pipelines, f->layout, f->scene, picture.ce, picture.weather,
-                              f->skypass);
+  f->format = format;
+  f->weapons = weapons;
+  f->pending = std::move(read);
+  build_step(d, *f);
+  if (!f->build_error.empty()) {
+    error = f->build_error;
+    return nullptr;
   }
   return f;
 }
 
-bool world_compiled(ge::gpu::Device& d, WorldDraw& f) { return f.pipelines.ready(d); }
+bool world_compiled(ge::gpu::Device& d, WorldDraw& f) {
+  if (!f.build_error.empty()) return true;  // finish_world says it
+  if (f.built < kBuildSteps) {
+    build_step(d, f);
+    return false;
+  }
+  return f.pipelines.ready(d);
+}
 
 bool finish_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t height,
                   std::string& error) {
+  while (f.built < kBuildSteps && f.build_error.empty()) build_step(d, f);
+  if (!f.build_error.empty()) {
+    error = f.build_error;
+    return false;
+  }
   if (!f.pipelines.finish(d)) {
     error = "the world's pipelines did not build; next: read the gpu: lines above";
     return false;
@@ -341,7 +393,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   const int p = lk == look::Look::classic ? 0 : 1;
   if (f.picture->gamma != f.gamma) {  // the brightness changed (the menu's slider, `gamma`)
     f.gamma = f.picture->gamma;
-    gr::set_grade(d, f.post[0], look::gamma_grade(look::palette_grade(f.grade_palette), f.gamma));
+    gr::set_grade(d, f.post[0], look::gamma_grade(f.classic_grade, f.gamma));
     gr::set_grade(d, f.post[1], look::gamma_grade(gr::identity_grade(), f.gamma));
   }
   // The map's own sky (its pick), keeping the eye and the look the caller set.

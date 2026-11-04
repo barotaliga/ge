@@ -14,6 +14,9 @@ namespace ge::gpu {
 namespace out = core::output;
 
 wgpu::ShaderModule create_shader(Device& device, std::string_view wgsl, std::string_view label) {
+  // The same text gives the same module (its messages were said the first time).
+  if (const auto known = device.shaders.find(std::string(wgsl)); known != device.shaders.end())
+    return known->second;
   wgpu::ShaderSourceWGSL source{};
   source.code = wgpu::StringView(wgsl.data(), wgsl.size());
   wgpu::ShaderModuleDescriptor desc{};
@@ -39,6 +42,7 @@ wgpu::ShaderModule create_shader(Device& device, std::string_view wgsl, std::str
                        }
                      }
                    }));
+  device.shaders.emplace(std::string(wgsl), module);
   return module;
 }
 
