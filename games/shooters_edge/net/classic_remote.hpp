@@ -20,14 +20,20 @@
 // move; the drawn view takes it every frame, so the mouse is never a tick behind. When the server
 // turns the player (a spawn, a teleport: `setangle`) the view takes the server's angles.
 //
-// NOT YET (M18h): the player's own moves are not predicted, so what he sees of himself is a round
-// trip late (plugins/shooter/predict.hpp is the next step); the other players are drawn where the
-// last frame put them.
+// PREDICTION: the player's own moves are run ahead of the server (plugins/shooter/predict.hpp):
+// from the newest state the server sent of the player (the reply to the move it acknowledged),
+// every move sent since is run through the same player move as the server's, over the level's
+// solids (its brush models, `remote_world`, the movers where the last frame put them, the other
+// players' boxes), with the move settings serverdata carried. A prediction the next frame proves
+// wrong by 4 to 64 units is not snapped but folded into a correction that decays (`Smoothing`).
+// The drawn eye and the player's own place are the prediction; `cl_nopred 1` draws the server's.
+// The other players are drawn where the last frame put them.
 //
 // ge:summary The window joined to a server: the classic client driven by the hands, drawn as a demo
 // ge:keywords remote-client connect disconnect join-server classic-client live-demo network-play
 // ge:keywords remote_connect remote_step remote_disconnect setangle tick-clock reconnect
-// ge:keywords remote_hands add_remote_commands netstatus
+// ge:keywords remote_hands add_remote_commands netstatus prediction predict cl_nopred
+// ge:keywords remote_world smoothing replayed
 // ge:skill net shooter
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
@@ -39,6 +45,7 @@
 #include "console/console.hpp"
 #include "input/state.hpp"
 #include "net/transport.hpp"
+#include "shooter/predict.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_client.hpp"
@@ -73,6 +80,13 @@ struct Remote {
   int64_t setangles = 0;  // the server's turns taken
   ClientStage said = ClientStage::challenge;  // the stage last reported
   std::string why;                            // why it dropped
+  // Prediction.
+  const std::vector<sh::BrushModel>* world = nullptr;  // the level's models ([0] the world)
+  bool nopred = false;                                 // cl_nopred: draw the server's place
+  sh::Smoothing smooth;
+  bool predicted = false;  // the last step drew a prediction
+  int replayed = 0;        // the moves it ran past the acknowledged one
+  sh::Vec3f prediction;    // the player's predicted origin, the correction not added
 };
 
 // Joins `address` ("host", "host:port"; the classic server port when none) over a UDP socket of
@@ -81,6 +95,9 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
                     std::string& error);
 // Joins over a transport already open (the simulated network's, in tests and labs).
 void remote_start(Remote& r, gn::Transport& t, const gn::Address& server, const ClientConfig& cfg);
+// The level's brush models the prediction moves through ([0] the world), the window's once it
+// has loaded the level `remote_step` named (nullptr: nothing predicted).
+void remote_world(Remote& r, const std::vector<sh::BrushModel>* models);
 // Leaves: the server told (a disconnect, three times), the socket closed, the state cleared.
 void remote_disconnect(Remote& r);
 // One window frame of `wall_s` s: the ticks due run (each sending `r.hands` with `r.view`), every
@@ -97,7 +114,8 @@ std::string remote_status(const Remote& r);
 void remote_hands(Remote& r, const client::Moves& m, const ge::input::InputState& in,
                   const client::ControlSettings& c, double dt);
 
-// `connect <host>[:port]`, `disconnect`, `reconnect` (the last server again) and `netstatus`; the
+// `connect <host>[:port]`, `disconnect`, `reconnect` (the last server again), `netstatus` and the
+// `cl_nopred` cvar; the
 // player's `name`, `topcolor` and `bottomcolor` cvars are read when a connect is made.
 void add_remote_commands(ge::console::Console& con, Remote& r);
 
