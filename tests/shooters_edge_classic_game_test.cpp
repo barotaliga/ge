@@ -2,13 +2,17 @@
 // server core. Offline and on the network with nobody connected it is one digest; a classic client
 // over the simulated network connects to the core's server, follows the signon and plays, and the
 // core counts it seated; the settings reach the endpoint (the name in its status, the password at
-// the connect); bots are refused with the next step; a whole session replays to the bit; the mod's
-// own rules come in as settings (`+set fraglimit 20`) and reach the mod; a map read from a pack;
-// the mod's changelevel takes the players to the next map (the rotation's when it has one).
+// the connect); too many bots are refused with the next step; a whole session replays to the bit;
+// the mod's own rules come in as settings (`+set fraglimit 20`) and reach the mod; a map read from
+// a pack;
+// the mod's changelevel takes the players to the next map (the rotation's when it has one); bots
+// are players every client sees, with their teams; the lobby warms up (its limits held, a bot
+// alone never counts down) until the client is ready, then restarts the map into the match.
 //
 // ge:summary Test: Shooter's Edge's dedicated server on the core: one digest, a client plays on it
 // ge:keywords test classic-game dedicated-server classic-client simulated-network serve net_frame
 // ge:keywords game-rules fraglimit pack-map changelevel map-change maprotation reconnect
+// ge:keywords bots sv_bots sv_lobby lobby warmup ready countdown match-restart local-seat
 // ge:skill net shooter testing
 #include <filesystem>
 #include <fstream>
@@ -53,11 +57,15 @@ struct Session {
   std::string error;
   bool opened = false;
   uint64_t digest = 1469598103934665603ull;
+  int look_at = -1;    // a frame whose status is kept
+  std::string looked;  // its status
 };
 
 // The core's server on the simulated network, one classic client joining at once, `frames`
 // frames; the digest folds every frame's hash and the client's end.
-void run_session(Session& r, const ServerConfig& c, int frames, const std::string& password = "") {
+// The client says `ready` at frame `ready_at` (-1: never).
+void run_session(Session& r, const ServerConfig& c, int frames, const std::string& password = "",
+                 int ready_at = -1) {
   gn::LinkConditions lan;
   r.net = gn::make_sim_network(c.seed, lan);
   gn::open_sim_transport(r.server_port, r.net, gn::sim_address(0, kPort));
@@ -72,8 +80,10 @@ void run_session(Session& r, const ServerConfig& c, int frames, const std::strin
   for (int f = 0; f < frames; f++) {
     const int64_t now = r.s.now_us;
     gn::sim_advance(r.net, now);
+    if (f == ready_at) se::client_command(r.client, "ready");
     se::client_tick(r.client, now);
     server_frame(r.s);
+    if (f == r.look_at) r.looked = server_status(r.s);
     r.digest = (r.digest ^ server_digest(r.s)) * 1099511628211ull;
   }
   r.digest = (r.digest ^ static_cast<uint64_t>(r.client.stage)) * 1099511628211ull;
@@ -131,11 +141,11 @@ TEST(classic_game_the_settings_reach_the_endpoint) {
   }
   {
     ServerConfig c = arena();
-    c.bots = 2;
+    c.bots = 8;  // every slot: none left for a player
     Server s;
     std::string error;
     CHECK(!server_open(s, se::classic_game(), c, nullptr, nullptr, error));
-    CHECK(error.find("next: --bots=0") != std::string::npos);
+    CHECK_MSG(error.find("next: lower sv_bots") != std::string::npos, error);
   }
   {
     ServerConfig c = arena();
@@ -217,5 +227,56 @@ TEST(classic_game_the_mod_s_changelevel_takes_the_players_along) {
   CHECK_MSG(server_status(r.s).find("seated=1") != std::string::npos, server_status(r.s));
   Session again;
   run_session(again, c, 900);
+  CHECK(r.digest == again.digest);
+}
+
+TEST(classic_game_bots_are_players_every_client_sees) {
+  ServerConfig c = arena();
+  c.bots = 2;
+  Session r;
+  run_session(r, c, 600);
+  CHECK_MSG(r.opened, r.error);
+  CHECK(r.client.stage == se::ClientStage::active);
+  const std::string status = server_status(r.s);
+  CHECK_MSG(status.find("seated=3") != std::string::npos, status);
+  CHECK_MSG(status.find("bots=2") != std::string::npos, status);
+  int bots = 0, teamed = 0;
+  for (const std::string& info : r.client.userinfos) {
+    bots += info.find("\\*bot\\1") != std::string::npos ? 1 : 0;
+    teamed += info.find("\\team\\") != std::string::npos ? 1 : 0;
+  }
+  CHECK_MSG(bots == 2, std::to_string(bots) + " bots in the client's scoreboard");
+  CHECK_MSG(teamed == 3, std::to_string(teamed) + " seats with a team");
+  Session again;
+  run_session(again, c, 600);
+  CHECK(r.digest == again.digest);
+}
+
+TEST(classic_game_the_lobby_warms_up_until_everyone_is_ready) {
+  ServerConfig c = arena();
+  c.lobby = 1;
+  c.bots = 1;
+  c.rules["fraglimit"] = "20";
+  {
+    Server alone;  // a bot alone never counts down
+    std::string error;
+    CHECK_MSG(server_open(alone, se::classic_game(), c, nullptr, nullptr, error), error);
+    for (int f = 0; f < 800; f++) server_frame(alone);
+    CHECK_MSG(server_status(alone).find("lobby=warmup") != std::string::npos, server_status(alone));
+  }
+  Session r;
+  r.look_at = 399;
+  run_session(r, c, 1100, "", 400);  // ready at 5.2 s, the countdown's 5 s, the restart
+  CHECK_MSG(r.looked.find("lobby=warmup ready=1/2") != std::string::npos, r.looked);
+  CHECK_MSG(r.looked.find("fraglimit=0") != std::string::npos, r.looked);  // warmup holds it
+  const std::string status = server_status(r.s);
+  CHECK_MSG(status.find("lobby=match") != std::string::npos, status);
+  CHECK_MSG(status.find("matches=1") != std::string::npos, status);
+  CHECK_MSG(status.find("fraglimit=20") != std::string::npos, status);
+  CHECK(r.client.stage == se::ClientStage::active);
+  CHECK_MSG(r.client.spawncount == 2, "spawncount " + std::to_string(r.client.spawncount));
+  Session again;
+  again.look_at = 399;
+  run_session(again, c, 1100, "", 400);
   CHECK(r.digest == again.digest);
 }

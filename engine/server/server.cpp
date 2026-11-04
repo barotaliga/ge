@@ -52,6 +52,7 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   // The fallbacks copied first: binding writes each into the field it is read from.
   const std::string port = std::to_string(c.port), clients = std::to_string(c.maxclients);
   const std::string bots = std::to_string(c.bots), seed = std::to_string(c.seed);
+  const std::string lobby = std::to_string(c.lobby);
   const std::string name = c.hostname, about = c.description, ip = c.ip, map = c.map;
   const std::string password = c.password, visibility = c.visibility;
   const std::string motd = c.motd, admin = c.admin, rotation = c.maprotation;
@@ -75,6 +76,10 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   cvars.bind({"sv_bots", bots, latched, "slots the game's bots fill at the start",
               CvarKind::integer, 0, static_cast<double>(most)},
              &c.bots);
+  cvars.bind({"sv_lobby", lobby, latched_info,
+              "1: every map warms up until everyone is ready (ready, break, team, start)",
+              CvarKind::integer, 0, 1},
+             &c.lobby);
   cvars.bind({"sv_seed", seed, latched, "the run's seed", CvarKind::integer, 0, 4294967295.0},
              &c.seed);
   cvars.bind(

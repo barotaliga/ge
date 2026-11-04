@@ -58,11 +58,13 @@ struct Room {
   std::string graph_of;                                        // the map it was built for
   uint32_t seed = 1;
   int bots_named = 0;               // bots ever seated (their names count up)
+  uint32_t held = 0;                // a bit a slot no bot may take (a dedicated server's clients)
   std::vector<sh::Packet> packets;  // a frame's, the player's first (reused)
 };
 
-// A fighter of `skill` seated in the lowest free slot of `s` (playing `map`) and the lobby; its
-// slot, or -1 with `error` (the server full, or no way to walk on the map).
+// A fighter of `skill` seated in the lowest free slot of `s` (playing `map`) and the lobby, under
+// the server's player limit and outside `held`; its slot, or -1 with `error` (the server full, or
+// no way to walk on the map).
 int room_add_bot(Room& r, sv::QcServer& s, const sv::MapSpec& map, sh::AimSkill skill,
                  std::string& error);
 // The highest bot seat freed; false when there is none.

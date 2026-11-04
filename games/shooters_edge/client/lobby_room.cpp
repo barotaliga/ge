@@ -114,8 +114,9 @@ bool skill_named(const std::string& word, sh::AimSkill& out) {
 int room_add_bot(Room& r, sv::QcServer& s, const sv::MapSpec& map, sh::AimSkill skill,
                  std::string& error) {
   int slot = -1;
-  for (int i = 1; i < sv::kLobbySeats && i < sh::kMaxClients; i++)
-    if (!r.lobby.seats[static_cast<size_t>(i)].used && !s.clients[i].active) {
+  for (int i = 1; i < sv::kLobbySeats && i < sh::kMaxClients && i < s.sv.set.maxclients; i++)
+    if (!r.lobby.seats[static_cast<size_t>(i)].used && !s.clients[i].active &&
+        ((r.held >> i) & 1u) == 0) {
       slot = i;
       break;
     }

@@ -55,7 +55,7 @@ bool well_formed(const ClassicClient& c, const uint8_t* data, size_t size) {
 // well formed and fit; otherwise counts them dropped.
 void mod_bytes(ClassicServer& s, int slot, const uint8_t* data, size_t size, bool reliable) {
   ClassicClient& c = s.clients[slot];
-  if (size == 0) return;
+  if (size == 0 || c.local) return;
   if (!well_formed(c, data, size)) {
     s.counts.mod_bytes_dropped += static_cast<int64_t>(size);
     return;
@@ -70,6 +70,7 @@ void mod_bytes(ClassicServer& s, int slot, const uint8_t* data, size_t size, boo
 
 void unreliable_svc(ClassicServer& s, int slot, const SvcMsg& m) {
   ClassicClient& c = s.clients[slot];
+  if (c.local) return;
   uint8_t buf[kMaxMsgLen];
   gn::Writer w = gn::make_writer(buf, sizeof buf);
   write_svc(w, m, ctx_of(c));

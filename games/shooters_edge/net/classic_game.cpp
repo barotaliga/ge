@@ -7,6 +7,7 @@
 // ge:test tests/shooters_edge_classic_game_test.cpp
 #include "shooters_edge/net/classic_game.hpp"
 
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <iterator>
@@ -14,13 +15,16 @@
 #include <string>
 #include <vector>
 
+#include "core/num.hpp"
 #include "net/packet.hpp"
 #include "progs/file.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/dedicated.hpp"
+#include "shooters_edge/server/lobby.hpp"
 
 namespace shooters_edge::net {
 
@@ -28,6 +32,7 @@ namespace {
 
 namespace gs = ge::server;
 namespace cl = shooters_edge::client;
+namespace sh = ge::shooter;
 
 struct Game {
   ge::progs::Progs progs;
@@ -39,6 +44,12 @@ struct Game {
   cl::SearchPath files;       // the game folder the maps are read from (empty: the arena only)
   int changes = 0;            // maps changed to
   std::string failed;         // why the last change did not happen ("": it did)
+  // The lobby and the bots (sv_lobby, sv_bots; null: neither). Without sv_lobby it stays in its
+  // match: the bots play every map as it comes.
+  std::unique_ptr<cl::Room> room;
+  std::array<const sv::QcServer*, gs::kLobbySeats> applied{};  // the server a seat's team is on
+  std::array<gs::Team, gs::kLobbySeats> shown{};               // the team its user info says
+  int said = 0;                                                // the lobby's lines printed
   ~Game() {
     classic.reset();
     qc.reset();  // its views into the map go before the map does
@@ -92,12 +103,33 @@ bool open_map(const Game& g, const std::string& name, std::unique_ptr<cl::Loaded
   return true;
 }
 
+// Warmup's hold on the mod's limits: nothing ends a warmup but the lobby.
+void hold_limits(sv::QcServer& qc) {
+  sv::server_command(qc, "fraglimit 0");
+  sv::server_command(qc, "timelimit 0");
+}
+
+// The room: the lobby (a player needed before a countdown), the `sv_bots` fighters seated.
+bool open_room(Game& g, std::string& error) {
+  const gs::ServerConfig& c = g.settings;
+  if (c.bots == 0 && c.lobby == 0) return true;
+  g.room = std::make_unique<cl::Room>();
+  cl::Room& r = *g.room;
+  r.seed = c.seed;
+  r.lobby.settings.humans = 1;  // bots alone warm up until a player joins
+  if (c.lobby == 0) r.lobby.phase = gs::LobbyPhase::match;
+  for (int i = 0; i < c.bots; i++)
+    if (cl::room_add_bot(r, *g.qc, g.map->spec, sh::AimSkill::average, error) < 0) {
+      std::string why = "sv_bots " + std::to_string(c.bots) + ": ";
+      why.append(error).append("; next: lower sv_bots under sv_maxclients");
+      error = std::move(why);
+      return false;
+    }
+  if (r.lobby.phase != gs::LobbyPhase::match) hold_limits(*g.qc);
+  return true;
+}
+
 void* create(const gs::ServerConfig& c, std::string& error) {
-  if (c.bots != 0) {
-    error = "sv_bots " + std::to_string(c.bots) +
-            ": bots on the classic server come with the engine's lobby (M53c); next: --bots=0";
-    return nullptr;
-  }
   auto g = std::make_unique<Game>();
   g->settings = c;
   if (!cl::baseline_progs(g->progs, error)) return nullptr;
@@ -108,6 +140,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     error.clear();
   }
   if (!open_map(*g, c.map, g->map, g->qc, error)) return nullptr;
+  if (!open_room(*g, error)) return nullptr;
   g->cfg.hostname = c.hostname;
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
@@ -146,6 +179,7 @@ void change_if_asked(Game& g) {
     name = current;
   else if (qc.pending_change == sv::MapChange::change_level || name == current)
     name = next_map(g.settings, current, name);
+  const bool match_over = qc.pending_change != sv::MapChange::restart;
   qc.pending_map.clear();
   std::unique_ptr<cl::LoadedMap> map;
   std::unique_ptr<sv::QcServer> next;
@@ -159,33 +193,157 @@ void change_if_asked(Game& g) {
   g.map = std::move(map);
   g.changes++;
   g.failed.clear();
+  if (g.room) {  // the seats onto the new server: warmup again after a match the mod ended
+    if (match_over && g.settings.lobby != 0) gs::lobby_back(g.room->lobby);
+    cl::room_enter(*g.room, *g.qc, g.map->spec);
+    g.applied.fill(nullptr);
+  }
+}
+
+// The room kept to the endpoint's seats: a bot seated is shown as a local seat and one gone is
+// freed; a client who signed on takes a lobby seat and one who left frees it; a seat's team is
+// put in its user info (every client sees the colours) and the mod's `.team`.
+void sync_seats(Game& g) {
+  if (!g.room || !g.classic) return;
+  cl::Room& r = *g.room;
+  ClassicServer& cs = *g.classic;
+  sv::QcServer& qc = *g.qc;
+  const double now = qc.sv.time;
+  for (int i = 0; i < gs::kLobbySeats && i < sh::kMaxClients; i++) {
+    const auto at = static_cast<size_t>(i);
+    const bool bot = r.bots[at] != nullptr;
+    if (cs.clients[i].local && !bot) {
+      cs.clients[i].qc_active = false;  // the room let it go from the mod
+      classic_drop(cs, i, "left the room");
+    }
+    std::string error;
+    if (bot && cs.clients[i].state == ConnState::free)
+      classic_add_local(cs, i, r.bots[at]->name, error);
+    const ClassicClient& c = cs.clients[i];
+    gs::LobbySeat& seat = r.lobby.seats[at];
+    if (!c.local && c.state == ConnState::free && seat.used && !seat.bot) {
+      gs::lobby_leave(r.lobby, i, now);
+      g.applied[at] = nullptr;
+    }
+    if (!c.qc_active) continue;
+    if (!c.local && !seat.used) gs::lobby_join(r.lobby, i, c.name, false, now);
+    if (!seat.used || (g.applied[at] == &qc && g.shown[at] == seat.team)) continue;
+    const std::string colour = std::to_string(sv::team_colour(seat.team));
+    classic_set_info(cs, i, "team", gs::team_name(seat.team));
+    classic_set_info(cs, i, "topcolor", colour);
+    classic_set_info(cs, i, "bottomcolor", colour);
+    sv::lobby_apply(qc, r.lobby, i);  // the mod's own `.team`
+    g.applied[at] = &qc;
+    g.shown[at] = seat.team;
+  }
+}
+
+// The lobby's turn after a frame: its lines printed to everyone, and a countdown run out restarts
+// the map with every seat on it, the match.
+void lobby_turn(Game& g) {
+  if (!g.room) return;
+  cl::Room& r = *g.room;
+  if (g.settings.lobby != 0 && gs::lobby_due(r.lobby, g.qc->sv.time)) {
+    g.qc->pending_map = g.map->name;
+    g.qc->pending_change = sv::MapChange::restart;
+  }
+  for (const std::string& line : r.lobby.said) {
+    if (g.classic) classic_print_all(*g.classic, line + "\n");
+    g.said++;
+  }
+  r.lobby.said.clear();
+}
+
+// A client's words the room takes before the mod: `addbot [skill]` and `removebot` from the
+// leader, and with sv_lobby the lobby's own (ready, break, team, start, lobby).
+bool room_words(void* ctx, int slot, const std::string& line) {
+  Game& g = *static_cast<Game*>(ctx);
+  if (!g.room) return false;
+  cl::Room& r = *g.room;
+  ClassicServer& cs = *g.classic;
+  const size_t space = line.find(' ');
+  const std::string word = line.substr(0, space);
+  if (word == "addbot" || word == "removebot") {
+    const int leader = gs::lobby_leader(r.lobby);
+    if (slot != leader) {
+      const std::string who =
+          leader >= 0 ? r.lobby.seats[static_cast<size_t>(leader)].name : std::string("nobody");
+      client_print(cs, slot, 2, word + ": only the leader (" + who + ") changes the bots\n");
+      return true;
+    }
+    std::string error;
+    if (word == "removebot") {
+      for (int i = gs::kLobbySeats - 1; i > 0; i--)
+        if (r.bots[static_cast<size_t>(i)]) {
+          cs.clients[i].qc_active = false;  // room_remove_bot lets it go from the mod
+          break;
+        }
+      if (!cl::room_remove_bot(r, *g.qc))
+        client_print(cs, slot, 2, "removebot: no bot is seated; next: `addbot`\n");
+      sync_seats(g);
+      return true;
+    }
+    sh::AimSkill skill = sh::AimSkill::average;
+    const std::string named = space == std::string::npos ? "" : line.substr(space + 1);
+    if (!named.empty() && !cl::skill_named(named, skill)) {
+      client_print(cs, slot, 2,
+                   "addbot " + named + ": no such skill; next: novice, average or expert\n");
+      return true;
+    }
+    r.held = 0;
+    for (int i = 0; i < sh::kMaxClients; i++)
+      if (cs.clients[i].state != ConnState::free) r.held |= 1u << i;
+    if (cl::room_add_bot(r, *g.qc, g.map->spec, skill, error) < 0)
+      client_print(cs, slot, 2, "addbot: " + error + "\n");
+    sync_seats(g);
+    return true;
+  }
+  if (g.settings.lobby == 0) return false;
+  return gs::lobby_command(r.lobby, slot, line, g.qc->sv.time);
 }
 
 void destroy(void* g) { delete static_cast<Game*>(g); }
 
 double frame_seconds(const void* g) { return static_cast<const Game*>(g)->qc->sv.set.mintic; }
 
+// A bot's move length: the server's frame, ms.
+int frame_msec(const Game& g) {
+  return static_cast<int>(ge::core::num::round(g.qc->sv.set.mintic * 1000));
+}
+
 // Offline: the mod's frame with nobody's moves, its streams emptied as the endpoint would.
 void frame(void* g) {
   Game& game = *static_cast<Game*>(g);
   sv::QcServer& qc = *game.qc;
-  sv::qc_frame(qc, nullptr, 0);
+  std::vector<sh::Packet> moves;
+  if (game.room) cl::room_packets(*game.room, qc, frame_msec(game), moves);
+  sv::qc_frame(qc, moves.data(), static_cast<int>(moves.size()));
   qc.out.all.clear();
   for (auto& one : qc.out.one) one.clear();
   sv::clear_frame(qc.out);
+  lobby_turn(game);
   change_if_asked(game);
 }
 
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
   game.classic = std::make_unique<ClassicServer>();
-  return classic_start(*game.classic, *game.qc, port, game.cfg, error);
+  if (!classic_start(*game.classic, *game.qc, port, game.cfg, error)) return false;
+  game.classic->game_command = room_words;
+  game.classic->game_ctx = &game;
+  sync_seats(game);
+  return true;
 }
 
 void net_frame(void* g, int64_t now_us) {
   Game& game = *static_cast<Game*>(g);
+  if (game.room)
+    cl::room_packets(*game.room, *game.qc, frame_msec(game), game.classic->local_moves);
   classic_frame(*game.classic, now_us);
+  sync_seats(game);
+  lobby_turn(game);
   change_if_asked(game);
+  sync_seats(game);  // a new map's seats
 }
 
 int seated(const void* g) {
@@ -205,6 +363,21 @@ std::string status(const void* g) {
   for (const char* name : {"deathmatch", "fraglimit", "timelimit"}) {
     const ge::console::Cvar* v = game.qc->cvars.find(name);
     out.append(" ").append(name).append("=").append(v ? v->value : "?");
+  }
+  if (game.room) {
+    const gs::Lobby& l = game.room->lobby;
+    int bots = 0;
+    for (const auto& b : game.room->bots) bots += b ? 1 : 0;
+    out.append(" bots=").append(std::to_string(bots));
+    if (game.settings.lobby != 0)
+      out.append(" lobby=")
+          .append(gs::phase_name(l.phase))
+          .append(" ready=")
+          .append(std::to_string(gs::lobby_ready_count(l)))
+          .append("/")
+          .append(std::to_string(gs::lobby_seated(l)))
+          .append(" matches=")
+          .append(std::to_string(l.matches));
   }
   if (!game.classic) return out + " offline";
   const ServerCounts& n = game.classic->counts;

@@ -384,9 +384,10 @@ void cmd_nextdl(ClassicServer& s, int slot, const pg::Words& w) {
 }  // namespace
 
 void full_client_update(ClassicServer& s, int about, int to) {
-  const ClassicClient& c = s.clients[about];
+  ClassicClient& c = s.clients[about];
   int frags = 0;
   if (c.qc_active) frags = static_cast<int>(s.qc->world.clients[about].numbers.frags);
+  c.frags_told = frags;
   std::vector<SvcMsg> ms(5);
   ms[0].id = svc::updatefrags;
   ms[0].ints = {about, frags};
@@ -459,8 +460,10 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
     c.dl = ServerDownload{};
   } else if (cmd == "ptrack" || cmd == "snap" || cmd == "upload") {
     // Spectator tracking, screenshots and uploads: not built.
-  } else if (c.qc_active) {
-    sv::client_command(*s.qc, slot, line);
+  } else {
+    // The game's own words (a lobby's ready, team, start) first, then the mod's.
+    const bool taken = s.game_command != nullptr && s.game_command(s.game_ctx, slot, line);
+    if (!taken && c.qc_active) sv::client_command(*s.qc, slot, line);
   }
 }
 
