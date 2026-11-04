@@ -6,6 +6,8 @@
 //
 // - A DEDICATED server is a `Server` stepped by `server_main` (main.hpp), the game's own
 //   `<game>_server` binary (`ge_add_server`, cmake/Server.cmake).
+// - A game with its own protocol (`ServerGame::serve`) gets the port itself and answers its own
+//   clients on it; the frame clock and the settings are still the core's.
 // - A LISTEN server is the same `Server` stepped by the game's client loop between its frames.
 // Nothing in a game branches on which one it is in.
 //
@@ -66,6 +68,7 @@ struct ServerConfig {
   std::string spectator_password;   // sv_spectatorpassword: watching takes it
   std::string rendezvous;           // sv_rendezvous: the rendezvous to list with (M17r)
   std::string mod;                  // sv_mod: the mods' directories, lowest first (read-only)
+  std::string root = ".";           // where the game directories are (`--root`): maps, cfgs
 
   double seconds = 60;         // server time to run (0: until stopped)
   double status_every = 5;     // a status line every this many seconds of server time (0: none)
@@ -113,6 +116,14 @@ struct ServerGame {
   // A log's frames run again; false with `error` when it cannot be read (may be null).
   bool (*replay)(const std::vector<uint8_t>& bytes, ServerReplay& out,
                  std::string& error) = nullptr;
+
+  // A game that SPEAKS ITS OWN PROTOCOL on its port (a classic endpoint): `serve` is handed the
+  // game's socket when the server opens with one, and the core opens no node, session or LAN
+  // hosting on it; each frame is then `net_frame` at the frame's start time (the endpoint reads its
+  // datagrams, runs the game's frame with the players' moves and answers), and `frame` only when
+  // offline. Both null: the core's own node, session and hosting round `frame`.
+  bool (*serve)(void* game, net::Transport& port, std::string& error) = nullptr;
+  void (*net_frame)(void* game, int64_t now_us) = nullptr;
 };
 
 struct Server {
@@ -128,6 +139,8 @@ struct Server {
   int64_t frame = 0;      // frames run
   int64_t now_us = 0;     // the server's clock: `frame` frames of `frame_s`
   bool networked = false;
+  bool own_protocol = false;       // the game answers its own clients on `port` (ServerGame::serve)
+  net::Transport* port = nullptr;  // the game's socket (null offline)
   net::Node node;
   net::SessionHost session;
   net::Hosting hosting;
