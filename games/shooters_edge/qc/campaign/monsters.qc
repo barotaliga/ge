@@ -7,7 +7,7 @@
 void() army_fire = {
   local vector dir;
   dir = self.enemy.origin + self.enemy.view_ofs - (self.origin + self.view_ofs);
-  makevectors(vectoangles(dir));
+  aim_along(dir);
   sound(self, CHAN_WEAPON, "soldier/sattck1.wav", 1, ATTN_NORM);
   self.effects = self.effects | EF_MUZZLEFLASH;
   fire_pellets(4, 4, 0.1);

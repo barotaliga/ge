@@ -5,6 +5,7 @@
 // the `th_` hooks below, its step distances, its pain and its death.
 //
 // A state is a think that runs every 0.1 s and takes one decision with the kind's step distance.
+// A kind starts with `walkmonster_start`, `flymonster_start` or `swimmonster_start`.
 // The animation frames are not chosen yet: every monster holds its model's first frame, and a
 // dead one is laid on its side.
 
@@ -164,15 +165,22 @@ float() check_attack = {
   return FALSE;
 };
 
-// A melee blow: within 60 units of the enemy, three random numbers summed times `factor`.
-void(float factor) melee_blow = {
-  local vector delta;
-  delta = self.enemy.origin - self.origin;
-  if (vlen(delta) > 60) return;
+// A melee blow: within 60 units of the enemy and seen, `n` random numbers summed times `factor`.
+void(float n, float factor) melee_blow_n = {
+  local float sum;
+  if (vlen(self.enemy.origin - self.origin) > 60) return;
   if (!can_see(self.enemy)) return;
+  sum = 0;
+  while (n > 0) {
+    sum = sum + random();
+    n = n - 1;
+  }
   self.enemy.deathtype = "mauled";
-  damage(self.enemy, self, self, (random() + random() + random()) * factor);
+  damage(self.enemy, self, self, sum * factor);
 };
+
+// The usual blow: three random numbers.
+void(float factor) melee_blow = { melee_blow_n(3, factor); };
 
 // A step of a melee attack: facing the enemy, closing in by `dist` until within the blow's reach.
 void(float dist) ai_charge = {
@@ -356,9 +364,9 @@ void() monster_begin = {
   self.th_stand();
 };
 
-// A walker: counted at once, raised a unit and dropped to the floor, thinking a random 0-0.5 s
-// later. `mdl` its model, `hp` its health, the box `lo`..`hi`.
-void(string mdl, float hp, vector lo, vector hi) walkmonster_start = {
+// What every kind's start shares: counted at once, solid, its model, box and health, the mind's
+// hooks, thinking a random 0-0.5 s later.
+void(string mdl, float hp, vector lo, vector hi) monster_start = {
   total_monsters = total_monsters + 1;
   self.solid = SOLID_SLIDEBOX;
   self.movetype = MOVETYPE_STEP;
@@ -376,10 +384,75 @@ void(string mdl, float hp, vector lo, vector hi) walkmonster_start = {
   self.th_stand = monster_stand;
   self.th_walk = monster_walk;
   self.th_run = monster_run;
-  setorigin(self, self.origin + '0 0 1');
-  if (!droptofloor()) dprint(self.classname, " in a wall at ", vtos(self.origin), "\n");
   self.think = monster_begin;
   self.nextthink = time + 0.1 + random() * 0.5;
+};
+
+// A walker: raised a unit and dropped to the floor.
+void(string mdl, float hp, vector lo, vector hi) walkmonster_start = {
+  monster_start(mdl, hp, lo, hi);
+  setorigin(self, self.origin + '0 0 1');
+  if (!droptofloor()) dprint(self.classname, " in a wall at ", vtos(self.origin), "\n");
+};
+
+// A flyer: stays where it is placed, turns at half a walker's rate.
+void(string mdl, float hp, vector lo, vector hi) flymonster_start = {
+  monster_start(mdl, hp, lo, hi);
+  self.flags = self.flags | FL_FLY;
+  self.yaw_speed = 10;
+  setorigin(self, self.origin);
+};
+
+// A swimmer: stays where it is placed, in its water.
+void(string mdl, float hp, vector lo, vector hi) swimmonster_start = {
+  monster_start(mdl, hp, lo, hi);
+  self.flags = self.flags | FL_SWIM;
+  self.yaw_speed = 10;
+  setorigin(self, self.origin);
+};
+
+// In deathmatch the map's monsters are not there: true when this one was removed.
+float() no_monsters_here = {
+  if (!deathmatch) return FALSE;
+  remove(self);
+  return TRUE;
+};
+
+// --- missiles ---
+
+void() monster_missile_touch = {
+  if (other == self.owner) return;
+  if (other.takedamage) {
+    other.deathtype = self.deathtype;
+    damage(other, self, self.owner, self.dmg);
+  }
+  remove(self);
+};
+
+// The view vectors along `dir`: a direction's angles pitch up where a view's pitch down, so the
+// pitch is turned over before the vectors are made.
+void(vector dir) aim_along = {
+  local vector a;
+  a = vectoangles(dir);
+  a_x = 0 - a_x;
+  makevectors(a);
+};
+
+// A missile at the enemy's eye from the monster's: `mdl` at `spd` units a second, `points` on what
+// it hits; `lob` units a second added upward (it then falls: a toss), else it flies straight.
+entity(string mdl, float spd, float points, float lob) monster_missile = {
+  local entity m;
+  local vector dir;
+  dir = self.enemy.origin + self.enemy.view_ofs - (self.origin + self.view_ofs);
+  aim_along(dir);
+  if (lob) m = launch(mdl, MOVETYPE_TOSS, spd, 5);
+  else m = launch(mdl, MOVETYPE_FLYMISSILE, spd, 5);
+  m.velocity = m.velocity + lob * '0 0 1';
+  m.classname = "monster_missile";
+  m.dmg = points;
+  m.deathtype = "hit";
+  m.touch = monster_missile_touch;
+  return m;
 };
 
 // A path corner: a monster walking to it goes on to the next; the last one stands it.
