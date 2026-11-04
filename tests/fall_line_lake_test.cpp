@@ -162,7 +162,9 @@ TEST(the_bot_keeps_off_the_open_tarn) {
 
 TEST(the_free_ride_lays_the_tarn_the_module_finds) {
   const mg::Level level = fs::free_map(38, 10);
-  CHECK(level.lakes.size() == 1);
+  // The tarn, then the valley's reservoir behind its dam (mountain/tarn/reservoir.hpp).
+  CHECK(level.lakes.size() == 2 && level.dams.size() == 1);
+  if (!level.dams.empty()) CHECK(level.dams[0].lake == 1);
   mg::GenerateOptions opts;
   opts.version = 10;
   const std::optional<mg::MapLake> found =

@@ -19,8 +19,8 @@
 // The free ride draws nothing and allocates nothing in a step.
 //
 // ge:summary The free ride: the runs as lines, the run under the skis, the foot, the reset
-// ge:keywords free-ride free free_map reservoir create_free_ride step_free reset_free run_chain runs
-// ge:keywords run-tracks onto arrived foot skied odometer distance
+// ge:keywords free-ride free free_map create_free_ride step_free reset_free run_chain runs
+// ge:keywords reservoir run-tracks onto arrived foot skied odometer distance
 // ge:skill sim
 // ge:test tests/fall_line_free_test.cpp
 #pragma once

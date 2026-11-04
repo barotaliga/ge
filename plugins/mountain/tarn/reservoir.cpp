@@ -38,6 +38,16 @@ struct Grid {
   size_t at(int i, int j) const { return static_cast<size_t>(j) * n + static_cast<size_t>(i); }
   bool inside(int i, int j) const { return i >= 0 && j >= 0 && i < n && j < n; }
   double x(int i) const { return i * kFloodCell; }
+  // The ground at (x, z), read between the samples (a dam's crest is tried against these).
+  double at_xz(double px, double pz) const {
+    const double u = std::clamp(px / kFloodCell, 0.0, n - 1.001);
+    const double v = std::clamp(pz / kFloodCell, 0.0, n - 1.001);
+    const int i = static_cast<int>(u), j = static_cast<int>(v);
+    const double fu = u - i, fv = v - j;
+    const double a = y[at(i, j)] + (y[at(i + 1, j)] - y[at(i, j)]) * fu;
+    const double b = y[at(i, j + 1)] + (y[at(i + 1, j + 1)] - y[at(i, j + 1)]) * fu;
+    return a + (b - a) * fv;
+  }
 };
 
 void keep_round(Grid& g, double x, double z, double reach) {
@@ -103,17 +113,20 @@ struct Try {
 
 // The flood behind a dam: the samples under the water, or none where it leaks, runs off the
 // map, reaches what must stay dry or outgrows the most a reservoir holds.
-bool flood(const Grid& g, const Try& t, std::vector<uint8_t>& wet, std::vector<int>& cells) {
+bool flood(const Grid& g, const Try& t, std::vector<uint32_t>& wet, uint32_t& pass,
+           std::vector<int>& cells) {
   const double level = t.crest - kFreeboard;
   const double ax = -t.dz, az = t.dx;  // along the crest, toward `left`
-  wet.assign(g.y.size(), 0);
+  // A sample is wet on this pass where it holds the pass's number (no clearing between tries).
+  if (wet.size() != g.y.size()) wet.assign(g.y.size(), 0);
+  const uint32_t mark = ++pass;
   cells.clear();
   const auto start_i = static_cast<int>(std::lround((t.x - t.dx * 2 * kFloodCell) / kFloodCell));
   const auto start_j = static_cast<int>(std::lround((t.z - t.dz * 2 * kFloodCell) / kFloodCell));
   if (!g.inside(start_i, start_j) || g.y[g.at(start_i, start_j)] >= level) return false;
   const size_t most = static_cast<size_t>(kMostReservoir / (kFloodCell * kFloodCell));
   std::vector<std::pair<int, int>> todo{{start_i, start_j}};
-  wet[g.at(start_i, start_j)] = 1;
+  wet[g.at(start_i, start_j)] = mark;
   while (!todo.empty()) {
     const auto [i, j] = todo.back();
     todo.pop_back();
@@ -132,8 +145,8 @@ bool flood(const Grid& g, const Try& t, std::vector<uint8_t>& wet, std::vector<i
       const int ni = i + kDi[k], nj = j + kDj[k];
       if (!g.inside(ni, nj)) return false;  // off the map
       const size_t at = g.at(ni, nj);
-      if (wet[at] || g.y[at] >= level) continue;
-      wet[at] = 1;
+      if (wet[at] == mark || g.y[at] >= level) continue;
+      wet[at] = mark;
       todo.push_back({ni, nj});
     }
   }
@@ -175,7 +188,8 @@ std::vector<mg::PlanPoint> outline(const Grid& g, const std::vector<int>& cells)
   std::vector<mg::PlanPoint> out;
   out.reserve(best.size());
   for (const int c : best) {
-    out.push_back({(c % m - 0.5) * kFloodCell, (c / m - 0.5) * kFloodCell});
+    const int i = c % m, j = c / m;
+    out.push_back({(i - 0.5) * kFloodCell, (j - 0.5) * kFloodCell});
   }
   return out;
 }
@@ -227,12 +241,14 @@ bool near_shore(const std::vector<mg::PlanPoint>& s, double x, double z, double 
 }
 
 // The crest's reach from the middle along (ux, uz) until the ground rises to `crest`, m, or none.
-std::optional<double> reach_along(const mg::Level& level, const Try& t, double ux, double uz,
-                                  double crest) {
-  for (double s = kStep; s <= kDamLongest; s += kStep) {
+std::optional<double> reach_along(const mg::Level& level, const Grid& g, const Try& t, double ux,
+                                  double uz, double crest) {
+  const int steps = static_cast<int>(kDamLongest / kStep);
+  for (int k = 1; k <= steps; ++k) {
+    const double s = k * kStep;
     const double x = t.x + ux * s, z = t.z + uz * s;
     if (x < 0 || z < 0 || x > level.size || z > level.size) return std::nullopt;
-    if (ground(level, x, z) >= crest) return s;
+    if (g.at_xz(x, z) >= crest) return s;
   }
   return std::nullopt;
 }
@@ -244,7 +260,8 @@ std::optional<Reservoir> find_reservoir(const mg::Level& level) {
   const double low = level.mountain.base.y, high = level.mountain.summit.y;
   const double y_high = low + kDamHigh * (high - low);
   const int steps = static_cast<int>(level.size / kDamGrid);
-  std::vector<uint8_t> wet;
+  std::vector<uint32_t> wet;
+  uint32_t pass = 0;
   std::vector<int> cells, best_cells;
   double best = 0;
   Try best_try{};
@@ -266,15 +283,15 @@ std::optional<Reservoir> find_reservoir(const mg::Level& level) {
       t.dz = -gz / len;
       for (const double h : kDamHeights) {
         const double crest = y0 + h;
-        const std::optional<double> left = reach_along(level, t, -t.dz, t.dx, crest);
+        const std::optional<double> left = reach_along(level, g, t, -t.dz, t.dx, crest);
         if (!left) continue;
-        const std::optional<double> right = reach_along(level, t, t.dz, -t.dx, crest);
+        const std::optional<double> right = reach_along(level, g, t, t.dz, -t.dx, crest);
         if (!right || *left + *right > kDamLongest) continue;
         t.left = *left;
         t.right = *right;
         t.crest = crest;
         t.height = h;
-        if (!flood(g, t, wet, cells)) continue;
+        if (!flood(g, t, wet, pass, cells)) continue;
         const double area = static_cast<double>(cells.size()) * kFloodCell * kFloodCell;
         if (area < kLeastReservoir) continue;
         if (area <= best) continue;
