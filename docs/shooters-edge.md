@@ -1103,7 +1103,8 @@ at whoever is ahead, is what the `se-server` lab runs and replays. The headless
 `shooters_edge_server` binary is the engine's dedicated process (`engine/server`, docs/servers.md)
 over the PLAYABLE server (`net/classic_game.hpp`): the baseline mod's deathmatch served over the
 classic protocol on the game's port, so a classic client connects and plays; it reads
-`server.cfg` in layers and its flags, prints a status line every few seconds and the digest at
+`server.cfg` in layers and its flags (the mod's rules among them: `+set fraglimit 20`, or a line
+in `server.cfg`; a map from the game folder under `--root`, loose or in a pack), prints a status line every few seconds and the digest at
 the end, and `--realtime` paces it to the wall clock. Its bots come with the engine's lobby
 (M53c). The `se-dedicated` lab has classic clients join it under each network preset.
 

@@ -35,6 +35,7 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -69,6 +70,9 @@ struct ServerConfig {
   std::string rendezvous;           // sv_rendezvous: the rendezvous to list with (M17r)
   std::string mod;                  // sv_mod: the mods' directories, lowest first (read-only)
   std::string root = ".";           // where the game directories are (`--root`): maps, cfgs
+  // The game's own rules (ServerGame::rules: `fraglimit`, `timelimit`) by name, as set; empty is
+  // unset, the game's own default.
+  std::map<std::string, std::string> rules;
 
   double seconds = 60;         // server time to run (0: until stopped)
   double status_every = 5;     // a status line every this many seconds of server time (0: none)
@@ -87,6 +91,14 @@ struct ServerReplay {
   uint64_t digest = 0;      // the last frame's hash
 };
 
+// A setting the game's own rules read (`fraglimit`, `timelimit`): a server cvar beside the core's,
+// set like them (every server.cfg layer, `+set`, the console; `--explain` shows where), and handed
+// to `create` in `ServerConfig::rules`. Its fallback is empty: unset leaves the game's own default.
+struct GameRule {
+  const char* name;
+  const char* help;  // what it does, with its unit
+};
+
 // A game's server, as functions over its own state (`void*`, made by `create`). Called once a
 // frame, so the indirection costs nothing that matters; nothing is registered at run time.
 struct ServerGame {
@@ -97,7 +109,9 @@ struct ServerGame {
   uint16_t discovery_port = 0;    // the game's fixed LAN discovery port (0: no LAN answers)
   int max_clients = kMaxClients;  // the most `sv_maxclients` may be (at most kMaxClients)
   const char* default_map = "";
-  const char* base_dir = "base";  // the base game directory, whose server.cfg is read first
+  const char* base_dir = "base";    // the base game directory, whose server.cfg is read first
+  const GameRule* rules = nullptr;  // the game's own rules, `rule_count` of them
+  int rule_count = 0;
 
   // The game on `config`'s map with its bots; null with `error` (what and the next action).
   void* (*create)(const ServerConfig& config, std::string& error) = nullptr;

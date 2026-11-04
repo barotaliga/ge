@@ -2,20 +2,30 @@
 // server core. Offline and on the network with nobody connected it is one digest; a classic client
 // over the simulated network connects to the core's server, follows the signon and plays, and the
 // core counts it seated; the settings reach the endpoint (the name in its status, the password at
-// the connect); bots are refused with the next step; a whole session replays to the bit.
+// the connect); bots are refused with the next step; a whole session replays to the bit; the mod's
+// own rules come in as settings (`+set fraglimit 20`) and reach the mod; a map read from a pack.
 //
 // ge:summary Test: Shooter's Edge's dedicated server on the core: one digest, a client plays on it
 // ge:keywords test classic-game dedicated-server classic-client simulated-network serve net_frame
+// ge:keywords game-rules fraglimit pack-map
 // ge:skill net shooter testing
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
+#include <vector>
 
+#include "brush/write.hpp"
 #include "check.hpp"
+#include "console/console.hpp"
 #include "net/sim_network.hpp"
+#include "server/config.hpp"
+#include "server/main.hpp"
 #include "server/server.hpp"
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "vfs/pak.hpp"
 
 using namespace ge::server;
 namespace gn = ge::net;
@@ -143,4 +153,50 @@ TEST(classic_game_a_session_replays_to_the_bit) {
   run_session(b, arena(7), 500);
   CHECK(a.client.stage == se::ClientStage::active);
   CHECK(a.digest == b.digest);
+}
+
+TEST(classic_game_the_mod_s_rules_are_settings) {
+  ge::console::Console con{true};
+  ServerConfig c;
+  ServerCfg cfg;
+  std::string error;
+  CHECK_MSG(
+      server_configure(con, {"--map=arena", "+set", "fraglimit", "20", "+set", "timelimit", "10"},
+                       c, cfg, se::classic_game(), error),
+      error);
+  CHECK(c.rules["fraglimit"] == "20");
+  CHECK(c.rules["teamplay"].empty());  // unset: the mod's own default
+  CHECK(explain(con, cfg, "fraglimit").find("command line") != std::string::npos);
+  Server s;
+  CHECK_MSG(server_open(s, se::classic_game(), c, nullptr, nullptr, error), error);
+  const std::string status = server_status(s);
+  CHECK_MSG(status.find("deathmatch=1 fraglimit=20 timelimit=10") != std::string::npos, status);
+  ServerConfig bad = arena();
+  bad.rules["fraglimit"] = "lots";
+  Server refused;
+  CHECK(!server_open(refused, se::classic_game(), bad, nullptr, nullptr, error));
+  CHECK_MSG(error.find("next: set fraglimit") != std::string::npos, error);
+}
+
+TEST(classic_game_a_map_from_the_game_folder_s_pack) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "ge_se_classic_game_pack";
+  fs::remove_all(root);
+  fs::create_directories(root / se::kGameFolder);
+  std::string error;
+  std::vector<uint8_t> bsp, pak;
+  CHECK_MSG(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bsp, &error),
+            error);
+  CHECK_MSG(ge::vfs::write_pak({{"maps/halls.bsp", bsp}}, &pak, &error), error);
+  {
+    std::ofstream out(root / se::kGameFolder / "pak0.pak", std::ios::binary);
+    out.write(reinterpret_cast<const char*>(pak.data()), static_cast<std::streamsize>(pak.size()));
+  }
+  ServerConfig c = arena();
+  c.map = "halls";
+  c.root = root.string();
+  Server s;
+  CHECK_MSG(server_open(s, se::classic_game(), c, nullptr, nullptr, error), error);
+  for (int f = 0; f < 10; f++) server_frame(s);
+  fs::remove_all(root);
 }
