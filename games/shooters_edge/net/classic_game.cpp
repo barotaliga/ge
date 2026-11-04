@@ -8,6 +8,8 @@
 #include "shooters_edge/net/classic_game.hpp"
 
 #include <cstdio>
+#include <cstdlib>
+#include <iterator>
 #include <memory>
 
 #include "net/packet.hpp"
@@ -38,6 +40,18 @@ struct Game {
   }
 };
 
+// The mod's own rules a server owner sets (server.cfg, `+set fraglimit 20`); the mod server keeps
+// each one's default (server/qc_server.cpp), so an unset rule is left to it.
+constexpr gs::GameRule kRules[] = {
+    {"deathmatch", "the match's rules: 1 and up deathmatch, as the mod reads them"},
+    {"teamplay", "team rules, as the mod reads them"},
+    {"fraglimit", "frags that end the match (0 none)"},
+    {"timelimit", "the match's length, minutes (0 none)"},
+    {"samelevel", "1: the map does not change at the end"},
+    {"sv_gravity", "the world's gravity, units/s^2"},
+    {"sv_maxspeed", "a player's run speed, units/s"},
+};
+
 void* create(const gs::ServerConfig& c, std::string& error) {
   if (c.bots != 0) {
     error = "sv_bots " + std::to_string(c.bots) +
@@ -61,6 +75,19 @@ void* create(const gs::ServerConfig& c, std::string& error) {
   g->qc = sv::make_qc_server(g->progs, so, error);
   if (!g->qc) return nullptr;
   sv::server_command(*g->qc, "deathmatch 1");
+  for (const auto& [name, value] : c.rules) {
+    if (value.empty()) continue;
+    char* end = nullptr;
+    std::strtod(value.c_str(), &end);  // every rule is a number
+    std::string line = name;
+    line.append(" \"").append(value).append("\"");
+    if (end == value.c_str() || *end != '\0' || !sv::server_command(*g->qc, line)) {
+      error = line;
+      error.append(" is not a number; next: set ").append(name).append(" to one (--explain=");
+      error.append(name).append(" shows where it was set)");
+      return nullptr;
+    }
+  }
   if (!sv::load_map(*g->qc, g->map->spec, error)) {
     error = "the map " + c.map + " did not load: " + error;
     return nullptr;
@@ -103,16 +130,22 @@ uint64_t hash(const void* g) {
   return ge::shooter::server_hash(static_cast<const Game*>(g)->qc->sv);
 }
 
+// The rules the mod is playing by, then the endpoint's counts.
 std::string status(const void* g) {
   const Game& game = *static_cast<const Game*>(g);
-  if (!game.classic) return "offline";
+  std::string out;
+  for (const char* name : {"deathmatch", "fraglimit", "timelimit"}) {
+    const ge::console::Cvar* v = game.qc->cvars.find(name);
+    out.append(out.empty() ? "" : " ").append(name).append("=").append(v ? v->value : "?");
+  }
+  if (!game.classic) return out + " offline";
   const ServerCounts& n = game.classic->counts;
-  char out[128];
-  std::snprintf(out, sizeof out, "connected=%d connects=%lld drops=%lld out=%lld B",
+  char counts[128];
+  std::snprintf(counts, sizeof counts, " connected=%d connects=%lld drops=%lld out=%lld B",
                 classic_count(*game.classic, ConnState::connected),
                 static_cast<long long>(n.connects), static_cast<long long>(n.drops),
                 static_cast<long long>(n.bytes_out));
-  return out;
+  return out + counts;
 }
 
 gs::ServerGame make() {
@@ -125,6 +158,8 @@ gs::ServerGame make() {
   g.max_clients = 32;
   g.default_map = "arena";
   g.base_dir = kGameFolder;
+  g.rules = kRules;
+  g.rule_count = static_cast<int>(std::size(kRules));
   g.create = create;
   g.destroy = destroy;
   g.frame_seconds = frame_seconds;

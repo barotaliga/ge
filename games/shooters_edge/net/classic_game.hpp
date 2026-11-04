@@ -7,7 +7,9 @@
 //
 // THE SETTINGS it reads: `sv_hostname` and `sv_password` (the server info and the connect's
 // check), `sv_maxclients` (the loop's slots), `sv_map` (`arena`, built in, or `maps/<name>.bsp`
-// from the game folder under `--root`), `sv_seed` (the mod's stream and the challenges').
+// from the game folder under `--root`, loose or in a pack), `sv_seed` (the mod's stream and the
+// challenges'), and the mod's own rules (`fraglimit`, `timelimit`, `deathmatch`, `teamplay`, …:
+// `ServerGame::rules`), each left to the mod's default when unset.
 // `sv_bots` must be 0: bots on the classic server come with the engine's lobby (M53c).
 //
 // Offline (no socket: a test, a lab) the frame is the mod's own frame with no moves; on the
@@ -16,7 +18,7 @@
 //
 // ge:summary Shooter's Edge's playable dedicated server: the mod on the classic protocol
 // ge:keywords dedicated-server classic-server servergame serve net_frame baseline-mod deathmatch
-// ge:keywords classic_game playable-server
+// ge:keywords classic_game playable-server game-rules fraglimit timelimit
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_game_test.cpp
 #pragma once

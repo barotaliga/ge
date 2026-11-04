@@ -102,6 +102,12 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   cvars.bind({"sv_mod", mod, cn::kServer | cn::kServerInfo | cn::kReadOnly,
               "the mods' directories over the base, lowest first (--mod)", CvarKind::text},
              &c.mod);
+  for (int i = 0; i < game.rule_count; i++) {
+    const GameRule& r = game.rules[i];
+    std::string& field = c.rules[r.name];  // a map's node: its address outlives the inserts
+    const std::string fallback = field;
+    cvars.bind({r.name, fallback, info, r.help, CvarKind::text}, &field);
+  }
 }
 
 bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
