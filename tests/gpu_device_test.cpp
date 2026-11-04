@@ -5,8 +5,9 @@
 //
 // ge:summary Tests for the GPU device: adapter, feature tiers, error lines, pipeline counter
 // ge:keywords test gpu device feature-tiers force_off validation-error shader-error
-// ge:keywords pipeline-counter end_load
+// ge:keywords pipeline-counter end_load ready poll
 // ge:skill gpu testing
+#include <chrono>
 #include <string>
 
 #include "check.hpp"
@@ -106,6 +107,21 @@ TEST(a_pipeline_after_end_load_is_an_error) {
   CHECK(d->pipelines_after_load == 1);
   CHECK(logged("pipeline 'gpu.test_scene' created mid-run"));
   CHECK(d->errors.load() == 0);
+}
+
+TEST(ready_polls_the_manifest_without_waiting) {
+  auto d = ge::test::test_device();
+  if (!d) return;
+  ge::gpu::PipelineSet manifest;
+  CHECK(manifest.ready(*d));  // nothing added: nothing to wait for
+  ge::gpu::add_test_scene(*d, manifest, wgpu::TextureFormat::RGBA8Unorm);
+  // Asked again until the compile is done, as a window asks once a frame.
+  bool done = false;
+  const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+  while (!done && std::chrono::steady_clock::now() < until) done = manifest.ready(*d);
+  CHECK(done);
+  CHECK(manifest.finish(*d));  // at once: every future is already done
+  CHECK(manifest.render(0) != nullptr);
 }
 
 TEST(a_device_without_validation_still_draws) {
