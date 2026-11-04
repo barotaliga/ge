@@ -112,8 +112,8 @@ TEST(only_the_leader_starts_and_too_few_players_wait) {
 }
 
 int frags_of(const cl::Listen& l, int slot) {
-  return static_cast<int>(
-      ge::progs::as_float(*ge::progs::entity_field(l.server->q.vm, slot + 1, ge::progs::kFFrags)));
+  return static_cast<int>(ge::progs::as_float(*ge::progs::entity_field(
+      shooters_edge::server::qc_of(*l.rules)->q.vm, slot + 1, ge::progs::kFFrags)));
 }
 
 TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
@@ -148,7 +148,8 @@ TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
   const sh::Vec3f bot_now = l.server->sv.edicts[2].origin;
   CHECK(bot_now.x != bot_at.x || bot_now.y != bot_at.y);
   // A frag in the warmup does not count: give one by hand.
-  *ge::progs::entity_field(l.server->q.vm, 2, ge::progs::kFFrags) = ge::progs::as_word(3);
+  *ge::progs::entity_field(shooters_edge::server::qc_of(*l.rules)->q.vm, 2, ge::progs::kFFrags) =
+      ge::progs::as_word(3);
   CHECK(frags_of(l, 1) == 3);
   CHECK(cl::listen_lobby(l, "team switch"));
   CHECK(l.room->lobby.seats[0].team == sv::Team::blue);

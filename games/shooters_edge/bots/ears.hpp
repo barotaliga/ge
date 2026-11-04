@@ -47,7 +47,7 @@ struct EarNews {
 
 // This frame's sounds as the fighter (entity `me`, its ear at `ear`) takes them in at time `t`;
 // once a server frame, however many commands it sends in it.
-EarNews fighter_hear(Fighter& f, const server::QcServer& s, int me, ge::shooter::Vec3f ear,
+EarNews fighter_hear(Fighter& f, const server::RulesCommon& s, int me, ge::shooter::Vec3f ear,
                      double t, bool fighting);
 
 }  // namespace shooters_edge::bots

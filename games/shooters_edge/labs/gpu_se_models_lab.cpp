@@ -345,7 +345,8 @@ void run(gl::Lab& lab) {
       for (const char* f : {"super_damage_finished", "invincible_finished"}) {
         const ge::progs::Def* def = ge::progs::find_field(progs, f);
         if (def != nullptr)
-          *ge::progs::entity_field(l.server->q.vm, me.entity, def->offset) =
+          *ge::progs::entity_field(shooters_edge::server::qc_of(*l.rules)->q.vm, me.entity,
+                                   def->offset) =
               std::bit_cast<uint32_t>(float(l.server->sv.time + 30));
       }
       cl::listen_frame(l, {});
@@ -374,8 +375,8 @@ void run(gl::Lab& lab) {
     if (def == nullptr) return false;
     float c[3];
     for (int q = 0; q < 3; q++)
-      c[q] = std::bit_cast<float>(
-          *ge::progs::entity_field(l.server->q.vm, e, def->offset + uint32_t(q)));
+      c[q] = std::bit_cast<float>(*ge::progs::entity_field(
+          shooters_edge::server::qc_of(*l.rules)->q.vm, e, def->offset + uint32_t(q)));
     out_v = {c[0], c[1], c[2]};
     return true;
   };

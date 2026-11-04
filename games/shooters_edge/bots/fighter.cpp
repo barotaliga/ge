@@ -199,7 +199,7 @@ bool heals(const ItemSpot& it) {
 
 float strength(const Stats& st) { return st.health + protection(st.armortype, st.armor); }
 
-bool alive_slot(const server::QcServer& s, int slot) {
+bool alive_slot(const server::RulesCommon& s, int slot) {
   return s.sv.clients[static_cast<size_t>(slot)].active &&
          s.world.entities[static_cast<size_t>(slot) + 1].health > 0;
 }
@@ -224,14 +224,14 @@ void go_to(Fighter& f, int32_t node) {
   sh::bot_goal(f.bot, node);
 }
 
-bool door_shut(const server::QcServer& s, const ItemSpot& it) {
+bool door_shut(const server::RulesCommon& s, const ItemSpot& it) {
   if (it.door_ent < 0) return false;
   const sh::Vec3f d = s.world.entities[static_cast<size_t>(it.door_ent)].origin - it.door_rest;
   return d.x * d.x + d.y * d.y + d.z * d.z < 1;
 }
 
 // Goes for item `i`: through its button first while its door is shut.
-void go_item(Fighter& f, const server::QcServer& s, int32_t i) {
+void go_item(Fighter& f, const server::RulesCommon& s, int32_t i) {
   const ItemSpot& it = f.items[static_cast<size_t>(i)];
   f.goal_item = i;
   if (it.dive && f.reach_at >= 0 && !f.reach.reached(it.node)) {
@@ -252,7 +252,7 @@ void go_item(Fighter& f, const server::QcServer& s, int32_t i) {
 
 // The best item for the player at `me` with `st`: worth over time to have it, `away` from a known
 // enemy (when `heal`, health and armour alone, and never nearer the enemy than this player is).
-int32_t best_item(const Fighter& f, const server::QcServer& s, const Stats& st, sh::Vec3f me,
+int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
                   double t, bool heal, const sh::Vec3f* enemy, ai::Why* why) {
   const auto score = [&](int32_t i) {
     const ItemSpot& it = f.items[static_cast<size_t>(i)];
@@ -299,7 +299,7 @@ int32_t best_item(const Fighter& f, const server::QcServer& s, const Stats& st, 
 }
 
 // A backpack in view within `reach` worth going for (ammunition short or a weapon lacking), or -1.
-int32_t pack_near(const Fighter& f, const server::QcServer& s, const Stats& st, sh::Vec3f me,
+int32_t pack_near(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
                   float reach) {
   bool short_of = st.rockets < 20 || st.shells < 40 || st.nails < 60 || st.cells < 30;
   short_of |= (st.items & (kWRockets | kWGrenades)) == 0;
@@ -320,7 +320,7 @@ int32_t pack_near(const Fighter& f, const server::QcServer& s, const Stats& st, 
 }
 
 // The role's goal (team.hpp), true when it set one; false leaves the goal to the items.
-bool team_goal(Fighter& f, const server::QcServer& s, const Stats& st, sh::Vec3f me, double t,
+bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me, double t,
                const sh::Contact* c, ai::Why* why) {
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
   // A backpack close by is had first, unless retreating with someone about.
@@ -435,7 +435,7 @@ bool team_goal(Fighter& f, const server::QcServer& s, const Stats& st, sh::Vec3f
   return false;
 }
 
-void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::Why* why) {
+void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai::Why* why) {
   const double t = s.sv.time;
   const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
@@ -683,7 +683,7 @@ void think(Fighter& f, const server::QcServer& s, int me, const Stats& st, ai::W
 }
 
 // A living teammate within kFireClearance of the line from `eye` to `target`, nearer than it.
-bool mate_in_line(const Fighter& f, const server::QcServer& s, sh::Vec3f eye, sh::Vec3f target) {
+bool mate_in_line(const Fighter& f, const server::RulesCommon& s, sh::Vec3f eye, sh::Vec3f target) {
   if (!f.team) return false;
   const sh::Vec3f line = target - eye;
   const float len2 = line.x * line.x + line.y * line.y + line.z * line.z;
@@ -707,7 +707,7 @@ float fighter_strength(const Stats& st) {
   return st.health + protection(st.armortype, st.armor) + ((st.items & kWRockets) ? 50.f : 0.f);
 }
 
-Stats read_stats(const server::QcServer& s, int ent) {
+Stats read_stats(const server::RulesCommon& s, int ent) {
   const server::PlayerNumbers& n = s.world.clients[static_cast<size_t>(ent) - 1].numbers;
   Stats st;
   st.health = n.health;
@@ -722,7 +722,7 @@ Stats read_stats(const server::QcServer& s, int ent) {
   return st;
 }
 
-void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, int slot,
+void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s, int slot,
                   const char* entities, sh::AimSkill skill, const sh::Traits& traits, double hz,
                   uint32_t seed) {
   // Moves: an expert's the bunny hop on practised hands (shooter/pilot.hpp); an average player's
@@ -802,7 +802,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, 
   spam_init(f, entities);
 }
 
-sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int msec) {
+sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, int msec) {
   const int me = slot + 1;
   const Stats st = read_stats(s, me);
   const double t = s.sv.time;

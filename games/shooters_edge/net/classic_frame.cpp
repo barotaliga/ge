@@ -81,8 +81,8 @@ void unreliable_svc(ClassicServer& s, int slot, const SvcMsg& m) {
 }
 
 int sound_index(const ClassicServer& s, const std::string& name) {
-  for (size_t i = 1; i < s.qc->sounds.size(); i++)
-    if (s.qc->sounds[i] == name) return static_cast<int>(i);
+  for (size_t i = 1; i < s.game->sounds.size(); i++)
+    if (s.game->sounds[i] == name) return static_cast<int>(i);
   return 0;
 }
 
@@ -153,7 +153,7 @@ void route_event(ClassicServer& s, const sv::NetEvent& ev) {
         break;
       case sv::EventKind::pause:
         m.id = svc::setpause;
-        m.ints = {s.qc->paused ? 1 : 0};
+        m.ints = {s.game->paused ? 1 : 0};
         reliable_svc(s, j, m);
         break;
       default:
@@ -163,7 +163,7 @@ void route_event(ClassicServer& s, const sv::NetEvent& ev) {
 }
 
 PmType pm_of(const ClassicServer& s, int slot) {
-  const sh::Edict& e = s.qc->sv.edicts[static_cast<size_t>(slot) + 1];
+  const sh::Edict& e = s.game->sv.edicts[static_cast<size_t>(slot) + 1];
   switch (sh::move_type_of(e, false)) {
     case sh::MoveType::spectator:
       return PmType::spectator;
@@ -176,16 +176,16 @@ PmType pm_of(const ClassicServer& s, int slot) {
     case sh::MoveType::lock:
       return PmType::lock;
     default:
-      return s.qc->sv.clients[static_cast<size_t>(slot)].jump_held ? PmType::normal_jump_held
-                                                                   : PmType::normal;
+      return s.game->sv.clients[static_cast<size_t>(slot)].jump_held ? PmType::normal_jump_held
+                                                                     : PmType::normal;
   }
 }
 
 PlayerState player_state(const ClassicServer& s, int about, int to) {
-  const sh::Server& sv = s.qc->sv;
+  const sh::Server& sv = s.game->sv;
   const sh::Edict& e = sv.edicts[static_cast<size_t>(about) + 1];
   const sh::ClientSlot& cs = sv.clients[static_cast<size_t>(about)];
-  const sv::RulesWorld& w = s.qc->world;
+  const sv::RulesWorld& w = s.game->world;
   const sv::WorldEntity& row = w.entities[static_cast<size_t>(about) + 1];
   PlayerState p;
   p.slot = about;
@@ -223,7 +223,7 @@ PlayerState player_state(const ClassicServer& s, int about, int to) {
 }  // namespace
 
 void player_stats(const ClassicServer& s, int slot, int32_t st[kStats], bool view_height) {
-  const sv::RulesWorld& w = s.qc->world;
+  const sv::RulesWorld& w = s.game->world;
   const sv::PlayerNumbers& n = w.clients[slot].numbers;
   st[0] = static_cast<int32_t>(n.health);
   st[2] = n.weapon_model;
@@ -257,7 +257,7 @@ void update_stats(ClassicServer& s, int slot) {
 void visible_entities(const ClassicServer& s, int slot, std::vector<EntityState>& out) {
   const ClassicClient& c = s.clients[slot];
   out.clear();
-  const sh::Server& sv = s.qc->sv;
+  const sh::Server& sv = s.game->sv;
   const int limit = c.ext.has(ExtFamily::x, kX256Entities) ? 256 : 64;
   const int top = c.ext.has(ExtFamily::x, kXEntityDbl2)  ? 2048
                   : c.ext.has(ExtFamily::x, kXEntityDbl) ? 1024
@@ -268,7 +268,7 @@ void visible_entities(const ClassicServer& s, int slot, std::vector<EntityState>
     if (ed.free) continue;
     const EntityState st = entity_state(s, e);
     if (st.modelindex == 0) continue;
-    if (s.qc->vis && !s.qc->vis(s.qc->vis_ctx, me, ed.origin, true)) continue;
+    if (s.game->vis && !s.game->vis(s.game->vis_ctx, me, ed.origin, true)) continue;
     out.push_back(grid_entity(st, c.coords));
   }
   if (static_cast<int>(out.size()) > limit) {
@@ -283,9 +283,9 @@ void visible_entities(const ClassicServer& s, int slot, std::vector<EntityState>
 }
 
 void send_static_updates(ClassicServer& s) {
-  const int n = static_cast<int>(s.qc->statics.size());
+  const int n = static_cast<int>(s.game->statics.size());
   for (; s.statics_known < n; s.statics_known++) {
-    const sv::StaticEntity& st = s.qc->statics[static_cast<size_t>(s.statics_known)];
+    const sv::StaticEntity& st = s.game->statics[static_cast<size_t>(s.statics_known)];
     for (int j = 0; j < sh::kMaxClients; j++) {
       ClassicClient& c = s.clients[j];
       if (c.state != ConnState::spawned) continue;
@@ -302,7 +302,7 @@ void send_static_updates(ClassicServer& s) {
 }  // namespace
 
 void route_events(ClassicServer& s) {
-  sv::MessageSink& out = s.qc->out;
+  sv::MessageSink& out = s.game->out;
   if (s.mvd) mvd_events(s, *s.mvd);
   for (const sv::NetEvent& ev : out.events) route_event(s, ev);
   s.counts.events += static_cast<int64_t>(out.events.size());
@@ -342,7 +342,7 @@ void send_frames(ClassicServer& s) {
     ServerFrame& f = c.frames[seq & 63];
     f.sequence = seq;
     f.sent = s.now;
-    f.server_time = s.qc->sv.time;
+    f.server_time = s.game->sv.time;
     f.entities = false;
     if (c.state == ConnState::spawned) {
       if (c.chokecount) {
@@ -351,11 +351,11 @@ void send_frames(ClassicServer& s) {
         c.chokecount = 0;
       }
       for (int k = 0; k < sh::kMaxClients; k++) {
-        if (!s.clients[k].qc_active || s.clients[k].spectator) continue;
-        if (!s.qc->sv.clients[static_cast<size_t>(k)].active) continue;
-        const sh::Vec3f me = s.qc->sv.edicts[static_cast<size_t>(j) + 1].origin;
-        const sh::Vec3f it = s.qc->sv.edicts[static_cast<size_t>(k) + 1].origin;
-        if (k != j && s.qc->vis && !s.qc->vis(s.qc->vis_ctx, me, it, true)) continue;
+        if (!s.clients[k].rules_active || s.clients[k].spectator) continue;
+        if (!s.game->sv.clients[static_cast<size_t>(k)].active) continue;
+        const sh::Vec3f me = s.game->sv.edicts[static_cast<size_t>(j) + 1].origin;
+        const sh::Vec3f it = s.game->sv.edicts[static_cast<size_t>(k) + 1].origin;
+        if (k != j && s.game->vis && !s.game->vis(s.game->vis_ctx, me, it, true)) continue;
         write_byte(w, svc::playerinfo);
         write_playerinfo(w, player_state(s, k, j), c.ext);
       }

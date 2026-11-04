@@ -81,7 +81,7 @@ gl::Picture panel_picture(const shooters_edge::hud::LobbyView& v, int w, int h) 
 
 float frags(const cl::Listen& l, int slot) {
   return ge::progs::as_float(
-      *ge::progs::entity_field(l.server->q.vm, slot + 1, ge::progs::kFFrags));
+      *ge::progs::entity_field(sv::qc_of(*l.rules)->q.vm, slot + 1, ge::progs::kFFrags));
 }
 
 struct Step {

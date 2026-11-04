@@ -59,7 +59,7 @@ void ears_init(Fighter& f, sh::AimSkill skill, const char* entities) {
   }
 }
 
-EarNews fighter_hear(Fighter& f, const server::QcServer& s, int me, sh::Vec3f ear, double t,
+EarNews fighter_hear(Fighter& f, const server::RulesCommon& s, int me, sh::Vec3f ear, double t,
                      bool fighting) {
   EarNews news;
   if (t == f.heard_t) return news;

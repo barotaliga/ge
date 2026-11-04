@@ -34,11 +34,11 @@ void spam_init(Fighter& f, const char* entities);
 
 // Whether the holder should be out firing at a spot now; sets `spam_node` (where it fires from)
 // and `spam_spot` (what at) when so, and clears them when not.
-bool spam_plan(Fighter& f, const server::QcServer& s, const Stats& st, double t);
+bool spam_plan(Fighter& f, const server::RulesCommon& s, const Stats& st, double t);
 
 // The rocket itself, when the holder stands where it fires from with no one in sight: the view on
 // the spot and the trigger, into `cmd`. True when it fired.
-bool spam_fire(Fighter& f, const server::QcServer& s, int me, const Stats& st, double t,
+bool spam_fire(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t,
                ge::shooter::MoveCmd& cmd);
 
 }  // namespace shooters_edge::bots

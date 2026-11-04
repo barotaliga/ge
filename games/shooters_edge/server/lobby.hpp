@@ -47,7 +47,7 @@
 
 namespace shooters_edge::server {
 
-struct QcServer;
+struct RulesRunner;
 
 using ge::server::kLobbySeats;
 using ge::server::Lobby;
@@ -79,6 +79,6 @@ int team_colour(Team t);
 
 // Seat `slot`'s team put on server `s`: the user info's team and colours, and the progs' `.team`
 // field when it has one. The slot must be connected.
-void lobby_apply(QcServer& s, const Lobby& l, int slot);
+void lobby_apply(const RulesRunner& r, const Lobby& l, int slot);
 
 }  // namespace shooters_edge::server

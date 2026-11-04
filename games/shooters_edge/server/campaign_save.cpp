@@ -377,7 +377,7 @@ std::string title_of(const QcServer& s) {
 
 std::string campaign_save_problem(const Campaign& c) {
   if (!c.server) return "no map is running; next: start a game with `map <name>` first";
-  const QcServer& s = *c.server;
+  const QcServer& s = *qc_of(c.server);
   if (!s.q.layout->single_player)
     return "the program is not a single-player one; next: save a campaign, not a match";
   for (const char* rule : {"deathmatch", "coop"})
@@ -398,7 +398,7 @@ bool campaign_save(const Campaign& c, std::vector<uint8_t>& out, std::string& er
     error = "save: " + error;
     return false;
   }
-  QcServer& s = *c.server;
+  QcServer& s = *qc_of(c.server);
   // The settings as the next map would carry them: every cvar changed from its default.
   Campaign& carried = const_cast<Campaign&>(c);
   std::vector<std::pair<std::string, std::string>> settings;
@@ -433,7 +433,7 @@ bool campaign_save(const Campaign& c, std::vector<uint8_t>& out, std::string& er
 
 bool campaign_load(Campaign& c, const pg::Progs& progs, const CampaignOptions& opt,
                    std::span<const uint8_t> bytes, std::string_view name, std::string& error) {
-  c.server.reset();
+  c.server = {};
   save::FileReader f;
   if (!f.open(bytes, name, kSaveGame)) {
     error = f.problem();
@@ -480,18 +480,18 @@ bool campaign_load(Campaign& c, const pg::Progs& progs, const CampaignOptions& o
   const float entered = c.entered_serverflags;
   std::vector<std::string> history = std::move(c.history);
   if (!campaign_reopen(c, progs, opt, map, error)) {
-    c.server.reset();
+    c.server = {};
     return false;
   }
   history.push_back(c.history.back());
   c.history = std::move(history);
   c.entered_serverflags = entered;
-  QcServer& s = *c.server;
+  QcServer& s = *qc_of(c.server);
   const bool ok = chunk(kQsrv, [&](save::Reader& r) { mod_server(r, s); }) &&
                   chunk(kLoop, [&](save::Reader& r) { loop(r, s.sv); }) &&
                   chunk(kQcvm, [&](save::Reader& r) { program(r, s.q); });
   if (!ok) {
-    c.server.reset();
+    c.server = {};
     return false;
   }
   fill_world(s, s.world, true);  // the rules' world as the loaded game has it

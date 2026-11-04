@@ -40,9 +40,9 @@ int bits(float f) { return f > 0 ? static_cast<int>(f) : 0; }
 // An item's bit as the running program names it (its constant `IT_...`), else `fallback`: the
 // campaign's program carries its own table, the baseline mod the same bits it shares.
 int item_bit(const Listen& l, const char* name, int fallback) {
-  const ge::progs::Def* d = ge::progs::find_global(*l.progs, name);
-  if (d == nullptr) return fallback;
-  return bits(ge::progs::global_float(l.server->q.vm, d->offset));
+  bool found = false;
+  const float v = global_named(l, name, &found);
+  return found ? bits(v) : fallback;
 }
 
 }  // namespace
@@ -94,9 +94,7 @@ hud::Status status_of(const Listen& l, double t) {
   s.key_silver = silver != 0 && (items & silver) != 0;
   s.key_gold = gold != 0 && (items & gold) != 0;
   // The runes: the first four bits of the program's `serverflags`, carried from map to map.
-  const int flags_at = l.server->q.layout->g.serverflags;
-  if (flags_at >= 0)
-    s.runes = static_cast<uint8_t>(bits(ge::progs::global_float(l.server->q.vm, flags_at)) & 15);
+  s.runes = static_cast<uint8_t>(bits(l.server->world.serverflags) & 15);
   s.frags = static_cast<int>(field_named(l, 1, "frags"));
   return s;
 }

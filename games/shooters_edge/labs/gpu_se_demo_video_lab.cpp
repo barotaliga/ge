@@ -129,9 +129,10 @@ bool play_match(int ticks, const cl::SearchPath* files, const std::string& map_n
   so.loop.max_edicts = 1024;
   std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(progs, so, error);
   if (!qc) return false;
-  sv::server_command(*qc, "deathmatch 1");
-  if (!sv::load_map(*qc, map->spec, error)) return false;
-  sv::use_map_sets(*qc, map->bsp);
+  const sv::RulesRunner rules = sv::qc_runner(std::move(qc));
+  rules.console("deathmatch 1");
+  if (!rules.start(map->spec, error)) return false;
+  sv::use_map_sets(*rules, map->bsp);
   gn::LinkConditions lan;
   gn::conditions_preset("lan", lan);
   gn::SimNetwork net = gn::make_sim_network(1, lan);
@@ -140,7 +141,7 @@ bool play_match(int ticks, const cl::SearchPath* files, const std::string& map_n
   auto server = std::make_unique<cn::ClassicServer>();
   cn::ServerConfig cfg;
   cfg.voice = true;
-  if (!cn::classic_start(*server, *qc, st, cfg, error)) return false;
+  if (!cn::classic_start(*server, rules, st, cfg, error)) return false;
   cn::MultiviewRecorder mvd;
   cn::mvd_start(mvd, true);
   server->mvd = &mvd;

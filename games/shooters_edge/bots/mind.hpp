@@ -44,7 +44,7 @@
 #include "shooter/locs.hpp"
 #include "shooter/vec.hpp"
 #include "shooters_edge/bots/talk.hpp"
-#include "shooters_edge/server/qc_server.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::bots {
 
@@ -110,7 +110,7 @@ struct Stats;
 void mind_hear(Fighter& f, const std::string& from, const std::string& text, double t);
 
 // The role and the calls, every `kPlan_s`, off its own beliefs (`me` is its entity).
-void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, double t);
+void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t);
 
 // A team message from this player, its place filled in from where it stands (`at`).
 bool mind_say(Fighter& f, double t, Said said, ge::shooter::Vec3f at);
@@ -127,7 +127,7 @@ bool wants_help(const Fighter& f, ge::shooter::Vec3f at, bool weak, double t);
 bool mate_going(const Fighter& f, int32_t i, double t);
 
 // Whether item `i` is left to a teammate (no use to this player, or the quad's carrier's due).
-bool gives_up(const Fighter& f, const server::QcServer& s, int me, int32_t i, const Stats& st,
+bool gives_up(const Fighter& f, const server::RulesCommon& s, int me, int32_t i, const Stats& st,
               double t);
 
 // This player's status as a message carries it.

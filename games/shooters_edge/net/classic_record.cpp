@@ -60,8 +60,8 @@ struct Scratch {
 };
 
 bool playing(const ClassicServer& s, int k) {
-  return s.clients[k].qc_active && !s.clients[k].spectator &&
-         s.qc->sv.clients[static_cast<size_t>(k)].active;
+  return s.clients[k].rules_active && !s.clients[k].spectator &&
+         s.game->sv.clients[static_cast<size_t>(k)].active;
 }
 
 // The mask of every spawned player.
@@ -107,7 +107,7 @@ bool whole_messages(std::span<const uint8_t> b) {
 }
 
 void signon(ClassicServer& s, MultiviewRecorder& r) {
-  const sv::QcServer& q = *s.qc;
+  const sv::RulesCommon& q = *s.game;
   Scratch o;
   gn::Writer& w = o.w;
   write_byte(w, svc::serverdata);  // no extension families: shorts for coordinates
@@ -147,9 +147,9 @@ void signon(ClassicServer& s, MultiviewRecorder& r) {
 // The statics and static sounds the level has that the recording has not.
 void statics(ClassicServer& s, MultiviewRecorder& r) {
   Scratch o;
-  const int n = static_cast<int>(s.qc->statics.size());
+  const int n = static_cast<int>(s.game->statics.size());
   for (; r.statics < n; r.statics++) {
-    const sv::StaticEntity& st = s.qc->statics[static_cast<size_t>(r.statics)];
+    const sv::StaticEntity& st = s.game->statics[static_cast<size_t>(r.statics)];
     SvcMsg m;
     m.id = svc::spawnstatic;
     m.ints = {st.modelindex, static_cast<int>(st.frame), static_cast<int>(st.colormap),
@@ -171,9 +171,9 @@ void statics(ClassicServer& s, MultiviewRecorder& r) {
 
 // A player in the recorder's form: every field, every frame.
 void player(const ClassicServer& s, int k, gn::Writer& w) {
-  const sh::Edict& e = s.qc->sv.edicts[static_cast<size_t>(k) + 1];
-  const sh::MoveCmd& cmd = s.qc->sv.clients[static_cast<size_t>(k)].last_cmd;
-  const sv::RulesWorld& world = s.qc->world;
+  const sh::Edict& e = s.game->sv.edicts[static_cast<size_t>(k) + 1];
+  const sh::MoveCmd& cmd = s.game->sv.clients[static_cast<size_t>(k)].last_cmd;
+  const sv::RulesWorld& world = s.game->world;
   const sv::WorldEntity& row = world.entities[static_cast<size_t>(k) + 1];
   constexpr int kAllFields = 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 1024 | 2048;
   write_byte(w, svc::playerinfo);
@@ -296,7 +296,7 @@ void mvd_start(MultiviewRecorder& r, bool voice, int pack_level) {
 void mvd_events(ClassicServer& s, MultiviewRecorder& r) {
   if (r.spawncount != s.spawncount) return;  // before the signon: the level's start sends it all
   const uint32_t all = everyone(s);
-  const sv::MessageSink& out = s.qc->out;
+  const sv::MessageSink& out = s.game->out;
   for (const sv::NetEvent& ev : out.events) {
     SvcMsg m;
     switch (ev.kind) {
@@ -316,8 +316,8 @@ void mvd_events(ClassicServer& s, MultiviewRecorder& r) {
         break;
       case sv::EventKind::sound: {
         int snd = 0;
-        for (size_t i = 1; i < s.qc->sounds.size(); i++)
-          if (s.qc->sounds[i] == ev.text) snd = static_cast<int>(i);
+        for (size_t i = 1; i < s.game->sounds.size(); i++)
+          if (s.game->sounds[i] == ev.text) snd = static_cast<int>(i);
         if (snd == 0 || snd > 255 || ev.ent > 1023) {
           r.dropped++;
           continue;
@@ -378,14 +378,14 @@ void mvd_frame(ClassicServer& s, MultiviewRecorder& r) {
   }
   statics(s, r);
   // The frame's clock: whole milliseconds since the signon, at least one a frame.
-  const int64_t now_ms = std::llround((s.qc->sv.time - r.start_time) * 1000);
+  const int64_t now_ms = std::llround((s.game->sv.time - r.start_time) * 1000);
   const int ms = static_cast<int>(std::clamp<int64_t>(now_ms - r.written_ms, 1, 255));
   r.written_ms += ms;
   Scratch o;
   for (int k = 0; k < sh::kMaxClients; k++)
     if (playing(s, k)) player(s, k, o.w);
   std::vector<EntityState> ents;
-  const sh::Server& sv = s.qc->sv;
+  const sh::Server& sv = s.game->sv;
   for (int e = sv.set.maxclients + 1; e < sv.num_edicts && e < 512; e++) {
     if (sv.edicts[static_cast<size_t>(e)].free) continue;
     const EntityState st = entity_state(s, e);
