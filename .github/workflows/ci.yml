@@ -12,7 +12,8 @@
 # changeset fragments) runs the gates alone. A pull request labelled `full-ci` also runs the Linux
 # rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and the shaders' check, and the
 # whole packaging. Once a day, at 05:00 in Stockholm, main runs all of that (the lint over the
-# whole tree), in a run nothing cancels.
+# whole tree), in a run nothing cancels; a push to main runs only while no pull request is open
+# (else it cancels itself and the daily run answers for it).
 #
 # Every queued group that changes more than prose is also compiled with Linux GCC (no tests),
 # `skip-ci` or not. A pull request labelled `skip-ci` runs nothing else, on the PR and in the
@@ -143,6 +144,19 @@ jobs:
           # is 5 less the offset, +0100 in winter and +0200 in summer); the other cancels itself
           # (a cancelled run says nothing to the main-red issue, where a skipped one would read
           # green).
+          # A PUSH TO MAIN runs only while no pull request is open (drafts aside: they run nothing),
+          # so main's runs never take runners from the PRs and the queue; the daily run answers for
+          # main the next morning. With a PR open the run cancels itself, for the same reason.
+          if [ "$EVENT" = push ]; then
+            open=$(gh pr list --repo "$GH_REPO" --state open --limit 100 --json isDraft \
+              --jq '[.[] | select(.isDraft | not)] | length')
+            if [ "${open:-0}" -gt 0 ]; then
+              echo "$open pull request(s) open: main's push run gives its runners to them and cancels itself; the daily run answers for main"
+              gh api -X POST "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/cancel" > /dev/null
+              sleep 120
+              exit 1
+            fi
+          fi
           if [ "$EVENT" = schedule ]; then
             offset=$(TZ=Europe/Stockholm date +%z)
             want=$((5 - 10#${offset:1:2}))
