@@ -1,115 +1,115 @@
-# face, then its hints' lift, piste and lake counts, tree line (m) and the data's hash (mountain_real_hints_test)
-alpine-1 lifts=17 pistes=125 lakes=7 line=- hash=f5d2b61aa28cd052
-alpine-2 lifts=24 pistes=164 lakes=4 line=2049 hash=da8af95e0b60229c
-alpine-3 lifts=10 pistes=61 lakes=2 line=- hash=59be4db7eae0f890
-alpine-4 lifts=10 pistes=91 lakes=4 line=2199 hash=b4563e8cdc62d31b
-alpine-5 lifts=23 pistes=114 lakes=4 line=2182 hash=a51f2c5e0a9625e1
-alpine-6 lifts=28 pistes=133 lakes=6 line=1747 hash=cd1b5b240e6f409d
-alpine-7 lifts=6 pistes=48 lakes=2 line=2304 hash=6b42504cda60e8bb
-alpine-8 lifts=7 pistes=50 lakes=0 line=2150 hash=c37c06fd0a6ce063
-alpine-9 lifts=15 pistes=105 lakes=0 line=1856 hash=cc374d183f5c4793
-alpine-10 lifts=0 pistes=29 lakes=0 line=2180 hash=451403a65a05f660
-alpine-11 lifts=8 pistes=70 lakes=0 line=2154 hash=4260d6cc235770cc
-alpine-12 lifts=9 pistes=67 lakes=3 line=2219 hash=b40c216ecdf2fc5f
-alpine-13 lifts=15 pistes=94 lakes=1 line=2209 hash=25afaa927bab288f
-alpine-14 lifts=21 pistes=84 lakes=0 line=2278 hash=3acd64c8b37f9b52
-alpine-15 lifts=11 pistes=75 lakes=0 line=2302 hash=6e95c312f3b1184f
-alpine-16 lifts=31 pistes=122 lakes=1 line=2204 hash=bda02626335c464d
-alpine-17 lifts=11 pistes=44 lakes=1 line=2119 hash=186ec082c6320c4f
-alpine-18 lifts=11 pistes=56 lakes=2 line=2133 hash=e5092a9821a7a8db
-alpine-19 lifts=10 pistes=56 lakes=7 line=2112 hash=3ade9e64e88d8501
-alpine-20 lifts=20 pistes=112 lakes=4 line=2314 hash=09a095cedd87b67b
-alpine-21 lifts=11 pistes=46 lakes=0 line=2077 hash=2714dda9c2bfad02
-alpine-22 lifts=11 pistes=36 lakes=6 line=1991 hash=33fef432f5418f44
-alpine-23 lifts=31 pistes=224 lakes=1 line=2124 hash=923c15b1afd4dbdc
-alpine-24 lifts=28 pistes=134 lakes=2 line=1943 hash=123c9598a27324fb
-alpine-25 lifts=20 pistes=119 lakes=2 line=2150 hash=e63384c5cba23888
-alpine-26 lifts=33 pistes=129 lakes=5 line=2327 hash=b2d4e1adcb6dc88d
-alpine-27 lifts=26 pistes=139 lakes=4 line=1730 hash=211946fa5a4188d8
-alpine-28 lifts=22 pistes=154 lakes=6 line=1898 hash=0ad39023a6ac1bd2
-alpine-29 lifts=23 pistes=69 lakes=2 line=1980 hash=cdd8a83a62bfdfe8
-continental-1 lifts=16 pistes=177 lakes=2 line=3341 hash=043cc7a34f12b20d
-continental-2 lifts=15 pistes=125 lakes=1 line=3561 hash=0169cc6d2ee242ee
-continental-3 lifts=9 pistes=112 lakes=4 line=2754 hash=0c5e85d3aa7cfe99
-continental-4 lifts=3 pistes=139 lakes=8 line=3448 hash=4d884710a1420479
-continental-5 lifts=16 pistes=177 lakes=2 line=2694 hash=9536e11cf51fffae
-continental-6 lifts=19 pistes=287 lakes=0 line=2950 hash=0ed96ae58697cb4d
-continental-7 lifts=12 pistes=126 lakes=3 line=3572 hash=0e02a8c77a55100a
-continental-8 lifts=11 pistes=130 lakes=1 line=2984 hash=a977ec008e8212cd
-continental-9 lifts=20 pistes=286 lakes=2 line=3298 hash=35e040a21ad9c0c1
-continental-10 lifts=10 pistes=143 lakes=0 line=2710 hash=45863ce5e050ac79
-continental-11 lifts=12 pistes=140 lakes=3 line=2430 hash=f999a18417a4af38
-continental-12 lifts=5 pistes=78 lakes=0 line=2402 hash=af69b74a29176604
-continental-13 lifts=10 pistes=150 lakes=2 line=1918 hash=268f5395890b993d
-continental-14 lifts=9 pistes=157 lakes=1 line=2407 hash=9b6c99a820981b4b
-continental-15 lifts=15 pistes=98 lakes=3 line=2306 hash=f3e7cd69750d01c5
-continental-16 lifts=10 pistes=187 lakes=3 line=2099 hash=1fc67032cbec4963
-continental-17 lifts=8 pistes=91 lakes=0 line=2034 hash=461c9822abbe24cd
-continental-18 lifts=9 pistes=114 lakes=3 line=2232 hash=2d36ec546cd01c99
-continental-19 lifts=18 pistes=138 lakes=2 line=2428 hash=a1cb6f1bfed06af3
-continental-20 lifts=23 pistes=125 lakes=5 line=2228 hash=c6f04caaa280ef29
-continental-21 lifts=15 pistes=30 lakes=1 line=2392 hash=fb6808c7e61c71ea
-continental-22 lifts=13 pistes=39 lakes=0 line=2200 hash=cfb74648c7cd50ee
-maritime-1 lifts=5 pistes=81 lakes=6 line=1674 hash=c4893ed9a9385beb
-maritime-2 lifts=11 pistes=103 lakes=1 line=975 hash=df220cbcd99404ee
-maritime-3 lifts=16 pistes=47 lakes=1 line=1458 hash=0a52d29348bd91cd
-fell-1 lifts=14 pistes=105 lakes=6 line=879 hash=a5536b9a591d2569
-fell-2 lifts=12 pistes=58 lakes=4 line=1194 hash=f02dc084829a262d
-fell-3 lifts=12 pistes=41 lakes=0 line=808 hash=c5a0c1138b722366
-fell-4 lifts=2 pistes=39 lakes=1 line=875 hash=43530966e9f57e9d
-fell-5 lifts=14 pistes=38 lakes=3 line=869 hash=98aa214f41e45e80
-fell-6 lifts=9 pistes=29 lakes=2 line=808 hash=735c8ad5fe24ddf6
-fell-7 lifts=5 pistes=50 lakes=5 line=565 hash=a82298fafc81814d
-fell-8 lifts=9 pistes=42 lakes=8 line=948 hash=e2f45cb421423034
-fell-9 lifts=5 pistes=35 lakes=3 line=628 hash=2a27e62248cff98b
-fell-10 lifts=39 pistes=51 lakes=3 line=799 hash=bdee92dc3d52fa4f
-fell-11 lifts=35 pistes=57 lakes=4 line=806 hash=4a8548df7c751545
-fell-12 lifts=11 pistes=47 lakes=5 line=1096 hash=1de1e364d5d29955
-fell-13 lifts=24 pistes=59 lakes=1 line=553 hash=d232a8b40c1f65f7
-fell-14 lifts=8 pistes=45 lakes=3 line=667 hash=58872a0070c7334e
-fell-15 lifts=4 pistes=26 lakes=8 line=685 hash=19a723adac9dd1cc
-fell-16 lifts=6 pistes=63 lakes=14 line=- hash=db5091a6611b9562
-fell-17 lifts=20 pistes=150 lakes=2 line=907 hash=852fca1f0e9fe906
-fell-18 lifts=16 pistes=159 lakes=0 line=1010 hash=843fbfa2e6c909a6
-fell-19 lifts=7 pistes=55 lakes=4 line=1027 hash=0cca33aad4182d90
-fell-20 lifts=7 pistes=27 lakes=0 line=1012 hash=21ed60b1d6679caf
-fell-21 lifts=11 pistes=82 lakes=2 line=481 hash=85416301c42c597d
-maritime-4 lifts=6 pistes=20 lakes=4 line=628 hash=a87dbaf279d98610
-fell-22 lifts=20 pistes=55 lakes=5 line=855 hash=8863e16fba4638e0
-fell-23 lifts=10 pistes=30 lakes=2 line=981 hash=62ebe5f22485fc67
-fell-24 lifts=12 pistes=52 lakes=11 line=899 hash=090de514943f4e78
-fell-25 lifts=7 pistes=7 lakes=15 line=736 hash=ed2798317b55d78b
-fell-26 lifts=26 pistes=64 lakes=1 line=777 hash=16a5a6ca835b70f3
-fell-27 lifts=5 pistes=21 lakes=2 line=537 hash=3479af7aac215ca2
-fell-28 lifts=11 pistes=40 lakes=3 line=1006 hash=ab81e628745a24bc
-fell-29 lifts=6 pistes=22 lakes=7 line=1073 hash=2f76193676571229
-fell-30 lifts=11 pistes=55 lakes=3 line=978 hash=8b5e50759a6fa8b5
-fell-31 lifts=8 pistes=43 lakes=6 line=1072 hash=f06db0a8907760dc
-fell-32 lifts=9 pistes=19 lakes=4 line=631 hash=32549f4c1b0d1c94
-maritime-5 lifts=9 pistes=29 lakes=3 line=740 hash=774615749245a911
-maritime-6 lifts=9 pistes=47 lakes=4 line=786 hash=925dab2c5df17c98
-maritime-7 lifts=6 pistes=21 lakes=16 line=917 hash=516fd82dd654f596
-maritime-8 lifts=11 pistes=27 lakes=16 line=747 hash=0f1d03ac0d7bf54c
-maritime-9 lifts=5 pistes=19 lakes=1 line=884 hash=de3a1fdc03ac58d5
-maritime-10 lifts=21 pistes=179 lakes=4 line=3229 hash=1424600c2cb484e6
-maritime-11 lifts=6 pistes=78 lakes=0 line=2203 hash=f58b694cb756a33f
-maritime-12 lifts=18 pistes=212 lakes=1 line=1943 hash=65f0db36b2756008
-maritime-13 lifts=12 pistes=26 lakes=0 line=988 hash=4336c6608efc52ca
-maritime-14 lifts=10 pistes=57 lakes=0 line=1088 hash=5e5991a652c84068
-maritime-15 lifts=9 pistes=34 lakes=1 line=1291 hash=82ca27f6e3384cf9
-maritime-16 lifts=26 pistes=58 lakes=1 line=1630 hash=6b42266f61852cae
-maritime-17 lifts=15 pistes=59 lakes=1 line=1534 hash=596177208f8d8f29
-maritime-18 lifts=6 pistes=44 lakes=1 line=2012 hash=8b47afdaed0881c5
-maritime-19 lifts=17 pistes=32 lakes=0 line=1687 hash=8d0dd83492fe9d96
-maritime-20 lifts=30 pistes=84 lakes=4 line=1729 hash=2233f543e5ffb934
-maritime-21 lifts=8 pistes=47 lakes=0 line=1289 hash=773cd9a06c0df6f5
-maritime-22 lifts=13 pistes=49 lakes=0 line=2068 hash=483c6670ddf7947c
-maritime-23 lifts=33 pistes=87 lakes=2 line=1753 hash=c3165ceb18ec2acc
-alpine-30 lifts=15 pistes=50 lakes=2 line=1722 hash=01914f51fac77553
-alpine-31 lifts=16 pistes=68 lakes=1 line=2223 hash=f7660c9be08e3dbf
-alpine-32 lifts=14 pistes=55 lakes=1 line=2047 hash=371218e6cbad3b80
-alpine-33 lifts=10 pistes=45 lakes=1 line=- hash=3e3ea4a6e340654c
-maritime-24 lifts=22 pistes=130 lakes=0 line=2071 hash=469337a3e825f65b
-continental-23 lifts=7 pistes=39 lakes=5 line=764 hash=c329d218c6eda9e1
-continental-24 lifts=3 pistes=78 lakes=0 line=368 hash=fcfcd077deb417af
-maritime-25 lifts=5 pistes=40 lakes=1 line=644 hash=c2544720054d9289
+# face, then its hints' lift, piste, lake and stream counts, tree line (m) and the data's hash (mountain_real_hints_test)
+alpine-1 lifts=17 pistes=125 lakes=7 streams=22 line=- hash=1a6aec541e9abf91
+alpine-2 lifts=24 pistes=164 lakes=4 streams=12 line=2049 hash=093bbc379bd4ce1e
+alpine-3 lifts=10 pistes=61 lakes=2 streams=8 line=- hash=0a0f5ce7025d35c7
+alpine-4 lifts=10 pistes=91 lakes=4 streams=14 line=2199 hash=dd372df8d29826cb
+alpine-5 lifts=23 pistes=114 lakes=4 streams=33 line=2182 hash=31081ab4c16a5a57
+alpine-6 lifts=28 pistes=133 lakes=6 streams=48 line=1747 hash=6b73bff489624093
+alpine-7 lifts=6 pistes=48 lakes=2 streams=6 line=2304 hash=7d4835a1e0f41fcd
+alpine-8 lifts=7 pistes=50 lakes=0 streams=26 line=2150 hash=d07bb5591388aee2
+alpine-9 lifts=15 pistes=105 lakes=0 streams=41 line=1856 hash=7f1d50a89990324b
+alpine-10 lifts=0 pistes=29 lakes=0 streams=11 line=2180 hash=17e7cbe60732a568
+alpine-11 lifts=8 pistes=70 lakes=0 streams=13 line=2154 hash=75730ebae5e1032f
+alpine-12 lifts=9 pistes=67 lakes=3 streams=42 line=2219 hash=db898fab513c9ddb
+alpine-13 lifts=15 pistes=94 lakes=1 streams=32 line=2209 hash=2e0642a885553a13
+alpine-14 lifts=21 pistes=84 lakes=0 streams=44 line=2278 hash=ad2c10143e01c85d
+alpine-15 lifts=11 pistes=75 lakes=0 streams=20 line=2302 hash=bcbaa77267794b75
+alpine-16 lifts=31 pistes=122 lakes=1 streams=25 line=2204 hash=0bb046c3c3d26907
+alpine-17 lifts=11 pistes=44 lakes=1 streams=15 line=2119 hash=e3cdfead77189f4a
+alpine-18 lifts=11 pistes=56 lakes=2 streams=2 line=2133 hash=e3bdbaf6c513cccc
+alpine-19 lifts=10 pistes=56 lakes=7 streams=12 line=2112 hash=79d30db1bb98e420
+alpine-20 lifts=20 pistes=112 lakes=4 streams=19 line=2314 hash=e09616478996e118
+alpine-21 lifts=11 pistes=46 lakes=0 streams=21 line=2077 hash=befcc20bea37391d
+alpine-22 lifts=11 pistes=36 lakes=6 streams=14 line=1991 hash=b3a4b5c549c75d56
+alpine-23 lifts=31 pistes=224 lakes=1 streams=27 line=2124 hash=3e4fc4c8d12d16d0
+alpine-24 lifts=28 pistes=134 lakes=2 streams=16 line=1943 hash=f523b8aa9f4259a6
+alpine-25 lifts=20 pistes=119 lakes=2 streams=10 line=2150 hash=42c54fdb249ba09d
+alpine-26 lifts=33 pistes=129 lakes=5 streams=21 line=2327 hash=7e2174a682821ca6
+alpine-27 lifts=26 pistes=139 lakes=4 streams=48 line=1730 hash=2d3db4409330a7de
+alpine-28 lifts=22 pistes=154 lakes=6 streams=42 line=1898 hash=33c4bc6dea14737f
+alpine-29 lifts=23 pistes=69 lakes=2 streams=22 line=1980 hash=ca37737f723df498
+continental-1 lifts=16 pistes=177 lakes=2 streams=43 line=3341 hash=b25216a47f670005
+continental-2 lifts=15 pistes=125 lakes=1 streams=48 line=3561 hash=a3d479c080633d41
+continental-3 lifts=9 pistes=112 lakes=4 streams=5 line=2754 hash=e7f008119a91ecb8
+continental-4 lifts=3 pistes=139 lakes=8 streams=44 line=3448 hash=f4c9581d547b4eaa
+continental-5 lifts=16 pistes=177 lakes=2 streams=4 line=2694 hash=e9055e327c1a86d9
+continental-6 lifts=19 pistes=287 lakes=0 streams=5 line=2950 hash=c09b54aa37840a10
+continental-7 lifts=12 pistes=126 lakes=3 streams=48 line=3572 hash=8eb97495f1cf2434
+continental-8 lifts=11 pistes=130 lakes=1 streams=3 line=2984 hash=b033d5b440e1b929
+continental-9 lifts=20 pistes=286 lakes=2 streams=48 line=3298 hash=ed7c54f1c25ae2b1
+continental-10 lifts=10 pistes=143 lakes=0 streams=1 line=2710 hash=955b5c327f1ac027
+continental-11 lifts=12 pistes=140 lakes=3 streams=8 line=2430 hash=36aaf612adb07381
+continental-12 lifts=5 pistes=78 lakes=0 streams=24 line=2402 hash=f3a44939df6346b9
+continental-13 lifts=10 pistes=150 lakes=2 streams=41 line=1918 hash=1b66cf9b7b98c4cb
+continental-14 lifts=9 pistes=157 lakes=1 streams=2 line=2407 hash=f111b34e0a00c09c
+continental-15 lifts=15 pistes=98 lakes=3 streams=29 line=2306 hash=4413aa5f513a2575
+continental-16 lifts=10 pistes=187 lakes=3 streams=45 line=2099 hash=cb5e5ea0f7208c7f
+continental-17 lifts=8 pistes=91 lakes=0 streams=11 line=2034 hash=c3bc1f1ae1ac5ab7
+continental-18 lifts=9 pistes=114 lakes=3 streams=31 line=2232 hash=8a822674ffbe6af0
+continental-19 lifts=18 pistes=138 lakes=2 streams=23 line=2428 hash=c4cbb07fec58de34
+continental-20 lifts=23 pistes=125 lakes=5 streams=31 line=2228 hash=97d9e3ca2a750233
+continental-21 lifts=15 pistes=30 lakes=1 streams=25 line=2392 hash=03b0c12841f21340
+continental-22 lifts=13 pistes=39 lakes=0 streams=10 line=2200 hash=c9dc761e6cf3363e
+maritime-1 lifts=5 pistes=81 lakes=6 streams=16 line=1674 hash=49fb3f6304fb4ca4
+maritime-2 lifts=11 pistes=103 lakes=1 streams=13 line=975 hash=8940aa05783ec81a
+maritime-3 lifts=16 pistes=47 lakes=1 streams=31 line=1458 hash=c5ac5f09e4cc1c51
+fell-1 lifts=14 pistes=105 lakes=6 streams=48 line=879 hash=3237dfc862fe2dc9
+fell-2 lifts=12 pistes=58 lakes=4 streams=32 line=1194 hash=28838789c04fdb67
+fell-3 lifts=12 pistes=41 lakes=0 streams=45 line=808 hash=71e539ced0f18a95
+fell-4 lifts=2 pistes=39 lakes=1 streams=9 line=875 hash=449af2dd6f3e0430
+fell-5 lifts=14 pistes=38 lakes=3 streams=13 line=869 hash=1b57ba1ac34fb8d3
+fell-6 lifts=9 pistes=29 lakes=2 streams=10 line=808 hash=1d396ec915cd8974
+fell-7 lifts=5 pistes=50 lakes=5 streams=3 line=565 hash=b598a87087abb095
+fell-8 lifts=9 pistes=42 lakes=8 streams=27 line=948 hash=2ddd85d9cf93e84e
+fell-9 lifts=5 pistes=35 lakes=3 streams=19 line=628 hash=d8f47a46b1dc703d
+fell-10 lifts=39 pistes=51 lakes=3 streams=3 line=799 hash=1f333187b5e24b03
+fell-11 lifts=35 pistes=57 lakes=4 streams=12 line=806 hash=5879485de4268241
+fell-12 lifts=11 pistes=47 lakes=5 streams=24 line=1096 hash=edcbbb151eb0514f
+fell-13 lifts=24 pistes=59 lakes=1 streams=2 line=553 hash=d54973023b4753aa
+fell-14 lifts=8 pistes=45 lakes=3 streams=30 line=667 hash=4de164e5ae5355fe
+fell-15 lifts=4 pistes=26 lakes=8 streams=5 line=685 hash=9007323b5403ac0c
+fell-16 lifts=6 pistes=63 lakes=14 streams=35 line=- hash=44fe1e473224f412
+fell-17 lifts=20 pistes=150 lakes=2 streams=34 line=907 hash=1f98bacfbb74c507
+fell-18 lifts=16 pistes=159 lakes=0 streams=48 line=1010 hash=3c8fdbc69a5a24b1
+fell-19 lifts=7 pistes=55 lakes=4 streams=20 line=1027 hash=2b6f1c73c6716dca
+fell-20 lifts=7 pistes=27 lakes=0 streams=10 line=1012 hash=ef1a8d7d650d77f1
+fell-21 lifts=11 pistes=82 lakes=2 streams=7 line=481 hash=85ae22a565353f38
+maritime-4 lifts=6 pistes=20 lakes=4 streams=47 line=628 hash=2ac1da07acbd6a6a
+fell-22 lifts=20 pistes=55 lakes=5 streams=2 line=855 hash=8db35c573ab53052
+fell-23 lifts=10 pistes=30 lakes=2 streams=7 line=981 hash=fdc4af80d4447231
+fell-24 lifts=12 pistes=52 lakes=11 streams=21 line=899 hash=9733716af946bd30
+fell-25 lifts=7 pistes=7 lakes=15 streams=36 line=736 hash=1b00bb847989f2ce
+fell-26 lifts=26 pistes=64 lakes=1 streams=4 line=777 hash=52e7ad0c7d4d7002
+fell-27 lifts=5 pistes=21 lakes=2 streams=0 line=537 hash=3479af7aac215ca2
+fell-28 lifts=11 pistes=40 lakes=3 streams=28 line=1006 hash=d7f4efc1ba111636
+fell-29 lifts=6 pistes=22 lakes=7 streams=48 line=1073 hash=04bda187375b1b4d
+fell-30 lifts=11 pistes=55 lakes=3 streams=41 line=978 hash=8f5cc6a6d5797507
+fell-31 lifts=8 pistes=43 lakes=6 streams=48 line=1072 hash=4feaeae10278666f
+fell-32 lifts=9 pistes=19 lakes=4 streams=40 line=631 hash=cbcdd6e615bdba4b
+maritime-5 lifts=9 pistes=29 lakes=3 streams=48 line=740 hash=2dd42ce64c3de9f8
+maritime-6 lifts=9 pistes=47 lakes=4 streams=48 line=786 hash=2fb62589b97b4341
+maritime-7 lifts=6 pistes=21 lakes=16 streams=48 line=917 hash=7809d20783286c51
+maritime-8 lifts=11 pistes=27 lakes=16 streams=38 line=747 hash=4a1af8e723c6c672
+maritime-9 lifts=5 pistes=19 lakes=1 streams=38 line=884 hash=9e8d48db93d7d7a6
+maritime-10 lifts=21 pistes=179 lakes=4 streams=29 line=3229 hash=06b374d2b24d6ea6
+maritime-11 lifts=6 pistes=78 lakes=0 streams=11 line=2203 hash=f9dc0e48d68c94d6
+maritime-12 lifts=18 pistes=212 lakes=1 streams=5 line=1943 hash=e811a85a265e980e
+maritime-13 lifts=12 pistes=26 lakes=0 streams=7 line=988 hash=6d093dabe48421f3
+maritime-14 lifts=10 pistes=57 lakes=0 streams=13 line=1088 hash=27c59139fbcce506
+maritime-15 lifts=9 pistes=34 lakes=1 streams=11 line=1291 hash=dfddc16f416817cf
+maritime-16 lifts=26 pistes=58 lakes=1 streams=11 line=1630 hash=1e79b9b593a9c06c
+maritime-17 lifts=15 pistes=59 lakes=1 streams=6 line=1534 hash=823839526777f00c
+maritime-18 lifts=6 pistes=44 lakes=1 streams=19 line=2012 hash=2cd5daca5a86b1c9
+maritime-19 lifts=17 pistes=32 lakes=0 streams=9 line=1687 hash=0001d024cfead239
+maritime-20 lifts=30 pistes=84 lakes=4 streams=7 line=1729 hash=7dfec0daf5d51356
+maritime-21 lifts=8 pistes=47 lakes=0 streams=1 line=1289 hash=55fbfa22af694db7
+maritime-22 lifts=13 pistes=49 lakes=0 streams=11 line=2068 hash=fc223c80451ca614
+maritime-23 lifts=33 pistes=87 lakes=2 streams=7 line=1753 hash=10444d54a0552be3
+alpine-30 lifts=15 pistes=50 lakes=2 streams=22 line=1722 hash=c13213c24a54352c
+alpine-31 lifts=16 pistes=68 lakes=1 streams=18 line=2223 hash=0e1ad10a9a76dd42
+alpine-32 lifts=14 pistes=55 lakes=1 streams=44 line=2047 hash=ffa865d071fa053c
+alpine-33 lifts=10 pistes=45 lakes=1 streams=27 line=- hash=e4c834cff8a1fae8
+maritime-24 lifts=22 pistes=130 lakes=0 streams=23 line=2071 hash=4dc1b18d3ea00ca4
+continental-23 lifts=7 pistes=39 lakes=5 streams=1 line=764 hash=c535008311b85671
+continental-24 lifts=3 pistes=78 lakes=0 streams=4 line=368 hash=218931e7bf392e3e
+maritime-25 lifts=5 pistes=40 lakes=1 streams=0 line=644 hash=c2544720054d9289

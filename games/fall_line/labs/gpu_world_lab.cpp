@@ -30,8 +30,9 @@
 // few lines in its scrollback and a command half typed, its suggestions under the panel.
 //
 // --face lays the ski area off a real face instead of a dealt mountain, with the face's mapped
-// lakes laid on it (mountain/tarn/mapped.hpp; the `tarn` views frame the largest), each iced by
-// the map's day (--day moves it).
+// lakes laid on it (mountain/tarn/mapped.hpp; the `tarn` views frame the largest) and its streams
+// (mountain/tarn/brook.hpp; the `stream` views follow the longest), each iced by the map's day
+// (--day moves it).
 //
 // --cfg runs console commands over Fall Line's cvars first (cfg/cvars.hpp), so a sky a server
 // picks (sv_weather, sv_snowfall, sv_fog, sv_wind, sv_winddir, sv_cover, sv_clouddensity,
@@ -77,6 +78,7 @@
 #include "lab/png.hpp"
 #include "lab/raster.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "mountain/tarn/brook.hpp"
 #include "mountain/tarn/mapped.hpp"
 #include "render/shadows.hpp"
 #include "render/taa.hpp"
@@ -336,9 +338,11 @@ void run(ge::lab::Lab& lab) {
     return;
   }
   if (!face.empty()) {
-    // The face's mapped lakes, iced by the day the map is lit on (the free ride's free_map).
+    // The face's mapped lakes and streams, iced by the day the map is lit on (the free ride's
+    // free_map).
     if (lab.arg_num("day") > 0) built.sun.day_of_year = lab.arg_num("day");
     ge::mountain::tarn::lay_mapped_lakes(built);
+    ge::mountain::tarn::lay_mapped_streams(built);
   }
   if (lab.arg_num("day") > 0) built.sun.day_of_year = lab.arg_num("day");
   if (const std::string problem = fall_line::sim::server_sky(cvars, built); !problem.empty()) {
@@ -764,8 +768,9 @@ const ge::lab::LabSpec kSpec{
     {
         {"seed", "38", "the map's seed"},
         {"face", "",
-         "a real face's id (mapgen/real_face_crops.hpp): its ski area, its mapped lakes laid on "
-         "it (the tarn views frame the largest)"},
+         "a real face's id (mapgen/real_face_crops.hpp): its ski area, its mapped lakes and "
+         "streams laid on it (the tarn views frame the largest lake, the stream views the "
+         "longest stream)"},
         {"views", "all", "the views to shoot, comma-separated (games/fall_line/app/views.hpp)"},
         {"hour", "-1", "the solar hour to light the map at; negative: the map's own"},
         {"day", "0", "the day of the year the map is lit on (its moon with it); 0: the map's own"},

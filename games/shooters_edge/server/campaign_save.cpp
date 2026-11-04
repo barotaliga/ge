@@ -494,6 +494,7 @@ bool campaign_load(Campaign& c, const pg::Progs& progs, const CampaignOptions& o
     c.server.reset();
     return false;
   }
+  fill_world(s, s.world, true);  // the rules' world as the loaded game has it
   return true;
 }
 
