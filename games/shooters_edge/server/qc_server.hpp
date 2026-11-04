@@ -44,8 +44,7 @@
 #include "progs/entity_text.hpp"
 #include "progs/extensions.hpp"
 #include "shooter/client.hpp"
-#include "shooters_edge/server/messages.hpp"
-#include "shooters_edge/server/rules_world.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
 #include "shooters_edge/sim/qc_program.hpp"
 
 namespace shooters_edge::server {
@@ -53,11 +52,10 @@ namespace shooters_edge::server {
 namespace sh = ge::shooter;
 namespace pg = ge::progs;
 
-constexpr int kMaxModels = 256;    // the model list (the precache)
-constexpr int kMaxSounds = 256;    // the sound list
-constexpr int kMaxVwep = 32;       // the visible-weapon list
-constexpr int kMaxStatics = 2048;  // static entities
-constexpr int kLightStyles = 64;
+constexpr int kMaxModels = 256;     // the model list (the precache)
+constexpr int kMaxSounds = 256;     // the sound list
+constexpr int kMaxVwep = 32;        // the visible-weapon list
+constexpr int kMaxStatics = 2048;   // static entities
 constexpr int kStuffBytes = 256;    // a client's pending stuffcmd text
 constexpr int kMaxHookLog = 20000;  // hook calls kept in order (more are counted only)
 
@@ -114,49 +112,6 @@ struct HookCall {
   int self = 0;
 };
 
-// The change a console line asks for: `map` a new game, `changelevel` the next map with the
-// players' parms carried (SetChangeParms), `restart` the same map with the parms it was entered
-// with.
-enum class MapChange : uint8_t { new_game, change_level, restart };
-
-// What the server keeps of one client (the player is entity slot + 1).
-// The blow a player took this frame (client_data.hpp): its blood and armour, each 0..255, and
-// where it came from.
-struct ClientBlow {
-  bool hit = false;
-  int armor = 0, blood = 0;
-  sh::Vec3f from;
-};
-
-struct ClientInfo {
-  bool active = false;
-  bool spectator = false;
-  bool bot = false;
-  int userid = 0;
-  std::vector<std::pair<std::string, std::string>> userinfo;  // in the order set
-  float spawn_parms[16] = {};
-  std::string stuff;  // stuffcmd text waiting for its newline
-  bool drop = false;  // a stuffed "disconnect": dropped after the current call
-  std::string address = "loopback";
-  int ping_ms = 0;
-  double entered_at = 0;  // the server's time it connected, s (the scoreboard's minutes)
-  ClientBlow blow;        // this frame's (a single-player program's)
-};
-
-struct StaticEntity {
-  int modelindex = 0;
-  float frame = 0, colormap = 0, skin = 0;
-  sh::Vec3f origin, angles;
-  pg::EntityExtras extras;
-};
-
-// A map: its brush models (`[0]` the world) and its entity text.
-struct MapSpec {
-  std::string name = "arena";
-  std::vector<sh::BrushModel> models;
-  std::string entities;
-};
-
 struct QcServerOptions {
   sh::ServerSettings loop;  // the loop's settings (first_dynamic, max_edicts set by the server)
   uint32_t seed = 1;        // the generator random, randomvec and movetogoal draw from
@@ -164,57 +119,22 @@ struct QcServerOptions {
   void* clock_ctx = nullptr;
 };
 
-struct QcServer {
+struct QcServer : RulesCommon {
   QcServerOptions opt;
   const pg::Progs* progs = nullptr;
-  sh::Server sv;
   sim::QcProgram q;
-  ge::console::Cvars cvars{true};
   pg::ExtensionRegistry extensions;
   NamedHooks named;
 
-  std::string map_name;
-  std::vector<std::string> models;       // the model list; [0] ""
-  std::vector<std::string> sounds;       // the sound list; [0] ""
-  std::vector<std::string> vwep;         // the visible-weapon list
-  std::vector<pg::EntityExtras> extras;  // by entity: alpha and colormod
-  std::vector<StaticEntity> statics;
-  std::string lightstyles[kLightStyles];
-  ClientInfo clients[sh::kMaxClients];
-  std::vector<std::pair<std::string, std::string>> serverinfo, localinfo;
-
-  MessageSink out;                        // what the network builtins wrote (messages.hpp)
-  std::vector<std::string> console;       // the server console's lines, in order
   std::vector<std::string> frag_log;      // logfrag's lines
   std::string command_buffer;             // localcmd's text, run at the next frame
   std::vector<std::string> map_messages;  // the entity text's messages ("x is not a field")
 
-  std::string stop_reason;  // why the map stopped (error / objerror)
-  std::string pending_map;  // a `map`, `changelevel` or `restart` console line: the change made
-  MapChange pending_change = MapChange::new_game;  // which of the three `pending_map` is
-  // The flags a game carries from map to map (the program's `serverflags`, written at each map's
-  // start; a campaign's runes). The host keeps them across a level change.
-  float serverflags = 0;
-
   // Statement tracing (traceon / traceoff) into the console, at most `trace_lines` lines.
   pg::TraceHooks trace_hooks;
 
-  // The map's visibility and hearing sets: whether `to` is in the set of `from` (`see` false: the
-  // hearing set). Null until the map carries them (M18b): every point is in every set.
-  bool (*vis)(void* ctx, sh::Vec3f from, sh::Vec3f to, bool see) = nullptr;
-  void* vis_ctx = nullptr;
-
-  // Lag compensation: called before (`begin`) and after a trace a player shoots (traceline or
-  // tracebox whose pass entity, or its owner, is a client) so the protocol's server can move the
-  // other players to where the shooter saw them and back. Null: traces see the players as they
-  // are (games/shooters_edge/net/classic_antilag.hpp).
-  void (*lag_rewind)(void* ctx, int shooter, bool begin) = nullptr;
-  void* lag_ctx = nullptr;
-
-  // What the rules show everyone else (rules_world.hpp): filled at the map's start and at the end
-  // of each frame. The program's fields the player's numbers come from, found by name at the map's
+  // The program's fields the player's numbers in `world` come from, found by name at the map's
   // start (-1: the program has none).
-  RulesWorld world;
   struct {
     int currentammo = -1, armorvalue = -1, ammo[4] = {-1, -1, -1, -1}, weapon = -1;
     int weaponframe = -1;
@@ -230,10 +150,8 @@ struct QcServer {
   int inhibited = 0;
   int next_userid = 1;
 
-  bool loading = false;      // spawn functions running: precache and the signon allowed
-  bool map_stopped = false;  // error / objerror: the map is over (`stop_reason` says why)
+  bool loading = false;  // spawn functions running: precache and the signon allowed
   bool changelevel_queued = false;
-  bool paused = false;
   bool tracing = false;
 };
 

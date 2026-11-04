@@ -32,6 +32,7 @@ namespace {
 struct Rig {
   ge::progs::Progs progs;
   std::unique_ptr<sv::QcServer> qc;
+  sv::RulesRunner rules;  // over `qc`
   gn::SimNetwork net;
   gn::Transport st, ct;
   cn::ClassicServer server;
@@ -56,7 +57,8 @@ struct Rig {
     net = gn::make_sim_network(1, lan);
     gn::open_sim_transport(st, net, gn::sim_address(0, cn::kPortServer));
     gn::open_sim_transport(ct, net, gn::sim_address(1, cn::kPortClient));
-    if (!cn::classic_start(server, *qc, st, cn::ServerConfig{}, error)) return false;
+    rules = sv::qc_runner_over(*qc);
+    if (!cn::classic_start(server, rules, st, cn::ServerConfig{}, error)) return false;
     cn::ClientConfig cc;
     cc.name = "window";
     cn::remote_start(remote, ct, gn::sim_address(0, cn::kPortServer), cc);

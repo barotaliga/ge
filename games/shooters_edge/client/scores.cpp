@@ -27,7 +27,7 @@ void clock_of(double seconds, int& minutes, int& secs) {
 menu::Scoreboard scores_of(const Listen& l) {
   menu::Scoreboard b;
   if (l.server == nullptr) return b;
-  const sv::QcServer& s = *l.server;
+  const sv::RulesCommon& s = *l.server;
   const ge::console::Cvar* tp = s.cvars.find("teamplay");
   b.teamplay = tp != nullptr && tp->on();
   clock_of(s.sv.time - l.entered_at, b.minutes, b.seconds);

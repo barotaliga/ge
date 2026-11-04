@@ -80,7 +80,8 @@ struct ItemNews {
 
 // One think's look at the items from `eye` (the player's entity `me`, its view `pitch`/`yaw`), at
 // time `t`; returns the news a team calls out.
-ItemNews knowledge_update(Fighter& f, const server::QcServer& s, int me, sh::Vec3f eye, double t);
+ItemNews knowledge_update(Fighter& f, const server::RulesCommon& s, int me, sh::Vec3f eye,
+                          double t);
 
 // Whether item `i` may be a goal: known, or in sight now.
 bool item_in_mind(const Fighter& f, int32_t i);

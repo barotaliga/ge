@@ -60,7 +60,7 @@ struct Fixture {
     o.settings = std::move(settings);
     return sv::campaign_new_game(c, mod, o, map, error);
   }
-  sv::QcServer& s() { return *c.server; }
+  sv::QcServer& s() { return *sv::qc_of(c.server); }
   float f(int e, int ofs) { return pg::as_float(*pg::entity_field(s().q.vm, e, ofs)); }
   // Frames until the map changes (at most `most`).
   int run_until_change(int most) {

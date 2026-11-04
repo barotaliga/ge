@@ -124,7 +124,7 @@ void record_listen_begin(ListenRecorder& r, const Listen& l, int pack_level) {
   r.ready.clear();
   r.plain = r.flushed_at = r.frames = 0;
   if (r.packed) ge::vfs::zstd_begin(r.pack, {std::clamp(pack_level, 1, 22), 0, false});
-  const sv::QcServer& s = *l.server;
+  const sv::RulesCommon& s = *l.server;
   r.last_time = r.flushed_time = s.sv.time;
   r.prints_seen = l.prints.size();
   r.explosions_seen = l.explosions.size();
@@ -177,7 +177,7 @@ void record_listen_begin(ListenRecorder& r, const Listen& l, int pack_level) {
 
 void record_listen_frame(ListenRecorder& r, const Listen& l) {
   if (!r.on || l.server == nullptr) return;
-  const sv::QcServer& s = *l.server;
+  const sv::RulesCommon& s = *l.server;
   const int ms =
       std::clamp(static_cast<int>(std::lround((s.sv.time - r.last_time) * 1000)), 1, 255);
   r.last_time = s.sv.time;

@@ -1,18 +1,19 @@
-// THE CLASSIC PROTOCOL'S SERVER ENDPOINT: the mod server (games/shooters_edge/server/qc_server.hpp)
-// served to clients that speak the classic protocol, over engine/net's transport (a UDP socket or
-// the simulated network). It owns no game rules: a client's moves become the loop's packets, its
-// string commands the mod's, and what the mod writes (messages.hpp) becomes svc messages.
+// THE CLASSIC PROTOCOL'S SERVER ENDPOINT: a game's rules, held as a runner
+// (games/shooters_edge/server/rules_runner.hpp), served to clients that speak the classic protocol,
+// over engine/net's transport (a UDP socket or the simulated network). It owns no game rules: a
+// client's moves become the loop's packets, its string commands the mod's, and what the mod writes
+// (messages.hpp) becomes svc messages.
 //
 // ONE FRAME (`classic_frame`, called once a server frame with the network's time): every datagram
 // waiting is read (out of band: ping, status, getchallenge, connect, the rest answered or ignored
 // as docs/shooters-edge.md § The network says; in band: the channel by address and qport, then
 // its clc messages in order, a client that sends an unknown one dropped); the spawned clients'
-// moves run as one packet each in `qc_frame`; what the mod wrote is routed (prints, sounds, stuffed
-// text, light styles, effects as temporary entities, static entities and sounds, multicasts, the
-// Write buffers, pauses); then every client the server heard from since its last reply gets one
-// packet when its rate allows (else its choke count grows): the reliable stream's next message,
-// and, once spawned, the choke count, the players it can see, the entities as a delta against the
-// frame it acknowledged (or from the baselines), and the frame's unreliable messages.
+// moves run as one packet each in the runner's `frame`; what the mod wrote is routed (prints,
+// sounds, stuffed text, light styles, effects as temporary entities, static entities and sounds,
+// multicasts, the Write buffers, pauses); then every client the server heard from since its last
+// reply gets one packet when its rate allows (else its choke count grows): the reliable stream's
+// next message, and, once spawned, the choke count, the players it can see, the entities as a delta
+// against the frame it acknowledged (or from the baselines), and the frame's unreliable messages.
 //
 // THE SIGNON (classic_signon.cpp): `new` (the `pext` step first when the connect named no
 // extension families), `soundlist` and `modellist` in pages, `prespawn` (static entities,
@@ -64,7 +65,7 @@
 #include "shooters_edge/net/classic_antilag.hpp"
 #include "shooters_edge/net/classic_channel.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
-#include "shooters_edge/server/qc_server.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::net {
 
@@ -124,7 +125,7 @@ struct ClassicClient {
   std::string userinfo, name;
   int userid = 0;
   bool spectator = false;
-  bool qc_active = false;  // the mod placed the player (after `begin`)
+  bool rules_active = false;  // the mod placed the player (after `begin`)
   Ext ext;
   Coords coords = Coords::shorts;
   bool need_pext = false;
@@ -162,7 +163,8 @@ struct Challenge {
 
 struct ClassicServer {
   ServerConfig cfg;
-  sv::QcServer* qc = nullptr;
+  const sv::RulesRunner* rules = nullptr;  // the rules served (their map started)
+  sv::RulesCommon* game = nullptr;         // what every runner keeps: `*rules`'s
   gn::Transport* transport = nullptr;
   ClassicClient clients[sh::kMaxClients];
   Challenge challenges[64];
@@ -193,13 +195,13 @@ struct ClassicServer {
   MultiviewRecorder* mvd = nullptr;  // a multiview recording running (classic_record.hpp)
 };
 
-// Serves `qc` (its map already loaded) over `t`. False with `error` when it cannot.
-bool classic_start(ClassicServer& s, sv::QcServer& qc, gn::Transport& t, const ServerConfig& cfg,
-                   std::string& error);
+// Serves `rules` (its map already started) over `t`. False with `error` when it cannot.
+bool classic_start(ClassicServer& s, const sv::RulesRunner& rules, gn::Transport& t,
+                   const ServerConfig& cfg, std::string& error);
 // The endpoint moves to `next` (its map loaded; the server before it is no longer read and may
 // go): every client is told the map is changing and to sign on again (`reconnect`), and the
 // next signon is the new map's. False with `error` when `next` has no map.
-bool classic_change(ClassicServer& s, sv::QcServer& next, std::string& error);
+bool classic_change(ClassicServer& s, const sv::RulesRunner& next, std::string& error);
 // One server frame at the network's time `now_us`.
 void classic_frame(ClassicServer& s, int64_t now_us);
 // Drops a client with a reason (it is told with a disconnect).

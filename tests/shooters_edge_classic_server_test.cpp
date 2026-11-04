@@ -56,6 +56,7 @@ bool env_set(const char* name) {
 struct Rig {
   ge::progs::Progs progs;
   std::unique_ptr<sv::QcServer> qc;
+  sv::RulesRunner rules;  // over `qc`
   gn::SimNetwork net;
   gn::Transport st, raw[2];
   cn::ClassicServer server;
@@ -79,7 +80,8 @@ struct Rig {
     gn::open_sim_transport(st, net, gn::sim_address(0, cn::kPortServer));
     gn::open_sim_transport(raw[0], net, gn::sim_address(9, cn::kPortClient));
     gn::open_sim_transport(raw[1], net, gn::sim_address(10, cn::kPortClient));
-    return cn::classic_start(server, *qc, st, cfg, error);
+    rules = sv::qc_runner_over(*qc);
+    return cn::classic_start(server, rules, st, cfg, error);
   }
   void frame() {
     now += 13000;

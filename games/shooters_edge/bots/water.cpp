@@ -21,8 +21,8 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 
 }  // namespace
 
-bool water_way(Fighter& f, const server::QcServer& s, int me, double t, int msec, ge::ai::Why* why,
-               sh::Vec3f& way) {
+bool water_way(Fighter& f, const server::RulesCommon& s, int me, double t, int msec,
+               ge::ai::Why* why, sh::Vec3f& way) {
   const server::WorldEntity& body = s.world.entities[static_cast<size_t>(me)];
   // Its air: the head under this long, it takes whichever way out of the water is shorter, the
   // dive's on or the way back, so it never drowns on a swim.
