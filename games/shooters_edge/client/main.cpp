@@ -59,11 +59,11 @@
 // ge:keywords scoreboard scr_levelstats settings config-cfg topcolor bottomcolor gamma binds f12
 // ge:skill platform input camera render ui shooter
 #include <algorithm>
-#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <exception>
+#include <functional>
 #include <future>
 #include <memory>
 #include <span>
@@ -74,7 +74,6 @@
 #include "capture/screenshot.hpp"
 #include "console/cfg.hpp"
 #include "console/view.hpp"
-#include "core/num_text.hpp"
 #include "core/output.hpp"
 #include "gpu/device.hpp"
 #include "gpu/surface.hpp"
@@ -104,6 +103,7 @@
 #include "shooters_edge/client/timedemo.hpp"
 #include "shooters_edge/client/title.hpp"
 #include "shooters_edge/client/view.hpp"
+#include "shooters_edge/client/window_cvars.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/classic_art.hpp"
@@ -111,6 +111,7 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
@@ -187,18 +188,14 @@ int run_main(int argc, char** argv) {
   cl::add_user_info_cvars(console, user_info);
   cl::WindowCvars win;  // vid_fullscreen (followed each frame), vid_display, volume, ...
   cl::add_window_cvars(console, win);
-  console.add_command("vid_displays", "list the displays vid_display numbers",
-                      [&](Con& c, const CArgs&) {
-                        const std::vector<ge::platform::Display> all = ge::platform::displays();
-                        if (all.empty()) c.print("vid_displays: the desktop named no display");
-                        for (const ge::platform::Display& d : all)
-                          c.print(std::to_string(d.number) + ": " + d.name + ", " +
-                                  std::to_string(d.width_px) + "x" + std::to_string(d.height_px));
-                      });
+  std::string bench_ask;  // a demo the console asked to benchmark (`timedemo`) or play
+  bool play_ask = false;  // the demo asked for is played at its own pace (`playdemo`)
+  cl::add_demo_commands(console, bench_ask, play_ask);
   cl::Timedemo bench;
+  shooters_edge::net::Remote remote;  // `connect`: the window on a server elsewhere
+  shooters_edge::net::add_remote_commands(console, remote);
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
-  cl::DemoAsk ask;            // timedemo and playdemo
-  cl::add_playback_commands(console, playback, bench, ask);
+  cl::add_playback_commands(console, playback, bench);
   // The window's sound: a played demo's for now (client/demo_heard.hpp), at `volume`.
   ge::audio::Synth synth;  // outlives the device that pulls it (opened with the window)
   se::Hud hud = se::make_hud();
@@ -407,10 +404,10 @@ int run_main(int argc, char** argv) {
   ge::gpu::Target bench_off;       // the benchmark's frames that are not shown
   uint64_t bench_shown_ns = 0;     // when the benchmark last showed a frame
   wgpu::Future bench_in_flight{};  // the frame before this one, waited before the next
-  if (!args.timedemo.empty()) ask.demo = args.timedemo;
+  if (!args.timedemo.empty()) bench_ask = args.timedemo;
   if (!args.playdemo.empty()) {
-    ask.demo = args.playdemo;
-    ask.paced = true;
+    bench_ask = args.playdemo;
+    play_ask = true;
   }
   // The world drawn again for `map`, with the models on `load` standing in it, through `from`
   // (the demo's game folder while one plays, else the window's).
@@ -427,6 +424,7 @@ int run_main(int argc, char** argv) {
   };
   // The benchmark over: its report, vsync back, the listen server's world again.
   int bench_failed = 0;
+  std::function<bool()> back_to_listen;  // below
   const auto end_bench = [&](const std::string& why, double now_s) {
     const std::string setup = std::to_string(w) + "x" + std::to_string(h) +
                               ", drawn offscreen, shown at 30 Hz, r_look " + picture.look + ", " +
@@ -451,6 +449,11 @@ int run_main(int argc, char** argv) {
     bench_in_flight = {};
     bench_off = {};
     bench.active = false;
+    if (bench.quit_after) quit = true;
+    return back_to_listen();
+  };
+  // A demo or a server left: the listen server's world again, vsync back.
+  back_to_listen = [&] {
     bench_map.reset();
     bench_folder = {};
     bench_models = 0;
@@ -458,7 +461,6 @@ int run_main(int argc, char** argv) {
     hud.centre.clear();
     vsync = true;
     surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), vsync);
-    if (bench.quit_after) quit = true;
     if (!listen.map || listen.server == nullptr) {  // run from the title: back to it
       world.reset();
       return true;
@@ -682,45 +684,26 @@ int run_main(int argc, char** argv) {
     // the window, drawn once its pipelines are compiled. A measured run waits for each step.
     if (next_map.empty() && !listen.pending_map.empty() && !cl::busy(loader))
       next_map = listen.pending_map;
-    if (!next_map.empty() && !loader.map.valid() && !bench.active) {
+    const bool elsewhere = bench.active || remote.active || bench_map;  // the world is theirs
+    if (!next_map.empty() && !loader.map.valid() && !elsewhere) {
       cl::load_map(loader, files, next_map, t);
       next_map.clear();
     }
-    while (!bench.active && cl::busy(loader)) {
-      cl::LoadStep step =
-          cl::step_load(loader, *device, static_cast<uint32_t>(w), static_cast<uint32_t>(h),
-                        surface.format(), picture, weapons, measured);
-      if (step.failed == cl::LoadFailed::world && world_current) {
-        console.print("map: " + step.error);  // a rebuild that failed: the old world stays
-      } else if (step.failed == cl::LoadFailed::world) {
-        out::error("shooters_edge: the new world draw did not load: " + step.error +
-                   "; see docs/rendering.md");
-        return 1;
-      } else if (step.failed == cl::LoadFailed::map) {
-        console.print("map: " + step.error);
-        listen.pending_map.clear();
-        if (!listen.map)  // a game just loaded and its first map did not: the arena
-          step.map = cl::load_named_map(files, "arena", error);
-      }
-      if (step.map) {
-        if (!cl::start_map(listen, game_content, std::move(step.map), error)) {
-          out::error("shooters_edge: the map change failed: " + error +
-                     "; see docs/shooters-edge.md § Playing it");
-          return 2;
-        }
-        world_current = false;  // the server plays the new map; its world is made next
-        cl::load_world(loader, files, *listen.map, picture, listen.server->models, adapter, t);
-      }
-      if (step.world) {
-        if (!world_current) forget_seen();  // a new map's: what was seen of the last let go
-        const double took = static_cast<double>(ge::platform::now_ns() - first_ns) * 1e-9;
-        out::status("shooters_edge: " + listen.map->name + " drawn " +
-                    ge::core::num::to_fixed(took - loader.since_s, 2) +
-                    " s after it was asked for");
-        world = std::move(step.world);
-        world_current = true;
-      }
-      if (!measured) break;  // one step a frame; a measured run waits them all out
+    if (!elsewhere) {
+      const cl::LoadWindow at{device.get(),
+                              static_cast<uint32_t>(w),
+                              static_cast<uint32_t>(h),
+                              surface.format(),
+                              &picture,
+                              weapons,
+                              &files,
+                              &adapter,
+                              &game_content};
+      bool fresh = false;
+      if (const int code =
+              cl::take_load(loader, at, listen, console, measured, t, world, world_current, fresh))
+        return code;
+      if (fresh) forget_seen();
     }
 
     // A save asked for: the game it holds now playing (its world made behind the window, below).
@@ -733,9 +716,9 @@ int run_main(int argc, char** argv) {
 
     // A benchmark asked for: vsync off, the listen server waits until it is done. A demo played
     // at its pace keeps vsync.
-    if (!ask.demo.empty()) {
-      const bool quit_after = ask.demo == args.timedemo || ask.demo == args.playdemo;
-      if (!cl::timedemo_start(files, ask.demo, bench, error, adapter)) {
+    if (!bench_ask.empty()) {
+      const bool quit_after = bench_ask == args.timedemo || bench_ask == args.playdemo;
+      if (!cl::timedemo_start(files, bench_ask, bench, error, adapter)) {
         console.print("timedemo: " + error);
         if (quit_after) {
           out::error("shooters_edge: the timedemo did not start: " + error +
@@ -744,31 +727,51 @@ int run_main(int argc, char** argv) {
         }
       } else {
         bench.quit_after = quit_after;
-        bench.paced = ask.paced;
-        bench.hear = ask.paced;  // its sounds and lines gathered for the draw (demo_heard.hpp)
+        bench.paced = play_ask;
+        bench.hear = play_ask;  // its sounds and lines gathered for the draw (demo_heard.hpp)
         bench.demo.track = playback.track;
-        console.print((ask.paced ? "playdemo: " : "timedemo: ") + bench.found);
-        if (ask.paced && !cl::playback_begin(playback, bench, error))
+        console.print((play_ask ? "playdemo: " : "timedemo: ") + bench.found);
+        if (play_ask && !cl::playback_begin(playback, bench, error))
           console.print("playdemo: no highlights: " + error);
         con_view.set_open(false);
-        if (!ask.paced) {
+        if (!play_ask) {
           vsync = false;  // and unlocked: immediate present, where the platform has it
           surface.configure_unlocked(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
         }
       }
       args.timedemo.clear();
       args.playdemo.clear();
-      ask.demo.clear();
-      ask.paced = false;
+      bench_ask.clear();
+      play_ask = false;
+      shooters_edge::net::remote_disconnect(remote);  // a demo is not played over a game joined
     }
+    // Joined to a server (`connect`): its game drawn as a played demo's is (classic_remote.hpp),
+    // from the frame its first level is known to the frame it drops, the listen server held.
+    auto joined = shooters_edge::net::RemoteStep::waiting;
+    if (remote.active || (bench_map && !bench.active)) {
+      shooters_edge::net::remote_hands(
+          remote, playing && !game_menu.open() ? cl::button_moves(controls) : cl::Moves{}, played,
+          controls, wall);
+      std::vector<std::string> lines;
+      joined = shooters_edge::net::remote_step(remote, wall, lines);
+      for (const std::string& line : lines) {
+        console.print(line);
+        hud.notify.push(line, se::hud_style().ink, t);
+      }
+      if (!remote.active && bench_map && !back_to_listen()) return 1;
+    }
+    const bool drawn_remote = remote.active && (bench_map || joined == decltype(joined)::new_level);
     if (bench.active && input.tapped(ge::platform::Key::escape)) {
       if (!end_bench("Escape pressed", t)) return 1;
       continue;
     }
-    if (bench.active) {
+    if (bench.active || drawn_remote) {
       std::vector<std::string> said;
+      const bool paced = bench.paced || drawn_remote;  // every frame shown, nothing timed
       const cl::TimedemoStep step =
-          bench.paced
+          drawn_remote ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
+                                                                : cl::TimedemoStep::frame)
+          : bench.paced
               ? cl::playback_step(playback, bench,
                                   {con_view.open() ? std::span<const bool>{} : input.pressed,
                                    input.pointer_x * px_per_unit, input.pointer_y * px_per_unit,
@@ -776,7 +779,7 @@ int run_main(int argc, char** argv) {
                                   w, h, wall, t, said, error)
               : cl::timedemo_step(bench, error);
       for (const std::string& line : said) console.print(line);
-      const cl::DemoState& ds = bench.demo.state;
+      const cl::DemoState& ds = drawn_remote ? remote.demo.state : bench.demo.state;
       if (step == cl::TimedemoStep::new_level) {
         // The game folder the recording's server ran, mounted when the window is not on it.
         std::vector<std::string> lines;
@@ -790,7 +793,7 @@ int run_main(int argc, char** argv) {
         }
         if (!rebuild_world(*bench_map, {ds.models, {}}, from)) return 1;
         bench_models = ds.models.size();
-        if (bench.paced) hearing.level(ds, from, &bench_map->bsp.map);
+        if (paced) hearing.level(ds, from, &bench_map->bsp.map);
       } else if (step != cl::TimedemoStep::frame) {
         if (!end_bench(step == cl::TimedemoStep::error ? error : "", t)) return 1;
         continue;
@@ -801,7 +804,7 @@ int run_main(int argc, char** argv) {
         if (!rebuild_world(*bench_map, {ds.models, {}}, from)) return 1;
         bench_models = ds.models.size();
       }
-      if (bench.paced) {  // what the frames read carried: heard, and its lines shown
+      if (paced) {  // what the frames read carried: heard, and its lines shown
         synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
         std::vector<std::string> lines;
         if (hearing.frame(ds, bench.heard, static_cast<float>(wall), lines, hud.centre))
@@ -812,23 +815,26 @@ int run_main(int argc, char** argv) {
         }
       }
       if (!world) continue;  // no level of the demo's yet
-      ge::render::FrameView view =
-          cl::demo_view(bench.demo.state, ge::camera::FirstPersonRow{}.fov_y, t);
+      ge::render::FrameView view = cl::demo_view(ds, ge::camera::FirstPersonRow{}.fov_y, t);
       view.frame = static_cast<uint64_t>(presented);
       overlay.begin(w, h);
-      se::fill_hud(hud, cl::demo_status(bench.demo.state, t),
-                   cl::hud_art_of(files, classic_art, free_art));
+      se::fill_hud(hud, cl::demo_status(ds, t), cl::hud_art_of(files, classic_art, free_art));
       const auto placed =
           hud.layout.draw(overlay, hud.layout.frame(w, h, se::hud_style()), se::hud_style());
       playback.bar_bottom_px = cl::hud_inset(placed, h);
       if (bench.paced) cl::playback_draw(overlay, playback, bench, w, h, t);
+      if (drawn_remote) {  // a game joined: its menu and console over it
+        game_menu.draw(overlay, w, h, t);
+        con_view.frame(wall);
+        ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
+      }
       // Every frame is drawn, but only one in kBenchShowNs is shown: the rest go to an offscreen
       // target of the surface's format. A window's present waits for the display however its
       // mode is set (macOS's compositor hands an image back once a refresh), so a frame rate
       // timed through it is the display's; drawn offscreen it is the machine's.
       const uint64_t frame_ns = ge::platform::now_ns();
       wgpu::TextureView target;
-      const bool show = bench.paced || frame_ns - bench_shown_ns >= kBenchShowNs;
+      const bool show = paced || frame_ns - bench_shown_ns >= kBenchShowNs;
       if (show) target = surface.acquire(*device);
       if (target) {
         bench_shown_ns = frame_ns;
@@ -842,12 +848,12 @@ int run_main(int argc, char** argv) {
       cl::demo_placed(ds, bench_fx.models);  // its entities and other players, not its effects yet
       const auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
-      if (!bench.paced && bench.skip == 0) cl::record_span(*world, bench.passes);
+      if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
         shot_copy.frame(*device, surface.frame_target(), shots, console);
         surface.present();
       }
-      if (bench.paced) {  // playback: every frame shown, nothing timed
+      if (paced) {  // playback: every frame shown, nothing timed
         ++presented;
         continue;
       }
@@ -907,10 +913,7 @@ int run_main(int argc, char** argv) {
       cl::load_world(loader, files, *listen.map, picture, listen.server->models, adapter, t);
       continue;  // the title from the next frame, not the last map from the new one's eyes
     }
-    if (listen.restarted) {  // the lobby's countdown ran out: the match on a new server
-      listen.restarted = false;
-      forget_seen();
-    }
+    if (std::exchange(listen.restarted, false)) forget_seen();  // the lobby's match restarted
     if (listen.campaign.sellscreen) {  // the shareware episode's end: the help pages
       listen.campaign.sellscreen = false;
       game_menu.show(menu_host, "help");

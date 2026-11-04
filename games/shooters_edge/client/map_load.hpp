@@ -16,7 +16,7 @@
 //
 // ge:summary A map loaded behind the window: read and decoded on a thread, compiled while drawing
 // ge:keywords map-load background-load async loading spinner load_map load_world step_load
-// ge:keywords cancel_load freeze hitch title
+// ge:keywords cancel_load take_load freeze hitch title
 // ge:skill render shooter
 #pragma once
 
@@ -28,10 +28,12 @@
 #include <string>
 #include <vector>
 
+#include "console/console.hpp"
 #include "gpu/device.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
+#include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "viewmodel/held.hpp"
@@ -50,6 +52,7 @@ struct WorldReadDone {
 struct MapLoad {
   std::string what;    // the map loading, for the spinner's caption ("" none)
   double since_s = 0;  // the window's clock when it began
+  std::chrono::steady_clock::time_point began;  // the same, for the line a world's arrival says
   std::future<MapRead> map;
   std::future<WorldReadDone> world;
   WorldDrawPtr compiling;                           // its GPU half, its pipelines compiling
@@ -92,6 +95,25 @@ struct LoadStep {
 LoadStep step_load(MapLoad& load, ge::gpu::Device& device, uint32_t width, uint32_t height,
                    wgpu::TextureFormat format, const look::Picture& picture,
                    std::span<const ge::viewmodel::HeldModel> weapons, bool wait);
+
+// THE WINDOW'S TURN: one frame's step taken (every step with `measured`): a map read started on
+// `listen` (`game_folder.hpp`'s `start_map`; the arena when a game's first map does not read)
+// and its world asked for; a rebuild that failed said on `con`, the old world kept; a world made
+// handed over to `world` (`current`: it is the server's map's; `fresh`: a new map's, so what was
+// seen of the last is let go). 0, or the window's exit code (1 the world, 2 the server) with the
+// error line said.
+struct LoadWindow {
+  ge::gpu::Device* device = nullptr;
+  uint32_t width = 0, height = 0;
+  wgpu::TextureFormat format = wgpu::TextureFormat::Undefined;
+  const look::Picture* picture = nullptr;
+  std::span<const ge::viewmodel::HeldModel> weapons;
+  const SearchPath* files = nullptr;
+  const GameAdapter* adapter = nullptr;
+  const GameContent* content = nullptr;
+};
+int take_load(MapLoad& load, const LoadWindow& at, Listen& listen, ge::console::Console& con,
+              bool measured, double now_s, WorldDrawPtr& world, bool& current, bool& fresh);
 
 // Every step stopped, its threads waited out (before the search path they read is let go).
 void cancel_load(MapLoad& load);

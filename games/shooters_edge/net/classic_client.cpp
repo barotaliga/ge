@@ -340,6 +340,10 @@ void apply(ClassicClientEnd& c, const SvcMsg& m) {
         c.player_seen[m.player.slot] = true;
       }
       break;
+    case svc::setangle:
+      for (size_t i = 0; i < 3 && i < m.floats.size(); i++) c.set_angles[i] = m.floats[i];
+      c.setangles++;
+      break;
     case svc::download:
       on_download(c, m);
       break;

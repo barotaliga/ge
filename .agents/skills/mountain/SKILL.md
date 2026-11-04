@@ -158,6 +158,15 @@ surface is set at the ground's lowest 30 % inside the shore, the rest cut to it,
 graded to the ground round it no steeper than 0.6. `tests/mountain_mapped_test.cpp` holds the
 fill, the bowl and the banks on alpine-1.
 
+A REAL FACE'S STREAMS (`mountain/tarn/brook.hpp`, M24l5) are its hints' `HintStream`s, baked by the
+same `--water` bake (the labs' `osm_water.hpp`'s `streams_of`), riding after the lakes in the
+packed hints. `lay_mapped_streams` lays them AFTER the lakes: the surface falls and never climbs
+(the running minimum of the ground less a sink), and where the generator's ground rises more than
+`kDeepestCut` over it, or a laid lake swallows it, the line breaks into streams of their own. Open
+water is cut half a grid cell past each edge (the ground read between nodes must lie under a 3 m
+brook on a 2 m grid); a frozen stream is a gully that never reaches the water.
+`tests/mountain_brook_test.cpp` holds the line, the bed and the gully on alpine-1.
+
 ## The village's traffic (`mountain/village`, M13h)
 
 `furnish_streets` (`furniture.hpp`) reads the street plan for what drives and parks on it: the

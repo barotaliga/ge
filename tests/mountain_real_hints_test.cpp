@@ -156,6 +156,35 @@ TEST(a_face_s_lakes_ride_after_its_woods) {
   CHECK(!mg::decode_hints(wet.substr(0, wet.size() - 8)));
 }
 
+TEST(a_face_s_streams_ride_after_its_lakes) {
+  mg::RealHints h;
+  h.lakes = {{{{100, 200}, {300, 210}, {280, 400}}}};
+  const std::string lakes_only = mg::encode_hints(h);
+  h.streams = {{mg::HintStreamKind::stream, {{500, 100}, {520, 300}, {560, 700}}},
+               {mg::HintStreamKind::river, {{0, 2000}, {800, 2100}}}};
+  const std::string wet = mg::encode_hints(h);
+  // The lakes' bytes stand as they were; the streams follow them.
+  const auto lake_bytes = mg::packed::from_base64(lakes_only);
+  const auto wet_bytes = mg::packed::from_base64(wet);
+  CHECK(lake_bytes && wet_bytes && wet_bytes->size() > lake_bytes->size());
+  if (lake_bytes && wet_bytes) {
+    CHECK(std::equal(lake_bytes->begin(), lake_bytes->end(), wet_bytes->begin()));
+  }
+  const auto back = mg::decode_hints(wet);
+  CHECK(back && back->lakes.size() == 1 && back->streams.size() == 2);
+  if (!back || back->streams.size() != 2) return;
+  CHECK(back->streams[0].kind == mg::HintStreamKind::stream &&
+        back->streams[1].kind == mg::HintStreamKind::river);
+  CHECK(back->streams[0].points.size() == 3 && back->streams[0].points[2].x == 560 &&
+        back->streams[0].points[2].z == 700);
+  CHECK(mg::encode_hints(*back) == wet);
+  // Streams with no lakes write the lakes' count as 0 before them; a bare 0 is torn.
+  h.lakes.clear();
+  const auto dry = mg::decode_hints(mg::encode_hints(h));
+  CHECK(dry && dry->lakes.empty() && dry->streams.size() == 2);
+  CHECK(!mg::decode_hints(wet.substr(0, wet.size() - 4)));
+}
+
 TEST(a_face_s_woods_are_read_by_its_height) {
   mg::FaceWoods w{1000, 1800, 1500, {0.8, 0.8, 0.6, 0.4, 0.2, 0, 0, 0}};
   // A band's middle reads the band; the ends hold.
@@ -186,6 +215,7 @@ TEST(every_face_has_hints_that_stand_on_its_map) {
   std::vector<std::string> got;
   int wooded = 0;
   int lakes = 0;
+  int streams = 0;
   for (const mg::HintData* data : baked) {
     const std::string id = data->id;
     const auto h = mg::real_hints(id);
@@ -214,7 +244,17 @@ TEST(every_face_has_hints_that_stand_on_its_map) {
       for (const mg::PlanPoint& q : l.shore) on = on && on_map(q);
       CHECK_MSG(on, id + ": a lake's shore stands off the map");
     }
+    for (const mg::HintStream& st : h->streams) {
+      bool on = st.points.size() >= 2;
+      for (const mg::PlanPoint& q : st.points) on = on && on_map(q);
+      CHECK_MSG(on, id + ": a stream's line stands off the map");
+      if (st.points.size() < 2) continue;
+      CHECK_MSG(mg::face_height(*face, st.points.front().x, st.points.front().z) + 1 >=
+                    mg::face_height(*face, st.points.back().x, st.points.back().z),
+                id + ": a stream climbs from its top to its foot");
+    }
     lakes += int(h->lakes.size());
+    streams += int(h->streams.size());
     const auto woods = mg::face_woods(*face, *h);
     if (woods) {
       wooded++;
@@ -223,8 +263,8 @@ TEST(every_face_has_hints_that_stand_on_its_map) {
     }
     got.push_back(id + " lifts=" + std::to_string(h->lifts.size()) + " pistes=" +
                   std::to_string(h->pistes.size()) + " lakes=" + std::to_string(h->lakes.size()) +
-                  " line=" + (woods ? f0(woods->line) : std::string("-")) +
-                  " hash=" + hash_of(data->data));
+                  " streams=" + std::to_string(h->streams.size()) + " line=" +
+                  (woods ? f0(woods->line) : std::string("-")) + " hash=" + hash_of(data->data));
     const size_t at = got.size() - 1;
     if (!write && at < want.size()) {
       CHECK_MSG(got[at] == want[at], id + ": the hints moved:\n  got  " + got[at] + "\n  want " +
@@ -236,10 +276,13 @@ TEST(every_face_has_hints_that_stand_on_its_map) {
   CHECK_MSG(wooded * 2 > int(baked.size()), std::to_string(wooded) + " faces have woods");
   // Most mountains hold a lake somewhere on their face.
   CHECK_MSG(lakes > int(baked.size()), std::to_string(lakes) + " lakes on the faces");
+  // Most mountains run streams down their face.
+  CHECK_MSG(streams > int(baked.size()), std::to_string(streams) + " streams on the faces");
   if (!write) CHECK(got.size() == want.size());
   if (write) {
     std::ofstream out(ge::test::root_path(kGolden));
-    out << "# face, then its hints' lift, piste and lake counts, tree line (m) and the data's hash "
+    out << "# face, then its hints' lift, piste, lake and stream counts, tree line (m) and the "
+           "data's hash "
            "(mountain_real_hints_test)\n";
     for (const auto& r : got) out << r << "\n";
     std::printf("  wrote %zu rows to %s\n", got.size(), kGolden);

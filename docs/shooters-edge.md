@@ -248,6 +248,38 @@ Rocket Launcher, 20 shells, 5 rockets", the weapon only when it is new to its ta
 "You got armor" whatever its colour, as the classic game does. On the built-in arena, with no
 packs, the mod speaks its own words ("You got ammunition", "You got the Spiker").
 
+### Joining a game over the network
+
+Any server that speaks the classic protocol can be joined from a window:
+
+```sh
+build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +connect 192.168.1.20
+```
+
+The game's own dedicated server, `shooters_edge_server` (docs/servers.md), is what a machine runs
+to host one, for example dm6 from the packs with a frag limit:
+
+```sh
+build/release/shooters_edge_server --root=$HOME/games/classic --map=dm6 --port=27500 --realtime --for=0 +set fraglimit 20
+```
+
+The window's console joins and leaves (`net/classic_remote.hpp`):
+
+| Command | What |
+| --- | --- |
+| `connect <host>[:port]` | join a server (an IPv4 address or `localhost`; 27500 when no port) |
+| `disconnect` | leave it, back to your own game |
+| `reconnect` | the last server again |
+| `netstatus` | the server joined, the stage, the packets and bytes each way |
+
+Joined, the window plays the server's game with your keys, mouse, `name`, `topcolor` and
+`bottomcolor`, and draws what the server sends exactly as it draws a client demo (the map, the
+items, the other players, the HUD, the sounds, the printed lines): the connection is read as a
+recording of it while it is made. Your own game waits until you leave. Not yet: your own moves are
+not predicted, so on a network with lag you see yourself a round trip late (on a LAN it is a few
+milliseconds); and a server is found by its
+address, not yet on a list.
+
 ### Benchmarking a demo
 
 `timedemo <demo>` in the console, or `-timedemo <demo>` on the command line (which quits with
@@ -740,14 +772,14 @@ for its own content (its own maps and mod), never a stand-in for a classic game'
 them never changes a classic game. Playing one classic game with another's parts is classic
 remix, a feature of classic-enhance (M18u), shown only when two full games are loaded.
 
-### The rules runner: the next seam (designed, not built)
+### The rules runner: the next seam (steps 1 and 2 landed)
 
 The adapter answers what a game's FILES hold. What its RULES do is the other half: the listen
 server, the dedicated server, the campaign, the bots and the recorder all hold the QC server
 (`server/qc_server.hpp`) itself today. A second program form (the sequel's native rules, a
 sandboxed bytecode, the engine's C++ mod as the whole game) needs them to hold a **runner**
-instead, of which the QC server is the first implementation. This is the design; it is built when
-the sequel's rules start (M18t4), not before.
+instead, of which the QC server is the first implementation. Steps 1 and 2 below have landed
+(`server/rules_world.hpp`); steps 3 and 4 follow, and step 5 waits for the sequel (M18v).
 
 **What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
 groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start
@@ -783,9 +815,12 @@ runner writes the same messages, so the client and the demos do not change.
 **It lands in steps, each with the digests unchanged** (the QC server stays the only runner until
 the last):
 
-1. `RulesWorld` and the QC server filling it each frame (`se-loop`, `se-server` digests the same,
-   the frame's cost measured).
-2. The scoreboard, the recorder and the wire's entity states read the view, never the layout.
+1. **Landed.** `RulesWorld` and the QC server filling it (`fill_world`): the lists at the map's
+   start and after a save's load, the clients and every entity's row at the end of each frame, of
+   `connect` and `disconnect`, and of each command or console line (`commands.hpp`), so a reader
+   between frames sees what the last call left. Every lab's digest is the same.
+2. **Landed.** The wire's entity and player states, the player's stats, the frags, the map's
+   title and the recorders read the view; nothing in `net/` reads a program field for them.
 3. The bots read the view (`se-bots`, `se-team`, `se-hop` digests the same): the largest group.
 4. The host holds a runner (a table pointer and its state) where it held a `QcServer`; the
    campaign and the dedicated server the same.

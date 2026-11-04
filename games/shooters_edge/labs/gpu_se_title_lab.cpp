@@ -86,7 +86,8 @@ void run(gl::Lab& lab) {
   shot("open", "THE TITLE",
        "The night the window opens on behind the main menu: the full moon, drawn near and huge, "
        "low in the Earth's shadow, a deep red, the cloud passing in front of it on the wind.",
-       "a red disc right of centre, a third of the frame tall, darker at its top; cloud over it", open);
+       "a red disc right of centre, a third of the frame tall, darker at its top; cloud over it",
+       open);
   shot("later", "FOUR SECONDS ON",
        "The same night four seconds later: the cloud has moved across the moon, the moon has not.",
        "the cloud's shapes moved against the first frame; the moon in the same place", later);

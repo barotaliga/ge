@@ -13,8 +13,7 @@
 //
 // ge:summary The window's settings kept in config.cfg, the user info sent, the mouse on binds
 // ge:keywords settings config-cfg save_settings settings_dir user-info topcolor bottomcolor name
-// ge:keywords mouse_to_binds keys_to_menu mouse1 mwheelup customize-controls add_window_cvars
-// ge:keywords vid_fullscreen vid_display volume scr_levelstats
+// ge:keywords mouse_to_binds keys_to_menu mouse1 mwheelup customize-controls
 // ge:skill console input
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -41,18 +40,6 @@ struct UserInfo {
   std::string name;
   int sent_top = -1, sent_bottom = -1;
 };
-// THE WINDOW'S OWN: `vid_fullscreen` (the window over the whole screen, the desktop's mode),
-// `vid_display` (which display it covers), `volume` (the game's sound, 0..1) and
-// `scr_levelstats` (the scores key in a campaign also shows the level's figures). The window
-// reads them each frame; `w` must outlive `con`.
-struct WindowCvars {
-  bool fullscreen = false;
-  int display = 0;
-  double volume = 0.7;
-  bool level_stats = true;
-};
-void add_window_cvars(ge::console::Console& con, WindowCvars& w);
-
 // `topcolor` and `bottomcolor` over `info` (it must outlive `con`).
 void add_user_info_cvars(ge::console::Console& con, UserInfo& info);
 // The name and colours sent to the server playing when they changed or it is a new server.

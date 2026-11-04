@@ -10,6 +10,9 @@
 #include <memory>
 #include <utility>
 
+#include "core/num_text.hpp"
+#include "core/output.hpp"
+
 namespace shooters_edge::client {
 
 namespace {
@@ -65,6 +68,7 @@ std::string load_caption(const MapLoad& l) {
 void load_map(MapLoad& l, const SearchPath& files, const std::string& name, double now_s) {
   l.what = name;
   l.since_s = now_s;
+  l.began = std::chrono::steady_clock::now();
   l.map = std::async(std::launch::async, read_map, &files, name);
 }
 
@@ -76,6 +80,7 @@ void load_world(MapLoad& l, const SearchPath& files, const LoadedMap& map,
   if (l.what.empty() || l.what != map.name) {
     l.what = map.name;
     l.since_s = now_s;
+    l.began = std::chrono::steady_clock::now();
   }
   // The thread's own copies: the map's bytes (the server keeps its own map), the names.
   auto copy = std::make_shared<LoadedMap>();
@@ -130,6 +135,48 @@ LoadStep step_load(MapLoad& l, ge::gpu::Device& device, uint32_t width, uint32_t
     l.what.clear();
   }
   return out;
+}
+
+int take_load(MapLoad& l, const LoadWindow& at, Listen& listen, ge::console::Console& con,
+              bool measured, double now_s, WorldDrawPtr& world, bool& current, bool& fresh) {
+  namespace out = ge::core::output;
+  fresh = false;
+  while (busy(l)) {
+    LoadStep step =
+        step_load(l, *at.device, at.width, at.height, at.format, *at.picture, at.weapons, measured);
+    std::string error;
+    if (step.failed == LoadFailed::world && current) {
+      con.print("map: " + step.error);  // a rebuild that failed: the old world stays
+    } else if (step.failed == LoadFailed::world) {
+      out::error("shooters_edge: the new world draw did not load: " + step.error +
+                 "; see docs/rendering.md");
+      return 1;
+    } else if (step.failed == LoadFailed::map) {
+      con.print("map: " + step.error);
+      listen.pending_map.clear();
+      if (!listen.map)  // a game just loaded and its first map did not: the arena
+        step.map = load_named_map(*at.files, "arena", error);
+    }
+    if (step.map) {
+      if (!start_map(listen, *at.content, std::move(step.map), error)) {
+        out::error("shooters_edge: the map change failed: " + error +
+                   "; see docs/shooters-edge.md § Playing it");
+        return 2;
+      }
+      current = false;  // the server plays the new map; its world is made next
+      load_world(l, *at.files, *listen.map, *at.picture, listen.server->models, *at.adapter, now_s);
+    }
+    if (step.world) {
+      fresh = fresh || !current;
+      const std::chrono::duration<double> took = std::chrono::steady_clock::now() - l.began;
+      out::status("shooters_edge: " + listen.map->name + " drawn " +
+                  ge::core::num::to_fixed(took.count(), 2) + " s after it was asked for");
+      world = std::move(step.world);
+      current = true;
+    }
+    if (!measured) break;  // one step a frame; a measured run waits them all out
+  }
+  return 0;
 }
 
 void cancel_load(MapLoad& l) {

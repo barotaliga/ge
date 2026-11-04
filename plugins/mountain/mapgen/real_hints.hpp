@@ -20,14 +20,18 @@
 // every band's cover, bottom first, 0..255 for 0..1), or 0 for a face whose map draws no forest;
 // then, only where the map has water on the face, the lakes' count and each lake's shore: its
 // points' count and each point's step in x and z from the one before (the first from the map's
-// corner) in `kHintGrain` m. A face with no lakes ends at its woods, so the hints baked before the
-// lakes were read back the same.
+// corner) in `kHintGrain` m (0 where it has streams and no lake); then, only where it has
+// streams, their count and each stream's kind (`HintStreamKind`), its points' count and each
+// point's step in x and z from the one before (the first from the map's corner), top first, in
+// `kHintGrain` m. A face with no water ends at its woods, so the hints baked before the water was
+// read back the same.
 //
 // The map data: © OpenStreetMap contributors, under the Open Database Licence (ODbL 1.0); the
 // baked hints are a derived database under the same licence.
 //
 // ge:summary R25 a real face's hints: the real lifts, pistes and woods by height, decoded
 // ge:keywords real-hints hint-lift hint-piste woods-by-height tree-line openstreetmap r25 hint-lake
+// ge:keywords hint-stream
 // ge:skill mountain
 // ge:test tests/mountain_real_hints_test.cpp
 #pragma once
@@ -80,11 +84,20 @@ struct HintLake {
   std::vector<PlanPoint> shore;
 };
 
+// A real stream or river on the face: its kind (a brook a stride across, or a river) and its line
+// on the map, top first (the end higher on the face).
+enum class HintStreamKind : uint8_t { stream, river };
+struct HintStream {
+  HintStreamKind kind;
+  std::vector<PlanPoint> points;
+};
+
 struct RealHints {
   std::vector<HintLift> lifts;
   std::vector<HintPiste> pistes;
   std::optional<HintWoods> woods;  // none where the face's map draws no forest
   std::vector<HintLake> lakes;
+  std::vector<HintStream> streams;
 };
 
 // One face's hints as baked (real_hints/): its id and its packed data (base64).

@@ -281,6 +281,21 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
   s.q.after_call = &after_call;
   s.q.rng = ge::core::make_rng(s.opt.seed);
   if (!install_catalogue(s, error)) return false;
+  {
+    auto offset = [&progs](const char* name) {
+      const pg::Def* d = pg::find_field(progs, name);
+      return d != nullptr ? d->offset : -1;
+    };
+    auto& w = s.world_fields;
+    w.currentammo = offset("currentammo");
+    w.armorvalue = offset("armorvalue");
+    w.ammo[0] = offset("ammo_shells");
+    w.ammo[1] = offset("ammo_nails");
+    w.ammo[2] = offset("ammo_rockets");
+    w.ammo[3] = offset("ammo_cells");
+    w.weapon = offset("weapon");
+    w.weaponframe = offset("weaponframe");
+  }
   NamedHooks& n = s.named;
   n.user_cmd = named(progs, "UserCmd");
   n.client_command = named(progs, "GE_ClientCommand");
@@ -410,6 +425,7 @@ bool load_map(QcServer& s, const MapSpec& map, std::string& error) {
   }
   s.loading = false;
   vm.world_locked = true;
+  fill_world(s, s.world, true);
   return true;
 }
 
@@ -437,6 +453,7 @@ void connect(QcServer& s, int slot, const std::string& name, bool spectator, boo
     }
   }
   sh::connect_client(s.sv, slot, spectator, bot, parms == nullptr);
+  fill_world(s, s.world, false);
 }
 
 void disconnect(QcServer& s, int slot) {
@@ -444,6 +461,7 @@ void disconnect(QcServer& s, int slot) {
   sh::disconnect_client(s.sv, slot);
   s.clients[slot] = ClientInfo{};
   if (s.paused) request_pause(s, -1, false);
+  fill_world(s, s.world, false);
 }
 
 void save_change_parms(QcServer& s) {
@@ -470,6 +488,7 @@ void qc_frame(QcServer& s, const sh::Packet* packets, int count) {
   for (int i = 0; i < sh::kMaxClients; i++)
     if (s.clients[i].active && s.clients[i].drop) disconnect(s, i);
   run_command_buffer(s);
+  fill_world(s, s.world, false);
 }
 
 }  // namespace shooters_edge::server
