@@ -41,7 +41,7 @@
 
 namespace ge::render {
 
-inline constexpr int kStreamBodies = 16;  // bodies whose optics a frame's streams read
+inline constexpr int kStreamBodies = 64;  // bodies whose optics a frame's streams read
 
 // One vertex of moving water, as water_stream.wgsl reads it.
 struct StreamVertex {

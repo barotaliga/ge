@@ -190,9 +190,6 @@ struct ClassicServer {
   sh::Vec3f lag_saved[sh::kMaxClients];  // a lagged trace's moved players' own origins
   bool lag_moved[sh::kMaxClients] = {};
   int64_t lag_rewinds = 0;
-  // Field offsets of the mod's own fields a stat or the player state reads (-1: absent).
-  int f_currentammo = -1, f_armorvalue = -1, f_ammo[4] = {-1, -1, -1, -1}, f_weapon = -1;
-  int f_weaponframe = -1;
   MultiviewRecorder* mvd = nullptr;  // a multiview recording running (classic_record.hpp)
 };
 

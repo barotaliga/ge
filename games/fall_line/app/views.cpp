@@ -184,6 +184,8 @@ std::string_view view_caption(std::string_view name) {
   if (name == "aerial") return "From high over a corner of the map, the whole mountain.";
   if (name == "tarn") return "Below a laid tarn's lip at eye height, over it to its headwall.";
   if (name == "tarn-high") return "High over the slope below a laid tarn, down onto it.";
+  if (name == "stream") return "On the bank of the longest laid stream, looking down along it.";
+  if (name == "stream-high") return "High over the longest laid stream, down along its line.";
   if (name == "corduroy") {
     return "Close over the groomed piste in the sun, looking down it at the comb's ribs and the "
            "machine's lanes.";
@@ -342,6 +344,23 @@ bool make_view(const Level& level, std::string_view name, ge::render::FrameView&
     place(level, l.x + dx / d * back, l.z + dz / d * back, high ? 70 : 1.8, v);
     v.heading = std::atan2(-dx, -dz);
     v.pitch = -std::atan2(v.eye[1] - l.level, back) * (high ? 1.0 : 0.6);
+  } else if (name == "stream" || name == "stream-high") {
+    // Two fifths of the way down the longest laid stream: on its bank, or high behind it.
+    const ge::mountain::mapgen::MapStream* best = nullptr;
+    for (const ge::mountain::mapgen::MapStream& s : level.streams) {
+      if (best == nullptr || s.points.size() > best->points.size()) best = &s;
+    }
+    if (best == nullptr || best->points.size() < 8) return false;
+    const auto& p = best->points;
+    const size_t i = p.size() * 2 / 5, j = std::min(p.size() - 1, i + 8);
+    const double dx = p[j].x - p[i].x, dz = p[j].z - p[i].z;
+    const double d = std::max(std::hypot(dx, dz), 1e-6);
+    const bool high = name == "stream-high";
+    const double back = high ? 45 : 6, side = high ? 0 : 0.5 * p[i].width + 4;
+    place(level, p[i].x - dx / d * back + dz / d * side, p[i].z - dz / d * back - dx / d * side,
+          high ? 30 : 1.7, v);
+    v.heading = std::atan2(dx, dz) + (high ? 0 : -12 * kDeg);
+    v.pitch = -std::atan2(v.eye[1] - p[j].level, back + d) * (high ? 1.0 : 0.7);
   } else if (name == "aerial") {
     const double c = level.size * 0.5;
     const double x = -0.15 * level.size, z = -0.15 * level.size;

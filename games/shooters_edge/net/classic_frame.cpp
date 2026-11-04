@@ -86,19 +86,6 @@ int sound_index(const ClassicServer& s, const std::string& name) {
   return 0;
 }
 
-float field(const ClassicServer& s, int e, int offset) {
-  if (offset < 0) return 0;
-  return pg::as_float(*pg::entity_field(s.qc->q.vm, e, offset));
-}
-
-int model_index_of(const ClassicServer& s, int32_t str) {
-  const char* name = pg::vm_string(s.qc->q.vm, str);
-  if (name == nullptr || name[0] == 0) return 0;
-  for (size_t i = 1; i < s.qc->models.size(); i++)
-    if (s.qc->models[i] == name) return static_cast<int>(i);
-  return 0;
-}
-
 void route_event(ClassicServer& s, const sv::NetEvent& ev) {
   for (int j = 0; j < sh::kMaxClients; j++) {
     ClassicClient& c = s.clients[j];
@@ -198,10 +185,12 @@ PlayerState player_state(const ClassicServer& s, int about, int to) {
   const sh::Server& sv = s.qc->sv;
   const sh::Edict& e = sv.edicts[static_cast<size_t>(about) + 1];
   const sh::ClientSlot& cs = sv.clients[static_cast<size_t>(about)];
+  const sv::RulesWorld& w = s.qc->world;
+  const sv::WorldEntity& row = w.entities[static_cast<size_t>(about) + 1];
   PlayerState p;
   p.slot = about;
   p.origin = e.origin;
-  p.frame = static_cast<int>(field(s, about + 1, s.qc->q.layout->f.frame));
+  p.frame = row.frame;
   if (about != to) {
     p.has_msec = true;
     const double ms = 1000 * (sv.time - cs.last_cmd_time);
@@ -216,13 +205,12 @@ PlayerState player_state(const ClassicServer& s, int about, int to) {
   p.velocity = {static_cast<float>(static_cast<int>(e.velocity.x)),
                 static_cast<float>(static_cast<int>(e.velocity.y)),
                 static_cast<float>(static_cast<int>(e.velocity.z))};
-  const int model = static_cast<int>(field(s, about + 1, s.qc->q.layout->f.modelindex));
-  p.modelindex = model == s.player_model ? 0 : model;
-  p.skin = static_cast<int>(field(s, about + 1, s.qc->q.layout->f.skin));
-  p.effects = static_cast<int>(field(s, about + 1, s.qc->q.layout->f.effects));
-  if (about == to && s.f_weaponframe >= 0) {
+  p.modelindex = row.modelindex == s.player_model ? 0 : row.modelindex;
+  p.skin = row.skin;
+  p.effects = row.effects;
+  if (about == to && w.weapon_frames) {
     p.has_weaponframe = true;
-    p.weaponframe = static_cast<int>(field(s, about + 1, s.f_weaponframe));
+    p.weaponframe = w.clients[about].numbers.weapon_frame;
   }
   p.dead = e.health <= 0;
   p.gib = e.mins.z != -24;
@@ -235,18 +223,16 @@ PlayerState player_state(const ClassicServer& s, int about, int to) {
 }  // namespace
 
 void player_stats(const ClassicServer& s, int slot, int32_t st[kStats], bool view_height) {
-  const int e = slot + 1;
-  st[0] = static_cast<int32_t>(field(s, e, s.qc->q.layout->f.health));
-  st[2] = model_index_of(
-      s, static_cast<int32_t>(*pg::entity_field(s.qc->q.vm, e, s.qc->q.layout->f.weaponmodel)));
-  st[3] = static_cast<int32_t>(field(s, e, s.f_currentammo));
-  st[4] = static_cast<int32_t>(field(s, e, s.f_armorvalue));
-  for (int i = 0; i < 4; i++) st[6 + i] = static_cast<int32_t>(field(s, e, s.f_ammo[i]));
-  st[10] = static_cast<int32_t>(field(s, e, s.f_weapon));
-  const float serverflags = pg::as_float(s.qc->q.vm.globals[s.qc->q.layout->g.serverflags]);
-  st[15] = static_cast<int32_t>(field(s, e, s.qc->q.layout->f.items)) |
-           (static_cast<int32_t>(serverflags) << 28);
-  if (view_height) st[16] = static_cast<int32_t>(field(s, e, s.qc->q.layout->f.view_ofs + 2));
+  const sv::RulesWorld& w = s.qc->world;
+  const sv::PlayerNumbers& n = w.clients[slot].numbers;
+  st[0] = n.health;
+  st[2] = n.weapon_model;
+  st[3] = n.current_ammo;
+  st[4] = n.armour;
+  for (int i = 0; i < 4; i++) st[6 + i] = n.ammo[i];
+  st[10] = n.weapon;
+  st[15] = n.items | (static_cast<int32_t>(w.serverflags) << 28);
+  if (view_height) st[16] = static_cast<int32_t>(n.view_z);
 }
 
 namespace {
