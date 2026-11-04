@@ -1,5 +1,5 @@
 // `shooters_edge_host`: a game others join. The baseline deathmatch mod on a map from your game
-// folder (or the built-in arena), served over the classic protocol on a UDP port of this machine
+// folder (or the built-in arena), served over the classic protocol on this machine's UDP port
 // (27500 by default), so `shooters_edge` windows on this machine or the network join it with
 // `connect <this machine's address>` (net/classic_remote.hpp). Headless: it opens no window.
 //
