@@ -185,7 +185,7 @@ void player(const ClassicServer& s, int k, gn::Writer& w) {
   write_byte(w, row.modelindex);
   write_byte(w, row.skin);
   write_byte(w, row.effects);
-  write_byte(w, world.clients[k].numbers.weapon_frame);
+  write_byte(w, static_cast<int>(world.clients[k].numbers.weapon_frame));
 }
 
 // A packed recorder's new plain bytes fed to its stream (flushed every kPackFlushBytes).

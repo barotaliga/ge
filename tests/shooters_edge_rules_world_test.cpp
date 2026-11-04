@@ -75,7 +75,7 @@ TEST(a_client_and_every_entity_follow_each_frame) {
   const sh::Edict& ed = fx.s->sv.edicts[static_cast<size_t>(p)];
   CHECK(ed.velocity.x != 0 || ed.velocity.y != 0);
   const sv::PlayerNumbers& n = w.clients[0].numbers;
-  CHECK(n.health == static_cast<int>(fx.f(p, fx.s->q.layout->f.health, 0)));
+  CHECK_BITS(n.health, fx.f(p, fx.s->q.layout->f.health, 0));
   CHECK_BITS(n.frags, fx.f(p, fx.s->q.layout->f.frags, 0));
   CHECK_BITS(n.view_z, fx.f(p, fx.s->q.layout->f.view_ofs, 2));
 }

@@ -38,7 +38,7 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 
 float draw(Fighter& f) { return static_cast<float>(ge::core::next(f.rng)); }
 
-sh::Vec3f middle(const sh::Edict& e) {
+sh::Vec3f middle(const server::WorldEntity& e) {
   return {(e.absmin.x + e.absmax.x) * 0.5f, (e.absmin.y + e.absmax.y) * 0.5f,
           (e.absmin.z + e.absmax.z) * 0.5f};
 }
@@ -82,7 +82,7 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s,
   if (!entities || !pg::parse_entity_text(entities, blocks, error)) return;
   const auto entity_on = [&](const char* model) {
     for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
-      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
+      const server::WorldEntity& d = s.world.entities[static_cast<size_t>(e)];
       if (!d.free && d.modelindex > 0 && static_cast<size_t>(d.modelindex) < s.models.size() &&
           s.models[static_cast<size_t>(d.modelindex)] == model)
         return e;
@@ -97,7 +97,7 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s,
     ButtonSpot bs;
     bs.ent = entity_on(model);
     if (bs.ent < 0) continue;
-    bs.at = middle(s.sv.edicts[static_cast<size_t>(bs.ent)]);
+    bs.at = middle(s.world.entities[static_cast<size_t>(bs.ent)]);
     const char* health = pg::block_value(b, "health");
     bs.shoot = health && std::atof(health) > 0;
     bs.node = button_node(g, s, bs, bs.shoot ? 900.f : 256.f);
@@ -111,7 +111,7 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s,
       const int door = entity_on(dm);
       if (door < 0) continue;
       bs.doors.push_back(door);
-      const sh::Edict& de = s.sv.edicts[static_cast<size_t>(door)];
+      const server::WorldEntity& de = s.world.entities[static_cast<size_t>(door)];
       for (size_t i = 0; i < f.items.size(); i++) {
         ItemSpot& it = f.items[i];
         if (!near_box(it.at, de.absmin, de.absmax, kDoorKeeps)) continue;
@@ -138,7 +138,7 @@ bool button_poke(Fighter& f, const server::QcServer& s, int me, double t) {
   if (t < f.next_poke) return false;
   f.next_poke = t + kPokeEvery_s;
   if (draw(f) >= kPokeChance) return false;
-  const sh::Vec3f self = s.sv.edicts[static_cast<size_t>(me)].origin;
+  const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   const sh::Vec3f eye{self.x, self.y, self.z + 22};
   float best = kPokeSight;
   for (size_t k = 0; k < f.button_spots.size(); k++) {
@@ -158,7 +158,7 @@ bool button_poke(Fighter& f, const server::QcServer& s, int me, double t) {
 void button_poke_cmd(Fighter& f, const server::QcServer& s, int me, double t, sh::MoveCmd& cmd) {
   if (f.poke < 0 || t >= f.poke_until || f.bot.aiming) return;
   const ButtonSpot& b = f.button_spots[static_cast<size_t>(f.poke)];
-  const sh::Vec3f self = s.sv.edicts[static_cast<size_t>(me)].origin;
+  const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
   const sh::Vec3f eye{self.x, self.y, self.z + 22};
   if (!sees(s, eye, b)) return;
   const sh::Vec3f d = b.at - eye;
