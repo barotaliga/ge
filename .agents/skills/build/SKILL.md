@@ -129,7 +129,10 @@ false`, so one row's golden failure shows alongside the others.
   queue; fix it, push, and auto-merge queues it again.
 - **Kept off the runners when it cannot change the answer** (`ci.yml`'s header): a newer push
   cancels the older run, a PR's and main's alike (so while main lands faster than its matrix, no
-  main run finishes and `main-red` waits for a pause); a draft runs nothing until it is marked ready; a label other than
+  main run finishes and `main-red` waits for a pause, or for the DAILY RUN: `ci.yml`'s schedule,
+  05:00 in Stockholm, both 03:00 and 04:00 UTC fire and the one that is 05:00 there that day runs
+  while the other cancels itself; every row, the whole-tree lint, the whole packaging, in a
+  concurrency group of its own that nothing cancels); a draft runs nothing until it is marked ready; a label other than
   `full-ci` runs the gates alone, in its own concurrency group, so it never cancels the run going;
   each queue run's gates cancel the queue runs whose group ref is gone (the queue rebuilt), so
   nobody cancels stale queue runs by hand any more; the heavy jobs time out at about twice their
