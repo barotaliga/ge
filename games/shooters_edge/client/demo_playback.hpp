@@ -27,6 +27,7 @@
 // ge:keywords demo playback playdemo play-bar seek scrub pause resume speed cl_demospeed skip
 // ge:keywords demo_skip demo_skip_forward demo_skip_back demo_next demo_prev demo_seek
 // ge:keywords demo_pause demo_highlights demo_bar demo_track highlights markers video-player
+// ge:keywords add_demo_commands timedemo playdemo
 // ge:skill shooter replay ui
 // ge:test tests/shooters_edge_demo_highlights_test.cpp
 #pragma once
@@ -92,6 +93,9 @@ struct PlaybackInput {
 // The console's demo commands and cvars (the table above), bound to `p`; `demo_track` also sets
 // `bench`'s tracked player; the recording's `demo_pack` cvars bind to `p.record`.
 void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timedemo& bench);
+// `timedemo <demo>` (into `ask`) and `playdemo <demo>` (into `ask`, with `paced` set); the window
+// starts what they ask for at its next frame. Both must outlive `console`.
+void add_demo_commands(ge::console::Console& console, std::string& ask, bool& paced);
 
 // The demo `t` just started: scanned for its highlights. False with the reason (the demo still
 // plays, with no markers).

@@ -105,4 +105,16 @@ bool PipelineSet::finish(Device& device) {
   return ok;
 }
 
+bool PipelineSet::ready(Device& device) {
+  bool all = true;
+  for (Entry& e : entries_) {
+    if (e.future.id == 0) continue;
+    if (device.instance.WaitAny(e.future, 0) == wgpu::WaitStatus::Success)
+      e.future = {};
+    else
+      all = false;
+  }
+  return all;
+}
+
 }  // namespace ge::gpu

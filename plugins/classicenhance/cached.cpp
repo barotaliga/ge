@@ -7,8 +7,10 @@
 // ge:test tests/classicenhance_cached_test.cpp
 #include "classicenhance/cached.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <iterator>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -41,6 +43,41 @@ void mark_glow(lab::Picture& colour, const std::optional<lab::Picture>& glow) {
   }
 }
 
+// A pack's SHA-256, worked once for the bytes at one place: a game asks for its cache folder each
+// time it makes a map's world, reads its pictures and starts its enhancing, and a full pack takes
+// nearly half a second to hash. Keyed by where the bytes are, how many, and a probe of their first
+// and last 64 KiB, so bytes freed and others put in their place are hashed afresh.
+struct Digested {
+  const uint8_t* at = nullptr;
+  size_t size = 0;
+  uint64_t probe = 0;
+  std::string sha256;
+};
+
+uint64_t probe_of(std::span<const uint8_t> b) {
+  uint64_t h = 1469598103934665603ull;
+  const size_t edge = std::min<size_t>(b.size(), 65536);
+  for (size_t i = 0; i < edge; ++i) h = (h ^ b[i]) * 1099511628211ull;
+  for (size_t i = b.size() - edge; i < b.size(); ++i) h = (h ^ b[i]) * 1099511628211ull;
+  return h;
+}
+
+std::string pack_digest(std::span<const uint8_t> pack) {
+  static std::mutex mutex;
+  static std::vector<Digested> known;
+  const uint64_t probe = probe_of(pack);
+  {
+    const std::lock_guard lock(mutex);
+    for (const Digested& d : known)
+      if (d.at == pack.data() && d.size == pack.size() && d.probe == probe) return d.sha256;
+  }
+  std::string sha = assets::sha256_hex(pack);
+  const std::lock_guard lock(mutex);
+  if (known.size() >= 16) known.erase(known.begin());
+  known.push_back({pack.data(), pack.size(), probe, sha});
+  return sha;
+}
+
 // Whether the pack's own texture `name` is left to the pack (a liquid, the sky).
 bool left_to_pack(std::string_view name) {
   return name.empty() || name[0] == '*' ||
@@ -59,7 +96,7 @@ fs::path find_cache(std::span<const std::span<const uint8_t>> packs, const fs::p
   const fs::path base = root.empty() ? default_cache_root() : root;
   if (base.empty() || packs.empty() || packs[0].empty()) return {};
   std::vector<std::string> digests;
-  for (const std::span<const uint8_t> p : packs) digests.push_back(assets::sha256_hex(p));
+  for (const std::span<const uint8_t> p : packs) digests.push_back(pack_digest(p));
   const fs::path dir = pack_dir(base, set_key(digests));
   return recorded_key(dir, "textures").empty() ? fs::path{} : dir;
 }
