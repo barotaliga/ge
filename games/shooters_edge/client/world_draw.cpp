@@ -42,7 +42,8 @@ struct WorldDraw {
   ba::Scene scene;
   ba::BspDraw bsp;
   ba::SkyPick sky;
-  double top_y = 0;  // the map's highest point, m: the clouds stand over it
+  ba::SkyPick night;  // the map's own classic night, for an sv_hour after dusk (bsp_sky.hpp)
+  double top_y = 0;   // the map's highest point, m: the clouds stand over it
   ge::gpu::PipelineSet pipelines;
   gr::FrameTargets targets;
   wgpu::Buffer uniforms;
@@ -222,6 +223,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     }
     f->has_map = true;
     f->sky = ba::pick_sky(f->scene.sky_colours);
+    f->night = f->sky;
+    ba::night_over(f->night, map.name);
     f->top_y = f->scene.maxs[1];
   }
   f->uniforms = gr::make_buffer(d, "shooters_edge.uniforms", sizeof(gr::FrameUniforms),
@@ -299,14 +302,17 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     gr::set_grade(d, f.post[1], look::gamma_grade(gr::identity_grade(), f.gamma));
   }
   // The map's own sky (its pick), keeping the eye and the look the caller set.
-  ba::dress_sky(view, f.sky, f.top_y, view.time_s);
+  // sv_hour: the sun where the hour puts it (the map's own pick at -1).
+  ba::SkyPick sky = f.sky;
+  if (f.picture->weather.hour >= 0) ba::at_hour(sky, f.night, f.picture->weather.hour);
+  ba::dress_sky(view, sky, f.top_y, view.time_s);
   view.altitude_m = 100;
   view.clouds.quarter = false;
   view.clouds.spread = false;
   ba::Options o = look::world_options(lk, {}, *f.picture);
-  o.sky_light = f.sky.sky_light;
-  o.sky_seen = f.sky.sky_seen;
-  for (int k = 0; k < 3; ++k) o.sky_tint[k] = f.sky.tint[k];
+  o.sky_light = sky.sky_light;
+  o.sky_seen = sky.sky_seen;
+  for (int k = 0; k < 3; ++k) o.sky_tint[k] = sky.tint[k];
   // The switches on the options and the weather on the view, before the uniforms take the view.
   if (f.extras) {
     GE_ZONE("world.dress");

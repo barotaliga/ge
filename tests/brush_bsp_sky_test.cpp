@@ -123,3 +123,26 @@ TEST(a_night_dressed_keys_the_moon_and_keeps_the_rooms_light) {
   ba::dress_sky(dv, day, 0, 10);
   CHECK(dv.adapt_cd == 0 && dv.clouds.count == 1 && !dv.night.moon_key);
 }
+
+TEST(an_hour_set_puts_the_sun_where_the_hour_has_it) {
+  const ba::SkyPick day = ba::pick_sky(ba::SkyColours{});
+  ba::SkyPick night = day;
+  ba::night_over(night, "e1m3");
+  // Noon: high in the south (heading pi, 180 degrees), the pick's own type and cover kept.
+  ba::SkyPick noon = day;
+  ba::at_hour(noon, night, 12);
+  CHECK(!noon.night && noon.sun_elevation > 55 && noon.sun_elevation < 62);
+  CHECK(std::fabs(noon.sun_azimuth - 180) < 1);
+  CHECK(noon.type == day.type && noon.cover == day.cover);
+  // Morning in the east, low; evening in the west.
+  ba::SkyPick morning = day, evening = day;
+  ba::at_hour(morning, night, 7);
+  ba::at_hour(evening, night, 17);
+  CHECK(!morning.night && morning.sun_elevation > 5 && morning.sun_elevation < 30);
+  CHECK(morning.sun_azimuth < 180 && evening.sun_azimuth > 180);
+  // Midnight: the map's own night, the sun far down.
+  ba::SkyPick midnight = day;
+  ba::at_hour(midnight, night, 0);
+  CHECK(midnight.night && midnight.sun_elevation < -20);
+  CHECK(midnight.adapt_cd == night.adapt_cd && midnight.scud_cover == night.scud_cover);
+}

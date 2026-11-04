@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include "core/num_text.hpp"
+#include "core/solar.hpp"
 #include "render/cloud_kinds.hpp"
 #include "render/clouds.hpp"
 #include "render/night.hpp"
@@ -195,6 +196,24 @@ void night_over(SkyPick& p, std::string_view map) {
            " lit, a wind of " + core::num::to_fixed(p.wind, 0) + " m/s, scud over " +
            pct(p.scud_cover) + " and a broken deck over " + pct(p.deck_cover) +
            " of the sky, seen " + core::num::to_fixed(p.sky_seen, 0) + " times brighter";
+}
+
+void at_hour(SkyPick& p, const SkyPick& night, double hour) {
+  constexpr double kDeclination = 15;  // a summer's day: the sun this far north of the equator
+  const core::SunPlace sun = core::sun_at(hour, kLatitude, kDeclination);
+  const double elevation = sun.elevation / kDeg, azimuth = sun.azimuth / kDeg;
+  if (elevation < -6) {
+    // Night: the map's own, the sun under the horizon where the hour puts it and the moon across
+    // the sky from it.
+    const double turn = azimuth - night.sun_azimuth;
+    p = night;
+    p.moon_azimuth += turn;
+    p.sidereal = std::fmod(night.sidereal + 15 * hour, 360.0);
+  } else {
+    p.night = false;
+  }
+  p.sun_elevation = elevation;
+  p.sun_azimuth = azimuth;
 }
 
 render::Clouds clouds_of(const SkyPick& p, double top_y, double t) {
