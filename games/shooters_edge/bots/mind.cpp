@@ -116,18 +116,18 @@ int32_t key_near(const Fighter& f, sh::Vec3f p, float reach) {
 
 bool alive_slot(const server::QcServer& s, int slot) {
   return slot >= 0 && s.sv.clients[static_cast<size_t>(slot)].active &&
-         s.sv.edicts[static_cast<size_t>(slot) + 1].health > 0;
+         s.world.entities[static_cast<size_t>(slot) + 1].health > 0;
 }
 
 // A teammate's slot in sight from `me`'s eye within `kMateSight`.
 bool sees_mate(const Fighter& f, const server::QcServer& s, int me, int slot) {
   if (!alive_slot(s, slot)) return false;
-  const sh::Edict& self = s.sv.edicts[static_cast<size_t>(me)];
+  const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   sh::SenseSettings look = f.bot.senses.set;
   look.range = kMateSight;
   const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + look.view_height};
   return sh::sees_player(s.sv, look, me, eye, {f.bot.pitch, f.bot.yaw, 0},
-                         s.sv.edicts[static_cast<size_t>(slot) + 1].origin);
+                         s.world.entities[static_cast<size_t>(slot) + 1].origin);
 }
 
 // Whether a teammate is believed fresh within `r` of `p` (in sight now or said lately).
@@ -431,7 +431,8 @@ bool gives_up(const Fighter& f, const server::QcServer& s, int me, int32_t i, co
   for (const Fighter* m : f.team->members) {
     if (m->slot < 0 || m->slot == me - 1) continue;
     if (!sees_mate(f, s, me, m->slot)) continue;
-    if (dist(s.sv.edicts[static_cast<size_t>(m->slot) + 1].origin, it.at) < kGiveNear) return true;
+    if (dist(s.world.entities[static_cast<size_t>(m->slot) + 1].origin, it.at) < kGiveNear)
+      return true;
   }
   // Or one it believes near it (a report's place, a sighting a moment ago).
   return mate_near(f, it.at, for_quad ? 1200 : kGiveNear, t);
@@ -446,7 +447,7 @@ void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, d
     return;
   }
   mn.next_plan = t + kPlan_s;
-  const sh::Edict& self = s.sv.edicts[static_cast<size_t>(me)];
+  const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   // Its first plan alive with its reach known: the match's start.
   const bool opening = !mn.opened && self.health > 0 && f.reach_at >= 0;
   if (opening) mn.opened = true;
@@ -469,7 +470,7 @@ void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, d
     if (m->slot < 0 || m->slot == me - 1 || !sees_mate(f, s, me, m->slot)) continue;
     Mate& b = mate_named(f, m->name);
     b.slot = m->slot;
-    b.at = s.sv.edicts[static_cast<size_t>(m->slot) + 1].origin;
+    b.at = s.world.entities[static_cast<size_t>(m->slot) + 1].origin;
     b.at_t = t;
   }
 
