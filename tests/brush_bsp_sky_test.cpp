@@ -9,6 +9,7 @@
 // ge:keywords test brush bsp sky pick_sky sky-texture hue tint sky-light with_type night_over
 // ge:keywords classic-night scud clouds_of dress_sky
 // ge:skill brush testing
+#include <cmath>
 #include <string>
 
 #include "brush/app/bsp_sky.hpp"
