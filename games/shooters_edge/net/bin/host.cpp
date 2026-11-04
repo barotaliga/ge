@@ -86,7 +86,8 @@ int run(int argc, char** argv) {
   if (!cl::open_game_dir(a.basedir, a.game, files, error)) {
     if (!map_name.empty() && map_name != "arena")
       return usage("the game folder did not open: " + error);
-    out::warn("shooters_edge_host: no game folder, so the built-in arena: " + error);
+    out::warn("shooters_edge_host: no game folder, so the built-in arena: " + error +
+              "; next: give the folder holding the packs with -basedir <dir>");
   }
   if (map_name.empty()) map_name = cl::archive_paths(files).empty() ? "arena" : "dm6";
   ge::progs::Progs progs;
