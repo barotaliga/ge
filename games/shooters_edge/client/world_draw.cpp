@@ -42,7 +42,8 @@ struct WorldDraw {
   ba::Scene scene;
   ba::BspDraw bsp;
   ba::SkyPick sky;
-  double top_y = 0;  // the map's highest point, m: the clouds stand over it
+  ba::SkyPick night;  // the map's own classic night, for an sv_hour after dusk (bsp_sky.hpp)
+  double top_y = 0;   // the map's highest point, m: the clouds stand over it
   ge::gpu::PipelineSet pipelines;
   gr::FrameTargets targets;
   wgpu::Buffer uniforms;
@@ -162,6 +163,7 @@ struct WorldRead {
   bool has_map = false;
   ba::Scene scene;
   ba::SkyPick sky;
+  ba::SkyPick night;  // the map's own classic night, for an sv_hour after dusk
   double top_y = 0;
   std::vector<uint8_t> grade_palette;
   ge::brush::LightProbe probe;
@@ -225,6 +227,8 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   }
   r->has_map = true;
   r->sky = ba::pick_sky(r->scene.sky_colours);
+  r->night = r->sky;
+  ba::night_over(r->night, map.name);
   r->top_y = r->scene.maxs[1];
   r->probe = ge::brush::make_light_probe(r->scene.map);
   // ce_models: the models' enhanced skins, when this pack's were enhanced.
@@ -248,6 +252,7 @@ WorldDrawPtr begin_world(ge::gpu::Device& d, WorldReadPtr read, uint32_t width, 
   f->has_map = read->has_map;
   f->scene = std::move(read->scene);
   f->sky = read->sky;
+  f->night = read->night;
   f->top_y = read->top_y;
   f->grade_palette = std::move(read->grade_palette);
   const look::Picture& made = f->made;
@@ -345,14 +350,17 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     gr::set_grade(d, f.post[1], look::gamma_grade(gr::identity_grade(), f.gamma));
   }
   // The map's own sky (its pick), keeping the eye and the look the caller set.
-  if (!f.own_sky) ba::dress_sky(view, f.sky, f.top_y, view.time_s);
+  // sv_hour: the sun where the hour puts it (the map's own pick at -1); the title dresses its own.
+  ba::SkyPick sky = f.sky;
+  if (f.picture->weather.hour >= 0) ba::at_hour(sky, f.night, f.picture->weather.hour);
+  if (!f.own_sky) ba::dress_sky(view, sky, f.top_y, view.time_s);
   view.altitude_m = 100;
   view.clouds.quarter = false;
   view.clouds.spread = false;
   ba::Options o = look::world_options(lk, {}, *f.picture);
-  o.sky_light = f.sky.sky_light;
-  o.sky_seen = f.sky.sky_seen;
-  for (int k = 0; k < 3; ++k) o.sky_tint[k] = f.sky.tint[k];
+  o.sky_light = sky.sky_light;
+  o.sky_seen = sky.sky_seen;
+  for (int k = 0; k < 3; ++k) o.sky_tint[k] = sky.tint[k];
   // The switches on the options and the weather on the view, before the uniforms take the view.
   if (f.extras) {
     GE_ZONE("world.dress");
