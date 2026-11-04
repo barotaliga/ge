@@ -52,6 +52,8 @@ then its own files (`progs.src` lists them in order), `world.qc` last.
 | `campaign/monsters.qc` | The roster: each kind's numbers, attacks, pain and sounds (the rifleman, the hound) |
 | `campaign/monsters_close.qc` | The roster, continued: the swordsman, the brute and the ghoul |
 | `campaign/monsters_air.qc` | The roster, continued: the flyer and the eel |
+| `campaign/monsters_big.qc` | The roster, continued: the leaper, the giant and the caster |
+| `campaign/monsters_more.qc` | The roster, continued: the trooper, the spawn and the heavy swordsman |
 | `campaign/world.qc` | The world, the intermission and the next map, the campaign's map things |
 
 ## The game
@@ -89,7 +91,8 @@ then its own files (`progs.src` lists them in order), `world.qc` last.
   decision says so. Hurt by another monster it turns on it (riflemen even on their own kind);
   a trigger that fires it makes it angry at the player who set the trigger off.
 - **A hit** reaches a monster through `damage` (`common/combat.qc`): a thing with `th_hurt` and
-  `th_die` answers its own hits, a player's are `player_pain` and `player_die`.
+  `th_die` answers its own hits, a player's are `player_pain` and `player_die`. A thing with a
+  `blast_share` takes only that share of a blast (`radius_damage`): the giant's is 0.5.
 
 ## Changing it
 
