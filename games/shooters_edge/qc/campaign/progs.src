@@ -14,4 +14,8 @@ glue.qc
 ../common/map.qc
 ai.qc
 monsters.qc
+monsters_close.qc
+monsters_air.qc
+monsters_big.qc
+monsters_more.qc
 world.qc

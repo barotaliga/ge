@@ -816,6 +816,12 @@ bool load_scene(const Pack& pack, std::string_view path, std::span<const uint8_t
     for (int k = 0; k < 3; ++k) l.pos[k] = le.pos[k];
     l.value = le.value;
     l.reach = le.reach;
+    l.gain = le.gain;
+    l.soft_m = le.soft_m;
+    l.spot = le.spot;
+    for (int k = 0; k < 3; ++k) l.dir[k] = le.dir[k];
+    l.cone_cos[0] = le.cone_cos[0];
+    l.cone_cos[1] = le.cone_cos[1];
     l.seed = hash32(++n * 0x9e3779b1u);
     l.flame = le.flame;
     if (l.flame) l.fire = le.torch ? Fire::wall_torch : le.large ? Fire::large : Fire::flame;

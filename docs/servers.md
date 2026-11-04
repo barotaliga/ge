@@ -15,12 +15,26 @@ LAN hosting round it), the dedicated process (`server_main`: `server.cfg`, then 
 running on it. M53b: `server.cfg` in layers (`engine/server/config`: the base game directory's,
 each mod's lowest first, a profile's winning copy, the command line, the console), every server
 value's file and line kept (`Cvars::set_watch`), the rest of the server's cvars, and
-`--explain`. Running one:
+`--explain`. M53a part two: a game that speaks its own protocol is handed the port
+(`ServerGame::serve`, `net_frame`), and `shooters_edge_server` now serves the game's own
+deathmatch over the classic protocol (`games/shooters_edge/net/classic_game.hpp`), so a classic
+client connects and plays (the `se-dedicated` lab). The game's own rules are settings too: a game
+names them (`ServerGame::rules`, a `GameRule` each: Shooter's Edge's `deathmatch`, `teamplay`,
+`fraglimit`, `timelimit`, `samelevel`, `sv_gravity`, `sv_maxspeed`), the core makes each a server
+cvar with an empty fallback (unset: the game's own default), every layer, `+set` and `--explain`
+reach it like the core's, and `create` gets the values in `ServerConfig::rules`. A map is read from
+the game folder's loose files or its packs, and when a match ends the server moves everyone to
+the next map (`sv_maprotation`'s when set). M53c part one: the lobby's match flow lives in the
+engine (`engine/server/match`: seats, teams, ready and break, the leader's start, warmup, the
+countdown, the match), and Shooter's Edge's lobby is that plus what a team is in its game.
+Running one:
 
 ```
 make build
-build/debug/shooters_edge_server --name="Arena Night" --description="bots only" --port=27500 \
-  --maxclients=16 --bots=8 --realtime --for=0
+build/debug/shooters_edge_server --name="Arena Night" --description="the arena" --port=27500 \
+  --maxclients=16 --realtime --for=0
+build/debug/shooters_edge_server --root=<install> --map=dm6 --port=27512 --realtime --for=0 \
+  +set fraglimit 20 +set timelimit 10
 build/debug/shooters_edge_server --root=servers --mod=arena --cfg=duel --explain=sv_
 ```
 
@@ -37,8 +51,8 @@ binary's own `--explain`.
 | Hosting and the browser | `engine/net/hosting`, `directory` (M17r) | LAN answers, pings, the router's forward, the rendezvous's list, visibility; "the same for a listen and a dedicated server" |
 | Cfg files | `engine/console/cfg` (M21a) | `start_server`: `server.cfg`, then the command line; the server's tier (`kServer`, `kServerInfo`) |
 | The search path | `engine/vfs/search` (M18a) | A base game directory, then a directory per mod over it, later sources winning |
-| A dedicated server | `games/shooters_edge/server` (M18f) | Shooter's Edge's own host and `shooters_edge_server` binary, with its own flags parser, bots, input log and replay |
-| The lobby's match flow | Shooter's Edge (the lobby row in flight) | Warmup on the map, two teams, ready and break, the leader's start, a countdown, the match restarting the map |
+| A dedicated server | `games/shooters_edge/server` (M18f) | Shooter's Edge's own host with bot slots, input log and replay (now a `ServerGame` on the core) |
+| The lobby's match flow | `engine/server/match` (M53c, lifted from Shooter's Edge's) | Warmup on the map, two teams, ready and break, the leader's start, a countdown, the match restarting the map |
 
 What is missing is the part every game would otherwise write again: the server's frame and
 process, its settings and where they come from, the match's phases, the administrator's

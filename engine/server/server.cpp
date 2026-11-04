@@ -102,6 +102,12 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   cvars.bind({"sv_mod", mod, cn::kServer | cn::kServerInfo | cn::kReadOnly,
               "the mods' directories over the base, lowest first (--mod)", CvarKind::text},
              &c.mod);
+  for (int i = 0; i < game.rule_count; i++) {
+    const GameRule& r = game.rules[i];
+    std::string& field = c.rules[r.name];  // a map's node: its address outlives the inserts
+    const std::string fallback = field;
+    cvars.bind({r.name, fallback, info, r.help, CvarKind::text}, &field);
+  }
 }
 
 bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
@@ -137,8 +143,25 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
   s.frame_s = game.frame_seconds(s.state);
   s.frame = 0;
   s.now_us = 0;
-  s.networked = transport != nullptr;
-  if (!s.networked) return true;
+  if (transport == nullptr) return true;
+  if (game.serve) {
+    if (!game.net_frame) {
+      error = std::string(game.binary) +
+              "'s ServerGame serves its own protocol without net_frame; next: fill it "
+              "(engine/server/server.hpp)";
+      server_close(s);
+      return false;
+    }
+    if (!game.serve(s.state, *transport, error)) {
+      server_close(s);
+      return false;
+    }
+    s.networked = s.own_protocol = true;
+    s.port = transport;
+    return true;
+  }
+  s.networked = true;
+  s.port = transport;
 
   gn::node_init(s.node, node_config(game, config), *transport);
   gn::SessionConfig sc;
@@ -162,6 +185,12 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
 
 void server_frame(Server& s) {
   if (!s.state) return;
+  if (s.own_protocol) {
+    s.game->net_frame(s.state, s.now_us);
+    s.now_us = server_next_us(s);
+    s.frame++;
+    return;
+  }
   s.game->frame(s.state);
   s.now_us = server_next_us(s);
   s.frame++;
@@ -173,11 +202,13 @@ void server_frame(Server& s) {
 }
 
 void server_close(Server& s) {
-  if (s.networked) {
+  if (s.networked && !s.own_protocol) {
     gn::hosting_stop(s.hosting, s.now_us);
     gn::node_flush(s.node, s.now_us);
-    s.networked = false;
   }
+  s.networked = false;
+  s.own_protocol = false;
+  s.port = nullptr;
   if (s.state && s.game && s.game->destroy) s.game->destroy(s.state);
   s.state = nullptr;
 }
@@ -192,11 +223,12 @@ int64_t server_next_us(const Server& s) {
 
 std::string server_status(const Server& s) {
   char head[96];
-  const int clients = s.networked ? gn::session_player_count(s.session, false) : 0;
-  std::snprintf(head, sizeof head, "t=%.1f s frame=%lld seated=%d clients=%d", server_time(s),
-                static_cast<long long>(s.frame), s.game && s.game->seated ? game_seated(&s) : 0,
-                clients);
+  std::snprintf(head, sizeof head, "t=%.1f s frame=%lld seated=%d", server_time(s),
+                static_cast<long long>(s.frame), s.game && s.game->seated ? game_seated(&s) : 0);
   std::string out = head;
+  // The core's own session's players (a game on its own protocol counts its clients itself).
+  if (s.networked && !s.own_protocol)
+    out += " clients=" + std::to_string(gn::session_player_count(s.session, false));
   if (s.game && s.game->status) out += " " + s.game->status(s.state);
   char hash[32];
   std::snprintf(hash, sizeof hash, " hash=%016llx",
@@ -210,7 +242,9 @@ std::string server_banner(const Server& s) {
   if (!c.description.empty()) out += " (" + c.description + ")";
   out += ", map " + c.map + ", " + std::to_string(c.bots) + " of " + std::to_string(c.maxclients) +
          " slots filled by bots, seed " + std::to_string(c.seed);
-  if (s.networked)
+  if (s.own_protocol)
+    out += ", on " + gn::to_string(s.port->local) + " (the game's own protocol)";
+  else if (s.networked)
     out += ", on " + gn::to_string(s.node.transport->local) + " (" + c.visibility + ")";
   else
     out += ", offline";

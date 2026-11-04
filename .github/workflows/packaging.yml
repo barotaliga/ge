@@ -28,8 +28,10 @@ jobs:
       fail-fast: false
       matrix:
         # Windows on the same image as ci.yml's windows row, so one MSVC judges every Windows
-        # build: windows-latest moved to a newer MSVC whose warnings the PR row never saw.
-        os: ${{ fromJSON(inputs.linux && '["ubuntu-latest","macos-latest","windows-2025"]' || '["macos-latest","windows-2025"]') }}
+        # build: windows-latest moved to a newer MSVC whose warnings the PR row never saw. Linux
+        # likewise on ci.yml's ubuntu-24.04 (its GCC): ubuntu-latest moved to GCC 15, whose
+        # -Wstringop-overflow and -Warray-bounds misfire on inlined library code under -Werror.
+        os: ${{ fromJSON(inputs.linux && '["ubuntu-24.04","macos-latest","windows-2025"]' || '["macos-latest","windows-2025"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     defaults:

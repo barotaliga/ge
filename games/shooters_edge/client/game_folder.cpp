@@ -143,6 +143,7 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
   out.campaign = nullptr;
   out.progs = {};
   out.pack_progs = {};
+  out.item_names.clear();
   bool loaded = false;
   if (!progs_path.empty()) {
     std::string source;
@@ -158,6 +159,8 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
     } else {
       if (!why.empty()) out::status("shooters_edge: the baseline mod runs (" + why + ")");
       loaded = baseline_progs(out.progs, error);
+      if (!archive_paths(files).empty())
+        out.item_names = profiles::item_name_lines(game.tables.names);
     }
   }
   if (!loaded) return false;
@@ -226,6 +229,36 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
                     else
                       load_ask = a[1];
                   });
+}
+
+bool start_map(Listen& listen, const GameContent& content, std::unique_ptr<LoadedMap> map,
+               std::string& error) {
+  if (content.campaign != nullptr && wants_campaign(listen.opt))
+    return listen.campaign_host
+               ? listen_change(listen, std::move(map), error)
+               : listen_campaign(listen, *content.campaign, std::move(map), listen.opt, error);
+  if (listen.campaign_host || listen.progs != &content.progs)
+    return listen_start(listen, content.progs, std::move(map), listen.opt, error);
+  return listen_change(listen, std::move(map), error);
+}
+
+bool load_asked_save(Listen& listen, const GameContent& content, const SearchPath& files,
+                     const std::string& name, std::string& error) {
+  std::vector<uint8_t> bytes;
+  ListenOptions lo = listen.opt;
+  lo.console.emplace_back("deathmatch 0");
+  std::string base = name;
+  bool classic = classic_save_name(base);
+  if (!classic && !read_save(files, base, bytes, error))
+    classic = read_save(files, base, bytes, error, true);
+  else if (classic && !read_save(files, base, bytes, error, true))
+    bytes.clear();
+  if (bytes.empty() || content.campaign == nullptr) return false;
+  if (classic)
+    return listen_load_text(
+        listen, *content.campaign, lo,
+        std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()), name, error);
+  return listen_load(listen, *content.campaign, lo, bytes, name, error);
 }
 
 }  // namespace shooters_edge::client

@@ -1,6 +1,6 @@
 // THE SERVER'S HOST: one Shooter's Edge server run on the classic loop (plugins/shooter), its
-// slots and its input log. The same host runs a dedicated server (`shooters_edge_server`, the
-// headless binary) and, later, a listen server inside the player's own process (M18q): a server
+// slots and its input log. The same host runs on the engine's server core (dedicated.hpp, the
+// `se-server` lab) and, later, a listen server inside the player's own process (M18q): a server
 // frame is one step of the run clock, and nothing here reads a wall clock.
 //
 // SLOTS: up to `maxclients` (at most 32). A slot is EMPTY, REMOTE (a client's packets fill it,

@@ -604,6 +604,23 @@ struct MapLake {
   std::vector<PlanPoint> shore;
 };
 
+// A STREAM a game lays on the map after the generator (plugins/mountain/tarn/brook.hpp: a real
+// face's brooks and rivers off its hints): its centreline top first, each point its surface's
+// height and the channel's width and depth there; `frozen` where the map's day has it iced over
+// and snowed in (its gully laid shallow, no water drawn).
+struct StreamPoint {
+  double x = 0, z = 0;
+  double level = 0;  // the surface, m
+  double width = 0;  // bank to bank, m
+  double depth = 0;  // mid-stream under the surface, m
+};
+struct MapStream {
+  bool river = false;
+  bool frozen = false;
+  double ice = 0;  // m of ice on still water at its height on the map's day
+  std::vector<StreamPoint> points;
+};
+
 struct Level {
   double seed = 0;
   double size = 0;               // the world is [0, size]² m
@@ -633,7 +650,8 @@ struct Level {
   std::optional<RaceCourse> race;              // a course set over the map (R31–); else absent
   std::optional<SkiJumpHill> ski_jump;         // a ski jumping hill built over it (R43)
   std::shared_ptr<const VenueSurface> venue;   // a venue's analytic surface (R37), else none
-  std::vector<MapLake> lakes;  // laid by a game after the generator; none on a dealt map
+  std::vector<MapLake> lakes;      // laid by a game after the generator; none on a dealt map
+  std::vector<MapStream> streams;  // the same
 
   // The snow's height: a venue's own surface where it answers, the grid everywhere else.
   double ground_at(double x, double z) const {

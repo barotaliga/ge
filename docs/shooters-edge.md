@@ -100,10 +100,19 @@ ENHANCED ▸ LOAD GAME and pick the folder your game is installed in (the one ho
 folder without `id1` and its first pack is refused, and LOAD GAME's line says what it lacks. The
 game is opened in place of the arena at once (its start map), its packs are enhanced in the
 background (`ce_auto 1`, the default; the enhancing page shows every stage, and the run goes on
-with the menu closed), and when the run ends the world is drawn again from the cache. The folder
+with the menu closed), and when the run ends having written anything the world is made again
+from the cache, behind the one drawn. The folder
 is kept (`game_folder.txt` in the platform's per-user folder) and opened at the next start when
 `-basedir` names none and the folder the game runs in holds no game. `basedir <folder>` in the
 console does the same as LOAD GAME (`client/game_folder.hpp`). Then `map dm3` plays that map.
+
+**The title and the loads.** With no `+map` the window opens at once on the title
+(`client/title.hpp`: a night with the full moon low in a total eclipse, blood red, cloud carried
+across it) with the main menu up, the start map loading behind it; ESCAPE out of the menu plays it
+once it is in. Every map loads behind the window (`client/map_load.hpp`): its file and its world's
+textures and models read on threads, its pipelines compiled while frames go on, a spinner in the
+bottom right corner naming the map and the seconds so far. A measured run (`--frames`, a
+timedemo) waits for its map before its first frame.
 
 **On a Mac (Apple silicon; Metal through Dawn):**
 
@@ -228,6 +237,48 @@ red the shield's; the window lights the walls round him and tints his own screen
 and flames (`light_torch_small_walltorch`, `light_flame_*`) are static things the clients draw. In
 the modern look with `ce_flames` on, the torch's model is drawn without its painted flame and the
 engine's burning gas is the flame.
+
+**What a pickup says.** The baseline mod names an item in the loaded game's own words: the game's
+profile has a table of names by class name (`profiles/items.hpp`'s `names`; the classic game's
+`kClassicNames`: "shells", "Nailgun", "Thunderbolt", "Pentagram of Protection"), which the window
+gives the server as local info (`localinfo weapon_nailgun "Nailgun"`) when the mod plays a game's
+packs, and the mod's `name_of` (each variant's `glue.qc`) reads it under the item's class name.
+So "You got the rockets", "You got the Nailgun", and a backpack lists what was in it ("You get the
+Rocket Launcher, 20 shells, 5 rockets", the weapon only when it is new to its taker). Armour says
+"You got armor" whatever its colour, as the classic game does. On the built-in arena, with no
+packs, the mod speaks its own words ("You got ammunition", "You got the Spiker").
+
+### Joining a game over the network
+
+Any server that speaks the classic protocol can be joined from a window:
+
+```sh
+build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +connect 192.168.1.20
+```
+
+The game's own dedicated server, `shooters_edge_server` (docs/servers.md), is what a machine runs
+to host one, for example dm6 from the packs with a frag limit:
+
+```sh
+build/release/shooters_edge_server --root=$HOME/games/classic --map=dm6 --port=27500 --realtime --for=0 +set fraglimit 20
+```
+
+The window's console joins and leaves (`net/classic_remote.hpp`):
+
+| Command | What |
+| --- | --- |
+| `connect <host>[:port]` | join a server (an IPv4 address or `localhost`; 27500 when no port) |
+| `disconnect` | leave it, back to your own game |
+| `reconnect` | the last server again |
+| `netstatus` | the server joined, the stage, the packets and bytes each way |
+
+Joined, the window plays the server's game with your keys, mouse, `name`, `topcolor` and
+`bottomcolor`, and draws what the server sends exactly as it draws a client demo (the map, the
+items, the other players, the HUD, the sounds, the printed lines): the connection is read as a
+recording of it while it is made. Your own game waits until you leave. Not yet: your own moves are
+not predicted, so on a network with lag you see yourself a round trip late (on a LAN it is a few
+milliseconds); and a server is found by its
+address, not yet on a list.
 
 ### Benchmarking a demo
 
@@ -721,14 +772,14 @@ for its own content (its own maps and mod), never a stand-in for a classic game'
 them never changes a classic game. Playing one classic game with another's parts is classic
 remix, a feature of classic-enhance (M18u), shown only when two full games are loaded.
 
-### The rules runner: the next seam (designed, not built)
+### The rules runner: the next seam (steps 1 and 2 landed)
 
 The adapter answers what a game's FILES hold. What its RULES do is the other half: the listen
 server, the dedicated server, the campaign, the bots and the recorder all hold the QC server
 (`server/qc_server.hpp`) itself today. A second program form (the sequel's native rules, a
 sandboxed bytecode, the engine's C++ mod as the whole game) needs them to hold a **runner**
-instead, of which the QC server is the first implementation. This is the design; it is built when
-the sequel's rules start (M18t4), not before.
+instead, of which the QC server is the first implementation. Steps 1 and 2 below have landed
+(`server/rules_world.hpp`); steps 3 and 4 follow, and step 5 waits for the sequel (M18v).
 
 **What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
 groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start
@@ -764,9 +815,12 @@ runner writes the same messages, so the client and the demos do not change.
 **It lands in steps, each with the digests unchanged** (the QC server stays the only runner until
 the last):
 
-1. `RulesWorld` and the QC server filling it each frame (`se-loop`, `se-server` digests the same,
-   the frame's cost measured).
-2. The scoreboard, the recorder and the wire's entity states read the view, never the layout.
+1. **Landed.** `RulesWorld` and the QC server filling it (`fill_world`): the lists at the map's
+   start and after a save's load, the clients and every entity's row at the end of each frame, of
+   `connect` and `disconnect`, and of each command or console line (`commands.hpp`), so a reader
+   between frames sees what the last call left. Every lab's digest is the same.
+2. **Landed.** The wire's entity and player states, the player's stats, the frags, the map's
+   title and the recorders read the view; nothing in `net/` reads a program field for them.
 3. The bots read the view (`se-bots`, `se-team`, `se-hop` digests the same): the largest group.
 4. The host holds a runner (a table pointer and its state) where it held a `QcServer`; the
    campaign and the dedicated server the same.
@@ -1061,12 +1115,17 @@ order) or a bot's, filled by a command source (`plugins/shooter/cmd_source.hpp`)
 server and returns a usercmd; the host puts it on the protocol's grid and packs it into a packet
 like a client's, so a bot's commands run exactly as a person's. Every frame is logged (the slot
 events, the packets, the hash after it), and the log replays the run to the bit with no bot at
-all, naming the first frame that leaves it. The headless `shooters_edge_server` binary runs the
-host with its slots filled by bots, prints a status line every few seconds and the digest at the
-end, writes the input log (`--log`) and replays one (`--replay`); `--realtime` paces it to the
-wall clock. Until M18r's bots land, a seeded stand-in wanders the arena and fires at whoever is
-ahead; until M18b's maps, the server runs the test arena under a roof. The `se-server` lab runs a
-full server and replays its log.
+all, naming the first frame that leaves it. The host on the engine's server core
+(`server/dedicated.hpp`), its slots filled by a seeded stand-in that wanders the arena and fires
+at whoever is ahead, is what the `se-server` lab runs and replays. The headless
+`shooters_edge_server` binary is the engine's dedicated process (`engine/server`, docs/servers.md)
+over the PLAYABLE server (`net/classic_game.hpp`): the baseline mod's deathmatch served over the
+classic protocol on the game's port, so a classic client connects and plays; it reads
+`server.cfg` in layers and its flags (the mod's rules among them: `+set fraglimit 20`, or a line
+in `server.cfg`; a map from the game folder under `--root`, loose or in a pack; at a match's end
+the next map, `sv_maprotation`'s when set, every client signing on to it again), prints a status line every few seconds and the digest at
+the end, and `--realtime` paces it to the wall clock. Its bots come with the engine's lobby
+(M53c). The `se-dedicated` lab has classic clients join it under each network preset.
 
 **Hosting from inside the game (M18q).** The menu's HOST page starts a server with its settings
 on one page: the map and the rotation, the mode, the mod, the frag and time limits, the player

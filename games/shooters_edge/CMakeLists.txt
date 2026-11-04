@@ -48,9 +48,10 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_classic)
 
 # The headless dedicated server (server/bin/), named `shooters_edge_server` on disk, at the build's
 # root (build/<preset>/shooters_edge_server): the engine's dedicated process (engine/server) over
-# the game's ServerGame (server/dedicated.hpp). `--help` lists its flags.
+# the game's playable ServerGame (net/classic_game.hpp: the mod's deathmatch on the classic
+# protocol). `--help` lists its flags.
 ge_add_server(shooters_edge_dedicated OUTPUT_NAME shooters_edge_server SOURCES server/bin/main.cpp
-              LINK shooters_edge_server)
+              LINK shooters_edge_classic)
 
 # Its HUD (hud/): the player's status snapshot, the HUD's pictures (the free set painted in code),
 # and the three looks over the engine's HUD layout with their hud_ cvars. No GPU: the CPU raster
@@ -108,7 +109,7 @@ ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME
 # the GPU and the platform are built. Headers are spelled "shooters_edge/client/<file>.hpp".
 file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/client/*.cpp)
 list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX
-     "/client/(main|world_draw|world_extras|world_fx|world_models|demo_video)\\.cpp$")
+     "/client/(main|window_cvars|world_draw|world_extras|world_fx|world_models|demo_video|title|map_load)\\.cpp$")
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
 target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_bots shooters_edge_hud
                                                   shooters_edge_view shooters_edge_sound ge_vfs
@@ -126,21 +127,24 @@ set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_client)
 # The world's frame (client/world_draw.cpp), the modern look's water, liquids, flames and weather
 # behind the classic-enhance switches (client/world_extras.cpp), the effects fed to it
 # (client/world_fx.cpp), the models standing in it (client/world_models.cpp, the packs' own) and
-# a demo turned into a video (client/demo_video.cpp, through engine/capture) are a library of their
+# a demo turned into a video (client/demo_video.cpp, through engine/capture), the title's night
+# (client/title.cpp) and a map loaded behind the window (client/map_load.cpp) are a library of their
 # own with the GPU, which the window and the game's GPU lab (`se-client`,
 # labs/gpu_se_client_lab.cpp) link.
 if(GE_GPU AND TARGET ge_brush_app)
   add_library(shooters_edge_client_gpu STATIC client/world_draw.cpp client/world_extras.cpp
                                               client/world_fx.cpp client/world_models.cpp
-                                              client/demo_video.cpp)
+                                              client/demo_video.cpp client/title.cpp
+                                              client/map_load.cpp)
   target_link_libraries(shooters_edge_client_gpu PUBLIC shooters_edge_client shooters_edge_app
                                                         ge_brush_app ge_classicenhance ge_render
                                                         ge_ui ge_morph ge_play)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_client_gpu)
 endif()
 if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
-  add_executable(shooters_edge client/main.cpp)
-  target_link_libraries(shooters_edge PRIVATE shooters_edge_client_gpu shooters_edge_menu
+  add_executable(shooters_edge client/main.cpp client/window_cvars.cpp)
+  target_link_libraries(shooters_edge PRIVATE shooters_edge_client_gpu shooters_edge_classic
+                                              shooters_edge_menu
                                               ge_platform ge_hud ge_console)
   # The held weapons' models where the tree is, for a game run from somewhere else (-models wins).
   target_compile_definitions(shooters_edge

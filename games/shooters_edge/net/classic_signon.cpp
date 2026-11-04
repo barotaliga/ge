@@ -60,9 +60,8 @@ void cmd_new(ClassicServer& s, int slot) {
     if (c.ext[f] != 0) m.ext.emplace_back(family_magic(f), c.ext[f]);
   const int number = slot | (c.spectator ? 0x80 : 0);
   m.ints = {kProtocolVersion, s.spawncount, number};
-  const char* level = pg::vm_string(
-      q.q.vm, static_cast<int32_t>(*pg::entity_field(q.q.vm, 0, q.q.layout->f.message)));
-  m.strings = {s.cfg.gamedir, level && level[0] ? level : q.map_name};
+  const std::string& level = q.world.map_title;
+  m.strings = {s.cfg.gamedir, !level.empty() ? level : q.map_name};
   const sh::MoveSettings& mv = q.sv.set.move;
   m.floats = {
       mv.gravity,       mv.stopspeed,       mv.maxspeed, mv.spectatormaxspeed, mv.accelerate,
@@ -387,9 +386,7 @@ void cmd_nextdl(ClassicServer& s, int slot, const pg::Words& w) {
 void full_client_update(ClassicServer& s, int about, int to) {
   const ClassicClient& c = s.clients[about];
   int frags = 0;
-  if (c.qc_active)
-    frags = static_cast<int>(
-        pg::as_float(*pg::entity_field(s.qc->q.vm, about + 1, s.qc->q.layout->f.frags)));
+  if (c.qc_active) frags = static_cast<int>(s.qc->world.clients[about].numbers.frags);
   std::vector<SvcMsg> ms(5);
   ms[0].id = svc::updatefrags;
   ms[0].ints = {about, frags};

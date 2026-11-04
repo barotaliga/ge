@@ -50,6 +50,10 @@ then its own files (`progs.src` lists them in order), `world.qc` last.
 | `arena/world.qc` | The world, the frag and time limits, the end of a match |
 | `campaign/ai.qc` | The monsters' minds: spawning, the senses, noticing a player, stand, walk a path, run, attack, anger, pain, death; path corners |
 | `campaign/monsters.qc` | The roster: each kind's numbers, attacks, pain and sounds (the rifleman, the hound) |
+| `campaign/monsters_close.qc` | The roster, continued: the swordsman, the brute and the ghoul |
+| `campaign/monsters_air.qc` | The roster, continued: the flyer and the eel |
+| `campaign/monsters_big.qc` | The roster, continued: the leaper, the giant and the caster |
+| `campaign/monsters_more.qc` | The roster, continued: the trooper, the spawn and the heavy swordsman |
 | `campaign/world.qc` | The world, the intermission and the next map, the campaign's map things |
 
 ## The game
@@ -74,17 +78,21 @@ then its own files (`progs.src` lists them in order), `world.qc` last.
 
 ## The campaign's monsters
 
-- **A kind** is a spawn function in `campaign/monsters.qc`: its precaches, its sight and death
+- **A kind** is a spawn function in `campaign/monsters*.qc`: its precaches, its sight and death
   sounds (`noise`, `noise1`), its gib health and head, its walk and run steps, its `th_` hooks
   (`th_missile`, `th_melee`, `th_pain`, `th_die`, and `th_check` for an attack decision of its
-  own), then `walkmonster_start(model, health, mins, maxs)`.
+  own), then `walkmonster_start(model, health, mins, maxs)` (dropped to the floor),
+  `flymonster_start` or `swimmonster_start` (left where the map puts it). `no_monsters_here()`
+  first takes it out of a deathmatch. A thing it throws or spits is `monster_missile(model, speed,
+  damage, lob)`, aimed at its enemy's eye; a blow up close is `melee_blow(factor)`.
 - **Its mind** is `campaign/ai.qc`'s: it stands or walks its path (`target` naming a
   `path_corner`) until it notices a player (far never, mid in front and seen, near seen and in
   front unless he fired in the last second, melee seen), then runs at him, attacking when the
   decision says so. Hurt by another monster it turns on it (riflemen even on their own kind);
   a trigger that fires it makes it angry at the player who set the trigger off.
 - **A hit** reaches a monster through `damage` (`common/combat.qc`): a thing with `th_hurt` and
-  `th_die` answers its own hits, a player's are `player_pain` and `player_die`.
+  `th_die` answers its own hits, a player's are `player_pain` and `player_die`. A thing with a
+  `blast_share` takes only that share of a blast (`radius_damage`): the giant's is 0.5.
 
 ## Changing it
 

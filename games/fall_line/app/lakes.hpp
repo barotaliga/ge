@@ -3,10 +3,12 @@
 // (`add_water`, its shore and the dug bed under it) and frozen by its ice on the map's day
 // (`freeze_water`: mountain/app/ice_look.hpp's sheet, the water hidden under it). A tarn frozen
 // to bear a skier lies on ground filled flat at its surface; the sheet hides the snow under it.
-// One frozen lake a frame (the frame keeps one ice family); a map lays at most one.
+// Every lake has its own sheet. THE STREAMS a game laid (`Level::streams`, a real face's: mountain/
+// tarn/brook.hpp) run as channels where they are open (render/water_stream.hpp's ribbons, built
+// once); a frozen one lies under the map's snow, its gully the ground's own, and is not drawn.
 //
 // ge:summary The map's laid lakes drawn: the water over the dug bed, the ice by the map's day
-// ge:keywords lakes tarn show_lakes add_water freeze_water lake-ice map-lake
+// ge:keywords lakes tarn show_lakes add_water freeze_water lake-ice map-lake map-stream
 // ge:skill render water
 #pragma once
 

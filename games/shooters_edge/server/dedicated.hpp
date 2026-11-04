@@ -1,8 +1,8 @@
-// SHOOTER'S EDGE ON THE ENGINE'S SERVER CORE: the game's `ServerGame` (engine/server/server.hpp),
-// which `shooters_edge_server` (server/bin/main.cpp) hands to the engine's dedicated process and a
-// listen server will step from the client (M53a). It runs the server's host (host.hpp) on the
-// config's map with its bot slots filled by stand-in wanderers (stand_in.hpp) until the real bots
-// take them (M18r), keeps the input log when one is asked for, and replays one.
+// THE HOST ON THE ENGINE'S SERVER CORE: a `ServerGame` (engine/server/server.hpp) over the server's
+// host, what the `se-server` lab and the core's tests run (`shooters_edge_server` itself serves the
+// playable mod over the classic protocol: net/classic_game.hpp). It runs the server's host
+// (host.hpp) on the config's map with its bot slots filled by stand-in wanderers (stand_in.hpp)
+// until the real bots take them (M18r), keeps the input log when one is asked for, and replays one.
 //
 // The run is the host's own, frame for frame: the digest of a run through this table is the
 // digest the host gives when driven by hand (tests/server_core_test.cpp holds both).
