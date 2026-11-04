@@ -1287,6 +1287,18 @@ sound takes longer to act on than a sight: a chase after an enemy only heard sta
 reaction plus 100 ms (a quick player, trait 8) to 200 ms (a slow one, trait 2) after the sound.
 `se-team` prints each player's sightings, their mean reaction and the share pre-aimed.
 
+**Hit rates (M18r11d).** A team game counts every player's shots and hits by weapon
+(`games/shooters_edge/net/classic_hits.hpp`), the way a match's statistics do, and `se-team`
+prints them per player and per skill (`team.hits.<skill>.<weapon>`). A shot is ammunition spent on
+the weapon held (the scatterguns count pellets, 6 and 14 a shot; the arc counts cells); a hit is
+health and armour an enemy lost to whatever last hurt him (`dmg_inflictor`: a player's hitscan
+by the weapon he holds, or a missile counted once however many it hurt). A rocket's direct hit is
+a blow of exactly the mod's direct damage, or one that killed a player the rocket was next to;
+any other rocket that hurt an enemy hit by its blast. The bands the bots are held to, a division's
+players in percent (Div1 / Div2 / Div3): the arc 38–45 / 28–35 / 15–25, a rocket's direct hit
+30–35 / 22–28 / 10–18 and its blast 18–25 / 15–20 / 12–15, the double scattergun 35–45 / 25–35 /
+15–25, grenades 8–15 / 5–10 / 2–5.
+
 **Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
 community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the
 `$loc_name_<key>` macros expanded) and names any point by its nearest. The files themselves are
