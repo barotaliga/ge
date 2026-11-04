@@ -11,6 +11,8 @@
 #include <cstdlib>
 #include <iterator>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "net/packet.hpp"
 #include "progs/file.hpp"
@@ -33,6 +35,10 @@ struct Game {
   std::unique_ptr<sv::QcServer> qc;        // reads `progs`
   std::unique_ptr<ClassicServer> classic;  // serves `qc` once the core hands it the port
   ServerConfig cfg;
+  gs::ServerConfig settings;  // what the server was opened with: every map is made from it
+  cl::SearchPath files;       // the game folder the maps are read from (empty: the arena only)
+  int changes = 0;            // maps changed to
+  std::string failed;         // why the last change did not happen ("": it did)
   ~Game() {
     classic.reset();
     qc.reset();  // its views into the map go before the map does
@@ -52,6 +58,40 @@ constexpr gs::GameRule kRules[] = {
     {"sv_maxspeed", "a player's run speed, units/s"},
 };
 
+// The mod's server on the map `name`, its rules set from the settings: into `map` and `qc`.
+bool open_map(const Game& g, const std::string& name, std::unique_ptr<cl::LoadedMap>& map,
+              std::unique_ptr<sv::QcServer>& qc, std::string& error) {
+  const gs::ServerConfig& c = g.settings;
+  map = cl::load_named_map(g.files, name, error);
+  if (!map) return false;
+  sv::QcServerOptions so;
+  so.seed = c.seed;
+  so.loop.maxclients = c.maxclients;
+  so.loop.max_edicts = 1024;
+  qc = sv::make_qc_server(g.progs, so, error);
+  if (!qc) return false;
+  sv::server_command(*qc, "deathmatch 1");
+  for (const auto& [rule, value] : c.rules) {
+    if (value.empty()) continue;
+    char* end = nullptr;
+    std::strtod(value.c_str(), &end);  // every rule is a number
+    std::string line = rule;
+    line.append(" \"").append(value).append("\"");
+    if (end == value.c_str() || *end != '\0' || !sv::server_command(*qc, line)) {
+      error = line;
+      error.append(" is not a number; next: set ").append(rule).append(" to one (--explain=");
+      error.append(rule).append(" shows where it was set)");
+      return false;
+    }
+  }
+  if (!sv::load_map(*qc, map->spec, error)) {
+    error = "the map " + name + " did not load: " + error;
+    return false;
+  }
+  if (map->from_file) sv::use_map_sets(*qc, map->bsp);
+  return true;
+}
+
 void* create(const gs::ServerConfig& c, std::string& error) {
   if (c.bots != 0) {
     error = "sv_bots " + std::to_string(c.bots) +
@@ -59,45 +99,66 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     return nullptr;
   }
   auto g = std::make_unique<Game>();
+  g->settings = c;
   if (!cl::baseline_progs(g->progs, error)) return nullptr;
-  if (c.map == "arena") {
-    g->map = cl::load_named_map(cl::SearchPath{}, c.map, error);
-  } else {
-    cl::SearchPath files;
-    if (!cl::open_game_dir(c.root, kGameFolder, files, error)) return nullptr;
-    g->map = cl::load_named_map(files, c.map, error);
+  // The built-in arena needs no game folder; any other map, or a rotation's, is read from one.
+  if (!cl::open_game_dir(c.root, kGameFolder, g->files, error)) {
+    if (c.map != "arena") return nullptr;
+    g->files = cl::SearchPath{};
+    error.clear();
   }
-  if (!g->map) return nullptr;
-  sv::QcServerOptions so;
-  so.seed = c.seed;
-  so.loop.maxclients = c.maxclients;
-  so.loop.max_edicts = 1024;
-  g->qc = sv::make_qc_server(g->progs, so, error);
-  if (!g->qc) return nullptr;
-  sv::server_command(*g->qc, "deathmatch 1");
-  for (const auto& [name, value] : c.rules) {
-    if (value.empty()) continue;
-    char* end = nullptr;
-    std::strtod(value.c_str(), &end);  // every rule is a number
-    std::string line = name;
-    line.append(" \"").append(value).append("\"");
-    if (end == value.c_str() || *end != '\0' || !sv::server_command(*g->qc, line)) {
-      error = line;
-      error.append(" is not a number; next: set ").append(name).append(" to one (--explain=");
-      error.append(name).append(" shows where it was set)");
-      return nullptr;
-    }
-  }
-  if (!sv::load_map(*g->qc, g->map->spec, error)) {
-    error = "the map " + c.map + " did not load: " + error;
-    return nullptr;
-  }
-  if (g->map->from_file) sv::use_map_sets(*g->qc, g->map->bsp);
+  if (!open_map(*g, c.map, g->map, g->qc, error)) return nullptr;
   g->cfg.hostname = c.hostname;
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
   g->cfg.seed = c.seed;
   return g.release();
+}
+
+// The map after `current` when a match ends: the next in `sv_maprotation` (round to its first
+// after its last; a map not in it goes to its first), else the one the mod asked for.
+std::string next_map(const gs::ServerConfig& c, const std::string& current,
+                     const std::string& asked) {
+  std::vector<std::string> rotation;
+  size_t at = 0;
+  while (at < c.maprotation.size()) {
+    const size_t space = c.maprotation.find(' ', at);
+    const size_t stop = space == std::string::npos ? c.maprotation.size() : space;
+    if (stop > at) rotation.push_back(c.maprotation.substr(at, stop - at));
+    at = stop + 1;
+  }
+  if (rotation.empty()) return asked;
+  for (size_t i = 0; i < rotation.size(); i++)
+    if (rotation[i] == current) return rotation[(i + 1) % rotation.size()];
+  return rotation.front();
+}
+
+// The change the mod or the console asked for (`changelevel`, `map`, `restart`): the next map's
+// server made, the endpoint moved onto it, the old one let go. A map that does not load leaves
+// the game on the one it was playing (`failed` says why).
+void change_if_asked(Game& g) {
+  sv::QcServer& qc = *g.qc;
+  if (qc.pending_map.empty()) return;
+  const std::string current = g.map->name;
+  std::string name = qc.pending_map;
+  // The mod's end of a match asks for the next map, or for its own again: the rotation's turn.
+  if (qc.pending_change == sv::MapChange::restart)
+    name = current;
+  else if (qc.pending_change == sv::MapChange::change_level || name == current)
+    name = next_map(g.settings, current, name);
+  qc.pending_map.clear();
+  std::unique_ptr<cl::LoadedMap> map;
+  std::unique_ptr<sv::QcServer> next;
+  std::string error;
+  if (!open_map(g, name, map, next, error) ||
+      (g.classic && !classic_change(*g.classic, *next, error))) {
+    g.failed = error;
+    return;
+  }
+  g.qc = std::move(next);  // the old server goes before the map it views
+  g.map = std::move(map);
+  g.changes++;
+  g.failed.clear();
 }
 
 void destroy(void* g) { delete static_cast<Game*>(g); }
@@ -106,11 +167,13 @@ double frame_seconds(const void* g) { return static_cast<const Game*>(g)->qc->sv
 
 // Offline: the mod's frame with nobody's moves, its streams emptied as the endpoint would.
 void frame(void* g) {
-  sv::QcServer& qc = *static_cast<Game*>(g)->qc;
+  Game& game = *static_cast<Game*>(g);
+  sv::QcServer& qc = *game.qc;
   sv::qc_frame(qc, nullptr, 0);
   qc.out.all.clear();
   for (auto& one : qc.out.one) one.clear();
   sv::clear_frame(qc.out);
+  change_if_asked(game);
 }
 
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
@@ -119,7 +182,11 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
   return classic_start(*game.classic, *game.qc, port, game.cfg, error);
 }
 
-void net_frame(void* g, int64_t now_us) { classic_frame(*static_cast<Game*>(g)->classic, now_us); }
+void net_frame(void* g, int64_t now_us) {
+  Game& game = *static_cast<Game*>(g);
+  classic_frame(*game.classic, now_us);
+  change_if_asked(game);
+}
 
 int seated(const void* g) {
   const Game& game = *static_cast<const Game*>(g);
@@ -133,10 +200,11 @@ uint64_t hash(const void* g) {
 // The rules the mod is playing by, then the endpoint's counts.
 std::string status(const void* g) {
   const Game& game = *static_cast<const Game*>(g);
-  std::string out;
+  std::string out = "map=" + game.map->name;
+  if (!game.failed.empty()) out += " (no change: " + game.failed + ")";
   for (const char* name : {"deathmatch", "fraglimit", "timelimit"}) {
     const ge::console::Cvar* v = game.qc->cvars.find(name);
-    out.append(out.empty() ? "" : " ").append(name).append("=").append(v ? v->value : "?");
+    out.append(" ").append(name).append("=").append(v ? v->value : "?");
   }
   if (!game.classic) return out + " offline";
   const ServerCounts& n = game.classic->counts;

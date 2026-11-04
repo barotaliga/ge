@@ -49,6 +49,7 @@
 // ge:keywords classic-server endpoint connectionless challenge connect signon serverdata
 // ge:keywords prespawn baselines spawn begin skins download chunked packet-entities playerinfo
 // ge:keywords stats choke rate ping user-info server-info classic_start classic_frame
+// ge:keywords classic_change map-change changing reconnect
 // ge:keywords verify_move_checksum antilag status voice voice-relay team-voice voice_route mvd
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_server_test.cpp
@@ -195,6 +196,10 @@ struct ClassicServer {
 // Serves `qc` (its map already loaded) over `t`. False with `error` when it cannot.
 bool classic_start(ClassicServer& s, sv::QcServer& qc, gn::Transport& t, const ServerConfig& cfg,
                    std::string& error);
+// The endpoint moves to `next` (its map loaded; the server before it is no longer read and may
+// go): every client is told the map is changing and to sign on again (`reconnect`), and the
+// next signon is the new map's. False with `error` when `next` has no map.
+bool classic_change(ClassicServer& s, sv::QcServer& next, std::string& error);
 // One server frame at the network's time `now_us`.
 void classic_frame(ClassicServer& s, int64_t now_us);
 // Drops a client with a reason (it is told with a disconnect).
