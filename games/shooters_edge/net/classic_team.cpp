@@ -518,8 +518,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     if (frame % opt.path_every == 0) {
       float tf[2] = {0, 0};
       for (const TeamPlayer& p : r.players)
-        if (p.slot >= 0)
-          tf[p.team] += pg::as_float(*pg::entity_field(s.q.vm, p.slot + 1, s.q.layout->f.frags));
+        if (p.slot >= 0) tf[p.team] += s.world.clients[p.slot].numbers.frags;
       r.team_frags[0].push_back(tf[0]);
       r.team_frags[1].push_back(tf[1]);
     }
@@ -571,8 +570,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   for (int k = 0; k < n; k++) {
     TeamPlayer& p = r.players[static_cast<size_t>(k)];
     const Seat& seat = seats[static_cast<size_t>(k)];
-    if (p.slot >= 0)
-      p.frags = pg::as_float(*pg::entity_field(s.q.vm, p.slot + 1, s.q.layout->f.frags));
+    if (p.slot >= 0) p.frags = s.world.clients[p.slot].numbers.frags;
     const bt::FighterStats& fs = seat.fighter.stats;
     p.shots = fs.shots;
     p.pickups = fs.pickups;

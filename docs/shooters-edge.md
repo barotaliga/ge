@@ -721,14 +721,14 @@ for its own content (its own maps and mod), never a stand-in for a classic game'
 them never changes a classic game. Playing one classic game with another's parts is classic
 remix, a feature of classic-enhance (M18u), shown only when two full games are loaded.
 
-### The rules runner: the next seam (designed, not built)
+### The rules runner: the next seam (steps 1 and 2 landed)
 
 The adapter answers what a game's FILES hold. What its RULES do is the other half: the listen
 server, the dedicated server, the campaign, the bots and the recorder all hold the QC server
 (`server/qc_server.hpp`) itself today. A second program form (the sequel's native rules, a
 sandboxed bytecode, the engine's C++ mod as the whole game) needs them to hold a **runner**
-instead, of which the QC server is the first implementation. This is the design; it is built when
-the sequel's rules start (M18t4), not before.
+instead, of which the QC server is the first implementation. Steps 1 and 2 below have landed
+(`server/rules_world.hpp`); steps 3 and 4 follow, and step 5 waits for the sequel (M18v).
 
 **What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
 groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start
@@ -764,9 +764,12 @@ runner writes the same messages, so the client and the demos do not change.
 **It lands in steps, each with the digests unchanged** (the QC server stays the only runner until
 the last):
 
-1. `RulesWorld` and the QC server filling it each frame (`se-loop`, `se-server` digests the same,
-   the frame's cost measured).
-2. The scoreboard, the recorder and the wire's entity states read the view, never the layout.
+1. **Landed.** `RulesWorld` and the QC server filling it (`fill_world`): the lists at the map's
+   start and after a save's load, the clients and every entity's row at the end of each frame, of
+   `connect` and `disconnect`, and of each command or console line (`commands.hpp`), so a reader
+   between frames sees what the last call left. Every lab's digest is the same.
+2. **Landed.** The wire's entity and player states, the player's stats, the frags, the map's
+   title and the recorders read the view; nothing in `net/` reads a program field for them.
 3. The bots read the view (`se-bots`, `se-team`, `se-hop` digests the same): the largest group.
 4. The host holds a runner (a table pointer and its state) where it held a `QcServer`; the
    campaign and the dedicated server the same.
