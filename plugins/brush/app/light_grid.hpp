@@ -30,6 +30,7 @@ struct GpuLight {
   float pos[4];
   float colour[4];
   float info[4];
+  float spot[4];  // xyz the way an aimed light points, w its cone's edge's cosine (-2: no cone)
 };
 
 // THE LIGHT GRID binned: into `rows`, each cell's first entry (kGridCells + 1, the last the

@@ -100,10 +100,19 @@ ENHANCED ▸ LOAD GAME and pick the folder your game is installed in (the one ho
 folder without `id1` and its first pack is refused, and LOAD GAME's line says what it lacks. The
 game is opened in place of the arena at once (its start map), its packs are enhanced in the
 background (`ce_auto 1`, the default; the enhancing page shows every stage, and the run goes on
-with the menu closed), and when the run ends the world is drawn again from the cache. The folder
+with the menu closed), and when the run ends having written anything the world is made again
+from the cache, behind the one drawn. The folder
 is kept (`game_folder.txt` in the platform's per-user folder) and opened at the next start when
 `-basedir` names none and the folder the game runs in holds no game. `basedir <folder>` in the
 console does the same as LOAD GAME (`client/game_folder.hpp`). Then `map dm3` plays that map.
+
+**The title and the loads.** With no `+map` the window opens at once on the title
+(`client/title.hpp`: a night with the full moon low in a total eclipse, blood red, cloud carried
+across it) with the main menu up, the start map loading behind it; ESCAPE out of the menu plays it
+once it is in. Every map loads behind the window (`client/map_load.hpp`): its file and its world's
+textures and models read on threads, its pipelines compiled while frames go on, a spinner in the
+bottom right corner naming the map and the seconds so far. A measured run (`--frames`, a
+timedemo) waits for its map before its first frame.
 
 **On a Mac (Apple silicon; Metal through Dawn):**
 
@@ -1122,7 +1131,8 @@ at whoever is ahead, is what the `se-server` lab runs and replays. The headless
 over the PLAYABLE server (`net/classic_game.hpp`): the baseline mod's deathmatch served over the
 classic protocol on the game's port, so a classic client connects and plays; it reads
 `server.cfg` in layers and its flags (the mod's rules among them: `+set fraglimit 20`, or a line
-in `server.cfg`; a map from the game folder under `--root`, loose or in a pack), prints a status line every few seconds and the digest at
+in `server.cfg`; a map from the game folder under `--root`, loose or in a pack; at a match's end
+the next map, `sv_maprotation`'s when set, every client signing on to it again), prints a status line every few seconds and the digest at
 the end, and `--realtime` paces it to the wall clock. Its bots come with the engine's lobby
 (M53c). The `se-dedicated` lab has classic clients join it under each network preset.
 

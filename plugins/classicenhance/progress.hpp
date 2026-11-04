@@ -102,6 +102,10 @@ class EnhanceJob {
 
   // Starts the run (a job runs once); false when one is already running.
   bool start(Source source, std::filesystem::path root, RunOptions opts);
+  // The same over the packs at `path` (open_source's), opened on the run's own thread, so the
+  // caller never waits for a whole pack to be read and hashed; a pack that does not open fails
+  // the run's first stage with open_source's reason.
+  bool start_at(std::string path, std::filesystem::path root, RunOptions opts);
   void cancel() { cancel_.store(true); }
   bool running() const { return running_.load(); }
   BoardView view() const { return board_.view(); }

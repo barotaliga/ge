@@ -23,7 +23,8 @@ names them (`ServerGame::rules`, a `GameRule` each: Shooter's Edge's `deathmatch
 `fraglimit`, `timelimit`, `samelevel`, `sv_gravity`, `sv_maxspeed`), the core makes each a server
 cvar with an empty fallback (unset: the game's own default), every layer, `+set` and `--explain`
 reach it like the core's, and `create` gets the values in `ServerConfig::rules`. A map is read from
-the game folder's loose files or its packs. M53c part one: the lobby's match flow lives in the
+the game folder's loose files or its packs, and when a match ends the server moves everyone to
+the next map (`sv_maprotation`'s when set). M53c part one: the lobby's match flow lives in the
 engine (`engine/server/match`: seats, teams, ready and break, the leader's start, warmup, the
 countdown, the match), and Shooter's Edge's lobby is that plus what a team is in its game.
 Running one:

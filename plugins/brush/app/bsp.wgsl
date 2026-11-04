@@ -88,8 +88,11 @@ struct Light {
   // its strength (rgb, the flicker in it); w: 1 physical (cd), 0 lightmap units
   colour: vec4f,
   // x: its shadow's first layer (six a light), -1 none; y: its source's size^2, m^2; z: 1 a dynamic
-  // light added to the lightmaps (colour its middle's light, pos.w its radius)
+  // light added to the lightmaps (colour its middle's light, pos.w its radius); w: an aimed
+  // light's full-light cosine
   info: vec4f,
+  // xyz: the way an aimed light points; w: its cone's edge's cosine (-2: lit all round)
+  spot: vec4f,
 };
 
 @group(1) @binding(0) var<uniform> bsp: Bsp;
@@ -875,12 +878,17 @@ fn shade(in: VsOut) -> FsOut {
     if (dot(n, to_light) <= 0.0) {
       continue;
     }
+    // An aimed light: only inside its cone.
+    let aim = smoothstep(l.spot.w, max(l.info.w, l.spot.w + 1e-3), dot(l.spot.xyz, -to_light));
+    if (aim <= 0.0) {
+      continue;
+    }
     let ndl = max(dot(wl.n, to_light), 0.0);
     let r = d / reach;
     let r4 = r * r * r * r;
     let window = (1.0 - r4) * (1.0 - r4);
     // Softened near the light over its source's size (a fire's whole flame), 0.2 m at least.
-    var fall = window / (d2 + max(l.info.y, 0.04));
+    var fall = aim * window / (d2 + max(l.info.y, 0.04));
     if (l.info.x >= 0.0) {
       fall *= cube_shadow(q, reach, i32(l.info.x));
       // wholly in its shadow: every sum below would add 0

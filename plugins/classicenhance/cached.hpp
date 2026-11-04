@@ -42,7 +42,8 @@
 namespace ge::classicenhance {
 
 // The cache folder of the pack with these bytes under `root` (default_cache_root() when empty);
-// an empty path when its textures were never enhanced there.
+// an empty path when its textures were never enhanced there. The pack's digest is worked once for
+// the bytes where they lie (any thread), so asking again is a few file lookups.
 std::filesystem::path find_cache(std::span<const uint8_t> pack,
                                  const std::filesystem::path& root = {});
 // The same for a set of packs, first to last (the full game's pak0, pak1 ...), keyed as the

@@ -3,7 +3,9 @@
 // from disk at run time) and its compile messages become error lines with the label and the
 // line. A pipeline is made through a `PipelineSet`, the game's pipeline manifest: every entry
 // starts compiling asynchronously when it is added and `finish` waits for them all, so a load
-// compiles in parallel and a frame never does.
+// compiles in parallel and a frame never does. `ready` asks without waiting, so a window can keep
+// drawing (a loading spinner, the last map) while a new map's pipelines compile, and finish once
+// it says they are done.
 //
 // THE CREATION COUNTER: every pipeline counts on its device (`pipelines_created`). After
 // `end_load` (device.hpp), adding one is an error line naming it and counts in
@@ -13,7 +15,7 @@
 // ge:summary Shader modules from embedded WGSL; the pipeline manifest and its creation counter
 // ge:keywords gpu shader wgsl shader-module compilation-info pipeline render-pipeline
 // ge:keywords compute-pipeline manifest pipeline-set create-async creation-counter mid-run
-// ge:keywords create_shader add_render add_compute finish
+// ge:keywords create_shader add_render add_compute finish ready poll background-load
 // ge:skill gpu
 // ge:test tests/gpu_device_test.cpp tests/gpu_capture_test.cpp
 #pragma once
@@ -42,6 +44,9 @@ class PipelineSet {
   // Wait for every pipeline added so far. False when any failed (each failure was an error
   // line naming its pipeline).
   bool finish(Device& device);
+  // Whether every pipeline added so far is done (compiled or failed), without waiting; `finish`
+  // then returns at once.
+  bool ready(Device& device);
 
   const wgpu::RenderPipeline& render(uint32_t i) const { return entries_[i].render; }
   const wgpu::ComputePipeline& compute(uint32_t i) const { return entries_[i].compute; }

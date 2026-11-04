@@ -8,6 +8,8 @@
 // ge:test tests/shooters_edge_menu_test.cpp
 #include "shooters_edge/menu/game_menu.hpp"
 
+#include <filesystem>
+#include <system_error>
 #include <utility>
 
 #include "classicenhance/cache.hpp"
@@ -164,15 +166,20 @@ bool GameMenu::enhance_game(bool watch, std::string* error) {
     }
     job_.reset();  // a run of another install: stopped after the item it is on
   }
-  ce::Source src;
-  std::string why;
-  if (!ce::open_source(game_, &src, &why)) return refuse(why);
+  // A path that is not there is refused at once, with the reason the open gives (no pack is read
+  // for it); an install is opened and hashed on the run's own thread.
+  if (std::error_code ec; !std::filesystem::exists(game_, ec)) {
+    ce::Source src;
+    std::string why;
+    if (!ce::open_source(game_, &src, &why)) return refuse(why);
+  }
   const std::filesystem::path root = ce::default_cache_root();
   if (root.empty()) return refuse("no cache folder on this machine; next: set GE_CLASSIC_CACHE");
   ce::RunOptions opts;
   ce::apply_bakes(switches_, &opts);
   job_ = std::make_unique<ce::EnhanceJob>();
-  job_->start(std::move(src), root, std::move(opts));
+  // A pack that does not open fails the run's first stage, its reason on the board.
+  job_->start_at(game_, root, std::move(opts));
   job_game_ = game_;
   job_live_ = true;
   if (watch && open_) watch_enhancing();

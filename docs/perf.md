@@ -140,6 +140,24 @@ What the relief still costs at 1440p is its work: the parallax's march 0.41 ms (
 the loop's presence the rest; a coarser mip for the march saves nothing), the highlights 0.26,
 the texel's normal 0.10. Main had moved to 4.34 ms by the trades' row.
 
+## Shooter's Edge's start and map loads
+
+Measured on the M3 Max (Metal), release build, the remastered packs with their enhanced cache, a
+960x540 window (1920x1080 pixels): the window's timeline (its status lines stamped as they came),
+macOS's `sample <pid>` over the start, and the exit line's longest frame. The pictures are
+unchanged (a settled frame of dm3 byte for byte the size of main's).
+
+| Change | No frame drawn at start | A map's load on the window's thread | Longest frame while a map loads | Where |
+| --- | --- | --- | --- | --- |
+| The pack's SHA-256 kept per pack (`find_cache` hashed the 179 MB pack every call: three times a world, again for the pictures and the enhance run) | | 1.25 s less | | `classicenhance/cached.cpp` |
+| The world's CPU half (`read_world`: the textures' and skins' PNGs, the rebake, the probes) on a thread, its pipelines polled (`PipelineSet::ready`) while frames go on, the window opened first on the title, the first pictures read on a thread and the enhance run's pack opened on its own | about 12 s → 0.6 s (the window's first frame), the menu up at 1.9 s | about 3.3 s → 0.22 s (`begin_world`'s uploads) | 3.3 s → 0.22 to 0.26 s (start: drawn 3.7 s after it was asked for; dm6: 2.1 s) | `client/map_load.hpp`, `world_draw.hpp`, `gpu/pipeline.hpp`, `classicenhance/progress.hpp` |
+| An enhance run that wrote nothing no longer makes the world again | about 5 s less | | | `client/main.cpp` |
+
+Before, the start drew nothing for about 12 s: the first world made before the window opened
+(3.3 s: 1.65 s waiting on Dawn's pipeline compiles, 1.3 s of PNG decode, the rest hashing), the
+pictures and the enhance run's start (0.8 s and 0.95 s, both hashing the pack), then the same
+world made again when the background run ended with every stage up to date.
+
 ## The flow step on threads
 
 `water::step_flow` splits its rows over `core::parallel_bands`. On the persistent pool a call
