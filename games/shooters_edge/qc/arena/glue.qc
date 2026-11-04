@@ -11,6 +11,16 @@ void(entity to, float level, string a, string b, string c, string d) say_to = {
   sprint(to, level, a, b, c, d);
 };
 
+// An item's name in the loaded game's own words: the server's local info under the item's class
+// name, which the window sets from the game's profile (profiles/items.hpp's `names`); `fallback`
+// (Shooter's Edge's own word) when the game names none.
+string(string class_name, string fallback) name_of = {
+  local string s;
+  s = infokey(world, class_name);
+  if (s == "") return fallback;
+  return s;
+};
+
 void(vector org, float set) effect_send = { multicast(org, set); };
 
 // A puff where a shot hits: blood on something that bleeds, a chip of the wall elsewhere.
