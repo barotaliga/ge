@@ -35,11 +35,6 @@ bool same_host(const gn::Address& a, const gn::Address& b) {
   return x == y;
 }
 
-int field_offset(const pg::Progs& p, const char* name) {
-  const pg::Def* d = pg::find_field(p, name);
-  return d ? d->offset : -1;
-}
-
 int32_t new_challenge(ClassicServer& s, const gn::Address& from) {
   int slot = 0;
   for (int i = 0; i < 64; i++) {
@@ -444,14 +439,6 @@ bool classic_start(ClassicServer& s, sv::QcServer& qc, gn::Transport& t, const S
   s.rng = ge::core::make_rng(cfg.seed);
   for (size_t i = 1; i < qc.models.size(); i++)
     if (qc.models[i] == "progs/player.mdl") s.player_model = static_cast<int>(i);
-  s.f_currentammo = field_offset(*qc.progs, "currentammo");
-  s.f_armorvalue = field_offset(*qc.progs, "armorvalue");
-  s.f_ammo[0] = field_offset(*qc.progs, "ammo_shells");
-  s.f_ammo[1] = field_offset(*qc.progs, "ammo_nails");
-  s.f_ammo[2] = field_offset(*qc.progs, "ammo_rockets");
-  s.f_ammo[3] = field_offset(*qc.progs, "ammo_cells");
-  s.f_weapon = field_offset(*qc.progs, "weapon");
-  s.f_weaponframe = field_offset(*qc.progs, "weaponframe");
   if (cfg.voice) s.cfg.offered[ExtFamily::x2] |= kX2Voice;
 
   // What the map's load wrote: its static sounds and signon writes; its statics are qc.statics.
@@ -549,9 +536,7 @@ std::string status_text(const ClassicServer& s, int opt) {
     const ClassicClient& c = s.clients[i];
     if (c.state == ConnState::free) continue;
     int frags = 0;
-    if (c.qc_active)
-      frags = static_cast<int>(
-          pg::as_float(*pg::entity_field(s.qc->q.vm, i + 1, s.qc->q.layout->f.frags)));
+    if (c.qc_active) frags = static_cast<int>(s.qc->world.clients[i].numbers.frags);
     const int ping = c.state != ConnState::spawned ? 999
                      : c.ping_samples == 0         ? 9999
                                                    : static_cast<int>(c.ping_s * 1000);
@@ -592,21 +577,17 @@ std::string status_text(const ClassicServer& s, int opt) {
 EntityState entity_state(const ClassicServer& s, int e) {
   EntityState st;
   st.number = e;
-  const pg::Vm& vm = s.qc->q.vm;
-  auto f = [&](int field) { return pg::as_float(*pg::entity_field(vm, e, field)); };
-  const sh::Edict& ed = s.qc->sv.edicts[static_cast<size_t>(e)];
-  st.modelindex = static_cast<int>(f(s.qc->q.layout->f.modelindex));
-  st.frame = static_cast<int>(f(s.qc->q.layout->f.frame));
-  st.colormap = static_cast<int>(f(s.qc->q.layout->f.colormap));
-  st.skin = static_cast<int>(f(s.qc->q.layout->f.skin));
-  st.effects = static_cast<int>(f(s.qc->q.layout->f.effects));
-  st.origin = ed.origin;
-  st.angles = ed.angles;
-  if (static_cast<size_t>(e) < s.qc->extras.size() &&
-      s.qc->extras[static_cast<size_t>(e)].has_alpha) {
-    const float a = s.qc->extras[static_cast<size_t>(e)].alpha;
-    const int v = static_cast<int>(a * 254);
-    st.alpha = a >= 1 ? 0 : v < 1 ? 1 : v > 254 ? 254 : v;
+  const sv::WorldEntity& row = s.qc->world.entities[static_cast<size_t>(e)];
+  st.modelindex = row.modelindex;
+  st.frame = row.frame;
+  st.colormap = row.colormap;
+  st.skin = row.skin;
+  st.effects = row.effects;
+  st.origin = row.origin;
+  st.angles = row.angles;
+  if (row.alpha != 1) {
+    const int v = static_cast<int>(row.alpha * 254);
+    st.alpha = row.alpha >= 1 ? 0 : v < 1 ? 1 : v > 254 ? 254 : v;
   }
   return st;
 }

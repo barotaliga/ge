@@ -133,7 +133,7 @@ float call_hook(QcServer& s, HookId h, int32_t fn, int self, std::initializer_li
   return r;
 }
 
-CommandResult client_command(QcServer& s, int slot, const std::string& line) {
+static CommandResult run_client_command(QcServer& s, int slot, const std::string& line) {
   if (slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].active) return CommandResult::bad;
   pg::Words& w = s.q.vm.words;
   pg::tokenize_words(line.c_str(), w);
@@ -160,7 +160,8 @@ CommandResult client_command(QcServer& s, int slot, const std::string& line) {
   return CommandResult::bad;
 }
 
-void set_user_info(QcServer& s, int slot, const std::string& key, const std::string& value) {
+static void change_user_info(QcServer& s, int slot, const std::string& key,
+                             const std::string& value) {
   std::string old;
   if (!set_info_value(s.clients[slot].userinfo, key, value, old)) return;
   if (key == "name") set_netname(s, slot + 1, value);
@@ -173,7 +174,7 @@ void set_local_info(QcServer& s, const std::string& key, const std::string& valu
   call_hook(s, HookId::localinfo_changed, s.named.localinfo_changed, 0, {key, old, value});
 }
 
-bool server_command(QcServer& s, const std::string& line) {
+static bool run_console_line(QcServer& s, const std::string& line) {
   pg::Words& w = s.q.vm.words;
   pg::tokenize_words(line.c_str(), w);
   if (w.count == 0) return true;
@@ -243,6 +244,24 @@ bool request_pause(QcServer& s, int slot, bool pause) {
   s.out.events.push_back(std::move(ev));
   s.out.events_total++;
   return true;
+}
+
+// The entry points: each leaves the rules' world as the command left the server.
+CommandResult client_command(QcServer& s, int slot, const std::string& line) {
+  const CommandResult r = run_client_command(s, slot, line);
+  fill_world(s, s.world, false);
+  return r;
+}
+
+void set_user_info(QcServer& s, int slot, const std::string& key, const std::string& value) {
+  change_user_info(s, slot, key, value);
+  fill_world(s, s.world, false);
+}
+
+bool server_command(QcServer& s, const std::string& line) {
+  const bool ok = run_console_line(s, line);
+  fill_world(s, s.world, false);
+  return ok;
 }
 
 }  // namespace shooters_edge::server
