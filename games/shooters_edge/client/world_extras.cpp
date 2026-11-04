@@ -5,6 +5,7 @@
 // ge:skill render shooter classicenhance
 #include "shooters_edge/client/world_extras.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 
