@@ -174,3 +174,8 @@ void() player_respawn;
 float(float w) weapon_rank;
 void() weapon_select_best;
 void(float w) weapon_set;
+
+// Each variant's answer to a teleporter (its world.qc): whether one sends this thing, and what its
+// arrival does where it lands.
+float(entity who) teleport_takes;
+void(entity who) teleport_arrived;

@@ -6,12 +6,15 @@
 // brute hurt a player near them, a ghoul shrugs off a small hit and is knocked down by a big one
 // and gets up again whole, and only its whole health in one blow ends it; a flyer keeps its height
 // and spits at the player. The big and late kinds: each counts at spawn and hurts a player in front
-// of it, the giant takes half of a blast, and a spawn bursts when it dies.
+// of it, the giant takes half of a blast, and a spawn bursts when it dies. The bosses: the lava
+// boss rises when used, throws, and falls to three strikes; arriving inside the final boss kills
+// it and ends the game; a teleport train rides its path.
 //
 // ge:summary Tests: our campaign mod's monsters: counting, noticing, attacking, paths, each kind
 // ge:keywords test campaign-mod monsters monster-ai rifleman hound path-corner killed-monsters
 // ge:keywords notice show-hostile swordsman brute ghoul flyer eel knockdown leaper giant caster
-// ge:keywords trooper spawn heavy-swordsman blast-share
+// ge:keywords trooper spawn heavy-swordsman blast-share lava-boss final-boss telefrag
+// ge:keywords teleport-train event-lightning
 // ge:skill progs shooter testing
 #include <algorithm>
 #include <filesystem>
@@ -95,11 +98,16 @@ struct Game {
   }
   // A function of the program called with these parameter words, the way the host calls a hook
   // with arguments.
-  bool call(const char* name, std::initializer_list<uint32_t> args) {
+  // `self` (and `activator`) are set first when `as` names an entity.
+  bool call(const char* name, std::initializer_list<uint32_t> args, int as = 0) {
     const int fn = pg::find_function(mod(), name);
     if (fn < 0) return false;
     pg::Vm& vm = s().q.vm;
     se::enter_qc(s().q, s().sv);
+    if (as > 0) {
+      vm.globals[pg::find_global(mod(), "self")->offset] = ent(as);
+      vm.globals[pg::find_global(mod(), "activator")->offset] = ent(1);
+    }
     int i = 0;
     for (uint32_t a : args) vm.globals[static_cast<size_t>(pg::parm(i++))] = a;
     const bool ok = se::run_qc(s().q, fn);
@@ -445,5 +453,79 @@ TEST(a_spawn_bursts_when_it_dies) {
   CHECK(g.global("killed_monsters") == 1);
   CHECK(g.find("monster_tarbaby") == 0);  // nothing left of it
   CHECK(g.field(1, g.f().health) < 100);  // the player beside it caught the burst
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(the_lava_boss_rises_when_used_throws_and_falls_to_three_strikes) {
+  Game g(R"({
+"classname" "monster_boss"
+"origin" "-150 0 24"
+}
+)");
+  const int boss = g.find("monster_boss");
+  CHECK(g.global("total_monsters") == 1);
+  CHECK(g.ed(boss).solid == 0);  // under the lava until used
+  CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.call("boss_use", {}, boss));
+  CHECK(g.ed(boss).solid != 0);
+  for (int i = 0; i < kFrames * 8 && g.field(1, g.f().health) == 100; i++)
+    CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.field(1, g.f().health) < 100);  // its fire reached the player
+  // The lightning with no doors to strike between does nothing.
+  CHECK(g.call("lightning_use", {}, g.find("player")));
+  CHECK(g.field(boss, g.f().health) == 3);
+  for (int i = 0; i < 3; i++) CHECK(g.call("boss_struck", {}));
+  CHECK(g.field(boss, g.f().health) == 0);
+  CHECK(g.global("killed_monsters") == 1);
+  CHECK(g.ed(boss).solid == 0);
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(arriving_inside_the_final_boss_kills_it_and_ends_the_game) {
+  Game g(R"({
+"classname" "monster_oldone"
+"origin" "-416 0 24"
+}
+)");
+  const int boss = g.find("monster_oldone");
+  CHECK(g.field(boss, g.f().health) == 40000);
+  CHECK_MSG(g.frame(0), g.error);
+  // The player stands inside it, as a teleporter would have put him there.
+  CHECK(g.call("teleport_arrived", {g.ent(1)}));
+  CHECK(g.global("killed_monsters") == 1);
+  for (int i = 0; i < kFrames * 5 && g.global("intermission_running") == 0; i++)
+    CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.global("intermission_running") == 1);
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(a_teleport_train_rides_its_path) {
+  Game g(R"({
+"classname" "misc_teleporttrain"
+"origin" "-300 0 100"
+"target" "c1"
+"speed" "200"
+}
+{
+"classname" "path_corner"
+"targetname" "c1"
+"target" "c2"
+"origin" "-300 0 100"
+}
+{
+"classname" "path_corner"
+"targetname" "c2"
+"target" "c1"
+"origin" "-100 0 100"
+}
+)");
+  const int train = g.find("misc_teleporttrain");
+  float most = -1000;
+  for (int i = 0; i < kFrames * 2; i++) {
+    CHECK_MSG(g.frame(0), g.error);
+    most = std::max(most, g.ed(train).origin.x);
+  }
+  CHECK_MSG(most > -110, std::to_string(most));  // reached the far corner
+  CHECK_MSG(g.ed(train).origin.x < most, std::to_string(g.ed(train).origin.x));  // and turned back
   CHECK(g.s().q.faults == 0);
 }
