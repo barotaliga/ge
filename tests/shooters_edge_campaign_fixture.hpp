@@ -29,7 +29,8 @@ namespace se = shooters_edge::sim;
 
 inline std::string g_things;  // the map's entities after the world and the start
 
-inline bool load(void* /*ctx*/, const std::string& /*name*/, sv::MapSpec& out, std::string& /*error*/) {
+inline bool load(void* /*ctx*/, const std::string& /*name*/, sv::MapSpec& out,
+                 std::string& /*error*/) {
   out.models = sv::arena_models(true);
   out.entities = R"({
 "classname" "worldspawn"
@@ -132,6 +133,5 @@ struct Game {
 };
 
 constexpr int kFrames = 72;  // host frames a second
-
 
 }  // namespace campfix
