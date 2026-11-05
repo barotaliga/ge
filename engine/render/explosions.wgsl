@@ -16,6 +16,7 @@ struct Blast {
   soot: vec4f,    // the smoke's single-scattering albedo times its tint
   axis: vec4f,    // the stretch's axis (unit); the stretch (1: a ball)
   side: vec4f,    // the first prong's way (unit, square to the axis); the prongs (0: none)
+  light: vec4f,   // the local light on it, whites; the share of the sun and the sky reaching it
 }
 
 struct ExplosionParams {
@@ -145,8 +146,11 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   let world_c = centre + frame.eye.xyz;
   // The light the smoke gets: the sun at the ball's height, the sky's from above, the fire's
   // from inside it (the core's glow, by how much still burns).
-  let sun_in = sun_light(world_c.y, world_c.xz);
-  let sky_in = sky_irradiance(vec3f(0.0, 1.0, 0.0));
+  // As far as the open sky reaches it, and the room's own light (in whites: a white surface's
+  // luminance, so its irradiance is pi times it).
+  let sun_in = sun_light(world_c.y, world_c.xz) * b.light.w;
+  let sky_in = sky_irradiance(vec3f(0.0, 1.0, 0.0)) * b.light.w +
+               b.light.rgb * (PI * white_luminance());
   let fire_in = fire_light(mix(kBlackbodyLoK, core_k, 0.85)) * fire * 0.35;
 
   var trans = 1.0;

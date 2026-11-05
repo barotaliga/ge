@@ -25,7 +25,7 @@
 //
 // ge:summary The window's models: items, weapons, flames, players, loaded from the packs and drawn
 // ge:keywords world-models create_models read_models place_models prepare_models encode_models
-// ge:keywords placed-model
+// ge:keywords placed-model effect-models s_explod bolt effect_model
 // ge:keywords items armour health weapons flames torches players statics entity-models morph
 // ge:keywords sprites bare-flames topcolor bottomcolor place_brushes doors plats
 // ge:keywords ce_models enhanced-skins cached_skins replacement-skin skin-stand-in
@@ -61,6 +61,17 @@ struct Placed {
   sh::Vec3f origin, angles;
   uint32_t top = models::kShirtRow, bottom = models::kPantsRow;  // palette rows for the tints
 };
+
+// THE EFFECTS' OWN MODELS: what the classic client draws for a temporary entity, loaded by the
+// window after the server's list whether the program precached them or not (a pack without one
+// draws nothing in its place, silently): the explosion's sprite and the three bolts' segments. A
+// placed one's modelindex is the server's list's size plus its slot here (`effect_model`).
+enum class EffectModel : uint8_t { explosion, bolt, bolt2, bolt3 };
+inline constexpr const char* kEffectModels[] = {"progs/s_explod.spr", "progs/bolt.mdl",
+                                                "progs/bolt2.mdl", "progs/bolt3.mdl"};
+inline int effect_model(const Listen& l, EffectModel m) {
+  return (l.server ? static_cast<int>(l.server->models.size()) : 0) + static_cast<int>(m);
+}
 
 // The effect bits a power held lights its holder with (the mod's EF_DIMLIGHT, EF_BLUE, EF_RED).
 inline constexpr int kGlow = 8, kGlowBlue = 64, kGlowRed = 128;

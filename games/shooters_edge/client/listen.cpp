@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_listen_test.cpp
 #include "shooters_edge/client/listen.hpp"
 
+#include <bit>
 #include <cstddef>
 #include <cstdlib>
 #include <cstring>
@@ -53,9 +54,70 @@ namespace pg = ge::progs;
 
 namespace {
 
-// The message bytes of the baseline mod's explosion (qc/common/defs.qc's SVC_TEMPENTITY,
-// TE_EXPLOSION).
+// The message bytes of the baseline mod's temporary entities (qc/common/defs.qc's SVC_TEMPENTITY
+// and its TE_ kinds, the multiplayer protocol's layout: a gunshot and blood carry a count).
 constexpr uint8_t kTempEntity = 23, kExplosion = 3;
+
+// A match's temporary entity (one multicast's bytes) as an effect the window draws: false for a
+// kind it does not draw or bytes cut short. The explosion is Listen::explosions' already.
+bool arena_effect(std::span<const uint8_t> b, Effect& e) {
+  if (b.size() < 2 || b[0] != kTempEntity) return false;
+  size_t i = 2;
+  const auto coord = [&] {
+    const auto raw = static_cast<int16_t>(b[i] | (b[i + 1] << 8));
+    i += 2;
+    return static_cast<float>(raw) / 8.0f;
+  };
+  const auto point = [&] {
+    const float x = coord(), y = coord();
+    return sh::Vec3f{x, y, coord()};
+  };
+  e.code = b[1];
+  size_t body = 6;
+  switch (b[1]) {
+    case 0:  // a spike, a big spike, the two monsters' spikes
+    case 1:
+    case 7:
+    case 8:
+      e.kind = EffectKind::spike;
+      e.count = b[1] == 1 ? 2 : 1;
+      break;
+    case 2:  // a gunshot: its count of pellets
+      e.kind = EffectKind::impact;
+      body = 7;
+      break;
+    case 5:  // the beams: an entity and two points
+    case 6:
+    case 9:
+      e.kind = EffectKind::beam;
+      body = 14;
+      break;
+    case 10:
+      e.kind = EffectKind::lava;
+      break;
+    case 11:
+      e.kind = EffectKind::teleport;
+      break;
+    case 12:  // blood: its count; the beam's blood
+      e.kind = EffectKind::blood;
+      body = 7;
+      break;
+    case 13:
+      e.kind = EffectKind::blood;
+      break;
+    default:
+      return false;
+  }
+  if (b.size() < 2 + body) return false;
+  if (body == 7) e.count = b[i++];
+  if (e.kind == EffectKind::beam) {
+    e.entity = static_cast<int16_t>(b[i] | (b[i + 1] << 8));
+    i += 2;
+  }
+  e.at = point();
+  e.end = e.kind == EffectKind::beam ? point() : e.at;
+  return true;
+}
 
 pg::QcSource source(const char* name, const unsigned char* bytes, std::size_t size) {
   pg::QcSource s;
@@ -515,6 +577,9 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     if (ev.kind == sv::EventKind::multicast && ev.bytes.size() >= 2 && ev.bytes[0] == kTempEntity &&
         ev.bytes[1] == kExplosion)
       l.explosions.push_back(ev.origin);
+    else if (Effect e;
+             !l.campaign_host && ev.kind == sv::EventKind::multicast && arena_effect(ev.bytes, e))
+      l.effects.push_back(e);
   }
   read_streams(l);
   sv::clear_frame(s.out);
@@ -627,7 +692,7 @@ void missiles_of(const Listen& l, std::vector<Missile>& out) {
     if (ed.free) continue;
     const std::string cn = text_field(l, e, q->q.layout->f.classname);
     if (cn != "rocket" && cn != "grenade" && cn != "spike" && cn != "missile") continue;
-    out.push_back({e, ed.origin, cn != "spike"});
+    out.push_back({e, ed.origin, cn != "spike", cn == "grenade"});
   }
 }
 
@@ -637,6 +702,14 @@ float field_named(const Listen& l, int entity, const char* name) {
   const sv::QcServer* q = program(l);
   if (q == nullptr) return 0;
   return pg::as_float(*pg::entity_field(q->q.vm, entity, d->offset));
+}
+
+void set_field_named(Listen& l, int entity, const char* name, float value) {
+  const pg::Def* d = pg::find_field(*l.progs, name);
+  if (d == nullptr || l.rules == nullptr) return;
+  sv::QcServer* q = sv::qc_of(*l.rules);
+  if (q == nullptr) return;
+  *pg::entity_field(q->q.vm, entity, d->offset) = std::bit_cast<uint32_t>(value);
 }
 
 float global_named(const Listen& l, const char* name, bool* found) {

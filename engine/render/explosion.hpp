@@ -40,7 +40,8 @@
 // ge:summary An explosion as seen: the looks and their knobs, the fireball, flash, sparks, scorch
 // ge:keywords render explosion blast fireball smoke flash sparks debris scorch grenade
 // ge:keywords rocket effect sprite-replacement blast_looks blast_look_by_id blast_knobs set_knob
-// ge:keywords knobs preset fireball_at flash_at blast_births scorch_of blast_life
+// ge:keywords knobs preset fireball_at flash_at blast_births scorch_of blast_life blast-light
+// ge:keywords indoor-smoke lit-smoke
 // ge:skill render
 // ge:test tests/render_explosion_test.cpp
 #pragma once
@@ -107,6 +108,14 @@ std::span<const BlastKnob> blast_knobs();
 // Sets the knob `name` to `value`, clamped to its range (counts rounded): false for no such knob.
 bool set_knob(BlastLook& look, std::string_view name, double value);
 
+// THE LIGHT ROUND A BLAST, for its smoke: the share of the sun and the sky that reaches it (1 in
+// the open; 0 in a room, which `lit` lights alone) and the local light on it in whites (1: a white
+// surface there reads as the white the picture is keyed to; a game reads it off its lightmaps).
+struct BlastLight {
+  double sky = 1;
+  float lit[3] = {0, 0, 0};
+};
+
 struct Blast {
   double at[3] = {0, 0, 0};         // world, m: where it went off
   double normal[3] = {0, 1, 0};     // the surface's, out of it (unit); unused in the open air
@@ -116,6 +125,7 @@ struct Blast {
   uint32_t seed = 0;                // its own sparks, scorch and the turn of its noise
   double born_s = 0;                // the clock it went off at
   double v[3] = {0, 0, 0};          // m/s it is thrown at (a muzzle's puff), slowed by the air
+  BlastLight light{};               // what lights its smoke (the open air's by default)
 };
 inline constexpr double kBlastDragS = 0.3;  // the air's e-folding time on a thrown blast, s
 inline const BlastLook& look_of(const Blast& b) { return b.look ? *b.look : default_look(); }

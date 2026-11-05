@@ -16,19 +16,25 @@
 //   away in the vertex stage. A particle is a STREAK along its motion over `streak` s (a fast grain
 //   reads as a stroke, the way a camera's shutter sees spray) at least `size` m long, thinned by
 //   its length so a fast grain is no brighter than a slow one, faded in over its first tenth and
-//   out over its last third, and SOFTENED where it nears what is behind it (the depth, read). It is
+//   out over its last third, GROWN by `grow` m a second of its age (a puff spreading as it thins:
+//   its opacity falls by its width), and SOFTENED where it nears what is behind it (the depth,
+//   read). It is
 //   lit as the instances are, by the sun past the ground's horizon and the shadow maps and by the
-//   sky, with a forward lobe so spray seen into a low sun is silver, and hazed. Blended
+//   sky, with a forward lobe so spray seen into a low sun is silver, its `tint` the colour of what
+//   it reflects (blood red, dust tan; white for snow), and hazed. Blended
 //   premultiplied over the picture, unsorted (a grain is small and nearly opaque, the fines nearly
 //   clear). A particle with a `kelvin` GLOWS as well: a blackbody at a heat falling from it toward
 //   700 K by e every `cool_s` (render/blackbody.hpp's table, kSparkEmissivity of a perfect
 //   radiator's light), so a spark thrown white-hot reddens and goes dark as it falls; it writes the
 //   motion target's reactive channel (b) so the resolve does not smear it, and nothing else there.
+//   One with a negative `kelvin` SHINES its tint instead, unlit, in the picture's whites (a
+//   classic palette speck: its colour drifts toward its `albedo`'s grey as it ages).
 //
 // ge:summary GPU particles: a ring pool, births, the compute flight, streaks softened by depth
 // ge:keywords render particles spray particle-pool ring births compute streak soft-particles
 // ge:keywords premultiplied reactive emit_particles prepare_particles encode_particles_sim
 // ge:keywords encode_particles step_particle create_particles read_particles glow spark kelvin
+// ge:keywords shine emissive palette-speck tint grow
 // ge:skill render
 // ge:test tests/render_particles_test.cpp
 #pragma once
@@ -57,10 +63,17 @@ struct Particle {
   float streak;   // s of motion drawn as its streak
   float albedo;   // its whiteness, 0..1
   float opacity;  // at its densest, 0..1
-  float kelvin;   // a glowing particle's heat at birth, K (0: it gives no light of its own)
-  float cool_s;   // its heat's fall toward a dull red, e-folding s
+  // A glowing particle's heat at birth, K (0: it gives no light of its own). Below 0 it SHINES
+  // instead: an unlit speck of its `tint` (linear) at -kelvin times the light of a white surface
+  // the picture is keyed to (frame.wgsl's white_luminance: 1 reads as a fullbright texel of that
+  // colour), the colour turning toward the grey `albedo` by e every `cool_s` (0: steady): a
+  // classic palette speck, an ember's yellow going to brown, a trail's orange going to grey.
+  float kelvin;
+  float cool_s;                        // its heat's (its colour's) fall, e-folding s
+  float tint[3] = {1.0f, 1.0f, 1.0f};  // the colour its albedo reflects (1, 1, 1: grey)
+  float grow = 0;                      // m across it gains a second (a puff of smoke spreading)
 };
-static_assert(sizeof(Particle) == 64, "match particles.wgsl's Particle");
+static_assert(sizeof(Particle) == 80, "match particles.wgsl's Particle");
 
 inline constexpr double kGravity = 9.81;          // m/s²
 inline constexpr double kSparkEmissivity = 0.35;  // a glowing particle's light over a blackbody's
