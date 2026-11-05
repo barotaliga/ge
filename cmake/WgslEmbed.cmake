@@ -1,6 +1,6 @@
 # The script half of ge_embed_wgsl (cmake/Wgsl.cmake), run as `cmake -P` at build time:
-# resolve IN's #include lines, drop its comment lines, write RESOLVED, and write HEADER with the
-# text as a string_view.
+# resolve IN's #include lines, drop its comment and blank lines, the indents and the comments after
+# code, write RESOLVED, and write HEADER with the text as a string_view.
 # Inputs: IN, HEADER, RESOLVED, NAME, ROOTS ('|'-separated include roots).
 cmake_minimum_required(VERSION 3.25)
 string(REPLACE "|" ";" roots "${ROOTS}")
@@ -42,7 +42,13 @@ function(resolve file out_var)
     elseif(line MATCHES "^[ \t]*//")
       # A comment line is the reader's, not the GPU's: left out of what is embedded, so a shader
       # with its includes stays under the literal's cap however well it is explained.
+    elseif(line MATCHES "^[ \t]*$")
+      # A blank line: nothing to the GPU.
     else()
+      # The indent and a comment after the code are the reader's too (WGSL has no strings, so a
+      # '//' is always a comment).
+      string(REGEX REPLACE "^[ \t]+" "" line "${line}")
+      string(REGEX REPLACE "[ \t]*//.*$" "" line "${line}")
       string(REPLACE "@SEMI@" ";" line "${line}")
       string(REPLACE "@LBRK@" "[" line "${line}")
       string(REPLACE "@RBRK@" "]" line "${line}")
