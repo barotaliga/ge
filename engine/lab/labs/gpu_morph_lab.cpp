@@ -497,8 +497,10 @@ void run(gl::Lab& lab) {
     plain[0].warp = gr::MorphWarp{};
     const double whole =
         changed(draw(*device, s, v, warped(1, true)).pic, draw(*device, s, v, plain).pic);
-    lab.metric("warp.gone-changed", gone, "count");
-    lab.metric("warp.whole-changed", whole, "count");
+    // Read off the pictures, so measured like the teams' colours (a machine with no adapter has
+    // none); the check below fails the run instead.
+    lab.metric("warp.gone-changed", gone, "count", Det::measured);
+    lab.metric("warp.whole-changed", whole, "count", Det::measured);
     if (gone != 0 || whole != 0) {
       lab.fail("a warp gone changed " + fixed(gone, 0) + " channels or one whole changed " +
                    fixed(whole, 0) + " against the plain runner",
