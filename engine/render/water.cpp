@@ -110,6 +110,7 @@ void upload_waves(gpu::Device& device, Water::Slot& slot, const water::Body& bod
   slot.staged.surf[0] = static_cast<float>(foam.hs);
   slot.staged.surf[1] = static_cast<float>(foam.runup);
   slot.staged.surf[2] = static_cast<float>(foam.fold_length);
+  slot.staged.surf[3] = static_cast<float>(foam.sigma);
   std::vector<float> data(size_t{kWaveSlots} * 8, 0.0f);
   size_t i = 0;
   const auto put = [&](const water::Component& c) {
@@ -193,7 +194,8 @@ WaterFoam foam_of(const water::Waves& waves, std::span<const water::Component> d
     const double z = 0.5 * (lo + hi);
     (0.5 * std::erfc(z / std::sqrt(2.0)) > active ? lo : hi) = z;
   }
-  f.fold = 1 - std::sqrt(var) * 0.5 * (lo + hi);
+  f.sigma = std::sqrt(var);
+  f.fold = 1 - f.sigma * 0.5 * (lo + hi);
   return f;
 }
 

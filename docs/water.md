@@ -436,7 +436,8 @@ With no body shown both rows run empty. What it draws:
 - **Surf by the depth.** A wave over 0.78 of the depth under it breaks (the simulation's
   `breaking_at`, eased in from 0.6 of that), the depth read off the opaque depth copy under the
   pixel; its foam is kept and drifts the same way, so white water rolls in and lace trails behind
-  it. A line of foam lies where the water laps the shore, as wide as the sea's height asks.
+  it. A line of foam lies where the water laps the shore, as wide as the sea's height asks. A sea
+  under 15 cm Hs (a tarn's chop) laps without breaking white.
 - **Lace, never a sheet.** The share is cut into ridges of noise at two sizes carried with the
   drift: threads round holes that open as a patch fades. A pixel too wide for the threads takes
   the share as its mean, so far foam whitens evenly and never sparkles. Foam is lit as a white face
@@ -444,9 +445,11 @@ With no body shown both rows run empty. What it draws:
 - **The shore's wet band.** In the "water" pass before the bodies, a full-screen triangle per body
   multiplies the frame's colour: every opaque point a little over the level and near the water
   (the shore mask's ramp: past the outline its texels fall from 127 to 0 over `kShoreReach`, 12 m)
-  is darkened by up to 45 %: fully up to 0.6 of the run-up (0.03 m for a calm lake's lap plus 0.7
-  of the sea's Hs), fading to nothing at 1.2 of it, and darker still where the waves run up it now
-  (their height there carried up the beach by half again).
+  is darkened by up to 30 %: fully up to a quarter of the run-up (0.03 m for a calm lake's lap
+  plus 0.7 of the sea's Hs), fading to nothing at 1.3 of it, and fully where the waves run up it
+  now (their height there carried up the beach by half again). The water darkens its own bed the
+  same in its last 30 cm, since the copy it reads was taken before the band: no dry seam shows at
+  the waterline. A body with no outline wets nothing past its box.
 - **Off for a lab.** `WaterDraw::foam` and `wet_band` (both on) let a lab draw the same view
   without them; the `gpu-water` lab's `whitecaps`, `foam-trail`, `surf` and `surf-night` views show
   them, and it fails when the gale's whitecaps whiten under a quarter of the law's cover.

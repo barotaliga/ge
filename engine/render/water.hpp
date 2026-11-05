@@ -163,6 +163,7 @@ inline constexpr double kFoamShortest = 1.5;  // m: the shortest wave that folds
 struct WaterFoam {
   double wind = 0, cover = 0;
   double fold = -1e9;      // J under this breaks; far under -1 when nothing can
+  double sigma = 0;        // the Jacobian's spread about 1 (its trace's standard deviation)
   double drift = 0;        // m/s downwind
   double hs = 0;           // the laid band's significant height, m
   double runup = 0;        // m over the level
@@ -182,7 +183,7 @@ struct WaterGpuBody {
   float view[4];  // the mirror (0 none, 1 over, 2 under), the view up (1), its heading's cos, sin
   // The foam (`foam_of`): the fold's threshold on the Jacobian, the whitecap cover, its drift x, z
   float foam[4];
-  float surf[4];  // the laid band's Hs (m), the run-up (m), the folds' wavelength (m), 0
+  float surf[4];  // the laid band's Hs (m), the run-up (m), the folds' wavelength (m), sigma
   float up_view_proj[16];
   float levels[kWaterLevels][4];
 };

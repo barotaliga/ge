@@ -2,8 +2,9 @@
 // half (render/wgsl/water_surface.wgsl), drawn in the "water" pass before the bodies as a
 // full-screen triangle multiplying the frame's colour. Each pixel's opaque point (the depth copy)
 // that stands a little over a body's level and near its water is darkened: wet up to most of the
-// run-up (the waves' reach over the last minutes, a calm lake's lap included), fading over the rest
-// of it, and darker still where the waves run up it now.
+// run-up (the waves' reach over the last minutes, a calm lake's lap included) fading from a quarter
+// of it to past its top, and where the waves run up it now; the water darkens its shallow bed to
+// match (water.wgsl), so no dry seam shows at the waterline.
 #include "render/wgsl/water_surface.wgsl"
 
 struct ShoreVertex {
@@ -19,7 +20,7 @@ fn vs_full(@builtin(vertex_index) i: u32) -> ShoreVertex {
 }
 
 const kShoreReach = 12.0;  // m past a lake's box its band may lie (render/water.hpp's kShoreReach)
-const kWetDark = 0.45;     // the share of its light wet ground loses
+const kWetDark = 0.3;      // the share of its light wet ground loses (water.wgsl's too)
 
 struct ShoreOut {
   @location(0) colour: vec4f,  // multiplies the frame's
@@ -37,7 +38,7 @@ fn fs_shore(in: ShoreVertex) -> ShoreOut {
   let world = p.xyz + frame.eye.xyz;
   let above = world.y - body.info.x;
   let runup = body.surf.y;
-  if (above < -0.05 || above > 1.2 * runup) {
+  if (above < -0.05 || above > 1.3 * runup) {
     discard;
   }
   // Near the water: the shore mask's ramp past the outline (render/water.hpp's `shore_mask`),
@@ -47,15 +48,19 @@ fn fs_shore(in: ShoreVertex) -> ShoreOut {
   let on_box = (xz - body.box.xy) / max(body.box.zw - body.box.xy, vec2f(1e-3));
   let mask = textureLoad(shore, vec2i(clamp(on_box * cells, vec2f(0.0), cells - 1.0)), 0).r;
   let out_of_box = length(max(body.box.xy - xz, vec2f(0.0)) + max(xz - body.box.zw, vec2f(0.0)));
+  // A body with no outline (an ocean, a pool) has no shore to wet past its box.
+  if (cells.x <= 1.0 && out_of_box > 0.0) {
+    discard;
+  }
   let near = clamp(mask * 2.0, 0.0, 1.0) * (1.0 - smoothstep(0.0, kShoreReach, out_of_box));
   if (near <= 0.0) {
     discard;
   }
   // Where the run-ups of the last minutes reached, and where the waves run up it now (their
   // height here, carried up the beach by half again).
-  let reached = 1.0 - smoothstep(0.6 * runup, 1.2 * runup, above);
+  let reached = 1.0 - smoothstep(0.25 * runup, 1.3 * runup, above);
   let now = 1.0 - smoothstep(0.0, 0.02, above - (1.5 * height_at(xz, frame.time.x, 0.5) + 0.01));
-  let wet = max(0.75 * reached, now) * near;
+  let wet = max(reached, now) * near;
   var out: ShoreOut;
   out.colour = vec4f(vec3f(1.0 - kWetDark * wet), 1.0);
   out.motion = vec4f(0.0);

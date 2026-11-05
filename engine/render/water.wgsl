@@ -7,7 +7,9 @@
 const kFoamTaps = 10;     // moments looked back at
 const kFoamStep = 0.3;    // s between them
 const kFoamLife = 2.0;    // s: a patch's share falls by e in this
-const kFoamEdge = 0.08;   // the Jacobian's span either side of the fold's threshold
+const kFoamEdge = 0.6;    // the Jacobian's span either side of the fold's threshold, in its spreads
+const kSurfFrom = 0.15;     // m: the least Hs that surfs white
+const kWetDark = 0.3;       // the share of its light wet ground loses (render/water_shore.wgsl's)
 const kFoamShortest = 1.5;  // m: the shortest wave that folds (render/water.hpp's kFoamShortest)
 
 // The waves' fold and height at `xz` at `t`: the Jacobian of the surface's horizontal motion (the
@@ -58,7 +60,8 @@ fn surf_share(h: f32, depth: f32) -> f32 {
 fn foam_at(xz: vec2f, t: f32, foot: f32, depth: f32) -> f32 {
   let hs = body.surf.x;
   let caps = body.foam.y > 0.0;
-  let surfs = hs > 0.0 && depth < 4.0 * hs;
+  // Wavelets under kSurfFrom m lap a shore without breaking white.
+  let surfs = hs > kSurfFrom && depth < 4.0 * hs;
   if (!caps && !surfs) {
     return 0.0;
   }
@@ -71,10 +74,11 @@ fn foam_at(xz: vec2f, t: f32, foot: f32, depth: f32) -> f32 {
     let fh = fold_at(xz - drift * tau, t - tau);
     var share = 0.0;
     if (caps && !far) {
-      share = smoothstep(body.foam.x + kFoamEdge, body.foam.x - kFoamEdge, fh.x);
+      let edge = kFoamEdge * body.surf.w;
+      share = smoothstep(body.foam.x + edge, body.foam.x - edge, fh.x);
     }
     if (surfs) {
-      share = max(share, surf_share(fh.y, depth));
+      share = max(share, surf_share(fh.y, depth) * smoothstep(kSurfFrom, 2.5 * kSurfFrom, hs));
     }
     f = max(f, share * exp(-tau / kFoamLife));
   }
@@ -155,13 +159,19 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let bed_foot = foot * length(behind.xyz) / max(dist, 0.1);
     bed_light = 1.0 + (caustic_at(at.xz, bed_depth, sun_down(), t, 1.0, bed_foot) - 1.0) * share;
   }
+  // The bed is as wet as the shore's band where the water shoals out onto it, so the waterline shows
+  // no dry seam between the band and the water (the copy was taken before the band darkened it).
+  if (behind.w > 0.5 && body.surf.y >= 0.0) {
+    bed_light *= 1.0 - kWetDark * (1.0 - smoothstep(0.05, 0.3, bed_depth));
+  }
   // THE FOAM: the whitecaps and the surf (their trails with them), and a line of it where the water
   // laps the shore, drawn as lace.
   let depth = select(1e6, bed_depth, behind.w > 0.5);
   var foam = foam_at(in.xz, t, foot, depth);
   let hs = body.surf.x;
-  if (hs > 0.0 && behind.w > 0.5) {
-    foam = max(foam, (1.0 - smoothstep(0.0, 0.02 + 0.3 * hs, bed_depth)) * smoothstep(0.0, 0.1, hs));
+  if (hs > kSurfFrom && behind.w > 0.5) {
+    foam = max(foam, (1.0 - smoothstep(0.0, 0.02 + 0.3 * hs, bed_depth)) *
+                         smoothstep(kSurfFrom, 2.5 * kSurfFrom, hs));
   }
   foam = foam_lace(in.xz, t, foam, foot);
   let c = shade_water_lit(n, in.rel, in.xz, in.position.xyz, body.info.x, lost, body.rough.z,
