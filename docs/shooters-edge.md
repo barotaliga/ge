@@ -774,8 +774,13 @@ server, the dedicated server, the campaign, the bots and the recorder all hold t
 sandboxed bytecode, the engine's C++ mod as the whole game) needs them to hold a **runner**
 instead, of which the QC server is the first implementation. Steps 1 to 4 below have landed
 (`server/rules_world.hpp`, `server/rules_runner.hpp`). Step 5, the sequel's runner (M18t4), is
-under way: its maps' brushes and the trace its move collides through landed first
-(`plugins/brush/trace.hpp`, `docs/levels.md` § The classic BSP families).
+under way. Its maps' brushes and the trace its move collides through landed first
+(`plugins/brush/trace.hpp`, `docs/levels.md` § The classic BSP families). Then came its player
+move (`plugins/shooter/sequel_move.hpp`): packed integer state, a third of the pitch when walking,
+the step slide that keeps the farther of two slides, ducking, ladders, currents and the landing
+pause, over any world's trace (`SequelBrushWorld` for a map's brushes). A player at rest stands an
+eighth above a floor: resting on the plane counts as touching it, which the trace calls solid, so
+the packing nudges the origin up. The move becomes `sv_playermove sequel` with the runner.
 
 **What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
 groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start

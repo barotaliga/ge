@@ -20,6 +20,7 @@ if(GE_GPU)
     engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl
     engine/render/skinning.wgsl engine/render/particles.wgsl engine/render/particles_sim.wgsl engine/render/precip.wgsl engine/render/precip_sim.wgsl
     engine/render/clouds.wgsl engine/render/water.wgsl engine/render/water_below.wgsl
+    engine/render/water_shore.wgsl
     engine/render/water_copy.wgsl
     engine/render/water_stream.wgsl
     engine/render/underwater.wgsl engine/render/liquid.wgsl engine/render/liquid_under.wgsl

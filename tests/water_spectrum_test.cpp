@@ -43,6 +43,20 @@ TEST(the_growth_laws_give_their_heights_and_periods) {
   CHECK(gw::grow(10, 0, 0).hs == 0);
 }
 
+TEST(the_wind_is_read_back_off_the_sea_it_grows) {
+  // A growing sea's height and period give back its wind exactly; a developed one's within the
+  // laws' rounding (the period's cap is the growth law's at the developed fetch to a percent).
+  for (const double wind : {3.0, 7.5, 12.0, 21.0}) {
+    for (const double fetch : {300.0, 5e3, 6e4}) {
+      const gw::Sea s = gw::grow(wind, fetch, 0);
+      const bool growing = gw::kGravity * fetch / (wind * wind) < gw::developed_fetch();
+      CHECK(close(gw::wind_of(s), wind) < (growing ? 1e-9 : 0.01));
+    }
+    CHECK(close(gw::wind_of(gw::grow(wind, 1e9, 0)), wind) < 0.01);
+  }
+  CHECK(gw::wind_of(gw::Sea{}) == 0);
+}
+
 TEST(the_spectrum_carries_the_asked_height) {
   for (const double depth : {1e9, 30.0, 4.0}) {
     gw::Sea sea = gw::grow(12, 5e4, 0);
