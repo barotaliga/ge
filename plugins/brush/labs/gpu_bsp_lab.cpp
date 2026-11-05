@@ -97,8 +97,7 @@ void dress(gr::FrameView& v, const ba::SkyPick& sky, const std::vector<double>& 
   if (sun.size() > 1) p.sun_azimuth = sun[1];
   if (cover >= 0) {
     p.cover = cover;
-    p.deck_cover = cover;
-    p.scud_cover = 0.75 * cover;
+    ba::set_cover(p, cover);
   }
   ba::dress_sky(v, p, top_y, t);
   v.altitude_m = 100;  // a level near the sea: the dust's colour reads its altitude
@@ -587,7 +586,8 @@ void run(gl::Lab& lab) {
   knob("lava-rough", &rows.lava_rough);
   // Each map's sky picked by its sky texture; --sky: one type for every map, or <map>:<type>
   // pairs, over the pick (its hour and light kept).
-  for (auto& m : maps) m->sky = ba::pick_sky(m->scene.sky_colours);
+  for (size_t i = 0; i < maps.size(); ++i)
+    maps[i]->sky = ba::pick_sky(maps[i]->scene.sky_colours, names[i]);
   for (const std::string& item : split(lab.arg("sky"), ',')) {
     const size_t colon = item.find(':');
     const std::string type = colon == std::string::npos ? item : item.substr(colon + 1);
@@ -613,7 +613,8 @@ void run(gl::Lab& lab) {
     for (auto& m : maps) m->sky.sky_light = lab.arg_num("skylight");
   }
   if (!lab.arg("cell").empty()) {
-    for (auto& m : maps) m->sky.cell_m = lab.arg_num("cell");
+    for (auto& m : maps)
+      for (ba::SkyLayer& l : m->sky.layers) l.cell = lab.arg_num("cell");
   }
   if (!lab.arg("tint").empty()) {
     const std::vector<double> tint = lab.arg_nums("tint");
@@ -957,7 +958,7 @@ const gl::LabSpec kSpec{
       "separated (none: each picked by its sky texture)"},
      {"skylight", "",
       "the sky against the rooms for every map (r_skylight; none: each picked sky's)"},
-     {"cell", "", "the heaps' span for every map, m (none: each picked sky's)"},
+     {"cell", "", "every layer's cells' span, a share of its kind's own (none: each map's dealt)"},
      {"tint", "", "the sky's tint for every map, r,g,b (none: each picked sky's)"},
      {"skies", "", "sky types to draw the sky views under too, comma separated (e.g. hell,toxic)"},
      {"skies-on", "sky", "the views --skies draws: those whose id holds this"},
