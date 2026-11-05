@@ -26,7 +26,8 @@ ge::render::FrameView frame_view(const Listen& l, ViewState& v, int frames, doub
   if (frames > 0) missiles_of(l, v.missiles);
   if (l.explosions.size() < v.explosions_seen) v.explosions_seen = 0;  // a new map
   for (; v.explosions_seen < l.explosions.size(); v.explosions_seen++)
-    v.blasts.push_back({engine_point(l.explosions[v.explosions_seen]), t});
+    v.blasts.push_back(
+        {engine_point(l.explosions[v.explosions_seen]), t, l.explosions[v.explosions_seen]});
   std::erase_if(v.blasts, [&](const Blast& b) { return t - b.t > kBlastS; });
 
   ge::camera::Subject s = subject_of(l, v.row);

@@ -73,6 +73,7 @@ struct Page {
 struct MenuInput {
   bool up = false, down = false, left = false, right = false;
   bool accept = false, back = false;
+  bool del = false;  // the delete key: a page that removes things (a gallery's screenshot) reads it
   bool pointer_moved = false;
   bool click = false;  // the pointer's primary button released over where it was pressed
   float pointer_x = 0, pointer_y = 0;

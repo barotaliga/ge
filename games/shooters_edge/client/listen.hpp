@@ -237,12 +237,15 @@ PlayerState player_state(const Listen& l);
 struct Missile {
   int entity = 0;
   sh::Vec3f origin;
-  bool rocket = false;  // a rocket or a grenade: something that explodes
+  bool rocket = false;   // a rocket or a grenade: something that explodes
+  bool grenade = false;  // a grenade (bounces, smokes) rather than a rocket
 };
 void missiles_of(const Listen& l, std::vector<Missile>& out);
 
 // A float field of an entity by its name in the progs (0 when the progs has no such field).
 float field_named(const Listen& l, int entity, const char* name);
+// Sets that field (nothing when the progs has no such field): a lab hands the player its weapons.
+void set_field_named(Listen& l, int entity, const char* name, float value);
 // A float global of the program by its name (0, and `found` false, when it has no such global).
 float global_named(const Listen& l, const char* name, bool* found = nullptr);
 

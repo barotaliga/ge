@@ -3,7 +3,7 @@
 //
 // ge:summary The main menu over the game: open, close, presses, the looks, classic enhance
 // ge:keywords menu game-menu escape togglemenu menu_look draw update enhance job pointer
-// ge:keywords load-game enhance_game take_ended ce_auto
+// ge:keywords load-game enhance_game take_ended ce_auto screenshots gallery
 // ge:skill ui console classicenhance
 // ge:test tests/shooters_edge_menu_test.cpp
 #include "shooters_edge/menu/game_menu.hpp"
@@ -74,6 +74,10 @@ void GameMenu::add_cvars(ge::console::Console& con) {
   con.add_command("menu_options", "menu_options: the main menu opened at OPTIONS",
                   opener("options"));
   con.add_command("menu_quit", "menu_quit: the main menu opened at QUIT", opener("quit"));
+  con.add_command("menu_screenshots",
+                  "menu_screenshots: the main menu opened at OPTIONS > SCREENSHOTS (the "
+                  "screenshots F12 took)",
+                  opener("screenshots"));
 }
 
 void GameMenu::set_art(ClassicArt art) { art_ = std::move(art); }
@@ -101,20 +105,54 @@ bool GameMenu::classic() const {
 
 void GameMenu::show(Host& host, std::string_view page) {
   in_enhance_ = false;
+  in_gallery_ = false;
   waiting_.clear();
   main_.reset();
+  const bool gallery = page == "screenshots";
+  if (gallery) page = "options";
   if (page != "main") main_.open(page);
   refresh_main(host);
   main_.top().focus = -1;
   main_.move_focus(0);
   help_page_ = 0;
   open_ = true;
+  if (gallery) {
+    main_.top().focus = -1;
+    main_.focus("screenshots");
+    show_gallery();
+  }
 }
 
 void GameMenu::hide() {
   open_ = false;
   waiting_.clear();
   in_enhance_ = false;
+  in_gallery_ = false;
+}
+
+void GameMenu::show_gallery() {
+  in_gallery_ = true;
+  gallery_.scan();  // a screenshot taken since the last look
+  gallery_.reset();
+}
+
+void GameMenu::update_gallery(const ui::MenuInput& in, Host& host) {
+  ge::capture::GalleryInput gi;
+  gi.up = in.up;
+  gi.down = in.down;
+  gi.left = in.left;
+  gi.right = in.right;
+  gi.accept = in.accept;
+  gi.back = in.back;
+  gi.del = in.del;
+  if (in.pointer_moved || in.click) gi.pointed = gallery_page_.hit(in.pointer_x, in.pointer_y);
+  gi.click = in.click && gi.pointed >= 0;
+  if (gallery_.input(gi) == ge::capture::GalleryAction::leave) {
+    in_gallery_ = false;
+    refresh_main(host);
+    return;
+  }
+  gallery_.poll();
 }
 
 void GameMenu::refresh_main(const Host& host) {
@@ -242,6 +280,10 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
     if (escape) show(host);
     return;
   }
+  if (in_gallery_) {
+    update_gallery(in, host);
+    return;
+  }
   if (in_enhance_) ce::sync_enhancing(enhance_, board());
   if (in_enhance_) {
     for (const ui::MenuEvent& e : enhance_.input(in, hits_)) apply_enhance(e, host);
@@ -274,6 +316,9 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
       case Outcome::load_game:
         load_asked_ = true;
         return;
+      case Outcome::screenshots:
+        show_gallery();
+        return;
       case Outcome::classic_enhance:
         if (std::string why; !enhance_game(true, &why) && con_ != nullptr)
           con_->print("classic enhance: " + why);
@@ -291,6 +336,11 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
 void GameMenu::draw(ui::DrawList& list, int width, int height, double t) {
   problems_.clear();
   if (!open_) return;
+  if (in_gallery_) {
+    gallery_page_.draw(list, gallery_, width, height, style_);
+    problems_ = gallery_page_.problems();
+    return;
+  }
   if (classic() && !in_enhance_) {
     const ClassicLayout l = layout_classic(main_, art_, width, height);
     hits_ = l.items;

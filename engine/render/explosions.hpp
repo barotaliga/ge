@@ -13,8 +13,10 @@
 //   in the ball and still burning: it EMITS the blackbody light of its temperature
 //   (render/blackbody.hpp's table, a perfect radiator's luminance, so the fireball sits in the
 //   sun's units and is white-hot, then orange, then a dull red); and it SCATTERS as smoke of
-//   its look's albedo and tint (soot, dust, steam), lit by the sun (its sunward side brighter),
-//   the sky and the fire inside it; the look's billows, fray and billow size shape its edge.
+//   its look's albedo and tint (soot, dust, steam), lit by the sun (its sunward side brighter)
+//   and the sky as far as they reach it (`BlastLight::sky`), the room's own light (`lit`: a
+//   room's smoke is as bright as the room, not sunlit) and the fire inside it; the look's
+//   billows, fray and billow size shape its edge.
 //   Emission and absorption are integrated front to back; the march stops once the ray is
 //   nearly opaque.
 // - THE COST is a pixel's steps where a fireball covers the screen, and nothing elsewhere: no
@@ -73,13 +75,15 @@ struct GpuBlast {
   float soot[4];    // the smoke's albedo times its tint; 0
   float axis[4];    // the stretch's axis (unit); the stretch, its length over its width (1: none)
   float side[4];    // where the first prong points (unit, square to the axis); the prongs (0: none)
+  float light[4];   // the local light on it, whites (BlastLight::lit); the sun's and sky's share
 };
-static_assert(sizeof(GpuBlast) == 128, "match explosions.wgsl's Blast");
+static_assert(sizeof(GpuBlast) == 144, "match explosions.wgsl's Blast");
 
 // A shot's flame this frame: the shot and the muzzle's pose of this frame.
 struct MuzzleFire {
   Shot shot;
   MuzzlePose pose;
+  BlastLight light{};  // what lights the gas that is not burning
 };
 
 struct Explosions {
