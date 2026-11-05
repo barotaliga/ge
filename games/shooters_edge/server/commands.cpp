@@ -222,7 +222,14 @@ bool request_pause(QcServer& s, int slot, bool pause) {
   if (pause == s.paused) return false;
   int self = 0;
   if (slot >= 0) {
-    if (s.clients[slot].spectator) return false;
+    if (s.clients[slot].spectator) {
+      print_to(s, 1u << slot, 2, "Spectators can not pause.\n");
+      return false;
+    }
+    if (pause && !s.cvars.find("pausable")->on()) {
+      print_to(s, 1u << slot, 2, "Pause not allowed.\n");
+      return false;
+    }
     self = slot + 1;
   } else if (!pause && players_left(s)) {
     return false;  // the server unpauses on its own only when no players are left

@@ -1,11 +1,12 @@
 // engine/render/water.hpp: the detail band carries the spectrum on past the simulation's waves
 // (its components shorter than the laid band's, its slope variance growing with the wind, the
-// same components for the same seed); and on a device, a sea drawn over a sea floor fills the
-// lower half of the frame with water, darker than the sky over it, with no GPU error and no
-// pipeline after the load.
+// same components for the same seed); the chop runs every way with the slope asked; the surface
+// over a flooded passage (render/underwater.hpp's level_over) slides from one pool's to the
+// other's; and on a device, a sea drawn over a sea floor fills the lower half of the frame with
+// water, darker than the sky over it, with no GPU error and no pipeline after the load.
 //
 // ge:summary Tests for the water's surface drawn: the detail band, a sea on a device
-// ge:keywords test render water detail-waves spectrum-tail slope-variance gpu sea
+// ge:keywords test render water detail-waves spectrum-tail slope-variance gpu sea chop level_over
 // ge:skill render water testing
 #include <algorithm>
 #include <cmath>
@@ -109,6 +110,42 @@ TEST(the_detail_band_carries_the_spectrum_past_the_simulations_waves) {
     CHECK(a.tail_mss > 0);
     CHECK(a.waves[3].phase == b.waves[3].phase && a.waves[3].kx == b.waves[3].kx);
     last = a.mss;
+  }
+}
+
+TEST(the_chop_runs_every_way_with_the_slope_asked) {
+  const std::vector<gw::Component> chop = r::chop_waves(0.05, r::kWaterChopWaves, 3);
+  const std::vector<gw::Component> again = r::chop_waves(0.05, r::kWaterChopWaves, 3);
+  CHECK(static_cast<int>(chop.size()) == r::kWaterChopWaves);
+  CHECK(r::chop_waves(0, r::kWaterChopWaves, 3).empty());  // a pool no one swims in: none
+  double mss = 0, sx = 0, sz = 0;
+  for (size_t i = 0; i < chop.size(); ++i) {
+    const gw::Component& c = chop[i];
+    mss += 0.5 * (c.k * c.a) * (c.k * c.a);
+    sx += c.kx / c.k;
+    sz += c.kz / c.k;
+    // From 1.2 m down to 5 cm, each faster than gravity alone runs it (the ripples' tension).
+    CHECK(c.k >= 2 * 3.14159 / 1.2 && c.k <= 2 * 3.14159 / 0.05);
+    CHECK(c.w > std::sqrt(9.80665 * c.k));
+    CHECK(c.phase == again[i].phase && c.kx == again[i].kx);
+  }
+  CHECK(std::fabs(mss - 0.05 * 0.05) < 1e-9);
+  // Every way at once: the headings' mean is near nothing (one way would sum to 16).
+  CHECK(std::sqrt(sx * sx + sz * sz) < 2.0);
+}
+
+TEST(the_surface_over_a_flooded_passage_slides_from_one_pool_to_the_other) {
+  // Two pools' tops 6 m apart along z, their levels 3 m apart, a passage between them.
+  const float tops[2][4] = {{0, 0, 10, 10}, {0, 16, 10, 20}};
+  const float levels[2] = {-5, -8};
+  CHECK(r::level_over(tops, levels, 2, 5, 5) > -5.001);  // in a top's box: its level
+  CHECK(r::level_over(tops, levels, 2, 5, 18) < -7.999);
+  CHECK(std::fabs(r::level_over(tops, levels, 2, 5, 13) + 6.5) < 1e-9);  // halfway: between
+  double last = r::level_over(tops, levels, 2, 5, 10);
+  for (int step = 1; step <= 24; ++step) {
+    const double now = r::level_over(tops, levels, 2, 5, 10 + 0.25 * step);
+    CHECK(now <= last && last - now < 0.5);  // falling toward the far pool, never at once
+    last = now;
   }
 }
 
