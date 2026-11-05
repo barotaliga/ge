@@ -170,6 +170,20 @@ void run(gl::Lab& lab) {
         kRounds;
     lab.metric("cpu.stage-32", us, "us", Det::measured);
   }
+  // The flash's lights (CPU only, so a row with no adapter cuts the same digest): the blast the
+  // FLASH shot draws, 8 m short of the wall.
+  {
+    const std::vector<gr::Blast> bl = {blast_at(kMid, 0, kWallZ - 8, 31)};
+    std::vector<gr::LocalLight> lamps;
+    gr::flash_lights(bl, 0.05, lamps);
+    const double on_wall[3] = {kMid, 1.5, kWallZ - 0.5};
+    lab.metric("flash.lights", static_cast<double>(lamps.size()), "count");
+    lab.metric("flash.cd-0.05", lamps.empty() ? 0 : lamps[0].candela, "cd", Det::measured);
+    lab.metric("flash.wall-lux-0.05", gr::lamp_lux_at(lamps, on_wall, 0.05), "lx", Det::measured);
+    lamps.clear();
+    gr::flash_lights(bl, 3.0, lamps);
+    lab.metric("flash.lights-3s", static_cast<double>(lamps.size()), "count");
+  }
   auto device = ge::gpu::create_device({.label = "gpu-explosion", .validation = 1});
   if (!device) {
     if (gpu_required()) {
@@ -343,15 +357,6 @@ void run(gl::Lab& lab) {
               "fading as the fire cools, dark again by 1 s with the smoke lit only by the sky",
               {}},
              sheet_of(pics, names, 4), Det::measured);
-    std::vector<gr::LocalLight> lamps;
-    gr::flash_lights(bl, 0.05, lamps);
-    const double on_wall[3] = {kMid, 1.5, kWallZ - 0.5};
-    lab.metric("flash.lights", static_cast<double>(lamps.size()), "count");
-    lab.metric("flash.cd-0.05", lamps.empty() ? 0 : lamps[0].candela, "cd", Det::measured);
-    lab.metric("flash.wall-lux-0.05", gr::lamp_lux_at(lamps, on_wall, 0.05), "lx", Det::measured);
-    lamps.clear();
-    gr::flash_lights(bl, 3.0, lamps);
-    lab.metric("flash.lights-3s", static_cast<double>(lamps.size()), "count");
   }
 
   // THE SCORCH: one blast on the floor and one at the wall's foot, their marks pressed with the
@@ -370,7 +375,8 @@ void run(gl::Lab& lab) {
         pics.push_back(std::move(p));
       for (const double m : at) names.push_back(std::string(when) + " " + fixed(m, 2) + " S");
     }
-    lab.metric("scorch.marks", s.marked, "count");
+    // Measured: the GPU scene counts them, and a row with no adapter has none.
+    lab.metric("scorch.marks", s.marked, "count", Det::measured);
     lab.shot({"scorch",
               "THE SCORCH IT LEAVES",
               "A blast on the floor 7 m short of the wall and one 0.4 s later at the wall's foot, "
