@@ -284,3 +284,34 @@ TEST(the_draw_puts_the_cloud_where_it_is) {
   CHECK(d.errors.load() == 0);
   CHECK(d.pipelines_after_load == 0);
 }
+
+TEST(a_particle_met_behind_a_drawn_surface_hops_off_its_face_or_comes_to_rest) {
+  const float at[3] = {0, 0, 0}, up[3] = {0, 1, 0}, wall[3] = {-1, 0, 0};
+  // Fast into a floor: back on its face, hopping up at kSurfaceBounce, slowed along it.
+  r::Particle p{};
+  p.p[0] = 2, p.p[1] = -0.05f, p.v[0] = 3, p.v[1] = -5, p.life = 4;
+  r::collide_particle(p, at, up);
+  CHECK(std::abs(p.p[1] - 0.01f) < 1e-6f);
+  CHECK(std::abs(p.v[1] - 5 * r::kSurfaceBounce) < 1e-5f &&
+        std::abs(p.v[0] - 3 * r::kFloorSlide) < 1e-5f);
+  // Its own bounce when it has one.
+  r::Particle q{};
+  q.v[1] = -4, q.bounce = 0.6f, q.life = 4;
+  r::collide_particle(q, at, up);
+  CHECK(std::abs(q.v[1] - 2.4f) < 1e-5f);
+  // Slow onto a floor: it lies there and fades.
+  r::Particle r{};
+  r.v[1] = -0.5f, r.life = 4;
+  r::collide_particle(r, at, up);
+  CHECK(r.v[0] == 0 && r.v[1] == 0 && r.v[2] == 0 && r.age >= r.life * 0.7f);
+  // Slow into a wall: it slides down it rather than sticking.
+  r::Particle w{};
+  w.p[0] = 0.02f, w.v[0] = 0.4f, w.v[1] = -1, w.life = 4;
+  r::collide_particle(w, at, wall);
+  CHECK(std::abs(w.p[0] + 0.01f) < 1e-6f && w.v[0] == 0 && w.v[1] < 0 && w.age == 0);
+  // Already leaving the face: only put back on it.
+  r::Particle o{};
+  o.p[1] = -0.02f, o.v[1] = 2;
+  r::collide_particle(o, at, up);
+  CHECK(o.v[1] == 2);
+}

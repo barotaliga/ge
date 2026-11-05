@@ -356,6 +356,7 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     // off the wall, where a wider softening would fade them to nothing.
     gr::ParticleSettings ps;
     ps.soft_m = kParticleSoftM;
+    ps.collide = true;  // sparks, chips and debris meet the map's brushes and its models
     gr::create_particles(d, f.pipelines, f.particles, f.layout, ps);
     gr::create_explosions(d, f.pipelines, f.explosions, f.layout);
     // The marks' burns too (world_fx.hpp's marks, render/marks.hpp).
@@ -463,6 +464,10 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
 
 const WorldModels& world_models(const WorldDraw& w) { return w.models; }
 
+std::vector<gr::Particle> world_particles(ge::gpu::Device& d, const WorldDraw& w) {
+  return gr::read_particles(d, w.particles);
+}
+
 void resize_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t height) {
   f.w = std::max(1u, width);
   f.h = std::max(1u, height);
@@ -567,7 +572,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       gr::emit_particles(f.particles, f.fire_births);
     }
     f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
-    gr::prepare_particles(d, f.particles, dt, view.near_m);
+    gr::prepare_particles(d, f.particles, dt, view, f.w, f.h);
     gr::prepare_explosions(d, f.explosions, f.lit_puffs, view, f.w, f.h, f.lit_flames);
     f.beam_draws.clear();
     for (const HeldBeam& b : fx.beams) {
