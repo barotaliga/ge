@@ -43,6 +43,7 @@
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/labs/staged.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -122,7 +123,8 @@ void run(gl::Lab& lab) {
   }
   cl::Listen l;
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, map_name, error);
-  if (!map || !cl::listen_start(l, progs, std::move(map), {}, error)) {
+  if (!map ||
+      !cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), error)) {
     lab.fail(error, "The map should load under the baseline mod. Skill: shooter.");
     return;
   }

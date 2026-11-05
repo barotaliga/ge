@@ -41,6 +41,7 @@
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/client/world_models.hpp"
 #include "shooters_edge/labs/warp_film.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -170,7 +171,8 @@ void run(gl::Lab& lab) {
   }
   cl::Listen l;
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, map_name, error);
-  if (!map || !cl::listen_start(l, progs, std::move(map), {}, error)) {
+  if (!map ||
+      !cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), error)) {
     lab.fail(error, "Check --map names a map in the pack. Skill: shooter.");
     return;
   }

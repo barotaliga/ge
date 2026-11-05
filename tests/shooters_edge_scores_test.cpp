@@ -15,6 +15,7 @@
 #include "progs/vm.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/scores.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 
 namespace {
 
@@ -28,7 +29,8 @@ bool start(cl::Listen& l, const pg::Progs& progs) {
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "arena", error);
   CHECK_MSG(map != nullptr, error);
   if (!map) return false;
-  const bool ok = cl::listen_start(l, progs, std::move(map), {}, error);
+  const bool ok =
+      cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), error);
   CHECK_MSG(ok, error);
   return ok;
 }

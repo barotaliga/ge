@@ -419,6 +419,10 @@ void stuff(ClassicServer& s, int slot, const std::string& text) {
 }
 
 void client_print(ClassicServer& s, int slot, int level, const std::string& text) {
+  if (s.clients[slot].local) {
+    if (s.local_print != nullptr) s.local_print(s.local_ctx, slot, text);
+    return;
+  }
   if (level < s.clients[slot].msg_level && level < 3) return;
   SvcMsg m;
   m.id = svc::print;
@@ -550,7 +554,8 @@ void classic_drop(ClassicServer& s, int slot, const std::string& why) {
   full_client_update(s, slot, -1);
 }
 
-bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std::string& error) {
+bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std::string& error,
+                       bool bot) {
   if (slot < 0 || slot >= sh::kMaxClients || s.clients[slot].state != ConnState::free) {
     error = "slot " + std::to_string(slot) + " is a client's; next: seat the bot in a free slot";
     return false;
@@ -565,7 +570,7 @@ bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std:
   s.next_userid = s.next_userid % 99 + 1;
   c.connect_time = s.game->sv.time;
   info_set(c.userinfo, "name", name);
-  info_set(c.userinfo, "*bot", "1");
+  if (bot) info_set(c.userinfo, "*bot", "1");
   s.log.push_back("local " + std::to_string(slot) + " " + name);
   full_client_update(s, slot, -1);
   return true;
@@ -731,6 +736,7 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
   s.local_moves.clear();
 
   s.rules->frame(s.packets.data(), static_cast<int>(s.packets.size()));
+  if (s.local_tap != nullptr) s.local_tap(s.local_ctx, *s.game);
   for (int i = 0; i < sh::kMaxClients; i++)
     if (s.clients[i].rules_active)
       antilag_record(s.antilag, i, s.game->sv.time,

@@ -31,6 +31,7 @@
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -131,7 +132,8 @@ void run(gl::Lab& lab) {
     lab.metric("skins." + tag + ".see-through-texels", clear, "count");
     cl::Listen l;
     std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "halls", error);
-    if (!map || !cl::listen_start(l, progs, std::move(map), {}, error)) {
+    if (!map ||
+        !cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), error)) {
       lab.fail(error, "The fixture halls should load under the baseline mod. Skill: shooter.");
       return;
     }

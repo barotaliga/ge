@@ -37,6 +37,7 @@
 #include "shooters_edge/hud/lobby_panel.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -123,7 +124,7 @@ void run(gl::Lab& lab) {
   }
 
   cl::Listen l;
-  cl::ListenOptions opt;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.lobby = true;
   opt.lobby_settings.countdown_s = 3;
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "halls", error);
