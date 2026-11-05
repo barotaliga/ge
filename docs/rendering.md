@@ -1900,7 +1900,7 @@ A pool over no ground (the second `create_particles`: a world of brushes or room
 stand-ins for the terrain's heights and horizon, so nothing lands and the sun is not shaded by a
 horizon.
 
-**As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 64 bytes, a
+**As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 80 bytes, a
 ring: the game hands each frame's births (`emit_particles`) and `prepare_particles` writes
 them into the next slots, so a full pool lets its oldest go first. There is no compaction or
 indirect count yet: `particles.sim` (one thread a slot) skips a dead slot, and `particles`
@@ -1918,6 +1918,16 @@ reactive channel so TAA does not smear it. What fills the pool is the game's: Fa
 throws each racer's spray (`plugins/skier/app/spray.hpp`) over the time between two frames'
 `time_s`. On the software adapter the pass pair costs about 0.6 + 0.13 ms (the `profile`
 lab), the flight of all 16384 slots the larger half.
+
+**Colour, growth and shining (M47c).** A slot is 80 bytes: `tint` is the colour its albedo reflects
+(blood red, dust tan; white for snow, the default), and `grow` the metres across it gains a second,
+thinning by its width as it spreads (a puff of smoke that widens behind a rocket). A particle with
+a negative `kelvin` SHINES instead of being lit: an unlit speck of its tint at -kelvin times the
+light of a white surface the picture is keyed to (`frame.wgsl`'s `white_luminance`, so 1 reads as
+a fullbright texel of that colour at any exposure), its colour drifting toward the grey `albedo`
+by e every `cool_s`. That is how a game draws a classic palette speck (an ember's yellow going to
+brown, a trail's orange going to grey), and how a game lights smoke by its own light where the
+sun does not reach (Shooter's Edge pre-lights each puff by the lightmap under it).
 
 **As built (M8d2).** The drag pulls a particle toward the AIR, not still air: the frame hands the
 pool the map's wind at the view's time (`plugins/mountain/air/air.hpp`), so a powder cloud (the
@@ -2194,6 +2204,13 @@ to red as they fall and dark debris, some still glowing; off a surface they fly 
 it faces. The scorch it leaves (`scorch_of`) is its kind's size times its scale, turned and picked
 off the seed, for a game to press with `engine/detail`'s scorch decal (none for a look whose
 scorch is 0).
+
+**The light round it (M47c).** A blast's smoke is lit by what reaches it, `Blast::light`
+(`BlastLight`): the share of the sun and the sky (1 in the open air, the default) and the local
+light in whites (a white surface there reads as the picture's white). A game of rooms sets both
+(Shooter's Edge: the lightmap on the floor under the blast and whether a line straight up meets
+the sky), so smoke in a dim corridor is dim and brown-grey rather than sunlit through the roof; a
+muzzle's flame (`MuzzleFire::light`) takes the same.
 
 `engine/render/explosions.hpp` draws them. Each live blast is ONE QUAD round its ball's outline on
 the screen (the whole screen when the eye is inside it), and the pixel's ray is cut by the ball and

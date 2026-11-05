@@ -1092,10 +1092,37 @@ every pass, and judged by captioned screenshots:
   fullbright palette colours as emissive.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
-- **Effects** (`games/shooters_edge/app/effects.hpp`): our own trails and bursts on the engine's
-  particles (a pool over no ground: nothing lands): a rocket's embers and smoke, a grenade's
-  smoke, an explosion's sparks and smoke, a hit's sparks and dust, a wound's droplets (dark: the
-  pool has no colour channel yet), a teleport's column of cold light, lava thrown up. **Dynamic
+- **Effects, classic** (`games/shooters_edge/app/effects.hpp`): the classic client's effects in
+  its own numbers, drawn as unlit specks of the pack's own palette colours (the engine's shining
+  particles, read from `gfx/palette.lmp`) that run along the palette's ramps as they age: an
+  explosion's 1024 specks off a 32-unit box at up to 256 units a second (half speeding out on the
+  bright ramp, half slowing on the second), a rocket's speck every 3 units on the fire ramp rising
+  as it greys and a grenade's from the ramp's greys, 20 dark grey specks a pellet and 10 a nail,
+  20 dark red ones a wound, a teleport's grid of 896, lava's 1024; all falling at 40 units a
+  second squared. The pack's own models stand in for the rest (`client/world_models.hpp`'s
+  `kEffectModels`, loaded by the window whether the program precached them or not): the
+  explosion's sprite (its 6 frames at 10 a second) and the lightning bolt's model laid every 30
+  units from the player's origin to the end, each segment turned to a fresh roll every frame.
+  The classic look also draws each weapon's own flash frames, not the engine's muzzle fire.
+- **Effects, enhanced** (`games/shooters_edge/app/weapon_fx.hpp`, the modern look, each behind
+  its `ce_` switch: `ce_muzzles`, `ce_explosions`, `ce_trails`, `ce_hits`, `ce_beams`): a
+  LAYERED fireball of the engine's (`render/explosion.hpp`: the main ball, then three smaller
+  billows born round it a few hundredths of a second later, a dome when it goes off against a
+  surface), the classic's ember ball kept as glowing embers that cool from yellow to a dull red,
+  white-hot sparks, dark chunks and smoke that lingers, its light white-hot then orange; a rocket
+  burns a short flame out of its motor (the muzzle fire's march stretched back along its flight)
+  and lays fire into puffs of smoke that spread as they thin (the particles' `grow`), a grenade
+  pale smoke; a pellet's or a nail's hit throws the burst of the face it hit (`render/impact.hpp`
+  by the surface class of the map triangle the round's line crosses there, its normal off that
+  triangle); the arc gun's beam is the engine's bolt (`render/beam.hpp`) in the style `r_beam_style`
+  numbers (1 forked, 2 arc, 3 bolt the default, 4 braid), rooted on the gun's own muzzle, a cold
+  glow on the walls along it. Smoke is lit as the room round it is
+  (`render::BlastLight` off the lightmap under it and the open sky over it), not by the sun
+  through the roof. A match's temporary entities (the gunshots, spikes, beams and blood the
+  baseline mod multicasts) reach these effects as a campaign's do. The `se-weapon-fx` lab fires
+  every weapon at a wall in both looks, from the eye and from beside the line of fire; with
+  `--game=<install>/id1 --map=e1m1` the pack's own maps and weapons, for private pictures.
+- **Dynamic
   lights** (`set_dynamic_lights`): the classic adds them to the lightmaps' light, falling off in
   a straight line to their radius; the modern draws them as point lights. **The screen's blend**
   (`render/post.hpp`'s `set_post_blend`): the liquid round the eye, the powers held and a hurt's
@@ -1378,6 +1405,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-lobby` | sim | The warmup on the listen server: bots seated on teams, the free roam, ready, break, the countdown and the map restarted for a clean match (built, M18q1); later clients find a hosted game on the LAN and through the rendezvous, fill the lobby, chat, start, play and return, and a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections (the compatible server half built, M18g: scripted clients under every preset, bytes a second, loss, downloads, the digest) |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
+| `se-weapon-fx` | picture | Every weapon's effects in the window's frame, classic beside enhanced: the player handed every weapon, aimed at the wall nearest 9 m off, each weapon fired and pictured after its shot (a launcher's after its blast), from the eye and from a camera beside the line of fire; the fixture halls, or a pack's map and its own weapons with `--game` (private); the births, the blasts and the beams each look drew |
 | `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the weapon in hand, the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost, the effects thrown and the shots the hand saw (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-models` | picture | The things a map places, as the window draws them: the armour, a health box, an ammo box, a weapon, a torch or a flame, the quad, the shield, another player in his colours and one holding both powers, each from a clear spot near it in both looks; a lift lowered and up, a door shut and open (M18i6); the things placed by kind and the light under each (built, M18i3; `--pak` and `--map` for a pack's own maps) |

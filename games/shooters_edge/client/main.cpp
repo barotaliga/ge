@@ -230,6 +230,7 @@ int run_main(int argc, char** argv) {
       "shooters_edge", &shot_settings);
   ge::capture::add_screenshot_cvars(console.cvars(), shot_settings);
   ge::capture::add_screenshot_command(console, shots, "<game folder>/screenshots/");
+  game_menu.set_screenshots(shots.dir());  // OPTIONS > SCREENSHOTS looks through them
   const auto save_settings = [&console] { cl::save_settings(console); };
   ge::console::start(console, args.plus);
   console.cvars().apply_latched();
@@ -485,6 +486,9 @@ int run_main(int argc, char** argv) {
   ge::ui::Vec2 last_pointer;
   cl::FxState fx_state;
   cl::FxFrame fx;
+  // The pack's palette for the classic effects' specks, read again when the game folder changes.
+  std::vector<uint8_t> fx_palette;
+  bool fx_palette_read = false;
   cl::HeldState in_hand;
   in_hand.hand.at_eye = weapons_at_eye;
   // LOAD GAME's folder and the console's `basedir` (client/game_folder.hpp): the install opened in
@@ -525,6 +529,7 @@ int run_main(int argc, char** argv) {
     weapons.clear();
     in_hand = {};
     in_hand.hand.at_eye = cl::load_held_set(adapter, files, model_dirs, weapons);
+    fx_palette_read = false;
     next_map = game_content.first_map;
     game_menu.set_game(basedir);
     cl::remember_folder(prefs, basedir);
@@ -586,6 +591,7 @@ int run_main(int argc, char** argv) {
         mi.right = input.tapped(Key::right) || input.tapped(Key::d);
         mi.accept = input.tapped(Key::enter) || input.tapped(Key::space);
         mi.back = input.tapped(Key::escape);
+        mi.del = input.tapped(Key::del) || input.tapped(Key::backspace);  // a Mac's delete key
         mi.pointer_x = input.pointer_x * px_per_unit;
         mi.pointer_y = input.pointer_y * px_per_unit;
         mi.pointer_moved = mi.pointer_x != last_pointer.x || mi.pointer_y != last_pointer.y;
@@ -929,13 +935,23 @@ int run_main(int argc, char** argv) {
     // The eyes on the player and what the world throws, then the overlay: the HUD, the console.
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
     view.frame = static_cast<uint64_t>(presented);
+    if (!fx_palette_read) {
+      std::vector<uint8_t> store;
+      const std::span<const uint8_t> pal = cl::find_file(files, "gfx/palette.lmp", store);
+      fx_palette.assign(pal.begin(), pal.end());
+      fx_palette_read = true;
+      fx_state.palette.clear();
+    }
+    if (fx_state.palette.empty()) fx_state.palette = fx_palette;
+    fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
     const shooters_edge::view::HandFrame hand =
         cl::step_held(listen, shown, in_hand, view_settings, weapons, t, wall);
     if (hand.flashing)
       fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
-    // ce_muzzles: each shot's flame, smoke and sparks from the barrel (off: its light alone).
-    cl::fire_held(held_fire, hand, picture.ce.muzzles, view.time_s, fx);
+    // ce_muzzles in the modern look: each shot's flame, smoke and sparks from the barrel (off, or
+    // the classic look: the weapon's own flash and its light alone).
+    cl::fire_held(held_fire, hand, fx_state.on.muzzles, view.time_s, fx);
     overlay.begin(w, h);
     if (listen.campaign.end == cl::LevelEnd::none) {
       se::fill_hud(hud, cl::status_of(listen, t), cl::hud_art_of(files, classic_art, free_art));

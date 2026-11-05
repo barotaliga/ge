@@ -52,6 +52,9 @@ struct Picture {
   double lava_glow = 0.2;       // r_lava_glow: the lava's light on the walls round it, 0 none
   double slime_glow = 1;        // r_slime_glow: the slime's faint green light, 0 none
   double gamma = 1;             // gamma: the picture's brightness, below 1 brighter
+  // r_beam_style: the arc gun's bolt in the modern look under ce_beams, by number
+  // (app/weapon_fx.hpp's kBoltStyles: 1 forked, 2 arc, 3 bolt, 4 braid)
+  double beam_style = 3;
   // The ce_ switches: each enhancement the modern look draws over the pack, on or off.
   ge::classicenhance::Switches ce;
   ge::brush::app::WeatherCvars weather;  // r_weather and its kin: the rain and the storm
@@ -60,8 +63,9 @@ struct Picture {
   std::string far_land = "auto";
   double far_warm = 0;  // r_farland_warm: its air warmer (or colder) than its kind's, C
 };
-// Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma, r_farland,
-// r_farland_warm, every ce_ switch and the weather's cvars over `picture` (it must outlive `con`).
+// Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
+// r_beam_style, r_farland, r_farland_warm, every ce_ switch and the weather's cvars over `picture`
+// (it must outlive `con`).
 void add_cvars(ge::console::Console& con, Picture& picture);
 // r_look's look; modern for a word it does not know.
 Look look_of(const Picture& picture);

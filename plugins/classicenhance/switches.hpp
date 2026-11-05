@@ -17,7 +17,8 @@
 // ge:summary Every classic-enhance effect a switch: the catalog, the values, the ce_ cvars
 // ge:keywords classicenhance switches settings toggle cvar ce_ decals flames skies water lava
 // ge:keywords muzzle teleports rubble fog bloom reflections sounds models upscaler options menu
-// ge:keywords relief parallax bonfires ce_bonfires ce_pictures pictures hud-art
+// ge:keywords relief parallax bonfires ce_bonfires ce_pictures pictures hud-art ce_trails ce_hits
+// ge:keywords trails hits
 // ge:skill classicenhance
 // ge:test tests/classicenhance_switches_test.cpp
 #pragma once
@@ -42,8 +43,8 @@ struct Switches {
   // Liquids and sky
   bool water = true, lava = true, slime = true, teleports = true, skies = true;
   // Effects
-  bool flames = true, bonfires = true, muzzles = true, explosions = true, flares = true,
-       bubbles = true, beams = true;
+  bool flames = true, bonfires = true, muzzles = true, explosions = true, trails = true,
+       hits = true, flares = true, bubbles = true, beams = true;
   // Air
   bool fog = true, clouds = true, wind = true, weather = true;
   // Picture

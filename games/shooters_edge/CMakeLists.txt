@@ -81,7 +81,7 @@ file(GLOB SHOOTERS_EDGE_MENU_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DI
 add_library(shooters_edge_menu STATIC ${SHOOTERS_EDGE_MENU_SOURCES})
 target_include_directories(shooters_edge_menu PUBLIC ${PROJECT_SOURCE_DIR}/games)
 target_link_libraries(shooters_edge_menu PUBLIC ge_ui ge_console ge_vfs ge_classicenhance
-                                            shooters_edge_hud)
+                                            ge_play shooters_edge_hud)
 set_property(GLOBAL APPEND PROPERTY GE_GAME_TARGETS shooters_edge_menu)
 
 # Its app half (app/): the picture's game side over the engine's passes and the brush world's
@@ -138,7 +138,7 @@ if(GE_GPU AND TARGET ge_brush_app)
                                               client/map_load.cpp)
   target_link_libraries(shooters_edge_client_gpu PUBLIC shooters_edge_client shooters_edge_app
                                                         ge_brush_app ge_classicenhance ge_render
-                                                        ge_ui ge_morph ge_play)
+                                                        ge_ui ge_morph ge_play ge_detail)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_client_gpu)
 endif()
 if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
