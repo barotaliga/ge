@@ -47,6 +47,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "render/view.hpp"
@@ -73,14 +74,21 @@ BenchStats bench_stats(std::span<const double> frame_s);
 std::vector<std::string> bench_report(const std::string& demo, const std::string& setup,
                                       const BenchStats& s);
 
-// The GPU's span of each timed frame over a run, ms.
+// The GPU's span of each timed frame over a run, ms, and each pass's own time by its name (the
+// frames it ran in; on a tiled GPU passes overlap, so they add up to more than the span).
 struct PassTimes {
   std::vector<double> span_ms;
+  std::vector<std::pair<std::string, std::vector<double>>> pass_ms;
 };
 // A frame's GPU span (NaN, not measured, left out).
 void span_add(PassTimes& p, double ms);
+// A pass's GPU time in a frame (NaN, not measured, left out).
+void pass_add(PassTimes& p, std::string_view name, double ms);
 // The report's GPU line: the median span, or that this GPU has no timestamp queries.
 std::string span_report(const PassTimes& p);
+// One line a pass, the dearest first: its mean a timed frame (0 in the frames it did not run),
+// its median where it ran and in how many frames; empty when nothing was timed.
+std::vector<std::string> pass_report(const PassTimes& p, size_t frames);
 
 // One run of a price: what was switched off (empty for the base) and its medians, ms (span NaN
 // when the GPU has no timestamp queries).

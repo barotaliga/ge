@@ -654,6 +654,12 @@ bool warm_world(ge::gpu::Device& d, WorldDraw& f, const gr::FrameView& view, int
   return !f.has_map || f.bsp.shadows_waiting == 0;
 }
 
-void record_span(const WorldDraw& f, PassTimes& p) { span_add(p, f.rec.stats.gpu_span_ms()); }
+void record_span(const WorldDraw& f, PassTimes& p) {
+  span_add(p, f.rec.stats.gpu_span_ms());
+  for (int i = 0; i < f.rec.stats.count; i++) {
+    const gr::PassStat& s = f.rec.stats.passes[size_t(i)];
+    if (s.draws > 0 || s.dispatches > 0) pass_add(p, s.name, s.gpu_ms);
+  }
+}
 
 }  // namespace shooters_edge::client
