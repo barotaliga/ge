@@ -75,8 +75,6 @@ void() misc_teleporttrain = {
 
 // --- the lava boss (monster_boss): out of the lava when used; three strikes of lightning ---
 
-float SVC_FINALE = 31;
-
 entity lava_boss;  // the one on the map, for the lightning
 
 // A ball of fire lobbed at its enemy at 300, high enough to land on it; 20 on a hit, a blast of

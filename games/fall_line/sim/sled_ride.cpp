@@ -14,6 +14,7 @@
 #include "core/quat.hpp"
 #include "fall_line/sim/army_sled_rules.hpp"
 #include "fall_line/sim/course.hpp"
+#include "fall_line/sim/lake.hpp"
 #include "fall_line/sim/wanted.hpp"
 #include "skier/skier.hpp"
 #include "snowmobile/spec.hpp"
@@ -290,7 +291,7 @@ bool takes(const GameState& state, int32_t i, const sm::SledState& b) {
 }
 
 bool free_takes(const GameState& state, int32_t i, const FreeSled& m) {
-  return m.present && !m.thrown && takes(state, i, m.body);
+  return m.present && !m.thrown && !m.sunk && takes(state, i, m.body);
 }
 
 // What the machine press would take: the free ride's own machine, the one he stole, or one of the
@@ -405,7 +406,18 @@ bool step_sled_ride(GameState& state, int32_t i, const Controls& c) {
   if (other.present) step_parked(state, other);
   if (c.machine) {
     hop(state, i, m);
+    // Off a planing machine he is in the water, and it goes under (lake.hpp).
+    if (m.skimming) sink_empty(*state.level, m);
     return false;
+  }
+  // On a tarn's open water the step is the water's (lake.hpp): planing on, or under.
+  if (state.water) {
+    const SledWater w = sled_on_lake(state, i, m, sled_controls(c), kDt);
+    if (w == SledWater::sunk) return false;
+    if (w == SledWater::skims) {
+      hold(state, i, m);
+      return true;
+    }
   }
   Racer& r = state.racers[static_cast<size_t>(i)];
   const core::Vec3 v0{m.body.vx, m.body.vy, m.body.vz};
@@ -433,6 +445,15 @@ bool remount_sled(GameState& state, int32_t i) {
     say(state, i, SledPhase::right, 0);
     return true;
   }
+  FreeSled* sunk = state.sled.sunk ? &state.sled : state.stolen.sunk ? &state.stolen : nullptr;
+  if (sunk != nullptr) {
+    // HAULED OUT: the machine he sank stood on the bank nearest it, and he on its boards.
+    haul_out(*state.level, *sunk);
+    dry_off(state, i);
+    mount(state, i, *sunk);
+    say(state, i, SledPhase::right, 0);
+    return true;
+  }
   FreeSled* thrown = state.sled.thrown     ? &state.sled
                      : state.stolen.thrown ? &state.stolen
                                            : nullptr;
@@ -454,6 +475,8 @@ const char* sled_phase_name(SledPhase p) {
       return "crash";
     case SledPhase::right:
       return "right";
+    case SledPhase::sunk:
+      return "sunk";
   }
   return "?";
 }

@@ -244,8 +244,9 @@ struct FreeRide {
 // is doing, whether the player is on its boards and whether he was thrown off it, the seconds in
 // this mode, and how many times it has been taken.
 enum class SledMode : uint8_t { parked, ridden, down };
-// What a `sled` event says: taken, hopped off, the rider thrown, stood back on its belt.
-enum class SledPhase : uint8_t { board, hop, crash, right };
+// What a `sled` event says: taken, hopped off, the rider thrown, stood back on its belt, gone
+// under on a tarn's open water (lake.hpp).
+enum class SledPhase : uint8_t { board, hop, crash, right, sunk };
 struct FreeSled {
   bool present = false;  // every free ride on a map has one; a race none
   ge::snowmobile::SledState body;
@@ -256,6 +257,10 @@ struct FreeSled {
   int32_t taken = 0;    // times boarded this run
   double still = 0;     // s at rest with nobody on it
   bool asleep = false;  // at rest on its parking brake, not stepped until something wakes it
+  // ON A TARN (lake.hpp): the open lake it is planing on or sunk in (-1 none), and which.
+  int32_t lake = -1;
+  bool skimming = false;
+  bool sunk = false;
   template <class Io>
   friend void describe(Io& io, FreeSled& v) {
     io(v.present);
@@ -267,6 +272,9 @@ struct FreeSled {
     io(v.taken);
     io(v.still);
     io(v.asleep);
+    io(v.lake);
+    io(v.skimming);
+    io(v.sunk);
   }
 };
 

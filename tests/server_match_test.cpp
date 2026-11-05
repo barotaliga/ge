@@ -2,10 +2,11 @@
 // smaller team; everyone ready starts the countdown and a break stops it; only the leader starts
 // it early; the countdown runs out once into the match and the map change brings warmup back;
 // every refusal names what to do instead; a session of acts on the server's clock replays to the
-// same phases and lines.
+// same phases and lines; with `humans` bots alone wait, and a player leads before a bot.
 //
 // ge:summary Test: the engine's lobby before the match: teams, ready, countdown, match, warmup
 // ge:keywords test lobby match-phases warmup countdown ready break leader lobby_due lobby_back
+// ge:keywords humans bots-alone
 // ge:skill net testing
 #include <string>
 
@@ -112,6 +113,23 @@ TEST(server_match_only_the_leader_starts_and_too_few_wait) {
   CHECK(!lobby_command(l, 0, "fraglimit 20", 0));  // not the lobby's
   CHECK(lobby_command(l, 0, "team purple", 0));
   CHECK(said(l, "next: `team red`"));
+}
+
+TEST(server_match_bots_alone_wait_for_a_player_who_leads) {
+  Lobby l;
+  l.settings.humans = 1;
+  lobby_join(l, 1, "bot1", true, 0);
+  lobby_join(l, 2, "bot2", true, 0);
+  CHECK(l.phase == LobbyPhase::warmup);  // every seat ready, but nobody to play against
+  CHECK(lobby_humans(l) == 0);
+  lobby_join(l, 3, "guest", false, 1);
+  CHECK(lobby_leader(l) == 3);  // the player, not the lowest bot
+  CHECK(lobby_ready(l, 3, true, 2) == LobbyWhy::ok);
+  CHECK(l.phase == LobbyPhase::countdown);
+  lobby_leave(l, 3, 3);
+  CHECK(l.phase == LobbyPhase::warmup);
+  CHECK(said(l, "no player left"));
+  CHECK(lobby_leader(l) == 1);  // bots alone: the lowest seat
 }
 
 TEST(server_match_a_session_replays) { CHECK(session() == session()); }
