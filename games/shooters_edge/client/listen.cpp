@@ -260,7 +260,40 @@ void campaign_entered(Listen& l) {
   l.server = l.rules->common;
   l.maps_started = l.campaign_host->history.size();
   if (l.map->from_file) sv::use_map_sets(*l.server, l.map->bsp);
+  if (l.party) {
+    std::string error;
+    party_enter(*l.party, *l.campaign_host, l.map->spec, error);
+    if (!error.empty()) l.prints.push_back(error);
+  }
   entered(l);
+}
+
+bool coop_on(const Listen& l) {
+  const ge::console::Cvar* v = l.server ? l.server->cvars.find("coop") : nullptr;
+  return v != nullptr && v->on();
+}
+
+// A companion seated now (in a campaign in coop); false with the line printed when it cannot be.
+bool seat_companion(Listen& l, sh::AimSkill skill) {
+  if (!coop_on(l)) {
+    l.prints.push_back(
+        "addbot: coop is off; next: `coopgame` (a new coop game), or `coop 1` "
+        "then `restart`");
+    return false;
+  }
+  if (!l.party) {
+    l.party = std::make_unique<Party>();
+    l.party->seed = l.opt.seed;
+  }
+  std::string error;
+  const int slot = party_add(*l.party, *l.campaign_host, l.map->spec, skill, error);
+  if (slot < 0) {
+    l.prints.push_back("addbot: " + error);
+    return false;
+  }
+  l.prints.push_back(l.party->mates[static_cast<size_t>(slot)]->name + " (" +
+                     sh::aim_skill_name(skill) + ") joins the game");
+  return true;
 }
 
 // The campaign host's options for the listen's settings (its loader the listen's).
@@ -299,7 +332,7 @@ void read_streams(Listen& l) {
       if (l.effects[i].kind == EffectKind::explosion) l.explosions.push_back(l.effects[i].at);
   }
   out.all.clear();
-  out.one[0].clear();
+  for (auto& one : out.one) one.clear();  // the companions' streams: nobody reads them
 }
 
 }  // namespace
@@ -362,6 +395,7 @@ std::unique_ptr<LoadedMap> load_named_map(const SearchPath& files, const std::st
 bool listen_start(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMap> map,
                   const ListenOptions& opt, std::string& error) {
   if (single_player(progs)) return listen_campaign(l, progs, std::move(map), opt, error);
+  l.party.reset();
   l.campaign_host.reset();
   l.progs = &progs;
   l.opt = opt;
@@ -419,7 +453,10 @@ bool listen_campaign(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMa
     return false;
   }
   sv::campaign_join(*l.campaign_host, 0, opt.player);
+  l.party.reset();
   campaign_entered(l);
+  for (int k = 0; k < opt.companions && k < kPartyMost; k++)
+    if (!seat_companion(l, opt.companion_skill)) break;
   l.map_changed = false;
   return true;
 }
@@ -490,6 +527,7 @@ bool load_game(Listen& l, const pg::Progs& progs, const ListenOptions& opt,
   l.failed.clear();
   l.next.reset();
   l.map = std::move(ahead.map);
+  l.party.reset();  // a save carries no companions (a coop game is never saved)
   campaign_entered(l);
   l.map_changed = true;  // the window draws the save's map
   // The player's commands go on from the saved sequence.
@@ -571,7 +609,17 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
   p.sequence = ++l.sequence;
   for (int i = 0; i < 3; i++) p.cmds[i] = l.cmds[i];
   if (l.campaign_host) {
-    if (!sv::campaign_frame(*l.campaign_host, &p, 1, l.failed)) {
+    const sh::Packet* sent = &p;
+    int count = 1;
+    if (l.party && party_size(*l.party) > 0) {  // the companions' packets after the player's
+      std::vector<sh::Packet>& ps = l.party->packets;
+      ps.clear();
+      ps.push_back(p);
+      party_packets(*l.party, *l.server, cmd.msec, ps);
+      sent = ps.data();
+      count = static_cast<int>(ps.size());
+    }
+    if (!sv::campaign_frame(*l.campaign_host, sent, count, l.failed)) {
       l.rules = nullptr;
       l.server = nullptr;
       return;
@@ -634,6 +682,22 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
 bool listen_lobby(Listen& l, std::string_view line) {
   const std::string_view word = line.substr(0, line.find(' '));
   const bool bot_word = word == "addbot" || word == "removebot";
+  if (bot_word && l.campaign_host && l.server != nullptr) {  // a campaign: the coop party
+    if (word == "removebot") {
+      if (!l.party || !party_remove(*l.party, *l.campaign_host))
+        l.prints.push_back("removebot: no companion is seated");
+      return true;
+    }
+    const size_t sp = line.find(' ');
+    const std::string arg = sp == std::string_view::npos ? "" : std::string(line.substr(sp + 1));
+    sh::AimSkill skill = l.opt.companion_skill;
+    if (!arg.empty() && !skill_named(arg, skill)) {
+      l.prints.push_back("addbot: no skill " + arg + "; next: addbot novice|average|expert");
+      return true;
+    }
+    seat_companion(l, skill);
+    return true;
+  }
   if (!l.room || l.server == nullptr) {
     if (bot_word || word == "ready" || word == "break" || word == "notready" ||
         word == "toggleready" || word == "team" || word == "start" || word == "lobby" ||
