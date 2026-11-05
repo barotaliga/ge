@@ -301,7 +301,7 @@ void mark(FxState& s, ge::detail::DecalKind kind, const double at[3], const doub
   d.size_m = size_m;
   d.spin_rad = spin;
   d.now_s = t;
-  d.variant = variant % kMarkVariants;
+  d.variant = variant % ge::render::kMarkVariants;
   d.kind = kind;
   const int slot = ge::detail::place_decal(s.marks, s.receivers->receivers, d);
   if (slot < 0 || s.marked == nullptr) return;
@@ -318,53 +318,10 @@ void mark(FxState& s, ge::detail::DecalKind kind, const double at[3], const doub
     lit = {0.5f, 0.5f, 0.5f};
 }
 
-// The marks as the beams' pass's burns: each one's soot and its embers, its masks' cell of the
-// atlas.
+// The marks as the beams' pass's burns, each in the light it was pressed in.
 void burns_of(const FxState& s, double t, std::vector<ge::render::BurnVertex>& out) {
   out.clear();
-  if (!s.receivers) return;
-  for (uint32_t i = 0; i < s.marks.capacity; ++i) {
-    const ge::detail::Decal& d = s.marks.decals[i];
-    if (!d.live) continue;
-    const ge::detail::DecalLook look = ge::detail::look_at(d.kind, t - d.born_s);
-    const float soot = static_cast<float>(look.opacity * (1 - (look.r + look.g + look.b) / 3));
-    // A fresh scorch's embers at their hottest (look_at's 2.6) are kHotEmberCd.
-    const float ember = static_cast<float>(look.er / 2.6) * kHotEmberCd;
-    const std::span<const ge::detail::DecalVertex> verts = ge::detail::decal_verts(s.marks, i);
-    const std::array<float, 3> lit =
-        i < s.mark_light.size() ? s.mark_light[i] : std::array<float, 3>{1, 1, 1};
-    for (size_t k = 0; k + 2 < verts.size(); k += 3) {
-      // The world's up across this triangle, in the atlas's uv: the way y climbs fastest.
-      const ge::detail::DecalVertex& a = verts[k];
-      const double du1 = verts[k + 1].u - a.u, dv1 = verts[k + 1].v - a.v;
-      const double du2 = verts[k + 2].u - a.u, dv2 = verts[k + 2].v - a.v;
-      const double dy1 = verts[k + 1].pos.y - a.pos.y, dy2 = verts[k + 2].pos.y - a.pos.y;
-      const double det = du1 * dv2 - du2 * dv1;
-      double gu = 0, gv = 1;
-      if (std::abs(det) > 1e-12) {
-        gu = (dy1 * dv2 - dy2 * dv1) / det;
-        gv = (du1 * dy2 - du2 * dy1) / det;
-      }
-      // Into the atlas's cell (its uv is the mark's over the variants and the kinds).
-      gu /= kMarkVariants;
-      gv /= ge::detail::kDecalKinds;
-      for (size_t j = k; j < k + 3; ++j) {
-        const ge::detail::DecalVertex& v = verts[j];
-        ge::render::BurnVertex b;
-        b.at[0] = v.pos.x, b.at[1] = v.pos.y, b.at[2] = v.pos.z;
-        b.u = static_cast<float>((d.variant + v.u) / kMarkVariants);
-        b.v = static_cast<float>((static_cast<int>(d.kind) + v.v) / ge::detail::kDecalKinds);
-        b.fade = static_cast<float>(v.fade);
-        b.soot = soot;
-        b.ember = ember;
-        b.relief = d.kind == ge::detail::DecalKind::bullet_hole ? 1.0f : 0.0f;
-        b.up[0] = static_cast<float>(gu);
-        b.up[1] = static_cast<float>(gv);
-        for (int c = 0; c < 3; ++c) b.light[c] = lit[c];
-        out.push_back(b);
-      }
-    }
-  }
+  if (s.receivers) ge::render::mark_burns(s.marks, t, s.mark_light, out);
 }
 
 }  // namespace
@@ -404,11 +361,6 @@ fx::Dust player_dust(const sh::Vec3f& origin, const sh::Vec3f& angles, int entit
   d.warp.high = float(d.half_depth * kAhead + d.high * kUp);
   d.warp.seed = float(uint32_t(entity) % 16u) * 1.37f;
   return d;
-}
-
-const std::vector<uint8_t>& mark_atlas() {
-  static const std::vector<uint8_t> kAtlas = ge::detail::bake_atlas(kMarkAtlasPx, kMarkVariants);
-  return kAtlas;
 }
 
 FxSwitches fx_switches(const look::Picture& picture) {
@@ -690,13 +642,22 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
         fx::fire_trail(from, to, s.seed++, &out.births);
         const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
         const double len = ge::core::hypot3(d[0], d[1], d[2]);
+        double dir[3] = {0, 0, 0};
         if (len > 1e-4) {
-          const double dir[3] = {d[0] / len, d[1] / len, d[2] / len};
+          for (int k = 0; k < 3; ++k) dir[k] = d[k] / len;
           out.flames.push_back(fx::exhaust(to, dir, static_cast<uint32_t>(m.entity), t));
         }
+        // The motor's fire lights the world round it (the classic rocket's steady light below).
+        out.lights.push_back(fx::motor_light(to, dir, static_cast<uint32_t>(m.entity), t));
+        continue;
       }
     }
-    if (!m.grenade || !s.on.trails) out.lights.push_back(fx::rocket_light(to));
+    if (s.on.trails && !m.grenade) {  // its first frame seen: no flight yet, the light on it
+      const double still[3] = {0, 0, 0};
+      out.lights.push_back(fx::motor_light(to, still, static_cast<uint32_t>(m.entity), t));
+    } else if (!s.on.trails) {
+      out.lights.push_back(fx::rocket_light(to));
+    }
   }
   std::swap(s.last, s.next);
   std::erase_if(s.haze,

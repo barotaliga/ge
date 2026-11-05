@@ -4,8 +4,9 @@
 // window draws it (client/world_draw.hpp, the effects of client/world_fx.hpp, the weapon in hand)
 // in the classic look and in the modern look with the classic-enhance switches on (the enhanced
 // weapon effects of app/weapon_fx.hpp: the layered blast, the rocket's flame and smoke, the bolt,
-// the hits), at moments after the first shot (`--times`, ms), from the eye and, with `--side`,
-// from a second camera beside the line of fire.
+// the hits), at moments after the first shot (`--times`, ms; a launcher's after its blast,
+// `--blast-times`, and in flight after its shot, `--flight-times`: the rocket's motor lighting the
+// room as it goes), from the eye and, with `--side`, from a second camera beside the line of fire.
 //
 // The default map is the fixture halls (plugins/brush's sample, a deathmatch spot facing the far
 // wall, two torches), so its pictures may go anywhere. `--game=<folder>` (a game folder of packs,
@@ -444,6 +445,8 @@ void run(gl::Lab& lab) {
   std::vector<double> blast_times;
   for (double v : lab.arg_nums("blast-times")) blast_times.push_back(v);
   if (blast_times.empty()) blast_times = {30, 150, 400, 1200};
+  std::vector<double> flight_times;  // a launcher's moments in flight, after its shot
+  for (double v : lab.arg_nums("flight-times")) flight_times.push_back(v);
   const std::string asked = "," + lab.arg("weapons") + ",";
   for (const Gun& gun : kGuns) {
     if (lab.arg("weapons") != "all" &&
@@ -460,10 +463,20 @@ void run(gl::Lab& lab) {
     const size_t blasts_before = l.explosions.size();
     double from_ms = 0;
     bool started = !blasts_;
-    size_t next = 0;
+    size_t next = 0, flown = blasts_ ? 0 : flight_times.size();
     for (int i = 0; next < when.size() && i < 500; i++) {
       frame(i < gun.hold ? fire : sh::MoveCmd{}, true);
       const double ms = (i + 1) * kTic * 1000;
+      // In flight: the moments after the shot, while nothing has gone off yet.
+      if (!started && flown < flight_times.size() && ms + 1e-6 >= flight_times[flown]) {
+        char label[64];
+        std::snprintf(label, sizeof label, "%s-flight-%04d", gun.name,
+                      static_cast<int>(flight_times[flown]));
+        picture(label, std::string("The ") + gun.name + " " +
+                           std::to_string(int(flight_times[flown])) +
+                           " ms after its shot, in flight.");
+        flown++;
+      }
       if (!started && l.explosions.size() > blasts_before) {
         started = true;
         from_ms = ms - kTic * 1000;
@@ -525,6 +538,7 @@ const gl::LabSpec kSpec{
       "rockets arc"},
      {"times", "40,200,600", "the moments pictured after the first shot, ms"},
      {"blast-times", "30,150,400,1200", "the launchers' moments, after the first blast, ms"},
+     {"flight-times", "", "the launchers' moments in flight, after the shot, ms (none: none)"},
      {"cvars", "", "the enhanced side's cvars, as the console takes them"},
      {"target", "0", "1: a bot stood in the line of fire, facing the player (its wounds)"},
      {"before", "", "the left side's cvars in the modern look instead of the classic look"}},
