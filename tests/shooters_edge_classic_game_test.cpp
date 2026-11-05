@@ -18,6 +18,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "brush/write.hpp"
@@ -63,9 +64,9 @@ struct Session {
 
 // The core's server on the simulated network, one classic client joining at once, `frames`
 // frames; the digest folds every frame's hash and the client's end.
-// The client says `ready` at frame `ready_at` (-1: never).
+// The client says `ready` at frame `ready_at` (-1: never), and each of `lines` at its frame.
 void run_session(Session& r, const ServerConfig& c, int frames, const std::string& password = "",
-                 int ready_at = -1) {
+                 int ready_at = -1, const std::vector<std::pair<int, std::string>>& lines = {}) {
   gn::LinkConditions lan;
   r.net = gn::make_sim_network(c.seed, lan);
   gn::open_sim_transport(r.server_port, r.net, gn::sim_address(0, kPort));
@@ -81,6 +82,8 @@ void run_session(Session& r, const ServerConfig& c, int frames, const std::strin
     const int64_t now = r.s.now_us;
     gn::sim_advance(r.net, now);
     if (f == ready_at) se::client_command(r.client, "ready");
+    for (const auto& [at, line] : lines)
+      if (f == at) se::client_command(r.client, line);
     se::client_tick(r.client, now);
     server_frame(r.s);
     if (f == r.look_at) r.looked = server_status(r.s);
@@ -187,6 +190,54 @@ TEST(classic_game_the_mod_s_rules_are_settings) {
   Server refused;
   CHECK(!server_open(refused, se::classic_game(), bad, nullptr, nullptr, error));
   CHECK_MSG(error.find("next: set fraglimit") != std::string::npos, error);
+}
+
+TEST(classic_game_the_shooter_s_and_the_endpoint_s_settings) {
+  ge::console::Console con{true};
+  ServerConfig c;
+  ServerCfg cfg;
+  std::string error;
+  CHECK_MSG(server_configure(con,
+                             {"--map=arena", "+set", "pm_ktjump", "0", "+set", "sv_maxrate", "8000",
+                              "+set", "sv_floodprot", "2 5 3", "+set", "sv_floodprotmsg", "hush",
+                              "+set", "maxfps", "100"},
+                             c, cfg, se::classic_game(), error),
+            error);
+  CHECK(c.rules["pm_ktjump"] == "0");
+  CHECK(c.floodprot == "2 5 3");
+  CHECK(explain(con, cfg, "pm_ktjump").find("command line") != std::string::npos);
+  // The client is told the changed switch and the move rate; its third line in a burst is
+  // refused (to it alone) and the silence holds the fourth.
+  Session r;
+  run_session(r, c, 700, "", -1,
+              {{500, "say one"}, {502, "say two"}, {504, "say three"}, {506, "say four"}});
+  CHECK(r.client.stage == se::ClientStage::active);
+  CHECK_MSG(r.client.serverinfo.find("\\pm_ktjump\\0") != std::string::npos, r.client.serverinfo);
+  CHECK_MSG(r.client.serverinfo.find("\\maxfps\\100") != std::string::npos, r.client.serverinfo);
+  int said = 0, hushed = 0, silenced = 0;
+  for (const std::string& p : r.client.prints) {
+    said += p.find(": one") != std::string::npos || p.find(": two") != std::string::npos;
+    said += p.find(": three") != std::string::npos ? 100 : 0;
+    hushed += p == "FloodProt: hush\n";
+    silenced += p.find("You can't talk for") != std::string::npos;
+  }
+  CHECK_MSG(said == 2 && hushed == 1 && silenced == 1, std::to_string(said));
+  // Out of range: refused with the range and the next step.
+  for (const auto& [name, value] : {std::pair<std::string, std::string>{"sv_mintic", "0.5"},
+                                    {"pm_airstep", "2"},
+                                    {"sv_downloadchunksperframe", "99"}}) {
+    ServerConfig bad = arena();
+    bad.rules[name] = value;
+    Server refused;
+    CHECK(!server_open(refused, se::classic_game(), bad, nullptr, nullptr, error));
+    CHECK_MSG(error.find(name) != std::string::npos && error.find("next:") != std::string::npos,
+              error);
+  }
+  ServerConfig bad = arena();
+  bad.floodprot = "lots";
+  Server refused;
+  CHECK(!server_open(refused, se::classic_game(), bad, nullptr, nullptr, error));
+  CHECK_MSG(error.find("sv_floodprot") != std::string::npos, error);
 }
 
 TEST(classic_game_a_map_from_the_game_folder_s_pack) {
