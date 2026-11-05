@@ -16,8 +16,10 @@
 #include "brush/read.hpp"
 #include "classicenhance/cached.hpp"
 #include "classicenhance/models.hpp"
+#include "classicenhance/replace.hpp"
 #include "core/output.hpp"
 #include "morph/read.hpp"
+#include "render/sprite_shapes.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
 namespace shooters_edge::client {
@@ -29,16 +31,19 @@ namespace ba = ge::brush::app;
 
 namespace {
 
+// The made frames drawn for the pack's flare and bubble sprites (ce_flares, ce_bubbles): their
+// texels, their size in the world, and how far a bubble wobbles off its path as it rises.
+constexpr uint32_t kFlarePx = 64, kBubblePx = 32;
+constexpr double kFlareM = 1.3, kBubbleM = 0.07, kBubbleWobbleM = 0.015;
+// A bubble the server moves is drawn as a little cluster: itself and two smaller ones trailing
+// under it, each its own share of the size, its offset (m: across, down) and its own wobble.
+constexpr double kCluster[3][3] = {{1.0, 0, 0}, {0.5, 0.025, 0.06}, {0.32, -0.02, 0.11}};
+
 constexpr uint32_t kSpin = 8;           // a model file's flag: the item turns
 constexpr double kSpinDegPerS = 100;    // how fast
 constexpr float kAmbientShare = 0.75f;  // of the floor's light, from every side
 constexpr float kShadeShare = 0.6f;     // and from above and ahead
 constexpr float kRelightUnits = 1;      // a move that takes the light again
-
-bool ends_with(const std::string& s, const char* tail) {
-  const size_t n = std::char_traits<char>::length(tail);
-  return s.size() >= n && s.compare(s.size() - n, n, tail) == 0;
-}
 
 uint32_t colour_row(const sv::ClientInfo& c, const char* key, uint32_t fallback) {
   const std::string v = sv::info_value(c.userinfo, key);
@@ -196,6 +201,8 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       continue;
     }
     if (i == 1 || name.empty()) continue;
+    const ge::classicenhance::Replacement* rep = ge::classicenhance::replacement_of(name);
+    if (rep != nullptr) k.effect = rep->effect;
     OpenedModel opened;
     std::string error;
     if (!game.open_model(game, files, name, opened, error)) {
@@ -234,7 +241,8 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
           }
         }
       }
-      if (ends_with(name, "/flame.mdl") || ends_with(name, "/flame2.mdl")) {
+      if (rep != nullptr &&
+          !rep->keep_glowing) {  // the engine's fire burns in its painted flame's place
         const mo::Model bare = ge::classicenhance::drop_glowing(model);
         k.bare = uint32_t(morphs.size());
         for (size_t s = 0; s < std::max<size_t>(1, bare.skins.size()); s++)
@@ -248,6 +256,12 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       k.facing = models::facing_of(sprite.facing);
       for (gr::SpriteFrame& f : models::sprite_frames_of(sprite, palette))
         frames.push_back(std::move(f));
+      // A flare's or a bubble's made frame, drawn in its place when its switch is on.
+      if (k.effect == "flare" || k.effect == "bubbles") {
+        k.made = uint32_t(frames.size());
+        frames.push_back(k.effect == "flare" ? gr::flare_frame(kFlarePx)
+                                             : gr::bubble_frame(kBubblePx));
+      }
     } else if (opened.form == ModelForm::brush) {
       gr::MorphModel mm = models::morph_from_brush(opened.brush, palette);
       if (mm.indices.empty()) continue;
@@ -369,7 +383,8 @@ bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::v
 
 void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                     std::span<const Placed> placed, const gr::FrameView& view, double brightness,
-                    double minlight, bool smooth, bool bare_flames) {
+                    double minlight, bool smooth, const InPlace& in_place) {
+  const bool bare_flames = in_place.flames;
   m.morph_draws.clear();
   m.sprite_draws.clear();
   m.near.clear();
@@ -394,6 +409,38 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     const double at = k.synced ? t : t + double(uint32_t(p.entity) * 2654435761u % 1000) * 1e-3;
     if (k.is == ModelKind::Is::sprite) {
       if (!m.has_sprites || m.sprite_draws.size() >= gr::kMaxSprites) continue;
+      const bool flare = k.made != ModelKind::kNone && k.effect == "flare" && in_place.flares;
+      const bool bubble = k.made != ModelKind::kNone && k.effect == "bubbles" && in_place.bubbles;
+      if (flare || bubble) {
+        gr::SpriteDraw s;
+        s.frame = k.made;
+        s.facing = gr::SpriteFacing::parallel;
+        s.outdoor = 0;
+        s.smooth = true;
+        if (flare) {
+          s.blend = gr::SpriteBlend::add;
+          s.scale = float(kFlareM / kFlarePx);
+          s.glow = 2.5f;  // a lamp outshines the wall it hangs on
+          s.colour[0] = 1.0f, s.colour[1] = 0.74f, s.colour[2] = 0.42f;  // the globe's warm flame
+          for (int a = 0; a < 3; a++) s.position[a] = s.last[a] = w[a];
+          m.sprite_draws.push_back(s);
+          continue;
+        }
+        s.blend = gr::SpriteBlend::over;
+        s.glow = 0.7f;  // its rim catches the room's light
+        // Each its own phase, so a column of bubbles never wobbles as one.
+        const double phase = double(uint32_t(p.entity) * 2654435761u % 6283) * 1e-3;
+        for (int b = 0; b < 3 && m.sprite_draws.size() < gr::kMaxSprites; b++) {
+          const double ph = phase + b * 2.1, wob = kBubbleWobbleM * (1 + 0.5 * b);
+          double c[3] = {w[0] + kCluster[b][1], w[1] - kCluster[b][2], w[2]};
+          c[0] += wob * std::sin(t * 2 * 3.14159265358979 * (2.7 + 0.6 * b) + ph);
+          c[2] += wob * std::cos(t * 2 * 3.14159265358979 * (2.3 + 0.5 * b) + ph * 1.3);
+          s.scale = float(kBubbleM * kCluster[b][0] / kBubblePx);
+          for (int a = 0; a < 3; a++) s.position[a] = s.last[a] = c[a];
+          m.sprite_draws.push_back(s);
+        }
+        continue;
+      }
       gr::SpriteDraw s;
       s.frame = k.first + models::frame_in(k.frames, p.frame, at);
       for (int c = 0; c < 3; c++) s.position[c] = s.last[c] = w[c];

@@ -630,6 +630,13 @@ classic effects and pickups this way (M18i). The pass is generic. A game hands i
 every kind on a yard by day, from the eye's height and from above, sharp beside smooth, a
 fireball's frames and the yard at dusk, and times 2000 sprites.
 
+**Made frames** (`render/sprite_shapes.hpp`): the pictures a game draws in place of a pack's flat
+effect sprites, made once at load, pure functions of their size. `flare_frame` is a light's glow,
+a warm core and a soft halo fading to nothing at the frame's edge, drawn `add`ed. `bubble_frame` is
+a ball of air in water: nearly clear, a Fresnel rim, a highlight up and to the left and a darker
+ring just inside the rim, drawn `over`. Shooter's Edge draws them for the pack's light globe and
+bubble sprites under `ce_flares` and `ce_bubbles` (classic-enhance's replacement table names them).
+
 ## Terrain
 
 A generic **heightfield renderer** in `engine/render`, which a game hands a height
@@ -1951,7 +1958,23 @@ brown, a trail's orange going to grey), and how a game lights smoke by its own l
 sun does not reach (Shooter's Edge pre-lights each puff by the lightmap under it). A particle may carry a
 FLOOR of its own (`floor_y`, world y) for a world the pool has no ground for: coming down on it, it
 hops back up at `bounce` of its speed while it falls faster than `kFloorRest`, else it lies there
-and fades (a chip knocked off a wall hops on the floor below). A slot is 96 bytes.
+and fades (a chip knocked off a wall hops on the floor below). It hops twice at most, a third of
+them three times (`max_hops`, off the particle's own size and life), then lies where it came down,
+off its own floor and off a drawn surface alike. A slot is 96 bytes.
+
+**What was drawn (M47c).** A pool made with `ParticleSettings::collide` lets what falls (a grain,
+a spark, debris) meet whatever the last frame drew, in a world of brushes or models with no
+heightfield. The sim runs before the frame is drawn, so the depth target still holds the last
+frame's, and `prepare_particles` (its view overload) keeps the camera that drew it. A particle
+that has gone behind the drawn surface there by less than kSurfaceSkin plus a step's travel is put
+back on the face, and its speed into the face is turned back at its `bounce` (kSurfaceBounce
+without one). Too slow for a hop, it lies on a floor and fades, or slides down a wall. The face's
+normal is rebuilt from the depth beside it, the nearer side each way. Nothing nearer the eye than
+0.8 m is met, because the held weapon is drawn into the same depth. Only what the last frame saw
+can be met: a spark flung out of the view or behind the eye flies on, so a game also gives it a
+floor (Shooter's Edge: the floor under the blast, traced through the world and its brush
+entities). `collide_particle` is the bounce's CPU twin (`tests/render_particles_test.cpp`).
+`se-weapon-fx`'s `<look>.<launcher>-sunk` counts what still fell through.
 
 **As built (M8d2).** The drag pulls a particle toward the AIR, not still air: the frame hands the
 pool the map's wind at the view's time (`plugins/mountain/air/air.hpp`), so a powder cloud (the

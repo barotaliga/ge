@@ -72,6 +72,7 @@
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/app/muzzle.hpp"
+#include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/warps.hpp"
@@ -86,9 +87,14 @@ struct FxSwitches {
   bool warps = false;  // ce_warps: a player's teleport and spawn as dust (warps.hpp)
   bool decals =
       false;  // ce_decals: the marks the weapons leave (scorches, holes, the bolt's burns)
+  // ce_flares, ce_bubbles: the pack's flare and bubble sprites drawn as the engine's (the models'
+  // `prepare_models`, through classic-enhance's replacement table).
+  bool flares = false, bubbles = false;
   const ge::render::BeamLook* bolt = nullptr;  // r_beam_style's (null: the default style)
 };
 // The switches `picture` asks for: each ce_ switch, in the modern look only, and its bolt's style.
+// The explosion is the engine's where classic-enhance's replacement table names `explosion` for the
+// pack's explosion sprite (classicenhance/replace.hpp), so the table, not this code, says so.
 FxSwitches fx_switches(const look::Picture& picture);
 
 // An arc gun's beam the program keeps sending: its shot, the beam's owner and when it last came.
@@ -147,6 +153,15 @@ struct FxState {
   std::unordered_map<int, ge::camera::Vec3> last;  // each missile's place a frame ago, m
   std::unordered_map<int, ge::camera::Vec3> next;  // this frame's, swapped into `last`
   std::vector<ge::render::HazeTrail> haze;         // the flights' hot air still warm, oldest first
+  // Each rocket's launch as it looks (ce_trails; app/weapon_fx.hpp's launch_offset): when it was
+  // first seen and the shooter's sway it carries; and the eye's aim a frame ago, for that sway.
+  struct Launched {
+    double born = 0;
+    effects::RocketLaunch launch;
+  };
+  std::unordered_map<int, Launched> launched;
+  double aim_yaw = 0, aim_pitch = 0, aim_rate[2] = {0, 0};
+  bool aimed = false;
   // Each missile's place (map units) and the way it flew, a frame ago: the surface a blast went
   // off against lies along it.
   struct Flight {
@@ -158,6 +173,7 @@ struct FxState {
   std::unordered_map<int, float> wound_health;  // each wounded body's health a frame ago
   std::size_t explosions_seen = 0;              // of Listen::explosions
   std::vector<Blast> lit;                       // the explosions whose light still fades
+  std::vector<Blast> sparked;                   // a nail's sparks off metal, their flick fading
   double hurt = 0;                              // the hit's flash now (effects::Screen::hurt)
   double armour = 0;                            // the armour's share of it (Screen::armour)
   std::size_t blows_seen = 0;                   // of Listen::blows

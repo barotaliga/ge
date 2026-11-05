@@ -38,6 +38,7 @@
 #include <filesystem>
 #include <span>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -100,6 +101,11 @@ struct ModelKind {
   uint32_t first = 0;  // its first morph model (a skin each) or sprite frame
   static constexpr uint32_t kNone = ~0u;
   uint32_t bare = kNone;  // a flame's first morph model without its painted flame
+  // The engine's effect drawn in its place (classicenhance/replace.hpp's table: "explosion",
+  // "flare", "bubbles", "fire.<kind>"; empty: none), and for a flare or bubble sprite the made
+  // frame drawn instead (render/sprite_shapes.hpp).
+  std::string_view effect;
+  uint32_t made = kNone;
   models::Groups frames, skins;
   bool spin = false, synced = true;
   ge::render::SpriteFacing facing = ge::render::SpriteFacing::parallel;
@@ -152,11 +158,16 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed,
                    std::vector<ge::brush::app::Mover>& out);
 // This frame's draws of `placed` at `view` (its time the animations' clock), lit `brightness`
 // times the lightmap under each and never under `minlight` (the world's own: ba::Options's
-// brightness and minlight), `smooth` texels; with `bare_flames` a torch's flame is drawn bare
-// (the modern look's burning gas, `ce_flames`, is the flame).
+// brightness and minlight), `smooth` texels; with `in_place` the pack's effects the engine draws
+// instead: a torch's flame drawn bare (the modern look's burning gas, `ce_flames`, is the flame),
+// a flare a soft added glow (`ce_flares`), a bubble a clear ball with a bright rim that wobbles as
+// it rises (`ce_bubbles`).
+struct InPlace {
+  bool flames = false, flares = false, bubbles = false;
+};
 void prepare_models(ge::gpu::Device& device, WorldModels& m, const ge::brush::Map& map,
                     std::span<const Placed> placed, const ge::render::FrameView& view,
-                    double brightness, double minlight, bool smooth, bool bare_flames);
+                    double brightness, double minlight, bool smooth, const InPlace& in_place);
 // The triangles of `p`'s model as `prepare_models` draws it at `time_s` (its frame and skin
 // group): nine floats a triangle, its model's own frame (m). False for a sprite, a brush or none.
 bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::vector<float>& out);
