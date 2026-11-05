@@ -469,6 +469,20 @@ void run(gl::Lab& lab) {
   // in the eyes' picture is with him there than with him gone.
   {
     const cl::PlayerState ps = cl::player_state(l);
+    // The powers the `powered` view handed him taken back first: their glow lights the floor round
+    // him, him drawn or not, and would wash out the shadow measured here.
+    for (const char* f : {"super_damage_finished", "invincible_finished"}) {
+      const ge::progs::Def* def = ge::progs::find_field(progs, f);
+      if (def != nullptr)
+        *ge::progs::entity_field(shooters_edge::server::qc_of(*l.rules)->q.vm, ps.entity,
+                                 def->offset) = std::bit_cast<uint32_t>(0.0f);
+    }
+    cl::listen_frame(l, {});
+    t += kTic;
+    cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
+    if (int(cl::field_named(l, ps.entity, "effects")) != 0)
+      lab.note("shadow views: the player still glows (effects " +
+               std::to_string(int(cl::field_named(l, ps.entity, "effects"))) + ")");
     sh::Edict& body = l.server->sv.edicts[size_t(ps.entity)];
     const sh::Vec3f was_at = body.origin, was_angles = body.angles;
     struct Lamp {
@@ -500,12 +514,12 @@ void run(gl::Lab& lab) {
       br::to_engine(eye_map, eye);
       for (int c = 0; c < 3; c++) v.eye[c] = eye[c];
       v.heading = ge::core::kPi / 2 - double(away) * ge::core::kPi / 180;
-      v.pitch = -0.6;
+      v.pitch = -0.8;
       // A dozen frames there first: the lights round a new place take their cubes a few a frame
       // (bsp_draw.hpp's fresh_cubes), as they do when a player walks into a room.
       if (device) {
         look.look = "modern";
-        for (int i = 0; i < 12; ++i)
+        for (int i = 0; i < 48; ++i)
           cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
       }
       std::string caption = "The player ";
@@ -525,7 +539,7 @@ void run(gl::Lab& lab) {
           const bool had = fx.has_self;
           fx.has_self = with_him && had;
           look.look = "modern";
-          for (int i = 0; i < 12; ++i)
+          for (int i = 0; i < 48; ++i)
             cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
           fx.has_self = had;
           return ge::gpu::read_now(*device, out);
@@ -581,34 +595,39 @@ void run(gl::Lab& lab) {
       ge::render::FrameView side = v;
       const double r = double(away) * 3.14159265358979323846 / 180;
       const float cr = float(lm::cos(r)), sr = float(lm::sin(r));
-      // Off to either side and a little ahead, the nearest of a few places with standing room and
-      // a clear line to his chest and to the floor before him.
+      // Well off to one side, high and a little ahead, looking down across the floor his shadow
+      // falls on, his figure at its end: the first of a few places, the widest and highest first,
+      // with standing room and clear lines to his chest, his feet and the floor where his shadow
+      // falls.
+      const float floor_z = body.origin.z - 24;
       const sh::Vec3f chest{body.origin.x, body.origin.y, body.origin.z + 16};
-      const sh::Vec3f floor_ahead{body.origin.x + 40 * cr, body.origin.y + 40 * sr,
-                                  body.origin.z - 16};
+      const sh::Vec3f at_feet{body.origin.x + 8 * cr, body.origin.y + 8 * sr, floor_z + 4};
+      const sh::Vec3f floor_ahead{body.origin.x + 56 * cr, body.origin.y + 56 * sr, floor_z + 4};
       sh::Vec3f cam{body.origin.x - 70 * sr + 30 * cr, body.origin.y + 70 * cr + 30 * sr,
                     body.origin.z + 30};
       bool placed_cam = false;
-      for (const float dist : {96.0f, 72.0f, 56.0f})
-        for (const float hand : {1.0f, -1.0f}) {
-          const sh::Vec3f c{body.origin.x - hand * dist * sr + 30 * cr,
-                            body.origin.y + hand * dist * cr + 30 * sr, body.origin.z + 30};
-          if (!placed_cam && open_line(c, c, 16) && open_line(c, chest, 0) &&
-              open_line(c, floor_ahead, 0)) {
-            cam = c;
-            placed_cam = true;
-          }
-        }
+      for (const float aside : {112.0f, 88.0f, 64.0f})
+        for (const float up : {104.0f, 80.0f, 56.0f})
+          for (const float ahead : {64.0f, 96.0f, 32.0f})
+            for (const float hand : {1.0f, -1.0f}) {
+              const sh::Vec3f c{body.origin.x + ahead * cr - hand * aside * sr,
+                                body.origin.y + ahead * sr + hand * aside * cr, floor_z + up};
+              if (!placed_cam && open_line(c, c, 16) && open_line(c, chest, 0) &&
+                  open_line(c, at_feet, 0) && open_line(c, floor_ahead, 0)) {
+                cam = c;
+                placed_cam = true;
+              }
+            }
       if (!placed_cam) lab.note(id + "-side: no clear place beside him");
       const float side_map[3] = {cam.x, cam.y, cam.z};
       double se[3];
       br::to_engine(side_map, se);
-      double feet[3];
-      const float feet_map[3] = {body.origin.x + 40 * cr, body.origin.y + 40 * sr,
-                                 body.origin.z - 24};
-      br::to_engine(feet_map, feet);
+      // Aimed at the floor his shadow falls on, a pace ahead of his feet: it and him both in view.
+      double aim[3];
+      const float aim_map[3] = {body.origin.x + 32 * cr, body.origin.y + 32 * sr, floor_z + 12};
+      br::to_engine(aim_map, aim);
       for (int c = 0; c < 3; c++) side.eye[c] = se[c];
-      const double sx = feet[0] - se[0], sy = feet[1] - se[1], sz = feet[2] - se[2];
+      const double sx = aim[0] - se[0], sy = aim[1] - se[1], sz = aim[2] - se[2];
       side.heading = lm::atan2(sx, sz);
       side.pitch = lm::atan2(sy, std::sqrt(sx * sx + sz * sz));
       cl::Placed figure;
@@ -619,8 +638,43 @@ void run(gl::Lab& lab) {
       fx.models.push_back(figure);  // seen from the side, as another player sees him
       fx.has_self = false;          // the figure drawn is the one casting
       shoot(id + "-side", "THE PLAYER'S SHADOW FROM " + what + ", FROM THE SIDE",
-            "As above, from beside him: his figure and the shadow it throws on the floor.",
+            "As above, from ahead of him and to one side, looking back: the shadow his figure "
+            "throws on the floor before him, the light behind him.",
             "the figure's shadow on the floor in front of him, the light behind him", side);
+      // The same from the side with him and with him gone, side by side (modern, each settled
+      // through the resolve): the floor his shadow darkens against the same floor without it.
+      if (device) {
+        const auto side_settled = [&] {
+          look.look = "modern";
+          for (int i = 0; i < 48; ++i)
+            cl::draw_world(*device, *frame, side, fx, nullptr, 0, {}, out.view);
+          return ge::gpu::read_now(*device, out);
+        };
+        const ge::gpu::Image with_img = side_settled();
+        fx.models.pop_back();
+        const ge::gpu::Image without_img = side_settled();
+        fx.models.push_back(figure);
+        const int pw = int(with_img.width), ph = int(with_img.height), gap = 4;
+        gl::Picture pair{2 * pw + gap, ph,
+                         std::vector<uint8_t>(size_t(2 * pw + gap) * size_t(ph) * 4, 255)};
+        for (int y = 0; y < ph; ++y)
+          for (int x = 0; x < pw; ++x)
+            for (int c = 0; c < 4; ++c) {
+              const size_t from = (size_t(y) * size_t(pw) + size_t(x)) * 4 + size_t(c);
+              pair.rgba[(size_t(y) * size_t(pair.width) + size_t(x)) * 4 + size_t(c)] =
+                  with_img.rgba[from];
+              pair.rgba[(size_t(y) * size_t(pair.width) + size_t(x + pw + gap)) * 4 + size_t(c)] =
+                  without_img.rgba[from];
+            }
+        lab.shot({id + "-side-pair",
+                  "HIS SHADOW FROM " + what + ": WITH HIM, AND WITH HIM GONE",
+                  "The side view above (modern), left with him standing there, right with him "
+                  "gone: the same floor, lit the same, but for the shadow he throws.",
+                  "on the left a darker patch on the floor ahead of his feet, away from the light; "
+                  "on the right the same floor evenly lit",
+                  {{"map", map_name}, {"look", "modern"}, {"size", lab.arg("size")}}},
+                 pair, gl::Det::measured);
+      }
       fx.models.pop_back();
     };
     for (const Lamp& lamp : lamps) {
@@ -639,10 +693,10 @@ void run(gl::Lab& lab) {
       }
       std::stable_sort(at.begin(), at.end(),
                        [](const auto& a, const auto& b) { return a.first < b.first; });
-      // A place to stand a pace or so off a light, his back to it: standing room on a floor not
-      // far under the light, the light's front (12 units out toward him: a torch's origin is in
-      // its wall) in clear sight of his chest, and the most open, level floor ahead of him, where
-      // his shadow falls and his eyes look.
+      // A place to stand one to three metres off a light (the further, the longer his shadow
+      // ahead), his back to it: standing room on a floor not far under the light, the light's front
+      // (12 units out toward him: a torch's origin is in its wall) in clear sight of his chest, and
+      // the most open, level floor ahead of him, where his shadow falls and his eyes look.
       const sh::Vec3f* fire = nullptr;
       sh::Vec3f stand{};
       float away = 0;
@@ -650,7 +704,7 @@ void run(gl::Lab& lab) {
       for (size_t i = 0; i < at.size() && i < 24 && best < 1; i++) {
         const sh::Vec3f& o = at[i].second;
         for (int k = 0; k < 16; k++)
-          for (const float dist : {48.0f, 64.0f}) {
+          for (const float dist : {112.0f, 88.0f, 64.0f, 48.0f}) {
             const double a = k * 0.392699081698724;
             const float cx = float(lm::cos(a)), cy = float(lm::sin(a));
             const sh::Vec3f e{o.x + dist * cx, o.y + dist * cy, o.z};

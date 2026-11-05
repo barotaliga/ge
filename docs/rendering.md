@@ -910,9 +910,10 @@ shadow the lights in two tiers:
   lights he hides at the pixel.
 
 Lab `se-models`: the views `shadow-lamp`, `shadow-torch`, `shadow-flame` and `shadow-sun` (at
-noon, on a map with open sky), each from his eyes and from the side, and `-shade` (in red, how
-much darker each pixel is with him there, eight times over), with the metrics `-darker` (the
-lower half's mean) and `-deepest` (the 99th percentile). The cost is `se-timedemo`'s
+noon, on a map with open sky), each from his eyes and from high to one side, `-side-pair` (the
+side view with him and with him gone) and `-shade` (in red, how much darker each pixel is with
+him there, eight times over), with the metrics `-darker` (the lower half's mean) and `-deepest`
+(the 99th percentile). The cost is `se-timedemo`'s
 (`docs/perf.md` § Shooter's Edge's world frame): main + 7 % at 2560 × 1440 on demo1.
 
 ### Materials
