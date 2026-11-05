@@ -1958,7 +1958,9 @@ brown, a trail's orange going to grey), and how a game lights smoke by its own l
 sun does not reach (Shooter's Edge pre-lights each puff by the lightmap under it). A particle may carry a
 FLOOR of its own (`floor_y`, world y) for a world the pool has no ground for: coming down on it, it
 hops back up at `bounce` of its speed while it falls faster than `kFloorRest`, else it lies there
-and fades (a chip knocked off a wall hops on the floor below). A slot is 96 bytes.
+and fades (a chip knocked off a wall hops on the floor below). It hops twice at most, a third of
+them three times (`max_hops`, off the particle's own size and life), then lies where it came down,
+off its own floor and off a drawn surface alike. A slot is 96 bytes.
 
 **What was drawn (M47c).** A pool made with `ParticleSettings::collide` lets what falls (a grain,
 a spark, debris) meet whatever the last frame drew, in a world of brushes or models with no

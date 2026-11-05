@@ -89,8 +89,9 @@ fn off_surface(q: Particle) -> Particle {
   }
   let b = select(kSurfaceBounce, p.bounce, p.bounce > 0.0);
   let along = p.v - vn * n;
-  if (-vn * b > kFloorRest) {
+  if (-vn * b > kFloorRest && p.hops < max_hops(p)) {
     p.v = along * kFloorSlide - vn * b * n;
+    p.hops += 1.0;
   } else if (n.y > 0.6) {
     p.v = vec3f(0.0);
     p.age = max(p.age, p.life * 0.7);
