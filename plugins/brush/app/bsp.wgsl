@@ -659,6 +659,24 @@ fn soft_shadow(q: vec3f, far: f32, l: Light, spin: vec2f) -> vec2f {
   return vec2f(world, world * lit / f32(kFilterTaps));
 }
 
+// AN AIMED LIGHT'S BEAM: a map's cone (40 degrees, its inner three quarters full, unless it says)
+// is a disc with a band of a few degrees at its edge, and a lamp far past white on a near wall then
+// shows a flat white plate with a hard rim. A real lamp's beam is brightest on its axis and fades
+// out from it, so here the beam is a bell: a gaussian in the angle off the axis (in cosines,
+// 1 - c grows as the angle squared), exp(-kSpotFade) of it left at the map's own edge, the last of
+// it cut by kSpotEnd edges (in the same measure). `c` is the cosine off the light's axis; a light
+// with no cone (spot.w -2) gives 1.
+const kSpotFade = 2.0;
+const kSpotEnd = 3.0;
+fn spot_edge(l: Light, c: f32) -> f32 {
+  let outer = l.spot.w;
+  if (outer < -1.5) {
+    return 1.0;
+  }
+  let x = (1.0 - c) / max(1.0 - outer, 1e-4);
+  return exp(-kSpotFade * x) * (1.0 - smoothstep(kSpotEnd - 1.0, kSpotEnd, x));
+}
+
 // THE MOVING CASTERS' SHARE OF THE ROOM'S OWN LIGHT: a body standing in the light hides the light
 // bounced round the room from what is under it too (the light reaching the floor from the
 // hemisphere he stands in), most of it from the way the nearest lights come. So the bounce and the
@@ -1040,8 +1058,8 @@ fn shade(in: VsOut) -> FsOut {
     if (dot(n, to_light) <= 0.0) {
       continue;
     }
-    // An aimed light: only inside its cone.
-    let aim = smoothstep(l.spot.w, max(l.info.w, l.spot.w + 1e-3), dot(l.spot.xyz, -to_light));
+    // An aimed light: only inside its cone, its edge eased (spot_edge).
+    let aim = spot_edge(l, dot(l.spot.xyz, -to_light));
     if (aim <= 0.0) {
       continue;
     }
