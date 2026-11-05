@@ -26,6 +26,11 @@
 .float walk_step;       // the kind's units a 0.1 s step when walking
 .float run_step;        // ... and when running
 .float anim_step;       // how far into an attack or a pain the monster is, in 0.1 s steps
+// The kind's model frames for each state: _x the first, _y the last, _z 1 when the model has them
+// (unset: the frame stays). A loop for standing, walking and running; played through once, a
+// frame a 0.1 s step and holding the last, for an attack, a leap, a pain and a death.
+.vector fr_stand, fr_walk, fr_run, fr_melee, fr_missile, fr_leap, fr_pain, fr_death;
+.vector fr_now;         // the frames of the attack, leap or pain in progress
 .float gib_health;      // a death below this health gibs the body
 .string head_model;     // what is left of a gibbed body
 
@@ -188,6 +193,31 @@ void(float dist) ai_charge = {
   if (vlen(self.enemy.origin - self.origin) > 60) walkmove(self.ideal_yaw, dist);
 };
 
+// --- the frames ---
+
+// The next frame of a loop, from its first when the monster was showing another.
+void(vector r) frame_loop = {
+  if (!r_z) return;
+  if (self.frame < r_x || self.frame >= r_y) self.frame = r_x;
+  else self.frame = self.frame + 1;
+};
+
+// An attack, a leap or a pain begins: its frames from the first.
+void(vector r) anim_begin = {
+  self.anim_step = 0;
+  self.fr_now = r;
+};
+
+// One 0.1 s step further into it, and the frame that step shows (the last held).
+void() anim_tick = {
+  local float f;
+  self.anim_step = self.anim_step + 1;
+  if (!self.fr_now_z) return;
+  f = self.fr_now_x + self.anim_step - 1;
+  if (f > self.fr_now_y) f = self.fr_now_y;
+  self.frame = f;
+};
+
 // --- the states ---
 
 void(float dist) ai_stand = {
@@ -252,18 +282,21 @@ void(float dist) ai_run = {
 void() monster_stand = {
   self.think = monster_stand;
   self.nextthink = time + 0.1;
+  frame_loop(self.fr_stand);
   ai_stand(0);
 };
 
 void() monster_walk = {
   self.think = monster_walk;
   self.nextthink = time + 0.1;
+  frame_loop(self.fr_walk);
   ai_walk(self.walk_step);
 };
 
 void() monster_run = {
   self.think = monster_run;
   self.nextthink = time + 0.1;
+  frame_loop(self.fr_run);
   ai_run(self.run_step);
 };
 
@@ -314,6 +347,14 @@ void(string mdl, float speed) throw_gib = {
   g.nextthink = time + 10 + random() * 10;
 };
 
+// The body falls through the kind's death frames and lies on the last.
+void() corpse_fall = {
+  anim_tick();
+  if (self.frame >= self.fr_now_y) return;
+  self.think = corpse_fall;
+  self.nextthink = time + 0.1;
+};
+
 // Counted and told, its targets fired for its enemy, then the body: gibbed when the blow was big
 // enough (the head left), else laid down.
 void() monster_die = {
@@ -340,8 +381,13 @@ void() monster_die = {
     return;
   }
   if (self.noise1 != "") sound(self, CHAN_VOICE, self.noise1, 1, ATTN_NORM);
-  self.angles_z = 90;  // laid on its side until the death frames are chosen
-  setorigin(self, self.origin - '0 0 16');
+  if (!self.fr_death_z) {  // a kind with no death frames is laid on its side
+    self.angles_z = 90;
+    setorigin(self, self.origin - '0 0 16');
+    return;
+  }
+  anim_begin(self.fr_death);
+  corpse_fall();
 };
 
 // --- spawning ---
