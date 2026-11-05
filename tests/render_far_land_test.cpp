@@ -1,7 +1,8 @@
 // engine/render/far_land.hpp: the kinds are named once each and their water stays under the
 // world; the land never rises into the site's cylinder and the ranges stand well over it far
 // off; the snow line follows the valley's temperature by the lapse rate; the mesh is the grid
-// it says, its normals face up, its horizons are elevations a ridge throws, and the same site
+// it says, its normals face up, its horizons (the water's too) are elevations a ridge throws, and
+// the same site
 // builds the same bits; a vertex is the shader's 48 bytes.
 //
 // ge:summary Test: the far land's kinds, keep-out, snow line, mesh, horizons and determinism
@@ -118,4 +119,13 @@ TEST(a_valley_under_the_ranges_sees_a_raised_horizon) {
   }
   CHECK(most > 0.02);
   CHECK(m.vertices[0].n[3] < 1);
+  // The water keeps its horizons too (the glade is hidden behind a ridge): some of it under the
+  // ranges sees a raised one.
+  double water_most = 0;
+  for (size_t i = size_t{64} * 60; i < m.vertices.size(); ++i) {
+    CHECK(m.vertices[i].pos[3] < 0);
+    for (int b = 0; b < gr::kFarBearings; ++b)
+      water_most = std::max(water_most, gr::far_horizon(m.vertices[i], b));
+  }
+  CHECK(water_most > 0.02);
 }

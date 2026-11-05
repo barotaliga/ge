@@ -2,7 +2,7 @@
 title: A far land is kept out of the world by its shape, aimed at its highest ranges and judged from high up in a map
 date: 2026-11-05
 scope: engine/render/far_land.cpp, engine/render/far_land.wgsl, engine/render/far_land_kinds.cpp, engine/lab/labs/gpu_far_land_lab.cpp, plugins/brush/labs/gpu_bsp_lab.cpp
-concepts: [far-land, skybox, keep-out, sky-mask, horizon-shadow, lapse-rate, lab-view]
+concepts: [far-land, skybox, keep-out, sky-mask, horizon-shadow, lapse-rate, lab-view, glade, placeholder-digest]
 ---
 
 - Backdrop geometry behind a closed world needs no mask or stencil: keep the land under the
@@ -20,3 +20,9 @@ concepts: [far-land, skybox, keep-out, sky-mask, horizon-shadow, lapse-rate, lab
   ceiling) on the user's pack, and in the game window by `se-client --cvars="r_farland <kind>"`;
   the id maps' skies are violet or red-brown, so `auto` gives them only alien kinds (`--sky=earth
   --night=0 --farland=<kind>` shows an earthly one).
+- A glade on far water is the GGX lobe with the sub-pixel ripples as roughness, not a sharp
+  `pow` glint (a dot far off). Every surface the key light reaches needs its horizon, the water's
+  too, or the moon's path shines on water the ridge hides it from.
+- Plan a GPU lab's shots once (a list of ids) and walk that list in both the device branch and
+  the placeholders': two loops that list them separately drift apart, and Windows (no adapter)
+  is the first to see the digest move.

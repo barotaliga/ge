@@ -1427,6 +1427,11 @@ walls.
   the kind's tree line and the cover thins to bare rock 500 to 1000 m over it; the shore is sand;
   water under air below -1 C is ice. A game warms or cools a kind (Shooter's Edge's
   `r_farland_warm`): colder brings the snow down the ranges and freezes the lakes.
+- **The glade.** The key light off the water is the surface model's GGX lobe (2 % head on) over
+  the drawn ripples, its roughness rising from 0.12 near the eye to 0.3 where a pixel spans the
+  ripples, so the moon's (or the low sun's) light lies across the water in a path that widens
+  with distance and sparkles near. The water keeps its horizons as the land does, so a moon behind
+  a ridge lays no glade on the water under it.
 - **The far air.** The frame's aerial volume reaches 8 km; past it the land closes toward the sky
   at the horizon at the kind's own visual range (30 km in a hellish air, 120 km on an airless ice
   moon), so ranges stack into paler layers to the horizon.
@@ -1438,8 +1443,9 @@ them: no houses. A classic map's land is dealt off its name among the kinds that
 (`brush/app/bsp_sky.hpp`'s `far_land_for`: an Earth air one of the eight, a violet or alien air
 xeno, a hellish or ashen one ember), and the player picks one with `r_farland`.
 
-The `far-land` lab draws every kind from 60 m over a site by day, at a low sun and by night, and
-the first kind warmed and cooled; the `gpu-bsp` lab's `<map>-high` view looks out from just
+The `far-land` lab draws every kind from 60 m over a site by day, at a low sun and by night, each
+kind with open water under the moon's glade (the moon 7 degrees up over the way the land is
+lowest), and the first kind warmed and cooled; the `gpu-bsp` lab's `<map>-high` view looks out from just
 under a map's largest sky ceiling (`--farland=off` is the before).
 
 ## Fog in an area
