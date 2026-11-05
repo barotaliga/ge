@@ -47,6 +47,9 @@ struct ParticleParams {
   air: vec4f,   // xyz: the air's velocity, m/s, which a particle's drag pulls it toward
   glow: vec4f,  // x: a perfect radiator's luminance at the table's last row times the
                 // emissivity, cd/m^2
+  seen_vp: mat4x4f,   // the camera the depth target was drawn by: its eye-relative world -> clip
+  seen_inv: mat4x4f,  // and back
+  seen_eye: vec4f,    // xyz: its eye, world m; w: 1 when the pool meets what it drew
   table: array<vec4f, 64>,  // render/blackbody.hpp's rows
 }
 

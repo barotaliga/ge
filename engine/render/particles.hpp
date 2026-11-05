@@ -14,6 +14,17 @@
 //   `floor_y`, where a game says (a chip knocked off a wall hops on the floor below and lies
 //   there). `step_particle` is its CPU
 //   twin, which the test holds the pass to.
+// - WHAT WAS DRAWN (`ParticleSettings::collide`, a world of brushes or models): a particle that
+//   falls (a grain, a spark, a chip of debris) meets whatever the last frame drew. The sim runs
+//   before the frame is drawn, so the depth target still holds the last frame's, and the pool keeps
+//   the camera that drew it (`prepare_particles`'s view). A particle that has gone behind the
+//   surface there by less than a step's travel is put back on its face, and its speed into the
+//   face is turned back at its `bounce` (kSurfaceBounce when it has none), its way along the face
+//   slowed by kFloorSlide; slower than kFloorRest it lies there and fades on a floor and slides
+//   down a wall. The face's normal is rebuilt from the depth beside it. Only what the last frame
+//   saw can be met: a spark off the screen or behind the eye flies on, and nothing nearer the
+//   eye than 0.8 m is met (the held weapon is drawn into the same depth). `collide_particle` is the
+//   bounce's CPU twin.
 // - THE DRAW ("particles", after the sky, before the resolve): one quad a slot, a dead one folded
 //   away in the vertex stage. A particle is a STREAK along its motion over `streak` s (a fast grain
 //   reads as a stroke, the way a camera's shutter sees spray) at least `size` m long, thinned by
@@ -83,8 +94,10 @@ struct Particle {
   float pad_[2] = {0, 0};  // particles.wgsl's 16-byte alignment
 };
 static_assert(sizeof(Particle) == 96, "match particles.wgsl's Particle");
-inline constexpr float kFloorRest = 0.35f;   // m/s: slower than this down, it lies still
-inline constexpr float kFloorSlide = 0.55f;  // its way along the floor kept at a hop
+inline constexpr float kFloorRest = 0.35f;      // m/s: slower than this down, it lies still
+inline constexpr float kFloorSlide = 0.55f;     // its way along the floor kept at a hop
+inline constexpr float kSurfaceBounce = 0.35f;  // a drawn surface's hop for one with no `bounce`
+inline constexpr float kSurfaceSkin = 0.12f;    // m behind a drawn surface still counted as on it
 
 inline constexpr double kGravity = 9.81;          // m/s²
 inline constexpr double kSparkEmissivity = 0.35;  // a glowing particle's light over a blackbody's
@@ -92,9 +105,13 @@ inline constexpr double kSparkEmissivity = 0.35;  // a glowing particle's light 
 // THE FLIGHT of one particle over `dt` s (no terrain; its own floor) in air moving at `air` m/s
 // (null: still): the CPU twin of particles_sim.wgsl's `fly` and its floor.
 void step_particle(Particle& p, float dt, const float air[3] = nullptr);
+// THE BOUNCE off a drawn surface whose face at `at` (world m) points along `normal` (unit, out of
+// it): the CPU twin of particles_sim.wgsl's `off_surface`, for a particle found behind it.
+void collide_particle(Particle& p, const float at[3], const float normal[3]);
 
 struct ParticleSettings {
   uint32_t capacity = 16384;  // slots in the ring
+  bool collide = false;       // particles that fall meet what the last frame drew (its depth)
   float soft_m = 0.4f;        // the depth over which a particle fades into what is behind it
   float glow = 1;             // the glowing particles' light, a share of kSparkEmissivity's
 };
@@ -114,6 +131,14 @@ struct Particles {
   // A pool with no ground's stand-ins (the second `create_particles`).
   wgpu::Buffer ground;
   wgpu::Texture ground_height, ground_horizon;
+  // The sim's ground and the depth it meets (a blank until the targets are bound), and the camera
+  // the depth target was last drawn by (`collide`).
+  wgpu::Buffer sim_ground;
+  wgpu::TextureView sim_heights;
+  wgpu::Texture blank_depth;
+  float seen_vp[16] = {}, seen_inv[16] = {};
+  double seen_eye[3] = {0, 0, 0};
+  bool seen = false;
 };
 
 // The pool, its pipelines (into `pipelines`, before the load ends) and its groups over the
@@ -141,6 +166,10 @@ void clear_particles(gpu::Device& device, Particles& particles);
 // velocity, m/s, that every particle's drag pulls it toward (null: still air).
 void prepare_particles(gpu::Device& device, Particles& particles, double dt, double near_m,
                        const double* air = nullptr);
+// The same for a pool that `collide`s: `view` on a `width` x `height` render is the camera this
+// frame is drawn by, kept for the next frame's sim (the depth it meets is this frame's).
+void prepare_particles(gpu::Device& device, Particles& particles, double dt, const FrameView& view,
+                       uint32_t width, uint32_t height, const double* air = nullptr);
 
 // The two passes: "particles.sim" (before any view is drawn) and "particles" (after the sky).
 void encode_particles_sim(const Particles& particles, const gpu::PipelineSet& pipelines,

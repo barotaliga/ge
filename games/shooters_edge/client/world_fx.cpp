@@ -19,6 +19,7 @@
 #include "detail/surfaces.hpp"
 #include "detail/vec.hpp"
 #include "shooter/hull.hpp"
+#include "shooter/trace.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/view.hpp"
 
@@ -182,6 +183,7 @@ bool struck_along(const LoadedMap& m, const std::unordered_map<int, FxState::Fli
 // straight down from two units back along the round's line meets, as world y (m); far below when
 // none is within kFloorReachU.
 constexpr float kFloorReachU = 1024;
+constexpr float kOverBlastU = 16;  // a blast's floor is looked for from this far over it
 double floor_under(const LoadedMap& m, const sh::Vec3f& at, const sh::Vec3f& shooter) {
   if (m.bsp.world.models.empty()) return -1e9;
   const sh::Hull& hull = m.bsp.world.models[0].hulls[0];
@@ -697,7 +699,29 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
       bool against = l.map && struck_along(*l.map, s.flights, boom, normal, &off);
       if (!against) against = l.map && surface_near(*l.map, boom, normal, &off);
       const size_t first = s.blasts.size();
+      const size_t thrown = out.births.size();
       fx::blast(p, against ? normal : nullptr, s.seed++, t, &s.blasts, &out.births);
+      // What it throws that falls meets what the frame draws (the pool collides); one flung out of
+      // the view has the floor under the blast to come down on, and hops there.
+      if (l.map) {
+        // From a little over the blast (it goes off just inside what it struck, a floor's top),
+        // down through the world and its brush entities (a lift's floor is one).
+        const sh::Vec3f over = {boom.x, boom.y, boom.z + kOverBlastU};
+        double floor_y = floor_under(*l.map, over, {over.x, over.y, over.z + kNearSurfaceU});
+        if (l.server) {
+          const sh::HullTrace tr =
+              sh::trace_move(l.server->sv, over, {0, 0, 0}, {0, 0, 0},
+                             {over.x, over.y, over.z - kFloorReachU}, sh::kTraceNoMonsters, -1);
+          if (!tr.startsolid && tr.fraction < 1)
+            floor_y = std::max(floor_y, engine_point(tr.endpos).y);
+        }
+        for (size_t i = thrown; i < out.births.size(); ++i) {
+          ge::render::Particle& q = out.births[i];
+          if (q.fall <= 0.5f || q.floor_y > -1e8f) continue;
+          q.floor_y = static_cast<float>(floor_y);
+          if (q.bounce <= 0) q.bounce = ge::render::kSurfaceBounce;
+        }
+      }
       // Its scorch on the surface it went off against.
       ge::render::Scorch sc;
       if (against && s.on.decals && ge::render::scorch_of(s.blasts[first], sc)) {
