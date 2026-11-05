@@ -4,7 +4,10 @@
 // colour comes off the instance's ramp at the texel's step, a glowing one lights itself, a hole
 // (mark 2) is not drawn: the texel the point falls in decides, sharp or smooth. Sharp
 // (the texel the point falls in) or smooth (the four nearest, each resolved, blended).
+// A WARPED draw (MorphWarp: shown under 1) dissolves by render/wgsl/warp.wgsl's field, the band at
+// its cut turned to ash, pinched and shimmering as its knobs say.
 #include "render/wgsl/frame.wgsl"
+#include "render/wgsl/warp.wgsl"
 
 struct Model {
   first_vertex: u32,  // the model's frame 0, vertex 0, in vertices (two vec4 each)
@@ -25,6 +28,7 @@ struct Draw {
   ambient: vec4f,
   shade: vec4f,
   shade_dir: vec4f,
+  warp: Warp,  // render/wgsl/warp.wgsl (MorphWarp)
 }
 
 const kTintSteps = 16u;
@@ -64,6 +68,7 @@ struct VertexOut {
   @location(2) normal: vec3f,
   @location(3) uv: vec2f,
   @location(4) @interpolate(flat) draw: u32,
+  @location(5) local: vec4f,  // the point in the model's frame times its scale; along the axis, m
 }
 
 @vertex
@@ -74,8 +79,11 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) k: u32) -> 
   let now = posed(m, d.frames.x, d.frames.y, d.blends.x, idx);
   let last = posed(m, d.frames.z, d.frames.w, d.blends.y, idx);
   var out: VertexOut;
-  out.rel = d.now_place.xyz + rotate(d.now_rotation, now.position * d.now_place.w);
-  out.last_rel = d.last_place.xyz + rotate(d.last_rotation, last.position * d.last_place.w);
+  let off = rotate(d.now_rotation, now.position * d.now_place.w);
+  let last_off = rotate(d.last_rotation, last.position * d.last_place.w);
+  out.rel = d.now_place.xyz + warp_vertex(d.warp, frame.time.x, off);
+  out.last_rel = d.last_place.xyz + warp_vertex(d.warp, frame.time.x, last_off);
+  out.local = vec4f(now.position * d.now_place.w, dot(off, d.warp.b.xyz));
   out.position = frame.view_proj * vec4f(out.rel, 1.0);
   out.normal = rotate(d.now_rotation, now.normal);
   out.uv = uvs[m.first_uv + idx];
@@ -145,6 +153,10 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   if (hole_at(in.uv, m)) {
     discard;
   }
+  let burn = warp_burn(d.warp, in.local.xyz, in.local.w);
+  if (burn < 0.0) {
+    discard;
+  }
   let s = skin_at(in.uv, m, d);
   let y = in.rel.y + frame.eye.y;
   let outdoor = d.blends.w;
@@ -157,8 +169,11 @@ fn fs_main(in: VertexOut, @builtin(front_facing) front: bool) -> FragmentOut {
   var c = s.rgb / PI * light + s.rgb * (s.w * d.blends.z * white_luminance());
   // The lamps on its skin (a torch carried past, a muzzle's flash), on a matte face.
   c += local_lights(matte(s.rgb), in.rel, n, -normalize(in.rel), in.position.xyz);
+  c = warp_shade(d.warp, c, burn);
+  let gone = 1.0 - clamp(d.warp.a.x, 0.0, 1.0);
   var out: FragmentOut;
   out.colour = vec4f(haze(c, in.position.xy * frame.size.zw, length(in.rel)), 1.0);
-  out.motion = vec4f(screen_motion(frame, vec4f(in.last_rel, 1.0), in.position.xy), 0.0, 0.0);
+  let reactive = select(0.0, 1.0, gone > 0.0);
+  out.motion = vec4f(screen_motion(frame, vec4f(in.last_rel, 1.0), in.position.xy), reactive, 0.0);
   return out;
 }

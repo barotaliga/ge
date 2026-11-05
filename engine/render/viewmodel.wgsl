@@ -5,8 +5,10 @@
 // highlight from the probe's direct light and each light the game kept, the floor), with the
 // frame's sun through its shadow maps and its sky by the draw's outdoor share, and the frame's
 // clustered lamps, all in the held unit (1: a white surface lit white), then put on the HDR target
-// at the held white. `fs_resolved` writes the same resolved as viewmodel::resolve does.
+// at the held white. `fs_resolved` writes the same resolved as viewmodel::resolve does. A draw
+// short of whole (its warp, render/wgsl/warp.wgsl) dissolves along the held frame's axis.
 #include "render/wgsl/frame.wgsl"
+#include "render/wgsl/warp.wgsl"
 #include "render/wgsl/sun_shadow.wgsl"
 
 struct HeldModel {
@@ -29,6 +31,7 @@ struct HeldDraw {
   up: vec4f,
   forward: vec4f,
   lights: array<vec4f, 16>,  // a light: at (view), range; rgb, radius
+  warp: Warp,                // the held frame's: its axis in the held frame
 }
 
 @group(1) @binding(0) var<storage, read> models: array<HeldModel>;
@@ -57,6 +60,7 @@ struct VertexOut {
   @location(2) normal: vec3f,     // view
   @location(3) attr: vec3f,       // uv, or the colour
   @location(4) @interpolate(flat) draw: u32,
+  @location(5) held: vec3f,  // the point in the held frame, m (the warp's)
 }
 
 @vertex
@@ -74,6 +78,7 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) k: u32) -> 
   out.normal = place(d.now, nb / max(length(nb), 1e-6), 0.0);
   out.attr = attrs[m.at.w + idx].xyz;
   out.draw = k;
+  out.held = pos;
   // The gun's own lens and the frame's jitter; depth near / z (reversed, infinite far), which the
   // viewport squeezes into the gun's range.
   let p = out.view;
@@ -224,12 +229,17 @@ struct FragmentOut {
 @fragment
 fn fs_main(in: VertexOut) -> FragmentOut {
   let d = draws[in.draw];
+  let burn = warp_burn(d.warp, in.held, dot(in.held, d.warp.b.xyz));
+  if (burn < 0.0) {
+    discard;
+  }
   var out: FragmentOut;
-  out.colour = vec4f(held_colour(in) * held_white(d), 1.0);
+  out.colour = vec4f(warp_shade(d.warp, held_colour(in) * held_white(d), burn), 1.0);
   // Where the point was a frame ago through the gun's lens, unjittered.
   let q = in.last_view;
   let was = vec2f(q.x * d.lens.x / q.z * 0.5 + 0.5, 0.5 - q.y * d.lens.y / q.z * 0.5);
-  out.motion = vec4f(in.position.xy * frame.size.zw - frame.jitter.zw - was, 0.0, 0.0);
+  let reactive = select(0.0, 1.0, d.warp.a.x < 1.0);
+  out.motion = vec4f(in.position.xy * frame.size.zw - frame.jitter.zw - was, reactive, 0.0);
   return out;
 }
 

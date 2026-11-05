@@ -2,11 +2,17 @@
 // normals renormalised and frames past the last clamped, a tinted texel takes its instance's
 // ramp at its step in either region while a plain one keeps its sRGB colour decoded and a
 // glowing one says so, a ramp runs from light to dark through its colour, and the atlas packs
-// skins without overlap or fails when they cannot fit.
+// skins without overlap or fails when they cannot fit; a warp at its whole share leaves the draw
+// alone, gone it draws nothing and pinches the figure toward its upright line, and as its share
+// rises it only ever adds fragments, the head before the feet; along another axis its near end
+// goes first, and with no pinch or shimmer no point moves.
 //
 // ge:summary Tests for morph meshes' CPU twins: frame blending, tinted texels, ramps, the atlas
 // ge:keywords test morph pose_morph morph_texel tint ramp ramp_from atlas pack_morph_atlas glow
+// ge:keywords warp warp_vertex warp_cut dissolve
 // ge:skill render testing
+#include <cmath>
+#include <string>
 #include <vector>
 
 #include "check.hpp"
@@ -95,4 +101,82 @@ TEST(the_atlas_packs_without_overlap_and_refuses_what_cannot_fit) {
   std::vector<MorphModel> huge(5);
   for (MorphModel& m : huge) m.skin.width = m.skin.height = 1200;
   CHECK(!pack_morph_atlas(huge, r));
+}
+
+TEST(a_whole_warp_leaves_every_point_and_draws_every_fragment) {
+  MorphWarp w;  // shown 1
+  const float v[3] = {0.2f, 0.7f, -0.1f};
+  float o[3];
+  warp_vertex(w, 3.5f, v, o);
+  for (int k = 0; k < 3; ++k) CHECK_BITS(o[k], v[k]);
+  float edge = -1;
+  CHECK(warp_cut(w, v, 0.7f, &edge) && edge == 0);
+}
+
+TEST(a_gone_warp_draws_nothing_and_pinches_toward_the_upright_line) {
+  MorphWarp w;
+  w.shown = 0;
+  w.pinch = 1;
+  w.shimmer = 1;
+  w.low = -0.75f;
+  w.high = 1.0f;
+  for (int i = 0; i < 400; ++i) {
+    const float p[3] = {0.01f * (i % 37) - 0.2f, 0.004f * i - 0.75f, 0.013f * (i % 11) - 0.07f};
+    float edge = 0;
+    CHECK_MSG(!warp_cut(w, p, p[1], &edge), "fragment " + std::to_string(i) + " drawn at 0");
+  }
+  const float v[3] = {0.3f, 0.5f, -0.3f};
+  float o[3];
+  warp_vertex(w, 0, v, o);
+  // Pinched to a fifth of its reach (the shimmer adds at most 6 cm), stretched up from the feet.
+  CHECK(std::abs(o[0]) < 0.3f * 0.2f + 0.061f && std::abs(o[2]) < 0.3f * 0.2f + 0.061f);
+  CHECK(o[1] > v[1]);
+}
+
+TEST(more_shown_draws_everything_less_shown_did_and_the_head_comes_first) {
+  MorphWarp w;
+  w.low = -0.75f;
+  w.high = 1.0f;
+  w.seed = 3.7f;
+  int head[5] = {}, feet[5] = {};
+  const float shares[5] = {0.1f, 0.3f, 0.5f, 0.7f, 0.9f};
+  for (int i = 0; i < 2000; ++i) {
+    const float p[3] = {0.0071f * (i % 53) - 0.19f, -0.75f + 1.75f * (i % 97) / 96.0f,
+                        0.0093f * (i % 29) - 0.13f};
+    bool was = false;
+    for (int s = 0; s < 5; ++s) {
+      w.shown = shares[s];
+      float edge = 0;
+      const bool drawn = warp_cut(w, p, p[1], &edge);
+      CHECK_MSG(!was || drawn, "point " + std::to_string(i) + " lost as the share rose");
+      CHECK(edge >= 0 && edge <= 1);
+      was = drawn;
+      if (drawn && p[1] > 0.6f) head[s]++;
+      if (drawn && p[1] < -0.4f) feet[s]++;
+    }
+  }
+  CHECK_MSG(head[2] > feet[2], "half shown, the head should lead: head " + std::to_string(head[2]) +
+                                   " feet " + std::to_string(feet[2]));
+}
+
+TEST(the_near_end_of_the_axis_goes_first_and_without_pinch_the_points_stay) {
+  // Swept along +x: the -x side is the near end, under the cut last as the share falls.
+  MorphWarp w;
+  w.axis[0] = 1;
+  w.axis[1] = 0;
+  w.low = -0.3f;
+  w.high = 0.3f;
+  double near = 0, far = 0;
+  for (int i = 0; i < 500; ++i) {
+    const float y = 0.004f * float(i) - 1, z = 0.0007f * float(i % 41);
+    const float a[3] = {-0.25f, y, z}, b[3] = {0.25f, y, z};
+    near += warp_field(w, a, a[0]);
+    far += warp_field(w, b, b[0]);
+  }
+  CHECK_MSG(near > far, "the near end's field should stand above the far end's");
+  w.shown = 0.3f;
+  const float v[3] = {0.2f, 0.4f, -0.1f};
+  float o[3];
+  warp_vertex(w, 1.25f, v, o);
+  for (int k = 0; k < 3; ++k) CHECK_BITS(o[k], v[k]);
 }

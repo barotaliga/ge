@@ -84,6 +84,10 @@ const SwitchSpec kSwitches[] = {
     {"beams", "EFFECTS", "LIGHTNING BEAMS",
      "The lightning gun's bolt as a live, branching beam. Off: the pack's bolt models.", &S::beams,
      false},
+    {"warps", "EFFECTS", "TELEPORT DUST",
+     "A player teleporting away crumbles into ash the wind takes, and one arriving or spawning is "
+     "blown back in out of it. Off: the pack's teleport flash, the player there at once.",
+     &S::warps, false},
     {"fog", "AIR", "FOG", "Fog and haze in the distance and in the rooms. Off: clear air.", &S::fog,
      false},
     {"clouds", "AIR", "LOW CLOUDS", "Low cloud over the open levels. Off: the sky alone.",

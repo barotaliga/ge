@@ -3,7 +3,8 @@
 //
 // ge:summary Morph meshes: the upload, the skin atlas, the ramps, the staged draws and the pass
 // ge:keywords render morph upload atlas shelf-pack ramps tint draws pipeline pose_morph
-// ge:keywords morph_texel pack_morph_atlas ramp_from
+// ge:keywords morph_texel pack_morph_atlas ramp_from warp_vertex warp_field warp_cut pack_warp
+// ge:keywords dissolve value-noise
 // ge:skill render
 // ge:test tests/render_morph_test.cpp
 #include "render/morph.hpp"
@@ -41,13 +42,44 @@ struct GpuDraw {
   float ambient[4];
   float shade[4];
   float shade_dir[4];
+  float warp[16];  // render/wgsl/warp.wgsl's Warp
 };
-static_assert(sizeof(GpuDraw) == 160, "match morph.wgsl's Draw");
+static_assert(sizeof(GpuDraw) == 224, "match morph.wgsl's Draw");
 
 float srgb_to_linear(uint8_t v) {
   const double c = v / 255.0;
   return static_cast<float>(c <= 0.04045 ? c / 12.92 : core::libm::pow((c + 0.055) / 1.055, 2.4));
 }
+
+// wgsl/warp.wgsl's `warp_hash` and `warp_noise`: a lattice of hashed values, blended smoothly.
+float cell_hash(int32_t x, int32_t y, int32_t z) {
+  uint32_t h = static_cast<uint32_t>(x) * 0x8da6b343u ^ static_cast<uint32_t>(y) * 0xd8163841u ^
+               static_cast<uint32_t>(z) * 0xcb1ab31fu;
+  h ^= h >> 16;
+  h *= 0x7feb352du;
+  h ^= h >> 15;
+  h *= 0x846ca68bu;
+  h ^= h >> 16;
+  return static_cast<float>(h >> 8) / 16777216.0f;
+}
+
+float value_noise(float x, float y, float z) {
+  const float fx = std::floor(x), fy = std::floor(y), fz = std::floor(z);
+  const int32_t ix = static_cast<int32_t>(fx), iy = static_cast<int32_t>(fy),
+                iz = static_cast<int32_t>(fz);
+  const float ux = x - fx, uy = y - fy, uz = z - fz;
+  const float sx = ux * ux * (3 - 2 * ux), sy = uy * uy * (3 - 2 * uy), sz = uz * uz * (3 - 2 * uz);
+  auto lerp = [](float a, float b, float t) { return a + (b - a) * t; };
+  float face[2];
+  for (int k = 0; k < 2; ++k) {
+    const float a = lerp(cell_hash(ix, iy, iz + k), cell_hash(ix + 1, iy, iz + k), sx);
+    const float b = lerp(cell_hash(ix, iy + 1, iz + k), cell_hash(ix + 1, iy + 1, iz + k), sx);
+    face[k] = lerp(a, b, sy);
+  }
+  return lerp(face[0], face[1], sz);
+}
+
+float clamp01(float v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
 
 uint32_t clamp_frame(const MorphModel& m, uint32_t f) {
   const uint32_t n = static_cast<uint32_t>(m.positions.size());
@@ -130,6 +162,48 @@ void morph_texel(const MorphSkin& skin, const TintRamps& ramps, const uint32_t t
   }
   for (int k = 0; k < 3; ++k) rgb[k] = srgb_to_linear(skin.rgba[i * 4 + static_cast<size_t>(k)]);
   if (glow && mark == kMarkGlow) *glow = 1;
+}
+
+void warp_vertex(const MorphWarp& w, float time_s, const float v[3], float out[3]) {
+  const float g = 1 - clamp01(w.shown);
+  if (g <= 0 || (w.pinch <= 0 && w.shimmer <= 0)) {
+    for (int k = 0; k < 3; ++k) out[k] = v[k];
+    return;
+  }
+  // Pinched toward the upright line and stretched up from the feet: a column.
+  const float gg = g * g * w.pinch, pinch = 1 - 0.8f * gg, stretch = 1 + 0.6f * gg;
+  // Bands that climb it, a few centimetres across at the most.
+  const float amp = 0.06f * g * w.shimmer, ph = v[1] * 20 - time_s * 12 + w.seed;
+  out[0] = v[0] * pinch + amp * std::sin(ph);
+  out[1] = w.low + (v[1] - w.low) * stretch;
+  out[2] = v[2] * pinch + amp * std::sin(ph * 1.31f + 1.7f);
+}
+
+float warp_field(const MorphWarp& w, const float local[3], float along) {
+  const float span = std::max(w.high - w.low, 1e-3f);
+  const float up = clamp01((along - w.low) / span);
+  const float n = 0.65f * value_noise(local[0] * 14 + w.seed, local[1] * 14, local[2] * 14) +
+                  0.35f * value_noise(local[0] * 31, local[1] * 31 + w.seed, local[2] * 31 + 17);
+  // The noise's values gather round a half: spread to 0..1, so the first flecks come early.
+  return 0.6f * clamp01((n - 0.2f) / 0.6f) + 0.4f * (1 - up);
+}
+
+bool warp_cut(const MorphWarp& w, const float local[3], float along, float* edge) {
+  const float s = clamp01(w.shown);
+  *edge = 0;
+  if (s >= 1) return true;
+  const float f = warp_field(w, local, along);
+  const float cut = s * (1 + kWarpEdge);
+  if (f >= cut) return false;
+  *edge = clamp01(1 - (cut - f) / kWarpEdge);
+  return true;
+}
+
+void pack_warp(const MorphWarp& w, float out[16]) {
+  const float v[16] = {w.shown,   w.low,    w.high,    w.seed,    w.axis[0], w.axis[1],
+                       w.axis[2], w.pinch,  w.edge[0], w.edge[1], w.edge[2], w.shimmer,
+                       w.ash[0],  w.ash[1], w.ash[2],  0};
+  std::memcpy(out, v, sizeof v);
 }
 
 bool create_morph(gpu::Device& device, gpu::PipelineSet& pipelines, Morph& morph,
@@ -282,6 +356,7 @@ void prepare_morph(gpu::Device& device, Morph& morph, std::span<const MorphDraw>
       g.shade[k] = d.shade[k];
       g.shade_dir[k] = d.shade_dir[k];
     }
+    pack_warp(d.warp, g.warp);
     std::memcpy(&morph.staged[morph.drawn * sizeof(GpuDraw)], &g, sizeof g);
     morph.staged_models[morph.drawn] = d.model;
     ++morph.drawn;

@@ -1,5 +1,6 @@
 // ge:summary Shooter's Edge's effects: each trail and burst's particles, the lights, the blend
 // ge:keywords effects particles trail explosion spark smoke blood teleport lava screen-blend
+// ge:keywords dust dust_off dust_in ash flakes warp_field
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
 #include "shooters_edge/app/effects.hpp"
@@ -201,6 +202,163 @@ void lava_splash(const double p[3], uint32_t seed, Particles* out) {
     q.fall = 1;
     q.cool_s = 0.8f;
     out->push_back(q);
+  }
+}
+
+namespace {
+
+// A point of the body (its offset from `d.at`, world axes) and the share at which it appears.
+struct BodyPoint {
+  double off[3];
+  double share;
+};
+
+void turn(const float q[4], bool back, const double v[3], double out[3]) {
+  const double s = back ? -1 : 1, x = s * q[0], y = s * q[1], z = s * q[2], w = q[3];
+  const double t[3] = {2 * (y * v[2] - z * v[1]), 2 * (z * v[0] - x * v[2]),
+                       2 * (x * v[1] - y * v[0])};
+  out[0] = v[0] + w * t[0] + (y * t[2] - z * t[1]);
+  out[1] = v[1] + w * t[1] + (z * t[0] - x * t[2]);
+  out[2] = v[2] + w * t[2] + (x * t[1] - y * t[0]);
+}
+
+BodyPoint body_point(const Dust& d, Rng& r) {
+  double local[3], off[3];
+  const size_t tris = d.skin.size() / 9;
+  if (tris > 0) {
+    // A triangle, then a point on it.
+    const size_t k = std::min(tris - 1, size_t(rnd(r, 0, double(tris))));
+    double a = rnd(r, 0, 1), b = rnd(r, 0, 1);
+    if (a + b > 1) a = 1 - a, b = 1 - b;
+    const float* t = &d.skin[k * 9];
+    for (int c = 0; c < 3; ++c) local[c] = t[c] + a * (t[3 + c] - t[c]) + b * (t[6 + c] - t[c]);
+    turn(d.rotation, false, local, off);
+  } else {
+    // Uniform over the ellipse by rejection, uniform up its height.
+    double u = 0, v = 0;
+    do {
+      u = rnd(r, -1, 1);
+      v = rnd(r, -1, 1);
+    } while (u * u + v * v > 1);
+    const double side[3] = {d.facing[2], 0, -d.facing[0]};
+    const double h = rnd(r, d.low, d.high);
+    for (int c = 0; c < 3; ++c)
+      off[c] = side[c] * u * d.half_width + d.facing[c] * v * d.half_depth + (c == 1 ? h : 0);
+    turn(d.rotation, true, off, local);
+  }
+  BodyPoint p;
+  for (int c = 0; c < 3; ++c) p.off[c] = off[c];
+  const float lf[3] = {float(local[0]), float(local[1]), float(local[2])};
+  const float along =
+      float(off[0] * d.warp.axis[0] + off[1] * d.warp.axis[1] + off[2] * d.warp.axis[2]);
+  p.share = ge::render::warp_field(d.warp, lf, along) / (1 + ge::render::kWarpEdge);
+  return p;
+}
+
+// A way of its own round the wind: up to `yaw` rad to either side, `lo` to `hi` rad up.
+void scatter(const Dust& d, Rng& r, double yaw, double lo, double hi, double out[3]) {
+  const double side[3] = {d.wind[2], 0, -d.wind[0]};
+  const double a = rnd(r, -yaw, yaw), e = rnd(r, lo, hi);
+  // Small angles: no trigonometry, the same bits everywhere.
+  double l2 = 0;
+  for (int k = 0; k < 3; ++k) {
+    out[k] = d.wind[k] + side[k] * a + (k == 1 ? e : 0);
+    l2 += out[k] * out[k];
+  }
+  const double l = std::sqrt(l2);
+  for (int k = 0; k < 3; ++k) out[k] /= l;
+}
+
+// A flake of ash: near black and light, each its own size; a few still smoulder.
+Particle flake(const double p[3], const double v[3], double life, Rng& r) {
+  Particle q = at(p);
+  for (int k = 0; k < 3; ++k) q.v[k] = float(v[k]);
+  q.life = float(life);
+  q.size = float(rnd(r, 0.01, 0.045));
+  q.drag = 0;
+  q.fall = 0;
+  q.streak = 0;
+  q.albedo = float(rnd(r, 0.02, 0.07));  // near black: ash, under the sky the pool lights it by
+  q.opacity = float(rnd(r, 0.7, 1.0));
+  // One in sixteen still smoulders a moment, so the ash reads in a dark room.
+  const bool ember = rnd(r, 0, 1) < 1.0 / 16;
+  q.kelvin = ember ? 1150.0f : 0.0f;
+  q.cool_s = 0.35f;
+  return q;
+}
+
+}  // namespace
+
+void dust_off(const Dust& d, double from, double to, uint32_t seed, Particles* out) {
+  if (!(from > to)) return;
+  Rng r = ge::core::make_rng(seed);
+  for (int i = 0; i < 1400; ++i) {
+    // Every candidate draws the same numbers, kept or not, so a seed's points are the same
+    // whatever the shares: the cut passing in two frames throws what it throws in one.
+    const BodyPoint b = body_point(d, r);
+    const double p[3] = {d.at[0] + b.off[0], d.at[1] + b.off[1], d.at[2] + b.off[2]};
+    double dir[3];
+    scatter(d, r, 0.9, -0.25, 0.8, dir);
+    const double speed = rnd(r, 0.4, 4.5);
+    double v[3];
+    for (int k = 0; k < 3; ++k) v[k] = dir[k] * speed;
+    Particle q = flake(p, v, rnd(r, 0.8, 2.8), r);
+    q.drag = float(rnd(r, 0.15, 1.5));
+    q.fall = float(rnd(r, -0.06, 0.08));            // some held up by the air, some sinking
+    if (b.share < to || b.share >= from) continue;  // not crossed by the cut this frame
+    out->push_back(q);
+  }
+}
+
+void dust_in(const Dust& d, double was, double age, double (*land_s)(double share), uint32_t seed,
+             Particles* out) {
+  if (!(age > was)) return;
+  Rng r = ge::core::make_rng(seed);
+  const double side[3] = {d.facing[2], 0, -d.facing[0]};
+  for (int i = 0; i < 1400; ++i) {
+    BodyPoint b = body_point(d, r);
+    if (d.keep_off_eye) {
+      // Seen from inside the figure: the ash lands in the air ahead of the eyes, through the
+      // whole arrival, and the eyes see it gather and go.
+      const double far = rnd(r, 0.6, 1.4), across = rnd(r, -0.7, 0.7), up = rnd(r, -0.5, 0.3);
+      for (int k = 0; k < 3; ++k)
+        b.off[k] = d.eye[k] - d.at[k] + (d.facing[k] + side[k] * across + (k == 1 ? up : 0)) * far;
+      b.share = rnd(r, 0, 0.95);
+    }
+    double dir[3];
+    scatter(d, r, 0.9, -0.5, 0.5, dir);
+    const double speed = rnd(r, 1.2, 3.5), flight = rnd(r, 0.1, 0.5);
+    Rng look = r;  // the flake's own numbers, drawn whether it is born or not
+    (void)rnd(r, 0, 1), (void)rnd(r, 0, 1), (void)rnd(r, 0, 1), (void)rnd(r, 0, 1);
+    if (b.share >= 1) continue;
+    const double land = land_s(b.share);
+    // It sets off `flight` s before it lands, or at once when that is before the warp began.
+    const double off = std::max(land - flight, 0.0);
+    if (off >= age || (off < was && was >= 0)) continue;
+    const double life = land - age;
+    if (life < 0.02) continue;
+    double v[3], p[3], end[3];
+    for (int k = 0; k < 3; ++k) {
+      v[k] = dir[k] * speed;  // downwind: from upwind of the point to it
+      end[k] = d.at[k] + b.off[k];
+      p[k] = end[k] - v[k] * life;  // so it ends on the point
+    }
+    if (d.keep_off_eye) {
+      // The nearest its line comes to the eye.
+      double ab[3], ae[3], ab2 = 0, t = 0;
+      for (int k = 0; k < 3; ++k) {
+        ab[k] = end[k] - p[k];
+        ae[k] = d.eye[k] - p[k];
+        ab2 += ab[k] * ab[k];
+        t += ab[k] * ae[k];
+      }
+      t = ab2 > 0 ? std::clamp(t / ab2, 0.0, 1.0) : 0;
+      double n2 = 0;
+      for (int k = 0; k < 3; ++k)
+        n2 += (p[k] + ab[k] * t - d.eye[k]) * (p[k] + ab[k] * t - d.eye[k]);
+      if (n2 < d.eye_clear * d.eye_clear) continue;
+    }
+    out->push_back(flake(p, v, life, look));
   }
 }
 

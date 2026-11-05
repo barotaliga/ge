@@ -49,6 +49,7 @@
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
+#include "lab/labs/explosion_scene.hpp"
 #include "lab/labs/liquid_scene.hpp"
 #include "lab/png.hpp"
 #include "progs/file.hpp"
@@ -63,6 +64,7 @@
 #include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/labs/staged.hpp"
+#include "shooters_edge/labs/warp_film.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -73,6 +75,7 @@ namespace cl = shooters_edge::client;
 namespace se = shooters_edge::hud;
 namespace sh = ge::shooter;
 namespace ls = ge::lab::liquid_scene;
+namespace es = ge::lab::explosion_scene;
 
 constexpr const char* kShots[] = {"spawn", "blast", "peak"};
 
@@ -235,10 +238,21 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   con[0].execute(before.empty() ? "r_look classic" : before);
   con[1].execute(lab.arg("cvars"));
   con[1].execute(lab.cvars());  // the runner's --cvars on the modern side (`ge lab pair`)
+  // `--warp`: another player stood there warping, and the local player's own arrival through his
+  // eyes with the weapon in hand (the enhanced side alone draws them).
+  float warp_at[4] = {0, 0, 0, 0};
+  const bool warp = std::sscanf(lab.arg("warp").c_str(), "%f,%f,%f,%f", &warp_at[0], &warp_at[1],
+                                &warp_at[2], &warp_at[3]) == 4;
+  std::vector<ge::viewmodel::HeldModel> weapons;
+  if (warp && !shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error))
+    lab.note("no weapon is drawn: " + error);
   cl::WorldDrawPtr world[2];
   for (int k = 0; k < 2; ++k) {
+    const std::span<const ge::viewmodel::HeldModel> held_models =
+        k == 1 ? std::span<const ge::viewmodel::HeldModel>(weapons)
+               : std::span<const ge::viewmodel::HeldModel>();
     world[k] = cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
-                                     looks[k], {}, error, {l.server->models, {}});
+                                     looks[k], held_models, error, {l.server->models, {}});
     if (!world[k]) {
       lab.fail(error, "Read the gpu: lines above. Skill: render.");
       return;
@@ -267,12 +281,16 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   cl::ViewState shown;
   cl::FxState fx_state;
   cl::FxFrame fx;
+  cl::HeldState held;
+  const shooters_edge::view::ViewSettings view_settings;
+  shooters_edge::view::HandFrame hand;
   double t = 0;
   for (int i = 0; i < 80; i++) {
     cl::listen_frame(l, {});
     t += 0.013;
     cl::frame_view(l, shown, 1, t, 0.013);
     cl::step_fx(l, shown, fx_state, t, 0.013, fx);
+    if (warp) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
   }
   // The views: `--views` (x,y,z,yaw,pitch in the map's units and degrees, ';' between), the
   // player stood there; else the start, four ways.
@@ -317,6 +335,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       t += 0.013;
       cl::frame_view(l, shown, 1, t, 0.013);
       cl::step_fx(l, shown, fx_state, t, 0.013, fx);
+      if (warp) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
     }
     fx.births.clear();
     ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
@@ -345,6 +364,59 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
                gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
                gl::Det::measured);
     }
+    if (!warp) continue;
+    // Another player at --warp arriving, then leaving, from this view.
+    namespace sl = shooters_edge::labs;
+    sl::WarpTake take;
+    take.figure.entity = 2;  // a client's slot the local player is not
+    take.figure.modelindex = player.modelindex;
+    take.figure.origin = {warp_at[0], warp_at[1], warp_at[2]};
+    take.figure.angles = {0, warp_at[3], 0};
+    take.figure.top = 4;
+    take.figure.bottom = 12;
+    for (int k = 0; k < 2; ++k) {
+      // The enhanced dust, and the original beside it (the classic side: ce_warps off).
+      sl::WarpFilm film;
+      take.enhanced = k == 1;
+      take.arriving = true;
+      take.moments = {0.1, 0.25, 0.4, 0.6};
+      take.seed = 21;
+      sl::film_warp(*device, *world[k], out, view, fx, k == 1 ? &hand : nullptr, take, film);
+      take.arriving = false;
+      take.moments = {0.15, 0.35, 0.55, 0.8};
+      take.seed = 22;
+      sl::film_warp(*device, *world[k], out, view, fx, k == 1 ? &hand : nullptr, take, film);
+      lab.shot({std::string(k == 1 ? "warp-" : "warp-original-") + std::to_string(v),
+                k == 1 ? "another player warping, enhanced" : "another player warping, original",
+                k == 1 ? "Top, a player arriving at --warp (a spawn, a teleport's far end): ash "
+                         "blown in, landing where his body appears, face and head first. Bottom, "
+                         "leaving (a teleport's near end): crumbling from his back into ash the "
+                         "wind takes."
+                       : "The same with ce_warps off, in the classic look: the teleport's fog at "
+                         "his feet, the figure there at once, then gone at once.",
+                k == 1 ? "the figure assembling out of grey flakes, then eaten away into ash"
+                       : "the fog's column of light round a whole figure; then the fog alone",
+                {{"map", lab.arg("map")}, {"warp", lab.arg("warp")}}},
+               es::sheet_of(film.pics, film.names, 4), gl::Det::measured);
+    }
+    // His own arrival through his eyes: the ash at the eyes, the weapon assembling.
+    sl::WarpTake own;
+    own.figure.entity = 1;
+    own.figure.origin = player.origin;
+    own.figure.angles = {0, p.yaw, 0};
+    own.first_person = true;
+    own.moments = {0.1, 0.25, 0.45, 0.8};
+    own.seed = 23;
+    sl::WarpFilm eyes;
+    sl::film_warp(*device, *world[1], out, view, fx, &hand, own, eyes);
+    lab.shot({"warp-eyes-" + std::to_string(v),
+              "his own arrival through his eyes, enhanced",
+              "The local player spawning or coming out of a teleporter here: the ash blown at his "
+              "eyes from ahead, landing round him, the weapon in his hands assembling muzzle "
+              "first.",
+              "grey flakes streaming toward the eye and thinning; the gun ragged, then whole",
+              {{"map", lab.arg("map")}}},
+             es::sheet_of(eyes.pics, eyes.names, 4), gl::Det::measured);
   }
 }
 
@@ -454,6 +526,7 @@ void run(gl::Lab& lab) {
   play(80, {});  // the spawn, the fall onto the launcher, picked up
   l.impulse = 7;
   play(80, {});
+  births.clear();  // the spawn's ash (client/warps.hpp) settled two seconds ago
   ground = l.server->sv.edicts[1].origin.z;
   picture("AT THE SPAWN",
           "The fixture hall from the player's eyes at the deathmatch spot, facing east, the "
@@ -530,6 +603,9 @@ const gl::LabSpec kSpec{
      {"progs", "",
       "with --game: a progs.src compiled and run instead of the arena variant, or pack"},
      {"settle", "4", "with --game: host frames run at each view before it is drawn (at least 4)"},
+     {"warp", "",
+      "with --game: x,y,z,yaw where another player warps in and out, filmed from each view in the "
+      "enhanced look, then the local player's own arrival through his eyes"},
      {"before", "",
       "with --game: the left side's cvars in the modern look instead of the classic look"}},
     "--size=480,270",

@@ -2,7 +2,9 @@
 // a listen server, its items dropped to the floor, then each kind of thing it placed seen from a
 // little way off in both looks, drawn as the window draws them (client/world_draw.hpp with
 // client/world_models.hpp): the ARMOUR, a HEALTH box, an AMMO box, a WEAPON lying about, a
-// TORCH or a FLAME (static: the server forgot them), and the view from the spawn.
+// TORCH or a FLAME (static: the server forgot them), and the view from the spawn. Then the
+// player WARPING (client/warps.hpp, client/world_fx.hpp, labs/warp_film.hpp): blown in as ash
+// from ahead of him at three moments, then crumbling into ash the wind takes at three.
 //
 // With `--pak` (a pack holding the map, its models and `gfx/palette.lmp`) it is the pack's own
 // map (`--map`, default e1m1); without one, the fixture halls (plugins/brush) with the fixture
@@ -12,7 +14,7 @@
 //
 // ge:summary Lab: the window's models on a map (armour, health, ammo, weapons, flames), both looks
 // ge:keywords lab se-models world-models items armour health ammo weapons flames torches statics
-// ge:keywords classic modern r_look pak
+// ge:keywords classic modern r_look pak warp spawn-effect teleport-effect dust ash
 // ge:skill shooter render labs
 #include <algorithm>
 #include <bit>
@@ -29,6 +31,7 @@
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
+#include "lab/labs/explosion_scene.hpp"
 #include "lab/labs/liquid_scene.hpp"
 #include "morph/write.hpp"
 #include "shooter/trace.hpp"
@@ -37,6 +40,7 @@
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/client/world_models.hpp"
+#include "shooters_edge/labs/warp_film.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -46,6 +50,7 @@ namespace cl = shooters_edge::client;
 namespace sh = ge::shooter;
 namespace br = ge::brush;
 namespace ls = ge::lab::liquid_scene;
+namespace es = ge::lab::explosion_scene;
 namespace lm = ge::core::libm;
 
 ge::brush::Entity entity(std::initializer_list<std::pair<std::string, std::string>> pairs) {
@@ -78,7 +83,8 @@ bool fixture_pack(std::vector<uint8_t>& out, std::string& error) {
   }
   std::vector<std::pair<std::string, std::vector<uint8_t>>> files = {{"maps/halls.bsp", bsp},
                                                                      {"gfx/palette.lmp", palette}};
-  for (const char* name : {"progs/armor.mdl", "progs/g_rock2.mdl", "progs/flame2.mdl"})
+  for (const char* name :
+       {"progs/armor.mdl", "progs/g_rock2.mdl", "progs/flame2.mdl", "progs/player.mdl"})
     files.push_back({name, model});
   return ge::vfs::write_pak(files, &out, &error);
 }
@@ -249,6 +255,10 @@ void run(gl::Lab& lab) {
   cl::FxFrame fx;
   cl::frame_view(l, shown, 1, t, kTic);
   cl::step_fx(l, shown, fx_state, t, kTic, fx);
+  // The effects' clock a second on, past the player's spawn (its sparks and flash, warps.hpp), so
+  // the views below show the things alone; the warp's own view stages it.
+  constexpr double kFxSettle = 1.0;
+  cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
   // A free spot `dist` units from `at` toward the eye, `up` units above it: the eight ways round
   // tried in turn, the first whose line to the thing crosses no wall.
   // The server's own sweep (brush models alone block), a box of `r` units each way.
@@ -291,6 +301,42 @@ void run(gl::Lab& lab) {
                 {{"map", map_name}, {"look", lk}, {"size", lab.arg("size")}}},
                gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
                gl::Det::measured);
+    }
+  };
+  // The player warping in and out where he stands, as another player sees it
+  // (labs/warp_film.hpp): blown in as ash, then crumbling into it.
+  const auto shoot_warps = [&](const ge::render::FrameView& view, const cl::Placed& figure) {
+    for (const char* lk : {"classic", "modern"}) {
+      const std::string shot_id = std::string("warp-") + lk;
+      if (!device) {
+        ls::placeholders(lab, {shot_id.c_str()});
+        continue;
+      }
+      look.look = lk;
+      shooters_edge::labs::WarpFilm film;
+      shooters_edge::labs::WarpTake take;
+      take.figure = figure;
+      take.enhanced = std::string(lk) == "modern";  // the classic look: the original
+      take.moments = {0.15, 0.35, 0.55};
+      take.seed = 11;
+      shooters_edge::labs::film_warp(*device, *frame, out, view, fx, nullptr, take, film);
+      take.arriving = false;
+      take.moments = {0.2, 0.4, 0.6};
+      take.seed = 12;
+      shooters_edge::labs::film_warp(*device, *frame, out, view, fx, nullptr, take, film);
+      lab.shot({shot_id,
+                std::string("THE PLAYER WARPING (") + lk + ")",
+                "Above, a player arriving (a spawn, a respawn, a teleport's far end) at 150, 350 "
+                "and 550 ms: ash blown in from ahead of him, each flake landing where his body "
+                "appears, his face and head first, the band at the cut grey as ash. Below, leaving "
+                "(a teleport's near end) at 200, 400 and 600 ms: crumbling from his back, the ash "
+                "streaming behind him on the wind. The classic look (and ce_warps 0) shows the "
+                "original: the teleport's fog at his feet, the figure there or gone at once.",
+                "modern: grey flakes converging on a partly formed figure, whole soon after; then "
+                "the figure eaten away from behind, flakes drifting off behind it. classic: the "
+                "figure whole at once in the fog, then gone with the fog",
+                {{"map", map_name}, {"look", lk}, {"size", lab.arg("size")}}},
+               es::sheet_of(film.pics, film.names, 3), gl::Det::measured);
     }
   };
   ge::render::FrameView base = cl::frame_view(l, shown, 0, t, 0);
@@ -353,7 +399,7 @@ void run(gl::Lab& lab) {
       t += kTic;
       me.effects = int(cl::field_named(l, me.entity, "effects"));
       lab.metric("powered.effects", me.effects, "bits");
-      cl::step_fx(l, shown, fx_state, t, 0, fx);
+      cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
     }
     if (k >= kPlayer)
       fx.models.push_back(me);  // the window never draws its own player; the lab does
@@ -367,6 +413,7 @@ void run(gl::Lab& lab) {
     v.heading = lm::atan2(dx, dz);
     v.pitch = lm::atan2(dy, std::sqrt(dx * dx + dz * dz));
     shoot(s.id, s.title, s.caption, s.look_for, v);
+    if (k == kPlayer) shoot_warps(v, me);
   }
   // The map's own moving brush models: a lift where the mod lowered it at spawn and raised, a door
   // shut and open. The server's entity holding "*N" moves its faces (place_brushes).
@@ -462,7 +509,7 @@ void run(gl::Lab& lab) {
         if (!vector_field(ent, mv.field, to)) break;
         l.server->sv.edicts[size_t(ent)].origin = to;
       }
-      cl::step_fx(l, shown, fx_state, t, 0, fx);
+      cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
       shoot(mv.id[stage], mv.title[stage], mv.caption, mv.look_for, v);
     }
   }
