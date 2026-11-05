@@ -182,6 +182,21 @@ void said(Listen& l) {
   r.announcer.pending.clear();
 }
 
+// The player put on the map when he joined the warmup, and taken off it when he went back to the
+// lobby's screen.
+void sync_player(Listen& l) {
+  if (!l.room || l.rules == nullptr) return;
+  const bool on = sv::lobby_on_map(l.room->lobby, 0);
+  const bool active = l.server->clients[0].active;
+  if (on && !active) {
+    l.rules->connect(0, l.opt.player, false, false);
+    sv::lobby_apply(*l.rules, l.room->lobby, 0);
+    l.entered_at = l.server->sv.time;
+  } else if (!on && active) {
+    l.rules->drop(0);
+  }
+}
+
 bool start_map(Listen& l, std::string& error) {
   sv::QcServerOptions so;
   so.seed = l.opt.seed;
@@ -200,7 +215,6 @@ bool start_map(Listen& l, std::string& error) {
     return false;
   }
   if (l.map->from_file) sv::use_map_sets(*l.server, l.map->bsp);
-  l.rules->connect(0, l.opt.player, false, false);
   if (l.opt.lobby) {
     if (!l.room) {
       l.room = std::make_unique<Room>();
@@ -209,8 +223,11 @@ bool start_map(Listen& l, std::string& error) {
     l.room->lobby.settings = l.opt.lobby_settings;
     if (!l.room->lobby.seats[0].used)
       sv::lobby_join(l.room->lobby, 0, l.opt.player, false, l.server->sv.time);
+    // The player is on the map only in the warmup or the match; on the lobby's screen he is not.
+    if (sv::lobby_on_map(l.room->lobby, 0)) l.rules->connect(0, l.opt.player, false, false);
     room_enter(*l.room, *l.rules, l.map->spec);
   } else {
+    l.rules->connect(0, l.opt.player, false, false);
     l.room.reset();
   }
   entered(l);
@@ -560,10 +577,10 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
       return;
     }
     if (l.campaign_host->history.size() != l.maps_started) campaign_entered(l);
-  } else if (l.room) {  // the bots' packets after the player's, in slot order
+  } else if (l.room) {  // the bots' packets after the player's (when he is on the map), in order
     std::vector<sh::Packet>& ps = l.room->packets;
     ps.clear();
-    ps.push_back(p);
+    if (l.server->clients[0].active) ps.push_back(p);
     room_packets(*l.room, *l.server, cmd.msec, ps);
     l.rules->frame(ps.data(), static_cast<int>(ps.size()));
     for (int k = 1; k < sh::kMaxClients; k++) l.server->out.one[k].clear();  // nobody reads them
@@ -593,7 +610,7 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
   }
   // The mod's forced view (a spawn, a teleport) leaves the player's angles off the ones sent.
   const sh::Edict& me = s.sv.edicts[1];
-  l.forced = me.v_angle.x != cmd.angles.x || me.v_angle.y != cmd.angles.y;
+  l.forced = s.clients[0].active && (me.v_angle.x != cmd.angles.x || me.v_angle.y != cmd.angles.y);
   if (l.forced) l.view = {me.v_angle.x, me.v_angle.y, 0};
   if (!l.campaign_host && !s.pending_map.empty()) l.pending_map = s.pending_map;
   if (l.room) {
@@ -619,7 +636,8 @@ bool listen_lobby(Listen& l, std::string_view line) {
   const bool bot_word = word == "addbot" || word == "removebot";
   if (!l.room || l.server == nullptr) {
     if (bot_word || word == "ready" || word == "break" || word == "notready" ||
-        word == "toggleready" || word == "team" || word == "start" || word == "lobby") {
+        word == "toggleready" || word == "team" || word == "start" || word == "lobby" ||
+        word == "warmup" || word == "sitout" || word == "togglewarmup") {
       l.prints.push_back(std::string(word) +
                          ": no lobby runs; next: play a match (`map <name>` with deathmatch 1) "
                          "with `sv_lobby 1`");
@@ -647,8 +665,27 @@ bool listen_lobby(Listen& l, std::string_view line) {
   } else if (!sv::lobby_command(l.room->lobby, 0, line, l.server->sv.time)) {
     return false;
   }
+  sync_player(l);
   said(l);
   return true;
+}
+
+hud::LobbyView listen_lobby_view(const Listen& l) {
+  if (!l.room || l.server == nullptr) return {};
+  hud::LobbyView v = lobby_view(*l.room, l.server->sv.time, 0);
+  v.map = l.map ? l.map->name : std::string();
+  size_t k = 0;
+  for (int i = 0; i < sv::kLobbySeats; i++) {
+    if (!l.room->lobby.seats[static_cast<size_t>(i)].used) continue;
+    if (i < sh::kMaxClients && l.server->clients[i].active)
+      v.rows[k].frags = static_cast<int>(field_named(l, i + 1, "frags"));
+    k++;
+  }
+  return v;
+}
+
+bool on_lobby_screen(const Listen& l) {
+  return l.room && l.server != nullptr && !sv::lobby_on_map(l.room->lobby, 0);
 }
 
 int listen_advance(Listen& l, double wall_s, const sh::MoveCmd& cmd) {

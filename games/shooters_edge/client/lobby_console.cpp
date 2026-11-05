@@ -2,6 +2,7 @@
 //
 // ge:summary The lobby's console commands and settings: ready, break, team, start, addbot
 // ge:keywords lobby console add_lobby_commands lobby_keys sv_lobby sv_countdown sv_minplayers
+// ge:keywords warmup
 // ge:skill shooter console
 // ge:test tests/shooters_edge_lobby_test.cpp
 #include "shooters_edge/client/lobby_console.hpp"
@@ -23,10 +24,14 @@ constexpr Word kWords[] = {
     {"notready", "notready: the same as break"},
     {"toggleready", "toggleready: ready or break, whichever you are not (F1)"},
     {"team", "team <red|blue|auto|switch>: change team (alone: say yours)"},
-    {"start", "start: the leader starts the countdown whoever is ready"},
+    {"start", "start: the leader starts the countdown whoever is ready (ENTER on the lobby)"},
+    {"warmup", "warmup: leave the lobby's screen for the warmup on the map (F4)"},
+    {"sitout", "sitout: leave the warmup for the lobby's screen (F4 on the map)"},
+    {"togglewarmup",
+     "togglewarmup: the warmup or the lobby's screen, whichever you are not on (F4)"},
     {"lobby", "lobby: print the lobby's roster"},
-    {"addbot", "addbot [novice|average|expert]: seat a bot in the warmup"},
-    {"removebot", "removebot: free the highest bot seat"},
+    {"addbot", "addbot [novice|average|expert]: seat a bot in the warmup (F5)"},
+    {"removebot", "removebot: free the highest bot seat (F6)"},
 };
 
 }  // namespace
@@ -52,17 +57,22 @@ void add_lobby_commands(ge::console::Console& con, Listen& l) {
                     .kind = ge::console::CvarKind::number},
                    &l.opt.lobby_settings.countdown_s);
   con.cvars().bind({.name = "sv_minplayers",
-                    .fallback = "1",
-                    .help = "the fewest seated before the lobby's countdown starts",
+                    .fallback = "2",
+                    .help = "the fewest seated (bots count) before the match may start",
                     .kind = ge::console::CvarKind::integer},
                    &l.opt.lobby_settings.min_players);
 }
 
-void lobby_keys(Listen& l, bool f1, bool f2, bool f3, bool& roster) {
+void lobby_keys(Listen& l, const LobbyKeys& k) {
   if (!l.room) return;
-  if (f1) listen_lobby(l, "toggleready");
-  if (f2) listen_lobby(l, "team switch");
-  if (f3) roster = !roster;
+  const bool page = on_lobby_screen(l);
+  if (k.f1) listen_lobby(l, "toggleready");
+  if (k.f2) listen_lobby(l, "team switch");
+  if (k.f4) listen_lobby(l, "togglewarmup");
+  if (!page) return;  // the rest are the lobby's screen's: on the map they are the game's keys
+  if (k.f5) listen_lobby(l, "addbot");
+  if (k.f6) listen_lobby(l, "removebot");
+  if (k.enter) listen_lobby(l, "start");
 }
 
 }  // namespace shooters_edge::client

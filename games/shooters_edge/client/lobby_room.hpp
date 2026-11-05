@@ -76,8 +76,9 @@ bool room_remove_bot(Room& r, const sv::RulesRunner& s);
 void room_enter(Room& r, const sv::RulesRunner& s, const sv::MapSpec& map);
 // The bots' packets for the next frame (each one `msec` long), appended to `out` in slot order.
 void room_packets(Room& r, const sv::RulesCommon& s, int msec, std::vector<sh::Packet>& out);
-// What the lobby panel shows of the room at server time `now`, slot `me` the player's.
-hud::LobbyView lobby_view(const Room& r, double now, int me, bool roster);
+// What the lobby's banner and screen show of the room at server time `now`, slot `me` the
+// player's (the frags left 0: listen.hpp's `listen_lobby_view` reads them off the server).
+hud::LobbyView lobby_view(const Room& r, double now, int me);
 // A skill named `novice`, `average` or `expert`; false for anything else.
 bool skill_named(const std::string& word, sh::AimSkill& out);
 
