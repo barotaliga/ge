@@ -220,8 +220,18 @@ blocks; `check --root=<dir> --game=<name>` reads every `.bsp` on a search path
 (`engine/vfs/search.hpp`) and names each one refused. A `<map>` is a file, or with `--root` and
 `--game` a name on the search path.
 
-Left to M18b: brushes for 38 and 46 (which sweep through brushes rather than clip hulls), and a
-picture of a map from the command line.
+**Brushes and the trace (38).** A version 38 map collides through its brushes, not clip hulls:
+the reader keeps every brush (a run of sides and a contents bit set), each side's plane and
+texinfo surface, and each leaf's run of brushes. `trace.hpp`'s `BrushTracer` sweeps a box through
+them (a position test when the box does not move; else a walk down the tree that splits the move
+where it crosses a plane within the box's reach, and clips each brush of a leaf once, stopping
+1/32 short of the plane it hits) and answers the contents at a point; each float step's precision
+is fixed in its header, and `tests/golden/brush_trace.txt` holds the bits. `write_brush_world`
+writes hand-built brushes (boxes, with slanted sides added) as a 38 map with no faces, its tree
+cut along the brushes' axial sides, for the tests and for the moves that collide through it.
+46's brushes are counted and not read.
+
+Left to M18b: a picture of a map from the command line.
 
 ## Cloning a classic map
 

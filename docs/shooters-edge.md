@@ -788,7 +788,9 @@ server, the dedicated server, the campaign, the bots and the recorder all hold t
 (`server/qc_server.hpp`) itself today. A second program form (the sequel's native rules, a
 sandboxed bytecode, the engine's C++ mod as the whole game) needs them to hold a **runner**
 instead, of which the QC server is the first implementation. Steps 1 to 4 below have landed
-(`server/rules_world.hpp`, `server/rules_runner.hpp`); step 5 waits for the sequel (M18v).
+(`server/rules_world.hpp`, `server/rules_runner.hpp`). Step 5, the sequel's runner (M18t4), is
+under way: its maps' brushes and the trace its move collides through landed first
+(`plugins/brush/trace.hpp`, `docs/levels.md` § The classic BSP families).
 
 **What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
 groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start

@@ -19,6 +19,8 @@ format notes (the clean-room rules there say what may be written where).
 | `anim.hpp/.cpp` | Texture sequences: `+` cycles and their alternates, `-` random sets, `texture_at` |
 | `tool.hpp/.cpp`, `tool/main.cpp` | The `brush` tool behind `ge tool brush`: `info`, `ents`, `check` over a search path, as JSON |
 | `bytes.hpp` | The little-endian cursor and writer |
+| `trace.hpp/.cpp` | The brush trace (38): `BrushTracer::trace` (position test, sweep, brush clip; its precision rules), `contents` |
+| `world_writer.cpp` | `write_brush_world`: hand-built brushes (`box_brush`, `add_side`) as a 38 map with no faces, its tree cut along their axial sides |
 | `write.hpp`, `write_parts.hpp`, `fixture.cpp` | Fixtures: the sample, the weather's (a hall, a yard, a store), the compile every writer shares |
 | `fixture_hulls.cpp` | The fixtures' player and large-box clip hulls (29, BSP2): the box's grid of cells, split to a tree |
 | `write_v29.cpp`, `write_v38.cpp`, `write_v46.cpp` | One writer a family |
