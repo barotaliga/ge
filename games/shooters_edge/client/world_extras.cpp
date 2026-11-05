@@ -24,6 +24,8 @@ namespace ba = ge::brush::app;
 namespace gr = ge::render;
 
 constexpr double kDegree = 3.14159265358979323846 / 180;
+// The rms slope of the short waves the pools keep from the players in them (rad).
+constexpr double kPoolChop = 0.05;
 
 struct WorldExtras {
   const ba::Scene* scene = nullptr;
@@ -85,6 +87,8 @@ void create_extras_part(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines,
     // changes).
     x.wind = x.on->wind ? weather.wind : 0;
     x.from = weather.wind_from * kDegree;
+    // A deathmatch map's pools are jumped into all game long: never glass, wind or none.
+    x.rows.chop = kPoolChop;
     x.world = ba::liquid_world(*x.scene, x.rows, x.wind, x.from);
     ba::add_bsp_liquids(d, x.water, x.liquids, x.world, x.rows);
     ba::create_bsp_views(d, x.views, frame, sky);
@@ -146,10 +150,32 @@ void dress_extras(WorldExtras& x, gr::FrameView& view, ba::Options& options, dou
   x.now.draw.near_m = view.near_m;
 }
 
-// The body the water's views are drawn for this frame: the one the eye is in, else the nearest
-// over whose level the eye stands (-1: none drawn, or none within reach).
+// The body the water's views are drawn for this frame: with the eye in the water, the nearest
+// surface over it; else the nearest over whose level the eye stands (-1: none drawn, or none
+// within reach).
 int view_body(const WorldExtras& x, const gr::FrameView& view, int eye_in) {
-  if (eye_in >= 0) return eye_in;
+  if (eye_in >= 0) {
+    // In the water: the surface nearest the eye of those over it, its top's box at its level (in
+    // a flooded passage, the pool the eye is swimming toward once it is the nearer surface,
+    // whichever the eye is counted in).
+    int near = eye_in;
+    double near_d = 1e300;
+    for (size_t i = 0; i < x.water.bodies.size(); ++i) {
+      const gr::Water::Slot& s = x.water.bodies[i];
+      if (s.hidden || view.eye[1] >= s.staged.info[0] || view.eye[1] <= s.floor) continue;
+      const double dx =
+          std::max({s.staged.box[0] - view.eye[0], 0.0, view.eye[0] - s.staged.box[2]});
+      const double dz =
+          std::max({s.staged.box[1] - view.eye[2], 0.0, view.eye[2] - s.staged.box[3]});
+      const double dy = s.staged.info[0] - view.eye[1];
+      const double d = dx * dx + dz * dz + dy * dy;
+      if (d < near_d) {
+        near_d = d;
+        near = int(i);
+      }
+    }
+    return near;
+  }
   int best = -1;
   double best_d = 60 * 60;  // m^2: past 60 m a pool's reflection is a few pixels
   for (size_t i = 0; i < x.water.bodies.size(); ++i) {
@@ -194,13 +220,16 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   const bool water_on = v2 && on.water;
   const int body = water_on ? view_body(x, view, eye_in) : -1;
   const double level = body >= 0 ? x.water.bodies[size_t(body)].staged.info[0] : 0;
-  ba::prepare_bsp_views(d, x.views, uniforms, body, level, body >= 0 && eye_in == body);
+  const float no_box[4] = {0, 0, 0, 0};
+  const float* box = body >= 0 ? x.water.bodies[size_t(body)].staged.box : no_box;
+  ba::prepare_bsp_views(d, x.views, uniforms, body, level, body >= 0 && eye_in >= 0, box);
   const gr::WaterViews handed = ba::water_views(x.views);
   if (handed.body != x.handed.body || handed.below != x.handed.below ||
       handed.has_up != x.handed.has_up || handed.level != x.handed.level) {
     x.handed = handed;
     gr::set_water_views(d, x.water, x.handed);
   }
+  gr::set_water_up_view(x.water, handed.up_view_proj);
   gr::prepare_water(d, x.water, view, eye_in);
   gr::prepare_underwater(d, x.under, x.water, view, x.height);
   gr::prepare_liquid(d, x.liquids, view);

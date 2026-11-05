@@ -280,7 +280,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
     }
   }
   r->has_map = true;
-  r->sky = ba::pick_sky(r->scene.sky_colours);
+  r->sky = ba::pick_sky(r->scene.sky_colours, map.name);
   r->night = r->sky;
   ba::night_over(r->night, map.name);
   r->top_y = r->scene.maxs[1];

@@ -310,7 +310,7 @@ void run(gl::Lab& lab) {
     const ba::Scene& s = m->scene;
     lab.metric(names[i] + ".light-layers", double(s.light_layers), "count");
     lab.metric(names[i] + ".animated-frames", double(s.frames.size()), "count");
-    m->sky = ba::pick_sky(s.sky_colours);
+    m->sky = ba::pick_sky(s.sky_colours, names[i]);
     ba::night_over(m->sky, names[i]);
     if (own) {
       for (const View& v : room_views(fixture, names[i])) views.push_back(v);

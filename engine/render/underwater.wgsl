@@ -18,7 +18,9 @@ struct Under {
   fog: vec4f,   // the fog's scale, the eye's adaptation (the veil's luma it lifts to; 0 off)
   surface: vec4f,  // the surface at the eye (m), its slope dx, dz, 1 when the eye is under it
   motes: vec4f,    // the specks' share of cells, their radius (m), the lens plate's height (m)
-  lit: vec4f,      // the room's share of the light, the caustics, the shafts
+  lit: vec4f,      // the room's share of the light, the caustics, the shafts, the tops
+  tops: array<vec4f, 4>,  // the tops' boxes (x0, z0, x1, z1), the eye's body's first
+  top_level: vec4f,       // their levels
 }
 
 @group(1) @binding(0) var<uniform> under: Under;
@@ -59,6 +61,26 @@ fn scene_distance(uv: vec2f) -> f32 {
   return length(p.xyz / p.w);
 }
 
+// The surface over a point of the plan (render/underwater.hpp's `level_over`): the level of the
+// top whose box holds it, else the tops' levels weighed by the inverse square of the distance to
+// each box; with one top, the surface at the eye.
+fn level_over(xz: vec2f) -> f32 {
+  let n = u32(under.lit.w);
+  if (n <= 1u) {
+    return under.info.x;
+  }
+  var sum = 0.0;
+  var weights = 0.0;
+  for (var i = 0u; i < n; i++) {
+    let b = under.tops[i];
+    let d = max(max(b.xy - xz, xz - b.zw), vec2f(0.0));
+    let w = 1.0 / (dot(d, d) + 1e-4);
+    sum += w * under.top_level[i];
+    weights += w;
+  }
+  return sum / weights;
+}
+
 // Eight taps round a disc of `radius` px and the centre.
 fn blurred(uv: vec2f, radius: f32) -> vec3f {
   var sum = textureSampleLevel(scene_colour, linear_clamp, uv, 0.0).rgb;
@@ -73,6 +95,33 @@ fn blurred(uv: vec2f, radius: f32) -> vec3f {
                               0.0).rgb;
   }
   return sum / 9.0;
+}
+
+// The surface from below round `uv` (its light, the veil filling its share `veil_down`), blurred as
+// `blurred` blurs the scene, `radius` px, from the taps that hold the surface: the eye's own blur
+// softens the window's rim and the mirror, never bleeding them into what stands in front.
+fn surface_blurred(uv: vec2f, radius: f32, veil_down: vec3f) -> vec3f {
+  let size = vec2i(frame.size.xy);
+  let px = frame.size.zw * radius;
+  var sum = vec3f(0.0);
+  var n = 0.0;
+  for (var i = -1; i < 8; i++) {
+    var at_uv = uv;
+    if (i >= 0) {
+      let a = f32(i) * 0.785398 + 0.3;
+      at_uv += vec2f(cos(a), sin(a)) * select(1.0, 0.55, (i & 1) == 1) * px;
+    }
+    let at = clamp(vec2i(at_uv * frame.size.xy), vec2i(0), size - vec2i(1));
+    let b = textureLoad(below, at, 0);
+    if (b.a > 0.0) {
+      sum += b.rgb + veil_down * textureLoad(below_veil, at, 0).r;
+      n += 1.0;
+    }
+    if (radius < 0.5) {
+      break;
+    }
+  }
+  return sum / max(n, 1.0);
 }
 
 // A cell's hash, 0..1, four of them (a PCG-style mix of the cell's integer coordinates).
@@ -157,7 +206,7 @@ fn light_shafts(ray: vec3f, path: f32, pixel: vec2f, t: f32, px_angle: f32) -> v
   for (var k = 0; k < 16; k++) {
     let along = (f32(k) + jitter) * step;
     let p = frame.eye.xyz + ray * along;
-    let depth = under.info.x - p.y;
+    let depth = level_over(p.xz) - p.y;
     if (depth <= 0.0) {
       continue;
     }
@@ -261,11 +310,14 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
     let veil_down = veil0 * mix(0.45, 1.5, smoothstep(-0.9, 0.9, -ray.y));
     if (b.a > 0.0 && b.a < dist) {
       path = b.a;
-      seen = b.rgb + veil_down * textureLoad(below_veil, at, 0).r;
+      let r_s = under.info.z * (1.0 - exp(-min(path, 1e3) * 0.693 / max(under.info.w, 0.01)));
+      seen = surface_blurred(uv, r_s, veil_down);
       through = true;
-    } else if (b.a <= 0.0 && ray.y > 1e-4 && eye_depth / ray.y < dist) {
+    } else if (b.a <= 0.0 && under.surface.w < 0.5 && ray.y > 1e-4 && eye_depth / ray.y < dist) {
       // No surface drawn (the eye over the level, the lens plate dipping under it): the level
-      // surface, the world seen straight through it and the water mirrored past the window.
+      // surface, the world seen straight through it and the water mirrored past the window. Never
+      // with the eye under: there every surface it may see is drawn, and a pixel none covers
+      // looks at what stands under the water (a flooded passage's roof, not a level over it).
       path = eye_depth / ray.y;
       let refl = fresnel_exit(ray.y);
       seen = seen * (1.0 - refl) + veil_down * refl;
@@ -273,7 +325,8 @@ fn fs_main(in: VertexOut) -> @location(0) vec4f {
     }
   }
   // What stands under the surface was lit by the day dimmed on its way down.
-  let point_depth = under.info.x - (frame.eye.y + ray.y * min(path, 1e4));
+  let point = frame.eye.xyz + ray * min(path, 1e4);
+  let point_depth = level_over(point.xz) - point.y;
   seen *= exp(-under.kd.rgb * max(point_depth, 0.0));
   // THE CAUSTICS on what stands under the surface: the sun's share of its light gathered and
   // spread by the waves over it (water_body.wgsl's `caustic_at`), a wall's at its slant to the sun.

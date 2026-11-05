@@ -218,8 +218,9 @@ The order, with what each stage is for:
    depth copied (`water.copy`), then every body drawn over it (`water`), reading the copies
    for what lies under it and what it mirrors, testing and writing the depth, so what follows
    sits in front of or behind it; both rows run empty with no water in view. With the eye
-   under a body, `water.below` draws that body's surface seen from under it (Snell's window, the
-   world above bent through it, total internal reflection past it) into targets of its own, and
+   under a body, `water.below` draws the surface seen from under it of every body the eye is
+   under (Snell's window, the world above bent through it, total internal reflection past it;
+   a flooded passage's far pool too, the depth test keeping the nearest) into targets of its own, and
    `water.under` redraws the picture as seen through the water, the underside laid in where the
    eye's ray meets it first (`render/underwater.hpp`). A game that draws its world again for the
    water (a classic map's `bsp.views`: a planar mirror in the pool's plane, the view up from under
@@ -1215,6 +1216,12 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   stratocumulus from 2.7 to 18, cirrus from 0.4 to 4; a storm's tower is never less than half
   its depth. The cloud's shadow on the ground (`cloud_cast`) is the column times its thickness,
   so a thin patch's shadow is faint.
+- THE WARP (`cloud_warped` in `wgsl/frame.wgsl`, `CloudLayer::warp`, mirrored by
+  `render/clouds.cpp`): the column's tile point pushed up to `warp` cells by two more reads of
+  the noise a tile apart, at the tile's own scale so the drift's wrap stays seamless. A cell's
+  outline leans and twists instead of standing as a dome its neighbours match; every read the
+  layer makes (its column, its thickness, its detail, its shadow) takes the warped point. 0 by
+  default; the classic maps' stacks deal it (`plugins/brush/app/bsp_sky.hpp`, M8f15).
 - THROUGH IT, THE DISC: the sky draws the sun's and the moon's discs behind the cloud, so a
   disc shows by the ray's own transmittance, exp(−τ), wherever on the ray its light was taken:
   bright through a thin patch, gone behind a core. Two things used to leak it: the march stopping

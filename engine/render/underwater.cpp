@@ -89,6 +89,19 @@ void bind_underwater(gpu::Device& /*device*/, Underwater& under, const Water& wa
   under.group_body = -1;
 }
 
+double level_over(const float tops[][4], const float* levels, int count, double x, double z) {
+  double sum = 0, weights = 0;
+  for (int i = 0; i < count; ++i) {
+    const double dx = std::max({tops[i][0] - x, 0.0, x - tops[i][2]});
+    const double dz = std::max({tops[i][1] - z, 0.0, z - tops[i][3]});
+    // A centimetre's square keeps the weight finite in the box, where it all but decides alone.
+    const double w = 1 / (dx * dx + dz * dz + 1e-4);
+    sum += w * levels[i];
+    weights += w;
+  }
+  return weights > 0 ? sum / weights : 0;
+}
+
 void prepare_underwater(gpu::Device& device, Underwater& under, const Water& water,
                         const FrameView& view, uint32_t render_height, const Waterline* line) {
   const UnderwaterLook& l = under.look;
@@ -105,8 +118,24 @@ void prepare_underwater(gpu::Device& device, Underwater& under, const Water& wat
     under.water = &water;
   }
   UnderGpu& u = under.staged;
+  // The tops the eye is under: its own body's first, then the others the water pass draws from
+  // below (a flooded passage's other end).
+  int tops = 0;
+  const auto add_top = [&](const Water::Slot& s) {
+    if (tops >= kUnderTops) return;
+    for (int k = 0; k < 4; ++k) u.tops[tops][k] = s.staged.box[k];
+    u.top_level[tops++] = s.staged.info[0];
+  };
+  add_top(slot);
+  if (water.eye_under >= 0) {
+    for (const Water::Slot& s : water.bodies) {
+      if (s.under && &s != &slot) add_top(s);
+    }
+  }
+  for (int i = tops; i < kUnderTops; ++i) u.top_level[i] = 0;
   const bool given = line && line->body == body;
-  const double surface = given ? line->surface : slot.staged.info[0];
+  const double surface =
+      given ? line->surface : level_over(u.tops, u.top_level, tops, view.eye[0], view.eye[2]);
   u.info[0] = static_cast<float>(surface);
   u.info[1] = static_cast<float>(surface - view.eye[1]);
   u.info[2] = static_cast<float>(l.blur * render_height / 1080.0);
@@ -138,7 +167,7 @@ void prepare_underwater(gpu::Device& device, Underwater& under, const Water& wat
   u.lit[0] = static_cast<float>(l.ambient);
   u.lit[1] = static_cast<float>(l.caustics);
   u.lit[2] = static_cast<float>(l.shafts);
-  u.lit[3] = 0;
+  u.lit[3] = static_cast<float>(tops);
   device.queue.WriteBuffer(under.uniform, 0, &u, sizeof u);
 }
 

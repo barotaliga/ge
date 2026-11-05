@@ -369,7 +369,7 @@ void run(gl::Lab& lab) {
       lab.fail(paths[i] + ": " + err, "Check the map's name in the pack (--maps). Skill: brush.");
       return;
     }
-    m->sky = ba::pick_sky(m->scene.sky_colours);
+    m->sky = ba::pick_sky(m->scene.sky_colours, names[i]);
     maps.push_back(std::move(m));
   }
 
