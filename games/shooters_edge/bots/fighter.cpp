@@ -58,6 +58,7 @@ constexpr double kKeepGoal = 1.5;   // the goal's score is held up by this again
 constexpr float kRun = 320;         // units/s, the run to an item
 constexpr double kCallAgain_s = 8;  // an enemy in sight is called out again after this
 constexpr double kTold_s = 10;      // a point at an item is followed this long
+constexpr float kRocketNear = 400;  // a rocket at a man nearer than this is aimed at his middle
 
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
 
@@ -76,11 +77,11 @@ struct WeaponRow {
 const WeaponRow kWeapons[8] = {
     {kWBlade, 1, "blade", Ammo::none, 0, 0, 0, 24, 72},
     {kWScatter, 2, "scattergun", Ammo::shells, 1, 0, 0, 24, 1200},
-    {kWDouble, 3, "double", Ammo::shells, 2, 0, 0, 32, 900},
+    {kWDouble, 3, "double", Ammo::shells, 2, 0, 0, 32, 350},
     {kWSpiker, 4, "spiker", Ammo::nails, 1, 1000, 0, 16, 1500},
     {kWHeavy, 5, "heavy spiker", Ammo::nails, 2, 1000, 0, 20, 1500},
     {kWGrenades, 6, "grenades", Ammo::rockets, 1, 600, -20, 40, 500},
-    {kWRockets, 7, "rockets", Ammo::rockets, 1, 1000, -20, 48, 2000},
+    {kWRockets, 7, "rockets", Ammo::rockets, 1, 1000, -20, 48, 1200},
     {kWArc, 8, "arc", Ammo::cells, 1, 0, 0, 20, 600},
 };
 
@@ -117,8 +118,8 @@ double weapon_score(const WeaponRow& w, float d) {
       return d < 72 ? 30 : 0.1;
     case 2:
       return 20;
-    case 3:
-      return d < 300 ? 60 : 25;
+    case 3:  // its spread is wider than a man past a few hundred units
+      return d < 250 ? 60 : d < 350 ? 30 : 3;
     case 4:
       return 35;
     case 5:
@@ -130,6 +131,14 @@ double weapon_score(const WeaponRow& w, float d) {
     default:
       return d < 560 ? 85 : 5;
   }
+}
+
+// How far, in degrees, the view command `cmd` carries is off the aim `b` wants.
+float view_off(const sh::Bot& b, const sh::MoveCmd& cmd) {
+  float dy = static_cast<float>(cmd.angles.y - b.wanted[0]);
+  dy -= 360.f * static_cast<float>(std::floor((dy + 180.f) / 360.f));
+  const float dp = static_cast<float>(cmd.angles.x - b.wanted[1]);
+  return std::sqrt(dy * dy + dp * dp);
 }
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
@@ -848,6 +857,14 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
   }
   f.bot.shot_speed = held ? held->shot_speed : 0;
   f.bot.aim_dz = held ? held->aim_dz : 0;
+  // A rocket near at hand is aimed at his middle for the direct blow; farther off at his feet,
+  // where the blast reaches him whichever way he steps.
+  if (held && held->bit == kWRockets) {
+    for (const sh::Contact& k : f.bot.senses.contacts)
+      if (k.ent == f.bot.target && ai::known(k.seen) &&
+          dist(s.world.entities[static_cast<size_t>(me)].origin, at_of(k.seen)) < kRocketNear)
+        f.bot.aim_dz = 0;
+  }
 
   sh::MoveCmd cmd = sh::bot_source(f.bot).next(&f.bot, s.sv, slot, msec);
   f.stats.mode_commands[static_cast<int>(f.mode)]++;
@@ -871,7 +888,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
   }
 
   // A button opened by a shot: from where the line meets it, the view on it and the trigger.
-  if (!dead && f.unlocking && f.goal_item >= 0) {
+  if (!dead && f.unlocking && f.goal_item >= 0 && !f.bot.aiming) {
     const ItemSpot& it = f.items[static_cast<size_t>(f.goal_item)];
     const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
     const sh::Vec3f eye{me_at.x, me_at.y, me_at.z + 22};
@@ -948,11 +965,21 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
     const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
     const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
     const float d = dist(eye, at_of(c->seen));
+    // Past the width, how loose the finger is, degrees: a novice sprays at a view well off him,
+    // an expert fires on him (the held weapon's aim trait, traits.hpp). The arc's beam is held
+    // down longer and swept onto him, as a person holds it through the fight.
+    const bool beam = held->bit == kWArc;
+    const double slack =
+        f.skill == sh::AimSkill::perfect ? 1.5
+        : beam ? sh::scale(f.traits.v[static_cast<size_t>(f.aim_slot)], {14, 9, 6, 4})
+               : sh::scale(f.traits.v[static_cast<size_t>(f.aim_slot)], {10, 7, 3, 2});
     const float tol = static_cast<float>(
-        ge::core::libm::atan2(held->width, std::fmax(d, 1.f)) * (180.0 / ge::core::kPi) + 1.5);
+        ge::core::libm::atan2(held->width, std::fmax(d, 1.f)) * (180.0 / ge::core::kPi) + slack);
     // Not before the reaction to him is over (shooter/bot.hpp), however the view lies.
     const bool reacting = sh::bot_reacting(f.bot, s.sv.time);
-    bool fire = !reacting && d <= held->range && sh::bot_aim_off(f.bot) <= tol;
+    // The view the command carries, which a swim or a button may have turned off the aim.
+    const float off = view_off(f.bot, cmd);
+    bool fire = !reacting && d <= held->range && off <= tol;
     if (fire && mate_in_line(f, s, eye, at_of(c->seen))) {
       fire = false;
       f.stats.held_fire++;
@@ -965,7 +992,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int
     if (why) {
       why->decide("trigger");
       why->fact("range", d);
-      why->fact("off", sh::bot_aim_off(f.bot));
+      why->fact("off", off);
       why->fact("tolerance", tol);
       why->choose(fire ? "fire" : "hold", fire       ? "on the target within its width"
                                           : reacting ? "still reacting to him"
