@@ -806,7 +806,12 @@ move (`plugins/shooter/sequel_move.hpp`): packed integer state, a third of the p
 the step slide that keeps the farther of two slides, ducking, ladders, currents and the landing
 pause, over any world's trace (`SequelBrushWorld` for a map's brushes). A player at rest stands an
 eighth above a floor: resting on the plane counts as touching it, which the trace calls solid, so
-the packing nudges the origin up. The move becomes `sv_playermove sequel` with the runner.
+the packing nudges the origin up. Then the runner itself (`server/sequel_server.hpp`, form
+`"sequel"`): a map started from its brushes (`MapSpec::brushes`, the version 38 map read whole),
+its entities spawned as data, players placed at deathmatch spots or the start and moved by every
+command as it arrives, the rules' frame every 100 ms of host time, `kill` and the respawn by
+attack, and the world filled in the shape every runner fills. Items, weapons, damage, movers and
+monsters come next; the move becomes `sv_playermove sequel` when the host can pick the runner.
 
 **What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
 groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start
@@ -861,7 +866,8 @@ the last):
    VM state and the lobby's team field; each is a candidate for the world when a second runner
    needs it. Every lab's digest is the same.
 5. The sequel's rules as a second runner (M18t4), with its own program form; nothing in steps 1
-   to 4 names it.
+   to 4 names it. **Started**: `server/sequel_server.hpp` runs the map, the spawns, the move and
+   the frame (golden `tests/golden/shooters_edge_sequel_server.txt`).
 
 **What stays QC-only**: the QC VM's own tools (`ge qc`, the profile, the fault traces), the
 extension catalogue and the C++ mods' hooks over a QC program (§ C++ mods), which are hooks on the
