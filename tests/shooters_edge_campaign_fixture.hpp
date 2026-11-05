@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <initializer_list>
 #include <string>
+#include <vector>
 
 #include "check.hpp"
 #include "progs/layout.hpp"
@@ -58,12 +59,14 @@ struct Game {
   sv::Campaign c;
   std::string error;
   uint32_t sequence = 0;
-  explicit Game(const std::string& things) {
+  // `settings`: server lines before the map loads (an arsenal's rows), after `deathmatch 0`.
+  explicit Game(const std::string& things, const std::vector<std::string>& settings = {}) {
     g_things = things;
     sv::CampaignOptions o;
     o.server.loop.max_edicts = 128;
     o.load = &load;
     o.settings = {"deathmatch 0"};
+    o.settings.insert(o.settings.end(), settings.begin(), settings.end());
     CHECK_MSG(sv::campaign_new_game(c, mod(), o, "first", error), error);
     sv::campaign_join(c, 0, "player");
   }
@@ -73,6 +76,11 @@ struct Game {
   void set(int e, int ofs, float v) { *pg::entity_field(s().q.vm, e, ofs) = pg::as_word(v); }
   int entity_of(int e, int ofs) {
     return pg::entity_number(s().q.vm, static_cast<int32_t>(*pg::entity_field(s().q.vm, e, ofs)));
+  }
+  // Entity `e`'s field `name` (the program's own fields, by name).
+  float named(int e, const char* name) {
+    const pg::Def* d = pg::find_field(mod(), name);
+    return d ? field(e, d->offset) : -1;
   }
   float global(const char* name) {
     const pg::Def* d = pg::find_global(mod(), name);

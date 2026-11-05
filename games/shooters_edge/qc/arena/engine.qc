@@ -175,6 +175,13 @@ void(entity killer, entity killed) logfrag = #79;
 string(entity e, string key) infokey = #80;
 float(string s) stof = #81;
 void(vector where, float set) multicast = #82;
+// The arsenal's rows (common/weapons.qc), the same extensions in either form:
+string(string s) cvar_string = #103;
+float(string s) tokenize = #84;
+string(float n) argv = #86;
+float(string s) strlen = #114;
+string(string s, float start, float length) substr = #116;
+string(string s) strzone = #118;
 
 // --- the variant's own settings, read each frame ---
 

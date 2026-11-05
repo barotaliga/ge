@@ -121,18 +121,35 @@ void() armour_touch = {
   item_taken();
 };
 
-void(float share, float value, float bit, float skin) armour_start = {
-  self.armortype = share;
-  self.armorvalue = value;
-  self.items = bit;
-  self.touch = armour_touch;
-  self.skin = skin;
-  item_start("progs/armor.mdl", "items/armor1.wav", '-16 -16 0', '16 16 56', 20);
+// An armour's row (games/shooters_edge/profiles/arsenal.hpp): the share of a blow it takes, its
+// amount, its pickup's skin, model and sound. The game puts its rows in the server's settings
+// (`arsenal_armour1` .. `arsenal_armour3`, weakest first); a slot with none keeps ours.
+string(float slot) armour_own_row = {
+  if (slot == 1) return "0.3 100 0 progs/armor.mdl items/armor1.wav";
+  if (slot == 2) return "0.6 150 1 progs/armor.mdl items/armor1.wav";
+  return "0.8 200 2 progs/armor.mdl items/armor1.wav";
 };
 
-void() item_armor1 = { armour_start(0.3, 100, IT_ARMOR1, 0); };
-void() item_armor2 = { armour_start(0.6, 150, IT_ARMOR2, 1); };
-void() item_armorInv = { armour_start(0.8, 200, IT_ARMOR3, 2); };
+void(float slot, float bit) armour_start = {
+  local string row, mdl, snd;
+  if (slot == 1) row = cvar_string("arsenal_armour1");
+  else if (slot == 2) row = cvar_string("arsenal_armour2");
+  else row = cvar_string("arsenal_armour3");
+  if (row == "") row = armour_own_row(slot);
+  tokenize(row);
+  mdl = strzone(argv(3));  // held by the item for as long as the map runs
+  snd = strzone(argv(4));
+  self.armortype = number_of(argv(0));
+  self.armorvalue = number_of(argv(1));
+  self.skin = number_of(argv(2));
+  self.items = bit;
+  self.touch = armour_touch;
+  item_start(mdl, snd, '-16 -16 0', '16 16 56', 20);
+};
+
+void() item_armor1 = { armour_start(1, IT_ARMOR1); };
+void() item_armor2 = { armour_start(2, IT_ARMOR2); };
+void() item_armorInv = { armour_start(3, IT_ARMOR3); };
 
 // --- ammunition ---
 

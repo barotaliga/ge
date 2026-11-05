@@ -97,6 +97,7 @@ struct ListenOptions {
   uint32_t seed = 1;
   std::vector<std::string> console = {"deathmatch 1"};  // server lines before each map loads
   std::vector<std::string> item_names;  // a match's server lines before `console` (GameContent's)
+  std::vector<std::string> arsenal;     // the game's weapons and armour as server lines (GameContent's)
   std::string player = "player";
   const SearchPath* files = nullptr;  // where a campaign's next map is read (outlives the listen)
   bool registered = false;            // a campaign's content is the full game (gfx/pop.lmp)

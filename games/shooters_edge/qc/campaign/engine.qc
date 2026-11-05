@@ -183,6 +183,13 @@ void(string var, string val) cvar_set = #72;
 void(entity client, string s, ...) centerprint = #73;
 void(vector pos, string samp, float vol, float atten) ambientsound = #74;
 void(entity e) setspawnparms = #78;
+// The arsenal's rows (common/weapons.qc), the same extensions in either form:
+string(string s) cvar_string = #103;
+float(string s) tokenize = #84;
+string(float n) argv = #86;
+float(string s) strlen = #114;
+string(string s, float start, float length) substr = #116;
+string(string s) strzone = #118;
 
 // --- the variant's own constants ---
 

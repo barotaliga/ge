@@ -36,6 +36,7 @@
 #include <string_view>
 
 #include "classicenhance/profile.hpp"
+#include "shooters_edge/profiles/arsenal.hpp"
 #include "shooters_edge/profiles/items.hpp"
 
 namespace shooters_edge::profiles {
@@ -80,6 +81,7 @@ struct GameProfile {
   ItemTables tables;  // its items, their words and the sounds a bot reads (items.hpp)
   // Its first-person weapons' model files, in the order of the number keys (view::Weapon's).
   std::span<const std::string_view> held_weapons;
+  Arsenal arsenal;  // its weapons and armour as data, which our programs read (arsenal.hpp)
 };
 
 inline constexpr ProgramFile kClassicMultiplayer[] = {{.name = "qwprogs.dat"},
@@ -99,7 +101,8 @@ inline constexpr GameProfile kGameProfiles[] = {
      .fallback_map = "arena",
      .demo_extensions = kClassicDemos,
      .tables = kClassicTables,
-     .held_weapons = kClassicHeld},
+     .held_weapons = kClassicHeld,
+     .arsenal = kClassicArsenal},
 };
 
 // The first row: the classic game, the one every reader uses until a choice of game is made.

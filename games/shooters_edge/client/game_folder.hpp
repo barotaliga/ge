@@ -76,6 +76,10 @@ struct GameContent {
   // baseline mod plays the game's packs, so its pickups speak the game's words; empty when the
   // game's own program runs (it has its own) or no packs are open (the mod's own words).
   std::vector<std::string> item_names;
+  // The game's weapons and armour as server lines (profiles/arsenal.hpp's `arsenal_lines`) when
+  // our programs play the game's packs, so they fire and absorb by its rows; empty otherwise
+  // (our programs' own rows).
+  std::vector<std::string> arsenal;
 };
 
 // `out` filled from `files` (`progs_path`: `-progs`, "" for the game's own); false with the

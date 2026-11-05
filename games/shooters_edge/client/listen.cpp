@@ -116,6 +116,7 @@ bool start_map(Listen& l, std::string& error) {
   l.rules = &l.match;
   l.server = l.match.common;
   for (const std::string& line : l.opt.item_names) l.rules->console(line);
+  for (const std::string& line : l.opt.arsenal) l.rules->console(line);
   for (const std::string& line : l.opt.console) l.rules->console(line);
   if (!l.rules->start(l.map->spec, error)) {
     error = "the map " + l.map->name + " did not load: " + error +
@@ -177,7 +178,8 @@ sv::CampaignOptions campaign_options(Listen& l, const ListenOptions& opt) {
   co.load = campaign_map;
   co.load_ctx = &l;
   co.registered = opt.registered;
-  co.settings = opt.console;
+  co.settings = opt.arsenal;
+  co.settings.insert(co.settings.end(), opt.console.begin(), opt.console.end());
   return co;
 }
 

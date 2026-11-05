@@ -348,6 +348,7 @@ int run_main(int argc, char** argv) {
   listen_opt.lobby_settings = listen.opt.lobby_settings;
   listen_opt.registered = game_content.registered;
   listen_opt.item_names = game_content.item_names;
+  listen_opt.arsenal = game_content.arsenal;
   // The saves (the campaign's whole game: listen.hpp's `listen_save`), `<game>/saves/<name>.save`.
   std::string load_ask;  // a save the console asked to load (loaded where a map change is made)
   cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
@@ -516,6 +517,7 @@ int run_main(int argc, char** argv) {
     if (!cl::load_programs(adapter, files, args.progs, game_content, error)) return false;
     listen.opt.registered = game_content.registered;
     listen.opt.item_names = game_content.item_names;
+    listen.opt.arsenal = game_content.arsenal;
     cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
     cl::add_adapter_commands(console, adapter, files, basedir);
     menu_host.maps = adapter.list_maps(adapter, files);
