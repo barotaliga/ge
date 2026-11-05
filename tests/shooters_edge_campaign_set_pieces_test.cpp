@@ -63,7 +63,7 @@ TEST(a_train_rides_its_path_of_corners_and_back) {
   CHECK_MSG(std::fabs(most - 100) < 1, std::to_string(most));  // up to the far corner
   CHECK_MSG(least_after < 1, std::to_string(least_after));     // and back down to the first
   CHECK(g.ed(train).origin.x == 0);
-  CHECK(g.s().q.faults == 0);
+  CHECK_MSG(g.s().q.faults == 0, g.s().q.last_fault);
 }
 
 TEST(a_secret_door_shot_moves_back_then_aside_and_closes_again) {

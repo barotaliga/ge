@@ -130,3 +130,47 @@ void(vector from, vector to) effect_beam = {
 float() crandom = { return 2 * random() - 1; };
 
 float(float a, float b) min_of = { if (a < b) return a; return b; };
+
+// A decimal's digit: 0..9, or -1 for any other character.
+float(string c) digit_of = {
+  if (c == "0") return 0;
+  if (c == "1") return 1;
+  if (c == "2") return 2;
+  if (c == "3") return 3;
+  if (c == "4") return 4;
+  if (c == "5") return 5;
+  if (c == "6") return 6;
+  if (c == "7") return 7;
+  if (c == "8") return 8;
+  if (c == "9") return 9;
+  return -1;
+};
+
+// A number written as a decimal ("-12", "0.04", "2.5") read in either program form, which share no
+// builtin that does it. The digits make a whole number, divided once by the power of ten its
+// fraction needs, so the result is the float nearest the text, as a literal of it would be.
+float(string s) number_of = {
+  local float i, n, d, whole, scale, minus, past_point;
+  n = strlen(s);
+  i = 0;
+  whole = 0;
+  scale = 1;
+  minus = FALSE;
+  past_point = FALSE;
+  if (substr(s, 0, 1) == "-") {
+    minus = TRUE;
+    i = 1;
+  }
+  for (; i < n; i += 1) {
+    if (substr(s, i, 1) == ".") {
+      past_point = TRUE;
+    } else {
+      d = digit_of(substr(s, i, 1));
+      if (d < 0) break;
+      whole = whole * 10 + d;
+      if (past_point) scale = scale * 10;
+    }
+  }
+  if (minus) return -whole / scale;
+  return whole / scale;
+};

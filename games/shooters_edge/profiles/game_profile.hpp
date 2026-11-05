@@ -38,6 +38,7 @@
 #include <string_view>
 
 #include "classicenhance/profile.hpp"
+#include "shooters_edge/profiles/arsenal.hpp"
 #include "shooters_edge/profiles/items.hpp"
 #include "shooters_edge/profiles/words.hpp"
 
@@ -83,6 +84,7 @@ struct GameProfile {
   ItemTables tables;  // its items, their words and the sounds a bot reads (items.hpp)
   // Its first-person weapons' model files, in the order of the number keys (view::Weapon's).
   std::span<const std::string_view> held_weapons;
+  Arsenal arsenal;  // its weapons and armour as data, which our programs read (arsenal.hpp)
   std::span<const WordRow> words;  // what its server prints (words.hpp)
 };
 
@@ -104,6 +106,7 @@ inline constexpr GameProfile kGameProfiles[] = {
      .demo_extensions = kClassicDemos,
      .tables = kClassicTables,
      .held_weapons = kClassicHeld,
+     .arsenal = kClassicArsenal,
      .words = kClassicServerWords},
 };
 

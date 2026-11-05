@@ -146,6 +146,7 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
   out.progs = {};
   out.pack_progs = {};
   out.item_names.clear();
+  out.arsenal.clear();
   bool loaded = false;
   if (!progs_path.empty()) {
     std::string source;
@@ -163,6 +164,7 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
       loaded = baseline_progs(out.progs, error);
       if (!archive_paths(files).empty()) {
         out.item_names = profiles::item_name_lines(game.tables.names);
+        out.arsenal = profiles::arsenal_lines(game.arsenal);
         for (std::string& line : profiles::word_lines(game.words))
           out.item_names.push_back(std::move(line));
       }
