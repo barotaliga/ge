@@ -2,7 +2,7 @@
 title: A player on the lobby's screen is a seat with no client on the server
 date: 2026-11-05
 scope: engine/server/match.cpp, games/shooters_edge/client/listen.cpp
-concepts: [lobby, warmup, lobby-screen, warm_on_join, listen-server, connect, drop]
+concepts: [lobby, warmup, lobby-screen, warm-on-join, listen-server, connect, drop]
 ---
 
 Keeping a player off the map while he sits on the lobby's screen is done by not connecting him
