@@ -152,6 +152,7 @@ float STATE_TOP = 0;
 float STATE_BOTTOM = 1;
 float STATE_UP = 2;
 float STATE_DOWN = 3;
+float STATE_WAITING = 4;  // a named plat at its top, until it is used
 
 // --- the mod's own globals ---
 
