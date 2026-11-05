@@ -305,6 +305,20 @@ bool blast_light(const gr::Blast& b, double now_s, Light* out) {
   return true;
 }
 
+Light motor_light(const double at[3], const double dir[3], uint32_t seed, double now_s) {
+  Light l;
+  for (int k = 0; k < 3; ++k) l.pos[k] = at[k] - dir[k] * kNozzleM;
+  l.radius = kMotorLightM;
+  // Two incommensurate wavers, phased off the seed: a flame's flicker, never a strobe.
+  const double phase = static_cast<double>(seed % 997u) * 0.37;
+  const double waver = 0.5 + 0.3 * std::sin(now_s * 2 * 3.14159265358979 * 8.3 + phase) +
+                       0.2 * std::sin(now_s * 2 * 3.14159265358979 * 11.9 + phase * 1.7);
+  const double level = kMotorLevel * (0.8 + 0.2 * waver);
+  constexpr double kFlame[3] = {1.0, 0.66, 0.34};  // a motor's flame, about 1900 K
+  for (int k = 0; k < 3; ++k) l.colour[k] = level * kFlame[k];
+  return l;
+}
+
 gr::MuzzleFire exhaust(const double p[3], const double dir[3], uint32_t seed, double now_s) {
   gr::MuzzleFire f;
   f.shot.look = &exhaust_look();

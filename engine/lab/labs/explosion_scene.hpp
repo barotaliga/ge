@@ -2,6 +2,10 @@
 // wall across its far side, drawn under the sky with the particles and the explosions' pass
 // (blasts and muzzle flames) on a device of its own, read back as a picture with the pass's own
 // GPU time; a still settled over frames as the TAA resolve settles it; sheets of pictures.
+// Every frame each blast's flash is handed to the local lights (render/explosions.hpp's
+// `flash_lights`), so the fire lights the yard and the wall round it, and each blast off a surface
+// has its scorch pressed onto the yard's floor or the wall's face with engine/detail's decals
+// (render/marks.hpp), drawn as the beams pass's burns, its embers glowing as fresh as the blast.
 //
 // ge:summary The explosion labs' scene: the yard, the sky, particles, explosions, timed draws
 // ge:keywords lab explosion muzzle scene yard make_scene draw settled sheet_of gpu-explosion
@@ -18,15 +22,20 @@
 #include <vector>
 
 #include "core/heightfield.hpp"
+#include "detail/decals.hpp"
+#include "detail/receivers.hpp"
 #include "gpu/device.hpp"
 #include "gpu/pipeline.hpp"
 #include "gpu/target.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/water_scene.hpp"
 #include "lab/raster.hpp"
+#include "render/beams.hpp"
 #include "render/explosion.hpp"
 #include "render/explosions.hpp"
 #include "render/frame.hpp"
+#include "render/lights.hpp"
+#include "render/marks.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/sky.hpp"
@@ -42,6 +51,25 @@ using ge::lab::water_scene::paste;
 constexpr double kMid = 128, kWallZ = 140, kWallH = 4;
 
 inline float yard(double, double z) { return z >= kWallZ ? static_cast<float>(kWallH) : 0.0f; }
+// The marks a frame can hold: one a blast the labs set off at once, and room over.
+constexpr uint32_t kYardMarks = 40;
+
+// The yard's surfaces as the decals' receivers: the floor up to the wall and the wall's face, the
+// heightfield's own step from its last row of floor to its first of wall (a 1 m cell's slope).
+inline ge::detail::TriMesh yard_faces() {
+  ge::detail::TriMesh m;
+  const auto quad = [&](ge::detail::Vec3 a, ge::detail::Vec3 b, ge::detail::Vec3 c,
+                        ge::detail::Vec3 d, uint16_t tag) {
+    const auto base = static_cast<uint32_t>(m.pos.size());
+    m.pos.insert(m.pos.end(), {a, b, c, d});
+    m.idx.insert(m.idx.end(), {base, base + 1, base + 2, base, base + 2, base + 3});
+    m.tag.insert(m.tag.end(), {tag, tag});
+  };
+  const double z0 = kWallZ - 1;
+  quad({0, 0, 0}, {0, 0, z0}, {256, 0, z0}, {256, 0, 0}, 0);                      // the floor, up
+  quad({0, 0, z0}, {0, kWallH, kWallZ}, {256, kWallH, kWallZ}, {256, 0, z0}, 1);  // the wall
+  return m;
+}
 
 struct Scene {
   ge::gpu::PipelineSet pipelines;
@@ -54,10 +82,19 @@ struct Scene {
   gr::Terrain terrain;
   gr::Particles particles;
   gr::Explosions explosions;
+  gr::Lights lights;
+  gr::Beams beams;  // the marks' burns
   gr::Post post;
   gr::FrameRecorder rec;
   ge::core::Heightfield field;
   std::vector<uint8_t> albedo;
+  ge::detail::TriMesh faces;
+  ge::detail::Receivers receivers;  // points into `faces`
+  ge::detail::DecalPool marks = ge::detail::make_pool(kYardMarks);
+  std::vector<gr::LocalLight> lamps;  // this frame's flashes
+  std::vector<gr::BurnVertex> burns;  // this frame's marks
+  uint32_t flashes = 0, marked = 0;   // the last frame's lights and marks
+  bool flash = true;                  // the blasts' flashes handed to the lights (a lab's own)
   ge::gpu::Target out;
   uint32_t w = 0, h = 0;
 };
@@ -93,12 +130,17 @@ inline bool make_scene(ge::gpu::Device& d, Scene& s, uint32_t w, uint32_t h, uin
   gr::create_terrain(d, s.pipelines, s.terrain, src, s.layout);
   gr::create_particles(d, s.pipelines, s.particles, s.layout, s.terrain, {.capacity = 4096});
   gr::create_explosions(d, s.pipelines, s.explosions, s.layout, {.steps = steps});
+  gr::create_lights(d, s.lights);
+  gr::create_beams(d, s.pipelines, s.beams, s.layout, gr::mark_beam_settings(kYardMarks));
   gr::create_post(d, s.pipelines, s.post, s.layout, wgpu::TextureFormat::RGBA8Unorm);
   if (!s.pipelines.finish(d)) return false;
   ge::gpu::end_load(d);
-  s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky);
+  s.frame = gr::frame_group(d, s.layout, s.uniforms, s.sky, s.lights.buffer);
   gr::bind_particle_targets(d, s.particles, s.targets);
   gr::bind_explosion_targets(d, s.explosions, s.targets);
+  gr::bind_beam_targets(d, s.beams, s.targets);
+  s.faces = yard_faces();
+  s.receivers = ge::detail::bin_receivers(s.faces, 8);  // s is not moved: the pointer holds
   s.post_group = gr::post_group(d, s.post, s.targets.hdr_view);
   s.rec.init(d, "gpu-explosion.timer", 10);
   s.out = ge::gpu::create_target(d, "gpu-explosion.final", w, h);
@@ -127,10 +169,26 @@ struct Timed {
   double frame_ms = 0;  // every pass on the GPU
 };
 
+// The marks of `blasts` at `now_s`: the pool pressed afresh with each one's scorch that has gone
+// off by then (in the order given), so the marks are a function of the blasts and the moment.
+inline void mark_blasts(Scene& s, const std::vector<gr::Blast>& blasts, double now_s) {
+  s.marks = ge::detail::make_pool(kYardMarks);
+  for (const gr::Blast& b : blasts)
+    if (b.born_s <= now_s) gr::press_scorch(s.marks, s.receivers, b);
+  gr::mark_burns(s.marks, now_s, {}, s.burns);
+  s.marked = ge::detail::live_count(s.marks);
+}
+
 // One frame: the particles flown `dt` s first (births waiting go in), then the picture.
-inline Timed draw(ge::gpu::Device& d, Scene& s, const gr::FrameView& v,
+// The eye adapts to the flash at once (`FrameView::lamp_lux`, the flash's light on a face at the
+// eye turned to it), as a camera's exposure would: the yard round a blast at night reads lit by
+// it instead of blown out against the dark.
+inline Timed draw(ge::gpu::Device& d, Scene& s, gr::FrameView v,
                   const std::vector<gr::Blast>& blasts, double dt,
                   std::span<const gr::MuzzleFire> fires = {}) {
+  s.lamps.clear();
+  if (s.flash) s.flashes = static_cast<uint32_t>(gr::flash_lights(blasts, v.time_s, s.lamps));
+  v.lamp_lux = gr::lamp_lux_at(s.lamps, v.eye, v.time_s);
   s.rec.begin_frame(d);
   gr::fill_uniforms(s.staged, v, s.w, s.h);
   d.queue.WriteBuffer(s.uniforms, 0, &s.staged, sizeof s.staged);
@@ -138,6 +196,9 @@ inline Timed draw(ge::gpu::Device& d, Scene& s, const gr::FrameView& v,
   gr::prepare_terrain(d, s.terrain, v);
   gr::prepare_particles(d, s.particles, dt, v.near_m);
   gr::prepare_explosions(d, s.explosions, blasts, v, s.w, s.h, fires);
+  gr::prepare_lights(d, s.lights, s.lamps, v, s.w, s.h);
+  mark_blasts(s, blasts, v.time_s);
+  gr::prepare_beams(d, s.beams, {}, s.burns, v, gr::kHotEmberCd);
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   gr::encode_sky_tables(s.sky, s.pipelines, s.rec, e);
   gr::encode_particles_sim(s.particles, s.pipelines, s.rec, e);
@@ -146,6 +207,7 @@ inline Timed draw(ge::gpu::Device& d, Scene& s, const gr::FrameView& v,
   gr::encode_terrain_depth(s.terrain, s.pipelines, s.rec, e, s.targets, s.frame);
   gr::encode_terrain(s.terrain, s.pipelines, s.rec, e, s.targets, s.frame);
   gr::encode_sky(s.sky, s.pipelines, s.rec, e, s.targets, s.frame);
+  gr::encode_beams(s.beams, s.pipelines, s.rec, e, s.targets, s.frame);  // the marks
   gr::encode_particles(s.particles, s.pipelines, s.rec, e, s.targets, s.frame);
   gr::encode_explosions(s.explosions, s.pipelines, s.rec, e, s.targets, s.frame);
   gr::encode_post(s.post, s.pipelines, s.rec, e, s.frame, s.post_group, s.out.view);
