@@ -25,7 +25,8 @@
 //
 // ge:summary The game folder a player loads: the install checked, its game folder, programs
 // ge:keywords game-folder load-game basedir install check_game_folder game_of multiplayer-dir
-// ge:keywords remembered_game remember_game kept-game last-game prefs load_programs first-map campaign-program
+// ge:keywords remembered_game remember_game kept-game last-game prefs load_programs first-map
+// ge:keywords campaign-program
 // ge:keywords choose_folder campaign_commands newgame save load
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
