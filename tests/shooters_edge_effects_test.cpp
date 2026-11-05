@@ -26,56 +26,83 @@ bool same(const fx::Particles& a, const fx::Particles& b) {
 
 }  // namespace
 
-TEST(a_burst_is_the_same_particles_for_the_same_seed) {
-  const double at[3] = {1, 2, 3}, n[3] = {0, 1, 0};
-  using Burst = void (*)(const double*, uint32_t, fx::Particles*);
+// A palette whose entry i is (i, 255 - i, i / 2): every index's colour tells it apart.
+std::vector<uint8_t> test_palette() {
+  std::vector<uint8_t> p(768);
+  for (size_t i = 0; i < 256; ++i) {
+    p[i * 3] = uint8_t(i);
+    p[i * 3 + 1] = uint8_t(255 - i);
+    p[i * 3 + 2] = uint8_t(i / 2);
+  }
+  return p;
+}
+
+TEST(a_burst_is_the_same_specks_for_the_same_seed) {
+  const std::vector<uint8_t> pal = test_palette();
+  const double at[3] = {1, 2, 3};
+  using Burst = void (*)(const double*, uint32_t, fx::Palette, fx::Particles*);
   const Burst bursts[] = {fx::explosion, fx::teleport_splash, fx::lava_splash};
   for (Burst b : bursts) {
     fx::Particles x, y, z;
-    b(at, 7, &x);
-    b(at, 7, &y);
-    b(at, 8, &z);
+    b(at, 7, pal, &x);
+    b(at, 7, pal, &y);
+    b(at, 8, pal, &z);
     CHECK(!x.empty());
     CHECK(same(x, y));
     CHECK(!same(x, z));
+    for (const auto& p : x) CHECK(p.kelvin < 0);  // unlit specks of the palette's colours
   }
   fx::Particles a, b;
-  fx::impact(at, n, 3, &a);
-  fx::impact(at, n, 3, &b);
-  CHECK(same(a, b));
-  // Every spark off a face leaves it.
-  for (const auto& p : a) {
-    if (p.kelvin > 0) CHECK(p.v[1] > 0);
-  }
+  fx::impact(at, 20, 3, pal, &a);
+  fx::impact(at, 20, 3, pal, &b);
+  CHECK(a.size() == 20 && same(a, b));
 }
 
-TEST(a_trail_lays_its_particles_along_the_stretch_it_flew) {
-  const double from[3] = {0, 1, 0}, to[3] = {3, 1, 0};
-  fx::Particles rocket, grenade;
-  fx::rocket_trail(from, to, 1, &rocket);
-  fx::grenade_trail(from, to, 1, &grenade);
-  const size_t steps = size_t(3 / fx::kTrailStep);
-  CHECK(rocket.size() == 2 * steps);  // an ember and a puff a step
-  CHECK(grenade.size() == steps);     // smoke alone
-  int embers = 0;
-  for (const auto& p : rocket) {
-    CHECK(p.p[0] >= 0 && p.p[0] <= 3);
-    if (p.kelvin > 0) ++embers;
-  }
-  CHECK(embers == int(steps));
-  for (const auto& p : grenade) CHECK(p.kelvin == 0);
-}
-
-TEST(an_explosion_glows_then_its_light_fades_to_nothing) {
+TEST(the_classic_explosion_is_1024_specks_on_its_two_ramps) {
+  const std::vector<uint8_t> pal = test_palette();
   const double at[3] = {0, 0, 0};
   fx::Particles burst;
-  fx::explosion(at, 1, &burst);
-  int hot = 0;
-  for (const auto& p : burst) hot += p.kelvin > 1400 ? 1 : 0;
-  CHECK(hot >= 100);
+  fx::explosion(at, 1, pal, &burst);
+  CHECK(burst.size() == 1024);
+  int speeding = 0, slowing = 0;
+  for (const auto& p : burst) {
+    if (p.drag < 0) ++speeding;  // the bright ramp's, flung out faster and faster
+    if (p.drag > 0) ++slowing;
+    CHECK(p.life > 0.3f && p.life <= 0.8f);
+    CHECK(p.fall > 0 && p.fall < 0.2f);  // the classic's 40 units a second squared
+    for (int k = 0; k < 3; ++k) CHECK(p.v[k] >= -6.41f && p.v[k] <= 6.41f);  // 256 units a second
+  }
+  CHECK(speeding == 512 && slowing == 512);
+  // Both ramps start at the palette's entry 111 at their brightest, its colour the pack's.
+  float c[3];
+  fx::palette_rgb(pal, 111, c);
+  bool first = false;
+  for (const auto& p : burst) first = first || (p.tint[0] == c[0] && p.tint[1] == c[1]);
+  CHECK(first);
+}
+
+TEST(a_trail_lays_a_speck_every_three_units_rising) {
+  const std::vector<uint8_t> pal = test_palette();
+  const double from[3] = {0, 1, 0}, to[3] = {3, 1, 0};
+  fx::Particles rocket, grenade;
+  fx::rocket_trail(from, to, 1, pal, &rocket);
+  fx::grenade_trail(from, to, 1, pal, &grenade);
+  const size_t steps = size_t(3 / fx::kTrailStep);
+  CHECK(rocket.size() == steps && grenade.size() == steps);
+  for (const auto& p : rocket) {
+    CHECK(p.p[0] >= -0.1 && p.p[0] <= 3.1);
+    CHECK(p.fall < 0);  // warm: it rises
+  }
+  // The grenade's are the ramp's greys alone: the test palette's low entries, mostly green.
+  for (const auto& p : grenade) CHECK(p.tint[1] > p.tint[0]);
+}
+
+TEST(an_explosions_light_is_the_classics_and_shrinks_to_nothing) {
+  const double at[3] = {0, 0, 0};
   fx::Light a, b, c;
   CHECK(fx::explosion_light(at, 0, &a));
   CHECK(fx::explosion_light(at, 0.4, &b));
+  CHECK(a.radius > 8.7 && a.radius < 8.8);  // 350 units
   CHECK(b.colour[0] < a.colour[0] && b.radius < a.radius);
   CHECK(!fx::explosion_light(at, fx::kExplosionLight, &c));
 }

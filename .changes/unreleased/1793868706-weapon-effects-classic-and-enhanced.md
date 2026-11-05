@@ -1,0 +1,6 @@
+---
+type: Added
+title: Weapon effects, classic and enhanced, and particles with colour, growth and shine
+---
+
+Shooter's Edge's weapon effects in both looks. The classic look draws the classic client's effects in its own numbers, as unlit specks of the pack's own palette colours that run along its ramps (1024 for an explosion, a speck every 3 units of a rocket's trail, 20 a pellet), the pack's explosion sprite and lightning bolt models, and each weapon's own flash. The modern look, each part behind its classic-enhance switch (`ce_explosions`, the new `ce_trails` and `ce_hits`, `ce_beams`, `ce_muzzles`), draws a layered fireball with the classic's ember ball, a rocket's motor flame and spreading smoke, a round's burst by the surface it hit, and the engine's lightning bolt from the gun's muzzle, with smoke lit by the room round it. A match's gunshots, spikes, beams and blood now reach the window's effects. Engine: a particle has a `tint`, a `grow` rate and a shining mode (an unlit speck in the picture's whites); a blast's smoke takes `BlastLight` (the open sky's share and the local light). Build: a git worktree shares its main checkout's downloaded dependencies and compiler cache with no setup. New lab: `se-weapon-fx`.

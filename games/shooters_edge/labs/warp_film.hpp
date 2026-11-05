@@ -1,7 +1,7 @@
 // A PLAYER'S WARP FILMED for the labs: a figure blown in as ash or crumbling into it (client/
 // world_fx.hpp's player dust, app/effects.hpp's dust_in and dust_off, the morph pass's warp) drawn
 // as the window draws it, a thirtieth of a second a frame, a picture at each moment asked; or the
-// original (ce_warps off: the teleport's fog, the figure there or gone at once). Seen
+// original (ce_warps off: the teleport's classic specks, the figure there or gone at once). Seen
 // from aside (another player arriving or leaving) or from his own eyes (`first_person`: his own
 // arrival, the ash streaming at the eyes and the weapon in hand assembling).
 //
@@ -35,7 +35,8 @@ struct WarpTake {
   client::Placed figure;  // who warps, where and how turned (map units, degrees)
   bool arriving = true;
   bool first_person = false;  // his own arrival through his eyes: the figure is not drawn
-  bool enhanced = true;  // the dust (ce_warps); false: the original, fog and the figure at once
+  bool enhanced = true;      // the dust (ce_warps); false: the original, fog and the figure at once
+  effects::Palette palette;  // the pack's (gfx/palette.lmp) for the original's specks; empty: greys
   std::vector<double> moments;  // s into the warp, rising
   uint32_t seed = 1;
 };
@@ -66,10 +67,9 @@ inline void film_warp(ge::gpu::Device& d, client::WorldDraw& world, const ge::gp
       // The original: the fog at his feet once, the figure there (arriving) or gone (leaving).
       if (take.arriving && !take.first_person) s.models.push_back(take.figure);
       if (births && was < 0) {
-        const ge::shooter::Vec3f o = take.figure.origin;
-        const ge::camera::Vec3 feet = client::engine_point({o.x, o.y, o.z + client::kBoxLowUnits});
-        const double p[3] = {feet.x, feet.y, feet.z};
-        fx::teleport_splash(p, take.seed, &s.births);
+        const ge::camera::Vec3 o = client::engine_point(take.figure.origin);
+        const double p[3] = {o.x, o.y, o.z};
+        fx::teleport_splash(p, take.seed, take.palette, &s.births);
       }
       return s;
     }

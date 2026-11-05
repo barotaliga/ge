@@ -315,6 +315,8 @@ void run(gl::Lab& lab) {
       look.look = lk;
       shooters_edge::labs::WarpFilm film;
       shooters_edge::labs::WarpTake take;
+      std::vector<uint8_t> palette_store;  // the original's specks in the pack's own colours
+      take.palette = cl::find_file(files, "gfx/palette.lmp", palette_store);
       take.figure = figure;
       take.enhanced = std::string(lk) == "modern";  // the classic look: the original
       take.moments = {0.15, 0.35, 0.55};

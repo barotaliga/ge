@@ -367,7 +367,9 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     if (!warp) continue;
     // Another player at --warp arriving, then leaving, from this view.
     namespace sl = shooters_edge::labs;
+    std::vector<uint8_t> palette_store;  // the original's specks in the pack's own colours
     sl::WarpTake take;
+    take.palette = cl::find_file(files, "gfx/palette.lmp", palette_store);
     take.figure.entity = 2;  // a client's slot the local player is not
     take.figure.modelindex = player.modelindex;
     take.figure.origin = {warp_at[0], warp_at[1], warp_at[2]};
