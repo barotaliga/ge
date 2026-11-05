@@ -133,6 +133,8 @@ void classic_line(Announcer& a, const Lobby& l, const Info& info, const MatchLoo
     case LobbyNoteKind::left:
     case LobbyNoteKind::moved:
     case LobbyNoteKind::warmup:
+    case LobbyNoteKind::warm:
+    case LobbyNoteKind::sat_out:
       break;
   }
 }

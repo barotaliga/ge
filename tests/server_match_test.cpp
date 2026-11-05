@@ -2,11 +2,13 @@
 // smaller team; everyone ready starts the countdown and a break stops it; only the leader starts
 // it early; the countdown runs out once into the match and the map change brings warmup back;
 // every refusal names what to do instead; a session of acts on the server's clock replays to the
-// same phases and lines; with `humans` bots alone wait, and a player leads before a bot.
+// same phases and lines; with `humans` bots alone wait, and a player leads before a bot; nobody
+// starts with too few seated; a player waits on the lobby's screen until he joins the warmup, and
+// a dedicated server's players are in it as they join.
 //
 // ge:summary Test: the engine's lobby before the match: teams, ready, countdown, match, warmup
 // ge:keywords test lobby match-phases warmup countdown ready break leader lobby_due lobby_back
-// ge:keywords humans bots-alone
+// ge:keywords humans bots-alone warmup-join sitout too-few lobby_on_map
 // ge:skill net testing
 #include <string>
 
@@ -108,7 +110,12 @@ TEST(server_match_only_the_leader_starts_and_too_few_wait) {
   CHECK(l.phase == LobbyPhase::warmup);  // two of the three it waits for
   CHECK(lobby_start(l, 1, 0) == LobbyWhy::not_leader);
   CHECK(said(l, "next: `ready`"));
-  CHECK(lobby_start(l, 0, 0) == LobbyWhy::ok);
+  CHECK(lobby_start(l, 0, 0) == LobbyWhy::too_few);  // the leader never starts with too few
+  CHECK(said(l, "2 seated, 3 needed"));
+  lobby_join(l, 2, "bot", true, 0);         // a bot counts
+  CHECK(l.phase == LobbyPhase::countdown);  // and everyone is ready now
+  CHECK(lobby_command(l, 2, "break", 0));
+  CHECK(lobby_start(l, 0, 0) == LobbyWhy::ok);  // whoever is ready
   CHECK(l.phase == LobbyPhase::countdown);
   CHECK(!lobby_command(l, 0, "fraglimit 20", 0));  // not the lobby's
   CHECK(lobby_command(l, 0, "team purple", 0));
@@ -133,3 +140,43 @@ TEST(server_match_bots_alone_wait_for_a_player_who_leads) {
 }
 
 TEST(server_match_a_session_replays) { CHECK(session() == session()); }
+
+TEST(server_match_players_wait_in_the_lobby_until_they_join_the_warmup) {
+  Lobby l;
+  l.settings.warm_on_join = false;
+  l.settings.min_players = 2;
+  l.settings.countdown_s = 1;
+  lobby_join(l, 0, "host", false, 0);
+  lobby_join(l, 1, "bot", true, 0);
+  CHECK(!l.seats[0].warm);  // on the lobby's screen
+  CHECK(l.seats[1].warm);   // a bot is in the warmup as it joins
+  CHECK(!lobby_on_map(l, 0));
+  CHECK(lobby_on_map(l, 1));
+  CHECK(lobby_warm_count(l) == 1);
+  CHECK(lobby_command(l, 0, "warmup", 0));
+  CHECK(lobby_on_map(l, 0));
+  CHECK(lobby_warmup(l, 0, true, 0) == LobbyWhy::same);
+  CHECK(lobby_command(l, 0, "togglewarmup", 0));  // F4 on the map: back to the lobby
+  CHECK(!lobby_on_map(l, 0));
+  CHECK(said(l, "host goes back to the lobby"));
+  // Ready from the lobby's screen: the match puts every seat on the map.
+  CHECK(lobby_ready(l, 0, true, 1) == LobbyWhy::ok);
+  CHECK(lobby_due(l, 2));
+  CHECK(lobby_on_map(l, 0));
+  CHECK(lobby_warmup(l, 0, true, 2) == LobbyWhy::in_match);
+  lobby_back(l);  // the next map: the player on the lobby's screen again, the bot warm
+  CHECK(!lobby_on_map(l, 0));
+  CHECK(lobby_on_map(l, 1));
+  CHECK(lobby_command(l, 5, "warmup", 3));  // nobody there
+  CHECK(said(l, "warmup: not in the game"));
+}
+
+TEST(server_match_a_dedicated_servers_players_are_warm_as_they_join) {
+  Lobby l;  // warm_on_join: no lobby's screen to wait on
+  lobby_join(l, 3, "guest", false, 0);
+  CHECK(lobby_on_map(l, 3));
+  CHECK(lobby_warmup(l, 3, false, 0) == LobbyWhy::no_screen);
+  CHECK(lobby_on_map(l, 3));
+  lobby_back(l);
+  CHECK(l.seats[3].warm);
+}

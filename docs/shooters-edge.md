@@ -1205,12 +1205,19 @@ smaller; `team red|blue|auto|switch`), and says `ready` or takes it back with `b
 seated player is ready (and at least `sv_minplayers` are seated) a countdown of `sv_countdown`
 seconds runs, stopped by a break or a player joining unready; the leader (the listen server's own
 player) may `start` it whoever is ready. When the match's map changes, everyone is back in warmup,
-unready. The window shows a banner (the phase, how many are ready, the keys: F1 ready or break, F2
-the other team, F3 the roster), the countdown's seconds and both teams' roster; `addbot` seats a
-fighter. `sv_lobby 0` starts the match with the map, as before. When the player's packs carry the
-classic menu's pictures, the lobby is drawn in them (`menu/lobby_screen.hpp`): the banner and the
-roster in the menu's text box, the words in the glyph sheet's two sets, the countdown in the big
-figures, as the ESC menu is; without them it keeps the modern panel.
+unready. The lobby is a screen of its own, full screen over the main menu's night
+(`hud/lobby_page.hpp`), never over the game: both teams, each player's place (IN WARMUP or IN
+LOBBY), his frags so far and READY, and the keys: F4 join the warmup, F1 ready or break, F2 the
+other team, F5 and F6 a bot more or less (`addbot`, `removebot`), ENTER the leader's start. The
+player opens on it; F4 (`warmup`) puts him on the map in the warmup, where the others fight and
+frags are scored, and F4 again (`sitout`) takes him back. On the map only a banner is left (the
+phase, how many are ready, F1 and F4) and the countdown's seconds. The match needs at least
+`sv_minplayers` seated (2; a bot counts), and starting it restarts the map, which resets every
+frag the warmup scored and puts every seat on the map. `sv_lobby 0` starts the match with the
+map, as before. When the player's packs carry the classic menu's pictures, the lobby is drawn in
+them (`menu/lobby_screen.hpp`): the screen and the banner in the menu's text boxes, the words in
+the glyph sheet's two sets, the countdown in the big figures, as the ESC menu is; without them it
+keeps the modern look.
 
 **The lobby (M18q).** Before the match, on M17d's sessions: the players and their pings, teams,
 ready, chat to all or the team, a map vote, kick, and the host's start; at the end of the match
