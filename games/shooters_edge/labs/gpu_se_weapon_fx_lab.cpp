@@ -334,7 +334,7 @@ void run(gl::Lab& lab) {
           sh::Vec3f n0{};
           for (int i = 0; i < 9 && flat; ++i) {
             const float across = static_cast<float>(i % 3 - 1) * 48,
-                        up = static_cast<float>(i / 3 - 1) * 32;
+                        up = static_cast<float>(i / 3) * 32 - 32;
             const sh::Vec3f o = {eye.x - cy * across, eye.y + cx * across, eye.z + up};
             const sh::HullTrace tr =
                 sh::trace_hull(hull, o, {o.x + 2048 * cx, o.y + 2048 * cy, o.z});

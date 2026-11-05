@@ -402,18 +402,14 @@ void hit(const WallHit& w, uint32_t seed, double now_s, std::vector<gr::Blast>* 
   const size_t n = gr::impact_births(h, thrown);
   for (size_t i = 0; i < n; ++i) {
     Particle q = gr::spark_particle(thrown[i]);
-    if (thrown[i].kind == gr::SparkKind::chip) {
-      paint(q);
-      q.bounce = 0.3f;
-    } else if (thrown[i].kind == gr::SparkKind::grit) {
-      paint(q);
-    } else if (thrown[i].kind == gr::SparkKind::spark) {
+    if (thrown[i].kind == gr::SparkKind::spark) {
       // Sparks only from a nail off metal: anything else's hit stays in its greys.
       if (w.surface != "metal" || !w.nail) continue;
       q.floor_y = static_cast<float>(w.floor_y);
       q.bounce = 0.25f;
     } else {
-      paint(q);  // a splash's beads and the rest: monotone too
+      paint(q);  // chips, grit, a splash's beads: monotone; the chips hop
+      if (thrown[i].kind == gr::SparkKind::chip) q.bounce = 0.3f;
     }
     births->push_back(q);
   }
