@@ -8,13 +8,14 @@
 // and spits at the player. The big and late kinds: each counts at spawn and hurts a player in front
 // of it, the giant takes half of a blast, and a spawn bursts when it dies. The bosses: the lava
 // boss rises when used, throws, and falls to three strikes; arriving inside the final boss kills
-// it and ends the game; a teleport train rides its path.
+// it and ends the game; a teleport train rides its path. A rifleman shows its model's frames
+// for standing, shooting and falling.
 //
 // ge:summary Tests: our campaign mod's monsters: counting, noticing, attacking, paths, each kind
 // ge:keywords test campaign-mod monsters monster-ai rifleman hound path-corner killed-monsters
 // ge:keywords notice show-hostile swordsman brute ghoul flyer eel knockdown leaper giant caster
 // ge:keywords trooper spawn heavy-swordsman blast-share lava-boss final-boss telefrag
-// ge:keywords teleport-train event-lightning
+// ge:keywords teleport-train event-lightning animation-frames death-frames
 // ge:skill progs shooter testing
 #include <algorithm>
 #include <string>
@@ -407,5 +408,32 @@ TEST(a_teleport_train_rides_its_path) {
   }
   CHECK_MSG(most > -110, std::to_string(most));  // reached the far corner
   CHECK_MSG(g.ed(train).origin.x < most, std::to_string(g.ed(train).origin.x));  // and turned back
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(a_rifleman_shows_its_kinds_frames_standing_shooting_and_falling) {
+  Game g(R"({
+"classname" "monster_army"
+"origin" "-100 0 24"
+"angle" "0"
+}
+)");
+  const int army = g.find("monster_army");
+  for (int i = 0; i < kFrames; i++) CHECK_MSG(g.frame(180), g.error);
+  const float standing = g.field(army, g.f().frame);
+  CHECK_MSG(standing >= 0 && standing <= 7, std::to_string(standing));  // its stand loop
+  // Woken and angry: it runs or shoots, each with its own frames.
+  CHECK(g.hit(army, 1, 1));
+  bool shot = false;
+  for (int i = 0; i < kFrames * 4; i++) {
+    CHECK_MSG(g.frame(180), g.error);
+    const float fr = g.field(army, g.f().frame);
+    CHECK_MSG(fr <= 89, std::to_string(fr));
+    shot = shot || (fr >= 81 && fr <= 89);
+  }
+  CHECK(shot);
+  CHECK(g.hit(army, 1, 40));  // dead, not gibbed (-35 is the line)
+  for (int i = 0; i < kFrames * 2; i++) CHECK_MSG(g.frame(180), g.error);
+  CHECK(g.field(army, g.f().frame) == 17);  // its death frames played to the last
   CHECK(g.s().q.faults == 0);
 }
