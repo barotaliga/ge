@@ -603,10 +603,24 @@ fn soft_shadow(q: vec3f, far: f32, l: Light, frag: vec2f) -> vec2f {
   let side = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(n.y) > 0.9);
   let t = normalize(cross(n, side));
   let b = cross(n, t);
-  let turn = fract(52.9829189 * fract(dot(frag + vec2f(f32(frame.time.y % 64.0) * 5.588238), vec2f(0.06711056, 0.00583715)))) * 6.2831853;
+  let turn = fract(52.9829189 * fract(dot(frag + vec2f(f32(frame.time.y % 64.0) * 5.588238),
+                                          vec2f(0.06711056, 0.00583715)))) *
+             6.2831853;
+  let texel = 2.0 / f32(textureDimensions(cubes).x);
+  // The world's kept cube alone (no moving caster near this light): four taps over the penumbra of
+  // a blocker halfway to the light, size / d, without a search; only the casters' lights pay for
+  // the search.
+  if (cbase < 0) {
+    let pen = clamp(size / max(d, 0.1), texel * 0.75, 0.08);
+    var w = 0.0;
+    for (var i = 0u; i < 4u; i++) {
+      let o = vogel(i, 4u, turn) * pen;
+      w += cube_lit(n + t * o.x + b * o.y, ref_depth, base, -1).x;
+    }
+    return vec2f(w * 0.25);
+  }
   // The search: what could hide the light's disc lies within its size seen from blockers as near
   // the light as a fifth of the way (a direction's angle, the cube's own measure).
-  let texel = 2.0 / f32(textureDimensions(cubes).x);
   let search = clamp(4.0 * size / max(d, 0.1), texel, 0.15);
   var blockers = 0.0;
   var found = 0.0;
@@ -637,6 +651,8 @@ fn soft_shadow(q: vec3f, far: f32, l: Light, frag: vec2f) -> vec2f {
 // hemisphere he stands in), most of it from the way the nearest lights come. So the bounce and the
 // floor of light are dimmed by kIndirectShadow of the share of the casters' lights he hides here.
 const kIndirectShadow = 0.8;
+// A figure's capsule shadows nothing further than this from its middle (squared, m^2).
+const kCapsuleReach2 = 36.0;
 
 // An orthographic map's lit share at `p` over a 3 x 3 spread of `spread` m.
 fn ortho_lit(j: Job, layer: i32, p: vec3f, spread: f32) -> f32 {
@@ -1003,13 +1019,18 @@ fn shade(in: VsOut) -> FsOut {
         continue;
       }
     }
-    // A light with no cube of the moving casters: their capsules shadow it instead.
+    // A light with no cube of the moving casters: their capsules shadow it instead (none at a
+    // point kCapsuleReachM past them: a figure's shadow is near him).
     if (l.more.x < 0.0 && bsp.capsule_info.x > 0.5) {
       var seen = 1.0;
       let lr = max(l.more.y, 0.04);
       for (var c = 0u; c < u32(bsp.capsule_info.x); c++) {
         let ca = bsp.capsules[c * 2u];
         let cb = bsp.capsules[c * 2u + 1u];
+        let mid = (ca.xyz + cb.xyz) * 0.5;
+        if (dot(p - mid, p - mid) > kCapsuleReach2) {
+          continue;
+        }
         seen *= capsule_one(p, to_light, d, lr, ca.xyz, cb.xyz, ca.w);
       }
       let lum = dot(l.colour.rgb, vec3f(0.2126, 0.7152, 0.0722)) * ndl * fall;

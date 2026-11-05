@@ -557,15 +557,6 @@ void run(gl::Lab& lab) {
           look.look = "modern";
           cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
           const ge::gpu::Image img = ge::gpu::read_now(*device, out);
-          if (std::getenv("GE_DBG"))
-            lab.shot(
-                {std::string(lamp.id) + (with_him ? "-dbg-with" : "-dbg-without"),
-                 "dbg",
-                 "",
-                 "",
-                 {}},
-                gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
-                gl::Det::measured);
           double sum = 0;
           size_t n = 0;
           for (uint32_t y = img.height / 2; y < img.height; ++y)
