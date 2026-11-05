@@ -21,6 +21,8 @@ void() light_torch_small_walltorch = { flame_start("progs/flame.mdl", 0); };
 void() light_flame_large_yellow = { flame_start("progs/flame2.mdl", 1); };
 void() light_flame_small_yellow = { flame_start("progs/flame2.mdl", 0); };
 void() light_flame_small_white = { flame_start("progs/flame2.mdl", 0); };
+// A globe lamp: its glowing sprite where it stands (its light is in the map's light already).
+void() light_globe = { flame_start("progs/s_light.spr", 0); };
 
 // --- brush entities ---
 

@@ -34,6 +34,7 @@
 #include "lab/labs/explosion_scene.hpp"
 #include "lab/labs/liquid_scene.hpp"
 #include "morph/write.hpp"
+#include "progs/qc_compile.hpp"
 #include "shooter/trace.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
@@ -96,6 +97,8 @@ const char* kind_of(const std::string& name) {
   if (name.rfind("maps/b_", 0) == 0) return "ammo";
   if (name.rfind("progs/g_", 0) == 0) return "weapon";
   if (name.find("flame") != std::string::npos) return "flame";
+  if (name == "progs/s_light.spr") return "globe";
+  if (name == "progs/s_bubble.spr") return "bubbles";
   if (name.find("quaddama") != std::string::npos) return "quad";
   if (name.find("invulner") != std::string::npos) return "shield";
   if (name.find("player") != std::string::npos) return "player";
@@ -121,6 +124,17 @@ constexpr Subject kSubjects[] = {
     {"flame", "A TORCH OR A FLAME",
      "A torch on its wall or a flame in its bowl: a static thing the server forgot at spawn.",
      "the flame's bright fullbright texels, the stick or the bowl lit by the wall"},
+    {"globe", "A GLOBE LAMP",
+     "A globe lamp where the map hangs one: the pack's flare sprite in the classic look; in the "
+     "enhanced look the engine's flare in its place (classic-enhance's replacement table, "
+     "ce_flares), a soft added glow, its light the map's own.",
+     "the classic's flat sprite beside a round warm glow fading to nothing, no square edge"},
+    {"bubbles", "BUBBLES UNDER WATER",
+     "Air bubbles rising from a water's floor (the campaign's air_bubbles: pass "
+     "--progs=games/shooters_edge/qc/campaign/progs.src): the pack's bubble sprite in the classic "
+     "look; in the enhanced look the engine's bubbles in its place (ce_bubbles), each a clear "
+     "ball wobbling off its path as it rises.",
+     "the classic's flat sprite beside small clear balls with a bright rim and a highlight"},
     {"quad", "THE QUAD DAMAGE",
      "The quad's pickup where the map puts it, turning, its blue glow on the floor round it.",
      "the rune turning over the floor, the floor lit blue round it"},
@@ -164,13 +178,29 @@ void run(gl::Lab& lab) {
       return;
     }
   }
-  if (!cl::baseline_progs(progs, error)) {
+  // The baseline mod (its arena), or `--progs`: a progs.src compiled here (the campaign's, whose
+  // set pieces the arena removes: air bubbles), played as a single game.
+  cl::ListenOptions opt;
+  if (const std::string& src = lab.arg("progs"); !src.empty()) {
+    const ge::progs::QcProject built = ge::progs::compile_project(src);
+    if (!built.result.ok) {
+      std::string why;
+      for (const ge::progs::QcDiagnostic& d : built.result.diagnostics)
+        why += ge::progs::diagnostic_text(d) + "\n";
+      lab.fail("se-models: " + src + " does not compile:\n" + why,
+               "next: fix the first error at its file and line. Skill: progs.");
+      return;
+    }
+    progs = built.result.progs;
+    opt.console = {"deathmatch 0"};
+    opt.files = &files;
+  } else if (!cl::baseline_progs(progs, error)) {
     lab.fail(error, "The baseline mod should compile. Skill: progs.");
     return;
   }
   cl::Listen l;
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, map_name, error);
-  if (!map || !cl::listen_start(l, progs, std::move(map), {}, error)) {
+  if (!map || !cl::listen_start(l, progs, std::move(map), opt, error)) {
     lab.fail(error, "Check --map names a map in the pack. Skill: shooter.");
     return;
   }
@@ -190,10 +220,10 @@ void run(gl::Lab& lab) {
   // What the server placed, by kind; the first of each kind is a subject.
   std::vector<cl::Placed> placed;
   cl::place_models(l, placed);
-  constexpr size_t kPlayer = 7, kPowered = 8, kKindCount = 9;
+  constexpr size_t kPlayer = 9, kPowered = 10, kKindCount = 11;
   double placed_by[kKindCount] = {};
-  const char* kKinds[kKindCount] = {"armour", "health", "ammo",   "weapon", "flame",
-                                    "quad",   "shield", "player", "powered"};
+  const char* kKinds[kKindCount] = {"armour",  "health", "ammo",   "weapon", "flame",  "globe",
+                                    "bubbles", "quad",   "shield", "player", "powered"};
   std::vector<std::vector<const cl::Placed*>> of_kind(kKindCount);
   for (const cl::Placed& p : placed) {
     const std::string kind = kind_of(l.server->models[size_t(p.modelindex)]);
@@ -267,13 +297,14 @@ void run(gl::Lab& lab) {
         sh::trace_move(l.server->sv, a, {-r, -r, -r}, {r, r, r}, b, sh::kTraceNoMonsters, -1);
     return !tr.startsolid && !tr.allsolid && tr.fraction >= 1;
   };
-  const auto eye_for = [&](const sh::Vec3f& at, float dist, float up, float out_eye[3]) {
+  const auto eye_for = [&](const sh::Vec3f& at, float dist, float up, float out_eye[3],
+                           float lift = 16) {
     for (int k = 0; k < 8; k++) {
       const double a = k * 0.785398163397448;
       const sh::Vec3f e{at.x + float(dist * lm::cos(a)), at.y + float(dist * lm::sin(a)),
                         at.z + up};
       // The eye clear of the walls by a margin, its line to the thing's middle clear.
-      if (open_line(e, e, 16) && open_line(e, {at.x, at.y, at.z + 16}, 0)) {
+      if (open_line(e, e, 16) && open_line(e, {at.x, at.y, at.z + lift}, 0)) {
         out_eye[0] = e.x;
         out_eye[1] = e.y;
         out_eye[2] = e.z;
@@ -360,7 +391,18 @@ void run(gl::Lab& lab) {
       if (box) c = {c.x + 16, c.y + 16, c.z};
       float ce[3], rgb[3] = {0, 0, 0};
       const bool figure = k >= kPlayer;
-      if (!eye_for(c, figure ? 96.0f : 56.0f, figure ? 24.0f : 32.0f, ce)) continue;
+      // A globe on its wall and a bubble in the water are seen at their own middle, a little
+      // further off; the rest stand on a floor.
+      const bool hung = std::string(kKinds[k]) == "globe" || std::string(kKinds[k]) == "bubbles";
+      if (!eye_for(c,
+                   figure ? 96.0f
+                   : hung ? 72.0f
+                          : 56.0f,
+                   figure ? 24.0f
+                   : hung ? 0.0f
+                          : 32.0f,
+                   ce, hung ? 0.0f : 16.0f))
+        continue;
       const float above[3] = {c.x, c.y, c.z + 8};
       shooters_edge::models::light_under(probe, world, above, rgb);
       const float lum = rgb[0] + rgb[1] + rgb[2];
@@ -406,7 +448,8 @@ void run(gl::Lab& lab) {
     if (k >= kPlayer)
       fx.models.push_back(me);  // the window never draws its own player; the lab does
     ge::render::FrameView v = base;
-    const float at_f[3] = {aim.x, aim.y, aim.z + (k >= kPlayer ? 0.0f : 12.0f)};
+    const bool hung_aim = std::string(kKinds[k]) == "globe" || std::string(kKinds[k]) == "bubbles";
+    const float at_f[3] = {aim.x, aim.y, aim.z + (k >= kPlayer || hung_aim ? 0.0f : 12.0f)};
     double eye[3], at[3];
     br::to_engine(e, eye);
     br::to_engine(at_f, at);
@@ -615,11 +658,13 @@ const gl::LabSpec kSpec{
     "game:shooters_edge",
     "games/shooters_edge/client/world_models (the packs' models, sprites and items in the world)",
     "shooter",
-    "Do the items, weapons, armour, health and ammo boxes and the torches' flames a map places "
+    "Do the items, weapons, armour, health and ammo boxes, the torches' flames, the globes and the "
+    "bubbles a map places "
     "stand where the server put them, lit as the floor under them, in both looks?",
     {{"size", "960,540", "the frame's width and height, px"},
      {"pak", "", "a pack holding the map, its models and gfx/palette.lmp (empty: the fixture)"},
      {"map", "e1m1", "the pack's map to stand in (with --pak)"},
+     {"progs", "", "a progs.src compiled and played as a single game (empty: the arena mod)"},
      {"cvars", "", "picture cvars run before the frames (r_look is set per shot)"}},
     "--size=480,270",
     run,

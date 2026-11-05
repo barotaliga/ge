@@ -86,9 +86,14 @@ struct FxSwitches {
   bool warps = false;  // ce_warps: a player's teleport and spawn as dust (warps.hpp)
   bool decals =
       false;  // ce_decals: the marks the weapons leave (scorches, holes, the bolt's burns)
+  // ce_flares, ce_bubbles: the pack's flare and bubble sprites drawn as the engine's (the models'
+  // `prepare_models`, through classic-enhance's replacement table).
+  bool flares = false, bubbles = false;
   const ge::render::BeamLook* bolt = nullptr;  // r_beam_style's (null: the default style)
 };
 // The switches `picture` asks for: each ce_ switch, in the modern look only, and its bolt's style.
+// The explosion is the engine's where classic-enhance's replacement table names `explosion` for the
+// pack's explosion sprite (classicenhance/replace.hpp), so the table, not this code, says so.
 FxSwitches fx_switches(const look::Picture& picture);
 
 // An arc gun's beam the program keeps sending: its shot, the beam's owner and when it last came.

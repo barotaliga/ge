@@ -630,6 +630,13 @@ classic effects and pickups this way (M18i). The pass is generic. A game hands i
 every kind on a yard by day, from the eye's height and from above, sharp beside smooth, a
 fireball's frames and the yard at dusk, and times 2000 sprites.
 
+**Made frames** (`render/sprite_shapes.hpp`): the pictures a game draws in place of a pack's flat
+effect sprites, made once at load, pure functions of their size. `flare_frame` is a light's glow,
+a warm core and a soft halo fading to nothing at the frame's edge, drawn `add`ed. `bubble_frame` is
+a ball of air in water: nearly clear, a Fresnel rim, a highlight up and to the left and a darker
+ring just inside the rim, drawn `over`. Shooter's Edge draws them for the pack's light globe and
+bubble sprites under `ce_flares` and `ce_bubbles` (classic-enhance's replacement table names them).
+
 ## Terrain
 
 A generic **heightfield renderer** in `engine/render`, which a game hands a height
