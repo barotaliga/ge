@@ -69,6 +69,7 @@ struct MapState {
   gr::Flames flames;  // the fires' gas (bsp_flames.hpp), in v2
   std::vector<gr::Flame> fires;
   ba::SkyPick sky;  // the map's sky: picked by its sky texture, or --sky's type over that
+  gr::FarLand far;  // the land round it (render/far_land.hpp), by --farland
 };
 
 struct Frame {
@@ -108,7 +109,7 @@ void dress(gr::FrameView& v, const ba::SkyPick& sky, const std::vector<double>& 
 }
 
 gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, const gr::FrameView& v,
-                 const ba::Options& o) {
+                 const ba::Options& o, double far_warm) {
   f.rec.begin_frame(d);
   gr::fill_uniforms(f.staged, v, f.w, f.h);
   d.queue.WriteBuffer(f.uniforms, 0, &f.staged, sizeof f.staged);
@@ -119,6 +120,7 @@ gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, const gr::FrameView&
   for (int k = 0; k < 3; ++k) lit.sky_tint[k] = m.sky.tint[k];
   ba::prepare_bsp(d, m.bsp, v, lit);
   const bool v2 = o.mode == ba::Mode::v2;
+  gr::prepare_far_land(d, m.far, v, far_warm, v2 && !o.pack_sky);
   for (auto& b : m.water.bodies) b.hidden = !v2;
   for (auto& b : m.liquids.bodies) b.hidden = !v2;
   ba::light_rooms(m.water, m.liquids, m.world, m.rows, o.minlight, o.brightness);
@@ -130,6 +132,7 @@ gl::Picture draw(ge::gpu::Device& d, Frame& f, MapState& m, const gr::FrameView&
   wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
   gr::encode_sky_tables(f.sky, f.pipelines, f.rec, e);
   ba::encode_bsp(m.bsp, f.pipelines, f.rec, e, f.targets, f.frame);
+  gr::encode_far_land(m.far, f.pipelines, f.rec, e, f.targets, f.frame, false);
   gr::encode_sky(f.sky, f.pipelines, f.rec, e, f.targets, f.frame);
   gr::encode_clouds(f.clouds, f.pipelines, f.rec, e, f.targets, f.frame, v, f.staged);
   ba::encode_bsp_veil(m.bsp, f.pipelines, f.rec, e, f.targets);
@@ -396,6 +399,25 @@ std::vector<View> auto_views(const ba::Scene& s, size_t map, const std::string& 
       for (int k = 0; k < 3; ++k) c[k] = (a.pos[k] + b.pos[k] + cc.pos[k]) / 3;
     }
   }
+  // From high up: just under the largest sky ceiling, looking a little down along the widest way,
+  // over the walls into the far land (render/far_land.hpp) where the sky faces show it.
+  if (best > 0) {
+    View v;
+    v.eye[0] = c[0];
+    v.eye[1] = c[1] - 0.6;
+    v.eye[2] = c[2];
+    if (open_at(s.map, v.eye)) {
+      v.heading = widest(s.map, v.eye);
+      v.pitch = -0.1;
+      v.id = name + "-high";
+      v.title = name + ": from high up";
+      v.caption =
+          "Just under the largest sky ceiling, looking out over the walls: the far land "
+          "through the sky faces.";
+      v.map = map;
+      out.push_back(v);
+    }
+  }
   if (best > 0) {
     View v;
     v.eye[0] = c[0];
@@ -624,6 +646,7 @@ void run(gl::Lab& lab) {
   for (size_t i = 0; i < maps.size(); ++i) lab.note(names[i] + "'s sky: " + maps[i]->sky.why);
   // The rebake (rebake.hpp): each map's light worked out again from its lights, a sun through its
   // sky faces and the open sky, before the renderer uploads it.
+  const double far_warm = lab.arg_num("farland-warm");
   const bool rebaked = lab.arg_num("rebake") > 0;
   for (size_t i = 0; rebaked && i < maps.size(); ++i) {
     ba::Scene& s = maps[i]->scene;
@@ -679,6 +702,20 @@ void run(gl::Lab& lab) {
     gr::create_flames(d, f.pipelines, m->flames, f.layout);
     m->world = ba::liquid_world(m->scene, rows);
     ba::add_bsp_liquids(d, m->water, m->liquids, m->world, rows);
+  }
+  // Each map's far land: --farland's kind (auto: dealt to suit its sky), built and uploaded.
+  for (size_t i = 0; i < maps.size(); ++i) {
+    MapState& m = *maps[i];
+    gr::create_far_land(d, f.pipelines, m.far, f.layout);
+    bool known = true;
+    const gr::FarLandKind* k = ba::far_land_for(m.sky, names[i], lab.arg("farland"), &known);
+    if (!known)
+      lab.fail("--farland names no far land: " + lab.arg("farland"),
+               "next: auto, off or a kind of engine/render/far_land_kinds.cpp (alps, xeno ...).");
+    if (k == nullptr) continue;
+    const gr::FarSite site = ba::far_site_of(m.scene, names[i]);
+    gr::set_far_land(d, m.far, *k, site, gr::build_far_land(*k, site));
+    lab.note(names[i] + "'s far land: " + k->name + " (" + k->what + ")");
   }
   if (!f.pipelines.finish(d)) {
     lab.fail("the BSP renderer's pipelines did not build",
@@ -784,7 +821,7 @@ void run(gl::Lab& lab) {
     }
     std::vector<gl::Picture> pics;
     pics.reserve(ways.size());
-    for (const Way& way : ways) pics.push_back(draw(d, f, m, fv, way.o));
+    for (const Way& way : ways) pics.push_back(draw(d, f, m, fv, way.o, far_warm));
     gl::Picture sheet = gl::create_picture(int(w) * 3 + 40, int(h) + 30, {250, 250, 248});
     for (size_t i = 0; i < pics.size(); ++i) {
       const int ox = 10 + int(i) * (int(w) + 10);
@@ -821,7 +858,7 @@ void run(gl::Lab& lab) {
                 v.caption + " V2 lit in real time, a frame of a sequence.",
                 "The layers drift on the wind between frames, the scud fastest.",
                 {{"t", ls::fixed(at, 2)}}},
-               draw(d, f, m, tv, ways[2].o), Det::measured);
+               draw(d, f, m, tv, ways[2].o, far_warm), Det::measured);
     }
     if (rebaked) {
       // The rebake beside the file's lightmaps: flat, then with the textures' relief lit by the
@@ -838,7 +875,7 @@ void run(gl::Lab& lab) {
       for (int i = 0; i < 3; ++i) {
         const int ox = 10 + i * (int(w) + 10);
         gl::draw_text(rs, ox, 6, r3[i].label, {24, 26, 32});
-        ls::paste(rs, draw(d, f, m, fv, r3[i].o), ox, 20);
+        ls::paste(rs, draw(d, f, m, fv, r3[i].o, far_warm), ox, 20);
       }
       lab.shot({v.id + "-rebaked",
                 v.title + ", REBAKED",
@@ -858,7 +895,7 @@ void run(gl::Lab& lab) {
         ba::SkyPick pick = m.sky;
         ba::with_type(pick, name);
         dress(sv, pick, sun, cover, m.scene.maxs[1], t);
-        panes.push_back(draw(d, f, m, sv, ways[2].o));
+        panes.push_back(draw(d, f, m, sv, ways[2].o, far_warm));
       }
       const int n = int(panes.size());
       gl::Picture row = gl::create_picture(int(w) * n + 10 * (n + 1), int(h) + 30, {250, 250, 248});
@@ -879,7 +916,7 @@ void run(gl::Lab& lab) {
     if (!ladder.empty()) {
       std::vector<gl::Picture> rungs;
       rungs.reserve(ladder.size());
-      for (const Way& way : ladder) rungs.push_back(draw(d, f, m, fv, way.o));
+      for (const Way& way : ladder) rungs.push_back(draw(d, f, m, fv, way.o, far_warm));
       const int n = int(rungs.size());
       gl::Picture row = gl::create_picture(int(w) * n + 10 * (n + 1), int(h) + 30, {250, 250, 248});
       for (int i = 0; i < n; ++i) {
@@ -925,6 +962,9 @@ const gl::LabSpec kSpec{
      {"sun", "", "the sun's elevation and azimuth, degrees (none: each map's picked sky's)"},
      {"clouds", "", "the heaps' cover, 0..1, 0 a clear sky (none: each map's picked sky's)"},
      {"night", "1", "the classic night over every map (0: the picked sky's hour by day)"},
+     {"farland", "auto",
+      "the land round each map seen over its walls: auto (dealt to suit its sky), off or a kind"},
+     {"farland-warm", "0", "the far land's air warmer than its kind's, C"},
      {"seen", "",
       "the night sky as seen through the sky faces against the rooms (none: the night's)"},
      {"to-moon", "0", "the --at sequence turned to the moon through a longer lens (1: on)"},
