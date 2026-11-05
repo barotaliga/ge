@@ -11,6 +11,8 @@
 #include <filesystem>
 #include <initializer_list>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "check.hpp"
 #include "progs/layout.hpp"
@@ -58,12 +60,13 @@ struct Game {
   sv::Campaign c;
   std::string error;
   uint32_t sequence = 0;
-  explicit Game(const std::string& things) {
+  explicit Game(const std::string& things,
+                std::vector<std::string> settings = std::vector<std::string>{"deathmatch 0"}) {
     g_things = things;
     sv::CampaignOptions o;
     o.server.loop.max_edicts = 128;
     o.load = &load;
-    o.settings = {"deathmatch 0"};
+    o.settings = std::move(settings);
     CHECK_MSG(sv::campaign_new_game(c, mod(), o, "first", error), error);
     sv::campaign_join(c, 0, "player");
   }

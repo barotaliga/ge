@@ -50,6 +50,7 @@
 #include "shooter/swim.hpp"
 #include "shooter/temper.hpp"
 #include "shooter/traits.hpp"
+#include "shooters_edge/bots/companion.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/profiles/items.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
@@ -164,6 +165,7 @@ struct Fighter {
   std::vector<FoeRead> foes;             // each enemy as believed, by entity (temper.hpp)
   std::vector<ButtonSpot> button_spots;  // the map's buttons (buttons.hpp)
   Mind mind;             // what it believes of its team, its claim, its calls (mind.hpp)
+  Escort escort;         // a co-op companion's own state (companion.hpp; leader -1: none)
   std::string name;      // its player name, as its teammates see it in their team lines
   ge::ai::Search reach;  // every node it can get to from where it stood at `reach_at`
   FighterStats stats;
@@ -246,6 +248,10 @@ float fighter_strength(const Stats& st);
 void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s, int slot,
                   const char* entities, sh::AimSkill skill, const sh::Traits& traits, double hz,
                   uint32_t seed);
+
+// Sends the fighter to nav node `node` (kept when it is on its way there or standing on it; none
+// when no way leads there from where it stands).
+void fighter_go(Fighter& f, int32_t node);
 
 // The fighter's next command, `msec` long, on server `s` as it stands after the last frame.
 sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, int msec);

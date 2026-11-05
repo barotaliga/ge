@@ -35,8 +35,12 @@ void(entity killer, entity killed) note_frag = {};
 
 void(entity m) missile_now = {};
 
-// The campaign has no teams and leaves no backpacks.
-float(entity a, entity b) same_team = { return FALSE; };
+// In coop with `teamplay` on, the players are one side: one player's shots never harm another
+// (his own blast still harms himself). Monsters are on no side. No backpacks are left.
+float(entity a, entity b) same_team = {
+  if (!coop || !teamplay || a == b) return FALSE;
+  return (a.flags & FL_CLIENT) && (b.flags & FL_CLIENT);
+};
 void() drop_on_death = {};
 
 // --- spawn parms: the inventory carried from map to map ---

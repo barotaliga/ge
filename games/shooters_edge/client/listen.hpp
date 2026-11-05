@@ -27,6 +27,10 @@
 // campaign_save.hpp) written to bytes and read back as the game playing, so it plays on as if
 // never stopped.
 //
+// THE PARTY (a campaign in coop: coop_party.hpp): companions seated by `addbot` or
+// `ListenOptions::companions`, carried from map to map by the campaign host, their packets in each
+// frame after the player's; `removebot` lets one go.
+//
 // THE LOBBY (`ListenOptions::lobby`, a match only): every map opens in warmup with the player and
 // the bots seated in `room` (lobby_room.hpp); the bots' packets go into each frame after his; the
 // lobby's lines are printed like the server's; when the countdown runs out the map is restarted
@@ -45,6 +49,7 @@
 // ge:keywords match-restart restarted
 // ge:keywords listen_campaign campaign single-player map_changed level-change
 // ge:keywords listen_save listen_load savegame listen_save_text listen_load_text classic-save
+// ge:keywords coop party companions
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -60,6 +65,7 @@
 #include "progs/file.hpp"
 #include "shooter/pmove.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
+#include "shooters_edge/client/coop_party.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/server/bsp_map.hpp"
@@ -104,6 +110,9 @@ struct ListenOptions {
   // countdown, then the map restarted for the match. Off: the match starts with the map.
   bool lobby = false;
   sv::LobbySettings lobby_settings;
+  // A campaign in coop starts with this many companions beside the player (coop_party.hpp).
+  int companions = 0;
+  sh::AimSkill companion_skill = sh::AimSkill::average;
 };
 
 // A blow the player took (a single-player program's damage record, client_data.hpp): its armour
@@ -149,6 +158,8 @@ struct Listen {
   // entities, then this).
   std::unique_ptr<Room> room;
   bool restarted = false;
+  // A campaign's companions (coop_party.hpp; null when none was ever seated).
+  std::unique_ptr<Party> party;
 };
 
 // The server made for `progs` (which must outlive it) on `map`, the player connected.
@@ -198,6 +209,7 @@ double listen_tic(const Listen& l);
 
 // A lobby line from the player (slot 0): the lobby's words (server/lobby.hpp: ready, break,
 // notready, toggleready, team, start, lobby), `addbot [novice|average|expert]` and `removebot`.
+// In a campaign the last two seat and let go a companion (coop on: `coopgame` starts one so).
 // False when the line is none of them, or when no lobby runs (a line saying so is printed).
 bool listen_lobby(Listen& l, std::string_view line);
 

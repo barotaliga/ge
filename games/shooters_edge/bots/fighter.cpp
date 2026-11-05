@@ -435,6 +435,19 @@ bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Ve
   return false;
 }
 
+// The weapon: the best loaded at `range`, asked for by its impulse.
+void choose_weapon(Fighter& f, const Stats& st, float range, double t, ai::Why* why) {
+  const auto score = [&](int32_t i) {
+    const WeaponRow& w = kWeapons[i];
+    return loaded(st, w) ? weapon_score(w, range) : -1.0;
+  };
+  const auto name = [](int32_t i) { return kWeapons[i].name; };
+  const int32_t w = ai::pick_best(8, score, why, "weapon", name, "the best loaded at the range");
+  if (w >= 0 && kWeapons[w].bit != st.weapon && loaded(st, kWeapons[w]) &&
+      t - f.impulse_at >= kImpulseGap_s)
+    f.want_weapon = kWeapons[w].number;
+}
+
 void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai::Why* why) {
   const double t = s.sv.time;
   const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
@@ -547,6 +560,19 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
       said.secs = static_cast<int>(it.respawn_s);
       mind_say(f, t, said, it.at);
     }
+  }
+
+  // A co-op companion (companion.hpp) chooses its own mode and goal: the leader, not the items.
+  if (f.escort.leader >= 0) {
+    if (committed >= 0) {
+      f.diving = f.last_dive = committed;
+    } else if (!escaping) {
+      escort_think(f, s, me, st, t, why);
+    }
+    if (f.diving < 0) f.last_dive = -1;
+    const sh::Contact* foe = sh::freshest(f.bot.senses, eye);
+    choose_weapon(f, st, foe ? dist(eye, at_of(foe->seen)) : 400.f, t, why);
+    return;
   }
 
   const sh::Contact* c = sh::freshest(f.bot.senses, eye);
@@ -669,17 +695,7 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   }
 
   if (f.diving < 0) f.last_dive = -1;
-
-  // The weapon.
-  const auto score = [&](int32_t i) {
-    const WeaponRow& w = kWeapons[i];
-    return loaded(st, w) ? weapon_score(w, range) : -1.0;
-  };
-  const auto name = [](int32_t i) { return kWeapons[i].name; };
-  const int32_t w = ai::pick_best(8, score, why, "weapon", name, "the best loaded at the range");
-  if (w >= 0 && kWeapons[w].bit != st.weapon && loaded(st, kWeapons[w]) &&
-      t - f.impulse_at >= kImpulseGap_s)
-    f.want_weapon = kWeapons[w].number;
+  choose_weapon(f, st, range, t, why);
 }
 
 // A living teammate within kFireClearance of the line from `eye` to `target`, nearer than it.
@@ -702,6 +718,8 @@ bool mate_in_line(const Fighter& f, const server::RulesCommon& s, sh::Vec3f eye,
 }
 
 }  // namespace
+
+void fighter_go(Fighter& f, int32_t node) { go_to(f, node); }
 
 float fighter_strength(const Stats& st) {
   return st.health + protection(st.armortype, st.armor) + ((st.items & kWRockets) ? 50.f : 0.f);
@@ -849,6 +867,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   f.bot.shot_speed = held ? held->shot_speed : 0;
   f.bot.aim_dz = held ? held->aim_dz : 0;
 
+  if (f.escort.leader >= 0) escort_sense(f, s, me, t);
   sh::MoveCmd cmd = sh::bot_source(f.bot).next(&f.bot, s.sv, slot, msec);
   f.stats.mode_commands[static_cast<int>(f.mode)]++;
   if (held) f.stats.weapon_commands[held->number]++;
@@ -939,6 +958,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
 
   if (!dead) spam_fire(f, s, me, st, t, cmd);
   if (!dead) button_poke_cmd(f, s, me, t, cmd);
+  if (!dead && f.escort.leader >= 0) escort_command(f, s, me, t, msec, cmd);
 
   // The trigger: a contact in sight, the view on the aim within the weapon's width at the range.
   const sh::Contact* c = nullptr;
@@ -957,6 +977,12 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
       fire = false;
       f.stats.held_fire++;
       if (f.team) f.team->stats.held_shots++;
+    }
+    if (fire && f.escort.leader >= 0 &&
+        escort_player_in_line(f, s, eye, at_of(c->seen), kFireClearance)) {
+      fire = false;
+      f.stats.held_fire++;
+      f.escort.stats.shots_held++;
     }
     if (fire) {
       cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);
