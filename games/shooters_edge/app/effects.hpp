@@ -19,14 +19,15 @@
 //   896 grey specks flying out), a splash of lava (1024 glowing specks thrown up).
 // - LIGHTS: a muzzle's flash (5 m), a rocket's glow (5 m), an explosion's (8.75 m shrinking 7.5 m
 //   a second for half a second): a white light on the lightmaps, as strong as the classic's.
-// - DUST (ce_warps, the modern look): a figure leaving (a teleport's near end) crumbles into
-//   ash that the wind takes, the flakes thrown off where its dissolve's cut passes each frame;
-//   one arriving (a spawn, a teleport's far end) is blown in as ash, each flake landing where
-//   the body appears as it appears. The figure's own dissolve is the morph pass's
-//   (render/morph.hpp's MorphWarp); both read the same field (`warp_field`), so the flakes
-//   leave and land on the cut. Off: the teleport's classic specks.
 // - THE SCREEN'S BLEND: the liquid round the eye, a hurt's red flash fading, and the powers held,
 //   mixed into one colour and share.
+//
+// THE DUST (ce_warps, the modern look; off, a teleport's classic specks above): a figure leaving
+// (a teleport's near end) crumbles into ash that the wind takes, the flakes thrown off where its
+// dissolve's cut passes each frame; one arriving (a spawn, a teleport's far end) is blown in as
+// ash, each flake landing where the body appears as it appears. The figure's own dissolve is the
+// morph pass's (render/morph.hpp's MorphWarp); both read the same field (`warp_field`), so the
+// flakes leave and land on the cut.
 //
 // ge:summary Shooter's Edge's effects: trails, bursts, dynamic lights and the screen's blend
 // ge:keywords effects particles trail rocket grenade explosion spark smoke blood teleport lava

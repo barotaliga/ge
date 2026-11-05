@@ -1,7 +1,8 @@
 // The window's effects each frame (world_fx.hpp).
 //
 // ge:summary The window's effects each frame: trails, explosions, their lights, the screen's blend
-// ge:keywords world-fx step_fx trail explosion screen-blend face_hit fx_switches held-beam warp ghost
+// ge:keywords world-fx step_fx trail explosion screen-blend face_hit fx_switches held-beam
+// ge:keywords warp ghost
 // ge:skill render shooter
 #include "shooters_edge/client/world_fx.hpp"
 
