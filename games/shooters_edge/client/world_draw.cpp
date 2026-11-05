@@ -582,8 +582,12 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   }
   if (f.has_map) {
     GE_ZONE("world.models");
+    const FxSwitches on = fx_switches(*f.picture);
+    const InPlace in_place{.flames = o.mode == ba::Mode::v2 && f.picture->ce.flames,
+                           .flares = on.flares,
+                           .bubbles = on.bubbles};
     prepare_models(d, f.models, f.scene.map, fx.models, view, o.brightness, o.minlight, !o.crisp,
-                   o.mode == ba::Mode::v2 && f.picture->ce.flames);
+                   in_place);
   }
   // Under a lava's or a slime's level the modern look draws the liquid round the eye itself.
   const bool round = f.extras && liquid_round_eye(*f.extras);

@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "brush/map.hpp"
+#include "classicenhance/replace.hpp"
 #include "classicenhance/weapons.hpp"
 #include "core/math.hpp"
 #include "core/prng.hpp"
@@ -367,12 +368,16 @@ FxSwitches fx_switches(const look::Picture& picture) {
   FxSwitches s;
   if (look::look_of(picture) == look::Look::classic) return s;
   s.muzzles = picture.ce.muzzles;
-  s.explosions = picture.ce.explosions;
+  const ge::classicenhance::Replacement* blast =
+      ge::classicenhance::replacement_of(kEffectModels[size_t(EffectModel::explosion)]);
+  s.explosions = picture.ce.explosions && blast != nullptr && blast->effect == "explosion";
   s.trails = picture.ce.trails;
   s.beams = picture.ce.beams;
   s.hits = picture.ce.hits;
   s.decals = picture.ce.decals;
   s.warps = picture.ce.warps;
+  s.flares = picture.ce.flares;
+  s.bubbles = picture.ce.bubbles;
   s.bolt = &fx::bolt_look(static_cast<int>(picture.beam_style));
   return s;
 }
