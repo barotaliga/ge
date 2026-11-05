@@ -33,6 +33,7 @@ inline constexpr double kHitKickDeg = 10;  // the full kick's pitch and roll, de
 struct Blast {
   ge::camera::Vec3 at;  // engine metres
   double t = 0;         // when it went off, s
+  sh::Vec3f map_at;     // map units (the effects' sprite stands there)
 };
 
 struct ViewState {

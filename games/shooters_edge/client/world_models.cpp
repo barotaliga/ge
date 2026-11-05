@@ -179,11 +179,15 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
   uint32_t most = 0;
   std::vector<gr::SpriteFrame>& frames = m.frames;
   std::set<std::string> refused;
-  m.kinds.assign(load.names.size(), {});
-  m.brush_of.assign(load.names.size(), 0);
+  // The server's list, then the effects' own models (kEffectModels).
+  std::vector<std::string> names(load.names.begin(), load.names.end());
+  for (const char* e : kEffectModels) names.emplace_back(e);
+  m.kinds.assign(names.size(), {});
+  m.brush_of.assign(names.size(), 0);
   m.brushes = uint32_t(map.models.size());
-  for (size_t i = 0; i < load.names.size(); i++) {
-    const std::string& name = load.names[i];
+  for (size_t i = 0; i < names.size(); i++) {
+    const std::string& name = names[i];
+    const bool own = i >= load.names.size();  // an effect's: no word when the pack lacks it
     ModelKind& k = m.kinds[i];
     // [1] is the map itself and "*N" its own brush models: the map's to draw, not these.
     if (name.size() > 1 && name[0] == '*') {
@@ -196,7 +200,7 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
     std::string error;
     if (!game.open_model(game, files, name, opened, error)) {
       // Not in the files (the map itself is not in the packs by this name either) or refused.
-      if (!error.empty() && refused.insert(name).second) not_drawn("model", name, error);
+      if (!own && !error.empty() && refused.insert(name).second) not_drawn("model", name, error);
       continue;
     }
     if (opened.form == ModelForm::morph) {

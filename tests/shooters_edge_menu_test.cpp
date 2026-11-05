@@ -5,11 +5,12 @@
 // files and refused without them; the classic layout's rows on the 320 x 200 screen; the modern
 // and the classic looks drawing every page clean; LOAD and SAVE's slots, their lines and the
 // console lines they run; CLASSIC ENHANCED's LOAD GAME asking the window for a folder and showing
-// why one was refused, ENHANCE dimmed until a game is loaded.
+// why one was refused, ENHANCE dimmed until a game is loaded; OPTIONS ▸ SCREENSHOTS looking
+// through the screenshots, deleting one after asking, and `menu_screenshots` opening it.
 //
 // ge:summary Tests the main menu: pages, dimming by the console, cvars, START, ESCAPE, both looks
 // ge:keywords test menu main-menu dimmed cvar console new-game start escape classic modern layout
-// ge:keywords load-game take_load load_refused
+// ge:keywords load-game take_load load_refused screenshots gallery menu_screenshots
 // ge:skill ui testing
 #include <algorithm>
 #include <cmath>
@@ -19,6 +20,7 @@
 
 #include "check.hpp"
 #include "console/console.hpp"
+#include "lab/png.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/menu/classic_view.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
@@ -442,4 +444,51 @@ TEST(enhanced_pictures_draw_at_the_classic_sizes) {
   dl.begin(1280, 720);
   g.draw(dl, 1280, 720, 0.25);
   for (const std::string& p : g.problems()) CHECK_MSG(false, p);
+}
+
+TEST(screenshots_page_looks_through_and_deletes_the_screenshots) {
+  namespace fs = std::filesystem;
+  const fs::path dir = fs::temp_directory_path() / "ge_se_menu_gallery";
+  std::error_code ec;
+  fs::remove_all(dir, ec);
+  fs::create_directories(dir, ec);
+  for (const char* name :
+       {"shooters_edge-2026-11-05-101500.png", "shooters_edge-2026-11-05-101501.png"}) {
+    const std::vector<uint8_t> rgba(size_t{32} * 18 * 4, 200);
+    CHECK(ge::lab::write_file((dir / name).string(), ge::lab::encode_png_rgb(32, 18, rgba)));
+  }
+  World w;
+  w.con.add_command("screenshot", "", [](ge::console::Console&, const ge::console::Args&) {});
+  sm::GameMenu g;
+  g.add_cvars(w.con);
+  g.set_screenshots(dir.string());
+  sm::Host host{.console = &w.con, .maps = {"start"}};
+  g.show(host, "options");
+  CHECK(!item(g.main(), "options", "screenshots")->disabled);  // lit: the console has `screenshot`
+  CHECK(g.main().focus("screenshots"));
+  MenuInput accept;
+  accept.accept = true;
+  g.update(accept, false, host, 0.016);
+  CHECK(g.in_gallery() && g.gallery().count() == 2);
+  CHECK(g.gallery().current()->name == "shooters_edge-2026-11-05-101501.png");  // newest first
+  for (const auto& [width, height] :
+       {std::pair{1280, 720}, std::pair{390, 844}, std::pair{844, 390}}) {
+    DrawList dl;
+    dl.begin(width, height);
+    g.draw(dl, width, height, 0);
+    for (const std::string& p : g.problems()) CHECK_MSG(false, p);
+  }
+  MenuInput del;
+  del.del = true;
+  g.update(del, false, host, 0.016);
+  CHECK(g.gallery().mode() == ge::capture::GalleryMode::confirm);
+  g.update(accept, false, host, 0.016);
+  CHECK(g.gallery().count() == 1 && !fs::exists(dir / "shooters_edge-2026-11-05-101501.png"));
+  MenuInput back;
+  back.back = true;
+  g.update(back, false, host, 0.016);
+  CHECK(!g.in_gallery() && g.open() && g.main().top().id == "options");
+  w.con.execute("menu_screenshots");
+  g.update({}, false, host, 0.016);
+  CHECK(g.open() && g.in_gallery());
 }

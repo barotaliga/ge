@@ -182,6 +182,10 @@ string(float n) argv = #86;
 float(string s) strlen = #114;
 string(string s, float start, float length) substr = #116;
 string(string s) strzone = #118;
+string(string s1, string s2, ...) strcat = #115;
+// A loaded game's own words (GE_QC_WORDS): the template under `key` in the server's local info
+// filled with the four arguments, "" when the game names none.
+string(string key, string a, string b, string c, string d) words = #640;
 
 // --- the variant's own settings, read each frame ---
 

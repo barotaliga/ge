@@ -109,6 +109,7 @@ struct Ball {
   double glow = 1;  // the emission's share of a blackbody's
   double billows, fray, billow_size, roll;
   double soot[3] = {0, 0, 0};
+  BlastLight light;
 };
 
 Ball ball_of(const Blast& b, double now_s) {
@@ -127,6 +128,7 @@ Ball ball_of(const Blast& b, double now_s) {
   o.billow_size = k.billow_size;
   o.roll = k.roll;
   for (int c = 0; c < 3; ++c) o.soot[c] = k.smoke_albedo * k.smoke_tint[c];
+  o.light = b.light;
   return o;
 }
 
@@ -153,6 +155,7 @@ Ball ball_of(const MuzzleFire& m, double now_s) {
   o.fray = k.fray;
   o.billow_size = k.billow_size;
   o.roll = 0;
+  o.light = m.light;
   return o;
 }
 
@@ -244,6 +247,8 @@ void stage_explosions(Explosions& ex, std::span<const Blast> blasts, const Frame
     }
     g.axis[3] = static_cast<float>(o.stretch);
     g.side[3] = static_cast<float>(o.prongs);
+    for (int c = 0; c < 3; ++c) g.light[c] = o.light.lit[c];
+    g.light[3] = static_cast<float>(o.light.sky);
   }
 }
 

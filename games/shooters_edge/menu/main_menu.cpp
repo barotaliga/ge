@@ -287,6 +287,11 @@ constexpr Entry kEntries[] = {
      .hint = "The world's look, the HUD and the menu's look.",
      .opens = "video"},
     {.page = "options",
+     .id = "screenshots",
+     .text = "SCREENSHOTS",
+     .hint = "The screenshots you took with F12: look through them, delete the ones to go.",
+     .needs = "screenshot"},
+    {.page = "options",
      .id = "classic",
      .text = "CLASSIC ENHANCED",
      .hint = "Your classic packs enhanced, and the modern picture: light, water, sky, weather.",
@@ -965,6 +970,7 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   if (e.kind != ge::ui::EventKind::activated) return Outcome::none;
   if (e.page == "enhanced" && e.item == "load") return Outcome::load_game;
   if (e.page == "enhanced" && e.item == "enhance") return Outcome::classic_enhance;
+  if (e.page == "options" && e.item == "screenshots") return Outcome::screenshots;
   if (e.page == "options" && e.item == "reset") {
     reset_defaults(host);
     refresh(menu, host);

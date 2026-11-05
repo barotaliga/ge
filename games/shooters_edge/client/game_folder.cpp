@@ -163,6 +163,8 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
       if (!archive_paths(files).empty()) {
         out.item_names = profiles::item_name_lines(game.tables.names);
         out.arsenal = profiles::arsenal_lines(game.arsenal);
+        for (std::string& line : profiles::word_lines(game.words))
+          out.item_names.push_back(std::move(line));
       }
     }
   }

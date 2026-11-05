@@ -1,0 +1,418 @@
+// Shooter's Edge's enhanced weapon effects (weapon_fx.hpp).
+//
+// ge:summary Shooter's Edge's enhanced weapon effects: layered blasts, exhaust, the bolt, the hits
+// ge:keywords weapon-fx blast billows embers exhaust rocket-trail grenade-trail bolt hit
+// ge:skill render shooter
+// ge:test tests/shooters_edge_weapon_fx_test.cpp
+#include "shooters_edge/app/weapon_fx.hpp"
+
+#include <algorithm>
+#include <cmath>
+
+#include "core/prng.hpp"
+#include "render/impact.hpp"
+
+namespace shooters_edge::effects {
+
+namespace {
+
+using ge::core::Rng;
+using gr::Particle;
+
+double rnd(Rng& r, double lo, double hi) { return ge::core::range(r, lo, hi); }
+
+// A direction uniform over the sphere (rejection: no trigonometry, the same bits everywhere).
+void unit(Rng& r, double out[3]) {
+  for (;;) {
+    double l2 = 0;
+    for (int k = 0; k < 3; ++k) {
+      out[k] = rnd(r, -1, 1);
+      l2 += out[k] * out[k];
+    }
+    if (l2 > 1e-4 && l2 <= 1) {
+      const double l = std::sqrt(l2);
+      for (int k = 0; k < 3; ++k) out[k] /= l;
+      return;
+    }
+  }
+}
+
+// `d` turned into the half space `n` faces (mirrored off the surface when it points into it).
+void away_from(const double n[3], double d[3]) {
+  const double along = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
+  if (along < 0)
+    for (int k = 0; k < 3; ++k) d[k] -= 2 * along * n[k];
+}
+
+Particle at(const double p[3]) {
+  Particle q{};
+  for (int k = 0; k < 3; ++k) q.p[k] = float(p[k]);
+  return q;
+}
+
+void set_v(Particle& q, const double d[3], double speed) {
+  for (int k = 0; k < 3; ++k) q.v[k] = float(d[k] * speed);
+}
+
+// A glowing ember: `kelvin` at birth, cooling by e every `cool` s.
+Particle ember(const double p[3], const double d[3], double speed, double kelvin, double cool,
+               double life, Rng& r) {
+  Particle q = at(p);
+  set_v(q, d, speed);
+  q.life = float(life);
+  q.size = float(rnd(r, 0.03, 0.05));
+  q.drag = 1.0f;
+  q.fall = 0.6f;
+  q.streak = 0.025f;
+  q.albedo = 0.05f;
+  q.opacity = 1;
+  q.kelvin = float(kelvin * rnd(r, 0.92, 1.08));
+  q.cool_s = float(cool);
+  return q;
+}
+
+// A puff of smoke that rises a little and spreads as it thins.
+Particle puff(const double p[3], double size, double grow, double grey, double opacity, double life,
+              const float tint[3], Rng& r) {
+  Particle q = at(p);
+  double d[3];
+  unit(r, d);
+  set_v(q, d, rnd(r, 0.05, 0.25));
+  q.v[1] += float(rnd(r, 0.15, 0.4));
+  q.life = float(life * rnd(r, 0.8, 1.2));
+  q.size = float(size * rnd(r, 0.8, 1.25));
+  q.grow = float(grow * rnd(r, 0.8, 1.2));
+  q.drag = 2.5f;
+  q.fall = -0.03f;  // warm: it rises
+  q.albedo = float(grey);
+  q.opacity = float(opacity);
+  for (int k = 0; k < 3; ++k) q.tint[k] = tint[k];
+  return q;
+}
+
+gr::BlastLook make_blast() {
+  gr::BlastLook l = *gr::blast_look_by_id("explosion.rocket");
+  l.id = "se.blast";
+  l.radius_m = 1.35;  // the classic sprite's ball, about 1.6 m across at its widest
+  l.grow_s = 0.05;
+  l.smoke_grow = 0.55;
+  l.rise = 1.1;
+  l.fire_s = 0.3;
+  l.core_k = 2450;  // orange-white at its hottest, not a white bulb
+  l.cool_k = 1400;
+  l.cool_s = 0.3;
+  l.flash = 0.55;
+  l.smoke = 0.75;
+  l.smoke_in_s = 0.25;
+  l.smoke_s = 2.4;
+  l.smoke_albedo = 0.14;
+  l.smoke_tint[0] = 0.95f, l.smoke_tint[1] = 0.86f, l.smoke_tint[2] = 0.74f;
+  l.billows = 0.95;
+  l.fray = 0.4;
+  l.billow_size = 1.1;
+  l.roll = 0.7;
+  l.sparks = 0;  // thrown by `blast`, the classic's way
+  l.debris = 6;
+  l.debris_hot = 0.6;
+  l.light_range_m = 10;
+  return l;
+}
+
+gr::BlastLook make_billow() {
+  gr::BlastLook l = make_blast();
+  l.id = "se.blast.billow";
+  l.radius_m = 0.7;
+  l.grow_s = 0.03;
+  l.fire_s = 0.22;
+  l.core_k = 2450;
+  l.cool_s = 0.25;
+  l.flash = 0.3;
+  l.smoke = 0.6;
+  l.smoke_s = 1.9;
+  l.billows = 1.1;
+  l.fray = 0.5;
+  l.debris = 0;
+  l.light_range_m = 0;
+  return l;
+}
+
+gr::MuzzleLook make_exhaust() {
+  gr::MuzzleLook l = *gr::muzzle_look_by_id("muzzle.rocket");
+  l.id = "se.exhaust";
+  l.length_m = 0.5;
+  l.width_m = 0.13;
+  l.life_s = 0.05;
+  l.core_k = 2400;
+  l.cool_k = 1700;
+  l.glow = 0.12;
+  l.flash = 0;
+  l.billows = 0.8;
+  l.fray = 0.5;
+  l.smoke.smoke = 0;  // the trail's puffs are its smoke
+  l.sparks = 0;
+  return l;
+}
+
+// The light any style throws on the room: a cold glow along it and where it lands.
+void cold_light(gr::BeamLook& l) {
+  l.light_rgb[0] = 0.55f, l.light_rgb[1] = 0.65f, l.light_rgb[2] = 1.0f;
+  l.light_cd = 900;
+  l.hit_cd = 700;
+  l.root_cd = 150;
+}
+
+gr::BeamLook make_forked() {
+  gr::BeamLook l;
+  gr::beam_look("bolt", l);
+  l.step_m = 0.3f;  // kinked every 30 cm, wandering far off its line over a few metres
+  l.wander = 0.55f;
+  l.pull = 0.18f;
+  l.fork_chance = 0.07f;
+  l.fork_m = 0.5f;
+  l.strike_hz = 20;
+  l.core_m = 0.06f;
+  l.glow_m = 0.55f;
+  l.core_cd = 9e4f;
+  l.glow_cd = 7000;  // the ionised air's blue round it, bright enough to read by day
+  l.core_rgb[0] = 0.86f, l.core_rgb[1] = 0.9f, l.core_rgb[2] = 1.0f;
+  l.glow_rgb[0] = 0.38f, l.glow_rgb[1] = 0.5f, l.glow_rgb[2] = 1.0f;
+  l.flash = 0.8f;
+  l.flicker = 0.5f;
+  l.shimmer = 0.35f;
+  l.attack_s = 0.02f;
+  l.release_s = 0.06f;
+  cold_light(l);
+  return l;
+}
+
+// One of the engine's presets as it makes it, its light turned down.
+gr::BeamLook make_preset(std::string_view name) {
+  gr::BeamLook l;
+  gr::beam_look(name, l);
+  cold_light(l);
+  return l;
+}
+
+constexpr float kWarmGrey[3] = {1.0f, 0.95f, 0.88f};
+constexpr float kPaleGrey[3] = {0.96f, 0.96f, 0.98f};
+
+}  // namespace
+
+const gr::BlastLook& blast_look() {
+  static const gr::BlastLook l = make_blast();
+  return l;
+}
+const gr::BlastLook& billow_look() {
+  static const gr::BlastLook l = make_billow();
+  return l;
+}
+const gr::MuzzleLook& exhaust_look() {
+  static const gr::MuzzleLook l = make_exhaust();
+  return l;
+}
+const gr::BeamLook& bolt_look(int style) {
+  static const gr::BeamLook kLooks[] = {make_forked(), make_preset(kBoltStyles[1]),
+                                        make_preset(kBoltStyles[2]), make_preset(kBoltStyles[3])};
+  const int n = static_cast<int>(std::size(kLooks));
+  return kLooks[(style >= 1 && style <= n ? style : kDefaultBoltStyle) - 1];
+}
+
+void blast(const double p[3], const double* normal, uint32_t seed, double now_s,
+           std::vector<gr::Blast>* blasts, Particles* births) {
+  Rng r = ge::core::make_rng(seed);
+  gr::Blast main;
+  for (int k = 0; k < 3; ++k) main.at[k] = p[k];
+  if (normal != nullptr) {
+    main.on_surface = true;
+    for (int k = 0; k < 3; ++k) main.normal[k] = normal[k];
+  }
+  main.look = &blast_look();
+  main.seed = seed;
+  main.born_s = now_s;
+  if (blasts) blasts->push_back(main);
+  // The billows: smaller balls born round it a moment later, so the cloud is lobed.
+  for (int i = 0; i < kBillows; ++i) {
+    double d[3];
+    unit(r, d);
+    d[1] = std::abs(d[1]) * 0.6 + 0.2;  // up and out more than down
+    if (normal != nullptr) away_from(normal, d);
+    gr::Blast b = main;
+    b.on_surface = false;  // round the dome, in the air
+    const double out = rnd(r, 0.55, 0.95);
+    for (int k = 0; k < 3; ++k) b.at[k] = p[k] + d[k] * out;
+    b.look = &billow_look();
+    b.scale = rnd(r, 0.8, 1.2);
+    b.seed = seed * 7919u + static_cast<uint32_t>(i) + 1u;
+    b.born_s = now_s + kBillowsBy * (i + 1) / kBillows * rnd(r, 0.4, 1.0);
+    for (int k = 0; k < 3; ++k) b.v[k] = d[k] * rnd(r, 0.8, 1.8);
+    if (blasts) blasts->push_back(b);
+  }
+  if (!births) return;
+  // The chunks the engine's look throws (its sparks are ours, below).
+  std::vector<gr::Spark> thrown(gr::blast_births_max(blast_look(), 1));
+  const size_t n = gr::blast_births(main, thrown);
+  for (size_t i = 0; i < n; ++i) births->push_back(gr::spark_particle(thrown[i]));
+  // The classic's ember ball: fast embers flung out that fall, slow ones that hang and drift.
+  for (int i = 0; i < 220; ++i) {
+    double d[3];
+    unit(r, d);
+    if (normal != nullptr) away_from(normal, d);
+    const double q[3] = {p[0] + d[0] * 0.2, p[1] + d[1] * 0.2, p[2] + d[2] * 0.2};
+    Particle e = ember(q, d, rnd(r, 4, 10), 2500, rnd(r, 0.4, 0.6), rnd(r, 0.6, 1.2), r);
+    e.size = float(rnd(r, 0.045, 0.07));
+    births->push_back(e);
+  }
+  for (int i = 0; i < 120; ++i) {
+    double d[3];
+    unit(r, d);
+    if (normal != nullptr) away_from(normal, d);
+    const double q[3] = {p[0] + d[0] * 0.4, p[1] + d[1] * 0.4, p[2] + d[2] * 0.4};
+    Particle e = ember(q, d, rnd(r, 1.5, 4.5), 2300, rnd(r, 0.6, 0.9), rnd(r, 0.9, 1.6), r);
+    e.drag = 2.6f;
+    e.fall = 0.2f;
+    e.size = float(rnd(r, 0.06, 0.09));
+    births->push_back(e);
+  }
+  // White-hot sparks, fast and streaked.
+  for (int i = 0; i < 48; ++i) {
+    double d[3];
+    unit(r, d);
+    if (normal != nullptr) away_from(normal, d);
+    Particle s = ember(p, d, rnd(r, 12, 26), 2900, 0.18, rnd(r, 0.25, 0.55), r);
+    s.size = 0.02f;
+    s.drag = 0.8f;
+    s.fall = 1;
+    s.streak = 0.045f;
+    births->push_back(s);
+  }
+}
+
+bool blast_light(const gr::Blast& b, double now_s, Light* out) {
+  const gr::Fireball f = gr::fireball_at(b, now_s);
+  if (!f.alive) return false;
+  const gr::Flash flash = gr::flash_at(b, now_s);
+  // The flash's share of its first moment, and a glow that falls away after it (the embers and
+  // the hot smoke), gone by kExplosionLight.
+  const double age = now_s - b.born_s;
+  const double tail = age < kExplosionLight ? 1 - age / kExplosionLight : 0;
+  const double k = std::max(f.fire, 0.35 * tail);
+  if (k <= 0.01) return false;
+  for (int i = 0; i < 3; ++i) out->pos[i] = f.centre[i];
+  out->radius = gr::look_of(b).light_range_m * (0.6 + 0.4 * k);
+  const double level = 2.6 * k;
+  for (int i = 0; i < 3; ++i) out->colour[i] = level * flash.colour[i];
+  return true;
+}
+
+gr::MuzzleFire exhaust(const double p[3], const double dir[3], uint32_t seed, double now_s) {
+  gr::MuzzleFire f;
+  f.shot.look = &exhaust_look();
+  f.shot.seed = seed;
+  f.shot.born_s = now_s - 0.012;  // a flame always young: re-lit every frame
+  for (int k = 0; k < 3; ++k) {
+    f.pose.at[k] = p[k];
+    f.pose.dir[k] = -dir[k];
+  }
+  // Any up square to the way it points.
+  const double up[3] = {std::abs(dir[1]) < 0.9 ? 0.0 : 1.0, std::abs(dir[1]) < 0.9 ? 1.0 : 0.0, 0};
+  const double along = up[0] * dir[0] + up[1] * dir[1];
+  double u[3] = {up[0] - along * dir[0], up[1] - along * dir[1], -along * dir[2]};
+  const double l = std::sqrt(u[0] * u[0] + u[1] * u[1] + u[2] * u[2]);
+  for (int k = 0; k < 3; ++k) f.pose.up[k] = u[k] / l;
+  return f;
+}
+
+namespace {
+
+void trail(const double from[3], const double to[3], uint32_t seed, bool rocket, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+  const double step = rocket ? kRocketStep : kGrenadeStep;
+  const int n = std::max(1, int(len / step));
+  for (int i = 0; i < n; ++i) {
+    const double t = (i + rnd(r, 0, 1)) / n;
+    const double p[3] = {from[0] + d[0] * t, from[1] + d[1] * t, from[2] + d[2] * t};
+    if (rocket) {
+      // Fire shed behind the motor: hot, slow, cooling to nothing within a few tenths.
+      double dir[3];
+      unit(r, dir);
+      Particle e = ember(p, dir, rnd(r, 0.2, 0.9), 2100, 0.09, rnd(r, 0.2, 0.4), r);
+      e.fall = -0.1f;
+      e.size = float(rnd(r, 0.05, 0.09));
+      e.streak = 0;
+      out->push_back(e);
+      // Puffs of every size, some thick, some thin, spreading at their own rates: a trail of
+      // smoke, not a tube.
+      Particle s = puff(p, rnd(r, 0.05, 0.15), rnd(r, 0.25, 0.9), 0.32, rnd(r, 0.15, 0.5),
+                        rnd(r, 0.9, 2.2), kWarmGrey, r);
+      for (float& v : s.v) v *= 2.5f;
+      out->push_back(s);
+    } else {
+      out->push_back(puff(p, rnd(r, 0.04, 0.1), rnd(r, 0.2, 0.5), 0.45, rnd(r, 0.15, 0.35),
+                          rnd(r, 0.7, 1.3), kPaleGrey, r));
+    }
+  }
+}
+
+}  // namespace
+
+void fire_trail(const double from[3], const double to[3], uint32_t seed, Particles* out) {
+  trail(from, to, seed, true, out);
+}
+
+void smoke_trail(const double from[3], const double to[3], uint32_t seed, Particles* out) {
+  trail(from, to, seed, false, out);
+}
+
+void hit(const double p[3], const double normal[3], const double dir[3], std::string_view surface,
+         bool nail, uint32_t seed, double now_s, std::vector<gr::Blast>* blasts,
+         Particles* births) {
+  const gr::ImpactLook* look = gr::impact_look_for(surface);
+  if (look == nullptr) return;  // the sky
+  gr::Impact h;
+  for (int k = 0; k < 3; ++k) {
+    h.at[k] = p[k];
+    h.normal[k] = normal[k];
+    h.dir[k] = dir[k];
+  }
+  h.look = look;
+  // The rounds a size up from the engine's: a hit read across a room, as the classic's puff is.
+  static const gr::ImpactRound kNail = {"se.round.nail", 2.2, 1.0};
+  static const gr::ImpactRound kPellet = {"se.round.pellet", 1.8, 0.35};
+  h.round = nail ? &kNail : &kPellet;
+  h.seed = seed;
+  h.born_s = now_s;
+  gr::Blast dust;
+  if (blasts && gr::dust_of(h, dust)) blasts->push_back(dust);
+  if (!births) return;
+  std::vector<gr::Spark> thrown(gr::impact_births_max(*look, gr::round_of(h)));
+  const size_t n = gr::impact_births(h, thrown);
+  for (size_t i = 0; i < n; ++i) births->push_back(gr::spark_particle(thrown[i]));
+}
+
+void bolt_hit(const double p[3], const double n[3], uint32_t seed, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  for (int i = 0; i < 6; ++i) {
+    double d[3];
+    unit(r, d);
+    away_from(n, d);
+    // Hotter than any fire: a blue-white that holds while it flies.
+    Particle s = ember(p, d, rnd(r, 3, 9), 9000, 0.5, rnd(r, 0.08, 0.2), r);
+    s.size = 0.015f;
+    s.streak = 0.03f;
+    s.fall = 0.5f;
+    out->push_back(s);
+  }
+}
+
+Light dynamic_light(const gr::LocalLight& l) {
+  Light d;
+  for (int k = 0; k < 3; ++k) d.pos[k] = l.position[k];
+  d.radius = l.range_m;
+  const double level = std::min(static_cast<double>(l.candela) / 2500.0, 1.2);
+  for (int k = 0; k < 3; ++k) d.colour[k] = level * l.colour[k];
+  return d;
+}
+
+}  // namespace shooters_edge::effects

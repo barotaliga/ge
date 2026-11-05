@@ -60,6 +60,7 @@ struct Effect {
   EffectKind kind = EffectKind::impact;
   int code = 0;            // the temporary entity's kind byte (-1: a particle burst)
   int entity = 0;          // a beam's owner
+  int count = 1;           // a gunshot's pellets, a blood's drops (a match's; 1 elsewhere)
   ge::shooter::Vec3f at;   // map units; a beam's start
   ge::shooter::Vec3f end;  // a beam's end
 };
