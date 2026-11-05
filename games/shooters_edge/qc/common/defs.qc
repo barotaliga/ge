@@ -139,6 +139,7 @@ float EF_RED = 128;     // the shield's
 .float respawn_time;      // an item's seconds to come back
 .float hazard_finished;   // when lava or slime next hurts
 .float super_damage_finished;  // the quad runs out
+.float power_said;             // the powers whose wearing off was told (IT_QUAD, IT_INVULNERABILITY)
 .float invincible_finished;    // the shield runs out
 .float light_lev;         // a light's brightness (the map's "light" key)
 .float style;             // a light's style

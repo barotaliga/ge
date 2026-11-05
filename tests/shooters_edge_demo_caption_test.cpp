@@ -133,6 +133,8 @@ TEST(the_prints_become_notify_lines_and_the_chat_lasts_longer) {
   CHECK(got[0].text == "You got the shells" && !got[0].gold);
   CHECK(got[1].gold);
   CHECK(cl::plain_text(got[1].text) == "(red1): [quad] low");
+  // The gold figures, from either half, read as their digits.
+  CHECK(cl::plain_text("\x90\x93\x92\x91 minutes, \x13 left") == "[10] minutes, 1 left");
   CHECK(n.at(10 + cl::kNoticeSeconds + 0.1).size() == 1);  // the pickup gone, the chat kept
   CHECK(n.at(10 + cl::kChatSeconds + 0.1).empty());
 

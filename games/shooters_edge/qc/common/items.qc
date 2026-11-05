@@ -117,7 +117,8 @@ void() armour_touch = {
   other.armortype = self.armortype;
   other.armorvalue = self.armorvalue;
   other.items = other.items - (other.items & IT_ARMOR_ALL) + self.items;
-  say_to(other, PRINT_LOW, "You got armor\n", "", "", "");
+  if (name_of(self.classname, "") == "") say_to(other, PRINT_LOW, "You got armor\n", "", "", "");
+  else say_to(other, PRINT_LOW, "You got the ", name_of(self.classname, ""), "\n", "");
   item_taken();
 };
 
@@ -345,9 +346,11 @@ void() power_touch = {
   if (!can_pick_up()) return;
   if (self.items == IT_QUAD) {
     other.super_damage_finished = time + POWER_TIME;
+    other.power_said = other.power_said - (other.power_said & IT_QUAD);
     say_to(other, PRINT_LOW, "You got the ", name_of(self.classname, "Quad Damage"), "\n", "");
   } else {
     other.invincible_finished = time + POWER_TIME;
+    other.power_said = other.power_said - (other.power_said & IT_INVULNERABILITY);
     say_to(other, PRINT_LOW, "You got the ", name_of(self.classname, "Shield"), "\n", "");
   }
   other.items = other.items | self.items;
@@ -370,13 +373,28 @@ void() item_artifact_invulnerability = {
 };
 
 // Each frame for a living player: the powers that ran out taken away, the glow of the ones held.
+// A power's end told 3 s before it comes, once, in the loaded game's words (none in ours).
+void(float bit, float finished, string key, string sample) power_warn = {
+  local string told;
+  if (!finished || finished - 3 > time || (self.power_said & bit)) return;
+  self.power_said = self.power_said | bit;
+  told = game_words(key, "", "", "", "");
+  if (told == "") return;
+  say_to(self, PRINT_HIGH, told, "", "", "");
+  sound(self, CHAN_ITEM, sample, 1, ATTN_NORM);
+};
+
 void() power_frame = {
+  power_warn(IT_QUAD, self.super_damage_finished, "power_quad_off", "items/damage2.wav");
+  power_warn(IT_INVULNERABILITY, self.invincible_finished, "power_pent_off", "items/protect2.wav");
   if (self.super_damage_finished && self.super_damage_finished < time) {
     self.super_damage_finished = 0;
+    self.power_said = self.power_said - (self.power_said & IT_QUAD);
     self.items = self.items - (self.items & IT_QUAD);
   }
   if (self.invincible_finished && self.invincible_finished < time) {
     self.invincible_finished = 0;
+    self.power_said = self.power_said - (self.power_said & IT_INVULNERABILITY);
     self.items = self.items - (self.items & IT_INVULNERABILITY);
   }
   self.effects = self.effects - (self.effects & (EF_DIMLIGHT | EF_BLUE | EF_RED));

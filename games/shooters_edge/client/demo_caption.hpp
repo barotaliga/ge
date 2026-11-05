@@ -87,8 +87,9 @@ struct DemoNotices {
   std::vector<CaptionLine> at(double t);
 };
 
-// The font's bytes as plain ASCII: the gold half folded onto the white, the brackets and rules
-// as `[`, `]` and `-`, the dots as `.`, every other control byte dropped.
+// The font's bytes as plain ASCII: the gold half folded onto the white, the gold figures as their
+// digits, the brackets and rules as `[`, `]` and `-`, the dots as `.`, every other control byte
+// dropped.
 std::string plain_text(std::string_view text);
 
 // The lines for `s` at `t` s on the demo's timeline; `title` the map's title ("": none).

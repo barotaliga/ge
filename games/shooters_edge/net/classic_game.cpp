@@ -22,6 +22,8 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/dedicated.hpp"
 #include "shooters_edge/server/lobby.hpp"
@@ -50,6 +52,9 @@ struct Game {
   std::array<const sv::RulesCommon*, gs::kLobbySeats> applied{};  // the rules a seat's team is on
   std::array<gs::Team, gs::kLobbySeats> shown{};                  // the team its user info says
   int said = 0;                                                   // the lobby's lines printed
+  // With a classic game's packs in the folder: its item names and server words as local info
+  // (profiles/items.hpp, profiles/words.hpp), set on every map before the rules start.
+  std::vector<std::string> info_lines;
   ~Game() {
     classic.reset();
     rules = {};  // its views into the map go before the map does
@@ -83,6 +88,7 @@ bool open_map(const Game& g, const std::string& name, std::unique_ptr<cl::Loaded
   if (!qc) return false;
   rules = sv::qc_runner(std::move(qc));
   rules.console("deathmatch 1");
+  for (const std::string& line : g.info_lines) rules.console(line);
   for (const auto& [rule, value] : c.rules) {
     if (value.empty()) continue;
     char* end = nullptr;
@@ -139,6 +145,11 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     if (c.map != "arena") return nullptr;
     g->files = cl::SearchPath{};
     error.clear();
+  }
+  if (!cl::archive_paths(g->files).empty()) {
+    const profiles::GameProfile& game = profiles::classic_game();
+    g->info_lines = profiles::item_name_lines(game.tables.names);
+    for (std::string& line : profiles::word_lines(game.words)) g->info_lines.push_back(line);
   }
   if (!open_map(*g, c.map, g->map, g->rules, error)) return nullptr;
   if (!open_room(*g, error)) return nullptr;
@@ -256,11 +267,24 @@ void lobby_turn(Game& g) {
     now.pending_map = g.map->name;
     now.pending_change = sv::MapChange::restart;
   }
-  for (const std::string& line : r.lobby.said) {
-    if (g.classic) classic_print_all(*g.classic, line + "\n");
-    g.said++;
-  }
-  r.lobby.said.clear();
+  g.said += static_cast<int>(r.lobby.said.size());
+  sv::MatchLook look;
+  if (const ge::console::Cvar* c = now.cvars.find("deathmatch"); c != nullptr)
+    look.deathmatch = static_cast<int>(c->number);
+  if (const ge::console::Cvar* c = now.cvars.find("teamplay"); c != nullptr)
+    look.teamplay = static_cast<int>(c->number);
+  std::vector<std::string> lines;
+  for (const auto& [rule, value] : g.settings.rules)
+    if (!value.empty()) lines.push_back(rule + " " + value);
+  sv::announce(r.announcer, r.lobby, now.localinfo, sv::match_look(look, lines), now.sv.time);
+}
+
+// The lobby's words handed to the rules playing now (after a change, the new map's): they go out
+// with the next frame's events, and into its recording.
+void lobby_words(Game& g) {
+  if (!g.room) return;
+  sv::announce_phase(g.rules->localinfo, g.room->lobby.phase);
+  sv::announce_flush(g.room->announcer, g.rules->out, g.rules->sv.time);
 }
 
 // A client's words the room takes before the mod: `addbot [skill]` and `removebot` from the
@@ -332,6 +356,7 @@ void frame(void* g) {
   sv::clear_frame(now.out);
   lobby_turn(game);
   change_if_asked(game);
+  lobby_words(game);
 }
 
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
@@ -352,6 +377,7 @@ void net_frame(void* g, int64_t now_us) {
   sync_seats(game);
   lobby_turn(game);
   change_if_asked(game);
+  lobby_words(game);
   sync_seats(game);  // a new map's seats
 }
 

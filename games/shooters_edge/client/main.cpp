@@ -115,6 +115,7 @@
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
+#include "shooters_edge/server/words.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "ui/console.hpp"
 #include "ui/console_keys.hpp"
@@ -541,7 +542,7 @@ int run_main(int argc, char** argv) {
     held_fire.shots = {};
     user_info.sent_to = nullptr;
   };
-  size_t printed = 0;
+  size_t printed = 0, centred = 0;
   uint64_t last = first_ns;
   long presented = 0;
   double longest = 0;  // the longest frame, s: a hitch a load or a stall made
@@ -916,6 +917,11 @@ int run_main(int argc, char** argv) {
       game_menu.show(menu_host, "help");
     }
     for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
+    if (centred > listen.centres.size()) centred = 0;     // a new listen
+    for (; centred < listen.centres.size(); centred++) {  // a centre print: the last one shows
+      hud.centre = listen.centres[centred];
+      hud.centre_until = hud.centre.empty() ? 0 : t + 2;
+    }
     // The eyes on the player and what the world throws, then the overlay: the HUD, the console.
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
     view.frame = static_cast<uint64_t>(presented);
@@ -934,8 +940,9 @@ int run_main(int argc, char** argv) {
     }
     if (listen.room && listen.server != nullptr) {
       // The lobby in the packs' own menu pictures when they carry them, else the modern panel.
-      const se::LobbyView lv =
-          cl::lobby_view(*listen.room, listen.server->sv.time, 0, lobby_roster);
+      se::LobbyView lv = cl::lobby_view(*listen.room, listen.server->sv.time, 0, lobby_roster);
+      // A classic game counts down in its own centre print (server/announce.hpp).
+      lv.count = shooters_edge::server::words_of(listen.server->localinfo, "count_head").empty();
       if (game_menu.art().loaded())
         shooters_edge::menu::draw_lobby_classic(overlay, game_menu.art(), lv, w, h);
       else

@@ -159,8 +159,11 @@ bool load_programs(const GameAdapter& adapter, const SearchPath& files,
     } else {
       if (!why.empty()) out::status("shooters_edge: the baseline mod runs (" + why + ")");
       loaded = baseline_progs(out.progs, error);
-      if (!archive_paths(files).empty())
+      if (!archive_paths(files).empty()) {
         out.item_names = profiles::item_name_lines(game.tables.names);
+        for (std::string& line : profiles::word_lines(game.words))
+          out.item_names.push_back(std::move(line));
+      }
     }
   }
   if (!loaded) return false;
