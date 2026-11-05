@@ -32,10 +32,12 @@
 // frame after the player's; `removebot` lets one go.
 //
 // THE LOBBY (`ListenOptions::lobby`, a match only): every map opens in warmup with the player and
-// the bots seated in `room` (lobby_room.hpp); the bots' packets go into each frame after his; the
-// lobby's lines are printed like the server's; when the countdown runs out the map is restarted
-// with every seat on it (`restarted`), and a map change goes back to warmup. `listen_lobby` runs
-// the player's lobby words.
+// the bots seated in `room` (lobby_room.hpp); the player is on the map (connected to the server)
+// only once he joins the warmup (`warmup`, F4) or the match starts, and off it again when he goes
+// back to the lobby's screen (`sitout`), the bots fighting on meanwhile; the bots' packets go into
+// each frame after his; the lobby's lines are printed like the server's; when the countdown runs
+// out the map is restarted with every seat on it (`restarted`), and a map change goes back to
+// warmup. `listen_lobby` runs the player's lobby words.
 //
 // THE VIEW: the player's angles are the client's (`Listen::view`, degrees: pitch down positive,
 // yaw counter-clockwise from +x), sent with every command; when the server turns him (a spawn, a
@@ -46,7 +48,7 @@
 // ge:keywords listen_advance listen_change loaded-map load_named_map baseline_progs map-change
 // ge:keywords listen_stop
 // ge:keywords forced-view mintic player_state missiles rocket-jump lobby warmup listen_lobby
-// ge:keywords match-restart restarted
+// ge:keywords match-restart restarted listen_lobby_view on_lobby_screen lobby-screen
 // ge:keywords listen_campaign campaign single-player map_changed level-change
 // ge:keywords listen_save listen_load savegame listen_save_text listen_load_text classic-save
 // ge:keywords coop party companions
@@ -111,7 +113,9 @@ struct ListenOptions {
   // A match opens every map in the lobby's warmup (lobby_room.hpp): ready, teams, bots, the
   // countdown, then the map restarted for the match. Off: the match starts with the map.
   bool lobby = false;
-  sv::LobbySettings lobby_settings;
+  // The window's lobby: two seats (a bot counts) before a match may start, and the player waits
+  // on the lobby's own screen until he joins the warmup (F4).
+  sv::LobbySettings lobby_settings = {.min_players = 2, .warm_on_join = false};
   // A campaign in coop starts with this many companions beside the player (coop_party.hpp).
   int companions = 0;
   sh::AimSkill companion_skill = sh::AimSkill::average;
@@ -211,10 +215,19 @@ std::string map_title(const Listen& l);
 double listen_tic(const Listen& l);
 
 // A lobby line from the player (slot 0): the lobby's words (server/lobby.hpp: ready, break,
-// notready, toggleready, team, start, lobby), `addbot [novice|average|expert]` and `removebot`.
-// In a campaign the last two seat and let go a companion (coop on: `coopgame` starts one so).
-// False when the line is none of them, or when no lobby runs (a line saying so is printed).
+// notready, toggleready, team, start, warmup, sitout, togglewarmup, lobby), `addbot
+// [novice|average|expert]` and `removebot`. In a campaign the last two seat and let go a companion
+// (coop on: `coopgame` starts one so). False when the line is none of them, or when no lobby runs
+// (a line saying so is printed).
 bool listen_lobby(Listen& l, std::string_view line);
+
+// What the lobby's banner and screen show (lobby_room.hpp's `lobby_view` for the player), each
+// seat's frags read off the server when it is on the map, and the map's name. A view with no rows
+// when no lobby runs.
+hud::LobbyView listen_lobby_view(const Listen& l);
+// Whether the player is on the lobby's screen: a lobby runs and he is not on the map (he has not
+// joined the warmup, and the match is not on).
+bool on_lobby_screen(const Listen& l);
 
 // One server frame with the player's command `cmd` (its angles are `l.view`, its length the
 // server's frame; an impulse waiting goes with it).

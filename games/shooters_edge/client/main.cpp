@@ -38,7 +38,7 @@
 // the brightness, `topcolor` and `bottomcolor` the player's colours, and `quit` quits; the settings
 // are kept in `<game folder>/settings/config.cfg` (client/settings.hpp).
 //
-// THE LOBBY: each map in warmup until all are ready; F1 ready, F2 team, F3 roster (lobby_console).
+// THE LOBBY: its own screen over the title's night until F4 joins the warmup (lobby_console).
 //
 // THE BENCHMARK: `timedemo <demo>` in the console (or `-timedemo <demo>` on the command line,
 // which quits when it is done) plays a recorded game (`demo1` from the packs, or a file's path)
@@ -108,6 +108,7 @@
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
+#include "shooters_edge/hud/lobby_page.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
@@ -281,8 +282,17 @@ int run_main(int argc, char** argv) {
   const uint64_t first_ns = ge::platform::now_ns();
   // The title with the spinner in its corner: the start's first frame, and every frame a map
   // loads with no world of it yet.
-  const auto title_frame = [&](double t, double dt, std::string_view caption, double since) {
+  // The title's night with the menu over it; `lobby` puts the lobby's screen between them.
+  const auto title_frame = [&](double t, double dt, std::string_view caption, double since,
+                               bool lobby = false) {
     overlay.begin(w, h);
+    if (lobby) {
+      const se::LobbyView lv = cl::listen_lobby_view(listen);
+      if (game_menu.art().loaded())
+        shooters_edge::menu::draw_lobby_page_classic(overlay, game_menu.art(), lv, w, h);
+      else
+        se::draw_lobby_page(overlay, lv, w, h);
+    }
     game_menu.draw(overlay, w, h, t);
     con_view.frame(dt);
     ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
@@ -480,7 +490,6 @@ int run_main(int argc, char** argv) {
   ge::input::InputState held;
   const ge::input::InputState idle;
   ge::ui::ConsoleKeys con_keys;
-  bool lobby_roster = true;  // the lobby panel's roster (F3)
   bool text_on = false;
   ge::platform::InputSnapshot input;
   cl::ViewState shown;
@@ -892,13 +901,31 @@ int run_main(int argc, char** argv) {
       continue;
     }
     cl::send_user_info(listen, console, user_info);  // the name and colours, as they change
-    // The lobby's keys (F1 ready or break, F2 the other team, F3 the roster), then the player's
+    // The lobby's keys (F1 ready or break, F2 the other team, F4 the warmup or the lobby's
+    // screen; on the screen F5 and F6 a bot more or less, ENTER the start), then the player's
     // hands, then the server's frames.
     {
       using ge::platform::Key;
       const bool keys = !con_keys.held && !con_view.open() && !game_menu.open();
-      cl::lobby_keys(listen, keys && input.tapped(Key::f1), keys && input.tapped(Key::f2),
-                     keys && input.tapped(Key::f3), lobby_roster);
+      const auto tap = [&](Key k) { return keys && input.tapped(k); };
+      cl::lobby_keys(listen, {.f1 = tap(Key::f1),
+                              .f2 = tap(Key::f2),
+                              .f4 = tap(Key::f4),
+                              .f5 = tap(Key::f5),
+                              .f6 = tap(Key::f6),
+                              .enter = tap(Key::enter)});
+    }
+    // The lobby's screen (hud/lobby_page.hpp, or the classic look's): the player is not on the
+    // map, so it is drawn over the main menu's backdrop while the server runs on (the bots and the
+    // warmup fight on without him), until he joins the warmup or the match starts.
+    if (cl::on_lobby_screen(listen)) {
+      const int frames = cl::listen_advance(listen, wall, ge::shooter::MoveCmd{});
+      cl::record_tick(recorder, listen, frames, console);
+      if (std::exchange(listen.restarted, false)) forget_seen();
+      for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
+      title_frame(t, wall, {}, 0, true);
+      ++presented;
+      continue;
     }
     const cl::Moves moves = playing ? cl::button_moves(controls) : cl::Moves{};
     cl::turn_view(played, moves, controls, wall, listen.view);
@@ -962,8 +989,8 @@ int run_main(int argc, char** argv) {
       hud.layout.draw(overlay, hf, se::hud_style());
     }
     if (listen.room && listen.server != nullptr) {
-      // The lobby in the packs' own menu pictures when they carry them, else the modern panel.
-      se::LobbyView lv = cl::lobby_view(*listen.room, listen.server->sv.time, 0, lobby_roster);
+      // The warmup's banner in the packs' own menu pictures when they carry them, else modern.
+      se::LobbyView lv = cl::listen_lobby_view(listen);
       // A classic game counts down in its own centre print (server/announce.hpp).
       lv.count = shooters_edge::server::words_of(listen.server->localinfo, "count_head").empty();
       if (game_menu.art().loaded())
