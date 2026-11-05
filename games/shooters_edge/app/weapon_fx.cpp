@@ -386,15 +386,17 @@ void hit(const WallHit& w, uint32_t seed, double now_s, std::vector<gr::Blast>* 
   gr::Blast dust;
   if (blasts && gr::dust_of(h, dust)) blasts->push_back(dust);
   if (!births) return;
-  // The wall's colour as a shade (its brightness) and a tint (its hue), for what comes off it.
+  // MONOTONE: what comes off the wall is its brightness in greys, a hint of its hue at most
+  // (kHueKept), so a hit reads as dust and grit, never as coloured confetti.
   const bool coloured = w.colour[0] >= 0;
   const float lum =
       coloured ? 0.2126f * w.colour[0] + 0.7152f * w.colour[1] + 0.0722f * w.colour[2] : 0;
+  constexpr float kHueKept = 0.12f;
   const auto paint = [&](Particle& q) {
     q.floor_y = static_cast<float>(w.floor_y);
     if (!coloured || lum <= 1e-4f) return;
     q.albedo = std::clamp(lum, 0.06f, 0.8f);
-    for (int k = 0; k < 3; ++k) q.tint[k] = std::min(w.colour[k] / lum, 2.0f);
+    for (int k = 0; k < 3; ++k) q.tint[k] = 1 + kHueKept * (std::min(w.colour[k] / lum, 2.0f) - 1);
   };
   std::vector<gr::Spark> thrown(gr::impact_births_max(*look, gr::round_of(h)));
   const size_t n = gr::impact_births(h, thrown);
@@ -405,9 +407,13 @@ void hit(const WallHit& w, uint32_t seed, double now_s, std::vector<gr::Blast>* 
       q.bounce = 0.3f;
     } else if (thrown[i].kind == gr::SparkKind::grit) {
       paint(q);
-    } else {
+    } else if (thrown[i].kind == gr::SparkKind::spark) {
+      // Sparks only from a nail off metal: anything else's hit stays in its greys.
+      if (w.surface != "metal" || !w.nail) continue;
       q.floor_y = static_cast<float>(w.floor_y);
       q.bounce = 0.25f;
+    } else {
+      paint(q);  // a splash's beads and the rest: monotone too
     }
     births->push_back(q);
   }
@@ -450,7 +456,8 @@ void hit(const WallHit& w, uint32_t seed, double now_s, std::vector<gr::Blast>* 
     q.albedo = 0.5f;
     q.opacity = 0.3f;
     paint(q);
-    q.albedo = std::max(q.albedo, 0.35f);  // powder is paler than the face it came off
+    q.albedo = std::max(q.albedo, 0.35f);            // powder is paler than the face it came off
+    for (float& c : q.tint) c = 1 + 0.5f * (c - 1);  // and greyer still
     births->push_back(q);
   }
   // The wisp: a thin, slow smoke that drifts off the face and spreads.

@@ -7,6 +7,7 @@
 // ge:summary Tests Shooter's Edge's enhanced weapon effects: blasts, trails, exhaust, hits, bolt
 // ge:keywords test weapon-fx blast billows dome trail exhaust hit bolt dynamic-light shooter
 // ge:skill shooter
+#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -109,7 +110,9 @@ TEST(a_hit_throws_its_surfaces_burst_in_the_walls_colour_and_nothing_off_the_sky
     if (p.grow > 0) continue;   // the wisp
     CHECK(p.floor_y == -1.5f);  // what it knocks loose comes down on the floor under it
     flakes += p.bounce > 0 ? 1 : 0;
-    browned += p.tint[0] > p.tint[2] ? 1 : 0;  // in the wall's own colour
+    browned += p.tint[0] > p.tint[2] ? 1 : 0;  // a hint of the wall's own colour
+    CHECK(std::abs(p.tint[0] - 1) < 0.2f && std::abs(p.tint[2] - 1) < 0.2f);  // monotone
+    CHECK(p.kelvin <= 0);                                                     // no sparks off stone
   }
   CHECK(flakes >= 2 && browned >= 2);
   int sparks = 0;

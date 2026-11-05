@@ -102,11 +102,11 @@ struct WallHit {
   double floor_y = -1e9;
   bool nail = false;  // a nail's (more sparks, a deeper bite), else a pellet's
 };
-// THE HIT, kept subtle: the engine's burst for its surface at about a round's own size (its puff of
-// dust through the explosions' pass, a few sparks off metal, chips and grit), the chips and grit
-// in the wall's own colour; FLAKES that peel off the face, fall and hop once or twice on the floor
-// before they lie still; and one thin wisp of smoke that drifts up and spreads. Nothing for the
-// sky.
+// THE HIT, kept subtle and MONOTONE: the engine's burst for its surface at about a round's own
+// size (its puff of dust through the explosions' pass, a few sparks from a nail off metal only,
+// chips and grit), all of it in the wall's own brightness in greys (a hint of its hue at most);
+// FLAKES that peel off the face, fall and hop once or twice on the floor before they lie still; and
+// one thin wisp of smoke that drifts up and spreads. Nothing for the sky.
 void hit(const WallHit& h, uint32_t seed, double now_s, std::vector<gr::Blast>* blasts,
          Particles* births);
 
