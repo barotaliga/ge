@@ -19,8 +19,9 @@
 //   muzzle fire's march, stretched back along its flight), embers shed behind it that cool fast,
 //   and puffs of warm grey smoke laid every few centimetres that rise and spread. A GRENADE trails
 //   thinner, paler smoke alone (`smoke_trail`).
-// - THE BOLT (`bolt_look`): render/beam.hpp's lightning channel in the classic's colours and its
-//   segments' length, re-struck twenty times a second, with short forks; its lights blue-white.
+// - THE BOLT (`bolt_look`): render/beam.hpp's lightning channel in the style the player picks
+//   (the engine's jagged bolt by default, its plasma arc or its braid, or a finer-forked bolt),
+//   its lights a cold blue-white glow that does not wash the room out.
 //   Where it lands, blue-white sparks (`bolt_hit`).
 // - THE HITS (`hit`): a pellet's or a nail's hit throws the burst of what it hit (`impact_look_for`
 //   with engine/detail's surface word), its dust a puff through the explosions' pass, its chips,
@@ -31,7 +32,8 @@
 //
 // ge:summary Shooter's Edge's enhanced weapon effects: layered blasts, exhaust, the bolt, the hits
 // ge:keywords weapon-fx enhanced effects explosion fireball layered secondary embers ember-ball
-// ge:keywords rocket-trail exhaust grenade-trail fire_trail smoke_trail smoke lightning bolt beam arc-gun impact hit
+// ge:keywords rocket-trail exhaust grenade-trail fire_trail smoke_trail smoke lightning bolt
+// ge:keywords beam arc-gun impact hit
 // ge:keywords pellet nail surface classic-soul blast_light
 // ge:skill render shooter
 // ge:test tests/shooters_edge_weapon_fx_test.cpp
@@ -56,7 +58,14 @@ namespace gr = ge::render;
 const gr::BlastLook& blast_look();     // the main fireball
 const gr::BlastLook& billow_look();    // a later, smaller billow round it
 const gr::MuzzleLook& exhaust_look();  // a rocket's motor
-const gr::BeamLook& bolt_look();       // the arc gun's bolt
+// The arc gun's bolt in each style a player picks by number (r_beam_style): 1 forked (finer
+// kinks, wider forks, a bluer sheath), then the engine's three presets as it makes them
+// (render/beam.hpp): 2 arc (a thick plasma arc), 3 bolt (jagged and forking, the default),
+// 4 braid (a spinning rope of three); each with its light on the room turned down to a cold glow.
+// A number out of range is the default's.
+inline constexpr std::string_view kBoltStyles[] = {"forked", "arc", "bolt", "braid"};
+inline constexpr int kDefaultBoltStyle = 3;
+const gr::BeamLook& bolt_look(int style = kDefaultBoltStyle);
 
 // Billows round a blast's main ball, and when the last is born after it, s.
 inline constexpr int kBillows = 3;

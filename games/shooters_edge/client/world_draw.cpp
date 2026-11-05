@@ -104,7 +104,8 @@ constexpr float kHeldAmbient = 0.55f, kHeldDirect = 0.45f, kHeldMost = 1.6f;
 // THE LIGHT AT A POINT (engine metres), for the smoke there: the open sky's share (1 when a march
 // straight up the map's tree meets a sky leaf before a solid one) and the lightmap's light on the
 // floor under it, in whites (a luxel of 128 a surface as painted). No map: the open air's.
-constexpr float kSkyStepU = 32, kSkyReachU = 4096;
+constexpr float kSkyStepU = 32;
+constexpr int kSkySteps = 128;  // 4096 units up
 constexpr int kSkyContents = -6, kSolidContents = -2;
 gr::BlastLight light_at(const WorldDraw& f, const double e[3]) {
   gr::BlastLight l;
@@ -117,8 +118,8 @@ gr::BlastLight light_at(const WorldDraw& f, const double e[3]) {
   if (ge::brush::light_below(f.probe, m, p, rgb))
     for (int k = 0; k < 3; ++k) l.lit[k] = 2 * rgb[k];
   l.sky = 0;
-  for (float up = kSkyStepU; up < kSkyReachU; up += kSkyStepU) {
-    const float q[3] = {p[0], p[1], p[2] + up};
+  for (int i = 1; i < kSkySteps; ++i) {
+    const float q[3] = {p[0], p[1], p[2] + kSkyStepU * static_cast<float>(i)};
     const uint32_t leaf = ge::brush::leaf_at(m, q);
     if (leaf >= m.leaves.size()) break;
     const int32_t c = m.leaves[leaf].contents;
@@ -525,8 +526,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     for (const HeldBeam& b : fx.beams) {
       if (f.beam_draws.size() >= f.beam_shapes.size()) break;
       gr::BeamShape& shape = f.beam_shapes[f.beam_draws.size()];
-      gr::build_beam(effects::bolt_look(), b.shot, view.time_s, shape);
-      if (shape.count > 0) f.beam_draws.push_back({&shape, &effects::bolt_look(), b.shot.seed});
+      const gr::BeamLook* look = b.look != nullptr ? b.look : &effects::bolt_look();
+      gr::build_beam(*look, b.shot, view.time_s, shape);
+      if (shape.count > 0) f.beam_draws.push_back({&shape, look, b.shot.seed});
     }
     gr::prepare_beams(d, f.beams, f.beam_draws, {}, view, 400);
   }

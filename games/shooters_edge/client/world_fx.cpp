@@ -137,6 +137,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.trails = picture.ce.trails;
   s.beams = picture.ce.beams;
   s.hits = picture.ce.hits;
+  s.bolt = &fx::bolt_look(static_cast<int>(picture.beam_style));
   return s;
 }
 
@@ -311,11 +312,11 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     return false;
   });
   // The beams: let go once the program stops sending one, gone once faded; their lights.
-  const ge::render::BeamLook& bolt = fx::bolt_look();
   for (HeldBeam& b : s.beams)
     if (b.shot.end_s < 0 && t - b.seen > kBeamHoldS) b.shot.end_s = b.seen + kBeamHoldS;
   std::erase_if(s.beams, [&](const HeldBeam& b) {
-    return b.shot.end_s >= 0 && t > b.shot.end_s + (s.on.beams ? bolt.release_s : 0);
+    const double release = s.on.beams && b.look != nullptr ? b.look->release_s : 0;
+    return b.shot.end_s >= 0 && t > b.shot.end_s + release;
   });
   ge::core::Rng roll = ge::core::make_rng(s.seed++);  // the classic bolt's segments' roll
   int segment = 0;
@@ -323,7 +324,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     if (s.on.beams) {
       out.beams.push_back(b);
       ge::render::LocalLight ll[ge::render::kBeamLights];
-      const int n = ge::render::beam_lights(bolt, b.shot, t, ll);
+      const int n = ge::render::beam_lights(b.look ? *b.look : fx::bolt_look(), b.shot, t, ll);
       for (int i = 0; i < n; ++i) out.lights.push_back(fx::dynamic_light(ll[i]));
       continue;
     }
@@ -336,11 +337,11 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     const float yaw = static_cast<float>(std::atan2(d.y, d.x) * 180 / ge::core::kPi);
     const float pitch =
         static_cast<float>(std::atan2(d.z, std::sqrt(d.x * d.x + d.y * d.y)) * 180 / ge::core::kPi);
-    for (double along = 0; along < len; along += kBoltSegment) {
+    for (int i = 0; i * kBoltSegment < len; ++i) {
       Placed seg;
       seg.entity = kBoltEntities - segment++;
       seg.modelindex = effect_model(l, b.model);
-      const float k = static_cast<float>(along / len);
+      const float k = static_cast<float>(i * kBoltSegment / len);
       seg.origin = {b.map_from.x + d.x * k, b.map_from.y + d.y * k, b.map_from.z + d.z * k};
       seg.angles = {pitch, yaw, static_cast<float>(ge::core::range(roll, 0, 360))};
       out.models.push_back(seg);

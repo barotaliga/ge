@@ -2,7 +2,7 @@
 title: A worktree missed every cached compile: debug builds hash the folder, deps were per checkout, the cache was full
 date: 2026-11-05
 scope: cmake/CompilerCache.cmake
-concepts: [ccache, worktree, hash_dir, debug-prefix-map, max_size, deps, GE_DEPS_DIR]
+concepts: [ccache, worktree, hash-dir, debug-prefix-map, max-size, deps, deps-dir]
 ---
 
 Three things made a new git worktree build cold. `-g` compiles hash the working directory unless

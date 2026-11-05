@@ -1140,8 +1140,9 @@ every pass, and judged by captioned screenshots:
   and lays fire into puffs of smoke that spread as they thin (the particles' `grow`), a grenade
   pale smoke; a pellet's or a nail's hit throws the burst of the face it hit (`render/impact.hpp`
   by the surface class of the map triangle the round's line crosses there, its normal off that
-  triangle); the arc gun's beam is the engine's bolt (`render/beam.hpp`) in blue-white, rooted on
-  the gun's own muzzle, lighting the walls along it. Smoke is lit as the room round it is
+  triangle); the arc gun's beam is the engine's bolt (`render/beam.hpp`) in the style `r_beam_style`
+  numbers (1 forked, 2 arc, 3 bolt the default, 4 braid), rooted on the gun's own muzzle, a cold
+  glow on the walls along it. Smoke is lit as the room round it is
   (`render::BlastLight` off the lightmap under it and the open sky over it), not by the sun
   through the roof. A match's temporary entities (the gunshots, spikes, beams and blood the
   baseline mod multicasts) reach these effects as a campaign's do. The `se-weapon-fx` lab fires

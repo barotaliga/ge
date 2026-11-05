@@ -153,7 +153,15 @@ gr::MuzzleLook make_exhaust() {
   return l;
 }
 
-gr::BeamLook make_bolt() {
+// The light any style throws on the room: a cold glow along it and where it lands.
+void cold_light(gr::BeamLook& l) {
+  l.light_rgb[0] = 0.55f, l.light_rgb[1] = 0.65f, l.light_rgb[2] = 1.0f;
+  l.light_cd = 900;
+  l.hit_cd = 700;
+  l.root_cd = 150;
+}
+
+gr::BeamLook make_forked() {
   gr::BeamLook l;
   gr::beam_look("bolt", l);
   l.step_m = 0.3f;  // kinked every 30 cm, wandering far off its line over a few metres
@@ -173,10 +181,15 @@ gr::BeamLook make_bolt() {
   l.shimmer = 0.35f;
   l.attack_s = 0.02f;
   l.release_s = 0.06f;
-  l.light_rgb[0] = 0.55f, l.light_rgb[1] = 0.65f, l.light_rgb[2] = 1.0f;
-  l.light_cd = 900;  // a cold glow along it, the room not washed out
-  l.hit_cd = 700;
-  l.root_cd = 150;
+  cold_light(l);
+  return l;
+}
+
+// One of the engine's presets as it makes it, its light turned down.
+gr::BeamLook make_preset(std::string_view name) {
+  gr::BeamLook l;
+  gr::beam_look(name, l);
+  cold_light(l);
   return l;
 }
 
@@ -197,9 +210,11 @@ const gr::MuzzleLook& exhaust_look() {
   static const gr::MuzzleLook l = make_exhaust();
   return l;
 }
-const gr::BeamLook& bolt_look() {
-  static const gr::BeamLook l = make_bolt();
-  return l;
+const gr::BeamLook& bolt_look(int style) {
+  static const gr::BeamLook kLooks[] = {make_forked(), make_preset(kBoltStyles[1]),
+                                        make_preset(kBoltStyles[2]), make_preset(kBoltStyles[3])};
+  const int n = static_cast<int>(std::size(kLooks));
+  return kLooks[(style >= 1 && style <= n ? style : kDefaultBoltStyle) - 1];
 }
 
 void blast(const double p[3], const double* normal, uint32_t seed, double now_s,

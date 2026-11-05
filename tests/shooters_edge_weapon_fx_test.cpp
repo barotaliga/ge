@@ -111,3 +111,14 @@ TEST(the_bolts_sparks_leave_the_face_and_its_light_is_capped) {
   const fx::Light l = fx::dynamic_light(bright);
   for (double c : l.colour) CHECK(c <= 1.2);
 }
+
+TEST(every_bolt_style_is_numbered_and_its_light_is_a_glow) {
+  // 1 forked, 2 arc, 3 bolt (the default), 4 braid; out of range the default's.
+  CHECK(&fx::bolt_look() == &fx::bolt_look(3));
+  CHECK(&fx::bolt_look(0) == &fx::bolt_look(3) && &fx::bolt_look(9) == &fx::bolt_look(3));
+  gr::BeamLook bolt, arc;
+  CHECK(gr::beam_look("bolt", bolt) && gr::beam_look("arc", arc));
+  CHECK(fx::bolt_look(3).wander == bolt.wander && fx::bolt_look(2).wander == arc.wander);
+  CHECK(fx::bolt_look(4).filaments > 1);  // the braid's rope
+  for (int s = 1; s <= 4; ++s) CHECK(fx::bolt_look(s).light_cd < bolt.light_cd);
+}

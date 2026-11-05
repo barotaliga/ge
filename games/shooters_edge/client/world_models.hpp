@@ -25,7 +25,7 @@
 //
 // ge:summary The window's models: items, weapons, flames, players, loaded from the packs and drawn
 // ge:keywords world-models create_models read_models place_models prepare_models encode_models
-// ge:keywords placed-model effect-models s_explod bolt kEffectModels effect_model
+// ge:keywords placed-model effect-models s_explod bolt effect_model
 // ge:keywords items armour health weapons flames torches players statics entity-models morph
 // ge:keywords sprites bare-flames topcolor bottomcolor place_brushes doors plats
 // ge:keywords ce_models enhanced-skins cached_skins replacement-skin skin-stand-in

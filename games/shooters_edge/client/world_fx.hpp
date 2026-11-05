@@ -22,7 +22,8 @@
 //   classic's ember ball, its light white-hot then orange), drawn by the explosions' pass.
 // - ce_trails: a rocket burns a short flame out of its motor and lays fire into smoke that spreads;
 //   a grenade trails pale smoke.
-// - ce_beams: the arc gun's beam is the engine's bolt (render/beam.hpp), held while the program
+// - ce_beams: the arc gun's beam is the engine's bolt (render/beam.hpp) in r_beam_style's
+//   style, held while the program
 //   keeps sending it, lighting the walls along it, its root on the gun's own muzzle for the
 //   player's own; blue-white sparks where it lands.
 // - ce_hits: a pellet's or a nail's hit throws the burst of the face it hit (the map's triangle
@@ -33,7 +34,8 @@
 // ge:summary The window's effects each frame: trails, explosions, their lights, the screen's blend
 // ge:keywords world-fx effects trail rocket-trail explosion dynamic-light screen-blend hurt-flash
 // ge:keywords underwater medium step_fx fx-state temp-entity gunshot spike teleport-splash beam
-// ge:keywords held-fire muzzle-fire fire_held load_held_fire fx_switches held-beam ce_trails ce_hits
+// ge:keywords held-fire muzzle-fire fire_held load_held_fire fx_switches held-beam
+// ge:keywords ce_trails ce_hits
 // ge:skill render shooter
 #pragma once
 
@@ -59,8 +61,9 @@ namespace shooters_edge::client {
 // The enhanced effects asked for (all off: the classic effects).
 struct FxSwitches {
   bool muzzles = false, explosions = false, trails = false, beams = false, hits = false;
+  const ge::render::BeamLook* bolt = nullptr;  // r_beam_style's (null: the default style)
 };
-// The switches `picture` asks for: each ce_ switch, in the modern look only.
+// The switches `picture` asks for: each ce_ switch, in the modern look only, and its bolt's style.
 FxSwitches fx_switches(const look::Picture& picture);
 
 // An arc gun's beam the program keeps sending: its shot, the beam's owner and when it last came.
@@ -69,6 +72,7 @@ struct HeldBeam {
   ge::render::BeamShot shot;   // engine metres
   sh::Vec3f map_from, map_to;  // map units (the classic bolt's segments)
   EffectModel model = EffectModel::bolt2;
+  const ge::render::BeamLook* look = nullptr;  // its enhanced bolt's (FxSwitches::bolt)
   double seen = 0;
 };
 inline constexpr double kBeamHoldS = 0.2;  // a beam not sent again for this long is let go

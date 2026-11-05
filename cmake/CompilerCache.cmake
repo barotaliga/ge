@@ -19,7 +19,7 @@
 # downloads are the main checkout's too (GE_DEPS_DIR defaults to its .cache/deps: Dawn, SDL and
 # the codecs are not fetched again), and while ccache's size is its own default (5 GiB, too small
 # for a few checkouts' debug and release objects: it evicts what the next worktree needs) the
-# worktree's compiles raise it to GE_CCACHE_WORKTREE_SIZE (20G).
+# worktree's compiles raise it to GE_CCACHE_WORKTREE_SIZE (10G).
 include_guard(GLOBAL)
 
 # The main checkout when this tree is a git worktree of it (empty otherwise).
@@ -55,7 +55,7 @@ if(ge_main_checkout)
     endforeach()
   endif()
 endif()
-set(GE_CCACHE_WORKTREE_SIZE "20G" CACHE STRING
+set(GE_CCACHE_WORKTREE_SIZE "10G" CACHE STRING
     "ccache's size in a worktree while ccache's own is its default (empty: leave it)")
 
 option(GE_CCACHE "Compile through ccache (or sccache) when one is on PATH" ON)

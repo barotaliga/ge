@@ -423,7 +423,7 @@ information (`-fdebug-prefix-map=<build>=.`) and runs ccache with `hash_dir=fals
 compile in another checkout hashes the same (measured: without both, a debug compile in a second
 checkout misses every time), and while ccache's size is its own default (5 GiB, which a few
 checkouts' debug and release objects overflow, evicting what the next worktree needs) gives it
-`GE_CCACHE_WORKTREE_SIZE` (20G). On Linux every link goes through mold or LLD when one is installed
+`GE_CCACHE_WORKTREE_SIZE` (10G). On Linux every link goes through mold or LLD when one is installed
 (`cmake/Linker.cmake`, `-DGE_FAST_LINKER=OFF` for the default): with the compiles cached,
 linking the tree's 500-odd executables is most of a rebuild. Measured in the cloud container
 (4 cores, the debug preset, a fresh build directory each time):
