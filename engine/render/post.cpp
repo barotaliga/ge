@@ -86,41 +86,50 @@ void create_post(gpu::Device& device, gpu::PipelineSet& pipelines, Post& post,
   const bool srgb_target = output == wgpu::TextureFormat::RGBA8UnormSrgb ||
                            output == wgpu::TextureFormat::BGRA8UnormSrgb;
   const PostLook& look = settings.look;
-  wgpu::ConstantEntry constants[10] = {};
-  const std::pair<const char*, double> values[10] = {
-      {"kEncodeSrgb", srgb_target ? 0.0 : 1.0},
-      {"kBloom", settings.bloom},
-      {"kSharpen", look.sharpen > 0 ? 1.0 : 0.0},
-      {"kChromatic", look.chromatic > 0 ? 1.0 : 0.0},
-      {"kVignette", look.vignette > 0 ? 1.0 : 0.0},
-      {"kGrain", look.grain > 0 ? 1.0 : 0.0},
-      {"kDirt", look.dirt > 0 ? 1.0 : 0.0},
-      {"kLens", settings.lens ? 1.0 : 0.0},
-      {"kMotionBlur", look.motion_blur > 0 ? 1.0 : 0.0},
-      {"kDof", settings.dof ? 1.0 : 0.0},
+  // One pipeline for a bloom share `bloom` (0: compiled out); the rest of the switches the same.
+  const auto build = [&](double bloom, const char* label) {
+    wgpu::ConstantEntry constants[10] = {};
+    const std::pair<const char*, double> values[10] = {
+        {"kEncodeSrgb", srgb_target ? 0.0 : 1.0},
+        {"kBloom", bloom},
+        {"kSharpen", look.sharpen > 0 ? 1.0 : 0.0},
+        {"kChromatic", look.chromatic > 0 ? 1.0 : 0.0},
+        {"kVignette", look.vignette > 0 ? 1.0 : 0.0},
+        {"kGrain", look.grain > 0 ? 1.0 : 0.0},
+        {"kDirt", look.dirt > 0 ? 1.0 : 0.0},
+        {"kLens", settings.lens ? 1.0 : 0.0},
+        {"kMotionBlur", look.motion_blur > 0 ? 1.0 : 0.0},
+        {"kDof", settings.dof ? 1.0 : 0.0},
+    };
+    for (size_t k = 0; k < std::size(values); ++k) {
+      constants[k].key = values[k].first;
+      constants[k].value = values[k].second;
+    }
+    wgpu::ColorTargetState colour{};
+    colour.format = output;
+    wgpu::FragmentState fragment{};
+    fragment.module = module;
+    fragment.entryPoint = "fs_main";
+    fragment.constantCount = std::size(constants);
+    fragment.constants = constants;
+    fragment.targetCount = 1;
+    fragment.targets = &colour;
+    wgpu::RenderPipelineDescriptor desc{};
+    desc.label = label;
+    desc.layout = make_pipeline_layout(device, "post.draw", {frame, post.layout});
+    desc.vertex.module = module;
+    desc.vertex.entryPoint = "vs_main";
+    desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+    desc.fragment = &fragment;
+    return pipelines.add_render(device, desc);
   };
-  for (size_t k = 0; k < std::size(values); ++k) {
-    constants[k].key = values[k].first;
-    constants[k].value = values[k].second;
-  }
-  wgpu::ColorTargetState colour{};
-  colour.format = output;
-  wgpu::FragmentState fragment{};
-  fragment.module = module;
-  fragment.entryPoint = "fs_main";
-  fragment.constantCount = std::size(constants);
-  fragment.constants = constants;
-  fragment.targetCount = 1;
-  fragment.targets = &colour;
-  wgpu::RenderPipelineDescriptor desc{};
-  desc.label = "post.draw";
-  desc.layout = make_pipeline_layout(device, "post.draw", {frame, post.layout});
-  desc.vertex.module = module;
-  desc.vertex.entryPoint = "vs_main";
-  desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
-  desc.fragment = &fragment;
-  post.p_draw = pipelines.add_render(device, desc);
+  post.p_draw = build(settings.bloom, "post.draw");
+  post.has_dry = settings.bloom_switch && settings.bloom > 0;
+  if (post.has_dry) post.p_dry = build(0, "post.draw.dry");
+  post.bloom_on = true;
 }
+
+void set_post_bloom(Post& post, bool on) { post.bloom_on = on || !post.has_dry; }
 
 wgpu::BindGroup post_group(gpu::Device& device, const Post& post, const wgpu::TextureView& hdr,
                            const wgpu::TextureView& bloom, const wgpu::TextureView& lens,
@@ -225,7 +234,7 @@ void encode_post(const Post& post, const gpu::PipelineSet& pipelines, FrameRecor
   desc.colorAttachmentCount = 1;
   desc.colorAttachments = &colour;
   wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "post");
-  pass.SetPipeline(pipelines.render(post.p_draw));
+  pass.SetPipeline(pipelines.render(post.bloom_on ? post.p_draw : post.p_dry));
   pass.SetBindGroup(0, frame);
   pass.SetBindGroup(1, group);
   pass.Draw(3);
