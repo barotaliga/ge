@@ -18,7 +18,10 @@ bool seated(const Lobby& l, int slot) {
 
 LobbySeat& seat(Lobby& l, int slot) { return l.seats[static_cast<size_t>(slot)]; }
 
-void say(Lobby& l, std::string line) { l.said.push_back(std::move(line)); }
+void say(Lobby& l, LobbyNote note, std::string line) {
+  l.said.push_back(std::move(line));
+  l.notes.push_back(note);
+}
 
 // A refusal said with what to do instead.
 LobbyWhy refuse(Lobby& l, int slot, std::string_view what, LobbyWhy why) {
@@ -39,22 +42,25 @@ LobbyWhy refuse(Lobby& l, int slot, std::string_view what, LobbyWhy why) {
     default:
       break;
   }
-  say(l, std::move(line));
+  say(l, {LobbyNoteKind::refused, slot, static_cast<uint8_t>(why)}, std::move(line));
   return why;
 }
 
-void stop_countdown(Lobby& l, const std::string& why) {
+// `by` the seat whose break stopped it, or -1.
+void stop_countdown(Lobby& l, const std::string& why, int by = -1) {
   if (l.phase != LobbyPhase::countdown) return;
   l.phase = LobbyPhase::warmup;
   l.stopped++;
-  say(l, "countdown stopped: " + why);
+  say(l, {LobbyNoteKind::stopped, by}, "countdown stopped: " + why);
 }
 
-void begin_countdown(Lobby& l, double now, const std::string& why) {
+// `by` the leader who started it, or -1 when everyone is ready.
+void begin_countdown(Lobby& l, double now, const std::string& why, int by = -1) {
   l.phase = LobbyPhase::countdown;
   l.countdown_ends = now + l.settings.countdown_s;
   l.countdowns++;
-  say(l, why + ": the match starts in " + std::to_string(lobby_seconds_left(l, now)) + " s");
+  say(l, {LobbyNoteKind::countdown, by},
+      why + ": the match starts in " + std::to_string(lobby_seconds_left(l, now)) + " s");
 }
 
 // Warmup: a countdown when everyone seated is ready and there are enough of them.
@@ -169,14 +175,15 @@ void lobby_join(Lobby& l, int slot, const std::string& name, bool bot, double no
   s.bot = bot;
   s.name = name;
   s.ready = bot && l.settings.bots_ready;
-  say(l, name + " joins team " + team_name(s.team) + (s.ready ? ", ready" : ""));
+  say(l, {LobbyNoteKind::joined, slot},
+      name + " joins team " + team_name(s.team) + (s.ready ? ", ready" : ""));
   if (!s.ready) stop_countdown(l, name + " is not ready");
   check(l, now);
 }
 
 void lobby_leave(Lobby& l, int slot, double now) {
   if (!seated(l, slot)) return;
-  say(l, seat(l, slot).name + " leaves");
+  say(l, {LobbyNoteKind::left, slot}, seat(l, slot).name + " leaves");
   seat(l, slot) = {};
   if (lobby_seated(l) < l.settings.min_players || lobby_seated(l) == 0)
     stop_countdown(l, "too few players");
@@ -192,9 +199,10 @@ LobbyWhy lobby_ready(Lobby& l, int slot, bool ready, double now) {
   LobbySeat& s = seat(l, slot);
   if (s.ready == ready) return refuse(l, slot, what, LobbyWhy::same);
   s.ready = ready;
-  say(l, s.name + (ready ? " is ready (" : " is not ready (") +
-             std::to_string(lobby_ready_count(l)) + " of " + std::to_string(lobby_seated(l)) + ")");
-  if (!ready) stop_countdown(l, s.name + " took a break");
+  say(l, {ready ? LobbyNoteKind::ready : LobbyNoteKind::unready, slot},
+      s.name + (ready ? " is ready (" : " is not ready (") + std::to_string(lobby_ready_count(l)) +
+          " of " + std::to_string(lobby_seated(l)) + ")");
+  if (!ready) stop_countdown(l, s.name + " took a break", slot);
   check(l, now);
   return LobbyWhy::ok;
 }
@@ -207,7 +215,7 @@ LobbyWhy lobby_team(Lobby& l, int slot, Team team, double now) {
   const Team to = team == Team::none ? lobby_smaller_team(l, slot) : team;
   if (to == s.team) return refuse(l, slot, "team", LobbyWhy::same);
   s.team = to;
-  say(l, s.name + " moves to team " + team_name(to));
+  say(l, {LobbyNoteKind::moved, slot}, s.name + " moves to team " + team_name(to));
   return LobbyWhy::ok;
 }
 
@@ -216,7 +224,7 @@ LobbyWhy lobby_start(Lobby& l, int slot, double now) {
   if (l.phase == LobbyPhase::match) return refuse(l, slot, "start", LobbyWhy::in_match);
   if (slot != lobby_leader(l)) return refuse(l, slot, "start", LobbyWhy::not_leader);
   if (l.phase == LobbyPhase::countdown) return refuse(l, slot, "start", LobbyWhy::same);
-  begin_countdown(l, now, seat(l, slot).name + " starts the match");
+  begin_countdown(l, now, seat(l, slot).name + " starts the match", slot);
   return LobbyWhy::ok;
 }
 
@@ -236,7 +244,8 @@ bool lobby_command(Lobby& l, int slot, std::string_view line, double now) {
   } else if (word == "team") {
     if (rest.empty()) {
       if (seated(l, slot))
-        say(l, std::string("team: you are on ") + team_name(seat(l, slot).team));
+        say(l, {LobbyNoteKind::told, slot},
+            std::string("team: you are on ") + team_name(seat(l, slot).team));
       else
         refuse(l, slot, "team", LobbyWhy::no_seat);
     } else if (rest == "auto") {
@@ -257,13 +266,14 @@ bool lobby_command(Lobby& l, int slot, std::string_view line, double now) {
                            std::to_string(lobby_seated(l)) + " ready";
     if (l.phase == LobbyPhase::countdown)
       line_out += ", " + std::to_string(lobby_seconds_left(l, now)) + " s to go";
-    say(l, line_out);
+    say(l, {LobbyNoteKind::told, slot}, line_out);
     for (int i = 0; i < kLobbySeats; i++) {
       const LobbySeat& s = l.seats[static_cast<size_t>(i)];
       if (!s.used) continue;
-      say(l, "  " + std::to_string(i) + " " + s.name + " " + team_name(s.team) +
-                 (s.ready ? " ready" : " not ready") + (s.bot ? " (bot)" : "") +
-                 (i == lobby_leader(l) ? " (leader)" : ""));
+      say(l, {LobbyNoteKind::told, slot},
+          "  " + std::to_string(i) + " " + s.name + " " + team_name(s.team) +
+              (s.ready ? " ready" : " not ready") + (s.bot ? " (bot)" : "") +
+              (i == lobby_leader(l) ? " (leader)" : ""));
     }
   } else {
     return false;
@@ -275,7 +285,7 @@ bool lobby_due(Lobby& l, double now) {
   if (l.phase != LobbyPhase::countdown || now < l.countdown_ends) return false;
   l.phase = LobbyPhase::match;
   l.matches++;
-  say(l, "the match begins");
+  say(l, {LobbyNoteKind::begins, -1}, "the match begins");
   return true;
 }
 
@@ -283,7 +293,7 @@ void lobby_back(Lobby& l) {
   l.phase = LobbyPhase::warmup;
   for (LobbySeat& s : l.seats)
     if (s.used) s.ready = s.bot && l.settings.bots_ready;
-  say(l, "warmup: say ready when you are");
+  say(l, {LobbyNoteKind::warmup, -1}, "warmup: say ready when you are");
 }
 
 }  // namespace ge::server

@@ -240,65 +240,39 @@ engine's burning gas is the flame.
 
 **What a pickup says.** The baseline mod names an item in the loaded game's own words: the game's
 profile has a table of names by class name (`profiles/items.hpp`'s `names`; the classic game's
-`kClassicNames`: "shells", "Nailgun", "Thunderbolt", "Pentagram of Protection"), which the window
-gives the server as local info (`localinfo weapon_nailgun "Nailgun"`) when the mod plays a game's
-packs, and the mod's `name_of` (each variant's `glue.qc`) reads it under the item's class name.
-So "You got the rockets", "You got the Nailgun", and a backpack lists what was in it ("You get the
-Rocket Launcher, 20 shells, 5 rockets", the weapon only when it is new to its taker). Armour says
-"You got armor" whatever its colour, as the classic game does. On the built-in arena, with no
-packs, the mod speaks its own words ("You got ammunition", "You got the Spiker").
+`kClassicNames`: "shells", "nailgun", "Double-barrelled Shotgun", "Red Armor", "Pentagram of
+Protection"), which the window gives the server as local info (`localinfo weapon_nailgun
+"nailgun"`) when the mod plays a game's packs, and the mod's `name_of` (each variant's `glue.qc`)
+reads it under the item's class name. So "You got the rockets", "You got the Red Armor", and a
+backpack lists what was in it ("You get the Rocket Launcher, 20 shells, 5 rockets", the weapon only
+when it is new to its taker). On the built-in arena, with no packs, the mod speaks its own words
+("You got ammunition", "You got the Spiker", "You got armor").
 
-### Joining a game over the network
-
-Any server that speaks the classic protocol can be joined from a window:
-
-```sh
-build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +connect 192.168.1.20
-```
-
-The game's own dedicated server, `shooters_edge_server` (docs/servers.md), is what a machine runs
-to host one, for example dm6 from the packs with a frag limit:
-
-```sh
-build/release/shooters_edge_server --root=$HOME/games/classic --map=dm6 --port=27500 --realtime --for=0 +set fraglimit 20
-```
-
-With `--bots=3` three bots take seats (every client sees them on the scoreboard, `*bot` in their
-user info), and with `--lobby=1` every map opens in warmup with the limits held: a joined player
-types `ready` (or `break`, `team red|blue|auto|switch`, `lobby` for the roster) in the console,
-the leader (the lowest seat a player holds) may `start` early and `addbot [novice|average|expert]`
-or `removebot`, and when everyone is ready a 5 s countdown restarts the map into the match. Bots
-alone warm up until a player joins. When the match ends the next map opens in warmup again:
-
-```sh
-build/release/shooters_edge_server --map=arena --bots=3 --lobby=1 --realtime --for=0 +set fraglimit 20
-```
-
-The window's console joins and leaves (`net/classic_remote.hpp`):
-
-| Command | What |
-| --- | --- |
-| `connect <host>[:port]` | join a server (an IPv4 address or `localhost`; 27500 when no port) |
-| `disconnect` | leave it, back to your own game |
-| `reconnect` | the last server again |
-| `netstatus` | the server joined, the stage, the packets and bytes each way |
-
-Joined, the window plays the server's game with your keys, mouse, `name`, `topcolor` and
-`bottomcolor`, and draws what the server sends exactly as it draws a client demo (the map, the
-items, the other players, the HUD, the sounds, the printed lines): the connection is read as a
-recording of it while it is made. Your own game waits until you leave.
-
-Your own moves are PREDICTED: from the newest place the server sent of you, every move sent since
-is run through the same player move as the server's (`plugins/shooter/predict.hpp`), over the
-level's solids, the movers where the last frame put them and the other players' boxes, with the
-move settings serverdata carried. So you are drawn where your keys put you, not a round trip late;
-a prediction the next frame proves 4 to 64 units wrong (a door, another player) is eased in, not
-snapped. `cl_nopred 1` draws the server's place instead, and `netstatus` says how many moves the
-prediction runs ahead. Over a 100 ms round trip the test holds every prediction to within 0.27
-units of where the server later puts the player. Not yet: the other players are drawn where the
-last frame put them, not smoothed between frames; the server info's `pm_` extras (the jump boost,
-the bunny-hop cap) are not read, so a server that sets them is predicted with their defaults; and
-a server is found by its address, not yet on a list.
+**What the server says.** Everything else a player reads from the server comes in the loaded
+game's words too: a second table in the profile (`profiles/words.hpp`'s `kClassicServerWords`),
+each a template in plain ASCII (`server/words.hpp`: `%1` a name, `%g1` its digits in the gold
+figures, `^red text^`, `%[ %]` the gold brackets, `%>4g1` right-aligned, `%n` a newline), put in
+the server's local info beside the item names by the window and by the dedicated server when the
+game folder holds packs. The mod fills one with the `words` builtin (#640, `GE_QC_WORDS`):
+- **Deaths**: one line to everyone at the medium level, chosen by the weapon, whether the victim
+  was gibbed (health below -40) and whether the killer had the quad ("bob rides ann's rocket",
+  "bob was gibbed by ann's rocket", "ann rips bob a new one"), a teammate's kill (-1 to the killer:
+  "ann checks his glasses"), one's own ("bob discovers blast radius") and the world's ("bob sleeps
+  with the fishes", "bob burst into flames"); where a death has variants one is drawn from the
+  game's stream. Before the match (the lobby's warmup and countdown, `ge_phase` in the local info)
+  nothing is told or scored, and a player who leaves is told only in the match ("bob left the game
+  with 3 frags").
+- **The clock**: each whole minute left ("[19] minutes remaining" in gold, and in a two-team game
+  "Team [red] leads by 3 frags" or "The game is currently a tie"), then 30, 15 and 10 to 1 seconds;
+  the end is "The match is over" and, in a team game, the teams' scores and shares.
+- **The powers**: "Quad Damage is wearing off" and "Protection is almost burned out" 3 s before.
+- **The lobby** (`server/announce.hpp`): "ann is ready - no matchtag set" (red text after the
+  name), "All players ready", "Timer started", "bob stops the countdown", "The match has begun!",
+  and each second of the countdown the centre print with the seconds in gold and the match's
+  settings a line each (the window's lobby panel then leaves out its own big count). Its start
+  plays `items/protect2.wav`, its last five seconds `buttons/switch04.wav`.
+The built-in arena, and Shooter's Edge's own content, keep the mod's and the lobby's own words.
+`make lab LAB=se-words` draws both side by side in a console font.
 
 ### Benchmarking a demo
 

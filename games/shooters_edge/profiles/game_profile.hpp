@@ -22,6 +22,8 @@
 //   content row's `start_map`): the built-in arena.
 // - **The full game** is the content row's `full_game` file being in the packs.
 // - **Items, their words and the sounds** a bot reads (items.hpp).
+// - **The server's words** (words.hpp): the obituaries, the clock, the lobby and its countdown in
+//   the game's own words; empty: the mod's and the lobby's own.
 //
 // ge:summary A classic game's game half as data: each mode's program files, the fallback map
 // ge:keywords game-profile profile classic program progs qwprogs multiplayer single-player
@@ -37,6 +39,7 @@
 
 #include "classicenhance/profile.hpp"
 #include "shooters_edge/profiles/items.hpp"
+#include "shooters_edge/profiles/words.hpp"
 
 namespace shooters_edge::profiles {
 
@@ -80,6 +83,7 @@ struct GameProfile {
   ItemTables tables;  // its items, their words and the sounds a bot reads (items.hpp)
   // Its first-person weapons' model files, in the order of the number keys (view::Weapon's).
   std::span<const std::string_view> held_weapons;
+  std::span<const WordRow> words;  // what its server prints (words.hpp)
 };
 
 inline constexpr ProgramFile kClassicMultiplayer[] = {{.name = "qwprogs.dat"},
@@ -99,7 +103,8 @@ inline constexpr GameProfile kGameProfiles[] = {
      .fallback_map = "arena",
      .demo_extensions = kClassicDemos,
      .tables = kClassicTables,
-     .held_weapons = kClassicHeld},
+     .held_weapons = kClassicHeld,
+     .words = kClassicServerWords},
 };
 
 // The first row: the classic game, the one every reader uses until a choice of game is made.

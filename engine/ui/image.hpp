@@ -37,6 +37,9 @@ struct Image {
   int width = 0;
   int height = 0;
   std::vector<uint8_t> rgba;  // width * height * 4
+  // Bumped by whoever changes the pixels of an image a GPU pass may already hold, so the pass
+  // uploads it again (render/ui_pass.hpp keys its textures by the image's address).
+  uint64_t revision = 0;
 
   bool empty() const { return width <= 0 || height <= 0; }
 };

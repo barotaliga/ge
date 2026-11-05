@@ -175,6 +175,10 @@ void(entity killer, entity killed) logfrag = #79;
 string(entity e, string key) infokey = #80;
 float(string s) stof = #81;
 void(vector where, float set) multicast = #82;
+string(string s1, string s2, ...) strcat = #115;
+// A loaded game's own words (GE_QC_WORDS): the template under `key` in the server's local info
+// filled with the four arguments, "" when the game names none.
+string(string key, string a, string b, string c, string d) words = #640;
 
 // --- the variant's own settings, read each frame ---
 

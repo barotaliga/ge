@@ -15,6 +15,11 @@ void(entity to, float level, string a, string b, string c, string d) say_to = {
 // An item's name: the form has no local info to read a game's own words from, so always ours.
 string(string class_name, string fallback) name_of = { return fallback; };
 
+// A loaded game's own words: the form has no local info, so none (the mod's own words always).
+string(string key, string a, string b, string c, string d) game_words = { return ""; };
+float() game_quiet = { return FALSE; };
+string(entity targ, entity attacker) death_words = { return ""; };
+
 void(vector org, float set) effect_send = {};
 
 // A puff where a shot hits: a burst of red particles on something that bleeds (the form has no
