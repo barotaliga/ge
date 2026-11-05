@@ -203,6 +203,8 @@ void stage_beams(Beams& beams, std::span<const BeamDraw> draws, std::span<const 
     o.uv[1] = b.v;
     o.uv[2] = b.soot;
     o.uv[3] = b.ember;
+    o.more[0] = b.relief;
+    o.more[1] = o.more[2] = o.more[3] = 0;
   }
   beams.seg_count = nseg;
   beams.burn_count = nburn;

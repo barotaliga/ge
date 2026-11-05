@@ -321,6 +321,7 @@ void burns_of(const FxState& s, double t, std::vector<ge::render::BurnVertex>& o
       b.fade = static_cast<float>(v.fade);
       b.soot = soot;
       b.ember = ember;
+      b.relief = d.kind == ge::detail::DecalKind::bullet_hole ? 1.0f : 0.0f;
       out.push_back(b);
     }
   }

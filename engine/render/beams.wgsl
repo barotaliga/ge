@@ -40,8 +40,9 @@ struct BeamSeg {
 }
 
 struct BurnVert {
-  at: vec4f,  // camera-relative position; its fade on a turned triangle
-  uv: vec4f,  // the atlas's uv; the soot's darkness; the ember's luminance (cd/m^2)
+  at: vec4f,    // camera-relative position; its fade on a turned triangle
+  uv: vec4f,    // the atlas's uv; the soot's darkness; the ember's luminance (cd/m^2)
+  more: vec4f,  // the relief's share of its darkness (0: by its cover alone)
 }
 
 @group(1) @binding(0) var<uniform> bp: BeamParams;
@@ -168,7 +169,7 @@ fn beam_fs(in: BeamOut) -> BeamFrag {
 struct BurnOut {
   @builtin(position) position: vec4f,
   @location(0) uv: vec2f,
-  @location(1) look: vec3f,  // the fade, the soot, the ember
+  @location(1) look: vec4f,  // the fade, the soot, the ember, the relief's share
 }
 
 @vertex
@@ -181,7 +182,7 @@ fn burn_vs(@builtin(vertex_index) vid: u32) -> BurnOut {
   let v = burns[vid];
   out.position = frame.view_proj * vec4f(v.at.xyz, 1.0);
   out.uv = v.uv.xy;
-  out.look = vec3f(v.at.w, v.uv.z, v.uv.w);
+  out.look = vec4f(v.at.w, v.uv.z, v.uv.w, v.more.x);
   return out;
 }
 
@@ -207,5 +208,11 @@ fn burn_fs(in: BurnOut) -> @location(0) vec4f {
   let ember = in.look.z * heart * crack;
   let heat = clamp(in.look.z / max(bp.more.y, 1e-3), 0.0, 1.0);
   let glow = burn_ember(heat) * ember * frame.world.y / kSunLux;
-  return vec4f(min(glow, vec3f(60000.0)), 1.0 - in.look.y * cover);
+  // Darkened by its cover, or (a hole's mark, by the relief's share) by its crater's relief: the
+  // dark wall of the hole the darkest, falling off to the pale rim and the dust round it, so a
+  // hole is a dark heart in a scuffed ring, not a flat black disc.
+  let relief = m.g * 2.0 - 1.0;  // -1 the hole's wall .. +1 a raised rim
+  let crater = clamp((0.45 - relief) / 1.45, 0.0, 1.0);
+  let dark = in.look.y * cover * mix(1.0, 0.18 + 0.82 * pow(crater, 1.5), in.look.w);
+  return vec4f(min(glow, vec3f(60000.0)), 1.0 - dark);
 }
