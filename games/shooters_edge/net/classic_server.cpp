@@ -354,7 +354,7 @@ void lag_rewind(void* ctx, int shooter, bool begin) {
     return;
   }
   const ClassicClient& sc = s.clients[me];
-  if (sc.state != ConnState::spawned) return;
+  if (sc.state != ConnState::spawned || sc.local) return;  // a bot aims at where players are
   const ServerFrame& f = sc.frames[sc.ch.incoming_acknowledged & 63];
   const double acked = f.sequence == sc.ch.incoming_acknowledged ? f.server_time : s.game->sv.time;
   const std::string maxfps = info_get(s.serverinfo, "maxfps");
@@ -398,7 +398,7 @@ void send_oob_print(ClassicServer& s, const gn::Address& to, const std::string& 
 
 void reliable_bytes(ClassicServer& s, int slot, const uint8_t* data, size_t size) {
   ClassicClient& c = s.clients[slot];
-  if (c.state == ConnState::free) return;
+  if (c.state == ConnState::free || c.local) return;
   channel_reliable(c.ch, data, size);
 }
 
@@ -510,7 +510,7 @@ bool classic_change(ClassicServer& s, const sv::RulesRunner& next, std::string& 
   for (int i = 0; i < sh::kMaxClients; i++) {
     ClassicClient& c = s.clients[i];
     antilag_clear(s.antilag, i);
-    if (c.state == ConnState::free) continue;
+    if (c.state == ConnState::free || c.local) continue;  // the game seats its own on `next`
     c.state = ConnState::connected;
     c.rules_active = false;
     c.delta_byte = -1;
@@ -529,7 +529,7 @@ void classic_drop(ClassicServer& s, int slot, const std::string& why) {
   if (c.state == ConnState::free) return;
   uint8_t buf[kMaxPacket];
   const uint8_t bye = svc::disconnect;
-  for (int i = 0; i < 2; i++) {
+  for (int i = 0; i < (c.local ? 0 : 2); i++) {
     const size_t n = channel_transmit(c.ch, &bye, 1, s.now, buf);
     gn::transport_send(*s.transport, c.address, buf, n, static_cast<int64_t>(s.now * 1e6));
     s.counts.datagrams_out++;
@@ -546,6 +546,48 @@ void classic_drop(ClassicServer& s, int slot, const std::string& why) {
   s.counts.drops++;
   c = ClassicClient{};
   full_client_update(s, slot, -1);
+}
+
+bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std::string& error) {
+  if (slot < 0 || slot >= sh::kMaxClients || s.clients[slot].state != ConnState::free) {
+    error = "slot " + std::to_string(slot) + " is a client's; next: seat the bot in a free slot";
+    return false;
+  }
+  ClassicClient& c = s.clients[slot];
+  c = ClassicClient{};
+  c.state = ConnState::spawned;
+  c.local = true;
+  c.rules_active = true;
+  c.name = name;
+  c.userid = s.next_userid;
+  s.next_userid = s.next_userid % 99 + 1;
+  c.connect_time = s.game->sv.time;
+  info_set(c.userinfo, "name", name);
+  info_set(c.userinfo, "*bot", "1");
+  s.log.push_back("local " + std::to_string(slot) + " " + name);
+  full_client_update(s, slot, -1);
+  return true;
+}
+
+void classic_set_info(ClassicServer& s, int slot, const std::string& key,
+                      const std::string& value) {
+  ClassicClient& c = s.clients[slot];
+  if (c.state == ConnState::free || info_get(c.userinfo, key) == value) return;
+  if (!info_set(c.userinfo, key, value)) return;
+  if (c.rules_active) s.rules->user_info(slot, key, value);
+  for (int j = 0; j < sh::kMaxClients; j++) {
+    if (s.clients[j].state == ConnState::free) continue;
+    SvcMsg m;
+    m.id = svc::setinfo;
+    m.ints = {slot};
+    m.strings = {key, value};
+    reliable_svc(s, j, m);
+  }
+}
+
+void classic_print_all(ClassicServer& s, const std::string& text) {
+  for (int j = 0; j < sh::kMaxClients; j++)
+    if (s.clients[j].state == ConnState::spawned) client_print(s, j, 2, text);
 }
 
 int classic_count(const ClassicServer& s, ConnState at_least) {
@@ -630,6 +672,26 @@ EntityState entity_state(const ClassicServer& s, int e) {
   return st;
 }
 
+namespace {
+
+// A score that moved this frame told to every client, as the scoreboard reads it.
+void tell_frags(ClassicServer& s) {
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    ClassicClient& c = s.clients[i];
+    if (!c.rules_active) continue;
+    const int frags = static_cast<int>(s.game->world.clients[i].numbers.frags);
+    if (frags == c.frags_told) continue;
+    c.frags_told = frags;
+    SvcMsg m;
+    m.id = svc::updatefrags;
+    m.ints = {i, frags};
+    for (int j = 0; j < sh::kMaxClients; j++)
+      if (s.clients[j].state != ConnState::free) reliable_svc(s, j, m);
+  }
+}
+
+}  // namespace
+
 void classic_frame(ClassicServer& s, int64_t now_us) {
   s.now = static_cast<double>(now_us) / 1e6;
   s.frames++;
@@ -660,6 +722,11 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
     }
     if (slot >= 0) handle_packet(s, slot, buf, size);
   }
+  for (const sh::Packet& p : s.local_moves)  // the game's own seats, after the network's
+    if (p.client >= 0 && p.client < sh::kMaxClients && s.clients[p.client].local &&
+        s.game->sv.clients[static_cast<size_t>(p.client)].active)
+      s.packets.push_back(p);
+  s.local_moves.clear();
 
   s.rules->frame(s.packets.data(), static_cast<int>(s.packets.size()));
   for (int i = 0; i < sh::kMaxClients; i++)
@@ -667,11 +734,12 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
       antilag_record(s.antilag, i, s.game->sv.time,
                      s.game->sv.edicts[static_cast<size_t>(i) + 1].origin);
   route_events(s);
+  tell_frags(s);
   if (s.mvd) mvd_frame(s, *s.mvd);
 
   for (int i = 0; i < sh::kMaxClients; i++) {
     ClassicClient& c = s.clients[i];
-    if (c.state == ConnState::free) continue;
+    if (c.state == ConnState::free || c.local) continue;
     if (c.ch.overflow)
       classic_drop(s, i, "reliable channel overflowed");
     else if (s.now - c.ch.last_received > kTimeout)

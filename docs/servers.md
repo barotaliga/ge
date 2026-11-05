@@ -27,6 +27,13 @@ the game folder's loose files or its packs, and when a match ends the server mov
 the next map (`sv_maprotation`'s when set). M53c part one: the lobby's match flow lives in the
 engine (`engine/server/match`: seats, teams, ready and break, the leader's start, warmup, the
 countdown, the match), and Shooter's Edge's lobby is that plus what a team is in its game.
+M53c part two: the dedicated server runs it. `sv_bots` seats the game's bots (Shooter's Edge's
+are local seats of its classic endpoint: shown to every client as players, sent nothing) and
+`sv_lobby 1` opens every map in warmup with the game's limits held; the players' `ready`,
+`break`, `team` and `start` (and the leader's `addbot`, `removebot`) arrive as their own console
+lines, a countdown run out restarts the map into the match, and the match's end brings the next
+map up in warmup. With `LobbySettings::humans` set (a dedicated server's 1) bots alone never
+count down, and a bot never leads while a player is seated (the `se-dedicated-lobby` lab).
 Running one:
 
 ```
@@ -151,11 +158,13 @@ so an agent or an owner can answer "why is this server set like this" without re
 | `sv_visibility` | `lan`, `invite` or `listed` (M17r) | server |
 | `sv_rendezvous` | the rendezvous to register and list with | server, latched |
 | `sv_map`, `sv_maprotation` | the first map and the rotation | server info |
+| `sv_bots` | seats the game's bots fill at the start | server, latched |
+| `sv_lobby` | 1: every map warms up until everyone is ready, then the countdown and the match | server info, latched |
 | `sv_mod` | the mod's game directory, mounted over the base | server, latched |
 | `sv_admin` | how to reach the server's owner, shown in its info | server info |
 
 and the flags `--port`, `--ip`, `--maxclients`, `--name`, `--description`, `--cfg`, `--mod`,
-`--map`, which are the same cvars set at layer 6. The game adds its own (`fraglimit`, a mountain's
+`--map`, `--bots`, `--lobby`, which are the same cvars set at layer 6. The game adds its own (`fraglimit`, a mountain's
 seed) the same way.
 
 ## Meta-cvars: one switch for a group

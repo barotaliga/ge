@@ -12,16 +12,19 @@
 //   the game holds off its own limits while warming up.
 //   Each player says `ready` (or takes it back with `break`). A bot is ready as it joins when
 //   `bots_ready`.
-// - COUNTDOWN. When every seat is ready and at least `min_players` are seated, the countdown of
-//   `countdown_s` starts; the leader may start it with `start` whoever is ready. A `break`, a
-//   player joining unready, or the seats falling under `min_players` stops it, back to warmup.
+// - COUNTDOWN. When every seat is ready, at least `min_players` are seated and at least `humans` of
+//   them are players, not bots, the countdown of `countdown_s` starts; the leader may start it with
+//   `start` whoever is ready. A `break`, a player joining unready, or the seats falling under
+//   `min_players` (or the players under `humans`) stops it, back to warmup.
 // - MATCH. When the countdown runs out `lobby_due` says so once: the game restarts the map with
 //   every seat on it (scores, items and the clock new) and the match is played to its limits.
 //   When the mod changes the map at the match's end, `lobby_back` returns everyone to warmup
 //   with every player unready.
 //
-// THE LEADER is slot 0 when it is seated (a listen server's own player), else the lowest seat:
-// only the leader may `start`.
+// THE LEADER is slot 0 when it is seated (a listen server's own player), else the lowest seat a
+// player holds, else the lowest seat: only the leader may `start`. A dedicated server's bots never
+// lead while a player is seated, and with `humans` set (a dedicated server's 1) a room of bots
+// alone never counts down: they warm up until a player joins.
 //
 // THE WORDS (`lobby_command`, a console line or a client's command): `ready`, `break` (also
 // `notready`), `toggleready`, `team <red|blue|auto|switch>`, `start`, `lobby` (the roster
@@ -64,6 +67,7 @@ struct LobbySettings {
   int min_players = 1;     // the fewest seated before a countdown starts
   double countdown_s = 5;  // the countdown's length, s
   bool bots_ready = true;  // a bot is ready as it joins
+  int humans = 0;          // the fewest players (not bots) seated before a countdown starts
 };
 
 struct LobbySeat {
@@ -118,6 +122,7 @@ void lobby_back(Lobby& l);
 
 int lobby_seated(const Lobby& l);
 int lobby_ready_count(const Lobby& l);
+int lobby_humans(const Lobby& l);  // the seats players (not bots) hold
 int lobby_leader(const Lobby& l);  // -1 with no seat taken
 // Whole seconds left on the countdown, rounded up (0 outside it).
 int lobby_seconds_left(const Lobby& l, double now);

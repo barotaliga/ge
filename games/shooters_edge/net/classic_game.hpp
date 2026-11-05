@@ -11,15 +11,23 @@
 // challenges'), and the mod's own rules (`fraglimit`, `timelimit`, `deathmatch`, `teamplay`, …:
 // `ServerGame::rules`), each left to the mod's default when unset, and `sv_maprotation` (the map
 // after each match's end; unset, the one the mod asks for).
-// `sv_bots` must be 0: bots on the classic server come with the engine's lobby (M53c).
 //
-// Offline (no socket: a test, a lab) the frame is the mod's own frame with no moves; on the
-// network it is the endpoint's frame at the server's time, which is the same frame while nobody
-// is connected, so both give one digest.
+// BOTS AND THE LOBBY: `sv_bots` seats the listen server's fighters (client/lobby_room.hpp) in the
+// slots after 0, each a local seat of the endpoint every client sees as a player. `sv_lobby 1`
+// runs the engine's lobby (engine/server/match.hpp): every map warms up with the limits held, a
+// client's `ready`, `break`, `team`, `start` and `lobby` (and the leader's `addbot`, `removebot`)
+// are taken before the mod, a seat's team goes into its user info and the mod's `.team`, the
+// countdown run out restarts the map into the match, and the match's next map warms up again.
+// Bots alone never count down. Without `sv_lobby` the bots play every map as a match.
+//
+// Offline (no socket: a test, a lab) the frame is the mod's own frame with the bots' moves; on
+// the network it is the endpoint's frame at the server's time, which is the same frame while
+// nobody is connected, so both give one digest.
 //
 // ge:summary Shooter's Edge's playable dedicated server: the mod on the classic protocol
 // ge:keywords dedicated-server classic-server servergame serve net_frame baseline-mod deathmatch
 // ge:keywords classic_game playable-server game-rules fraglimit timelimit map-change maprotation
+// ge:keywords sv_bots sv_lobby bots lobby warmup addbot removebot
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_game_test.cpp
 #pragma once

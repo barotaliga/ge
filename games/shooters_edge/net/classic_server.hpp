@@ -30,6 +30,10 @@
 // 1/25 within 10..1024 bytes) or, when agreed, chunks of 1024 bytes asked for by number, the first
 // a frame inside the packet and the rest out of band as `\chunk` packets.
 //
+// LOCAL SEATS (`classic_add_local`, a bot): shown to every client as a player, sent nothing, kept
+// over a map change, its moves the game's (`local_moves`). `game_command` sees a client's words
+// before the rules (a lobby's).
+//
 // VOICE (`ServerConfig::voice`): the x2 family's voice bit offered, and each voice message a
 // client sends (clc 83, at most `kMostVoiceBytes`) relayed as svc 84 with the talker's slot to the
 // clients that agreed the bit and may hear it: by `voice_route`, everyone, or only the players
@@ -50,7 +54,7 @@
 // ge:keywords classic-server endpoint connectionless challenge connect signon serverdata
 // ge:keywords prespawn baselines spawn begin skins download chunked packet-entities playerinfo
 // ge:keywords stats choke rate ping user-info server-info classic_start classic_frame
-// ge:keywords classic_change map-change changing reconnect
+// ge:keywords classic_change map-change changing reconnect classic_add_local local-seat bots
 // ge:keywords verify_move_checksum antilag status voice voice-relay team-voice voice_route mvd
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_server_test.cpp
@@ -145,6 +149,8 @@ struct ClassicClient {
   std::vector<uint8_t> datagram;  // this frame's unreliable messages
   uint64_t moves = 0, moves_unchecked = 0, moves_bad_checksum = 0;
   int statics_sent = 0;  // static entities the client has (signon and later)
+  bool local = false;    // a seat the game plays in its own process (a bot): no address, no packets
+  int frags_told = 0;    // the frags every client was last sent
 };
 
 struct ServerCounts {
@@ -193,6 +199,10 @@ struct ClassicServer {
   bool lag_moved[sh::kMaxClients] = {};
   int64_t lag_rewinds = 0;
   MultiviewRecorder* mvd = nullptr;  // a multiview recording running (classic_record.hpp)
+  // A client's string command the game sees before the rules (a lobby's words): true takes it.
+  bool (*game_command)(void* ctx, int slot, const std::string& line) = nullptr;
+  void* game_ctx = nullptr;
+  std::vector<sh::Packet> local_moves;  // the local seats' moves for the next frame (the game's)
 };
 
 // Serves `rules` (its map already started) over `t`. False with `error` when it cannot.
@@ -202,6 +212,15 @@ bool classic_start(ClassicServer& s, const sv::RulesRunner& rules, gn::Transport
 // go): every client is told the map is changing and to sign on again (`reconnect`), and the
 // next signon is the new map's. False with `error` when `next` has no map.
 bool classic_change(ClassicServer& s, const sv::RulesRunner& next, std::string& error);
+// A seat the game plays in its own process at `slot` (a bot it connected to the rules itself):
+// shown to every client as a player (`*bot` in its user info), sent nothing, never timed out, kept
+// over a map change (the game connects it to the next map's rules), its moves `local_moves`.
+// False with `error` when the slot is a client's.
+bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std::string& error);
+// One key of a seat's user info set, told to every client and to the rules (a lobby's team).
+void classic_set_info(ClassicServer& s, int slot, const std::string& key, const std::string& value);
+// A line printed to every spawned client.
+void classic_print_all(ClassicServer& s, const std::string& text);
 // One server frame at the network's time `now_us`.
 void classic_frame(ClassicServer& s, int64_t now_us);
 // Drops a client with a reason (it is told with a disconnect).

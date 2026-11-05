@@ -61,7 +61,8 @@ void begin_countdown(Lobby& l, double now, const std::string& why) {
 void check(Lobby& l, double now) {
   if (l.phase != LobbyPhase::warmup) return;
   const int n = lobby_seated(l);
-  if (n >= l.settings.min_players && n > 0 && lobby_ready_count(l) == n)
+  if (n >= l.settings.min_players && n > 0 && lobby_humans(l) >= l.settings.humans &&
+      lobby_ready_count(l) == n)
     begin_countdown(l, now, "everyone is ready");
 }
 
@@ -127,7 +128,16 @@ int lobby_ready_count(const Lobby& l) {
   return n;
 }
 
+int lobby_humans(const Lobby& l) {
+  int n = 0;
+  for (const LobbySeat& s : l.seats) n += s.used && !s.bot ? 1 : 0;
+  return n;
+}
+
 int lobby_leader(const Lobby& l) {
+  if (l.seats[0].used) return 0;
+  for (int i = 0; i < kLobbySeats; i++)
+    if (l.seats[static_cast<size_t>(i)].used && !l.seats[static_cast<size_t>(i)].bot) return i;
   for (int i = 0; i < kLobbySeats; i++)
     if (l.seats[static_cast<size_t>(i)].used) return i;
   return -1;
@@ -170,6 +180,8 @@ void lobby_leave(Lobby& l, int slot, double now) {
   seat(l, slot) = {};
   if (lobby_seated(l) < l.settings.min_players || lobby_seated(l) == 0)
     stop_countdown(l, "too few players");
+  else if (lobby_humans(l) < l.settings.humans)
+    stop_countdown(l, "no player left to play it");
   check(l, now);
 }
 

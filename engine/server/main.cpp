@@ -37,6 +37,7 @@ constexpr CvarFlag kCvarFlags[] = {
     {"--maxclients", "sv_maxclients"},
     {"--map", "sv_map"},
     {"--bots", "sv_bots"},
+    {"--lobby", "sv_lobby"},
     {"--seed", "sv_seed"},
     {"--password", "sv_password"},
     {"--visibility", "sv_visibility"},
@@ -333,6 +334,7 @@ std::string server_help(const ServerGame& game) {
       std::string(game.default_map) +
       ")\n"
       "  --bots=N           sv_bots: slots the game's bots fill\n"
+      "  --lobby=1          sv_lobby: warm up every map until everyone is ready\n"
       "  --seed=N           sv_seed: the run's seed\n"
       "  --password=TEXT    sv_password: joining takes it\n"
       "  --visibility=V     sv_visibility: lan, invite or listed\n"
