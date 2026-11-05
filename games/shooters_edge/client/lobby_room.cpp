@@ -83,7 +83,7 @@ void make_fighter(Room& r, const sv::RulesCommon& s, const sv::MapSpec& map, int
 
 }  // namespace
 
-hud::LobbyView lobby_view(const Room& r, double now, int me, bool roster) {
+hud::LobbyView lobby_view(const Room& r, double now, int me) {
   hud::LobbyView v;
   const sv::Lobby& l = r.lobby;
   v.phase = l.phase == sv::LobbyPhase::warmup      ? hud::LobbyShown::warmup
@@ -92,12 +92,13 @@ hud::LobbyView lobby_view(const Room& r, double now, int me, bool roster) {
   v.seconds_left = sv::lobby_seconds_left(l, now);
   const double left = l.countdown_ends - now;
   v.fraction = left > 0 ? left - std::floor(left) : 0;
-  v.roster = roster;
+  v.min_players = l.settings.min_players;
   const int leader = sv::lobby_leader(l);
   for (int i = 0; i < sv::kLobbySeats; i++) {
     const sv::LobbySeat& s = l.seats[static_cast<size_t>(i)];
     if (!s.used) continue;
-    v.rows.push_back({s.name, static_cast<int>(s.team), s.ready, s.bot, i == leader, i == me});
+    v.rows.push_back({s.name, static_cast<int>(s.team), s.ready, s.bot, i == leader, i == me,
+                      sv::lobby_on_map(l, i)});
   }
   return v;
 }

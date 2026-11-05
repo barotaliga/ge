@@ -6,6 +6,13 @@
 // (red on a tie), and a player moves with `team red|blue|auto|switch`. The team is the player's
 // game's to show (Shooter's Edge puts it in the player's user info and its mod's `.team`).
 //
+// THE LOBBY AND THE WARMUP. A seat is in the lobby (the game shows it the lobby's own screen, not
+// the map) until it joins the WARMUP (`warmup`; `sitout` goes back): only a seat in the warmup is
+// on the map before the match. Bots join the warmup as they are seated, and a player does too when
+// `warm_on_join` (a dedicated server's clients, who have no lobby screen). Being in the warmup is
+// not being ready: a seat may be ready from the lobby's screen, and every seat, warm or not, is on
+// the map once the match starts.
+//
 // THE PHASES:
 // - WARMUP. The map plays as a match would, every player spawned and free to roam, fight and pick
 //   things up, but nothing counts: whatever is scored is thrown away when the match starts, and
@@ -14,12 +21,13 @@
 //   `bots_ready`.
 // - COUNTDOWN. When every seat is ready, at least `min_players` are seated and at least `humans` of
 //   them are players, not bots, the countdown of `countdown_s` starts; the leader may start it with
-//   `start` whoever is ready. A `break`, a player joining unready, or the seats falling under
+//   `start` whoever is ready, but never with fewer than `min_players` seated (nor fewer than
+//   `humans` players). A `break`, a player joining unready, or the seats falling under
 //   `min_players` (or the players under `humans`) stops it, back to warmup.
 // - MATCH. When the countdown runs out `lobby_due` says so once: the game restarts the map with
 //   every seat on it (scores, items and the clock new) and the match is played to its limits.
 //   When the mod changes the map at the match's end, `lobby_back` returns everyone to warmup
-//   with every player unready.
+//   with every player unready and back in the lobby (unless `warm_on_join`).
 //
 // THE LEADER is slot 0 when it is seated (a listen server's own player), else the lowest seat a
 // player holds, else the lowest seat: only the leader may `start`. A dedicated server's bots never
@@ -27,9 +35,10 @@
 // alone never counts down: they warm up until a player joins.
 //
 // THE WORDS (`lobby_command`, a console line or a client's command): `ready`, `break` (also
-// `notready`), `toggleready`, `team <red|blue|auto|switch>`, `start`, `lobby` (the roster
-// printed). Anything else is not the lobby's (false), for the mod or the console. Every act, and
-// every refusal with why and what to do instead, is a line in `said` for the game to print.
+// `notready`), `toggleready`, `team <red|blue|auto|switch>`, `start`, `warmup`, `sitout`,
+// `togglewarmup`, `lobby` (the roster printed). Anything else is not the lobby's (false), for the
+// mod or the console. Every act, and every refusal with why and what to do instead, is a line in
+// `said` for the game to print.
 //
 // A pure function of the seats and the acts in order, on the server's clock: no wall clock, no
 // randomness.
@@ -40,7 +49,8 @@
 // ge:summary The lobby before the match: seats, teams, ready and break, warmup, the countdown
 // ge:keywords lobby warmup countdown ready break notready toggleready team red blue auto switch
 // ge:keywords start leader seats roster pre-match free-roam lobby_command lobby_due lobby_back
-// ge:keywords match-phases server-match match-start
+// ge:keywords match-phases server-match match-start warm warmup-join sitout togglewarmup
+// ge:keywords lobby_on_map lobby-screen min_players too-few
 // ge:skill net
 // ge:test tests/server_match_test.cpp
 #pragma once
@@ -68,12 +78,16 @@ struct LobbySettings {
   double countdown_s = 5;  // the countdown's length, s
   bool bots_ready = true;  // a bot is ready as it joins
   int humans = 0;          // the fewest players (not bots) seated before a countdown starts
+  // A player is in the warmup as soon as it is seated (a dedicated server's clients); false: it
+  // waits on the lobby's screen until it says `warmup`. Bots always join the warmup.
+  bool warm_on_join = true;
 };
 
 struct LobbySeat {
   bool used = false;
   bool bot = false;
   bool ready = false;
+  bool warm = false;  // in the warmup, on the map (else on the lobby's screen)
   Team team = Team::none;
   std::string name;
 };
@@ -86,6 +100,8 @@ enum class LobbyWhy : uint8_t {
   not_leader,  // only the leader may start
   same,        // already so (ready when ready, the team it is on)
   bad_team,    // `team` named no team
+  too_few,     // fewer seated than `min_players` (or players than `humans`)
+  no_screen,   // `sitout` where players join the warmup as they are seated: no lobby screen
 };
 const char* why_text(LobbyWhy w);
 
@@ -111,6 +127,8 @@ LobbyWhy lobby_ready(Lobby& l, int slot, bool ready, double now);
 LobbyWhy lobby_team(Lobby& l, int slot, Team team, double now);
 // The leader starts the countdown whoever is ready.
 LobbyWhy lobby_start(Lobby& l, int slot, double now);
+// The seat joins the warmup (`warm`) or goes back to the lobby's screen.
+LobbyWhy lobby_warmup(Lobby& l, int slot, bool warm, double now);
 // One of the words above for `slot`; false when the line is not the lobby's.
 bool lobby_command(Lobby& l, int slot, std::string_view line, double now);
 
@@ -121,6 +139,9 @@ bool lobby_due(Lobby& l, double now);
 void lobby_back(Lobby& l);
 
 int lobby_seated(const Lobby& l);
+// Whether the seat is on the map: in the warmup, or seated at all once the match is on.
+bool lobby_on_map(const Lobby& l, int slot);
+int lobby_warm_count(const Lobby& l);  // the seats in the warmup
 int lobby_ready_count(const Lobby& l);
 int lobby_humans(const Lobby& l);  // the seats players (not bots) hold
 int lobby_leader(const Lobby& l);  // -1 with no seat taken

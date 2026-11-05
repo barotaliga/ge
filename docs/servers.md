@@ -34,6 +34,12 @@ are local seats of its classic endpoint: shown to every client as players, sent 
 lines, a countdown run out restarts the map into the match, and the match's end brings the next
 map up in warmup. With `LobbySettings::humans` set (a dedicated server's 1) bots alone never
 count down, and a bot never leads while a player is seated (the `se-dedicated-lobby` lab).
+The lobby and the warmup are apart: with `LobbySettings::warm_on_join` off (a game that has a
+lobby screen of its own, as Shooter's Edge's window does) a player waits on that screen, off the
+map, until `warmup` puts him in the warmup (`sitout` takes him back, `lobby_on_map` says where a
+seat is); bots are in the warmup as they join, and the match puts every seat on the map. `start`
+is refused below `min_players` seated (bots count) or `humans` players. A dedicated server's
+clients have no lobby screen, so there `warm_on_join` stays on and they join the warmup at once.
 Running one:
 
 ```
@@ -205,7 +211,9 @@ from the lobby Shooter's Edge lands first:
 ```
 
 - **Warmup** on the map itself (players move and play, scores do not count), with `ready` and
-  `break` (unready) as console commands and lobby buttons, `team <name>` and the leader's `start`.
+  `break` (unready) as console commands and lobby buttons, `team <name>` and the leader's `start`
+  (never with fewer than `min_players` seated). A game with a lobby screen keeps each player on it,
+  off the map, until he joins the warmup (`warmup`, `sitout`); the match puts everyone on the map.
 - **Countdown**, cancelled by a `break`; the **match**, which the game restarts the map for; an
   **intermission** with the scores, then back to warmup or to the next map in the rotation.
 - **The game decides what each phase means** through `ServerGame`'s phase events; the engine owns
