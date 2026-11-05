@@ -81,6 +81,10 @@ struct Breaking {
   double wind = 0;   // the wind blowing the tops off (the whitecap cover)
 };
 
+// The share of the sea's face white under a wind of `wind` m/s at 10 m (the whitecap cover,
+// 3.84e-6 U^3.41, at most 1): the crests breaking and the foam they leave.
+double whitecap_cover(double wind);
+
 // The breaking shares at a surface over `depth` m of water under a wind of `wind` m/s at 10 m.
 Breaking breaking_at(const Surface& s, double depth, double wind);
 
