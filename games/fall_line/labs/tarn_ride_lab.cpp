@@ -217,7 +217,16 @@ void run(gl::Lab& lab) {
       Ride r = ride(level, v, off, limit, ons[n]);
       const std::string how = ons[n] == On::sled_flat ? " flat out" : "";
       if (r.end == "still in" || r.end == "stopped short") {
-        lab.fail(k + ": " + tag + " at " + fixed(v, 0) + " m/s" + how + " the ride ended " + r.end,
+        std::string what = k;
+        what += ": ";
+        what += tag;
+        what += " at ";
+        what += fixed(v, 0);
+        what += " m/s";
+        what += how;
+        what += " the ride ended ";
+        what += r.end;
+        lab.fail(what,
                  "Onto the open tarn it skims across, or goes in and climbs out or is reset: "
                  "read games/fall_line/sim/lake.cpp (skill: sim).");
       }
