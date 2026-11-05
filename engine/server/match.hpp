@@ -29,7 +29,9 @@
 // THE WORDS (`lobby_command`, a console line or a client's command): `ready`, `break` (also
 // `notready`), `toggleready`, `team <red|blue|auto|switch>`, `start`, `lobby` (the roster
 // printed). Anything else is not the lobby's (false), for the mod or the console. Every act, and
-// every refusal with why and what to do instead, is a line in `said` for the game to print.
+// every refusal with why and what to do instead, is a line in `said` for the game to print, and
+// beside it in `notes` what happened as data (the kind and the seat), so a game that speaks its
+// own words (a classic game's) says them instead of the line.
 //
 // A pure function of the seats and the acts in order, on the server's clock: no wall clock, no
 // randomness.
@@ -78,6 +80,26 @@ struct LobbySeat {
   std::string name;
 };
 
+// What a line in `said` is about: `notes[i]` is `said[i]`'s.
+enum class LobbyNoteKind : uint8_t {
+  joined,     // `slot` took a seat
+  left,       // `slot` left
+  ready,      // `slot` is ready
+  unready,    // `slot` is not ready
+  moved,      // `slot` moved to another team
+  countdown,  // the countdown began: everyone ready (`slot` -1) or the leader's `start` (`slot`)
+  stopped,    // the countdown stopped: `slot` took a break, or -1 (a join, too few players)
+  begins,     // the countdown ran out: the match begins
+  warmup,     // back to warmup after a match
+  refused,    // `slot`'s act refused (`why`)
+  told,       // an answer for `slot` alone (`team`, `lobby`'s roster)
+};
+struct LobbyNote {
+  LobbyNoteKind kind = LobbyNoteKind::told;
+  int slot = -1;
+  uint8_t why = 0;  // a refusal's LobbyWhy
+};
+
 // Why an act was refused.
 enum class LobbyWhy : uint8_t {
   ok,
@@ -95,6 +117,7 @@ struct Lobby {
   double countdown_ends = 0;  // the server time the countdown runs out, s
   std::array<LobbySeat, kLobbySeats> seats;
   std::vector<std::string> said;  // lines for the game to print, in order (the game clears it)
+  std::vector<LobbyNote> notes;   // what each line of `said` is about (cleared with it)
   int matches = 0;                // matches started
   int countdowns = 0;             // countdowns started (stopped ones included)
   int stopped = 0;                // countdowns stopped before they ran out

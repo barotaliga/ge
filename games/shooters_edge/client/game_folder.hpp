@@ -72,8 +72,9 @@ struct GameContent {
   bool registered = false;                     // the packs are the full game
   std::string start_map;                       // the profile's start map
   std::string first_map;  // the start map when the packs hold it, else the game's fallback
-  // The game's item names as server lines (profiles/items.hpp's `item_name_lines`) when the
-  // baseline mod plays the game's packs, so its pickups speak the game's words; empty when the
+  // The game's item names and its server's words as server lines (profiles/items.hpp's
+  // `item_name_lines`, profiles/words.hpp's `word_lines`) when the baseline mod plays the game's
+  // packs, so its pickups, obituaries, clock and lobby speak the game's words; empty when the
   // game's own program runs (it has its own) or no packs are open (the mod's own words).
   std::vector<std::string> item_names;
 };

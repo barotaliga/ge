@@ -225,7 +225,9 @@ bool stage(gpu::Device& device, UiPass& pass, const ui::DrawList& list) {
       it.info[0] = kKindBox;
       it.info[1] = static_cast<uint32_t>(pass.staged_paints.size());
       auto found = b.image ? pass.pictures.find(b.image) : pass.pictures.end();
-      if (b.image != nullptr && found == pass.pictures.end() && !b.image->empty()) {
+      if (b.image != nullptr && !b.image->empty() &&
+          (found == pass.pictures.end() ||
+           (found->second.revision != b.image->revision && !found->second.external))) {
         ui_image(device, pass, *b.image);
         found = pass.pictures.find(b.image);
       }
@@ -348,11 +350,13 @@ void ui_image(gpu::Device& device, UiPass& pass, const ui::Image& image) {
     found = pass.pictures.find(&image);
   }
   write_pixels(device, found->second.texture, image.rgba.data(), w, h);
+  found->second.revision = image.revision;
 }
 
 void ui_texture(gpu::Device& device, UiPass& pass, const ui::Image* key,
                 const wgpu::TextureView& view, uint32_t width, uint32_t height) {
   pass.pictures[key] = make_picture(device, pass, width, height, &view);
+  pass.pictures[key].external = true;
 }
 
 void prepare_ui(gpu::Device& device, UiPass& pass, const ui::DrawList& list, uint32_t width,

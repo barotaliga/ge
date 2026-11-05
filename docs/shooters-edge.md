@@ -240,65 +240,39 @@ engine's burning gas is the flame.
 
 **What a pickup says.** The baseline mod names an item in the loaded game's own words: the game's
 profile has a table of names by class name (`profiles/items.hpp`'s `names`; the classic game's
-`kClassicNames`: "shells", "Nailgun", "Thunderbolt", "Pentagram of Protection"), which the window
-gives the server as local info (`localinfo weapon_nailgun "Nailgun"`) when the mod plays a game's
-packs, and the mod's `name_of` (each variant's `glue.qc`) reads it under the item's class name.
-So "You got the rockets", "You got the Nailgun", and a backpack lists what was in it ("You get the
-Rocket Launcher, 20 shells, 5 rockets", the weapon only when it is new to its taker). Armour says
-"You got armor" whatever its colour, as the classic game does. On the built-in arena, with no
-packs, the mod speaks its own words ("You got ammunition", "You got the Spiker").
+`kClassicNames`: "shells", "nailgun", "Double-barrelled Shotgun", "Red Armor", "Pentagram of
+Protection"), which the window gives the server as local info (`localinfo weapon_nailgun
+"nailgun"`) when the mod plays a game's packs, and the mod's `name_of` (each variant's `glue.qc`)
+reads it under the item's class name. So "You got the rockets", "You got the Red Armor", and a
+backpack lists what was in it ("You get the Rocket Launcher, 20 shells, 5 rockets", the weapon only
+when it is new to its taker). On the built-in arena, with no packs, the mod speaks its own words
+("You got ammunition", "You got the Spiker", "You got armor").
 
-### Joining a game over the network
-
-Any server that speaks the classic protocol can be joined from a window:
-
-```sh
-build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +connect 192.168.1.20
-```
-
-The game's own dedicated server, `shooters_edge_server` (docs/servers.md), is what a machine runs
-to host one, for example dm6 from the packs with a frag limit:
-
-```sh
-build/release/shooters_edge_server --root=$HOME/games/classic --map=dm6 --port=27500 --realtime --for=0 +set fraglimit 20
-```
-
-With `--bots=3` three bots take seats (every client sees them on the scoreboard, `*bot` in their
-user info), and with `--lobby=1` every map opens in warmup with the limits held: a joined player
-types `ready` (or `break`, `team red|blue|auto|switch`, `lobby` for the roster) in the console,
-the leader (the lowest seat a player holds) may `start` early and `addbot [novice|average|expert]`
-or `removebot`, and when everyone is ready a 5 s countdown restarts the map into the match. Bots
-alone warm up until a player joins. When the match ends the next map opens in warmup again:
-
-```sh
-build/release/shooters_edge_server --map=arena --bots=3 --lobby=1 --realtime --for=0 +set fraglimit 20
-```
-
-The window's console joins and leaves (`net/classic_remote.hpp`):
-
-| Command | What |
-| --- | --- |
-| `connect <host>[:port]` | join a server (an IPv4 address or `localhost`; 27500 when no port) |
-| `disconnect` | leave it, back to your own game |
-| `reconnect` | the last server again |
-| `netstatus` | the server joined, the stage, the packets and bytes each way |
-
-Joined, the window plays the server's game with your keys, mouse, `name`, `topcolor` and
-`bottomcolor`, and draws what the server sends exactly as it draws a client demo (the map, the
-items, the other players, the HUD, the sounds, the printed lines): the connection is read as a
-recording of it while it is made. Your own game waits until you leave.
-
-Your own moves are PREDICTED: from the newest place the server sent of you, every move sent since
-is run through the same player move as the server's (`plugins/shooter/predict.hpp`), over the
-level's solids, the movers where the last frame put them and the other players' boxes, with the
-move settings serverdata carried. So you are drawn where your keys put you, not a round trip late;
-a prediction the next frame proves 4 to 64 units wrong (a door, another player) is eased in, not
-snapped. `cl_nopred 1` draws the server's place instead, and `netstatus` says how many moves the
-prediction runs ahead. Over a 100 ms round trip the test holds every prediction to within 0.27
-units of where the server later puts the player. Not yet: the other players are drawn where the
-last frame put them, not smoothed between frames; the server info's `pm_` extras (the jump boost,
-the bunny-hop cap) are not read, so a server that sets them is predicted with their defaults; and
-a server is found by its address, not yet on a list.
+**What the server says.** Everything else a player reads from the server comes in the loaded
+game's words too: a second table in the profile (`profiles/words.hpp`'s `kClassicServerWords`),
+each a template in plain ASCII (`server/words.hpp`: `%1` a name, `%g1` its digits in the gold
+figures, `^red text^`, `%[ %]` the gold brackets, `%>4g1` right-aligned, `%n` a newline), put in
+the server's local info beside the item names by the window and by the dedicated server when the
+game folder holds packs. The mod fills one with the `words` builtin (#640, `GE_QC_WORDS`):
+- **Deaths**: one line to everyone at the medium level, chosen by the weapon, whether the victim
+  was gibbed (health below -40) and whether the killer had the quad ("bob rides ann's rocket",
+  "bob was gibbed by ann's rocket", "ann rips bob a new one"), a teammate's kill (-1 to the killer:
+  "ann checks his glasses"), one's own ("bob discovers blast radius") and the world's ("bob sleeps
+  with the fishes", "bob burst into flames"); where a death has variants one is drawn from the
+  game's stream. Before the match (the lobby's warmup and countdown, `ge_phase` in the local info)
+  nothing is told or scored, and a player who leaves is told only in the match ("bob left the game
+  with 3 frags").
+- **The clock**: each whole minute left ("[19] minutes remaining" in gold, and in a two-team game
+  "Team [red] leads by 3 frags" or "The game is currently a tie"), then 30, 15 and 10 to 1 seconds;
+  the end is "The match is over" and, in a team game, the teams' scores and shares.
+- **The powers**: "Quad Damage is wearing off" and "Protection is almost burned out" 3 s before.
+- **The lobby** (`server/announce.hpp`): "ann is ready - no matchtag set" (red text after the
+  name), "All players ready", "Timer started", "bob stops the countdown", "The match has begun!",
+  and each second of the countdown the centre print with the seconds in gold and the match's
+  settings a line each (the window's lobby panel then leaves out its own big count). Its start
+  plays `items/protect2.wav`, its last five seconds `buttons/switch04.wav`.
+The built-in arena, and Shooter's Edge's own content, keep the mod's and the lobby's own words.
+`make lab LAB=se-words` draws both side by side in a console font.
 
 ### Benchmarking a demo
 
@@ -1151,10 +1125,37 @@ every pass, and judged by captioned screenshots:
   fullbright palette colours as emissive.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
-- **Effects** (`games/shooters_edge/app/effects.hpp`): our own trails and bursts on the engine's
-  particles (a pool over no ground: nothing lands): a rocket's embers and smoke, a grenade's
-  smoke, an explosion's sparks and smoke, a hit's sparks and dust, a wound's droplets (dark: the
-  pool has no colour channel yet), a teleport's column of cold light, lava thrown up. **Dynamic
+- **Effects, classic** (`games/shooters_edge/app/effects.hpp`): the classic client's effects in
+  its own numbers, drawn as unlit specks of the pack's own palette colours (the engine's shining
+  particles, read from `gfx/palette.lmp`) that run along the palette's ramps as they age: an
+  explosion's 1024 specks off a 32-unit box at up to 256 units a second (half speeding out on the
+  bright ramp, half slowing on the second), a rocket's speck every 3 units on the fire ramp rising
+  as it greys and a grenade's from the ramp's greys, 20 dark grey specks a pellet and 10 a nail,
+  20 dark red ones a wound, a teleport's grid of 896, lava's 1024; all falling at 40 units a
+  second squared. The pack's own models stand in for the rest (`client/world_models.hpp`'s
+  `kEffectModels`, loaded by the window whether the program precached them or not): the
+  explosion's sprite (its 6 frames at 10 a second) and the lightning bolt's model laid every 30
+  units from the player's origin to the end, each segment turned to a fresh roll every frame.
+  The classic look also draws each weapon's own flash frames, not the engine's muzzle fire.
+- **Effects, enhanced** (`games/shooters_edge/app/weapon_fx.hpp`, the modern look, each behind
+  its `ce_` switch: `ce_muzzles`, `ce_explosions`, `ce_trails`, `ce_hits`, `ce_beams`): a
+  LAYERED fireball of the engine's (`render/explosion.hpp`: the main ball, then three smaller
+  billows born round it a few hundredths of a second later, a dome when it goes off against a
+  surface), the classic's ember ball kept as glowing embers that cool from yellow to a dull red,
+  white-hot sparks, dark chunks and smoke that lingers, its light white-hot then orange; a rocket
+  burns a short flame out of its motor (the muzzle fire's march stretched back along its flight)
+  and lays fire into puffs of smoke that spread as they thin (the particles' `grow`), a grenade
+  pale smoke; a pellet's or a nail's hit throws the burst of the face it hit (`render/impact.hpp`
+  by the surface class of the map triangle the round's line crosses there, its normal off that
+  triangle); the arc gun's beam is the engine's bolt (`render/beam.hpp`) in the style `r_beam_style`
+  numbers (1 forked, 2 arc, 3 bolt the default, 4 braid), rooted on the gun's own muzzle, a cold
+  glow on the walls along it. Smoke is lit as the room round it is
+  (`render::BlastLight` off the lightmap under it and the open sky over it), not by the sun
+  through the roof. A match's temporary entities (the gunshots, spikes, beams and blood the
+  baseline mod multicasts) reach these effects as a campaign's do. The `se-weapon-fx` lab fires
+  every weapon at a wall in both looks, from the eye and from beside the line of fire; with
+  `--game=<install>/id1 --map=e1m1` the pack's own maps and weapons, for private pictures.
+- **Dynamic
   lights** (`set_dynamic_lights`): the classic adds them to the lightmaps' light, falling off in
   a straight line to their radius; the modern draws them as point lights. **The screen's blend**
   (`render/post.hpp`'s `set_post_blend`): the liquid round the eye, the powers held and a hurt's
@@ -1439,6 +1440,7 @@ Every row lands its labs (G9), and every lab runs headless in the container:
 | `se-lobby` | sim | The warmup on the listen server: bots seated on teams, the free roam, ready, break, the countdown and the map restarted for a clean match (built, M18q1); later clients find a hosted game on the LAN and through the rendezvous, fill the lobby, chat, start, play and return, and a dedicated server outlives the client that started it |
 | `se-net` | sim | Compatible and native clients on the simulated network under every preset: bandwidth, prediction errors, corrections (the compatible server half built, M18g: scripted clients under every preset, bytes a second, loss, downloads, the digest) |
 | `se-interop` | drive | Our client and server against existing programs on loopback (cache-gated like `se-parity`; a stub reporting "not run" with its commands, M18g) |
+| `se-weapon-fx` | picture | Every weapon's effects in the window's frame, classic beside enhanced: the player handed every weapon, aimed at the wall nearest 9 m off, each weapon fired and pictured after its shot (a launcher's after its blast), from the eye and from a camera beside the line of fire; the fixture halls, or a pack's map and its own weapons with `--game` (private); the births, the blasts and the beams each look drew |
 | `se-client` | picture | The `shooters_edge` window's frame without a window: the fixture halls from a pack, the baseline mod as a listen server, a rocket jump; the frame from the player's eyes with the weapon in hand, the HUD and the effects at the spawn, the blast (its sparks, light and red flash) and the top of the jump; the rise, the health it cost, the effects thrown and the shots the hand saw (built, M18h first slice) |
 | `se-world` | picture | Named views of free maps in both looks, with captions |
 | `se-models` | picture | The things a map places, as the window draws them: the armour, a health box, an ammo box, a weapon, a torch or a flame, the quad, the shield, another player in his colours and one holding both powers, each from a clear spot near it in both looks; a lift lowered and up, a door shut and open (M18i6); the things placed by kind and the light under each (built, M18i3; `--pak` and `--map` for a pack's own maps) |

@@ -22,6 +22,7 @@ void() PutClientInServer = {
   self.effects = 0;
   self.super_damage_finished = 0;
   self.invincible_finished = 0;
+  self.power_said = 0;
   self.attack_finished = time;
   self.pain_finished = 0;
   self.air_finished = time + 12;
@@ -144,9 +145,17 @@ void() ClientKill = {
   damage(self, self, self, 1000);
 };
 
+// Leaving is told in the loaded game's words (`left`) when it has them, and then only in the match.
 void() ClientDisconnect = {
-  say_all(PRINT_HIGH, self.netname, " left the game with ", ftos(self.frags), " frags\n", "", "");
-  sound(self, CHAN_BODY, "player/tornoff2.wav", 1, ATTN_NONE);
+  local string told;
+  told = game_words("left", self.netname, ftos(self.frags), "", "");
+  if (told == "") {
+    say_all(PRINT_HIGH, self.netname, " left the game with ", ftos(self.frags), " frags\n", "", "");
+    sound(self, CHAN_BODY, "player/tornoff2.wav", 1, ATTN_NONE);
+  } else if (!game_quiet()) {
+    say_all(PRINT_HIGH, told, "", "", "", "", "");
+    sound(self, CHAN_BODY, "player/tornoff2.wav", 1, ATTN_NONE);
+  }
   self.classname = "disconnected";
   self.takedamage = DAMAGE_NO;
   self.solid = SOLID_NOT;

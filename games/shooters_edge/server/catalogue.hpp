@@ -26,7 +26,8 @@
 // DP_QC_MINMAXBOUND (94 min, 95 max, 96 bound), QSG_CVARSTRING (103 cvar_string),
 // DP_QC_CVAR_STRING (448 cvar_string), ZQ_QC_STRINGS (114 strlen, 115 strcat, 116 substr, 118
 // strzone, 119 strunzone), FTE_CALLTIMEOFDAY (231), ZQ_PAUSE (531 setpause; the pause hooks),
-// ZQ_VWEP (532 precache_vwep_model; vw_index), and with no builtin: DP_CON_SET (the console's
+// ZQ_VWEP (532 precache_vwep_model; vw_index), GE_QC_WORDS (640 words: a loaded game's own
+// words filled in, words.hpp), and with no builtin: DP_CON_SET (the console's
 // `set`), ZQ_CLIENTCOMMAND (the GE_ClientCommand hook), ZQ_ITEMS2 (items2), ZQ_MOVETYPE_NOCLIP,
 // ZQ_MOVETYPE_FLY, ZQ_MOVETYPE_NONE (the loop's move types). `checkextension` (#99) answers 1 for
 // any of these names in any case.

@@ -129,7 +129,8 @@ void draw_lobby_classic(ui::DrawList& dl, const ClassicArt& art, const hd::Lobby
                            std::to_string(ready) + " OF " + std::to_string(seated) + " READY";
   centred(pen, head, bx + 8, kBannerCols, kBannerY + 8, true);
   centred(pen, "F1 READY  F2 TEAM  F3 LIST", bx + 8, kBannerCols, kBannerY + 16, false);
-  if (counting) count(pen, v.seconds_left, 0.55f + 0.45f * static_cast<float>(v.fraction));
+  if (counting && v.count)
+    count(pen, v.seconds_left, 0.55f + 0.45f * static_cast<float>(v.fraction));
   if (!v.roster) return;
   int rows = 0;
   for (int team = 1; team <= 2; team++) {

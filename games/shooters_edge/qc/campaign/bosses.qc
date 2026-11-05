@@ -90,11 +90,9 @@ void() boss_ball_touch = {
   remove(self);
 };
 
-// Up: a throw every 2 s at the nearest living player it can see.
-void() boss_throw = {
-  local entity m, p;
-  self.think = boss_throw;
-  self.nextthink = time + 2;
+// The nearest living player it can see, kept while he lives; world when there is none.
+float() boss_pick = {
+  local entity p;
   if (self.enemy.health <= 0 || self.enemy.classname != "player") {
     self.enemy = world;
     p = find(world, classname, "player");
@@ -105,13 +103,37 @@ void() boss_throw = {
       p = find(p, classname, "player");
     }
   }
-  if (!self.enemy || !can_see(self.enemy)) return;
+  return self.enemy && can_see(self.enemy);
+};
+
+// The throw itself, lobbed to land on the enemy: as much upward as gravity takes back over the
+// flight.
+void() boss_throw = {
+  local entity m;
+  if (!boss_pick()) return;
   face_enemy();
   sound(self, CHAN_WEAPON, "boss1/throw.wav", 1, ATTN_NORM);
-  // Lobbed to land on it: as much upward as gravity takes back over the flight.
   m = monster_missile("progs/lavaball.mdl", 300, 20, 400 * vlen(self.enemy.origin - self.origin) / 300);
   m.avelocity = '200 100 300';
   m.touch = boss_ball_touch;
+};
+
+// Up, a frame every 0.1 s: the rise, a strike's shudder or a throw played through (the ball leaves
+// on the throw's twelfth frame), else its idle sway; a throw begins every 2 s while a player is
+// in sight.
+void() boss_think = {
+  self.think = boss_think;
+  self.nextthink = time + 0.1;
+  if (self.fr_now_z) {
+    anim_tick();
+    if (self.fr_now == self.fr_missile && self.anim_step == 12) boss_throw();
+    if (self.frame >= self.fr_now_y) self.fr_now = '0 0 0';
+    return;
+  }
+  frame_loop(self.fr_walk);
+  if (time < self.attack_finished) return;
+  self.attack_finished = time + 2;
+  if (boss_pick()) anim_begin(self.fr_missile);
 };
 
 // Used (the rune taken): it rises out of the lava, angry at whoever took it.
@@ -126,11 +148,24 @@ void() boss_use = {
   self.enemy = activator;
   sound(self, CHAN_VOICE, "boss1/sight1.wav", 1, ATTN_NORM);
   effect_explosion(self.origin + '0 0 64');
-  self.think = boss_throw;
-  self.nextthink = time + 1.5;
+  anim_begin(self.fr_stand);  // the rise
+  self.attack_finished = time + 1.5;
+  boss_think();
 };
 
-// One strike: three and it sinks back for good, its targets fired.
+// Its death frames played, it is gone.
+void() boss_sink = {
+  anim_tick();
+  if (self.frame < self.fr_now_y) {
+    self.nextthink = time + 0.1;
+    return;
+  }
+  self.modelindex = 0;
+  self.think = noop;
+  self.nextthink = -1;
+};
+
+// One strike: it shudders; three and it sinks back for good, its targets fired.
 void() boss_struck = {
   local entity was_self;
   was_self = self;
@@ -138,7 +173,8 @@ void() boss_struck = {
   self.health = self.health - 1;
   if (self.health > 0) {
     sound(self, CHAN_VOICE, "boss1/pain.wav", 1, ATTN_NORM);
-    self.nextthink = time + 2;  // a strike stops its throwing a while
+    anim_begin(self.fr_pain);
+    self.attack_finished = time + 2;  // a strike stops its throwing a while
   } else {
     sound(self, CHAN_VOICE, "boss1/death.wav", 1, ATTN_NORM);
     killed_monsters = killed_monsters + 1;
@@ -147,9 +183,9 @@ void() boss_struck = {
     use_targets();
     effect_explosion(self.origin + '0 0 64');
     self.solid = SOLID_NOT;
-    self.modelindex = 0;
-    self.think = noop;
-    self.nextthink = -1;
+    anim_begin(self.fr_death);
+    self.think = boss_sink;
+    self.nextthink = time + 0.1;
   }
   self = was_self;
 };
@@ -166,6 +202,11 @@ void() monster_boss = {
   precache_sound("weapons/r_exp3.wav");
   total_monsters = total_monsters + 1;
   self.flags = self.flags | FL_MONSTER;
+  self.fr_stand = '0 16 1';     // the rise
+  self.fr_walk = '17 47 1';     // its sway while up
+  self.fr_missile = '57 79 1';  // a throw
+  self.fr_pain = '80 89 1';     // a strike's shudder
+  self.fr_death = '48 56 1';
   self.health = 3;
   self.solid = SOLID_NOT;  // under the lava until used
   self.movetype = MOVETYPE_STEP;
@@ -220,20 +261,39 @@ void() oldone_end = {
               "four runes go quiet. The way home is open.");
 };
 
+// Torn apart: it shakes through its last frames, then bursts, and the game ends.
+void() oldone_burst = {
+  anim_tick();
+  if (self.frame < self.fr_now_y) {
+    self.nextthink = time + 0.1;
+    return;
+  }
+  sound(self, CHAN_VOICE, "boss2/pop2.wav", 1, ATTN_NONE);
+  throw_gib("progs/gib1.mdl", 300);
+  throw_gib("progs/gib2.mdl", 300);
+  throw_gib("progs/gib3.mdl", 300);
+  self.modelindex = 0;
+  self.think = oldone_end;
+  self.nextthink = time + 2;
+};
+
 void() oldone_die = {
   self.solid = SOLID_NOT;
   self.takedamage = DAMAGE_NO;
   killed_monsters = killed_monsters + 1;
   WriteByte(MSG_ALL, SVC_KILLEDMONSTER);
   sound(self, CHAN_VOICE, "boss2/death.wav", 1, ATTN_NONE);
-  throw_gib("progs/gib1.mdl", 300);
-  throw_gib("progs/gib2.mdl", 300);
-  throw_gib("progs/gib3.mdl", 300);
   activator = damage_attacker;
   use_targets();
-  self.modelindex = 0;
-  self.think = oldone_end;
-  self.nextthink = time + 4;
+  anim_begin(self.fr_death);
+  self.think = oldone_burst;
+  self.nextthink = time + 0.1;
+};
+
+// Alive, it sways: a frame every 0.1 s.
+void() oldone_sway = {
+  frame_loop(self.fr_stand);
+  self.nextthink = time + 0.1;
 };
 
 void() monster_oldone = {
@@ -254,4 +314,8 @@ void() monster_oldone = {
   self.takedamage = DAMAGE_YES;
   self.th_hurt = noop;  // it does not flinch
   self.th_die = oldone_die;
+  self.fr_stand = '0 45 1';   // its sway
+  self.fr_death = '46 66 1';  // its shaking apart
+  self.think = oldone_sway;
+  self.nextthink = time + 0.1 + random() * 0.5;
 };
