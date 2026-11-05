@@ -17,8 +17,10 @@
 //   glow that falls away, reaching as far as the classic's.
 // - THE ROCKET (`exhaust`, `fire_trail`): a short hot flame out of its motor each frame (the
 //   muzzle fire's march, stretched back along its flight), embers shed behind it that cool fast,
-//   and puffs of warm grey smoke laid every few centimetres that rise and spread. A GRENADE trails
-//   thinner, paler smoke alone (`smoke_trail`).
+//   and puffs of warm grey smoke laid every few centimetres that rise and spread. Its motor's fire
+//   lights the world round it as it flies (`motor_light`): a warm flame's colour at the nozzle, a
+//   little behind the rocket, wavering as a flame does, where the classic rocket's light is a
+//   steady white one on it. A GRENADE trails thinner, paler smoke alone (`smoke_trail`).
 // - THE BOLT (`bolt_look`): render/beam.hpp's lightning channel in the style the player picks
 //   (the engine's jagged bolt by default, its plasma arc or its braid, or a finer-forked bolt),
 //   its lights a cold blue-white glow that does not wash the room out.
@@ -84,6 +86,11 @@ bool blast_light(const gr::Blast& b, double now_s, Light* out);
 
 // A rocket's motor flame at `at` going `dir` (unit) this frame.
 gr::MuzzleFire exhaust(const double at[3], const double dir[3], uint32_t seed, double now_s);
+// The light of that flame at `now_s`: at the nozzle, kNozzleM behind `at` along `dir` (a zero
+// `dir`, on it), the flame's orange-yellow, reaching kMotorLightM, its level wavering at a flame's
+// 8 to 12 Hz between 0.8 and 1 of kMotorLevel, off the rocket's own seed so two never waver as one.
+inline constexpr double kNozzleM = 0.3, kMotorLightM = 6.5, kMotorLevel = 1.7;
+Light motor_light(const double at[3], const double dir[3], uint32_t seed, double now_s);
 // The trails over the stretch `from` .. `to` (m) flown this frame.
 inline constexpr double kRocketStep = 0.06, kGrenadeStep = 0.08;
 void fire_trail(const double from[3], const double to[3], uint32_t seed, Particles* out);

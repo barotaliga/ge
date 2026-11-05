@@ -2255,9 +2255,23 @@ adapter at 640 x 360 (`gpu-explosion`, the pass's own timestamps), a frame of th
 and far), and one filling the whole screen 0.9 ms, since dense smoke ends the march early (about 2% of the frame at most). A real
 GPU's times need the Mac. The CPU stages 32 blasts in about 0.1 ms in the debug build.
 
-**Not yet:** the flash lighting the scene (it needs the local lights, M39a) and the scorch pressed
-(it needs the decals, M42b), and particles colliding with anything but a heightfield: rows M47b and
-M47c.
+**The flash and the scorch in the world (M47b).** Each frame `flash_lights` turns every live
+blast's `flash_at` into a local light (§ Local lights): a point at the fireball's centre, its
+candela and colour reset from the curve, reaching out to where its light has fallen to a lux (the
+look's range at least, four times it at most). A fixed range would end a white-hot flash in a lit
+dome with a hard rim, and an eye outside that range would never adapt to it. The eye adapts
+through `FrameView::lamp_lux` (the flash's light on a face at the eye turned to it), so at night
+the yard round a blast reads lit by it instead of blown out against the dark; a game that wants a
+slower eye eases that value itself. The scorch is pressed with `engine/detail`'s decals as the blast
+goes off and drawn as the beams pass's burns (`engine/render/marks.hpp`: the masks' atlas,
+`press_scorch`, `mark_burns`, the same glue Shooter's Edge's marks use), its embers glowing for
+their first 1.5 s and the soot left. `gpu-explosion`'s `flash` view shows the yard and the wall lit
+by day, at dusk and at night, and its `scorch` view a floor's mark and a wall's; every older view now
+has its flash on the ground too (its march's pixel count leaves the flash out). Held by
+`tests/render_marks_test.cpp`.
+
+**Not yet:** particles colliding with anything but a heightfield (M47c); the eye's slower
+adaptation to a flash.
 
 ## Muzzle fire
 

@@ -355,12 +355,8 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     ps.soft_m = kParticleSoftM;
     gr::create_particles(d, f.pipelines, f.particles, f.layout, ps);
     gr::create_explosions(d, f.pipelines, f.explosions, f.layout);
-    gr::BeamSettings bs;  // the marks' burns too (world_fx.hpp's marks)
-    bs.max_burn_verts = kMarks * 240;
-    bs.atlas = &mark_atlas();
-    bs.atlas_width = kMarkAtlasPx * kMarkVariants;
-    bs.atlas_height = kMarkAtlasPx * ge::detail::kDecalKinds;
-    gr::create_beams(d, f.pipelines, f.beams, f.layout, bs);
+    // The marks' burns too (world_fx.hpp's marks, render/marks.hpp).
+    gr::create_beams(d, f.pipelines, f.beams, f.layout, gr::mark_beam_settings(kMarks));
     f.beam_shapes.resize(gr::kMaxBeamDraws);
     f.beam_draws.reserve(gr::kMaxBeamDraws);
     if (!f.weapons.empty()) {
@@ -577,7 +573,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       gr::build_beam(*look, b.shot, view.time_s, shape);
       if (shape.count > 0) f.beam_draws.push_back({&shape, look, b.shot.seed});
     }
-    gr::prepare_beams(d, f.beams, f.beam_draws, fx.burns, view, kHotEmberCd);
+    gr::prepare_beams(d, f.beams, f.beam_draws, fx.burns, view, gr::kHotEmberCd);
   }
   if (f.has_map) {
     GE_ZONE("world.models");
