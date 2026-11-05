@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "brush/map.hpp"
+#include "classicenhance/weapons.hpp"
 #include "core/math.hpp"
 #include "core/prng.hpp"
 #include "detail/receivers.hpp"
@@ -1080,8 +1081,15 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   fx::screen_blend(screen, out.blend_dry);
 }
 
-bool load_held_fire(HeldFire& f, std::string* error) {
+bool load_held_fire(HeldFire& f, std::string* error, std::span<const std::string_view> at_eye) {
   std::vector<fx::FireRow> rows;
+  if (!at_eye.empty()) {
+    for (const std::string_view name : at_eye) {
+      const ge::classicenhance::ClassicFire* c = ge::classicenhance::classic_fire_of(name);
+      rows.push_back(c != nullptr ? fx::FireRow{c->muzzle, c->knobs} : fx::FireRow{});
+    }
+    return fx::fire_looks(rows, 1.0, f.looks, error);
+  }
   for (const view::WeaponLook& look : view::weapon_looks())
     rows.push_back({look.muzzle, look.muzzle_knobs});
   return fx::fire_looks(rows, view::kBuiltScale, f.looks, error);

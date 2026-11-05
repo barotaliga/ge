@@ -389,9 +389,14 @@ int run_main(int argc, char** argv) {
   model_dirs.emplace_back(SE_MODELS_DIR);
 #endif
   const bool weapons_at_eye = cl::load_held_set(adapter, files, model_dirs, weapons);
-  // Each weapon's muzzle fire (world_fx.hpp), at the size its gun is drawn.
+  // Each weapon's muzzle fire (world_fx.hpp), at the size its gun is drawn: a classic game's own
+  // weapons fire the classic table's.
+  const auto held_names = [&](bool at_eye) {
+    return at_eye && adapter.game != nullptr ? adapter.game->held_weapons
+                                             : std::span<const std::string_view>{};
+  };
   cl::HeldFire held_fire;
-  if (std::string why; !cl::load_held_fire(held_fire, &why)) {
+  if (std::string why; !cl::load_held_fire(held_fire, &why, held_names(weapons_at_eye))) {
     out::error("shooters_edge: " + why +
                "; next: fix the weapon's fire in games/shooters_edge/view/weapons.cpp");
     return 1;
@@ -540,6 +545,8 @@ int run_main(int argc, char** argv) {
     weapons.clear();
     in_hand = {};
     in_hand.hand.at_eye = cl::load_held_set(adapter, files, model_dirs, weapons);
+    if (std::string why; !cl::load_held_fire(held_fire, &why, held_names(in_hand.hand.at_eye)))
+      out::error("shooters_edge: " + why + "; next: fix the weapon's fire in its table");
     fx_palette_read = false;
     next_map = game_content.first_map;
     game_menu.set_game(basedir);

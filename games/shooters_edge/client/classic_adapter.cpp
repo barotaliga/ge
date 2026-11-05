@@ -281,11 +281,17 @@ bool held_weapons(const GameAdapter& self, const SearchPath& files,
       h.skin.image = std::move(m.skins[0]);
       h.skin.glow.clear();
     }
-    if (h.frames.size() > 1)  // the firing frames after the rest frame, at the classic rate
-      h.clips.push_back({.name = "fire",
-                         .first = 1,
-                         .count = int(h.frames.size()) - 1,
-                         .fps = 1.0 / ge::classicenhance::kFrameSeconds});
+    // The firing frames after the rest frame, at the classic rate. A weapon that fires every
+    // frame (the nailguns, the lightning gun) steps them one a shot, round and round, each shot
+    // from the barrel its frame shows firing; the others play them through on each shot.
+    const ge::classicenhance::ClassicFire* fire = ge::classicenhance::classic_fire_of(name);
+    if (h.frames.size() > 1)
+      h.clips.push_back(
+          {.name = "fire",
+           .first = 1,
+           .count = int(h.frames.size()) - 1,
+           .fps = 1.0 / ge::classicenhance::kFrameSeconds,
+           .frame_a_shot = fire != nullptr && fire->refire_s <= ge::classicenhance::kFrameSeconds});
     out.push_back(std::move(h));
   }
   if (missing.empty()) return true;

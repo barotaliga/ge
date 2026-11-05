@@ -287,11 +287,12 @@ std::span<const ClassicFire> classic_fires() {
   // As a real gun's flash looks: a few milliseconds of glowing gas, small and dim, the smoke what
   // is left; each preset's shape (the shotguns' short wide flash, the grenade launcher's thump,
   // the rocket launcher's jet) at that scale. A nailgun throws nails, not burning powder: no
-  // flame, no flash, only a faint puff from the barrel that fired. The rates are the classic
-  // game's.
+  // flame, no flash, and next to no smoke, a breath of haze from the barrel that fired, thin and
+  // gone in under half a second, so a stream of them never builds a cloud. The rates are the
+  // classic game's.
   static constexpr std::string_view kPuff =
-      "length=0.02,width=0.02,glow=0,flash=0,sparks=0,light_range=0,smoke.smoke=0.14,"
-      "smoke_speed=1.5";
+      "length=0.02,width=0.02,glow=0,flash=0,sparks=0,light_range=0,smoke.smoke=0.02,"
+      "smoke.smoke_grow=0.3,smoke.smoke_time=0.35,smoke.smoke_albedo=0.45,smoke_speed=1.2";
   static constexpr std::string_view kShotgun =
       "life=0.018,length=0.24,width=0.144,glow=0.0175,flash=0.2,sparks=2,light_range=3.6,"
       "smoke.smoke=0.45";
