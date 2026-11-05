@@ -233,6 +233,7 @@ void run(gl::Lab& lab) {
             "short choppy waves across the whole lake, the reflection broken up, darker water "
             "where the waves' faces turn from the sky",
             10.0}}) {
+    if (!lab.wants(c.id)) continue;
     gw::World world = lake_world(c.wind, "nordic-clear");
     if (lake.water.bodies.empty()) {
       gr::add_water_body(d, lake.water, world.bodies[0]);
@@ -254,7 +255,10 @@ void run(gl::Lab& lab) {
 
   // THE WAKE: a 5 m boat across the calm lake at 5 m/s for 40 s, its rings summed as the
   // simulation sums them (water/wake.hpp); then crates dropped by the shore, their rings.
-  {
+  if (lake.water.bodies.empty()) {
+    gr::add_water_body(d, lake.water, lake_world(1.5, "nordic-clear").bodies[0]);
+  }
+  if (lab.wants("wake") || lab.wants("wake-high")) {
     gw::World world = lake_world(1.5, "nordic-clear");
     gw::Trail trail;
     const double x0 = kLakeX - 220, speed = 5;
@@ -268,28 +272,35 @@ void run(gl::Lab& lab) {
     const double bx = x0 + speed * t;
     const gr::FrameView behind =
         view_at(bx - 70, kLakeLevel + 7, kLakeZ - 12, 1.45, -0.12, 0.3, 1.3, t);
-    lab.shot({"wake",
-              "A BOAT'S WAKE ON THE CALM LAKE",
-              "A 5 m boat across the lake at 5 m/s under a light air after 40 s, seen from 7 m up "
-              "70 m behind it, looking along its track into a sun 17 degrees up: the rings it "
-              "set off along its track summed into its wake.",
-              "the arms spreading from the boat, short diverging crests along each breaking the "
-              "calm mirror and catching the sun's glitter; the transverse waves across the "
-              "track between them; the water outside the arms still",
-              {{"speed", "5 m/s"}, {"wind", "1.5 m/s"}}},
-             draw(d, lake, behind), Det::measured);
+    if (lab.wants("wake")) {
+      lab.shot(
+          {"wake",
+           "A BOAT'S WAKE ON THE CALM LAKE",
+           "A 5 m boat across the lake at 5 m/s under a light air after 40 s, seen from 7 m up "
+           "70 m behind it, looking along its track into a sun 17 degrees up: the rings it "
+           "set off along its track summed into its wake.",
+           "the arms spreading from the boat, short diverging crests along each breaking the "
+           "calm mirror and catching the sun's glitter; the transverse waves across the "
+           "track between them; the water outside the arms still",
+           {{"speed", "5 m/s"}, {"wind", "1.5 m/s"}}},
+          draw(d, lake, behind), Det::measured);
+    }
     const gr::FrameView high =
         view_at(bx - 55, kLakeLevel + 12, kLakeZ - 30, 1.0, -0.22, 0.35, 2.6, t);
-    lab.shot({"wake-high",
-              "THE WAKE FROM THE SIDE",
-              "The same boat's wake from 12 m up, 55 m behind and to one side of it, the sun "
-              "low on the right.",
-              "the V of the wake opening behind the boat: short diverging crests feathered "
-              "outward along each arm, the transverse waves curving across the track between "
-              "them, still water outside",
-              {{"speed", "5 m/s"}, {"wind", "1.5 m/s"}}},
-             draw(d, lake, high), Det::measured);
-
+    if (lab.wants("wake-high")) {
+      lab.shot({"wake-high",
+                "THE WAKE FROM THE SIDE",
+                "The same boat's wake from 12 m up, 55 m behind and to one side of it, the sun "
+                "low on the right.",
+                "the V of the wake opening behind the boat: short diverging crests feathered "
+                "outward along each arm, the transverse waves curving across the track between "
+                "them, still water outside",
+                {{"speed", "5 m/s"}, {"wind", "1.5 m/s"}}},
+               draw(d, lake, high), Det::measured);
+    }
+    gr::set_water_wakes(d, lake.water, 0, gw::Wakes{}, 0);
+  }
+  if (lab.wants("rings")) {
     gw::World drops = lake_world(0.5, "nordic-clear");
     const double sx = kLakeX - 240, sz = kLakeZ - 110;
     const double when[3] = {1.5, 3.5, 6.0};
@@ -331,7 +342,7 @@ void run(gl::Lab& lab) {
   // over the water, looking down at it from two metres out to the far shore, under an overcast.
   // A ring's crests are centimetres, so a narrow picture keeps only the nearest: each view fails
   // under its own share of the picture changed (the smoke's 256 px keeps a few light rings).
-  {
+  if (lab.wants("rain-light") || lab.wants("rain-heavy")) {
     gw::World world = lake_world(0.5, "nordic-clear");
     gr::set_water_body(d, lake.water, 0, world.bodies[0]);
     gr::FrameView jetty =
@@ -348,6 +359,7 @@ void run(gl::Lab& lab) {
           std::tuple{"rain-heavy", 25.0, 0.02, "A HEAVY RAIN ON THE LAKE",
                      "the near water crowded with rings over one another, the reflection broken "
                      "up into a grey sheen; far off the lake a dull, even grey"}}) {
+      if (!lab.wants(id)) continue;
       gr::FrameView v = jetty;
       v.weather.rain = rate;
       const gl::Picture pic = draw(d, lake, v);
@@ -378,7 +390,7 @@ void run(gl::Lab& lab) {
   // lake from the jetty on a moonless night in a light rain, a street lamp on a post at the
   // water's edge 6 m up throwing its cone onto the water, and the spray a wave throws off the
   // post's foot flown 1.5 s; drawn with the lamp off and on.
-  {
+  if (lab.wants("lamp-night-off") || lab.wants("lamp-night")) {
     gw::World world = lake_world(0.5, "nordic-clear");
     gr::set_water_body(d, lake.water, 0, world.bodies[0]);
     gr::FrameView night =
@@ -471,7 +483,7 @@ void run(gl::Lab& lab) {
   }
 
   // THE LOOKS: the shallows from above, a sandy shelf from 0 to 6 m deep.
-  {
+  if (lab.wants("looks")) {
     const int tw = static_cast<int>(w / 2), th = static_cast<int>(h / 2);
     Scene small;
     ge::gpu::Device& ds = fresh();
@@ -524,6 +536,7 @@ void run(gl::Lab& lab) {
             "waves of a metre or two, the glitter spread into a broad path", 10.0},
            {"sea-gale", "A GALE", "The same under 20 m/s.",
             "a heavy sea, the long waves' faces dark, the glitter wide and broken", 20.0}}) {
+    if (!lab.wants(c.id)) continue;
     gw::World world = sea_world(c.wind, "adriatic");
     if (sea.water.bodies.empty()) {
       gr::add_water_body(dsea, sea.water, world.bodies[0]);
@@ -538,7 +551,11 @@ void run(gl::Lab& lab) {
   // simulation's surface with the waves the vertex keeps at level 0 (0.5 m quads: 2 m and longer).
   {
     gw::World world = sea_world(10, "adriatic");
-    gr::set_water_body(dsea, sea.water, 0, world.bodies[0]);
+    if (sea.water.bodies.empty()) {
+      gr::add_water_body(dsea, sea.water, world.bodies[0]);
+    } else {
+      gr::set_water_body(dsea, sea.water, 0, world.bodies[0]);
+    }
     const double t = 5.0;
     // Over a crest, not a node: the point of the highest kept surface along a line.
     double best = 0, bx = 4000.0;
@@ -565,7 +582,7 @@ void run(gl::Lab& lab) {
     }
   }
 
-  {
+  if (lab.wants("sunset")) {
     gw::World world = sea_world(7, "adriatic");
     gr::set_water_body(dsea, sea.water, 0, world.bodies[0]);
     const gr::FrameView sunset = view_at(4000, 6, shore_z, kPi, -0.02, 0.05, kPi, 4.0);
@@ -577,7 +594,7 @@ void run(gl::Lab& lab) {
              draw(dsea, sea, sunset), Det::measured);
   }
   // THE FLY-OUT: the same sea from 2, 20, 200 and 2000 m, one strip.
-  {
+  if (lab.wants("fly-out")) {
     gw::World world = sea_world(10, "adriatic");
     const int tw = static_cast<int>(w / 2), th = static_cast<int>(h / 2);
     Scene small;
@@ -604,7 +621,7 @@ void run(gl::Lab& lab) {
   }
   // THE RIVER AND THE FALLS: a channel down the valley (water/world.hpp's add_river), then a
   // flow region over the cliff (water/flow.hpp), its sheets drawn as curtains.
-  {
+  if (lab.wants("river") || lab.wants("waterfall")) {
     ge::wind::Field wind;
     wind.mean = 3;
     gw::World world(wind);
@@ -661,30 +678,34 @@ void run(gl::Lab& lab) {
     lab.metric("falls.spray", static_cast<double>(thrown), "count", Det::measured);
     const gr::FrameView bank =
         view_at(kRiverX + 10, kTop + 4.5, kCliff - 125, -0.25, -0.16, 0.6, 2.2, t);
-    lab.shot({"river",
-              "A RIVER DOWN THE VALLEY",
-              "A glacial river of 6 m3/s down a valley falling 1 in 50, from 4 m up on its bank: "
-              "a channel (water/world.hpp's add_river) drawn as a ribbon, its ripples carried "
-              "downstream by a flow map in two phases.",
-              "the river's surface falling away down the valley between its banks, the ripples "
-              "finer and rougher mid-stream where it runs fastest, foam lace only where it is "
-              "fast; the water's milky green-blue",
-              {{"discharge", "6 m3/s"}}},
-             draw(dfl, fs, bank), Det::measured);
+    if (lab.wants("river")) {
+      lab.shot({"river",
+                "A RIVER DOWN THE VALLEY",
+                "A glacial river of 6 m3/s down a valley falling 1 in 50, from 4 m up on its bank: "
+                "a channel (water/world.hpp's add_river) drawn as a ribbon, its ripples carried "
+                "downstream by a flow map in two phases.",
+                "the river's surface falling away down the valley between its banks, the ripples "
+                "finer and rougher mid-stream where it runs fastest, foam lace only where it is "
+                "fast; the water's milky green-blue",
+                {{"discharge", "6 m3/s"}}},
+               draw(dfl, fs, bank), Det::measured);
+    }
     const gr::FrameView pool =
         view_at(kRiverX + 7, kFoot + 3, kCliff + 34, kPi - 0.2, 0.08, 0.6, 2.2, t);
-    lab.shot({"waterfall",
-              "THE FALLS FROM THE POOL",
-              "The same river over a 12 m cliff into a pool, from 3 m up 34 m downstream: the "
-              "flow region's sheets (water/flow.hpp) drawn as a curtain along their ballistic "
-              "path, white water where they land and the stream running on, the mist and spray "
-              "thrown up where it lands (render/water_stream.hpp's waterfall_spray).",
-              "a white curtain from the lip to the pool, streaked down its height; a haze of "
-              "mist and drops round its foot; foam round where it lands thinning downstream; the "
-              "pool's surface rough below the falls and "
-              "calmer beyond",
-              {{"discharge", "6 m3/s"}, {"drop", "12 m"}}},
-             draw(dfl, fs, pool), Det::measured);
+    if (lab.wants("waterfall")) {
+      lab.shot({"waterfall",
+                "THE FALLS FROM THE POOL",
+                "The same river over a 12 m cliff into a pool, from 3 m up 34 m downstream: the "
+                "flow region's sheets (water/flow.hpp) drawn as a curtain along their ballistic "
+                "path, white water where they land and the stream running on, the mist and spray "
+                "thrown up where it lands (render/water_stream.hpp's waterfall_spray).",
+                "a white curtain from the lip to the pool, streaked down its height; a haze of "
+                "mist and drops round its foot; foam round where it lands thinning downstream; the "
+                "pool's surface rough below the falls and "
+                "calmer beyond",
+                {{"discharge", "6 m3/s"}, {"drop", "12 m"}}},
+               draw(dfl, fs, pool), Det::measured);
+    }
   }
 
   int errors = 0, late = 0;
