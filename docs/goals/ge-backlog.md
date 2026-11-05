@@ -128,6 +128,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab <id> --sunlit` (a warning when a look's pixels sit in the horizon map's shadow, so a shadow change that moves no pixel is caught)
 - `ge lab scene <lab> <scene> --plan` (one scene's moment from above without running the whole lab)
 - `ge why --agent=1000..1003 --decision=landing` (the decision trace filtered by agent range and decision name)
+- `ge why --stuck` (the stretches of a bot run where a player barely moved, each with the plan's goal, the route's next link and the pilot's state; coop thread)
 - `ge lab pick <lab> <shot> --pixel=x,y` (a picture's value at a pixel before the tonemap, the HDR colour and its depth)
 - `ge gpu dump <target> --frame=N --decode=<scheme>`
 - `ge asset inspect`
@@ -264,6 +265,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge play` for first-person games (an angle axis on the protocol's grid, a step whose length the input sets, several players a run)
 - `ge bot nav <map>` (build a map's navigation graph without a lab run, and print its node and link counts, the nodes no route reaches, and the proof of one route: bots thread, M18r; also `--near=x,y,z`, the nodes and links near a point: #293)
 - `ge bot nav --map=<m> --pocket` (the navigation graph's disconnected parts, each with its node count and the items inside it, so an item no route reaches is named: a rocket launcher sat in a water-only pocket; 4v4 team bots thread)
+- `ge map ents <map> --near=x,y,z --r=R` (a map's entities within a radius of a point, each with its fields, in place of a throwaway script per map; coop thread)
 - `ge bot team --map=<m> --minutes=<n> --seed=<s>` (the se-team lab's match in one command, its frags and roles summary printed, for a bot change's before and after; 4v4 team bots thread)
 - `ge bot run <map> --from=<x,y,z> --to=<x,y,z> --hands=human --seeds=N` (one route ridden by the bot and printed as its trail, its mode timeline and its why-record, without editing a test: #293, M18r2)
 - `--game=<zip>` on the labs that read a game folder (`ge lab run se-client --game=<release zip>`: the zip mounted as the game directory through `engine/vfs`, its packs read inside it, so pak0 is never extracted into an `id1` folder first; classic HUD thread)
