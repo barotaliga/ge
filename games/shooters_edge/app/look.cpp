@@ -1,5 +1,6 @@
 // ge:summary Shooter's Edge's looks: the switch's options and the palette grade
 // ge:keywords look classic modern palette grade quantize r_look r_fx_lights r_fx_glow r_bloom
+// ge:keywords r_farland r_farland_warm far-land
 // ge:skill render shooter
 // ge:test tests/shooters_edge_effects_test.cpp
 #include "shooters_edge/app/look.hpp"
@@ -54,6 +55,20 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0,
            .max = 4},
           &picture.slime_glow);
+  cv.bind({.name = "r_farland",
+           .fallback = "auto",
+           .help = "the land round the map seen over its walls from high up: auto (one to suit "
+                   "the map's sky), off, or alps, fjord, highlands, winter, dolomites, sierra, "
+                   "volcano, arctic, xeno, ember, rime",
+           .kind = gc::CvarKind::text},
+          &picture.far_land);
+  cv.bind({.name = "r_farland_warm",
+           .fallback = "0",
+           .help = "the far land's air warmer than its own by this many degrees C (below 0 "
+                   "colder: the snow comes down the mountains and the lakes freeze)",
+           .min = -40,
+           .max = 40},
+          &picture.far_warm);
   cv.bind({.name = "gamma",
            .fallback = "1",
            .flags = gc::kArchive,
