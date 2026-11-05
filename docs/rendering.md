@@ -2494,11 +2494,20 @@ numbers and how they were measured are beside the table in `ladder.cpp`).
   on a clear day (`--view=vista --lift=0 --fall=0`): there the woods past 2 km are most of the
   frame's cost on the software adapter.
 
-The table's costs today are the software adapter's (lavapipe at 1280 × 720), whose ratios are a
-CPU raster's: the reference machine's prices (the Mac, § Where it is developed) replace them.
-What the ladder does not have yet: the cloud's march spread over frames with reprojection, and
-changing a stop without making the frame again (the reach already can: it is a field of the
-view, not of the frame).
+- **A stop changed on a live frame** (Fall Line's `set_picture`, `games/fall_line/app/frame.hpp`):
+  the window watches its `r_` cvars' revisions and puts the ladder's rows on the frame it has,
+  with no pipeline made after the load. The spray, the falling snow (its pool made at the
+  ladder's largest at the load), the cloud's march and quarter, and the reach are each frame's;
+  a new resolution makes the render-size targets again, as a resize does; a new shadow size makes
+  the sun's maps again and rebinds them into the terrain, the instances, the particles and the
+  fog; the bloom turns on and off by the post pass's two pipelines, one with it compiled in and
+  one without (`PostSettings::bloom_switch`, `set_post_bloom`), both made at the load with the
+  bloom's own; the lens turns off (its target black) and on where it was made at the load. The
+  snow's material and the trails are a terrain pipeline and maps of their own each: a change to
+  them waits for the frame to be made again, and the window says so. The `ladder` lab's `--live`
+  lowers a frame made at the top to each preset in place and draws it against a frame made fresh
+  with the options it took over the same run: the same picture (no pixel more than one level
+  apart) and no pipeline made.
 
 ## Measurement
 

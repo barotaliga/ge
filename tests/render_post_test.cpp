@@ -226,3 +226,16 @@ TEST(the_lens_and_the_film_do_what_they_name) {
   CHECK(std::labs(grain_sum - sum) < static_cast<long>(kW * kH));  // averaging under a level
   CHECK(d.errors.load() == 0);
 }
+
+TEST(the_bloom_switch_holds_without_its_dry_pipeline) {
+  // With no pipeline built without the bloom, the bloom stays on whatever it is told: the only
+  // pipeline there is draws.
+  ge::render::Post post;
+  ge::render::set_post_bloom(post, false);
+  CHECK(post.bloom_on);
+  post.has_dry = true;
+  ge::render::set_post_bloom(post, false);
+  CHECK(!post.bloom_on);
+  ge::render::set_post_bloom(post, true);
+  CHECK(post.bloom_on);
+}
