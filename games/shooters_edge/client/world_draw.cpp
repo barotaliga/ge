@@ -102,6 +102,7 @@ namespace {
 // The weapon's light off the floor's: the share that is all round and the share from above, and
 // the brightest the floor's light is taken as (twice the light as baked).
 constexpr float kHeldAmbient = 0.55f, kHeldDirect = 0.45f, kHeldMost = 1.6f;
+constexpr float kParticleSoftM = 0.06f;  // the particles' softening against what is behind them
 
 // THE LIGHT AT A POINT (engine metres), for the smoke there: the open sky's share (1 when a march
 // straight up the map's tree meets a sky leaf before a solid one) and the lightmap's light on the
@@ -348,9 +349,18 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     gr::set_grade(d, f.post[0], look::gamma_grade(f.classic_grade, f.gamma));
     gr::set_grade(d, f.post[1], look::gamma_grade(gr::identity_grade(), f.gamma));
   } else if (step == 1) {
-    gr::create_particles(d, f.pipelines, f.particles, f.layout);
+    // Softened over a few centimetres only: a hit's dust and a scorch's smoke live a hand's width
+    // off the wall, where a wider softening would fade them to nothing.
+    gr::ParticleSettings ps;
+    ps.soft_m = kParticleSoftM;
+    gr::create_particles(d, f.pipelines, f.particles, f.layout, ps);
     gr::create_explosions(d, f.pipelines, f.explosions, f.layout);
-    gr::create_beams(d, f.pipelines, f.beams, f.layout, {});
+    gr::BeamSettings bs;  // the marks' burns too (world_fx.hpp's marks)
+    bs.max_burn_verts = kMarks * 240;
+    bs.atlas = &mark_atlas();
+    bs.atlas_width = kMarkAtlasPx * kMarkVariants;
+    bs.atlas_height = kMarkAtlasPx * ge::detail::kDecalKinds;
+    gr::create_beams(d, f.pipelines, f.beams, f.layout, bs);
     f.beam_shapes.resize(gr::kMaxBeamDraws);
     f.beam_draws.reserve(gr::kMaxBeamDraws);
     if (!f.weapons.empty()) {
@@ -567,7 +577,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       gr::build_beam(*look, b.shot, view.time_s, shape);
       if (shape.count > 0) f.beam_draws.push_back({&shape, look, b.shot.seed});
     }
-    gr::prepare_beams(d, f.beams, f.beam_draws, {}, view, 400);
+    gr::prepare_beams(d, f.beams, f.beam_draws, fx.burns, view, kHotEmberCd);
   }
   if (f.has_map) {
     GE_ZONE("world.models");
@@ -601,7 +611,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     if (f.extras) encode_extras(*f.extras, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_particles(f.particles, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_explosions(f.explosions, f.pipelines, f.rec, e, f.targets, f.frame);
-    if (!f.beam_draws.empty()) gr::encode_beams(f.beams, f.pipelines, f.rec, e, f.targets, f.frame);
+    if (!f.beam_draws.empty() || !fx.burns.empty())
+      gr::encode_beams(f.beams, f.pipelines, f.rec, e, f.targets, f.frame);
     encode_model_sprites(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
     if (weapon) gr::encode_viewmodel(f.held, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);

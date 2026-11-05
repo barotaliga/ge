@@ -123,8 +123,14 @@ void run(gl::Lab& lab) {
   }
   cl::Listen l;
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, map_name, error);
-  if (!map ||
-      !cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), error)) {
+  // `--target`: a bot to shoot at, seated through the lobby (its warmup held for the run).
+  const bool target = lab.arg_num("target") > 0;
+  cl::ListenOptions options = shooters_edge::net::listen_options();
+  if (target) {
+    options.lobby = true;
+    options.lobby_settings.countdown_s = 1e6;
+  }
+  if (!map || !cl::listen_start(l, progs, std::move(map), options, error)) {
     lab.fail(error, "The map should load under the baseline mod. Skill: shooter.");
     return;
   }
@@ -170,7 +176,10 @@ void run(gl::Lab& lab) {
   cl::FxFrame fx[2];
   cl::HeldFire held_fire[2];
   for (cl::HeldFire& f : held_fire)
-    if (!cl::load_held_fire(f, &error)) lab.note("no muzzle fire: " + error);
+    if (!cl::load_held_fire(f, &error,
+                            at_eye ? cl::classic_adapter().game->held_weapons
+                                   : std::span<const std::string_view>{}))
+      lab.note("no muzzle fire: " + error);
   cl::HeldState held;
   held.hand.at_eye = at_eye;
   {
@@ -205,15 +214,40 @@ void run(gl::Lab& lab) {
     cl::set_field_named(l, 1, "ammo_cells", 200);
   };
   // One server frame with `cmd`, its effects in both looks, each drawn so the particles fly.
+  // The target: the bot stood where `target_at` says (between the player and the wall), facing
+  // him, unarmed and never dying.
+  sh::Vec3f target_at{};
+  float target_yaw = 0;
+  bool target_placed = false;
+  const auto hold_target = [&] {
+    if (!target_placed) return;
+    for (int e = 2; e <= static_cast<int>(sh::kMaxClients); ++e) {
+      auto& bot = l.server->sv.edicts[static_cast<size_t>(e)];
+      if (bot.free) continue;
+      bot.origin = target_at;
+      bot.velocity = {};
+      bot.angles = {0, target_yaw, 0};
+      bot.v_angle = {0, target_yaw, 0};
+      bot.health = 999;
+      cl::set_field_named(l, e, "health", 999);
+      cl::set_field_named(l, e, "items", 4096);
+      cl::set_field_named(l, e, "weapon", 4096);
+      for (const char* ammo : {"ammo_shells", "ammo_nails", "ammo_rockets", "ammo_cells"})
+        cl::set_field_named(l, e, ammo, 0);
+      break;
+    }
+  };
   const auto frame = [&](sh::MoveCmd cmd, bool draw) {
     stand();
     arm();
+    hold_target();
     cl::listen_frame(l, cmd);
     t += kTic;
     cl::frame_view(l, shown, 1, t, kTic);
     hand = cl::step_held(l, shown, held, view_settings, weapons, t, kTic);
     for (int k = 0; k < 2; ++k) {
       fx_state[k].on = cl::fx_switches(looks[k]);
+      fx_state[k].models = device ? &cl::world_models(*world[k]) : nullptr;  // the bodies' skins
       cl::step_fx(l, shown, fx_state[k], t, kTic, fx[k]);
       if (hand.flashing)
         fx[k].lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
@@ -278,25 +312,75 @@ void run(gl::Lab& lab) {
   // eye's height (a target near enough to see the hits, far enough to see the rounds fly); no
   // --side: a camera beside the line of fire, back from its middle, looking at the far end.
   const sh::Hull& hull = l.map->bsp.world.models[0].hulls[0];
-  constexpr float kAimAt = 360, kEyeZ = 22;
+  constexpr float kAimAt = 320, kEyeZ = 22;
   if (!placed) {
-    const sh::Vec3f eye = {player.origin.x, player.origin.y, player.origin.z + kEyeZ};
-    float best = 1e9f, dist = 0;
-    for (int a = 0; a < 360; a += 10) {
-      const double r = a * ge::core::kPi / 180;
-      const sh::Vec3f to = {eye.x + 2048 * static_cast<float>(ge::core::libm::cos(r)),
-                            eye.y + 2048 * static_cast<float>(ge::core::libm::sin(r)), eye.z};
-      const float d = sh::trace_hull(hull, eye, to).fraction * 2048;
-      if (d > 200 && std::abs(d - kAimAt) < best) {
-        best = std::abs(d - kAimAt);
-        dist = d;
-        at[3] = static_cast<float>(a);
+    // A PLAIN WALL: from the spawn or a few steps off it, the way whose wall a 3x3 grid of parallel
+    // rays (96 units across, 64 tall) meets as one flat face square to the line of fire, nearest
+    // kAimAt units off; a counter, a console or a doorway breaks the grid and is passed over.
+    struct Aim {
+      sh::Vec3f from;
+      int yaw = 0;
+      float dist = 0, score = 1e9f;
+    };
+    Aim best;
+    const sh::Vec3f spawn = player.origin;
+    for (const float dx : {0.0f, 96.0f, -96.0f})
+      for (const float dy : {0.0f, 96.0f, -96.0f}) {
+        const sh::Vec3f eye = {spawn.x + dx, spawn.y + dy, spawn.z + kEyeZ};
+        if (sh::point_contents(hull, eye) != sh::kContentsEmpty) continue;
+        if (sh::trace_hull(hull, {spawn.x, spawn.y, eye.z}, eye).fraction < 1) continue;
+        for (int a = 0; a < 360; a += 10) {
+          const double r = a * ge::core::kPi / 180;
+          const float cx = static_cast<float>(ge::core::libm::cos(r)),
+                      cy = static_cast<float>(ge::core::libm::sin(r));
+          bool flat = true;
+          float lo = 1e9f, hi = -1e9f;
+          sh::Vec3f n0{};
+          for (int i = 0; i < 9 && flat; ++i) {
+            const int col = i % 3 - 1, row = i / 3 - 1;
+            const float across = static_cast<float>(col) * 48, up = static_cast<float>(row) * 32;
+            const sh::Vec3f o = {eye.x - cy * across, eye.y + cx * across, eye.z + up};
+            const sh::HullTrace tr =
+                sh::trace_hull(hull, o, {o.x + 2048 * cx, o.y + 2048 * cy, o.z});
+            if (tr.startsolid || tr.fraction >= 1) {
+              flat = false;
+              break;
+            }
+            const sh::Vec3f n = tr.plane.normal;
+            if (i == 0) n0 = n;
+            flat = n.x * n0.x + n.y * n0.y + n.z * n0.z > 0.999f && n.x * cx + n.y * cy < -0.9f;
+            lo = std::min(lo, tr.fraction * 2048);
+            hi = std::max(hi, tr.fraction * 2048);
+          }
+          if (!flat || hi - lo > 24 || lo < 160) continue;
+          const float score = std::abs(lo - kAimAt) + (dx != 0 || dy != 0 ? 40.0f : 0.0f);
+          if (score < best.score) best = {{eye.x, eye.y, spawn.z}, a, lo, score};
+        }
       }
+    if (best.score < 1e9f) {
+      at[0] = best.from.x, at[1] = best.from.y, at[2] = best.from.z;
+      at[3] = static_cast<float>(best.yaw);
+      lab.note("aimed at a plain wall: yaw " + std::to_string(best.yaw) + ", " +
+               std::to_string(int(best.dist)) + " units off");
+    } else {  // none plain: the wall nearest kAimAt units off from the spawn
+      const sh::Vec3f eye = {spawn.x, spawn.y, spawn.z + kEyeZ};
+      float near = 1e9f;
+      for (int a = 0; a < 360; a += 10) {
+        const double r = a * ge::core::kPi / 180;
+        const sh::Vec3f to = {eye.x + 2048 * static_cast<float>(ge::core::libm::cos(r)),
+                              eye.y + 2048 * static_cast<float>(ge::core::libm::sin(r)), eye.z};
+        const float d = sh::trace_hull(hull, eye, to).fraction * 2048;
+        if (d > 200 && std::abs(d - kAimAt) < near) {
+          near = std::abs(d - kAimAt);
+          at[3] = static_cast<float>(a);
+        }
+      }
+      at[0] = spawn.x, at[1] = spawn.y, at[2] = spawn.z;
+      lab.note("no plain wall in reach: aimed at the wall nearest " + std::to_string(int(kAimAt)) +
+               " units off, yaw " + std::to_string(int(at[3])));
     }
-    at[0] = player.origin.x, at[1] = player.origin.y, at[2] = player.origin.z, at[4] = 2;
+    at[4] = static_cast<float>(lab.arg_num("pitch"));
     placed = true;
-    lab.note("aimed at yaw " + std::to_string(int(at[3])) + ", the wall " +
-             std::to_string(int(dist)) + " units off");
   }
   if (!has_side) {
     const double r = at[3] * ge::core::kPi / 180;
@@ -305,26 +389,55 @@ void run(gl::Lab& lab) {
     const sh::Vec3f eye = {at[0], at[1], at[2] + kEyeZ};
     const float reach =
         sh::trace_hull(hull, eye, {eye.x + 2048 * fx_, eye.y + 2048 * fy, eye.z}).fraction * 2048;
-    const sh::Vec3f mid = {eye.x + fx_ * reach * 0.35f, eye.y + fy * reach * 0.35f, eye.z + 24};
-    // As far to the side as the room lets, up to 112 units, either side.
+    // `--side-along` of the way to the wall: 0.35 (back, seeing the line of fire, looking at its
+    // far end); 0.6 and on, CLOSE: in front of the wall where the rounds land, kCloseU back from it
+    // and to one side, looking at it.
+    const auto along = static_cast<float>(lab.arg_num("side-along"));
+    const bool close = along >= 0.6f;
+    constexpr float kCloseU = 96;
+    const double tilt = static_cast<double>(at[4]) * ge::core::kPi / 180;
+    const sh::Vec3f wall = {eye.x + fx_ * reach, eye.y + fy * reach,
+                            eye.z - reach * static_cast<float>(ge::core::libm::tan(tilt))};
+    // Closer still from 0.9 on: a hand's length from the wall, the marks' own detail.
+    const float back =
+        close ? std::min(along >= 0.9f ? kCloseU / 2 : kCloseU, reach * 0.6f) : reach * (1 - along);
+    const sh::Vec3f mid = {wall.x - fx_ * back, wall.y - fy * back,
+                           wall.z + (close ? 8.0f : 24.0f)};
+    // As far to the side as the room lets, up to 112 units (48 close), either side.
+    const float reach_out = close ? (along >= 0.9f ? 16.0f : 48.0f) : 112.0f;
     sh::Vec3f cam = mid;
     float room = 0;
     for (const float sign : {1.0f, -1.0f}) {
-      const sh::Vec3f wide = {mid.x + sign * fy * 112, mid.y - sign * fx_ * 112, mid.z};
+      const sh::Vec3f wide = {mid.x + sign * fy * reach_out, mid.y - sign * fx_ * reach_out, mid.z};
       const sh::HullTrace tr = sh::trace_hull(hull, mid, wide);
-      const float got = tr.fraction * 112 - 12;
+      const float got = tr.fraction * reach_out - 12;
       if (got > room) {
         room = got;
         cam = {mid.x + sign * fy * got, mid.y - sign * fx_ * got, mid.z};
       }
     }
-    const sh::Vec3f look = {eye.x + fx_ * reach * 0.9f, eye.y + fy * reach * 0.9f, eye.z - 8};
+    const sh::Vec3f look =
+        close ? wall : sh::Vec3f{eye.x + fx_ * reach * 0.9f, eye.y + fy * reach * 0.9f, eye.z - 8};
     const double dx = look.x - cam.x, dy = look.y - cam.y, dz = look.z - cam.z;
     side[0] = cam.x, side[1] = cam.y, side[2] = cam.z;
     side[3] = static_cast<float>(ge::core::libm::atan2(dy, dx) * 180 / ge::core::kPi);
     side[4] = static_cast<float>(-ge::core::libm::atan2(dz, std::sqrt(dx * dx + dy * dy)) * 180 /
                                  ge::core::kPi);
-    has_side = room > 24;
+    has_side = close || room > 24;
+  }
+  if (target) {
+    // Two thirds of the way to the wall the player faces, on the floor under that point.
+    const double r = at[3] * ge::core::kPi / 180;
+    const float cx = static_cast<float>(ge::core::libm::cos(r)),
+                cy = static_cast<float>(ge::core::libm::sin(r));
+    const sh::Vec3f eye = {at[0], at[1], at[2] + kEyeZ};
+    const float reach =
+        sh::trace_hull(hull, eye, {eye.x + 2048 * cx, eye.y + 2048 * cy, eye.z}).fraction * 2048;
+    target_at = {at[0] + cx * reach * 0.6f, at[1] + cy * reach * 0.6f, at[2]};
+    target_yaw = at[3] + 180;
+    cl::listen_lobby(l, "addbot novice");
+    target_placed = true;
+    for (int i = 0; i < 40; i++) frame({}, true);  // seated and stood
   }
   std::vector<double> times;
   for (double v : lab.arg_nums("times")) times.push_back(v);
@@ -370,6 +483,14 @@ void run(gl::Lab& lab) {
     lab.metric(std::string(kLooks[k]) + ".blasts-drawn", blasts[k], "count");
     lab.metric(std::string(kLooks[k]) + ".beams-drawn", beams[k], "count");
   }
+  for (int k = 0; k < 2; ++k) {
+    lab.metric(std::string(kLooks[k]) + ".marks", ge::detail::live_count(fx_state[k].marks),
+               "count");
+    lab.metric(std::string(kLooks[k]) + ".mark-verts", static_cast<double>(fx[k].burns.size()),
+               "vertices");
+    lab.metric(std::string(kLooks[k]) + ".wounds", static_cast<double>(fx_state[k].wounds.size()),
+               "count");
+  }
   lab.metric("explosions", static_cast<double>(l.explosions.size()), "count");
   lab.metric("effects", static_cast<double>(l.effects.size()), "count");
   lab.metric("weapons.pack", at_eye ? 1 : 0, "");
@@ -396,12 +517,17 @@ const gl::LabSpec kSpec{
       "x,y,z,yaw,pitch: where the player stands (map units; pitch down positive); "
       "empty: the spawn, aimed at the wall nearest 360 units off"},
      {"side", "", "x,y,z,yaw,pitch: a second camera; empty: beside the line of fire"},
+     {"side-along", "0.35",
+      "with no --side: how far toward the wall the side camera stands, 0..0.9"},
+     {"pitch", "2",
+      "with no --at: the aim's pitch, degrees down (15: the floor a few metres ahead)"},
      {"weapons", "all",
       "the weapons fired, ',' between: shotgun double spiker heavy grenades "
       "rockets arc"},
      {"times", "40,200,600", "the moments pictured after the first shot, ms"},
      {"blast-times", "30,150,400,1200", "the launchers' moments, after the first blast, ms"},
      {"cvars", "", "the enhanced side's cvars, as the console takes them"},
+     {"target", "0", "1: a bot stood in the line of fire, facing the player (its wounds)"},
      {"before", "", "the left side's cvars in the modern look instead of the classic look"}},
     "--size=240,135 --weapons=shotgun,rockets,arc --times=60,400 --blast-times=60",
     run,

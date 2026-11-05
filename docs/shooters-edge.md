@@ -1114,11 +1114,20 @@ every pass, and judged by captioned screenshots:
   white-hot sparks, dark chunks and smoke that lingers, its light white-hot then orange; a rocket
   burns a short flame out of its motor (the muzzle fire's march stretched back along its flight)
   and lays fire into puffs of smoke that spread as they thin (the particles' `grow`), a grenade
-  pale smoke; a pellet's or a nail's hit throws the burst of the face it hit (`render/impact.hpp`
+  pale smoke; a pellet's or a nail's hit throws, subtly, the burst of the face it hit (a small puff
+  of dust, a thin wisp of smoke, chips, grit and flakes in the wall's own colour that fall and hop
+  on the floor under the hit before they lie still; `render/impact.hpp`
   by the surface class of the map triangle the round's line crosses there, its normal off that
   triangle); the arc gun's beam is the engine's bolt (`render/beam.hpp`) in the style `r_beam_style`
   numbers (1 forked, 2 arc, 3 bolt the default, 4 braid), rooted on the gun's own muzzle, a cold
-  glow on the walls along it. Smoke is lit as the room round it is
+  glow on the walls along it. Under `ce_decals` the weapons leave
+  their MARKS (`client/world_fx.hpp`): engine/detail's decals pressed onto the map's own faces, a
+  scorch where a blast went off against a surface (its embers glowing for a second and a half), a
+  bullet hole where each pellet hit a face (a classic program's one message for a shot spread over
+  the shot's cone), the bolt's burns where it lands, and WOUNDS on a body: a hole with blood
+  splattered round it, pinned to the triangle of the figure's skin the round's line crossed, riding
+  its frames until it comes back to life; a pool of 128, drawn as
+  the beams' pass's burns (soot and ember). The classic drew none, so its look shows none. Smoke is lit as the room round it is
   (`render::BlastLight` off the lightmap under it and the open sky over it), not by the sun
   through the roof. A match's temporary entities (the gunshots, spikes, beams and blood the
   baseline mod multicasts) reach these effects as a campaign's do. The `se-weapon-fx` lab fires

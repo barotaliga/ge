@@ -1921,7 +1921,7 @@ A pool over no ground (the second `create_particles`: a world of brushes or room
 stand-ins for the terrain's heights and horizon, so nothing lands and the sun is not shaded by a
 horizon.
 
-**As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 80 bytes, a
+**As built (M8d1).** `engine/render/particles.hpp` is one pool of 16384 slots of 96 bytes, a
 ring: the game hands each frame's births (`emit_particles`) and `prepare_particles` writes
 them into the next slots, so a full pool lets its oldest go first. There is no compaction or
 indirect count yet: `particles.sim` (one thread a slot) skips a dead slot, and `particles`
@@ -1948,7 +1948,10 @@ light of a white surface the picture is keyed to (`frame.wgsl`'s `white_luminanc
 a fullbright texel of that colour at any exposure), its colour drifting toward the grey `albedo`
 by e every `cool_s`. That is how a game draws a classic palette speck (an ember's yellow going to
 brown, a trail's orange going to grey), and how a game lights smoke by its own light where the
-sun does not reach (Shooter's Edge pre-lights each puff by the lightmap under it).
+sun does not reach (Shooter's Edge pre-lights each puff by the lightmap under it). A particle may carry a
+FLOOR of its own (`floor_y`, world y) for a world the pool has no ground for: coming down on it, it
+hops back up at `bounce` of its speed while it falls faster than `kFloorRest`, else it lies there
+and fades (a chip knocked off a wall hops on the floor below). A slot is 96 bytes.
 
 **As built (M8d2).** The drag pulls a particle toward the AIR, not still air: the frame hands the
 pool the map's wind at the view's time (`plugins/mountain/air/air.hpp`), so a powder cloud (the

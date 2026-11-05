@@ -76,3 +76,27 @@ TEST(a_row_given_changes_what_its_slot_does) {
   CHECK(a.named(1, "armortype") == 0.45f);  // parsed to the float a literal of it is
   CHECK_MSG(g.s().q.faults == 0 && a.s().q.faults == 0, g.s().q.last_fault + a.s().q.last_fault);
 }
+
+// A weapon lying on the map takes its slot's row: the ammunition that comes with it (and the
+// model it lies as); with no row, the map's own.
+TEST(a_weapon_on_the_map_comes_with_its_rows_ammunition) {
+  const char* here = R"({
+"classname" "weapon_supershotgun"
+"origin" "-416 0 24"
+}
+)";
+  const auto shells_gained = [&](const std::vector<std::string>& lines) {
+    Game g(here, lines);
+    const float before = g.named(1, "ammo_shells");
+    for (int i = 0; i < 4; i++) CHECK_MSG(g.frame(0), g.error);
+    CHECK_MSG(g.s().q.faults == 0, g.s().q.last_fault);
+    return g.named(1, "ammo_shells") - before;
+  };
+  const float own = shells_gained({});
+  CHECK_MSG(own == 5, std::to_string(own));
+  pf::WeaponRow double_row = pf::kClassicWeapons[2];
+  double_row.pickup_ammo = 11;
+  const float given =
+      shells_gained({"set arsenal_weapon3 \"" + pf::weapon_text(double_row) + "\""});
+  CHECK_MSG(given == 11, std::to_string(given));
+}

@@ -89,7 +89,7 @@ TEST(the_arsenal_rows_become_server_lines_our_programs_read) {
   CHECK(lines.size() == 11);
   CHECK_MSG(lines[0] ==
                 "set arsenal_weapon1 \"melee none 0 0.5 1 20 0 64 0 0 progs/v_axe.mdl "
-                "weapons/ax1.wav - player/axhit2.wav -\"",
+                "weapons/ax1.wav - player/axhit2.wav - - 0\"",
             lines[0]);
   CHECK_MSG(lines[8] == "set arsenal_armour1 \"0.3 100 0 progs/armor.mdl items/armor1.wav\"",
             lines[8]);
