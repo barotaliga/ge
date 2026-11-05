@@ -219,10 +219,29 @@ void() weapon_touch = {
   self = was_self;
 };
 
+// A weapon lying on the map in slot `w`'s place: the arsenal's row gives the model it lies as and
+// the ammunition that comes with it; a row with no pickup leaves the map's own (`mdl` and the
+// amount the item's spawn function set).
 void(float w, string name, string mdl) weapon_start = {
+  local string pickup, kind;
+  local float n;
   self.weapon = w;
   self.netname = name;
   self.touch = weapon_touch;
+  pickup = weapon_word(w, 15);
+  if (pickup != "" && pickup != "-") {
+    mdl = strzone(pickup);  // held by the item for as long as the map runs
+    n = weapon_number(w, 16);
+    kind = weapon_word(w, 1);
+    self.ammo_shells = 0;
+    self.ammo_nails = 0;
+    self.ammo_rockets = 0;
+    self.ammo_cells = 0;
+    if (kind == "shells") self.ammo_shells = n;
+    else if (kind == "nails") self.ammo_nails = n;
+    else if (kind == "rockets") self.ammo_rockets = n;
+    else if (kind == "cells") self.ammo_cells = n;
+  }
   item_start(mdl, "weapons/pkup.wav", '-16 -16 0', '16 16 56', 30);
 };
 
