@@ -119,7 +119,7 @@ void choose_folder(Args& args, const std::string& prefs) {
       return;
     } else if (content != nullptr) {
       out::warn("shooters_edge: the game loaded last no longer opens: " + why +
-                "; so the folder the game runs in");
+                "; so the folder the game runs in; next: OPTIONS > CLASSIC ENHANCED > LOAD GAME");
     }
   }
   if (!args.game_set) args.game = game_of(args.basedir);
