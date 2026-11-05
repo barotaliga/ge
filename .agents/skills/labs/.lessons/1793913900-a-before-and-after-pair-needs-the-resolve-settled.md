@@ -2,7 +2,7 @@
 title: A with-and-without picture pair needs each state settled through the resolve; show the difference as a picture
 date: 2026-11-05
 scope: games/shooters_edge/labs/gpu_se_models_lab.cpp, games/shooters_edge/client/world_draw.cpp
-concepts: [taa, resolve, settle, difference-picture, shade, model-shadows, sun, world_sun, digest-affected, staging]
+concepts: [taa, resolve, settle, difference-picture, shade, model-shadows, sun, world-sun, digest-affected, staging]
 ---
 
 - `se-models` measured his shadow by drawing one frame with him and one without: the TAA's history
