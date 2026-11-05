@@ -9,12 +9,15 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <span>
+#include <vector>
 
 #include "core/libm/libm.hpp"
 #include "core/prng.hpp"
 #include "render/water.wgsl.hpp"
 #include "render/water_below.wgsl.hpp"
 #include "render/water_copy.wgsl.hpp"
+#include "render/water_shore.wgsl.hpp"
 #include "render/water_stream.hpp"
 #include "render/water_stream.wgsl.hpp"
 #include "water/spectrum.hpp"
@@ -92,6 +95,22 @@ void upload_waves(gpu::Device& device, Water::Slot& slot, const water::Body& bod
       detail_waves(body.waves, kWaterDetailWaves, slot.draw.seed + 977u * slot.draw.seed);
   slot.staged.info[3] = static_cast<float>(detail.waves.size());
   slot.staged.rough[0] = static_cast<float>(detail.tail_mss);
+  WaterFoam foam = foam_of(body.waves, detail.waves);
+  if (!slot.draw.foam) {
+    foam.fold = -1e9;
+    foam.cover = 0;
+    foam.hs = 0;
+  }
+  // A run-up under the ground's lowest reach (-0.05 m) leaves no band.
+  if (!slot.draw.wet_band) foam.runup = -1;
+  slot.staged.foam[0] = static_cast<float>(foam.fold);
+  slot.staged.foam[1] = static_cast<float>(foam.cover);
+  slot.staged.foam[2] = static_cast<float>(foam.drift * lm::sin(body.waves.sea.toward));
+  slot.staged.foam[3] = static_cast<float>(foam.drift * lm::cos(body.waves.sea.toward));
+  slot.staged.surf[0] = static_cast<float>(foam.hs);
+  slot.staged.surf[1] = static_cast<float>(foam.runup);
+  slot.staged.surf[2] = static_cast<float>(foam.fold_length);
+  slot.staged.surf[3] = static_cast<float>(foam.sigma);
   std::vector<float> data(size_t{kWaveSlots} * 8, 0.0f);
   size_t i = 0;
   const auto put = [&](const water::Component& c) {
@@ -140,6 +159,45 @@ void bind_body(gpu::Device& device, const Water& water, Water::Slot& slot, int i
 }
 
 }  // namespace
+
+WaterFoam foam_of(const water::Waves& waves, std::span<const water::Component> detail) {
+  WaterFoam f;
+  f.hs = 4 * std::sqrt(waves.m0);
+  // A calm lake still laps its shore a few centimetres; a sea runs up most of its height.
+  f.runup = 0.03 + 0.7 * f.hs;
+  if (waves.count == 0 || waves.sea.hs <= 0) return f;
+  // The waves that fold: every laid one, and the detail band's down to kFoamShortest m (faded in
+  // from twice that, as water.wgsl's `fold_at` keeps them), so the whitecaps are the short steep
+  // waves breaking where the long ones' crests carry them; and the folds' own size, the wavelength
+  // their slopes weigh most (k weighted by (k a)^2).
+  double var = 0, sk = 0;
+  const auto fold = [&](const water::Component& c) {
+    double keep = std::clamp((2 * kPi / c.k - kFoamShortest) / kFoamShortest, 0.0, 1.0);
+    keep = keep * keep * (3 - 2 * keep);
+    const double ka = keep * c.k * c.a;
+    var += 0.5 * ka * ka;
+    sk += 0.5 * ka * ka * c.k;
+  };
+  for (int i = 0; i < waves.count; ++i) fold(waves.c[i]);
+  for (const water::Component& c : detail) fold(c);
+  f.fold_length = sk > 0 ? 2 * kPi * var / sk : 0;
+  f.wind = water::wind_of(waves.sea);
+  f.cover = water::whitecap_cover(f.wind);
+  // The foam drifts with the surface's water, about 3 % of the wind.
+  f.drift = 0.03 * f.wind;
+  // The Jacobian's trace is 1 - sum k a sin(phi), Gaussian of variance sum (k a)^2 / 2: the
+  // fold under which `active` of the surface lies is 1 - sigma z, z the normal's quantile.
+  const double active = kFoamActive * f.cover;
+  if (active < 1e-6 || var <= 0) return f;
+  double lo = 0, hi = 12;
+  for (int i = 0; i < 60; ++i) {
+    const double z = 0.5 * (lo + hi);
+    (0.5 * std::erfc(z / std::sqrt(2.0)) > active ? lo : hi) = z;
+  }
+  f.sigma = std::sqrt(var);
+  f.fold = 1 - f.sigma * 0.5 * (lo + hi);
+  return f;
+}
 
 WaterDetail detail_waves(const water::Waves& laid, int count, uint32_t seed, double shortest,
                          double finest) {
@@ -278,6 +336,38 @@ void create_water(gpu::Device& device, gpu::PipelineSet& pipelines, Water& water
     water.p_below = pipelines.add_render(device, desc);
   }
   {
+    // THE SHORE'S WET BAND: a full-screen triangle over the body's group, darkening the ground the
+    // waves wet (the colour multiplied, the motion and the depth left alone). Its own module
+    // (render/water_shore.wgsl over the shared half), drawn in the "water" pass before the bodies.
+    const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::water_shore, "water.shore");
+    wgpu::BlendState multiply{};
+    multiply.color = {wgpu::BlendOperation::Add, wgpu::BlendFactor::Zero, wgpu::BlendFactor::Src};
+    multiply.alpha = {wgpu::BlendOperation::Add, wgpu::BlendFactor::Zero, wgpu::BlendFactor::One};
+    wgpu::ColorTargetState colours[2] = {};
+    colours[0].format = kHdrFormat;
+    colours[0].blend = &multiply;
+    colours[1].format = kMotionFormat;
+    colours[1].writeMask = wgpu::ColorWriteMask::None;
+    wgpu::FragmentState fragment{};
+    fragment.module = module;
+    fragment.entryPoint = "fs_shore";
+    fragment.targetCount = 2;
+    fragment.targets = colours;
+    wgpu::DepthStencilState depth{};
+    depth.format = kDepthFormat;
+    depth.depthWriteEnabled = false;
+    depth.depthCompare = wgpu::CompareFunction::Always;
+    wgpu::RenderPipelineDescriptor desc{};
+    desc.label = "water.shore";
+    desc.layout = make_pipeline_layout(device, "water.shore", {frame, water.layout});
+    desc.vertex.module = module;
+    desc.vertex.entryPoint = "vs_full";
+    desc.primitive.topology = wgpu::PrimitiveTopology::TriangleList;
+    desc.depthStencil = &depth;
+    desc.fragment = &fragment;
+    water.p_shore = pipelines.add_render(device, desc);
+  }
+  {
     Water::Streams& st = water.streams;
     st.layout =
         make_layout(device, "water.stream",
@@ -408,6 +498,42 @@ ShoreMask shore_mask(const water::Body& body) {
         }
       }
     }
+  }
+  // Past the shore, how near the water: 127 at the grown outline falling to 0 at kShoreReach m,
+  // by a chamfer distance (3 a side step, 4 a diagonal) in two sweeps.
+  const int reach = std::max(2, static_cast<int>(std::ceil(kShoreReach / m.texel)));
+  constexpr int kFar = 1 << 28;
+  std::vector<int> d(m.texels.size(), kFar);
+  for (size_t i = 0; i < d.size(); ++i)
+    if (m.texels[i] == 255) d[i] = 0;
+  const auto relax = [&](int c, int r, int dc, int dr, int step) {
+    const int cc = c + dc, rr = r + dr;
+    if (cc < 0 || cc >= m.cols || rr < 0 || rr >= m.rows) return;
+    int& here = d[static_cast<size_t>(r) * static_cast<size_t>(m.cols) + static_cast<size_t>(c)];
+    const int there =
+        d[static_cast<size_t>(rr) * static_cast<size_t>(m.cols) + static_cast<size_t>(cc)];
+    here = std::min(here, there + step);
+  };
+  for (int r = 0; r < m.rows; ++r) {
+    for (int c = 0; c < m.cols; ++c) {
+      relax(c, r, -1, 0, 3);
+      relax(c, r, 0, -1, 3);
+      relax(c, r, -1, -1, 4);
+      relax(c, r, 1, -1, 4);
+    }
+  }
+  for (int r = m.rows - 1; r >= 0; --r) {
+    for (int c = m.cols - 1; c >= 0; --c) {
+      relax(c, r, 1, 0, 3);
+      relax(c, r, 0, 1, 3);
+      relax(c, r, 1, 1, 4);
+      relax(c, r, -1, 1, 4);
+    }
+  }
+  for (size_t i = 0; i < d.size(); ++i) {
+    if (m.texels[i] == 255) continue;
+    const double near = 1 - d[i] / (3.0 * reach);
+    m.texels[i] = near > 0 ? static_cast<uint8_t>(std::lround(127 * near)) : 0;
   }
   return m;
 }
@@ -567,8 +693,17 @@ void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRe
   desc.colorAttachments = colours;
   desc.depthStencilAttachment = &depth;
   wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "water");
-  pass.SetPipeline(pipelines.render(water.p_draw));
   pass.SetBindGroup(0, frame);
+  // The shore's wet band under every body first: the ground over the level, which the water
+  // then leaves alone.
+  pass.SetPipeline(pipelines.render(water.p_shore));
+  for (const Water::Slot& slot : water.bodies) {
+    if (!slot.shown) continue;
+    pass.SetBindGroup(1, slot.group);
+    pass.Draw(3);
+    ++rec.current().draws;
+  }
+  pass.SetPipeline(pipelines.render(water.p_draw));
   pass.SetIndexBuffer(water.indices, wgpu::IndexFormat::Uint32);
   for (const Water::Slot& slot : water.bodies) {
     if (!slot.shown) continue;

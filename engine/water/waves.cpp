@@ -152,8 +152,12 @@ Breaking breaking_at(const Surface& s, double depth, double wind) {
   b.crest = smooth((slope - kSpillFrom) / (kLimitSlope - kSpillFrom));
   if (depth > 0 && s.height > 0) b.shoal = smooth(2 * s.height / (kBreakDepth * depth) - 0.6);
   if (depth <= 0) b.shoal = 1;
-  b.wind = wind > 0 ? core::num::min(1.0, 3.84e-6 * core::libm::pow(wind, 3.41)) : 0;
+  b.wind = whitecap_cover(wind);
   return b;
+}
+
+double whitecap_cover(double wind) {
+  return wind > 0 ? core::num::min(1.0, 3.84e-6 * core::libm::pow(wind, 3.41)) : 0;
 }
 
 }  // namespace ge::water

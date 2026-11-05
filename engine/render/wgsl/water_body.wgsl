@@ -27,6 +27,9 @@ struct WaterBody {
   sun: vec4f,        // the share of the surface the sun reaches (the caustics, the shafts), 0, 0, 0
   view: vec4f,       // the mirror (0 none, 1 over the surface, 2 under it), the view up (1), the
                      // wind's heading (sin, cos)
+  foam: vec4f,       // the fold's threshold on the Jacobian, the whitecap cover, its drift (x, z)
+  surf: vec4f,       // the laid band's Hs (m), the run-up over the level (m), the folds' wavelength (m),
+                     // the Jacobian's spread
   up_view_proj: mat4x4f,  // the view up: world relative to the surface over the eye -> its clip
   levels: array<vec4f, 12>,  // origin x, z, spacing, 0
 }
