@@ -74,6 +74,8 @@ struct Bsp {
   // two ends, the radius in the first's w
   capsule_info: vec4f,
   capsules: array<vec4f, 8>,
+  // the moving casters along the sun: their atlas's last row's first tile (info.z 1: drawn)
+  sun_caster: Job,
 };
 
 // A shadow map's camera: an origin, three axes (z the way it looks) and its reach: a point
@@ -682,6 +684,29 @@ fn ortho_lit(j: Job, layer: i32, p: vec3f, spread: f32) -> f32 {
   return lit / 9.0;
 }
 
+// The share of the sun the moving casters leave `p` (1 outside their tile round the eye): the
+// tile's 2 x 2 compare, kept half a texel inside it.
+fn sun_casters_lit(p: vec3f) -> f32 {
+  let j = bsp.sun_caster;
+  if (j.info.z < 0.5) {
+    return 1.0;
+  }
+  let q = p - j.o.xyz;
+  let x = dot(q, j.x.xyz) / j.o.w;
+  let y = dot(q, j.y.xyz) / j.o.w;
+  if (abs(x) >= 1.0 || abs(y) >= 1.0) {
+    return 1.0;
+  }
+  let z = (dot(q, j.z.xyz) + j.info.y) / (2.0 * j.info.y);
+  let dims = vec2f(textureDimensions(caster_cubes));
+  let face = dims.x / 6.0;
+  let half = 0.5 / face;
+  let uv = clamp(vec2f(0.5 + 0.5 * x, 0.5 - 0.5 * y), vec2f(half), vec2f(1.0 - half));
+  let row = dims.y / face - 1.0;
+  return textureSampleCompareLevel(caster_cubes, shadow_cmp, (vec2f(0.0, row) + uv) * face / dims,
+                                   0, z - 0.0005);
+}
+
 // THE SHARE OF THE FALL THAT REACHES `p` (0 .. 1): the fall's map (`bsp.ortho[2]`) marched along
 // a cone of ways round the fall's (`bsp.weather.z`, the spread's tangent: wider for snow than for
 // rain) by render/wgsl/fall_shelter.wgsl, the same test the flakes, the drops and the splashes
@@ -1090,7 +1115,7 @@ fn shade(in: VsOut) -> FsOut {
   let sun_dir = frame.sun.xyz;
   let sun_ndl = max(dot(wl.n, sun_dir), 0.0);
   if (sun_ndl > 0.0 && frame.sun.y > 0.0) {
-    let lit = ortho_lit(bsp.ortho[0], 0, p, 0.05);
+    let lit = ortho_lit(bsp.ortho[0], 0, p, 0.05) * sun_casters_lit(p);
     let sun = sun_light(in.world.y, in.world.xz) * lit * bsp.info3.z;
     // No highlight: the classic's dark painted walls under a whole sky's sun would read as foil.
     c += wl.albedo / PI * sun * sun_ndl;

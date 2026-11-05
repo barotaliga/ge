@@ -50,6 +50,7 @@
 #include <vector>
 
 #include "brush/app/bsp_cull.hpp"
+#include "brush/app/casters.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/app/light_grid.hpp"
 #include "gpu/device.hpp"
@@ -158,19 +159,14 @@ inline constexpr uint32_t kOrthos = 3;  // the sun's, the zenith's and the fall'
 // of their own for each of the kCasterLights shadowed lights that light them most (the light each
 // puts on the middle of their box), and read beside the world's kept cube, the nearer of the two
 // the shadow: the shadows that show. The cubes are one atlas, a light's six faces a row, drawn in
-// one pass. A frame's casters are kMaxCasterVerts vertices at most.
-inline constexpr int kCasterLights = 8;
+// one pass; under it a row more, its first tile the casters seen along the sun (kSunCasterHalfM
+// round the eye). A frame's casters are kMaxCasterVerts vertices at most.
 inline constexpr uint32_t kCasterSize = 384;  // a caster cube's face, texels a side
 inline constexpr uint32_t kMaxCasterVerts = 3 * 24576;
+inline constexpr double kSunCasterHalfM = 8;  // the sun's tile of them: half its width, m
 // THE CAPSULES (wgsl/capsules.wgsl): the kShadowCapsules casters nearest the eye as vertical
-// capsules (their boxes'), shadowing every light that has no caster cube of its own.
-inline constexpr int kShadowCapsules = 4;
-// A caster this far from the eye counts half as much when the lights are dealt their cubes.
-inline constexpr double kCasterSeenM = 4;
-// A moving caster's box, world m.
-struct CasterBox {
-  float lo[3], hi[3];
-};
+// capsules (their boxes'), shadowing every light that has no caster cube of its own. Which lights
+// get the cubes and which casters the capsules: casters.hpp.
 // A light's source when the map says nothing of its size, m: a bulb's glow (its shadows sharp).
 inline constexpr double kPointSourceM = 0.04;
 // A flame's source radius as a share of its height (a flame is tall and thin): a wall torch's
@@ -215,6 +211,9 @@ struct GpuBsp {
   // capsule's two ends (xyz, the radius in the first's w), the nearest the eye.
   float capsule_info[4];
   float capsules[kShadowCapsules * 2][4];
+  // The moving casters under the sun: an orthographic map of them alone round the eye, a tile of
+  // their atlas (info.z 1 when drawn this frame).
+  GpuJob sun_caster;
 };
 
 struct BspDraw {
@@ -242,7 +241,8 @@ struct BspDraw {
   wgpu::Buffer caster_vertices;
   wgpu::Texture caster_cubes;  // the atlas: a light a row, a face a column
   wgpu::TextureView caster_target, caster_cubes_view;
-  int caster_lights = 0;  // this frame's lights with a caster cube (prepare_bsp)
+  int caster_lights = 0;    // this frame's lights with a caster cube (prepare_bsp)
+  bool sun_caster = false;  // this frame's casters drawn along the sun (prepare_bsp)
   uint32_t p_caster = 0;
   wgpu::TextureView ortho_layers[kOrthos];
   wgpu::TextureView cubes_view, orthos_view;

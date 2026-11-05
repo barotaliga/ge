@@ -486,6 +486,24 @@ bool world_stale(const WorldDraw& f) {
          a.far_land != b.far_land;
 }
 
+namespace {
+
+// The map's own sky (its pick) at the picture's sv_hour (the map's own at -1), dressed on `view`;
+// the title dresses its own.
+ba::SkyPick dress_world_sky(const WorldDraw& f, gr::FrameView& view) {
+  ba::SkyPick sky = f.sky;
+  if (f.picture->weather.hour >= 0) ba::at_hour(sky, f.night, f.picture->weather.hour);
+  if (!f.own_sky) ba::dress_sky(view, sky, f.top_y, view.time_s);
+  return sky;
+}
+
+}  // namespace
+
+void world_sun(const WorldDraw& f, gr::FrameView view, double out[3]) {
+  dress_world_sky(f, view);
+  gr::sun_direction(view, out);
+}
+
 void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFrame& fx,
                 const shooters_edge::view::HandFrame* held, double dt,
                 const ge::ui::DrawList& overlay, const wgpu::TextureView& target) {
@@ -498,10 +516,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     gr::set_grade(d, f.post[1], look::gamma_grade(gr::identity_grade(), f.gamma));
   }
   // The map's own sky (its pick), keeping the eye and the look the caller set.
-  // sv_hour: the sun where the hour puts it (the map's own pick at -1); the title dresses its own.
-  ba::SkyPick sky = f.sky;
-  if (f.picture->weather.hour >= 0) ba::at_hour(sky, f.night, f.picture->weather.hour);
-  if (!f.own_sky) ba::dress_sky(view, sky, f.top_y, view.time_s);
+  const ba::SkyPick sky = dress_world_sky(f, view);
   view.altitude_m = 100;
   if (!f.own_sky) {  // a map's cloud seen through its sky faces: every pixel, every frame
     view.clouds.quarter = false;
