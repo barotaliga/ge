@@ -96,6 +96,7 @@ TEST(a_weapon_on_the_map_comes_with_its_rows_ammunition) {
   CHECK_MSG(own == 5, std::to_string(own));
   pf::WeaponRow double_row = pf::kClassicWeapons[2];
   double_row.pickup_ammo = 11;
-  const float given = shells_gained({"set arsenal_weapon3 \"" + pf::weapon_text(double_row) + "\""});
+  const float given =
+      shells_gained({"set arsenal_weapon3 \"" + pf::weapon_text(double_row) + "\""});
   CHECK_MSG(given == 11, std::to_string(given));
 }
