@@ -271,6 +271,7 @@ void run(gl::Lab& lab) {
   };
 
   for (int i = 0; i < 90; i++) frame({}, true);  // the spawn and the fall to the floor
+  births[0] = births[1] = 0;  // the spawn's ash (client/warps.hpp): not the weapons' own
   // No --at: from where the player stands, the way whose wall is nearest kAimAt units off at the
   // eye's height (a target near enough to see the hits, far enough to see the rounds fly); no
   // --side: a camera beside the line of fire, back from its middle, looking at the far end.

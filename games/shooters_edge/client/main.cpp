@@ -937,6 +937,7 @@ int run_main(int argc, char** argv) {
     // The eyes on the player and what the world throws, then the overlay: the HUD, the console.
     ge::render::FrameView view = cl::frame_view(listen, shown, frames, t, wall);
     view.frame = static_cast<uint64_t>(presented);
+    fx_state.models = world ? &cl::world_models(*world) : nullptr;
     if (!fx_palette_read) {
       std::vector<uint8_t> store;
       const std::span<const uint8_t> pal = cl::find_file(files, "gfx/palette.lmp", store);

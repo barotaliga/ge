@@ -545,7 +545,7 @@ frame a list of `MorphDraw`s.
 - **Upload once.** Every frame of every model goes into one storage buffer, two `vec4` a vertex.
   The triangles and the coordinates go into two more. The skins are shelf-packed into one
   2048-wide atlas, tallest first, a texel apart (`pack_morph_atlas`). A frame writes only its
-  draws: 160 bytes each, at most `kMaxMorphDraws`.
+  draws: 224 bytes each, at most `kMaxMorphDraws`.
 - **Frames blended on the GPU.** The vertex stage pulls each vertex by index and mixes the draw's
   two frames by its share. It does the same for the frame before, so a swinging limb carries its
   own motion into the motion target and TAA keeps it sharp. A model with frames at 10 a second
@@ -568,12 +568,27 @@ frame a list of `MorphDraw`s.
 - **The game's own light.** `outdoor` is the share of the frame's sun and sky. `ambient` and a
   `shade` from one direction are what a game samples where the model stands: an indoor map's
   light at its feet. Glowing texels add `glow` times the scene's white, whatever the light.
+- **The warp** (`MorphWarp`, `wgsl/warp.wgsl`, shared with the view-model pass): a draw coming
+  into being or going out of it, a spawn or a teleport, as one share `shown` (1 whole, 0 gone). A
+  fragment is drawn where a field lies under `shown`. The field is two octaves of value noise,
+  fixed to the model's own frame so it stays on the body as it turns, plus the point's place along
+  a sweep axis, so the far end comes in first and the near end goes out first. Within `kWarpEdge`
+  of the cut the surface turns to ash: its light greyed and tinted by `ash`. That is the knobs at
+  rest, a figure crumbling to dust; the game throws its flakes where the cut passes, reading the
+  same field on the CPU (`warp_field`). Other looks are knobs: `edge` burns the band in a light of
+  its own, `pinch` draws the figure into a column stretched up, `shimmer` runs bands up it. A
+  warped fragment is marked reactive, so TAA does not trail the cut. The view-model pass reads
+  the same warp along an axis of the held frame, so a spawn assembles the gun in the hands.
+  Shooter's Edge times it at 0.7 s arriving and 0.8 s leaving
+  (`games/shooters_edge/client/warps.hpp`).
 - The draws go into the HDR and motion targets after the opaque world. Depth is tested and
   written (reversed z) and back faces are culled.
 
-The CPU twins (`pose_morph`, `morph_texel`) are the shader's arithmetic for
-`tests/render_morph_test.cpp`. The `gpu-morph` lab draws a runner in four teams, sharp beside
-smooth, its frames and in-betweens, at dusk and in a game's own light, and times 64 of them.
+The CPU twins (`pose_morph`, `morph_texel`, `warp_vertex`, `warp_field`, `warp_cut`) are the shader's arithmetic
+for `tests/render_morph_test.cpp`. The `gpu-morph` lab draws a runner in four teams, sharp beside
+smooth, its frames and in-betweens, at dusk, in a game's own light and warping in as dust and as
+a beam, checks that a
+warp gone draws nothing and one whole draws the plain runner, and times 64 of them.
 **Not yet:** the local lights of the lighting pass, shadows cast by the figures, and the classic
 model reader (it lands with its plugin).
 

@@ -223,12 +223,13 @@ void run(gl::Lab& lab) {
   }
   lab.table(table);
 
+  // The shots' ids in the order the device branch takes them (each kind's lights, the first
+  // kind's warmed views right after its own), so the placeholders give the same digest.
   std::vector<std::string> ids;
-  for (const gr::FarLandKind* k : kinds) {
-    for (const Light& l : kLights) ids.push_back(std::string(k->name) + "-" + l.id);
-  }
-  if (!kinds.empty()) {
-    for (double warm : warms) ids.push_back(std::string(kinds[0]->name) + "-warm" + fixed(warm, 0));
+  for (size_t i = 0; i < kinds.size(); ++i) {
+    for (const Light& l : kLights) ids.push_back(std::string(kinds[i]->name) + "-" + l.id);
+    if (i != 0) continue;
+    for (double warm : warms) ids.push_back(std::string(kinds[i]->name) + "-warm" + fixed(warm, 0));
   }
 
   auto device = ge::gpu::create_device({.label = "far-land", .validation = 1});

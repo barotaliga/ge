@@ -21,7 +21,8 @@
 // - DRAWN (`prepare_models`, `encode_models`): a group of frames plays at its intervals; a model
 //   flagged to spin turns; each one lit by the lightmap on the floor under it (taken again only
 //   when it moves), shaded from above, a fullbright texel glowing; a player's shirt and pants in
-//   his own colours. The nearest `kMaxMorphDraws` are drawn.
+//   his own colours. The nearest `kMaxMorphDraws` are drawn. One short of whole (`Placed::warp`,
+//   a spawn or a teleport) is drawn warped and holds still for TAA.
 //
 // ge:summary The window's models: items, weapons, flames, players, loaded from the packs and drawn
 // ge:keywords world-models create_models read_models place_models prepare_models encode_models
@@ -29,6 +30,7 @@
 // ge:keywords items armour health weapons flames torches players statics entity-models morph
 // ge:keywords sprites bare-flames topcolor bottomcolor place_brushes doors plats
 // ge:keywords ce_models enhanced-skins cached_skins replacement-skin skin-stand-in
+// ge:keywords body_triangles shapes warp-ash
 // ge:skill render shooter morph
 #pragma once
 
@@ -60,7 +62,13 @@ struct Placed {
   int effects = 0;  // the entity's effect bits (kGlow...)
   sh::Vec3f origin, angles;
   uint32_t top = models::kShirtRow, bottom = models::kPantsRow;  // palette rows for the tints
+  // Its warp (world_fx.hpp, warps.hpp): short of whole an alias model is drawn dissolving to ash
+  // or out of it (render/morph.hpp's MorphWarp).
+  ge::render::MorphWarp warp;
 };
+
+// A player's box, map units above and below his origin: the warp's dissolve spans it.
+inline constexpr float kBoxLowUnits = -24, kBoxHighUnits = 32;
 
 // THE EFFECTS' OWN MODELS: what the classic client draws for a temporary entity, loaded by the
 // window after the server's list whether the program precached them or not (a pack without one
@@ -111,6 +119,8 @@ struct WorldModels {
   };
   std::unordered_map<int, Lit> lit;                          // by entity
   std::unordered_map<int, ge::render::MorphPose> last_pose;  // by entity
+  // Each morph model's frames and triangles kept on the CPU (no skin): where a warp's ash lands.
+  std::vector<ge::render::MorphModel> shapes;
   std::vector<ge::render::MorphDraw> morph_draws;
   std::vector<ge::render::SpriteDraw> sprite_draws;
   std::vector<std::pair<double, size_t>> near;  // scratch
@@ -147,6 +157,10 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed,
 void prepare_models(ge::gpu::Device& device, WorldModels& m, const ge::brush::Map& map,
                     std::span<const Placed> placed, const ge::render::FrameView& view,
                     double brightness, double minlight, bool smooth, bool bare_flames);
+// The triangles of `p`'s model as `prepare_models` draws it at `time_s` (its frame and skin
+// group): nine floats a triangle, its model's own frame (m). False for a sprite, a brush or none.
+bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::vector<float>& out);
+
 // The models after the opaque world; the sprites where the particles are drawn.
 void encode_models(const WorldModels& m, const ge::gpu::PipelineSet& pipelines,
                    ge::render::FrameRecorder& rec, wgpu::CommandEncoder& encoder,

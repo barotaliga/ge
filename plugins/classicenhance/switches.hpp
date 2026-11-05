@@ -44,7 +44,7 @@ struct Switches {
   bool water = true, lava = true, slime = true, teleports = true, skies = true;
   // Effects
   bool flames = true, bonfires = true, muzzles = true, explosions = true, trails = true,
-       hits = true, flares = true, bubbles = true, beams = true;
+       hits = true, flares = true, bubbles = true, beams = true, warps = true;
   // Air
   bool fog = true, clouds = true, wind = true, weather = true;
   // Picture
