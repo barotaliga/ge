@@ -35,7 +35,7 @@ void(entity targ, entity inflictor, entity attacker, float damage) damage = {
   if (!targ.takedamage || targ.health <= 0) return;
   if (match_over) return;
   if (targ.invincible_finished > time) return;  // the shield
-  if (same_team(targ, attacker)) return;          // a teammate, under teamplay
+  if (!telefragging && same_team(targ, attacker)) return;  // a teammate, under teamplay
   if (attacker.super_damage_finished > time) damage = damage * 4;  // the quad
   // Armour takes its share, as far as it lasts.
   saved = ceil(targ.armortype * damage);
@@ -68,6 +68,29 @@ void(entity targ, entity inflictor, entity attacker, float damage) damage = {
     else player_pain();
   }
   self = was_self;
+};
+
+// `who` takes the spot he stands on: a living player there dies, teammate or not (no two players
+// are ever left stuck inside each other), unless the shield holds him, when `who` dies instead.
+void(entity who) telefrag = {
+  local entity p, next;
+  p = findradius(who.origin, 48);
+  while (p) {
+    next = p.chain;  // a death may search the world again
+    if (p != who && p.classname == "player" && p.health > 0) {
+      telefragging = TRUE;
+      if (p.invincible_finished > time) {
+        who.deathtype = "telefragged";
+        damage(who, p, p, 50000);
+        telefragging = FALSE;
+        return;
+      }
+      p.deathtype = "telefragged";
+      damage(p, who, who, 50000);
+      telefragging = FALSE;
+    }
+    p = next;
+  }
 };
 
 // A blast at `inflictor`: everything within reach that takes damage gets `points` less half its
