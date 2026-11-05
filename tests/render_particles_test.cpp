@@ -315,3 +315,28 @@ TEST(a_particle_met_behind_a_drawn_surface_hops_off_its_face_or_comes_to_rest) {
   r::collide_particle(o, at, up);
   CHECK(o.v[1] == 2);
 }
+
+TEST(a_thrown_thing_hops_twice_or_three_times_then_lies) {
+  // Dropped hard onto its own floor with a lively bounce: it hops its few times, then lies still.
+  int twice = 0, thrice = 0;
+  for (int i = 0; i < 12; ++i) {
+    r::Particle p{};
+    p.p[1] = 2;
+    p.life = 20;
+    p.size = 0.01f + 0.003f * static_cast<float>(i);
+    p.fall = 1;
+    p.floor_y = 0;
+    p.bounce = 0.8f;
+    int hops = 0;
+    float last_vy = 0;
+    for (int k = 0; k < 2000; ++k) {
+      r::step_particle(p, 0.005f);
+      if (p.v[1] > 0 && last_vy <= 0) hops++;
+      last_vy = p.v[1];
+    }
+    CHECK(hops == int(r::max_hops(p)) && p.v[1] == 0 && p.p[1] == 0);
+    twice += hops == 2;
+    thrice += hops == 3;
+  }
+  CHECK(twice > 0 && thrice > 0);
+}
