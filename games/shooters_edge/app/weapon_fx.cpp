@@ -115,7 +115,7 @@ gr::BlastLook make_blast() {
   l.debris = 6;
   l.debris_hot = 0.6;
   l.light_range_m = 10;
-  l.scorch_m = 2.0;  // the mark it leaves, read across a room
+  l.scorch_m = 3.0;  // the mark's box: its dark heart about half of it, read across a room
   return l;
 }
 

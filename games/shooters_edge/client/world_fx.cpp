@@ -142,6 +142,35 @@ bool surface_near(const LoadedMap& m, const sh::Vec3f& at, double normal[3], dou
   return best < 1;
 }
 
+// The surface a missile flying into `at` (map units) struck: the nearest missile of a frame ago
+// within kStruckU, the line on along its flight from the blast for kNearSurfaceU; its normal
+// (engine axes) and how far off it the blast is (m). False for none (a grenade at rest, an air
+// burst).
+constexpr float kStruckU = 96;
+bool struck_along(const LoadedMap& m, const std::unordered_map<int, FxState::Flight>& flights,
+                  const sh::Vec3f& at, double normal[3], double* off_m) {
+  if (m.bsp.world.models.empty()) return false;
+  const FxState::Flight* best = nullptr;
+  float nearest = kStruckU * kStruckU;
+  for (const auto& [e, f] : flights) {
+    const float dx = f.at.x - at.x, dy = f.at.y - at.y, dz = f.at.z - at.z;
+    const float d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 < nearest && (f.dir.x != 0 || f.dir.y != 0 || f.dir.z != 0)) {
+      nearest = d2;
+      best = &f;
+    }
+  }
+  if (best == nullptr) return false;
+  const sh::Hull& hull = m.bsp.world.models[0].hulls[0];
+  const sh::Vec3f to = {at.x + best->dir.x * kNearSurfaceU, at.y + best->dir.y * kNearSurfaceU,
+                        at.z + best->dir.z * kNearSurfaceU};
+  const sh::HullTrace tr = sh::trace_hull(hull, at, to);
+  if (tr.startsolid || tr.fraction >= 1) return false;
+  engine_dir(tr.plane.normal, normal);
+  *off_m = tr.fraction * kNearSurfaceU * ge::brush::kUnitM;
+  return true;
+}
+
 // The map's world faces (no sky, no liquid) as the marks' receivers, in engine metres, each
 // triangle wound to face the way its face's normal does.
 std::shared_ptr<const MarkFaces> receivers_of(const ge::brush::Map& m) {
@@ -303,6 +332,15 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   for (const Missile& m : v.missiles) {
     const ge::camera::Vec3 at = engine_point(m.origin);
     s.next[m.entity] = at;
+    if (const auto f = s.flights.find(m.entity); f != s.flights.end()) {
+      const sh::Vec3f d = {m.origin.x - f->second.at.x, m.origin.y - f->second.at.y,
+                           m.origin.z - f->second.at.z};
+      const float len = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+      s.flights_next[m.entity] = {
+          m.origin, len > 0.5f ? sh::Vec3f{d.x / len, d.y / len, d.z / len} : f->second.dir};
+    } else {
+      s.flights_next[m.entity] = {m.origin, {0, 0, 0}};
+    }
     if (!m.rocket) continue;
     double to[3];
     put(at, to);
@@ -338,6 +376,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     s.last.clear();
     s.blasts.clear();
     s.mains.clear();
+    s.flights.clear();
     s.marked = nullptr;
     s.beams.clear();
   }
@@ -348,9 +387,10 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     if (s.on.explosions) {
       // The surface it went off against, if one is within a ball's reach of it: the nearest hit
       // of six lines out of it.
-      double normal[3], off = 0;
-      const bool against =
-          l.map && surface_near(*l.map, l.explosions[s.explosions_seen], normal, &off);
+      double normal[3] = {0, 1, 0}, off = 0;
+      const sh::Vec3f boom = l.explosions[s.explosions_seen];
+      bool against = l.map && struck_along(*l.map, s.flights, boom, normal, &off);
+      if (!against) against = l.map && surface_near(*l.map, boom, normal, &off);
       const size_t first = s.blasts.size();
       fx::blast(p, against ? normal : nullptr, s.seed++, t, &s.blasts, &out.births);
       // Its scorch on the surface it went off against.
@@ -460,6 +500,8 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
                           [&](const Warp& w) { return w.entity == kv.first && !w.arriving; });
     });
   }
+  std::swap(s.flights, s.flights_next);  // the missiles flying now, for the next frame's blasts
+  s.flights_next.clear();
   // A campaign's other effects (its temporary entities and particle bursts; its explosions are
   // drawn above): a shot's or a spike's hit throws sparks back toward the eye, blood falls, a
   // teleport flares, lava splashes, a beam lights and sparks where it ends.

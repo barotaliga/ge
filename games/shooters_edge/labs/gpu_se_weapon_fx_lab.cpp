@@ -276,26 +276,75 @@ void run(gl::Lab& lab) {
   // eye's height (a target near enough to see the hits, far enough to see the rounds fly); no
   // --side: a camera beside the line of fire, back from its middle, looking at the far end.
   const sh::Hull& hull = l.map->bsp.world.models[0].hulls[0];
-  constexpr float kAimAt = 360, kEyeZ = 22;
+  constexpr float kAimAt = 320, kEyeZ = 22;
   if (!placed) {
-    const sh::Vec3f eye = {player.origin.x, player.origin.y, player.origin.z + kEyeZ};
-    float best = 1e9f, dist = 0;
-    for (int a = 0; a < 360; a += 10) {
-      const double r = a * ge::core::kPi / 180;
-      const sh::Vec3f to = {eye.x + 2048 * static_cast<float>(ge::core::libm::cos(r)),
-                            eye.y + 2048 * static_cast<float>(ge::core::libm::sin(r)), eye.z};
-      const float d = sh::trace_hull(hull, eye, to).fraction * 2048;
-      if (d > 200 && std::abs(d - kAimAt) < best) {
-        best = std::abs(d - kAimAt);
-        dist = d;
-        at[3] = static_cast<float>(a);
+    // A PLAIN WALL: from the spawn or a few steps off it, the way whose wall a 3x3 grid of parallel
+    // rays (96 units across, 64 tall) meets as one flat face square to the line of fire, nearest
+    // kAimAt units off; a counter, a console or a doorway breaks the grid and is passed over.
+    struct Aim {
+      sh::Vec3f from;
+      int yaw = 0;
+      float dist = 0, score = 1e9f;
+    };
+    Aim best;
+    const sh::Vec3f spawn = player.origin;
+    for (const float dx : {0.0f, 96.0f, -96.0f})
+      for (const float dy : {0.0f, 96.0f, -96.0f}) {
+        const sh::Vec3f eye = {spawn.x + dx, spawn.y + dy, spawn.z + kEyeZ};
+        if (sh::point_contents(hull, eye) != sh::kContentsEmpty) continue;
+        if (sh::trace_hull(hull, {spawn.x, spawn.y, eye.z}, eye).fraction < 1) continue;
+        for (int a = 0; a < 360; a += 10) {
+          const double r = a * ge::core::kPi / 180;
+          const float cx = static_cast<float>(ge::core::libm::cos(r)),
+                      cy = static_cast<float>(ge::core::libm::sin(r));
+          bool flat = true;
+          float lo = 1e9f, hi = -1e9f;
+          sh::Vec3f n0{};
+          for (int i = 0; i < 9 && flat; ++i) {
+            const float across = static_cast<float>(i % 3 - 1) * 48,
+                        up = static_cast<float>(i / 3 - 1) * 32;
+            const sh::Vec3f o = {eye.x - cy * across, eye.y + cx * across, eye.z + up};
+            const sh::HullTrace tr =
+                sh::trace_hull(hull, o, {o.x + 2048 * cx, o.y + 2048 * cy, o.z});
+            if (tr.startsolid || tr.fraction >= 1) {
+              flat = false;
+              break;
+            }
+            const sh::Vec3f n = tr.plane.normal;
+            if (i == 0) n0 = n;
+            flat = n.x * n0.x + n.y * n0.y + n.z * n0.z > 0.999f && n.x * cx + n.y * cy < -0.9f;
+            lo = std::min(lo, tr.fraction * 2048);
+            hi = std::max(hi, tr.fraction * 2048);
+          }
+          if (!flat || hi - lo > 24 || lo < 160) continue;
+          const float score = std::abs(lo - kAimAt) + (dx != 0 || dy != 0 ? 40.0f : 0.0f);
+          if (score < best.score) best = {{eye.x, eye.y, spawn.z}, a, lo, score};
+        }
       }
+    if (best.score < 1e9f) {
+      at[0] = best.from.x, at[1] = best.from.y, at[2] = best.from.z;
+      at[3] = static_cast<float>(best.yaw);
+      lab.note("aimed at a plain wall: yaw " + std::to_string(best.yaw) + ", " +
+               std::to_string(int(best.dist)) + " units off");
+    } else {  // none plain: the wall nearest kAimAt units off from the spawn
+      const sh::Vec3f eye = {spawn.x, spawn.y, spawn.z + kEyeZ};
+      float near = 1e9f;
+      for (int a = 0; a < 360; a += 10) {
+        const double r = a * ge::core::kPi / 180;
+        const sh::Vec3f to = {eye.x + 2048 * static_cast<float>(ge::core::libm::cos(r)),
+                              eye.y + 2048 * static_cast<float>(ge::core::libm::sin(r)), eye.z};
+        const float d = sh::trace_hull(hull, eye, to).fraction * 2048;
+        if (d > 200 && std::abs(d - kAimAt) < near) {
+          near = std::abs(d - kAimAt);
+          at[3] = static_cast<float>(a);
+        }
+      }
+      at[0] = spawn.x, at[1] = spawn.y, at[2] = spawn.z;
+      lab.note("no plain wall in reach: aimed at the wall nearest " + std::to_string(int(kAimAt)) +
+               " units off, yaw " + std::to_string(int(at[3])));
     }
-    at[0] = player.origin.x, at[1] = player.origin.y, at[2] = player.origin.z;
     at[4] = static_cast<float>(lab.arg_num("pitch"));
     placed = true;
-    lab.note("aimed at yaw " + std::to_string(int(at[3])) + ", the wall " +
-             std::to_string(int(dist)) + " units off");
   }
   if (!has_side) {
     const double r = at[3] * ge::core::kPi / 180;

@@ -103,10 +103,10 @@ struct HeldBeam {
 // (render/beam.hpp's `beam_burns`). Kept in a pool of kMarks, the oldest reused; drawn as the
 // beams' pass's burns (soot and ember) through the decal masks' atlas (`mark_atlas`).
 inline constexpr uint32_t kMarks = 128;
-inline constexpr int kMarkVariants = 4;     // the atlas's masks a kind
-inline constexpr int kMarkAtlasPx = 128;    // a mask's side in it
-inline constexpr float kHotEmberCd = 6000;  // a fresh scorch's glow, cd/m^2
-inline constexpr double kHoleM = 0.12, kNailHoleM = 0.14;
+inline constexpr int kMarkVariants = 4;                   // the atlas's masks a kind
+inline constexpr int kMarkAtlasPx = 128;                  // a mask's side in it
+inline constexpr float kHotEmberCd = 6000;                // a fresh scorch's glow, cd/m^2
+inline constexpr double kHoleM = 0.2, kNailHoleM = 0.24;  // boxes: the hole about half
 // The faces the marks are pressed onto: the mesh and its receivers (which point into it), kept
 // together.
 struct MarkFaces {
@@ -129,13 +129,19 @@ struct FxState {
   ge::detail::DecalPool marks;
   std::unordered_map<int, ge::camera::Vec3> last;  // each missile's place a frame ago, m
   std::unordered_map<int, ge::camera::Vec3> next;  // this frame's, swapped into `last`
-  std::size_t explosions_seen = 0;                 // of Listen::explosions
-  std::vector<Blast> lit;                          // the explosions whose light still fades
-  double hurt = 0;                                 // the hit's flash now (effects::Screen::hurt)
-  double armour = 0;                               // the armour's share of it (Screen::armour)
-  std::size_t blows_seen = 0;                      // of Listen::blows
-  std::size_t effects_seen = 0;                    // of Listen::effects
-  float health = 0;                                // the last frame's
+  // Each missile's place (map units) and the way it flew, a frame ago: the surface a blast went
+  // off against lies along it.
+  struct Flight {
+    sh::Vec3f at, dir;
+  };
+  std::unordered_map<int, Flight> flights, flights_next;
+  std::size_t explosions_seen = 0;  // of Listen::explosions
+  std::vector<Blast> lit;           // the explosions whose light still fades
+  double hurt = 0;                  // the hit's flash now (effects::Screen::hurt)
+  double armour = 0;                // the armour's share of it (Screen::armour)
+  std::size_t blows_seen = 0;       // of Listen::blows
+  std::size_t effects_seen = 0;     // of Listen::effects
+  float health = 0;                 // the last frame's
   uint32_t seed = 1;
   WarpWatch warps;                       // the players' arrivals and departures (warps.hpp)
   std::unordered_map<int, Placed> seen;  // each player as drawn last frame, by entity
