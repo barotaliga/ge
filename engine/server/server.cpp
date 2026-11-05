@@ -10,7 +10,9 @@
 #include <cstdio>
 
 #include "core/num.hpp"
+#include "core/num_text.hpp"
 #include "net/packet.hpp"
+#include "server/guards.hpp"
 
 namespace ge::server {
 
@@ -107,6 +109,18 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   cvars.bind({"sv_mod", mod, cn::kServer | cn::kServerInfo | cn::kReadOnly,
               "the mods' directories over the base, lowest first (--mod)", CvarKind::text},
              &c.mod);
+  const std::string timeout = core::num::to_string(c.timeout_s);
+  const std::string flood = c.floodprot, flood_msg = c.floodprot_msg;
+  cvars.bind({"sv_timeout", timeout, cn::kServer,
+              "seconds a client may go unheard before it is dropped", CvarKind::number, 1, 3600},
+             &c.timeout_s);
+  cvars.bind({"sv_floodprot", flood, cn::kServer,
+              "\"N S T\": N chat lines in S seconds, else silent for T seconds", CvarKind::text},
+             &c.floodprot);
+  cvars.bind({"sv_floodprotmsg", flood_msg, cn::kServer,
+              "what a player who floods the chat is told (empty: how long the silence is)",
+              CvarKind::text},
+             &c.floodprot_msg);
   for (int i = 0; i < game.rule_count; i++) {
     const GameRule& r = game.rules[i];
     std::string& field = c.rules[r.name];  // a map's node: its address outlives the inserts
@@ -135,6 +149,8 @@ bool server_open(Server& s, const ServerGame& game, const ServerConfig& config,
             " slots; next: raise sv_maxclients or lower sv_bots";
     return false;
   }
+  FloodRule flood;
+  if (!parse_flood_rule(config.floodprot, flood, error)) return false;
   gn::Visibility vis{};
   if (!gn::visibility_of(config.visibility, vis)) {
     error =

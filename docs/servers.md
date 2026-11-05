@@ -20,7 +20,10 @@ value's file and line kept (`Cvars::set_watch`), the rest of the server's cvars,
 deathmatch over the classic protocol (`games/shooters_edge/net/classic_game.hpp`), so a classic
 client connects and plays (the `se-dedicated` lab). The game's own rules are settings too: a game
 names them (`ServerGame::rules`, a `GameRule` each: Shooter's Edge's `deathmatch`, `teamplay`,
-`fraglimit`, `timelimit`, `samelevel`, `sv_gravity`, `sv_maxspeed`), the core makes each a server
+`fraglimit`, `timelimit`, `samelevel`, `pausable`; the move's and the loop's settings every
+shooter shares, `plugins/shooter/settings.hpp`: `sv_gravity`, `sv_maxspeed`, `sv_mintic`,
+`sv_maxvelocity`, `pm_ktjump`, …; and its endpoint's: `sv_maxrate`, `sv_antilag`, `sv_voip`, `maxfps`,
+`allow_download*`), the core makes each a server
 cvar with an empty fallback (unset: the game's own default), every layer, `+set` and `--explain`
 reach it like the core's, and `create` gets the values in `ServerConfig::rules`. A map is read from
 the game folder's loose files or its packs, and when a match ends the server moves everyone to
@@ -162,6 +165,8 @@ so an agent or an owner can answer "why is this server set like this" without re
 | `sv_lobby` | 1: every map warms up until everyone is ready, then the countdown and the match | server info, latched |
 | `sv_mod` | the mod's game directory, mounted over the base | server, latched |
 | `sv_admin` | how to reach the server's owner, shown in its info | server info |
+| `sv_timeout` | seconds a client may go unheard before it is dropped (65): a dead link, not an idle player | server |
+| `sv_floodprot`, `sv_floodprotmsg` | the chat flood rule, `"N S T"`: N lines in any S seconds, else silent for T (`10 1 1`), and what a flooder is told (`engine/server/guards.hpp`) | server |
 
 and the flags `--port`, `--ip`, `--maxclients`, `--name`, `--description`, `--cfg`, `--mod`,
 `--map`, `--bots`, `--lobby`, which are the same cvars set at layer 6. The game adds its own (`fraglimit`, a mountain's

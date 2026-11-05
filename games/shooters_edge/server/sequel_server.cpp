@@ -1,0 +1,453 @@
+// The sequel's rules as a runner (sequel_server.hpp states the rules): the map's start, the
+// players' slots, their commands through the sequel's move, the 10 Hz frame, `kill` and the
+// respawn, the console's settings, and the world the host reads.
+//
+// ge:summary The sequel's runner: the map started, players spawned and moved, the frame, the world
+// ge:keywords sequel sequel-server sequel-runner spawn-point respawn kill deathmatch frame-100ms
+// ge:keywords sequel_runner runner-calls fill-world
+// ge:skill shooter
+// ge:test tests/shooters_edge_sequel_server_test.cpp
+#include "shooters_edge/server/sequel_server.hpp"
+
+#include <cstdio>
+#include <cstdlib>
+#include <utility>
+
+#include "brush/map.hpp"
+#include "brush/trace.hpp"
+#include "core/num.hpp"
+#include "progs/text.hpp"
+
+namespace shooters_edge::server {
+
+namespace {
+
+namespace num = ge::core::num;
+namespace con = ge::console;
+
+constexpr double kFrameSeconds = 0.1;
+constexpr double kKillAfter = 5;      // `kill` is refused this long after a spawn, s
+constexpr double kRespawnAfter = 1;   // the dead may respawn this long after dying, s
+constexpr uint8_t kRespawnHold = 14;  // the deathmatch respawn's teleport hold, in 8 ms
+constexpr float kSpawnHealth = 100;
+
+SequelServer& sq(void* rules) { return *static_cast<SequelServer*>(rules); }
+
+int16_t to_short_angle(float degrees) {
+  return static_cast<int16_t>(num::to_int32(double(degrees) * (65536.0 / 360.0)));
+}
+
+sh::Vec3f parse_vec(const std::string& s) {
+  sh::Vec3f v;
+  if (std::sscanf(s.c_str(), "%f %f %f", &v.x, &v.y, &v.z) != 3) return {};
+  return v;
+}
+
+sh::Vec3f unpack(const int16_t v[3]) {
+  return {float(v[0]) * 0.125f, float(v[1]) * 0.125f, float(v[2]) * 0.125f};
+}
+
+void register_cvars(SequelServer& s) {
+  s.cvars.add({.name = "deathmatch",
+               .fallback = "1",
+               .flags = con::kServer,
+               .help = "the deathmatch rules: spawn points, respawns by attack"});
+  s.cvars.add({.name = "sv_gravity",
+               .fallback = "800",
+               .flags = con::kServer,
+               .help = "the pull down on players, units/s^2"});
+  s.cvars.add({.name = "sv_airaccelerate",
+               .fallback = "0",
+               .flags = con::kServer,
+               .help = "the air move's acceleration in deathmatch; 0 the walking rule"});
+}
+
+bool deathmatch(const SequelServer& s) { return s.cvars.find("deathmatch")->on(); }
+
+// The squared distance from `p` to the nearest living player other than `skip`; huge for none.
+double nearest_player(const SequelServer& s, sh::Vec3f p, int skip) {
+  double best = 1e30;
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    const SequelPlayer& o = s.players[i];
+    if (i == skip || !s.clients[i].active || !o.alive) continue;
+    const sh::Vec3f d = unpack(o.move.origin) - p;
+    const double sq = double(d.x) * d.x + double(d.y) * d.y + double(d.z) * d.z;
+    if (sq < best) best = sq;
+  }
+  return best;
+}
+
+// The spot a player spawns at: in deathmatch a random `info_player_deathmatch` that is not one of
+// the two nearest to a living player (any of them with two or fewer); else, or with none, the
+// first `info_player_start`; else the map's origin.
+const SequelEntity* spawn_spot(SequelServer& s, int slot) {
+  if (deathmatch(s)) {
+    std::vector<const SequelEntity*> spots;
+    for (const SequelEntity& e : s.entities)
+      if (e.classname == "info_player_deathmatch") spots.push_back(&e);
+    if (!spots.empty()) {
+      const SequelEntity* near1 = nullptr;
+      const SequelEntity* near2 = nullptr;
+      if (spots.size() > 2) {
+        double d1 = 1e31, d2 = 1e31;
+        for (const SequelEntity* e : spots) {
+          const double d = nearest_player(s, e->origin, slot);
+          if (d < d1) {
+            d2 = d1;
+            near2 = near1;
+            d1 = d;
+            near1 = e;
+          } else if (d < d2) {
+            d2 = d;
+            near2 = e;
+          }
+        }
+      }
+      std::vector<const SequelEntity*> allowed;
+      for (const SequelEntity* e : spots)
+        if (e != near1 && e != near2) allowed.push_back(e);
+      return allowed[ge::core::pick_index(s.rng, allowed.size())];
+    }
+  }
+  for (const SequelEntity& e : s.entities)
+    if (e.classname == "info_player_start") return &e;
+  return nullptr;
+}
+
+void spawn_player(SequelServer& s, int slot, bool respawn) {
+  SequelPlayer& p = s.players[slot];
+  const SequelEntity* spot = spawn_spot(s, slot);
+  const sh::Vec3f at = spot != nullptr ? spot->origin : sh::Vec3f{};
+  const float yaw = spot != nullptr ? spot->angles.y : 0;
+  sh::SequelState st;
+  st.type = s.clients[slot].spectator ? sh::SequelType::spectator : sh::SequelType::normal;
+  st.gravity = static_cast<int16_t>(s.cvars.find("sv_gravity")->integer());
+  // 9 above the spot, then 1 higher; packed to the eighth, truncated.
+  const float pos[3] = {at.x, at.y, at.z + 9 + 1};
+  for (int i = 0; i < 3; i++) st.origin[i] = static_cast<int16_t>(num::to_int32(pos[i] * 8));
+  // The delta angles turn the player's own view to the spot's yaw.
+  const int16_t want[3] = {0, to_short_angle(yaw), 0};
+  for (int i = 0; i < 3; i++) st.delta_angles[i] = int16_t(want[i] - p.cmd_angles[i]);
+  if (respawn && deathmatch(s)) {
+    st.flags |= sh::kSqTimeTeleport;
+    st.time = kRespawnHold;
+  }
+  p.move = st;
+  p.changed = true;
+  p.alive = !s.clients[slot].spectator;
+  p.health = p.alive ? kSpawnHealth : 0;
+  p.spawned_at = s.level_time;
+  p.view_angles = {0, yaw, 0};
+  p.mins = {-16, -16, -24};
+  p.maxs = {16, 16, 32};
+  p.view_height = 22;
+  p.water_level = 0;
+  p.on_ground = false;
+}
+
+void kill_player(SequelServer& s, int slot) {
+  SequelPlayer& p = s.players[slot];
+  p.alive = false;
+  p.health = 0;
+  p.died_at = s.level_time;
+  p.frags -= 1;  // a player killed by itself
+  p.move.type = sh::SequelType::dead;
+}
+
+void run_command(SequelServer& s, int slot, const sh::MoveCmd& c) {
+  SequelPlayer& p = s.players[slot];
+  sh::SequelMove pm;
+  pm.s = p.move;
+  if (pm.s.type != sh::SequelType::spectator)
+    pm.s.type = p.alive ? sh::SequelType::normal : sh::SequelType::dead;
+  pm.s.gravity = static_cast<int16_t>(s.cvars.find("sv_gravity")->integer());
+  pm.cmd.msec = c.msec;
+  pm.cmd.buttons = c.buttons;
+  pm.cmd.angles[0] = to_short_angle(c.angles.x);
+  pm.cmd.angles[1] = to_short_angle(c.angles.y);
+  pm.cmd.angles[2] = to_short_angle(c.angles.z);
+  pm.cmd.forward = c.forward;
+  pm.cmd.side = c.side;
+  pm.cmd.up = c.up;
+  pm.cmd.impulse = c.impulse;
+  pm.changed = p.changed;
+  pm.air_accelerate =
+      deathmatch(s) ? static_cast<float>(s.cvars.find("sv_airaccelerate")->number) : 0;
+  sh::SequelBrushWorld bw{s.tracer.get(), p.alive ? sh::kSqMaskPlayerSolid : sh::kSqMaskDeadSolid};
+  sh::sequel_move(pm, bw.world());
+  p.move = pm.s;
+  p.changed = false;
+  for (int i = 0; i < 3; i++) p.cmd_angles[i] = pm.cmd.angles[i];
+  p.buttons = c.buttons;
+  p.view_angles = pm.view_angles;
+  p.mins = pm.mins;
+  p.maxs = pm.maxs;
+  p.view_height = pm.view_height;
+  p.water_level = pm.water_level;
+  p.on_ground = pm.ground_entity >= 0;
+}
+
+// The commands a packet brings: those a lost packet left unrun (up to the two it carries), then
+// its newest. A packet older than the last one run brings nothing.
+void take_packet(SequelServer& s, const sh::Packet& pk) {
+  if (pk.client < 0 || pk.client >= sh::kMaxClients || !s.clients[pk.client].active) return;
+  SequelPlayer& p = s.players[pk.client];
+  if (p.last_sequence != 0 && pk.sequence <= p.last_sequence) return;
+  const uint32_t gap = p.last_sequence == 0 ? 0 : pk.sequence - p.last_sequence - 1;
+  const int lost = gap > 2 ? 2 : static_cast<int>(gap);
+  for (int i = 2 - lost; i <= 2; i++) run_command(s, pk.client, pk.cmds[i]);
+  p.last_sequence = pk.sequence;
+}
+
+// One rules frame: the time advances, the dead who press attack a second after dying respawn.
+void rules_frame(SequelServer& s) {
+  s.frame_number++;
+  s.level_time = double(s.frame_number) * kFrameSeconds;
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    SequelPlayer& p = s.players[i];
+    if (!s.clients[i].active || s.clients[i].spectator || p.alive) continue;
+    if (s.level_time < p.died_at + kRespawnAfter - 0.001) continue;
+    if (deathmatch(s) && (p.buttons & sh::kButtonAttack) != 0) spawn_player(s, i, true);
+  }
+}
+
+void fill_rows(SequelServer& s) {
+  RulesWorld& w = s.world;
+  w.time = s.level_time;
+  w.paused = s.paused;
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    const ClientInfo& c = s.clients[i];
+    const SequelPlayer& p = s.players[i];
+    WorldClient& wc = w.clients[i];
+    wc.active = c.active;
+    wc.spectator = c.spectator;
+    wc.bot = c.bot;
+    wc.userid = c.userid;
+    wc.name.clear();
+    for (const auto& [k, v] : c.userinfo)
+      if (k == "name") wc.name = v;
+    wc.userinfo = c.userinfo;
+    wc.ping_ms = c.ping_ms;
+    wc.entered_at = c.entered_at;
+    wc.numbers = {};
+    WorldEntity& e = w.entities[size_t(i) + 1];
+    e = {};
+    if (!c.active) continue;
+    wc.numbers.health = p.health;
+    wc.numbers.frags = p.frags;
+    wc.numbers.view_z = p.view_height;
+    e.free = false;
+    e.origin = unpack(p.move.origin);
+    e.velocity = unpack(p.move.velocity);
+    e.angles = {0, p.view_angles.y, 0};
+    e.view_angles = p.view_angles;
+    e.mins = p.mins;
+    e.maxs = p.maxs;
+    e.absmin = e.origin + p.mins;
+    e.absmax = e.origin + p.maxs;
+    e.flags = p.on_ground ? sh::kFlagOnGround : 0;
+    e.waterlevel = p.water_level;
+    e.health = p.health;
+    e.modelindex = c.spectator ? 0 : static_cast<int>(s.models.size()) - 1;
+  }
+}
+
+void fill_lists(SequelServer& s) {
+  RulesWorld& w = s.world;
+  w.map_name = s.map_name;
+  w.map_title.clear();
+  if (!s.map->entities.empty()) w.map_title = s.map->entities[0].get("message");
+  w.models = s.models;
+  w.sounds = s.sounds;
+  w.vwep.clear();
+  w.statics.clear();
+  w.max_clients = sh::kMaxClients;
+  w.entities.assign(1 + sh::kMaxClients + s.entities.size(), WorldEntity{});
+  w.entity_count = static_cast<int>(w.entities.size());
+  w.entities[0].free = false;
+  w.entities[0].modelindex = 1;
+  for (size_t i = 0; i < s.entities.size(); i++) {
+    const SequelEntity& m = s.entities[i];
+    WorldEntity& e = w.entities[1 + sh::kMaxClients + i];
+    e.free = false;
+    e.origin = m.origin;
+    e.angles = m.angles;
+    e.modelindex = m.modelindex;
+  }
+}
+
+bool sq_start(void* r, const MapSpec& map, std::string& error) {
+  SequelServer& s = sq(r);
+  if (map.brushes == nullptr) {
+    error = "the sequel's rules cannot start map '" + map.name +
+            "': it has no brushes (MapSpec::brushes). Read the version 38 map with "
+            "brush::read_bsp and pass it whole.";
+    return false;
+  }
+  s.map = map.brushes;
+  s.tracer = std::make_unique<ge::brush::BrushTracer>(*s.map);
+  s.map_name = map.name;
+  s.entities.clear();
+  for (size_t i = 1; i < s.map->entities.size(); i++) {
+    const ge::brush::Entity& b = s.map->entities[i];
+    SequelEntity e;
+    e.classname = b.get("classname");
+    e.targetname = b.get("targetname");
+    e.target = b.get("target");
+    e.model = b.get("model");
+    e.origin = parse_vec(b.get("origin"));
+    if (!b.get("angles").empty())
+      e.angles = parse_vec(b.get("angles"));
+    else if (!b.get("angle").empty())
+      e.angles.y = std::strtof(b.get("angle").c_str(), nullptr);
+    if (e.model.size() > 1 && e.model[0] == '*') e.modelindex = std::atoi(e.model.c_str() + 1);
+    s.entities.push_back(std::move(e));
+  }
+  s.models.assign(1, "");
+  for (size_t i = 1; i < s.map->models.size(); i++) s.models.push_back("*" + std::to_string(i));
+  s.models.push_back(kSequelPlayerModel);
+  s.sounds.assign(1, "");
+  s.frame_number = 0;
+  s.level_time = 0;
+  s.host_time = 0;
+  s.map_stopped = false;
+  s.pending_map.clear();
+  fill_lists(s);
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (s.clients[i].active) spawn_player(s, i, false);
+  fill_rows(s);
+  return true;
+}
+
+void set_info(std::vector<std::pair<std::string, std::string>>& info, const std::string& key,
+              const std::string& value) {
+  for (auto& kv : info)
+    if (kv.first == key) {
+      kv.second = value;
+      return;
+    }
+  info.emplace_back(key, value);
+}
+
+void sq_connect(void* r, int slot, const std::string& name, bool spectator, bool bot,
+                const float* /*parms: a deathmatch body starts from scratch*/) {
+  SequelServer& s = sq(r);
+  if (slot < 0 || slot >= sh::kMaxClients) return;
+  ClientInfo& c = s.clients[slot];
+  c = ClientInfo{};
+  c.active = true;
+  c.spectator = spectator;
+  c.bot = bot;
+  c.userid = s.next_userid++;
+  c.entered_at = s.level_time;
+  set_info(c.userinfo, "name", name);
+  s.players[slot] = SequelPlayer{};
+  if (s.map != nullptr) spawn_player(s, slot, false);
+  if (s.map != nullptr) fill_rows(s);
+}
+
+void sq_drop(void* r, int slot) {
+  SequelServer& s = sq(r);
+  if (slot < 0 || slot >= sh::kMaxClients) return;
+  s.clients[slot] = ClientInfo{};
+  s.players[slot] = SequelPlayer{};
+  if (s.map != nullptr) fill_rows(s);
+}
+
+void sq_frame(void* r, const sh::Packet* packets, int count) {
+  SequelServer& s = sq(r);
+  if (s.map == nullptr || s.paused) return;
+  for (int i = 0; i < count; i++) take_packet(s, packets[i]);
+  s.host_time += s.sv.set.mintic;
+  while (s.host_time + 1e-9 >= double(s.frame_number + 1) * kFrameSeconds) rules_frame(s);
+  fill_rows(s);
+}
+
+CommandResult sq_client_command(void* r, int slot, const std::string& line) {
+  SequelServer& s = sq(r);
+  if (slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].active) return CommandResult::bad;
+  ge::progs::Words w;
+  ge::progs::tokenize_words(line.c_str(), w);
+  if (w.count == 0) return CommandResult::bad;
+  const std::string cmd = ge::progs::word(w, 0);
+  if (cmd == "kill") {
+    SequelPlayer& p = s.players[slot];
+    if (p.alive && s.level_time >= p.spawned_at + kKillAfter) kill_player(s, slot);
+    fill_rows(s);
+    return CommandResult::mod;
+  }
+  return CommandResult::bad;
+}
+
+bool sq_console(void* r, const std::string& line) {
+  SequelServer& s = sq(r);
+  ge::progs::Words w;
+  ge::progs::tokenize_words(line.c_str(), w);
+  if (w.count == 0) return true;
+  const std::string cmd = ge::progs::word(w, 0);
+  if ((cmd == "map" || cmd == "changelevel") && w.count >= 2) {
+    s.pending_map = ge::progs::word(w, 1);
+    s.pending_change = cmd == "map" ? MapChange::new_game : MapChange::change_level;
+    return true;
+  }
+  if (cmd == "restart") {
+    s.pending_map = s.map_name;
+    s.pending_change = MapChange::restart;
+    return true;
+  }
+  if (s.cvars.find(cmd) != nullptr) {
+    if (w.count >= 2)
+      s.cvars.set(cmd, ge::progs::word(w, 1), con::Source::local);
+    else
+      s.console.push_back(cmd + " is \"" + s.cvars.find(cmd)->value + "\"");
+    return true;
+  }
+  return false;
+}
+
+void sq_user_info(void* r, int slot, const std::string& key, const std::string& value) {
+  SequelServer& s = sq(r);
+  if (slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].active) return;
+  set_info(s.clients[slot].userinfo, key, value);
+  if (s.map != nullptr) fill_rows(s);
+}
+
+bool sq_pause(void* r, int /*slot*/, bool on) {
+  SequelServer& s = sq(r);
+  if (s.paused == on) return false;
+  s.paused = on;
+  s.world.paused = on;
+  return true;
+}
+
+void sq_carry(void* /*r*/) {}  // a deathmatch body starts from scratch on every map
+
+void sq_destroy(void* r) { delete static_cast<SequelServer*>(r); }
+
+constexpr RunnerCalls kSequelCalls = {"sequel",  &sq_start,          &sq_connect, &sq_drop,
+                                      &sq_frame, &sq_client_command, &sq_console, &sq_user_info,
+                                      &sq_pause, &sq_carry,          &sq_destroy};
+
+}  // namespace
+
+SequelServer::SequelServer() = default;
+SequelServer::~SequelServer() = default;
+
+std::unique_ptr<SequelServer> make_sequel_server(const SequelServerOptions& opt) {
+  auto s = std::make_unique<SequelServer>();
+  s->opt = opt;
+  s->rng = ge::core::make_rng(opt.seed);
+  register_cvars(*s);
+  return s;
+}
+
+RulesRunner sequel_runner(std::unique_ptr<SequelServer> s) {
+  SequelServer* p = s.release();
+  return {&kSequelCalls, p, p};
+}
+
+SequelServer* sequel_of(const RulesRunner& r) {
+  return r.calls == &kSequelCalls ? static_cast<SequelServer*>(r.rules) : nullptr;
+}
+
+}  // namespace shooters_edge::server

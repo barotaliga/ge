@@ -25,13 +25,14 @@
 // to ConsoleCmd (self the world, the console's words in the program's word list): zero, and
 // "Unknown command" is printed.
 //
-// PAUSING (`request_pause`): a client asks (a spectator cannot); GE_ShouldPause (self the client,
-// p0 the new state) may refuse with 0; the pause changes and every client is told. The server
-// asks the same with self the world before it unpauses because no players are left.
+// PAUSING (`request_pause`): a client asks (a spectator cannot, nor anyone a pause while `pausable`
+// is 0: unpausing is always allowed; each refusal tells the asker why); GE_ShouldPause (self the
+// client, p0 the new state) may refuse with 0; the pause changes and every client is told. The
+// server asks the same with self the world before it unpauses because no players are left.
 //
 // ge:summary Client commands, chat, info changes, the console and pausing, to the mod's hooks
 // ge:keywords client-command usercmd ge_clientcommand chatmessage say say_team kill userinfo
-// ge:keywords userinfo_changed localinfochanged consolecmd console pause ge_shouldpause
+// ge:keywords userinfo_changed localinfochanged consolecmd console pause ge_shouldpause pausable
 // ge:keywords overridable bad-user-command client_command server_command request_pause call_hook
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_qc_hooks_test.cpp

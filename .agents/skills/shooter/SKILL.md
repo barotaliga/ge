@@ -21,6 +21,7 @@ edges. `docs/shooters-edge.md` is the design;
 | `shooter/world.hpp/.cpp` | A move's solids (`MoveWorld`): `player_trace`, `box_free`, `water_contents`, `brush_contents` |
 | `shooter/pmove.hpp/.cpp` | The move: `MoveCmd`, `MoveSettings`, `MoveState`, `player_move`, `run_command` (the 50 ms split) |
 | `shooter/sequel_move.hpp/.cpp` | The sequel's move: `SequelState` (packed eighths), `SequelCmd`, `sequel_move` over a `SequelWorld`; `SequelBrushWorld` over a 38 map's `BrushTracer` |
+| `games/shooters_edge/server/sequel_server.hpp/.cpp` | The sequel's rules as a runner (form `"sequel"`): the map from `MapSpec::brushes`, spawn points, each command through `sequel_move`, the 10 Hz frame, `kill` and the respawn, `fill_rows` into the world |
 | `shooter/slide.hpp/.cpp` | The slide along planes, the step-slide up stairs, `clip_velocity` |
 | `shooter/recording.hpp/.cpp` | The recorded scenarios: the text format, `replay` line by line, the tolerance |
 | `shooter/hull_world.hpp/.cpp` | The engine mover's world over brush models' clip hulls (`mover_world`, the axes `to_engine`/`to_map`, `contents_at`) and a hull 0's liquids laid as `engine/water` volumes (`add_liquids`) |

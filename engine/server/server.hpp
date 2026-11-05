@@ -21,7 +21,10 @@
 // `sv_lobby` (the engine's lobby, match.hpp, before every match), `sv_seed`, `sv_password`,
 // `sv_visibility`; and those kept for what reads them as it lands:
 // `sv_motd`, `sv_admin`, `sv_maprotation`, `sv_maxspectators`, `sv_spectatorpassword`,
-// `sv_rendezvous`, `sv_mod` (read-only: the mods the server was started with). A dedicated server
+// `sv_rendezvous`, `sv_mod` (read-only: the mods the server was started with). The guards a game's
+// endpoint holds its clients to: `sv_timeout` (a client nothing was heard from for that long is
+// dropped: a dead link, not an idle player, who still sends moves) and `sv_floodprot`,
+// `sv_floodprotmsg` (the chat flood rule, guards.hpp). A dedicated server
 // reads them from the game directories' `server.cfg` in layers and its command line (config.hpp,
 // main.hpp).
 //
@@ -29,7 +32,7 @@
 // ge:keywords server dedicated-server listen-server server-core servergame server_frame
 // ge:keywords server_open hostname description port listen-address maxclients bots seed
 // ge:keywords sv_hostname sv_description net_ip net_port sv_maxclients sv_map sv_bots sv_seed
-// ge:keywords sv_lobby
+// ge:keywords sv_lobby sv_timeout sv_floodprot sv_floodprotmsg client-timeout
 // ge:keywords sv_password sv_visibility sv_motd sv_admin sv_maprotation sv_maxspectators
 // ge:keywords sv_spectatorpassword sv_rendezvous sv_mod lan-advert multiplayer hosting
 // ge:skill net
@@ -54,25 +57,28 @@ constexpr int kMaxClients = 32;
 // Everything a server is started with. The first block are cvars (`add_server_cvars`); the second
 // only how a dedicated process runs (main.hpp's flags).
 struct ServerConfig {
-  std::string hostname = "server";  // sv_hostname: the name in the browser and the lobby
-  std::string description;          // sv_description: a line under the name
-  std::string ip;                   // net_ip: the address to listen on (empty: every interface)
-  int32_t port = 0;                 // net_port: the game's port (0: the game's default)
-  int32_t maxclients = 8;           // sv_maxclients: 1..32
-  std::string map;                  // sv_map (empty: the game's default)
-  int32_t bots = 0;                 // sv_bots: slots the game's bots fill at the start
-  int32_t lobby = 0;                // sv_lobby: 1 warms up every map until the lobby's match
-  uint32_t seed = 1;                // sv_seed: the run's seed
-  std::string password;             // sv_password: joining takes it (the advert says locked)
-  std::string visibility = "lan";   // sv_visibility: lan, invite or listed (net/hosting.hpp)
-  std::string motd;                 // sv_motd: the message a player sees on joining
-  std::string admin;                // sv_admin: how to reach the server's owner
-  std::string maprotation;          // sv_maprotation: the maps after the first, space-separated
-  int32_t max_spectators = 0;       // sv_maxspectators: spectators beside the players
-  std::string spectator_password;   // sv_spectatorpassword: watching takes it
-  std::string rendezvous;           // sv_rendezvous: the rendezvous to list with (M17r)
-  std::string mod;                  // sv_mod: the mods' directories, lowest first (read-only)
-  std::string root = ".";           // where the game directories are (`--root`): maps, cfgs
+  std::string hostname = "server";   // sv_hostname: the name in the browser and the lobby
+  std::string description;           // sv_description: a line under the name
+  std::string ip;                    // net_ip: the address to listen on (empty: every interface)
+  int32_t port = 0;                  // net_port: the game's port (0: the game's default)
+  int32_t maxclients = 8;            // sv_maxclients: 1..32
+  std::string map;                   // sv_map (empty: the game's default)
+  int32_t bots = 0;                  // sv_bots: slots the game's bots fill at the start
+  int32_t lobby = 0;                 // sv_lobby: 1 warms up every map until the lobby's match
+  uint32_t seed = 1;                 // sv_seed: the run's seed
+  std::string password;              // sv_password: joining takes it (the advert says locked)
+  std::string visibility = "lan";    // sv_visibility: lan, invite or listed (net/hosting.hpp)
+  std::string motd;                  // sv_motd: the message a player sees on joining
+  std::string admin;                 // sv_admin: how to reach the server's owner
+  std::string maprotation;           // sv_maprotation: the maps after the first, space-separated
+  int32_t max_spectators = 0;        // sv_maxspectators: spectators beside the players
+  std::string spectator_password;    // sv_spectatorpassword: watching takes it
+  std::string rendezvous;            // sv_rendezvous: the rendezvous to list with (M17r)
+  std::string mod;                   // sv_mod: the mods' directories, lowest first (read-only)
+  double timeout_s = 65;             // sv_timeout: a client silent this long is dropped
+  std::string floodprot = "10 1 1";  // sv_floodprot: "N S T" chat lines (guards.hpp)
+  std::string floodprot_msg;         // sv_floodprotmsg: what a flooder is told ("": the silence)
+  std::string root = ".";            // where the game directories are (`--root`): maps, cfgs
   // The game's own rules (ServerGame::rules: `fraglimit`, `timelimit`) by name, as set; empty is
   // unset, the game's own default.
   std::map<std::string, std::string> rules;

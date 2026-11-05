@@ -17,6 +17,7 @@
 #include "progs/layout.hpp"
 #include "progs/text.hpp"
 #include "shooter/client.hpp"
+#include "shooter/settings.hpp"
 #include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -26,8 +27,6 @@ namespace shooters_edge::net {
 namespace pg = ge::progs;
 
 namespace {
-
-constexpr double kTimeout = 30;  // s of silence before a client is dropped
 
 bool same_host(const gn::Address& a, const gn::Address& b) {
   gn::Address x = a, y = b;
@@ -479,8 +478,11 @@ bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error
   info_set(s.serverinfo, "*z_ext", std::to_string(s.cfg.offered[ExtFamily::z]), kServerInfoBytes);
   info_set(s.serverinfo, "hostname", s.cfg.hostname, kServerInfoBytes);
   info_set(s.serverinfo, "maxclients", std::to_string(qc.sv.set.maxclients), kServerInfoBytes);
-  info_set(s.serverinfo, "maxfps", "77", kServerInfoBytes);
+  info_set(s.serverinfo, "maxfps", std::to_string(s.cfg.maxfps), kServerInfoBytes);
   info_set(s.serverinfo, "sv_antilag", s.cfg.antilag ? "1" : "0", kServerInfoBytes);
+  // The move's switches a client predicts with, when not at their defaults (pm_ktjump 0).
+  for (const auto& [k, v] : sh::changed_info(qc.sv.set))
+    info_set(s.serverinfo, k, v, kServerInfoBytes);
   for (const auto& [k, v] : qc.serverinfo) info_set(s.serverinfo, k, v, kServerInfoBytes);
   if (s.cfg.antilag) {
     qc.lag_rewind = &lag_rewind;
@@ -742,9 +744,11 @@ void classic_frame(ClassicServer& s, int64_t now_us) {
     if (c.state == ConnState::free || c.local) continue;
     if (c.ch.overflow)
       classic_drop(s, i, "reliable channel overflowed");
-    else if (s.now - c.ch.last_received > kTimeout)
+    else if (s.now - c.ch.last_received > s.cfg.timeout_s) {
+      const std::string name = c.name;
       classic_drop(s, i, "timed out");
-    else if (c.rules_active && s.game->clients[i].drop)
+      classic_print_all(s, name + " timed out\n");
+    } else if (c.rules_active && s.game->clients[i].drop)
       classic_drop(s, i, "dropped by the mod");
   }
   if (s.now - s.last_ping_update >= 2) {
