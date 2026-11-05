@@ -654,16 +654,16 @@ void run(gl::Lab& lab) {
         fx.models.pop_back();
         const ge::gpu::Image without_img = side_settled();
         fx.models.push_back(figure);
-        const int w = int(with_img.width), h = int(with_img.height), gap = 4;
-        gl::Picture pair{2 * w + gap, h,
-                         std::vector<uint8_t>(size_t(2 * w + gap) * size_t(h) * 4, 255)};
-        for (int y = 0; y < h; ++y)
-          for (int x = 0; x < w; ++x)
+        const int pw = int(with_img.width), ph = int(with_img.height), gap = 4;
+        gl::Picture pair{2 * pw + gap, ph,
+                         std::vector<uint8_t>(size_t(2 * pw + gap) * size_t(ph) * 4, 255)};
+        for (int y = 0; y < ph; ++y)
+          for (int x = 0; x < pw; ++x)
             for (int c = 0; c < 4; ++c) {
-              const size_t from = (size_t(y) * size_t(w) + size_t(x)) * 4 + size_t(c);
+              const size_t from = (size_t(y) * size_t(pw) + size_t(x)) * 4 + size_t(c);
               pair.rgba[(size_t(y) * size_t(pair.width) + size_t(x)) * 4 + size_t(c)] =
                   with_img.rgba[from];
-              pair.rgba[(size_t(y) * size_t(pair.width) + size_t(x + w + gap)) * 4 + size_t(c)] =
+              pair.rgba[(size_t(y) * size_t(pair.width) + size_t(x + pw + gap)) * 4 + size_t(c)] =
                   without_img.rgba[from];
             }
         lab.shot({id + "-side-pair",
