@@ -108,6 +108,10 @@ void draw_world(ge::gpu::Device& device, WorldDraw& w, ge::render::FrameView vie
 bool warm_world(ge::gpu::Device& device, WorldDraw& w, const ge::render::FrameView& view,
                 int cubes);
 
+// The way to the sun (engine frame, unit) a frame drawn from `view` lights the map with: the map's
+// own sky, at the picture's sv_hour.
+void world_sun(const WorldDraw& w, ge::render::FrameView view, double out[3]);
+
 // The last GPU reading of the frame's span (a frame or more late) into `p`; nothing when the GPU
 // has no timestamp queries.
 void record_span(const WorldDraw& w, PassTimes& p);

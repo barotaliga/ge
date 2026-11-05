@@ -875,6 +875,46 @@ too). An added sprite (a flame, a fireball) is light of its own and takes none. 
 `gpu-sprites`'s `lamp-night` (the yard's bushes and sign under a 400 cd lamp), each with `-off`
 beside it.
 
+### Shadows of moving models
+
+**As built (M54, in progress)** (`brush/app/casters.hpp`, `bsp_draw.cpp`, `bsp.wgsl`,
+`wgsl/capsules.wgsl`). The brush world's v2 look lit in real time keeps each shadowed light's cube
+of the map (drawn when the light takes a slot, not every frame). The models that move (players,
+monsters, and the first-person player, who is never drawn in his own eyes but casts) are handed
+over each frame (`set_shadow_casters`: their posed triangles in world metres and a box each) and
+shadow the lights in two tiers:
+
+- **The casters' cubes.** `caster_lights` ranks the shadowed lights by the most light each puts on
+  one caster (its strength over the squared distance to the box, inside its reach), a caster
+  counting less the further it is from the eye (half at 4 m), and the first 8 get a cube of the
+  casters alone, 384 texels a face. The 48 faces are one depth atlas (a light a row, a face a
+  column) drawn in ONE pass with a viewport a face, as the lamps' tiles above: as 48 passes they
+  cost 6 ms of GPU a frame on the M3 Max whatever they drew. A pixel reads the world's cube with
+  one 2 × 2 compare and the casters' cube with percentage-closer soft shadows: a blocker search
+  of 8 taps in the casters' cube alone (most pixels find none and stop there), the penumbra
+  `size × (d − d_blocker) / d_blocker`, then 12 compares. The taps are Vogel discs from constant
+  tables, turned by one spin a pixel and frame that the TAA resolves; they are directions round the
+  point's, so they cross a cube's seams with no special case (a tap is clamped half a texel inside
+  its face's tile). A light's source radius (`GpuLight::more.y`) sets how soft: a plain light's
+  4 cm is sharp, a flame's a quarter of its height (a wall torch 0.14 m, a large flame 0.26 m).
+- **The capsules.** A classic map lights a room with many overlapping fill lights (on e1m4 the 32
+  nearest shadowed ones carry 5 to 20 % of a floor's light), so 8 cubes alone leave no shadow
+  to see. The 4 casters nearest the eye become vertical capsules fitted to their boxes
+  (`shadow_capsules`), and every light without a casters' cube is shadowed by the ones within 6 m
+  of the pixel (found once a pixel), the penumbra from the light's size seen from the point.
+- **The sun.** A row more of the atlas: its first tile is the casters seen along the sun, an
+  orthographic view 16 m wide round the eye (4 cm texels), drawn in the same pass. A pixel inside
+  it multiplies the sun's map of the world by its 2 × 2 compare (`sun_casters_lit`).
+- **The room's own light.** A figure standing in the light hides some of what bounces round the
+  room too: the bounce and the `r_minlight` floor are dimmed by 0.8 of the share of the casters'
+  lights he hides at the pixel.
+
+Lab `se-models`: the views `shadow-lamp`, `shadow-torch`, `shadow-flame` and `shadow-sun` (at
+noon, on a map with open sky), each from his eyes and from the side, and `-shade` (in red, how
+much darker each pixel is with him there, eight times over), with the metrics `-darker` (the
+lower half's mean) and `-deepest` (the 99th percentile). The cost is `se-timedemo`'s
+(`docs/perf.md` § Shooter's Edge's world frame): main + 7 % at 2560 × 1440 on demo1.
+
 ### Materials
 
 **As built (M39b)** (`render/surface.hpp`, `wgsl/surface.wgsl`). One physically based model for

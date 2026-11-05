@@ -172,6 +172,16 @@ void prepare_models(ge::gpu::Device& device, WorldModels& m, const ge::brush::Ma
 // group): nine floats a triangle, its model's own frame (m). False for a sprite, a brush or none.
 bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::vector<float>& out);
 
+// THE MOVING CASTERS (the modern look's real-time lights, M54): the alias models of `placed`
+// within kCasterReachM of the eye (players, monsters, items; not a torch's flame, which is light),
+// and `self` when given (the first-person player, never drawn, still casting), posed at `time_s`
+// as prepare_models poses them, into `out` as world triangles (m, nine floats a triangle) for the
+// BSP renderer's caster cubes (bsp_draw.hpp's set_shadow_casters).
+inline constexpr double kCasterReachM = 24;
+void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const Placed* self,
+                    const ge::render::FrameView& view, std::vector<float>& out,
+                    std::vector<ge::brush::app::CasterBox>& boxes);
+
 // The models after the opaque world; the sprites where the particles are drawn.
 void encode_models(const WorldModels& m, const ge::gpu::PipelineSet& pipelines,
                    ge::render::FrameRecorder& rec, wgpu::CommandEncoder& encoder,

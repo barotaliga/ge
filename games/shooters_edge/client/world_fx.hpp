@@ -216,6 +216,10 @@ struct FxFrame {
   std::vector<ge::render::BurnVertex> burns;
   // The hot air a nail's or a rocket's flight left (ce_trails), a stretch a frame, for the haze.
   std::vector<ge::render::HazeTrail> haze;
+  // The local player as the world would place him (never drawn in his own eyes, still casting his
+  // shadow, M54); `has_self` false when he is dead or there is no server.
+  Placed self;
+  bool has_self = false;
 };
 
 // A player's dust and the sweep of his warp from where he stands (`origin`, `angles`: map units
