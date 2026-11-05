@@ -339,6 +339,15 @@ void run(gl::Lab& lab) {
       (device ? ", " + device->report.name + " on " + device->report.backend : ", no GPU");
   for (const std::string& line : cl::bench_report(bench.name, setup, s)) lab.note(line);
   lab.note(cl::span_report(bench.passes));
+  for (const std::string& line : cl::pass_report(bench.passes, bench.passes.span_ms.size()))
+    lab.note(line);
+  for (const auto& [pass, ms] : bench.passes.pass_ms) {
+    if (bench.passes.span_ms.empty()) break;
+    double sum = 0;
+    for (const double m : ms) sum += m;
+    lab.metric("gpu.pass." + pass, sum / static_cast<double>(bench.passes.span_ms.size()), "ms",
+               gl::Det::measured);
+  }
   // Where the CPU's part of a frame goes: each zone's median a timed frame (nested zones inside
   // their parent's), the frame's own median beside them.
   {

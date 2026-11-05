@@ -104,6 +104,14 @@ void span_add(PassTimes& p, double ms) {
   if (!std::isnan(ms)) p.span_ms.push_back(ms);
 }
 
+void pass_add(PassTimes& p, std::string_view name, double ms) {
+  if (std::isnan(ms)) return;
+  auto at = std::find_if(p.pass_ms.begin(), p.pass_ms.end(),
+                         [&](const auto& e) { return e.first == name; });
+  if (at == p.pass_ms.end()) at = p.pass_ms.insert(p.pass_ms.end(), {std::string(name), {}});
+  at->second.push_back(ms);
+}
+
 double median_of(std::vector<double> v) {
   if (v.empty()) return 0;
   const auto mid = v.begin() + static_cast<std::ptrdiff_t>(v.size() / 2);
@@ -115,6 +123,26 @@ std::string span_report(const PassTimes& p) {
   if (p.span_ms.empty()) return "  GPU frame: not measured (this GPU has no timestamp queries)";
   return "  GPU frame span, median " + fixed(median_of(p.span_ms), 2) +
          " ms (what each thing costs: the se-timedemo lab's --price)";
+}
+
+std::vector<std::string> pass_report(const PassTimes& p, size_t frames) {
+  if (p.pass_ms.empty() || frames == 0) return {};
+  std::vector<std::pair<double, size_t>> order;
+  for (size_t i = 0; i < p.pass_ms.size(); i++) {
+    double sum = 0;
+    for (const double ms : p.pass_ms[i].second) sum += ms;
+    order.push_back({sum / static_cast<double>(frames), i});
+  }
+  std::sort(order.begin(), order.end(),
+            [](const auto& a, const auto& b) { return a.first > b.first; });
+  std::vector<std::string> out{
+      "  GPU by pass (mean a timed frame; median where it ran, in how many):"};
+  for (const auto& [mean, i] : order) {
+    const auto& [name, ms] = p.pass_ms[i];
+    out.push_back("    " + name + " " + fixed(mean, 3) + " ms; " + fixed(median_of(ms), 3) +
+                  " ms in " + std::to_string(ms.size()) + " of " + std::to_string(frames));
+  }
+  return out;
 }
 
 std::vector<Price> prices(std::span<const PriceRun> bases, std::span<const PriceRun> off) {
