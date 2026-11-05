@@ -11,3 +11,5 @@ C4244 ("conversion from 'int' to 'float'") and `/WX` makes it the Windows row's 
 Every PR in the queue then fails on Windows until the line is fixed. Write the arms as the
 destination's type: `flag ? 1.0f : 0.0f`. The container has no MSVC, so a float stored from an
 int expression (a ternary, a `bool`, a count) gets an explicit `float(...)` or float literals.
+The same holds for a braced pair: `std::vector<std::pair<float, V>>::push_back({0, v})` builds
+`pair<float, V>` from an `int` inside `<utility>` (C4244 again); write `{0.0f, v}`.

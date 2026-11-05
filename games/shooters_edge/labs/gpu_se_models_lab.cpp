@@ -682,7 +682,7 @@ void run(gl::Lab& lab) {
       // first.
       std::vector<std::pair<float, sh::Vec3f>> at;
       for (const cl::Placed& p : placed)
-        if (l.server->models[size_t(p.modelindex)] == lamp.source) at.push_back({0, p.origin});
+        if (l.server->models[size_t(p.modelindex)] == lamp.source) at.push_back({0.0f, p.origin});
       for (const br::Entity& e : world.entities) {
         if (e.get("classname") != lamp.source) continue;
         float o[3];
