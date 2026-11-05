@@ -230,6 +230,7 @@ int run_main(int argc, char** argv) {
       "shooters_edge", &shot_settings);
   ge::capture::add_screenshot_cvars(console.cvars(), shot_settings);
   ge::capture::add_screenshot_command(console, shots, "<game folder>/screenshots/");
+  game_menu.set_screenshots(shots.dir());  // OPTIONS > SCREENSHOTS looks through them
   const auto save_settings = [&console] { cl::save_settings(console); };
   ge::console::start(console, args.plus);
   console.cvars().apply_latched();
@@ -586,6 +587,7 @@ int run_main(int argc, char** argv) {
         mi.right = input.tapped(Key::right) || input.tapped(Key::d);
         mi.accept = input.tapped(Key::enter) || input.tapped(Key::space);
         mi.back = input.tapped(Key::escape);
+        mi.del = input.tapped(Key::del) || input.tapped(Key::backspace);  // a Mac's delete key
         mi.pointer_x = input.pointer_x * px_per_unit;
         mi.pointer_y = input.pointer_y * px_per_unit;
         mi.pointer_moved = mi.pointer_x != last_pointer.x || mi.pointer_y != last_pointer.y;
