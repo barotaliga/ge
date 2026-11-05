@@ -33,6 +33,16 @@ double developed_fetch() {
   return r * r;
 }
 
+double wind_of(const Sea& sea) {
+  if (sea.hs <= 0 || sea.tp <= 0) return 0;
+  // g Tp^2 / Hs = (B^2 / A) x^(1/6) while the sea still grows (x = g F / U^2), so x, then U off
+  // the height law.
+  const double r = kGravity * sea.tp * sea.tp / sea.hs * kHsLaw / (kTpLaw * kTpLaw);
+  const double r3 = r * r * r;
+  const double x = core::num::min(r3 * r3, developed_fetch());
+  return std::sqrt(sea.hs * kGravity / (kHsLaw * std::sqrt(x)));
+}
+
 Sea grow(double wind, double fetch, double toward) {
   Sea sea;
   sea.toward = toward;

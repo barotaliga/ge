@@ -48,6 +48,27 @@ constexpr double kHz = 1000.0 / bt::kPilotMsec;
 constexpr int kTickUs = 13000;
 constexpr int32_t kItQuad = 4194304;
 
+// The drill: every player's weapons cut to `bit` alone (the blade kept, so nothing is left with no
+// weapon), and the ammunition it fires topped up when it runs under half (so a refill, which the
+// hit book would read as a pickup, comes once every hundred shots or so).
+void drill_frame(server::QcServer& s, int32_t bit) {
+  constexpr int32_t kWeapons = 1 | 2 | 4 | 8 | 16 | 32 | 64;  // the baseline mod's guns
+  constexpr int32_t kBlade = 4096;
+  const pg::LayoutFields& f = s.q.layout->f;
+  const int ammo = bit <= 2    ? f.ammo_shells
+                   : bit <= 8  ? f.ammo_nails
+                   : bit <= 32 ? f.ammo_rockets
+                               : f.ammo_cells;
+  for (int e = 1; e <= s.sv.set.maxclients; e++) {
+    if (!s.clients[static_cast<size_t>(e - 1)].active || f.items < 0 || ammo < 0) continue;
+    uint32_t* items = pg::entity_field(s.q.vm, e, f.items);
+    const int32_t had = static_cast<int32_t>(pg::as_float(*items));
+    *items = pg::as_word(static_cast<float>((had & ~kWeapons) | bit | kBlade));
+    uint32_t* a = pg::entity_field(s.q.vm, e, ammo);
+    if (pg::as_float(*a) < 50) *a = pg::as_word(100.f);
+  }
+}
+
 uint64_t fold(uint64_t h, uint32_t w) { return (h ^ w) * 1099511628211ull; }
 
 uint64_t fold_f(uint64_t h, float f) {
@@ -403,6 +424,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     s.sv.sound_count = 0;
     classic_frame(*server, now);
     hits_frame(hits, s);
+    if (opt.drill != 0) drill_frame(s, opt.drill);
     // Fighters take their slots once their players are in the game.
     for (int k = 0; k < n; k++) {
       Seat& seat = seats[static_cast<size_t>(k)];

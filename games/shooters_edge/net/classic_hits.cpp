@@ -82,6 +82,7 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
   if (first) {
     b.players.assign(static_cast<size_t>(clients), {});
     b.life.assign(n, 0);
+    b.health.assign(n, 0);
     b.ammo.assign(n, {});
     b.weapon.assign(n, 0);
     b.at.assign(n, {});
@@ -103,8 +104,9 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
                                     field(s, e, f.ammo_rockets), field(s, e, f.ammo_cells)};
     const int32_t weapon = static_cast<int32_t>(field(s, e, f.weapon));
     if (!first && in) {
-      // Shots: ammunition spent on the weapon held at the frame before.
-      const int32_t w = b.weapon[i];
+      // Shots: ammunition spent on the weapon held at the frame before, alive in both frames (a
+      // player coming back in has his ammunition emptied, which is no shot).
+      const int32_t w = health > 0 && b.health[i] > 0 ? b.weapon[i] : 0;
       const auto spent = [&](int k) {
         const float d = b.ammo[i][static_cast<size_t>(k)] - ammo[static_cast<size_t>(k)];
         return d > 0 ? static_cast<int64_t>(std::lround(d)) : 0;
@@ -168,6 +170,7 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
       }
     }
     b.life[i] = life;
+    b.health[i] = health;
     b.ammo[i] = ammo;
     b.weapon[i] = weapon;
   }

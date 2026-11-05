@@ -9,7 +9,7 @@ void() enforcer_fire = {
   self.think = enforcer_fire;
   self.nextthink = time + 0.1;
   self.effects = self.effects - (self.effects & EF_MUZZLEFLASH);
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   face_enemy();
   if (self.anim_step == 4 || self.anim_step == 6) {
     sound(self, CHAN_WEAPON, "enforcer/enfire.wav", 1, ATTN_NORM);
@@ -21,14 +21,14 @@ void() enforcer_fire = {
 };
 
 void() enforcer_missile = {
-  self.anim_step = 0;
+  anim_begin(self.fr_missile);
   enforcer_fire();
 };
 
 void() enforcer_flinch = {
   self.think = enforcer_flinch;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step >= 3) monster_run();
 };
 
@@ -36,7 +36,7 @@ void() enforcer_pain = {
   if (self.pain_finished < time + 1) self.pain_finished = time + 1;
   if (random() < 0.5) sound(self, CHAN_VOICE, "enforcer/pain1.wav", 1, ATTN_NORM);
   else sound(self, CHAN_VOICE, "enforcer/pain2.wav", 1, ATTN_NORM);
-  self.anim_step = 0;
+  anim_begin(self.fr_pain);
   enforcer_flinch();
 };
 
@@ -69,6 +69,12 @@ void() monster_enforcer = {
   self.th_missile = enforcer_missile;
   self.th_pain = enforcer_pain;
   self.th_die = monster_die;
+  self.fr_stand = '0 6 1';
+  self.fr_walk = '7 22 1';
+  self.fr_run = '23 30 1';
+  self.fr_missile = '31 40 1';
+  self.fr_pain = '66 69 1';
+  self.fr_death = '41 54 1';
   walkmonster_start("progs/enforcer.mdl", 80, '-16 -16 -24', '16 16 40');
 };
 
@@ -91,7 +97,7 @@ void() tarbaby_touch = {
 void() tarbaby_bounce = {
   self.think = tarbaby_bounce;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if ((self.anim_step > 2 && (self.flags & FL_ONGROUND)) || self.anim_step > 30) {
     if (self.enemy.health > 0 && can_see(self.enemy) && range_to(self.enemy) <= RANGE_NEAR) {
       tarbaby_jump();
@@ -110,7 +116,7 @@ void() tarbaby_jump = {
   setorigin(self, self.origin);
   self.flags = self.flags - (self.flags & FL_ONGROUND);
   self.touch = tarbaby_touch;
-  self.anim_step = 0;
+  anim_begin(self.fr_leap);
   tarbaby_bounce();
 };
 
@@ -148,6 +154,10 @@ void() monster_tarbaby = {
   self.run_step = 2;
   self.th_check = tarbaby_check;
   self.th_die = tarbaby_die;
+  self.fr_stand = '0 24 1';
+  self.fr_walk = '0 24 1';
+  self.fr_run = '25 49 1';
+  self.fr_leap = '50 59 1';
   walkmonster_start("progs/tarbaby.mdl", 80, '-16 -16 -24', '16 16 40');
 };
 
@@ -157,7 +167,7 @@ void() monster_tarbaby = {
 void() hknight_swing = {
   self.think = hknight_swing;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   ai_charge(10);
   if (self.anim_step == 1) sound(self, CHAN_WEAPON, "hknight/slash1.wav", 1, ATTN_NORM);
   if (self.anim_step == 3 || self.anim_step == 5) melee_blow(3);
@@ -165,7 +175,7 @@ void() hknight_swing = {
 };
 
 void() hknight_melee = {
-  self.anim_step = 0;
+  anim_begin(self.fr_melee);
   hknight_swing();
 };
 
@@ -173,7 +183,7 @@ void() hknight_melee = {
 void() hknight_charge = {
   self.think = hknight_charge;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   ai_charge(20);
   if (self.anim_step >= 4 && self.anim_step <= 10) melee_blow(2);
   if (self.anim_step >= 12) monster_run();
@@ -185,7 +195,7 @@ void() hknight_cast = {
   local float i;
   self.think = hknight_cast;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   face_enemy();
   if (self.anim_step == 1) sound(self, CHAN_VOICE, "hknight/attack1.wav", 1, ATTN_NORM);
   if (self.anim_step == 4) {
@@ -200,7 +210,7 @@ void() hknight_cast = {
 };
 
 void() hknight_missile = {
-  self.anim_step = 0;
+  anim_begin(self.fr_missile);
   hknight_cast();
 };
 
@@ -217,7 +227,7 @@ float() hknight_check = {
   if (d <= 250 && fabs(self.enemy.origin_z - self.origin_z) <= 20) {
     self.attack_finished = time + 2;
     face_enemy();
-    self.anim_step = 0;
+    anim_begin(self.fr_leap);
     hknight_charge();
     return TRUE;
   }
@@ -227,14 +237,14 @@ float() hknight_check = {
 void() hknight_flinch = {
   self.think = hknight_flinch;
   self.nextthink = time + 0.1;
-  self.anim_step = self.anim_step + 1;
+  anim_tick();
   if (self.anim_step >= 3) monster_run();
 };
 
 void() hknight_pain = {
   if (self.pain_finished < time + 1) self.pain_finished = time + 1;
   sound(self, CHAN_VOICE, "hknight/pain1.wav", 1, ATTN_NORM);
-  self.anim_step = 0;
+  anim_begin(self.fr_pain);
   hknight_flinch();
 };
 
@@ -262,5 +272,13 @@ void() monster_hell_knight = {
   self.th_check = hknight_check;
   self.th_pain = hknight_pain;
   self.th_die = monster_die;
+  self.fr_stand = '0 8 1';
+  self.fr_walk = '9 28 1';
+  self.fr_run = '29 36 1';
+  self.fr_melee = '112 121 1';
+  self.fr_missile = '155 165 1';
+  self.fr_leap = '63 78 1';
+  self.fr_pain = '37 41 1';
+  self.fr_death = '42 53 1';
   walkmonster_start("progs/hknight.mdl", 250, '-16 -16 -24', '16 16 40');
 };
