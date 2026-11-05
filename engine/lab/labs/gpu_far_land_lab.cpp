@@ -1,10 +1,12 @@
 // LAB `far-land`: THE FAR LAND (engine/render/far_land.hpp) LOOKED AT: each kind round a site
 // 60 m across (a small world's circle), seen from an eye standing high over the site's floor, as
 // a player on a world's roof would see it over its walls: by DAY (the sun 35 degrees up), LOW
-// (the sun 5 degrees up: the ranges' shadows long across the valleys) and by NIGHT (the sun gone,
-// a full moon 35 degrees up). The eye looks along the bearing where the ranges stand highest.
-// For the first kind, the same view under `--warm`'s temperatures, so the snow line is seen to
-// follow the air: colder brings the snow down the ranges and onto the lake, warmer lifts it off.
+// (the sun 5 degrees up: the ranges' shadows long across the valleys), by NIGHT (the sun gone,
+// a full moon 35 degrees up) and, for a kind with open water, the moon's GLADE (the moon 7
+// degrees up over the water, its light in a path across the ripples). The eye looks along the
+// bearing where the ranges stand highest. For the first kind, the same view under `--warm`'s
+// temperatures, so the snow line is seen to follow the air: colder brings the snow down the ranges
+// and onto the lake, warmer lifts it off.
 //
 // The digest holds each kind's mesh (its vertices and triangles, its highest point, its snow line
 // and its water's level, all from the CPU's build, the same bits on every machine); the pictures
@@ -46,16 +48,19 @@ constexpr double kDeg = kPi / 180;
 constexpr double kEyeUp = 60;  // m over the site's floor
 
 // The sun's elevation and its bearing off the eye's heading (degrees): from the side by day, low
-// and ahead to one side for the long shadows, and by night the moon there.
+// and ahead to one side for the long shadows; by night the moon `moon_el` up on the far side of the
+// sky from the sun. The GLADE looks along the way the land is lowest (open water, for a kind with
+// water) with the moon low ahead, so its light lies across the water in a path.
 struct Light {
   const char* id;
   const char* title;
-  double sun_el, sun_off;
-  bool night;
+  double sun_el, sun_off, moon_el;
+  bool night, glade;
 };
-constexpr Light kLights[] = {{"day", "BY DAY", 35, 120, false},
-                             {"low", "LOW SUN", 5, 55, false},
-                             {"night", "BY NIGHT", -18, 220, true}};
+constexpr Light kLights[] = {{"day", "BY DAY", 35, 120, 0, false, false},
+                             {"low", "LOW SUN", 5, 55, 0, false, false},
+                             {"night", "BY NIGHT", -18, 220, 35, true, false},
+                             {"glade", "THE MOON'S GLADE", -18, 180, 7, true, true}};
 
 struct Frame {
   ge::gpu::PipelineSet pipelines;
@@ -114,6 +119,45 @@ double highest_bearing(const gr::FarMesh& mesh, double near_m) {
   return 2 * kPi * best / b;
 }
 
+// The bearing (rad, a heading) where the land's horizon seen from the site is lowest: the open
+// water, where a kind has any, or its lowest ground.
+double lowest_bearing(const gr::FarMesh& mesh) {
+  int best = 0;
+  for (int b = 1; b < gr::kFarBearings; ++b) {
+    if (gr::far_horizon(mesh.vertices[0], b) < gr::far_horizon(mesh.vertices[0], best)) best = b;
+  }
+  return 2 * kPi * best / gr::kFarBearings;
+}
+
+// Whether a kind has water a moon can lie on (not lava, not ice under its valley's air).
+bool has_open_water(const gr::FarLandKind& k) {
+  return k.water >= 0 && k.liquid == gr::FarLiquid::water && k.temp_c > 0;
+}
+
+// ONE SHOT of the run, planned before the device is made, so the device's branch and the
+// placeholders' take the same ids in the same order (the digest hashes them so).
+struct Planned {
+  size_t kind;
+  const Light* light;  // null: the first kind's day, warmed by `warm`
+  double warm;
+  std::string id;
+};
+
+std::vector<Planned> plan(const std::vector<const gr::FarLandKind*>& kinds,
+                          const std::vector<double>& warms) {
+  std::vector<Planned> out;
+  for (size_t i = 0; i < kinds.size(); ++i) {
+    for (const Light& l : kLights) {
+      if (l.glade && !has_open_water(*kinds[i])) continue;
+      out.push_back({i, &l, 0, std::string(kinds[i]->name) + "-" + l.id});
+    }
+    if (i != 0) continue;
+    for (double warm : warms)
+      out.push_back({i, nullptr, warm, std::string(kinds[i]->name) + "-warm" + fixed(warm, 0)});
+  }
+  return out;
+}
+
 // The view: the eye high over the site looking along `heading`, a layer of fair heaps over the
 // land, the kind's sky, the light's sun (and at night the moon).
 gr::FrameView view_of(const gr::FarLandKind& kind, const Light& light, double heading,
@@ -146,7 +190,8 @@ gr::FrameView view_of(const gr::FarLandKind& kind, const Light& light, double he
   v.clouds.quarter = false;
   v.clouds.spread = false;
   if (light.night) {
-    const gr::Moon moon{35 * kDeg, heading + (light.sun_off - 180) * kDeg, 0.98, gr::kMoonMeanKm};
+    const gr::Moon moon{light.moon_el * kDeg, heading + (light.sun_off - 180) * kDeg, 0.98,
+                        gr::kMoonMeanKm};
     gr::set_night(v, moon, 46, 80);
   }
   return v;
@@ -223,14 +268,7 @@ void run(gl::Lab& lab) {
   }
   lab.table(table);
 
-  // The shots' ids in the order the device branch takes them (each kind's lights, the first
-  // kind's warmed views right after its own), so the placeholders give the same digest.
-  std::vector<std::string> ids;
-  for (size_t i = 0; i < kinds.size(); ++i) {
-    for (const Light& l : kLights) ids.push_back(std::string(kinds[i]->name) + "-" + l.id);
-    if (i != 0) continue;
-    for (double warm : warms) ids.push_back(std::string(kinds[i]->name) + "-warm" + fixed(warm, 0));
-  }
+  const std::vector<Planned> shots = plan(kinds, warms);
 
   auto device = ge::gpu::create_device({.label = "far-land", .validation = 1});
   if (!device) {
@@ -239,7 +277,7 @@ void run(gl::Lab& lab) {
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
     lab.note("No GPU adapter on this machine: no pictures.");
-    for (const std::string& id : ids) ls::placeholders(lab, {id.c_str()});
+    for (const Planned& p : shots) ls::placeholders(lab, {p.id.c_str()});
     ls::checked(lab, 0, 0);
     return;
   }
@@ -274,50 +312,55 @@ void run(gl::Lab& lab) {
   f.rec.init(d, "far-land.timer", 16);
   f.out = ge::gpu::create_target(d, "far-land.final", w, h);
 
-  for (size_t i = 0; i < kinds.size(); ++i) {
-    const gr::FarLandKind& k = *kinds[i];
-    const gr::FarMesh& mesh = meshes[i];
-    d.loading = true;
-    gr::set_far_land(d, f.land, k, site, mesh);
-    ge::gpu::end_load(d);
-    const double heading = lab.arg("heading").empty() ? highest_bearing(mesh, k.near_m)
-                                                      : lab.arg_num("heading") * kDeg;
-    const double snow = gr::far_snow_line(k, mesh, 0);
-    const std::vector<std::pair<std::string, std::string>> inputs_of = {
+  size_t loaded = kinds.size();
+  for (const Planned& p : shots) {
+    const gr::FarLandKind& k = *kinds[p.kind];
+    const gr::FarMesh& mesh = meshes[p.kind];
+    if (!lab.wants(p.id)) continue;
+    if (loaded != p.kind) {
+      d.loading = true;
+      gr::set_far_land(d, f.land, k, site, mesh);
+      ge::gpu::end_load(d);
+      loaded = p.kind;
+    }
+    const bool glade = p.light != nullptr && p.light->glade;
+    const double heading = glade                        ? lowest_bearing(mesh)
+                           : lab.arg("heading").empty() ? highest_bearing(mesh, k.near_m)
+                                                        : lab.arg_num("heading") * kDeg;
+    std::vector<std::pair<std::string, std::string>> inputs_of = {
         {"kind", k.name},
         {"sky", k.sky},
         {"eye", fixed(kEyeUp, 0) + " m over the floor"},
         {"heading", fixed(heading / kDeg, 0) + " deg"}};
-    for (const Light& l : kLights) {
-      const std::string id = std::string(k.name) + "-" + l.id;
-      if (!lab.wants(id)) continue;
-      const gr::FrameView v = view_of(k, l, heading, site.floor_y);
-      std::string title = std::string(k.name) + " " + l.title;
-      for (char& c : title) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-      gl::Shot shot{id, title,
-                    std::string(k.what) + "; the snow line at " + fixed(snow, 0) +
-                        " m (the valley's " + fixed(k.temp_c, 0) + " C cooled 6.5 K a km).",
-                    "ranges to the horizon on the Earth's curve, fading into the far air; snow "
-                    "only above the snow line and off the steepest rock; water mirroring the sky; "
-                    "no seam at the clouds' base",
-                    inputs_of};
-      shot.inputs.push_back({"sun", fixed(l.sun_el, 0) + " deg"});
-      lab.shot(shot, draw(d, f, v, 0), Det::measured);
-    }
-    if (i != 0) continue;
-    for (double warm : warms) {
-      const std::string id = std::string(k.name) + "-warm" + fixed(warm, 0);
-      if (!lab.wants(id)) continue;
+    if (p.light == nullptr) {
       const gr::FrameView v = view_of(k, kLights[0], heading, site.floor_y);
-      const double line = gr::far_snow_line(k, mesh, warm);
-      gl::Shot shot{id, std::string("WARMED ") + fixed(warm, 0) + " C",
-                    std::string(k.name) + " with its valley " + fixed(k.temp_c + warm, 0) +
+      const double line = gr::far_snow_line(k, mesh, p.warm);
+      gl::Shot shot{p.id, std::string("WARMED ") + fixed(p.warm, 0) + " C",
+                    std::string(k.name) + " with its valley " + fixed(k.temp_c + p.warm, 0) +
                         " C: the snow line at " + fixed(line, 0) + " m.",
-                    "colder: the snow down the ranges and the lake frozen under -3 C; warmer: "
+                    "colder: the snow down the ranges and the lake frozen under -1 C; warmer: "
                     "only the highest crests white",
                     inputs_of};
-      lab.shot(shot, draw(d, f, v, warm), Det::measured);
+      lab.shot(shot, draw(d, f, v, p.warm), Det::measured);
+      continue;
     }
+    const Light& l = *p.light;
+    const gr::FrameView v = view_of(k, l, heading, site.floor_y);
+    std::string title = std::string(k.name) + " " + l.title;
+    for (char& c : title) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    const double snow = gr::far_snow_line(k, mesh, 0);
+    gl::Shot shot{p.id, title,
+                  std::string(k.what) + "; the snow line at " + fixed(snow, 0) +
+                      " m (the valley's " + fixed(k.temp_c, 0) + " C cooled 6.5 K a km).",
+                  glade ? "the moon low over the water and its light on the ripples in a path "
+                          "from the shore toward it, widest far off, sparkling near"
+                        : "ranges to the horizon on the Earth's curve, fading into the far air; "
+                          "snow only above the snow line and off the steepest rock; water "
+                          "mirroring the sky; no seam at the clouds' base",
+                  inputs_of};
+    shot.inputs.push_back({"sun", fixed(l.sun_el, 0) + " deg"});
+    if (l.night) shot.inputs.push_back({"moon", fixed(l.moon_el, 0) + " deg"});
+    lab.shot(shot, draw(d, f, v, 0), Det::measured);
   }
   ls::checked(lab, static_cast<int>(d.errors.load()), static_cast<int>(d.pipelines_after_load));
 }

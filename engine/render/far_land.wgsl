@@ -4,12 +4,13 @@
 // strata), grass or dry grass by the moisture, forest under the tree line, sand at the shore,
 // snow where the air is under freezing and the slope holds it. Lit by the key light past the
 // ranges' own horizons and by the sky by the share of it each point sees; the water a mirror of
-// the sky with the sun's glint (ice once its air is well under freezing; a kind's lava a crust
+// the sky with the key light's glade across the ripples (ice once its air is well under freezing; a kind's lava a crust
 // with its light through the breaks). Then the frame's haze, and past the aerial volume's reach
 // the kind's own far air closing toward the sky at the horizon.
 //
 // ge:summary The far land's draw: ground by height, slope and frost; water, ice or lava; haze
 // ge:keywords render far-land wgsl snowline lapse tree-line strata horizon-shadow water-glint
+// ge:keywords moon-glade glitter-path sun-glint ggx
 // ge:keywords lava far-haze sky-share
 // ge:skill render
 #include "render/wgsl/frame.wgsl"
@@ -35,6 +36,10 @@ struct FarVertex {
 const kFarHalfPi = 1.5707963;
 const kFarIce = -1.0;  // C: the water's air under this, it is ice
 const kFarLavaWhite = 1.2;  // the lava's breaks at most this many times the display's white
+// The ripples' roughness as a microfacet lobe: where the shader draws them, and far off where a pixel
+// spans them.
+const kFarGladeNear = 0.12;
+const kFarGladeFar = 0.3;
 
 struct VertexOut {
   @builtin(position) position: vec4f,
@@ -187,7 +192,12 @@ fn fs_main(in: VertexOut) -> FragmentOut {
       let f = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
       let body = mix(far_colour(7), far_colour(8), 0.25 * calm) / PI *
                  (key * max(frame.sun.y, 0.0) + sky_irradiance(up));
-      let glint = key * pow(max(dot(r, frame.sun.xyz), 0.0), 600.0) * 40.0 * f;
+      // THE GLADE: the key light (the sun, or the moon at night) off the ripples as microfacets.
+      // Near, the ripples the shader draws sparkle on a tight lobe; far, the ripples a pixel cannot
+      // hold become the lobe's roughness, so the light lies across the water in a path toward it,
+      // widening with distance. Past the ranges' horizon (`key`'s shadow) there is none.
+      let ripples = Surface(vec3f(0.0), mix(kFarGladeFar, kFarGladeNear, calm), 0.0, 0.25, 0.0, 0.0);
+      let glint = key * surface_specular(ripples, n, v, frame.sun.xyz);
       c = body * (1.0 - f) + sky_luminance(r) * f + glint;
     }
   } else {
