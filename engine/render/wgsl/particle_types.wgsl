@@ -14,8 +14,31 @@ struct Particle {
   opacity: f32,
   kelvin: f32,
   cool_s: f32,
-  tint: vec3f,  // vec3f's 16-byte alignment: before `grow`, so the slot is 80 bytes
+  tint: vec3f,  // vec3f's 16-byte alignment: before `grow`
   grow: f32,
+  floor_y: f32,  // its own floor (world y, m), where it hops by `bounce` and comes to rest
+  bounce: f32,
+  pad0: f32,
+  pad1: f32,
+}
+
+const kFloorRest = 0.35;   // m/s: slower than this down, it lies still
+const kFloorSlide = 0.55;  // its way along the floor kept at a hop
+
+// Its own floor: a hop back up at `bounce` of its speed while it comes down fast, else at rest.
+fn on_floor(q: Particle) -> Particle {
+  var p = q;
+  if (p.p.y >= p.floor_y || p.v.y >= 0.0) {
+    return p;
+  }
+  p.p.y = p.floor_y;
+  if (-p.v.y * p.bounce > kFloorRest) {
+    p.v = vec3f(p.v.x * kFloorSlide, -p.v.y * p.bounce, p.v.z * kFloorSlide);
+  } else {
+    p.v = vec3f(0.0);
+    p.age = max(p.age, p.life * 0.7);
+  }
+  return p;
 }
 
 struct ParticleParams {

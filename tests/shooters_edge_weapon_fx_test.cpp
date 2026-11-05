@@ -85,16 +85,33 @@ TEST(the_rockets_trail_spreads_and_its_flame_points_back) {
   CHECK(f.shot.born_s < 2.0 && f.shot.look == &fx::exhaust_look());
 }
 
-TEST(a_hit_throws_its_surfaces_burst_and_nothing_off_the_sky) {
+TEST(a_hit_throws_its_surfaces_burst_in_the_walls_colour_and_nothing_off_the_sky) {
   const double at[3] = {0, 0, 0}, n[3] = {0, 0, -1}, dir[3] = {0, 0, 1};
   std::vector<gr::Blast> dust;
   fx::Particles stone, metal, sky;
-  fx::hit(at, n, dir, "stone", false, 5, 0.0, &dust, &stone);
-  fx::hit(at, n, dir, "metal", true, 5, 0.0, nullptr, &metal);
-  fx::hit(at, n, dir, "sky", false, 5, 0.0, &dust, &sky);
+  fx::WallHit w;
+  for (int k = 0; k < 3; ++k) w.at[k] = at[k], w.normal[k] = n[k], w.dir[k] = dir[k];
+  w.floor_y = -1.5;
+  w.colour[0] = 0.3f, w.colour[1] = 0.2f, w.colour[2] = 0.1f;  // a brown wall
+  fx::hit(w, 5, 0.0, &dust, &stone);
+  fx::WallHit steel = w;
+  steel.surface = "metal";
+  steel.nail = true;
+  fx::hit(steel, 5, 0.0, nullptr, &metal);
+  fx::WallHit sky_hit = w;
+  sky_hit.surface = "sky";
+  fx::hit(sky_hit, 5, 0.0, &dust, &sky);
   CHECK(dust.size() == 1);  // the stone's puff; the sky none
   CHECK(!stone.empty() && !metal.empty() && sky.empty());
-  for (const auto& p : stone) CHECK(p.v[2] <= 1e-6f);  // off the face, back toward the shooter
+  int flakes = 0, browned = 0;
+  for (const auto& p : stone) {
+    CHECK(p.v[2] <= 1e-6f);     // off the face, back toward the shooter
+    if (p.grow > 0) continue;   // the wisp
+    CHECK(p.floor_y == -1.5f);  // what it knocks loose comes down on the floor under it
+    flakes += p.bounce > 0 ? 1 : 0;
+    browned += p.tint[0] > p.tint[2] ? 1 : 0;  // in the wall's own colour
+  }
+  CHECK(flakes >= 2 && browned >= 2);
   int sparks = 0;
   for (const auto& p : metal) sparks += p.kelvin > 0 ? 1 : 0;
   CHECK(sparks > 0);  // a nail off metal strikes sparks
@@ -121,4 +138,20 @@ TEST(every_bolt_style_is_numbered_and_its_light_is_a_glow) {
   CHECK(fx::bolt_look(3).wander == bolt.wander && fx::bolt_look(2).wander == arc.wander);
   CHECK(fx::bolt_look(4).filaments > 1);  // the braid's rope
   for (int s = 1; s <= 4; ++s) CHECK(fx::bolt_look(s).light_cd < bolt.light_cd);
+}
+
+TEST(a_chip_hops_on_its_floor_and_comes_to_rest) {
+  gr::Particle p{};
+  p.p[1] = 1;
+  p.v[0] = 1;
+  p.v[1] = -4;
+  p.life = 5;
+  p.fall = 1;
+  p.floor_y = 0;
+  p.bounce = 0.3f;
+  gr::step_particle(p, 0.3f);  // past the floor: a hop up at 0.3 of its speed, slowed along it
+  CHECK(p.p[1] == 0 && p.v[1] > 0 && p.v[1] < 2.2f && p.v[0] < 1);  // (4 + 9.81 * 0.3) * 0.3
+  for (int i = 0; i < 400; ++i) gr::step_particle(p, 0.01f);
+  CHECK(p.p[1] == 0 && p.v[0] == 0 && p.v[1] == 0);  // lying still
+  CHECK(p.age >= p.life * 0.7f);                     // and fading
 }

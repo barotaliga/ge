@@ -102,6 +102,7 @@ namespace {
 // The weapon's light off the floor's: the share that is all round and the share from above, and
 // the brightest the floor's light is taken as (twice the light as baked).
 constexpr float kHeldAmbient = 0.55f, kHeldDirect = 0.45f, kHeldMost = 1.6f;
+constexpr float kParticleSoftM = 0.06f;  // the particles' softening against what is behind them
 
 // THE LIGHT AT A POINT (engine metres), for the smoke there: the open sky's share (1 when a march
 // straight up the map's tree meets a sky leaf before a solid one) and the lightmap's light on the
@@ -348,7 +349,11 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     gr::set_grade(d, f.post[0], look::gamma_grade(f.classic_grade, f.gamma));
     gr::set_grade(d, f.post[1], look::gamma_grade(gr::identity_grade(), f.gamma));
   } else if (step == 1) {
-    gr::create_particles(d, f.pipelines, f.particles, f.layout);
+    // Softened over a few centimetres only: a hit's dust and a scorch's smoke live a hand's width
+    // off the wall, where a wider softening would fade them to nothing.
+    gr::ParticleSettings ps;
+    ps.soft_m = kParticleSoftM;
+    gr::create_particles(d, f.pipelines, f.particles, f.layout, ps);
     gr::create_explosions(d, f.pipelines, f.explosions, f.layout);
     gr::BeamSettings bs;  // the marks' burns too (world_fx.hpp's marks)
     bs.max_burn_verts = kMarks * 240;

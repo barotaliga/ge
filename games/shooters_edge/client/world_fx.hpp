@@ -51,6 +51,7 @@
 // ge:skill render shooter
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -103,10 +104,24 @@ struct HeldBeam {
 // (render/beam.hpp's `beam_burns`). Kept in a pool of kMarks, the oldest reused; drawn as the
 // beams' pass's burns (soot and ember) through the decal masks' atlas (`mark_atlas`).
 inline constexpr uint32_t kMarks = 128;
-inline constexpr int kMarkVariants = 4;                   // the atlas's masks a kind
-inline constexpr int kMarkAtlasPx = 128;                  // a mask's side in it
-inline constexpr float kHotEmberCd = 6000;                // a fresh scorch's glow, cd/m^2
-inline constexpr double kHoleM = 0.2, kNailHoleM = 0.24;  // boxes: the hole about half
+inline constexpr int kMarkVariants = 4;     // the atlas's masks a kind
+inline constexpr int kMarkAtlasPx = 128;    // a mask's side in it
+inline constexpr float kHotEmberCd = 6000;  // a fresh scorch's glow, cd/m^2
+inline constexpr double kHoleM = 0.16, kNailHoleM = 0.2;
+inline constexpr double kPelletSpread = 0.04;  // a shot's pellets' cone, rad: one message's holes
+// THE WOUNDS (ce_decals): where a round struck a body, a hole with blood splattered round it,
+// pinned to the body's own triangle there (body_triangles, the point's place on it), so it rides
+// the figure's frames and turns; drawn each frame as specks lit by the room. A body keeps
+// kWoundsEach, the oldest let go; all are gone when it comes back to life (a respawn).
+inline constexpr size_t kWoundsEach = 24, kWoundsAll = 192;
+inline constexpr float kWoundReachU = 64;  // a hit this near a body's origin is on it, units
+struct Wound {
+  int entity = 0;
+  uint32_t tri = 0;    // its triangle of the body's skin
+  float a = 0, b = 0;  // its place on it (barycentric, from its first corner)
+  uint32_t seed = 0;   // its splatter
+  float size = 1;      // the splatter's spread: a burst of drops, a share more
+};  // boxes: the hole about half
 // The faces the marks are pressed onto: the mesh and its receivers (which point into it), kept
 // together.
 struct MarkFaces {
@@ -135,13 +150,16 @@ struct FxState {
     sh::Vec3f at, dir;
   };
   std::unordered_map<int, Flight> flights, flights_next;
-  std::size_t explosions_seen = 0;  // of Listen::explosions
-  std::vector<Blast> lit;           // the explosions whose light still fades
-  double hurt = 0;                  // the hit's flash now (effects::Screen::hurt)
-  double armour = 0;                // the armour's share of it (Screen::armour)
-  std::size_t blows_seen = 0;       // of Listen::blows
-  std::size_t effects_seen = 0;     // of Listen::effects
-  float health = 0;                 // the last frame's
+  std::unordered_map<uint32_t, std::array<float, 3>> wall_colours;  // each texture's, as hit
+  std::vector<Wound> wounds;
+  std::unordered_map<int, float> wound_health;  // each wounded body's health a frame ago
+  std::size_t explosions_seen = 0;              // of Listen::explosions
+  std::vector<Blast> lit;                       // the explosions whose light still fades
+  double hurt = 0;                              // the hit's flash now (effects::Screen::hurt)
+  double armour = 0;                            // the armour's share of it (Screen::armour)
+  std::size_t blows_seen = 0;                   // of Listen::blows
+  std::size_t effects_seen = 0;                 // of Listen::effects
+  float health = 0;                             // the last frame's
   uint32_t seed = 1;
   WarpWatch warps;                       // the players' arrivals and departures (warps.hpp)
   std::unordered_map<int, Placed> seen;  // each player as drawn last frame, by entity

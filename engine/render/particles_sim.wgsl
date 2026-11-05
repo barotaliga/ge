@@ -29,7 +29,7 @@ fn sim(@builtin(global_invocation_id) id: vec3u) {
   if (p.age >= p.life || pp.step.x <= 0.0) {
     return;
   }
-  p = fly(p, pp.step.x, pp.air.xyz);
+  p = on_floor(fly(p, pp.step.x, pp.air.xyz));
   let h = field_height(heights, ground, p.p.xz);
   // Under the snow and falling: it has come down on it. (One under it and rising is still coming
   // up out of the snow it was thrown from: a ski sinks into soft snow.)

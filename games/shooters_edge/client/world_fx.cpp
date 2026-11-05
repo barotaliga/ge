@@ -7,6 +7,7 @@
 #include "shooters_edge/client/world_fx.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "brush/map.hpp"
@@ -64,8 +65,8 @@ void engine_dir(const sh::Vec3f& d, double out[3]) {
 // THE FACE A ROUND HIT: the map's triangle the line from `from` through `at` (map units) crosses
 // within a few units of `at`, among the surfaces marked in the leaf just before it: its normal
 // toward `from` (map axes, unit) and its texture's surface class. False when no triangle is near.
-bool face_hit(const ge::brush::Map& m, const sh::Vec3f& from, const sh::Vec3f& at, sh::Vec3f* n,
-              ge::detail::SurfaceClass* surface) {
+bool face_hit(const ge::brush::Map& m, const sh::Vec3f& from, const sh::Vec3f& at,
+              uint32_t* texture, sh::Vec3f* n, ge::detail::SurfaceClass* surface) {
   const double d[3] = {at.x - from.x, at.y - from.y, at.z - from.z};
   const double len = ge::core::hypot3(d[0], d[1], d[2]);
   if (len < 1e-3 || m.leaves.empty()) return false;
@@ -111,6 +112,7 @@ bool face_hit(const ge::brush::Map& m, const sh::Vec3f& from, const sh::Vec3f& a
       const double sign = facing > 0 ? -1.0 : 1.0;  // toward `from`
       *n = {static_cast<float>(sign * nn[0] / nl), static_cast<float>(sign * nn[1] / nl),
             static_cast<float>(sign * nn[2] / nl)};
+      *texture = sf.texture;
       const ge::brush::Texture* tex =
           sf.texture < m.textures.size() ? &m.textures[sf.texture] : nullptr;
       *surface = tex == nullptr                           ? ge::detail::SurfaceClass::unknown
@@ -169,6 +171,80 @@ bool struck_along(const LoadedMap& m, const std::unordered_map<int, FxState::Fli
   engine_dir(tr.plane.normal, normal);
   *off_m = tr.fraction * kNearSurfaceU * ge::brush::kUnitM;
   return true;
+}
+
+// The floor under a hit at `at` (map units) by a round from `shooter`: the first solid a line
+// straight down from two units back along the round's line meets, as world y (m); far below when
+// none is within kFloorReachU.
+constexpr float kFloorReachU = 1024;
+double floor_under(const LoadedMap& m, const sh::Vec3f& at, const sh::Vec3f& shooter) {
+  if (m.bsp.world.models.empty()) return -1e9;
+  const sh::Hull& hull = m.bsp.world.models[0].hulls[0];
+  const float bx = shooter.x - at.x, by = shooter.y - at.y, bz = shooter.z - at.z;
+  const float bl = std::max(std::sqrt(bx * bx + by * by + bz * bz), 1e-3f);
+  const sh::Vec3f from = {at.x + bx / bl * 2, at.y + by / bl * 2, at.z + bz / bl * 2};
+  const sh::HullTrace tr = sh::trace_hull(hull, from, {from.x, from.y, from.z - kFloorReachU});
+  if (tr.startsolid || tr.fraction >= 1) return -1e9;
+  return engine_point(tr.endpos).y;
+}
+
+// The mean colour of texture `index` (linear), off the pack's palette; kept a map. All below 0
+// without the texture's pixels or a palette.
+void wall_colour(FxState& s, const ge::brush::Map& m, uint32_t index, float out[3]) {
+  out[0] = out[1] = out[2] = -1;
+  if (const auto c = s.wall_colours.find(index); c != s.wall_colours.end()) {
+    for (int k = 0; k < 3; ++k) out[k] = c->second[k];
+    return;
+  }
+  std::array<float, 3> mean = {-1, -1, -1};
+  if (index < m.textures.size() && !m.textures[index].indexed.empty() && s.palette.size() >= 768) {
+    double sum[3] = {0, 0, 0};
+    const std::vector<uint8_t>& px = m.textures[index].indexed;
+    for (const uint8_t i : px)
+      for (int k = 0; k < 3; ++k) {
+        const double c = s.palette[size_t(i) * 3 + size_t(k)] / 255.0;
+        sum[k] += c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
+      }
+    for (int k = 0; k < 3; ++k) mean[k] = static_cast<float>(sum[k] / double(px.size()));
+  }
+  s.wall_colours[index] = mean;
+  for (int k = 0; k < 3; ++k) out[k] = mean[k];
+}
+
+// Two unit ways square to `n` and to each other.
+void tangents(const double n[3], double a[3], double b[3]) {
+  const double up[3] = {std::abs(n[1]) < 0.9 ? 0.0 : 1.0, std::abs(n[1]) < 0.9 ? 1.0 : 0.0, 0};
+  a[0] = up[1] * n[2] - up[2] * n[1];
+  a[1] = up[2] * n[0] - up[0] * n[2];
+  a[2] = up[0] * n[1] - up[1] * n[0];
+  const double al = std::max(ge::core::hypot3(a[0], a[1], a[2]), 1e-9);
+  for (int k = 0; k < 3; ++k) a[k] /= al;
+  b[0] = n[1] * a[2] - n[2] * a[1];
+  b[1] = n[2] * a[0] - n[0] * a[2];
+  b[2] = n[0] * a[1] - n[1] * a[0];
+}
+
+// `v` (a model's own frame) turned by the model's rotation `q` (x, y, z, w) into the world's.
+void turn_by(const float q[4], const double v[3], double out[3]) {
+  const double x = q[0], y = q[1], z = q[2], w = q[3];
+  const double t[3] = {2 * (y * v[2] - z * v[1]), 2 * (z * v[0] - x * v[2]),
+                       2 * (x * v[1] - y * v[0])};
+  out[0] = v[0] + w * t[0] + (y * t[2] - z * t[1]);
+  out[1] = v[1] + w * t[1] + (z * t[0] - x * t[2]);
+  out[2] = v[2] + w * t[2] + (x * t[1] - y * t[0]);
+}
+
+// Triangle `k` of a body's skin (nine floats a triangle, its model's frame) in the world: its
+// corners into `c`.
+void skin_corners(const std::vector<float>& skin, size_t k, const double at[3], const float q[4],
+                  double c[3][3]) {
+  for (int i = 0; i < 3; ++i) {
+    const double local[3] = {skin[k * 9 + size_t(i) * 3], skin[k * 9 + size_t(i) * 3 + 1],
+                             skin[k * 9 + size_t(i) * 3 + 2]};
+    double o[3];
+    turn_by(q, local, o);
+    for (int j = 0; j < 3; ++j) c[i][j] = at[j] + o[j];
+  }
 }
 
 // The map's world faces (no sky, no liquid) as the marks' receivers, in engine metres, each
@@ -308,6 +384,209 @@ FxSwitches fx_switches(const look::Picture& picture) {
   return s;
 }
 
+namespace {
+
+// The point on triangle `c` nearest `p`, as its place from the first corner (a, b).
+void nearest_on(const double c[3][3], const double p[3], float* a, float* b, double* d2) {
+  double e1[3], e2[3], w[3];
+  for (int k = 0; k < 3; ++k) {
+    e1[k] = c[1][k] - c[0][k];
+    e2[k] = c[2][k] - c[0][k];
+    w[k] = p[k] - c[0][k];
+  }
+  const double d11 = e1[0] * e1[0] + e1[1] * e1[1] + e1[2] * e1[2];
+  const double d12 = e1[0] * e2[0] + e1[1] * e2[1] + e1[2] * e2[2];
+  const double d22 = e2[0] * e2[0] + e2[1] * e2[1] + e2[2] * e2[2];
+  const double w1 = w[0] * e1[0] + w[1] * e1[1] + w[2] * e1[2];
+  const double w2 = w[0] * e2[0] + w[1] * e2[1] + w[2] * e2[2];
+  const double det = d11 * d22 - d12 * d12;
+  double u = det > 1e-12 ? (d22 * w1 - d12 * w2) / det : 0.0;
+  double v = det > 1e-12 ? (d11 * w2 - d12 * w1) / det : 0.0;
+  u = std::clamp(u, 0.0, 1.0);
+  v = std::clamp(v, 0.0, 1.0 - u);
+  double q[3];
+  for (int k = 0; k < 3; ++k) q[k] = c[0][k] + u * e1[k] + v * e2[k] - p[k];
+  *a = static_cast<float>(u);
+  *b = static_cast<float>(v);
+  *d2 = q[0] * q[0] + q[1] * q[1] + q[2] * q[2];
+}
+
+// A wound where a round struck `at` (map units; `p` the same in the world), on the body standing
+// nearest it: the triangle of its skin nearest the point.
+void wound(FxState& s, const std::vector<Placed>& placed, const sh::Vec3f& at, const double p[3],
+           const ge::camera::Vec3& from, int drops, double t) {
+  if (s.models == nullptr) return;
+  const Placed* body = nullptr;
+  float nearest = kWoundReachU * kWoundReachU;
+  for (const Placed& m : placed) {
+    if (m.entity < 1) continue;
+    const float dx = m.origin.x - at.x, dy = m.origin.y - at.y, dz = m.origin.z - at.z;
+    const float d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 < nearest) {
+      nearest = d2;
+      body = &m;
+    }
+  }
+  if (body == nullptr || !body_triangles(*s.models, *body, t, s.skin) || s.skin.empty()) return;
+  double origin[3];
+  put(engine_point(body->origin), origin);
+  float q[4];
+  const float ang[3] = {body->angles.x, body->angles.y, body->angles.z};
+  models::rotation_of(ang, true, q);
+  Wound w;
+  w.entity = body->entity;
+  w.seed = s.seed++;
+  w.size = 1 + 0.15f * static_cast<float>(drops - 1);
+  // The round's own line, from the shooter through where it struck the body's box, onto the
+  // skin: the first triangle it crosses; else the triangle nearest the point.
+  double dir[3] = {p[0] - from.x, p[1] - from.y, p[2] - from.z};
+  const double dl = std::max(ge::core::hypot3(dir[0], dir[1], dir[2]), 1e-9);
+  for (double& k : dir) k /= dl;
+  const double start[3] = {from.x, from.y, from.z};
+  double first = 1e18, best = 1e18;
+  bool crossed = false;
+  for (size_t k = 0; k < s.skin.size() / 9; ++k) {
+    double c[3][3];
+    skin_corners(s.skin, k, origin, q, c);
+    double e1[3], e2[3], tv[3];
+    for (int j = 0; j < 3; ++j) {
+      e1[j] = c[1][j] - c[0][j];
+      e2[j] = c[2][j] - c[0][j];
+      tv[j] = start[j] - c[0][j];
+    }
+    const double pv[3] = {dir[1] * e2[2] - dir[2] * e2[1], dir[2] * e2[0] - dir[0] * e2[2],
+                          dir[0] * e2[1] - dir[1] * e2[0]};
+    const double det = e1[0] * pv[0] + e1[1] * pv[1] + e1[2] * pv[2];
+    if (std::abs(det) > 1e-12) {
+      const double u = (tv[0] * pv[0] + tv[1] * pv[1] + tv[2] * pv[2]) / det;
+      const double qv[3] = {tv[1] * e1[2] - tv[2] * e1[1], tv[2] * e1[0] - tv[0] * e1[2],
+                            tv[0] * e1[1] - tv[1] * e1[0]};
+      const double v = (dir[0] * qv[0] + dir[1] * qv[1] + dir[2] * qv[2]) / det;
+      const double d = (e2[0] * qv[0] + e2[1] * qv[1] + e2[2] * qv[2]) / det;
+      if (u >= 0 && v >= 0 && u + v <= 1 && d > 0 && d < first) {
+        first = d;
+        crossed = true;
+        w.tri = static_cast<uint32_t>(k);
+        w.a = static_cast<float>(u);
+        w.b = static_cast<float>(v);
+      }
+    }
+    if (crossed) continue;
+    float a = 0, b = 0;
+    double d2 = 0;
+    nearest_on(c, p, &a, &b, &d2);
+    if (d2 < best) {
+      best = d2;
+      w.tri = static_cast<uint32_t>(k);
+      w.a = a;
+      w.b = b;
+    }
+  }
+  s.wounds.push_back(w);
+  // At most kWoundsEach a body and kWoundsAll in all, the oldest let go.
+  size_t on_body = 0;
+  for (const Wound& o : s.wounds) on_body += o.entity == w.entity ? 1 : 0;
+  if (on_body > kWoundsEach) {
+    const auto oldest = std::find_if(s.wounds.begin(), s.wounds.end(),
+                                     [&](const Wound& o) { return o.entity == w.entity; });
+    s.wounds.erase(oldest);
+  }
+  if (s.wounds.size() > kWoundsAll) s.wounds.erase(s.wounds.begin());
+}
+
+constexpr double kWoundLift = 0.07;  // m toward the eye: past the particles' soft band
+
+// A speck of a wound this frame: still, lit by the room (its `grow`, world_draw's rule for the
+// smoke), alive until the next frame's takes its place.
+ge::render::Particle wound_speck(const double at[3], double size, float albedo, float r, float g,
+                                 float b, double dt) {
+  ge::render::Particle q{};
+  for (int k = 0; k < 3; ++k) q.p[k] = static_cast<float>(at[k]);
+  q.life = static_cast<float>(std::max(dt, 1.0 / 240) * 1.5 + 0.004);
+  q.age = q.life * 0.2f;  // past its fade-in
+  q.size = static_cast<float>(size);
+  q.grow = 1e-6f;  // lit by the room
+  q.albedo = albedo;
+  q.opacity = 1;
+  q.tint[0] = r, q.tint[1] = g, q.tint[2] = b;
+  return q;
+}
+
+// Every wound of a body drawn this frame on its skin as it stands: a dark hole, drops round it.
+void draw_wounds(const Listen& l, FxState& s, const std::vector<Placed>& placed,
+                 const ge::camera::Vec3& eye, double t, double dt, effects::Particles& out) {
+  if (s.wounds.empty()) return;
+  // A body come back to life (its health above nothing again, a respawn) is whole.
+  for (auto it = s.wound_health.begin(); it != s.wound_health.end();) {
+    const float h = field_named(l, it->first, "health");
+    if (it->second <= 0 && h > 0) {
+      std::erase_if(s.wounds, [&](const Wound& w) { return w.entity == it->first; });
+      it = s.wound_health.erase(it);
+    } else {
+      it->second = h;
+      ++it;
+    }
+  }
+  for (const Wound& w : s.wounds)
+    if (!s.wound_health.contains(w.entity))
+      s.wound_health[w.entity] = field_named(l, w.entity, "health");
+  if (s.models == nullptr) return;
+  int skinned = -1;  // the body whose skin s.skin holds
+  for (const Placed& m : placed) {
+    if (m.entity < 1) continue;
+    bool any = false;
+    for (const Wound& w : s.wounds) any = any || w.entity == m.entity;
+    if (!any) continue;
+    if (!body_triangles(*s.models, m, t, s.skin)) continue;
+    skinned = m.entity;
+    double origin[3];
+    put(engine_point(m.origin), origin);
+    float q[4];
+    const float ang[3] = {m.angles.x, m.angles.y, m.angles.z};
+    models::rotation_of(ang, true, q);
+    for (const Wound& w : s.wounds) {
+      if (w.entity != skinned || size_t(w.tri) * 9 + 9 > s.skin.size()) continue;
+      double c[3][3];
+      skin_corners(s.skin, w.tri, origin, q, c);
+      double e1[3], e2[3], n[3], at[3];
+      for (int k = 0; k < 3; ++k) {
+        e1[k] = c[1][k] - c[0][k];
+        e2[k] = c[2][k] - c[0][k];
+        at[k] = c[0][k] + w.a * e1[k] + w.b * e2[k];
+      }
+      n[0] = e1[1] * e2[2] - e1[2] * e2[1];
+      n[1] = e1[2] * e2[0] - e1[0] * e2[2];
+      n[2] = e1[0] * e2[1] - e1[1] * e2[0];
+      const double nl = std::max(ge::core::hypot3(n[0], n[1], n[2]), 1e-9);
+      for (double& k : n) k /= nl;
+      double ta[3], tb[3];
+      tangents(n, ta, tb);
+      // Seen only on the side of the body toward the eye; lifted kWoundLift toward it, so the
+      // particles' softening against the skin behind them leaves them whole.
+      double to_eye[3] = {eye.x - at[0], eye.y - at[1], eye.z - at[2]};
+      const double el = std::max(ge::core::hypot3(to_eye[0], to_eye[1], to_eye[2]), 1e-6);
+      for (double& k : to_eye) k /= el;
+      if (n[0] * to_eye[0] + n[1] * to_eye[1] + n[2] * to_eye[2] < 0) continue;
+      // The hole on the skin; the drops round it, the same each frame (its seed).
+      const double hole[3] = {at[0] + to_eye[0] * kWoundLift, at[1] + to_eye[1] * kWoundLift,
+                              at[2] + to_eye[2] * kWoundLift};
+      out.push_back(wound_speck(hole, 0.03, 0.05f, 0.6f, 0.12f, 0.1f, dt));
+      ge::core::Rng r = ge::core::make_rng(w.seed);
+      for (int i = 0; i < 6; ++i) {
+        const double u = ge::core::range(r, -1, 1), v = ge::core::range(r, -1, 1);
+        const double spread = 0.06 * w.size;
+        const double d[3] = {hole[0] + (ta[0] * u + tb[0] * v) * spread,
+                             hole[1] + (ta[1] * u + tb[1] * v) * spread,
+                             hole[2] + (ta[2] * u + tb[2] * v) * spread};
+        out.push_back(
+            wound_speck(d, ge::core::range(r, 0.01, 0.025), 0.3f, 0.75f, 0.04f, 0.03f, dt));
+      }
+    }
+  }
+}
+
+}  // namespace
+
 void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double dt, FxFrame& out) {
   place_models(l, out.models);
   out.births.clear();
@@ -377,6 +656,9 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     s.blasts.clear();
     s.mains.clear();
     s.flights.clear();
+    s.wall_colours.clear();
+    s.wounds.clear();
+    s.wound_health.clear();
     s.marked = nullptr;
     s.beams.clear();
   }
@@ -520,13 +802,14 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     for (double& c : to_eye) c = n > 0 ? c / n : 0;
     if (n == 0) to_eye[1] = 1;
     // The face it landed on, seen along the line from the eye (a beam's from its root).
-    bool on_face = false;  // `face` found the map's triangle
+    bool on_face = false;       // `face` found the map's triangle
+    uint32_t face_texture = 0;  // and its texture
     const auto face = [&](const sh::Vec3f& from, double normal[3], double dir[3]) {
       sh::Vec3f fn{};
       ge::detail::SurfaceClass sc = ge::detail::SurfaceClass::unknown;
       const sh::Vec3f hit = e.kind == EffectKind::beam ? e.end : e.at;
       engine_dir({hit.x - from.x, hit.y - from.y, hit.z - from.z}, dir);
-      on_face = map != nullptr && face_hit(*map, from, hit, &fn, &sc);
+      on_face = map != nullptr && face_hit(*map, from, hit, &face_texture, &fn, &sc);
       if (on_face) {
         engine_dir(fn, normal);
       } else {
@@ -544,16 +827,38 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
         // The hole it leaves in a solid face (none in the sky or a liquid).
         if (s.on.decals && on_face && sc != ge::detail::SurfaceClass::sky &&
             sc != ge::detail::SurfaceClass::liquid) {
-          const uint32_t h = s.seed++ * 2654435761u;
-          mark(s, ge::detail::DecalKind::bullet_hole, p, normal, nail ? kNailHoleM : kHoleM,
-               (h >> 8) % 628 / 100.0, h >> 24, t);
+          // One hole a pellet where it hit; a message that stands for several pellets (a classic
+          // program's one gunshot a shot) has them spread round its point as the shot's cone
+          // spreads them at that range.
+          const int holes = nail ? 1 : std::clamp(e.count, 1, 16);
+          const double range =
+              ge::core::hypot3(eye.x - p[0], eye.y - p[1], eye.z - p[2]) * kPelletSpread;
+          double ta[3], tb[3];
+          tangents(normal, ta, tb);
+          for (int i = 0; i < holes; ++i) {
+            const uint32_t h = s.seed++ * 2654435761u;
+            const double u = holes > 1 ? ((h & 0xff) / 127.5 - 1) * range : 0;
+            const double w = holes > 1 ? (((h >> 16) & 0xff) / 127.5 - 1) * range : 0;
+            const double q[3] = {p[0] + ta[0] * u + tb[0] * w, p[1] + ta[1] * u + tb[1] * w,
+                                 p[2] + ta[2] * u + tb[2] * w};
+            mark(s, ge::detail::DecalKind::bullet_hole, q, normal, nail ? kNailHoleM : kHoleM,
+                 (h >> 8) % 628 / 100.0, h >> 24, t);
+          }
         }
         if (s.on.hits) {
-          // A gunshot's count is its pellets (a match's); each its own hit, spread a little.
+          // A gunshot's count is its pellets (a match's); each its own hit.
+          fx::WallHit w;
+          for (int k = 0; k < 3; ++k) {
+            w.at[k] = p[k];
+            w.normal[k] = normal[k];
+            w.dir[k] = dir[k];
+          }
+          w.surface = ge::detail::surface_name(sc);
+          w.nail = nail;
+          if (on_face && map != nullptr) wall_colour(s, *map, face_texture, w.colour);
+          if (l.map) w.floor_y = floor_under(*l.map, e.at, eye_map);
           const int hits = nail ? 1 : std::clamp(e.count, 1, 4);
-          for (int i = 0; i < hits; ++i)
-            fx::hit(p, normal, dir, ge::detail::surface_name(sc), nail, s.seed++, t, &s.blasts,
-                    &out.births);
+          for (int i = 0; i < hits; ++i) fx::hit(w, s.seed++, t, &s.blasts, &out.births);
         } else {
           // 20 specks a pellet, 10 a nail, 20 a big nail.
           const int specks = e.kind == EffectKind::spike ? 10 * e.count : 20 * e.count;
@@ -564,6 +869,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
       case EffectKind::blood: {
         const bool arc = e.code == 13 && !l.campaign_host;  // a match's beam's blood
         fx::blood(p, arc ? 50 : 20 * e.count, arc, s.seed++, s.palette, &out.births);
+        if (s.on.decals && !arc) wound(s, out.models, e.at, p, eye, std::clamp(e.count, 1, 8), t);
         break;
       }
       case EffectKind::teleport:
@@ -662,6 +968,10 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     }
   }
   burns_of(s, t, out.burns);
+  if (s.on.decals)
+    draw_wounds(l, s, out.models, v.pose.eye, t, dt, out.births);
+  else
+    s.wounds.clear();
   std::erase_if(s.lit, [&](const Blast& b) {
     return t - b.t > std::max(fx::kExplosionLight, kSpriteFrames / kSpriteFps);
   });

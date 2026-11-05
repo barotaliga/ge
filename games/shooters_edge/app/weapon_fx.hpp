@@ -23,9 +23,10 @@
 //   (the engine's jagged bolt by default, its plasma arc or its braid, or a finer-forked bolt),
 //   its lights a cold blue-white glow that does not wash the room out.
 //   Where it lands, blue-white sparks (`bolt_hit`).
-// - THE HITS (`hit`): a pellet's or a nail's hit throws the burst of what it hit (`impact_look_for`
-//   with engine/detail's surface word), its dust a puff through the explosions' pass, its chips,
-//   grit and sparks into the pool; a nail strikes more sparks than a pellet.
+// - THE HITS (`hit`): a pellet's or a nail's hit throws, subtly, the burst of what it hit
+//   (`impact_look_for` with engine/detail's surface word): a small puff of dust, chips and grit in
+//   the wall's own colour, flakes that fall and hop on the floor below, a thin wisp of smoke; a
+//   nail strikes more sparks than a pellet. The hole it leaves is the client's mark.
 //
 // Each is a pure function of where, when and a seed (ge::core::Rng, the engine's pure looks), so a
 // replay throws the same fire. Every number is our own, in metres, seconds and kelvin.
@@ -88,11 +89,26 @@ inline constexpr double kRocketStep = 0.06, kGrenadeStep = 0.08;
 void fire_trail(const double from[3], const double to[3], uint32_t seed, Particles* out);
 void smoke_trail(const double from[3], const double to[3], uint32_t seed, Particles* out);
 
-// A round's hit at `at` on a face of `surface` (engine/detail's word: "stone", "metal", ...)
-// whose normal is `normal`, the round going `dir` (both unit): its dust into `blasts`, its throw
-// into `births`. `nail` a nail's (more sparks), else a pellet's. Nothing for the sky.
-void hit(const double at[3], const double normal[3], const double dir[3], std::string_view surface,
-         bool nail, uint32_t seed, double now_s, std::vector<gr::Blast>* blasts, Particles* births);
+// A round's hit on a wall: where (world m), the face's normal (unit, out of it) and the way the
+// round went (unit), the face's surface class (engine/detail's word: "stone", "metal", ...) and
+// its texture's colour (linear; all below 0: the class's own shade), and the floor under the hit
+// (world y, m) that what it knocks loose comes down on.
+struct WallHit {
+  double at[3] = {0, 0, 0};
+  double normal[3] = {0, 1, 0};
+  double dir[3] = {0, 0, 1};
+  std::string_view surface = "stone";
+  float colour[3] = {-1, -1, -1};
+  double floor_y = -1e9;
+  bool nail = false;  // a nail's (more sparks, a deeper bite), else a pellet's
+};
+// THE HIT, kept subtle: the engine's burst for its surface at about a round's own size (its puff of
+// dust through the explosions' pass, a few sparks off metal, chips and grit), the chips and grit
+// in the wall's own colour; FLAKES that peel off the face, fall and hop once or twice on the floor
+// before they lie still; and one thin wisp of smoke that drifts up and spreads. Nothing for the
+// sky.
+void hit(const WallHit& h, uint32_t seed, double now_s, std::vector<gr::Blast>* blasts,
+         Particles* births);
 
 // Where the bolt lands on `normal`'s face (unit): blue-white sparks.
 void bolt_hit(const double at[3], const double normal[3], uint32_t seed, Particles* out);

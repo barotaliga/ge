@@ -366,30 +366,97 @@ void smoke_trail(const double from[3], const double to[3], uint32_t seed, Partic
   trail(from, to, seed, false, out);
 }
 
-void hit(const double p[3], const double normal[3], const double dir[3], std::string_view surface,
-         bool nail, uint32_t seed, double now_s, std::vector<gr::Blast>* blasts,
+void hit(const WallHit& w, uint32_t seed, double now_s, std::vector<gr::Blast>* blasts,
          Particles* births) {
-  const gr::ImpactLook* look = gr::impact_look_for(surface);
+  const gr::ImpactLook* look = gr::impact_look_for(w.surface);
   if (look == nullptr) return;  // the sky
   gr::Impact h;
   for (int k = 0; k < 3; ++k) {
-    h.at[k] = p[k];
-    h.normal[k] = normal[k];
-    h.dir[k] = dir[k];
+    h.at[k] = w.at[k];
+    h.normal[k] = w.normal[k];
+    h.dir[k] = w.dir[k];
   }
   h.look = look;
-  // The rounds a size up from the engine's: a hit read across a room, as the classic's puff is.
-  static const gr::ImpactRound kNail = {"se.round.nail", 2.2, 1.0};
-  static const gr::ImpactRound kPellet = {"se.round.pellet", 1.8, 0.35};
-  h.round = nail ? &kNail : &kPellet;
+  // About the rounds' own size: subtle, a nail's bite a little deeper than a pellet's.
+  static const gr::ImpactRound kNail = {"se.round.nail", 1.2, 1.0};
+  static const gr::ImpactRound kPellet = {"se.round.pellet", 0.9, 0.35};
+  h.round = w.nail ? &kNail : &kPellet;
   h.seed = seed;
   h.born_s = now_s;
   gr::Blast dust;
   if (blasts && gr::dust_of(h, dust)) blasts->push_back(dust);
   if (!births) return;
+  // The wall's colour as a shade (its brightness) and a tint (its hue), for what comes off it.
+  const bool coloured = w.colour[0] >= 0;
+  const float lum =
+      coloured ? 0.2126f * w.colour[0] + 0.7152f * w.colour[1] + 0.0722f * w.colour[2] : 0;
+  const auto paint = [&](Particle& q) {
+    q.floor_y = static_cast<float>(w.floor_y);
+    if (!coloured || lum <= 1e-4f) return;
+    q.albedo = std::clamp(lum, 0.06f, 0.8f);
+    for (int k = 0; k < 3; ++k) q.tint[k] = std::min(w.colour[k] / lum, 2.0f);
+  };
   std::vector<gr::Spark> thrown(gr::impact_births_max(*look, gr::round_of(h)));
   const size_t n = gr::impact_births(h, thrown);
-  for (size_t i = 0; i < n; ++i) births->push_back(gr::spark_particle(thrown[i]));
+  for (size_t i = 0; i < n; ++i) {
+    Particle q = gr::spark_particle(thrown[i]);
+    if (thrown[i].kind == gr::SparkKind::chip) {
+      paint(q);
+      q.bounce = 0.3f;
+    } else if (thrown[i].kind == gr::SparkKind::grit) {
+      paint(q);
+    } else {
+      q.floor_y = static_cast<float>(w.floor_y);
+      q.bounce = 0.25f;
+    }
+    births->push_back(q);
+  }
+  Rng r = ge::core::make_rng(seed ^ 0x5bd1e995u);
+  // Flakes: bits of the face knocked loose, out of it slowly, falling to the floor and hopping.
+  const int flakes = w.nail ? 5 : 3;
+  for (int i = 0; i < flakes; ++i) {
+    double d[3];
+    unit(r, d);
+    for (int k = 0; k < 3; ++k) d[k] = 0.45 * d[k] + w.normal[k];
+    Particle q = at(w.at);
+    set_v(q, d, rnd(r, 0.5, 1.5));
+    q.life = float(rnd(r, 1.8, 2.8));
+    q.size = float(rnd(r, 0.015, 0.03));
+    q.drag = 0.3f;
+    q.fall = 1;
+    q.streak = 0.004f;
+    q.albedo = 0.35f;
+    q.opacity = 1;
+    q.bounce = 0.3f;
+    paint(q);
+    births->push_back(q);
+  }
+  // Dust: a small cloud of the wall's own powder kicked out of the hole, spreading as it slows and
+  // thinning away within a second.
+  const int motes = w.nail ? 4 : 3;
+  for (int i = 0; i < motes; ++i) {
+    double d[3];
+    unit(r, d);
+    for (int k = 0; k < 3; ++k) d[k] = 0.6 * d[k] + w.normal[k];
+    const double off[3] = {w.at[0] + w.normal[0] * 0.025, w.at[1] + w.normal[1] * 0.025,
+                           w.at[2] + w.normal[2] * 0.025};
+    Particle q = at(off);
+    set_v(q, d, rnd(r, 0.6, 1.6));
+    q.life = float(rnd(r, 0.6, 1.1));
+    q.size = float(rnd(r, 0.03, 0.06));
+    q.grow = float(rnd(r, 0.2, 0.4));
+    q.drag = 5;
+    q.fall = 0.05f;
+    q.albedo = 0.5f;
+    q.opacity = 0.3f;
+    paint(q);
+    q.albedo = std::max(q.albedo, 0.35f);  // powder is paler than the face it came off
+    births->push_back(q);
+  }
+  // The wisp: a thin, slow smoke that drifts off the face and spreads.
+  Particle s = puff(w.at, 0.05, 0.12, 0.45, 0.1, rnd(r, 1.4, 2.2), kPaleGrey, r);
+  for (int k = 0; k < 3; ++k) s.v[k] += float(w.normal[k] * 0.15);
+  births->push_back(s);
 }
 
 void bolt_hit(const double p[3], const double n[3], uint32_t seed, Particles* out) {

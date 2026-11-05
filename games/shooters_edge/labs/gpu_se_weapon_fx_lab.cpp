@@ -122,7 +122,14 @@ void run(gl::Lab& lab) {
   }
   cl::Listen l;
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, map_name, error);
-  if (!map || !cl::listen_start(l, progs, std::move(map), {}, error)) {
+  // `--target`: a bot to shoot at, seated through the lobby (its warmup held for the run).
+  const bool target = lab.arg_num("target") > 0;
+  cl::ListenOptions options;
+  if (target) {
+    options.lobby = true;
+    options.lobby_settings.countdown_s = 1e6;
+  }
+  if (!map || !cl::listen_start(l, progs, std::move(map), options, error)) {
     lab.fail(error, "The map should load under the baseline mod. Skill: shooter.");
     return;
   }
@@ -203,15 +210,40 @@ void run(gl::Lab& lab) {
     cl::set_field_named(l, 1, "ammo_cells", 200);
   };
   // One server frame with `cmd`, its effects in both looks, each drawn so the particles fly.
+  // The target: the bot stood where `target_at` says (between the player and the wall), facing
+  // him, unarmed and never dying.
+  sh::Vec3f target_at{};
+  float target_yaw = 0;
+  bool target_placed = false;
+  const auto hold_target = [&] {
+    if (!target_placed) return;
+    for (int e = 2; e <= static_cast<int>(sh::kMaxClients); ++e) {
+      auto& bot = l.server->sv.edicts[static_cast<size_t>(e)];
+      if (bot.free) continue;
+      bot.origin = target_at;
+      bot.velocity = {};
+      bot.angles = {0, target_yaw, 0};
+      bot.v_angle = {0, target_yaw, 0};
+      bot.health = 999;
+      cl::set_field_named(l, e, "health", 999);
+      cl::set_field_named(l, e, "items", 4096);
+      cl::set_field_named(l, e, "weapon", 4096);
+      for (const char* ammo : {"ammo_shells", "ammo_nails", "ammo_rockets", "ammo_cells"})
+        cl::set_field_named(l, e, ammo, 0);
+      break;
+    }
+  };
   const auto frame = [&](sh::MoveCmd cmd, bool draw) {
     stand();
     arm();
+    hold_target();
     cl::listen_frame(l, cmd);
     t += kTic;
     cl::frame_view(l, shown, 1, t, kTic);
     hand = cl::step_held(l, shown, held, view_settings, weapons, t, kTic);
     for (int k = 0; k < 2; ++k) {
       fx_state[k].on = cl::fx_switches(looks[k]);
+      fx_state[k].models = device ? &cl::world_models(*world[k]) : nullptr;  // the bodies' skins
       cl::step_fx(l, shown, fx_state[k], t, kTic, fx[k]);
       if (hand.flashing)
         fx[k].lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
@@ -353,26 +385,53 @@ void run(gl::Lab& lab) {
     const sh::Vec3f eye = {at[0], at[1], at[2] + kEyeZ};
     const float reach =
         sh::trace_hull(hull, eye, {eye.x + 2048 * fx_, eye.y + 2048 * fy, eye.z}).fraction * 2048;
-    const sh::Vec3f mid = {eye.x + fx_ * reach * 0.35f, eye.y + fy * reach * 0.35f, eye.z + 24};
-    // As far to the side as the room lets, up to 112 units, either side.
+    // `--side-along` of the way to the wall: 0.35 (back, seeing the line of fire, looking at its
+    // far end); 0.6 and on, CLOSE: in front of the wall where the rounds land, kCloseU back from it
+    // and to one side, looking at it.
+    const auto along = static_cast<float>(lab.arg_num("side-along"));
+    const bool close = along >= 0.6f;
+    constexpr float kCloseU = 96;
+    const double tilt = static_cast<double>(at[4]) * ge::core::kPi / 180;
+    const sh::Vec3f wall = {eye.x + fx_ * reach, eye.y + fy * reach,
+                            eye.z - reach * static_cast<float>(ge::core::libm::tan(tilt))};
+    const float back = close ? std::min(kCloseU, reach * 0.6f) : reach * (1 - along);
+    const sh::Vec3f mid = {wall.x - fx_ * back, wall.y - fy * back,
+                           wall.z + (close ? 8.0f : 24.0f)};
+    // As far to the side as the room lets, up to 112 units (48 close), either side.
+    const float reach_out = close ? 48 : 112;
     sh::Vec3f cam = mid;
     float room = 0;
     for (const float sign : {1.0f, -1.0f}) {
-      const sh::Vec3f wide = {mid.x + sign * fy * 112, mid.y - sign * fx_ * 112, mid.z};
+      const sh::Vec3f wide = {mid.x + sign * fy * reach_out, mid.y - sign * fx_ * reach_out, mid.z};
       const sh::HullTrace tr = sh::trace_hull(hull, mid, wide);
-      const float got = tr.fraction * 112 - 12;
+      const float got = tr.fraction * reach_out - 12;
       if (got > room) {
         room = got;
         cam = {mid.x + sign * fy * got, mid.y - sign * fx_ * got, mid.z};
       }
     }
-    const sh::Vec3f look = {eye.x + fx_ * reach * 0.9f, eye.y + fy * reach * 0.9f, eye.z - 8};
+    const sh::Vec3f look =
+        close ? wall : sh::Vec3f{eye.x + fx_ * reach * 0.9f, eye.y + fy * reach * 0.9f, eye.z - 8};
     const double dx = look.x - cam.x, dy = look.y - cam.y, dz = look.z - cam.z;
     side[0] = cam.x, side[1] = cam.y, side[2] = cam.z;
     side[3] = static_cast<float>(ge::core::libm::atan2(dy, dx) * 180 / ge::core::kPi);
     side[4] = static_cast<float>(-ge::core::libm::atan2(dz, std::sqrt(dx * dx + dy * dy)) * 180 /
                                  ge::core::kPi);
-    has_side = room > 24;
+    has_side = close || room > 24;
+  }
+  if (target) {
+    // Two thirds of the way to the wall the player faces, on the floor under that point.
+    const double r = at[3] * ge::core::kPi / 180;
+    const float cx = static_cast<float>(ge::core::libm::cos(r)),
+                cy = static_cast<float>(ge::core::libm::sin(r));
+    const sh::Vec3f eye = {at[0], at[1], at[2] + kEyeZ};
+    const float reach =
+        sh::trace_hull(hull, eye, {eye.x + 2048 * cx, eye.y + 2048 * cy, eye.z}).fraction * 2048;
+    target_at = {at[0] + cx * reach * 0.6f, at[1] + cy * reach * 0.6f, at[2]};
+    target_yaw = at[3] + 180;
+    cl::listen_lobby(l, "addbot novice");
+    target_placed = true;
+    for (int i = 0; i < 40; i++) frame({}, true);  // seated and stood
   }
   std::vector<double> times;
   for (double v : lab.arg_nums("times")) times.push_back(v);
@@ -423,6 +482,8 @@ void run(gl::Lab& lab) {
                "count");
     lab.metric(std::string(kLooks[k]) + ".mark-verts", static_cast<double>(fx[k].burns.size()),
                "vertices");
+    lab.metric(std::string(kLooks[k]) + ".wounds", static_cast<double>(fx_state[k].wounds.size()),
+               "count");
   }
   lab.metric("explosions", static_cast<double>(l.explosions.size()), "count");
   lab.metric("effects", static_cast<double>(l.effects.size()), "count");
@@ -450,6 +511,8 @@ const gl::LabSpec kSpec{
       "x,y,z,yaw,pitch: where the player stands (map units; pitch down positive); "
       "empty: the spawn, aimed at the wall nearest 360 units off"},
      {"side", "", "x,y,z,yaw,pitch: a second camera; empty: beside the line of fire"},
+     {"side-along", "0.35",
+      "with no --side: how far toward the wall the side camera stands, 0..0.9"},
      {"pitch", "2",
       "with no --at: the aim's pitch, degrees down (15: the floor a few metres ahead)"},
      {"weapons", "all",
@@ -458,6 +521,7 @@ const gl::LabSpec kSpec{
      {"times", "40,200,600", "the moments pictured after the first shot, ms"},
      {"blast-times", "30,150,400,1200", "the launchers' moments, after the first blast, ms"},
      {"cvars", "", "the enhanced side's cvars, as the console takes them"},
+     {"target", "0", "1: a bot stood in the line of fire, facing the player (its wounds)"},
      {"before", "", "the left side's cvars in the modern look instead of the classic look"}},
     "--size=240,135 --weapons=shotgun,rockets,arc --times=60,400 --blast-times=60",
     run,
