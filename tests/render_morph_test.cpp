@@ -121,7 +121,8 @@ TEST(a_gone_warp_draws_nothing_and_pinches_toward_the_upright_line) {
   w.low = -0.75f;
   w.high = 1.0f;
   for (int i = 0; i < 400; ++i) {
-    const float p[3] = {0.01f * (i % 37) - 0.2f, 0.004f * i - 0.75f, 0.013f * (i % 11) - 0.07f};
+    const float p[3] = {0.01f * float(i % 37) - 0.2f, 0.004f * float(i) - 0.75f,
+                        0.013f * float(i % 11) - 0.07f};
     float edge = 0;
     CHECK_MSG(!warp_cut(w, p, p[1], &edge), "fragment " + std::to_string(i) + " drawn at 0");
   }
@@ -141,8 +142,8 @@ TEST(more_shown_draws_everything_less_shown_did_and_the_head_comes_first) {
   int head[5] = {}, feet[5] = {};
   const float shares[5] = {0.1f, 0.3f, 0.5f, 0.7f, 0.9f};
   for (int i = 0; i < 2000; ++i) {
-    const float p[3] = {0.0071f * (i % 53) - 0.19f, -0.75f + 1.75f * (i % 97) / 96.0f,
-                        0.0093f * (i % 29) - 0.13f};
+    const float p[3] = {0.0071f * float(i % 53) - 0.19f, -0.75f + 1.75f * float(i % 97) / 96.0f,
+                        0.0093f * float(i % 29) - 0.13f};
     bool was = false;
     for (int s = 0; s < 5; ++s) {
       w.shown = shares[s];
