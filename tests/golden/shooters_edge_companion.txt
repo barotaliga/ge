@@ -1,0 +1,2 @@
+# games/shooters_edge/bots/coop_run.hpp: the leader's tour of the coop hall with an expert companion, seed 1, 60 s: the last frame's digest (tests/shooters_edge_companion_test.cpp)
+5a66d361fa973129
