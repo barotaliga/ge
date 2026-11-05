@@ -5,7 +5,7 @@
 # Each red gate's whole log is printed, up to 400 lines (every lint finding in every file).
 #
 #   1. fmt-check     clang-format over every source
-#   2. agents-check  the links, the router, the line cap, the ge: tags, the lessons
+#   2. agents-check  the links, the router, the line cap (warns past 1000, fails past 2000), the ge: tags, the lessons
 #   3. libm-check    no <cmath> transcendental in simulation code
 #   4. release       the changeset fragments valid
 #   5. build         the preset's build (incremental); a change no build reads (prose, the gates'

@@ -296,8 +296,9 @@ The simulation never sees the frame rate, and the renderer never writes `GameSta
 - **SoA where a loop is hot.** Trees, particles and spatial-hash cells use structure of
   arrays. Everything else uses the natural struct. Change a layout only with a
   measurement.
-- **One subject per file, under 1000 lines** (`agents:allow-large-file: <reason>` for
-  honest exceptions). A file opens with a comment that states what it owns, in the
+- **One subject per file, under 1000 lines as advice, 2000 as the cap.** `make agents-check`
+  warns past 1000 and fails past 2000 (`agents:allow-large-file: <reason>` for honest
+  exceptions): splitting a file at 1001 lines buys nothing, so the split waits for a subject. A file opens with a comment that states what it owns, in the
   engine's own terms (never where it came from: `AGENTS.md` § A clean slate).
 - **Every number has a unit in its name or its comment** (`speed_mps`, `cell_m`), and
   every tuning number lives in its `defs/` table.
