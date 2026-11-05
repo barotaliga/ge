@@ -130,6 +130,18 @@ void run(gl::Lab& lab) {
   o.locs = std::move(locs);
   o.progs = &progs;
   o.seed = seed;
+  {
+    // A weapon drill: its name in the hit table, the mod's bit for it (classic_hits.hpp's order).
+    const std::string drill = lab.arg("drill");
+    const char* names[] = {"scattergun", "double", "spiker", "heavy", "grenades", "rockets", "arc"};
+    for (int k = 0; k < 7; k++)
+      if (drill == names[k]) o.drill = 1 << k;
+    if (!drill.empty() && o.drill == 0) {
+      lab.fail("se-team: no weapon " + drill + " to drill",
+               "next: --drill=scattergun, double, spiker, heavy, grenades, rockets or arc.");
+      return;
+    }
+  }
   // The temperaments, red's then blue's, a letter or a word each (a, b, c), comma separated.
   {
     const std::string list = lab.arg("tempers");
@@ -597,6 +609,9 @@ const gl::LabSpec kSpec{
          "name=value joined by / (aim_rl=9/timing=3); empty: the preset"},
         {"items", "key",
          "the items noted with the nearest a player came: key (the held armour, the quad) or all"},
+        {"drill", "",
+         "a weapon drill: every player holds only this weapon, its ammunition topped up "
+         "(scattergun, double, spiker, heavy, grenades, rockets, arc); empty: a normal match"},
     },
     "--minutes=0.5",
     run,
