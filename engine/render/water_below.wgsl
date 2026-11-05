@@ -6,6 +6,13 @@
 // marched), weighed by the exact Fresnel terms for light leaving water; what the reflection finds
 // is fogged over its own way through the water, and the share it lacks (nothing to mirror, the
 // water's own light) goes out beside it for the view under water to fill with its veil.
+//
+// THE RIM: the Fresnel terms are taken per colour (blue bends most, so its window is the narrowest
+// and the rim is fringed) and averaged over the normals the pixel cannot resolve (the slope
+// variance its waves lose to the footprint), so a far or choppy rim fades into the mirror over a
+// few degrees as it does on real water, while a near calm one stays sharp; the waves the pixel
+// does resolve (the chop, the wakes) break it up. The light through the window is n^2 times the
+// air's radiance: the whole hemisphere is gathered into its cone.
 #include "render/wgsl/water_surface.wgsl"
 
 // The view up's reach: the tangent, sine and cosine of 72 degrees off straight up, inside the 75
@@ -19,10 +26,13 @@ struct BelowOut {
   @location(1) veil: vec4f,    // the share of it the water's own light fills
 }
 
-// Light leaving water into air at `cos_i` to the normal: the exact Fresnel reflectance of the two
-// polarisations, averaged; 1 past the critical angle (total internal reflection).
-fn fresnel_exit(cos_i: f32) -> f32 {
-  let eta = 1.333;
+// The refractive index of water for red, green and blue light (656, 546 and 450 nm).
+const kWaterEta = vec3f(1.331, 1.334, 1.339);
+
+// Light leaving water into air at `cos_i` to the normal, the water's index `eta`: the exact
+// Fresnel reflectance of the two polarisations, averaged; 1 past the critical angle (total
+// internal reflection).
+fn fresnel_exit(cos_i: f32, eta: f32) -> f32 {
   let s2 = eta * eta * max(1.0 - cos_i * cos_i, 0.0);
   if (s2 >= 1.0) {
     return 1.0;
@@ -31,6 +41,20 @@ fn fresnel_exit(cos_i: f32) -> f32 {
   let rs = (eta * cos_i - ct) / (eta * cos_i + ct);
   let rp = (eta * ct - cos_i) / (eta * ct + cos_i);
   return 0.5 * (rs * rs + rp * rp);
+}
+
+// The reflectance per colour at `cos_i`, averaged over normals tilted in the plane of incidence by
+// `tilt` rad rms: three Gauss-Hermite nodes (0 and +-sqrt(3) tilt, weighed 2/3 and 1/6 each).
+fn fresnel_exit_rough(cos_i: f32, tilt: f32) -> vec3f {
+  let a = acos(clamp(cos_i, 0.0, 1.0));
+  var r = vec3f(0.0);
+  for (var k = -1; k <= 1; k++) {
+    let c = cos(clamp(a + f32(k) * 1.7320508 * tilt, 0.0, 1.5707963));
+    let w = select(1.0 / 6.0, 2.0 / 3.0, k == 0);
+    r += w * vec3f(fresnel_exit(c, kWaterEta.r), fresnel_exit(c, kWaterEta.g),
+                   fresnel_exit(c, kWaterEta.b));
+  }
+  return r;
 }
 
 @fragment
@@ -51,14 +75,21 @@ fn fs_below(in: VertexOut) -> BelowOut {
   let d = in.rel / dist;  // the eye's ray, up toward the surface
   let uv = in.position.xy * frame.size.zw;
   let cos_i = clamp(dot(d, n), 0.0, 1.0);
-  let refl = fresnel_exit(cos_i);
+  // Half the slope variance lost to the footprint tilts the normal in the plane of incidence.
+  let refl3 = fresnel_exit_rough(cos_i, sqrt(0.5 * sl.z));
+  let refl = refl3.g;
   let room = vec3f(white_luminance() * body.emission.w);
   let open = body.rough.w;
 
-  // OUT THROUGH THE WINDOW: the ray bent away from the normal by Snell's law.
+  // OUT THROUGH THE WINDOW: the ray bent away from the normal by Snell's law; past the critical
+  // angle (where only the rough rim's tilted normals let light through) the ray out grazes the
+  // surface along the eye's bearing.
   var above = vec3f(0.0);
-  if (refl < 1.0) {
-    let tr = refract(d, -n, 1.333);
+  if (refl3.r < 1.0) {
+    var tr = refract(d, -n, kWaterEta.g);
+    if (dot(tr, tr) < 1e-6) {
+      tr = normalize(d - n * dot(d, n) + n * 0.02);
+    }
     let sky = mix(room * kRoomAlbedo, sky_luminance(normalize(vec3f(tr.x, max(tr.y, 0.01), tr.z))),
                   open);
     if (body.view.y > 0.5) {
@@ -106,7 +137,7 @@ fn fs_below(in: VertexOut) -> BelowOut {
     }
   }
   var out: BelowOut;
-  out.colour = vec4f(above * (1.0 - refl) + below * refl, dist);
+  out.colour = vec4f(above * (1.0 - refl3) * (kWaterEta.g * kWaterEta.g) + below * refl3, dist);
   out.veil = vec4f(veil, 0.0, 0.0, 0.0);
   return out;
 }

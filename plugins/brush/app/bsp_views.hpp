@@ -12,7 +12,9 @@
 // - THE VIEW UP (the eye under the level): the map over the water drawn from the surface straight
 //   over the eye, looking straight up across 150 degrees, so the world bent through Snell's window
 //   (the whole sky squeezed into a cone 97 degrees across) can be read along each pixel's refracted
-//   ray, far past the frame's own edges.
+//   ray, far past the frame's own edges. An eye in a flooded passage beyond the pool's top (its
+//   point straight over it is rock) takes the nearest point of the top's box, a little inside it;
+//   the matrix the water reads carries that shift.
 //
 // One body a frame: the one the eye is under, else the nearest seen from above. The passes are
 // "bsp.views", timed as one; the models (the players, the items) are not in them.
@@ -51,6 +53,7 @@ struct BspViews {
   int body = -1;       // the water body they are of this frame; -1 none
   bool below = false;  // the eye is under its level
   double level = 0;
+  float up_shift[2] = {0, 0};  // m: the eye's plan place less the view up's (x, z)
 };
 
 // The views' frame blocks and groups (beside the frame's own, over the same sky).
@@ -59,14 +62,16 @@ void create_bsp_views(gpu::Device& device, BspViews& views, const wgpu::BindGrou
 // Their targets for a render of `width` x `height` (again when it changes).
 void create_bsp_view_targets(gpu::Device& device, BspViews& views, uint32_t width, uint32_t height);
 // This frame's: the mirror in the plane y = `level` m of body `body` (-1: no view this frame), of
-// the water under it when `below`, and then the view up too; `main` the frame's own uniforms as
-// filled for this frame.
+// the water under it when `below`, and then the view up too, from the point of the body's top
+// `box` (x0, z0, x1, z1, m) nearest the eye; `main` the frame's own uniforms as filled for this
+// frame.
 void prepare_bsp_views(gpu::Device& device, BspViews& views, const render::FrameUniforms& main,
-                       int body, double level, bool below);
+                       int body, double level, bool below, const float box[4]);
 // "bsp.views": the map into the views prepared (an empty row when none is).
 void encode_bsp_views(const BspDraw& draw, const BspViews& views, const gpu::PipelineSet& pipelines,
                       render::FrameRecorder& rec, wgpu::CommandEncoder& encoder);
-// What the water reads of them (render/water.hpp's set_water_views), for this frame's body.
+// What the water reads of them (render/water.hpp's set_water_views; the view up's matrix moves
+// with the eye, render/water.hpp's set_water_up_view), for this frame's body.
 render::WaterViews water_views(const BspViews& views);
 
 // The matrices (column-major, camera-relative world to clip and back): the frame's own with the
@@ -75,5 +80,8 @@ render::WaterViews water_views(const BspViews& views);
 void mirror_matrices(const float view_proj[16], const float inv_view_proj[16], float out[16],
                      float inv_out[16]);
 void up_matrices(double fov_deg, double near_m, float out[16], float inv_out[16]);
+// The view up's point in the plan for an eye at (`x`, `z`) over a top whose box is `box` (x0, z0,
+// x1, z1): the eye's own place, or the nearest point a quarter metre inside the box.
+void up_place(const float box[4], float x, float z, float out[2]);
 
 }  // namespace ge::brush::app
