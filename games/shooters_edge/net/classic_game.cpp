@@ -275,7 +275,12 @@ void lobby_turn(Game& g) {
     look.teamplay = static_cast<int>(c->number);
   std::vector<std::string> lines;
   for (const auto& [rule, value] : g.settings.rules)
-    if (!value.empty()) lines.push_back(rule + " " + value);
+    if (!value.empty()) {
+      std::string line = rule;
+      line += ' ';
+      line += value;
+      lines.push_back(std::move(line));
+    }
   sv::announce(r.announcer, r.lobby, now.localinfo, sv::match_look(look, lines), now.sv.time);
 }
 

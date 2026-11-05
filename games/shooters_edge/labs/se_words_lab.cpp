@@ -119,6 +119,7 @@ ui::Image column(const ui::Image& sheet, const std::string& heading,
   dl.begin(w, h);
   std::vector<cl::CaptionLine> top = {{heading, true}};
   std::vector<cl::CaptionLine> body;
+  body.reserve(lines.size());
   for (const std::string& l : lines) body.push_back({l, false});
   cl::draw_caption(dl, sheet, w, h, top, body);
   ui::Image img = ui::make_image(w, h, ui::hex(0x15130f));
@@ -187,7 +188,8 @@ std::vector<std::string> lobby_script(const sv::Info& info, std::string* centre)
   take(5);
   sv::lobby_ready(l, 1, true, 6);
   take(6);
-  for (double t = 7; t <= 16.5; t += 0.5) {
+  for (int half = 14; half <= 33; half++) {
+    const double t = half * 0.5;
     if (sv::lobby_due(l, t)) {
       take(t);
       break;

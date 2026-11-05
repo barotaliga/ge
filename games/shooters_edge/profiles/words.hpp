@@ -27,7 +27,8 @@
 //   `count_timelimit`, `count_fraglimit`, `count_powerups` (%1 `on`), `count_tail`; the sounds
 //   `sound_timer` (the countdown begins) and `sound_tick` (each of its last 5 s).
 //
-// ge:summary A classic game's server words as templates: obituaries, the clock, the lobby, the count
+// ge:summary A classic game's server words as templates: obituaries, the clock, the lobby,
+// ge:summary the countdown
 // ge:keywords words classic-words obituary obituaries kill-message death-message countdown
 // ge:keywords centerprint ready break match-over minutes-remaining word_lines kclassicserverwords
 // ge:skill shooter
