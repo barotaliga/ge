@@ -394,11 +394,13 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   const std::vector<sh::Vec3f>* known_items = nullptr;
   int64_t now = 0;
   uint64_t h = 1469598103934665603ull;
+  HitBook hits;  // every player's shots and hits by weapon
   for (int frame = 0; frame < opt.frames; frame++) {
     now += kTickUs;
     gn::sim_advance(net, now);
     s.sv.sound_count = 0;
     classic_frame(*server, now);
+    hits_frame(hits, s);
     // Fighters take their slots once their players are in the game.
     for (int k = 0; k < n; k++) {
       Seat& seat = seats[static_cast<size_t>(k)];
@@ -580,6 +582,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.reactions = seat.fighter.bot.stats.reactions;
     p.pre_aimed = seat.fighter.bot.stats.pre_aimed;
     p.react_s = seat.fighter.bot.stats.react_s;
+    if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.players.size())
+      p.hits = hits.players[static_cast<size_t>(p.slot)];
     p.dives = seat.fighter.dives;
     p.dives_given_up = fs.dives_given_up;
     p.dive_wet_s = fs.dive_wet_s;

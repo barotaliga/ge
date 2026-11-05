@@ -312,10 +312,11 @@ void() trigger_once = {
   self.use = trigger_use;
 };
 
-// Sends a player (or anything moving) to the destination named by .target.
+// Sends what the variant lets it (`teleport_takes`) to the destination named by .target, which
+// may be any named thing, even a moving one; the variant says what arriving does.
 void() teleport_touch = {
   local entity dest;
-  if (other.classname != "player" || other.health <= 0) return;
+  if (!teleport_takes(other)) return;
   dest = find(world, targetname, self.target);
   if (!dest) {
     objerror("a teleporter cannot find its destination ", self.target);
@@ -329,6 +330,7 @@ void() teleport_touch = {
   other.teleport_time = time + 0.7;
   other.flags = other.flags - (other.flags & FL_ONGROUND);
   sound(other, CHAN_VOICE, "misc/r_tele1.wav", 1, ATTN_NORM);
+  teleport_arrived(other);
 };
 
 void() trigger_teleport = {

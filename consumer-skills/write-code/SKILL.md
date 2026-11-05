@@ -1,6 +1,6 @@
 ---
 name: write-code
-description: "Use on every code change in a game repo built on the engine: file shape and naming, the ge: discovery tags, data-first design, diagnostics written as prompts for an agent, comments, the 1000-line cap, and the edit loop."
+description: "Use on every code change in a game repo built on the engine: file shape and naming, the ge: discovery tags, data-first design, diagnostics written as prompts for an agent, comments, the line cap (advised 1000, capped 2000), and the edit loop."
 ---
 
 # Write code
@@ -12,7 +12,8 @@ file explains itself. `ge doctor` (part of `ge check`) holds every rule here tha
 
 - **One subject per file.** The leading comment says what the file owns and why, then ends with
   the file's `ge:` tag block.
-- **Under 1000 lines.** Split by subject, not by line count. An honest exception carries an
+- **Under 1000 lines, advised; 2000, the cap.** `ge doctor` warns past 1000 lines and fails
+  past 2000. Split by subject, not by line count. An honest exception carries an
   `agents:allow-large-file: <reason>` comment.
 - **Headers declare the API with comments**; small hot math is `inline` there, the rest is in
   the `.cpp`.

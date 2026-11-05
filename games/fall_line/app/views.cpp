@@ -184,6 +184,9 @@ std::string_view view_caption(std::string_view name) {
   if (name == "aerial") return "From high over a corner of the map, the whole mountain.";
   if (name == "tarn") return "Below a laid tarn's lip at eye height, over it to its headwall.";
   if (name == "tarn-high") return "High over the slope below a laid tarn, down onto it.";
+  if (name == "reservoir") return "On the dam's crest, looking up the reservoir behind it.";
+  if (name == "reservoir-high")
+    return "High over the valley below the dam, over it onto the water.";
   if (name == "stream") return "On the bank of the longest laid stream, looking down along it.";
   if (name == "stream-high") return "High over the longest laid stream, down along its line.";
   if (name == "corduroy") {
@@ -344,6 +347,18 @@ bool make_view(const Level& level, std::string_view name, ge::render::FrameView&
     place(level, l.x + dx / d * back, l.z + dz / d * back, high ? 70 : 1.8, v);
     v.heading = std::atan2(-dx, -dz);
     v.pitch = -std::atan2(v.eye[1] - l.level, back) * (high ? 1.0 : 0.6);
+  } else if (name == "reservoir" || name == "reservoir-high") {
+    // From the middle of the first dam's crest up its reservoir, or from high below it.
+    if (level.dams.empty()) return false;
+    const ge::mountain::mapgen::MapDam& dam = level.dams[0];
+    const double mx = 0.5 * (dam.a.x + dam.b.x), mz = 0.5 * (dam.a.z + dam.b.z);
+    const double ux = -dam.downhill.x, uz = -dam.downhill.z;  // up the valley
+    const bool high = name == "reservoir-high";
+    const double back = high ? 160 : 0;
+    place(level, mx - ux * back, mz - uz * back, high ? 60 : 1.7, v);
+    v.eye[1] = std::max(v.eye[1], dam.crest + (high ? 45 : 1.7));
+    v.heading = std::atan2(ux, uz);
+    v.pitch = high ? -std::atan2(v.eye[1] - dam.crest, back + 80) : -4 * kDeg;
   } else if (name == "stream" || name == "stream-high") {
     // Two fifths of the way down the longest laid stream: on its bank, or high behind it.
     const ge::mountain::mapgen::MapStream* best = nullptr;

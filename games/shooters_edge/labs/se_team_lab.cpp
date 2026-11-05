@@ -17,6 +17,7 @@
 // ge:skill shooter bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <fstream>
@@ -209,6 +210,45 @@ void run(gl::Lab& lab) {
     react_s += p.react_s;
   }
   lab.table(rt);
+  // Hit rates by weapon (net/classic_hits.hpp): each player's, and each skill's against the bands
+  // players of the three divisions reach.
+  {
+    gl::LabTable ht{"each player's hit rates", {"player", "aim"}, {}};
+    for (int w = 0; w < cn::kHitWeapons; w++)
+      ht.columns.push_back(cn::hit_weapon_name(static_cast<cn::HitWeapon>(w)));
+    std::array<std::array<cn::HitCount, cn::kHitWeapons>, 3> by_skill{};
+    const auto rate = [](const cn::HitCount& c) {
+      return c.fired > 0
+                 ? to_fixed(100.0 * static_cast<double>(c.hit) / static_cast<double>(c.fired), 0) +
+                       "% of " + std::to_string(c.fired)
+                 : std::string("-");
+    };
+    for (const cn::TeamPlayer& p : r.players) {
+      std::vector<std::string> row{p.name, sh::aim_skill_name(p.skill)};
+      for (int w = 0; w < cn::kHitWeapons; w++) row.push_back(rate(p.hits[static_cast<size_t>(w)]));
+      ht.rows.push_back(row);
+      const int k = static_cast<int>(p.skill) - 1;  // novice, average, expert
+      if (k >= 0 && k < 3)
+        for (int w = 0; w < cn::kHitWeapons; w++) {
+          by_skill[static_cast<size_t>(k)][static_cast<size_t>(w)].fired +=
+              p.hits[static_cast<size_t>(w)].fired;
+          by_skill[static_cast<size_t>(k)][static_cast<size_t>(w)].hit +=
+              p.hits[static_cast<size_t>(w)].hit;
+        }
+    }
+    lab.table(ht);
+    static const char* kSkill[3] = {"novice", "average", "expert"};
+    for (int k = 0; k < 3; k++)
+      for (int w = 0; w < cn::kHitWeapons; w++) {
+        const cn::HitCount& c = by_skill[static_cast<size_t>(k)][static_cast<size_t>(w)];
+        if (c.fired == 0) continue;
+        std::string key = std::string("team.hits.") + kSkill[k] + "." +
+                          cn::hit_weapon_name(static_cast<cn::HitWeapon>(w));
+        for (char& ch : key)
+          if (ch == ' ') ch = '-';
+        lab.metric(key, 100.0 * static_cast<double>(c.hit) / static_cast<double>(c.fired), "%");
+      }
+  }
   lab.metric("team.sightings", static_cast<double>(sightings), "count");
   lab.metric("team.reaction-mean-ms",
              sightings > 0 ? react_s / static_cast<double>(sightings) * 1000 : 0, "ms");

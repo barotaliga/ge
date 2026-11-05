@@ -2,8 +2,9 @@
 // map), the spawn points, and the campaign's own map things (porting/shooters-edge/
 // campaign-rules.md § The map vocabulary, § The game's flow): the exits and the intermission,
 // secrets, counters and relays, the skill triggers, the registered-only triggers, the episode and
-// boss gates, the runes and the keys. The monsters are ai.qc's and monsters.qc's; the set pieces
-// come in a later step, their brushes standing as walls meanwhile.
+// boss gates, the runes and the keys. The monsters are ai.qc's and monsters*.qc's, the bosses and
+// their set pieces bosses.qc's; the other set pieces come in a later step, their brushes standing
+// as walls meanwhile.
 
 .string map;       // a changelevel trigger's next map
 .float count;      // a counter's uses still owed

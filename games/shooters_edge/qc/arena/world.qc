@@ -78,3 +78,7 @@ void() main = {};
 void() info_player_deathmatch = {};
 void() info_player_start = {};
 void() info_intermission = {};
+
+// A teleporter sends a living player, and arriving does nothing more.
+float(entity who) teleport_takes = { return who.classname == "player" && who.health > 0; };
+void(entity who) teleport_arrived = {};

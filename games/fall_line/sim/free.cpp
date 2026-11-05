@@ -25,6 +25,7 @@
 #include "fall_line/sim/wanted.hpp"
 #include "mountain/mapgen/generate.hpp"
 #include "mountain/mapgen/query.hpp"
+#include "mountain/tarn/reservoir.hpp"
 #include "mountain/tarn/tarn.hpp"
 #include "skier/skier.hpp"
 
@@ -70,6 +71,9 @@ mg::Level free_map(double seed, std::optional<int> version) {
   mg::Level level = mg::generate_level(seed, opts);
   if (const std::optional<mg::MapLake> lake = ge::mountain::tarn::find_tarn(level, kTarnRadius))
     ge::mountain::tarn::lay_tarn(level, *lake);
+  if (const std::optional<ge::mountain::tarn::Reservoir> r =
+          ge::mountain::tarn::find_reservoir(level))
+    ge::mountain::tarn::lay_reservoir(level, *r);
   return level;
 }
 

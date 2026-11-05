@@ -1963,10 +1963,12 @@ drain and dry by the wind and the sun). The picture reads the same numbers:
   on the water). The rain's sound by its rate is `engine/water/rain.hpp` (the `rain-audition`
   lab).
 
-**The weather on a BSP map (M36e).** `plugins/brush/app/bsp_weather.hpp` turns twelve cvars
-(`sv_weather`, `sv_precip`, `sv_rain`, `sv_wind`, `sv_winddir`, `sv_gust` the server's;
+**The weather on a BSP map (M36e).** `plugins/brush/app/bsp_weather.hpp` turns thirteen cvars
+(`sv_weather`, `sv_precip`, `sv_rain`, `sv_wind`, `sv_winddir`, `sv_gust`, `sv_hour` the server's;
 `r_precip`, `r_precip_density`, `r_splashes`, `r_wet`, `r_snowcover`, `r_lightning` the player's)
-into a frame's weather: the wind off `engine/wind`'s field with its gusts and veer, the fall's
+into a frame's weather (`sv_hour`, 0 to 24, sets the sun where that hour of a summer's day puts it
+at 46 N, `bsp_sky.hpp`'s `at_hour`; past dusk the map's own classic night; -1 the map's own pick):
+the wind off `engine/wind`'s field with its gusts and veer, the fall's
 way, the wet ground and the snow's cover for the whole map stepped by the clock, the flash, and
 a storm's deck over the sky. The v2 renderer draws a third orthographic map of its `orthos`
 array along the fall (the sky faces do not block it), binds it as the fall's shelter, and reads

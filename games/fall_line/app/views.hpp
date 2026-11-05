@@ -37,7 +37,8 @@ std::span<const std::string_view> view_names();
 // `<view>@sun[:<lens deg>]` and `<view>@moon[:<lens deg>]` aim the eye at the sun or the moon at
 // the map's hour (so `day_view` first). `tarn` and `tarn-high` (not in `view_names`: only a map
 // with a laid lake has one) look over the map's first lake, `stream` and `stream-high` along its
-// longest laid stream. False for an unknown name.
+// longest laid stream, `reservoir` and `reservoir-high` up its first dam's reservoir. False for
+// an unknown name.
 bool make_view(const ge::mountain::mapgen::Level& level, std::string_view name,
                ge::render::FrameView& out);
 
