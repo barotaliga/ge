@@ -412,10 +412,50 @@ With no body shown both rows run empty. What it draws:
   every lake a game laid on its map (`app/lakes.hpp`, § Fall Line's tarn); the `lake` lab digs
   a tarn of its own into a seed's race map, low in the valley, for the water's own looks.
 
-Not built yet (M24g2): the GPU detail FFT and its cascades, foam, caustics, the shore's wet band,
-rain, the lake shore mesh and the channel's and flow region's own geometry, the reflections over
-the Hi-Z pyramid with a probe behind them, and the stops on the quality ladder. The plan for all
-of it follows.
+**Built (M24g2, part: the foam and the wet shore; `foam_of`, `water.wgsl`'s `foam_at`,
+`render/water_shore.wgsl`).**
+
+- **Whitecaps from the Jacobian.** The waves are drawn as heights, but water moves sideways
+  too: a component's choppy displacement is (k / |k|) a cos(phi), and where the Jacobian of that
+  motion falls under a threshold the surface is folding over itself and breaks white. The laid
+  components fold, and so do the detail band's down to 1.5 m (`kFoamShortest`, faded in from 3 m),
+  so the whitecaps are the short steep waves breaking where the long ones' crests carry them. The
+  threshold is set from the sea's own wind, never by hand: `water::wind_of` reads the wind back
+  off the sea's height and period (the growth laws inverted), `water::whitecap_cover` gives the
+  share of the face white at that wind (3.84e-6 U^3.41: 1 % at 10 m/s, 10.6 % at 20), and the
+  Jacobian's trace, Gaussian of variance sum (k a)^2 / 2, is cut where `kFoamActive` (0.15) of
+  that cover is breaking now; the rest of the cover is the trails.
+- **The history is the waves' own past.** A patch of foam stays where the water carried it while
+  the crest that made it runs on, fading over about two seconds. Rather than keep a texture of it
+  from frame to frame, each pixel looks back at ten moments 0.3 s apart over the last three
+  seconds, at the places the surface's drift (3 % of the wind, downwind) brought its water from,
+  and keeps the strongest fold or surf it finds there, faded by its age. So the foam is a pure
+  function of the place and the clock: right on a lab's first frame, after a cut and after a
+  replay's seek, the same on every machine, with no texture to reproject as the eye moves. A
+  pixel wider than a sixteenth of the folds' wavelength takes the cover's mean instead.
+- **Surf by the depth.** A wave over 0.78 of the depth under it breaks (the simulation's
+  `breaking_at`, eased in from 0.6 of that), the depth read off the opaque depth copy under the
+  pixel; its foam is kept and drifts the same way, so white water rolls in and lace trails behind
+  it. A line of foam lies where the water laps the shore, as wide as the sea's height asks.
+- **Lace, never a sheet.** The share is cut into ridges of noise at two sizes carried with the
+  drift: threads round holes that open as a patch fades. A pixel too wide for the threads takes
+  the share as its mean, so far foam whitens evenly and never sparkles. Foam is lit as a white face
+  by the sun (or the moon), the sky and the lamps.
+- **The shore's wet band.** In the "water" pass before the bodies, a full-screen triangle per body
+  multiplies the frame's colour: every opaque point a little over the level and near the water
+  (the shore mask's ramp: past the outline its texels fall from 127 to 0 over `kShoreReach`, 12 m)
+  is darkened by up to 45 %: fully up to 0.6 of the run-up (0.03 m for a calm lake's lap plus 0.7
+  of the sea's Hs), fading to nothing at 1.2 of it, and darker still where the waves run up it now
+  (their height there carried up the beach by half again).
+- **Off for a lab.** `WaterDraw::foam` and `wet_band` (both on) let a lab draw the same view
+  without them; the `gpu-water` lab's `whitecaps`, `foam-trail`, `surf` and `surf-night` views show
+  them, and it fails when the gale's whitecaps whiten under a quarter of the law's cover.
+
+Not built yet (M24g2): the GPU detail FFT and its cascades, the ripple field, the lake shore mesh,
+the reflections over the Hi-Z pyramid with a probe behind them, and the stops on the quality
+ladder with the pass priced. (The caustics are built since M24h3 and the rain's rings since M36d,
+below; the channel's ribbon and the flow region's grid since M24i.) The plan for all of it
+follows.
 
 The water is a pass in the frame's table after the opaque geometry (it reads the scene's
 colour and depth) and before TAA-U. All of it runs on GPU-less Linux on the software adapter,
