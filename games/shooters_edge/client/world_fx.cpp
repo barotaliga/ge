@@ -33,6 +33,9 @@ constexpr double kSpriteFps = 10;
 constexpr double kBoltSegment = 30;
 // The placed effects' entity numbers (below every static's): the sprites', then the bolts'.
 constexpr int kSpriteEntities = -(1 << 20), kBoltEntities = -(1 << 21);
+// The hot air a nail's flight and a rocket's motor leave (render/haze.hpp's presets).
+const ge::render::HazeLook* const kNailHaze = ge::render::haze_look("haze.nail");
+const ge::render::HazeLook* const kRocketHaze = ge::render::haze_look("haze.rocket");
 
 // The mod's contents codes for the liquids (games/shooters_edge/qc/common/defs.qc's CONTENT_*).
 constexpr float kWater = -3, kSlime = -4, kLava = -5;
@@ -659,10 +662,20 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     } else {
       s.flights_next[m.entity] = {m.origin, {0, 0, 0}};
     }
-    if (!m.rocket) continue;
     double to[3];
     put(at, to);
     const auto was = s.last.find(m.entity);
+    // The hot air behind a nail and a rocket's motor (a grenade is not hot), a stretch a frame.
+    if (was != s.last.end() && s.on.trails && !m.grenade) {
+      ge::render::HazeTrail h;
+      put(was->second, h.a);
+      put(at, h.b);
+      h.born_s = t;
+      h.look = m.rocket ? kRocketHaze : kNailHaze;
+      h.seed = static_cast<uint32_t>(m.entity);
+      s.haze.push_back(h);
+    }
+    if (!m.rocket) continue;
     if (was != s.last.end()) {
       double from[3];
       put(was->second, from);
@@ -686,6 +699,10 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     if (!m.grenade || !s.on.trails) out.lights.push_back(fx::rocket_light(to));
   }
   std::swap(s.last, s.next);
+  std::erase_if(s.haze,
+                [&](const ge::render::HazeTrail& h) { return ge::render::haze_cold(h, t); });
+  if (!s.on.trails) s.haze.clear();
+  out.haze.assign(s.haze.begin(), s.haze.end());
 
   // The explosions: a burst once, then a light while it fades.
   if (l.explosions.size() < s.explosions_seen) {  // a new map
@@ -695,6 +712,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     s.blasts.clear();
     s.mains.clear();
     s.flights.clear();
+    s.haze.clear();
     s.wall_colours.clear();
     s.wounds.clear();
     s.wound_health.clear();

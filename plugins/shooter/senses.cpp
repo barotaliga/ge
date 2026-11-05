@@ -107,8 +107,22 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
   const auto friendly = [&](int ent) {
     return ent >= 1 && ent <= 32 && (s.friends >> (ent - 1) & 1u) != 0;
   };
+  const auto foe = [&](int ent) {
+    return !is_player(sv, ent) && ent >= 0 && static_cast<size_t>(ent) < s.foes.size() &&
+           s.foes[static_cast<size_t>(ent)] != 0;
+  };
+  // A foe the game no longer marks is no contact.
+  for (Contact& c : s.contacts) {
+    if (c.ent < 0 || is_player(sv, c.ent) || foe(c.ent)) continue;
+    if (why) {
+      why->decide("memory");
+      why->fact("ent", c.ent);
+      why->choose("dropped", "no longer a foe");
+    }
+    c.ent = -1;
+  }
   for (const ViewEntity& v : view.entities) {
-    if (!is_player(sv, v.ent) || friendly(v.ent)) continue;
+    if (!(is_player(sv, v.ent) || foe(v.ent)) || friendly(v.ent)) continue;
     if (v.dead) {
       for (Contact& c : s.contacts) {
         if (c.ent != v.ent) continue;
@@ -142,7 +156,8 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
   }
   for (const ViewSound& snd : view.sounds) {
     if (!s.set.hear_players) break;
-    if (!is_player(sv, snd.ent) || snd.ent == viewer || friendly(snd.ent)) continue;
+    if (!(is_player(sv, snd.ent) || foe(snd.ent)) || snd.ent == viewer || friendly(snd.ent))
+      continue;
     bool dead = false;  // a death cry is no contact
     for (const ViewEntity& v : view.entities) dead |= v.ent == snd.ent && v.dead;
     if (dead) continue;

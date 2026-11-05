@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #include "shooters_edge/client/game_folder.hpp"
 
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -13,6 +14,7 @@
 #include <utility>
 
 #include "core/output.hpp"
+#include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 
 namespace shooters_edge::client {
@@ -223,15 +225,44 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
   using CArgs = ge::console::Args;
   using Con = ge::console::Console;
   if (content.campaign == nullptr) {
-    for (const char* name : {"newgame", "save", "load"}) con.remove_command(name);
+    for (const char* name : {"newgame", "coopgame", "save", "load"}) con.remove_command(name);
     return;
   }
   con.add_command("newgame", "newgame: a new single-player game from the start map",
                   [&listen, &next_map, &content](Con&, const CArgs&) {
                     listen.opt.console.emplace_back("deathmatch 0");
                     listen.opt.console.emplace_back("coop 0");
+                    listen.opt.companions = 0;
                     next_map = content.start_map;
                   });
+  con.add_command(
+      "coopgame",
+      "coopgame [bots] [novice|average|expert] [map]: a new coop game (teamplay on: no harm "
+      "between players) with that many companion bots beside you, 1 by default, from the start "
+      "map or the map named; `addbot` and `removebot` change the party during the game",
+      [&listen, &next_map, &content](Con& c, const CArgs& a) {
+        int bots = 1;
+        sh::AimSkill skill = sh::AimSkill::average;
+        std::string map = content.start_map;
+        for (size_t i = 1; i < a.size(); i++) {
+          const std::string& w = a[i];
+          if (!w.empty() && w[0] >= '0' && w[0] <= '9') {
+            bots = std::atoi(w.c_str());
+          } else if (!skill_named(w, skill)) {
+            map = w;
+          }
+        }
+        if (bots < 0 || bots > kPartyMost) {
+          c.print("coopgame: 0 to " + std::to_string(kPartyMost) + " bots");
+          return;
+        }
+        listen.opt.console.emplace_back("deathmatch 0");
+        listen.opt.console.emplace_back("coop 1");
+        listen.opt.console.emplace_back("teamplay 1");
+        listen.opt.companions = bots;
+        listen.opt.companion_skill = skill;
+        next_map = map;
+      });
   con.add_command("save",
                   "save <name>: the single-player game saved as saves/<name>.save (<name>.sav: "
                   "the classic text save in the game folder)",

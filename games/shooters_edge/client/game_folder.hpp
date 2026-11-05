@@ -21,13 +21,13 @@
 //   program files, a mod's folder first, else the baseline mod), the single-player program the
 //   campaign runs, whether the packs are the full game, and the first map (the profile's start
 //   map when the packs hold it, else the game's fallback); and the campaign's commands it lights
-//   (`campaign_commands`: `newgame`, `save`, `load`).
+//   (`campaign_commands`: `newgame`, `coopgame`, `save`, `load`).
 //
 // ge:summary The game folder a player loads: the install checked, its game folder, programs
 // ge:keywords game-folder load-game basedir install check_game_folder game_of multiplayer-dir
 // ge:keywords remembered_game remember_game kept-game last-game prefs load_programs first-map
 // ge:keywords campaign-program
-// ge:keywords choose_folder campaign_commands newgame save load
+// ge:keywords choose_folder campaign_commands newgame coopgame save load
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #pragma once

@@ -40,9 +40,60 @@ void(entity killer, entity killed) note_frag = {};
 
 void(entity m) missile_now = {};
 
-// The campaign has no teams and leaves no backpacks.
-float(entity a, entity b) same_team = { return FALSE; };
+// In coop with `teamplay` on, the players are one side: one player's shots never harm another
+// (his own blast still harms himself). Monsters are on no side. No backpacks are left.
+float(entity a, entity b) same_team = {
+  if (!coop || !teamplay || a == b) return FALSE;
+  return (a.flags & FL_CLIENT) && (b.flags & FL_CLIENT);
+};
 void() drop_on_death = {};
+
+// --- the jump: the single-player form's program jumps for itself (the move never does) ---
+
+float FL_WATERJUMP = 2048;     // out of the water onto a ledge: the move carries him by movedir
+float FL_JUMPRELEASED = 4096;  // the jump let go since the last one (no pogo)
+
+// A ledge ahead at the water's edge: the jump out (checked at water level 2, every frame).
+void() water_jump_check = {
+  local vector start, end;
+  makevectors(self.angles);
+  start = self.origin;
+  start_z = start_z + 8;
+  v_forward_z = 0;
+  end = start + v_forward * 24;  // not renormalised: a little short when the body is pitched
+  traceline(start, end, TRUE, self);
+  if (trace_fraction == 1) return;
+  start_z = start_z + self.maxs_z - 8;
+  end = start + v_forward * 24;
+  self.movedir = trace_plane_normal * -50;
+  traceline(start, end, TRUE, self);
+  if (trace_fraction < 1) return;
+  self.flags = self.flags | FL_WATERJUMP;
+  self.velocity_z = 225;
+  self.flags = self.flags - (self.flags & FL_JUMPRELEASED);
+  self.teleport_time = time + 2;
+};
+
+// Before the move: the water jump's check, then the jump button: swimming up in deep water, a jump
+// of 270 off the ground once the button was let go since the last.
+void() player_jump = {
+  if (self.waterlevel == 2) water_jump_check();
+  if (!self.button2) {
+    self.flags = self.flags | FL_JUMPRELEASED;
+    return;
+  }
+  if (self.flags & FL_WATERJUMP) return;
+  if (self.waterlevel >= 2) {
+    if (self.watertype == CONTENT_WATER) self.velocity_z = 100;
+    else if (self.watertype == CONTENT_SLIME) self.velocity_z = 80;
+    else self.velocity_z = 50;
+    return;
+  }
+  if (!(self.flags & FL_ONGROUND) || !(self.flags & FL_JUMPRELEASED)) return;
+  self.flags = self.flags - (self.flags & FL_JUMPRELEASED);
+  self.flags = self.flags - (self.flags & FL_ONGROUND);
+  self.velocity_z = self.velocity_z + 270;
+};
 
 // --- spawn parms: the inventory carried from map to map ---
 // parm1 the items, parm2 health, parm3 armour, parm4..7 shells, nails, rockets and cells, parm8 the
