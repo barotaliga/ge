@@ -142,7 +142,7 @@ pass (`gpu.pass.<name>`):
 
 | Change | GPU span (median ms) | Where |
 | --- | --- | --- |
-| The moving casters' 48 cube faces (8 lights) drawn as one atlas in one pass, a viewport a face, not a pass each: on the M3 Max a pass cost about 0.12 ms whatever it drew (`bsp.shadows` 3.8 to 0.09 ms at 960x540) | far above → 18.1 | `brush/app/bsp_draw.cpp`, `bsp.wgsl` |
+| The moving casters' 48 cube faces (8 lights) drawn as one atlas in one pass, a viewport a face, not a pass each: on the M3 Max a pass cost about 0.12 ms whatever it drew (`bsp.shadows` 3.8 to 0.09 ms at 960x540) | 22.7 → 18.1 | `brush/app/bsp_draw.cpp`, `bsp.wgsl` |
 | The blocker search reads the casters' cube alone, so a point no figure stands before skips the filter; the world's kept cube one compare again (its 4-tap soft filter cost 1.2); the capsules near a pixel found once, not for every light; the Vogel discs as constant tables turned by one spin a pixel | 18.1 → 15.7 | `brush/app/bsp.wgsl` |
 
 What the relief still costs at 1440p is its work: the parallax's march 0.41 ms (its steps 0.28,
