@@ -1116,7 +1116,11 @@ every pass, and judged by captioned screenshots:
   by the surface class of the map triangle the round's line crosses there, its normal off that
   triangle); the arc gun's beam is the engine's bolt (`render/beam.hpp`) in the style `r_beam_style`
   numbers (1 forked, 2 arc, 3 bolt the default, 4 braid), rooted on the gun's own muzzle, a cold
-  glow on the walls along it. Smoke is lit as the room round it is
+  glow on the walls along it. Under `ce_decals` the weapons leave
+  their MARKS (`client/world_fx.hpp`): engine/detail's decals pressed onto the map's own faces, a
+  scorch where a blast went off against a surface (its embers glowing for a second and a half), a
+  bullet hole where a round hit a face, the bolt's burns where it lands; a pool of 128, drawn as
+  the beams' pass's burns (soot and ember). The classic drew none, so its look shows none. Smoke is lit as the room round it is
   (`render::BlastLight` off the lightmap under it and the open sky over it), not by the sun
   through the roof. A match's temporary entities (the gunshots, spikes, beams and blood the
   baseline mod multicasts) reach these effects as a campaign's do. The `se-weapon-fx` lab fires

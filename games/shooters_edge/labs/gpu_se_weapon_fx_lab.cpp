@@ -290,7 +290,8 @@ void run(gl::Lab& lab) {
         at[3] = static_cast<float>(a);
       }
     }
-    at[0] = player.origin.x, at[1] = player.origin.y, at[2] = player.origin.z, at[4] = 2;
+    at[0] = player.origin.x, at[1] = player.origin.y, at[2] = player.origin.z;
+    at[4] = static_cast<float>(lab.arg_num("pitch"));
     placed = true;
     lab.note("aimed at yaw " + std::to_string(int(at[3])) + ", the wall " +
              std::to_string(int(dist)) + " units off");
@@ -367,6 +368,12 @@ void run(gl::Lab& lab) {
     lab.metric(std::string(kLooks[k]) + ".blasts-drawn", blasts[k], "count");
     lab.metric(std::string(kLooks[k]) + ".beams-drawn", beams[k], "count");
   }
+  for (int k = 0; k < 2; ++k) {
+    lab.metric(std::string(kLooks[k]) + ".marks", ge::detail::live_count(fx_state[k].marks),
+               "count");
+    lab.metric(std::string(kLooks[k]) + ".mark-verts", static_cast<double>(fx[k].burns.size()),
+               "vertices");
+  }
   lab.metric("explosions", static_cast<double>(l.explosions.size()), "count");
   lab.metric("effects", static_cast<double>(l.effects.size()), "count");
   lab.metric("weapons.pack", at_eye ? 1 : 0, "");
@@ -393,6 +400,8 @@ const gl::LabSpec kSpec{
       "x,y,z,yaw,pitch: where the player stands (map units; pitch down positive); "
       "empty: the spawn, aimed at the wall nearest 360 units off"},
      {"side", "", "x,y,z,yaw,pitch: a second camera; empty: beside the line of fire"},
+     {"pitch", "2",
+      "with no --at: the aim's pitch, degrees down (15: the floor a few metres ahead)"},
      {"weapons", "all",
       "the weapons fired, ',' between: shotgun double spiker heavy grenades "
       "rockets arc"},

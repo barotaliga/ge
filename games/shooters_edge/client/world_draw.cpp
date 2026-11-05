@@ -350,7 +350,12 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
   } else if (step == 1) {
     gr::create_particles(d, f.pipelines, f.particles, f.layout);
     gr::create_explosions(d, f.pipelines, f.explosions, f.layout);
-    gr::create_beams(d, f.pipelines, f.beams, f.layout, {});
+    gr::BeamSettings bs;  // the marks' burns too (world_fx.hpp's marks)
+    bs.max_burn_verts = kMarks * 240;
+    bs.atlas = &mark_atlas();
+    bs.atlas_width = kMarkAtlasPx * kMarkVariants;
+    bs.atlas_height = kMarkAtlasPx * ge::detail::kDecalKinds;
+    gr::create_beams(d, f.pipelines, f.beams, f.layout, bs);
     f.beam_shapes.resize(gr::kMaxBeamDraws);
     f.beam_draws.reserve(gr::kMaxBeamDraws);
     if (!f.weapons.empty()) {
@@ -567,7 +572,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       gr::build_beam(*look, b.shot, view.time_s, shape);
       if (shape.count > 0) f.beam_draws.push_back({&shape, look, b.shot.seed});
     }
-    gr::prepare_beams(d, f.beams, f.beam_draws, {}, view, 400);
+    gr::prepare_beams(d, f.beams, f.beam_draws, fx.burns, view, kHotEmberCd);
   }
   if (f.has_map) {
     GE_ZONE("world.models");
@@ -601,7 +606,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     if (f.extras) encode_extras(*f.extras, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_particles(f.particles, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_explosions(f.explosions, f.pipelines, f.rec, e, f.targets, f.frame);
-    if (!f.beam_draws.empty()) gr::encode_beams(f.beams, f.pipelines, f.rec, e, f.targets, f.frame);
+    if (!f.beam_draws.empty() || !fx.burns.empty())
+      gr::encode_beams(f.beams, f.pipelines, f.rec, e, f.targets, f.frame);
     encode_model_sprites(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
     if (weapon) gr::encode_viewmodel(f.held, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);

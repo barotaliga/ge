@@ -12,7 +12,9 @@
 #include "brush/map.hpp"
 #include "core/math.hpp"
 #include "core/prng.hpp"
+#include "detail/receivers.hpp"
 #include "detail/surfaces.hpp"
+#include "detail/vec.hpp"
 #include "shooter/hull.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/view.hpp"
@@ -121,9 +123,9 @@ bool face_hit(const ge::brush::Map& m, const sh::Vec3f& from, const sh::Vec3f& a
 }
 
 // The surface nearest `at` (map units) within kNearSurfaceU along the six axes: its normal (out of
-// it, engine axes, unit); false in the open.
+// it, engine axes, unit) and how far off it is (m); false in the open.
 constexpr float kNearSurfaceU = 40;
-bool surface_near(const LoadedMap& m, const sh::Vec3f& at, double normal[3]) {
+bool surface_near(const LoadedMap& m, const sh::Vec3f& at, double normal[3], double* off_m) {
   if (m.bsp.world.models.empty()) return false;
   const sh::Hull& hull = m.bsp.world.models[0].hulls[0];
   float best = 1;
@@ -136,7 +138,87 @@ bool surface_near(const LoadedMap& m, const sh::Vec3f& at, double normal[3]) {
       best = tr.fraction;
       engine_dir(tr.plane.normal, normal);
     }
+  *off_m = best * kNearSurfaceU * ge::brush::kUnitM;
   return best < 1;
+}
+
+// The map's world faces (no sky, no liquid) as the marks' receivers, in engine metres, each
+// triangle wound to face the way its face's normal does.
+std::shared_ptr<const MarkFaces> receivers_of(const ge::brush::Map& m) {
+  namespace gd = ge::detail;
+  if (m.models.empty()) return nullptr;
+  auto faces = std::make_shared<MarkFaces>();
+  gd::TriMesh& mesh = faces->mesh;
+  const ge::brush::Model& world = m.models[0];
+  const uint32_t end = std::min<uint32_t>(world.first_surface + world.surface_count,
+                                          static_cast<uint32_t>(m.surfaces.size()));
+  for (uint32_t si = world.first_surface; si < end; ++si) {
+    const ge::brush::Surface& sf = m.surfaces[si];
+    if (sf.kind == ge::brush::SurfaceKind::sky || sf.kind == ge::brush::SurfaceKind::liquid)
+      continue;
+    if (sf.texture < m.textures.size() &&
+        (m.textures[sf.texture].sky || m.textures[sf.texture].liquid != ge::brush::Liquid::none))
+      continue;
+    for (uint32_t t = 0; t + 2 < sf.count; t += 3) {
+      gd::Vec3 c[3];
+      for (int k = 0; k < 3; ++k) {
+        double e[3];
+        ge::brush::to_engine(m.vertices[m.indices[sf.first + t + k]].pos, e);
+        c[k] = {e[0], e[1], e[2]};
+      }
+      double n[3];
+      ge::brush::to_engine(m.vertices[m.indices[sf.first + t]].nrm, n);
+      const gd::Vec3 front = gd::cross(gd::sub(c[1], c[0]), gd::sub(c[2], c[0]));
+      if (front.x * n[0] + front.y * n[1] + front.z * n[2] < 0) std::swap(c[1], c[2]);
+      for (const gd::Vec3& v : c) {
+        mesh.idx.push_back(static_cast<uint32_t>(mesh.pos.size()));
+        mesh.pos.push_back(v);
+      }
+      mesh.tag.push_back(0);
+    }
+  }
+  faces->receivers = gd::bin_receivers(mesh, 1);  // points into faces->mesh, kept beside it
+  return faces;
+}
+
+// A mark pressed onto the receivers (nothing without them).
+void mark(FxState& s, ge::detail::DecalKind kind, const double at[3], const double n[3],
+          double size_m, double spin, uint32_t variant, double t) {
+  if (!s.receivers) return;
+  ge::detail::DecalAt d;
+  d.at = {at[0], at[1], at[2]};
+  d.normal = {n[0], n[1], n[2]};
+  d.size_m = size_m;
+  d.spin_rad = spin;
+  d.now_s = t;
+  d.variant = variant % kMarkVariants;
+  d.kind = kind;
+  ge::detail::place_decal(s.marks, s.receivers->receivers, d);
+}
+
+// The marks as the beams' pass's burns: each one's soot and its embers, its masks' cell of the
+// atlas.
+void burns_of(const FxState& s, double t, std::vector<ge::render::BurnVertex>& out) {
+  out.clear();
+  if (!s.receivers) return;
+  for (uint32_t i = 0; i < s.marks.capacity; ++i) {
+    const ge::detail::Decal& d = s.marks.decals[i];
+    if (!d.live) continue;
+    const ge::detail::DecalLook look = ge::detail::look_at(d.kind, t - d.born_s);
+    const float soot = static_cast<float>(look.opacity * (1 - (look.r + look.g + look.b) / 3));
+    // A fresh scorch's embers at their hottest (look_at's 2.6) are kHotEmberCd.
+    const float ember = static_cast<float>(look.er / 2.6) * kHotEmberCd;
+    for (const ge::detail::DecalVertex& v : ge::detail::decal_verts(s.marks, i)) {
+      ge::render::BurnVertex b;
+      b.at[0] = v.pos.x, b.at[1] = v.pos.y, b.at[2] = v.pos.z;
+      b.u = static_cast<float>((d.variant + v.u) / kMarkVariants);
+      b.v = static_cast<float>((static_cast<int>(d.kind) + v.v) / ge::detail::kDecalKinds);
+      b.fade = static_cast<float>(v.fade);
+      b.soot = soot;
+      b.ember = ember;
+      out.push_back(b);
+    }
+  }
 }
 
 }  // namespace
@@ -178,6 +260,11 @@ fx::Dust player_dust(const sh::Vec3f& origin, const sh::Vec3f& angles, int entit
   return d;
 }
 
+const std::vector<uint8_t>& mark_atlas() {
+  static const std::vector<uint8_t> kAtlas = ge::detail::bake_atlas(kMarkAtlasPx, kMarkVariants);
+  return kAtlas;
+}
+
 FxSwitches fx_switches(const look::Picture& picture) {
   FxSwitches s;
   if (look::look_of(picture) == look::Look::classic) return s;
@@ -186,6 +273,7 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.trails = picture.ce.trails;
   s.beams = picture.ce.beams;
   s.hits = picture.ce.hits;
+  s.decals = picture.ce.decals;
   s.warps = picture.ce.warps;
   s.bolt = &fx::bolt_look(static_cast<int>(picture.beam_style));
   return s;
@@ -198,6 +286,17 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   out.puffs.clear();
   out.flames.clear();
   out.beams.clear();
+  // The marks' receivers, made once a map (ce_decals).
+  const ge::brush::Map* faces = l.map ? &l.map->bsp.map : nullptr;
+  if (s.on.decals && faces != s.marked) {
+    s.marked = faces;
+    s.receivers = faces != nullptr ? receivers_of(*faces) : nullptr;
+    s.marks = ge::detail::make_pool(kMarks);
+  }
+  if (!s.on.decals) {
+    s.marked = nullptr;
+    s.receivers.reset();
+  }
 
   // The missiles: a trail over the stretch each flew since the last frame, a rocket's glow.
   s.next.clear();
@@ -239,6 +338,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     s.last.clear();
     s.blasts.clear();
     s.mains.clear();
+    s.marked = nullptr;
     s.beams.clear();
   }
   for (; s.explosions_seen < l.explosions.size(); s.explosions_seen++) {
@@ -248,10 +348,18 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     if (s.on.explosions) {
       // The surface it went off against, if one is within a ball's reach of it: the nearest hit
       // of six lines out of it.
-      double normal[3];
-      const bool against = l.map && surface_near(*l.map, l.explosions[s.explosions_seen], normal);
+      double normal[3], off = 0;
+      const bool against =
+          l.map && surface_near(*l.map, l.explosions[s.explosions_seen], normal, &off);
       const size_t first = s.blasts.size();
       fx::blast(p, against ? normal : nullptr, s.seed++, t, &s.blasts, &out.births);
+      // Its scorch on the surface it went off against.
+      ge::render::Scorch sc;
+      if (against && s.on.decals && ge::render::scorch_of(s.blasts[first], sc)) {
+        const double on[3] = {p[0] - normal[0] * off, p[1] - normal[1] * off,
+                              p[2] - normal[2] * off};
+        mark(s, ge::detail::DecalKind::scorch, on, normal, sc.size_m, sc.spin_rad, sc.variant, t);
+      }
       s.mains.push_back(s.blasts[first]);
     } else {
       fx::explosion(p, s.seed++, s.palette, &out.births);
@@ -370,12 +478,14 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     for (double& c : to_eye) c = n > 0 ? c / n : 0;
     if (n == 0) to_eye[1] = 1;
     // The face it landed on, seen along the line from the eye (a beam's from its root).
+    bool on_face = false;  // `face` found the map's triangle
     const auto face = [&](const sh::Vec3f& from, double normal[3], double dir[3]) {
       sh::Vec3f fn{};
       ge::detail::SurfaceClass sc = ge::detail::SurfaceClass::unknown;
       const sh::Vec3f hit = e.kind == EffectKind::beam ? e.end : e.at;
       engine_dir({hit.x - from.x, hit.y - from.y, hit.z - from.z}, dir);
-      if (map != nullptr && face_hit(*map, from, hit, &fn, &sc)) {
+      on_face = map != nullptr && face_hit(*map, from, hit, &fn, &sc);
+      if (on_face) {
         engine_dir(fn, normal);
       } else {
         for (int k = 0; k < 3; ++k) normal[k] = -dir[k];
@@ -384,11 +494,19 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     };
     switch (e.kind) {
       case EffectKind::impact:
-      case EffectKind::spike:
+      case EffectKind::spike: {
+        double normal[3], dir[3];
+        ge::detail::SurfaceClass sc = ge::detail::SurfaceClass::unknown;
+        if (s.on.hits || s.on.decals) sc = face(eye_map, normal, dir);
+        const bool nail = e.kind == EffectKind::spike;
+        // The hole it leaves in a solid face (none in the sky or a liquid).
+        if (s.on.decals && on_face && sc != ge::detail::SurfaceClass::sky &&
+            sc != ge::detail::SurfaceClass::liquid) {
+          const uint32_t h = s.seed++ * 2654435761u;
+          mark(s, ge::detail::DecalKind::bullet_hole, p, normal, nail ? kNailHoleM : kHoleM,
+               (h >> 8) % 628 / 100.0, h >> 24, t);
+        }
         if (s.on.hits) {
-          double normal[3], dir[3];
-          const ge::detail::SurfaceClass sc = face(eye_map, normal, dir);
-          const bool nail = e.kind == EffectKind::spike;
           // A gunshot's count is its pellets (a match's); each its own hit, spread a little.
           const int hits = nail ? 1 : std::clamp(e.count, 1, 4);
           for (int i = 0; i < hits; ++i)
@@ -400,6 +518,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
           fx::impact(p, specks, s.seed++, s.palette, &out.births);
         }
         break;
+      }
       case EffectKind::blood: {
         const bool arc = e.code == 13 && !l.campaign_host;  // a match's beam's blood
         fx::blood(p, arc ? 50 : 20 * e.count, arc, s.seed++, s.palette, &out.births);
@@ -466,8 +585,15 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   });
   ge::core::Rng roll = ge::core::make_rng(s.seed++);  // the classic bolt's segments' roll
   int segment = 0;
-  for (const HeldBeam& b : s.beams) {
+  for (HeldBeam& b : s.beams) {
     if (s.on.beams) {
+      // Its burns where it lands, a few to fill a sweep's gap.
+      ge::render::BeamBurn burn;
+      for (int i = 0; s.on.decals && b.look != nullptr && i < 4 &&
+                      ge::render::beam_burns(*b.look, b.shot, t, b.trail, burn);
+           ++i)
+        mark(s, ge::detail::DecalKind::scorch, burn.at, burn.normal, burn.size_m, burn.spin_rad,
+             burn.variant, burn.born_s);
       out.beams.push_back(b);
       ge::render::LocalLight ll[ge::render::kBeamLights];
       const int n = ge::render::beam_lights(b.look ? *b.look : fx::bolt_look(), b.shot, t, ll);
@@ -493,6 +619,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
       out.models.push_back(seg);
     }
   }
+  burns_of(s, t, out.burns);
   std::erase_if(s.lit, [&](const Blast& b) {
     return t - b.t > std::max(fx::kExplosionLight, kSpriteFrames / kSpriteFps);
   });
