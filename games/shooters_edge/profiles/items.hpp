@@ -21,6 +21,7 @@
 // ge:keywords items item-row call-word heard-word pickup sound-table item-kind spawnflags
 // ge:keywords respawn classname classic-items kclassicitems kclassicsounds
 // ge:keywords item-name pickup-message pickup-print item_name_lines kclassicnames localinfo
+// ge:keywords monster-models kclassicmonsters
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_game_profile_test.cpp
 #pragma once
@@ -175,6 +176,18 @@ inline constexpr ge::shooter::SoundMeaning kClassicSounds[] = {
     {"player/death1.wav", SoundClass::death, false, ""},
     {"player/udeath.wav", SoundClass::death, false, ""},
 };
+
+// The monsters' models a co-op companion knows on sight (bots/companion.hpp): a client is sent
+// each entity's model, and these are the ones that walk, fly or swim at the players.
+inline constexpr std::string_view kClassicMonsters[] = {
+    "progs/soldier.mdl", "progs/dog.mdl",      "progs/knight.mdl",   "progs/hknight.mdl",
+    "progs/ogre.mdl",    "progs/zombie.mdl",   "progs/wizard.mdl",   "progs/fish.mdl",
+    "progs/demon.mdl",   "progs/shambler.mdl", "progs/shalrath.mdl", "progs/enforcer.mdl",
+    "progs/tarbaby.mdl", "progs/boss.mdl",     "progs/oldone.mdl"};
+// Of those, the ones only a blast keeps down (a shot one gets up again), and the ones no weapon
+// kills at all (the map's own trap does): a player passes them rather than fights them.
+inline constexpr std::string_view kClassicBlastOnly[] = {"progs/zombie.mdl"};
+inline constexpr std::string_view kClassicNoWeapon[] = {"progs/boss.mdl", "progs/oldone.mdl"};
 
 // A game's three tables, which its profile row carries (game_profile.hpp).
 struct ItemTables {

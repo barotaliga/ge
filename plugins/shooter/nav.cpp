@@ -469,7 +469,13 @@ int32_t nav_nearest(const NavGraph& g, Vec3f p) {
 }
 
 NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& search,
-                   float mover_penalty_s, std::span<const int32_t> barred) {
+                   float mover_penalty_s, std::span<const int32_t> barred,
+                   std::span<const NavExtraLink> cut) {
+  auto is_cut = [&](int32_t a, int32_t b) {
+    for (const NavExtraLink& c : cut)
+      if (c.from == a && c.to == b) return true;
+    return false;
+  };
   auto is_barred = [&](int32_t m) {
     if (m < 0) return false;
     for (const int32_t b : barred)
@@ -499,7 +505,11 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
         const NavNode& n = g.nodes[static_cast<size_t>(a)];
         for (int32_t k = 0; k < n.links; k++) {
           const NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
-          if (is_barred(l.mover)) continue;
+          // A shut door is crossed neither by a link it is tagged on nor into a node inside it
+          // (a link that crosses two doors carries one of them).
+          if (is_barred(l.mover) || is_barred(g.nodes[static_cast<size_t>(l.to)].mover) ||
+              (l.mover >= 0 && !cut.empty() && is_cut(a, l.to)))
+            continue;
           const double cost = search.cost(a) + l.time_s + (l.mover >= 0 ? mover_penalty_s : 0);
           if (search.improves(l.to, cost)) search.reach(l.to, cost, a, heuristic(l.to));
         }

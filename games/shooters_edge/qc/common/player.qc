@@ -124,6 +124,7 @@ void() PlayerPreThink = {
     return;
   }
   player_water();
+  player_jump();  // the variant's: the campaign's program jumps for itself
 };
 
 void() PlayerPostThink = {

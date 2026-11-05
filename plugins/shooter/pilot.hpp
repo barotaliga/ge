@@ -144,6 +144,14 @@ struct Pilot {
   bool jump_pressed = false;     // the jump button in the last command
   bool airborne = false;         // left the ground on the current jump link
   int32_t barred[4] = {-1, -1, -1, -1};    // doors found shut: planned round
+  std::vector<NavExtraLink> cut;           // links an open door's leaf stands across: round
+  std::vector<NavExtraLink> short_jumps;   // jumps missed (short, or no nearer), one entry a time
+  std::vector<NavExtraLink> failed;        // those missed twice: never planned again
+  int32_t try_from = -1, try_to = -1;      // the jump being lined up for
+  int tries = 0;                           // and the run-ups at it
+  std::vector<int32_t> shut;               // doors the caller knows are shut: never planned through
+  std::vector<NavExtraLink> shut_links;    // and links it knows are (onto a bridge still in)
+  std::vector<NavExtraLink> cut_all;       // cut and shut_links together, for the route
   double wanted[3] = {}, pressed[3] = {};  // the last command's yaw, forward, side
   ai::Hands hands;
   ai::Search search;

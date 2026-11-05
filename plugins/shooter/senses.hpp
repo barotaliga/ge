@@ -20,6 +20,10 @@
 //   never aims at a body.
 // - HEARD when it started a sound this frame that reached the client: its place is remembered as
 //   heard (a footstep, a shot, a jump), not as seen.
+// - A FOE that is not a player (a monster in a co-op game): an entity the game marks in
+//   `Senses::foes` is taken as a contact like a player, seen by the same cone and line and heard
+//   when it starts a sound; one the game unmarks (dead, or no threat any more) is dropped. What
+//   marks one is the game's choice, from what its client is sent.
 // A contact is forgotten `forget_s` after it was last seen or heard. Every change (seen, lost,
 // heard, forgotten) is a decision on the `ai::Why` handed in, so `ge why` reads why a bot turned.
 //
@@ -29,6 +33,7 @@
 // ge:summary The bot's senses: what a client is sent, sight by the hull trace in a cone, sounds
 // ge:keywords senses sight hearing client-view sent entities sounds attenuation fov cone
 // ge:keywords line-of-sight trace memory contact forget seen heard velocity pvs friends team
+// ge:keywords foes monsters co-op
 // ge:skill shooter bots
 // ge:test tests/shooter_senses_test.cpp
 #pragma once
@@ -97,6 +102,9 @@ struct Senses {
   // Players this bot does not take as contacts (its team): bit k is the player in slot k (entity
   // k + 1). A teammate is neither seen nor heard as someone to fight.
   uint32_t friends = 0;
+  // Entities other than players this bot takes as contacts: `foes[e]` non-zero for entity `e`
+  // (empty: players only). The game sets and clears them between frames.
+  std::vector<uint8_t> foes;
   std::vector<Contact> contacts;
   SenseStats stats;
 };

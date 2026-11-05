@@ -3,7 +3,7 @@
 // ge:summary The window's world frame: the BSP map, the effects, sky, bloom, post, the overlay
 // ge:keywords world-draw bsp frame create_world_draw draw_world resize_world particles
 // ge:keywords enhanced-textures texture-cache relief normal-map parallax
-// ge:keywords muzzle-fire explosions-pass hide-hands beams-pass lightning-bolt
+// ge:keywords muzzle-fire explosions-pass hide-hands beams-pass lightning-bolt heat-haze
 // ge:skill render brush shooter
 #include "shooters_edge/client/world_draw.hpp"
 
@@ -25,6 +25,7 @@
 #include "render/explosions.hpp"
 #include "render/far_land.hpp"
 #include "render/frame.hpp"
+#include "render/haze.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
 #include "render/sky.hpp"
@@ -66,6 +67,7 @@ struct WorldDraw {
   gr::Particles particles;
   gr::Explosions explosions;  // the muzzle fire, the enhanced blasts, a rocket's flame, hits' dust
   gr::Beams beams;            // the arc guns' bolts (ce_beams)
+  gr::Haze haze;              // the hot air behind a nail or a rocket (ce_trails)
   std::vector<gr::BeamShape> beam_shapes;  // kMaxBeamDraws, built each frame
   std::vector<gr::BeamDraw> beam_draws;
   // This frame's births, blasts and flames with the room's light on their smoke (light_at).
@@ -146,6 +148,7 @@ void make_targets(ge::gpu::Device& d, WorldDraw& f) {
   gr::bind_particle_targets(d, f.particles, f.targets);
   gr::bind_explosion_targets(d, f.explosions, f.targets);
   gr::bind_beam_targets(d, f.beams, f.targets);
+  gr::bind_haze_targets(d, f.haze, f.targets);
   if (f.has_map) ba::create_bsp_targets(d, f.bsp, f.targets);
   if (f.extras) bind_extras_targets(d, *f.extras, f.targets);
 }
@@ -357,6 +360,7 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     gr::create_explosions(d, f.pipelines, f.explosions, f.layout);
     // The marks' burns too (world_fx.hpp's marks, render/marks.hpp).
     gr::create_beams(d, f.pipelines, f.beams, f.layout, gr::mark_beam_settings(kMarks));
+    gr::create_haze(d, f.pipelines, f.haze, f.layout);
     f.beam_shapes.resize(gr::kMaxBeamDraws);
     f.beam_draws.reserve(gr::kMaxBeamDraws);
     if (!f.weapons.empty()) {
@@ -574,6 +578,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       if (shape.count > 0) f.beam_draws.push_back({&shape, look, b.shot.seed});
     }
     gr::prepare_beams(d, f.beams, f.beam_draws, fx.burns, view, gr::kHotEmberCd);
+    gr::prepare_haze(d, f.haze, fx.haze, view);
   }
   if (f.has_map) {
     GE_ZONE("world.models");
@@ -609,6 +614,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     gr::encode_explosions(f.explosions, f.pipelines, f.rec, e, f.targets, f.frame);
     if (!f.beam_draws.empty() || !fx.burns.empty())
       gr::encode_beams(f.beams, f.pipelines, f.rec, e, f.targets, f.frame);
+    // After everything the hot air is in front of: it bends the smoke and the fire behind it too.
+    gr::encode_haze(f.haze, f.pipelines, f.rec, e, f.targets, f.frame);
     encode_model_sprites(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
     if (weapon) gr::encode_viewmodel(f.held, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);

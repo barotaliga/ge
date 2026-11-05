@@ -67,6 +67,7 @@
 #include "render/beam.hpp"
 #include "render/beams.hpp"
 #include "render/explosions.hpp"
+#include "render/haze.hpp"
 #include "render/marks.hpp"
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/look.hpp"
@@ -145,6 +146,7 @@ struct FxState {
   std::vector<std::array<float, 3>> mark_light;    // each slot's light, whites, as it was pressed
   std::unordered_map<int, ge::camera::Vec3> last;  // each missile's place a frame ago, m
   std::unordered_map<int, ge::camera::Vec3> next;  // this frame's, swapped into `last`
+  std::vector<ge::render::HazeTrail> haze;         // the flights' hot air still warm, oldest first
   // Each missile's place (map units) and the way it flew, a frame ago: the surface a blast went
   // off against lies along it.
   struct Flight {
@@ -196,6 +198,8 @@ struct FxFrame {
   std::vector<HeldBeam> beams;
   // The marks on the walls this frame (ce_decals), three vertices a triangle, for the beams' pass.
   std::vector<ge::render::BurnVertex> burns;
+  // The hot air a nail's or a rocket's flight left (ce_trails), a stretch a frame, for the haze.
+  std::vector<ge::render::HazeTrail> haze;
 };
 
 // A player's dust and the sweep of his warp from where he stands (`origin`, `angles`: map units

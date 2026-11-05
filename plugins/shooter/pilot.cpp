@@ -26,14 +26,17 @@ constexpr float kStrafeHold = 2;    // the strafe's side holds until the target 
 constexpr float kSimpleSide = 3;    // the simple hop takes the side the route is this far off, deg
 constexpr float kStrafeSpeed = 0.8f;  // a strafe starts moving at least this share of maxspeed
 constexpr float kLevel = 2;           // a strafe stretch's nodes lie within this of one height
-constexpr float kClear = 4;           // a player waits this far clear of a mover's box, units
-constexpr float kLanded = 32;         // a jump has landed on its target within this, units
-constexpr float kSlow = 50;           // under this a velocity's way is not read, units/s
-constexpr float kSlowing_s = 0.25f;   // a run slows to a jump's speed in about this, s
-constexpr float kBrake = 0.25f;       // the least share of maxspeed walked into the goal
-constexpr float kFacing = 10;      // a run-up goes when the view is this near the jump's way, deg
-constexpr float kOnLine = 10;      // a jump is run at on its line within this across, units
-constexpr float kStepHeight = 18;  // the move's step
+constexpr float kJumpKin = 72;   // a jump given up takes those beside it, start and end this near
+constexpr int kRunUpTries = 4;   // a jump lined up for this many times and never made is given up
+constexpr float kStepOver = 18;  // a mover's top this near a player's feet is a step up, units
+constexpr float kClear = 4;      // a player waits this far clear of a mover's box, units
+constexpr float kLanded = 32;    // a jump has landed on its target within this, units
+constexpr float kSlow = 50;      // under this a velocity's way is not read, units/s
+constexpr float kSlowing_s = 0.25f;  // a run slows to a jump's speed in about this, s
+constexpr float kBrake = 0.25f;      // the least share of maxspeed walked into the goal
+constexpr float kFacing = 10;        // a run-up goes when the view is this near the jump's way, deg
+constexpr float kOnLine = 10;        // a jump is run at on its line within this across, units
+constexpr float kStepHeight = 18;    // the move's step
 
 float across(Vec3f a, Vec3f b) {
   const float dx = b.x - a.x, dy = b.y - a.y;
@@ -154,7 +157,9 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
     if (nb.origin[i] < lo[i]) lo[i] = nb.origin[i];
     if (nb.origin[i] > hi[i]) hi[i] = nb.origin[i];
   }
-  return boxes_meet(lo + kPlayerMins, hi + kPlayerMaxs, now->absmin, now->absmax);
+  // A door sunk to within a step of the floor (one that opens downward) is walked over.
+  return boxes_meet(lo + kPlayerMins + Vec3f{0, 0, kStepOver}, hi + kPlayerMaxs, now->absmin,
+                    now->absmax);
 }
 
 // The end of a strafe stretch from route[k]: the furthest route index j whose links from k are
@@ -365,6 +370,35 @@ Vec3f pursue(const Pilot& p, Vec3f at) {
   }
 }
 
+// A jump missed (landed short, or no nearer its start): the second miss of the same one is not a
+// jump this player makes, and it is never planned again.
+void missed_jump(Pilot& p, NavExtraLink j) {
+  int times = 0;
+  for (const NavExtraLink& e : p.short_jumps) times += e.from == j.from && e.to == j.to ? 1 : 0;
+  if (p.short_jumps.size() < 256) p.short_jumps.push_back(j);
+  if (times != 1) return;
+  // It and every jump beside it (the graph lays a jump from each node along an edge): from within
+  // kJumpKin of its start to within kJumpKin of its end.
+  const NavGraph& g = *p.g;
+  const Vec3f fa = node(g, j.from).origin, fb = node(g, j.to).origin;
+  for (size_t na = 0; na < g.nodes.size(); na++) {
+    const NavNode& n = g.nodes[na];
+    if (across(n.origin, fa) > kJumpKin || n.origin.z > fa.z + kJumpKin ||
+        n.origin.z < fa.z - kJumpKin)
+      continue;
+    for (int32_t k = 0; k < n.links; k++) {
+      const NavLink& kl = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+      const Vec3f to = node(g, kl.to).origin;
+      if (kl.kind != NavKind::jump || across(to, fb) > kJumpKin || to.z > fb.z + kJumpKin ||
+          to.z < fb.z - kJumpKin)
+        continue;
+      const NavExtraLink e{static_cast<int32_t>(na), kl.to, kl.kind, kl.time_s};
+      p.failed.push_back(e);
+      p.cut.push_back(e);
+    }
+  }
+}
+
 // The run-up and the jump from S toward T at `v`: line up behind S (the run-up point, `run_up`
 // back along the jump's way), run at S with the forward axis held to `v`, and jump at S moving
 // at it along the way. True on the command the jump is pressed.
@@ -518,12 +552,20 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
   p.stats.plans++;
   restart(p, s);
   const int32_t from = nav_nearest(*p.g, s.origin);
-  int32_t barred[4];
+  int32_t barred[4 + 60];
   int nb = 0;
   for (const int32_t b : p.barred)
     if (b >= 0) barred[nb++] = b;
+  for (const int32_t b : p.shut)
+    if (b >= 0 && nb < 64) barred[nb++] = b;
+  std::span<const NavExtraLink> cut = p.cut;
+  if (!p.shut_links.empty()) {
+    p.cut_all = p.cut;
+    p.cut_all.insert(p.cut_all.end(), p.shut_links.begin(), p.shut_links.end());
+    cut = p.cut_all;
+  }
   p.route = nav_route(*p.g, from, goal, p.search, 1,
-                      std::span<const int32_t>(barred, static_cast<size_t>(nb)))
+                      std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut)
                 .nodes;
   if (p.route.empty()) {
     p.mode = PilotMode::idle;
@@ -609,6 +651,11 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         p.best_s = t;
       } else if (t - p.best_s > p.set.stuck_s) {
         p.stats.stuck++;
+        // No nearer on the way to a jump (its run-up walled in): a miss of that jump.
+        if (l.kind == NavKind::jump)
+          missed_jump(p, {a, b, l.kind, l.time_s});
+        else if (l2 && l2->kind == NavKind::jump)
+          missed_jump(p, {b, p.route[p.k + 2], l2->kind, l2->time_s});
         replanned = true;
         replan(p, s);
         because = "the hop is no nearer: plan again";
@@ -782,7 +829,36 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       }
       const NavMover* rest = mover_of(g.movers, l.mover);
       const bool door = rest == nullptr || rest->model == nullptr;
-      if (door && p.wait_s > p.set.wait_s && !is_barred(p, l.mover)) {
+      // A door away from its rest is open and still in the way: its leaf stands across this
+      // link (a sliding door's half beside the doorway's middle). Every link through it its leaf
+      // meets now is cut, and the way planned through the rest of the doorway.
+      const NavMover* now_m = mover_of(s.movers, l.mover);
+      const bool open = door && rest != nullptr && now_m != nullptr &&
+                        (now_m->absmin.x != rest->absmin.x || now_m->absmin.y != rest->absmin.y ||
+                         now_m->absmin.z != rest->absmin.z);
+      if (open && p.wait_s > p.set.wait_s) {
+        const NavGraph& gg = *p.g;
+        for (size_t na = 0; na < gg.nodes.size(); na++) {
+          const NavNode& n = gg.nodes[na];
+          for (int32_t k = 0; k < n.links; k++) {
+            const NavLink& kl =
+                gg.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+            if (kl.mover != l.mover) continue;
+            const Vec3f o = gg.nodes[static_cast<size_t>(kl.to)].origin;
+            Vec3f lo = n.origin, hi = n.origin;
+            for (int i = 0; i < 3; i++) {
+              if (o[i] < lo[i]) lo[i] = o[i];
+              if (o[i] > hi[i]) hi[i] = o[i];
+            }
+            if (boxes_meet(lo + kPlayerMins, hi + kPlayerMaxs, now_m->absmin, now_m->absmax))
+              p.cut.push_back({static_cast<int32_t>(na), kl.to, kl.kind, kl.time_s});
+          }
+        }
+        p.stats.barred++;
+        replanned = true;
+        replan(p, s);
+        because = "waited too long at an open door: round its leaf";
+      } else if (door && p.wait_s > p.set.wait_s && !is_barred(p, l.mover)) {
         for (int32_t& slot : p.barred)
           if (slot < 0) {
             slot = l.mover;
@@ -800,8 +876,10 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         w.forward = 1;
         because = "in the air: toward the target";
       } else {
-        // Landed, and not on the target (passed() would have moved on): plan again.
+        // Landed, and not on the target (passed() would have moved on): plan again. A jump
+        // landed short twice is not one this player makes: never planned again.
         p.stats.lost++;
+        missed_jump(p, {a, b, l.kind, l.time_s});
         replanned = true;
         replan(p, s);
         because = "landed short";
@@ -813,11 +891,28 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       const Vec3f S = on_it ? A : B;
       const Vec3f T = on_it ? B : node(g, p.route[p.k + 2]).origin;
       const float v = on_it ? l.speed : l2->speed;
+      const NavExtraLink jl = on_it ? NavExtraLink{a, b, l.kind, l.time_s}
+                                    : NavExtraLink{b, p.route[p.k + 2], l2->kind, l2->time_s};
+      if (jl.from != p.try_from || jl.to != p.try_to) {
+        p.try_from = jl.from;
+        p.try_to = jl.to;
+        p.tries = 0;
+      }
+      const int32_t run_ups = p.stats.run_ups;
       if (approach_jump(p, s, S, T, v, w, target, because)) {
         p.stats.jumps++;
         if (!on_it) advance(p, s);
         p.airborne = true;
         p.mode = PilotMode::air;
+      } else if (p.stats.run_ups != run_ups && ++p.tries >= kRunUpTries) {
+        // Lined up again and again and never off (the run-up walled in, the line never held):
+        // not a jump this player makes.
+        missed_jump(p, jl);
+        missed_jump(p, jl);
+        p.tries = 0;
+        replanned = true;
+        replan(p, s);
+        because = "a jump never made: planned round";
       }
     } else {
       if (p.mode == PilotMode::wait || p.mode == PilotMode::run_up || p.mode == PilotMode::jump)
@@ -840,6 +935,11 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         p.best_s = t;
       } else if (t - p.best_s > p.set.stuck_s) {
         p.stats.stuck++;
+        // No nearer on the way to a jump (its run-up walled in): a miss of that jump.
+        if (l.kind == NavKind::jump)
+          missed_jump(p, {a, b, l.kind, l.time_s});
+        else if (l2 && l2->kind == NavKind::jump)
+          missed_jump(p, {b, p.route[p.k + 2], l2->kind, l2->time_s});
         replan(p, s);
         because = "no nearer: plan again";
       } else if (p.k + 1 < p.route.size() &&
@@ -911,6 +1011,7 @@ MoveCmd pilot_next(void* ctx, const Server& sv, int slot, int msec) {
   if ((p.mode == PilotMode::idle || p.mode == PilotMode::arrived) && !b.goals.empty()) {
     if (p.mode == PilotMode::arrived) b.arrivals++;
     for (int32_t& d : p.barred) d = -1;
+    p.cut = p.failed;
     for (size_t tries = 0; tries < b.goals.size(); tries++) {
       const int32_t goal = b.goals[b.next_goal];
       b.next_goal = (b.next_goal + 1) % b.goals.size();

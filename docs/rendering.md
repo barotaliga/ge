@@ -2366,6 +2366,35 @@ normal), so the hole and the burst never depend on each other. A game classes th
 hit by its texture and hands the impact here and the hole to the decals (M18, M42f); a light for
 the metal's sparks; chips tinted by the surface's own texture rather than its shade.
 
+## Heat haze
+
+Air that something hot has just passed through bends the light crossing it, as the air over a road
+in the sun does: what is behind it is seen a little displaced, the displacement wandering as the
+hot cells rise and mix, and gone once the air has cooled. Nothing is added to the picture; light is
+only moved. A hot nail leaves a thread of it a few centimetres wide for a fifth of a second; a
+rocket motor leaves a wide wake that spreads and rises for most of a second. The bend is a few
+milliradians (a road's mirage), a pixel or three on a 1080-line screen: seen moving, it is a
+trail; in a still it is barely there.
+
+**As built.** `engine/render/haze.hpp`, `haze.wgsl`, `haze_copy.wgsl`. A game lays a trail a
+STRETCH a frame (`HazeTrail`: where the hot thing was, where it is, the frame's time, a look), and
+each stretch ages on its own, so the trail is hottest at its head. `haze_level` is a stretch's heat
+(up over 10 ms, then (1 - age/life)^2), a pure function of the moment. The LOOK (`HazeLook`,
+presets `haze.nail` and `haze.rocket`) is the width laid and how fast it spreads, the bend at its
+hottest, the cells' size, how fast it rises and its life. The pass copies the frame's colour so far
+("haze.copy"), then draws every warm stretch as a ribbon turned to the eye ("haze"), whose pixels
+read the copy pushed off by two octaves of smooth 3D noise churning in the air. The push is largest
+along the ribbon's middle and zero at its edges, and is the bend in radians turned into pixels at
+the ribbon's distance. The ribbon is hidden behind anything nearer (the depth, read and never
+written), and a push that would land on something nearer than the air keeps the pixel's own
+colour, so a hand in front never smears into the air behind it. Shooter's Edge draws it after the
+explosions and the beams, so the smoke and the fire behind the hot air bend too, under `ce_trails`.
+`stage_haze` keeps the newest kMaxHaze (2048) stretches and allocates nothing; held by
+`tests/render_haze_test.cpp`.
+
+**Not yet:** a priced row on the software adapter; the explosions' own heat over a blast and a
+muzzle's.
+
 ## Shaders
 
 - **WGSL**, one file per pass, beside the pass's C++. A small build step resolves

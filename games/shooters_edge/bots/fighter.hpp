@@ -50,6 +50,7 @@
 #include "shooter/swim.hpp"
 #include "shooter/temper.hpp"
 #include "shooter/traits.hpp"
+#include "shooters_edge/bots/companion.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/profiles/items.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
@@ -164,6 +165,7 @@ struct Fighter {
   std::vector<FoeRead> foes;             // each enemy as believed, by entity (temper.hpp)
   std::vector<ButtonSpot> button_spots;  // the map's buttons (buttons.hpp)
   Mind mind;             // what it believes of its team, its claim, its calls (mind.hpp)
+  Escort escort;         // a co-op companion's own state (companion.hpp; leader -1: none)
   std::string name;      // its player name, as its teammates see it in their team lines
   ge::ai::Search reach;  // every node it can get to from where it stood at `reach_at`
   FighterStats stats;
@@ -199,6 +201,7 @@ struct Fighter {
   int32_t spam_node = -1;   // where it fires at a spot from now (-1: not out)
   int32_t spam_spot = -1;   // and at which
   int32_t poke = -1;        // the button a novice is on
+  int32_t objective = -1;   // a goal set from outside (way_through.hpp): taken before any item
   int32_t mega_watch = -1;  // the mega it took, its timer waiting on its health (knowledge.hpp)
   int32_t goal_node = -1;
   int32_t want_weapon = 0;  // the number (1..8) asked for; 0 none pending
@@ -234,6 +237,7 @@ struct Fighter {
   bool was_dead = false;
   bool unlocking = false;  // on the way to the goal item's button
   bool swimming = false;   // in water no route leaves: following the swim field
+  bool hunts = false;      // every monster a foe (companion.hpp `hunt_init`)
 };
 
 // The fighter's strength: health and armour's protection, a launcher counted on top.
@@ -246,6 +250,10 @@ float fighter_strength(const Stats& st);
 void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s, int slot,
                   const char* entities, sh::AimSkill skill, const sh::Traits& traits, double hz,
                   uint32_t seed);
+
+// Sends the fighter to nav node `node` (kept when it is on its way there or standing on it; none
+// when no way leads there from where it stands).
+void fighter_go(Fighter& f, int32_t node);
 
 // The fighter's next command, `msec` long, on server `s` as it stands after the last frame.
 sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, int msec);
