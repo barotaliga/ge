@@ -13,7 +13,10 @@
 //   the weapon's `flash_s`, for the world's lamps and the gun's own light (`light_held`).
 // - THE ANIMATION: a shot plays the model's `fire` clip from its start (the pump racked, the
 //   barrels turned, the axe's swing: viewmodel::held_clip_frames), handed out as the frames to
-//   draw; a model without one draws its rest frame.
+//   draw; a model without one draws its rest frame. A clip stepped a frame a shot
+//   (`HeldClip::frame_a_shot`, a nailgun held firing) goes one frame round on each shot and holds
+//   it, and the shot's muzzle, flash and fire are on the barrel that frame fires from: the
+//   nailgun's two in turn, the super nailgun's cluster one barrel at a time.
 // - A CLASSIC GAME'S OWN WEAPONS (`Hand::at_eye`): models authored at the eye, placed by the
 //   classic row (`eye_row`) with no offset of their own; the kick, the flash and the fire are
 //   still each weapon's look.
@@ -88,6 +91,8 @@ struct Hand {
   vm::PlaceState place;
   double flash_left = 0;  // s of the last shot's light still to fade
   double fire_t = -1;     // s into the `fire` clip (-1: at rest)
+  int shot_frame = -1;  // a clip stepped a frame a shot: the frame of the clip the last shot is on
+  int barrel = -1;      // the barrel the last shot left from (-1: the one muzzle)
   // The models are a classic game's own (GameAdapter::held_weapons), authored at the eye: placed
   // by `eye_row`, never on a look's offset.
   bool at_eye = false;

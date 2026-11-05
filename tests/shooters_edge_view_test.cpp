@@ -1,7 +1,8 @@
 // Shooter's Edge's held weapons (games/shooters_edge/view): the set is the eight number keys in
 // order, every model loads and mounts muzzle forward (a free one at its stated length, a built one
 // round its grip hand), the hand puts a weapon away and raises the next on the game's change (and
-// snaps it up on a shot), a shot plays the model's fire clip and comes back to rest, a shot lights
+// snaps it up on a shot), a shot plays the model's fire clip and comes back to rest (a nailgun
+// held firing steps it a frame a shot, each shot from its frame's barrel), a shot lights
 // the muzzle and fades, the player's cvars move the row, and every built weapon's arms stay inside
 // the human ranges at rest and through every clip.
 //
@@ -324,4 +325,44 @@ TEST(a_classic_games_own_weapon_is_held_at_the_eye) {
   vm::place_point(b.placement, o, pb);
   CHECK(std::fabs(pa[0]) < 1e-4f && std::fabs(pa[1] + 0.02f) < 1e-4f && std::fabs(pa[2]) < 1e-4f);
   CHECK(pb[1] < -0.1f);  // the look's grip, well below the eye
+}
+
+TEST(a_nailgun_held_firing_steps_a_frame_a_shot_from_each_barrel_in_turn) {
+  // A model of a rest frame and four firing frames, two barrels (vertex 0 on the left, 1 on the
+  // right), each firing frame flashing one of them in turn, its clip stepped a frame a shot.
+  vm::HeldModel gun;
+  gun.frames.resize(5);
+  for (vm::HeldFrame& fr : gun.frames) fr.positions = {-0.05f, 0, 0.5f, 0.05f, 0, 0.5f, 0, 0.1f, 0};
+  gun.indices = {0, 1, 2};
+  gun.muzzle_vertices = {0, 1};
+  gun.barrels = {{0}, {1}};
+  gun.frame_barrel = {-1, 0, 1, 0, 1};
+  gun.clips.push_back({.name = "fire", .first = 1, .count = 4, .fps = 10, .frame_a_shot = true});
+  std::vector<vm::HeldModel> set(se::kWeapons, gun);
+  se::Hand hand;
+  hand.at_eye = true;
+  se::HandInput in;
+  in.weapon = se::Weapon::nailgun;
+  const se::ViewSettings s;
+  const double dt = 0.05;  // two display frames a shot
+  for (int i = 0; i < 4; ++i) se::step_hand(hand, in, s, set, eye(), dt);
+  std::vector<int> frames;
+  std::vector<double> xs;
+  for (int shot = 0; shot < 6; ++shot) {
+    in.fired = true;
+    const se::HandFrame f = se::step_hand(hand, in, s, set, eye(), dt);
+    in.fired = false;
+    const se::HandFrame held = se::step_hand(hand, in, s, set, eye(), dt);
+    CHECK(f.frame_a == f.frame_b && held.frame_a == f.frame_a);  // held, not blended on
+    frames.push_back(f.frame_a);
+    xs.push_back(f.muzzle_at[0]);
+  }
+  CHECK((frames == std::vector<int>{1, 2, 3, 4, 1, 2}));  // a frame a shot, round the clip
+  for (size_t i = 1; i < xs.size(); ++i) CHECK((xs[i] > xs[i - 1]) == (i % 2 == 1));  // L, R, L
+  // A frame's time and a half after the last shot it is back at rest; the next burst starts over.
+  se::HandFrame f;
+  for (int i = 0; i < 4; ++i) f = se::step_hand(hand, in, s, set, eye(), dt);
+  CHECK(f.frame_a == 0);
+  in.fired = true;
+  CHECK(se::step_hand(hand, in, s, set, eye(), dt).frame_a == 1);
 }

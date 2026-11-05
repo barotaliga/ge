@@ -64,12 +64,15 @@ struct Skin {
 };
 
 // A clip baked into a held model's frames: `count` frames from `first`, `fps` apart, the first at
-// the clip's start and the last at its end.
+// the clip's start and the last at its end. `frame_a_shot`: a weapon held firing steps the clip
+// on by one frame a shot, round and round, each frame held until the next shot (a nailgun's: each
+// frame shows its own barrel firing); otherwise a shot plays the clip from its start.
 struct HeldClip {
   std::string name;
   int first = 0;
   int count = 0;
   double fps = 30;
+  bool frame_a_shot = false;
 };
 
 struct HeldModel {
