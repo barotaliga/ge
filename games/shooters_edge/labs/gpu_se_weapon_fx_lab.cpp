@@ -175,7 +175,10 @@ void run(gl::Lab& lab) {
   cl::FxFrame fx[2];
   cl::HeldFire held_fire[2];
   for (cl::HeldFire& f : held_fire)
-    if (!cl::load_held_fire(f, &error)) lab.note("no muzzle fire: " + error);
+    if (!cl::load_held_fire(f, &error,
+                            at_eye ? cl::classic_adapter().game->held_weapons
+                                   : std::span<const std::string_view>{}))
+      lab.note("no muzzle fire: " + error);
   cl::HeldState held;
   held.hand.at_eye = at_eye;
   {

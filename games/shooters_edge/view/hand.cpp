@@ -12,6 +12,10 @@ namespace shooters_edge::view {
 
 namespace con = ge::console;
 
+// A frame stepped on by a shot is held this many of the clip's frame times waiting for the next
+// shot before the weapon goes back to rest (the classic weapon falls back a frame after the last).
+constexpr double kShotFrameHold = 1.5;
+
 void add_view_cvars(con::Cvars& c, ViewSettings& out) {
   c.bind({"r_drawviewmodel", "1", con::kArchive, "draw the held weapon (0 off)",
           con::CvarKind::boolean},
@@ -85,7 +89,11 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   }
   // Down at the bottom of a switch: the new weapon goes into the hand and comes up.
   if (hand.held != hand.wanted && hand.place.lowered >= 1.0) hand.held = hand.wanted;
-  if (hand.held != before) hand.fire_t = -1;  // a new weapon comes up at rest
+  if (hand.held != before) {  // a new weapon comes up at rest
+    hand.fire_t = -1;
+    hand.shot_frame = -1;
+    hand.barrel = -1;
+  }
 
   const WeaponLook& look = weapon_look(hand.held);
   const vm::PlaceRow row = hand.at_eye ? eye_row(s) : held_row(look, s);
@@ -100,11 +108,44 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   f.hands = s.hands;
   f.fired = in.fired;
 
+  // The fire clip from its start on a shot, held at its end once played; or, for a clip stepped a
+  // frame a shot, the next frame round on each shot, held until the next one, the shot leaving
+  // from the barrel that frame fires (`barrel_of_frame`), and back at rest a frame's time after
+  // the last shot. The barrel is picked before the flash is placed, so both stand on it.
+  if (static_cast<size_t>(hand.held) < models.size()) {
+    const vm::HeldModel& m = models[static_cast<size_t>(hand.held)];
+    const int clip = vm::find_held_clip(m, "fire");
+    const vm::HeldClip* c = clip >= 0 ? &m.clips[static_cast<size_t>(clip)] : nullptr;
+    if (c != nullptr && c->frame_a_shot && c->count > 0) {
+      if (in.fired) {
+        hand.shot_frame = (hand.shot_frame + 1) % c->count;
+        hand.fire_t = 0;
+        hand.barrel = vm::barrel_of_frame(m, c->first + hand.shot_frame);
+      }
+      if (hand.fire_t >= 0 && hand.shot_frame >= 0) {
+        f.frame_a = f.frame_b = c->first + hand.shot_frame;
+        hand.fire_t += dt;
+        if (hand.fire_t * c->fps > kShotFrameHold) {
+          hand.fire_t = -1;
+          hand.shot_frame = -1;
+        }
+      }
+    } else {
+      hand.barrel = -1;
+      if (in.fired && c != nullptr) hand.fire_t = 0;
+      if (hand.fire_t >= 0 && c != nullptr) {
+        vm::held_clip_frames(m, clip, hand.fire_t, false, f.frame_a, f.frame_b, f.frame_t);
+        hand.fire_t += dt;
+        if (hand.fire_t * c->fps > c->count - 1) hand.fire_t = -1;
+      }
+    }
+  }
+
   if (in.fired && look.flash_s > 0) hand.flash_left = look.flash_s;
   if (hand.flash_left > 0 && look.flash_s > 0 && static_cast<size_t>(hand.held) < models.size()) {
     const vm::HeldModel& m = models[static_cast<size_t>(hand.held)];
     float tip[3];
-    vm::muzzle_at(m, 0, 0, 0, tip);
+    vm::muzzle_at(m, 0, 0, 0, tip, hand.barrel);
     vm::held_to_world(f.placement, row.fov_y, view, tip, f.flash.position);
     for (int k = 0; k < 3; ++k) f.flash.colour[k] = look.flash_rgb[k];
     f.flash.intensity = static_cast<float>(
@@ -115,21 +156,10 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
   }
   hand.flash_left = hand.flash_left > dt ? hand.flash_left - dt : 0;
 
-  // The fire clip from its start on a shot, held at its end once played.
-  if (static_cast<size_t>(hand.held) < models.size()) {
-    const vm::HeldModel& m = models[static_cast<size_t>(hand.held)];
-    const int clip = vm::find_held_clip(m, "fire");
-    if (in.fired && clip >= 0) hand.fire_t = 0;
-    if (hand.fire_t >= 0 && clip >= 0) {
-      vm::held_clip_frames(m, clip, hand.fire_t, false, f.frame_a, f.frame_b, f.frame_t);
-      const vm::HeldClip& c = m.clips[static_cast<size_t>(clip)];
-      hand.fire_t += dt;
-      if (hand.fire_t * c.fps > c.count - 1) hand.fire_t = -1;
-    }
-  }
   if (static_cast<size_t>(hand.held) < models.size()) {
     vm::muzzle_to_world(models[static_cast<size_t>(hand.held)], f.frame_a, f.frame_b, f.frame_t,
-                        f.placement, row.fov_y, view, f.muzzle_at, f.muzzle_dir, f.muzzle_up);
+                        f.placement, row.fov_y, view, f.muzzle_at, f.muzzle_dir, f.muzzle_up,
+                        hand.barrel);
   }
   return f;
 }

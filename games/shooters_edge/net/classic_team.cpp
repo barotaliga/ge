@@ -23,6 +23,7 @@
 #include "shooter/swim.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
+#include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/bots/team.hpp"
@@ -77,142 +78,6 @@ uint64_t fold_f(uint64_t h, float f) {
   return fold(h, b);
 }
 
-// A door that starts open (spawnflags 1) stays where it spawned until a button moves it: a plate
-// over a pit, a wall drawn aside.
-bool start_open(const pg::EntityBlock& b) {
-  const char* sf = pg::block_value(b, "spawnflags");
-  return sf && (std::atoi(sf) & 1) != 0;
-}
-
-// Those doors as solids of the nav's world, where they stand (the rest of the movers are left
-// out of it and tagged on the links they close).
-void open_doors_as_floor(const sv::QcServer& s, const sv::MapSpec& spec, sh::MoveWorld& world) {
-  std::vector<pg::EntityBlock> blocks;
-  std::string error;
-  if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) return;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* model = pg::block_value(b, "model");
-    if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_door") != 0 || !start_open(b))
-      continue;
-    const int m = std::atoi(model + 1);
-    if (m <= 0 || static_cast<size_t>(m) >= spec.models.size() || world.count >= sh::kMaxSolids)
-      continue;
-    for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
-      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
-      if (d.free || d.modelindex <= 0 || static_cast<size_t>(d.modelindex) >= s.models.size() ||
-          s.models[static_cast<size_t>(d.modelindex)] != model)
-        continue;
-      const sh::BrushModel& bm = spec.models[static_cast<size_t>(m)];
-      sh::Solid& so = world.solids[world.count++];
-      so = sh::Solid{};
-      so.kind = sh::SolidKind::brush;
-      so.origin = d.origin;
-      so.point_hull = bm.hulls[0];
-      so.clip_hull = bm.hulls[1];
-      so.mins = bm.mins;
-      so.maxs = bm.maxs;
-      break;
-    }
-  }
-}
-
-// The map's doors and plats as the nav's movers, off the entity text's brush entities and the
-// edicts the mod made of them (each found by its inline model's name).
-std::vector<sh::NavMover> map_movers(const sv::QcServer& s, const sv::MapSpec& spec) {
-  std::vector<sh::NavMover> out;
-  std::vector<pg::EntityBlock> blocks;
-  std::string error;
-  if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) return out;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* model = pg::block_value(b, "model");
-    if (!cn || !model || model[0] != '*') continue;
-    const bool door = std::strcmp(cn, "func_door") == 0;
-    const bool plat = std::strcmp(cn, "func_plat") == 0;
-    if (!door && !plat) continue;
-    if (door && start_open(b)) continue;  // a floor to the nav (open_doors_as_floor)
-    const int m = std::atoi(model + 1);
-    if (m <= 0 || static_cast<size_t>(m) >= spec.models.size()) continue;
-    int ent = -1;
-    for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
-      const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
-      if (d.free || d.modelindex <= 0 || static_cast<size_t>(d.modelindex) >= s.models.size())
-        continue;
-      if (s.models[static_cast<size_t>(d.modelindex)] == model) {
-        ent = e;
-        break;
-      }
-    }
-    if (ent < 0) continue;
-    sh::NavMover mv;
-    mv.ent = ent;
-    mv.absmin = s.sv.edicts[static_cast<size_t>(ent)].absmin;
-    mv.absmax = s.sv.edicts[static_cast<size_t>(ent)].absmax;
-    if (plat) {
-      const sh::BrushModel& bm = spec.models[static_cast<size_t>(m)];
-      const char* h = pg::block_value(b, "height");
-      const char* sp = pg::block_value(b, "speed");
-      const float rise = h ? static_cast<float>(std::atof(h)) : (bm.maxs.z - bm.mins.z) - 8;
-      const float speed = sp ? static_cast<float>(std::atof(sp)) : 150;
-      mv.model = &bm;
-      mv.rest = s.sv.edicts[static_cast<size_t>(ent)].origin;  // lowered from where it was built
-      mv.travel = {0, 0, rise};
-      mv.ride_s = 1 + rise / (speed > 0 ? speed : 150);
-    }
-    out.push_back(mv);
-  }
-  return out;
-}
-
-// The map's teleporters as links: from every node whose player box touches a teleporter's trigger
-// to the node at its destination (a teleporter another entity switches on, by its name, is left
-// out: nothing says when it works).
-std::vector<sh::NavExtraLink> teleport_links(const sh::NavGraph& g, const sv::MapSpec& spec) {
-  std::vector<sh::NavExtraLink> out;
-  std::vector<pg::EntityBlock> blocks;
-  std::string error;
-  if (!pg::parse_entity_text(spec.entities.c_str(), blocks, error)) return out;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* model = pg::block_value(b, "model");
-    const char* target = pg::block_value(b, "target");
-    if (!cn || std::strcmp(cn, "trigger_teleport") != 0 || !model || model[0] != '*' || !target ||
-        pg::block_value(b, "targetname"))
-      continue;
-    const int m = std::atoi(model + 1);
-    if (m <= 0 || static_cast<size_t>(m) >= spec.models.size()) continue;
-    const sh::BrushModel& box = spec.models[static_cast<size_t>(m)];
-    sh::Vec3f dest;
-    bool found = false;
-    for (const pg::EntityBlock& d : blocks) {
-      const char* dn = pg::block_value(d, "targetname");
-      const char* dc = pg::block_value(d, "classname");
-      const char* org = pg::block_value(d, "origin");
-      if (!dn || !dc || !org || std::strcmp(dn, target) != 0 ||
-          std::strcmp(dc, "info_teleport_destination") != 0)
-        continue;
-      char* end = nullptr;
-      dest.x = std::strtof(org, &end);
-      dest.y = std::strtof(end, &end);
-      dest.z = std::strtof(end, &end) + 27;  // the mod lifts a destination 27 units
-      found = true;
-      break;
-    }
-    if (!found) continue;
-    const int32_t to = sh::nav_nearest(g, dest);
-    if (to < 0) continue;
-    for (size_t a = 0; a < g.nodes.size(); a++) {
-      const sh::Vec3f o = g.nodes[a].origin;
-      if (o.x + 16 < box.mins.x || o.x - 16 > box.maxs.x || o.y + 16 < box.mins.y ||
-          o.y - 16 > box.maxs.y || o.z + 32 < box.mins.z || o.z - 24 > box.maxs.z)
-        continue;
-      out.push_back({static_cast<int32_t>(a), to, sh::NavKind::walk, 0.1f});
-    }
-  }
-  return out;
-}
-
 struct Seat {
   bt::Fighter fighter;
   bool ready = false;  // the fighter initialised on its slot
@@ -258,61 +123,25 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   if (!rules.start(map->spec, r.error)) return r;
   sv::use_map_sets(q, map->bsp);
 
-  // The nav graph off the world and the movers.
-  sh::MoveWorld world;
-  sh::map_world(map->spec.models[0], world);
-  open_doors_as_floor(q, map->spec, world);
-  const std::vector<sh::NavMover> movers = map_movers(q, map->spec);
-  sh::NavGraph graph;
-  sh::SwimField swim;
-  ge::ai::Search best;  // what the map's main part reaches (the largest a spawn spot reaches)
-  int32_t best_n = 0;
-  std::vector<uint8_t> wet;               // the nodes standing in water
-  std::vector<sh::NavExtraLink> entries;  // the links into the water the graph closed
-  const auto t0 = std::chrono::steady_clock::now();
-  sh::build_nav(world, movers, sh::MoveSettings{}, sh::NavSettings{}, graph);
-  const std::vector<sh::NavExtraLink> teleports = teleport_links(graph, map->spec);
-  sh::nav_add_links(graph, teleports);
-  r.teleport_links = static_cast<int64_t>(teleports.size());
-  // Water: the links prove no swim, so a pool is closed to entry (no route leads into it, and an
-  // item under water is out of reach); a player knocked in finds his own way out (the fighter).
-  {
-    wet.assign(graph.nodes.size(), 0);
-    for (size_t n = 0; n < graph.nodes.size(); n++) {
-      const sh::Vec3f o = graph.nodes[n].origin;
-      wet[n] = sh::water_contents(world, {o.x, o.y, o.z - 10}) <= sh::kContentsWater ? 1 : 0;
-    }
-    r.closed_links = sh::nav_close_entries(graph, wet, &entries);
-    // The way out of the water: to any dry node of the map's main part (the largest a spawn
-    // spot reaches).
-    std::vector<pg::EntityBlock> blocks;
-    std::string perr;
-    ge::ai::Search sr;
-    if (pg::parse_entity_text(map->spec.entities.c_str(), blocks, perr))
-      for (const pg::EntityBlock& b : blocks) {
-        const char* cn = pg::block_value(b, "classname");
-        const char* org = pg::block_value(b, "origin");
-        if (!cn || !org || std::strcmp(cn, "info_player_deathmatch") != 0) continue;
-        char* end = nullptr;
-        sh::Vec3f o;
-        o.x = std::strtof(org, &end);
-        o.y = std::strtof(end, &end);
-        o.z = std::strtof(end, &end);
-        const int32_t k = sh::nav_reach(graph, sh::nav_nearest(graph, o), sr);
-        if (k > best_n) {
-          best_n = k;
-          std::swap(best, sr);
-        }
-      }
-    std::vector<uint8_t> exits(graph.nodes.size(), 0);
-    for (size_t n = 0; n < graph.nodes.size(); n++)
-      exits[n] = best_n > 0 && best.reached(static_cast<int32_t>(n)) && !wet[n] ? 1 : 0;
-    sh::build_swim(world, graph, exits, sh::SwimSettings{}, swim);
-    r.swim_wet = swim.wet;
-    r.swim_leading = swim.leading;
+  // The nav graph off the world and the movers (bots/map_nav.hpp).
+  bt::MapNav nav;
+  if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, r.error)) {
+    r.error = "run_team_match: " + r.error;
+    return r;
   }
-  r.nav_build_ms =
-      std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+  sh::MoveWorld& world = nav.world;
+  sh::NavGraph& graph = nav.graph;
+  sh::SwimField& swim = nav.swim;
+  const std::vector<sh::NavMover>& movers = nav.movers;
+  ge::ai::Search& best = nav.main;  // what the map's main part reaches
+  const int32_t best_n = nav.main_n;
+  const std::vector<uint8_t>& wet = nav.wet;
+  const std::vector<sh::NavExtraLink>& entries = nav.entries;
+  r.teleport_links = nav.teleport_links;
+  r.closed_links = nav.closed_links;
+  r.swim_wet = swim.wet;
+  r.swim_leading = swim.leading;
+  r.nav_build_ms = nav.build_ms;
   r.lo = graph.lo;
   r.hi = graph.hi;
   r.nav_nodes = static_cast<int64_t>(graph.nodes.size());

@@ -55,7 +55,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -220,9 +222,11 @@ struct HeldFire {
   effects::MuzzleShots shots;
 };
 
-// Each built weapon's fire from its row (view/weapons.hpp) at kBuiltScale; false with `error`
-// naming the row when a row's knobs do not read.
-bool load_held_fire(HeldFire& f, std::string* error);
+// Each built weapon's fire from its row (view/weapons.hpp) at kBuiltScale; or, when `at_eye`
+// names a classic game's own held weapons (its files, in the weapons' order), each one's fire from
+// the classic table (classicenhance/weapons.hpp's `classic_fire_of`) at its true size. False with
+// `error` naming the row when a row's knobs do not read.
+bool load_held_fire(HeldFire& f, std::string* error, std::span<const std::string_view> at_eye = {});
 
 // The hand's shot this frame (`hand.fired`) and the fire still burning, staged into `out` at time
 // `now_s`; `on` false (ce_muzzles 0): a shot throws nothing, its light alone. The player's own

@@ -105,6 +105,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge lab why <lab> <metric>` (what drove a lab's metric: the scenario steps, series and inputs that moved it most, and against a kept run with `--compare=<tag>` where it parted)
 - `ge lab listen <lab> <id>` (a lab's WAVs transcoded to a small web format, Opus in Ogg, for its report page and `ge lab publish`, without ffmpeg by hand)
 - `ge record` (done: a run as an MP4, WebM or GIF and a contact sheet of timestamped stills, its resolution, frame rate, speed, range and encoder quality; and `--gpu`, the game's registered renderer drawing each frame headless in a mode, Fall Line's `lit`, `wireframe`, `depth` and `overlay` from a chase camera, a high chase or the named views; `ge shot --gpu` the same still)
+- `ge run <game> --shot-after=<frames> [--prefs=<dir>]` (the real game window run headless, screenshotted after N frames and quit, its per-user prefs folder in scratch, in place of xvfb-run, `+wait` repeated 120 times, `+screenshot +quit` and XDG_DATA_HOME pointed at a scratch folder by hand; last classic game loaded thread)
 - `ge export <replay> --from-mark=<kind>` (a clip cut straight off a replay file's marks, a crash or a jump, without finding its steps by hand)
 - the CPU views' `shoot` honouring `--size` (Fall Line's near view always draws 512 px, about 0.8 s a frame in debug, whatever size is asked)
 - `ge state --entities=<kind> --at=<t>`
