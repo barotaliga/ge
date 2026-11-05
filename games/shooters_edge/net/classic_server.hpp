@@ -56,6 +56,7 @@
 // ge:keywords stats choke rate ping user-info server-info classic_start classic_frame
 // ge:keywords classic_change map-change changing reconnect classic_add_local local-seat bots
 // ge:keywords verify_move_checksum antilag status voice voice-relay team-voice voice_route mvd
+// ge:keywords sv_timeout timed-out flood-protection sv_floodprot chat-flood
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_server_test.cpp
 #pragma once
@@ -66,6 +67,7 @@
 
 #include "core/prng.hpp"
 #include "net/transport.hpp"
+#include "server/guards.hpp"
 #include "shooters_edge/net/classic_antilag.hpp"
 #include "shooters_edge/net/classic_channel.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
@@ -74,6 +76,7 @@
 namespace shooters_edge::net {
 
 namespace sv = shooters_edge::server;
+namespace gs = ge::server;
 
 struct MultiviewRecorder;
 
@@ -92,6 +95,13 @@ struct ServerConfig {
   std::string password, spectator_password;
   bool verify_move_checksum = true;  // false: moves are accepted unchecked (and counted)
   int maxrate = 0;                   // sv_maxrate: a client's rate cap, bytes/s (0: none)
+  int maxfps = 77;                   // maxfps: the moves a second clients are told they may send
+  // THE GUARDS (never on a local seat): a client unheard for `timeout_s` is dropped and everyone
+  // told "<name> timed out"; a `say` or `say_team` past the flood rule (engine/server/guards.hpp)
+  // is dropped and only its sender told why.
+  double timeout_s = 65;  // sv_timeout
+  gs::FloodRule flood;    // sv_floodprot
+  std::string flood_msg;  // sv_floodprotmsg: what a flooder is told ("": the silence)
   bool allow_download = true, allow_skins = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true, allow_other = false;
   std::vector<ServedFile> files;
@@ -151,6 +161,7 @@ struct ClassicClient {
   int statics_sent = 0;  // static entities the client has (signon and later)
   bool local = false;    // a seat the game plays in its own process (a bot): no address, no packets
   int frags_told = 0;    // the frags every client was last sent
+  gs::FloodGuard flood;  // its chat lines' times and its silence
 };
 
 struct ServerCounts {
@@ -159,6 +170,7 @@ struct ServerCounts {
   int64_t effects_dropped = 0, events = 0;
   int64_t mod_bytes_dropped = 0;  // a mod's raw bytes that did not read as whole messages
   int64_t voice_in = 0, voice_out = 0, voice_refused = 0, voice_dropped = 0;
+  int64_t chat_flooded = 0;  // say and say_team lines dropped by the flood rule
 };
 
 struct Challenge {
