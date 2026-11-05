@@ -630,6 +630,13 @@ classic effects and pickups this way (M18i). The pass is generic. A game hands i
 every kind on a yard by day, from the eye's height and from above, sharp beside smooth, a
 fireball's frames and the yard at dusk, and times 2000 sprites.
 
+**Made frames** (`render/sprite_shapes.hpp`): the pictures a game draws in place of a pack's flat
+effect sprites, made once at load, pure functions of their size. `flare_frame` is a light's glow,
+a warm core and a soft halo fading to nothing at the frame's edge, drawn `add`ed. `bubble_frame` is
+a ball of air in water: nearly clear, a Fresnel rim, a highlight up and to the left and a darker
+ring just inside the rim, drawn `over`. Shooter's Edge draws them for the pack's light globe and
+bubble sprites under `ce_flares` and `ce_bubbles` (classic-enhance's replacement table names them).
+
 ## Terrain
 
 A generic **heightfield renderer** in `engine/render`, which a game hands a height
@@ -2255,9 +2262,23 @@ adapter at 640 x 360 (`gpu-explosion`, the pass's own timestamps), a frame of th
 and far), and one filling the whole screen 0.9 ms, since dense smoke ends the march early (about 2% of the frame at most). A real
 GPU's times need the Mac. The CPU stages 32 blasts in about 0.1 ms in the debug build.
 
-**Not yet:** the flash lighting the scene (it needs the local lights, M39a) and the scorch pressed
-(it needs the decals, M42b), and particles colliding with anything but a heightfield: rows M47b and
-M47c.
+**The flash and the scorch in the world (M47b).** Each frame `flash_lights` turns every live
+blast's `flash_at` into a local light (§ Local lights): a point at the fireball's centre, its
+candela and colour reset from the curve, reaching out to where its light has fallen to a lux (the
+look's range at least, four times it at most). A fixed range would end a white-hot flash in a lit
+dome with a hard rim, and an eye outside that range would never adapt to it. The eye adapts
+through `FrameView::lamp_lux` (the flash's light on a face at the eye turned to it), so at night
+the yard round a blast reads lit by it instead of blown out against the dark; a game that wants a
+slower eye eases that value itself. The scorch is pressed with `engine/detail`'s decals as the blast
+goes off and drawn as the beams pass's burns (`engine/render/marks.hpp`: the masks' atlas,
+`press_scorch`, `mark_burns`, the same glue Shooter's Edge's marks use), its embers glowing for
+their first 1.5 s and the soot left. `gpu-explosion`'s `flash` view shows the yard and the wall lit
+by day, at dusk and at night, and its `scorch` view a floor's mark and a wall's; every older view now
+has its flash on the ground too (its march's pixel count leaves the flash out). Held by
+`tests/render_marks_test.cpp`.
+
+**Not yet:** particles colliding with anything but a heightfield (M47c); the eye's slower
+adaptation to a flash.
 
 ## Muzzle fire
 
@@ -2351,6 +2372,35 @@ normal), so the hole and the burst never depend on each other. A game classes th
 **Not yet:** hits in a real level, where the shooter's code traces the round, classes the face it
 hit by its texture and hands the impact here and the hole to the decals (M18, M42f); a light for
 the metal's sparks; chips tinted by the surface's own texture rather than its shade.
+
+## Heat haze
+
+Air that something hot has just passed through bends the light crossing it, as the air over a road
+in the sun does: what is behind it is seen a little displaced, the displacement wandering as the
+hot cells rise and mix, and gone once the air has cooled. Nothing is added to the picture; light is
+only moved. A hot nail leaves a thread of it a few centimetres wide for a fifth of a second; a
+rocket motor leaves a wide wake that spreads and rises for most of a second. The bend is a few
+milliradians (a road's mirage), a pixel or three on a 1080-line screen: seen moving, it is a
+trail; in a still it is barely there.
+
+**As built.** `engine/render/haze.hpp`, `haze.wgsl`, `haze_copy.wgsl`. A game lays a trail a
+STRETCH a frame (`HazeTrail`: where the hot thing was, where it is, the frame's time, a look), and
+each stretch ages on its own, so the trail is hottest at its head. `haze_level` is a stretch's heat
+(up over 10 ms, then (1 - age/life)^2), a pure function of the moment. The LOOK (`HazeLook`,
+presets `haze.nail` and `haze.rocket`) is the width laid and how fast it spreads, the bend at its
+hottest, the cells' size, how fast it rises and its life. The pass copies the frame's colour so far
+("haze.copy"), then draws every warm stretch as a ribbon turned to the eye ("haze"), whose pixels
+read the copy pushed off by two octaves of smooth 3D noise churning in the air. The push is largest
+along the ribbon's middle and zero at its edges, and is the bend in radians turned into pixels at
+the ribbon's distance. The ribbon is hidden behind anything nearer (the depth, read and never
+written), and a push that would land on something nearer than the air keeps the pixel's own
+colour, so a hand in front never smears into the air behind it. Shooter's Edge draws it after the
+explosions and the beams, so the smoke and the fire behind the hot air bend too, under `ce_trails`.
+`stage_haze` keeps the newest kMaxHaze (2048) stretches and allocates nothing; held by
+`tests/render_haze_test.cpp`.
+
+**Not yet:** a priced row on the software adapter; the explosions' own heat over a blast and a
+muzzle's.
 
 ## Shaders
 
