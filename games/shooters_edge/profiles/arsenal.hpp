@@ -43,14 +43,14 @@ struct WeaponRow {
   int32_t slot = 0;  // 1..8: its number key and its rank
   Fire fire = Fire::melee;
   Ammo ammo = Ammo::none;
-  int32_t cost = 0;       // ammunition a shot
-  float refire = 0;       // s between shots
-  int32_t count = 1;      // pellets a shot
-  float damage = 0;       // each pellet's, the cut's, the spike's, the rocket's direct hit, the beam's
-  float spread = 0;       // the pellets' cone, a share of the forward line
-  float reach = 0;        // a cut's or a beam's reach, a pellet's range or a missile's speed, u
-  float life = 0;         // s a missile flies (a grenade's fuse)
-  float splash = 0;       // a blast's radius damage; a beam's discharge in water, a cell
+  int32_t cost = 0;   // ammunition a shot
+  float refire = 0;   // s between shots
+  int32_t count = 1;  // pellets a shot
+  float damage = 0;   // each pellet's, the cut's, the spike's, the rocket's direct hit, the beam's
+  float spread = 0;   // the pellets' cone, a share of the forward line
+  float reach = 0;    // a cut's or a beam's reach, a pellet's range or a missile's speed, u
+  float life = 0;     // s a missile flies (a grenade's fuse)
+  float splash = 0;   // a blast's radius damage; a beam's discharge in water, a cell
   std::string_view view;  // the content's names, "-" for none
   std::string_view fire_sound;
   std::string_view missile;

@@ -105,6 +105,5 @@ TEST(the_arsenal_rows_become_server_lines_our_programs_read) {
     CHECK_MSG(weapons.find('"' + pf::weapon_text(w) + '"') != std::string::npos,
               pf::weapon_text(w));
   for (const pf::ArmourRow& r : a.armour)
-    CHECK_MSG(items.find('"' + pf::armour_text(r) + '"') != std::string::npos,
-              pf::armour_text(r));
+    CHECK_MSG(items.find('"' + pf::armour_text(r) + '"') != std::string::npos, pf::armour_text(r));
 }
