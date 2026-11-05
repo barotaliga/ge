@@ -10,7 +10,7 @@ void() ClientConnect = {
 };
 
 void() PutClientInServer = {
-  local entity spot, p;
+  local entity spot;
   self.classname = "player";
   self.health = 100;
   self.max_health = 100;
@@ -45,16 +45,8 @@ void() PutClientInServer = {
   if (deathmatch) {
     // A deathmatch spawn is heard: the fog's sound where the player comes in.
     sound(self, CHAN_VOICE, "misc/r_tele1.wav", 1, ATTN_NORM);
-    // And it takes the spot: a living player standing on it dies (no two players ever stand
-    // stuck inside each other when every spawn point is taken).
-    p = findradius(self.origin, 48);
-    while (p) {
-      if (p != self && p.classname == "player" && p.health > 0) {
-        p.deathtype = "telefragged";
-        damage(p, self, self, 50000);
-      }
-      p = p.chain;
-    }
+    // And it takes the spot (combat.qc), for when every spawn point is taken.
+    telefrag(self);
   }
   if (match_over) {
     self.takedamage = DAMAGE_NO;

@@ -186,6 +186,7 @@ void() info_player_deathmatch = {};
 void() info_player_start = {};
 void() info_intermission = {};
 
-// A teleporter sends a living player, and arriving does nothing more.
+// A teleporter sends a living player, and arriving takes the spot (combat.qc): whoever stands on
+// the destination dies.
 float(entity who) teleport_takes = { return who.classname == "player" && who.health > 0; };
-void(entity who) teleport_arrived = {};
+void(entity who) teleport_arrived = { telefrag(who); };

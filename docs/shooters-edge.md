@@ -1289,14 +1289,24 @@ reaction plus 100 ms (a quick player, trait 8) to 200 ms (a slow one, trait 2) a
 **Hit rates (M18r11d).** A team game counts every player's shots and hits by weapon
 (`games/shooters_edge/net/classic_hits.hpp`), the way a match's statistics do, and `se-team`
 prints them per player and per skill (`team.hits.<skill>.<weapon>`). A shot is ammunition spent on
-the weapon held (the scatterguns count pellets, 6 and 14 a shot; the arc counts cells); a hit is
+the weapon held (the scatterguns count pellets, 6 and 14 a shot; the arc counts cells; nothing in
+a frame its player is dead in or comes back from, when the mod empties his ammunition); a hit is
 health and armour an enemy lost to whatever last hurt him (`dmg_inflictor`: a player's hitscan
 by the weapon he holds, or a missile counted once however many it hurt). A rocket's direct hit is
 a blow of exactly the mod's direct damage, or one that killed a player the rocket was next to;
 any other rocket that hurt an enemy hit by its blast. The bands the bots are held to, a division's
 players in percent (Div1 / Div2 / Div3): the arc 38–45 / 28–35 / 15–25, a rocket's direct hit
 30–35 / 22–28 / 10–18 and its blast 18–25 / 15–20 / 12–15, the double scattergun 35–45 / 25–35 /
-15–25, grenades 8–15 / 5–10 / 2–5.
+15–25, grenades 8–15 / 5–10 / 2–5. A **weapon drill** (`se-team --drill=arc`, `TeamMatchOptions::drill`)
+cuts every player's weapons to one, its ammunition topped up, so a match measures that weapon
+alone: on a map whose every item a route reaches (dm6), two seeds of six minutes give each skill a
+few hundred shots or more.
+
+The trigger is a finger, not a filter: a fighter fires while his view is within the target's width
+and a slack his weapon's aim trait sets (10° at trait 2, 7° at 5, 3° at 8, 2° at 10; the arc's beam
+held down longer, 14°, 9°, 6° and 4°), measured on the view the command carries, which a swim or a
+button may have turned. The double is fired within 350 units and chosen under 250, the launcher
+within 1200, a rocket at a man within 400 aimed at his middle and at his feet farther off.
 
 **Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
 community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the

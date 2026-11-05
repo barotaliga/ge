@@ -158,6 +158,7 @@ float STATE_DOWN = 3;
 float fraglimit;
 float timelimit;
 float match_over;
+float telefragging;     // a telefrag under way: it kills a teammate too
 float intermission_time;  // when the match ended (0: still on)
 entity last_spawn;        // the spawn point used last
 entity activator;         // the entity that set off the targets being fired
