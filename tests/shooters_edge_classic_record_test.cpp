@@ -55,6 +55,7 @@ bool talk(int tick, int seed) {
 struct Session {
   ge::progs::Progs progs;
   std::unique_ptr<sv::QcServer> qc;
+  sv::RulesRunner rules;  // over `qc`
   gn::SimNetwork net;
   gn::Transport st, ct[kClients];
   cn::ClassicServer server;
@@ -82,7 +83,8 @@ struct Session {
     gn::open_sim_transport(st, net, gn::sim_address(0, cn::kPortServer));
     cn::ServerConfig cfg;
     cfg.voice = true;
-    if (!cn::classic_start(server, *qc, st, cfg, error)) return false;
+    rules = sv::qc_runner_over(*qc);
+    if (!cn::classic_start(server, rules, st, cfg, error)) return false;
     cn::mvd_start(mvd, true, packed ? cl::kDefaultPackLevel : 0);
     server.mvd = &mvd;
     for (int i = 0; i < kClients; i++) {

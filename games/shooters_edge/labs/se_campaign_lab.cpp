@@ -374,7 +374,8 @@ SaveCheck save_and_go_on(sv::Campaign& a, const sv::CampaignOptions& opt, int fr
     for (int e = 1; e < s.sv.num_edicts; e++) n += s.sv.edicts[static_cast<size_t>(e)].free ? 0 : 1;
     return n / 10.0;
   };
-  if (sv::campaign_digest(*a.server) != sv::campaign_digest(*b.server)) r.parted = 0;
+  if (sv::campaign_digest(*sv::qc_of(a.server)) != sv::campaign_digest(*sv::qc_of(b.server)))
+    r.parted = 0;
   for (int i = 0; i < frames && r.parted < 0; i++) {
     const sh::Packet* p = packet(i);
     std::string error;
@@ -387,9 +388,10 @@ SaveCheck save_and_go_on(sv::Campaign& a, const sv::CampaignOptions& opt, int fr
     const double at = (i + 1) * sv::kCampaignStep;
     r.a_x.x.push_back(at), r.a_x.y.push_back(a.server->sv.edicts[1].origin.x / 10);
     r.b_x.x.push_back(at), r.b_x.y.push_back(b.server->sv.edicts[1].origin.x / 10);
-    r.a_live.x.push_back(at), r.a_live.y.push_back(live(*a.server));
-    r.b_live.x.push_back(at), r.b_live.y.push_back(live(*b.server));
-    if (sv::campaign_digest(*a.server) != sv::campaign_digest(*b.server)) r.parted = i + 1;
+    r.a_live.x.push_back(at), r.a_live.y.push_back(live(*sv::qc_of(a.server)));
+    r.b_live.x.push_back(at), r.b_live.y.push_back(live(*sv::qc_of(b.server)));
+    if (sv::campaign_digest(*sv::qc_of(a.server)) != sv::campaign_digest(*sv::qc_of(b.server)))
+      r.parted = i + 1;
   }
   for (size_t k = a_from; k < a.history.size(); k++) r.a_maps += " " + a.history[k];
   for (size_t k = b_from; k < b.history.size(); k++) r.b_maps += " " + b.history[k];
@@ -420,7 +422,7 @@ void campaign_flow(gl::Lab& lab) {
   sv::campaign_join(c, 0, "player");
   const pg::LayoutFields& f = pg::kSinglePlayerLayout.f;
   auto field = [&](int e, int ofs) {
-    return pg::as_float(*pg::entity_field(c.server->q.vm, e, ofs));
+    return pg::as_float(*pg::entity_field(sv::qc_of(c.server)->q.vm, e, ofs));
   };
   gl::LabTable t{
       "the campaign host on the campaign stub",
@@ -438,7 +440,7 @@ void campaign_flow(gl::Lab& lab) {
     frames++;
   }
   row();
-  sv::server_command(*c.server, "restart");
+  sv::server_command(*sv::qc_of(c.server), "restart");
   sv::campaign_frame(c, nullptr, 0, error);
   row();
   lab.table(t);
@@ -511,8 +513,8 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
       const sv::ClientBlow& b = c.server->clients[0].blow;
       if (b.hit) blows++, blood += b.blood, armour += b.armor;
       punch = std::min(punch, c.server->sv.edicts[1].punchangle.x);
-      const int ip = c.server->q.layout->f.idealpitch;
-      const float ideal = pg::as_float(*pg::entity_field(c.server->q.vm, 1, ip));
+      const int ip = sv::qc_of(c.server)->q.layout->f.idealpitch;
+      const float ideal = pg::as_float(*pg::entity_field(sv::qc_of(c.server)->q.vm, 1, ip));
       ideal_lo = std::min(ideal_lo, ideal), ideal_hi = std::max(ideal_hi, ideal);
       const double at = c.server->sv.time;
       ideal_line.x.push_back(at), ideal_line.y.push_back(ideal);
@@ -661,7 +663,8 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
           sv::clear_frame(c.server->out);
           sv::clear_frame(b.server->out);
           ran = i + 1;
-          if (parted < 0 && sv::campaign_digest(*c.server) != sv::campaign_digest(*b.server))
+          if (parted < 0 && sv::campaign_digest(*sv::qc_of(c.server)) !=
+                                sv::campaign_digest(*sv::qc_of(b.server)))
             parted = ran;
         }
         // Where the two games stand after the walk: they keep the program's state, so they stay
@@ -674,7 +677,7 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
           const auto& pb = b.server->sv.edicts[1].origin;
           const double dx = pa.x - pb.x, dy = pa.y - pb.y, dz = pa.z - pb.z;
           apart = std::sqrt(dx * dx + dy * dy + dz * dz);
-          const pg::LayoutFields& lf = c.server->q.layout->f;
+          const pg::LayoutFields& lf = sv::qc_of(c.server)->q.layout->f;
           const auto live = [](const sv::QcServer& s) {
             int n = 0;
             for (int e = 1; e < s.sv.num_edicts; e++)
@@ -686,11 +689,14 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
             return d ? to_fixed(pg::as_float(s.q.vm.globals[d->offset]), 0) : std::string("?");
           };
           ends = to_fixed(apart, 1) + " units apart; health " +
-                 to_fixed(pg::as_float(*pg::entity_field(c.server->q.vm, 1, lf.health)), 0) + ", " +
-                 to_fixed(pg::as_float(*pg::entity_field(b.server->q.vm, 1, lf.health)), 0) +
-                 "; entities live " + std::to_string(live(*c.server)) + ", " +
-                 std::to_string(live(*b.server)) + "; monsters killed " + kills(*c.server) + ", " +
-                 kills(*b.server);
+                 to_fixed(pg::as_float(*pg::entity_field(sv::qc_of(c.server)->q.vm, 1, lf.health)),
+                          0) +
+                 ", " +
+                 to_fixed(pg::as_float(*pg::entity_field(sv::qc_of(b.server)->q.vm, 1, lf.health)),
+                          0) +
+                 "; entities live " + std::to_string(live(*sv::qc_of(c.server))) + ", " +
+                 std::to_string(live(*sv::qc_of(b.server))) + "; monsters killed " +
+                 kills(*sv::qc_of(c.server)) + ", " + kills(*sv::qc_of(b.server));
         }
         t.rows.push_back({"after " + to_fixed(ran * sv::kCampaignStep, 1) +
                               " s on (original, classic): the players",
@@ -699,17 +705,18 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
         t.rows.push_back({"the classic save's game against the original",
                           (parted < 0 ? "the same digest every frame of " + std::to_string(ran)
                                       : "parted at frame " + std::to_string(parted)) +
-                              "; faults " + std::to_string(b.server ? b.server->q.faults : -1)});
+                              "; faults " +
+                              std::to_string(b.server ? sv::qc_of(b.server)->q.faults : -1)});
         lab.metric("pack.classic.parted", parted, "frame");
-        lab.metric("pack.classic.faults", b.server ? static_cast<double>(b.server->q.faults) : -1,
-                   "count");
+        lab.metric("pack.classic.faults",
+                   b.server ? static_cast<double>(sv::qc_of(b.server)->q.faults) : -1, "count");
       }
     }
     // The exit: the player stood in the map's first changelevel trigger; the program's messages
     // read as the window reads them (the intermission, the counts), then the attack button held
     // after `kExitWait` until the next map starts.
     if (c.server && lab.arg_num("exit") != 0) {
-      const sv::QcServer& s = *c.server;
+      const sv::QcServer& s = *sv::qc_of(c.server);
       int trigger = 0;
       for (int e = 1; e < s.sv.num_edicts && trigger == 0; e++) {
         const pg::Vm& vm = s.q.vm;
@@ -726,7 +733,7 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
         const sh::Vec3f centre = (tr.absmin + tr.absmax) * 0.5f;
         sh::set_origin(c.server->sv, 1, centre);
         cl::CampaignView view;
-        const sv::CampaignStats st = sv::campaign_stats(*c.server);
+        const sv::CampaignStats st = sv::campaign_stats(*sv::qc_of(c.server));
         cl::join_stats(view, st.total_secrets, st.total_monsters, st.found_secrets,
                        st.killed_monsters);
         const double entered = c.server->sv.time;
@@ -770,13 +777,13 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
     }
     // A console line after it (`changelevel e1m2`): the change, then one frame on the next map.
     if (c.server && !lab.arg("then").empty()) {
-      sv::server_command(*c.server, lab.arg("then"));
+      sv::server_command(*sv::qc_of(c.server), lab.arg("then"));
       if (!sv::campaign_frame(c, nullptr, 0, error))
         t.rows.push_back({"after `" + lab.arg("then") + "`", "failed: " + error});
     }
   }
   if (c.server) {
-    const sv::QcServer& s = *c.server;
+    const sv::QcServer& s = *sv::qc_of(c.server);
     const sv::CampaignStats st = sv::campaign_stats(s);
     int live = 0;
     for (int e = 1; e < s.sv.num_edicts; e++)

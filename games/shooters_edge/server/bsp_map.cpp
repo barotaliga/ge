@@ -47,7 +47,7 @@ bool read_bsp_map(std::span<const uint8_t> bytes, const std::string& name, BspMa
   return true;
 }
 
-void use_map_sets(QcServer& s, const BspMap& map) {
+void use_map_sets(RulesCommon& s, const BspMap& map) {
   s.vis = &map_sets;
   s.vis_ctx = const_cast<BspMap*>(&map);
 }

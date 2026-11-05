@@ -781,14 +781,14 @@ for its own content (its own maps and mod), never a stand-in for a classic game'
 them never changes a classic game. Playing one classic game with another's parts is classic
 remix, a feature of classic-enhance (M18u), shown only when two full games are loaded.
 
-### The rules runner: the next seam (steps 1 to 3 landed)
+### The rules runner: the seam a second program form plugs into (steps 1 to 4 landed)
 
 The adapter answers what a game's FILES hold. What its RULES do is the other half: the listen
 server, the dedicated server, the campaign, the bots and the recorder all hold the QC server
 (`server/qc_server.hpp`) itself today. A second program form (the sequel's native rules, a
 sandboxed bytecode, the engine's C++ mod as the whole game) needs them to hold a **runner**
-instead, of which the QC server is the first implementation. Steps 1 and 2 below have landed
-(`server/rules_world.hpp`); steps 3 and 4 follow, and step 5 waits for the sequel (M18v).
+instead, of which the QC server is the first implementation. Steps 1 to 4 below have landed
+(`server/rules_world.hpp`, `server/rules_runner.hpp`); step 5 waits for the sequel (M18v).
 
 **What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
 groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start
@@ -833,8 +833,15 @@ the last):
 3. **Landed.** The bots read the view: each body's place, bounds, view, flags and water from its
    row, a bot's stats and every frag from its client's numbers. They still trace the loop's world
    (`trace_move`), which is the map's collision and no rules'. Every lab's digest is the same.
-4. The host holds a runner (a table pointer and its state) where it held a `QcServer`; the
-   campaign and the dedicated server the same.
+4. **Landed.** The listen host, the lobby room, the campaign, the wire's endpoint and the
+   dedicated server hold a `RulesRunner` (`server/rules_runner.hpp`: the table of calls, the
+   runner's state, and `RulesCommon`, the part every runner keeps alike: the loop, the lists, the
+   clients' info, the settings, the message sink, the map change asked for and the world). Only
+   the code that makes a runner names the QC server (`qc_runner`). The bots take the common part.
+   What still reads the program behind a runner goes through `qc_of` in one place each: the
+   listen's field and global by name, an entity's class, the campaign's statistics, the saves'
+   VM state and the lobby's team field; each is a candidate for the world when a second runner
+   needs it. Every lab's digest is the same.
 5. The sequel's rules as a second runner (M18t4), with its own program form; nothing in steps 1
    to 4 names it.
 

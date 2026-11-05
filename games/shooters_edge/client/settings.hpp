@@ -35,8 +35,8 @@ std::filesystem::path settings_dir(const std::string& basedir, const std::string
 bool save_settings(ge::console::Console& con);
 
 struct UserInfo {
-  int top = 0, bottom = 0;                                   // topcolor, bottomcolor
-  const shooters_edge::server::QcServer* sent_to = nullptr;  // null: send again
+  int top = 0, bottom = 0;                                      // topcolor, bottomcolor
+  const shooters_edge::server::RulesCommon* sent_to = nullptr;  // null: send again
   std::string name;
   int sent_top = -1, sent_bottom = -1;
 };

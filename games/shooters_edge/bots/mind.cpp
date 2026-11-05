@@ -114,13 +114,13 @@ int32_t key_near(const Fighter& f, sh::Vec3f p, float reach) {
   return best;
 }
 
-bool alive_slot(const server::QcServer& s, int slot) {
+bool alive_slot(const server::RulesCommon& s, int slot) {
   return slot >= 0 && s.sv.clients[static_cast<size_t>(slot)].active &&
          s.world.entities[static_cast<size_t>(slot) + 1].health > 0;
 }
 
 // A teammate's slot in sight from `me`'s eye within `kMateSight`.
-bool sees_mate(const Fighter& f, const server::QcServer& s, int me, int slot) {
+bool sees_mate(const Fighter& f, const server::RulesCommon& s, int me, int slot) {
   if (!alive_slot(s, slot)) return false;
   const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
   sh::SenseSettings look = f.bot.senses.set;
@@ -403,7 +403,7 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
   }
 }
 
-bool gives_up(const Fighter& f, const server::QcServer& s, int me, int32_t i, const Stats& st,
+bool gives_up(const Fighter& f, const server::RulesCommon& s, int me, int32_t i, const Stats& st,
               double t) {
   if (!f.team || f.teamwork == MapSense::novice) return false;  // a novice takes what he finds
   if (ge::shooter::selfish(f.traits)) return false;             // he takes all he can carry
@@ -438,7 +438,7 @@ bool gives_up(const Fighter& f, const server::QcServer& s, int me, int32_t i, co
   return mate_near(f, it.at, for_quad ? 1200 : kGiveNear, t);
 }
 
-void mind_plan(Fighter& f, const server::QcServer& s, int me, const Stats& st, double t) {
+void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t) {
   Mind& mn = f.mind;
   if (!f.team || t < mn.next_plan) return;
   if (mn.next_plan == 0) {

@@ -380,7 +380,8 @@ void set_field(cl::Listen& l, int entity, const char* name, float value) {
   const ge::progs::Def* d = ge::progs::find_field(*l.progs, name);
   CHECK_MSG(d != nullptr, std::string("the baseline mod has no field ") + name);
   if (d != nullptr) {
-    *ge::progs::entity_field(l.server->q.vm, entity, d->offset) = std::bit_cast<uint32_t>(value);
+    *ge::progs::entity_field(shooters_edge::server::qc_of(*l.rules)->q.vm, entity, d->offset) =
+        std::bit_cast<uint32_t>(value);
   }
 }
 

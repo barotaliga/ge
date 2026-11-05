@@ -33,13 +33,13 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
   return std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
 }
 
-bool clear(const server::QcServer& s, sh::Vec3f from, sh::Vec3f to) {
+bool clear(const server::RulesCommon& s, sh::Vec3f from, sh::Vec3f to) {
   return sh::trace_move(s.sv, from, {}, {}, to, sh::kTraceNoMonsters, -1).fraction >= 1;
 }
 
 // Per spot, the node within the leash of `area` that sees it from the right range, nearest the
 // area (-1 where none does).
-void find_from(Fighter& f, const server::QcServer& s, int32_t area) {
+void find_from(Fighter& f, const server::RulesCommon& s, int32_t area) {
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
   const sh::Vec3f home = f.items[static_cast<size_t>(area)].at;
   f.spam_from.assign(f.spam_spots.size(), -1);
@@ -83,7 +83,7 @@ void spam_init(Fighter& f, const char* entities) {
       f.spam_spots.push_back({it.at.x, it.at.y, it.at.z + 8});
 }
 
-bool spam_plan(Fighter& f, const server::QcServer& s, const Stats& st, double t) {
+bool spam_plan(Fighter& f, const server::RulesCommon& s, const Stats& st, double t) {
   f.spam_node = f.spam_spot = -1;
   const int32_t area = f.mind.claim;
   if (!f.team || f.camp != MapSense::expert || f.role != Role::hold || area < 0) return false;
@@ -112,7 +112,7 @@ bool spam_plan(Fighter& f, const server::QcServer& s, const Stats& st, double t)
   return false;
 }
 
-bool spam_fire(Fighter& f, const server::QcServer& s, int me, const Stats& st, double t,
+bool spam_fire(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t,
                sh::MoveCmd& cmd) {
   if (f.spam_node < 0 || f.spam_spot < 0 || f.bot.aiming) return false;
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;
