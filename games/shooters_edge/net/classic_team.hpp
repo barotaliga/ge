@@ -68,6 +68,10 @@ struct TeamMatchOptions {
   bool record = true;   // keep the multiview recording
   bool packed = false;  // record it packed (classic_record.hpp: a `.mvdz`)
   int path_every = 8;   // a path point every this many frames
+  // A weapon drill: every player holds only this weapon (its bit in the baseline mod), its
+  // ammunition topped up, so the hit rates measure one weapon's aim over the whole match (0: a
+  // normal match).
+  int32_t drill = 0;
 };
 
 struct TeamPlayer {

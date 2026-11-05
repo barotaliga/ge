@@ -59,9 +59,14 @@ TEST(a_lake_is_drawn_only_inside_its_shore) {
   };
   CHECK(at(50, 50) == 255 && at(150, 50) == 255 && at(50, 150) == 255);
   CHECK(at(150, 150) == 0 && at(190, 190) == 0);
+  CHECK(at(100 + 0.5 * r::kShoreReach, 120) > 0);
   // Grown by a texel round the outline: just past the inner corner is still drawn.
   CHECK(at(100 + 0.5 * m.texel, 100 + 0.5 * m.texel) == 255);
-  CHECK(at(100 + 3 * m.texel, 100 + 3 * m.texel) == 0);
+  // Past it the texels tell how near the water the ground is (the wet band's reach), always under
+  // the half that draws, and nothing far from it.
+  const uint8_t near = at(100 + 3 * m.texel, 100 + 3 * m.texel);
+  CHECK(near > 0 && near < 128);
+  CHECK(at(100 + 2 * r::kShoreReach, 100 + 2 * r::kShoreReach) == 0);
   // A body with no outline is drawn everywhere.
   const gw::World seas = sea(5);
   const r::ShoreMask open = r::shore_mask(seas.bodies[0]);
@@ -142,6 +147,29 @@ TEST(the_surface_over_a_flooded_passage_slides_from_one_pool_to_the_other) {
     CHECK(now <= last && last - now < 0.5);  // falling toward the far pool, never at once
     last = now;
   }
+}
+
+TEST(the_foam_answers_the_wind_that_grew_the_sea) {
+  // A light air whitens next to nothing; past it the cover is the whitecap law's at the sea's own
+  // wind, the fold's threshold rises toward 1 (more of the surface folds), and the foam drifts
+  // faster.
+  const r::WaterFoam calm = r::foam_of(sea(3).bodies[0].waves);
+  CHECK(calm.cover < 1e-3 && calm.runup > 0.03);
+  double fold = -1e9, drift = 0;
+  for (const double wind : {10.0, 15.0, 22.0}) {
+    const gw::World world = sea(wind);
+    const r::WaterFoam f = r::foam_of(world.bodies[0].waves);
+    CHECK(std::fabs(f.wind - wind) < 0.05 * wind);
+    CHECK(std::fabs(f.cover - gw::whitecap_cover(f.wind)) < 1e-12);
+    CHECK(f.fold > fold && f.fold < 1);
+    CHECK(f.drift > drift);
+    CHECK(f.hs > 0 && f.runup > 0.7 * f.hs && f.fold_length > 0);
+    fold = f.fold;
+    drift = f.drift;
+  }
+  // A lake with no waves laid laps its shore and makes no foam.
+  const r::WaterFoam still = r::foam_of(gw::Waves{});
+  CHECK(still.cover == 0 && still.fold < -1 && std::fabs(still.runup - 0.03) < 1e-12);
 }
 
 TEST(a_sea_draws_under_the_sky) {

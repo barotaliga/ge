@@ -5,7 +5,8 @@
 // - A SHOT is ammunition spent: each player's shells, nails, rockets and cells read every frame,
 //   a drop being shots of the weapon then held (the double scattergun and the heavy spiker spend
 //   two). A scattergun shot is 6 pellets, a double 14: the scatterguns count pellets, as a
-//   match's statistics do; the arc counts cells (one beam each).
+//   match's statistics do; the arc counts cells (one beam each). A frame he is dead in or comes
+//   back from counts no shot: the mod empties his ammunition when he comes back in.
 // - A HIT is damage an enemy took: each player's health and armour read every frame, a drop
 //   being a blow from whatever last hurt him (`dmg_inflictor`): a player (his scattergun, double
 //   or arc, by the weapon he holds: pellets of 4 points, beams of 30, four times either under the
@@ -54,6 +55,7 @@ struct HitBook {
   std::vector<std::array<HitCount, kHitWeapons>> players;  // by client slot
   // What the last frame read, by entity.
   std::vector<float> life;                 // a player's health and armour
+  std::vector<float> health;               // and his health alone (at or under 0: dead)
   std::vector<std::array<float, 4>> ammo;  // shells, nails, rockets, cells
   std::vector<int32_t> weapon;             // the weapon held
   std::vector<ge::shooter::Vec3f> at;      // where each missile was
