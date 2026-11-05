@@ -18,7 +18,8 @@
 //
 // THE SETTINGS are `ServerConfig`, every field a cvar on the server's tier (`add_server_cvars`):
 // `sv_hostname`, `sv_description`, `net_ip`, `net_port`, `sv_maxclients`, `sv_map`, `sv_bots`,
-// `sv_seed`, `sv_password`, `sv_visibility`; and those kept for what reads them as it lands:
+// `sv_lobby` (the engine's lobby, match.hpp, before every match), `sv_seed`, `sv_password`,
+// `sv_visibility`; and those kept for what reads them as it lands:
 // `sv_motd`, `sv_admin`, `sv_maprotation`, `sv_maxspectators`, `sv_spectatorpassword`,
 // `sv_rendezvous`, `sv_mod` (read-only: the mods the server was started with). A dedicated server
 // reads them from the game directories' `server.cfg` in layers and its command line (config.hpp,
@@ -28,6 +29,7 @@
 // ge:keywords server dedicated-server listen-server server-core servergame server_frame
 // ge:keywords server_open hostname description port listen-address maxclients bots seed
 // ge:keywords sv_hostname sv_description net_ip net_port sv_maxclients sv_map sv_bots sv_seed
+// ge:keywords sv_lobby
 // ge:keywords sv_password sv_visibility sv_motd sv_admin sv_maprotation sv_maxspectators
 // ge:keywords sv_spectatorpassword sv_rendezvous sv_mod lan-advert multiplayer hosting
 // ge:skill net
@@ -59,6 +61,7 @@ struct ServerConfig {
   int32_t maxclients = 8;           // sv_maxclients: 1..32
   std::string map;                  // sv_map (empty: the game's default)
   int32_t bots = 0;                 // sv_bots: slots the game's bots fill at the start
+  int32_t lobby = 0;                // sv_lobby: 1 warms up every map until the lobby's match
   uint32_t seed = 1;                // sv_seed: the run's seed
   std::string password;             // sv_password: joining takes it (the advert says locked)
   std::string visibility = "lan";   // sv_visibility: lan, invite or listed (net/hosting.hpp)

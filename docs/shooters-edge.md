@@ -263,6 +263,17 @@ to host one, for example dm6 from the packs with a frag limit:
 build/release/shooters_edge_server --root=$HOME/games/classic --map=dm6 --port=27500 --realtime --for=0 +set fraglimit 20
 ```
 
+With `--bots=3` three bots take seats (every client sees them on the scoreboard, `*bot` in their
+user info), and with `--lobby=1` every map opens in warmup with the limits held: a joined player
+types `ready` (or `break`, `team red|blue|auto|switch`, `lobby` for the roster) in the console,
+the leader (the lowest seat a player holds) may `start` early and `addbot [novice|average|expert]`
+or `removebot`, and when everyone is ready a 5 s countdown restarts the map into the match. Bots
+alone warm up until a player joins. When the match ends the next map opens in warmup again:
+
+```sh
+build/release/shooters_edge_server --map=arena --bots=3 --lobby=1 --realtime --for=0 +set fraglimit 20
+```
+
 The window's console joins and leaves (`net/classic_remote.hpp`):
 
 | Command | What |
@@ -788,7 +799,9 @@ server, the dedicated server, the campaign, the bots and the recorder all hold t
 (`server/qc_server.hpp`) itself today. A second program form (the sequel's native rules, a
 sandboxed bytecode, the engine's C++ mod as the whole game) needs them to hold a **runner**
 instead, of which the QC server is the first implementation. Steps 1 to 4 below have landed
-(`server/rules_world.hpp`, `server/rules_runner.hpp`); step 5 waits for the sequel (M18v).
+(`server/rules_world.hpp`, `server/rules_runner.hpp`). Step 5, the sequel's runner (M18t4), is
+under way: its maps' brushes and the trace its move collides through landed first
+(`plugins/brush/trace.hpp`, `docs/levels.md` § The classic BSP families).
 
 **What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
 groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start
