@@ -14,6 +14,8 @@ struct Particle {
   opacity: f32,
   kelvin: f32,
   cool_s: f32,
+  tint: vec3f,  // vec3f's 16-byte alignment: before `grow`, so the slot is 80 bytes
+  grow: f32,
 }
 
 struct ParticleParams {

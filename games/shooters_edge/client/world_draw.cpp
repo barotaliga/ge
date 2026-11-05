@@ -3,7 +3,7 @@
 // ge:summary The window's world frame: the BSP map, the effects, sky, bloom, post, the overlay
 // ge:keywords world-draw bsp frame create_world_draw draw_world resize_world particles
 // ge:keywords enhanced-textures texture-cache relief normal-map parallax
-// ge:keywords muzzle-fire explosions-pass hide-hands
+// ge:keywords muzzle-fire explosions-pass hide-hands beams-pass lightning-bolt
 // ge:skill render brush shooter
 #include "shooters_edge/client/world_draw.hpp"
 
@@ -19,6 +19,7 @@
 #include "classicenhance/cached.hpp"
 #include "core/output.hpp"
 #include "prof/zones.hpp"
+#include "render/beams.hpp"
 #include "render/bloom.hpp"
 #include "render/clouds.hpp"
 #include "render/explosions.hpp"
@@ -28,6 +29,7 @@
 #include "render/sky.hpp"
 #include "render/ui_pass.hpp"
 #include "render/viewmodel.hpp"
+#include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/world_extras.hpp"
 #include "viewmodel/light.hpp"
 
@@ -60,7 +62,14 @@ struct WorldDraw {
   double gamma = 1;    // the gamma the grades were last made with
   look::Picture made;  // the picture as it was when the world was made
   gr::Particles particles;
-  gr::Explosions explosions;  // the weapon's muzzle fire: its flames and smoke
+  gr::Explosions explosions;  // the muzzle fire, the enhanced blasts, a rocket's flame, hits' dust
+  gr::Beams beams;            // the arc guns' bolts (ce_beams)
+  std::vector<gr::BeamShape> beam_shapes;  // kMaxBeamDraws, built each frame
+  std::vector<gr::BeamDraw> beam_draws;
+  // This frame's births, blasts and flames with the room's light on their smoke (light_at).
+  std::vector<gr::Particle> lit_births;
+  std::vector<gr::Blast> lit_puffs;
+  std::vector<gr::MuzzleFire> lit_flames;
   WorldModels models;
   std::vector<ba::Mover> movers;  // this frame's (place_brushes)
   gr::HeldModels held;
@@ -92,6 +101,36 @@ namespace {
 // the brightest the floor's light is taken as (twice the light as baked).
 constexpr float kHeldAmbient = 0.55f, kHeldDirect = 0.45f, kHeldMost = 1.6f;
 
+// THE LIGHT AT A POINT (engine metres), for the smoke there: the open sky's share (1 when a march
+// straight up the map's tree meets a sky leaf before a solid one) and the lightmap's light on the
+// floor under it, in whites (a luxel of 128 a surface as painted). No map: the open air's.
+constexpr float kSkyStepU = 32, kSkyReachU = 4096;
+constexpr int kSkyContents = -6, kSolidContents = -2;
+gr::BlastLight light_at(const WorldDraw& f, const double e[3]) {
+  gr::BlastLight l;
+  if (!f.has_map) return l;
+  const ge::brush::Map& m = f.scene.map;
+  float p[3] = {static_cast<float>(e[0] / ge::brush::kUnitM),
+                static_cast<float>(e[2] / ge::brush::kUnitM),
+                static_cast<float>(e[1] / ge::brush::kUnitM)};
+  float rgb[3];
+  if (ge::brush::light_below(f.probe, m, p, rgb))
+    for (int k = 0; k < 3; ++k) l.lit[k] = 2 * rgb[k];
+  l.sky = 0;
+  for (float up = kSkyStepU; up < kSkyReachU; up += kSkyStepU) {
+    const float q[3] = {p[0], p[1], p[2] + up};
+    const uint32_t leaf = ge::brush::leaf_at(m, q);
+    if (leaf >= m.leaves.size()) break;
+    const int32_t c = m.leaves[leaf].contents;
+    if (c == kSkyContents) l.sky = 1;
+    if (c == kSkyContents || c == kSolidContents) break;
+  }
+  return l;
+}
+
+// The open sky's light on a smoke puff, in whites, as `light_at`'s share of it.
+constexpr float kOpenWhites = 0.8f;
+
 // Everything sized to the targets: made at create and again at a resize.
 void make_targets(ge::gpu::Device& d, WorldDraw& f) {
   f.targets = gr::create_targets(d, "shooters_edge", f.w, f.h);
@@ -102,6 +141,7 @@ void make_targets(ge::gpu::Device& d, WorldDraw& f) {
     f.post_group[p] = gr::post_group(d, f.post[p], f.targets.hdr_view, f.bloom.view);
   gr::bind_particle_targets(d, f.particles, f.targets);
   gr::bind_explosion_targets(d, f.explosions, f.targets);
+  gr::bind_beam_targets(d, f.beams, f.targets);
   if (f.has_map) ba::create_bsp_targets(d, f.bsp, f.targets);
   if (f.extras) bind_extras_targets(d, *f.extras, f.targets);
 }
@@ -125,7 +165,7 @@ bool surface_from_cache(void* user, std::string_view name, uint32_t w, uint32_t 
 // The weapon's draw this frame: its model and placement, lit by the baked light on the floor under
 // the eye (the lightmap's 0.5 the light as baked, from above) and by its own flash.
 gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
-                       const gr::FrameView& view) {
+                       const gr::FrameView& view, bool engine_fire) {
   namespace vm = ge::viewmodel;
   gr::HeldDraw g;
   g.model = static_cast<uint32_t>(h.weapon);
@@ -138,7 +178,7 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
   f.held_fresh = false;
   g.fov_y = h.placement.fov_y;
   g.lamps = false;
-  g.hide_flame = !h.flashing;
+  g.hide_flame = !h.flashing || engine_fire;  // the engine's muzzle fire burns in its place
   g.hide_hands = !h.hands;
   vm::Probe probe;
   float rgb[3];
@@ -281,6 +321,9 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
   } else if (step == 1) {
     gr::create_particles(d, f.pipelines, f.particles, f.layout);
     gr::create_explosions(d, f.pipelines, f.explosions, f.layout);
+    gr::create_beams(d, f.pipelines, f.beams, f.layout, {});
+    f.beam_shapes.resize(gr::kMaxBeamDraws);
+    f.beam_draws.reserve(gr::kMaxBeamDraws);
     if (!f.weapons.empty()) {
       if (gr::create_viewmodel(d, f.pipelines, f.held, f.layout, f.weapons))
         f.has_held = true;
@@ -452,7 +495,24 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   }
   {
     GE_ZONE("world.effects");
-    gr::emit_particles(f.particles, fx.births);
+    // The smoke lit as the room round it is: a puff (a particle that spreads) shines the light
+    // where it was born, the blasts' and the flames' smoke the light where they are.
+    f.lit_births.assign(fx.births.begin(), fx.births.end());
+    for (gr::Particle& q : f.lit_births) {
+      if (q.grow <= 0 || q.kelvin != 0) continue;
+      const double at[3] = {q.p[0], q.p[1], q.p[2]};
+      const gr::BlastLight l = light_at(f, at);
+      for (int k = 0; k < 3; ++k)
+        q.tint[k] *= q.albedo * (l.lit[k] + kOpenWhites * static_cast<float>(l.sky));
+      q.albedo = 0;
+      q.kelvin = -1;
+      q.cool_s = 0;
+    }
+    f.lit_puffs.assign(fx.puffs.begin(), fx.puffs.end());
+    for (gr::Blast& b : f.lit_puffs) b.light = light_at(f, b.at);
+    f.lit_flames.assign(fx.flames.begin(), fx.flames.end());
+    for (gr::MuzzleFire& m : f.lit_flames) m.light = light_at(f, m.pose.at);
+    gr::emit_particles(f.particles, f.lit_births);
     if (f.extras) {
       f.fire_births.clear();
       extras_births(*f.extras, view.time_s, f.fire_births);
@@ -460,7 +520,15 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     }
     f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
     gr::prepare_particles(d, f.particles, dt, view.near_m);
-    gr::prepare_explosions(d, f.explosions, fx.puffs, view, f.w, f.h, fx.flames);
+    gr::prepare_explosions(d, f.explosions, f.lit_puffs, view, f.w, f.h, f.lit_flames);
+    f.beam_draws.clear();
+    for (const HeldBeam& b : fx.beams) {
+      if (f.beam_draws.size() >= f.beam_shapes.size()) break;
+      gr::BeamShape& shape = f.beam_shapes[f.beam_draws.size()];
+      gr::build_beam(effects::bolt_look(), b.shot, view.time_s, shape);
+      if (shape.count > 0) f.beam_draws.push_back({&shape, &effects::bolt_look(), b.shot.seed});
+    }
+    gr::prepare_beams(d, f.beams, f.beam_draws, {}, view, 400);
   }
   if (f.has_map) {
     GE_ZONE("world.models");
@@ -472,7 +540,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   gr::set_post_blend(d, f.post[p], round ? fx.blend_dry : fx.blend);
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
-    gr::HeldDraw draw = held_draw(f, *held, view);
+    gr::HeldDraw draw = held_draw(f, *held, view, fx_switches(*f.picture).muzzles);
     gr::prepare_viewmodel(d, f.held, std::span<const gr::HeldDraw>(&draw, 1), view, f.w, f.h);
   } else {
     f.held_fresh = true;
@@ -493,6 +561,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     if (f.extras) encode_extras(*f.extras, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_particles(f.particles, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_explosions(f.explosions, f.pipelines, f.rec, e, f.targets, f.frame);
+    if (!f.beam_draws.empty()) gr::encode_beams(f.beams, f.pipelines, f.rec, e, f.targets, f.frame);
     encode_model_sprites(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
     if (weapon) gr::encode_viewmodel(f.held, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_bloom(f.bloom, f.pipelines, f.rec, e, 0);

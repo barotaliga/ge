@@ -17,10 +17,10 @@ namespace {
 // The fires, at the true size (a real gun's: a few milliseconds of glowing gas, small and dim).
 constexpr std::string_view kShotgunFire =
     "life=0.02,length=0.26,width=0.15,glow=0.02,flash=0.22,sparks=3,light_range=4,"
-    "smoke.smoke=0.5";
+    "smoke.smoke=0.3,smoke.radius=0.07";
 constexpr std::string_view kDoubleFire =
     "life=0.024,length=0.3,width=0.2,glow=0.022,flash=0.28,prongs=6,sparks=4,light_range=5,"
-    "smoke.smoke=0.65";
+    "smoke.smoke=0.35,smoke.radius=0.08";
 constexpr std::string_view kMinigunFire =
     "life=0.016,length=0.14,width=0.08,glow=0.02,flash=0.16,sparks=1,light_range=3,"
     "smoke.smoke=0.18,smoke_speed=1.5";
@@ -29,10 +29,10 @@ constexpr std::string_view kRailgunFire =
     "smoke_speed=1.5";
 constexpr std::string_view kGrenadeFire =
     "life=0.022,length=0.14,width=0.11,glow=0.018,flash=0.13,sparks=0,light_range=2.5,"
-    "smoke.smoke=0.55";
+    "smoke.smoke=0.35";
 constexpr std::string_view kRocketFire =
     "life=0.036,length=0.54,width=0.12,glow=0.03,flash=0.22,sparks=3,light_range=5.5,"
-    "smoke.smoke=0.65";
+    "smoke.smoke=0.4";
 
 // clang-format off
 constexpr WeaponLook kLooks[kWeapons] = {

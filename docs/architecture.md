@@ -414,7 +414,16 @@ shared project folder: `make build`, `make test` and `make precheck` restore the
 container before their first compile (installing ccache first when it is missing), and a good
 build saves them back, at most every half hour. The folder silently drops a file over about
 500 MB, so each cache is saved as 200 MB parts behind a manifest written last; ccache runs with
-`base_dir` at the checkout and `compiler_check=content`, so a cache from another container hits. On Linux every link goes through mold or LLD when one is installed
+`base_dir` at the checkout and `compiler_check=content`, so a cache from another container hits.
+**A git worktree builds warm with nothing to set up.** `cmake/CompilerCache.cmake` finds the main
+checkout (`git rev-parse --git-common-dir`) and points the worktree's `GE_DEPS_DIR` at the main
+checkout's `.cache/deps/` (no Dawn, SDL or codec downloaded again; a build folder configured
+before forgets every path it found under its own), maps the build folder out of the debug
+information (`-fdebug-prefix-map=<build>=.`) and runs ccache with `hash_dir=false`, so a `-g`
+compile in another checkout hashes the same (measured: without both, a debug compile in a second
+checkout misses every time), and while ccache's size is its own default (5 GiB, which a few
+checkouts' debug and release objects overflow, evicting what the next worktree needs) gives it
+`GE_CCACHE_WORKTREE_SIZE` (20G). On Linux every link goes through mold or LLD when one is installed
 (`cmake/Linker.cmake`, `-DGE_FAST_LINKER=OFF` for the default): with the compiles cached,
 linking the tree's 500-odd executables is most of a rebuild. Measured in the cloud container
 (4 cores, the debug preset, a fresh build directory each time):
