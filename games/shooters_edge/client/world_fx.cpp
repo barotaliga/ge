@@ -283,6 +283,7 @@ std::shared_ptr<const MarkFaces> receivers_of(const ge::brush::Map& m) {
     }
   }
   faces->receivers = gd::bin_receivers(mesh, 1);  // points into faces->mesh, kept beside it
+  faces->probe = ge::brush::make_light_probe(m);
   return faces;
 }
 
@@ -298,7 +299,19 @@ void mark(FxState& s, ge::detail::DecalKind kind, const double at[3], const doub
   d.now_s = t;
   d.variant = variant % kMarkVariants;
   d.kind = kind;
-  ge::detail::place_decal(s.marks, s.receivers->receivers, d);
+  const int slot = ge::detail::place_decal(s.marks, s.receivers->receivers, d);
+  if (slot < 0 || s.marked == nullptr) return;
+  // The light it lies in: the lightmap under it, a luxel of 128 a surface as painted.
+  if (s.mark_light.size() < s.marks.capacity) s.mark_light.assign(s.marks.capacity, {1, 1, 1});
+  const float p[3] = {static_cast<float>(at[0] / ge::brush::kUnitM),
+                      static_cast<float>(at[2] / ge::brush::kUnitM),
+                      static_cast<float>(at[1] / ge::brush::kUnitM)};
+  float rgb[3];
+  std::array<float, 3>& lit = s.mark_light[static_cast<size_t>(slot)];
+  if (ge::brush::light_below(s.receivers->probe, *s.marked, p, rgb))
+    lit = {2 * rgb[0], 2 * rgb[1], 2 * rgb[2]};
+  else
+    lit = {0.5f, 0.5f, 0.5f};
 }
 
 // The marks as the beams' pass's burns: each one's soot and its embers, its masks' cell of the
@@ -313,16 +326,39 @@ void burns_of(const FxState& s, double t, std::vector<ge::render::BurnVertex>& o
     const float soot = static_cast<float>(look.opacity * (1 - (look.r + look.g + look.b) / 3));
     // A fresh scorch's embers at their hottest (look_at's 2.6) are kHotEmberCd.
     const float ember = static_cast<float>(look.er / 2.6) * kHotEmberCd;
-    for (const ge::detail::DecalVertex& v : ge::detail::decal_verts(s.marks, i)) {
-      ge::render::BurnVertex b;
-      b.at[0] = v.pos.x, b.at[1] = v.pos.y, b.at[2] = v.pos.z;
-      b.u = static_cast<float>((d.variant + v.u) / kMarkVariants);
-      b.v = static_cast<float>((static_cast<int>(d.kind) + v.v) / ge::detail::kDecalKinds);
-      b.fade = static_cast<float>(v.fade);
-      b.soot = soot;
-      b.ember = ember;
-      b.relief = d.kind == ge::detail::DecalKind::bullet_hole ? 1.0f : 0.0f;
-      out.push_back(b);
+    const std::span<const ge::detail::DecalVertex> verts = ge::detail::decal_verts(s.marks, i);
+    const std::array<float, 3> lit =
+        i < s.mark_light.size() ? s.mark_light[i] : std::array<float, 3>{1, 1, 1};
+    for (size_t k = 0; k + 2 < verts.size(); k += 3) {
+      // The world's up across this triangle, in the atlas's uv: the way y climbs fastest.
+      const ge::detail::DecalVertex& a = verts[k];
+      const double du1 = verts[k + 1].u - a.u, dv1 = verts[k + 1].v - a.v;
+      const double du2 = verts[k + 2].u - a.u, dv2 = verts[k + 2].v - a.v;
+      const double dy1 = verts[k + 1].pos.y - a.pos.y, dy2 = verts[k + 2].pos.y - a.pos.y;
+      const double det = du1 * dv2 - du2 * dv1;
+      double gu = 0, gv = 1;
+      if (std::abs(det) > 1e-12) {
+        gu = (dy1 * dv2 - dy2 * dv1) / det;
+        gv = (du1 * dy2 - du2 * dy1) / det;
+      }
+      // Into the atlas's cell (its uv is the mark's over the variants and the kinds).
+      gu /= kMarkVariants;
+      gv /= ge::detail::kDecalKinds;
+      for (size_t j = k; j < k + 3; ++j) {
+        const ge::detail::DecalVertex& v = verts[j];
+        ge::render::BurnVertex b;
+        b.at[0] = v.pos.x, b.at[1] = v.pos.y, b.at[2] = v.pos.z;
+        b.u = static_cast<float>((d.variant + v.u) / kMarkVariants);
+        b.v = static_cast<float>((static_cast<int>(d.kind) + v.v) / ge::detail::kDecalKinds);
+        b.fade = static_cast<float>(v.fade);
+        b.soot = soot;
+        b.ember = ember;
+        b.relief = d.kind == ge::detail::DecalKind::bullet_hole ? 1.0f : 0.0f;
+        b.up[0] = static_cast<float>(gu);
+        b.up[1] = static_cast<float>(gv);
+        for (int c = 0; c < 3; ++c) b.light[c] = lit[c];
+        out.push_back(b);
+      }
     }
   }
 }
@@ -601,6 +637,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     s.marked = faces;
     s.receivers = faces != nullptr ? receivers_of(*faces) : nullptr;
     s.marks = ge::detail::make_pool(kMarks);
+    s.mark_light.assign(kMarks, {1, 1, 1});
   }
   if (!s.on.decals) {
     s.marked = nullptr;

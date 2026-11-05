@@ -59,6 +59,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "brush/light_probe.hpp"
 #include "camera/subject.hpp"
 #include "detail/decals.hpp"
 #include "render/beam.hpp"
@@ -127,6 +128,7 @@ struct Wound {
 struct MarkFaces {
   ge::detail::TriMesh mesh;
   ge::detail::Receivers receivers;
+  ge::brush::LightProbe probe;  // the map's light under a point, for each mark's
 };
 // The atlas: engine/detail's `bake_atlas` of kMarkVariants masks a kind.
 const std::vector<uint8_t>& mark_atlas();
@@ -142,6 +144,7 @@ struct FxState {
   const ge::brush::Map* marked = nullptr;
   std::shared_ptr<const MarkFaces> receivers;
   ge::detail::DecalPool marks;
+  std::vector<std::array<float, 3>> mark_light;    // each slot's light, whites, as it was pressed
   std::unordered_map<int, ge::camera::Vec3> last;  // each missile's place a frame ago, m
   std::unordered_map<int, ge::camera::Vec3> next;  // this frame's, swapped into `last`
   // Each missile's place (map units) and the way it flew, a frame ago: the surface a blast went

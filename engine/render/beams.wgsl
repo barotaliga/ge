@@ -42,7 +42,8 @@ struct BeamSeg {
 struct BurnVert {
   at: vec4f,    // camera-relative position; its fade on a turned triangle
   uv: vec4f,    // the atlas's uv; the soot's darkness; the ember's luminance (cd/m^2)
-  more: vec4f,  // the relief's share of its darkness (0: by its cover alone)
+  more: vec4f,  // the relief's share of its darkness (0: by its cover alone); the world's up in uv
+  lit: vec4f,   // the light on it, in whites (a lightmap's 1 a surface as painted)
 }
 
 @group(1) @binding(0) var<uniform> bp: BeamParams;
@@ -170,6 +171,8 @@ struct BurnOut {
   @builtin(position) position: vec4f,
   @location(0) uv: vec2f,
   @location(1) look: vec4f,  // the fade, the soot, the ember, the relief's share
+  @location(2) up: vec2f,    // the world's up across the mark (its uv's units)
+  @location(3) lit: vec3f,   // the light on it, whites
 }
 
 @vertex
@@ -183,6 +186,8 @@ fn burn_vs(@builtin(vertex_index) vid: u32) -> BurnOut {
   out.position = frame.view_proj * vec4f(v.at.xyz, 1.0);
   out.uv = v.uv.xy;
   out.look = vec4f(v.at.w, v.uv.z, v.uv.w, v.more.x);
+  out.up = v.more.yz;
+  out.lit = v.lit.rgb;
   return out;
 }
 
@@ -208,11 +213,28 @@ fn burn_fs(in: BurnOut) -> @location(0) vec4f {
   let ember = in.look.z * heart * crack;
   let heat = clamp(in.look.z / max(bp.more.y, 1e-3), 0.0, 1.0);
   let glow = burn_ember(heat) * ember * frame.world.y / kSunLux;
-  // Darkened by its cover, or (a hole's mark, by the relief's share) by its crater's relief: the
-  // dark wall of the hole the darkest, falling off to the pale rim and the dust round it, so a
-  // hole is a dark heart in a scuffed ring, not a flat black disc.
-  let relief = m.g * 2.0 - 1.0;  // -1 the hole's wall .. +1 a raised rim
+  if (in.look.w <= 0.0) {  // a scorch: its soot by its cover
+    return vec4f(min(glow, vec3f(60000.0)), 1.0 - in.look.y * cover);
+  }
+  // A HOLE, by its mask's relief as a height (-1 the hole's wall .. +1 its raised rim): darkest in
+  // its heart, through the crater's wall; the rim and the round's dust lit from above, its upper
+  // side catching the light and its lower side in shadow (the relief's slope along the world's
+  // up); the bare metal of the rim a little of its own pale grey in the light it stands in. The
+  // wall's own picture stays under all of it, so no part is one flat colour.
+  let relief = m.g * 2.0 - 1.0;
   let crater = clamp((0.45 - relief) / 1.45, 0.0, 1.0);
-  let dark = in.look.y * cover * mix(1.0, 0.18 + 0.82 * pow(crater, 1.5), in.look.w);
-  return vec4f(min(glow, vec3f(60000.0)), 1.0 - dark);
+  let dims = vec2f(textureDimensions(burn_atlas));
+  let up = in.up / max(length(in.up), 1e-4) * (1.5 / dims);
+  let above = textureSampleLevel(burn_atlas, linear_clamp, in.uv + up, 0.0).g;
+  let below = textureSampleLevel(burn_atlas, linear_clamp, in.uv - up, 0.0).g;
+  let facing = clamp((below - above) * 6.0, -1.0, 1.0);  // +1 turned to the light from above
+  let rim = clamp(relief, 0.0, 1.0) * cover;
+  var keep = 1.0 - in.look.y * cover * (0.12 + 0.88 * pow(crater, 1.3));
+  // The rim: a ring of bare, paler metal all round, brighter still where it faces the light.
+  keep *= 1.0 + (1.1 * rim + 0.8 * facing * cover) * (1.0 - crater * 0.8);
+  let bare = vec3f(0.62, 0.6, 0.57) * (rim * (0.6 + 0.4 * max(facing, 0.0))) * 0.22 * in.lit *
+             white_luminance();
+  // A warm dark down the hole, the depth's own.
+  let deep = vec3f(0.035, 0.026, 0.02) * pow(crater, 3.0) * cover * in.lit * white_luminance();
+  return vec4f(min(glow + bare + deep, vec3f(60000.0)), max(keep, 0.0));
 }

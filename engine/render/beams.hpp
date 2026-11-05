@@ -56,9 +56,12 @@ struct BurnVertex {
   float fade = 1;      // its triangle's fade (turned from the decal's normal)
   float soot = 0.85f;  // how dark the scorch makes what is under it, 0..1
   float ember = 0;     // its glow, cd/m^2 (ember_level)
-  // How much its mask's relief, not its cover, says how dark it is (0..1): 0 a scorch's even soot,
-  // 1 a bullet hole's dark heart falling off to a pale rim (the atlas's green).
+  // How much its mask's relief, not its cover, shapes it (0..1): 0 a scorch's even soot, 1 a bullet
+  // hole: its relief (the atlas's green) as a height, dark in its heart, its rim lit from above
+  // along `up` (the world's up across the mark, in its uv) and of bare metal in `light`.
   float relief = 0;
+  float up[2] = {0, 1};
+  float light[3] = {1, 1, 1};  // the light on it, whites (a lightmap's 1 a surface as painted)
 };
 
 // wgsl's BeamLookGpu, BeamSeg and BurnVert.
@@ -69,7 +72,7 @@ struct GpuBeamSeg {
   float a[4], b[4], c[4];
 };
 struct GpuBurnVert {
-  float at[4], uv[4], more[4];
+  float at[4], uv[4], more[4], lit[4];
 };
 struct GpuBeamParams {
   float info[4];

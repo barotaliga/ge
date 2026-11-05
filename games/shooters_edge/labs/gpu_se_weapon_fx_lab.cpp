@@ -394,11 +394,13 @@ void run(gl::Lab& lab) {
     const double tilt = static_cast<double>(at[4]) * ge::core::kPi / 180;
     const sh::Vec3f wall = {eye.x + fx_ * reach, eye.y + fy * reach,
                             eye.z - reach * static_cast<float>(ge::core::libm::tan(tilt))};
-    const float back = close ? std::min(kCloseU, reach * 0.6f) : reach * (1 - along);
+    // Closer still from 0.9 on: a hand's length from the wall, the marks' own detail.
+    const float back =
+        close ? std::min(along >= 0.9f ? kCloseU / 2 : kCloseU, reach * 0.6f) : reach * (1 - along);
     const sh::Vec3f mid = {wall.x - fx_ * back, wall.y - fy * back,
                            wall.z + (close ? 8.0f : 24.0f)};
     // As far to the side as the room lets, up to 112 units (48 close), either side.
-    const float reach_out = close ? 48 : 112;
+    const float reach_out = close ? (along >= 0.9f ? 16.0f : 48.0f) : 112.0f;
     sh::Vec3f cam = mid;
     float room = 0;
     for (const float sign : {1.0f, -1.0f}) {
