@@ -1,7 +1,7 @@
 // The game folder a player loads (game_folder.hpp).
 //
 // ge:summary The game folder a player loads: the install checked, its game folder, kept, programs
-// ge:keywords game-folder check_game_folder game_of remembered_folder remember_folder load_programs
+// ge:keywords game-folder check_game_folder game_of remembered_game remember_game load_programs
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
 #include "shooters_edge/client/game_folder.hpp"
@@ -102,34 +102,61 @@ std::string game_of(const std::string& basedir, const ge::classicenhance::Profil
 }
 
 void choose_folder(Args& args, const std::string& prefs) {
-  std::string basedir, why;
-  if (!args.basedir_set && !check_game_folder(args.basedir, &basedir, &why)) {
-    const std::string kept = remembered_folder(prefs);
-    if (!kept.empty() && check_game_folder(kept, &basedir, &why)) {
-      out::status("shooters_edge: the game loaded last, " + basedir + " (-basedir names another)");
+  if (!args.basedir_set) {
+    const KeptGame kept = remembered_game(prefs);
+    const ge::classicenhance::Profile* content =
+        kept.basedir.empty() ? nullptr : ge::classicenhance::find_profile(kept.profile);
+    std::string basedir, why;
+    if (!kept.basedir.empty() && content == nullptr) {
+      out::warn("shooters_edge: the game loaded last is " + kept.profile +
+                ", which this build does not know (it knows " + ge::classicenhance::profile_ids() +
+                "); next: OPTIONS > CLASSIC ENHANCED > LOAD GAME");
+    } else if (content != nullptr && check_game_folder(kept.basedir, &basedir, &why, *content)) {
+      out::status("shooters_edge: the game loaded last, " + std::string(content->what) + " in " +
+                  basedir + " (-basedir names another)");
       args.basedir = basedir;
+      if (!args.game_set) args.game = game_of(basedir, *content);
+      return;
+    } else if (content != nullptr) {
+      out::warn("shooters_edge: the game loaded last no longer opens: " + why +
+                "; so the folder the game runs in");
     }
   }
   if (!args.game_set) args.game = game_of(args.basedir);
 }
 
-std::string remembered_folder(const std::string& prefs) {
-  if (prefs.empty()) return {};
+KeptGame remembered_game(const std::string& prefs) {
+  KeptGame kept;
+  if (prefs.empty()) return kept;
   std::ifstream f(fs::path(prefs) / kKeptFile);
   std::string line;
-  if (!f || !std::getline(f, line)) return {};
-  while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
-  return line;
+  bool keyed = false;
+  while (f && std::getline(f, line)) {
+    while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+    if (line.rfind("profile ", 0) == 0) {
+      kept.profile = line.substr(8);
+      keyed = true;
+    } else if (line.rfind("basedir ", 0) == 0) {
+      kept.basedir = line.substr(8);
+      keyed = true;
+    } else if (!keyed && kept.basedir.empty() && !line.empty()) {
+      kept.basedir = line;  // the older form: the folder alone
+    }
+  }
+  if (!kept.basedir.empty() && kept.profile.empty())
+    kept.profile = std::string(ge::classicenhance::classic_profile().id);
+  return kept;
 }
 
-bool remember_folder(const std::string& prefs, const std::string& basedir) {
+bool remember_game(const std::string& prefs, const std::string& basedir,
+                   const ge::classicenhance::Profile& content) {
   if (prefs.empty()) return false;
   const fs::path file = fs::path(prefs) / kKeptFile;
   const fs::path tmp = fs::path(prefs) / (std::string(kKeptFile) + ".tmp");
   {
     std::ofstream f(tmp, std::ios::trunc);
     if (!f) return false;
-    f << basedir << "\n";
+    f << "profile " << content.id << "\nbasedir " << basedir << "\n";
     if (!f) return false;
   }
   std::error_code ec;
