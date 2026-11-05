@@ -44,14 +44,14 @@ sh::Vec3f middle(const server::WorldEntity& e) {
 }
 
 // The line from `eye` meets nothing before the button.
-bool sees(const server::QcServer& s, sh::Vec3f eye, const ButtonSpot& b) {
+bool sees(const server::RulesCommon& s, sh::Vec3f eye, const ButtonSpot& b) {
   const sh::HullTrace tr = sh::trace_move(s.sv, eye, {}, {}, b.at, sh::kTraceNoMonsters, -1);
   return tr.fraction >= 1 || tr.ent == b.ent;
 }
 
 // The node a button is pressed (or shot) from: the nearest within reach whose line meets the
 // button itself, so a node behind the wall the button is set in is never chosen.
-int32_t button_node(const sh::NavGraph& g, const server::QcServer& s, const ButtonSpot& b,
+int32_t button_node(const sh::NavGraph& g, const server::RulesCommon& s, const ButtonSpot& b,
                     float reach) {
   int32_t best = -1;
   float best_d = reach;
@@ -73,7 +73,7 @@ bool near_box(sh::Vec3f p, sh::Vec3f lo, sh::Vec3f hi, float r) {
 
 }  // namespace
 
-void buttons_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s,
+void buttons_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s,
                   const char* entities) {
   f.button_spots.clear();
   f.poke = -1;
@@ -131,7 +131,7 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s,
   }
 }
 
-bool button_poke(Fighter& f, const server::QcServer& s, int me, double t) {
+bool button_poke(Fighter& f, const server::RulesCommon& s, int me, double t) {
   if (f.sense != MapSense::novice || f.button_spots.empty()) return false;
   if (f.poke >= 0 && t < f.poke_until) return true;
   f.poke = -1;
@@ -155,7 +155,7 @@ bool button_poke(Fighter& f, const server::QcServer& s, int me, double t) {
   return true;
 }
 
-void button_poke_cmd(Fighter& f, const server::QcServer& s, int me, double t, sh::MoveCmd& cmd) {
+void button_poke_cmd(Fighter& f, const server::RulesCommon& s, int me, double t, sh::MoveCmd& cmd) {
   if (f.poke < 0 || t >= f.poke_until || f.bot.aiming) return;
   const ButtonSpot& b = f.button_spots[static_cast<size_t>(f.poke)];
   const sh::Vec3f self = s.world.entities[static_cast<size_t>(me)].origin;

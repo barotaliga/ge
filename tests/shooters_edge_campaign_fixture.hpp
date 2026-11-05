@@ -67,7 +67,7 @@ struct Game {
     CHECK_MSG(sv::campaign_new_game(c, mod(), o, "first", error), error);
     sv::campaign_join(c, 0, "player");
   }
-  sv::QcServer& s() { return *c.server; }
+  sv::QcServer& s() { return *sv::qc_of(c.server); }
   const pg::LayoutFields& f() { return s().q.layout->f; }
   float field(int e, int ofs) { return pg::as_float(*pg::entity_field(s().q.vm, e, ofs)); }
   void set(int e, int ofs, float v) { *pg::entity_field(s().q.vm, e, ofs) = pg::as_word(v); }

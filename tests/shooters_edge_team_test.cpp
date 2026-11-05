@@ -89,6 +89,18 @@ TEST(a_team_game_of_bots_plays_as_teams_and_records) {
   CHECK_MSG(r.faults == 0, "the baseline mod faulted under the team game");
   CHECK_MSG(r.players.size() == 8, "eight players");
   for (const cn::TeamPlayer& p : r.players) CHECK_MSG(p.slot >= 0, p.name + " never got a slot");
+  // Shots and hits by weapon (net/classic_hits.hpp): a frag takes hits, and no weapon hits more
+  // than it fired.
+  int64_t hits = 0;
+  for (const cn::TeamPlayer& p : r.players)
+    for (int w = 0; w < cn::kHitWeapons; w++) {
+      const cn::HitCount& c = p.hits[static_cast<size_t>(w)];
+      CHECK_MSG(c.hit >= 0 && c.hit <= c.fired,
+                p.name + "'s " + cn::hit_weapon_name(static_cast<cn::HitWeapon>(w)) + " hit " +
+                    std::to_string(c.hit) + " of " + std::to_string(c.fired));
+      hits += c.hit;
+    }
+  CHECK_MSG(hits > 0, "the match's frags were made with no hit counted");
   for (int t = 0; t < 2; t++) {
     CHECK_MSG(r.teams[t].frags >= 3,
               "team " + std::to_string(t) + " scored " + std::to_string(r.teams[t].frags));

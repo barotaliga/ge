@@ -11,7 +11,9 @@
 # run opens the `main-red` issue (flakes.yml), and a newer push cancels the older run. A change that touches only prose (docs, skills, lessons, root Markdown,
 # changeset fragments) runs the gates alone. A pull request labelled `full-ci` also runs the Linux
 # rows (GCC debug+ASan, GCC and Clang release, arm64), the lint and the shaders' check, and the
-# whole packaging.
+# whole packaging. Once a day, at 05:00 in Stockholm, main runs all of that (the lint over the
+# whole tree), in a run nothing cancels; a push to main runs only while the merge queue is empty
+# (else it cancels itself: the queue's next run, on the tree that lands, answers for it).
 #
 # Every queued group that changes more than prose is also compiled with Linux GCC (no tests),
 # `skip-ci` or not. A pull request labelled `skip-ci` runs nothing else, on the PR and in the
@@ -37,6 +39,13 @@ on:
     types: [opened, synchronize, reopened, ready_for_review, labeled]
   # The merge queue: each queued PR is tested on top of the ones ahead of it before it lands.
   merge_group:
+  # THE DAILY RUN: main's whole matrix at 05:00 in Stockholm, every row, the lint over the whole
+  # tree and the whole packaging, never cancelled. Cron speaks UTC and Sweden changes its clocks,
+  # so both 03:00 (summer) and 04:00 (winter) fire, and the gates keep the one that is 05:00 there
+  # that day (the other cancels itself, which the main-red issue ignores).
+  schedule:
+    - cron: "0 3 * * *"
+    - cron: "0 4 * * *"
 
 permissions:
   contents: read
@@ -56,12 +65,15 @@ env:
 # GitHub has no counting semaphore for jobs (a concurrency group holds one running and one
 # pending job and CANCELS the pending one a third arrival replaces), so the macOS and Windows
 # jobs are not capped by group: these rules keep their number down instead.
-# A push to main never cancels the run already going: main lands faster than its matrix runs, so
-# cancelling left no main run finished and nothing to open or close the `main-red` issue on. The
-# group holds the newest push pending, so main runs back to back, skipping the pushes between.
+# A push to main cancels the run already going, as every other event does: only the newest main is
+# worth a runner, and a run on a main a later push replaced holds the group and the runners while
+# the run that can turn main green waits. The price: while main lands faster than its matrix runs,
+# no main run finishes, so the `main-red` issue opens or closes only once the pushes pause.
+# The daily run (a schedule) has a group of its own and is never cancelled: a push to main cancels
+# only the push runs.
 concurrency:
-  group: ci-${{ github.ref }}${{ (github.event.action == 'labeled' && github.event.label.name != 'full-ci') && format('-label-{0}', github.run_id) || '' }}
-  cancel-in-progress: ${{ github.event_name != 'push' }}
+  group: ${{ github.event_name == 'schedule' && format('ci-daily-{0}', github.run_id) || format('ci-{0}{1}', github.ref, (github.event.action == 'labeled' && github.event.label.name != 'full-ci') && format('-label-{0}', github.run_id) || '') }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
 
 jobs:
   # The cheap gates, on every run, and the decision what else runs.
@@ -126,7 +138,43 @@ jobs:
           GH_REPO: ${{ github.repository }}
           ACTION: ${{ github.event.action }}
           LABEL: ${{ github.event.label.name }}
+          CRON: ${{ github.event.schedule }}
         run: |
+          # THE DAILY RUN: of the two crons, the one at 05:00 in Stockholm today runs (the UTC hour
+          # is 5 less the offset, +0100 in winter and +0200 in summer); the other cancels itself
+          # (a cancelled run says nothing to the main-red issue, where a skipped one would read
+          # green).
+          # A PUSH TO MAIN runs only while the merge queue is empty: a queued PR is about to land
+          # on top of it, and the queue's run on that tree answers for main (with the daily run for
+          # what the queue skips), so main's run would only take runners from it. With the queue
+          # busy the run cancels itself (a cancelled run says nothing to main-red; a skipped one
+          # would read green).
+          if [ "$EVENT" = push ]; then
+            # shellcheck disable=SC2016 # $owner and $name are the query's own variables
+            queued=$(gh api graphql -F owner="${GH_REPO%/*}" -F name="${GH_REPO#*/}" -f query='
+              query($owner: String!, $name: String!) {
+                repository(owner: $owner, name: $name) {
+                  mergeQueue(branch: "main") { entries(first: 1) { totalCount } }
+                }
+              }' --jq '.data.repository.mergeQueue.entries.totalCount // 0')
+            if [ "${queued:-0}" -gt 0 ]; then
+              echo "$queued pull request(s) in the merge queue: main's push run gives its runners to the queue and cancels itself"
+              gh api -X POST "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/cancel" > /dev/null
+              sleep 120
+              exit 1
+            fi
+          fi
+          if [ "$EVENT" = schedule ]; then
+            offset=$(TZ=Europe/Stockholm date +%z)
+            want=$((5 - 10#${offset:1:2}))
+            fired=$(echo "$CRON" | awk '{print $2}')
+            if [ "$fired" != "$want" ]; then
+              echo "the cron at $fired:00 UTC is not 05:00 in Stockholm today ($offset); this run cancels itself"
+              gh api -X POST "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID/cancel" > /dev/null
+              sleep 120
+              exit 1
+            fi
+          fi
           # `skip-ci`: a PR its owner wants merged now, with CI fixed after it lands. Every job is
           # skipped, the gates' checks included, so `required` passes, on the PR and in the merge
           # queue. A queued run reads the label off the PR at the head of its group
@@ -186,6 +234,8 @@ jobs:
           if [ "$ACTION" = labeled ] && [ "$LABEL" != full-ci ]; then CODE=false; fi
           FULL=false
           if [ "$FULL_LABEL" = true ]; then FULL=true; SCAFFOLD=true; fi
+          # The daily run: everything, on the whole tree.
+          if [ "$EVENT" = schedule ]; then CODE=true; FULL=true; SCAFFOLD=true; fi
           PACKAGE=false
           if [ "$EVENT" = merge_group ] || [ "$FULL" = true ]; then PACKAGE=true; fi
           ROW_MAC='{"os":"macos-15","cxx":"clang++","preset":"release"}'
@@ -450,6 +500,9 @@ jobs:
       - name: make lint (merge queue; what the queued change reaches)
         if: github.event_name == 'merge_group'
         run: make lint PRESET=release BASE=${{ github.event.merge_group.base_sha }}
+      - name: make lint (the daily run; the whole tree)
+        if: github.event_name == 'schedule'
+        run: make lint PRESET=release
       # Every embedded WGSL shader through Tint, offline (no GPU needed).
       - run: make shaders-check PRESET=release
 

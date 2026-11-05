@@ -2,8 +2,9 @@
 // as a chain of maps, the players' state carried from map to map (porting/shooters-edge/
 // campaign.md is the specification; docs/shooters-edge.md § Profiles says where it sits).
 //
-// A campaign owns one mod server (qc_server.hpp) at a time, made afresh for every map, and what
-// outlives a map: the settings, `serverflags` and every player's spawn parms.
+// A campaign owns one runner of the program's rules (rules_runner.hpp; the QC server today) at a
+// time, made afresh for every map, and what outlives a map: the settings, `serverflags` and every
+// player's spawn parms.
 //
 // A MAP'S START (`start_level`): the settings carried from the last map; `skill` rounded to the
 // nearest whole number, clamped to 0..3 and written back; `registered` from the content (the
@@ -71,7 +72,7 @@ struct CampaignStats {
 struct Campaign {
   CampaignOptions opt;
   const pg::Progs* progs = nullptr;
-  std::unique_ptr<QcServer> server;  // this map's
+  RulesRunner server;  // this map's rules (rules_runner.hpp)
   MapSpec map;
   float serverflags = 0;          // carried into the next map
   float entered_serverflags = 0;  // what this map started with (a restart's)

@@ -37,6 +37,6 @@ bool read_bsp_map(std::span<const uint8_t> bytes, const std::string& name, BspMa
                   MapSpec* spec, std::string& error);
 
 // The server's visibility and hearing sets answered by the map's.
-void use_map_sets(QcServer& s, const BspMap& map);
+void use_map_sets(RulesCommon& s, const BspMap& map);
 
 }  // namespace shooters_edge::server

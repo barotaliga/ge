@@ -1,8 +1,9 @@
-// THE LISTEN SERVER: Shooter's Edge as one player plays it on his own machine. The mod server
-// (server/qc_server.hpp) runs a progs (the baseline deathmatch mod, compiled at start from the
-// sources built into the game: `baseline_progs`) on a map, and the local player is client slot 0,
-// his commands handed to the server's frame directly as packets that are never lost (no network,
-// no prediction: what he sees is the server's own state after each frame).
+// THE LISTEN SERVER: Shooter's Edge as one player plays it on his own machine. The listen holds
+// the rules as a runner (server/rules_runner.hpp; the QC server today) running a progs (the
+// baseline deathmatch mod, compiled at start from the sources built into the game:
+// `baseline_progs`) on a map, and the local player is client slot 0, his commands handed to the
+// server's frame directly as packets that are never lost (no network, no prediction: what he sees
+// is the server's own state after each frame).
 //
 // A MAP (`LoadedMap`): a map file from the search path (`maps/<name>.bsp`, read by
 // server/bsp_map.hpp: its hulls, its entity text, its visibility and hearing sets) or the
@@ -116,8 +117,9 @@ struct Listen {
   const ge::progs::Progs* progs = nullptr;
   ListenOptions opt;
   std::unique_ptr<LoadedMap> map;
-  sv::QcServer* server = nullptr;       // the one playing: `match`'s, or the campaign's map's
-  std::unique_ptr<sv::QcServer> match;  // a match's server (null in a campaign)
+  sv::RulesRunner* rules = nullptr;   // the rules playing: `match`, or the campaign's map's
+  sv::RulesCommon* server = nullptr;  // what they keep (`*rules`'s): the loop, the lists, the sink
+  sv::RulesRunner match;              // a match's rules (empty in a campaign)
   std::unique_ptr<sv::Campaign> campaign_host;  // a campaign's host (null in a match)
   std::unique_ptr<LoadedMap> next;              // a map read ahead for the campaign's loader
   bool map_changed = false;  // the campaign moved to another map in the last frames (the window
@@ -227,5 +229,7 @@ void missiles_of(const Listen& l, std::vector<Missile>& out);
 
 // A float field of an entity by its name in the progs (0 when the progs has no such field).
 float field_named(const Listen& l, int entity, const char* name);
+// A float global of the program by its name (0, and `found` false, when it has no such global).
+float global_named(const Listen& l, const char* name, bool* found = nullptr);
 
 }  // namespace shooters_edge::client

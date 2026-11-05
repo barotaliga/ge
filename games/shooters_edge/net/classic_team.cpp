@@ -229,17 +229,19 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   so.loop.max_edicts = 1024;
   std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(*opt.progs, so, r.error);
   if (!qc) return r;
-  sv::server_command(*qc, "deathmatch 1");
-  sv::server_command(*qc, "teamplay 1");
-  sv::server_command(*qc, "timelimit " + std::to_string(opt.timelimit));
-  if (!sv::load_map(*qc, map->spec, r.error)) return r;
-  sv::use_map_sets(*qc, map->bsp);
+  sv::RulesRunner rules = sv::qc_runner(std::move(qc));
+  sv::QcServer& q = *sv::qc_of(rules);
+  rules.console("deathmatch 1");
+  rules.console("teamplay 1");
+  rules.console("timelimit " + std::to_string(opt.timelimit));
+  if (!rules.start(map->spec, r.error)) return r;
+  sv::use_map_sets(q, map->bsp);
 
   // The nav graph off the world and the movers.
   sh::MoveWorld world;
   sh::map_world(map->spec.models[0], world);
-  open_doors_as_floor(*qc, map->spec, world);
-  const std::vector<sh::NavMover> movers = map_movers(*qc, map->spec);
+  open_doors_as_floor(q, map->spec, world);
+  const std::vector<sh::NavMover> movers = map_movers(q, map->spec);
   sh::NavGraph graph;
   sh::SwimField swim;
   ge::ai::Search best;  // what the map's main part reaches (the largest a spawn spot reaches)
@@ -309,7 +311,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   auto server = std::make_unique<ClassicServer>();
   ServerConfig cfg;
   cfg.hostname = "Shooter's Edge bots 4on4";
-  if (!classic_start(*server, *qc, st, cfg, r.error)) return r;
+  if (!classic_start(*server, rules, st, cfg, r.error)) return r;
   MultiviewRecorder mvd;
   if (opt.record) {
     mvd_start(mvd, false, opt.packed ? cl::kDefaultPackLevel : 0);
@@ -329,7 +331,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   auto clients = std::make_unique<ClassicClientEnd[]>(static_cast<size_t>(n));
   bt::Team teams[2];
   r.players.resize(static_cast<size_t>(n));
-  sv::QcServer& s = *qc;
+  sv::QcServer& s = q;
   {
     int k = 0;
     for (int t = 0; t < 2; t++) {
@@ -394,16 +396,18 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   const std::vector<sh::Vec3f>* known_items = nullptr;
   int64_t now = 0;
   uint64_t h = 1469598103934665603ull;
+  HitBook hits;  // every player's shots and hits by weapon
   for (int frame = 0; frame < opt.frames; frame++) {
     now += kTickUs;
     gn::sim_advance(net, now);
     s.sv.sound_count = 0;
     classic_frame(*server, now);
+    hits_frame(hits, s);
     // Fighters take their slots once their players are in the game.
     for (int k = 0; k < n; k++) {
       Seat& seat = seats[static_cast<size_t>(k)];
       const int slot = clients[k].playernum;
-      if (seat.ready || slot < 0 || !server->clients[slot].qc_active) continue;
+      if (seat.ready || slot < 0 || !server->clients[slot].rules_active) continue;
       bt::fighter_init(seat.fighter, graph, s, slot, map->spec.entities.c_str(), seat.skill,
                        r.players[static_cast<size_t>(k)].traits, kHz,
                        opt.seed + 31u * static_cast<uint32_t>(k));
@@ -580,6 +584,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.reactions = seat.fighter.bot.stats.reactions;
     p.pre_aimed = seat.fighter.bot.stats.pre_aimed;
     p.react_s = seat.fighter.bot.stats.react_s;
+    if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.players.size())
+      p.hits = hits.players[static_cast<size_t>(p.slot)];
     p.dives = seat.fighter.dives;
     p.dives_given_up = fs.dives_given_up;
     p.dive_wet_s = fs.dive_wet_s;

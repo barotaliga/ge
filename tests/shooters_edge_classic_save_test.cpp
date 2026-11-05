@@ -47,7 +47,9 @@ struct Game {
     CHECK_MSG(sv::campaign_new_game(c, mod, options(), "first", error), error);
     sv::campaign_join(c, 0, "player");
   }
-  float f(int e, int ofs) { return pg::as_float(*pg::entity_field(c.server->q.vm, e, ofs)); }
+  float f(int e, int ofs) {
+    return pg::as_float(*pg::entity_field(sv::qc_of(c.server)->q.vm, e, ofs));
+  }
 };
 
 }  // namespace
@@ -69,7 +71,7 @@ TEST(a_game_written_read_and_written_again_is_the_same_text) {
                          text.substr(d > 80 ? d - 80 : 0, 200) + "] vs [" +
                          again.substr(d > 80 ? d - 80 : 0, 200) + "]");
   }
-  const pg::LayoutFields& f = a.c.server->q.layout->f;
+  const pg::LayoutFields& f = sv::qc_of(a.c.server)->q.layout->f;
   CHECK(b.f(1, f.health) == a.f(1, f.health));
   CHECK(b.c.server->sv.time == a.c.server->sv.time);
   CHECK(b.c.server->clients[0].spawn_parms[0] == a.c.server->clients[0].spawn_parms[0]);
@@ -77,7 +79,7 @@ TEST(a_game_written_read_and_written_again_is_the_same_text) {
   CHECK(b.c.server->sv.edicts[1].origin.x == a.c.server->sv.edicts[1].origin.x);
   // It plays on.
   for (int k = 0; k < 30; k++) CHECK_MSG(sv::campaign_frame(b.c, nullptr, 0, error), error);
-  CHECK(b.c.server->q.faults == 0);
+  CHECK(sv::qc_of(b.c.server)->q.faults == 0);
 }
 
 TEST(a_save_numbered_after_one_player_is_moved_onto_this_servers_numbering) {
@@ -94,7 +96,7 @@ TEST(a_save_numbered_after_one_player_is_moved_onto_this_servers_numbering) {
   compact += "{\n\"classname\" \"thing\"\n\"owner\" \"1\"\n\"health\" \"7\"\n}\n";
   Game b;
   CHECK_MSG(sv::classic_load_text(b.c, b.mod, options(), compact, "s1", "player", error), error);
-  const sv::QcServer& s = *b.c.server;
+  const sv::QcServer& s = *sv::qc_of(b.c.server);
   const int first = s.sv.set.first_dynamic;
   CHECK(first > 2);
   CHECK(s.sv.num_edicts == first + 1);

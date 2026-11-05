@@ -26,15 +26,15 @@ constexpr float kDoorKeeps = 160;  // an item this near a door's box is behind i
 
 // The buttons off the map's entity text, linked to the server's entities, and the items behind
 // their doors (a novice's items get no link: he knows no button).
-void buttons_init(Fighter& f, const ge::shooter::NavGraph& g, const server::QcServer& s,
+void buttons_init(Fighter& f, const ge::shooter::NavGraph& g, const server::RulesCommon& s,
                   const char* entities);
 
 // A novice's whim, at a think: a button in sight now and then becomes where he goes and what he
 // shoots at. True while he is on one.
-bool button_poke(Fighter& f, const server::QcServer& s, int me, double t);
+bool button_poke(Fighter& f, const server::RulesCommon& s, int me, double t);
 
 // The poke itself, once there: the view on the button and the trigger (or the walk into it).
-void button_poke_cmd(Fighter& f, const server::QcServer& s, int me, double t,
+void button_poke_cmd(Fighter& f, const server::RulesCommon& s, int me, double t,
                      ge::shooter::MoveCmd& cmd);
 
 }  // namespace shooters_edge::bots

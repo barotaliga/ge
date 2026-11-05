@@ -104,7 +104,7 @@ bool classic_save_text(const Campaign& c, std::string& out, std::string& error) 
     error = "save: " + error;
     return false;
   }
-  QcServer& s = *c.server;
+  QcServer& s = *qc_of(c.server);
   sim::enter_qc(s.q, s.sv);  // the program's copy of the world brought up to the loop's
   sim::leave_qc(s.q);
   const pg::Vm& vm = s.q.vm;
@@ -145,12 +145,12 @@ bool classic_save_text(const Campaign& c, std::string& out, std::string& error) 
 bool classic_load_text(Campaign& c, const pg::Progs& progs, const CampaignOptions& opt,
                        std::string_view text, std::string_view name, const std::string& player,
                        std::string& error) {
-  c.server.reset();
+  c.server = {};
   const std::string where(name);
   const auto refuse = [&](int line, const std::string& what) {
     error = where + ", line " + std::to_string(line) + ": " + what +
             "; next: the file is damaged or not a save, load another";
-    c.server.reset();
+    c.server = {};
     return false;
   };
   // The header, a line an item.
@@ -191,10 +191,10 @@ bool classic_load_text(Campaign& c, const pg::Progs& progs, const CampaignOption
                 {"skill", std::to_string(static_cast<int>(num::round(skill)))}};
   c.serverflags = 0;
   if (!campaign_reopen(c, progs, opt, map, error)) {
-    c.server.reset();
+    c.server = {};
     return false;
   }
-  QcServer& s = *c.server;
+  QcServer& s = *qc_of(c.server);
   sh::Server& sv = s.sv;
   pg::Vm& vm = s.q.vm;
   const int first =

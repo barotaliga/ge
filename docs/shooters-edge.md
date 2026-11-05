@@ -781,14 +781,14 @@ for its own content (its own maps and mod), never a stand-in for a classic game'
 them never changes a classic game. Playing one classic game with another's parts is classic
 remix, a feature of classic-enhance (M18u), shown only when two full games are loaded.
 
-### The rules runner: the next seam (steps 1 to 3 landed)
+### The rules runner: the seam a second program form plugs into (steps 1 to 4 landed)
 
 The adapter answers what a game's FILES hold. What its RULES do is the other half: the listen
 server, the dedicated server, the campaign, the bots and the recorder all hold the QC server
 (`server/qc_server.hpp`) itself today. A second program form (the sequel's native rules, a
 sandboxed bytecode, the engine's C++ mod as the whole game) needs them to hold a **runner**
-instead, of which the QC server is the first implementation. Steps 1 and 2 below have landed
-(`server/rules_world.hpp`); steps 3 and 4 follow, and step 5 waits for the sequel (M18v).
+instead, of which the QC server is the first implementation. Steps 1 to 4 below have landed
+(`server/rules_world.hpp`, `server/rules_runner.hpp`); step 5 waits for the sequel (M18v).
 
 **What holds the QC server today** (counted 2026-11-02, outside `server/`): 31 files, in three
 groups. The host and the wire (`client/listen*`, `client/lobby_room*`, `net/classic_*`) start
@@ -833,8 +833,15 @@ the last):
 3. **Landed.** The bots read the view: each body's place, bounds, view, flags and water from its
    row, a bot's stats and every frag from its client's numbers. They still trace the loop's world
    (`trace_move`), which is the map's collision and no rules'. Every lab's digest is the same.
-4. The host holds a runner (a table pointer and its state) where it held a `QcServer`; the
-   campaign and the dedicated server the same.
+4. **Landed.** The listen host, the lobby room, the campaign, the wire's endpoint and the
+   dedicated server hold a `RulesRunner` (`server/rules_runner.hpp`: the table of calls, the
+   runner's state, and `RulesCommon`, the part every runner keeps alike: the loop, the lists, the
+   clients' info, the settings, the message sink, the map change asked for and the world). Only
+   the code that makes a runner names the QC server (`qc_runner`). The bots take the common part.
+   What still reads the program behind a runner goes through `qc_of` in one place each: the
+   listen's field and global by name, an entity's class, the campaign's statistics, the saves'
+   VM state and the lobby's team field; each is a candidate for the world when a second runner
+   needs it. Every lab's digest is the same.
 5. The sequel's rules as a second runner (M18t4), with its own program form; nothing in steps 1
    to 4 names it.
 
@@ -1286,6 +1293,18 @@ on, within 5 degrees (pre-aimed at a doorway), takes half the draw: the only way
 sound takes longer to act on than a sight: a chase after an enemy only heard starts the median
 reaction plus 100 ms (a quick player, trait 8) to 200 ms (a slow one, trait 2) after the sound.
 `se-team` prints each player's sightings, their mean reaction and the share pre-aimed.
+
+**Hit rates (M18r11d).** A team game counts every player's shots and hits by weapon
+(`games/shooters_edge/net/classic_hits.hpp`), the way a match's statistics do, and `se-team`
+prints them per player and per skill (`team.hits.<skill>.<weapon>`). A shot is ammunition spent on
+the weapon held (the scatterguns count pellets, 6 and 14 a shot; the arc counts cells); a hit is
+health and armour an enemy lost to whatever last hurt him (`dmg_inflictor`: a player's hitscan
+by the weapon he holds, or a missile counted once however many it hurt). A rocket's direct hit is
+a blow of exactly the mod's direct damage, or one that killed a player the rocket was next to;
+any other rocket that hurt an enemy hit by its blast. The bands the bots are held to, a division's
+players in percent (Div1 / Div2 / Div3): the arc 38–45 / 28–35 / 15–25, a rocket's direct hit
+30–35 / 22–28 / 10–18 and its blast 18–25 / 15–20 / 12–15, the double scattergun 35–45 / 25–35 /
+15–25, grenades 8–15 / 5–10 / 2–5.
 
 **Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
 community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the
