@@ -433,6 +433,38 @@ pixel, every packer's worst case) and, with `--file`, a frame a game wrote: the 
 SSIM after reading it back, the time, a sweep of `scr_quality`, and a picture of a part of each
 frame at four times its size in every format.
 
+### The gallery (M23l)
+
+The screenshots a game took are looked through in the game, on a page of its menu. What every
+game's page does alike is the engine's (`capture/gallery.hpp`, `ge::capture::Gallery`); the page's
+look, its words and its keys are the game's, a hundred lines of layout over it.
+
+- **The list.** Every still in the folder (png, jpg, avif, heic; a `.part` being written is not
+  one) newest first by the time in its name, a count after the second ordered as a number, names
+  holding no time last. An entry carries its name, format, bytes and the time it was taken; its
+  pixel size once a load has read it, or why the file does not read.
+- **The modes and the presses.** `grid` (pages of the cells the game's layout fits:
+  `gallery_cells` gives as many columns of the screen's shape as fit a smallest cell),
+  `viewer` (one picture at full size) and `confirm` (asked whether to delete). `input` takes the
+  frame's edges (the arrows, accept, back, delete, the cell under the pointer and a click) and
+  says what they did (`moved`, `opened`, `asked`, `deleted`, `leave` ...), so a game plays a sound
+  or goes back a page. Delete always asks first; a delete keeps the selection where it was.
+- **The loads.** A worker thread of the gallery's own reads and decodes the files
+  (`decode_still`) the page shows, most wanted first: the viewer's picture, the page's
+  thumbnails (shrunk to 320 px across), the viewer's neighbours, then the pages either side.
+  `poll` once a frame takes in what came back and lets go of what is far from the selection, so
+  memory stays at three pages and three pictures however many files there are. Each picture
+  carries a `stamp` that moves when its pixels do: a game copies it into its texture only then,
+  through `ui::Image::revision`, which the GPU's 2D pass reads to upload an image again.
+- **The folder changing under it** (F12 pressed with the page up, a file deleted outside) is
+  listed again by the next `poll`, the selection kept on its file.
+
+Shooter's Edge's page is OPTIONS ▸ SCREENSHOTS (`menu_screenshots` opens it from the console;
+`games/shooters_edge/menu/gallery_page.hpp`): the grid with the selected cell ringed and its facts
+in the footer, ENTER for the viewer, LEFT and RIGHT through the pictures, DELETE or BACKSPACE (a
+Mac's delete key) to delete after asking, ESC back. The `se-gallery` lab walks it at three
+screen shapes. Fall Line's pause card is where its page goes, the same gallery under it.
+
 ## Broadcasting to a video service (M23e)
 
 The services a player streams to take RTMP: plain RTMP and RTMPS carry H.264 and AAC, and Enhanced

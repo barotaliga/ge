@@ -26,6 +26,7 @@
 // ge:keywords video dimmed disabled cvar console-line needs togglemenu shooters-edge
 // ge:keywords load-page save-page save-slots customize-controls controls bind_control bound_keys
 // ge:keywords classic-enhanced ce_ graphics weather held-weapon gamma brightness load-game
+// ge:keywords screenshots gallery
 // ge:skill ui console
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -141,8 +142,17 @@ void refresh(ge::ui::Menu& menu, const Host& host, bool hide_back = false);
 // What an event asks of the game menu.
 // `bind_key`: a CUSTOMIZE CONTROLS row was pressed; the game menu waits for the key (the event's
 // item names the row). `load_game`: LOAD GAME, the window shows the desktop's folder chooser.
-// `classic_enhance`: ENHANCE, the enhancing watched.
-enum class Outcome : uint8_t { none, close, classic_enhance, load_game, back_at_root, bind_key };
+// `classic_enhance`: ENHANCE, the enhancing watched. `screenshots`: OPTIONS ▸ SCREENSHOTS, the
+// gallery's page shown (gallery_page.hpp).
+enum class Outcome : uint8_t {
+  none,
+  close,
+  classic_enhance,
+  load_game,
+  back_at_root,
+  bind_key,
+  screenshots
+};
 
 // One menu event applied: a client setting's line run, NEW GAME's START running the rules and the
 // map, an action's line run. Returns whether the menu closes or opens something it owns.
