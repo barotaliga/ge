@@ -54,6 +54,7 @@
 #include "mountain/air/marks.hpp"
 #include "mountain/app/mist_look.hpp"
 #include "mountain/mapgen/generate.hpp"
+#include "render/water.hpp"
 #include "water/optics.hpp"
 #include "water/world.hpp"
 #include "wind/cold.hpp"
@@ -448,6 +449,10 @@ void run(ge::lab::Lab& lab) {
       } else {
         fall_line::app::set_water(*device, *frame, body, world.bodies[0]);
       }
+      // The sea on the tarn and the foam it makes (render/water.hpp's foam_of).
+      const ge::render::WaterFoam foam = ge::render::foam_of(world.bodies[0].waves);
+      lab.metric(s.id + ".hs", foam.hs, "m", Det::measured);
+      lab.metric(s.id + ".whitecap-cover", foam.cover, "", Det::measured);
       wind_now = s.wind;
     }
     ge::render::FrameView v;

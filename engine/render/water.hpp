@@ -41,7 +41,9 @@
 //   vertex and the pixel in the simulation's formula, each faded as the picture's tiers fade a
 //   wave (`set_water_wakes`).
 //
-// Not yet (M24g2): foam, caustics, the shore's wet band, rain.
+// - THE FOAM (`foam_of`, water.wgsl's `foam_at`): whitecaps where the surface folds, surf over
+//   the shallows, kept as they drift (the waves' own past, per pixel), drawn as lace; and THE
+//   SHORE'S WET BAND (render/water_shore.wgsl), the ground the waves run up darkened.
 //
 // ge:summary The water's surface drawn: the snapped rings, the waves, Fresnel, refraction, glitter
 // ge:keywords render water surface ocean lake rings clipmap snapped morph fresnel reflection
@@ -50,12 +52,14 @@
 // ge:keywords prepare_water encode_water detail_waves hidden wake rings set_water_wakes kelvin
 // ge:keywords shore-mask shore_mask gusts cats-paws stir still-pool planar-mirror planar-reflection
 // ge:keywords water-below underside snell-window total-internal-reflection fresnel-exit daylight
-// ge:keywords set_water_views water-views
+// ge:keywords set_water_views water-views foam whitecap jacobian fold surf foam-trail lace
+// ge:keywords wet-band shore-wet run-up swash foam_of
 // ge:skill render water
 // ge:test tests/render_water_test.cpp
 #pragma once
 
 #include <cstdint>
+#include <span>
 #include <vector>
 
 #include "gpu/device.hpp"
@@ -104,8 +108,10 @@ struct WaterDraw {
   // The share of the surface the sun itself reaches (its caustics and the shafts under it); < 0:
   // the day's share. A courtyard's pool under the open sky may lie in a wall's shade.
   double sunlit = -1;
-  double stir = 0;   // a still surface's own wandering slope (rad, about): 0 glass
-  double gusts = 0;  // 0..1: how strongly the gusts' patches raise and lay the short waves
+  double stir = 0;       // a still surface's own wandering slope (rad, about): 0 glass
+  double gusts = 0;      // 0..1: how strongly the gusts' patches raise and lay the short waves
+  bool foam = true;      // the whitecaps, the surf and the line at the shore (`foam_of`)
+  bool wet_band = true;  // the shore darkened where the waves run up it
 };
 
 // A game's own pictures of the world for one body (`set_water_views`): THE MIRROR, the world
@@ -126,8 +132,10 @@ struct WaterViews {
   float up_view_proj[16] = {};
 };
 
-// A body's SHORE MASK: 255 where it may be drawn, 0 where not, row-major from its box's (x0, z0)
-// corner, each texel `texel` m a side; the lake's outline filled even-odd and grown by one texel.
+// A body's SHORE MASK: 255 where it may be drawn, under 128 where not, row-major from its box's
+// (x0, z0) corner, each texel `texel` m a side; the lake's outline filled even-odd and grown by one
+// texel. Past it the texels fall from 127 to 0 over `kShoreReach` m: how near the water the ground
+// is, for the shore's wet band.
 // A body with no outline (an ocean, a volume) is one texel, drawn everywhere.
 struct ShoreMask {
   int cols = 1, rows = 1;
@@ -135,6 +143,28 @@ struct ShoreMask {
   std::vector<uint8_t> texels{255};
 };
 ShoreMask shore_mask(const water::Body& body);
+
+// THE FOAM a body's waves make (docs/water.md § Foam): a crest whose surface folds (the Jacobian of
+// the horizontal motion of the waves `waves` lays and the `detail` band's, down to `kFoamShortest`
+// m, under `fold`) breaks white, and a wave over 0.78 of the depth surfs.
+// `wind` is the wind at 10 m that grew the sea (`water::wind_of`), `cover` its whitecap cover
+// (`water::whitecap_cover`, the share of the face white, the trails included), and the fold is
+// set so the crests breaking now are `kFoamActive` of it (the waves' slopes taken as Gaussian);
+// the foam drifts downwind at `drift` m/s. The run-up is how far over the level the waves wet the
+// shore (a calm lake's lap included).
+inline constexpr double kFoamActive = 0.15;   // the share of the cover that is crests breaking now
+inline constexpr double kShoreReach = 12;     // m past a lake's shore its wet band may lie
+inline constexpr double kFoamShortest = 1.5;  // m: the shortest wave that folds (faded in to 3 m)
+struct WaterFoam {
+  double wind = 0, cover = 0;
+  double fold = -1e9;      // J under this breaks; far under -1 when nothing can
+  double sigma = 0;        // the Jacobian's spread about 1 (its trace's standard deviation)
+  double drift = 0;        // m/s downwind
+  double hs = 0;           // the laid band's significant height, m
+  double runup = 0;        // m over the level
+  double fold_length = 0;  // m: the wavelength the folds' slopes weigh most (0: no sea)
+};
+WaterFoam foam_of(const water::Waves& waves, std::span<const water::Component> detail = {});
 
 struct WaterGpuBody {
   float info[4];
@@ -146,13 +176,16 @@ struct WaterGpuBody {
   float air[4];   // the day's share on the water, the stir's slope, the gusts, the wind (m/s)
   float sun[4];   // the share of the surface the sun reaches (the caustics, the shafts), 0, 0, 0
   float view[4];  // the mirror (0 none, 1 over, 2 under), the view up (1), its heading's cos, sin
+  // The foam (`foam_of`): the fold's threshold on the Jacobian, the whitecap cover, its drift x, z
+  float foam[4];
+  float surf[4];  // the laid band's Hs (m), the run-up (m), the folds' wavelength (m), sigma
   float up_view_proj[16];
   float levels[kWaterLevels][4];
 };
 
 struct Water {
   wgpu::BindGroupLayout layout, copy_layout;
-  uint32_t p_copy = 0, p_draw = 0;
+  uint32_t p_copy = 0, p_draw = 0, p_shore = 0;
   wgpu::Texture scene_colour, scene_depth;
   wgpu::TextureView scene_colour_view, scene_depth_view;
   wgpu::BindGroup copy_group;

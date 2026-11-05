@@ -47,6 +47,11 @@ Sea grow(double wind, double fetch, double toward);
 // The dimensionless fetch g F / U^2 past which the sea is fully developed.
 double developed_fetch();
 
+// The wind at 10 m that grows `sea` (`grow`'s inverse off its height and period): the wind a
+// sea's whitecaps answer to where only the sea is kept. 0 for no sea; a developed sea's wind
+// from its height alone.
+double wind_of(const Sea& sea);
+
 // The JONSWAP shape at `w` rad/s for a peak at `wp` with enhancement `gamma`, with a = 1.
 double jonswap_shape(double w, double wp, double gamma);
 

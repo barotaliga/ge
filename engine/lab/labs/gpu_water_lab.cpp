@@ -4,7 +4,9 @@
 // heavy rain (its drops' rings); the lake at night in the rain under a street lamp, the spray
 // off its post lit (render/lights.hpp), the lamp off and on; the sea under a light
 // air, a fresh breeze and a gale; the sea at sunset into the sun's path; the shallows from above
-// in six looks (the colour from what is in the water, water/optics.hpp); and a slow fly-out
+// in six looks (the colour from what is in the water, water/optics.hpp); the gale's whitecaps
+// and a whitecap's trail, the surf on the beach and its wet sand by day and under a full moon
+// (render/water.hpp's `foam_of`); and a slow fly-out
 // over the sea, every distance's band in one strip. It holds the GPU's crest to the
 // simulation's (the depth read back looking straight down against `surface_at` with the same
 // waves kept) and the detail band's slope variance to the spectrum's, and fails on a GPU error,
@@ -13,7 +15,7 @@
 // ge:summary Lab: the water's surface drawn: lake, sea by wind, sunset, looks, the fly-out
 // ge:keywords lab gpu water surface lake sea sunset glitter fresnel refraction looks fly-out
 // ge:keywords crest detail-waves picture software-adapter rain rain-rings street-lamp night
-// ge:keywords lamp-glitter
+// ge:keywords lamp-glitter whitecaps foam-trail surf wet-band moonlit-surf
 // ge:skill render water labs
 // ge:test tests/render_water_test.cpp
 #include <algorithm>
@@ -192,11 +194,12 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    placeholders(lab,
-                 {"lake-calm", "lake-fresh", "wake", "wake-high", "rings", "rain-light",
-                  "rain-heavy", "lamp-night-off", "lamp-night", "looks", "sea-light", "sea-fresh",
-                  "sea-gale", "sunset", "fly-out", "river", "waterfall"},
-                 w, h);
+    placeholders(
+        lab, {"lake-calm",  "lake-fresh",     "wake",       "wake-high", "rings",      "rain-light",
+              "rain-heavy", "lamp-night-off", "lamp-night", "looks",     "sea-light",  "sea-fresh",
+              "sea-gale",   "whitecaps",      "foam-trail", "surf",      "surf-night", "sunset",
+              "fly-out",    "river",          "waterfall"},
+        w, h);
     return;
   }
   std::vector<std::unique_ptr<ge::gpu::Device>> devices;
@@ -533,6 +536,122 @@ void run(gl::Lab& lab) {
     const gl::Picture pic = draw(dsea, sea, deck);
     lab.shot({c.id, c.title, c.caption, c.look_for, {{"wind", fixed(c.wind, 0) + " m/s"}}}, pic,
              Det::measured);
+  }
+  // THE FOAM (render/water.hpp's `foam_of`): the gale's whitecaps and their trails, from 15 m up
+  // looking across the wind, drawn with the foam and without; the share of the water it whitens
+  // against the whitecap law's cover at the sea's wind.
+  {
+    gw::World world = sea_world(20, "adriatic");
+    gr::set_water_body(dsea, sea.water, 0, world.bodies[0]);
+    const gr::WaterFoam foam = gr::foam_of(world.bodies[0].waves);
+    const gr::FrameView across =
+        view_at(4000, 15, kBeach - 600, 0.5 * kPi, -0.22, 0.5, kPi + 0.9, 6.0);
+    const gl::Picture pic = draw(dsea, sea, across);
+    sea.water.bodies[0].draw.foam = false;
+    gr::set_water_body(dsea, sea.water, 0, world.bodies[0]);
+    const gl::Picture bare = draw(dsea, sea, across);
+    sea.water.bodies[0].draw.foam = true;
+    gr::set_water_body(dsea, sea.water, 0, world.bodies[0]);
+    const double white = changed(pic, bare);
+    lab.metric("whitecaps.law", foam.cover, "", Det::measured);
+    lab.metric("whitecaps.drawn", white, "", Det::measured);
+    if (white < 0.25 * foam.cover) {
+      lab.fail("the gale's whitecaps whiten " + fixed(white * 100, 2) +
+                   "% of the picture against " + fixed(foam.cover * 100, 1) +
+                   "% by the whitecap law",
+               "Check foam_of's fold (engine/render/water.cpp) and foam_at "
+               "(engine/render/wgsl/water_surface.wgsl). Skill: render.");
+    }
+    lab.shot({"whitecaps",
+              "WHITECAPS IN A GALE",
+              "The open sea under 20 m/s from 15 m up, looking across the wind with the sun "
+              "behind the camera: a crest breaks white where the surface "
+              "folds (the waves' Jacobian under its threshold), set so the whitecap law's cover (" +
+                  fixed(foam.cover * 100, 1) +
+                  "% of the face, trails included) is three twentieths crests breaking now, the "
+                  "rest their trails; each patch "
+                  "fades over a few seconds as it drifts downwind, drawn as lace.",
+              "white lace on the crests of the bigger waves, scattered across the sea and "
+              "thinning into streaks behind them; holes in each patch; far off a faint even "
+              "whitening, no sparkle",
+              {{"wind", "20 m/s"}, {"cover", fixed(foam.cover * 100, 1) + "%"}}},
+             pic, Det::measured);
+    // A trail in three moments, from 8 m over the water looking down: a crest breaking and the
+    // foam it leaves fading behind it as the wave runs on.
+    const int tw = static_cast<int>(w / 2), th = static_cast<int>(h / 2);
+    Scene small;
+    ge::gpu::Device& dt = fresh();
+    make_scene(dt, small, sea_ground, 0, 32, static_cast<uint32_t>(tw), static_cast<uint32_t>(th));
+    gr::add_water_body(dt, small.water, world.bodies[0]);
+    gl::Picture sheet = gl::create_picture(3 * tw + 40, th + 26, {250, 250, 248});
+    for (int i = 0; i < 3; ++i) {
+      const double t = 6.0 + 0.8 * i;
+      const gr::FrameView v = view_at(4000, 8, kBeach - 620, 0.0, -0.75, 0.6, kPi + 0.9, t);
+      gl::draw_text(sheet, 10 + i * (tw + 10), 4, "T = " + fixed(t, 1) + " S", {24, 26, 32});
+      paste(sheet, draw(dt, small, v), 10 + i * (tw + 10), 16);
+    }
+    lab.shot({"foam-trail",
+              "A WHITECAP'S TRAIL",
+              "The gale's sea from 8 m up looking downwind and down at the water, at three "
+              "moments 0.8 s apart: the foam is the waves' own past worked out again, so the same "
+              "view drawn alone at any moment shows the trails a crest has left.",
+              "patches of lace that stay nearly where they are while the crests that made them "
+              "run on, thinning and opening into holes from one moment to the next; new white "
+              "where a crest folds",
+              {{"wind", "20 m/s"}}},
+             sheet, Det::measured);
+  }
+  // THE SURF AND THE WET SHORE: the fresh breeze's sea onto the beach (shelving 1 in 8), from 2 m
+  // up on the sand looking along the waterline; by day and under a full moon.
+  {
+    gw::World world = sea_world(10, "adriatic");
+    gr::set_water_body(dsea, sea.water, 0, world.bodies[0]);
+    const gr::WaterFoam foam = gr::foam_of(world.bodies[0].waves);
+    const double line_z = kBeach + 40.0 / 0.12;
+    gr::FrameView beach =
+        view_at(4000, 2.2 + 0.12 * 12, line_z + 12, 0.5 * kPi + 0.55, -0.12, 0.45, 0.3, 5.0);
+    const gl::Picture pic = draw(dsea, sea, beach);
+    sea.water.bodies[0].draw.foam = false;
+    sea.water.bodies[0].draw.wet_band = false;
+    gr::set_water_body(dsea, sea.water, 0, world.bodies[0]);
+    const gl::Picture bare = draw(dsea, sea, beach);
+    sea.water.bodies[0].draw.foam = true;
+    sea.water.bodies[0].draw.wet_band = true;
+    gr::set_water_body(dsea, sea.water, 0, world.bodies[0]);
+    const double share = changed(pic, bare);
+    lab.metric("surf.changed", share, "", Det::measured);
+    lab.metric("surf.runup", foam.runup, "m", Det::measured);
+    if (share < 0.02) {
+      lab.fail("the beach shows no surf and no wet band (" + fixed(share * 100, 1) +
+                   "% changed by them)",
+               "Check foam_at's surf (engine/render/wgsl/water_surface.wgsl) and fs_shore "
+               "(engine/render/water_shore.wgsl). Skill: render.");
+    }
+    lab.shot({"surf",
+              "SURF ON THE BEACH",
+              "The fresh breeze's sea (Hs " + fixed(foam.hs, 1) +
+                  " m) onto a beach shelving 1 in 8, from 3.6 m up on the sand 12 m from the "
+                  "waterline looking along it out to sea: each wave breaks where it stands over "
+                  "0.78 of the depth, its foam kept a few seconds; a line of foam where the water "
+                  "laps the sand, and the sand dark over the " +
+                  fixed(foam.runup, 1) + " m the waves run up.",
+              "white water along the shallows where the waves break, lace trailing back from "
+              "it; a ragged white line at the water's edge; the beach darker in a band over the "
+              "waterline, fading up the sand",
+              {{"wind", "10 m/s"}, {"run-up", fixed(foam.runup, 1) + " m"}}},
+             pic, Det::measured);
+    gr::Moon full{0.5, 0.3, 1.0, 384400};
+    gr::FrameView moonlit = beach;
+    moonlit.sun_elevation = -0.35;
+    gr::set_night(moonlit, full, 46, 120);
+    lab.shot({"surf-night",
+              "SURF UNDER A FULL MOON",
+              "The same beach at night, the sun 20 degrees under the horizon and a full moon 29 "
+              "degrees up.",
+              "the breaking water and the line at the edge grey-white against dark water, the "
+              "moon's glitter on the sea beyond; the wet band a darker strip of sand",
+              {{"wind", "10 m/s"}, {"moon", "full"}}},
+             draw(dsea, sea, moonlit), Det::measured);
   }
   // The crest: straight down from 6 m over the open sea, the depth read back against the
   // simulation's surface with the waves the vertex keeps at level 0 (0.5 m quads: 2 m and longer).
