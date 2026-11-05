@@ -374,4 +374,31 @@ size_t throw_impact(Particles& particles, const Impact& hit) {
   return n;
 }
 
+namespace {
+constexpr double kFlashEdgeLux = 1.0;  // the flash's light where its reach ends, lx
+constexpr double kFlashReach = 4.0;    // its reach at most, a share of the look's range
+}  // namespace
+
+size_t flash_lights(std::span<const Blast> blasts, double now_s, std::vector<LocalLight>& out) {
+  size_t n = 0;
+  for (const Blast& b : blasts) {
+    const Flash f = flash_at(b, now_s);
+    if (!(f.candela > 0) || !(f.range_m > 0)) continue;
+    LocalLight l;
+    for (int k = 0; k < 3; ++k) {
+      l.position[k] = f.at[k];
+      l.colour[k] = f.colour[k];
+    }
+    l.candela = static_cast<float>(f.candela);
+    // Out to where it has fallen to kFlashEdgeLux, never short of the look's range nor past
+    // kFlashReach of it: a fixed range would end a white-hot flash in a lit dome with a hard rim.
+    l.range_m = static_cast<float>(
+        std::clamp(std::sqrt(f.candela / kFlashEdgeLux), f.range_m, kFlashReach * f.range_m));
+    l.radius_m = static_cast<float>(f.radius_m);
+    out.push_back(l);
+    n++;
+  }
+  return n;
+}
+
 }  // namespace ge::render

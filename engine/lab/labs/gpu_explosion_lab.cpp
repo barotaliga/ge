@@ -4,7 +4,10 @@
 // orange, then smoke rising, its sparks streaking out and reddening); a rocket's and a grenade's
 // blast through their lives side by side (one code, two looks); every preset at two moments; a
 // sweep of the knobs, each at its two ends; a blast against the wall's foot (the wall and the
-// ground clip the ball pixel by pixel); the eye inside a ball; the march's steps 6, 10 and 16
+// ground clip the ball pixel by pixel); the flash lighting the yard and the wall round a blast by
+// day, at dusk and at night (its flash a local light every frame); the scorch two blasts leave on
+// the floor and the wall's face, its embers and its soot; the eye inside a ball; the march's
+// steps 6, 10 and 16
 // beside each other; and with `--frames=N` N frames of the day sequence for an animation.
 // `--look=<id>` picks the preset the day, dusk and animation views draw and `--set=knob=value,...`
 // turns its knobs (render/explosion.hpp's `blast_knobs`). Measured: what a blast costs the GPU, as
@@ -15,7 +18,7 @@
 //
 // ge:summary Lab: explosions through their life, looks and knobs, clipping, steps, and their cost
 // ge:keywords lab gpu explosion fireball smoke sparks blast cost steps clip sequence animation
-// ge:keywords knobs preset rocket grenade
+// ge:keywords knobs preset rocket grenade flash local-light scorch decal marks embers night
 // ge:keywords picture software-adapter
 // ge:skill render labs
 // ge:test tests/render_explosion_test.cpp
@@ -88,6 +91,34 @@ std::vector<gl::Picture> sequence(ge::gpu::Device& d, Scene& s, const gr::Blast&
   return out;
 }
 
+// The same for several blasts from any eye (x, y, z, pitch): their sparks thrown as each goes off.
+std::vector<gl::Picture> sequence_of(ge::gpu::Device& d, Scene& s, const std::vector<gr::Blast>& bl,
+                                     const std::vector<double>& moments, const double eye[4],
+                                     double sun_el, int settle) {
+  gr::clear_particles(d, s.particles);
+  std::vector<bool> thrown(bl.size(), false);
+  std::vector<gl::Picture> out;
+  out.reserve(moments.size());
+  double t = 0;
+  const auto throw_due = [&] {
+    for (size_t i = 0; i < bl.size(); ++i) {
+      if (thrown[i] || bl[i].born_s > t) continue;
+      gr::throw_blast(s.particles, bl[i]);
+      thrown[i] = true;
+    }
+  };
+  for (const double m : moments) {
+    while (t + 1e-9 < m) {
+      const double dt = std::min(1.0 / 60, m - t);
+      t += dt;
+      throw_due();
+      draw(d, s, eye_at(eye[0], eye[1], eye[2], eye[3], sun_el, t, 0), bl, dt);
+    }
+    out.push_back(settled(d, s, eye_at(eye[0], eye[1], eye[2], eye[3], sun_el, m, 0), bl, settle));
+  }
+  return out;
+}
+
 void run(gl::Lab& lab) {
   const auto w = static_cast<uint32_t>(lab.arg_num("width"));
   const auto h = static_cast<uint32_t>(lab.arg_num("height"));
@@ -145,10 +176,10 @@ void run(gl::Lab& lab) {
       lab.fail("no GPU device, and GE_GPU_REQUIRE=1",
                "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
     }
-    placeholders(
-        lab,
-        {"day", "dusk", "rocket-grenade", "presets", "knobs", "wall", "inside", "field", "steps"},
-        w, h);
+    placeholders(lab,
+                 {"day", "dusk", "rocket-grenade", "presets", "knobs", "wall", "flash", "scorch",
+                  "inside", "field", "steps"},
+                 w, h);
     return;
   }
   Scene s;
@@ -287,6 +318,74 @@ void run(gl::Lab& lab) {
              sheet_of(pics, {"0.10 S", "0.60 S"}, 2), Det::measured);
   }
 
+  // THE FLASH IN THE WORLD: a blast 8 m short of the wall, by day and at night, its flash a local
+  // light (flash_lights) lighting the floor round it and the wall's face.
+  {
+    const std::vector<gr::Blast> bl = {blast_at(kMid, 0, kWallZ - 8, 31)};
+    const double eye[4] = {kMid - 4, 1.7, kWallZ - 28, -0.02};
+    const std::vector<double> at = {0.03, 0.1, 0.3, 1.0};
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> names;
+    for (const auto& [sun, when] :
+         {std::pair{0.6, "DAY"}, std::pair{-0.05, "DUSK"}, std::pair{-0.4, "NIGHT"}}) {
+      for (gl::Picture& p : sequence_of(*device, s, bl, at, eye, sun, settle))
+        pics.push_back(std::move(p));
+      for (const double m : at) names.push_back(std::string(when) + " " + fixed(m, 2) + " S");
+    }
+    lab.shot({"flash",
+              "THE FLASH LIGHTS THE YARD",
+              "The common blast on the floor 8 m short of the wall, from 20 m off, by day, at "
+              "dusk and at night, at 0.03, 0.1, 0.3 and 1 s. Each frame its flash (the fireball's "
+              "blackbody light, render/explosion.hpp's flash_at) is a local light, so the floor "
+              "round it and the wall's face are lit by the fire.",
+              "by day the flash barely shows on the sunlit floor; at dusk and at night the floor "
+              "round the ball and the wall behind it lit white-hot at once, then orange and "
+              "fading as the fire cools, dark again by 1 s with the smoke lit only by the sky",
+              {}},
+             sheet_of(pics, names, 4), Det::measured);
+    std::vector<gr::LocalLight> lamps;
+    gr::flash_lights(bl, 0.05, lamps);
+    const double on_wall[3] = {kMid, 1.5, kWallZ - 0.5};
+    lab.metric("flash.lights", static_cast<double>(lamps.size()), "count");
+    lab.metric("flash.cd-0.05", lamps.empty() ? 0 : lamps[0].candela, "cd", Det::measured);
+    lab.metric("flash.wall-lux-0.05", gr::lamp_lux_at(lamps, on_wall, 0.05), "lx", Det::measured);
+    lamps.clear();
+    gr::flash_lights(bl, 3.0, lamps);
+    lab.metric("flash.lights-3s", static_cast<double>(lamps.size()), "count");
+  }
+
+  // THE SCORCH: one blast on the floor and one at the wall's foot, their marks pressed with the
+  // decals (render/marks.hpp) as they go off, the embers glowing and cooling, the soot left.
+  {
+    gr::Blast foot = blast_at(kMid + 3, 0.3, kWallZ - 1.0, 41, nullptr, 0.4);
+    foot.normal[1] = 0;
+    foot.normal[2] = -1;
+    const std::vector<gr::Blast> bl = {blast_at(kMid - 3, 0, kWallZ - 7, 43), foot};
+    const double eye[4] = {kMid, 2.6, kWallZ - 15, -0.14};
+    const std::vector<double> at = {0.3, 1.2, 3.0, 10.0};
+    std::vector<gl::Picture> pics;
+    std::vector<std::string> names;
+    for (const auto& [sun, when] : {std::pair{0.6, "DAY"}, std::pair{-0.4, "NIGHT"}}) {
+      for (gl::Picture& p : sequence_of(*device, s, bl, at, eye, sun, settle))
+        pics.push_back(std::move(p));
+      for (const double m : at) names.push_back(std::string(when) + " " + fixed(m, 2) + " S");
+    }
+    lab.metric("scorch.marks", s.marked, "count");
+    lab.shot({"scorch",
+              "THE SCORCH IT LEAVES",
+              "A blast on the floor 7 m short of the wall and one 0.4 s later at the wall's foot, "
+              "from 15 m off and 2.6 m up, by day and at night, at 0.3, 1.2, 3 and 10 s. Each "
+              "blast's scorch (render/explosion.hpp's scorch_of) is pressed onto the floor or the "
+              "wall's face with engine/detail's decals as it goes off and drawn as the beams "
+              "pass's burns (render/marks.hpp).",
+              "a dark burnt star under each ball, the wall's on its face and not on the floor; "
+              "its embers glowing orange in the first second and a half (bright at night), then "
+              "a soot mark with its cracks that stays once the smoke has cleared (by day; at "
+              "night, with the fire out, it is as dark as the yard)",
+              {}},
+             sheet_of(pics, names, 4), Det::measured);
+  }
+
   // THE COST: the explosions pass's GPU time (its timestamps) with none, one, 32 and one
   // filling the screen (the eye inside it), each the median of seven.
   auto median_ms = [&](const gr::FrameView& v, const std::vector<gr::Blast>& bl) {
@@ -321,8 +420,11 @@ void run(gl::Lab& lab) {
   lab.metric("pass.filling-empty", in_base, "ms", Det::measured);
   lab.metric("drawn.32", drawn32, "count", Det::measured);
   {
+    // The march's own pixels: its flash on the ground left out (it lights pixels it costs nothing).
+    s.flash = false;
     const gl::Picture bare = draw(*device, s, far_eye, {}, 0).pic;
     const gl::Picture lit = draw(*device, s, far_eye, {centre}, 0).pic;
+    s.flash = true;
     const int px = changed(bare, lit);
     lab.metric("pixels.one", px, "px", Det::measured);
     lab.metric("pixels.one-share", 100.0 * px / (w * h), "%", Det::measured);
@@ -413,7 +515,7 @@ const gl::LabSpec kSpec{
     "engine/render/explosions.hpp",
     "render",
     "Does a blast read as fire and smoke through its life, by day and at dusk, clipped by what "
-    "it meets, and how little does it cost?",
+    "it meets, lighting the yard round it and leaving its scorch, and how little does it cost?",
     {
         {"width", "640", "each view's width, px"},
         {"height", "360", "each view's height, px"},
