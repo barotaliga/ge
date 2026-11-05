@@ -100,8 +100,10 @@ every entry queued behind it.
 compile (`linux-gcc`, no tests: GCC's -Werror is what merged changes break), so it merges within
 minutes of being armed. Any thread may label its own PR so, once `make precheck` is green and the
 branch is clean against main: the precheck is then the only build and test it had. Every push to
-main runs the WHOLE matrix (macOS, Windows and the Linux rows), so what a skipped PR breaks shows
-on main within the hour: a red main run opens (or adds to) the one `main-red` issue, names the
+main runs the WHOLE matrix (macOS, Windows and the Linux rows; a newer push cancels the older
+run) when the merge queue is empty, and once a day at 05:00 Stockholm time a run nothing cancels
+adds the whole-tree lint and the whole packaging, so what a skipped PR breaks shows on main
+within the hour on a quiet day, or by the next morning: a red main run opens (or adds to) the one `main-red` issue, names the
 commits and comments on the PR it landed with, and the issue closes itself on the next green
 main. Whoever's PR broke main fixes it first, in the next PR, before any other work on that
 thread; a thread that sees `main-red` open does not label `skip-ci` until it closes.

@@ -38,6 +38,12 @@ gyro pitch it and the nose is set for the landing. The hull meets the snow as im
 springs run out. Nothing else on snow throws the rider but a trunk, a roll past 72 degrees held,
 a landing too hard or too crooked, or the way stopped dead.
 
+**On open water the plugin has no say.** The snow model has no water under it: a machine driven
+onto an open tarn would ride the dug bed. Fall Line's `sim/lake.hpp` (`sled_on_lake`, M24l4)
+takes the ridden machine's step before `step_sled` while its belt is at the surface inside an open
+lake's shore. It planes there, held level, its paddles' thrust against the water's drag, or it goes
+under and throws its rider in. A game's water is the game's, and so is any rule like this one.
+
 ## Rules
 
 - **State each answer once.** A number that shapes the feel goes in `spec.hpp` with its unit.
