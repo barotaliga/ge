@@ -32,7 +32,8 @@ if(GE_GPU)
     engine/render/wet_lens.wgsl engine/render/snow_probe.wgsl
     engine/render/lens.wgsl
     engine/render/fog.wgsl engine/render/fog_integrate.wgsl
-    engine/render/beams.wgsl engine/render/motion_blur.wgsl engine/render/ao.wgsl
+    engine/render/beams.wgsl engine/render/haze.wgsl engine/render/haze_copy.wgsl
+    engine/render/motion_blur.wgsl engine/render/ao.wgsl
     engine/render/ao_blur.wgsl engine/render/dof.wgsl
     engine/render/snow_marks.wgsl engine/render/flame.wgsl engine/render/viewmodel.wgsl
     engine/render/lamp_shadows.wgsl engine/render/mirror_keep.wgsl engine/render/far_land.wgsl)
