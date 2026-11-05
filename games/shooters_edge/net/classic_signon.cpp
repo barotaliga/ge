@@ -461,6 +461,16 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
   } else if (cmd == "ptrack" || cmd == "snap" || cmd == "upload") {
     // Spectator tracking, screenshots and uploads: not built.
   } else {
+    // A chat line held to the flood rule first (a dropped one tells only its sender why).
+    if ((cmd == "say" || cmd == "say_team") && !c.local) {
+      const gs::FloodVerdict v = gs::flood_check(c.flood, s.cfg.flood, s.game->sv.time);
+      if (v != gs::FloodVerdict::allowed) {
+        client_print(s, slot, 3,
+                     gs::flood_text(v, c.flood, s.cfg.flood, s.cfg.flood_msg, s.game->sv.time));
+        s.counts.chat_flooded++;
+        return;
+      }
+    }
     // The game's own words (a lobby's ready, team, start) first, then the rules'.
     const bool taken = s.game_command != nullptr && s.game_command(s.game_ctx, slot, line);
     if (!taken && c.rules_active) s.rules->client_command(slot, line);

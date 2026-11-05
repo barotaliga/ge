@@ -55,7 +55,9 @@ bool done(const std::future<T>& f) {
 
 }  // namespace
 
-bool busy(const MapLoad& l) { return l.map.valid() || l.world.valid() || l.compiling != nullptr; }
+bool busy(const MapLoad& l) {
+  return l.map.valid() || l.world.valid() || l.compiling != nullptr || l.warming != nullptr;
+}
 
 std::string load_caption(const MapLoad& l) {
   if (!busy(l)) return "";
@@ -77,6 +79,7 @@ void load_world(MapLoad& l, const SearchPath& files, const LoadedMap& map,
                 const GameAdapter& game, double now_s) {
   if (l.world.valid()) l.dropped.push_back(std::move(l.world));
   l.compiling.reset();
+  l.warming.reset();  // a world made again replaces one still warming
   if (l.what.empty() || l.what != map.name) {
     l.what = map.name;
     l.since_s = now_s;
@@ -131,8 +134,7 @@ LoadStep step_load(MapLoad& l, ge::gpu::Device& device, uint32_t width, uint32_t
       l.what.clear();
       return out;
     }
-    out.world = std::move(l.compiling);
-    l.what.clear();
+    out.world = std::move(l.compiling);  // `what` stays up while it warms
   }
   return out;
 }
@@ -167,12 +169,21 @@ int take_load(MapLoad& l, const LoadWindow& at, Listen& listen, ge::console::Con
       load_world(l, *at.files, *listen.map, *at.picture, listen.server->models, *at.adapter, now_s);
     }
     if (step.world) {
+      l.warming = std::move(step.world);
+      l.warmed = 0;
+      if (!measured) break;  // warmed from the next frame
+    }
+    // Warmed up offscreen until every cube near the player's eyes is in (a measured run shows it at
+    // once: its first frame draws them all, as a map's first frame does).
+    if (l.warming && (measured || warm_world(*at.device, *l.warming, at.view(), kWarmCubes) ||
+                      ++l.warmed >= kMostWarmFrames)) {
       fresh = fresh || !current;
       const std::chrono::duration<double> took = std::chrono::steady_clock::now() - l.began;
       out::status("shooters_edge: " + listen.map->name + " drawn " +
                   ge::core::num::to_fixed(took.count(), 2) + " s after it was asked for");
-      world = std::move(step.world);
+      world = std::move(l.warming);
       current = true;
+      l.what.clear();
     }
     if (!measured) break;  // one step a frame; a measured run waits them all out
   }
@@ -187,6 +198,7 @@ void cancel_load(MapLoad& l) {
   for (std::future<WorldReadDone>& f : l.dropped) f.wait();
   l.dropped.clear();
   l.compiling.reset();
+  l.warming.reset();
   l.what.clear();
 }
 

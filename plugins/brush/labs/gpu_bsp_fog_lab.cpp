@@ -272,7 +272,7 @@ void run(gl::Lab& lab) {
       m->scene.liquids.push_back(fixture_pool());
       m->scene.liquids.push_back(fixture_pond());
     }
-    m->sky = ba::pick_sky(m->scene.sky_colours);
+    m->sky = ba::pick_sky(m->scene.sky_colours, names[i]);
     m->fog = ba::bsp_fog(m->scene, rows);
     int placed = 0;
     for (const ge::brush::Entity& e : m->scene.map.entities)

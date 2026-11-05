@@ -57,8 +57,9 @@ ba::SkyPick title_sky() {
   p.moon_lit = 1;
   p.wind = 22;
   p.wind_from = (kMoonAzimuth - 70) * kDeg;  // across the line of sight, not along it
-  p.scud_cover = 0.3;
-  p.deck_cover = 0.38;
+  p.layer_count = 0;
+  ba::add_layer(p, "fractus", 0.3);
+  ba::add_layer(p, "stratocumulus", 0.38);
   p.adapt_cd = kAdaptCd;
   return p;
 }

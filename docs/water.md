@@ -450,9 +450,11 @@ With no body shown both rows run empty. What it draws:
   now (their height there carried up the beach by half again). The water darkens its own bed the
   same in its last 30 cm, since the copy it reads was taken before the band: no dry seam shows at
   the waterline. A body with no outline wets nothing past its box.
-- **Off for a lab.** `WaterDraw::foam` and `wet_band` (both on) let a lab draw the same view
-  without them; the `gpu-water` lab's `whitecaps`, `foam-trail`, `surf` and `surf-night` views show
-  them, and it fails when the gale's whitecaps whiten under a quarter of the law's cover.
+- **The foam is OFF by default.** `WaterDraw::foam` is false: the owner did not find the foam nice
+  looking, so no game draws it until its look is reworked and signed off; a game or a lab turns it
+  on per body. `wet_band` is on. The `gpu-water` lab's `whitecaps`, `foam-trail`, `surf` and
+  `surf-night` views turn the foam on (and draw the same view without it), and it fails when the
+  gale's whitecaps whiten under a quarter of the law's cover.
 
 Not built yet (M24g2): the GPU detail FFT and its cascades, the ripple field, the lake shore mesh,
 the reflections over the Hi-Z pyramid with a probe behind them, and the stops on the quality

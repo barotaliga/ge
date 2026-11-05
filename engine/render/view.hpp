@@ -137,6 +137,10 @@ struct CloudLayer {
   double thin = 1;
   double thick_cells = 3;
   double thick_bias = 0;
+  // Its WARP: how far (in cells, 0 none .. about 1.5) the column's read is pushed about by a
+  // second read of the noise, so a cell's outline leans and twists instead of standing round
+  // and alike beside its neighbours (a sky of real heaps is never a field of matching domes).
+  double warp = 0;
 };
 inline constexpr int kCloudLayers = 4;
 // The frame block's rows a layer (render/clouds.hpp's `cloud_rows`).

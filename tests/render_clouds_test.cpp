@@ -81,6 +81,34 @@ TEST(a_layer_covers_the_share_its_cover_asks) {
   }
 }
 
+TEST(a_warped_layer_twists_its_cells_and_keeps_its_cover) {
+  // The warp moves the cells' outlines (the columns differ), keeps the sky's share near the
+  // cover, never leaves the tile's wrap (the drift across a whole tile lands on the same column)
+  // and is in the rows for the shader.
+  for (double cover : {0.2, 0.4}) {
+    gr::CloudLayer l = heap(cover);
+    l.warp = 1.2;
+    CHECK(std::fabs(share(l) - cover) < 0.1);
+    int differ = 0;
+    for (int k = 0; k < 200; ++k) {
+      const double x = 173.0 * k, z = 61.0 * k;
+      if (std::fabs(gr::cloud_column(l, x, z) - gr::cloud_column(heap(cover), x, z)) > 0.05)
+        ++differ;
+    }
+    CHECK(differ > 20);
+    gr::CloudLayer moved = l;
+    moved.drift_m = l.cell_m * gr::kCloudTileCells;
+    CHECK(std::fabs(gr::cloud_column(moved, 300, 700) - gr::cloud_column(l, 300, 700)) < 1e-9);
+  }
+  gr::Clouds c;
+  c.count = 1;
+  c.layers[0] = heap(0.3);
+  c.layers[0].warp = 0.9;
+  float info[4], rows[gr::kCloudLayers * gr::kCloudRows][4];
+  gr::cloud_rows(c, info, rows);
+  CHECK(std::fabs(rows[5][3] - 0.9f) < 1e-6f);
+}
+
 TEST(the_drift_carries_the_column_along_the_wind) {
   gr::CloudLayer l = heap(0.4);
   l.heading = 0.7;  // toward +x and +z

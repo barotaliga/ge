@@ -700,7 +700,11 @@ int run_main(int argc, char** argv) {
                               weapons,
                               &files,
                               &adapter,
-                              &game_content};
+                              &game_content,
+                              [&] {  // the new map's first view, from where the player stands
+                                cl::ViewState first;
+                                return cl::frame_view(listen, first, 0, t, 0);
+                              }};
       bool fresh = false;
       if (const int code =
               cl::take_load(loader, at, listen, console, measured, t, world, world_current, fresh))
