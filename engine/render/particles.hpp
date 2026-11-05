@@ -91,11 +91,15 @@ struct Particle {
   // lies there and fades. Below every floor by default: it never lands.
   float floor_y = -1e9f;
   float bounce = 0;
-  float pad_[2] = {0, 0};  // particles.wgsl's 16-byte alignment
+  float hops = 0;  // the hops it has made off a floor or a drawn surface (max_hops: then it lies)
+  float pad_ = 0;  // particles.wgsl's 16-byte alignment
 };
 static_assert(sizeof(Particle) == 96, "match particles.wgsl's Particle");
-inline constexpr float kFloorRest = 0.35f;      // m/s: slower than this down, it lies still
-inline constexpr float kFloorSlide = 0.55f;     // its way along the floor kept at a hop
+inline constexpr float kFloorRest = 0.35f;   // m/s: slower than this down, it lies still
+inline constexpr float kFloorSlide = 0.55f;  // its way along the floor kept at a hop
+// A thrown thing hops twice at most, a third of them three times (`max_hops`, by the particle's own
+// size and life, so the same particle always the same), then it lies where it came down.
+inline constexpr float kMaxHops = 2;
 inline constexpr float kSurfaceBounce = 0.35f;  // a drawn surface's hop for one with no `bounce`
 inline constexpr float kSurfaceSkin = 0.12f;    // m behind a drawn surface still counted as on it
 
@@ -108,6 +112,8 @@ void step_particle(Particle& p, float dt, const float air[3] = nullptr);
 // THE BOUNCE off a drawn surface whose face at `at` (world m) points along `normal` (unit, out of
 // it): the CPU twin of particles_sim.wgsl's `off_surface`, for a particle found behind it.
 void collide_particle(Particle& p, const float at[3], const float normal[3]);
+// How many hops `p` makes at most: kMaxHops, or one more for about a third (particle_types.wgsl's).
+float max_hops(const Particle& p);
 
 struct ParticleSettings {
   uint32_t capacity = 16384;  // slots in the ring

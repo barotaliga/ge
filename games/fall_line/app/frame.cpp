@@ -265,7 +265,13 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   r::create_terrain(device, f->pipelines, f->terrain, source, f->frame_layout);
   r::create_particles(device, f->pipelines, f->particles, f->frame_layout, f->terrain,
                       options.particles);
-  r::create_precip(device, f->pipelines, f->precip, f->frame_layout, f->terrain, options.fall);
+  // The falling snow's pool at the largest the ladder draws, so a stop raises it live
+  // (set_picture); the count drawn is the options'.
+  r::PrecipSettings fall = options.fall;
+  fall.particles = std::max(fall.particles, r::PrecipSettings{}.particles);
+  f->fall_capacity = fall.particles;
+  r::create_precip(device, f->pipelines, f->precip, f->frame_layout, f->terrain, fall);
+  f->precip.settings.particles = options.fall.particles;
   r::create_bolts(device, f->pipelines, f->bolts, f->frame_layout);
   r::create_flames(device, f->pipelines, f->flames, f->frame_layout);
   r::create_clouds(device, f->pipelines, f->clouds, f->frame_layout);
@@ -281,12 +287,16 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
     taa.scale = options.scale;
     r::create_taa(device, f->pipelines, f->taa, f->frame_layout, taa);
   }
-  if (options.bloom > 0) {
+  // The bloom's pipelines whether it is on or not (the post pass's with it and without), so a
+  // ladder stop turns it on and off live (set_picture); off at the load, at the default's share.
+  f->bloom_ready = options.bloom > 0 ? options.bloom : FrameOptions{}.bloom;
+  {
     r::BloomSettings bloom;
-    bloom.strength = options.bloom;
+    bloom.strength = f->bloom_ready;
     r::create_bloom_pipelines(device, f->pipelines, f->bloom, bloom);
   }
-  if (r::lens_on(options.lens)) {
+  f->lens_ready = r::lens_on(options.lens);
+  if (f->lens_ready) {
     r::create_lens_pipelines(device, f->pipelines, f->lens, f->frame_layout, options.lens);
   }
   if (options.look.motion_blur > 0) r::create_motion_blur_pipelines(device, f->pipelines, f->blur);
@@ -298,11 +308,13 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
     r::set_ao(device, f->ao, options.ao);
   }
   r::PostSettings post;
-  post.bloom = options.bloom;
+  post.bloom = f->bloom_ready;
+  post.bloom_switch = true;
   post.look = options.look;
   post.lens = r::lens_on(options.lens);
   post.dof = r::dof_on(options.dof);
   r::create_post(device, f->pipelines, f->post, f->frame_layout, output, post);
+  r::set_post_bloom(f->post, options.bloom > 0);
   std::vector<float> grade = bake_grade();
   r::apply_grade_knobs(grade, options.grade);
   r::set_grade(device, f->post, grade);
@@ -479,6 +491,68 @@ void show_village(ge::gpu::Device& device, GameFrame& f,
 
 void resize(ge::gpu::Device& device, GameFrame& f, uint32_t width, uint32_t height) {
   make_targets(device, f, width, height);
+}
+
+PictureChange set_picture(ge::gpu::Device& device, GameFrame& f, const FrameOptions& next) {
+  PictureChange change;
+  FrameOptions& o = f.options;
+  const auto later = [&](const char* what) {
+    change.later += change.later.empty() ? what : std::string(", ") + what;
+  };
+  // Each frame's: set and drawn from the next frame.
+  o.spray = next.spray;
+  o.precip = next.precip;
+  o.clouds = next.clouds;
+  o.cloud_quarter = next.cloud_quarter;
+  o.reach_m = next.reach_m;
+  if (next.fall.particles <= f.fall_capacity) {
+    o.fall.particles = next.fall.particles;
+    f.precip.settings.particles = next.fall.particles;
+  } else if (next.fall.particles != o.fall.particles) {
+    later("the falling snow's count");
+  }
+  // The render size, the bloom and the lens: the targets and the post pass's groups made again.
+  if (next.scale != o.scale) {
+    o.scale = next.scale;
+    change.targets = true;
+  }
+  if ((next.bloom > 0) != (o.bloom > 0) || (next.bloom > 0 && next.bloom != o.bloom)) {
+    if (next.bloom == 0 || next.bloom == f.bloom_ready) {
+      o.bloom = next.bloom;
+      r::set_post_bloom(f.post, next.bloom > 0);
+      change.targets = true;
+    } else {
+      later("the bloom's share");
+    }
+  }
+  if (r::lens_on(next.lens) != r::lens_on(o.lens)) {
+    if (!r::lens_on(next.lens) || f.lens_ready) {
+      o.lens = next.lens;
+      change.targets = true;
+    } else {
+      later("the lens");
+    }
+  }
+  if (change.targets) make_targets(device, f, f.output_width, f.output_height);
+  if (r::lens_on(o.lens)) r::set_lens(device, f.lens, o.lens);
+  // The sun's shadow maps at a new size, rebound into what receives them; drawn again.
+  if (next.shadow_size != o.shadow_size) {
+    o.shadow_size = next.shadow_size;
+    r::ShadowSettings shadows;
+    shadows.size = o.shadow_size;
+    r::create_sun_shadows(device, f.shadows, shadows, f.frame_layout, f.sky);
+    r::bind_terrain_shadows(f.terrain, f.shadows.group);
+    r::bind_instance_shadows(f.instancing, f.shadows.group);
+    r::bind_particle_shadows(f.particles, f.shadows.group);
+    r::bind_fog_shadows(f.fog, f.shadows.group);
+    change.shadows = true;
+  }
+  // A terrain pipeline and maps of their own each: kept until the frame is made again.
+  if (next.snow != o.snow) later("the snow's material");
+  if (next.trails != o.trails || next.trail_maps.fine_size != o.trail_maps.fine_size ||
+      next.trail_maps.coarse_size != o.trail_maps.coarse_size)
+    later("the trails");
+  return change;
 }
 
 void cut(GameFrame& f) {

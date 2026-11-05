@@ -41,6 +41,7 @@
 // ge:keywords render post exposure tone-mapping tonemap pbr-neutral dither srgb encode output
 // ge:keywords bloom colour-grade color-grade lut lookup-table 3d-lut grade
 // ge:keywords create_post post_group encode_post set_grade identity_grade set_post_look
+// ge:keywords set_post_bloom bloom_switch live-bloom
 // ge:keywords sharpen cas contrast-adaptive-sharpening chromatic-aberration vignette film-grain
 // ge:keywords lens-dirt post-look lens-effects motion-blur shutter post-motion
 // ge:keywords screen-blend set_post_blend tint damage-flash
@@ -77,6 +78,9 @@ struct PostSettings {
   PostLook look;      // which of the lens and film are compiled (above 0), and their start
   bool lens = false;  // mix in the lens pass's target (render/lens.hpp)
   bool dof = false;   // mix in depth of field's gather (render/dof.hpp)
+  // Also build the pipeline with the bloom compiled out, so `set_post_bloom` turns the bloom off
+  // and on in a live frame (a quality ladder's stop) with no pipeline made after the load.
+  bool bloom_switch = false;
 };
 
 struct Post {
@@ -94,6 +98,9 @@ struct Post {
   wgpu::TextureView flat_view;
   wgpu::Buffer look;  // PostLook's strengths, as the shader reads them
   uint32_t p_draw = 0;
+  uint32_t p_dry = 0;    // the bloom compiled out (PostSettings::bloom_switch)
+  bool has_dry = false;  // p_dry was built
+  bool bloom_on = true;  // which of the two draws (set_post_bloom)
 };
 
 // Add the post pipeline for an output of `format` to the manifest; the grade starts as the
@@ -114,6 +121,9 @@ struct PostReads {
 wgpu::BindGroup post_group(gpu::Device& device, const Post& post, const wgpu::TextureView& hdr,
                            const wgpu::TextureView& bloom = nullptr,
                            const wgpu::TextureView& lens = nullptr, const PostReads& reads = {});
+// The bloom mixed in (on) or not (off), live: the pipeline built with it or the one without
+// (PostSettings::bloom_switch; without that, only the pipeline built at create_post draws).
+void set_post_bloom(Post& post, bool on);
 // The strengths, live; a feature not compiled at create_post stays off whatever it is given.
 void set_post_look(gpu::Device& device, const Post& post, const PostLook& look);
 // THE SCREEN'S BLEND: the whole picture mixed toward one colour after the grade (a game's flash

@@ -18,22 +18,31 @@ struct Particle {
   grow: f32,
   floor_y: f32,  // its own floor (world y, m), where it hops by `bounce` and comes to rest
   bounce: f32,
+  hops: f32,  // the hops it has made (render/particles.hpp's max_hops)
   pad0: f32,
-  pad1: f32,
 }
 
 const kFloorRest = 0.35;   // m/s: slower than this down, it lies still
 const kFloorSlide = 0.55;  // its way along the floor kept at a hop
 
-// Its own floor: a hop back up at `bounce` of its speed while it comes down fast, else at rest.
+const kMaxHops = 2.0;
+
+// Twice, a third of them three times: its own, off its size and life (render/particles.cpp's).
+fn max_hops(p: Particle) -> f32 {
+  return select(kMaxHops, kMaxHops + 1.0, fract(p.size * 977.0 + p.life * 131.0) > 0.66);
+}
+
+// Its own floor: a hop back up at `bounce` of its speed while it comes down fast and has hops
+// left, else at rest.
 fn on_floor(q: Particle) -> Particle {
   var p = q;
   if (p.p.y >= p.floor_y || p.v.y >= 0.0) {
     return p;
   }
   p.p.y = p.floor_y;
-  if (-p.v.y * p.bounce > kFloorRest) {
+  if (-p.v.y * p.bounce > kFloorRest && p.hops < max_hops(p)) {
     p.v = vec3f(p.v.x * kFloorSlide, -p.v.y * p.bounce, p.v.z * kFloorSlide);
+    p.hops += 1.0;
   } else {
     p.v = vec3f(0.0);
     p.age = max(p.age, p.life * 0.7);

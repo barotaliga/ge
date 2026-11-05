@@ -305,6 +305,66 @@ bool blast_light(const gr::Blast& b, double now_s, Light* out) {
   return true;
 }
 
+namespace {
+
+// A swell to 1 at `tau` s that dies away after it: (t / tau) e^(1 - t / tau).
+double swell(double t, double tau) { return t <= 0 ? 0 : t / tau * std::exp(1 - t / tau); }
+
+}  // namespace
+
+void launch_offset(double age, const double dir[3], const RocketLaunch& l, double out[3]) {
+  out[0] = out[1] = out[2] = 0;
+  if (age <= 0 || age >= kLaunchS) return;
+  // Gone by kLaunchS whatever the curves say.
+  const double u = std::clamp((age - 0.3) / (kLaunchS - 0.3), 0.0, 1.0);
+  const double settle = 1 - u * u * (3 - 2 * u);
+  // Behind its true place along the line (the slow pop, then the motor catching it up), a little
+  // under it (the drop before the motor bites), and the shooter's sway.
+  const double lag = 0.45 * swell(age, 0.09), drop = 0.22 * swell(age, 0.13);
+  const double kick = swell(age, 0.12);
+  // A waver across the line off its own seed, dying as it gathers speed.
+  ge::core::Rng rng = ge::core::make_rng(l.seed * 2654435761u + 17u);
+  const double phase = ge::core::next(rng) * 6.283185307179586;
+  const double turn = ge::core::next(rng) * 6.283185307179586;
+  double a[3], b[3];
+  // Two axes square to the flight.
+  const double up[3] = {0, 1, 0};
+  a[0] = dir[1] * up[2] - dir[2] * up[1];
+  a[1] = dir[2] * up[0] - dir[0] * up[2];
+  a[2] = dir[0] * up[1] - dir[1] * up[0];
+  double al = std::sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+  if (al < 1e-6) {
+    a[0] = 1, a[1] = a[2] = 0;
+    al = 1;
+  }
+  for (double& c : a) c /= al;
+  b[0] = dir[1] * a[2] - dir[2] * a[1];
+  b[1] = dir[2] * a[0] - dir[0] * a[2];
+  b[2] = dir[0] * a[1] - dir[1] * a[0];
+  const double waver = 0.035 * std::sin(age * 2 * 3.14159265358979 * 7.5 + phase) *
+                       std::exp(-age / 0.18) * std::min(age / 0.03, 1.0);
+  const double wa = std::cos(turn) * waver, wb = std::sin(turn) * waver;
+  for (int k = 0; k < 3; ++k)
+    out[k] = settle * (-dir[k] * lag + l.kick[k] * kick + a[k] * wa + b[k] * wb) -
+             (k == 1 ? settle * drop : 0);
+}
+
+void launch_kick(const double dir[3], const double v[3], double yaw_rate, double pitch_rate,
+                 double out[3]) {
+  // His movement across the line, carried a moment; along it the rocket is his speed ahead anyway.
+  const double along = v[0] * dir[0] + v[1] * dir[1] + v[2] * dir[2];
+  for (int k = 0; k < 3; ++k) out[k] = (v[k] - along * dir[k]) * 0.08;
+  // His aim's swing: the rocket left the tube pointing where the aim was, so it lags behind the
+  // turn (right of the line for a turn to the left).
+  const double h = std::atan2(dir[0], dir[2]);
+  const double right[3] = {std::cos(h), 0, -std::sin(h)};
+  for (int k = 0; k < 3; ++k) out[k] -= right[k] * yaw_rate * 0.12;
+  out[1] -= pitch_rate * 0.12;
+  const double n = std::sqrt(out[0] * out[0] + out[1] * out[1] + out[2] * out[2]);
+  if (n > kKickM)
+    for (int k = 0; k < 3; ++k) out[k] *= kKickM / n;
+}
+
 Light motor_light(const double at[3], const double dir[3], uint32_t seed, double now_s) {
   Light l;
   for (int k = 0; k < 3; ++k) l.pos[k] = at[k] - dir[k] * kNozzleM;
@@ -489,6 +549,16 @@ void bolt_hit(const double p[3], const double n[3], uint32_t seed, Particles* ou
     s.fall = 0.5f;
     out->push_back(s);
   }
+}
+
+bool spark_light(const double at[3], double age, Light* out) {
+  if (age < 0 || age >= kSparkLightS) return false;
+  const double left = 1 - age / kSparkLightS;
+  for (int k = 0; k < 3; ++k) out->pos[k] = at[k];
+  out->radius = 1.5;
+  constexpr double kSpark[3] = {1.0, 0.82, 0.55};  // hot steel's spark, about 2400 K
+  for (int k = 0; k < 3; ++k) out->colour[k] = 0.9 * left * left * kSpark[k];
+  return true;
 }
 
 Light dynamic_light(const gr::LocalLight& l) {
