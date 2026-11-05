@@ -41,14 +41,9 @@
 //   vertex and the pixel in the simulation's formula, each faded as the picture's tiers fade a
 //   wave (`set_water_wakes`).
 //
-// - THE FOAM (`foam_of`, render/wgsl/water_surface.wgsl's `foam_at`): whitecaps where the waves'
-//   surface folds and surf where a wave stands over 0.78 of the depth, each kept a few seconds as
-//   it drifts downwind (the waves' own past, worked out again per pixel: no texture, no frame's
-//   history), drawn as lace; a line of it where the water laps the shore.
-// - THE SHORE'S WET BAND (render/water_shore.wgsl, in the "water" pass before the bodies): the
-//   ground a little over the level near the water darkened where the waves run up and wet it.
-//
-// Not yet (M24g2): the GPU detail FFT, reflections over Hi-Z, the lake's shore mesh, the ladder.
+// - THE FOAM (`foam_of`, water.wgsl's `foam_at`): whitecaps where the surface folds, surf over
+//   the shallows, kept as they drift (the waves' own past, per pixel), drawn as lace; and THE
+//   SHORE'S WET BAND (render/water_shore.wgsl), the ground the waves run up darkened.
 //
 // ge:summary The water's surface drawn: the snapped rings, the waves, Fresnel, refraction, glitter
 // ge:keywords render water surface ocean lake rings clipmap snapped morph fresnel reflection
