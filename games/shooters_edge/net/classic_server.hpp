@@ -42,11 +42,6 @@
 // (`ClassicServer::mvd`, classic_record.hpp), every relayed message goes into it too, whoever heard
 // it.
 //
-// THE GUARDS: a client nothing was heard from for `timeout_s` is dropped and everyone is told
-// "<name> timed out"; a client's `say` and `say_team` lines are held to the flood rule
-// (`ServerConfig::flood`, engine/server/guards.hpp): a line past it is dropped and only its sender
-// is told. Local seats are held to neither.
-//
 // LAG COMPENSATION (`ServerConfig::antilag`, classic_antilag.hpp): each player's origins are kept
 // with their server times; a hitscan trace a mod marks lagged sees the other players where the
 // shooter saw them.
@@ -101,9 +96,12 @@ struct ServerConfig {
   bool verify_move_checksum = true;  // false: moves are accepted unchecked (and counted)
   int maxrate = 0;                   // sv_maxrate: a client's rate cap, bytes/s (0: none)
   int maxfps = 77;                   // maxfps: the moves a second clients are told they may send
-  double timeout_s = 65;             // sv_timeout: a client unheard this long is dropped
-  gs::FloodRule flood;               // sv_floodprot: a client's say and say_team lines
-  std::string flood_msg;             // sv_floodprotmsg: what a flooder is told ("": the silence)
+  // THE GUARDS (never on a local seat): a client unheard for `timeout_s` is dropped and everyone
+  // told "<name> timed out"; a `say` or `say_team` past the flood rule (engine/server/guards.hpp)
+  // is dropped and only its sender told why.
+  double timeout_s = 65;  // sv_timeout
+  gs::FloodRule flood;    // sv_floodprot
+  std::string flood_msg;  // sv_floodprotmsg: what a flooder is told ("": the silence)
   bool allow_download = true, allow_skins = true, allow_models = true, allow_sounds = true;
   bool allow_maps = true, allow_other = false;
   std::vector<ServedFile> files;

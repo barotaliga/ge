@@ -3,7 +3,7 @@
 // window slides; talking while silenced neither counts nor extends the silence; the words a
 // player is told.
 //
-// ge:summary Test: a server's chat flood rule: the parse, the sliding window, the silence, the words
+// ge:summary Test: a server's chat flood rule: the parse, the sliding window, the silence
 // ge:keywords test flood-protection sv_floodprot flood_check flood_text parse_flood_rule
 // ge:skill net testing
 #include <string>
