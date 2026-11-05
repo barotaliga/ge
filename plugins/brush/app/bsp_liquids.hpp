@@ -8,8 +8,9 @@
 //   share of the open map's wind that reaches it: rays from over the pool, level and climbing,
 //   marched through the map's leaves to the sky or a wall. A ray that reaches the sky low down
 //   and from the way the wind blows is a window or a doorway the wind comes in by; the sky
-//   overhead lets a little down into a courtyard. A pool in a closed hall gets none: its water
-//   lies still, as a pool indoors does, and only the room's faint stir moves it.
+//   overhead lets a little down into a courtyard. A pool in a closed hall gets none of the wind:
+//   only the room's faint stir and the chop the game asks for (`LiquidRows::chop`: the rings of
+//   whoever swims in it, turned back off its walls) move it.
 // - THE WIND (`liquid_world`'s `wind`, `from`: the weather's sv_wind and sv_winddir) times each
 //   pool's share is the air its waves are grown from (water::lay_waves's own wind).
 // - THE ROOM'S LIGHT (`light_rooms`): what the map's lightmaps say the pool's bed is lit by (the
@@ -65,6 +66,9 @@ struct LiquidRows {
   // The slope of a still pool's own stir (the room's draughts, a drip, the warmth): the water is
   // never quite glass, but close.
   double stir = 0.004;
+  // The chop's rms slope (render/water.hpp's WaterDraw::chop): the short waves a pool in use keeps
+  // running every way, its rings turned back off the walls; 0 a pool no one ever swims in.
+  double chop = 0;
 };
 
 // What the map says of a pool, worked out once (`pool_site`).

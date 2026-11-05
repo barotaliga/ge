@@ -522,6 +522,24 @@ with its veil looking down. `water.under` lays the underside in where the eye's 
 the scene, fogged over the way there; the eye's own three fixed ripples and its flat-window test
 are gone. A look with `window` 0 (the classic tint) sees through the surface as through air.
 
+**Built (the rim, and flooded passages).** The Fresnel terms are taken per colour (n = 1.331,
+1.334 and 1.339 for red, green and blue: blue's window is the narrowest, so the rim is fringed) and
+averaged over the normals the pixel cannot resolve (half the slope variance its waves lose to the
+footprint tilts the normal in the plane of incidence; three Gauss-Hermite nodes), so a far or
+choppy rim fades into the mirror over a few degrees, as on real water, while a near calm one stays
+sharp; the waves a pixel does resolve break it up. The light through the window is n^2 (1.78)
+times the air's radiance, the whole hemisphere gathered into its cone, and `water.under` blurs the
+underside with the eye's own blur by its distance, from the taps that hold the surface. Every body
+the eye is under whose water reaches down to it is drawn from below (`Water::Slot::under`), the
+depth test keeping the nearest, so a flooded passage between two pools sees the far pool's surface
+rather than through it; with the eye under, a pixel no underside covers is never the flat level
+(that fallback is the waterline's, with the eye over the surface). The surface over a point
+(`level_over`, up to four tops) is the level of the top whose box holds it, else the tops' levels
+weighed by the inverse square of the plan's distance to each box: the eye's depth, each point's and
+the shafts' read it, so down the passage the light changes smoothly from one end's to the other's.
+Judged in a classic map's flooded passage (dm3's, under the pent pool and 3 and 5 m under its big
+pool) through `se-client`, before and after (private pictures).
+
 Under a lit room (the "pool" look: `ambient`) the water's light is read off the room seen round
 the eye, in a third of the water's hue, and the eye adapts to it (at most three times), so the
 window is a few times brighter than the water rather than a lamp in a black sea. Seen from below,
@@ -568,7 +586,14 @@ roughness) are raised and laid by a field of value noise in the plan and in time
 some metres across in lulls a few times wider), drifting downwind at most of the peak's phase
 speed, from near calm in a lull to nearly twice the mean under a puff, so ripples come in patches
 and no stretch repeats. Water no wind reaches is never glass: `stir` is a faint slope off a noise
-that wanders in time (two sizes, 0.9 and 0.3 m), a far pixel taking it as roughness. `daylight` is
+that wanders in time (two sizes, 0.9 and 0.3 m), a far pixel taking it as roughness. Water in use is
+never still either: `chop` (`chop_waves`) is what swimmers, a diver's splash and the walls turning
+their rings back leave on a pool, a confused field of real short waves running every way at once
+with no wind at all: sixteen components from 1.2 m down to 5 cm, each octave the same share of the
+slope (`chop`, rms), on the capillary-gravity dispersion, headed round the circle and shuffled
+against their lengths. They are summed by the pixels and the caustics as the detail band is, never
+raised or laid by the gusts; a few millimetres high, they are the picture's own, nothing a float
+feels. A wild lake takes none; Shooter's Edge's pools 0.05. `daylight` is
 the share of the sun's and the sky's light on the water itself, apart from the share of the sky it
 mirrors (`open_sky`): a courtyard's pool sees the sky overhead, but its walls keep most of the day
 off it.
@@ -586,8 +611,8 @@ A classic map's water lies level in rooms, so its pools are drawn as rooms make 
   leaves to the sky or a wall, give the share of the dome that is sky and the share of the low rays
   toward the wind that reach it (a window or a doorway it blows in by). The pool's share of the open
   map's wind is 0.8 of the second plus a quarter of the square of the first, so a closed hall's pool
-  gets none and lies still (only the stir moves it), a courtyard's a little, a pool under a window
-  facing the wind most of it.
+  gets none of it (only the stir and the game's chop move it), a courtyard's a little, a pool under
+  a window facing the wind most of it.
 - **The wind** is the weather's (`sv_wind`, `sv_winddir`; `ce_wind 0` still air) times each pool's
   share, laid by `water::lay_waves`'s own-wind form, and laid again when the cvars change.
 - **The room's light** (`light_rooms`) is what the lightmaps say the pool's bed is lit by (the
@@ -596,9 +621,12 @@ A classic map's water lies level in rooms, so its pools are drawn as rooms make 
 - **The eye in the water** is the map's word: its leaf at the eye (`eye_water_body`), at any depth
   and in a flooded passage beyond the top's box, handed to `prepare_water`.
 - **The mirror and the view up** (`bsp_views.hpp`, "bsp.views"): the map drawn again at half the
-  render's size for the nearest pool (the one the eye is in, else the nearest it stands over),
-  every face, those on the water's far side dropped by the frame's sixth plane (zero in the frame's
-  own view), the sky faces left at alpha 0.
+  render's size for the nearest pool (in the water, the nearest surface over the eye, its top's box
+  at its level: in a flooded passage the pool swum toward once it is the nearer; else the nearest
+  the eye stands over), every face, those on the water's far side dropped by the frame's sixth
+  plane (zero in the frame's own view), the sky faces left at alpha 0. The view up stands on the
+  top's box at the point nearest the eye, a quarter metre inside it (`up_place`): from a flooded
+  passage, the point straight over the eye is rock.
 
 **Under water**, the plan: one `UnderwaterLook`, derived from the body's optics and open to
 every knob a game wants:

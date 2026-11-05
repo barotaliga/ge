@@ -268,18 +268,17 @@ fn rain_rings(xz: vec2f, t: f32, foot: f32) -> vec3f {
 
 
 // THE SURFACE'S SLOPE at a pixel's point: the waves its footprint `foot` m resolves (the detail
-// band's raised and laid by the gusts), the wakes, the rain's rings and the stir; x, y the slope
+// band's raised and laid by the gusts, the chop's), the wakes, the rain's rings and the stir; x, y the slope
 // (d/dx, d/dz), z the slope variance the pixel cannot resolve.
 fn surface_slope(xz: vec2f, t: f32, foot: f32) -> vec3f {
   var slope = vec2f(0.0);
   let gust = gust_at(xz, t);
   var lost = body.rough.x * gust * gust + body.rough.y;
-  let laid = u32(body.info.z);
-  let total = u32(body.info.z + body.info.w);
+  let total = waves_drawn();
   for (var i = 0u; i < total; i++) {
     let w = waves[i];
     let k = w.more.y;
-    let a = w.dir.z * body.info.y * select(1.0, gust, i >= laid);
+    let a = wave_amplitude(i, w, gust);
     let keep = smoothstep(2.0 * foot, 4.0 * foot, 6.2831853 / k);
     lost += (1.0 - keep) * 0.5 * (k * a) * (k * a);
     if (keep <= 0.0) {

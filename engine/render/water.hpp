@@ -24,6 +24,9 @@
 //   ripples on calmer water, as the wind's puffs write on a lake), and no two stretches of the
 //   surface repeat. THE STIR (`WaterDraw::stir`): even water no wind reaches is never glass (a
 //   room's draughts, a drip, the warmth): a faint slope that wanders and never repeats.
+// - THE CHOP (`WaterDraw::chop`, `chop_waves`): water in use is never still either: the short
+//   waves swimmers and splashes leave, turned back off the walls, running every way with no wind;
+//   drawn and lighting the caustics as the detail band is, never gusted; the picture's own.
 // - THE PICTURE'S TIERS, from the camera: a vertex keeps the waves at least four of its level's
 //   spacings long, a pixel the waves at least four pixels long; what each drops becomes
 //   roughness, so the far water glints right and never shimmers.
@@ -36,7 +39,9 @@
 // - FROM BELOW ("water.below"): the same surface and waves, each pixel refracted out by Snell's law
 //   (the window, 48.6 degrees round straight up) and read along the bent ray (the game's view up,
 //   else marched, else the sky), total internal reflection past it mirroring the water below, the
-//   two weighed by the exact Fresnel terms for light leaving water.
+//   two weighed by the exact Fresnel terms for light leaving water (per colour, averaged over the
+//   slopes the pixel cannot resolve; the window n^2 as bright as the air), for every body the eye
+//   is under (a flooded passage sees the far pool's surface, not through it).
 // - THE WAKES: the rings a hull, a stroke or a splash set off (water/wake.hpp), summed by the
 //   vertex and the pixel in the simulation's formula, each faded as the picture's tiers fade a
 //   wave (`set_water_wakes`).
@@ -50,7 +55,8 @@
 // ge:keywords prepare_water encode_water detail_waves hidden wake rings set_water_wakes kelvin
 // ge:keywords shore-mask shore_mask gusts cats-paws stir still-pool planar-mirror planar-reflection
 // ge:keywords water-below underside snell-window total-internal-reflection fresnel-exit daylight
-// ge:keywords set_water_views water-views
+// ge:keywords set_water_views water-views chop chop_waves ambient-ripples pool-chop used-pool
+// ge:keywords set_water_up_view snell-rim dispersion
 // ge:skill render water
 // ge:test tests/render_water_test.cpp
 #pragma once
@@ -69,6 +75,7 @@ namespace ge::render {
 inline constexpr uint32_t kWaterGrid = 64;     // a level's quads a side (water.wgsl's override)
 inline constexpr int kWaterLevels = 12;        // at most
 inline constexpr int kWaterDetailWaves = 32;   // the detail components
+inline constexpr int kWaterChopWaves = 16;     // the chop's components
 inline constexpr int kWaterBodies = 8;         // bodies a Water draws
 inline constexpr int kWaterRings = 512;        // a body's wake rings drawn (the newest)
 inline constexpr double kWaterlineBand = 0.5;  // m over a level an eye is at its waterline
@@ -84,6 +91,13 @@ struct WaterDetail {
 };
 WaterDetail detail_waves(const water::Waves& laid, int count, uint32_t seed, double shortest = 0.04,
                          double finest = 0.004);
+
+// THE CHOP: `count` components from waves `longest` m long down to `shortest` m, each the same
+// share of the mean square slope `rms_slope`^2 (spaced evenly in the log of the length, so each
+// octave carries the same slope: a saturated band), headed every way (stratified round the
+// circle, shuffled against the lengths) and moving on the capillary-gravity dispersion.
+std::vector<water::Component> chop_waves(double rms_slope, int count, uint32_t seed,
+                                         double longest = 1.2, double shortest = 0.05);
 
 // How a body is drawn, beside what engine/water says of it.
 struct WaterDraw {
@@ -106,6 +120,10 @@ struct WaterDraw {
   double sunlit = -1;
   double stir = 0;   // a still surface's own wandering slope (rad, about): 0 glass
   double gusts = 0;  // 0..1: how strongly the gusts' patches raise and lay the short waves
+  // The chop's rms slope (rad): the short waves a body in use keeps running every way
+  // (`chop_waves`); 0: none (a wild lake no one swims in), about 0.06 a pool people jump into all
+  // day.
+  double chop = 0;
 };
 
 // A game's own pictures of the world for one body (`set_water_views`): THE MIRROR, the world
@@ -146,6 +164,7 @@ struct WaterGpuBody {
   float air[4];   // the day's share on the water, the stir's slope, the gusts, the wind (m/s)
   float sun[4];   // the share of the surface the sun reaches (the caustics, the shafts), 0, 0, 0
   float view[4];  // the mirror (0 none, 1 over, 2 under), the view up (1), its heading's cos, sin
+  float chop[4];  // the chop's components (after the detail band's), its rms slope, 0, 0
   float up_view_proj[16];
   float levels[kWaterLevels][4];
 };
@@ -166,6 +185,7 @@ struct Water {
     wgpu::BindGroup group;
     bool hidden = false;  // the caller's switch: not drawn (a lab's dry picture)
     bool shown = true;    // this frame's: not hidden and seen from over its level
+    bool under = false;   // this frame's: the eye is in the water and under this body's level
     // m: a volume's lowest hull floor (an eye under it is not in it); open water has none
     double floor = -1e300;
     float veil[4] = {0, 0, 0, 0};  // the fog a view under it looks through (water::Optics)
@@ -214,12 +234,16 @@ void set_water_wakes(gpu::Device& device, Water& water, int index, const water::
 // The game's planar mirror and view up for one body (WaterViews; again whenever they are made
 // anew, as at a resize; a default WaterViews takes them away).
 void set_water_views(gpu::Device& device, Water& water, const WaterViews& views);
+// The view up's matrix alone (WaterViews::up_view_proj), each frame its camera moves.
+void set_water_up_view(Water& water, const float up_view_proj[16]);
 // `prepare_water`'s eye: worked out from the bodies' boxes and levels, or the body the game says
 // it is in (a classic map's leaf at the eye: brush/app/bsp_liquids.hpp's eye_water_body; -1 the
 // air).
 inline constexpr int kEyeFromBoxes = -2;
 // The levels round this frame's eye, uploaded; a body seen from under its level is not drawn
-// from above: the eye is under it (`Water::eye_under`), and "water.below" draws its underside.
+// from above: the eye is under it (`Water::eye_under`), and "water.below" draws its underside and
+// every other body's whose level is over the eye and whose water reaches down to it
+// (`Slot::under`).
 void prepare_water(gpu::Device& device, Water& water, const FrameView& view,
                    int eye_in = kEyeFromBoxes);
 // "water.copy", "water" (the still bodies, then the moving water) and "water.below".

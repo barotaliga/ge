@@ -48,13 +48,15 @@
 //   light, and none where the day does not reach (a pool under a roof).
 // - A POOL UNDER A LIT ROOM (`ambient`; "pool"): the water's light read off the room seen round
 //   the eye rather than the day, so the window is not a bright hole in a black sea.
+// - THE SURFACE OVER A POINT (`level_over`): of the tops the eye is under, the one whose box holds
+//   it, else weighed by the inverse square distance, so a flooded passage's light slides smoothly.
 //
 // ge:summary The view under water: the water's fog, blur by distance, Snell's window, presets
 // ge:keywords render underwater under-water fog veil blur snell window total-internal-reflection
 // ge:keywords mask goggles magnify warp tint classic murky create_underwater prepare_underwater
 // ge:keywords encode_underwater underwater_look waterline meniscus split half-submerged motes
 // ge:keywords suspended-matter specks particles caustics pool water-below underside light-shafts
-// ge:keywords god-rays shafts caustic_at henyey-greenstein
+// ge:keywords god-rays shafts caustic_at henyey-greenstein level_over flooded-passage tunnel
 // ge:skill render water
 // ge:test tests/render_water_test.cpp
 #pragma once
@@ -103,6 +105,13 @@ struct Waterline {
 // A preset by name; false (and `out` untouched) for an unknown one.
 bool underwater_look(std::string_view name, UnderwaterLook& out);
 
+inline constexpr int kUnderTops = 4;  // the bodies' tops `level_over` weighs, at most
+
+// The surface over the plan point (`x`, `z`): of `count` tops (boxes x0, z0, x1, z1 and levels),
+// the level of the one whose box holds it, else their levels weighed by the inverse square of the
+// distance to each box (render/underwater.wgsl's twin).
+double level_over(const float tops[][4], const float* levels, int count, double x, double z);
+
 // What the pass reads, as the shader has it.
 struct UnderGpu {
   float info[4];  // the level, the eye's depth, the blur (px at the render's rows), its range
@@ -112,7 +121,9 @@ struct UnderGpu {
   float fog[4];      // the fog's scale, the adaptation's target, 0, 0
   float surface[4];  // the surface at the eye, its slope dx, dz, 1 when the eye is under it
   float motes[4];    // the specks' share, their radius (m), the lens plate's height (m), 0
-  float lit[4];      // ambient, the caustics, the shafts, 0
+  float lit[4];      // ambient, the caustics, the shafts, the tops (`level_over`)
+  float tops[4][4];  // each top's box: x0, z0, x1, z1 (m)
+  float top_level[4];
 };
 
 struct Underwater {
