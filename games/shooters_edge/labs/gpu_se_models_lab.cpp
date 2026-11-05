@@ -542,11 +542,15 @@ void run(gl::Lab& lab) {
           cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
       }
       const std::string what(lamp.what);
-      shoot(lamp.id, "THE PLAYER'S SHADOW FROM " + what,
-            "The player a pace from " + what + " on " + map_name +
-                ", his back to it, his own eyes looking down at the floor ahead: his body is "
-                "never drawn in his own eyes, but it casts his shadow from every light near him "
-                "(the moving casters' cubes), as soft as the light is big.",
+      std::string caption = "The player a pace from ";
+      caption += what;
+      caption += " on ";
+      caption += map_name;
+      caption +=
+          ", his back to it, his own eyes looking down at the floor ahead: his body is never drawn "
+          "in his own eyes, but it casts his shadow from every light near him (the moving "
+          "casters' cubes), as soft as the light is big.";
+      shoot(lamp.id, "THE PLAYER'S SHADOW FROM " + what, caption,
             "his shadow on the floor ahead of him, from his feet outward, sharper near his feet "
             "and softer further off; none in the classic look",
             v);

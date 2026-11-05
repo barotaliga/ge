@@ -352,8 +352,8 @@ TEST(the_passes_report_the_dearest_first_by_their_mean_a_timed_frame) {
   cl::PassTimes p;
   CHECK(cl::pass_report(p, 4).empty());
   for (int i = 0; i < 4; i++) cl::pass_add(p, "bsp", 1.0);  // 1 ms a frame
-  cl::pass_add(p, "bsp.shadows", 6.0);                       // in one frame of four: 1.5 a frame
-  cl::pass_add(p, "bsp.shadows", NAN);                       // not measured: left out
+  cl::pass_add(p, "bsp.shadows", 6.0);                      // in one frame of four: 1.5 a frame
+  cl::pass_add(p, "bsp.shadows", NAN);                      // not measured: left out
   const std::vector<std::string> lines = cl::pass_report(p, 4);
   CHECK(lines.size() == 3);
   CHECK(lines[1].find("bsp.shadows 1.500 ms; 6.000 ms in 1 of 4") != std::string::npos);
