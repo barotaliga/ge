@@ -83,6 +83,7 @@ void bi_changelevel(pg::Vm& vm);
 void bi_cvar_set(pg::Vm& vm);
 void bi_logfrag(pg::Vm& vm);
 void bi_infokey(pg::Vm& vm);
+void bi_words(pg::Vm& vm);  // words.cpp
 void bi_registercvar(pg::Vm& vm);
 void bi_checkextension(pg::Vm& vm);
 void bi_cvar_string(pg::Vm& vm);

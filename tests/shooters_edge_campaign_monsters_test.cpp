@@ -349,6 +349,7 @@ TEST(the_lava_boss_rises_when_used_throws_and_falls_to_three_strikes) {
   CHECK_MSG(g.frame(0), g.error);
   CHECK(g.call("boss_use", {}, boss));
   CHECK(g.ed(boss).solid != 0);
+  CHECK(g.field(boss, g.f().frame) <= 16);  // rising
   for (int i = 0; i < kFrames * 8 && g.field(1, g.f().health) == 100; i++)
     CHECK_MSG(g.frame(0), g.error);
   CHECK(g.field(1, g.f().health) < 100);  // its fire reached the player
@@ -359,6 +360,8 @@ TEST(the_lava_boss_rises_when_used_throws_and_falls_to_three_strikes) {
   CHECK(g.field(boss, g.f().health) == 0);
   CHECK(g.global("killed_monsters") == 1);
   CHECK(g.ed(boss).solid == 0);
+  for (int i = 0; i < kFrames * 2; i++) CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.field(boss, g.f().frame) == 56);  // its death frames played through
   CHECK(g.s().q.faults == 0);
 }
 

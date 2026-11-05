@@ -30,6 +30,10 @@
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/rules_world.hpp"
 
+namespace ge::brush {
+struct Map;
+}
+
 namespace shooters_edge::server {
 
 namespace sh = ge::shooter;
@@ -73,11 +77,13 @@ struct StaticEntity {
   pg::EntityExtras extras;
 };
 
-// A map: its brush models (`[0]` the world) and its entity text.
+// A map: its brush models (`[0]` the world) and its entity text, or (the sequel's runner) the
+// version 38 map read whole, whose brushes it traces and whose entities it spawns.
 struct MapSpec {
   std::string name = "arena";
   std::vector<sh::BrushModel> models;
   std::string entities;
+  std::shared_ptr<const ge::brush::Map> brushes;
 };
 
 // What every runner keeps alike: what the host, the wire and the bots read, and the hooks the

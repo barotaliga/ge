@@ -150,6 +150,19 @@ double drift_in_tile(const CloudLayer& l) {
 }
 double age_in_tile(const CloudLayer& l) { return frac(l.evolve / kCloudTileCells); }
 
+// The layer's tile point (u, v) at age `w` pushed by its WARP (the shader's `cloud_warped`): two
+// reads of the noise a whole tile apart from the column's own, each moving the point up to
+// `warp` cells; at the tile's own scale, so the drift's wrap at a tile's edge stays seamless.
+void warped(const CloudLayer& l, double& u, double& v, double w) {
+  const double warp = std::clamp(l.warp, 0.0, 4.0);
+  if (warp <= 0) return;
+  const double a = cloud_noise_at(u + 0.19, v + 0.53, w + 0.61);
+  const double b = cloud_noise_at(u + 0.67, v + 0.11, w + 0.83);
+  const double k = 2 * warp / kCloudTileCells;
+  u += (a - 0.5) * k;
+  v += (b - 0.5) * k;
+}
+
 }  // namespace
 
 const std::vector<uint8_t>& cloud_noise() {
@@ -206,8 +219,9 @@ double cloud_column(const CloudLayer& l, double x, double z) {
   const double hc = core::libm::cos(l.heading), hs = core::libm::sin(l.heading);
   const double across = x * hc - z * hs, along = x * hs + z * hc;
   const double scale = 1.0 / (l.cell_m * kCloudTileCells);
-  const double u = across * scale, v = along * scale / std::max(l.stretch, 1e-3) - drift_in_tile(l);
+  double u = across * scale, v = along * scale / std::max(l.stretch, 1e-3) - drift_in_tile(l);
   const double w = age_in_tile(l);
+  warped(l, u, v, w);
   const double n = cloud_noise_at(u, v, w);
   const double cut = cloud_cut(l.cover);
   double c = std::clamp((n - cut) / std::max(std::min(1.0 - cut, kColumnRamp), 1e-3), 0.0, 1.0);
@@ -225,7 +239,8 @@ double cloud_thickness(const CloudLayer& l, double x, double z, double c) {
   const double hc = core::libm::cos(l.heading), hs = core::libm::sin(l.heading);
   const double across = x * hc - z * hs, along = x * hs + z * hc;
   const double scale = 1.0 / (l.cell_m * kCloudTileCells);
-  const double u = across * scale, v = along * scale / std::max(l.stretch, 1e-3) - drift_in_tile(l);
+  double u = across * scale, v = along * scale / std::max(l.stretch, 1e-3) - drift_in_tile(l);
+  warped(l, u, v, age_in_tile(l));
   const double k = 1.0 / std::max(l.thick_cells, 0.25);
   const double m = cloud_noise_at(u * k + 0.37, v * k + 0.71, age_in_tile(l) + 0.25);
   const double bias = std::clamp(l.thick_bias, -1.0, 1.0);
@@ -277,6 +292,7 @@ void cloud_rows(const Clouds& clouds, float info[4], float rows[][4]) {
     v5[0] = static_cast<float>(std::clamp(l.thin, 0.0, 1.0));
     v5[1] = static_cast<float>(1.0 / std::max(l.thick_cells, 0.25));
     v5[2] = static_cast<float>(std::clamp(l.thick_bias, -1.0, 1.0));
+    v5[3] = static_cast<float>(std::clamp(l.warp, 0.0, 4.0));
   }
 }
 

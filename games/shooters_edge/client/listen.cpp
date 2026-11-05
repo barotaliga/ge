@@ -17,6 +17,7 @@
 #include "progs/layout.hpp"
 #include "progs/qc_compile.hpp"
 #include "progs/vm.hpp"
+#include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/baseline_mod.hpp"
 #include "shooters_edge/server/campaign_save.hpp"
 #include "shooters_edge/server/classic_save.hpp"
@@ -99,11 +100,24 @@ void entered(Listen& l) {
   join_stats(l.campaign, st.total_secrets, st.total_monsters, st.found_secrets, st.killed_monsters);
 }
 
-// The lobby's lines, printed to the player like the server's.
+// The lobby's words (server/announce.hpp) printed to the player like the server's, at once.
 void said(Listen& l) {
-  if (!l.room) return;
-  for (std::string& line : l.room->lobby.said) l.prints.push_back(std::move(line));
-  l.room->lobby.said.clear();
+  if (!l.room || l.server == nullptr) return;
+  Room& r = *l.room;
+  const auto setting = [&l](const char* name) {
+    const ge::console::Cvar* c = l.server->cvars.find(name);
+    return c != nullptr ? static_cast<int>(c->number) : 0;
+  };
+  const sv::MatchLook look = sv::match_look(
+      {.deathmatch = setting("deathmatch"), .teamplay = setting("teamplay")}, l.opt.console);
+  sv::announce(r.announcer, r.lobby, l.server->localinfo, look, l.server->sv.time);
+  sv::announce_phase(l.server->localinfo, r.lobby.phase);
+  for (sv::NetEvent& ev : r.announcer.pending) {
+    if ((ev.to & 1u) == 0) continue;
+    if (ev.kind == sv::EventKind::print) l.prints.push_back(std::move(ev.text));
+    if (ev.kind == sv::EventKind::centerprint) l.centres.push_back(std::move(ev.text));
+  }
+  r.announcer.pending.clear();
 }
 
 // The player put on the map when he joined the warmup, and taken off it when he went back to the
@@ -512,9 +526,8 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
   sv::RulesCommon& s = *l.server;
   l.frames++;
   for (const sv::NetEvent& ev : s.out.events) {
-    if ((ev.kind == sv::EventKind::print || ev.kind == sv::EventKind::centerprint) &&
-        (ev.to & 1u) != 0)
-      l.prints.push_back(ev.text);
+    if (ev.kind == sv::EventKind::print && (ev.to & 1u) != 0) l.prints.push_back(ev.text);
+    if (ev.kind == sv::EventKind::centerprint && (ev.to & 1u) != 0) l.centres.push_back(ev.text);
     // The baseline mod's explosion: its temporary-entity message's first two bytes.
     if (ev.kind == sv::EventKind::multicast && ev.bytes.size() >= 2 && ev.bytes[0] == kTempEntity &&
         ev.bytes[1] == kExplosion)

@@ -148,7 +148,8 @@ void draw_lobby_classic(ui::DrawList& dl, const ClassicArt& art, const hd::Lobby
   centred(pen, head, bx + 8, kBannerCols, kBannerY + 8, true);
   centred(pen, me_ready ? "F1 BREAK  F4 LOBBY" : "F1 READY  F4 LOBBY", bx + 8, kBannerCols,
           kBannerY + 16, false);
-  if (counting) count(pen, v.seconds_left, 0.55f + 0.45f * static_cast<float>(v.fraction));
+  if (counting && v.count)
+    count(pen, v.seconds_left, 0.55f + 0.45f * static_cast<float>(v.fraction));
 }
 
 void draw_lobby_page_classic(ui::DrawList& dl, const ClassicArt& art, const hd::LobbyView& v,

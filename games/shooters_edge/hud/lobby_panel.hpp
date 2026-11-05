@@ -40,6 +40,7 @@ struct LobbyView {
   double fraction = 0;   // of the second now running down, 0..1 (the count's pulse)
   std::string map;       // the map the warmup plays
   int min_players = 1;   // seats needed before the match may start
+  bool count = true;     // the big count drawn (false: the game's own centre print counts down)
   std::vector<LobbyRow> rows;
 };
 

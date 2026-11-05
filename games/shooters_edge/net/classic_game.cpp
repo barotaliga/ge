@@ -18,10 +18,13 @@
 #include "core/num.hpp"
 #include "net/packet.hpp"
 #include "progs/file.hpp"
+#include "shooter/settings.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/profiles/game_profile.hpp"
+#include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/dedicated.hpp"
 #include "shooters_edge/server/lobby.hpp"
@@ -50,6 +53,9 @@ struct Game {
   std::array<const sv::RulesCommon*, gs::kLobbySeats> applied{};  // the rules a seat's team is on
   std::array<gs::Team, gs::kLobbySeats> shown{};                  // the team its user info says
   int said = 0;                                                   // the lobby's lines printed
+  // With a classic game's packs in the folder: its item names and server words as local info
+  // (profiles/items.hpp, profiles/words.hpp), set on every map before the rules start.
+  std::vector<std::string> info_lines;
   ~Game() {
     classic.reset();
     rules = {};  // its views into the map go before the map does
@@ -58,16 +64,96 @@ struct Game {
 };
 
 // The mod's own rules a server owner sets (server.cfg, `+set fraglimit 20`); the mod server keeps
-// each one's default (server/qc_server.cpp), so an unset rule is left to it.
-constexpr gs::GameRule kRules[] = {
+// each one's default (server/qc_server.cpp), so an unset rule is left to it. The move's and the
+// loop's settings (plugins/shooter/settings.hpp: `sv_gravity`, `sv_mintic`, `pm_ktjump`) follow,
+// then the endpoint's own, which the mod never sees.
+constexpr gs::GameRule kModRules[] = {
     {"deathmatch", "the match's rules: 1 and up deathmatch, as the mod reads them"},
     {"teamplay", "team rules, as the mod reads them"},
     {"fraglimit", "frags that end the match (0 none)"},
     {"timelimit", "the match's length, minutes (0 none)"},
     {"samelevel", "1: the map does not change at the end"},
-    {"sv_gravity", "the world's gravity, units/s^2"},
-    {"sv_maxspeed", "a player's run speed, units/s"},
+    {"pausable", "1: a player may pause the game (0: only unpausing)"},
 };
+
+constexpr gs::GameRule kEndpointRules[] = {
+    {"sv_maxrate", "the most bytes/s a client may ask for with its `rate` (0 no cap; 0)"},
+    {"sv_antilag", "1: a shot sees the others where the shooter saw them (0)"},
+    {"sv_voip", "1: players' voice is relayed to their team (0)"},
+    {"maxfps", "the most moves a second a client sends, told in the server info (77)"},
+    {"allow_download", "0: no file is offered to a client that lacks one (1)"},
+    {"allow_download_skins", "0: no skins/ file is offered (1)"},
+    {"allow_download_models", "0: no progs/ model is offered (1)"},
+    {"allow_download_sounds", "0: no sound/ file is offered (1)"},
+    {"allow_download_maps", "0: no maps/ file is offered (1)"},
+    {"allow_download_other", "1: files outside those folders are offered too (0)"},
+    {"sv_downloadchunksperframe", "chunks of 1 KB a downloading client gets a frame, 1..30 (30)"},
+};
+
+// Every rule, in the order `--explain` lists them: built once.
+const std::vector<gs::GameRule>& all_rules() {
+  static const std::vector<gs::GameRule> rules = [] {
+    std::vector<gs::GameRule> out(std::begin(kModRules), std::end(kModRules));
+    int count = 0;
+    const sh::Setting* table = sh::settings_table(count);
+    for (int i = 0; i < count; i++) out.push_back({table[i].name, table[i].help});
+    out.insert(out.end(), std::begin(kEndpointRules), std::end(kEndpointRules));
+    return out;
+  }();
+  return rules;
+}
+
+bool is_endpoint_rule(const std::string& name) {
+  for (const gs::GameRule& r : kEndpointRules)
+    if (name == r.name) return true;
+  return false;
+}
+
+// An endpoint rule as a whole number in `low..high`; unset leaves `out`. False with `error`.
+bool endpoint_int(const gs::ServerConfig& c, const char* name, int low, int high, int& out,
+                  std::string& error) {
+  const auto it = c.rules.find(name);
+  if (it == c.rules.end() || it->second.empty()) return true;
+  char* end = nullptr;
+  const long v = std::strtol(it->second.c_str(), &end, 10);
+  if (end == it->second.c_str() || *end != '\0' || v < low || v > high) {
+    error = std::string(name) + " \"" + it->second + "\" is not a whole number in " +
+            std::to_string(low) + ".." + std::to_string(high) +
+            "; next: set it in range (--explain=" + name + " shows where it was set)";
+    return false;
+  }
+  out = static_cast<int>(v);
+  return true;
+}
+
+// The endpoint's own settings from the rules: false with `error` on a value out of range.
+bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string& error) {
+  int antilag = cfg.antilag ? 1 : 0, voice = cfg.voice ? 1 : 0;
+  int all = cfg.allow_download ? 1 : 0, skins = cfg.allow_skins ? 1 : 0;
+  int models = cfg.allow_models ? 1 : 0, sounds = cfg.allow_sounds ? 1 : 0;
+  int maps = cfg.allow_maps ? 1 : 0, other = cfg.allow_other ? 1 : 0;
+  if (!endpoint_int(c, "sv_maxrate", 0, 1000000, cfg.maxrate, error) ||
+      !endpoint_int(c, "sv_antilag", 0, 1, antilag, error) ||
+      !endpoint_int(c, "sv_voip", 0, 1, voice, error) ||
+      !endpoint_int(c, "maxfps", 20, 1000, cfg.maxfps, error) ||
+      !endpoint_int(c, "allow_download", 0, 1, all, error) ||
+      !endpoint_int(c, "allow_download_skins", 0, 1, skins, error) ||
+      !endpoint_int(c, "allow_download_models", 0, 1, models, error) ||
+      !endpoint_int(c, "allow_download_sounds", 0, 1, sounds, error) ||
+      !endpoint_int(c, "allow_download_maps", 0, 1, maps, error) ||
+      !endpoint_int(c, "allow_download_other", 0, 1, other, error) ||
+      !endpoint_int(c, "sv_downloadchunksperframe", 1, 30, cfg.chunks_per_frame, error))
+    return false;
+  cfg.antilag = antilag != 0;
+  cfg.voice = voice != 0;
+  cfg.allow_download = all != 0;
+  cfg.allow_skins = skins != 0;
+  cfg.allow_models = models != 0;
+  cfg.allow_sounds = sounds != 0;
+  cfg.allow_maps = maps != 0;
+  cfg.allow_other = other != 0;
+  return true;
+}
 
 // The mod's rules on the map `name`, set from the settings: into `map` and `rules`.
 bool open_map(const Game& g, const std::string& name, std::unique_ptr<cl::LoadedMap>& map,
@@ -83,8 +169,14 @@ bool open_map(const Game& g, const std::string& name, std::unique_ptr<cl::Loaded
   if (!qc) return false;
   rules = sv::qc_runner(std::move(qc));
   rules.console("deathmatch 1");
+  for (const std::string& line : g.info_lines) rules.console(line);
   for (const auto& [rule, value] : c.rules) {
-    if (value.empty()) continue;
+    if (value.empty() || is_endpoint_rule(rule)) continue;
+    sh::ServerSettings check;
+    if (sh::find_setting(rule) && !sh::set_setting(check, rule, value, error)) {
+      error.append(" (--explain=").append(rule).append(" shows where it was set)");
+      return false;
+    }
     char* end = nullptr;
     std::strtod(value.c_str(), &end);  // every rule is a number
     std::string line = rule;
@@ -140,12 +232,21 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->files = cl::SearchPath{};
     error.clear();
   }
+  if (!cl::archive_paths(g->files).empty()) {
+    const profiles::GameProfile& game = profiles::classic_game();
+    g->info_lines = profiles::item_name_lines(game.tables.names);
+    for (std::string& line : profiles::word_lines(game.words)) g->info_lines.push_back(line);
+  }
   if (!open_map(*g, c.map, g->map, g->rules, error)) return nullptr;
   if (!open_room(*g, error)) return nullptr;
   g->cfg.hostname = c.hostname;
   g->cfg.password = c.password;
   g->cfg.spectator_password = c.spectator_password;
   g->cfg.seed = c.seed;
+  g->cfg.timeout_s = c.timeout_s;
+  g->cfg.flood_msg = c.floodprot_msg;
+  if (!gs::parse_flood_rule(c.floodprot, g->cfg.flood, error)) return nullptr;
+  if (!endpoint_settings(c, g->cfg, error)) return nullptr;
   return g.release();
 }
 
@@ -256,11 +357,29 @@ void lobby_turn(Game& g) {
     now.pending_map = g.map->name;
     now.pending_change = sv::MapChange::restart;
   }
-  for (const std::string& line : r.lobby.said) {
-    if (g.classic) classic_print_all(*g.classic, line + "\n");
-    g.said++;
-  }
-  r.lobby.said.clear();
+  g.said += static_cast<int>(r.lobby.said.size());
+  sv::MatchLook look;
+  if (const ge::console::Cvar* c = now.cvars.find("deathmatch"); c != nullptr)
+    look.deathmatch = static_cast<int>(c->number);
+  if (const ge::console::Cvar* c = now.cvars.find("teamplay"); c != nullptr)
+    look.teamplay = static_cast<int>(c->number);
+  std::vector<std::string> lines;
+  for (const auto& [rule, value] : g.settings.rules)
+    if (!value.empty()) {
+      std::string line = rule;
+      line += ' ';
+      line += value;
+      lines.push_back(std::move(line));
+    }
+  sv::announce(r.announcer, r.lobby, now.localinfo, sv::match_look(look, lines), now.sv.time);
+}
+
+// The lobby's words handed to the rules playing now (after a change, the new map's): they go out
+// with the next frame's events, and into its recording.
+void lobby_words(Game& g) {
+  if (!g.room) return;
+  sv::announce_phase(g.rules->localinfo, g.room->lobby.phase);
+  sv::announce_flush(g.room->announcer, g.rules->out, g.rules->sv.time);
 }
 
 // A client's words the room takes before the mod: `addbot [skill]` and `removebot` from the
@@ -332,6 +451,7 @@ void frame(void* g) {
   sv::clear_frame(now.out);
   lobby_turn(game);
   change_if_asked(game);
+  lobby_words(game);
 }
 
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
@@ -352,6 +472,7 @@ void net_frame(void* g, int64_t now_us) {
   sync_seats(game);
   lobby_turn(game);
   change_if_asked(game);
+  lobby_words(game);
   sync_seats(game);  // a new map's seats
 }
 
@@ -408,8 +529,8 @@ gs::ServerGame make() {
   g.max_clients = 32;
   g.default_map = "arena";
   g.base_dir = kGameFolder;
-  g.rules = kRules;
-  g.rule_count = static_cast<int>(std::size(kRules));
+  g.rules = all_rules().data();
+  g.rule_count = static_cast<int>(all_rules().size());
   g.create = create;
   g.destroy = destroy;
   g.frame_seconds = frame_seconds;

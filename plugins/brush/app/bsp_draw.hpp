@@ -11,10 +11,11 @@
 //   it, the sun through the sky faces with its own shadow map, the sky's light by how open a
 //   point is overhead, and the glowing texels. The shadow maps are KEPT: the world they see
 //   stands still, so a light's cube is drawn when it takes a slot (and only then) and an
-//   orthographic map when its camera moves; every `prepare_bsp` is followed by its `encode_bsp`,
-//   which draws what the prepare found stale. A frame draws at most `Options::fresh_cubes` new
-//   cubes (a light past the budget waits a frame or more unshadowed), the slots are reused least
-//   recently first, and a dynamic light (it moves or goes out) casts no shadow.
+//   orthographic map when its camera moves; every `prepare_bsp` is followed by its `encode_bsp`
+//   (or `encode_bsp_shadows` alone), which draws what the prepare found stale. A frame draws at
+//   most `Options::fresh_cubes` new cubes (a light past the budget waits a frame or more
+//   unshadowed; a map's first frame draws them all unless `first_all` is off), the slots are
+//   reused least recently first, and a dynamic light (it moves or goes out) casts no shadow.
 //
 // - THE WEATHER (v2, `Options::weather`): a third orthographic map looks along the fall, so the
 //   faces the rain and the snow reach (a courtyard's flags, a sill, the floor inside a window as
@@ -37,6 +38,7 @@
 // ge:keywords set_movers movers moving-brush-models doors plats
 // ge:keywords relief normal-map parallax-occlusion roughness specular ggx surface-atlas
 // ge:keywords shadow-cache shadow-slot fresh_slots fresh_cubes shadow-budget shadow-hitch
+// ge:keywords encode_bsp_shadows first_all warm-up
 // ge:skill brush render
 #pragma once
 
@@ -72,8 +74,11 @@ struct Options {
   int shadowed = 32;            // the nearest lights that cast shadows
   // The cubes drawn a frame at most for lights new to the shadowed few (each one the map drawn six
   // times); the rest wait their turn unshadowed. 0 draws none new. The map's first frame draws
-  // every cube whatever this says (it is the load's).
+  // every cube whatever this says (it is the load's), unless `first_all` is off: a window that
+  // warms a new map's world up offscreen over a few frames before it shows it (shadows_waiting
+  // says when every cube is in).
   int fresh_cubes = 2;
+  bool first_all = true;
   int most = 160;             // the lights a frame draws at most (the nearest)
   bool lava_lights = true;    // the lava's glow lights the walls round it
   double lava_glow = 1;       // that glow's strength, 0 none
@@ -268,6 +273,10 @@ void set_movers(BspDraw& draw, std::span<const Mover> movers);
 // Light style `style` (0 .. 63) played from now on as `pattern`: letters 'a' (dark) .. 'z', 'm'
 // the light as baked, ten a second (draw_data.hpp's `style_level`); empty for steady.
 void set_light_style(BspDraw& draw, int style, std::string_view pattern);
+// "bsp.shadows" alone: the cubes and the orthographic maps prepare_bsp found stale (encode_bsp
+// draws them first; a window warming a map up offscreen draws only these).
+void encode_bsp_shadows(const BspDraw& draw, const gpu::PipelineSet& pipelines,
+                        render::FrameRecorder& rec, wgpu::CommandEncoder& encoder);
 // "bsp.shadows", "bsp" and "bsp.sky": the map into the cleared targets.
 void encode_bsp(const BspDraw& draw, const gpu::PipelineSet& pipelines, render::FrameRecorder& rec,
                 wgpu::CommandEncoder& encoder, const render::FrameTargets& targets,

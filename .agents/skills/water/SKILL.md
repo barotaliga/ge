@@ -38,7 +38,7 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
 | Wakes: impulse rings, a hull's trail, a splash's ring | `engine/water/wake.hpp` | `float`, `gpu-water` | `tests/water_wake_test.cpp` (golden) |
 | A body through the surface: the crater and its jet (a ring's near field), the rings, the spray, by mass, volume, footprint and speed, leaned forward by a run (`Ring::lean_x`, `reach`) | `engine/water/entry.hpp`, `render/water_stream.hpp`'s `entry_spray` | `gpu-plunge` | `tests/water_entry_test.cpp` |
 | Moving water drawn: river ribbons, flow grids, waterfall curtains, flow maps, foam, spray | `engine/render/water_stream.hpp`, `water_stream.wgsl`, `wgsl/water_light.wgsl` | `gpu-water` | `tests/render_water_stream_test.cpp` |
-| The surface drawn: rings, the waves kept per vertex and pixel, the mirror, the glitter | `engine/render/water.hpp`, `water.wgsl` | `gpu-water`, `lake` | `tests/render_water_test.cpp` |
+| The surface drawn: rings, the waves kept per vertex and pixel, the chop, the mirror, the glitter, the underside (`water_below.wgsl`) | `engine/render/water.hpp`, `water.wgsl` | `gpu-water`, `lake` | `tests/render_water_test.cpp` |
 | Foam (whitecaps from the Jacobian, surf by the depth, the trails as the waves' past, lace) and the shore's wet band | `engine/render/water.hpp` (`foam_of`), `water.wgsl`, `water_shore.wgsl` | `gpu-water` (`whitecaps`, `foam-trail`, `surf`) | `tests/render_water_test.cpp` |
 | The view under water: the fog, blur, Snell's window, the presets, the waterline split, the specks | `engine/render/underwater.hpp`, `underwater.wgsl` | `gpu-underwater`, `gpu-plunge`, `lake` | `tests/render_water_test.cpp` |
 | The wet lens: the sheet and the drops on leaving the water | `engine/render/wet_lens.hpp`, `wet_lens.wgsl` | `gpu-plunge` | `tests/render_wet_lens_test.cpp` |
@@ -105,6 +105,14 @@ for anything the simulation reads, `render` for a pass, `audio` for a voice, `la
   gain and keep the `water-audition` lab's orders (the fresh shore over the calm, the stream
   over the slow river, the near fall over the far, under darker than over) and its chart's 1 / r.
   "How rough is the water here" is `Sample::hs`, never the laid surface's variance.
+- **An eye under the water sees every surface over it.** `water.below` draws each body the eye is
+  under (`Water::Slot::under`), never only the one it is counted in, and the light over a point is
+  `level_over`'s weighing of the tops: a flooded passage between two pools otherwise sees straight
+  through the far pool, then flips its mirror and its light halfway. Judge one swum end to end
+  (dm3's tunnel to the pent pool, `se-client`), not only straight under a pool.
+- **Water in use is never glass.** A still pool's rim is lens-sharp and its mirror exact, which reads
+  as fake; a game whose pools are swum in gives them a chop (`WaterDraw::chop`, about 0.05), and the
+  rim's Fresnel is averaged over the slope a pixel loses, so it softens with distance by itself.
 - **A plan view drops the components shorter than a few pixels** (the picture's own tier):
   drawn, they alias into stripes that are not on the water.
 

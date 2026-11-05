@@ -159,6 +159,8 @@ std::string plain_text(std::string_view text) {
     const auto c = static_cast<unsigned char>(static_cast<unsigned char>(raw) & 0x7f);
     if (c >= 32 && c < 127)
       out += static_cast<char>(c);
+    else if (c >= 18 && c <= 27)  // the gold figures
+      out += static_cast<char>('0' + (c - 18));
     else if (c == 16)
       out += '[';
     else if (c == 17)

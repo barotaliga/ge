@@ -598,9 +598,10 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   }
   d.fresh_slots.clear();
   d.shadows_waiting = 0;
-  // The first frame after the map is made draws every cube: it is the load's, not play's.
-  const size_t budget =
-      d.shadow_frame == 1 ? size_t(kMaxShadowed) : size_t(std::max(o.fresh_cubes, 0));
+  // The first frame after the map is made draws every cube: it is the load's, not play's (unless
+  // the caller warms the map up over frames of its own: `first_all` off).
+  const size_t budget = d.shadow_frame == 1 && o.first_all ? size_t(kMaxShadowed)
+                                                           : size_t(std::max(o.fresh_cubes, 0));
   for (const size_t c : homeless) {
     if (d.fresh_slots.size() >= budget) {
       ++d.shadows_waiting;  // info[0] stays -1: lit, unshadowed, this frame
@@ -780,13 +781,11 @@ void set_light_style(BspDraw& d, int style, std::string_view pattern) {
   if (style >= 0 && style < kLightStyles) d.light_styles[size_t(style)] = pattern;
 }
 
-void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRecorder& rec,
-                wgpu::CommandEncoder& encoder, const r::FrameTargets& targets,
-                const wgpu::BindGroup& frame) {
+void encode_bsp_shadows(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRecorder& rec,
+                        wgpu::CommandEncoder& encoder) {
   const bool v2 = d.options.mode == Mode::v2;
   const bool lights = v2 && d.options.lighting == Lighting::lights;
-  // The ranges the shadows see: the solid faces (the sky's do not stop the sun), and the
-  // ranges drawn: v2 leaves the liquids to our bodies.
+  // The ranges the shadows see: the solid faces (the sky's do not stop the sun).
   const auto draw_solid = [&](wgpu::RenderPassEncoder& pass, uint32_t instance) {
     pass.DrawIndexed(d.range[kSolid][1], 1, d.range[kSolid][0], 0, instance);
   };
@@ -826,6 +825,13 @@ void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRec
     for (uint32_t k = 0; k < kOrthos; ++k)
       if (d.ortho_fresh[k]) shadow_pass(d.ortho_layers[k], first_ortho + k, false);
   }
+}
+
+void encode_bsp(const BspDraw& d, const gpu::PipelineSet& pipelines, r::FrameRecorder& rec,
+                wgpu::CommandEncoder& encoder, const r::FrameTargets& targets,
+                const wgpu::BindGroup& frame) {
+  const bool v2 = d.options.mode == Mode::v2;
+  encode_bsp_shadows(d, pipelines, rec, encoder);
   // The map: every kind's faces, or (culled) a phase's, drawn into the targets; the late phase
   // over what the early one drew.
   const bool culled = d.options.cull && d.cull.chunks > 0;

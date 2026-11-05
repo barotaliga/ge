@@ -110,7 +110,7 @@ struct CloudRows {
   form: vec4f,
   // its particles' radius (um), their sizes' spread, the 22 degree halo, the deck
   glow: vec4f,
-  // the thinnest patches' share of the extinction, one over a patch's cells, the bias
+  // the thinnest patches' share of the extinction, one over a patch's cells, the bias, the warp
   thick: vec4f,
 }
 
@@ -129,7 +129,20 @@ fn cloud_uvw(l: CloudRows, xz: vec2f) -> vec3f {
   let across = xz.x * l.wind.x - xz.y * l.wind.y;
   let along = xz.x * l.wind.y + xz.y * l.wind.x;
   let s = l.shape.w / kCloudTileCells;
-  return vec3f(across * s, along * s * l.look.x - l.wind.z, l.wind.w);
+  let uvw = vec3f(across * s, along * s * l.look.x - l.wind.z, l.wind.w);
+  if (l.thick.w <= 0.0) {
+    return uvw;
+  }
+  return cloud_warped(l, uvw);
+}
+
+// THE WARP (thick.w, render/clouds.cpp's `warped`): the point pushed up to thick.w cells by two
+// reads of the noise a tile apart from the column's, so a cell's outline leans and twists; at the
+// tile's own scale, so the drift's wrap stays seamless.
+fn cloud_warped(l: CloudRows, uvw: vec3f) -> vec3f {
+  let a = textureSampleLevel(cloud_noise, linear_repeat, uvw + vec3f(0.19, 0.53, 0.61), 0.0).r;
+  let b = textureSampleLevel(cloud_noise, linear_repeat, uvw + vec3f(0.67, 0.11, 0.83), 0.0).r;
+  return vec3f(uvw.xy + (vec2f(a, b) - 0.5) * (2.0 * l.thick.w / kCloudTileCells), uvw.z);
 }
 
 // How far past the cut the noise climbs to a full column (render/clouds.hpp's kColumnRamp): a

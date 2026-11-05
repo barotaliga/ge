@@ -34,6 +34,7 @@
 #include "shooter/nav.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/hud/lobby_panel.hpp"
+#include "shooters_edge/server/announce.hpp"
 #include "shooters_edge/server/lobby.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
@@ -52,6 +53,7 @@ struct RoomBot {
 
 struct Room {
   sv::Lobby lobby;
+  sv::Announcer announcer;  // the lobby's words as the server's events (server/announce.hpp)
   std::array<std::unique_ptr<RoomBot>, sv::kLobbySeats> bots;  // by slot (null: no bot)
   std::unique_ptr<sh::NavGraph> graph;                         // the bots' map's
   std::unique_ptr<sh::MoveWorld> world;                        // its solids (the hop's look)

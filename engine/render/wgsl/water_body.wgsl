@@ -30,14 +30,28 @@ struct WaterBody {
   foam: vec4f,       // the fold's threshold on the Jacobian, the whitecap cover, its drift (x, z)
   surf: vec4f,       // the laid band's Hs (m), the run-up over the level (m), the folds' wavelength (m),
                      // the Jacobian's spread
+  chop: vec4f,       // the chop's components (after the detail band's), its rms slope, 0, 0
   up_view_proj: mat4x4f,  // the view up: world relative to the surface over the eye -> its clip
   levels: array<vec4f, 12>,  // origin x, z, spacing, 0
 }
 
-// A wave: kx, kz, amplitude, angular frequency; phase, k, 0, 0.
+// A wave: kx, kz, amplitude, angular frequency; phase, k, 0, 0. The simulation's laid band
+// (info.z of them), then the detail band (info.w), then the chop (chop.x).
 struct Wave {
   dir: vec4f,
   more: vec4f,
+}
+
+// Every component the pixels sum: the laid band's, the detail band's and the chop's.
+fn waves_drawn() -> u32 {
+  return u32(body.info.z + body.info.w + body.chop.x);
+}
+
+// A component's amplitude where the gusts are `gust`: the detail band is raised and laid by them,
+// the laid band (the simulation's) and the chop (the water's own use) are not.
+fn wave_amplitude(i: u32, w: Wave, gust: f32) -> f32 {
+  let detail = i >= u32(body.info.z) && i < u32(body.info.z + body.info.w);
+  return w.dir.z * body.info.y * select(1.0, gust, detail);
 }
 
 // A lattice point's value, 0..1: an integer hash, the same on every GPU.
@@ -124,8 +138,7 @@ fn caustic_at(xz: vec2f, depth: f32, down: vec3f, t: f32, soft: f32, foot: f32) 
   // spread over the way down, and a few millimetres the eye never resolves on a bed.
   let blur = max(soft * (0.007 * along + 0.003), foot);
   let gust = gust_at(s_xz, t);
-  let laid = u32(body.info.z);
-  let total = u32(body.info.z + body.info.w);
+  let total = waves_drawn();
   var h = vec3f(0.0);  // the curvature: d2/dx2, d2/dxdz, d2/dz2
   for (var i = 0u; i < total; i++) {
     let w = waves[i];
@@ -134,7 +147,7 @@ fn caustic_at(xz: vec2f, depth: f32, down: vec3f, t: f32, soft: f32, foot: f32) 
     if (keep <= 0.0) {
       continue;
     }
-    let a = w.dir.z * body.info.y * select(1.0, gust, i >= laid);
+    let a = wave_amplitude(i, w, gust);
     let phi = dot(w.dir.xy, s_xz) - w.dir.w * t + w.more.x;
     let g = keep * (-a * sin(phi) + 2.0 * k * a * a * cos(2.0 * phi));
     h += g * vec3f(w.dir.x * w.dir.x, w.dir.x * w.dir.y, w.dir.y * w.dir.y);

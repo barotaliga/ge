@@ -57,7 +57,7 @@ void draw_lobby(ui::DrawList& dl, const LobbyView& v, int w, int h) {
   dl.text(body, 15 * s, fw / 2, by + 52 * s, keys, kDim, ui::Align::center);
 
   // The count.
-  if (counting) {
+  if (counting && v.count) {
     const float pulse =
         1 + 0.18f * static_cast<float>(std::pow(1 - std::clamp(v.fraction, 0.0, 1.0), 3.0));
     dl.text(bold, 22 * s, fw / 2, fh * 0.30f, "MATCH STARTS IN", kInk, ui::Align::center);

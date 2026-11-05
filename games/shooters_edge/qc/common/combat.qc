@@ -5,24 +5,38 @@
 void() player_die;
 void() player_pain;
 
-// The frags a death is worth: a kill +1, a death by one's own hand or the world's -1.
+// The frags a death is worth: a kill +1, a teammate's -1 to the killer, a death by one's own hand
+// or the world's -1. It is told in the loaded game's words when it has them (the glue's
+// `death_words`), else in ours; before the match a game that asks tells and scores nothing.
 void(entity targ, entity attacker) score_death = {
-  local string how;
+  local string how, told;
   if (targ.classname != "player") return;
+  if (game_quiet()) return;
   how = targ.deathtype;
+  told = death_words(targ, attacker);
   if (attacker == targ) {
     targ.frags = targ.frags - 1;
-    say_all(PRINT_MEDIUM, targ.netname, " fragged themselves\n", "", "", "", "");
+    if (told != "") say_all(PRINT_MEDIUM, told, "", "", "", "", "");
+    else say_all(PRINT_MEDIUM, targ.netname, " fragged themselves\n", "", "", "", "");
     return;
   }
   if (attacker.classname == "player") {
-    attacker.frags = attacker.frags + 1;
+    if (same_team(targ, attacker)) attacker.frags = attacker.frags - 1;
+    else attacker.frags = attacker.frags + 1;
     note_frag(attacker, targ);
+    if (told != "") {
+      say_all(PRINT_MEDIUM, told, "", "", "", "", "");
+      return;
+    }
     if (how == "") how = "fragged";
     say_all(PRINT_MEDIUM, targ.netname, " was ", how, " by ", attacker.netname, "\n");
     return;
   }
   targ.frags = targ.frags - 1;
+  if (told != "") {
+    say_all(PRINT_MEDIUM, told, "", "", "", "", "");
+    return;
+  }
   if (how == "") how = "died";
   say_all(PRINT_MEDIUM, targ.netname, " ", how, "\n", "", "");
 };

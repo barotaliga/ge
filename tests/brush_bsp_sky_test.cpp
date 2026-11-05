@@ -77,7 +77,10 @@ TEST(a_classic_map_is_never_seen_by_day) {
     CHECK(p.sun_elevation <= -3);  // an evening's or a night's, never a day's
     CHECK(p.moon_elevation >= 8);  // a moon up for the cloud to cross
     CHECK(p.wind >= 8);            // always windy
-    CHECK(p.scud_cover >= 0.3 && p.deck_cover >= 0.4 && p.deck_cover < 0.6);  // partly cloudy
+    // Partly cloudy: the scud and a layer over it, none covering half the sky.
+    CHECK(p.layer_count >= 2 && std::string(p.layers[0].kind->name) == "fractus");
+    for (int i = 0; i < p.layer_count; ++i)
+      CHECK(p.layers[i].cover > 0.05 && p.layers[i].cover < 0.5);
     CHECK(p.adapt_cd > 0);
   }
 }
@@ -97,7 +100,7 @@ TEST(the_night_scud_races_low_under_the_deck) {
   const double top = 50;
   const ge::render::Clouds c0 = ba::clouds_of(p, top, 0);
   const ge::render::Clouds c1 = ba::clouds_of(p, top, 60);
-  CHECK(c0.count == 2);
+  CHECK(c0.count >= 2);
   const auto& scud = c0.layers[0];
   const auto& deck = c0.layers[1];
   CHECK(scud.base_m >= top + 200 && scud.top_m < deck.base_m);
@@ -114,7 +117,7 @@ TEST(a_night_dressed_keys_the_moon_and_keeps_the_rooms_light) {
   ba::night_over(p, "e1m3");
   ge::render::FrameView v;
   ba::dress_sky(v, p, 0, 10);
-  CHECK(v.clouds.count == 2);
+  CHECK(v.clouds.count == p.layer_count && v.clouds.count >= 2);
   CHECK(v.adapt_cd == p.adapt_cd);
   CHECK(v.time_s == 10);
   CHECK(v.night.moon_elevation > 0);
@@ -122,7 +125,32 @@ TEST(a_night_dressed_keys_the_moon_and_keeps_the_rooms_light) {
   ba::SkyPick day = ba::pick_sky(ba::SkyColours{});
   ge::render::FrameView dv;
   ba::dress_sky(dv, day, 0, 10);
-  CHECK(dv.adapt_cd == 0 && dv.clouds.count == 1 && !dv.night.moon_key);
+  CHECK(dv.adapt_cd == 0 && dv.clouds.count == day.layer_count && !dv.night.moon_key);
+}
+
+TEST(each_maps_day_has_its_own_open_sky) {
+  // The day's stack is dealt off the map's name: a low layer under two fifths of the sky at the
+  // most whatever the texture's own cloud, every layer in islands with its outlines twisted,
+  // carried on a wind, and the maps' stacks unlike one another.
+  std::string seen;
+  int kinds = 0;
+  for (const char* map : {"start", "e1m1", "e1m2", "e1m3", "e1m4", "e1m5", "e1m6", "e1m7"}) {
+    const ba::SkyPick p = ba::pick_sky(colours(0.012, 0.006, 0.005, 0.9), map);
+    CHECK(p.layer_count >= 1 && p.wind >= 8);
+    CHECK(p.layers[0].cover <= 0.42);
+    for (int i = 0; i < p.layer_count; ++i)
+      CHECK(p.layers[i].patch > 0.3 && p.layers[i].warp > 0.5);
+    const ge::render::Clouds a = ba::clouds_of(p, 20, 0), b = ba::clouds_of(p, 20, 60);
+    CHECK(b.layers[0].drift_m > a.layers[0].drift_m);
+    const std::string stack = std::string(p.layers[0].kind->name) + std::to_string(p.layer_count);
+    if (seen.find(stack) == std::string::npos) ++kinds;
+    seen += stack + " ";
+  }
+  CHECK(kinds >= 3);
+  // set_cover scales the stack by its lowest layer.
+  ba::SkyPick p = ba::pick_sky(colours(0.012, 0.006, 0.005, 0.6), "e1m1");
+  ba::set_cover(p, 0);
+  CHECK(ba::clouds_of(p, 0, 0).count == 0);
 }
 
 TEST(an_hour_set_puts_the_sun_where_the_hour_has_it) {
@@ -145,5 +173,6 @@ TEST(an_hour_set_puts_the_sun_where_the_hour_has_it) {
   ba::SkyPick midnight = day;
   ba::at_hour(midnight, night, 0);
   CHECK(midnight.night && midnight.sun_elevation < -20);
-  CHECK(midnight.adapt_cd == night.adapt_cd && midnight.scud_cover == night.scud_cover);
+  CHECK(midnight.adapt_cd == night.adapt_cd && midnight.layer_count == night.layer_count &&
+        midnight.layers[0].cover == night.layers[0].cover);
 }
