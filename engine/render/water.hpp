@@ -108,9 +108,11 @@ struct WaterDraw {
   // The share of the surface the sun itself reaches (its caustics and the shafts under it); < 0:
   // the day's share. A courtyard's pool under the open sky may lie in a wall's shade.
   double sunlit = -1;
-  double stir = 0;       // a still surface's own wandering slope (rad, about): 0 glass
-  double gusts = 0;      // 0..1: how strongly the gusts' patches raise and lay the short waves
-  bool foam = true;      // the whitecaps, the surf and the line at the shore (`foam_of`)
+  double stir = 0;   // a still surface's own wandering slope (rad, about): 0 glass
+  double gusts = 0;  // 0..1: how strongly the gusts' patches raise and lay the short waves
+  // The whitecaps, the surf and the line at the shore (`foam_of`). OFF by default: their look is
+  // not signed off yet, so a game or a lab that wants them turns them on.
+  bool foam = false;
   bool wet_band = true;  // the shore darkened where the waves run up it
 };
 

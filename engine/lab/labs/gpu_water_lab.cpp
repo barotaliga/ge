@@ -539,9 +539,11 @@ void run(gl::Lab& lab) {
   }
   // THE FOAM (render/water.hpp's `foam_of`): the gale's whitecaps and their trails, from 15 m up
   // looking across the wind, drawn with the foam and without; the share of the water it whitens
-  // against the whitecap law's cover at the sea's wind.
+  // against the whitecap law's cover at the sea's wind. The foam is off by default
+  // (WaterDraw::foam): these views turn it on, and the surf's turns it off again after.
   {
     gw::World world = sea_world(20, "adriatic");
+    sea.water.bodies[0].draw.foam = true;
     gr::set_water_body(dsea, sea.water, 0, world.bodies[0]);
     const gr::WaterFoam foam = gr::foam_of(world.bodies[0].waves);
     const gr::FrameView across =
@@ -582,7 +584,9 @@ void run(gl::Lab& lab) {
     Scene small;
     ge::gpu::Device& dt = fresh();
     make_scene(dt, small, sea_ground, 0, 32, static_cast<uint32_t>(tw), static_cast<uint32_t>(th));
-    gr::add_water_body(dt, small.water, world.bodies[0]);
+    gr::WaterDraw foamy;
+    foamy.foam = true;
+    gr::add_water_body(dt, small.water, world.bodies[0], foamy);
     gl::Picture sheet = gl::create_picture(3 * tw + 40, th + 26, {250, 250, 248});
     for (int i = 0; i < 3; ++i) {
       const double t = 6.0 + 0.8 * i;
@@ -652,6 +656,7 @@ void run(gl::Lab& lab) {
               "moon's glitter on the sea beyond; the wet band a darker strip of sand",
               {{"wind", "10 m/s"}, {"moon", "full"}}},
              draw(dsea, sea, moonlit), Det::measured);
+    sea.water.bodies[0].draw.foam = false;
   }
   // The crest: straight down from 6 m over the open sea, the depth read back against the
   // simulation's surface with the waves the vertex keeps at level 0 (0.5 m quads: 2 m and longer).
