@@ -13,6 +13,7 @@
 //   sv_wind         m/s    the mean wind, 10 m over open ground
 //   sv_winddir      deg    the bearing it blows FROM (0 the map's +z, clockwise from above)
 //   sv_gust         0..1   the gusts' strength (the speed's deviation over its mean)
+//   sv_hour         -1..24 the hour the sun stands at (-1: the map's own, picked from its sky)
 //   r_precip        0/1    the falling rain and snow drawn
 //   r_precip_density 0.25..2  the particles a full fall draws, a share of the default
 //   r_splashes      0/1    the drops' splashes
@@ -26,6 +27,7 @@
 // ge:summary The weather over a BSP map: cvars, the wet and the snow stepped, the fall's frame
 // ge:keywords weather bsp rain snow sleet storm wind lightning puddles wet cvars sv_weather
 // ge:keywords sv_precip sv_rain sv_wind sv_winddir sv_gust r_precip r_splashes r_wet r_snowcover
+// ge:keywords sv_hour time-of-day
 // ge:keywords r_lightning add_weather_cvars step_weather apply_weather
 // ge:skill brush render
 // ge:test tests/brush_weather_test.cpp
@@ -46,6 +48,7 @@ struct WeatherCvars {
   bool on = false;
   double precip = 0.5, rain = 1;
   double wind = 4, wind_from = 210, gust = 0.25;
+  double hour = -1;  // the sun's hour, 0 .. 24 (bsp_sky.hpp's at_hour); -1 the map's own pick
   bool draw = true;
   double density = 1;
   bool splashes = true, wet = true, snowcover = true, lightning = true;

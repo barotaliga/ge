@@ -53,6 +53,16 @@ WorldExtrasPtr create_extras(ge::gpu::Device& device, ge::gpu::PipelineSet& pipe
                              const ge::classicenhance::Switches& switches,
                              const ge::brush::app::WeatherCvars& weather,
                              const ge::render::Sky& sky);
+// The same in parts, so a window can make one a frame (each parses its shaders: 10 to 20 ms):
+// `new_extras`, then every part from 0 to kExtrasParts - 1 in order (0 the water, 1 the lava and
+// slime, 2 the flames, the weather and the map's bodies laid out).
+inline constexpr int kExtrasParts = 3;
+WorldExtrasPtr new_extras(const ge::brush::app::Scene& scene,
+                          const ge::classicenhance::Switches& switches,
+                          const ge::brush::app::WeatherCvars& weather);
+void create_extras_part(ge::gpu::Device& device, ge::gpu::PipelineSet& pipelines,
+                        const wgpu::BindGroupLayout& frame, const ge::render::Sky& sky,
+                        WorldExtras& x, int part);
 // Again at every resize, after the frame's targets are made.
 void bind_extras_targets(ge::gpu::Device& device, WorldExtras& x,
                          const ge::render::FrameTargets& targets);

@@ -52,40 +52,59 @@ struct WorldExtras {
 
 void WorldExtrasDeleter::operator()(WorldExtras* x) const { delete x; }
 
-WorldExtrasPtr create_extras(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines,
-                             const wgpu::BindGroupLayout& frame, const ba::Scene& scene,
-                             const ge::classicenhance::Switches& switches,
-                             const ba::WeatherCvars& weather, const gr::Sky& sky) {
+WorldExtrasPtr new_extras(const ba::Scene& scene, const ge::classicenhance::Switches& switches,
+                          const ba::WeatherCvars& weather) {
   WorldExtrasPtr x(new WorldExtras);
   x->scene = &scene;
   x->on = &switches;
   x->weather = &weather;
-  gr::create_water(d, pipelines, x->water, frame);
-  gr::create_underwater(d, pipelines, x->under, frame);
-  // The maps' pools are indoors: the water lit by the room, rippled, caustics on its walls and
-  // the ceiling over it.
-  gr::underwater_look("pool", x->under.look);
-  gr::create_liquid(d, pipelines, x->liquids, frame);
-  // A player dropped in the slime sees a few metres round them, not the two centimetres a toxic
-  // ooze lets through.
-  x->liquids.under_reach = kUnderReach;
-  gr::create_flames(d, pipelines, x->flames, frame);
-  gr::PrecipSettings precip;
-  precip.particles = ba::weather_particles(precip, weather.density);
-  gr::create_precip(d, pipelines, x->precip, frame, precip);
-  // The waves under the weather's wind as far as each pool is open to it (re-laid when it changes).
-  x->wind = switches.wind ? weather.wind : 0;
-  x->from = weather.wind_from * kDegree;
-  x->world = ba::liquid_world(scene, x->rows, x->wind, x->from);
-  ba::add_bsp_liquids(d, x->water, x->liquids, x->world, x->rows);
-  ba::create_bsp_views(d, x->views, frame, sky);
-  // The liquid slots in the order add_bsp_liquids made them: every body that is not water and
-  // whose row is known.
-  for (const ba::Kind k : x->world.kinds) {
-    if (k == ba::kWater) continue;
-    if (gr::find_liquid_look(k == ba::kLava ? x->rows.lava : x->rows.slime))
-      x->liquid_kinds.push_back(k);
+  return x;
+}
+
+void create_extras_part(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines,
+                        const wgpu::BindGroupLayout& frame, const gr::Sky& sky, WorldExtras& x,
+                        int part) {
+  if (part == 0) {
+    gr::create_water(d, pipelines, x.water, frame);
+    gr::create_underwater(d, pipelines, x.under, frame);
+    // The maps' pools are indoors: the water lit by the room, rippled, caustics on its walls and
+    // the ceiling over it.
+    gr::underwater_look("pool", x.under.look);
+  } else if (part == 1) {
+    gr::create_liquid(d, pipelines, x.liquids, frame);
+    // A player dropped in the slime sees a few metres round them, not the two centimetres a toxic
+    // ooze lets through.
+    x.liquids.under_reach = kUnderReach;
+  } else if (part == 2) {
+    const ba::WeatherCvars& weather = *x.weather;
+    gr::create_flames(d, pipelines, x.flames, frame);
+    gr::PrecipSettings precip;
+    precip.particles = ba::weather_particles(precip, weather.density);
+    gr::create_precip(d, pipelines, x.precip, frame, precip);
+    // The waves under the weather's wind as far as each pool is open to it (re-laid when it
+    // changes).
+    x.wind = x.on->wind ? weather.wind : 0;
+    x.from = weather.wind_from * kDegree;
+    x.world = ba::liquid_world(*x.scene, x.rows, x.wind, x.from);
+    ba::add_bsp_liquids(d, x.water, x.liquids, x.world, x.rows);
+    ba::create_bsp_views(d, x.views, frame, sky);
+    // The liquid slots in the order add_bsp_liquids made them: every body that is not water and
+    // whose row is known.
+    for (const ba::Kind k : x.world.kinds) {
+      if (k == ba::kWater) continue;
+      if (gr::find_liquid_look(k == ba::kLava ? x.rows.lava : x.rows.slime))
+        x.liquid_kinds.push_back(k);
+    }
   }
+}
+
+WorldExtrasPtr create_extras(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines,
+                             const wgpu::BindGroupLayout& frame, const ba::Scene& scene,
+                             const ge::classicenhance::Switches& switches,
+                             const ba::WeatherCvars& weather, const gr::Sky& sky) {
+  WorldExtrasPtr x = new_extras(scene, switches, weather);
+  for (int part = 0; part < kExtrasParts; ++part)
+    create_extras_part(d, pipelines, frame, sky, *x, part);
   return x;
 }
 

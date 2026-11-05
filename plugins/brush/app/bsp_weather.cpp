@@ -39,6 +39,10 @@ void add_weather_cvars(con::Cvars& cvars, WeatherCvars& out) {
        &out.wind_from},
       {"sv_gust", out.gust, 0, 1, server,
        "the gusts' strength, the speed's deviation over its mean", &out.gust},
+      {"sv_hour", out.hour, -1, 24, server,
+       "the hour the sun stands at, 0 .. 24: up at 5, high in the south at noon, down at 19 (-1: "
+       "the map's own, picked from its sky)",
+       &out.hour},
       {"r_precip_density", out.density, 0.25, 2, player,
        "the particles a full fall draws, a share of the default", &out.density},
   };

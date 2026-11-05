@@ -2,7 +2,7 @@
 // says what each map is).
 //
 // ge:summary Other moons' maps decoded from their embedded PNGs and uploaded as mipmapped arrays
-// ge:keywords render moons moon-maps decode png texture-array mipmap upload
+// ge:keywords render moons moon-maps decode png texture-array mipmap upload decoded-once
 // ge:skill render
 // ge:test tests/render_moons_test.cpp
 #include "render/moon_maps.hpp"
@@ -93,27 +93,29 @@ std::vector<uint8_t> decode(Bytes png, int w, int h, int channels) {
   return out;
 }
 
-// An array texture of `layers` layers `w` x `h` in `format` (`channels` bytes a texel), each
-// layer's bytes from `layer(k)`, with every mip level the box filter of the one above.
-template <class Layer>
-wgpu::Texture upload_array(gpu::Device& device, const char* label, int w, int h, int layers,
-                           wgpu::TextureFormat format, int channels, Layer layer) {
+// An array texture's bytes, a layer's every mip level (each the box filter of the one above,
+// a row padded to 256 bytes as a copy's rows must be): worked once, on the CPU.
+struct Prepared {
+  int w = 0, h = 0, layers = 0, channels = 0;
   uint32_t levels = 1;
-  while ((static_cast<uint32_t>(h) >> levels) >= 1) ++levels;
-  wgpu::TextureDescriptor td{};
-  td.label = label;
-  td.size = {static_cast<uint32_t>(w), static_cast<uint32_t>(h), static_cast<uint32_t>(layers)};
-  td.format = format;
-  td.mipLevelCount = levels;
-  td.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
-  wgpu::Texture texture = device.device.CreateTexture(&td);
+  std::vector<std::vector<std::vector<uint8_t>>> bytes;  // [layer][mip]
+};
+
+template <class Layer>
+Prepared prepare_array(int w, int h, int layers, int channels, Layer layer) {
+  Prepared p;
+  p.w = w;
+  p.h = h;
+  p.layers = layers;
+  p.channels = channels;
+  while ((static_cast<uint32_t>(h) >> p.levels) >= 1) ++p.levels;
   const auto ch = static_cast<size_t>(channels);
+  p.bytes.resize(static_cast<size_t>(layers));
   for (int k = 0; k < layers; ++k) {
     const std::vector<uint8_t> top = layer(k);
     std::vector<double> level(top.begin(), top.end());
     auto lw = static_cast<uint32_t>(w), lh = static_cast<uint32_t>(h);
-    for (uint32_t mip = 0; mip < levels; ++mip) {
-      // A row is padded to 256 bytes, as a copy's rows must be.
+    for (uint32_t mip = 0; mip < p.levels; ++mip) {
       const size_t row = (lw * ch + 255u) / 256u * 256u;
       std::vector<uint8_t> bytes(row * lh, 0);
       for (uint32_t y = 0; y < lh; ++y) {
@@ -122,16 +124,8 @@ wgpu::Texture upload_array(gpu::Device& device, const char* label, int w, int h,
               std::lround(std::clamp(level[static_cast<size_t>(y) * lw * ch + x], 0.0, 255.0)));
         }
       }
-      wgpu::TexelCopyTextureInfo dst{};
-      dst.texture = texture;
-      dst.mipLevel = mip;
-      dst.origin = {0, 0, static_cast<uint32_t>(k)};
-      wgpu::TexelCopyBufferLayout copy{};
-      copy.bytesPerRow = static_cast<uint32_t>(row);
-      copy.rowsPerImage = lh;
-      const wgpu::Extent3D size{lw, lh, 1};
-      device.queue.WriteTexture(&dst, bytes.data(), bytes.size(), &copy, &size);
-      if (mip + 1 == levels) break;
+      p.bytes[static_cast<size_t>(k)].push_back(std::move(bytes));
+      if (mip + 1 == p.levels) break;
       const uint32_t nw = std::max(1u, lw / 2), nh = std::max(1u, lh / 2);
       std::vector<double> next(static_cast<size_t>(nw) * nh * ch);
       for (uint32_t y = 0; y < nh; ++y) {
@@ -150,6 +144,38 @@ wgpu::Texture upload_array(gpu::Device& device, const char* label, int w, int h,
       level = std::move(next);
       lw = nw;
       lh = nh;
+    }
+  }
+  return p;
+}
+
+// The prepared bytes as an array texture of `format`.
+wgpu::Texture upload_array(gpu::Device& device, const char* label, const Prepared& p,
+                           wgpu::TextureFormat format) {
+  wgpu::TextureDescriptor td{};
+  td.label = label;
+  td.size = {static_cast<uint32_t>(p.w), static_cast<uint32_t>(p.h),
+             static_cast<uint32_t>(p.layers)};
+  td.format = format;
+  td.mipLevelCount = p.levels;
+  td.usage = wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst;
+  wgpu::Texture texture = device.device.CreateTexture(&td);
+  const auto ch = static_cast<uint32_t>(p.channels);
+  for (int k = 0; k < p.layers; ++k) {
+    auto lw = static_cast<uint32_t>(p.w), lh = static_cast<uint32_t>(p.h);
+    for (uint32_t mip = 0; mip < p.levels; ++mip) {
+      const std::vector<uint8_t>& bytes = p.bytes[static_cast<size_t>(k)][mip];
+      wgpu::TexelCopyTextureInfo dst{};
+      dst.texture = texture;
+      dst.mipLevel = mip;
+      dst.origin = {0, 0, static_cast<uint32_t>(k)};
+      wgpu::TexelCopyBufferLayout copy{};
+      copy.bytesPerRow = (lw * ch + 255u) / 256u * 256u;
+      copy.rowsPerImage = lh;
+      const wgpu::Extent3D size{lw, lh, 1};
+      device.queue.WriteTexture(&dst, bytes.data(), bytes.size(), &copy, &size);
+      lw = std::max(1u, lw / 2);
+      lh = std::max(1u, lh / 2);
     }
   }
   return texture;
@@ -175,27 +201,28 @@ std::vector<uint8_t> moon_kind_colour(int kind) {
 MoonMaps create_moon_maps(gpu::Device& device) {
   const int kinds = static_cast<int>(moon_kinds().size());
   MoonMaps m;
-  // A map that does not decode is drawn at its mean, as the kind's tint alone.
-  m.albedo = upload_array(device, "sky.moon_maps", kMoonMapsWidth, kMoonMapsHeight, kinds,
-                          wgpu::TextureFormat::R8Unorm, 1, [](int k) {
-                            std::vector<uint8_t> map = moon_kind_map(k);
-                            if (map.empty()) {
-                              map.assign(static_cast<size_t>(kMoonMapsWidth) * kMoonMapsHeight,
-                                         static_cast<uint8_t>(kMoonMapMean));
-                            }
-                            return map;
-                          });
-  m.colour = upload_array(device, "sky.moon_colours", kMoonColourWidth, kMoonColourHeight, kinds,
-                          wgpu::TextureFormat::RGBA8Unorm, 4, [](int k) {
-                            const std::vector<uint8_t> rgb = moon_kind_colour(k);
-                            const size_t n =
-                                static_cast<size_t>(kMoonColourWidth) * kMoonColourHeight;
-                            std::vector<uint8_t> rgba(n * 4, 128);
-                            for (size_t i = 0; i < n && !rgb.empty(); ++i) {
-                              for (size_t c = 0; c < 3; ++c) rgba[i * 4 + c] = rgb[i * 3 + c];
-                            }
-                            return rgba;
-                          });
+  // A map that does not decode is drawn at its mean, as the kind's tint alone. The maps are
+  // decoded and their mips worked once a process (about 0.1 s): every world's sky uploads them.
+  static const Prepared albedo =
+      prepare_array(kMoonMapsWidth, kMoonMapsHeight, kinds, 1, [](int k) {
+        std::vector<uint8_t> map = moon_kind_map(k);
+        if (map.empty())
+          map.assign(static_cast<size_t>(kMoonMapsWidth) * kMoonMapsHeight,
+                     static_cast<uint8_t>(kMoonMapMean));
+        return map;
+      });
+  static const Prepared colour =
+      prepare_array(kMoonColourWidth, kMoonColourHeight, kinds, 4, [](int k) {
+        const std::vector<uint8_t> rgb = moon_kind_colour(k);
+        const size_t n = static_cast<size_t>(kMoonColourWidth) * kMoonColourHeight;
+        std::vector<uint8_t> rgba(n * 4, 128);
+        for (size_t i = 0; i < n && !rgb.empty(); ++i) {
+          for (size_t c = 0; c < 3; ++c) rgba[i * 4 + c] = rgb[i * 3 + c];
+        }
+        return rgba;
+      });
+  m.albedo = upload_array(device, "sky.moon_maps", albedo, wgpu::TextureFormat::R8Unorm);
+  m.colour = upload_array(device, "sky.moon_colours", colour, wgpu::TextureFormat::RGBA8Unorm);
   m.albedo_view = array_view(m.albedo, kinds);
   m.colour_view = array_view(m.colour, kinds);
   return m;
