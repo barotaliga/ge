@@ -31,8 +31,8 @@ struct GpuLight {
   float colour[4];
   float info[4];
   float spot[4];  // xyz the way an aimed light points, w its cone's edge's cosine (-2: no cone)
-  // x: its moving casters' cube's first layer (bsp_draw.hpp's caster cubes; -1: none), y: its
-  // source's radius, m (how soft its shadows are), zw: 0
+  // x: its moving casters' cube's row in their atlas (bsp_draw.hpp's caster cubes; -1: none), y:
+  // its source's radius, m (how soft its shadows are), zw: 0
   float more[4];
 };
 

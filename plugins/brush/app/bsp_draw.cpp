@@ -279,10 +279,17 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
   d.cubes = depth_array(device, "bsp.cubes", kCubeSize, kMaxShadowed * 6);
   for (uint32_t k = 0; k < kMaxShadowed * 6; ++k) d.cube_layers.push_back(layer_view(d.cubes, k));
   d.cubes_view = array_view(d.cubes, kMaxShadowed * 6);
-  d.caster_cubes = depth_array(device, "bsp.casters", kCasterSize, kCasterLights * 6);
-  for (uint32_t k = 0; k < kCasterLights * 6; ++k)
-    d.caster_layers.push_back(layer_view(d.caster_cubes, k));
-  d.caster_cubes_view = array_view(d.caster_cubes, kCasterLights * 6);
+  {
+    // One atlas, a row a light and a column a face, so a frame draws them all in one pass.
+    wgpu::TextureDescriptor desc{};
+    desc.label = "bsp.casters";
+    desc.size = {kCasterSize * 6, kCasterSize * uint32_t(kCasterLights), 1};
+    desc.format = r::kDepthFormat;
+    desc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    d.caster_cubes = device.device.CreateTexture(&desc);
+    d.caster_target = layer_view(d.caster_cubes, 0);
+    d.caster_cubes_view = array_view(d.caster_cubes, 1);
+  }
   d.caster_vertices = r::make_buffer(device, "bsp.casters", sizeof(float) * 3 * kMaxCasterVerts,
                                      wgpu::BufferUsage::Vertex);
   d.orthos = depth_array(device, "bsp.orthos", kOrthoSize, kOrthos);
@@ -720,7 +727,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       if (d.caster_lights >= kCasterLights) break;
       GpuLight& g = d.frame_lights[c];
       const int n = d.caster_lights++;
-      g.more[0] = float(n * 6);
+      g.more[0] = float(n);
       for (int f = 0; f < 6; ++f) {
         GpuJob j = d.frame_jobs[size_t(g.info[0]) + size_t(f)];  // the world cube's face
         set4(j.o, g.pos[0], g.pos[1], g.pos[2], g.pos[3]);
@@ -890,7 +897,7 @@ void encode_bsp_shadows(const BspDraw& d, const gpu::PipelineSet& pipelines, r::
   // that moved (the zenith's also for the lightning, and the fall's, with the weather on); timed
   // together as "bsp.shadows".
   const int cube_passes = lights ? int(d.fresh_slots.size()) * 6 : 0;
-  const int caster_passes = lights ? d.caster_lights * 6 : 0;
+  const int caster_passes = lights && d.caster_lights > 0 ? 1 : 0;
   int parts = cube_passes + caster_passes;
   for (uint32_t k = 0; k < kOrthos; ++k) parts += d.ortho_fresh[k] ? 1 : 0;
   if (parts == 0) rec.compute(encoder, "bsp.shadows").End();
@@ -922,22 +929,29 @@ void encode_bsp_shadows(const BspDraw& d, const gpu::PipelineSet& pipelines, r::
           shadow_pass(d.cube_layers[size_t(slot) * 6 + size_t(f)], uint32_t(slot * 6 + f), true);
     for (uint32_t k = 0; k < kOrthos; ++k)
       if (d.ortho_fresh[k]) shadow_pass(d.ortho_layers[k], first_ortho + k, false);
-    // The moving casters, every frame: each lit cube's six faces of them alone.
-    const uint32_t first_caster = first_ortho + kOrthos;
-    for (int c = 0; c < caster_passes; ++c) {
+    // The moving casters, every frame: each lit cube's six faces of them alone, every face its
+    // tile of the atlas in one pass (a pass a face cost 0.1 ms each on a tiled GPU, whatever it
+    // drew).
+    if (caster_passes > 0) {
+      const uint32_t first_caster = first_ortho + kOrthos;
       wgpu::RenderPassDepthStencilAttachment depth{};
-      depth.view = d.caster_layers[size_t(c)];
+      depth.view = d.caster_target;
       depth.depthLoadOp = wgpu::LoadOp::Clear;
       depth.depthStoreOp = wgpu::StoreOp::Store;
       depth.depthClearValue = 1.0f;
       wgpu::RenderPassDescriptor desc{};
       desc.depthStencilAttachment = &depth;
       wgpu::RenderPassEncoder pass = rec.render_part(encoder, desc, "bsp.shadows", part++, parts);
-      ++rec.current().draws;
       pass.SetPipeline(pipelines.render(d.p_caster));
       pass.SetBindGroup(0, d.shadow_group);
       pass.SetVertexBuffer(0, d.caster_vertices);
-      pass.Draw(d.caster_count, 1, 0, first_caster + uint32_t(c));
+      const float size = float(kCasterSize);
+      for (int n = 0; n < d.caster_lights; ++n)
+        for (int f = 0; f < 6; ++f) {
+          pass.SetViewport(float(f) * size, float(n) * size, size, size, 0, 1);
+          ++rec.current().draws;
+          pass.Draw(d.caster_count, 1, 0, first_caster + uint32_t(n * 6 + f));
+        }
       pass.End();
     }
   }

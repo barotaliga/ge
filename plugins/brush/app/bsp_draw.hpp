@@ -157,7 +157,8 @@ inline constexpr uint32_t kOrthos = 3;  // the sun's, the zenith's and the fall'
 // over (players, monsters, the first-person player who is not drawn), drawn each frame into a cube
 // of their own for each of the kCasterLights shadowed lights that light them most (the light each
 // puts on the middle of their box), and read beside the world's kept cube, the nearer of the two
-// the shadow: the shadows that show. A frame's casters are kMaxCasterVerts vertices at most.
+// the shadow: the shadows that show. The cubes are one atlas, a light's six faces a row, drawn in
+// one pass. A frame's casters are kMaxCasterVerts vertices at most.
 inline constexpr int kCasterLights = 8;
 inline constexpr uint32_t kCasterSize = 384;  // a caster cube's face, texels a side
 inline constexpr uint32_t kMaxCasterVerts = 3 * 24576;
@@ -239,9 +240,8 @@ struct BspDraw {
   std::vector<CasterBox> caster_boxes;
   uint32_t caster_count = 0;  // vertices uploaded this frame
   wgpu::Buffer caster_vertices;
-  wgpu::Texture caster_cubes;
-  std::vector<wgpu::TextureView> caster_layers;
-  wgpu::TextureView caster_cubes_view;
+  wgpu::Texture caster_cubes;  // the atlas: a light a row, a face a column
+  wgpu::TextureView caster_target, caster_cubes_view;
   int caster_lights = 0;  // this frame's lights with a caster cube (prepare_bsp)
   uint32_t p_caster = 0;
   wgpu::TextureView ortho_layers[kOrthos];

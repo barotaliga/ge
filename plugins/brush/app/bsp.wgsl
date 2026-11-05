@@ -98,8 +98,8 @@ struct Light {
   info: vec4f,
   // xyz: the way an aimed light points; w: its cone's edge's cosine (-2: lit all round)
   spot: vec4f,
-  // x: its moving casters' cube's first layer (-1: none); y: its source's radius, m (how soft
-  // its shadows are)
+  // x: its moving casters' cube's row in their atlas (-1: none); y: its source's radius, m (how
+  // soft its shadows are)
   more: vec4f,
 };
 
@@ -131,7 +131,8 @@ struct Mover {
 // THE LIGHT GRID (bsp_draw.hpp): each cell's first entry (the last the lists' end), then the
 // lists of the lights that can reach the cell, in the lights' order
 @group(1) @binding(15) var<storage, read> grid: array<u32>;
-// The moving casters' cubes (bsp_draw.hpp's kCasterLights of them), each face as the world's.
+// The moving casters' cubes (bsp_draw.hpp's kCasterLights of them): one atlas in layer 0, a light's
+// six faces a row, each face as the world's.
 @group(1) @binding(16) var caster_cubes: texture_depth_2d_array;
 // bsp_draw.hpp's kGridX, kGridY, kGridZ and kGridCells
 const kGridDims = vec3f(32.0, 16.0, 32.0);
@@ -559,6 +560,16 @@ fn cube_uv(q: vec3f) -> vec3f {
   return vec3f(0.5 + 0.5 * u, 0.5 - 0.5 * v, f32(f));
 }
 
+// Where face c.z of the casters' cube on row `row` holds c.xy in their atlas: kept half a texel
+// inside the face, so a compare's 2 x 2 never reads the next face's tile.
+fn caster_uv(c: vec3f, row: i32) -> vec2f {
+  let dims = vec2f(textureDimensions(caster_cubes));
+  let face = dims.x / 6.0;
+  let half = 0.5 / face;
+  let uv = clamp(c.xy, vec2f(half), vec2f(1.0 - half));
+  return (vec2f(c.z, f32(row)) + uv) * face / dims;
+}
+
 // The nearest thing either cube saw along `q`, a share of the reach.
 fn cube_nearest(q: vec3f, base: i32, cbase: i32) -> f32 {
   let c = cube_uv(q);
@@ -567,8 +578,7 @@ fn cube_nearest(q: vec3f, base: i32, cbase: i32) -> f32 {
                       base + i32(c.z), 0);
   if (cbase >= 0) {
     let csize = vec2f(textureDimensions(caster_cubes));
-    d = min(d, textureLoad(caster_cubes, vec2i(clamp(c.xy, vec2f(0.0), vec2f(0.9999)) * csize),
-                           cbase + i32(c.z), 0));
+    d = min(d, textureLoad(caster_cubes, vec2i(caster_uv(c, cbase) * csize), 0, 0));
   }
   return d;
 }
@@ -580,7 +590,7 @@ fn cube_lit(q: vec3f, ref_depth: f32, base: i32, cbase: i32) -> vec2f {
   let world = textureSampleCompareLevel(cubes, shadow_cmp, c.xy, base + i32(c.z), ref_depth);
   var both = world;
   if (cbase >= 0) {
-    both *= textureSampleCompareLevel(caster_cubes, shadow_cmp, c.xy, cbase + i32(c.z), ref_depth);
+    both *= textureSampleCompareLevel(caster_cubes, shadow_cmp, caster_uv(c, cbase), 0, ref_depth);
   }
   return vec2f(world, both);
 }
