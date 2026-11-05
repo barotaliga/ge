@@ -11,19 +11,20 @@
 //   6 spread    the pellets' cone   7 reach   a cut's, a beam's or a pellet's reach; a missile's speed
 //   8 life      s a missile flies   9 splash  a blast's radius damage; a beam's discharge a cell
 //  10 view      its view model     11 fire sound   12 missile model   13 land sound  14 blast sound
+//  15 pickup    the model it lies on a map as          16 pickup ammo   the ammunition with it
 
 // --- the arsenal ---
 
 // Our own rows: what a slot holds when the game gives none.
 string(float slot) weapon_own_row = {
-  if (slot == 1) return "melee none 0 0.5 1 20 0 64 0 0 progs/v_axe.mdl weapons/ax1.wav - player/axhit2.wav -";
-  if (slot == 2) return "pellets shells 1 0.5 6 4 0.04 2048 0 0 progs/v_shot.mdl weapons/guncock.wav - - -";
-  if (slot == 3) return "pellets shells 2 0.7 14 4 0.07 2048 0 0 progs/v_shot2.mdl weapons/shotgn2.wav - - -";
-  if (slot == 4) return "spike nails 1 0.1 1 9 0 1000 6 0 progs/v_nail.mdl weapons/rocket1i.wav progs/spike.mdl - -";
-  if (slot == 5) return "spike nails 2 0.1 1 18 0 1000 6 0 progs/v_nail2.mdl weapons/spike2.wav progs/s_spike.mdl - -";
-  if (slot == 6) return "grenade rockets 1 0.6 1 0 0 600 2.5 120 progs/v_rock.mdl weapons/grenade.wav progs/grenade.mdl weapons/bounce.wav weapons/r_exp3.wav";
-  if (slot == 7) return "rocket rockets 1 0.8 1 100 0 1000 5 120 progs/v_rock2.mdl weapons/sgun1.wav progs/missile.mdl - weapons/r_exp3.wav";
-  return "beam cells 1 0.1 1 30 0 600 0 35 progs/v_light.mdl weapons/lhit.wav - - -";
+  if (slot == 1) return "melee none 0 0.5 1 20 0 64 0 0 progs/v_axe.mdl weapons/ax1.wav - player/axhit2.wav - - 0";
+  if (slot == 2) return "pellets shells 1 0.5 6 4 0.04 2048 0 0 progs/v_shot.mdl weapons/guncock.wav - - - - 0";
+  if (slot == 3) return "pellets shells 2 0.7 14 4 0.07 2048 0 0 progs/v_shot2.mdl weapons/shotgn2.wav - - - progs/g_shot.mdl 5";
+  if (slot == 4) return "spike nails 1 0.1 1 9 0 1000 6 0 progs/v_nail.mdl weapons/rocket1i.wav progs/spike.mdl - - progs/g_nail.mdl 30";
+  if (slot == 5) return "spike nails 2 0.1 1 18 0 1000 6 0 progs/v_nail2.mdl weapons/spike2.wav progs/s_spike.mdl - - progs/g_nail2.mdl 30";
+  if (slot == 6) return "grenade rockets 1 0.6 1 0 0 600 2.5 120 progs/v_rock.mdl weapons/grenade.wav progs/grenade.mdl weapons/bounce.wav weapons/r_exp3.wav progs/g_rock.mdl 5";
+  if (slot == 7) return "rocket rockets 1 0.8 1 100 0 1000 5 120 progs/v_rock2.mdl weapons/sgun1.wav progs/missile.mdl - weapons/r_exp3.wav progs/g_rock2.mdl 5";
+  return "beam cells 1 0.1 1 30 0 600 0 35 progs/v_light.mdl weapons/lhit.wav - - - progs/g_light.mdl 15";
 };
 
 // The rows in force, and the two models of each kept for as long as the map runs (a model's name

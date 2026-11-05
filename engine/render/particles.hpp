@@ -10,7 +10,9 @@
 //   wind, so a powder cloud drifts off downwind), and
 //   the ground (the terrain's heights, render/terrain.hpp): a grain that comes down on the snow is
 //   gone, a fine one comes to rest on it and fades (one under the snow and rising is coming up out
-//   of it: a ski sinks into soft snow, and what it throws starts there). `step_particle` is its CPU
+//   of it: a ski sinks into soft snow, and what it throws starts there); and a particle's own
+//   `floor_y`, where a game says (a chip knocked off a wall hops on the floor below and lies
+//   there). `step_particle` is its CPU
 //   twin, which the test holds the pass to.
 // - THE DRAW ("particles", after the sky, before the resolve): one quad a slot, a dead one folded
 //   away in the vertex stage. A particle is a STREAK along its motion over `streak` s (a fast grain
@@ -72,14 +74,23 @@ struct Particle {
   float cool_s;                        // its heat's (its colour's) fall, e-folding s
   float tint[3] = {1.0f, 1.0f, 1.0f};  // the colour its albedo reflects (1, 1, 1: grey)
   float grow = 0;                      // m across it gains a second (a puff of smoke spreading)
+  // A FLOOR of its own (world y, m: the floor under where a game threw it, in a world the pool has
+  // no ground for): coming down on it, it hops back up at `bounce` of its speed (the rest of its
+  // way along the floor slowed by kFloorSlide) while it falls faster than kFloorRest m/s, else it
+  // lies there and fades. Below every floor by default: it never lands.
+  float floor_y = -1e9f;
+  float bounce = 0;
+  float pad_[2] = {0, 0};  // particles.wgsl's 16-byte alignment
 };
-static_assert(sizeof(Particle) == 80, "match particles.wgsl's Particle");
+static_assert(sizeof(Particle) == 96, "match particles.wgsl's Particle");
+inline constexpr float kFloorRest = 0.35f;   // m/s: slower than this down, it lies still
+inline constexpr float kFloorSlide = 0.55f;  // its way along the floor kept at a hop
 
 inline constexpr double kGravity = 9.81;          // m/s²
 inline constexpr double kSparkEmissivity = 0.35;  // a glowing particle's light over a blackbody's
 
-// THE FLIGHT of one particle over `dt` s (no ground) in air moving at `air` m/s (null: still): the
-// CPU twin of particles_sim.wgsl's `fly`.
+// THE FLIGHT of one particle over `dt` s (no terrain; its own floor) in air moving at `air` m/s
+// (null: still): the CPU twin of particles_sim.wgsl's `fly` and its floor.
 void step_particle(Particle& p, float dt, const float air[3] = nullptr);
 
 struct ParticleSettings {

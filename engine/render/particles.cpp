@@ -42,6 +42,17 @@ void step_particle(Particle& p, float dt, const float air[3]) {
     p.p[k] += p.v[k] * dt;
   }
   p.age += dt;
+  // Its own floor (particle_types.wgsl's on_floor).
+  if (p.p[1] >= p.floor_y || p.v[1] >= 0) return;
+  p.p[1] = p.floor_y;
+  if (-p.v[1] * p.bounce > kFloorRest) {
+    p.v[0] *= kFloorSlide;
+    p.v[1] = -p.v[1] * p.bounce;
+    p.v[2] *= kFloorSlide;
+  } else {
+    p.v[0] = p.v[1] = p.v[2] = 0;
+    p.age = std::max(p.age, p.life * 0.7f);
+  }
 }
 
 namespace {
