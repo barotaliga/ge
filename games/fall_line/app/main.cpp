@@ -363,6 +363,17 @@ static int run_main(int argc, char** argv) {
                                             fall_line::app::frame_options(set));
   if (!frame) return 1;
   fall_line::app::show_village(*device, *frame, fall_line::controls::hand_state(*hand).village);
+  // The picture's settings (every r_ cvar, r_quality's ladder among them), watched by their
+  // revisions: a change is put on the live frame (frame.hpp's set_picture).
+  std::vector<const ge::console::Cvar*> picture_cvars;
+  for (const ge::console::Cvar* c : console.cvars().sorted())
+    if (c->name.rfind("r_", 0) == 0) picture_cvars.push_back(c);
+  const auto picture_revision = [&] {
+    uint32_t sum = 0;
+    for (const ge::console::Cvar* c : picture_cvars) sum += c->revision;
+    return sum;
+  };
+  uint32_t picture_rev = picture_revision();
 
   // The shell (menus.hpp): the front door first, its bot skiing behind it, unless the run is
   // asked for at once. The options start from their cvars.
@@ -543,6 +554,16 @@ static int run_main(int argc, char** argv) {
       if (input.height_px > 0) {
         fall_line::controls::hand_screen(
             *hand, static_cast<float>(input.width_px) / static_cast<float>(input.height_px));
+      }
+    }
+    if (const uint32_t rev = picture_revision(); rev != picture_rev) {
+      picture_rev = rev;
+      const fall_line::app::PictureChange change =
+          fall_line::app::set_picture(*device, *frame, fall_line::app::frame_options(set));
+      if (!change.later.empty()) {
+        out::status("fall_line: " + change.later +
+                    " take effect at the next start (each is a pipeline of its own, made at the "
+                    "load); the rest of the picture changed now");
       }
     }
 

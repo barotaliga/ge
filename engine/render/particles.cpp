@@ -48,14 +48,20 @@ void step_particle(Particle& p, float dt, const float air[3]) {
   // Its own floor (particle_types.wgsl's on_floor).
   if (p.p[1] >= p.floor_y || p.v[1] >= 0) return;
   p.p[1] = p.floor_y;
-  if (-p.v[1] * p.bounce > kFloorRest) {
+  if (-p.v[1] * p.bounce > kFloorRest && p.hops < max_hops(p)) {
     p.v[0] *= kFloorSlide;
     p.v[1] = -p.v[1] * p.bounce;
     p.v[2] *= kFloorSlide;
+    p.hops += 1;
   } else {
     p.v[0] = p.v[1] = p.v[2] = 0;
     p.age = std::max(p.age, p.life * 0.7f);
   }
+}
+
+float max_hops(const Particle& p) {
+  const float x = p.size * 977.0f + p.life * 131.0f;
+  return x - std::floor(x) > 0.66f ? kMaxHops + 1 : kMaxHops;
 }
 
 void collide_particle(Particle& p, const float at[3], const float n[3]) {
@@ -68,8 +74,9 @@ void collide_particle(Particle& p, const float at[3], const float n[3]) {
   const float b = p.bounce > 0 ? p.bounce : kSurfaceBounce;
   float along[3];
   for (int k = 0; k < 3; ++k) along[k] = p.v[k] - vn * n[k];
-  if (-vn * b > kFloorRest) {
+  if (-vn * b > kFloorRest && p.hops < max_hops(p)) {
     for (int k = 0; k < 3; ++k) p.v[k] = along[k] * kFloorSlide - vn * b * n[k];
+    p.hops += 1;
   } else if (n[1] > 0.6f) {  // a floor: it lies there and fades
     p.v[0] = p.v[1] = p.v[2] = 0;
     p.age = std::max(p.age, p.life * 0.7f);

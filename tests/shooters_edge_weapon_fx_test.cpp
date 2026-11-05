@@ -177,3 +177,43 @@ TEST(the_rockets_motor_lights_the_world_from_its_nozzle_and_wavers) {
   CHECK(hi > lo * 1.1 && lo >= 0.8 * fx::kMotorLevel - 1e-9 && hi <= fx::kMotorLevel + 1e-9);
   CHECK(fx::motor_light(at, dir, 3, 1.2).colour[0] != fx::motor_light(at, dir, 4, 1.2).colour[0]);
 }
+
+TEST(a_nails_sparks_off_metal_flick_a_light_that_fades_at_once) {
+  const double at[3] = {1, 2, 3};
+  fx::Light first, later, gone;
+  CHECK(fx::spark_light(at, 0.0, &first) && fx::spark_light(at, 0.05, &later));
+  CHECK(first.pos[0] == 1 && first.radius == 1.5);
+  CHECK(later.colour[0] < first.colour[0] && first.colour[0] > first.colour[2]);  // warm, fading
+  CHECK(!fx::spark_light(at, fx::kSparkLightS, &gone) && !fx::spark_light(at, -0.01, &gone));
+}
+
+TEST(a_rocket_pops_drops_and_settles_onto_its_line) {
+  const double dir[3] = {0, 0, 1};
+  fx::RocketLaunch still;
+  still.seed = 9;
+  double off[3];
+  fx::launch_offset(0, dir, still, off);
+  CHECK(off[0] == 0 && off[1] == 0 && off[2] == 0);  // at the muzzle, on its line
+  fx::launch_offset(0.1, dir, still, off);
+  CHECK(off[2] < -0.2 && off[1] < -0.1);  // behind its true place and under it
+  CHECK(std::abs(off[0]) < 0.05);         // a waver at most across it
+  fx::launch_offset(fx::kLaunchS, dir, still, off);
+  CHECK(off[0] == 0 && off[1] == 0 && off[2] == 0);  // on its line again
+  // The shooter's sway: a turn to the left leaves the rocket right of the line, his strafe carries
+  // it with him; capped.
+  double kick[3];
+  const double v[3] = {0, 0, 0};
+  fx::launch_kick(dir, v, -2.0, 0, kick);
+  CHECK(kick[0] > 0.1);  // right of a line along +z is +x
+  const double strafe[3] = {-3, 0, 2};
+  fx::launch_kick(dir, strafe, 0, 0, kick);
+  CHECK(kick[0] < 0 && std::abs(kick[2]) < 1e-12);  // across the line only
+  fx::launch_kick(dir, v, 100.0, 50.0, kick);
+  CHECK(std::sqrt(kick[0] * kick[0] + kick[1] * kick[1] + kick[2] * kick[2]) <= fx::kKickM + 1e-9);
+  fx::RocketLaunch swayed = still;
+  swayed.kick[0] = 0.4;
+  double a[3], b[3];
+  fx::launch_offset(0.12, dir, still, a);
+  fx::launch_offset(0.12, dir, swayed, b);
+  CHECK(b[0] - a[0] > 0.3);
+}

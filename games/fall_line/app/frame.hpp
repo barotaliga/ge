@@ -276,10 +276,15 @@ struct GameFrame {
   ge::render::Taa taa;
   ge::render::Bloom bloom;
   ge::render::Lens lens;        // made only when FrameOptions::lens has a half on
+  bool lens_ready = false;      // its pipelines were made at the load (set_picture turns it on)
   ge::render::MotionBlur blur;  // made only with FrameOptions::look.motion_blur above 0
   ge::render::Ao ao;            // made only with FrameOptions::ao's strength above 0
   ge::render::Dof dof;          // made only with FrameOptions::dof's strength above 0
   ge::render::Post post;
+  // THE LADDER'S READINESS (set_picture): the bloom's share its pipelines were made for (the
+  // options', or the default's when it was off at the load), and the falling snow's capacity.
+  double bloom_ready = 0;
+  uint32_t fall_capacity = 0;
   ge::render::UiPass ui;
   ge::render::InstancePipelines instancing;
   ge::render::InstanceFamily forest, figures, crowd;
@@ -360,6 +365,21 @@ void show_village(ge::gpu::Device& device, GameFrame& frame,
 
 // New targets for outputs of width x height (a resized window); the history starts over.
 void resize(ge::gpu::Device& device, GameFrame& frame, uint32_t width, uint32_t height);
+
+// A QUALITY LADDER STOP CHANGED ON A LIVE FRAME (app/ladder.hpp's rows: the fields `apply_picture`
+// sets), with no pipeline made after the load: the spray, the falling snow (up to the capacity
+// made at the load), the cloud's march, its quarter and the reach are each frame's; a new
+// resolution makes the render-size targets again, a new shadow size the sun's maps (rebound into
+// what receives them), the bloom on or off picks the post pass's pipeline with or without it (both
+// made at the load), the lens goes off (and on when it was made at the load). The snow's material
+// and the trails are each a terrain pipeline and maps of their own: they take effect when the
+// frame is made again, and are named in `later`.
+struct PictureChange {
+  bool targets = false;  // the render-size targets were made again (the history starts over)
+  bool shadows = false;  // the sun's shadow maps were made again
+  std::string later;     // the settings kept until the frame is made again, by name; empty: none
+};
+PictureChange set_picture(ge::gpu::Device& device, GameFrame& frame, const FrameOptions& next);
 
 // The camera cut: the next frame keeps nothing of the last (no motion, no history, the sun's
 // cascades drawn again round the new camera). The tracks stay: they are the run's, not the
