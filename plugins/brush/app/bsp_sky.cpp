@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include "core/num_text.hpp"
 #include "core/solar.hpp"
@@ -322,6 +323,43 @@ void dress_sky(render::FrameView& v, const SkyPick& p, double top_y, double t) {
                           render::kMoonMeanKm};
   render::set_night(v, moon, kLatitude, p.sidereal);
   v.adapt_cd = p.adapt_cd;
+}
+
+const render::FarLandKind* far_land_for(const SkyPick& pick, std::string_view map,
+                                        std::string_view word, bool* known) {
+  if (known != nullptr) *known = true;
+  if (word == "off") return nullptr;
+  if (word != "auto") {
+    const render::FarLandKind* k = render::find_far_land(word);
+    if (known != nullptr) *known = k != nullptr;
+    return k;
+  }
+  const std::string_view t = pick.type;
+  if (t == "dust") return render::find_far_land("sierra");
+  if (t == "alien" || t == "violet" || t == "toxic" || t == "nebula")
+    return render::find_far_land("xeno");
+  if (t == "hell" || t == "ash") return render::find_far_land("ember");
+  if (t == "ice") return render::find_far_land("rime");
+  // The Earth's air, and a black sky (a plain night's, though it picks the airless type): one of
+  // the Earth's lands, dealt off the name.
+  std::vector<const render::FarLandKind*> earthly;
+  for (const render::FarLandKind& k : render::far_land_kinds()) {
+    if (!k.alien) earthly.push_back(&k);
+  }
+  const double u = hash01(seed_of(map), 61);
+  return earthly[std::min(earthly.size() - 1, static_cast<size_t>(u * double(earthly.size())))];
+}
+
+render::FarSite far_site_of(const Scene& scene, std::string_view map) {
+  render::FarSite s;
+  s.x = 0.5 * (scene.mins[0] + scene.maxs[0]);
+  s.z = 0.5 * (scene.mins[2] + scene.maxs[2]);
+  const double hx = 0.5 * (scene.maxs[0] - scene.mins[0]),
+               hz = 0.5 * (scene.maxs[2] - scene.mins[2]);
+  s.radius_m = std::sqrt(hx * hx + hz * hz) + 4;
+  s.floor_y = scene.mins[1];
+  s.seed = 1 + (seed_of(map) % 9973);
+  return s;
 }
 
 }  // namespace ge::brush::app

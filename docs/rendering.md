@@ -545,7 +545,7 @@ frame a list of `MorphDraw`s.
 - **Upload once.** Every frame of every model goes into one storage buffer, two `vec4` a vertex.
   The triangles and the coordinates go into two more. The skins are shelf-packed into one
   2048-wide atlas, tallest first, a texel apart (`pack_morph_atlas`). A frame writes only its
-  draws: 160 bytes each, at most `kMaxMorphDraws`.
+  draws: 224 bytes each, at most `kMaxMorphDraws`.
 - **Frames blended on the GPU.** The vertex stage pulls each vertex by index and mixes the draw's
   two frames by its share. It does the same for the frame before, so a swinging limb carries its
   own motion into the motion target and TAA keeps it sharp. A model with frames at 10 a second
@@ -568,12 +568,27 @@ frame a list of `MorphDraw`s.
 - **The game's own light.** `outdoor` is the share of the frame's sun and sky. `ambient` and a
   `shade` from one direction are what a game samples where the model stands: an indoor map's
   light at its feet. Glowing texels add `glow` times the scene's white, whatever the light.
+- **The warp** (`MorphWarp`, `wgsl/warp.wgsl`, shared with the view-model pass): a draw coming
+  into being or going out of it, a spawn or a teleport, as one share `shown` (1 whole, 0 gone). A
+  fragment is drawn where a field lies under `shown`. The field is two octaves of value noise,
+  fixed to the model's own frame so it stays on the body as it turns, plus the point's place along
+  a sweep axis, so the far end comes in first and the near end goes out first. Within `kWarpEdge`
+  of the cut the surface turns to ash: its light greyed and tinted by `ash`. That is the knobs at
+  rest, a figure crumbling to dust; the game throws its flakes where the cut passes, reading the
+  same field on the CPU (`warp_field`). Other looks are knobs: `edge` burns the band in a light of
+  its own, `pinch` draws the figure into a column stretched up, `shimmer` runs bands up it. A
+  warped fragment is marked reactive, so TAA does not trail the cut. The view-model pass reads
+  the same warp along an axis of the held frame, so a spawn assembles the gun in the hands.
+  Shooter's Edge times it at 0.7 s arriving and 0.8 s leaving
+  (`games/shooters_edge/client/warps.hpp`).
 - The draws go into the HDR and motion targets after the opaque world. Depth is tested and
   written (reversed z) and back faces are culled.
 
-The CPU twins (`pose_morph`, `morph_texel`) are the shader's arithmetic for
-`tests/render_morph_test.cpp`. The `gpu-morph` lab draws a runner in four teams, sharp beside
-smooth, its frames and in-betweens, at dusk and in a game's own light, and times 64 of them.
+The CPU twins (`pose_morph`, `morph_texel`, `warp_vertex`, `warp_field`, `warp_cut`) are the shader's arithmetic
+for `tests/render_morph_test.cpp`. The `gpu-morph` lab draws a runner in four teams, sharp beside
+smooth, its frames and in-betweens, at dusk, in a game's own light and warping in as dust and as
+a beam, checks that a
+warp gone draws nothing and one whole draws the plain runner, and times 64 of them.
 **Not yet:** the local lights of the lighting pass, shadows cast by the figures, and the classic
 model reader (it lands with its plugin).
 
@@ -1373,6 +1388,59 @@ The `night` lab draws it on seed 38's vista: the snow's luma falls from 194 at t
 under to 67 at fourteen, a full moon's snow is 71, a quarter's 28 and a new moon's 10, the
 handover moves the snow by 0.1 %, a moonless sky draws 319 star pixels, and the sky tables'
 twilight matches `twilight_lux` within 1 % down to twelve degrees under.
+
+## The far land
+
+A small world closed under the sky (a classic map's halls under their sky faces) stands in
+nothing: through the sky faces there was only sky. **The far land** (`render/far_land.hpp`, M8f16)
+is the land round it that is never walked, a "3D skybox": ranges of mountains to the horizon,
+lakes and seas, snow, meadows, forest and rock, seen once the eye is high enough to look over the
+walls.
+
+- **Real geometry, not a picture.** It is a mesh at its true size (90 km out), drawn with the
+  frame's camera, so it has true parallax as the eye climbs, it is lit by the frame's key light
+  and sky (the sun, the moon at night, the deck's flat light), it stands in the cloud (the clouds
+  march to its depth) and goes through the frame's haze. A cube map painted once could do none of
+  that with a sky that turns through the hours.
+- **The keep-out.** The site is the world's circle on the plan and its lowest point; the land
+  is a level top just under that point inside the circle, then falls to the valley floor past it,
+  and the ranges rise from there. So the world's own faces hide the land wherever the two could
+  meet, and the pass needs nothing but the depth test: it draws after the world's opaque passes
+  and the sky faces' fix-up (which gives their pixels the cleared depth), tests `greater` and
+  writes depth, colour and motion, and the sky pass fills what is left. A classic map's veil over
+  its sky pixels dims or lifts the land with the sky, so the two stay one picture.
+- **The mesh**, built once a site on the CPU in bands (about 250 ms for 246k vertices; `build_far_land`):
+  a polar grid round the site, 640 bearings by 384 rings spaced by a constant ratio, so it is fine
+  under the eye and coarse at the horizon; the Earth's curve sinks it with distance (283 m at
+  60 km); the water is a second polar sheet at its level. Each vertex keeps its HORIZON in eight
+  bearings, marched over the grid: the key light's elevation against the horizon toward it is the
+  ranges' own shadow (long across the valleys at a low sun), and the share of sky they leave is
+  the valleys' shade under the open sky. No shadow map, no per-frame work.
+- **The shape** of a kind: ridged noise (each octave folded about its mean, the finer weighed by
+  the coarser's crest, so detail climbs the ridges) on a broad body, in massifs with passes;
+  flat-topped towers where a coarse noise crosses a band (dolomites, needles); cones in a share
+  of a coarse grid's cells, concave flanks and a crater (volcanoes); a mesa's terraces; lakes dug
+  into the low ground under the water's level.
+- **The climate** decides the ground in the shader: the air's temperature at a point is the
+  valley's cooled by the standard lapse rate (6.5 K a km), so the snow lies over the snow line
+  `temp_c / 0.0065` m over the valley floor, off the rock too steep to hold it; the forest stops at
+  the kind's tree line and the cover thins to bare rock 500 to 1000 m over it; the shore is sand;
+  water under air below -1 C is ice. A game warms or cools a kind (Shooter's Edge's
+  `r_farland_warm`): colder brings the snow down the ranges and freezes the lakes.
+- **The far air.** The frame's aerial volume reaches 8 km; past it the land closes toward the sky
+  at the horizon at the kind's own visual range (30 km in a hellish air, 120 km on an airless ice
+  moon), so ranges stack into paler layers to the horizon.
+
+Eleven kinds (`far_land_kinds`, `render/far_land_kinds.cpp`): the Earth's alps, fjord, highlands,
+winter, dolomites, sierra, volcano and arctic, and other worlds' xeno (violet meadows, teal needles,
+green-glass lakes), ember (black crags, lava lakes) and rime (an ice moon). Nothing is built on
+them: no houses. A classic map's land is dealt off its name among the kinds that suit its sky's type
+(`brush/app/bsp_sky.hpp`'s `far_land_for`: an Earth air one of the eight, a violet or alien air
+xeno, a hellish or ashen one ember), and the player picks one with `r_farland`.
+
+The `far-land` lab draws every kind from 60 m over a site by day, at a low sun and by night, and
+the first kind warmed and cooled; the `gpu-bsp` lab's `<map>-high` view looks out from just
+under a map's largest sky ceiling (`--farland=off` is the before).
 
 ## Fog in an area
 

@@ -23,6 +23,7 @@
 #include "render/bloom.hpp"
 #include "render/clouds.hpp"
 #include "render/explosions.hpp"
+#include "render/far_land.hpp"
 #include "render/frame.hpp"
 #include "render/particles.hpp"
 #include "render/post.hpp"
@@ -43,6 +44,7 @@ struct WorldDraw {
   bool has_map = false;
   ba::Scene scene;
   ba::BspDraw bsp;
+  gr::FarLand far;  // the land round the map, seen through its sky faces (r_farland)
   ba::SkyPick sky;
   ba::SkyPick night;  // the map's own classic night, for an sv_hour after dusk (bsp_sky.hpp)
   double top_y = 0;   // the map's highest point, m: the clouds stand over it
@@ -166,10 +168,20 @@ bool surface_from_cache(void* user, std::string_view name, uint32_t w, uint32_t 
 // The weapon's draw this frame: its model and placement, lit by the baked light on the floor under
 // the eye (the lightmap's 0.5 the light as baked, from above) and by its own flash.
 gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
-                       const gr::FrameView& view, bool engine_fire) {
+                       const gr::FrameView& view, bool engine_fire, float shown) {
   namespace vm = ge::viewmodel;
   gr::HeldDraw g;
   g.model = static_cast<uint32_t>(h.weapon);
+  // A spawn assembles it muzzle first, along the held frame's forward.
+  if (shown < 1 && g.model < f.weapons.size()) {
+    float lo[3], hi[3];
+    vm::held_bounds(f.weapons[g.model], lo, hi);
+    g.warp.shown = shown;
+    g.warp.axis[0] = g.warp.axis[1] = 0;
+    g.warp.axis[2] = 1;
+    g.warp.low = lo[2];
+    g.warp.high = hi[2];
+  }
   g.frame_a = h.frame_a;
   g.frame_b = h.frame_b;
   g.blend = static_cast<float>(h.frame_t);
@@ -220,6 +232,10 @@ struct WorldRead {
   std::vector<float> classic_grade;  // the classic look's grade to the palette (look.hpp)
   ge::brush::LightProbe probe;
   ModelsRead models;
+  // The far land (r_farland: render/far_land.hpp), its mesh built on the read's thread.
+  const gr::FarLandKind* far_kind = nullptr;
+  gr::FarSite far_site;
+  gr::FarMesh far_mesh;
 };
 
 void WorldReadDeleter::operator()(WorldRead* r) const { delete r; }
@@ -284,6 +300,18 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   r->night = r->sky;
   ba::night_over(r->night, map.name);
   r->top_y = r->scene.maxs[1];
+  bool known = true;
+  r->far_kind = ba::far_land_for(r->sky, map.name, picture.far_land, &known);
+  if (!known) {
+    ge::core::output::status("shooters_edge: r_farland " + picture.far_land +
+                             " names no far land; next: set it to auto, off or a kind its help "
+                             "lists");
+  }
+  if (r->far_kind != nullptr) {
+    GE_ZONE("world.far_land");
+    r->far_site = ba::far_site_of(r->scene, map.name);
+    r->far_mesh = gr::build_far_land(*r->far_kind, r->far_site);
+  }
   r->probe = ge::brush::make_light_probe(r->scene.map);
   // ce_models: the models' enhanced skins, when this pack's were enhanced.
   ModelLoad load = models;
@@ -339,6 +367,9 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     f.built = kBuildSteps;  // no map: nothing more to make
   } else if (step == 2) {
     ba::create_bsp(d, f.pipelines, f.bsp, f.scene, f.layout);
+    gr::create_far_land(d, f.pipelines, f.far, f.layout);
+    if (read.far_kind != nullptr)
+      gr::set_far_land(d, f.far, *read.far_kind, read.far_site, read.far_mesh);
   } else if (step == 3) {
     create_models(d, f.pipelines, f.models, f.layout, std::move(read.models));
   } else {
@@ -420,6 +451,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
   return f;
 }
 
+const WorldModels& world_models(const WorldDraw& w) { return w.models; }
+
 void resize_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t height) {
   f.w = std::max(1u, width);
   f.h = std::max(1u, height);
@@ -432,7 +465,8 @@ bool world_stale(const WorldDraw& f) {
   const look::Picture& a = f.made;
   const look::Picture& b = *f.picture;
   return a.ce.textures != b.ce.textures || a.ce.models != b.ce.models ||
-         a.ce.rebake != b.ce.rebake || a.ce.bloom != b.ce.bloom || a.bloom != b.bloom;
+         a.ce.rebake != b.ce.rebake || a.ce.bloom != b.ce.bloom || a.bloom != b.bloom ||
+         a.far_land != b.far_land;
 }
 
 void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFrame& fx,
@@ -479,6 +513,9 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     place_brushes(f.models, fx.models, f.movers);
     ba::set_movers(f.bsp, f.movers);
     ba::prepare_bsp(d, f.bsp, view, o);
+    // The far land shows through the sky faces where our sky does (the modern look's own sky).
+    const bool far = o.mode == ba::Mode::v2 && !o.pack_sky && !f.own_sky;
+    gr::prepare_far_land(d, f.far, view, f.picture->far_warm, far);
   }
   if (f.warm_cubes >= 0) {  // a warm-up (warm_world): the sky's tables and the new shadows alone
     wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
@@ -542,7 +579,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   gr::set_post_blend(d, f.post[p], round ? fx.blend_dry : fx.blend);
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
-    gr::HeldDraw draw = held_draw(f, *held, view, fx_switches(*f.picture).muzzles);
+    gr::HeldDraw draw = held_draw(f, *held, view, fx_switches(*f.picture).muzzles, fx.held_shown);
     gr::prepare_viewmodel(d, f.held, std::span<const gr::HeldDraw>(&draw, 1), view, f.w, f.h);
   } else {
     f.held_fresh = true;
@@ -556,6 +593,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     if (f.extras) encode_extras_sim(*f.extras, f.pipelines, f.rec, e);
     if (f.has_map) ba::encode_bsp(f.bsp, f.pipelines, f.rec, e, f.targets, f.frame);
     encode_models(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
+    gr::encode_far_land(f.far, f.pipelines, f.rec, e, f.targets, f.frame, false);
     gr::encode_sky(f.skypass, f.pipelines, f.rec, e, f.targets, f.frame);
     if (f.picture->ce.clouds)
       gr::encode_clouds(f.clouds, f.pipelines, f.rec, e, f.targets, f.frame, view, f.staged);

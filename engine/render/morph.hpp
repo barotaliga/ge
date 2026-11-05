@@ -28,16 +28,28 @@
 //   the model stands (an indoor map's light at the model's feet), so a figure in a dark corridor
 //   is dark; in the sun's units, or in the scene's white (`light_in_white`), as a lightmap is.
 //   Glowing texels add their own colour times `glow`, whatever the light.
+// - THE WARP (`MorphWarp`, render/wgsl/warp.wgsl, shared with the view-model pass): a draw coming
+//   into being or going out of it (a spawn, a teleport's arrival or departure) as one share,
+//   `shown`, 1 whole and 0 gone. A fragment is drawn where a FIELD over the figure lies under the
+//   share: value noise fixed to the model's own frame (so the pattern stays on the body as it
+//   turns) plus the point's place along a sweep AXIS (the far end first in, the near end first
+//   out). The band at the cut turns to ASH (the surface's light, greyed and tinted), so the figure
+//   crumbles; a game throws its flakes where the cut passes (`warp_field` on the CPU says where).
+//   Knobs for other looks: its EDGE burning in a light of its own, a PINCH into a column stretched
+//   up, a SHIMMER of bands that climb it. The fragments it touches are marked reactive, so TAA
+//   does not trail the cut.
 // - THE PASS draws after the opaque world (depth tested and written, reversed z, back faces
 //   culled), one draw a model instance, at most `kMaxMorphDraws` a frame.
 //
-// The CPU twins (`pose_morph`, `morph_texel`, `pack_morph_atlas`) are what the shader does, for
-// the tests and the CPU pictures.
+// The CPU twins (`pose_morph`, `morph_texel`, `pack_morph_atlas`, `warp_vertex`, `warp_cut`) are
+// what the shader does, for the tests and the CPU pictures.
 //
 // ge:summary Morph meshes drawn: vertex-animated models, frames blended on the GPU, tinted skins
 // ge:keywords render morph morph-mesh vertex-animation frames blend interpolation skin atlas
 // ge:keywords tint team-colours player-colours ramp glow fullbright sharp smooth nearest
 // ge:keywords hole cut-out alpha see-through mark-hole
+// ge:keywords warp morph-warp dissolve materialize dematerialize spawn teleport fade-in fade-out
+// ge:keywords warp_vertex warp_field warp_cut pack_warp ash dust crumble burning-edge shimmer pinch
 // ge:keywords create_morph prepare_morph encode_morph pose_morph morph_texel pack_morph_atlas
 // ge:skill render
 // ge:test tests/render_morph_test.cpp
@@ -101,6 +113,21 @@ struct MorphPose {
   float blend = 0;  // 0: frame_a, 1: frame_b
 };
 
+// A draw coming into being or going out of it (a spawn, a teleport): `shown` 1 is the plain draw.
+struct MorphWarp {
+  float shown = 1;  // 0: gone, 1: whole
+  // The sweep: the world way (unit) along which the far end comes in first and the near end goes
+  // out first, and the span along it (m from the draw's position) the figure fills.
+  float axis[3] = {0, 1, 0};
+  float low = -1, high = 1;
+  float ash[3] = {0.3f, 0.27f, 0.24f};  // the band at the cut: its light greyed, times this
+  float edge[3] = {0, 0, 0};            // the band's own light, linear, over the scene's white
+  float pinch = 0;    // 0..1: drawn into a column round the upright line, stretched up from `low`
+  float shimmer = 0;  // 0..1: bands that climb it (pinch and shimmer read the axis as up)
+  float seed = 0;     // the noise's offset: two figures differ
+};
+inline constexpr float kWarpEdge = 0.08f;  // the band at the cut, a share of the field's 0..1
+
 struct MorphDraw {
   uint32_t model = 0;
   MorphPose now, last;        // `last`: where it was the frame before (a cut: the same as now)
@@ -115,6 +142,7 @@ struct MorphDraw {
   // eye is adapted to, as a baked lightmap's 1 does) rather than in the sun's units: what a game
   // whose light is a map's lightmaps samples under a model.
   bool light_in_white = false;
+  MorphWarp warp;
 };
 
 // Where each model's skin sits in the atlas, texels.
@@ -131,6 +159,18 @@ void pose_morph(const MorphModel& model, uint32_t a, uint32_t b, float t,
 // Texel (x, y) of `skin` as drawn: linear rgb, and 1 in `glow` when it lights itself.
 void morph_texel(const MorphSkin& skin, const TintRamps& ramps, const uint32_t tint[2], uint32_t x,
                  uint32_t y, float rgb[3], float* glow);
+
+// The warp's move of one point: `v` the point's offset from the draw's position (world axes, m),
+// at `time_s` (the frame's clock: the shimmer's phase), into `out`. `shown` 1 leaves it.
+void warp_vertex(const MorphWarp& w, float time_s, const float v[3], float out[3]);
+// The share at which a point appears: `local` its place in the model's own frame times the scale
+// (m), `along` its offset from the draw's position along `w.axis` (m). Drawn while under
+// `shown * (1 + kWarpEdge)`.
+float warp_field(const MorphWarp& w, const float local[3], float along);
+// Whether that point is drawn under `w`, and its burn 0..1 in `edge` (1 at the cut).
+bool warp_cut(const MorphWarp& w, const float local[3], float along, float* edge);
+// The warp as the shaders read it (render/wgsl/warp.wgsl's Warp): four vec4.
+void pack_warp(const MorphWarp& w, float out[16]);
 
 struct Morph {
   wgpu::Buffer models, vertices, uvs, indices, draws, ramps;

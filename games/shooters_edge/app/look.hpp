@@ -58,10 +58,14 @@ struct Picture {
   // The ce_ switches: each enhancement the modern look draws over the pack, on or off.
   ge::classicenhance::Switches ce;
   ge::brush::app::WeatherCvars weather;  // r_weather and its kin: the rain and the storm
+  // r_farland: the land round the map seen over its walls from high up (render/far_land.hpp):
+  // auto (a kind dealt to suit the map's sky), off, or a kind's name; read when the world is made.
+  std::string far_land = "auto";
+  double far_warm = 0;  // r_farland_warm: its air warmer (or colder) than its kind's, C
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
-// r_beam_style, every ce_
-// switch and the weather's cvars over `picture` (it must outlive `con`).
+// r_beam_style, r_farland, r_farland_warm, every ce_ switch and the weather's cvars over `picture`
+// (it must outlive `con`).
 void add_cvars(ge::console::Console& con, Picture& picture);
 // r_look's look; modern for a word it does not know.
 Look look_of(const Picture& picture);

@@ -23,10 +23,16 @@
 // light and the lava its colour, and the hour, not the veil, darkens the sky through the sky faces.
 // `dress_sky` puts it all in a frame's view, the layers drifting on the wind at the frame's time.
 //
+// THE FAR LAND (render/far_land.hpp, `far_land_for`): the land round the map seen through its sky
+// faces from high up, a kind dealt off its name among those that suit its sky's type (the Earth's
+// air one of the Earth's eight lands, an alien air an alien one), standing round its box
+// (`far_site_of`).
+//
 // ge:summary Our sky picked by a classic map's sky texture: its type, light, tint and cloud
 // ge:keywords bsp brush sky sky-type match pick_sky sky-texture hue dusk cover v2 night_over
 // ge:keywords classic-night evening moon scud low-cloud wind dress_sky clouds_of adapt
 // ge:keywords at_hour sv_hour time-of-day sun-position cloud-stack sky-layer set_cover warp islands
+// ge:keywords far-land far_land_for far_site_of r_farland skybox 3d-skybox
 // ge:skill brush render
 // ge:test tests/brush_bsp_sky_test.cpp
 #pragma once
@@ -37,6 +43,7 @@
 
 #include "brush/app/draw_data.hpp"
 #include "render/cloud_kinds.hpp"
+#include "render/far_land.hpp"
 #include "render/sky_style.hpp"
 #include "render/view.hpp"
 
@@ -115,5 +122,17 @@ render::Clouds clouds_of(const SkyPick& pick, double top_y, double t);
 // The pick in `view` at time `t`: the type, the sun, the moon and the stars, the layers and the
 // eye's adaptation.
 void dress_sky(render::FrameView& view, const SkyPick& pick, double top_y, double t);
+
+// THE FAR LAND for a map named `map` under `pick` (r_farland's `word`): "auto" deals a kind off the
+// name among those that suit the sky's type (the Earth's air one of the Earth's eight; the dust's
+// the desert's; an alien, violet, toxic or nebula air the violet meadows; a hellish or ashen one
+// the lava's; an icy one the frozen moon's; a black sky, the airless type's, the Earth's as a
+// plain night's), "off" none, a kind's name that kind. Null
+// for none and for a word that names no kind (`known` false then).
+const render::FarLandKind* far_land_for(const SkyPick& pick, std::string_view map,
+                                        std::string_view word = "auto", bool* known = nullptr);
+// Where a map stands for its far land: its box's middle on the plan, the circle round its box a
+// few metres out, its lowest point, a seed off its name.
+render::FarSite far_site_of(const Scene& scene, std::string_view map);
 
 }  // namespace ge::brush::app
