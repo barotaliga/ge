@@ -164,24 +164,37 @@ EnhanceJob::~EnhanceJob() {
 
 bool EnhanceJob::start(Source source, std::filesystem::path root, RunOptions opts) {
   if (running_.load() || thread_.joinable()) return false;
-  running_.store(true);
   source_ = std::move(source);
+  return start_at("", std::move(root), std::move(opts));
+}
+
+bool EnhanceJob::start_at(std::string path, std::filesystem::path root, RunOptions opts) {
+  if (running_.load() || thread_.joinable()) return false;
+  running_.store(true);
   opts.cancel = &cancel_;
   opts.progress = [this](const Progress& p) {
     const double now =
         std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     board_.on(p, now);
   };
-  thread_ = std::thread([this, root = std::move(root), opts = std::move(opts)] {
-    RunReport report;
-    std::string error;
-    run_pipeline(source_, root, opts, &report, &error);
-    {
-      const std::lock_guard lock(mutex_);
-      report_ = std::move(report);
-    }
-    running_.store(false);
-  });
+  thread_ =
+      std::thread([this, path = std::move(path), root = std::move(root), opts = std::move(opts)] {
+        RunReport report;
+        std::string error;
+        if (!path.empty() && !open_source(path, &source_, &error)) {
+          Progress failed;
+          failed.kind = Progress::Kind::failed;
+          failed.item = error;
+          opts.progress(failed);
+        } else {
+          run_pipeline(source_, root, opts, &report, &error);
+        }
+        {
+          const std::lock_guard lock(mutex_);
+          report_ = std::move(report);
+        }
+        running_.store(false);
+      });
   return true;
 }
 

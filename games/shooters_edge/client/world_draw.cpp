@@ -42,7 +42,8 @@ struct WorldDraw {
   ba::Scene scene;
   ba::BspDraw bsp;
   ba::SkyPick sky;
-  double top_y = 0;  // the map's highest point, m: the clouds stand over it
+  ba::SkyPick night;  // the map's own classic night, for an sv_hour after dusk (bsp_sky.hpp)
+  double top_y = 0;   // the map's highest point, m: the clouds stand over it
   ge::gpu::PipelineSet pipelines;
   gr::FrameTargets targets;
   wgpu::Buffer uniforms;
@@ -64,6 +65,7 @@ struct WorldDraw {
   bool has_held = false;
   ge::viewmodel::Placement last_place;  // the weapon's placement a frame ago
   bool held_fresh = true;
+  bool own_sky = false;  // the view's sky as the caller dressed it (the title's)
   ge::brush::LightProbe probe;
   WorldExtrasPtr extras;  // the modern look's water, liquids, flames and weather (a map's only)
   std::vector<gr::Particle> fire_births;  // this frame's sparks off the bonfires
@@ -156,88 +158,117 @@ gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
 
 }  // namespace
 
-WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, const LoadedMap& map,
-                               uint32_t width, uint32_t height, wgpu::TextureFormat format,
-                               const look::Picture& picture,
-                               std::span<const ge::viewmodel::HeldModel> weapons,
-                               std::string& error, const ModelLoad& models,
-                               const GameAdapter& game) {
+struct WorldRead {
+  look::Picture picture;  // as it was when the read began: the world is made in it
+  bool has_map = false;
+  ba::Scene scene;
+  ba::SkyPick sky;
+  ba::SkyPick night;  // the map's own classic night, for an sv_hour after dusk
+  double top_y = 0;
+  std::vector<uint8_t> grade_palette;
+  ge::brush::LightProbe probe;
+  ModelsRead models;
+};
+
+void WorldReadDeleter::operator()(WorldRead* r) const { delete r; }
+
+WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const look::Picture& picture,
+                        const ModelLoad& models, std::string& error, const GameAdapter& game) {
+  GE_ZONE("world.read");
+  WorldReadPtr r(new WorldRead);
+  r->picture = picture;
+  if (!map.from_file) return r;
+  std::vector<uint8_t> store;
+  std::span<const uint8_t> palette = find_file(files, "gfx/palette.lmp", store);
+  std::vector<uint8_t> grey;
+  if (palette.size() < 768) {  // no palette in the packs: a grey ramp, so the map still shows
+    grey.resize(768);
+    for (size_t i = 0; i < 768; i++) grey[i] = static_cast<uint8_t>(i / 3);
+    palette = grey;
+    ge::core::output::status("shooters_edge: no gfx/palette.lmp in the packs; drawing grey");
+  }
+  const std::vector<uint8_t> palette_copy(palette.begin(), palette.end());
+  if (grey.empty()) r->grade_palette = palette_copy;
+  // The enhanced cache, when this pack's were enhanced (the in-game menu's ENHANCE): keyed by the
+  // packs' bytes, looked up once for the textures, the rebake and the skins.
+  const bool any = picture.ce.textures || picture.ce.rebake || picture.ce.models;
+  const std::filesystem::path cache = any && !content_packs(files).empty()
+                                          ? ge::classicenhance::find_cache(content_packs(files))
+                                          : std::filesystem::path{};
+  // ce_textures: the enhanced textures.
+  ba::TextureSource source;
+  if (picture.ce.textures && !cache.empty()) {
+    source.replace = from_cache;
+    source.surface = surface_from_cache;
+    source.user = const_cast<std::filesystem::path*>(&cache);
+    ge::core::output::status("shooters_edge: the enhanced textures from " + cache.string());
+  }
+  // The map's textures as the game's adapter reads them.
+  std::vector<uint8_t> picture_store;
+  const std::vector<ge::brush::MapPicture> pictures =
+      game.map_textures(game, files, map.name, map.file, picture_store);
+  source.pictures = &pictures;
+  ba::Pack pack;  // the map file alone, as the scene reader takes it
+  pack.bytes = map.file;
+  pack.files.push_back({"maps/" + map.name + ".bsp", 0, static_cast<uint32_t>(map.file.size())});
+  if (!ba::load_scene(pack, pack.files[0].name, palette_copy, &r->scene, &error, source)) {
+    error = "the map " + map.name + " cannot be drawn: " + error;
+    return nullptr;
+  }
+  // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
+  // adds its bounce under the live lights (look.cpp).
+  if (picture.ce.rebake && !cache.empty()) {
+    ge::brush::Rebaked baked;
+    if (ge::classicenhance::cached_rebake(cache, map.name, r->scene.map.vertices.size(), &baked)) {
+      ba::attach_rebake(r->scene, std::move(baked));
+      ge::core::output::status("shooters_edge: the rebaked light of " + map.name + " from " +
+                               cache.string());
+    }
+  }
+  r->has_map = true;
+  r->sky = ba::pick_sky(r->scene.sky_colours);
+  r->night = r->sky;
+  ba::night_over(r->night, map.name);
+  r->top_y = r->scene.maxs[1];
+  r->probe = ge::brush::make_light_probe(r->scene.map);
+  // ce_models: the models' enhanced skins, when this pack's were enhanced.
+  ModelLoad load = models;
+  if (picture.ce.models) load.cache = cache;
+  r->models = read_models(files, palette_copy, r->scene.map, load, game);
+  return r;
+}
+
+WorldDrawPtr begin_world(ge::gpu::Device& d, WorldReadPtr read, uint32_t width, uint32_t height,
+                         wgpu::TextureFormat format, const look::Picture& picture,
+                         std::span<const ge::viewmodel::HeldModel> weapons, std::string& error) {
   // A map's frame is made while the map loads, the first and every later one: its pipelines are
   // the load's, not a hitch mid-run.
   d.loading = true;
   WorldDrawPtr f(new WorldDraw);
   f->picture = &picture;
-  f->made = picture;
+  f->made = read->picture;
   f->w = std::max(1u, width);
   f->h = std::max(1u, height);
-  std::vector<uint8_t> palette_copy;
-  std::vector<uint8_t>& grade_palette = f->grade_palette;
-  if (map.from_file) {
-    std::vector<uint8_t> store;
-    std::span<const uint8_t> palette = find_file(files, "gfx/palette.lmp", store);
-    std::vector<uint8_t> grey;
-    if (palette.size() < 768) {  // no palette in the packs: a grey ramp, so the map still shows
-      grey.resize(768);
-      for (size_t i = 0; i < 768; i++) grey[i] = static_cast<uint8_t>(i / 3);
-      palette = grey;
-      ge::core::output::status("shooters_edge: no gfx/palette.lmp in the packs; drawing grey");
-    }
-    palette_copy.assign(palette.begin(), palette.end());
-    if (grey.empty()) grade_palette = palette_copy;
-    // ce_textures: the enhanced textures, when this pack's were enhanced (the in-game menu's
-    // ENHANCE); the cache is keyed by the first pack's bytes.
-    std::filesystem::path cache;
-    ba::TextureSource source;
-    if (picture.ce.textures && !content_packs(files).empty())
-      cache = ge::classicenhance::find_cache(content_packs(files));
-    if (!cache.empty()) {
-      source.replace = from_cache;
-      source.surface = surface_from_cache;
-      source.user = &cache;
-      ge::core::output::status("shooters_edge: the enhanced textures from " + cache.string());
-    }
-    // The map's textures as the game's adapter reads them.
-    std::vector<uint8_t> picture_store;
-    const std::vector<ge::brush::MapPicture> pictures =
-        game.map_textures(game, files, map.name, map.file, picture_store);
-    source.pictures = &pictures;
-    ba::Pack pack;  // the map file alone, as the scene reader takes it
-    pack.bytes = map.file;
-    pack.files.push_back({"maps/" + map.name + ".bsp", 0, static_cast<uint32_t>(map.file.size())});
-    if (!ba::load_scene(pack, pack.files[0].name, palette_copy, &f->scene, &error, source)) {
-      error = "the map " + map.name + " cannot be drawn: " + error;
-      return nullptr;
-    }
-    // ce_rebake: the map's light rebaked into the cache (its lightmaps stage); the modern look
-    // adds its bounce under the live lights (look.cpp).
-    if (picture.ce.rebake && !content_packs(files).empty()) {
-      const std::filesystem::path dir =
-          cache.empty() ? ge::classicenhance::find_cache(content_packs(files)) : cache;
-      ge::brush::Rebaked baked;
-      if (ge::classicenhance::cached_rebake(dir, map.name, f->scene.map.vertices.size(), &baked)) {
-        ba::attach_rebake(f->scene, std::move(baked));
-        ge::core::output::status("shooters_edge: the rebaked light of " + map.name + " from " +
-                                 dir.string());
-      }
-    }
-    f->has_map = true;
-    f->sky = ba::pick_sky(f->scene.sky_colours);
-    f->top_y = f->scene.maxs[1];
-  }
+  f->has_map = read->has_map;
+  f->scene = std::move(read->scene);
+  f->sky = read->sky;
+  f->night = read->night;
+  f->top_y = read->top_y;
+  f->grade_palette = std::move(read->grade_palette);
+  const look::Picture& made = f->made;
   f->uniforms = gr::make_buffer(d, "shooters_edge.uniforms", sizeof(gr::FrameUniforms),
                                 wgpu::BufferUsage::Uniform);
   f->layout = gr::frame_layout(d);
   gr::create_sky(d, f->pipelines, f->skypass, f->uniforms, f->layout);
   gr::create_clouds(d, f->pipelines, f->clouds, f->layout);
   gr::BloomSettings bs;
-  bs.strength = picture.ce.bloom ? look::post_settings(look::Look::modern, picture).bloom : 0;
+  bs.strength = made.ce.bloom ? look::post_settings(look::Look::modern, made).bloom : 0;
   gr::create_bloom_pipelines(d, f->pipelines, f->bloom, bs);
   for (int p = 0; p < 2; ++p)
-    gr::create_post(
-        d, f->pipelines, f->post[p], f->layout, format,
-        look::post_settings(p == 0 ? look::Look::classic : look::Look::modern, picture));
+    gr::create_post(d, f->pipelines, f->post[p], f->layout, format,
+                    look::post_settings(p == 0 ? look::Look::classic : look::Look::modern, made));
   f->gamma = picture.gamma;
-  gr::set_grade(d, f->post[0], look::gamma_grade(look::palette_grade(grade_palette), f->gamma));
+  gr::set_grade(d, f->post[0], look::gamma_grade(look::palette_grade(f->grade_palette), f->gamma));
   gr::set_grade(d, f->post[1], look::gamma_grade(gr::identity_grade(), f->gamma));
   gr::create_particles(d, f->pipelines, f->particles, f->layout);
   gr::create_explosions(d, f->pipelines, f->explosions, f->layout);
@@ -250,27 +281,45 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
     }
     f->has_held = true;
   }
-  if (f->has_map) f->probe = ge::brush::make_light_probe(f->scene.map);
+  if (f->has_map) f->probe = std::move(read->probe);
   gr::create_ui_pass(d, f->pipelines, f->ui, format);
   if (f->has_map) {
     ba::create_bsp(d, f->pipelines, f->bsp, f->scene, f->layout);
-    // ce_models: the models' enhanced skins, when this pack's were enhanced.
-    ModelLoad load = models;
-    if (picture.ce.models && !content_packs(files).empty())
-      load.cache = ge::classicenhance::find_cache(content_packs(files));
-    create_models(d, f->pipelines, f->models, f->layout, files, palette_copy, f->scene.map, load,
-                  game);
+    create_models(d, f->pipelines, f->models, f->layout, std::move(read->models));
+    // The live switches and weather (read every frame), not the snapshot the world was made in.
     f->extras = create_extras(d, f->pipelines, f->layout, f->scene, picture.ce, picture.weather,
                               f->skypass);
   }
-  if (!f->pipelines.finish(d)) {
+  return f;
+}
+
+bool world_compiled(ge::gpu::Device& d, WorldDraw& f) { return f.pipelines.ready(d); }
+
+bool finish_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t height,
+                  std::string& error) {
+  if (!f.pipelines.finish(d)) {
     error = "the world's pipelines did not build; next: read the gpu: lines above";
-    return nullptr;
+    return false;
   }
   ge::gpu::end_load(d);
-  f->frame = gr::frame_group(d, f->layout, f->uniforms, f->skypass);
-  f->rec.init(d, "shooters_edge.timer", gr::kMaxPasses);  // every pass timed
-  make_targets(d, *f);
+  f.frame = gr::frame_group(d, f.layout, f.uniforms, f.skypass);
+  f.rec.init(d, "shooters_edge.timer", gr::kMaxPasses);  // every pass timed
+  f.w = std::max(1u, width);
+  f.h = std::max(1u, height);
+  make_targets(d, f);
+  return true;
+}
+
+WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, const LoadedMap& map,
+                               uint32_t width, uint32_t height, wgpu::TextureFormat format,
+                               const look::Picture& picture,
+                               std::span<const ge::viewmodel::HeldModel> weapons,
+                               std::string& error, const ModelLoad& models,
+                               const GameAdapter& game) {
+  WorldReadPtr read = read_world(files, map, picture, models, error, game);
+  if (!read) return nullptr;
+  WorldDrawPtr f = begin_world(d, std::move(read), width, height, format, picture, weapons, error);
+  if (!f || !finish_world(d, *f, width, height, error)) return nullptr;
   return f;
 }
 
@@ -279,6 +328,8 @@ void resize_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t hei
   f.h = std::max(1u, height);
   make_targets(d, f);
 }
+
+void own_sky(WorldDraw& f, bool own) { f.own_sky = own; }
 
 bool world_stale(const WorldDraw& f) {
   const look::Picture& a = f.made;
@@ -299,14 +350,17 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     gr::set_grade(d, f.post[1], look::gamma_grade(gr::identity_grade(), f.gamma));
   }
   // The map's own sky (its pick), keeping the eye and the look the caller set.
-  ba::dress_sky(view, f.sky, f.top_y, view.time_s);
+  // sv_hour: the sun where the hour puts it (the map's own pick at -1); the title dresses its own.
+  ba::SkyPick sky = f.sky;
+  if (f.picture->weather.hour >= 0) ba::at_hour(sky, f.night, f.picture->weather.hour);
+  if (!f.own_sky) ba::dress_sky(view, sky, f.top_y, view.time_s);
   view.altitude_m = 100;
   view.clouds.quarter = false;
   view.clouds.spread = false;
   ba::Options o = look::world_options(lk, {}, *f.picture);
-  o.sky_light = f.sky.sky_light;
-  o.sky_seen = f.sky.sky_seen;
-  for (int k = 0; k < 3; ++k) o.sky_tint[k] = f.sky.tint[k];
+  o.sky_light = sky.sky_light;
+  o.sky_seen = sky.sky_seen;
+  for (int k = 0; k < 3; ++k) o.sky_tint[k] = sky.tint[k];
   // The switches on the options and the weather on the view, before the uniforms take the view.
   if (f.extras) {
     GE_ZONE("world.dress");

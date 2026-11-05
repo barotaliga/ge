@@ -134,6 +134,11 @@ struct ClassicClientEnd {
   int frags[32] = {};
   int32_t stats[kStats] = {};
   std::vector<std::string> prints, centerprints;
+  float set_angles[3] = {};  // the server's last turn of the player (setangle), degrees
+  float movevars[10] = {800, 100, 320, 500, 10, 10, 10, 4, 4, 1};  // serverdata's, in its order
+  sh::MoveCmd sent[64];        // each move's newest command, by its packet's sequence mod 64
+  uint32_t sent_seq[64] = {};  // the sequence each `sent` slot holds (0: none)
+  int64_t setangles = 0;       // turns read
   int lightstyles = 0, statics = 0, static_sounds = 0;
   int valid_frame = -1;  // the newest frame's sequence held (-1: none)
 

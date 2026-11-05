@@ -23,7 +23,7 @@ float dist(sh::Vec3f a, sh::Vec3f b) {
 
 bool water_way(Fighter& f, const server::QcServer& s, int me, double t, int msec, ge::ai::Why* why,
                sh::Vec3f& way) {
-  const sh::Edict& body = s.sv.edicts[static_cast<size_t>(me)];
+  const server::WorldEntity& body = s.world.entities[static_cast<size_t>(me)];
   // Its air: the head under this long, it takes whichever way out of the water is shorter, the
   // dive's on or the way back, so it never drowns on a swim.
   if (body.waterlevel >= 3) {

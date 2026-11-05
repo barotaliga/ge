@@ -13,13 +13,14 @@
 //   It is his (`Controls::reset`) and the run's (down or stuck, as in a race).
 // - On a map with no ski area (the single piste) the piste is the one run.
 // - THE TARN (`free_map`): a small lake laid high on the mountain, frozen flat where its ice bears
-//   a skier; through thin ice he sinks (lake.hpp).
+//   a skier; through thin ice he sinks (lake.hpp). THE RESERVOIR: a lake behind an earth dam in a
+//   valley clear of the ski area (mountain/tarn/reservoir.hpp), laid after it where one closes.
 //
 // The free ride draws nothing and allocates nothing in a step.
 //
 // ge:summary The free ride: the runs as lines, the run under the skis, the foot, the reset
 // ge:keywords free-ride free free_map create_free_ride step_free reset_free run_chain runs
-// ge:keywords run-tracks onto arrived foot skied odometer distance
+// ge:keywords reservoir run-tracks onto arrived foot skied odometer distance
 // ge:skill sim
 // ge:test tests/fall_line_free_test.cpp
 #pragma once
@@ -50,7 +51,8 @@ inline constexpr double kTarnRadius = 60;
 
 // The map for `seed` as the free ride rides it: the ski area at the generator's current version
 // unless `version` names another (throws the generator's GenerateError), and a tarn laid on it
-// where there is open ground for one (`kTarnRadius`; its ice by the map's day).
+// where there is open ground for one (`kTarnRadius`; its ice by the map's day), then the valley's
+// reservoir behind its dam where a valley closes clear of the ski area.
 ge::mountain::mapgen::Level free_map(double seed, std::optional<int> version = {});
 
 // The ski area's runs as lines, in the map's order (the single piste where it has none), each

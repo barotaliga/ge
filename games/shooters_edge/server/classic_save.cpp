@@ -277,6 +277,7 @@ bool classic_load_text(Campaign& c, const pg::Progs& progs, const CampaignOption
   c.serverflags = flags >= 0 ? pg::global_float(vm, flags) : 0;
   c.entered_serverflags = c.serverflags;
   s.serverflags = c.serverflags;
+  fill_world(s, s.world, true);  // the rules' world as the loaded game has it
   return true;
 }
 

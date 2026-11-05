@@ -121,6 +121,12 @@ struct PointLight {
   Fire fire = Fire::none;  // the fire drawn at it (bsp_flames.hpp)
   float sky = 0;           // the share of open sky over its fire, 0..1 (bsp_flames' place_fires)
   bool physical = false;   // `value` is a luminous intensity, cd (a glowing liquid's light)
+  // Its fall-off and its cone, as the entity's (brush/lights.hpp's LightEntity).
+  double gain = 1;
+  double soft_m = 0;
+  bool spot = false;
+  double dir[3] = {0, -1, 0};
+  double cone_cos[2] = {-1, -1};
 };
 // The light's share of its brightness at time t, s.
 double flicker_at(const PointLight& light, double t);

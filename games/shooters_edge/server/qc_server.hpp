@@ -45,6 +45,7 @@
 #include "progs/extensions.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/server/messages.hpp"
+#include "shooters_edge/server/rules_world.hpp"
 #include "shooters_edge/sim/qc_program.hpp"
 
 namespace shooters_edge::server {
@@ -209,6 +210,15 @@ struct QcServer {
   // are (games/shooters_edge/net/classic_antilag.hpp).
   void (*lag_rewind)(void* ctx, int shooter, bool begin) = nullptr;
   void* lag_ctx = nullptr;
+
+  // What the rules show everyone else (rules_world.hpp): filled at the map's start and at the end
+  // of each frame. The program's fields the player's numbers come from, found by name at the map's
+  // start (-1: the program has none).
+  RulesWorld world;
+  struct {
+    int currentammo = -1, armorvalue = -1, ammo[4] = {-1, -1, -1, -1}, weapon = -1;
+    int weaponframe = -1;
+  } world_fields;
 
   std::vector<HookCall> hook_log;
   int64_t hook_counts[static_cast<int>(HookId::count)] = {};

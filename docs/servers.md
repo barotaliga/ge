@@ -23,7 +23,11 @@ names them (`ServerGame::rules`, a `GameRule` each: Shooter's Edge's `deathmatch
 `fraglimit`, `timelimit`, `samelevel`, `sv_gravity`, `sv_maxspeed`), the core makes each a server
 cvar with an empty fallback (unset: the game's own default), every layer, `+set` and `--explain`
 reach it like the core's, and `create` gets the values in `ServerConfig::rules`. A map is read from
-the game folder's loose files or its packs. Running one:
+the game folder's loose files or its packs, and when a match ends the server moves everyone to
+the next map (`sv_maprotation`'s when set). M53c part one: the lobby's match flow lives in the
+engine (`engine/server/match`: seats, teams, ready and break, the leader's start, warmup, the
+countdown, the match), and Shooter's Edge's lobby is that plus what a team is in its game.
+Running one:
 
 ```
 make build
@@ -48,7 +52,7 @@ binary's own `--explain`.
 | Cfg files | `engine/console/cfg` (M21a) | `start_server`: `server.cfg`, then the command line; the server's tier (`kServer`, `kServerInfo`) |
 | The search path | `engine/vfs/search` (M18a) | A base game directory, then a directory per mod over it, later sources winning |
 | A dedicated server | `games/shooters_edge/server` (M18f) | Shooter's Edge's own host with bot slots, input log and replay (now a `ServerGame` on the core) |
-| The lobby's match flow | Shooter's Edge (the lobby row in flight) | Warmup on the map, two teams, ready and break, the leader's start, a countdown, the match restarting the map |
+| The lobby's match flow | `engine/server/match` (M53c, lifted from Shooter's Edge's) | Warmup on the map, two teams, ready and break, the leader's start, a countdown, the match restarting the map |
 
 What is missing is the part every game would otherwise write again: the server's frame and
 process, its settings and where they come from, the match's phases, the administrator's

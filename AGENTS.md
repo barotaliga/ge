@@ -210,7 +210,7 @@ make play         # an agent at the controls: the play protocol on stdio (engine
 build/debug/play why runs/fall_line-38.inputs --step=1200 --around=6   # why the bot did it (ge why)
 build/release/play bench --seeds=38 --rivals=3   # Fall Line's step timed per zone (ge bench's engine half)
 make labs-smoke   # every lab at its smoke flags, twice, digests against tests/digests/
-make agents-check # symlinks, skills ↔ this router, the 1000-line cap, ge: tags (writing docs/index.md), lesson fragments
+make agents-check # symlinks, skills ↔ this router, the line cap (warns past 1000, fails past 2000), ge: tags (writing docs/index.md), lesson fragments
 make index        # write docs/index.md from every file's ge: tags (gitignored: never committed)
 make find Q="noise sample_field"  # files, skills, lessons and the porting map matching any word
 make lessons ARGS="port --scope=engine/core"   # read a skill's lessons, filtered (no ARGS: the inventory)

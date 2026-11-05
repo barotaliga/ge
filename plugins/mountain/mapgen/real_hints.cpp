@@ -77,7 +77,7 @@ std::optional<RealHints> decode_hints(std::string_view data) {
   }
   if (in.ok && !in.done()) {
     const int64_t lakes = in.get();
-    if (!in.ok || lakes < 1 || lakes > 10000) return std::nullopt;
+    if (!in.ok || lakes < 0 || lakes > 10000) return std::nullopt;
     for (int64_t i = 0; i < lakes; i++) {
       const int64_t n = in.get();
       if (n < 3 || n > 100000) return std::nullopt;
@@ -90,6 +90,26 @@ std::optional<RealHints> decode_hints(std::string_view data) {
         l.shore.push_back({double(x) * kHintGrain, double(z) * kHintGrain});
       }
       h.lakes.push_back(std::move(l));
+    }
+    if (in.ok && !in.done()) {
+      const int64_t streams = in.get();
+      if (!in.ok || streams < 1 || streams > 10000) return std::nullopt;
+      for (int64_t i = 0; i < streams; i++) {
+        const int64_t kind = in.get();
+        const int64_t n = in.get();
+        if (kind < 0 || kind > 1 || n < 2 || n > 100000) return std::nullopt;
+        HintStream st{HintStreamKind(kind), {}};
+        int64_t x = 0;
+        int64_t z = 0;
+        for (int64_t k = 0; k < n; k++) {
+          x += in.get();
+          z += in.get();
+          st.points.push_back({double(x) * kHintGrain, double(z) * kHintGrain});
+        }
+        h.streams.push_back(std::move(st));
+      }
+    } else if (lakes == 0) {
+      return std::nullopt;  // a lakes' count of 0 is written only before streams
     }
   }
   if (!in.ok || !in.done()) return std::nullopt;
@@ -130,20 +150,28 @@ std::string encode_hints(const RealHints& h) {
   } else {
     out.put(0);
   }
-  if (!h.lakes.empty()) {
+  const auto line = [&](const std::vector<PlanPoint>& pts) {
+    out.put(int64_t(pts.size()));
+    int64_t px = 0;
+    int64_t pz = 0;
+    for (const PlanPoint& p : pts) {
+      const int64_t x = on_grain(p.x, kHintGrain);
+      const int64_t z = on_grain(p.z, kHintGrain);
+      out.put(x - px);
+      out.put(z - pz);
+      px = x;
+      pz = z;
+    }
+  };
+  if (!h.lakes.empty() || !h.streams.empty()) {
     out.put(int64_t(h.lakes.size()));
-    for (const HintLake& l : h.lakes) {
-      out.put(int64_t(l.shore.size()));
-      int64_t px = 0;
-      int64_t pz = 0;
-      for (const PlanPoint& p : l.shore) {
-        const int64_t x = on_grain(p.x, kHintGrain);
-        const int64_t z = on_grain(p.z, kHintGrain);
-        out.put(x - px);
-        out.put(z - pz);
-        px = x;
-        pz = z;
-      }
+    for (const HintLake& l : h.lakes) line(l.shore);
+  }
+  if (!h.streams.empty()) {
+    out.put(int64_t(h.streams.size()));
+    for (const HintStream& st : h.streams) {
+      out.put(int64_t(st.kind));
+      line(st.points);
     }
   }
   return packed::to_base64(out.bytes);

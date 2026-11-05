@@ -13,21 +13,18 @@
 // within `kStray` m, with its width at each bend (straight across to the edges of the narrowest
 // mapped piste area it lies in), and the woods: the forest the map draws rasterised onto the
 // face's height grid and binned by height into the tree line (the top of the highest of
-// `kLineBins` bins still `kLineCover` wooded) and `kWoodsBands` bands' cover. The LAKES are every
-// standing water the map draws (a lake, a reservoir, a pond; a river's or a canal's area is
-// flowing water and is not one), each its outer shore: a closed way, or a multipolygon's outer
-// members joined into rings, clipped to the map's square, thinned to the bends that keep it within
-// `kShoreStray` m, and kept where `kSmallestLake` m² or more of it lies on the map, the largest
-// first, `kMostLakes` at most. `--water` bakes the lakes alone into the hints the tree has, the
-// lifts, the pistes and the woods kept bit for bit. `--write` writes
+// `kLineBins` bins still `kLineCover` wooded) and `kWoodsBands` bands' cover. The WATER, its lakes
+// and its streams, is read as osm_water.hpp says. `--water` bakes the water alone into the hints
+// the tree has, the lifts, the pistes and the woods kept bit for bit. `--write` writes
 // the faces baked and the index (plugins/mountain/mapgen/real_hints/), run from the repository's
 // root. A hint file is GENERATED: never edited by hand. Nothing is kept by name.
 //
 // The map data: © OpenStreetMap contributors, under the Open Database Licence (ODbL 1.0); the
 // baked hints are a derived database under the same licence.
 //
-// ge:summary Lab: the real faces' lifts, pistes, woods and lakes, read, drawn and baked off the map
+// ge:summary Lab: the real faces' lifts, pistes, woods and water, read, drawn and baked off the map
 // ge:keywords lab real-hints bake openstreetmap lifts pistes woods tree-line r25 picture lakes
+// ge:keywords streams
 // ge:skill mountain labs
 // ge:test tests/lab_runner_test.cpp
 #include <algorithm>
@@ -47,6 +44,8 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "mountain/labs/osm_data.hpp"
+#include "mountain/labs/osm_shapes.hpp"
+#include "mountain/labs/osm_water.hpp"
 #include "mountain/mapgen/real_face.hpp"
 #include "mountain/mapgen/real_hints.hpp"
 #include "mountain/mapgen/regions.hpp"
@@ -77,13 +76,17 @@ constexpr int kLineBins = 48;
 constexpr int kLineCells = 12;
 constexpr double kLineCover = 0.05;
 constexpr double kLeast = 0.01;
-// The lakes: how far a shore may stray, m; the least of one on the map, m²; the most kept a face.
-constexpr double kShoreStray = 4;
-constexpr double kSmallestLake = 2500;
-constexpr size_t kMostLakes = 24;
-
-using Pt = mg::PlanPoint;
-using Ring = std::vector<Pt>;
+using ge::mountain::labs::inside;
+using ge::mountain::labs::lakes_of;
+using ge::mountain::labs::length_of;
+using ge::mountain::labs::longest_on_map;
+using ge::mountain::labs::on_map;
+using ge::mountain::labs::points_of;
+using ge::mountain::labs::Pt;
+using ge::mountain::labs::Ring;
+using ge::mountain::labs::signed_area;
+using ge::mountain::labs::streams_of;
+using ge::mountain::labs::thin;
 
 std::string f0(double v) {
   char b[32];
@@ -115,66 +118,6 @@ std::vector<const mg::FaceCrop*> faces_of(ge::lab::Lab& lab) {
     }
   }
   return out;
-}
-
-bool on_map(const Pt& p) { return p.x >= 0 && p.x <= kSize && p.z >= 0 && p.z <= kSize; }
-
-double length_of(const std::vector<Pt>& pts) {
-  double s = 0;
-  for (size_t i = 1; i < pts.size(); i++) {
-    s += ge::core::hypot(pts[i].x - pts[i - 1].x, pts[i].z - pts[i - 1].z);
-  }
-  return s;
-}
-
-// A line thinned to the bends that keep it within `tol` m (Douglas–Peucker).
-std::vector<Pt> thin(const std::vector<Pt>& pts, double tol) {
-  if (pts.size() < 3) return pts;
-  const Pt a = pts.front();
-  const Pt b = pts.back();
-  const double dx = b.x - a.x;
-  const double dz = b.z - a.z;
-  const double len = std::max(1e-9, ge::core::hypot(dx, dz));
-  double worst = 0;
-  size_t at = 0;
-  for (size_t i = 1; i + 1 < pts.size(); i++) {
-    const double d = std::abs((pts[i].x - a.x) * dz - (pts[i].z - a.z) * dx) / len;
-    if (d > worst) {
-      worst = d;
-      at = i;
-    }
-  }
-  if (worst <= tol) return {a, b};
-  std::vector<Pt> left = thin({pts.begin(), pts.begin() + long(at) + 1}, tol);
-  const std::vector<Pt> right = thin({pts.begin() + long(at), pts.end()}, tol);
-  left.pop_back();
-  left.insert(left.end(), right.begin(), right.end());
-  return left;
-}
-
-// The longest run of a line's points that stay on the map.
-std::vector<Pt> longest_on_map(const std::vector<Pt>& pts) {
-  std::vector<Pt> best;
-  std::vector<Pt> cur;
-  for (const Pt& p : pts) {
-    if (on_map(p)) {
-      cur.push_back(p);
-      continue;
-    }
-    if (cur.size() > best.size()) best = cur;
-    cur.clear();
-  }
-  return cur.size() > best.size() ? cur : best;
-}
-
-bool inside(const Ring& ring, double x, double z) {
-  bool odd = false;
-  for (size_t i = 0, j = ring.size() - 1; i < ring.size(); j = i++) {
-    const Pt a = ring[i];
-    const Pt b = ring[j];
-    if ((a.z > z) != (b.z > z) && x < (b.x - a.x) * (z - a.z) / (b.z - a.z) + a.x) odd = !odd;
-  }
-  return odd;
 }
 
 // How far from (x, z) along (dx, dz) the ring's edge is, m (infinity where it is never met).
@@ -243,18 +186,6 @@ mg::HintGrade grade_of(const mg::FaceCrop& f, const std::string& d) {
   if (d == "advanced" || d == "expert") return G::black;
   if (d == "freeride" || d == "extreme") return G::route;
   return west ? G::blue : G::red;
-}
-
-// The way's points on the map, the nodes the data has.
-std::vector<Pt> points_of(const mg::FaceCrop& f, const OsmData& d, const OsmWay& w) {
-  std::vector<Pt> out;
-  for (const int64_t r : w.refs) {
-    const auto it = d.nodes.find(r);
-    if (it == d.nodes.end()) continue;
-    const auto [x, z] = mg::map_at(f, it->second.first, it->second.second);
-    out.push_back({x, z});
-  }
-  return out;
 }
 
 // The lifts and pistes of a face's map data.
@@ -438,168 +369,6 @@ std::optional<mg::HintWoods> woods_by_height(const std::vector<uint8_t>& wooded,
   return out;
 }
 
-// Whether a way's or a relation's tags draw standing water.
-bool is_lake(const std::map<std::string, std::string>& tags) {
-  const auto at = [&](const char* k) {
-    const auto it = tags.find(k);
-    return it == tags.end() ? std::string() : it->second;
-  };
-  const std::string water = at("water");
-  if (water == "river" || water == "canal" || water == "stream" || water == "ditch" ||
-      water == "drain" || water == "wastewater" || water == "lock" || water == "fish_pass")
-    return false;
-  return at("natural") == "water" || at("landuse") == "reservoir";
-}
-
-// The area a ring holds, m² (its sign its winding).
-double signed_area(const Ring& ring) {
-  double a = 0;
-  for (size_t i = 0, j = ring.size() - 1; i < ring.size(); j = i++) {
-    a += ring[j].x * ring[i].z - ring[i].x * ring[j].z;
-  }
-  return a / 2;
-}
-
-// The ring clipped to the map's square (Sutherland–Hodgman, one edge of the square at a time).
-Ring clip_to_map(const Ring& ring) {
-  Ring out = ring;
-  const auto pass = [&](auto in_side, auto cut) {
-    Ring next;
-    for (size_t i = 0; i < out.size(); i++) {
-      const Pt a = out[(i + out.size() - 1) % out.size()];
-      const Pt b = out[i];
-      if (in_side(b)) {
-        if (!in_side(a)) next.push_back(cut(a, b));
-        next.push_back(b);
-      } else if (in_side(a)) {
-        next.push_back(cut(a, b));
-      }
-    }
-    out = std::move(next);
-  };
-  const auto at_x = [](double x) {
-    return [x](Pt a, Pt b) { return Pt{x, a.z + (b.z - a.z) * (x - a.x) / (b.x - a.x)}; };
-  };
-  const auto at_z = [](double z) {
-    return [z](Pt a, Pt b) { return Pt{a.x + (b.x - a.x) * (z - a.z) / (b.z - a.z), z}; };
-  };
-  pass([](Pt p) { return p.x >= 0; }, at_x(0));
-  if (!out.empty()) pass([](Pt p) { return p.x <= kSize; }, at_x(kSize));
-  if (!out.empty()) pass([](Pt p) { return p.z >= 0; }, at_z(0));
-  if (!out.empty()) pass([](Pt p) { return p.z <= kSize; }, at_z(kSize));
-  return out;
-}
-
-// A closed ring thinned (Douglas–Peucker on its two halves, split at the point farthest from its
-// first), unclosed.
-Ring thin_ring(const Ring& ring, double tol) {
-  if (ring.size() < 4) return ring;
-  size_t far = 0;
-  double most = -1;
-  for (size_t i = 1; i < ring.size(); i++) {
-    const double d = ge::core::hypot(ring[i].x - ring[0].x, ring[i].z - ring[0].z);
-    if (d > most) {
-      most = d;
-      far = i;
-    }
-  }
-  std::vector<Pt> a = thin({ring.begin(), ring.begin() + long(far) + 1}, tol);
-  std::vector<Pt> second(ring.begin() + long(far), ring.end());
-  second.push_back(ring[0]);
-  const std::vector<Pt> b = thin(second, tol);
-  a.pop_back();
-  a.insert(a.end(), b.begin(), b.end() - 1);
-  return a;
-}
-
-// Ways' node lists joined end to end into closed rings; a chain that never closes is dropped.
-std::vector<std::vector<int64_t>> join_rings(std::vector<std::vector<int64_t>> parts) {
-  std::vector<std::vector<int64_t>> rings;
-  while (!parts.empty()) {
-    std::vector<int64_t> cur = std::move(parts.back());
-    parts.pop_back();
-    bool grew = true;
-    while (cur.size() > 1 && cur.front() != cur.back() && grew) {
-      grew = false;
-      for (size_t i = 0; i < parts.size(); i++) {
-        std::vector<int64_t>& p = parts[i];
-        if (p.empty()) continue;
-        if (p.back() == cur.back()) std::reverse(p.begin(), p.end());
-        if (p.front() != cur.back()) continue;
-        cur.insert(cur.end(), p.begin() + 1, p.end());
-        parts.erase(parts.begin() + long(i));
-        grew = true;
-        break;
-      }
-    }
-    if (cur.size() >= 4 && cur.front() == cur.back()) rings.push_back(std::move(cur));
-  }
-  return rings;
-}
-
-// Every lake of a face's map data, clipped, thinned and kept by size (the module comment); a
-// multipolygon whose members the boxes left out is read whole, `missing` counting those that
-// could not be.
-std::vector<mg::HintLake> lakes_of(const mg::FaceCrop& f, const OsmData& d,
-                                   ge::mountain::labs::OsmCache& osm, bool fetch, int& missing,
-                                   std::string& error) {
-  struct Found {
-    Ring shore;
-    double area;
-  };
-  std::vector<Found> found;
-  const auto keep = [&](const OsmData& src, const std::vector<int64_t>& refs) {
-    Ring ring;
-    for (size_t i = 1; i < refs.size(); i++) {
-      const auto it = src.nodes.find(refs[i]);
-      if (it == src.nodes.end()) return;  // a way cut short: no shore to trust
-      const auto [x, z] = mg::map_at(f, it->second.first, it->second.second);
-      ring.push_back({x, z});
-    }
-    ring = clip_to_map(ring);
-    if (ring.size() < 3) return;
-    const double area = std::abs(signed_area(ring));
-    if (area < kSmallestLake) return;
-    ring = thin_ring(ring, kShoreStray);
-    if (ring.size() >= 3) found.push_back({std::move(ring), area});
-  };
-  for (const auto& [id, w] : d.ways) {
-    if (is_lake(w.tags) && w.closed()) keep(d, w.refs);
-  }
-  for (const auto& [id, r] : d.relations) {
-    if (r.tag("type") != "multipolygon" || !is_lake(r.tags)) continue;
-    const auto whole = [&](const OsmData& src) {
-      return std::all_of(r.members.begin(), r.members.end(),
-                         [&](int64_t m) { return src.ways.count(m) > 0; });
-    };
-    const OsmData* src = &d;
-    OsmData full;
-    if (!whole(d)) {
-      if (!osm.relation_full(id, fetch, full, error) || !whole(full)) {
-        if (!error.empty()) return {};
-        missing++;
-        continue;
-      }
-      src = &full;
-    }
-    std::vector<std::vector<int64_t>> outer;
-    for (size_t k = 0; k < r.members.size(); k++) {
-      if (r.roles[k] == "inner") continue;
-      outer.push_back(src->ways.at(r.members[k]).refs);
-    }
-    for (const std::vector<int64_t>& ring : join_rings(std::move(outer))) keep(*src, ring);
-  }
-  std::sort(found.begin(), found.end(), [](const Found& a, const Found& b) {
-    if (a.area != b.area) return a.area > b.area;
-    return a.shore[0].x != b.shore[0].x ? a.shore[0].x < b.shore[0].x : a.shore[0].z < b.shore[0].z;
-  });
-  if (found.size() > kMostLakes) found.resize(kMostLakes);
-  std::vector<mg::HintLake> out;
-  out.reserve(found.size());
-  for (Found& l : found) out.push_back({std::move(l.shore)});
-  return out;
-}
-
 // A face baked: its hints, its data as kept, and what the bake could not read.
 struct Baked {
   mg::RealHints hints;
@@ -608,7 +377,7 @@ struct Baked {
   int missing = 0;    // forest and lake relations left out for want of members
 };
 
-// With `kept` (--water), the lakes alone baked into the tree's hints, the rest kept as it is.
+// With `kept` (--water), the water alone baked into the tree's hints, the rest kept as it is.
 bool bake(const mg::FaceCrop& f, const mg::RealFace& face, ge::mountain::labs::OsmCache& osm,
           bool fetch, const mg::RealHints* kept, Baked& out, std::string& error) {
   const OsmData d = osm.read_face(f);
@@ -625,6 +394,7 @@ bool bake(const mg::FaceCrop& f, const mg::RealFace& face, ge::mountain::labs::O
   }
   out.hints.lakes = lakes_of(f, d, osm, fetch, out.missing, error);
   if (!error.empty()) return false;
+  out.hints.streams = streams_of(f, d, face);
   out.data = mg::encode_hints(out.hints);
   // What a reader gets back: the kept data decoded, on the grain.
   std::optional<mg::RealHints> back = mg::decode_hints(out.data);
@@ -770,6 +540,13 @@ ge::lab::Picture draw_hints(const mg::RealFace& face, const mg::RealHints& h, in
       }
     }
   }
+  for (const mg::HintStream& st : h.streams) {
+    const double w = st.kind == mg::HintStreamKind::river ? 3 : 1.5;
+    for (size_t i = 1; i < st.points.size(); i++) {
+      ge::lab::draw_line(pic, st.points[i - 1].x * s, st.points[i - 1].z * s, st.points[i].x * s,
+                         st.points[i].z * s, {20, 170, 210}, w);
+    }
+  }
   for (const mg::HintPiste& p : h.pistes) {
     for (size_t i = 1; i < p.points.size(); i++) {
       ge::lab::draw_line(pic, p.points[i - 1].x * s, p.points[i - 1].z * s, p.points[i].x * s,
@@ -798,6 +575,7 @@ void run(ge::lab::Lab& lab) {
   int pistes = 0;
   int wooded = 0;
   int lakes = 0;
+  int streams = 0;
   for (const mg::FaceCrop* f : faces) {
     const std::string id = f->id;
     const auto face = mg::real_face(id);
@@ -823,7 +601,7 @@ void run(ge::lab::Lab& lab) {
         continue;
       }
       if (water && !h) {
-        lab.fail(id + " has no hints in the tree to bake its lakes into",
+        lab.fail(id + " has no hints in the tree to bake its water into",
                  "next: bake them whole first, without --water (skill: mountain).");
         continue;
       }
@@ -867,6 +645,9 @@ void run(ge::lab::Lab& lab) {
     pistes += int(h->pistes.size());
     wooded += woods ? 1 : 0;
     lakes += int(h->lakes.size());
+    streams += int(h->streams.size());
+    double stream_m = 0;
+    for (const mg::HintStream& st : h->streams) stream_m += length_of(st.points);
     double water_m2 = 0;
     for (const mg::HintLake& l : h->lakes) water_m2 += std::abs(signed_area(l.shore));
     std::string bands;
@@ -885,13 +666,16 @@ void run(ge::lab::Lab& lab) {
                                  woods ? f0(woods->line) : "-",
                                  bands.empty() ? "-" : bands,
                                  std::to_string(h->lakes.size()),
-                                 f2(water_m2 / 1e4)};
+                                 f2(water_m2 / 1e4),
+                                 std::to_string(h->streams.size()),
+                                 f0(stream_m)};
     row.insert(row.end(), extra.begin(), extra.end());
     rows.push_back(std::move(row));
     lab.metric(id + ".lifts", double(h->lifts.size()), "count");
     lab.metric(id + ".pistes", double(h->pistes.size()), "count");
     if (woods) lab.metric(id + ".tree-line", woods->line, "m");
     if (!h->lakes.empty()) lab.metric(id + ".lakes", double(h->lakes.size()), "count");
+    if (!h->streams.empty()) lab.metric(id + ".streams", double(h->streams.size()), "count");
     if (faces.size() <= 4) drawn.emplace_back(*face, std::move(*h));
   }
   if (written > 0) {
@@ -902,13 +686,15 @@ void run(ge::lab::Lab& lab) {
   std::vector<std::string> head{"face",     "region",      "chairs",
                                 "gondolas", "drags",       "pistes g/b/r/k/route",
                                 "piste m",  "tree line m", "cover by band, bottom first",
-                                "lakes",    "water ha"};
+                                "lakes",    "water ha",    "streams",
+                                "stream m"};
   if (baking) head.insert(head.end(), {"wooded", "missing", "base64 bytes", "vs the tree"});
   lab.table({"the real faces' hints (the tree's; with --bake, the bake's)", head, rows});
   lab.metric("lifts", lifts, "count");
   lab.metric("pistes", pistes, "count");
   lab.metric("wooded", wooded, "count");
   lab.metric("lakes", lakes, "count");
+  lab.metric("streams", streams, "count");
   for (const auto& [face, h] : drawn) {
     const std::string id = face.crop->id;
     lab.shot({id,
@@ -940,7 +726,7 @@ const ge::lab::LabSpec kSpec{
         {"bake", "", "bake the hints off the map data and compare them with the tree's", true},
         {"fetch", "", "with --bake: download the map data not yet kept in --osm", true},
         {"write", "", "with --bake: write the faces baked and the index into the tree", true},
-        {"water", "", "with --bake: bake the lakes alone into the tree's hints", true},
+        {"water", "", "with --bake: bake the lakes and streams alone into the tree's hints", true},
         {"osm", ".cache/osm", "where the map data is kept"},
     },
     "--faces=alpine-1,fell-1 --size=192",

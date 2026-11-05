@@ -59,11 +59,6 @@ struct Scratch {
   std::span<const uint8_t> bytes() const { return {buf.data(), w.overflow ? 0 : w.size}; }
 };
 
-float field(const ClassicServer& s, int e, int offset) {
-  if (offset < 0) return 0;
-  return pg::as_float(*pg::entity_field(s.qc->q.vm, e, offset));
-}
-
 bool playing(const ClassicServer& s, int k) {
   return s.clients[k].qc_active && !s.clients[k].spectator &&
          s.qc->sv.clients[static_cast<size_t>(k)].active;
@@ -178,18 +173,19 @@ void statics(ClassicServer& s, MultiviewRecorder& r) {
 void player(const ClassicServer& s, int k, gn::Writer& w) {
   const sh::Edict& e = s.qc->sv.edicts[static_cast<size_t>(k) + 1];
   const sh::MoveCmd& cmd = s.qc->sv.clients[static_cast<size_t>(k)].last_cmd;
-  const auto& f = s.qc->q.layout->f;
+  const sv::RulesWorld& world = s.qc->world;
+  const sv::WorldEntity& row = world.entities[static_cast<size_t>(k) + 1];
   constexpr int kAllFields = 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 1024 | 2048;
   write_byte(w, svc::playerinfo);
   write_byte(w, k);
   write_short(w, kAllFields);
-  write_byte(w, static_cast<int>(field(s, k + 1, f.frame)));
+  write_byte(w, row.frame);
   for (int i = 0; i < 3; i++) write_coord(w, e.origin[i]);
   for (int i = 0; i < 3; i++) write_angle16(w, cmd.angles[i]);
-  write_byte(w, static_cast<int>(field(s, k + 1, f.modelindex)));
-  write_byte(w, static_cast<int>(field(s, k + 1, f.skin)));
-  write_byte(w, static_cast<int>(field(s, k + 1, f.effects)));
-  write_byte(w, static_cast<int>(field(s, k + 1, s.f_weaponframe)));
+  write_byte(w, row.modelindex);
+  write_byte(w, row.skin);
+  write_byte(w, row.effects);
+  write_byte(w, static_cast<int>(world.clients[k].numbers.weapon_frame));
 }
 
 // A packed recorder's new plain bytes fed to its stream (flushed every kPackFlushBytes).

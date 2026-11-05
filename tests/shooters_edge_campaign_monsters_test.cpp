@@ -5,14 +5,20 @@
 // path walks it corner to corner. The kinds that fight up close and in the air: a swordsman and a
 // brute hurt a player near them, a ghoul shrugs off a small hit and is knocked down by a big one
 // and gets up again whole, and only its whole health in one blow ends it; a flyer keeps its height
-// and spits at the player.
+// and spits at the player. The big and late kinds: each counts at spawn and hurts a player in front
+// of it, the giant takes half of a blast, and a spawn bursts when it dies. The bosses: the lava
+// boss rises when used, throws, and falls to three strikes; arriving inside the final boss kills
+// it and ends the game; a teleport train rides its path.
 //
 // ge:summary Tests: our campaign mod's monsters: counting, noticing, attacking, paths, each kind
 // ge:keywords test campaign-mod monsters monster-ai rifleman hound path-corner killed-monsters
-// ge:keywords notice show-hostile swordsman brute ghoul flyer eel knockdown
+// ge:keywords notice show-hostile swordsman brute ghoul flyer eel knockdown leaper giant caster
+// ge:keywords trooper spawn heavy-swordsman blast-share lava-boss final-boss telefrag
+// ge:keywords teleport-train event-lightning
 // ge:skill progs shooter testing
 #include <algorithm>
 #include <filesystem>
+#include <initializer_list>
 #include <string>
 
 #include "check.hpp"
@@ -90,23 +96,32 @@ struct Game {
     }
     return 0;
   }
-  // One blow of `points` on `target` from `attacker`, through the program's own `damage`, called
-  // the way the host calls a hook with arguments.
-  bool hit(int target, int attacker, float points) {
-    const int fn = pg::find_function(mod(), "damage");
+  // A function of the program called with these parameter words, the way the host calls a hook
+  // with arguments.
+  // `self` (and `activator`) are set first when `as` names an entity.
+  bool call(const char* name, std::initializer_list<uint32_t> args, int as = 0) {
+    const int fn = pg::find_function(mod(), name);
     if (fn < 0) return false;
     pg::Vm& vm = s().q.vm;
     se::enter_qc(s().q, s().sv);
-    vm.globals[static_cast<size_t>(pg::parm(0))] =
-        static_cast<uint32_t>(pg::entity_value(vm, target));
-    vm.globals[static_cast<size_t>(pg::parm(1))] =
-        static_cast<uint32_t>(pg::entity_value(vm, attacker));
-    vm.globals[static_cast<size_t>(pg::parm(2))] =
-        static_cast<uint32_t>(pg::entity_value(vm, attacker));
-    vm.globals[static_cast<size_t>(pg::parm(3))] = pg::as_word(points);
+    if (as > 0) {
+      vm.globals[pg::find_global(mod(), "self")->offset] = ent(as);
+      vm.globals[pg::find_global(mod(), "activator")->offset] = ent(1);
+    }
+    int i = 0;
+    for (uint32_t a : args) vm.globals[static_cast<size_t>(pg::parm(i++))] = a;
     const bool ok = se::run_qc(s().q, fn);
     se::leave_qc(s().q);
     return ok;
+  }
+  uint32_t ent(int e) { return static_cast<uint32_t>(pg::entity_value(s().q.vm, e)); }
+  // One blow of `points` on `target` from `attacker`, through the program's own `damage`.
+  bool hit(int target, int attacker, float points) {
+    return call("damage", {ent(target), ent(attacker), ent(attacker), pg::as_word(points)});
+  }
+  // A blast of `points` centred on `at`'s origin, through the program's own `radius_damage`.
+  bool blast(int at, int attacker, float points) {
+    return call("radius_damage", {ent(at), ent(attacker), pg::as_word(points), ent(0), 0});
   }
   const sh::Edict& ed(int e) { return s().sv.edicts[static_cast<size_t>(e)]; }
   // One host frame with the player looking along `yaw` and pressing `buttons`.
@@ -348,5 +363,169 @@ TEST(a_flyer_keeps_its_height_and_spits_at_the_player) {
   }
   CHECK(g.field(1, g.f().health) < 100);
   CHECK_MSG(lowest > 40, std::to_string(lowest));  // flying, not fallen to the floor
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(the_big_and_late_kinds_count_at_spawn) {
+  Game g(R"({
+"classname" "monster_demon1"
+"origin" "-100 200 24"
+}
+{
+"classname" "monster_shambler"
+"origin" "-100 -200 24"
+}
+{
+"classname" "monster_shalrath"
+"origin" "100 0 24"
+}
+{
+"classname" "monster_enforcer"
+"origin" "0 300 24"
+}
+{
+"classname" "monster_tarbaby"
+"origin" "0 -300 24"
+}
+{
+"classname" "monster_hell_knight"
+"origin" "-300 300 24"
+}
+)");
+  CHECK(g.s().q.faults == 0);
+  CHECK(g.global("total_monsters") == 6);
+  CHECK(g.field(g.find("monster_demon1"), g.f().health) == 300);
+  CHECK(g.field(g.find("monster_shambler"), g.f().health) == 600);
+  CHECK(g.field(g.find("monster_shalrath"), g.f().health) == 400);
+  CHECK(g.field(g.find("monster_enforcer"), g.f().health) == 80);
+  CHECK(g.field(g.find("monster_tarbaby"), g.f().health) == 80);
+  CHECK(g.field(g.find("monster_hell_knight"), g.f().health) == 250);
+}
+
+TEST(each_big_and_late_kind_hurts_a_player_in_front_of_it) {
+  for (const char* kind : {"monster_demon1", "monster_shambler", "monster_shalrath",
+                           "monster_enforcer", "monster_tarbaby", "monster_hell_knight"}) {
+    Game g(std::string(R"({
+"classname" ")") +
+           kind + R"("
+"origin" "-200 0 24"
+"angle" "180"
+}
+)");
+    for (int i = 0; i < kFrames * 10 && g.field(1, g.f().health) == 100; i++)
+      CHECK_MSG(g.frame(180), g.error);
+    CHECK_MSG(g.field(1, g.f().health) < 100, kind);
+    CHECK_MSG(g.s().q.faults == 0, kind);
+  }
+}
+
+TEST(the_giant_takes_half_of_a_blast) {
+  Game g(R"({
+"classname" "monster_shambler"
+"origin" "-100 0 24"
+}
+{
+"classname" "monster_hell_knight"
+"origin" "-100 200 24"
+}
+)");
+  const int giant = g.find("monster_shambler"), knight = g.find("monster_hell_knight");
+  // A blast of 110 on each one's own origin: the giant's centre is 20 units up (100, half of
+  // it taken), the heavy swordsman's 8 (106, all of it).
+  CHECK(g.blast(giant, 1, 110));
+  CHECK(g.blast(knight, 1, 110));
+  CHECK_MSG(g.field(giant, g.f().health) == 550, std::to_string(g.field(giant, g.f().health)));
+  CHECK_MSG(g.field(knight, g.f().health) == 144, std::to_string(g.field(knight, g.f().health)));
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(a_spawn_bursts_when_it_dies) {
+  Game g(R"({
+"classname" "monster_tarbaby"
+"origin" "-340 0 24"
+"spawnflags" "1"
+}
+)");
+  CHECK_MSG(g.frame(180), g.error);
+  const int spawn = g.find("monster_tarbaby");
+  CHECK(spawn > 0);
+  CHECK(g.hit(spawn, 1, 100));
+  CHECK(g.global("killed_monsters") == 1);
+  CHECK(g.find("monster_tarbaby") == 0);  // nothing left of it
+  CHECK(g.field(1, g.f().health) < 100);  // the player beside it caught the burst
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(the_lava_boss_rises_when_used_throws_and_falls_to_three_strikes) {
+  Game g(R"({
+"classname" "monster_boss"
+"origin" "-150 0 24"
+}
+)");
+  const int boss = g.find("monster_boss");
+  CHECK(g.global("total_monsters") == 1);
+  CHECK(g.ed(boss).solid == 0);  // under the lava until used
+  CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.call("boss_use", {}, boss));
+  CHECK(g.ed(boss).solid != 0);
+  for (int i = 0; i < kFrames * 8 && g.field(1, g.f().health) == 100; i++)
+    CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.field(1, g.f().health) < 100);  // its fire reached the player
+  // The lightning with no doors to strike between does nothing.
+  CHECK(g.call("lightning_use", {}, g.find("player")));
+  CHECK(g.field(boss, g.f().health) == 3);
+  for (int i = 0; i < 3; i++) CHECK(g.call("boss_struck", {}));
+  CHECK(g.field(boss, g.f().health) == 0);
+  CHECK(g.global("killed_monsters") == 1);
+  CHECK(g.ed(boss).solid == 0);
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(arriving_inside_the_final_boss_kills_it_and_ends_the_game) {
+  Game g(R"({
+"classname" "monster_oldone"
+"origin" "-416 0 24"
+}
+)");
+  const int boss = g.find("monster_oldone");
+  CHECK(g.field(boss, g.f().health) == 40000);
+  CHECK_MSG(g.frame(0), g.error);
+  // The player stands inside it, as a teleporter would have put him there.
+  CHECK(g.call("teleport_arrived", {g.ent(1)}));
+  CHECK(g.global("killed_monsters") == 1);
+  for (int i = 0; i < kFrames * 5 && g.global("intermission_running") == 0; i++)
+    CHECK_MSG(g.frame(0), g.error);
+  CHECK(g.global("intermission_running") == 1);
+  CHECK(g.s().q.faults == 0);
+}
+
+TEST(a_teleport_train_rides_its_path) {
+  Game g(R"({
+"classname" "misc_teleporttrain"
+"origin" "-300 0 100"
+"target" "c1"
+"speed" "200"
+}
+{
+"classname" "path_corner"
+"targetname" "c1"
+"target" "c2"
+"origin" "-300 0 100"
+}
+{
+"classname" "path_corner"
+"targetname" "c2"
+"target" "c1"
+"origin" "-100 0 100"
+}
+)");
+  const int train = g.find("misc_teleporttrain");
+  float most = -1000;
+  for (int i = 0; i < kFrames * 2; i++) {
+    CHECK_MSG(g.frame(0), g.error);
+    most = std::max(most, g.ed(train).origin.x);
+  }
+  CHECK_MSG(most > -110, std::to_string(most));  // reached the far corner
+  CHECK_MSG(g.ed(train).origin.x < most, std::to_string(g.ed(train).origin.x));  // and turned back
   CHECK(g.s().q.faults == 0);
 }

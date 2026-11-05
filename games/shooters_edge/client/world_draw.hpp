@@ -10,12 +10,17 @@
 // the map's baked light on the floor under the player (brush/light_probe.hpp) and by its own
 // muzzle flash. The built-in arena has no drawn world: the sky, the effects and the weapon alone.
 //
-// It is the client's one seam onto the renderer: `create_world_draw` and `draw_world`.
+// It is the client's one seam onto the renderer: `create_world_draw` and `draw_world`. A window
+// that keeps drawing while a map loads makes it in three steps instead: `read_world` on any
+// thread (the map's textures decoded, its rebaked light and its models read, the enhanced cache
+// found: the seconds of it), `begin_world` on the GPU's thread (the uploads, the pipelines
+// started), then `finish_world` once `world_compiled` says the pipelines are done.
 //
 // ge:summary The window's world frame: the BSP map, the effects, sky, bloom, post, the overlay
 // ge:keywords world-draw bsp render frame sky bloom post overlay ui-pass r_look classic modern
 // ge:keywords create_world_draw draw_world resize_world palette particles dynamic-lights blend
-// ge:keywords models items flames
+// ge:keywords models items flames read_world begin_world world_compiled finish_world own_sky
+// ge:keywords background-load async-load title
 // ge:keywords viewmodel held-weapon light-probe
 // ge:skill render brush shooter
 #pragma once
@@ -57,7 +62,30 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& device, const SearchPath& files,
                                std::span<const ge::viewmodel::HeldModel> weapons,
                                std::string& error, const ModelLoad& models = {},
                                const GameAdapter& game = classic_adapter());
+
+// The world's CPU half, read on any thread: `picture` is copied (the world is made in it), and
+// `models.names` must outlive the call.
+struct WorldRead;
+struct WorldReadDeleter {
+  void operator()(WorldRead* r) const;
+};
+using WorldReadPtr = std::unique_ptr<WorldRead, WorldReadDeleter>;
+WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const look::Picture& picture,
+                        const ModelLoad& models, std::string& error,
+                        const GameAdapter& game = classic_adapter());
+// Its GPU half on the device's thread: the uploads made and the pipelines started; drawn once
+// `finish_world` is done (`world_compiled` true, or it waits). Null with the reason in `error`.
+WorldDrawPtr begin_world(ge::gpu::Device& device, WorldReadPtr read, uint32_t width,
+                         uint32_t height, wgpu::TextureFormat format, const look::Picture& picture,
+                         std::span<const ge::viewmodel::HeldModel> weapons, std::string& error);
+bool world_compiled(ge::gpu::Device& device, WorldDraw& w);
+// The pipelines finished and the targets made at the window's size now. False with the reason.
+bool finish_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_t height,
+                  std::string& error);
+
 void resize_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_t height);
+// With `own` the frame's sky is the view's as the caller dressed it (the title's), not the map's.
+void own_sky(WorldDraw& w, bool own);
 // Whether a setting read only when the world is made changed since it was made (`ce_textures`,
 // `ce_models`, `ce_rebake`, `ce_bloom`, `r_bloom`): the window makes it again (the menu closed).
 bool world_stale(const WorldDraw& w);

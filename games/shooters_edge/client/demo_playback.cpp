@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdlib>
 
+#include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/demo_highlights.hpp"
 
 namespace shooters_edge::client {
@@ -270,6 +271,26 @@ std::vector<std::string> highlight_lines(const DemoPlayback& p, bool all) {
   }
   if (out.empty()) out.push_back("demo_highlights: none found");
   return out;
+}
+
+void add_demo_commands(ge::console::Console& console, std::string& ask, bool& paced) {
+  using Con = ge::console::Console;
+  console.add_command("timedemo", "timedemo <demo>: play a demo flat out and report its fps",
+                      [&ask](Con& c, const ge::console::Args& a) {
+                        if (a.size() < 2)
+                          c.print("timedemo: name a demo (timedemo demo1)");
+                        else
+                          ask = expand_home(a[1]);
+                      });
+  console.add_command("playdemo", "playdemo <demo>: play a demo at its own pace",
+                      [&ask, &paced](Con& c, const ge::console::Args& a) {
+                        if (a.size() < 2) {
+                          c.print("playdemo: name a demo (playdemo demo1, playdemo match.mvd)");
+                        } else {
+                          ask = expand_home(a[1]);
+                          paced = true;
+                        }
+                      });
 }
 
 }  // namespace shooters_edge::client

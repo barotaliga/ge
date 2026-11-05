@@ -31,8 +31,9 @@
 namespace ge::classicenhance {
 
 // The stage's version: a rerun redoes the stage when it moves. 2: the rebake (GERB) in place of
-// the map's own lightmaps packed into a picture.
-inline constexpr int kLightmapStageVersion = 2;
+// the map's own lightmaps packed into a picture. 3: the lights' fall-off kinds, `_color` and
+// spots read (brush/lights.hpp), so the bright lights of a falling kind no longer blow it out.
+inline constexpr int kLightmapStageVersion = 3;
 
 // Every lightmap of `map` shelf-packed into one picture, at most `max_width` texels wide (the map's
 // own light, for labs to show beside the rebake).

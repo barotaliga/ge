@@ -35,11 +35,6 @@ bool same_host(const gn::Address& a, const gn::Address& b) {
   return x == y;
 }
 
-int field_offset(const pg::Progs& p, const char* name) {
-  const pg::Def* d = pg::find_field(p, name);
-  return d ? d->offset : -1;
-}
-
 int32_t new_challenge(ClassicServer& s, const gn::Address& from) {
   int slot = 0;
   for (int i = 0; i < 64; i++) {
@@ -432,28 +427,19 @@ void client_print(ClassicServer& s, int slot, int level, const std::string& text
   reliable_svc(s, slot, m);
 }
 
-bool classic_start(ClassicServer& s, sv::QcServer& qc, gn::Transport& t, const ServerConfig& cfg,
-                   std::string& error) {
+// What the endpoint reads off a map's server once: the player model, the mod's fields, the
+// map's static sounds and signon writes, the baselines and the server info.
+bool bind_map(ClassicServer& s, sv::QcServer& qc, std::string& error) {
   if (qc.progs == nullptr || qc.models.empty()) {
     error = "classic_start: the mod server has no map; next: call load_map before classic_start";
     return false;
   }
-  s.cfg = cfg;
   s.qc = &qc;
-  s.transport = &t;
-  s.rng = ge::core::make_rng(cfg.seed);
+  s.player_model = 0;
+  s.static_sounds.clear();
+  s.signon.clear();
   for (size_t i = 1; i < qc.models.size(); i++)
     if (qc.models[i] == "progs/player.mdl") s.player_model = static_cast<int>(i);
-  s.f_currentammo = field_offset(*qc.progs, "currentammo");
-  s.f_armorvalue = field_offset(*qc.progs, "armorvalue");
-  s.f_ammo[0] = field_offset(*qc.progs, "ammo_shells");
-  s.f_ammo[1] = field_offset(*qc.progs, "ammo_nails");
-  s.f_ammo[2] = field_offset(*qc.progs, "ammo_rockets");
-  s.f_ammo[3] = field_offset(*qc.progs, "ammo_cells");
-  s.f_weapon = field_offset(*qc.progs, "weapon");
-  s.f_weaponframe = field_offset(*qc.progs, "weaponframe");
-  if (cfg.voice) s.cfg.offered[ExtFamily::x2] |= kX2Voice;
-
   // What the map's load wrote: its static sounds and signon writes; its statics are qc.statics.
   for (const sv::NetEvent& ev : qc.out.events)
     if (ev.kind == sv::EventKind::ambient) {
@@ -495,7 +481,41 @@ bool classic_start(ClassicServer& s, sv::QcServer& qc, gn::Transport& t, const S
     qc.lag_rewind = &lag_rewind;
     qc.lag_ctx = &s;
   }
+  return true;
+}
+
+bool classic_start(ClassicServer& s, sv::QcServer& qc, gn::Transport& t, const ServerConfig& cfg,
+                   std::string& error) {
+  s.cfg = cfg;
+  s.transport = &t;
+  s.rng = ge::core::make_rng(cfg.seed);
+  if (cfg.voice) s.cfg.offered[ExtFamily::x2] |= kX2Voice;
+  if (!bind_map(s, qc, error)) return false;
   s.packets.reserve(static_cast<size_t>(sh::kMaxClients) * 4);
+  return true;
+}
+
+bool classic_change(ClassicServer& s, sv::QcServer& next, std::string& error) {
+  for (int i = 0; i < sh::kMaxClients; i++)
+    if (s.clients[i].state != ConnState::free) stuff(s, i, "changing\n");
+  s.qc->lag_rewind = nullptr;
+  s.qc->lag_ctx = nullptr;
+  if (!bind_map(s, next, error)) return false;
+  s.spawncount++;
+  for (int i = 0; i < sh::kMaxClients; i++) {
+    ClassicClient& c = s.clients[i];
+    antilag_clear(s.antilag, i);
+    if (c.state == ConnState::free) continue;
+    c.state = ConnState::connected;
+    c.qc_active = false;
+    c.delta_byte = -1;
+    for (ServerFrame& f : c.frames) f = ServerFrame{};
+    for (bool& known : c.stats_known) known = false;
+    c.statics_sent = 0;
+    c.dl = ServerDownload{};
+    stuff(s, i, "reconnect\n");
+  }
+  s.log.push_back("change " + next.map_name);
   return true;
 }
 
@@ -549,9 +569,7 @@ std::string status_text(const ClassicServer& s, int opt) {
     const ClassicClient& c = s.clients[i];
     if (c.state == ConnState::free) continue;
     int frags = 0;
-    if (c.qc_active)
-      frags = static_cast<int>(
-          pg::as_float(*pg::entity_field(s.qc->q.vm, i + 1, s.qc->q.layout->f.frags)));
+    if (c.qc_active) frags = static_cast<int>(s.qc->world.clients[i].numbers.frags);
     const int ping = c.state != ConnState::spawned ? 999
                      : c.ping_samples == 0         ? 9999
                                                    : static_cast<int>(c.ping_s * 1000);
@@ -592,21 +610,17 @@ std::string status_text(const ClassicServer& s, int opt) {
 EntityState entity_state(const ClassicServer& s, int e) {
   EntityState st;
   st.number = e;
-  const pg::Vm& vm = s.qc->q.vm;
-  auto f = [&](int field) { return pg::as_float(*pg::entity_field(vm, e, field)); };
-  const sh::Edict& ed = s.qc->sv.edicts[static_cast<size_t>(e)];
-  st.modelindex = static_cast<int>(f(s.qc->q.layout->f.modelindex));
-  st.frame = static_cast<int>(f(s.qc->q.layout->f.frame));
-  st.colormap = static_cast<int>(f(s.qc->q.layout->f.colormap));
-  st.skin = static_cast<int>(f(s.qc->q.layout->f.skin));
-  st.effects = static_cast<int>(f(s.qc->q.layout->f.effects));
-  st.origin = ed.origin;
-  st.angles = ed.angles;
-  if (static_cast<size_t>(e) < s.qc->extras.size() &&
-      s.qc->extras[static_cast<size_t>(e)].has_alpha) {
-    const float a = s.qc->extras[static_cast<size_t>(e)].alpha;
-    const int v = static_cast<int>(a * 254);
-    st.alpha = a >= 1 ? 0 : v < 1 ? 1 : v > 254 ? 254 : v;
+  const sv::WorldEntity& row = s.qc->world.entities[static_cast<size_t>(e)];
+  st.modelindex = row.modelindex;
+  st.frame = row.frame;
+  st.colormap = row.colormap;
+  st.skin = row.skin;
+  st.effects = row.effects;
+  st.origin = row.origin;
+  st.angles = row.angles;
+  if (row.alpha != 1) {
+    const int v = static_cast<int>(row.alpha * 254);
+    st.alpha = row.alpha >= 1 ? 0 : v < 1 ? 1 : v > 254 ? 254 : v;
   }
   return st;
 }

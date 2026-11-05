@@ -20,6 +20,7 @@
 // ge:summary Our sky picked by a classic map's sky texture: its type, light, tint and cloud
 // ge:keywords bsp brush sky sky-type match pick_sky sky-texture hue dusk cover v2 night_over
 // ge:keywords classic-night evening moon scud low-cloud wind dress_sky clouds_of adapt
+// ge:keywords at_hour sv_hour time-of-day sun-position
 // ge:skill brush render
 // ge:test tests/brush_bsp_sky_test.cpp
 #pragma once
@@ -71,6 +72,12 @@ bool with_type(SkyPick& pick, std::string_view name);
 // light against the rooms goes to 1, the hour doing the dimming.
 void night_over(SkyPick& pick, std::string_view map);
 
+// THE HOUR SET (sv_hour, `at_hour`): the sun where it stands at `hour` (0 .. 24) on a summer's day
+// at the latitude the night's stars turn over (46 N, the sun 15 degrees north of the equator): up
+// at about 5, 59 degrees high at noon in the south, down at about 19. By day the pick's own type,
+// tint and cover keep; once the sun is 6 degrees under the horizon the hour is `night` (the map's
+// own classic night, its moon on the far side of the sky from the sun).
+void at_hour(SkyPick& pick, const SkyPick& night, double hour);
 // The layers over a map whose highest point is at world `top_y`, at time `t` s: by day the pick's
 // one still deck of heaps (`cover`, at 1.5 to 2.3 km); at night the scud and the deck, each
 // carried on the wind aloft at its height and the evening's jet.

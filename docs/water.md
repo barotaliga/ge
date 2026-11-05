@@ -873,7 +873,58 @@ it: a game lays them after it, as the free ride lays its tarn.
   ARGS="--face=alpine-1 --views=tarn-high --day=200"` shows a face's largest lake open in
   summer; `--day=40` frozen.
 
-Not yet (M24l5): the streams' channels and the valley's reservoir.
+## A real face's streams (`plugins/mountain/tarn/brook.hpp`, M24l5)
+
+A real face's running water comes off the open map data with its lakes (`HintStream`, baked by
+the same `--water` bake): every brook and river the map draws as a line (`waterway` stream or
+river; a culvert's or a tunnel's length, a canal and a ditch are not), each its longest run on
+the face's square, turned to run top first by the face's heights, thinned to 4 m and kept from
+150 m, the longest 48 a face. They ride after the lakes in a face's packed hints (a lakes' count
+of 0 written before them where a face has streams and no lake), so the hints baked before are
+kept bit for bit where a face has none.
+
+- **The line** (`mapped_streams`): the mapped line read every 4 m, its surface falling and never
+  climbing, at each point the lower of the last point's and the ground's less a sink (0.8 m for a
+  brook, 1.6 m for a river), so the water runs in a bed of its own. Where the generator's ground
+  rises more than 3 m over that (a spur the real stream does not cross) or the line runs into a
+  laid lake, the stream is buried and the line breaks; each run of 60 m or more is a stream.
+- **The channel**: a brook 3 m bank to bank and 0.5 m deep, a river 12 m and 1.5 m.
+- **The ice** (`stream_ice`): a still lake's at the stream's top. A brook with any ice is frozen
+  over and snowed in, a river only where that ice would bear a skier.
+- **The bed** (`lay_stream`): open water is cut across its channel and half a grid cell past
+  each edge, shelving to its depth mid-stream; the banks stand 25 cm over the water and grade to
+  the ground no steeper than 0.8 out to 12 m. A frozen stream is a shallow gully under the snow,
+  60 % of its depth over twice its width, never down to the water. The trees in the channel and
+  within 1.5 m of it are felled.
+- **Drawn**: every open stream a channel (`water::add_river`, its bed the laid ground) through
+  `app/lakes.hpp`, its ribbon built once when the frame is made (`render/water_stream.hpp`, which
+  now reads 64 bodies' optics a frame). `make lab LAB=world ARGS="--face=alpine-1
+  --views=stream,stream-high --day=200"` follows a face's longest stream in summer; `--day=40`
+  shows its gully under the snow.
+
+## The valley's reservoir (`plugins/mountain/tarn/reservoir.hpp`, M24l5)
+
+A dealt map has no mapped water, so the free ride builds a reservoir after its tarn: an earth
+dam across one of the mountain's valleys and the water it holds (`MapLake` in `Level::lakes`,
+`MapDam` in `Level::dams`). The generator builds no water, so no dealt map moves; `free_map`
+lays it.
+
+- **The site** (`find_reservoir`): every 32 m of the mountain's lower 60 % (above the hub) is
+  tried as the middle of a dam across the ground's fall, at 8, 12, 18, 25 and 35 m over that
+  ground: the crest runs both ways along the contour until the valley's sides rise to it, 420 m
+  at most. The water stands 2 m under the crest, and the ground under it is flooded from just
+  upstream on an 8 m grid: the flood must not run round the dam's ends or off the map, must
+  stay 30 m clear of every run, ski route, lift, the hub and a laid lake, and must cover 3 to
+  60 ha. The site that floods the most is kept.
+- **The shore**: the flooded cells' outline thinned to 5 m; its centroid and its circle's radius
+  as a mapped lake's.
+- **The dam** (`lay_reservoir`): an earth bank 8 m across its crest, its faces falling 1 in 2 to
+  the ground and run on 10 m into the valley's sides; the trees on it felled. Seed 38's holds
+  3.9 ha behind a 392 m crest 35 m over its valley.
+- **The water**: the flooded ground already lies under it; ice that bears fills the shore flat,
+  as a frozen tarn's. Drawn through `app/lakes.hpp` like every lake. `make lab LAB=world
+  ARGS="--reservoir --views=reservoir,reservoir-high --day=200"` looks up it from the dam's
+  crest and from over the valley below; `--day=40` frozen.
 
 ## Determinism (G1)
 
@@ -906,8 +957,8 @@ never read back by the simulation.
 | `rain-audition` | sim | M36d | The rain's sound metered and written as WAV: a drizzle, a light rain and a downpour in the open and by a lake, the downpour under a roof, a blizzard and still snow; each voice's level against the rate |
 | `water-cost` | bench | M24f, M24g | The CPU's costs per step (sample, floats, the flow grid) and the GPU's per pass |
 | `free --water` | drive | M24l3 | Fall Line: the bot near and into water on the free ride |
-| `real-hints` | picture | M24l2 | Each real face's lifts, pistes, woods and lakes (the lakes' count and area); a face named alone drawn with its lakes in blue; `--bake --water` reads the lakes off the open map data into the tree's hints |
-| `world --face` | picture | M24l2 | Fall Line's frame on a real face's ski area with its mapped lakes laid, iced by `--day`; the `tarn` views frame the largest |
+| `real-hints` | picture | M24l2, M24l5 | Each real face's lifts, pistes, woods, lakes (the lakes' count and area) and streams (their count and length); a face named alone drawn with its lakes in blue and its streams in cyan; `--bake --water` reads the water off the open map data into the tree's hints |
+| `world --face` | picture | M24l2, M24l5 | Fall Line's frame on a real face's ski area with its mapped lakes and streams laid, iced by `--day`; the `tarn` views frame the largest lake, the `stream` views follow the longest stream; `--reservoir` lays a dealt map's reservoir and the `reservoir` views look up it from its dam |
 | `liquids`, `gpu-lava`, `gpu-slime` | picture | M30 | The other liquids: lava and slime (`docs/liquids.md` § Labs) |
 
 ## Sources

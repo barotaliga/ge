@@ -145,6 +145,7 @@ float EF_RED = 128;     // the shield's
 .void() th_die;           // what a death does to this kind of thing (unset: a player's)
 .void() th_hurt;          // what a hit that leaves it alive does (unset: a player's pain)
 .float show_hostile;      // a player is noisy until this (he fired): monsters hear him
+.float blast_share;       // the share of a blast it takes (0: all of it)
 
 float STATE_TOP = 0;
 float STATE_BOTTOM = 1;
@@ -173,3 +174,8 @@ void() player_respawn;
 float(float w) weapon_rank;
 void() weapon_select_best;
 void(float w) weapon_set;
+
+// Each variant's answer to a teleporter (its world.qc): whether one sends this thing, and what its
+// arrival does where it lands.
+float(entity who) teleport_takes;
+void(entity who) teleport_arrived;
