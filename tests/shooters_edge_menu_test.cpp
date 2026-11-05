@@ -454,7 +454,7 @@ TEST(screenshots_page_looks_through_and_deletes_the_screenshots) {
   fs::create_directories(dir, ec);
   for (const char* name :
        {"shooters_edge-2026-11-05-101500.png", "shooters_edge-2026-11-05-101501.png"}) {
-    const std::vector<uint8_t> rgba(32 * 18 * 4, 200);
+    const std::vector<uint8_t> rgba(size_t{32} * 18 * 4, 200);
     CHECK(ge::lab::write_file((dir / name).string(), ge::lab::encode_png_rgb(32, 18, rgba)));
   }
   World w;

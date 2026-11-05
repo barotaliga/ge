@@ -70,7 +70,7 @@ TEST(the_time_and_size_read_for_a_person) {
   CHECK(gc::taken_of("fall_line-2026-01-02-030405-3") == "2026-01-02 03:04:05");
   CHECK(gc::taken_of("holiday").empty());
   CHECK(gc::size_text(812) == "812 B");
-  CHECK(gc::size_text(412 * 1024) == "412 KB");
+  CHECK(gc::size_text(uint64_t{412} * 1024) == "412 KB");
   CHECK(gc::size_text(1468006) == "1.4 MB");
 }
 
@@ -78,6 +78,7 @@ TEST(the_folder_lists_newest_first_and_only_stills) {
   const fs::path dir = seven("ge_gallery_list");
   const std::vector<gc::GalleryEntry> list = gc::list_stills(dir.string());
   std::vector<std::string> got;
+  got.reserve(list.size());
   for (const auto& e : list) got.push_back(e.name);
   const std::vector<std::string> want = {"game-2026-11-05-120000.JPG",
                                          "game-2026-11-05-101500-10.png",

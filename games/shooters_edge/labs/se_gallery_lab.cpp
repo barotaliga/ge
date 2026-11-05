@@ -183,7 +183,10 @@ void run(ge::lab::Lab& lab) {
       g.menu.draw(dl, v.w, v.h, 0);
       for (const std::string& p : g.menu.problems()) {
         problems++;
-        lab.fail(v.name() + ", " + id + ": " + p,
+        std::string what = v.name();
+        what += ", " + id + ": ";
+        what += p;
+        lab.fail(what,
                  "shorten the words in games/shooters_edge/menu/gallery_page.cpp or fix its "
                  "layout; rerun `make lab LAB=se-gallery`. Skill: ui.");
       }

@@ -211,7 +211,8 @@ void GalleryPage::draw(ui::DrawList& list, gc::Gallery& gallery, int width, int 
         b.uv = {0, 0, static_cast<float>(slot.image.width), static_cast<float>(slot.image.height)};
         b.radius = style.radius * s * 0.6f;
         list.box(b);
-      } else if (!gallery.entries()[static_cast<size_t>(first_ + i)].error.empty()) {
+      } else if (!gallery.entries()[static_cast<size_t>(first_) + static_cast<size_t>(i)]
+                      .error.empty()) {
         list.text(small, word, cell.x + cell.w * 0.5f, cell.y + cell.h * 0.5f + word * 0.35f,
                   kUnread, style.text_disabled, ui::Align::center);
       }

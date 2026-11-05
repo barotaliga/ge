@@ -85,7 +85,7 @@ std::string taken_of(std::string_view stem) {
 
 std::string size_text(uint64_t bytes) {
   if (bytes < 1024) return std::to_string(bytes) + " B";
-  if (bytes < 1024 * 1024) return std::to_string((bytes + 512) / 1024) + " KB";
+  if (bytes < uint64_t{1024} * 1024) return std::to_string((bytes + 512) / 1024) + " KB";
   return core::num::to_fixed(static_cast<double>(bytes) / (1024.0 * 1024.0), 1) + " MB";
 }
 
