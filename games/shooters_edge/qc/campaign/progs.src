@@ -20,3 +20,4 @@ monsters_big.qc
 monsters_more.qc
 world.qc
 bosses.qc
+set_pieces.qc

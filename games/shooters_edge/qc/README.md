@@ -55,6 +55,7 @@ then its own files (`progs.src` lists them in order), `world.qc` last.
 | `campaign/monsters_big.qc` | The roster, continued: the leaper, the giant and the caster |
 | `campaign/monsters_more.qc` | The roster, continued: the trooper, the spawn and the heavy swordsman |
 | `campaign/bosses.qc` | The bosses and their set pieces: the lava boss and the lightning, the final boss and the teleport train, and the campaign's teleporting |
+| `campaign/set_pieces.qc` | The other set pieces: trains, secret doors, exploding boxes, fireball spouts, spike and laser traps, bubbles, the ambient sounds |
 | `campaign/world.qc` | The world, the intermission and the next map, the campaign's map things |
 
 ## The game
