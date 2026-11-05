@@ -129,14 +129,15 @@ struct Listen {
   CampaignView campaign;     // the program's client messages (campaign_view.hpp)
   double entered_at = 0;     // the server's time the player entered this map, s
   uint32_t sequence = 0;
-  sh::MoveCmd cmds[3];              // the three newest, oldest first
-  double owed = 0;                  // wall seconds not yet run, s
-  int64_t frames = 0;               // server frames run on this map
-  sh::Vec3f view;                   // the player's view angles, degrees
-  bool forced = false;              // the server turned the view in the last frame
-  int impulse = 0;                  // waiting for a frame
-  std::string pending_map;          // the mod or the console asked for this map
-  std::vector<std::string> prints;  // what the server printed to the player, in order
+  sh::MoveCmd cmds[3];               // the three newest, oldest first
+  double owed = 0;                   // wall seconds not yet run, s
+  int64_t frames = 0;                // server frames run on this map
+  sh::Vec3f view;                    // the player's view angles, degrees
+  bool forced = false;               // the server turned the view in the last frame
+  int impulse = 0;                   // waiting for a frame
+  std::string pending_map;           // the mod or the console asked for this map
+  std::vector<std::string> prints;   // what the server printed to the player, in order
+  std::vector<std::string> centres;  // its centre prints, in order ("" clears the last)
   // Where the mod's explosions went off on this map (its temporary-entity message), map units,
   // in order.
   std::vector<sh::Vec3f> explosions;

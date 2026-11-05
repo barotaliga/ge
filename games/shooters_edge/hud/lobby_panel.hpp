@@ -39,6 +39,7 @@ struct LobbyView {
   int seconds_left = 0;  // the countdown's, rounded up
   double fraction = 0;   // of the second now running down, 0..1 (the count's pulse)
   bool roster = true;    // the teams shown (F3 hides them)
+  bool count = true;     // the big count drawn (false: the game's own centre print counts down)
   std::vector<LobbyRow> rows;
 };
 
