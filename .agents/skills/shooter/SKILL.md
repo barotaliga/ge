@@ -20,6 +20,7 @@ edges. `docs/shooters-edge.md` is the design;
 | `shooter/bsp_world.hpp/.cpp` | A read brush map (29, BSP2) as the server's brush models: hull 0 from the node tree, hulls 1 and 2 from the clip nodes |
 | `shooter/world.hpp/.cpp` | A move's solids (`MoveWorld`): `player_trace`, `box_free`, `water_contents`, `brush_contents` |
 | `shooter/pmove.hpp/.cpp` | The move: `MoveCmd`, `MoveSettings`, `MoveState`, `player_move`, `run_command` (the 50 ms split) |
+| `shooter/sequel_move.hpp/.cpp` | The sequel's move: `SequelState` (packed eighths), `SequelCmd`, `sequel_move` over a `SequelWorld`; `SequelBrushWorld` over a 38 map's `BrushTracer` |
 | `shooter/slide.hpp/.cpp` | The slide along planes, the step-slide up stairs, `clip_velocity` |
 | `shooter/recording.hpp/.cpp` | The recorded scenarios: the text format, `replay` line by line, the tolerance |
 | `shooter/hull_world.hpp/.cpp` | The engine mover's world over brush models' clip hulls (`mover_world`, the axes `to_engine`/`to_map`, `contents_at`) and a hull 0's liquids laid as `engine/water` volumes (`add_liquids`) |
