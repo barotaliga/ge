@@ -748,6 +748,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   s.began.clear();
   watch_warps(s.warps, s.bodies, t, dt, s.began);
   const int own = l.server ? player_state(l).entity : 0;  // the local player's entity
+  out.has_self = false;
   // A player as the window places him (the local player's own too, never drawn).
   const auto placed_of = [&](int e) {
     Placed m;
@@ -761,6 +762,11 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     m.angles = ed.angles;
     return m;
   };
+  // The local player, as the world would place him: unseen in his own eyes, his shadow still his.
+  if (l.server != nullptr && own > 0 && !player_state(l).dead) {
+    out.self = placed_of(own);
+    out.has_self = out.self.modelindex > 0;
+  }
   // ce_warps off (or the classic look): the original. The figure is there or gone at once, and
   // each end of the warp flashes the teleport's fog, the campaign's program throwing its own.
   if (!s.on.warps) {

@@ -19,6 +19,8 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <vector>
@@ -460,6 +462,159 @@ void run(gl::Lab& lab) {
     shoot(s.id, s.title, s.caption, s.look_for, v);
     if (k == kPlayer) shoot_warps(v, me);
   }
+  // THE PLAYER'S SHADOW (M54): the player stood a pace from a torch on its wall (and again from a
+  // large flame), facing away from it, his own eyes looking down at the floor ahead where his
+  // shadow falls, and from the side; the classic look has none. A wall torch is a small light
+  // (a sharp shadow), a large flame a big one (a soft shadow). Measured: how much darker the floor
+  // in the eyes' picture is with him there than with him gone.
+  {
+    const cl::PlayerState ps = cl::player_state(l);
+    sh::Edict& body = l.server->sv.edicts[size_t(ps.entity)];
+    const sh::Vec3f was_at = body.origin, was_angles = body.angles;
+    struct Lamp {
+      const char* id;
+      const char* source;  // a fire's model, or a plain light's classname
+      const char* what;
+    };
+    // A plain lamp is a bulb's small source (a sharp shadow); a torch's flame and a large flame
+    // are bigger sources (softer, the large flame's the softest).
+    const Lamp lamps[] = {{"shadow-lamp", "light", "a lamp, a small light"},
+                          {"shadow-torch", "progs/flame.mdl", "a wall torch"},
+                          {"shadow-flame", "progs/flame2.mdl", "a large flame, a big light"}};
+    for (const Lamp& lamp : lamps) {
+      // The light's places: the fires the server placed, or the map's plain lights, brightest
+      // first.
+      std::vector<std::pair<float, sh::Vec3f>> at;
+      for (const cl::Placed& p : placed)
+        if (l.server->models[size_t(p.modelindex)] == lamp.source) at.push_back({0, p.origin});
+      for (const br::Entity& e : world.entities) {
+        if (e.get("classname") != lamp.source) continue;
+        float o[3];
+        if (std::sscanf(e.get("origin").c_str(), "%f %f %f", &o[0], &o[1], &o[2]) != 3) continue;
+        const float bright =
+            e.get("light").empty() ? 300 : std::strtof(e.get("light").c_str(), nullptr);
+        at.push_back({-bright, {o[0], o[1], o[2]}});
+      }
+      std::stable_sort(at.begin(), at.end(),
+                       [](const auto& a, const auto& b) { return a.first < b.first; });
+      const sh::Vec3f* fire = nullptr;
+      float spot[3] = {0, 0, 0};
+      // A spot a pace off the light in the open, its line to the light's front (12 units out
+      // toward it: a torch's origin is in its wall) clear.
+      for (const auto& [rank, o] : at) {
+        for (int k = 0; k < 8 && fire == nullptr; k++) {
+          const double a = k * 0.785398163397448;
+          const float cx = float(lm::cos(a)), cy = float(lm::sin(a));
+          const sh::Vec3f e{o.x + 56 * cx, o.y + 56 * cy, o.z};
+          const sh::Vec3f front{o.x + 12 * cx, o.y + 12 * cy, o.z};
+          if (open_line(e, e, 16) && open_line(e, front, 0)) {
+            spot[0] = e.x, spot[1] = e.y, spot[2] = e.z;
+            fire = &o;
+          }
+        }
+        if (fire != nullptr) break;
+      }
+      if (fire == nullptr) {
+        lab.note(std::string("no ") + lamp.source + " on " + map_name + " with room round it");
+        continue;
+      }
+      // His feet on the floor under the spot, his back to the fire.
+      const sh::HullTrace down =
+          sh::trace_move(l.server->sv, {spot[0], spot[1], spot[2]}, {0, 0, 0}, {0, 0, 0},
+                         {spot[0], spot[1], spot[2] - 512}, sh::kTraceNoMonsters, ps.entity);
+      const float away =
+          float(lm::atan2(spot[1] - fire->y, spot[0] - fire->x) * 180 / 3.14159265358979323846);
+      body.origin = {spot[0], spot[1], down.endpos.z + 24};
+      body.angles = {0, away, 0};
+      cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
+      ge::render::FrameView v = base;
+      const float eye_map[3] = {body.origin.x, body.origin.y, body.origin.z + 22};
+      double eye[3];
+      br::to_engine(eye_map, eye);
+      for (int c = 0; c < 3; c++) v.eye[c] = eye[c];
+      v.heading = ge::core::kPi / 2 - double(away) * ge::core::kPi / 180;
+      v.pitch = -0.6;
+      // A dozen frames there first: the lights round a new place take their cubes a few a frame
+      // (bsp_draw.hpp's fresh_cubes), as they do when a player walks into a room.
+      if (device) {
+        look.look = "modern";
+        for (int i = 0; i < 12; ++i)
+          cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+      }
+      const std::string what(lamp.what);
+      shoot(lamp.id, "THE PLAYER'S SHADOW FROM " + what,
+            "The player a pace from " + what + " on " + map_name +
+                ", his back to it, his own eyes looking down at the floor ahead: his body is "
+                "never drawn in his own eyes, but it casts his shadow from every light near him "
+                "(the moving casters' cubes), as soft as the light is big.",
+            "his shadow on the floor ahead of him, from his feet outward, sharper near his feet "
+            "and softer further off; none in the classic look",
+            v);
+      if (device) {
+        // How much darker the floor ahead is with him than without (the lower half's mean).
+        const auto mean_low = [&](bool with_him) {
+          fx.has_self = with_him && fx.has_self;
+          look.look = "modern";
+          cl::draw_world(*device, *frame, v, fx, nullptr, 0, {}, out.view);
+          const ge::gpu::Image img = ge::gpu::read_now(*device, out);
+          if (std::getenv("GE_DBG"))
+            lab.shot(
+                {std::string(lamp.id) + (with_him ? "-dbg-with" : "-dbg-without"),
+                 "dbg",
+                 "",
+                 "",
+                 {}},
+                gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+                gl::Det::measured);
+          double sum = 0;
+          size_t n = 0;
+          for (uint32_t y = img.height / 2; y < img.height; ++y)
+            for (uint32_t x = 0; x < img.width; ++x, ++n) {
+              const uint8_t* q = &img.rgba[(size_t(y) * img.width + x) * 4];
+              sum += 0.2126 * q[0] + 0.7152 * q[1] + 0.0722 * q[2];
+            }
+          return n ? sum / double(n) : 0.0;
+        };
+        const double with_him = mean_low(true);
+        const double without = mean_low(false);
+        lab.metric(std::string(lamp.id) + "-darker",
+                   without > 0 ? 100.0 * (without - with_him) / without : 0, "%",
+                   gl::Det::measured);
+        cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
+      }
+      // From the side: his figure (drawn, as another player sees him) and the shadow it throws.
+      ge::render::FrameView side = v;
+      const double r = lm::atan2(double(spot[1] - fire->y), double(spot[0] - fire->x));
+      const float side_map[3] = {float(body.origin.x - 70 * lm::sin(r) + 30 * lm::cos(r)),
+                                 float(body.origin.y + 70 * lm::cos(r) + 30 * lm::sin(r)),
+                                 body.origin.z + 30};
+      double se[3];
+      br::to_engine(side_map, se);
+      double feet[3];
+      const float feet_map[3] = {float(body.origin.x + 40 * lm::cos(r)),
+                                 float(body.origin.y + 40 * lm::sin(r)), body.origin.z - 24};
+      br::to_engine(feet_map, feet);
+      for (int c = 0; c < 3; c++) side.eye[c] = se[c];
+      const double sx = feet[0] - se[0], sy = feet[1] - se[1], sz = feet[2] - se[2];
+      side.heading = lm::atan2(sx, sz);
+      side.pitch = lm::atan2(sy, std::sqrt(sx * sx + sz * sz));
+      cl::Placed figure;
+      figure.entity = ps.entity;
+      figure.modelindex = body.modelindex;
+      figure.origin = body.origin;
+      figure.angles = body.angles;
+      fx.models.push_back(figure);  // seen from the side, as another player sees him
+      fx.has_self = false;          // the figure drawn is the one casting
+      shoot(std::string(lamp.id) + "-side", "THE PLAYER'S SHADOW FROM " + what + ", FROM THE SIDE",
+            "As above, from beside him: his figure and the shadow it throws on the floor.",
+            "the figure's shadow on the floor in front of him, the fire behind him", side);
+      fx.models.pop_back();
+    }
+    body.origin = was_at;
+    body.angles = was_angles;
+    cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
+  }
+
   // The map's own moving brush models: a lift where the mod lowered it at spawn and raised, a door
   // shut and open. The server's entity holding "*N" moves its faces (place_brushes).
   const auto vector_field = [&](int e, const char* name, sh::Vec3f& out_v) {

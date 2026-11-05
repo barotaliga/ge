@@ -65,10 +65,12 @@ struct WorldDraw {
   double gamma = 1;    // the gamma the grades were last made with
   look::Picture made;  // the picture as it was when the world was made
   gr::Particles particles;
-  gr::Explosions explosions;  // the muzzle fire, the enhanced blasts, a rocket's flame, hits' dust
-  gr::Beams beams;            // the arc guns' bolts (ce_beams)
-  gr::Haze haze;              // the hot air behind a nail or a rocket (ce_trails)
-  std::vector<gr::BeamShape> beam_shapes;  // kMaxBeamDraws, built each frame
+  gr::Explosions explosions;   // the muzzle fire, the enhanced blasts, a rocket's flame, hits' dust
+  gr::Beams beams;             // the arc guns' bolts (ce_beams)
+  gr::Haze haze;               // the hot air behind a nail or a rocket (ce_trails)
+  std::vector<float> casters;  // this frame's models as world triangles, for their shadows
+  std::vector<ba::CasterBox> caster_boxes;  // and each one's box
+  std::vector<gr::BeamShape> beam_shapes;   // kMaxBeamDraws, built each frame
   std::vector<gr::BeamDraw> beam_draws;
   // This frame's births, blasts and flames with the room's light on their smoke (light_at).
   std::vector<gr::Particle> lit_births;
@@ -525,6 +527,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (f.has_map) {
     GE_ZONE("world.bsp");
     ba::set_dynamic_lights(f.bsp, fx.lights);
+    // The moving models' shadows (M54): every model near the eye and the player himself.
+    shadow_casters(f.models, fx.models, fx.has_self ? &fx.self : nullptr, view, f.casters,
+                   f.caster_boxes);
+    ba::set_shadow_casters(f.bsp, f.casters, f.caster_boxes);
     place_brushes(f.models, fx.models, f.movers);
     ba::set_movers(f.bsp, f.movers);
     ba::prepare_bsp(d, f.bsp, view, o);
