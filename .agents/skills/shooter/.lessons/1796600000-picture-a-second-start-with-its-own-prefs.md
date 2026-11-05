@@ -2,7 +2,7 @@
 title: A second start is pictured with its own per-user folder, the kept game in it
 date: 2026-11-05
 scope: games/shooters_edge/client/game_folder.hpp, games/shooters_edge/client/main.cpp
-concepts: [kept-game, remember_game, choose_folder, prefs, xdg-data-home, second-start]
+concepts: [kept-game, remember-game, choose-folder, prefs, xdg-data-home, second-start]
 ---
 
 The window keeps the game loaded last in `<prefs>/game_folder.txt` (`profile <id>`, `basedir
