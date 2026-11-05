@@ -115,6 +115,29 @@ uint32_t pack_angle(double a) {
   return static_cast<uint32_t>(std::lround(std::clamp(a / kHalfPi, 0.0, 1.0) * 255));
 }
 
+// A vertex's horizon in each bearing: the highest elevation the land ahead stands at, from a step
+// `step0` m growing by 1.35 a step to 30 km; and the share of the sky it leaves open.
+void march_horizons(const GridRead& read, double step0, FarVertex& v) {
+  double open = 0;
+  uint32_t packed[2] = {0, 0};
+  const double y0 = v.pos[1] + 2.0;
+  for (int k = 0; k < kFarBearings; ++k) {
+    const double hd = 2 * kPi * k / kFarBearings;
+    const double sx = lm::sin(hd), sz = lm::cos(hd);
+    double best = 0, s = step0;
+    for (int step = 0; step < 64 && s < 30000; ++step, s *= 1.35) {
+      const double y = read.at(v.pos[0] + sx * s, v.pos[2] + sz * s);
+      if (y > y0) best = std::max(best, lm::atan2(y - y0, s));
+    }
+    open += 1 - lm::sin(best);
+    packed[k / 4] |= pack_angle(best) << (8 * (k % 4));
+  }
+  v.n[3] = float(open / kFarBearings);
+  v.horizon[0] = packed[0];
+  v.horizon[1] = packed[1];
+  v.pad[0] = v.pad[1] = 0;
+}
+
 }  // namespace
 
 double far_height(const FarLandKind& k, const FarSite& site, double x, double z) {
@@ -251,26 +274,7 @@ FarMesh build_far_land(const FarLandKind& kind, const FarSite& site, int bearing
         v.n[0] = float(nx * inv);
         v.n[1] = float(len > 0 ? ny * inv : 1);
         v.n[2] = float(nz * inv);
-        // Each bearing's horizon: the highest elevation the ground ahead stands at, from a step
-        // a cell wide growing by 1.35 a step to 30 km.
-        double open = 0;
-        uint32_t packed[2] = {0, 0};
-        const double y0 = v.pos[1] + 2.0;
-        for (int k = 0; k < kFarBearings; ++k) {
-          const double hd = 2 * kPi * k / kFarBearings;
-          const double sx = lm::sin(hd), sz = lm::cos(hd);
-          double best = 0, s = step0;
-          for (int step = 0; step < 64 && s < 30000; ++step, s *= 1.35) {
-            const double y = read.at(v.pos[0] + sx * s, v.pos[2] + sz * s);
-            if (y > y0) best = std::max(best, lm::atan2(y - y0, s));
-          }
-          open += 1 - lm::sin(best);
-          packed[k / 4] |= pack_angle(best) << (8 * (k % 4));
-        }
-        v.n[3] = float(open / kFarBearings);
-        v.horizon[0] = packed[0];
-        v.horizon[1] = packed[1];
-        v.pad[0] = v.pad[1] = 0;
+        march_horizons(read, step0, v);
       }
     }
   });
@@ -312,6 +316,14 @@ FarMesh build_far_land(const FarLandKind& kind, const FarSite& site, int bearing
         mesh.vertices.push_back(v);
       }
     }
+    // Its horizons over the land, as the land's own: the key light (and its glade) is hidden from
+    // the water behind a ridge.
+    core::parallel_bands(size_t(wr), workers, [&](size_t lo, size_t hi) {
+      for (size_t j = lo; j < hi; ++j) {
+        const double step0 = std::max(r0 * lm::exp(double(j) * lr) * (lm::exp(lr) - 1), 12.0);
+        for (int i = 0; i < wb; ++i) march_horizons(read, step0, mesh.vertices[base + j * wb + i]);
+      }
+    });
     for (int j = 0; j + 1 < wr; ++j) {
       for (int i = 0; i < wb; ++i) {
         const uint32_t a = base + uint32_t(j * wb + i), c = base + uint32_t(j * wb + (i + 1) % wb);
