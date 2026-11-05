@@ -20,7 +20,7 @@
 // ge:keywords world-draw bsp render frame sky bloom post overlay ui-pass r_look classic modern
 // ge:keywords create_world_draw draw_world resize_world palette particles dynamic-lights blend
 // ge:keywords models items flames read_world begin_world world_compiled finish_world own_sky
-// ge:keywords background-load async-load title
+// ge:keywords background-load async-load title warm_world warm-up shadow-cubes
 // ge:keywords viewmodel held-weapon light-probe
 // ge:skill render brush shooter
 #pragma once
@@ -96,6 +96,13 @@ bool world_stale(const WorldDraw& w);
 void draw_world(ge::gpu::Device& device, WorldDraw& w, ge::render::FrameView view,
                 const FxFrame& fx, const shooters_edge::view::HandFrame* held, double dt,
                 const ge::ui::DrawList& overlay, const wgpu::TextureView& target);
+
+// A WARM-UP frame of a world not shown yet, from `view` (where the player will see it from first):
+// nothing drawn but its sky's tables and at most `cubes` new shadow cubes (each the map drawn six
+// times, about 6 ms of GPU on dm6; a map's first frame shown would draw every one at once). True
+// once every caster near the view has its cube: the world can be shown with no hitch.
+bool warm_world(ge::gpu::Device& device, WorldDraw& w, const ge::render::FrameView& view,
+                int cubes);
 
 // The last GPU reading of the frame's span (a frame or more late) into `p`; nothing when the GPU
 // has no timestamp queries.

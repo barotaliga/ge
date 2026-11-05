@@ -78,6 +78,7 @@ struct WorldDraw {
   // from, the steps made, what they need and the first step's error.
   WorldReadPtr pending;
   int built = 0;
+  int warm_cubes = -1;  // a warm-up frame's cube budget (warm_world); -1: a frame shown
   wgpu::TextureFormat format = wgpu::TextureFormat::Undefined;
   std::span<const ge::viewmodel::HeldModel> weapons;
   std::string build_error;
@@ -407,9 +408,15 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (f.picture->weather.hour >= 0) ba::at_hour(sky, f.night, f.picture->weather.hour);
   if (!f.own_sky) ba::dress_sky(view, sky, f.top_y, view.time_s);
   view.altitude_m = 100;
-  view.clouds.quarter = false;
-  view.clouds.spread = false;
+  if (!f.own_sky) {  // a map's cloud seen through its sky faces: every pixel, every frame
+    view.clouds.quarter = false;
+    view.clouds.spread = false;
+  }
   ba::Options o = look::world_options(lk, {}, *f.picture);
+  if (f.warm_cubes >= 0) {  // warmed up over frames: the first frame's cubes under a budget too
+    o.first_all = false;
+    o.fresh_cubes = f.warm_cubes;
+  }
   o.sky_light = sky.sky_light;
   o.sky_seen = sky.sky_seen;
   for (int k = 0; k < 3; ++k) o.sky_tint[k] = sky.tint[k];
@@ -428,6 +435,16 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     place_brushes(f.models, fx.models, f.movers);
     ba::set_movers(f.bsp, f.movers);
     ba::prepare_bsp(d, f.bsp, view, o);
+  }
+  if (f.warm_cubes >= 0) {  // a warm-up (warm_world): the sky's tables and the new shadows alone
+    wgpu::CommandEncoder e = d.device.CreateCommandEncoder();
+    gr::encode_sky_tables(f.skypass, f.pipelines, f.rec, e);
+    if (f.has_map) ba::encode_bsp_shadows(f.bsp, f.pipelines, f.rec, e);
+    f.rec.end_frame(e);
+    const wgpu::CommandBuffer c = e.Finish();
+    d.queue.Submit(1, &c);
+    f.rec.after_submit(d);
+    return;
   }
   if (f.extras) {
     GE_ZONE("world.extras");
@@ -490,6 +507,13 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   GE_ZONE("world.submit");
   d.queue.Submit(1, &c);
   f.rec.after_submit(d);
+}
+
+bool warm_world(ge::gpu::Device& d, WorldDraw& f, const gr::FrameView& view, int cubes) {
+  f.warm_cubes = std::max(cubes, 0);
+  draw_world(d, f, view, FxFrame{}, nullptr, 0, ge::ui::DrawList{}, {});
+  f.warm_cubes = -1;
+  return !f.has_map || f.bsp.shadows_waiting == 0;
 }
 
 void record_span(const WorldDraw& f, PassTimes& p) { span_add(p, f.rec.stats.gpu_span_ms()); }
