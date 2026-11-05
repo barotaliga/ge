@@ -22,8 +22,8 @@
 // ge:skill brush
 // ge:test tests/brush_trace_test.cpp
 #include <array>
+#include <bit>
 #include <cmath>
-#include <cstring>
 #include <map>
 #include <string>
 #include <tuple>
@@ -44,7 +44,9 @@ struct WPlane {
   int32_t type;
 };
 
-bool same_bits(float a, float b) { return std::memcmp(&a, &b, sizeof a) == 0; }
+bool same_bits(float a, float b) {
+  return std::bit_cast<uint32_t>(a) == std::bit_cast<uint32_t>(b);
+}
 
 int axial_axis(const float n[3]) {
   for (int k = 0; k < 3; ++k) {
@@ -300,7 +302,13 @@ bool write_brush_world(const BrushWorld& world, std::vector<uint8_t>* out, std::
   std::string text = "{\n\"classname\" \"worldspawn\"\n}\n";
   for (const Entity& e : world.entities) {
     text += "{\n";
-    for (const auto& [k, v] : e.pairs) text += "\"" + k + "\" \"" + v + "\"\n";
+    for (const auto& [k, v] : e.pairs) {
+      text += '"';
+      text += k;
+      text += "\" \"";
+      text += v;
+      text += "\"\n";
+    }
     text += "}\n";
   }
   for (char ch : text) entities.u8(uint8_t(ch));
