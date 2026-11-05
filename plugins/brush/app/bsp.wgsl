@@ -533,12 +533,13 @@ fn classic_sky(d: vec3f) -> vec3f {
   return select(front.rgb, back.rgb, front.a > 0.002 && front.a < 0.006);
 }
 
-// THE SOFT SHADOW OF A LIGHT THAT HAS A SIZE (percentage-closer soft shadows): a blocker search
-// over the part of the cube a light of radius `size` could be hidden by from the point, the mean
-// depth of what blocks it, the penumbra that depth casts (a blocker near the point casts a sharp
-// edge, one near the light a wide soft one: size * (d - d_blocker) / d_blocker), then that many
-// directions compared. The world's kept cube and the moving casters' cube (when the light has one,
-// `cbase` >= 0) are read alike, the nearer of the two blocking. The taps are a Vogel disc in the
+// THE SOFT SHADOW OF A LIGHT THAT HAS A SIZE (percentage-closer soft shadows) for the moving
+// casters: a blocker search over the part of their cube a light of radius `size` could be hidden by
+// from the point, the mean depth of what blocks it, the penumbra that depth casts (a blocker near
+// the point casts a sharp edge, one near the light a wide soft one: size * (d - d_blocker) /
+// d_blocker), then that many directions compared. The search reads the casters' cube alone, so a
+// point no figure stands before (most of them) pays for the search and no filter. The world's kept
+// cube is one 2 x 2 compare, as for a light with no casters' cube. The taps are a Vogel disc in the
 // directions round the point's, turned by a noise of the pixel and the frame (the resolve averages
 // it), so a cube's seams are crossed with no special case.
 const kSearchTaps = 8u;
@@ -570,90 +571,90 @@ fn caster_uv(c: vec3f, row: i32) -> vec2f {
   return (vec2f(c.z, f32(row)) + uv) * face / dims;
 }
 
-// The nearest thing either cube saw along `q`, a share of the reach.
-fn cube_nearest(q: vec3f, base: i32, cbase: i32) -> f32 {
+// The nearest thing the casters' cube on row `row` saw along `q`, a share of the reach.
+fn caster_nearest(q: vec3f, row: i32) -> f32 {
+  let size = vec2f(textureDimensions(caster_cubes));
+  return textureLoad(caster_cubes, vec2i(caster_uv(cube_uv(q), row) * size), 0, 0);
+}
+
+// The share lit along `q` at the point's own depth `ref_depth`, 2 x 2 compared: by the world's
+// cube from layer `base`, and by the casters' cube on row `row`.
+fn world_lit(q: vec3f, ref_depth: f32, base: i32) -> f32 {
   let c = cube_uv(q);
-  let wsize = vec2f(textureDimensions(cubes));
-  var d = textureLoad(cubes, vec2i(clamp(c.xy, vec2f(0.0), vec2f(0.9999)) * wsize),
-                      base + i32(c.z), 0);
-  if (cbase >= 0) {
-    let csize = vec2f(textureDimensions(caster_cubes));
-    d = min(d, textureLoad(caster_cubes, vec2i(caster_uv(c, cbase) * csize), 0, 0));
-  }
-  return d;
+  return textureSampleCompareLevel(cubes, shadow_cmp, c.xy, base + i32(c.z), ref_depth);
+}
+fn caster_lit(q: vec3f, ref_depth: f32, row: i32) -> f32 {
+  return textureSampleCompareLevel(caster_cubes, shadow_cmp, caster_uv(cube_uv(q), row), 0,
+                                   ref_depth);
 }
 
-// Lit along `q` at the point's own depth `ref_depth` (2 x 2 compared each): by the world's cube
-// alone, and by it and the moving casters' cube.
-fn cube_lit(q: vec3f, ref_depth: f32, base: i32, cbase: i32) -> vec2f {
-  let c = cube_uv(q);
-  let world = textureSampleCompareLevel(cubes, shadow_cmp, c.xy, base + i32(c.z), ref_depth);
-  var both = world;
-  if (cbase >= 0) {
-    both *= textureSampleCompareLevel(caster_cubes, shadow_cmp, caster_uv(c, cbase), 0, ref_depth);
-  }
-  return vec2f(world, both);
+// The Vogel discs of 8 and 12 taps (tap i at radius sqrt((i + 0.5) / n), turned i times the
+// golden angle), worked once here rather than a sine and a cosine a tap a light.
+const kVogel8 = array<vec2f, 8>(vec2f(0.25, 0.0), vec2f(-0.319290, 0.292496),
+                                vec2f(0.048872, -0.556877), vec2f(0.402445, 0.524917),
+                                vec2f(-0.738535, -0.130636), vec2f(0.699604, -0.445032),
+                                vec2f(-0.234003, 0.870484), vec2f(-0.446273, -0.859268));
+const kVogel12 = array<vec2f, 12>(vec2f(0.204124, 0.0), vec2f(-0.260699, 0.238822),
+                                  vec2f(0.039904, -0.454688), vec2f(0.328595, 0.428593),
+                                  vec2f(-0.603011, -0.106664), vec2f(0.571225, -0.363367),
+                                  vec2f(-0.191063, 0.710747), vec2f(-0.364380, -0.701589),
+                                  vec2f(0.790557, 0.288709), vec2f(-0.822442, 0.339494),
+                                  vec2f(0.396470, -0.847238), vec2f(0.292985, 0.934073));
+
+// A disc's tap turned by the pixel's spin (its cosine and sine).
+fn spun(o: vec2f, spin: vec2f) -> vec2f {
+  return vec2f(o.x * spin.x - o.y * spin.y, o.x * spin.y + o.y * spin.x);
 }
 
-fn vogel(i: u32, n: u32, turn: f32) -> vec2f {
-  let r = sqrt((f32(i) + 0.5) / f32(n));
-  let a = f32(i) * 2.399963 + turn;
-  return vec2f(cos(a), sin(a)) * r;
-}
-
-// x: lit by the world alone, y: by the world and the moving casters.
-fn soft_shadow(q: vec3f, far: f32, l: Light, frag: vec2f) -> vec2f {
-  let base = i32(l.info.x);
-  let cbase = i32(l.more.x);
-  let d = length(q);
-  let n = q / max(d, 1e-4);
-  let size = max(l.more.y, 0.01);
-  let ref_depth = d / far - 0.004;
-  // A frame round the direction, and the pixel's own turn of the disc.
-  let side = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(n.y) > 0.9);
-  let t = normalize(cross(n, side));
-  let b = cross(n, t);
+// The pixel's turn of the discs this frame (the resolve averages it), as a cosine and a sine.
+fn disc_spin(frag: vec2f) -> vec2f {
   let turn = fract(52.9829189 * fract(dot(frag + vec2f(f32(frame.time.y % 64.0) * 5.588238),
                                           vec2f(0.06711056, 0.00583715)))) *
              6.2831853;
-  let texel = 2.0 / f32(textureDimensions(cubes).x);
-  // The world's kept cube alone (no moving caster near this light): four taps over the penumbra of
-  // a blocker halfway to the light, size / d, without a search; only the casters' lights pay for
-  // the search.
-  if (cbase < 0) {
-    let pen = clamp(size / max(d, 0.1), texel * 0.75, 0.08);
-    var w = 0.0;
-    for (var i = 0u; i < 4u; i++) {
-      let o = vogel(i, 4u, turn) * pen;
-      w += cube_lit(n + t * o.x + b * o.y, ref_depth, base, -1).x;
-    }
-    return vec2f(w * 0.25);
+  return vec2f(cos(turn), sin(turn));
+}
+
+// x: lit by the world alone, y: by the world and the moving casters.
+fn soft_shadow(q: vec3f, far: f32, l: Light, spin: vec2f) -> vec2f {
+  let d = length(q);
+  let n = q / max(d, 1e-4);
+  let ref_depth = d / far - 0.004;
+  let world = world_lit(n, ref_depth, i32(l.info.x));
+  let row = i32(l.more.x);
+  if (row < 0 || world <= 0.0) {
+    return vec2f(world);
   }
+  let size = max(l.more.y, 0.01);
+  // A frame round the direction.
+  let side = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(n.y) > 0.9);
+  let t = normalize(cross(n, side));
+  let b = cross(n, t);
+  let texel = 2.0 / f32(textureDimensions(caster_cubes).x / 6u);
   // The search: what could hide the light's disc lies within its size seen from blockers as near
   // the light as a fifth of the way (a direction's angle, the cube's own measure).
   let search = clamp(4.0 * size / max(d, 0.1), texel, 0.15);
   var blockers = 0.0;
   var found = 0.0;
   for (var i = 0u; i < kSearchTaps; i++) {
-    let o = vogel(i, kSearchTaps, turn) * search;
-    let z = cube_nearest(n + t * o.x + b * o.y, base, cbase);
+    let o = spun(kVogel8[i], spin) * search;
+    let z = caster_nearest(n + t * o.x + b * o.y, row);
     if (z < ref_depth) {
       blockers += z;
       found += 1.0;
     }
   }
   if (found == 0.0) {
-    return vec2f(1.0);
+    return vec2f(world);
   }
   // The penumbra the blockers' mean distance casts, as an angle at the point.
   let db = max(blockers / found * far, 0.02);
   let pen = clamp(size * (d - db) / (db * d), texel * 0.75, 0.15);
-  var lit = vec2f(0.0);
+  var lit = 0.0;
   for (var i = 0u; i < kFilterTaps; i++) {
-    let o = vogel(i, kFilterTaps, turn + 1.7) * pen;
-    lit += cube_lit(n + t * o.x + b * o.y, ref_depth, base, cbase);
+    let o = spun(kVogel12[i], spin) * pen;
+    lit += caster_lit(n + t * o.x + b * o.y, ref_depth, row);
   }
-  return lit / f32(kFilterTaps);
+  return vec2f(world, world * lit / f32(kFilterTaps));
 }
 
 // THE MOVING CASTERS' SHARE OF THE ROOM'S OWN LIGHT: a body standing in the light hides the light
@@ -983,6 +984,15 @@ fn shade(in: VsOut) -> FsOut {
   var cast_full = 0.0;
   var cast_lit = 0.0;
   // Only the lights the grid lists for p's cell (every light outside the grid), in order.
+  let spin = disc_spin(in.clip.xy);
+  // The casters' capsules near enough to p to shadow it, a bit each, found once for every light.
+  var near_capsules = 0u;
+  for (var c = 0u; c < u32(bsp.capsule_info.x); c++) {
+    let mid = (bsp.capsules[c * 2u].xyz + bsp.capsules[c * 2u + 1u].xyz) * 0.5;
+    if (dot(p - mid, p - mid) <= kCapsuleReach2) {
+      near_capsules |= 1u << c;
+    }
+  }
   let cell = grid_cell(p);
   var first = 0u;
   var end = u32(bsp.info.z);
@@ -1017,7 +1027,7 @@ fn shade(in: VsOut) -> FsOut {
     // Softened near the light over its source's size (a fire's whole flame), 0.2 m at least.
     var fall = aim * window / (d2 + max(l.info.y, 0.04));
     if (l.info.x >= 0.0) {
-      let lit = soft_shadow(q, reach, l, in.clip.xy);
+      let lit = soft_shadow(q, reach, l, spin);
       if (l.more.x >= 0.0) {
         let lum = dot(l.colour.rgb, vec3f(0.2126, 0.7152, 0.0722)) * ndl * fall;
         cast_full += lum * lit.x;
@@ -1034,14 +1044,11 @@ fn shade(in: VsOut) -> FsOut {
     if (l.more.x < 0.0 && bsp.capsule_info.x > 0.5) {
       var seen = 1.0;
       let lr = max(l.more.y, 0.04);
-      for (var c = 0u; c < u32(bsp.capsule_info.x); c++) {
-        let ca = bsp.capsules[c * 2u];
-        let cb = bsp.capsules[c * 2u + 1u];
-        let mid = (ca.xyz + cb.xyz) * 0.5;
-        if (dot(p - mid, p - mid) > kCapsuleReach2) {
-          continue;
+      for (var c = 0u; near_capsules != 0u && c < u32(bsp.capsule_info.x); c++) {
+        if ((near_capsules & (1u << c)) != 0u) {
+          let ca = bsp.capsules[c * 2u];
+          seen *= capsule_one(p, to_light, d, lr, ca.xyz, bsp.capsules[c * 2u + 1u].xyz, ca.w);
         }
-        seen *= capsule_one(p, to_light, d, lr, ca.xyz, cb.xyz, ca.w);
       }
       let lum = dot(l.colour.rgb, vec3f(0.2126, 0.7152, 0.0722)) * ndl * fall;
       cast_full += lum;
