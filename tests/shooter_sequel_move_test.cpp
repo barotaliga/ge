@@ -282,6 +282,7 @@ TEST(a_scripted_run_holds_golden) {
     if (i % 25 == 24) {
       const sh::SequelState& s = r.pm.s;
       std::vector<uint64_t> row;
+      row.reserve(8);
       for (int k = 0; k < 3; ++k) row.push_back(uint16_t(s.origin[k]));
       for (int k = 0; k < 3; ++k) row.push_back(uint16_t(s.velocity[k]));
       row.push_back(s.flags);

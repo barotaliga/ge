@@ -185,18 +185,12 @@ struct Move {
 
   void currents(Vec3f& wish) const {
     if (ladder && fabs_f(velocity.z) <= 200) {
+      // Looking 15 or more up or down while moving forward climbs that way; else the up move.
       const float pitch = pm.view_angles.x;
-      if (pitch <= -15 && pm.cmd.forward > 0) {
-        wish.z = 200;
-      } else if (pitch >= 15 && pm.cmd.forward > 0) {
-        wish.z = -200;
-      } else if (pm.cmd.up > 0) {
-        wish.z = 200;
-      } else if (pm.cmd.up < 0) {
-        wish.z = -200;
-      } else {
-        wish.z = 0;
-      }
+      const bool looks = (pitch <= -15 || pitch >= 15) && pm.cmd.forward > 0;
+      const bool climbs = looks ? pitch <= -15 : pm.cmd.up > 0;
+      const bool descends = looks ? pitch >= 15 : pm.cmd.up < 0;
+      wish.z = climbs ? 200.0f : descends ? -200.0f : 0.0f;
       for (int i = 0; i < 2; ++i) {
         if (wish[i] < -25) wish[i] = -25;
         if (wish[i] > 25) wish[i] = 25;
@@ -482,10 +476,8 @@ struct Move {
       pm.view_height = 8;
       return;
     }
-    if (pm.s.type == SequelType::dead) {
-      pm.s.flags |= kSqDucked;
-    } else if (pm.cmd.up < 0 && (pm.s.flags & kSqOnGround)) {
-      pm.s.flags |= kSqDucked;
+    if (pm.s.type == SequelType::dead || (pm.cmd.up < 0 && (pm.s.flags & kSqOnGround))) {
+      pm.s.flags |= kSqDucked;            // the dead always, the living when ducking on the ground
     } else if (pm.s.flags & kSqDucked) {  // stand up where the standing box fits
       if (!trace(origin, origin).all_solid) pm.s.flags &= uint8_t(~kSqDucked);
     }
