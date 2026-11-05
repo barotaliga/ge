@@ -11,8 +11,8 @@
 // - BUTTON: a button within `kEscortButtonNear` of the leader that he has stood near for
 //   `kEscortButtonWait_s` and that is still at rest, with a door it opens still shut: it goes and
 //   presses it (walks into it, or shoots it when it opens by a shot), once;
-// - CATCH UP: the leader more than `kEscortCatchUp` away: it runs to him, hopping when its moves
-// allow;
+// - CATCH UP: the leader more than `kEscortCatchUp` away: it runs to him (walked, never hopped:
+//   a hop on a map's ledges ends in its pit);
 // - FOLLOW: to a spot at the leader's shoulder (`kEscortNear` from him, behind his view, a side of
 // its
 //   own) whenever he moves on or it is further than `kEscortFar`;
@@ -134,6 +134,10 @@ void escort_think(Fighter& f, const server::RulesCommon& s, int me, const Stats&
 // turned at a person's rate.
 void escort_command(Fighter& f, const server::RulesCommon& s, int me, double t, int msec,
                     sh::MoveCmd& cmd);
+// A player of the campaign who is no companion (the way-through's leader, a bot playing the map
+// himself): every player his friend, every monster he sees or hears a foe, awake or not.
+void hunt_init(Fighter& f, const server::RulesCommon& s);
+void hunt_sense(Fighter& f, const server::RulesCommon& s);
 // Whether a living player other than the companion stands within `clear` of the line from `eye`
 // to `target`, nearer than it.
 bool escort_player_in_line(const Fighter& f, const server::RulesCommon& s, sh::Vec3f eye,

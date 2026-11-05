@@ -19,6 +19,7 @@
 #include "check.hpp"
 #include "golden.hpp"
 #include "shooter/idle.hpp"
+#include "shooters_edge/bots/coop_episode.hpp"
 #include "shooters_edge/bots/coop_run.hpp"
 #include "shooters_edge_campaign_fixture.hpp"
 
@@ -28,6 +29,7 @@ namespace fb = shooters_edge::bots;
 namespace {
 
 constexpr const char* kGolden = "tests/golden/shooters_edge_companion.txt";
+constexpr const char* kEpisodeGolden = "tests/golden/shooters_edge_coop_episode.txt";
 
 bool env_set(const char* name) {
   const char* v = std::getenv(name);
@@ -40,6 +42,21 @@ fb::CoopOptions options(uint32_t seed) {
   o.seed = seed;
   o.seconds = 60;
   return o;
+}
+
+fb::EpisodeOptions episode_options() {
+  fb::EpisodeOptions o;
+  o.root = GE_SOURCE_DIR;
+  o.load = &fb::coop_hall_exit_map;
+  o.first = "hall";
+  o.maps = 2;
+  o.map_seconds = 90;
+  return o;
+}
+
+const fb::EpisodeReport& episode_once() {
+  static const fb::EpisodeReport r = fb::run_coop_episode(episode_options());
+  return r;
 }
 
 const fb::CoopReport& run_once() {
@@ -191,4 +208,56 @@ TEST(a_coop_run_replays_to_the_bit_and_matches_its_golden) {
               "the coop run moved off its golden bits: if the companion, the fighter, the bot, the "
               "campaign mod or the move changed on purpose, rewrite with GE_GOLDEN_WRITE=1 and say "
               "why in the PR");
+}
+
+TEST(a_leader_finds_the_way_out_and_the_party_follows_him_through_two_maps) {
+  const fb::EpisodeReport& r = episode_once();
+  CHECK_MSG(r.ok, r.error);
+  if (!r.ok) return;
+  CHECK(r.faults == 0);
+  CHECK_MSG(r.maps.size() == 2, "the episode did not reach its second map");
+  for (const fb::EpisodeMap& m : r.maps) {
+    std::printf(
+        "%s: out %d in %.1f s (%s), monsters %d: leader %d mates %d unseen %d, near %.3f, "
+        "farthest %.0f, mate buttons %lld, plans exit %lld button %lld explore %lld\n",
+        m.name.c_str(), m.finished ? 1 : 0, m.seconds, m.end.c_str(), m.monsters,
+        m.killed_by_leader, m.killed_by_mates, m.killed_unseen, m.near_share, m.farthest,
+        static_cast<long long>(m.mate_buttons),
+        static_cast<long long>(m.way.by_kind[static_cast<int>(fb::WayKind::exit)]),
+        static_cast<long long>(m.way.by_kind[static_cast<int>(fb::WayKind::button)]),
+        static_cast<long long>(m.way.by_kind[static_cast<int>(fb::WayKind::explore)]));
+    CHECK_MSG(m.finished, m.name + ": the leader did not get out: " + m.end);
+    CHECK_MSG(m.way.by_kind[static_cast<int>(fb::WayKind::button)] > 0,
+              "the exit was behind a shut door, yet the plan never went for the button");
+    CHECK_MSG(m.near_share > 0.6, m.name + ": the companion kept near him less than 3/5 of it");
+    CHECK(m.mate_deaths == 0);
+  }
+}
+
+TEST(a_coop_episode_replays_to_the_bit_and_matches_its_golden) {
+  const fb::EpisodeReport& a = episode_once();
+  const fb::EpisodeReport b = fb::run_coop_episode(episode_options());
+  CHECK_MSG(a.ok && b.ok, a.error + b.error);
+  CHECK_MSG(a.digest == b.digest, "two coop episodes on one seed differ");
+  if (env_set("GE_GOLDEN_WRITE")) {
+    std::ofstream out(ge::test::root_path(kEpisodeGolden));
+    out << "# games/shooters_edge/bots/coop_episode.hpp: the coop hall with an exit, twice, a "
+           "leader "
+           "and an expert companion, seed 1: the run's digest "
+           "(tests/shooters_edge_companion_test.cpp)\n";
+    char line[32];
+    std::snprintf(line, sizeof line, "%016llx\n", static_cast<unsigned long long>(a.digest));
+    out << line;
+    std::printf("wrote %s\n", kEpisodeGolden);
+    return;
+  }
+  const auto rows = ge::test::golden_rows(kEpisodeGolden);
+  CHECK_MSG(
+      rows.size() == 1 && rows[0].size() == 1,
+      std::string(kEpisodeGolden) + " is missing or malformed: write it with GE_GOLDEN_WRITE=1");
+  if (rows.size() == 1 && rows[0].size() == 1)
+    CHECK_MSG(rows[0][0] == a.digest,
+              "the coop episode moved off its golden bits: if the way through, the companion, the "
+              "fighter or the campaign mod changed on purpose, rewrite with GE_GOLDEN_WRITE=1 and "
+              "say why in the PR");
 }

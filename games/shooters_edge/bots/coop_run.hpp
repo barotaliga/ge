@@ -50,6 +50,12 @@ inline constexpr TourLeg kCoopTour[] = {
 
 // The coop hall's entities (the arena's models plus the button as "*3").
 extern const char* const kCoopHallEntities;
+// The hall with a way out: the same, and an exit (`trigger_changelevel` "*4", back to the hall) in
+// the east room's north-east corner, behind the door the button alone opens. The loader gives it
+// under any name (a campaign's maps for coop_episode.hpp).
+extern const char* const kCoopHallExitEntities;
+bool coop_hall_exit_map(void* ctx, const std::string& name, server::MapSpec& out,
+                        std::string& error);
 
 struct CoopOptions {
   std::vector<sh::AimSkill> skills = {sh::AimSkill::expert};  // one companion each

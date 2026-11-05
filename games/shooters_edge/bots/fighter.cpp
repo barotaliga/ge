@@ -654,6 +654,10 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     // Kept on the dive's field whatever the reach from the water says (the nearest node under
     // water may stand in the pocket already).
     f.diving = f.last_dive = committed;
+  } else if (!escaping && f.objective >= 0 && f.mode != FightMode::retreat) {
+    go_to(f, f.objective);  // the way through the map (way_through.hpp) before any item
+    f.goal_item = -1;       // and no item's errand (a shot at its button) kept from before
+    f.unlocking = false;
   } else if (!escaping && !team_goal(f, s, st, self.origin, t, c, why)) {
     if (f.mode == FightMode::chase && c) {
       go_to(f, sh::nav_nearest(*f.bot.pilot.pilot.g, enemy));
@@ -681,7 +685,7 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
 
   // A goal no way leads to any more (the way there was a drop, or a teleporter): the nearest item
   // there is a way to and that is not underfoot, so the player never stands planning in vain.
-  if (!escaping && f.lost_to < 0 && f.reach_at >= 0 &&
+  if (!escaping && f.lost_to < 0 && f.reach_at >= 0 && f.objective < 0 &&
       (f.goal_node < 0 || !f.reach.reached(f.goal_node))) {
     int32_t pick = -1;
     float best = 0;
@@ -885,6 +889,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   }
 
   if (f.escort.leader >= 0) escort_sense(f, s, me, t);
+  if (f.hunts) hunt_sense(f, s);
   sh::MoveCmd cmd = sh::bot_source(f.bot).next(&f.bot, s.sv, slot, msec);
   f.stats.mode_commands[static_cast<int>(f.mode)]++;
   if (held) f.stats.weapon_commands[held->number]++;

@@ -5,8 +5,9 @@
 //   free slot: it joins the campaign (server/campaign.hpp's `campaign_join`), so the host carries
 //   it from map to map like any player, its inventory in its spawn parms; `removebot` lets the
 //   highest one go;
-// - every map entered (a level change, a restart, a new game) builds the companions' NAV GRAPH off
-//   the map's world model and makes each companion afresh on it, the player (slot 0) its leader;
+// - every map entered (a level change, a restart, a new game) builds the companions' NAV off the
+//   map (bots/map_nav.hpp: its doors, plats, teleporters and water) and makes each companion
+//   afresh on it, the player (slot 0) its leader;
 // - each frame a companion's packet goes into the campaign's frame after the player's, in slot
 //   order, made from what its client is sent like the player's.
 //
@@ -28,6 +29,7 @@
 #include "shooter/aim.hpp"
 #include "shooter/nav.hpp"
 #include "shooters_edge/bots/fighter.hpp"
+#include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/server/campaign.hpp"
 
 namespace shooters_edge::client {
@@ -47,8 +49,7 @@ struct PartyMate {
 
 struct Party {
   std::array<std::unique_ptr<PartyMate>, sh::kMaxClients> mates;  // by slot (null: none)
-  std::unique_ptr<sh::NavGraph> graph;                            // this map's
-  std::unique_ptr<sh::MoveWorld> world;                           // its solids (the hop's look)
+  std::unique_ptr<bots::MapNav> nav;  // this map's graph, solids and swim (bots/map_nav.hpp)
   std::string graph_of;  // the map it was built for, and its place in the campaign's history
   size_t graph_at = 0;
   uint32_t seed = 1;

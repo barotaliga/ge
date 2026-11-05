@@ -68,6 +68,13 @@ const sh::ModelData& button_model() {
   return m;
 }
 
+const sh::Vec3f kExitMins{432, 336, 0}, kExitMaxs{496, 400, 72};
+
+const sh::ModelData& exit_model() {
+  static const sh::ModelData m = sh::build_brush_model({sim::box_brush(kExitMins, kExitMaxs)});
+  return m;
+}
+
 bool load_hall(void* /*ctx*/, const std::string& /*name*/, sv::MapSpec& out,
                std::string& /*error*/) {
   out.models = sv::arena_models(true);
@@ -166,6 +173,23 @@ const char* const kCoopHallEntities = R"({
 "angle" "225"
 }
 )";
+
+const char* const kCoopHallExitEntities = R"({
+"classname" "trigger_changelevel"
+"model" "*4"
+"map" "hall"
+}
+)";
+
+bool coop_hall_exit_map(void* /*ctx*/, const std::string& name, sv::MapSpec& out,
+                        std::string& /*error*/) {
+  out.name = name;
+  out.models = sv::arena_models(true);
+  out.models.push_back(button_model().model());
+  out.models.push_back(exit_model().model());
+  out.entities = std::string(kCoopHallEntities) + kCoopHallExitEntities;
+  return true;
+}
 
 CoopReport run_coop(const CoopOptions& opt) {
   CoopReport r;

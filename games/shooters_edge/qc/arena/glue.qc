@@ -54,6 +54,8 @@ float(entity a, entity b) same_team = {
 // A dead player leaves a backpack (items.qc) with his ammunition and the weapon he held.
 void() backpack_drop;
 void() drop_on_death = { backpack_drop(); };
+// The multiplayer form's move jumps for the program: nothing to do before it.
+void() player_jump = {};
 
 // --- spawn parms (kept by the server across a map change; deathmatch starts everyone fresh) ---
 

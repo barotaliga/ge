@@ -161,6 +161,14 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
 // units up or down; -1 when none.
 int32_t nav_nearest(const NavGraph& g, Vec3f p);
 
+// A link a map adds that no proof finds (a teleporter: from every node its trigger holds to the
+// node at its destination), at `time_s`.
+struct NavExtraLink {
+  int32_t from = 0, to = 0;
+  NavKind kind = NavKind::walk;
+  float time_s = 0.1f;
+};
+
 struct NavRoute {
   std::vector<int32_t> nodes;  // from the start to the goal; empty: no way
   float time_s = 0;            // the links' proof times summed
@@ -169,21 +177,16 @@ struct NavRoute {
 
 // The quickest way from node `from` to node `to` (A* on the proofs' times, the heuristic the
 // straight distance at the fastest speed any link has); links through a mover cost
-// `mover_penalty_s` more, and links through a mover in `barred` (a door found shut) are not taken.
+// `mover_penalty_s` more, links through a mover in `barred` (a door found shut) are not taken, and
+// nor is any link in `cut` (its `from` and `to`: a way an open door's leaf still stands across).
 NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& search,
-                   float mover_penalty_s = 1, std::span<const int32_t> barred = {});
+                   float mover_penalty_s = 1, std::span<const int32_t> barred = {},
+                   std::span<const NavExtraLink> cut = {});
 
 // Every node a player at node `from` can get to (`search.reached(n)` after; costs the links'
 // times), and how many, `from` itself included.
 int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search);
 
-// A link a map adds that no proof finds (a teleporter: from every node its trigger holds to the
-// node at its destination), at `time_s`.
-struct NavExtraLink {
-  int32_t from = 0, to = 0;
-  NavKind kind = NavKind::walk;
-  float time_s = 0.1f;
-};
 // Adds `extra` to each node's run of links (after the proven ones), keeping the runs contiguous.
 void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra);
 

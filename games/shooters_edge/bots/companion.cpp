@@ -34,7 +34,9 @@ constexpr float kTurnRate = 720;    // degrees/s the companion's own view turns 
 constexpr float kLookRate = 260;    // and a bored look's
 constexpr float kPressReach = 120;  // a touch button walked into from this near, units
 constexpr float kShootReach = 900;  // a shot button fired at from this near, units
-constexpr float kLookSight = 700;   // an item this near and in sight is worth a bored look
+constexpr int32_t kWGrenades = 16,
+                  kWRockets = 32;         // the blast weapons' W_ bits (games/shooters_edge/qc)
+constexpr float kLookSight = 700;         // an item this near and in sight is worth a bored look
 constexpr float kHopOut[2] = {180, 320};  // a bored hop's turn point from the leader, units
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
@@ -64,6 +66,27 @@ float wrap(float a) {
 
 const server::WorldEntity& ent_of(const server::RulesCommon& s, int e) {
   return s.world.entities[static_cast<size_t>(e)];
+}
+
+// Each model's kind of monster: 0 none, 1 one any weapon kills, 2 one only a blast keeps down,
+// 3 one no weapon kills.
+void monster_models(const server::RulesCommon& s, std::vector<uint8_t>& out) {
+  out.assign(s.models.size(), 0);
+  for (size_t m = 0; m < s.models.size(); m++) {
+    for (std::string_view name : profiles::kClassicMonsters)
+      if (s.models[m] == name) out[m] = 1;
+    for (std::string_view name : profiles::kClassicBlastOnly)
+      if (s.models[m] == name) out[m] = 2;
+    for (std::string_view name : profiles::kClassicNoWeapon)
+      if (s.models[m] == name) out[m] = 3;
+  }
+}
+
+// The kinds of monster player `ent` fights with what he holds: a blast's (the grenade or rocket
+// launcher, with its ammunition) puts down the second kind too.
+int fights_up_to(const server::RulesCommon& s, int ent) {
+  const Stats st = read_stats(s, ent);
+  return (st.weapon & (kWGrenades | kWRockets)) != 0 && st.rockets > 0 ? 2 : 1;
 }
 
 bool alive_player(const server::RulesCommon& s, int slot) {
@@ -245,10 +268,7 @@ void escort_init(Fighter& f, const server::RulesCommon& s, int slot, int leader)
     e.rest[i] = e.last_at[i] = ent_of(s, static_cast<int>(i)).origin;
     e.last_yaw[i] = ent_of(s, static_cast<int>(i)).angles.y;
   }
-  e.monster_model.assign(s.models.size(), 0);
-  for (size_t m = 0; m < s.models.size(); m++)
-    for (std::string_view name : profiles::kClassicMonsters)
-      if (s.models[m] == name) e.monster_model[m] = 1;
+  monster_models(s, e.monster_model);
   e.button_rest.clear();
   e.button_done.clear();
   for (const ButtonSpot& b : f.button_spots) {
@@ -263,9 +283,35 @@ void escort_init(Fighter& f, const server::RulesCommon& s, int slot, int leader)
   set_moves(f, false, false);
 }
 
+void hunt_init(Fighter& f, const server::RulesCommon& s) {
+  f.escort = Escort{};
+  f.hunts = true;
+  set_moves(f, false, false);  // a first time through is walked: no hop off a ledge
+  f.bot.senses.friends = 0xffffffffu;
+  f.bot.senses.foes.assign(s.sv.edicts.size(), 0);
+  monster_models(s, f.escort.monster_model);
+}
+
+void hunt_sense(Fighter& f, const server::RulesCommon& s) {
+  std::vector<uint8_t>& foes = f.bot.senses.foes;
+  if (foes.size() < static_cast<size_t>(s.sv.num_edicts))
+    foes.resize(static_cast<size_t>(s.sv.num_edicts), 0);
+  const std::vector<uint8_t>& mm = f.escort.monster_model;
+  const int top = fights_up_to(s, f.slot + 1);
+  for (int ent = s.sv.set.maxclients + 1; ent < s.sv.num_edicts; ent++) {
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(ent)];
+    const int kind = !d.free && d.solid != sh::kSolidNot && d.modelindex > 0 &&
+                             static_cast<size_t>(d.modelindex) < mm.size()
+                         ? mm[static_cast<size_t>(d.modelindex)]
+                         : 0;
+    foes[static_cast<size_t>(ent)] = kind != 0 && kind <= top ? 1 : 0;
+  }
+}
+
 void escort_sense(Fighter& f, const server::RulesCommon& s, int me, double t) {
   Escort& e = f.escort;
   const server::WorldEntity& leader = ent_of(s, e.leader + 1);
+  const int top = fights_up_to(s, me);
   // His velocity off his places a command apart (a client sees where he is, frame by frame); any
   // move off the spot ends his standing still.
   if (e.last_t >= 0 && t > e.last_t) {
@@ -299,7 +345,8 @@ void escort_sense(Fighter& f, const server::RulesCommon& s, int me, double t) {
     const size_t k = static_cast<size_t>(ent);
     const bool monster = !d.free && d.modelindex > 0 &&
                          static_cast<size_t>(d.modelindex) < e.monster_model.size() &&
-                         e.monster_model[static_cast<size_t>(d.modelindex)] != 0;
+                         e.monster_model[static_cast<size_t>(d.modelindex)] != 0 &&
+                         e.monster_model[static_cast<size_t>(d.modelindex)] <= top;
     // One lying dead (its body no longer solid) is no monster any more.
     if (!monster || d.solid == sh::kSolidNot) {
       foes[k] = 0;
@@ -426,7 +473,7 @@ void escort_think(Fighter& f, const server::RulesCommon& s, int me, const Stats&
       break;
     }
     case EscortMode::catch_up:
-      set_moves(f, true, true);
+      set_moves(f, false, false);  // walked: a hop on a map's ledges ends in its pit
       e.follow_node = sh::nav_nearest(*f.bot.pilot.pilot.g, L);
       fighter_go(f, e.follow_node);
       break;

@@ -143,6 +143,12 @@ void() func_door = {
   if (!self.dmg) self.dmg = 2;
   self.pos1 = self.origin;
   self.pos2 = self.pos1 + self.movedir * (fabs(self.movedir * self.size) - self.lip);
+  if (self.spawnflags & 1) {
+    // Starts open: it stands where it would open to, and "opening" it shuts it (a trap's bars).
+    setorigin(self, self.pos2);
+    self.pos2 = self.pos1;
+    self.pos1 = self.origin;
+  }
   self.state = STATE_BOTTOM;
   if (self.targetname == "") {
     self.think = door_spawn_field;
@@ -226,6 +232,7 @@ void() button_return = {
   self.state = STATE_DOWN;
   calc_move(self.pos1, self.speed, noop);
   self.frame = 0;
+  if (self.max_health) self.takedamage = DAMAGE_YES;  // a shot one can be shot again
 };
 
 void() button_pressed = {
@@ -254,6 +261,14 @@ void() button_use = {
   button_fire();
 };
 
+// A button the map gives health is pressed by a shot (or any blow) that takes it.
+void() button_killed = {
+  activator = damage_attacker;
+  self.health = self.max_health;
+  self.takedamage = DAMAGE_NO;
+  button_fire();
+};
+
 void() func_button = {
   set_movedir();
   brush_start();
@@ -265,6 +280,12 @@ void() func_button = {
   self.pos1 = self.origin;
   self.pos2 = self.pos1 + self.movedir * (fabs(self.movedir * self.size) - self.lip);
   self.state = STATE_BOTTOM;
+  if (self.health) {
+    self.max_health = self.health;
+    self.takedamage = DAMAGE_YES;
+    self.th_die = button_killed;
+    self.touch = noop;  // only a blow presses it
+  }
 };
 
 // --- triggers ---

@@ -1,7 +1,7 @@
 // The co-op party on the listen server (coop_party.hpp states what it does).
 //
 // ge:summary The co-op party: companions seated, their graph per map, their packets each frame
-// ge:keywords party_add party_remove party_enter party_packets companion coop nav-graph
+// ge:keywords party_add party_remove party_enter party_packets companion coop nav-graph map-nav
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_campaign_view_test.cpp
 #include "shooters_edge/client/coop_party.hpp"
@@ -13,21 +13,18 @@ namespace {
 constexpr double kHz = 72;  // the campaign host's frames a second
 
 bool ensure_graph(Party& p, const sv::Campaign& c, const sv::MapSpec& map, std::string& error) {
-  if (p.graph && p.graph_of == map.name && p.graph_at == c.history.size()) return true;
-  if (map.models.empty()) {
-    error = "the map " + map.name + " has no world model to walk on; next: load a map first";
+  if (p.nav && p.graph_of == map.name && p.graph_at == c.history.size()) return true;
+  const sv::QcServer* q = sv::qc_of(c.server);
+  if (!q) {
+    error = "the campaign runs no QC server; next: start a coop game (`coopgame`)";
     return false;
   }
-  auto w = std::make_unique<sh::MoveWorld>();
-  sh::map_world(map.models[0], *w);
-  auto g = std::make_unique<sh::NavGraph>();
-  sh::build_nav(*w, {}, sh::MoveSettings{}, sh::NavSettings{}, *g);
-  if (g->nodes.empty()) {
-    error = "no floor a companion can walk on " + map.name + "; next: play coop on another map";
+  auto nav = std::make_unique<bots::MapNav>();
+  if (!bots::build_map_nav(*q, map, "info_player_start", *nav, error)) {
+    error += "; next: play coop on another map";
     return false;
   }
-  p.graph = std::move(g);
-  p.world = std::move(w);
+  p.nav = std::move(nav);
   p.graph_of = map.name;
   p.graph_at = c.history.size();
   return true;
@@ -38,11 +35,12 @@ void make(Party& p, const sv::RulesCommon& s, const sv::MapSpec& map, int slot) 
   m.fighter = bots::Fighter();
   m.sequence = 0;
   for (sh::MoveCmd& cmd : m.cmds) cmd = {};
-  bots::fighter_init(m.fighter, *p.graph, s, slot, map.entities.c_str(), m.skill,
+  bots::fighter_init(m.fighter, p.nav->graph, s, slot, map.entities.c_str(), m.skill,
                      sh::traits_of(m.skill, sh::Temper::balanced), kHz,
                      p.seed + 31u * static_cast<uint32_t>(slot));
   m.fighter.bot.yaw = s.world.entities[static_cast<size_t>(slot) + 1].view_angles.y;
-  m.fighter.bot.pilot.world = p.world.get();
+  m.fighter.bot.pilot.world = &p.nav->world;
+  if (p.nav->swim.leading > 0) m.fighter.swim = &p.nav->swim;
   bots::escort_init(m.fighter, s, slot, 0);
 }
 

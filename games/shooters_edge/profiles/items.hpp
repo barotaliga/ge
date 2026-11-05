@@ -181,6 +181,10 @@ inline constexpr std::string_view kClassicMonsters[] = {
     "progs/ogre.mdl",    "progs/zombie.mdl",   "progs/wizard.mdl",   "progs/fish.mdl",
     "progs/demon.mdl",   "progs/shambler.mdl", "progs/shalrath.mdl", "progs/enforcer.mdl",
     "progs/tarbaby.mdl", "progs/boss.mdl",     "progs/oldone.mdl"};
+// Of those, the ones only a blast keeps down (a shot one gets up again), and the ones no weapon
+// kills at all (the map's own trap does): a player passes them rather than fights them.
+inline constexpr std::string_view kClassicBlastOnly[] = {"progs/zombie.mdl"};
+inline constexpr std::string_view kClassicNoWeapon[] = {"progs/boss.mdl", "progs/oldone.mdl"};
 
 // A game's three tables, which its profile row carries (game_profile.hpp).
 struct ItemTables {

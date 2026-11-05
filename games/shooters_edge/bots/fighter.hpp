@@ -201,6 +201,7 @@ struct Fighter {
   int32_t spam_node = -1;   // where it fires at a spot from now (-1: not out)
   int32_t spam_spot = -1;   // and at which
   int32_t poke = -1;        // the button a novice is on
+  int32_t objective = -1;   // a goal set from outside (way_through.hpp): taken before any item
   int32_t mega_watch = -1;  // the mega it took, its timer waiting on its health (knowledge.hpp)
   int32_t goal_node = -1;
   int32_t want_weapon = 0;  // the number (1..8) asked for; 0 none pending
@@ -236,6 +237,7 @@ struct Fighter {
   bool was_dead = false;
   bool unlocking = false;  // on the way to the goal item's button
   bool swimming = false;   // in water no route leaves: following the swim field
+  bool hunts = false;      // every monster a foe (companion.hpp `hunt_init`)
 };
 
 // The fighter's strength: health and armour's protection, a launcher counted on top.
