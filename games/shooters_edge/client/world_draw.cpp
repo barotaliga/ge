@@ -168,10 +168,20 @@ bool surface_from_cache(void* user, std::string_view name, uint32_t w, uint32_t 
 // The weapon's draw this frame: its model and placement, lit by the baked light on the floor under
 // the eye (the lightmap's 0.5 the light as baked, from above) and by its own flash.
 gr::HeldDraw held_draw(WorldDraw& f, const shooters_edge::view::HandFrame& h,
-                       const gr::FrameView& view, bool engine_fire) {
+                       const gr::FrameView& view, bool engine_fire, float shown) {
   namespace vm = ge::viewmodel;
   gr::HeldDraw g;
   g.model = static_cast<uint32_t>(h.weapon);
+  // A spawn assembles it muzzle first, along the held frame's forward.
+  if (shown < 1 && g.model < f.weapons.size()) {
+    float lo[3], hi[3];
+    vm::held_bounds(f.weapons[g.model], lo, hi);
+    g.warp.shown = shown;
+    g.warp.axis[0] = g.warp.axis[1] = 0;
+    g.warp.axis[2] = 1;
+    g.warp.low = lo[2];
+    g.warp.high = hi[2];
+  }
   g.frame_a = h.frame_a;
   g.frame_b = h.frame_b;
   g.blend = static_cast<float>(h.frame_t);
@@ -441,6 +451,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
   return f;
 }
 
+const WorldModels& world_models(const WorldDraw& w) { return w.models; }
+
 void resize_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t height) {
   f.w = std::max(1u, width);
   f.h = std::max(1u, height);
@@ -567,7 +579,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   gr::set_post_blend(d, f.post[p], round ? fx.blend_dry : fx.blend);
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
-    gr::HeldDraw draw = held_draw(f, *held, view, fx_switches(*f.picture).muzzles);
+    gr::HeldDraw draw = held_draw(f, *held, view, fx_switches(*f.picture).muzzles, fx.held_shown);
     gr::prepare_viewmodel(d, f.held, std::span<const gr::HeldDraw>(&draw, 1), view, f.w, f.h);
   } else {
     f.held_fresh = true;

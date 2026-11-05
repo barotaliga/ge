@@ -311,6 +311,15 @@ void create_models(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines, WorldMod
       ge::core::output::status(
           "shooters_edge: the models' skins do not fit the atlas; models not drawn");
   }
+  // The frames and triangles kept for the ash; the skins and coordinates are the GPU's alone.
+  m.shapes.clear();
+  m.shapes.reserve(morphs.size());
+  for (const gr::MorphModel& mm : morphs) {
+    gr::MorphModel shape;
+    shape.positions = mm.positions;
+    shape.indices = mm.indices;
+    m.shapes.push_back(std::move(shape));
+  }
   if (!frames.empty()) {
     m.has_sprites = gr::create_sprites(d, pipelines, m.sprites, frame, frames);
     if (!m.has_sprites)
@@ -335,6 +344,27 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed,
     mv.hidden = false;
     to_world(p.origin, mv.offset);
   }
+}
+
+bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::vector<float>& out) {
+  out.clear();
+  if (p.modelindex <= 0 || size_t(p.modelindex) >= m.kinds.size()) return false;
+  const ModelKind& k = m.kinds[size_t(p.modelindex)];
+  if (k.is != ModelKind::Is::alias) return false;
+  // The model and frame as prepare_models picks them.
+  const double at =
+      k.synced ? time_s : time_s + double(uint32_t(p.entity) * 2654435761u % 1000) * 1e-3;
+  const uint32_t model = k.first + models::frame_in(k.skins, p.skin, at);
+  if (model >= m.shapes.size()) return false;
+  const gr::MorphModel& shape = m.shapes[model];
+  if (shape.positions.empty()) return false;
+  const uint32_t frame = std::min<uint32_t>(models::frame_in(k.frames, p.frame, at),
+                                            uint32_t(shape.positions.size() - 1));
+  const std::vector<float>& pos = shape.positions[frame];
+  out.reserve(shape.indices.size() * 3);
+  for (const uint32_t i : shape.indices)
+    out.insert(out.end(), {pos[size_t(i) * 3], pos[size_t(i) * 3 + 1], pos[size_t(i) * 3 + 2]});
+  return !out.empty();
 }
 
 void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
@@ -392,7 +422,8 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     models::rotation_of(ang, k.is == ModelKind::Is::alias, g.now.rotation);
     g.now.frame_a = g.now.frame_b = frame;
     const auto last = m.last_pose.find(p.entity);
-    g.last = last == m.last_pose.end() ? g.now : last->second;
+    g.last = last == m.last_pose.end() || p.warp.shown < 1 ? g.now : last->second;
+    g.warp = p.warp;
     m.last_pose[p.entity] = g.now;
     g.tint[0] = p.top;
     g.tint[1] = p.bottom;

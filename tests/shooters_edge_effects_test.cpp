@@ -4,8 +4,9 @@
 // own colours.
 //
 // ge:summary Tests Shooter's Edge's effects (trails, bursts, lights, the blend) and its looks
-// ge:keywords test effects particles explosion trail blend palette grade look shooter
+// ge:keywords test effects particles explosion trail blend palette grade look shooter dust ash
 // ge:skill shooter
+#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -231,4 +232,48 @@ TEST(ce_rebake_adds_the_cached_bounce_in_the_modern_look_only) {
   CHECK(!lk::world_options(lk::Look::classic, {}, pic).rebake_bounce);
   con.execute("ce_rebake 0");
   CHECK(!lk::world_options(lk::Look::modern, {}, pic).rebake_bounce);
+}
+
+double linear_land(double share) { return 0.7 * share; }
+
+TEST(dust_blown_in_lands_on_the_body_as_it_appears_and_is_the_same_for_a_seed) {
+  fx::Dust d;
+  d.at[0] = 1, d.at[1] = 2, d.at[2] = 3;
+  d.warp.low = float(d.low), d.warp.high = float(d.high);
+  fx::Particles a, b;
+  fx::dust_in(d, -1, 0.05, linear_land, 5, &a);
+  fx::dust_in(d, -1, 0.05, linear_land, 5, &b);
+  CHECK(!a.empty() && same(a, b));
+  // An arrival a frame at a time: every flake born ends on the body, as its point appears.
+  fx::Particles all;
+  double was = -1;
+  for (int f = 0; f <= 42; ++f) {
+    const double age = f / 60.0;
+    fx::Particles births;
+    fx::dust_in(d, was, age, linear_land, 100 + uint32_t(f), &births);
+    for (const auto& p : births) {
+      CHECK(p.drag == 0 && p.fall == 0);
+      CHECK(p.life >= 0.02f && age + p.life <= 0.7 + 1e-6);
+      const double x = p.p[0] + p.v[0] * p.life - d.at[0], y = p.p[1] + p.v[1] * p.life - d.at[1],
+                   z = p.p[2] + p.v[2] * p.life - d.at[2];
+      CHECK(std::sqrt(x * x + z * z) <= d.half_width + 1e-3);
+      CHECK(y >= d.low - 1e-3 && y <= d.high + 1e-3);
+    }
+    all.insert(all.end(), births.begin(), births.end());
+    was = age;
+  }
+  CHECK(all.size() > 300);
+}
+
+TEST(dust_blown_off_is_thrown_once_wherever_the_cut_passes) {
+  fx::Dust d;
+  d.warp.low = float(d.low), d.warp.high = float(d.high);
+  fx::Particles whole, first, second, none;
+  fx::dust_off(d, 1, 0, 9, &whole);
+  fx::dust_off(d, 1, 0.5, 9, &first);
+  fx::dust_off(d, 0.5, 0, 9, &second);
+  fx::dust_off(d, 0.5, 0.5, 9, &none);
+  CHECK(whole.size() > 600 && none.empty());
+  CHECK(first.size() + second.size() == whole.size());
+  for (const auto& p : whole) CHECK(p.v[2] < 0);  // downwind, -z here
 }

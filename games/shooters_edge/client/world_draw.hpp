@@ -84,6 +84,8 @@ bool finish_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_
                   std::string& error);
 
 void resize_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_t height);
+// The models it draws (world_models.hpp): their shapes, for where a warp's ash lands.
+const WorldModels& world_models(const WorldDraw& w);
 // With `own` the frame's sky is the view's as the caller dressed it (the title's), not the map's.
 void own_sky(WorldDraw& w, bool own);
 // Whether a setting read only when the world is made changed since it was made (`ce_textures`,
