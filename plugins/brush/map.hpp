@@ -22,8 +22,13 @@
 // - **Clip hulls** (29 and BSP2): the trees a box is swept through, each the world's solids grown
 //   by one box (hull 1 the player's, hull 2 a large one; the point hull is the node tree). A
 //   `ClipNode`'s child `c >= 0` is a clip node, `c < 0` the contents number itself (29's codes).
-//   `Model::hulls[h - 1]` is hull h's first clip node. 38 and 46 sweep through brushes instead,
-//   which the view does not keep yet: their `clip_nodes` are empty.
+//   `Model::hulls[h - 1]` is hull h's first clip node. 38 and 46 sweep through brushes instead:
+//   their `clip_nodes` are empty.
+// - **Brushes** (38): the convex solids a box is swept through (trace.hpp). A brush is a run of
+//   `Map::brush_sides` and a contents bit set; the solid is the back of every side's plane. A leaf
+//   lists the brushes that touch it (`Leaf::first_brush`, into `Map::leaf_brushes`). A side keeps
+//   its texinfo's surface: its texture (−1 for none), flags and value. 46's brushes are counted,
+//   not read (`unread_brushes`).
 // - **BSPX lumps** (29 and BSP2): extra named lumps a compiler appends after the fifteen, behind a
 //   `BSPX` directory at the first four-byte boundary past the last lump. Each is kept by name
 //   (`Map::bspx`); `RGBLIGHTING` (three bytes a luxel, the grey lighting's size three times over)
@@ -40,6 +45,7 @@
 // ge:keywords node plane entity model patch to_engine ambient ambient-level clip-hull clipnode
 // ge:keywords phs hearable build_phs cluster_hears hull_contents bspx rgblighting bspx_lump
 // ge:keywords sky liquid liquid-kind teleport lava slime water next-frame texture-mark
+// ge:keywords brush-side leaf-brushes contents plane-type surface-flags
 // ge:skill brush
 // ge:test tests/brush_read_test.cpp
 #pragma once
@@ -115,6 +121,9 @@ struct Lightmap {
 struct Plane {
   float n[3] = {};
   float d = 0;
+  // The file's type (38): 0, 1, 2 when the normal is that axis (a node then tests only that
+  // coordinate), 3..5 otherwise; 3 where the family stores none. Not in `map_digest`.
+  uint8_t type = 3;
 };
 
 struct Node {
@@ -136,6 +145,9 @@ struct Leaf {
   // The surfaces marked as seen from inside it: Map::marks[first_mark, first_mark + marks), each a
   // surface's index (29, BSP2 and 38). A cull draws a cluster's leaves' marked surfaces.
   uint32_t first_mark = 0, marks = 0;
+  // The brushes that touch it: Map::leaf_brushes[first_brush, first_brush + brushes), each a
+  // brush's index (38).
+  uint32_t first_brush = 0, brushes = 0;
 };
 
 // A leaf's ambient levels, in the order a version 29 or BSP2 file stores them. The map's compiler
@@ -147,6 +159,19 @@ struct Model {
   uint32_t first_surface = 0, surface_count = 0;
   int32_t head_node = 0;
   int32_t hulls[3] = {};  // hulls 1..3: the first clip node (29 and BSP2)
+};
+
+// A convex solid (38): Map::brush_sides[first_side, first_side + sides) and its contents bits.
+struct Brush {
+  uint32_t first_side = 0, sides = 0;
+  int32_t contents = 0;
+};
+
+// One side of a brush: its plane (the solid is behind it) and its texinfo's surface.
+struct BrushSide {
+  uint32_t plane = 0;
+  int32_t texture = -1;  // into Map::textures; −1: no surface (an empty name, no flags)
+  int32_t flags = 0, value = 0;
 };
 
 struct Entity {
@@ -185,14 +210,18 @@ struct Map {
 
   std::vector<ClipNode> clip_nodes;  // every clip hull of every model (29 and BSP2)
 
+  std::vector<Brush> brushes;          // 38
+  std::vector<BrushSide> brush_sides;  // the brushes' sides, runs of them
+  std::vector<uint32_t> leaf_brushes;  // the leaves' brushes (Leaf::first_brush), brush indices
+
   std::vector<BspxLump> bspx;  // in the directory's order (29 and BSP2)
 
   std::string entity_text;
   std::vector<Entity> entities;
 
-  // What was read but has no place in the view yet (brushes, light grid): counts, so a lab can say
-  // it is there.
-  uint32_t brushes = 0, patches = 0, billboards = 0;
+  // What was read but has no place in the view yet (46's brushes, light grid): counts, so a lab
+  // can say it is there.
+  uint32_t unread_brushes = 0, patches = 0, billboards = 0;
 
   size_t triangles() const { return indices.size() / 3; }
 };

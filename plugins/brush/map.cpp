@@ -181,14 +181,33 @@ uint64_t map_digest(const Map& map) {
     mix_u(l.offset);
   }
   mix(map.light_rgb.data(), map.light_rgb.size());
-  for (const Plane& p : map.planes) mix(&p, sizeof p);
+  for (const Plane& p : map.planes) {
+    mix(p.n, sizeof p.n);
+    mix(&p.d, sizeof p.d);
+  }
   for (const Node& n : map.nodes) mix(&n, sizeof n);
   for (const Leaf& l : map.leaves) {
     mix_u(uint64_t(int64_t(l.contents)));
     mix_u(uint64_t(int64_t(l.cluster)));
     mix(l.mins, sizeof l.mins);
     mix(l.maxs, sizeof l.maxs);
+    if (l.brushes) {  // brushes a leaf lists (38): absent from a map without them
+      mix_u(l.first_brush);
+      mix_u(l.brushes);
+    }
   }
+  for (const Brush& b : map.brushes) {
+    mix_u(b.first_side);
+    mix_u(b.sides);
+    mix_u(uint64_t(int64_t(b.contents)));
+  }
+  for (const BrushSide& s : map.brush_sides) {
+    mix_u(s.plane);
+    mix_u(uint64_t(int64_t(s.texture)));
+    mix_u(uint64_t(int64_t(s.flags)));
+    mix_u(uint64_t(int64_t(s.value)));
+  }
+  mix(map.leaf_brushes.data(), map.leaf_brushes.size() * 4);
   mix(map.pvs.data(), map.pvs.size());
   for (const ClipNode& n : map.clip_nodes) mix(&n, sizeof n);
   for (const Model& md : map.models) mix(md.hulls, sizeof md.hulls);

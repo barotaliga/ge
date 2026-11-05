@@ -327,7 +327,7 @@ bool read_v46(std::span<const uint8_t> file, Map* out, std::string* err, const R
   }
 
   if (!detail::count_of(L[kBrushes], 12, f, &n, err)) return false;
-  m.brushes = uint32_t(n);
+  m.unread_brushes = uint32_t(n);
 
   const auto vis = file.subspan(L[kVisdata].off, L[kVisdata].len);
   if (!vis.empty()) {
