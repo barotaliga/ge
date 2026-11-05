@@ -52,6 +52,7 @@
 #include "render/explosion.hpp"
 #include "render/frame.hpp"
 #include "render/impact.hpp"
+#include "render/lights.hpp"
 #include "render/muzzle.hpp"
 #include "render/particles.hpp"
 #include "render/view.hpp"
@@ -116,6 +117,13 @@ void stage_explosions(Explosions& ex, std::span<const Blast> blasts, const Frame
 void prepare_explosions(gpu::Device& device, Explosions& ex, std::span<const Blast> blasts,
                         const FrameView& view, uint32_t width, uint32_t height,
                         std::span<const MuzzleFire> fires = {});
+
+// The flash of every blast alive at `now_s` (render/explosion.hpp's `flash_at`) as a local light
+// appended to `out`: a point at the fireball's centre, its candela and colour reset from the curve
+// each frame (white-hot, then an orange glow, then out), reaching out to where its light has
+// fallen to a lux (the look's range at least, four times it at most); a blast whose fire is out
+// gives none. The count appended.
+size_t flash_lights(std::span<const Blast> blasts, double now_s, std::vector<LocalLight>& out);
 
 // The pass "explosions" (after the particles, before the resolve): one quad a staged blast.
 void encode_explosions(const Explosions& ex, const gpu::PipelineSet& pipelines, FrameRecorder& rec,

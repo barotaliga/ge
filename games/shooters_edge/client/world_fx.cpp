@@ -11,6 +11,7 @@
 #include <cmath>
 
 #include "brush/map.hpp"
+#include "classicenhance/replace.hpp"
 #include "classicenhance/weapons.hpp"
 #include "core/math.hpp"
 #include "core/prng.hpp"
@@ -33,6 +34,9 @@ constexpr double kSpriteFps = 10;
 constexpr double kBoltSegment = 30;
 // The placed effects' entity numbers (below every static's): the sprites', then the bolts'.
 constexpr int kSpriteEntities = -(1 << 20), kBoltEntities = -(1 << 21);
+// The hot air a nail's flight and a rocket's motor leave (render/haze.hpp's presets).
+const ge::render::HazeLook* const kNailHaze = ge::render::haze_look("haze.nail");
+const ge::render::HazeLook* const kRocketHaze = ge::render::haze_look("haze.rocket");
 
 // The mod's contents codes for the liquids (games/shooters_edge/qc/common/defs.qc's CONTENT_*).
 constexpr float kWater = -3, kSlime = -4, kLava = -5;
@@ -298,7 +302,7 @@ void mark(FxState& s, ge::detail::DecalKind kind, const double at[3], const doub
   d.size_m = size_m;
   d.spin_rad = spin;
   d.now_s = t;
-  d.variant = variant % kMarkVariants;
+  d.variant = variant % ge::render::kMarkVariants;
   d.kind = kind;
   const int slot = ge::detail::place_decal(s.marks, s.receivers->receivers, d);
   if (slot < 0 || s.marked == nullptr) return;
@@ -315,53 +319,10 @@ void mark(FxState& s, ge::detail::DecalKind kind, const double at[3], const doub
     lit = {0.5f, 0.5f, 0.5f};
 }
 
-// The marks as the beams' pass's burns: each one's soot and its embers, its masks' cell of the
-// atlas.
+// The marks as the beams' pass's burns, each in the light it was pressed in.
 void burns_of(const FxState& s, double t, std::vector<ge::render::BurnVertex>& out) {
   out.clear();
-  if (!s.receivers) return;
-  for (uint32_t i = 0; i < s.marks.capacity; ++i) {
-    const ge::detail::Decal& d = s.marks.decals[i];
-    if (!d.live) continue;
-    const ge::detail::DecalLook look = ge::detail::look_at(d.kind, t - d.born_s);
-    const float soot = static_cast<float>(look.opacity * (1 - (look.r + look.g + look.b) / 3));
-    // A fresh scorch's embers at their hottest (look_at's 2.6) are kHotEmberCd.
-    const float ember = static_cast<float>(look.er / 2.6) * kHotEmberCd;
-    const std::span<const ge::detail::DecalVertex> verts = ge::detail::decal_verts(s.marks, i);
-    const std::array<float, 3> lit =
-        i < s.mark_light.size() ? s.mark_light[i] : std::array<float, 3>{1, 1, 1};
-    for (size_t k = 0; k + 2 < verts.size(); k += 3) {
-      // The world's up across this triangle, in the atlas's uv: the way y climbs fastest.
-      const ge::detail::DecalVertex& a = verts[k];
-      const double du1 = verts[k + 1].u - a.u, dv1 = verts[k + 1].v - a.v;
-      const double du2 = verts[k + 2].u - a.u, dv2 = verts[k + 2].v - a.v;
-      const double dy1 = verts[k + 1].pos.y - a.pos.y, dy2 = verts[k + 2].pos.y - a.pos.y;
-      const double det = du1 * dv2 - du2 * dv1;
-      double gu = 0, gv = 1;
-      if (std::abs(det) > 1e-12) {
-        gu = (dy1 * dv2 - dy2 * dv1) / det;
-        gv = (du1 * dy2 - du2 * dy1) / det;
-      }
-      // Into the atlas's cell (its uv is the mark's over the variants and the kinds).
-      gu /= kMarkVariants;
-      gv /= ge::detail::kDecalKinds;
-      for (size_t j = k; j < k + 3; ++j) {
-        const ge::detail::DecalVertex& v = verts[j];
-        ge::render::BurnVertex b;
-        b.at[0] = v.pos.x, b.at[1] = v.pos.y, b.at[2] = v.pos.z;
-        b.u = static_cast<float>((d.variant + v.u) / kMarkVariants);
-        b.v = static_cast<float>((static_cast<int>(d.kind) + v.v) / ge::detail::kDecalKinds);
-        b.fade = static_cast<float>(v.fade);
-        b.soot = soot;
-        b.ember = ember;
-        b.relief = d.kind == ge::detail::DecalKind::bullet_hole ? 1.0f : 0.0f;
-        b.up[0] = static_cast<float>(gu);
-        b.up[1] = static_cast<float>(gv);
-        for (int c = 0; c < 3; ++c) b.light[c] = lit[c];
-        out.push_back(b);
-      }
-    }
-  }
+  if (s.receivers) ge::render::mark_burns(s.marks, t, s.mark_light, out);
 }
 
 }  // namespace
@@ -403,21 +364,20 @@ fx::Dust player_dust(const sh::Vec3f& origin, const sh::Vec3f& angles, int entit
   return d;
 }
 
-const std::vector<uint8_t>& mark_atlas() {
-  static const std::vector<uint8_t> kAtlas = ge::detail::bake_atlas(kMarkAtlasPx, kMarkVariants);
-  return kAtlas;
-}
-
 FxSwitches fx_switches(const look::Picture& picture) {
   FxSwitches s;
   if (look::look_of(picture) == look::Look::classic) return s;
   s.muzzles = picture.ce.muzzles;
-  s.explosions = picture.ce.explosions;
+  const ge::classicenhance::Replacement* blast =
+      ge::classicenhance::replacement_of(kEffectModels[size_t(EffectModel::explosion)]);
+  s.explosions = picture.ce.explosions && blast != nullptr && blast->effect == "explosion";
   s.trails = picture.ce.trails;
   s.beams = picture.ce.beams;
   s.hits = picture.ce.hits;
   s.decals = picture.ce.decals;
   s.warps = picture.ce.warps;
+  s.flares = picture.ce.flares;
+  s.bubbles = picture.ce.bubbles;
   s.bolt = &fx::bolt_look(static_cast<int>(picture.beam_style));
   return s;
 }
@@ -659,10 +619,20 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     } else {
       s.flights_next[m.entity] = {m.origin, {0, 0, 0}};
     }
-    if (!m.rocket) continue;
     double to[3];
     put(at, to);
     const auto was = s.last.find(m.entity);
+    // The hot air behind a nail and a rocket's motor (a grenade is not hot), a stretch a frame.
+    if (was != s.last.end() && s.on.trails && !m.grenade) {
+      ge::render::HazeTrail h;
+      put(was->second, h.a);
+      put(at, h.b);
+      h.born_s = t;
+      h.look = m.rocket ? kRocketHaze : kNailHaze;
+      h.seed = static_cast<uint32_t>(m.entity);
+      s.haze.push_back(h);
+    }
+    if (!m.rocket) continue;
     if (was != s.last.end()) {
       double from[3];
       put(was->second, from);
@@ -677,15 +647,28 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
         fx::fire_trail(from, to, s.seed++, &out.births);
         const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
         const double len = ge::core::hypot3(d[0], d[1], d[2]);
+        double dir[3] = {0, 0, 0};
         if (len > 1e-4) {
-          const double dir[3] = {d[0] / len, d[1] / len, d[2] / len};
+          for (int k = 0; k < 3; ++k) dir[k] = d[k] / len;
           out.flames.push_back(fx::exhaust(to, dir, static_cast<uint32_t>(m.entity), t));
         }
+        // The motor's fire lights the world round it (the classic rocket's steady light below).
+        out.lights.push_back(fx::motor_light(to, dir, static_cast<uint32_t>(m.entity), t));
+        continue;
       }
     }
-    if (!m.grenade || !s.on.trails) out.lights.push_back(fx::rocket_light(to));
+    if (s.on.trails && !m.grenade) {  // its first frame seen: no flight yet, the light on it
+      const double still[3] = {0, 0, 0};
+      out.lights.push_back(fx::motor_light(to, still, static_cast<uint32_t>(m.entity), t));
+    } else if (!s.on.trails) {
+      out.lights.push_back(fx::rocket_light(to));
+    }
   }
   std::swap(s.last, s.next);
+  std::erase_if(s.haze,
+                [&](const ge::render::HazeTrail& h) { return ge::render::haze_cold(h, t); });
+  if (!s.on.trails) s.haze.clear();
+  out.haze.assign(s.haze.begin(), s.haze.end());
 
   // The explosions: a burst once, then a light while it fades.
   if (l.explosions.size() < s.explosions_seen) {  // a new map
@@ -695,6 +678,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     s.blasts.clear();
     s.mains.clear();
     s.flights.clear();
+    s.haze.clear();
     s.wall_colours.clear();
     s.wounds.clear();
     s.wound_health.clear();

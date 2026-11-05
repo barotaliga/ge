@@ -7,6 +7,7 @@
 // ge:summary Tests Shooter's Edge's enhanced weapon effects: blasts, trails, exhaust, hits, bolt
 // ge:keywords test weapon-fx blast billows dome trail exhaust hit bolt dynamic-light shooter
 // ge:skill shooter
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -157,4 +158,22 @@ TEST(a_chip_hops_on_its_floor_and_comes_to_rest) {
   for (int i = 0; i < 400; ++i) gr::step_particle(p, 0.01f);
   CHECK(p.p[1] == 0 && p.v[0] == 0 && p.v[1] == 0);  // lying still
   CHECK(p.age >= p.life * 0.7f);                     // and fading
+}
+
+TEST(the_rockets_motor_lights_the_world_from_its_nozzle_and_wavers) {
+  const double at[3] = {0, 1, 0}, dir[3] = {1, 0, 0}, still[3] = {0, 0, 0};
+  const fx::Light l = fx::motor_light(at, dir, 3, 1.0);
+  CHECK(std::abs(l.pos[0] + fx::kNozzleM) < 1e-12 && l.pos[1] == 1);  // behind it, at the nozzle
+  CHECK(l.radius == fx::kMotorLightM);
+  CHECK(l.colour[0] > l.colour[1] && l.colour[1] > l.colour[2]);  // a flame's orange-yellow
+  const fx::Light on = fx::motor_light(at, still, 3, 1.0);
+  CHECK(on.pos[0] == 0);
+  double lo = 1e9, hi = 0;
+  for (int i = 0; i < 200; ++i) {
+    const double r = fx::motor_light(at, dir, 3, 1.0 + i * 0.005).colour[0];
+    lo = std::min(lo, r);
+    hi = std::max(hi, r);
+  }
+  CHECK(hi > lo * 1.1 && lo >= 0.8 * fx::kMotorLevel - 1e-9 && hi <= fx::kMotorLevel + 1e-9);
+  CHECK(fx::motor_light(at, dir, 3, 1.2).colour[0] != fx::motor_light(at, dir, 4, 1.2).colour[0]);
 }
