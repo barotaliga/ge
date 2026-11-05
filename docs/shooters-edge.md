@@ -860,7 +860,9 @@ armour, or both, once the sequel's profile lands. The design makes that possible
   its amount and its pickup. A profile ships one weapon set and one armour set, so the classic
   game's set and the sequel's set are rows in two profiles. Nothing in our programs names a
   weapon by a constant.
-- **Our programs read the arsenal, never their own copies.** The weapons and armour in
+- **Our programs read the arsenal, never their own copies.** (Landed: the rows are
+  `games/shooters_edge/profiles/arsenal.hpp`, handed to the program as the server settings
+  `arsenal_weapon1..8` and `arsenal_armour1..3`; a slot with no row keeps the program's own.) The weapons and armour in
   `qc/common/` (the arena and campaign variants share them) fire, pick up and absorb through the
   arsenal's rows. The settings `sv_weapons <profile>` and `sv_armour <profile>` pick which set a
   map's items give. They default to the content's own sets, and each can be set without the
