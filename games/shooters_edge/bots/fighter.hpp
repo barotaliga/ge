@@ -52,7 +52,7 @@
 #include "shooter/traits.hpp"
 #include "shooters_edge/bots/mind.hpp"
 #include "shooters_edge/profiles/items.hpp"
-#include "shooters_edge/server/qc_server.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::bots {
 
@@ -67,7 +67,7 @@ struct Stats {
   int32_t weapon = 0;  // the W_ bit held
   float shells = 0, nails = 0, rockets = 0, cells = 0;
 };
-Stats read_stats(const server::QcServer& s, int ent);
+Stats read_stats(const server::RulesCommon& s, int ent);
 
 // What an item is, the game profile's vocabulary (profiles/items.hpp).
 using ItemKind = shooters_edge::profiles::ItemKind;
@@ -243,11 +243,11 @@ float fighter_strength(const Stats& st);
 // passes its aim's hands untouched, the measuring stick), the map's items off `entities` (the
 // map's text) matched to what the server `s` sends client `slot`'s player now. Call after the
 // slot connects.
-void fighter_init(Fighter& f, const sh::NavGraph& g, const server::QcServer& s, int slot,
+void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s, int slot,
                   const char* entities, sh::AimSkill skill, const sh::Traits& traits, double hz,
                   uint32_t seed);
 
 // The fighter's next command, `msec` long, on server `s` as it stands after the last frame.
-sh::MoveCmd fighter_command(Fighter& f, const server::QcServer& s, int slot, int msec);
+sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, int msec);
 
 }  // namespace shooters_edge::bots

@@ -86,11 +86,12 @@ TrialReport run_classic_trial(const TrialOptions& opt) {
     rep.error = "run_classic_trial: " + error;
     return rep;
   }
+  const sv::RulesRunner rules = sv::qc_runner(std::move(qc));
   sv::MapSpec map;
   map.name = "arena";
   map.models = sv::arena_models();
   map.entities = sv::kArenaEntities;
-  if (!sv::load_map(*qc, map, error)) {
+  if (!rules.start(map, error)) {
     rep.error = "run_classic_trial: " + error;
     return rep;
   }
@@ -107,7 +108,7 @@ TrialReport run_classic_trial(const TrialOptions& opt) {
   cfg.antilag = opt.antilag;
   cfg.seed = opt.seed;
   cfg.maxrate = opt.maxrate;
-  if (!classic_start(*server, *qc, *st, cfg, error)) {
+  if (!classic_start(*server, rules, *st, cfg, error)) {
     rep.error = error;
     return rep;
   }
@@ -141,7 +142,7 @@ TrialReport run_classic_trial(const TrialOptions& opt) {
     for (size_t i = 0; i < n; i++)
       if (now >= static_cast<int64_t>(i) * 200000) client_tick(*clients[i], now);
     classic_frame(*server, now);
-    h = fold(h, sh::server_hash(qc->sv));
+    h = fold(h, sh::server_hash(rules->sv));
     if ((f + 1) % 77 == 0) {
       rep.server_kbps.push_back(static_cast<double>(server->counts.bytes_out - last_bytes) * 8 /
                                 1000.0 / (77 * kFrameUs / 1e6));

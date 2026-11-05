@@ -59,7 +59,6 @@ struct HookArg {
 float call_hook(QcServer& s, HookId h, int32_t fn, int self, std::initializer_list<HookArg> args,
                 bool* ok = nullptr);
 
-enum class CommandResult : uint8_t { mod, server, bad };
 CommandResult client_command(QcServer& s, int slot, const std::string& line);
 
 void set_user_info(QcServer& s, int slot, const std::string& key, const std::string& value);

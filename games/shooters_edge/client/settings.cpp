@@ -54,10 +54,10 @@ void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) 
   info.name = name, info.sent_top = info.top, info.sent_bottom = info.bottom;
   l.opt.player = name;
   namespace sv = shooters_edge::server;
-  sv::set_user_info(*l.server, 0, "name", name);
+  l.rules->user_info(0, "name", name);
   if (l.room) return;  // a team game's lobby wears the team's colours (lobby.cpp)
-  sv::set_user_info(*l.server, 0, "topcolor", std::to_string(info.top));
-  sv::set_user_info(*l.server, 0, "bottomcolor", std::to_string(info.bottom));
+  l.rules->user_info(0, "topcolor", std::to_string(info.top));
+  l.rules->user_info(0, "bottomcolor", std::to_string(info.bottom));
 }
 
 void mouse_to_binds(ge::console::Console& con, const ge::input::InputState& in) {

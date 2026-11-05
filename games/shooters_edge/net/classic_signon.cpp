@@ -53,7 +53,7 @@ void cmd_new(ClassicServer& s, int slot) {
     stuff(s, slot, "cmd pext\n");
     return;
   }
-  sv::QcServer& q = *s.qc;
+  sv::RulesCommon& q = *s.game;
   SvcMsg m;
   m.id = svc::serverdata;
   for (ExtFamily f : {ExtFamily::x, ExtFamily::x2, ExtFamily::mvd})
@@ -92,14 +92,14 @@ void cmd_pext(ClassicServer& s, int slot, const pg::Words& w) {
 
 void cmd_list(ClassicServer& s, int slot, bool models, int start) {
   const ClassicClient& c = s.clients[slot];
-  const std::vector<std::string>& names = models ? s.qc->models : s.qc->sounds;
+  const std::vector<std::string>& names = models ? s.game->models : s.game->sounds;
   const bool dbl = c.ext.has(ExtFamily::x, models ? kXModelDbl : kXSoundDbl);
   const int limit =
       dbl ? static_cast<int>(names.size()) : std::min<int>(256, static_cast<int>(names.size()));
   if (start < 0 || start >= limit) start = limit - 1;
-  if (models && start == 0 && !s.qc->vwep.empty() && c.ext.has(ExtFamily::z, kZVwep)) {
+  if (models && start == 0 && !s.game->vwep.empty() && c.ext.has(ExtFamily::z, kZVwep)) {
     std::string line = "//vwep";
-    for (const std::string& v : s.qc->vwep) line += " " + v;
+    for (const std::string& v : s.game->vwep) line += " " + v;
     stuff(s, slot, line + "\n");
   }
   SvcMsg m;
@@ -122,7 +122,7 @@ void cmd_prespawn(ClassicServer& s, int slot, int n) {
   ClassicClient& c = s.clients[slot];
   const WireCtx ctx = ctx_of(c);
   const bool v2 = c.ext.has(ExtFamily::x, kXSpawnStatic2);
-  const int statics = static_cast<int>(s.qc->statics.size());
+  const int statics = static_cast<int>(s.game->statics.size());
   std::vector<const EntityState*> bases;
   for (const EntityState& b : s.baselines)
     if (b.modelindex != 0) bases.push_back(&b);
@@ -134,7 +134,7 @@ void cmd_prespawn(ClassicServer& s, int slot, int n) {
   for (; i < total && w.size < kPage; i++) {
     SvcMsg m;
     if (i < statics) {
-      const sv::StaticEntity& st = s.qc->statics[static_cast<size_t>(i)];
+      const sv::StaticEntity& st = s.game->statics[static_cast<size_t>(i)];
       if (v2) {
         m.id = svc::spawnstatic2;
         EntityRecord r;
@@ -203,7 +203,7 @@ void cmd_spawn(ClassicServer& s, int slot, int n) {
     SvcMsg m;
     m.id = svc::lightstyle;
     m.ints = {i};
-    m.strings = {s.qc->lightstyles[i]};
+    m.strings = {s.game->lightstyles[i]};
     reliable_svc(s, slot, m);
   }
   for (int st = 11; st <= 14; st++) {
@@ -219,13 +219,13 @@ void cmd_begin(ClassicServer& s, int slot) {
   ClassicClient& c = s.clients[slot];
   if (c.state == ConnState::spawned) return;
   c.state = ConnState::spawned;
-  c.qc_active = true;
-  sv::connect(*s.qc, slot, c.name, c.spectator, false);
+  c.rules_active = true;
+  s.rules->connect(slot, c.name, c.spectator, false);
   std::vector<std::pair<std::string, std::string>> pairs;
   info_pairs(c.userinfo, pairs);
   for (const auto& [k, v] : pairs)
-    if (k != "name") sv::set_user_info(*s.qc, slot, k, v);
-  if (s.qc->paused) {
+    if (k != "name") s.rules->user_info(slot, k, v);
+  if (s.game->paused) {
     SvcMsg m;
     m.id = svc::setpause;
     m.ints = {1};
@@ -259,7 +259,7 @@ void cmd_setinfo(ClassicServer& s, int slot, const std::string& key, const std::
                          : 2500,
                      std::atoi(info_get(c.userinfo, "dupe").c_str()));
   if (key == "msg") c.msg_level = std::atoi(v.c_str());
-  if (c.qc_active) sv::set_user_info(*s.qc, slot, key, v);
+  if (c.rules_active) s.rules->user_info(slot, key, v);
   if (!visible_key(key)) return;
   for (int j = 0; j < sh::kMaxClients; j++) {
     if (s.clients[j].state == ConnState::free) continue;
@@ -386,7 +386,7 @@ void cmd_nextdl(ClassicServer& s, int slot, const pg::Words& w) {
 void full_client_update(ClassicServer& s, int about, int to) {
   ClassicClient& c = s.clients[about];
   int frags = 0;
-  if (c.qc_active) frags = static_cast<int>(s.qc->world.clients[about].numbers.frags);
+  if (c.rules_active) frags = static_cast<int>(s.game->world.clients[about].numbers.frags);
   c.frags_told = frags;
   std::vector<SvcMsg> ms(5);
   ms[0].id = svc::updatefrags;
@@ -397,7 +397,7 @@ void full_client_update(ClassicServer& s, int about, int to) {
   ms[2].ints = {about, c.loss_pct};
   ms[3].id = svc::updateentertime;
   ms[3].ints = {about};
-  ms[3].floats = {static_cast<float>(s.qc->sv.time - c.connect_time)};
+  ms[3].floats = {static_cast<float>(s.game->sv.time - c.connect_time)};
   ms[4].id = svc::updateuserinfo;
   ms[4].ints = {about, c.state == ConnState::free ? 0 : c.userid};
   ms[4].strings = {c.state == ConnState::free ? std::string() : info_public(c.userinfo)};
@@ -461,9 +461,9 @@ void string_command(ClassicServer& s, int slot, const std::string& line) {
   } else if (cmd == "ptrack" || cmd == "snap" || cmd == "upload") {
     // Spectator tracking, screenshots and uploads: not built.
   } else {
-    // The game's own words (a lobby's ready, team, start) first, then the mod's.
+    // The game's own words (a lobby's ready, team, start) first, then the rules'.
     const bool taken = s.game_command != nullptr && s.game_command(s.game_ctx, slot, line);
-    if (!taken && c.qc_active) sv::client_command(*s.qc, slot, line);
+    if (!taken && c.rules_active) s.rules->client_command(slot, line);
   }
 }
 

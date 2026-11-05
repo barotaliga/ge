@@ -36,9 +36,9 @@ namespace sh = ge::shooter;
 
 struct Game {
   ge::progs::Progs progs;
-  std::unique_ptr<cl::LoadedMap> map;      // the spec's models point into it: outlives `qc`
-  std::unique_ptr<sv::QcServer> qc;        // reads `progs`
-  std::unique_ptr<ClassicServer> classic;  // serves `qc` once the core hands it the port
+  std::unique_ptr<cl::LoadedMap> map;      // the spec's models point into it: outlives `rules`
+  sv::RulesRunner rules;                   // reads `progs`
+  std::unique_ptr<ClassicServer> classic;  // serves `rules` once the core hands it the port
   ServerConfig cfg;
   gs::ServerConfig settings;  // what the server was opened with: every map is made from it
   cl::SearchPath files;       // the game folder the maps are read from (empty: the arena only)
@@ -47,12 +47,12 @@ struct Game {
   // The lobby and the bots (sv_lobby, sv_bots; null: neither). Without sv_lobby it stays in its
   // match: the bots play every map as it comes.
   std::unique_ptr<cl::Room> room;
-  std::array<const sv::QcServer*, gs::kLobbySeats> applied{};  // the server a seat's team is on
-  std::array<gs::Team, gs::kLobbySeats> shown{};               // the team its user info says
-  int said = 0;                                                // the lobby's lines printed
+  std::array<const sv::RulesCommon*, gs::kLobbySeats> applied{};  // the rules a seat's team is on
+  std::array<gs::Team, gs::kLobbySeats> shown{};                  // the team its user info says
+  int said = 0;                                                   // the lobby's lines printed
   ~Game() {
     classic.reset();
-    qc.reset();  // its views into the map go before the map does
+    rules = {};  // its views into the map go before the map does
     map.reset();
   }
 };
@@ -69,9 +69,9 @@ constexpr gs::GameRule kRules[] = {
     {"sv_maxspeed", "a player's run speed, units/s"},
 };
 
-// The mod's server on the map `name`, its rules set from the settings: into `map` and `qc`.
+// The mod's rules on the map `name`, set from the settings: into `map` and `rules`.
 bool open_map(const Game& g, const std::string& name, std::unique_ptr<cl::LoadedMap>& map,
-              std::unique_ptr<sv::QcServer>& qc, std::string& error) {
+              sv::RulesRunner& rules, std::string& error) {
   const gs::ServerConfig& c = g.settings;
   map = cl::load_named_map(g.files, name, error);
   if (!map) return false;
@@ -79,34 +79,35 @@ bool open_map(const Game& g, const std::string& name, std::unique_ptr<cl::Loaded
   so.seed = c.seed;
   so.loop.maxclients = c.maxclients;
   so.loop.max_edicts = 1024;
-  qc = sv::make_qc_server(g.progs, so, error);
+  std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(g.progs, so, error);
   if (!qc) return false;
-  sv::server_command(*qc, "deathmatch 1");
+  rules = sv::qc_runner(std::move(qc));
+  rules.console("deathmatch 1");
   for (const auto& [rule, value] : c.rules) {
     if (value.empty()) continue;
     char* end = nullptr;
     std::strtod(value.c_str(), &end);  // every rule is a number
     std::string line = rule;
     line.append(" \"").append(value).append("\"");
-    if (end == value.c_str() || *end != '\0' || !sv::server_command(*qc, line)) {
+    if (end == value.c_str() || *end != '\0' || !rules.console(line)) {
       error = line;
       error.append(" is not a number; next: set ").append(rule).append(" to one (--explain=");
       error.append(rule).append(" shows where it was set)");
       return false;
     }
   }
-  if (!sv::load_map(*qc, map->spec, error)) {
+  if (!rules.start(map->spec, error)) {
     error = "the map " + name + " did not load: " + error;
     return false;
   }
-  if (map->from_file) sv::use_map_sets(*qc, map->bsp);
+  if (map->from_file) sv::use_map_sets(*rules, map->bsp);
   return true;
 }
 
 // Warmup's hold on the mod's limits: nothing ends a warmup but the lobby.
-void hold_limits(sv::QcServer& qc) {
-  sv::server_command(qc, "fraglimit 0");
-  sv::server_command(qc, "timelimit 0");
+void hold_limits(const sv::RulesRunner& rules) {
+  rules.console("fraglimit 0");
+  rules.console("timelimit 0");
 }
 
 // The room: the lobby (a player needed before a countdown), the `sv_bots` fighters seated.
@@ -119,13 +120,13 @@ bool open_room(Game& g, std::string& error) {
   r.lobby.settings.humans = 1;  // bots alone warm up until a player joins
   if (c.lobby == 0) r.lobby.phase = gs::LobbyPhase::match;
   for (int i = 0; i < c.bots; i++)
-    if (cl::room_add_bot(r, *g.qc, g.map->spec, sh::AimSkill::average, error) < 0) {
+    if (cl::room_add_bot(r, g.rules, g.map->spec, sh::AimSkill::average, error) < 0) {
       std::string why = "sv_bots " + std::to_string(c.bots) + ": ";
       why.append(error).append("; next: lower sv_bots under sv_maxclients");
       error = std::move(why);
       return false;
     }
-  if (r.lobby.phase != gs::LobbyPhase::match) hold_limits(*g.qc);
+  if (r.lobby.phase != gs::LobbyPhase::match) hold_limits(g.rules);
   return true;
 }
 
@@ -139,7 +140,7 @@ void* create(const gs::ServerConfig& c, std::string& error) {
     g->files = cl::SearchPath{};
     error.clear();
   }
-  if (!open_map(*g, c.map, g->map, g->qc, error)) return nullptr;
+  if (!open_map(*g, c.map, g->map, g->rules, error)) return nullptr;
   if (!open_room(*g, error)) return nullptr;
   g->cfg.hostname = c.hostname;
   g->cfg.password = c.password;
@@ -170,32 +171,39 @@ std::string next_map(const gs::ServerConfig& c, const std::string& current,
 // server made, the endpoint moved onto it, the old one let go. A map that does not load leaves
 // the game on the one it was playing (`failed` says why).
 void change_if_asked(Game& g) {
-  sv::QcServer& qc = *g.qc;
-  if (qc.pending_map.empty()) return;
+  sv::RulesCommon& now = *g.rules;
+  if (now.pending_map.empty()) return;
   const std::string current = g.map->name;
-  std::string name = qc.pending_map;
+  std::string name = now.pending_map;
   // The mod's end of a match asks for the next map, or for its own again: the rotation's turn.
-  if (qc.pending_change == sv::MapChange::restart)
+  if (now.pending_change == sv::MapChange::restart)
     name = current;
-  else if (qc.pending_change == sv::MapChange::change_level || name == current)
+  else if (now.pending_change == sv::MapChange::change_level || name == current)
     name = next_map(g.settings, current, name);
-  const bool match_over = qc.pending_change != sv::MapChange::restart;
-  qc.pending_map.clear();
+  const bool match_over = now.pending_change != sv::MapChange::restart;
+  now.pending_map.clear();
   std::unique_ptr<cl::LoadedMap> map;
-  std::unique_ptr<sv::QcServer> next;
+  sv::RulesRunner next;
   std::string error;
-  if (!open_map(g, name, map, next, error) ||
-      (g.classic && !classic_change(*g.classic, *next, error))) {
+  if (!open_map(g, name, map, next, error)) {
     g.failed = error;
     return;
   }
-  g.qc = std::move(next);  // the old server goes before the map it views
+  // The endpoint keeps the runner's address: it is moved to where it lives before it is handed on.
+  sv::RulesRunner old = std::move(g.rules);
+  g.rules = std::move(next);
+  if (g.classic && !classic_change(*g.classic, g.rules, error)) {
+    g.rules = std::move(old);
+    g.failed = error;
+    return;
+  }
+  old = {};  // the old rules go before the map they view
   g.map = std::move(map);
   g.changes++;
   g.failed.clear();
-  if (g.room) {  // the seats onto the new server: warmup again after a match the mod ended
+  if (g.room) {  // the seats onto the new rules: warmup again after a match the mod ended
     if (match_over && g.settings.lobby != 0) gs::lobby_back(g.room->lobby);
-    cl::room_enter(*g.room, *g.qc, g.map->spec);
+    cl::room_enter(*g.room, g.rules, g.map->spec);
     g.applied.fill(nullptr);
   }
 }
@@ -207,13 +215,13 @@ void sync_seats(Game& g) {
   if (!g.room || !g.classic) return;
   cl::Room& r = *g.room;
   ClassicServer& cs = *g.classic;
-  sv::QcServer& qc = *g.qc;
-  const double now = qc.sv.time;
+  const sv::RulesCommon& now_rules = *g.rules;
+  const double now = now_rules.sv.time;
   for (int i = 0; i < gs::kLobbySeats && i < sh::kMaxClients; i++) {
     const auto at = static_cast<size_t>(i);
     const bool bot = r.bots[at] != nullptr;
     if (cs.clients[i].local && !bot) {
-      cs.clients[i].qc_active = false;  // the room let it go from the mod
+      cs.clients[i].rules_active = false;  // the room let it go from the rules
       classic_drop(cs, i, "left the room");
     }
     std::string error;
@@ -225,15 +233,15 @@ void sync_seats(Game& g) {
       gs::lobby_leave(r.lobby, i, now);
       g.applied[at] = nullptr;
     }
-    if (!c.qc_active) continue;
+    if (!c.rules_active) continue;
     if (!c.local && !seat.used) gs::lobby_join(r.lobby, i, c.name, false, now);
-    if (!seat.used || (g.applied[at] == &qc && g.shown[at] == seat.team)) continue;
+    if (!seat.used || (g.applied[at] == &now_rules && g.shown[at] == seat.team)) continue;
     const std::string colour = std::to_string(sv::team_colour(seat.team));
     classic_set_info(cs, i, "team", gs::team_name(seat.team));
     classic_set_info(cs, i, "topcolor", colour);
     classic_set_info(cs, i, "bottomcolor", colour);
-    sv::lobby_apply(qc, r.lobby, i);  // the mod's own `.team`
-    g.applied[at] = &qc;
+    sv::lobby_apply(g.rules, r.lobby, i);  // the mod's own `.team`
+    g.applied[at] = &now_rules;
     g.shown[at] = seat.team;
   }
 }
@@ -243,9 +251,10 @@ void sync_seats(Game& g) {
 void lobby_turn(Game& g) {
   if (!g.room) return;
   cl::Room& r = *g.room;
-  if (g.settings.lobby != 0 && gs::lobby_due(r.lobby, g.qc->sv.time)) {
-    g.qc->pending_map = g.map->name;
-    g.qc->pending_change = sv::MapChange::restart;
+  sv::RulesCommon& now = *g.rules;
+  if (g.settings.lobby != 0 && gs::lobby_due(r.lobby, now.sv.time)) {
+    now.pending_map = g.map->name;
+    now.pending_change = sv::MapChange::restart;
   }
   for (const std::string& line : r.lobby.said) {
     if (g.classic) classic_print_all(*g.classic, line + "\n");
@@ -275,10 +284,10 @@ bool room_words(void* ctx, int slot, const std::string& line) {
     if (word == "removebot") {
       for (int i = gs::kLobbySeats - 1; i > 0; i--)
         if (r.bots[static_cast<size_t>(i)]) {
-          cs.clients[i].qc_active = false;  // room_remove_bot lets it go from the mod
+          cs.clients[i].rules_active = false;  // room_remove_bot lets it go from the rules
           break;
         }
-      if (!cl::room_remove_bot(r, *g.qc))
+      if (!cl::room_remove_bot(r, g.rules))
         client_print(cs, slot, 2, "removebot: no bot is seated; next: `addbot`\n");
       sync_seats(g);
       return true;
@@ -293,34 +302,34 @@ bool room_words(void* ctx, int slot, const std::string& line) {
     r.held = 0;
     for (int i = 0; i < sh::kMaxClients; i++)
       if (cs.clients[i].state != ConnState::free) r.held |= 1u << i;
-    if (cl::room_add_bot(r, *g.qc, g.map->spec, skill, error) < 0)
+    if (cl::room_add_bot(r, g.rules, g.map->spec, skill, error) < 0)
       client_print(cs, slot, 2, "addbot: " + error + "\n");
     sync_seats(g);
     return true;
   }
   if (g.settings.lobby == 0) return false;
-  return gs::lobby_command(r.lobby, slot, line, g.qc->sv.time);
+  return gs::lobby_command(r.lobby, slot, line, g.rules->sv.time);
 }
 
 void destroy(void* g) { delete static_cast<Game*>(g); }
 
-double frame_seconds(const void* g) { return static_cast<const Game*>(g)->qc->sv.set.mintic; }
+double frame_seconds(const void* g) { return static_cast<const Game*>(g)->rules->sv.set.mintic; }
 
 // A bot's move length: the server's frame, ms.
 int frame_msec(const Game& g) {
-  return static_cast<int>(ge::core::num::round(g.qc->sv.set.mintic * 1000));
+  return static_cast<int>(ge::core::num::round(g.rules->sv.set.mintic * 1000));
 }
 
 // Offline: the mod's frame with nobody's moves, its streams emptied as the endpoint would.
 void frame(void* g) {
   Game& game = *static_cast<Game*>(g);
-  sv::QcServer& qc = *game.qc;
   std::vector<sh::Packet> moves;
-  if (game.room) cl::room_packets(*game.room, qc, frame_msec(game), moves);
-  sv::qc_frame(qc, moves.data(), static_cast<int>(moves.size()));
-  qc.out.all.clear();
-  for (auto& one : qc.out.one) one.clear();
-  sv::clear_frame(qc.out);
+  if (game.room) cl::room_packets(*game.room, *game.rules, frame_msec(game), moves);
+  game.rules.frame(moves.data(), static_cast<int>(moves.size()));
+  sv::RulesCommon& now = *game.rules;
+  now.out.all.clear();
+  for (auto& one : now.out.one) one.clear();
+  sv::clear_frame(now.out);
   lobby_turn(game);
   change_if_asked(game);
 }
@@ -328,7 +337,7 @@ void frame(void* g) {
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
   game.classic = std::make_unique<ClassicServer>();
-  if (!classic_start(*game.classic, *game.qc, port, game.cfg, error)) return false;
+  if (!classic_start(*game.classic, game.rules, port, game.cfg, error)) return false;
   game.classic->game_command = room_words;
   game.classic->game_ctx = &game;
   sync_seats(game);
@@ -338,7 +347,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
 void net_frame(void* g, int64_t now_us) {
   Game& game = *static_cast<Game*>(g);
   if (game.room)
-    cl::room_packets(*game.room, *game.qc, frame_msec(game), game.classic->local_moves);
+    cl::room_packets(*game.room, *game.rules, frame_msec(game), game.classic->local_moves);
   classic_frame(*game.classic, now_us);
   sync_seats(game);
   lobby_turn(game);
@@ -352,7 +361,7 @@ int seated(const void* g) {
 }
 
 uint64_t hash(const void* g) {
-  return ge::shooter::server_hash(static_cast<const Game*>(g)->qc->sv);
+  return ge::shooter::server_hash(static_cast<const Game*>(g)->rules->sv);
 }
 
 // The rules the mod is playing by, then the endpoint's counts.
@@ -361,7 +370,7 @@ std::string status(const void* g) {
   std::string out = "map=" + game.map->name;
   if (!game.failed.empty()) out += " (no change: " + game.failed + ")";
   for (const char* name : {"deathmatch", "fraglimit", "timelimit"}) {
-    const ge::console::Cvar* v = game.qc->cvars.find(name);
+    const ge::console::Cvar* v = game.rules->cvars.find(name);
     out.append(" ").append(name).append("=").append(v ? v->value : "?");
   }
   if (game.room) {

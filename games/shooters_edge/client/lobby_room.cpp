@@ -19,7 +19,7 @@ constexpr double kBotHz = 1000.0 / bots::kPilotMsec;
 constexpr float kPlatRise = 96, kPlatSpeed = 64;  // the arena's plat in the baseline mod's text
 
 // The entity drawn with model `name` (an inline brush model "*n"), or -1.
-int entity_on(const sv::QcServer& s, const char* name) {
+int entity_on(const sv::RulesCommon& s, const char* name) {
   for (int e = 1; e < s.sv.num_edicts; e++) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(e)];
     if (d.free || d.modelindex <= 0 || d.modelindex >= static_cast<int>(s.models.size())) continue;
@@ -29,7 +29,7 @@ int entity_on(const sv::QcServer& s, const char* name) {
 }
 
 // The bots' graph for `map`, built when it is not already.
-bool ensure_graph(Room& r, const sv::QcServer& s, const sv::MapSpec& map, std::string& error) {
+bool ensure_graph(Room& r, const sv::RulesCommon& s, const sv::MapSpec& map, std::string& error) {
   if (r.graph && r.graph_of == map.name) return true;
   if (map.models.empty()) {
     error = "the map " + map.name + " has no world model to walk on; next: load a map first";
@@ -69,7 +69,7 @@ bool ensure_graph(Room& r, const sv::QcServer& s, const sv::MapSpec& map, std::s
 
 uint32_t bot_seed(const Room& r, int slot) { return r.seed + 31u * static_cast<uint32_t>(slot); }
 
-void make_fighter(Room& r, const sv::QcServer& s, const sv::MapSpec& map, int slot) {
+void make_fighter(Room& r, const sv::RulesCommon& s, const sv::MapSpec& map, int slot) {
   RoomBot& b = *r.bots[static_cast<size_t>(slot)];
   b.fighter = bots::Fighter();
   b.sequence = 0;
@@ -111,8 +111,9 @@ bool skill_named(const std::string& word, sh::AimSkill& out) {
   return false;
 }
 
-int room_add_bot(Room& r, sv::QcServer& s, const sv::MapSpec& map, sh::AimSkill skill,
+int room_add_bot(Room& r, const sv::RulesRunner& rules, const sv::MapSpec& map, sh::AimSkill skill,
                  std::string& error) {
+  const sv::RulesCommon& s = *rules;
   int slot = -1;
   for (int i = 1; i < sv::kLobbySeats && i < sh::kMaxClients && i < s.sv.set.maxclients; i++)
     if (!r.lobby.seats[static_cast<size_t>(i)].used && !s.clients[i].active &&
@@ -129,17 +130,18 @@ int room_add_bot(Room& r, sv::QcServer& s, const sv::MapSpec& map, sh::AimSkill 
   r.bots[static_cast<size_t>(slot)] = std::make_unique<RoomBot>();
   r.bots[static_cast<size_t>(slot)]->skill = skill;
   r.bots[static_cast<size_t>(slot)]->name = name;
-  sv::connect(s, slot, name, false, true);
+  rules.connect(slot, name, false, true);
   sv::lobby_join(r.lobby, slot, name + " (" + sh::aim_skill_name(skill) + ")", true, s.sv.time);
-  sv::lobby_apply(s, r.lobby, slot);
+  sv::lobby_apply(rules, r.lobby, slot);
   make_fighter(r, s, map, slot);
   return slot;
 }
 
-bool room_remove_bot(Room& r, sv::QcServer& s) {
+bool room_remove_bot(Room& r, const sv::RulesRunner& rules) {
+  const sv::RulesCommon& s = *rules;
   for (int i = sv::kLobbySeats - 1; i > 0; i--) {
     if (!r.bots[static_cast<size_t>(i)]) continue;
-    sv::disconnect(s, i);
+    rules.drop(i);
     r.bots[static_cast<size_t>(i)].reset();
     sv::lobby_leave(r.lobby, i, s.sv.time);
     return true;
@@ -147,7 +149,8 @@ bool room_remove_bot(Room& r, sv::QcServer& s) {
   return false;
 }
 
-void room_enter(Room& r, sv::QcServer& s, const sv::MapSpec& map) {
+void room_enter(Room& r, const sv::RulesRunner& rules, const sv::MapSpec& map) {
+  const sv::RulesCommon& s = *rules;
   bool any = false;
   for (const auto& b : r.bots) any = any || b != nullptr;
   std::string error;
@@ -161,22 +164,22 @@ void room_enter(Room& r, sv::QcServer& s, const sv::MapSpec& map) {
   }
   for (int i = 1; i < sv::kLobbySeats && i < sh::kMaxClients; i++)
     if (r.bots[static_cast<size_t>(i)])
-      sv::connect(s, i,
-                  "bot" + r.lobby.seats[static_cast<size_t>(i)].name.substr(
-                              3, r.lobby.seats[static_cast<size_t>(i)].name.find(' ') - 3),
-                  false, true);
+      rules.connect(i,
+                    "bot" + r.lobby.seats[static_cast<size_t>(i)].name.substr(
+                                3, r.lobby.seats[static_cast<size_t>(i)].name.find(' ') - 3),
+                    false, true);
   for (int i = 0; i < sv::kLobbySeats && i < sh::kMaxClients; i++)
     if (r.lobby.seats[static_cast<size_t>(i)].used && s.clients[i].active)
-      sv::lobby_apply(s, r.lobby, i);
+      sv::lobby_apply(rules, r.lobby, i);
   for (int i = 1; i < sv::kLobbySeats && i < sh::kMaxClients; i++)
     if (r.bots[static_cast<size_t>(i)]) make_fighter(r, s, map, i);
   if (r.lobby.phase != sv::LobbyPhase::match) {
-    sv::server_command(s, "fraglimit 0");
-    sv::server_command(s, "timelimit 0");
+    rules.console("fraglimit 0");
+    rules.console("timelimit 0");
   }
 }
 
-void room_packets(Room& r, const sv::QcServer& s, int msec, std::vector<sh::Packet>& out) {
+void room_packets(Room& r, const sv::RulesCommon& s, int msec, std::vector<sh::Packet>& out) {
   for (int i = 1; i < sv::kLobbySeats && i < sh::kMaxClients; i++) {
     if (!r.bots[static_cast<size_t>(i)] || !s.clients[i].active) continue;
     RoomBot& b = *r.bots[static_cast<size_t>(i)];

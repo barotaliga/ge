@@ -157,8 +157,8 @@ TEST(the_listen_client_plays_a_single_player_program_on_the_campaign_host) {
   cl::ListenOptions opt;
   opt.console = {"deathmatch 0"};
   CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), opt, error), error);
-  CHECK(l.campaign_host != nullptr && l.match == nullptr);
-  CHECK(l.server == l.campaign_host->server.get());
+  CHECK(l.campaign_host != nullptr && !l.match);
+  CHECK(l.rules == &l.campaign_host->server && l.server == l.campaign_host->server.common);
   CHECK(cl::listen_tic(l) == sv::kCampaignStep);
   // The stub counts 3 monsters, one killed, and 2 secrets: what a joining client is sent.
   CHECK(l.campaign.total_monsters == 3 && l.campaign.monsters == 1);
@@ -193,7 +193,7 @@ TEST(the_listen_client_plays_a_single_player_program_on_the_campaign_host) {
   CHECK_MSG(l.map_changed, "no level change in " + std::to_string(frames) + " frames");
   CHECK(l.failed.empty());
   CHECK(l.map.get() == ahead && l.map->name == "second");
-  CHECK(l.server == l.campaign_host->server.get());
+  CHECK(l.rules == &l.campaign_host->server && l.server == l.campaign_host->server.common);
   CHECK(l.campaign.end == cl::LevelEnd::none);  // a new map's record
   CHECK(l.entered_at == l.server->sv.time);
   CHECK(l.campaign_host->history.back() == "change second");

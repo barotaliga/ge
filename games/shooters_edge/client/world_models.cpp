@@ -127,7 +127,7 @@ void not_drawn(std::string_view kind, const std::string& name, const std::string
 void place_models(const Listen& l, std::vector<Placed>& out) {
   out.clear();
   if (!l.server) return;
-  const sv::QcServer& s = *l.server;
+  const sv::RulesCommon& s = *l.server;
   const int me = player_state(l).entity;
   const int models = int(s.models.size());
   for (int e = 1; e < s.sv.num_edicts; e++) {

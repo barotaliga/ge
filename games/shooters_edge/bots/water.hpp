@@ -29,7 +29,7 @@ constexpr double kDiveRetry_s = 30;  // and not tried again for this long
 // One command's look at the water for player entity `me` at time `t`, `msec` long: the air clock,
 // the dive kept or given up (on `why` when non-null). True with `way` the point to swim at when it
 // dives or swims out this command. Call every command, alive or dead.
-bool water_way(Fighter& f, const server::QcServer& s, int me, double t, int msec, ge::ai::Why* why,
-               sh::Vec3f& way);
+bool water_way(Fighter& f, const server::RulesCommon& s, int me, double t, int msec,
+               ge::ai::Why* why, sh::Vec3f& way);
 
 }  // namespace shooters_edge::bots

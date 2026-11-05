@@ -175,8 +175,7 @@ int run_main(int argc, char** argv) {
   console.add_command("sv", "sv <line>: a line for the server's console",
                       [&](Con&, const CArgs& a) {
                         listen.opt.console.push_back(a.rest(0));
-                        if (listen.server)
-                          shooters_edge::server::server_command(*listen.server, a.rest(0));
+                        if (listen.server) listen.rules->console(a.rest(0));
                       });
   cl::add_lobby_commands(console, listen);
   cl::add_cvars(console, controls);

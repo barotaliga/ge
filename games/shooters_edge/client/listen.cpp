@@ -65,8 +65,14 @@ pg::QcSource source(const char* name, const unsigned char* bytes, std::size_t si
   return s;
 }
 
+// The program's own state behind the rules (the reads the rules' world does not carry yet: a
+// field by name, an entity's class, the program's statistics); null for another program form.
+const sv::QcServer* program(const Listen& l) { return l.rules ? sv::qc_of(*l.rules) : nullptr; }
+
 std::string text_field(const Listen& l, int e, int field) {
-  const pg::Vm& vm = l.server->q.vm;
+  const sv::QcServer* q = program(l);
+  if (q == nullptr || field < 0) return "";
+  const pg::Vm& vm = q->q.vm;
   const int32_t v = static_cast<int32_t>(*pg::entity_field(vm, e, field));
   const char* t = pg::vm_string(vm, v);
   return t == nullptr ? "" : t;
@@ -88,7 +94,8 @@ void entered(Listen& l) {
   l.forced = true;
   l.entered_at = l.server->sv.time;
   l.campaign = CampaignView{};
-  const sv::CampaignStats st = sv::campaign_stats(*l.server);
+  const sv::QcServer* q = program(l);
+  const sv::CampaignStats st = q != nullptr ? sv::campaign_stats(*q) : sv::CampaignStats{};
   join_stats(l.campaign, st.total_secrets, st.total_monsters, st.found_secrets, st.killed_monsters);
 }
 
@@ -103,18 +110,20 @@ bool start_map(Listen& l, std::string& error) {
   sv::QcServerOptions so;
   so.seed = l.opt.seed;
   so.loop.max_edicts = 1024;
-  l.match = sv::make_qc_server(*l.progs, so, error);
-  l.server = l.match.get();
-  if (!l.server) return false;
-  for (const std::string& line : l.opt.item_names) sv::server_command(*l.server, line);
-  for (const std::string& line : l.opt.console) sv::server_command(*l.server, line);
-  if (!sv::load_map(*l.server, l.map->spec, error)) {
+  std::unique_ptr<sv::QcServer> made = sv::make_qc_server(*l.progs, so, error);
+  if (!made) return false;
+  l.match = sv::qc_runner(std::move(made));
+  l.rules = &l.match;
+  l.server = l.match.common;
+  for (const std::string& line : l.opt.item_names) l.rules->console(line);
+  for (const std::string& line : l.opt.console) l.rules->console(line);
+  if (!l.rules->start(l.map->spec, error)) {
     error = "the map " + l.map->name + " did not load: " + error +
             "; next: read the console's lines above";
     return false;
   }
   if (l.map->from_file) sv::use_map_sets(*l.server, l.map->bsp);
-  sv::connect(*l.server, 0, l.opt.player, false, false);
+  l.rules->connect(0, l.opt.player, false, false);
   if (l.opt.lobby) {
     if (!l.room) {
       l.room = std::make_unique<Room>();
@@ -123,7 +132,7 @@ bool start_map(Listen& l, std::string& error) {
     l.room->lobby.settings = l.opt.lobby_settings;
     if (!l.room->lobby.seats[0].used)
       sv::lobby_join(l.room->lobby, 0, l.opt.player, false, l.server->sv.time);
-    room_enter(*l.room, *l.server, l.map->spec);
+    room_enter(*l.room, *l.rules, l.map->spec);
   } else {
     l.room.reset();
   }
@@ -153,7 +162,8 @@ bool campaign_map(void* ctx, const std::string& name, sv::MapSpec& out, std::str
 
 // The campaign's map now playing, as the listen's: the server, its sets, the player's arrival.
 void campaign_entered(Listen& l) {
-  l.server = l.campaign_host->server.get();
+  l.rules = &l.campaign_host->server;
+  l.server = l.rules->common;
   l.maps_started = l.campaign_host->history.size();
   if (l.map->from_file) sv::use_map_sets(*l.server, l.map->bsp);
   entered(l);
@@ -267,8 +277,9 @@ bool listen_start(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMap> 
 void listen_stop(Listen& l) {
   ListenOptions opt = std::move(l.opt);
   l.room.reset();
+  l.rules = nullptr;
   l.server = nullptr;
-  l.match.reset();  // the servers' views into the maps go before the maps do
+  l.match = {};  // the rules' views into the maps go before the maps do
   l.campaign_host.reset();
   l.next.reset();
   l.map.reset();
@@ -285,9 +296,10 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
     l.map_changed = false;
     return true;
   }
-  if (l.server) sv::save_change_parms(*l.server);
+  if (l.rules) l.rules->carry();
+  l.rules = nullptr;
   l.server = nullptr;
-  l.match.reset();                            // its views into the old map go before the map does
+  l.match = {};                               // its views into the old map go before the map does
   if (l.room) sv::lobby_back(l.room->lobby);  // a new map: warmup again
   l.map = std::move(map);
   return start_map(l, error);
@@ -295,8 +307,9 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
 
 bool listen_campaign(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMap> map,
                      const ListenOptions& opt, std::string& error) {
+  l.rules = nullptr;
   l.server = nullptr;
-  l.match.reset();
+  l.match = {};
   l.room.reset();  // a campaign has no lobby
   l.campaign_host.reset();
   l.progs = &progs;
@@ -372,8 +385,9 @@ bool load_game(Listen& l, const pg::Progs& progs, const ListenOptions& opt,
   if (!load(*host, co)) return false;
   host->opt.load = campaign_map;
   host->opt.load_ctx = &l;
+  l.rules = nullptr;
   l.server = nullptr;
-  l.match.reset();
+  l.match = {};
   l.room.reset();
   l.campaign_host = std::move(host);
   l.progs = &progs;
@@ -439,7 +453,7 @@ bool wants_campaign(const ListenOptions& opt) {
 }
 
 std::string map_title(const Listen& l) {
-  const std::string t = text_field(l, 0, l.server->q.layout->f.message);
+  const std::string& t = l.server->world.map_title;
   return t.empty() ? l.map->name : t;
 }
 
@@ -463,6 +477,7 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
   for (int i = 0; i < 3; i++) p.cmds[i] = l.cmds[i];
   if (l.campaign_host) {
     if (!sv::campaign_frame(*l.campaign_host, &p, 1, l.failed)) {
+      l.rules = nullptr;
       l.server = nullptr;
       return;
     }
@@ -472,12 +487,12 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     ps.clear();
     ps.push_back(p);
     room_packets(*l.room, *l.server, cmd.msec, ps);
-    sv::qc_frame(*l.server, ps.data(), static_cast<int>(ps.size()));
+    l.rules->frame(ps.data(), static_cast<int>(ps.size()));
     for (int k = 1; k < sh::kMaxClients; k++) l.server->out.one[k].clear();  // nobody reads them
   } else {
-    sv::qc_frame(*l.server, &p, 1);
+    l.rules->frame(&p, 1);
   }
-  sv::QcServer& s = *l.server;
+  sv::RulesCommon& s = *l.server;
   l.frames++;
   for (const sv::NetEvent& ev : s.out.events) {
     if ((ev.kind == sv::EventKind::print || ev.kind == sv::EventKind::centerprint) &&
@@ -506,8 +521,9 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
     const bool due = l.pending_map.empty() && sv::lobby_due(l.room->lobby, s.sv.time);
     if (due) {
       std::string error;
+      l.rules = nullptr;
       l.server = nullptr;
-      l.match.reset();
+      l.match = {};
       if (!start_map(l, error)) {
         l.failed = error;
         return;
@@ -544,10 +560,10 @@ bool listen_lobby(Listen& l, std::string_view line) {
       return true;
     }
     std::string error;
-    if (room_add_bot(*l.room, *l.server, l.map->spec, skill, error) < 0)
+    if (room_add_bot(*l.room, *l.rules, l.map->spec, skill, error) < 0)
       l.prints.push_back("addbot: " + error);
   } else if (word == "removebot") {
-    if (!room_remove_bot(*l.room, *l.server)) l.prints.push_back("removebot: no bot is seated");
+    if (!room_remove_bot(*l.room, *l.rules)) l.prints.push_back("removebot: no bot is seated");
   } else if (!sv::lobby_command(l.room->lobby, 0, line, l.server->sv.time)) {
     return false;
   }
@@ -577,7 +593,9 @@ PlayerState player_state(const Listen& l) {
   p.health = me.health;
   p.dead = me.health <= 0;
   p.on_ground = (me.flags & sh::kFlagOnGround) != 0;
-  const pg::Vm& vm = l.server->q.vm;
+  const sv::QcServer* q = program(l);
+  if (q == nullptr) return p;
+  const pg::Vm& vm = q->q.vm;
   const uint32_t* view_ofs = pg::entity_field(vm, 1, pg::vm_layout(vm).f.view_ofs);
   p.view_ofs = {pg::as_float(view_ofs[0]), pg::as_float(view_ofs[1]), pg::as_float(view_ofs[2])};
   p.punch = me.punchangle;
@@ -588,11 +606,13 @@ PlayerState player_state(const Listen& l) {
 
 void missiles_of(const Listen& l, std::vector<Missile>& out) {
   out.clear();
-  const sv::QcServer& s = *l.server;
+  const sv::QcServer* q = program(l);
+  if (q == nullptr) return;
+  const sv::RulesCommon& s = *l.server;
   for (int e = sh::kMaxClients + 1; e < s.sv.num_edicts; e++) {
     const sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
     if (ed.free) continue;
-    const std::string cn = text_field(l, e, l.server->q.layout->f.classname);
+    const std::string cn = text_field(l, e, q->q.layout->f.classname);
     if (cn != "rocket" && cn != "grenade" && cn != "spike" && cn != "missile") continue;
     out.push_back({e, ed.origin, cn != "spike"});
   }
@@ -601,7 +621,19 @@ void missiles_of(const Listen& l, std::vector<Missile>& out) {
 float field_named(const Listen& l, int entity, const char* name) {
   const pg::Def* d = pg::find_field(*l.progs, name);
   if (d == nullptr) return 0;
-  return pg::as_float(*pg::entity_field(l.server->q.vm, entity, d->offset));
+  const sv::QcServer* q = program(l);
+  if (q == nullptr) return 0;
+  return pg::as_float(*pg::entity_field(q->q.vm, entity, d->offset));
+}
+
+float global_named(const Listen& l, const char* name, bool* found) {
+  if (found != nullptr) *found = false;
+  const sv::QcServer* q = program(l);
+  if (q == nullptr || l.progs == nullptr) return 0;
+  const pg::Def* d = pg::find_global(*l.progs, name);
+  if (d == nullptr) return 0;
+  if (found != nullptr) *found = true;
+  return pg::global_float(q->q.vm, d->offset);
 }
 
 }  // namespace shooters_edge::client

@@ -35,7 +35,7 @@
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/hud/lobby_panel.hpp"
 #include "shooters_edge/server/lobby.hpp"
-#include "shooters_edge/server/qc_server.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
 
 namespace shooters_edge::client {
 
@@ -65,15 +65,15 @@ struct Room {
 // A fighter of `skill` seated in the lowest free slot of `s` (playing `map`) and the lobby, under
 // the server's player limit and outside `held`; its slot, or -1 with `error` (the server full, or
 // no way to walk on the map).
-int room_add_bot(Room& r, sv::QcServer& s, const sv::MapSpec& map, sh::AimSkill skill,
+int room_add_bot(Room& r, const sv::RulesRunner& s, const sv::MapSpec& map, sh::AimSkill skill,
                  std::string& error);
 // The highest bot seat freed; false when there is none.
-bool room_remove_bot(Room& r, sv::QcServer& s);
+bool room_remove_bot(Room& r, const sv::RulesRunner& s);
 // The seats put on a new server `s` for `map` (slot 0, the player, already connected): every bot
 // connected and its fighter made again, every seat's team applied, and in warmup the limits held.
-void room_enter(Room& r, sv::QcServer& s, const sv::MapSpec& map);
+void room_enter(Room& r, const sv::RulesRunner& s, const sv::MapSpec& map);
 // The bots' packets for the next frame (each one `msec` long), appended to `out` in slot order.
-void room_packets(Room& r, const sv::QcServer& s, int msec, std::vector<sh::Packet>& out);
+void room_packets(Room& r, const sv::RulesCommon& s, int msec, std::vector<sh::Packet>& out);
 // What the lobby panel shows of the room at server time `now`, slot `me` the player's.
 hud::LobbyView lobby_view(const Room& r, double now, int me, bool roster);
 // A skill named `novice`, `average` or `expert`; false for anything else.
