@@ -131,6 +131,67 @@ void buttons_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   }
 }
 
+void exits_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s,
+                const char* entities) {
+  f.exits.clear();
+  f.locked.clear();
+  f.locked_rest.clear();
+  std::vector<pg::EntityBlock> blocks;
+  std::string error;
+  if (!entities || !pg::parse_entity_text(entities, blocks, error)) return;
+  for (const pg::EntityBlock& b : blocks) {
+    const char* cn = pg::block_value(b, "classname");
+    const char* model = pg::block_value(b, "model");
+    // A door that only something else opens: one with a name (not one that starts open), or a
+    // secret door. A touch does not open it, so a route through it waits there for ever.
+    if (cn && model && model[0] == '*') {
+      const char* name = pg::block_value(b, "targetname");
+      const char* sf = pg::block_value(b, "spawnflags");
+      const bool start_open = sf && (std::atoi(sf) & 1) != 0;
+      if ((std::strcmp(cn, "func_door") == 0 && name && !start_open) ||
+          std::strcmp(cn, "func_door_secret") == 0) {
+        for (int e = s.sv.set.maxclients + 1; e < s.sv.num_edicts; e++) {
+          const server::WorldEntity& d = s.world.entities[static_cast<size_t>(e)];
+          if (!d.free && d.modelindex > 0 && static_cast<size_t>(d.modelindex) < s.models.size() &&
+              s.models[static_cast<size_t>(d.modelindex)] == model) {
+            f.locked.push_back(e);
+            f.locked_rest.push_back(d.origin);
+            break;
+          }
+        }
+      }
+    }
+    if (!cn || std::strcmp(cn, "trigger_changelevel") != 0 || !model || model[0] != '*') continue;
+    // The trigger's brush model by its name in the model list (a trigger draws none, so no
+    // entity carries the index): its bounds are the box.
+    size_t mi = 0;
+    for (size_t i = 1; i < s.models.size() && i < s.sv.models.size(); i++)
+      if (s.models[i] == model) mi = i;
+    if (mi == 0) continue;
+    ExitSpot x;
+    x.lo = s.sv.models[mi].mins;
+    x.hi = s.sv.models[mi].maxs;
+    // The box a standing player at a node fills: 16 each way across, 24 below, 32 above.
+    const auto gap = [&](sh::Vec3f o) {
+      const float dx = std::fmax(std::fmax(x.lo.x - (o.x + 16), (o.x - 16) - x.hi.x), 0.f);
+      const float dy = std::fmax(std::fmax(x.lo.y - (o.y + 16), (o.y - 16) - x.hi.y), 0.f);
+      const float dz = std::fmax(std::fmax(x.lo.z - (o.z + 32), (o.z - 24) - x.hi.z), 0.f);
+      return std::sqrt(dx * dx + dy * dy + dz * dz);
+    };
+    float best = 1e30f;
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      const float d = gap(g.nodes[n].origin);
+      if (d <= kExitMargin) {
+        x.inside.push_back(static_cast<int32_t>(n));
+      } else if (d >= kExitClear && d <= kExitStandFar && d < best) {
+        best = d;
+        x.stand = static_cast<int32_t>(n);
+      }
+    }
+    f.exits.push_back(std::move(x));
+  }
+}
+
 bool button_poke(Fighter& f, const server::RulesCommon& s, int me, double t) {
   if (f.sense != MapSense::novice || f.button_spots.empty()) return false;
   if (f.poke >= 0 && t < f.poke_until) return true;

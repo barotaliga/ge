@@ -7,12 +7,16 @@
 // - a NOVICE knows none of it: now and then he shoots at a button he sees, or walks into it, to
 //   see what it does (`button_poke`).
 //
+// THE MAP'S EXITS too (`exits_init`): each `trigger_changelevel`'s box, the nodes a standing
+// player there would touch it from (`kExitMargin` round it), and the nearest node clear of it by
+// `kExitClear`, where a companion stands to show the leader the way (companion.hpp).
+//
 // An item is a door's when it stands inside the door's box grown by `kDoorKeeps`; read once a map,
 // off the hot path.
 //
 // ge:summary The map's buttons: the doors each opens, the items they keep, a novice's random pokes
 // ge:keywords button func_button shootable-button door func_door secret armour-door buttons_init
-// ge:keywords button_poke button_node poke novice
+// ge:keywords button_poke button_node poke novice exit trigger_changelevel exits_init stand-by
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
@@ -22,12 +26,20 @@
 
 namespace shooters_edge::bots {
 
-constexpr float kDoorKeeps = 160;  // an item this near a door's box is behind it
+constexpr float kDoorKeeps = 160;     // an item this near a door's box is behind it
+constexpr float kExitMargin = 16;     // a node whose player box comes this near an exit is in it
+constexpr float kExitClear = 48;      // the stand-by node: at least this clear of the exit's box
+constexpr float kExitStandFar = 320;  // and no further than this from it
 
 // The buttons off the map's entity text, linked to the server's entities, and the items behind
 // their doors (a novice's items get no link: he knows no button).
 void buttons_init(Fighter& f, const ge::shooter::NavGraph& g, const server::RulesCommon& s,
                   const char* entities);
+
+// The exits off the map's entity text: the boxes of their brush models, the nodes in them, the
+// stand-by node beside each.
+void exits_init(Fighter& f, const ge::shooter::NavGraph& g, const server::RulesCommon& s,
+                const char* entities);
 
 // A novice's whim, at a think: a button in sight now and then becomes where he goes and what he
 // shoots at. True while he is on one.

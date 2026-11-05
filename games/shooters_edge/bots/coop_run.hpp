@@ -65,6 +65,7 @@ struct CoopOptions {
   int skill = 1;               // the campaign's `skill`
   std::string root = ".";      // the repository's root (the campaign's sources)
   ge::ai::Why* why = nullptr;  // decisions recorded for the first companion
+  bool exit = false;           // the hall with its exit (kCoopHallExitEntities): left to him
 };
 
 struct CoopMate {
@@ -98,6 +99,7 @@ struct CoopReport {
   std::vector<uint8_t> leg;  // a frame the tour's leg
   std::vector<CoopMate> mates;
   std::vector<CoopKill> kills;
+  bool exited = false;  // the map changed (only the leader may: he never walks the exit here)
   std::vector<sh::Vec3f> monsters;  // where each monster stood at the start
   sh::Vec3f button_at, lo, hi;
   double button_pressed_at = -1, door_open_at = -1;

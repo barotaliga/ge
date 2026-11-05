@@ -4,7 +4,8 @@
 // far behind), presses the button that opens the shut door he waits by (he never presses it), kills
 // the monsters that come for him once he walks into their room and none before they wake, and
 // while he stands still with nothing about it fidgets (several kinds of idle act) and stops when he
-// moves on. Co-op spares one player another's blows under teamplay, never his own. The run replays
+// moves on. With an exit in the hall it shows it (stands beside it and jumps) and never takes it.
+// Co-op spares one player another's blows under teamplay, never his own. The run replays
 // to the bit and matches its golden (tests/golden/shooters_edge_companion.txt, GE_GOLDEN_WRITE=1
 // rewrites it; the PR says why).
 //
@@ -100,6 +101,25 @@ TEST(the_companion_keeps_to_the_leader) {
   CHECK_MSG(share > 0.8, "the companion was near the leader less than four fifths of the run");
   CHECK_MSG(farthest < fb::kEscortCatchUp, "the companion fell further behind than its catch-up");
   CHECK(m.deaths == 0);
+}
+
+// The hall with its exit in the east room's corner: the leader stands among the monsters within
+// sight of it. The companion stands beside it and jumps to show it, and never takes it (the map
+// would change: only the leader may leave).
+TEST(the_companion_shows_the_exit_and_leaves_it_to_the_leader) {
+  fb::CoopOptions o = options(1);
+  o.exit = true;
+  const fb::CoopReport r = fb::run_coop(o);
+  CHECK_MSG(r.ok, r.error);
+  if (!r.ok) return;
+  const fb::CoopMate& m = r.mates[0];
+  std::printf("signal %lld commands, %lld jumps, turned back %lld, exited %d\n",
+              static_cast<long long>(in_mode(m, fb::EscortMode::signal)),
+              static_cast<long long>(m.escort.signal_jumps),
+              static_cast<long long>(m.escort.exit_turned), r.exited ? 1 : 0);
+  CHECK_MSG(!r.exited, "the companion took the exit: the leader's to take");
+  CHECK_MSG(in_mode(m, fb::EscortMode::signal) > 0, "the companion never showed the exit");
+  CHECK_MSG(m.escort.signal_jumps >= 3, "the companion showed the exit without jumping by it");
 }
 
 TEST(the_companion_presses_the_button_the_leader_waits_by) {

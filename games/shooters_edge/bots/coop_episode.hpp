@@ -58,6 +58,10 @@ struct EpisodeMap {
   float farthest = 0;
   int64_t mate_buttons = 0, mate_threats = 0, mate_idle = 0;
   int64_t leader_shoves = 0, mate_shoves = 0;  // commands spent shoving free at a corner
+  // Frames a companion was further than kEscortCatchUp from him, by its mode then, and of those
+  // the ones where one of them was in the water.
+  int64_t far_by_mode[kEscortModes] = {};
+  int64_t far_in_water = 0;
   WayStats way;
   int64_t nav_nodes = 0, movers = 0, faults = 0;
   double nav_ms = 0;  // wall time

@@ -121,6 +121,14 @@ struct ButtonSpot {
   bool shoot = false;  // opened by a shot (health over 0), not a touch
 };
 
+// A map's exit (`trigger_changelevel`), as a player who keeps off it knows it: its box, the nodes
+// where a standing player's box would touch it, and a node beside it to stand on and show it.
+struct ExitSpot {
+  sh::Vec3f lo, hi;             // its box
+  std::vector<int32_t> inside;  // the nodes whose player box touches it (grown by a margin)
+  int32_t stand = -1;           // the nearest node clear of it, or -1
+};
+
 enum class FightMode : uint8_t { roam, fight, chase, retreat };
 const char* fight_mode_name(FightMode m);
 
@@ -164,6 +172,11 @@ struct Fighter {
   std::vector<int32_t> spam_from;        // per spot, the node near its area it is fired from
   std::vector<FoeRead> foes;             // each enemy as believed, by entity (temper.hpp)
   std::vector<ButtonSpot> button_spots;  // the map's buttons (buttons.hpp)
+  std::vector<ExitSpot> exits;           // the map's exits (buttons.hpp `exits_init`)
+  // The doors only something else opens (a named door, a secret door), and where each rests:
+  // shut to a route while at rest (buttons.hpp `exits_init`).
+  std::vector<int> locked;
+  std::vector<sh::Vec3f> locked_rest;
   Mind mind;             // what it believes of its team, its claim, its calls (mind.hpp)
   Escort escort;         // a co-op companion's own state (companion.hpp; leader -1: none)
   std::string name;      // its player name, as its teammates see it in their team lines
