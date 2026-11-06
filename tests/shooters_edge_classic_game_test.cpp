@@ -379,6 +379,28 @@ TEST(classic_game_the_lobby_warms_up_until_everyone_is_ready) {
   CHECK(r.digest == again.digest);
 }
 
+TEST(classic_game_sv_intermission_holds_the_next_map) {
+  ServerConfig c = arena();
+  c.lobby = 1;
+  c.countdown_s = 1;
+  c.intermission_s = 4;
+  c.rules["timelimit"] = "0.05";  // the match's 3 s
+  Session r;
+  r.look_at = 1149;  // 15 s
+  // Ready at 3.9 s: the match from about 5 s to 8 s, the mod's own end until about 13 s, then
+  // the next map held 4 s more.
+  run_session(r, c, 1700, "", 300);
+  CHECK_MSG(r.opened, r.error);
+  CHECK_MSG(r.looked.find("lobby=intermission") != std::string::npos, r.looked);
+  CHECK_MSG(r.client.spawncount == 3, "spawncount " + std::to_string(r.client.spawncount));
+  const std::string status = server_status(r.s);
+  CHECK_MSG(status.find("lobby=warmup") != std::string::npos, status);  // the next map
+  Session again;
+  again.look_at = 1149;
+  run_session(again, c, 1700, "", 300);
+  CHECK(r.digest == again.digest);
+}
+
 TEST(classic_game_a_client_joins_the_window_s_own_match) {
   ge::progs::Progs progs;
   std::string error;

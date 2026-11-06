@@ -173,6 +173,8 @@ so an agent or an owner can answer "why is this server set like this" without re
 | `sv_map`, `sv_maprotation` | the first map and the rotation | server info |
 | `sv_bots` | seats the game's bots fill at the start | server, latched |
 | `sv_lobby` | 1: every map warms up until everyone is ready, then the countdown and the match | server info, latched |
+| `sv_countdown` | with `sv_lobby`: seconds from everyone ready to the match (5) | server |
+| `sv_intermission` | with `sv_lobby`: seconds the scores stay up after a match before the next map (0: none) | server |
 | `sv_mod` | the mod's game directory, mounted over the base | server, latched |
 | `sv_admin` | how to reach the server's owner, shown in its info | server info |
 | `sv_timeout` | seconds a client may go unheard before it is dropped (65): a dead link, not an idle player | server |

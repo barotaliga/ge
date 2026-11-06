@@ -26,8 +26,13 @@
 //   `min_players` (or the players under `humans`) stops it, back to warmup.
 // - MATCH. When the countdown runs out `lobby_due` says so once: the game restarts the map with
 //   every seat on it (scores, items and the clock new) and the match is played to its limits.
-//   When the mod changes the map at the match's end, `lobby_back` returns everyone to warmup
-//   with every player unready and back in the lobby (unless `warm_on_join`).
+//   When the match is over (the mod asks for the next map), `lobby_end` starts the INTERMISSION.
+// - INTERMISSION. The scores stay up, the map as the match left it, for `intermission_s`
+//   (`sv_intermission`); when it runs out `lobby_next_due` says so once and the game changes the
+//   map. With `intermission_s` 0 there is none: `lobby_end` is over at once. Ready, break and
+//   teams still wait, as in the match.
+//   On the next map `lobby_back` returns everyone to warmup with every player unready and back in
+//   the lobby (unless `warm_on_join`).
 //
 // THE LEADER is slot 0 when it is seated (a listen server's own player), else the lowest seat a
 // player holds, else the lowest seat: only the leader may `start`. A dedicated server's bots never
@@ -66,7 +71,7 @@ namespace ge::server {
 
 constexpr int kLobbySeats = 32;
 
-enum class LobbyPhase : uint8_t { warmup, countdown, match };
+enum class LobbyPhase : uint8_t { warmup, countdown, match, intermission };
 enum class Team : uint8_t { none, red, blue };
 
 const char* phase_name(LobbyPhase p);
@@ -76,7 +81,9 @@ Team team_named(std::string_view word);
 
 struct LobbySettings {
   int min_players = 1;     // the fewest seated before a countdown starts
-  double countdown_s = 5;  // the countdown's length, s
+  double countdown_s = 5;  // the countdown's length, s (sv_countdown)
+  double intermission_s =
+      0;  // the scores up between a match's end and the next map, s (sv_intermission)
   bool bots_ready = true;  // a bot is ready as it joins
   int humans = 0;          // the fewest players (not bots) seated before a countdown starts
   // A player is in the warmup as soon as it is seated (a dedicated server's clients); false: it
@@ -103,6 +110,7 @@ enum class LobbyNoteKind : uint8_t {
   countdown,  // the countdown began: everyone ready (`slot` -1) or the leader's `start` (`slot`)
   stopped,    // the countdown stopped: `slot` took a break, or -1 (a join, too few players)
   begins,     // the countdown ran out: the match begins
+  over,       // the match is over: the intermission (its length in the line)
   warmup,     // back to warmup after a match
   refused,    // `slot`'s act refused (`why`)
   told,       // an answer for `slot` alone (`team`, `lobby`'s roster)
@@ -131,7 +139,8 @@ const char* why_text(LobbyWhy w);
 struct Lobby {
   LobbySettings settings;
   LobbyPhase phase = LobbyPhase::warmup;
-  double countdown_ends = 0;  // the server time the countdown runs out, s
+  double countdown_ends = 0;     // the server time the countdown runs out, s
+  double intermission_ends = 0;  // the server time the intermission runs out, s
   std::array<LobbySeat, kLobbySeats> seats;
   std::vector<std::string> said;  // lines for the game to print, in order (the game clears it)
   std::vector<LobbyNote> notes;   // what each line of `said` is about (cleared with it)
@@ -159,7 +168,13 @@ bool lobby_command(Lobby& l, int slot, std::string_view line, double now);
 // True once, when a countdown runs out at `now`: the phase is then `match`, and the game restarts
 // the map with every seat on it.
 bool lobby_due(Lobby& l, double now);
-// The match is over (the map changes): warmup again, every player unready (bots as they join).
+// The match is over: the intermission of `intermission_s` from `now` (none when 0). Outside a
+// match it does nothing.
+void lobby_end(Lobby& l, double now);
+// True once, when an intermission runs out at `now` (at once for one of 0 s): the game changes the
+// map, then `lobby_back`.
+bool lobby_next_due(Lobby& l, double now);
+// The map changed after a match: warmup again, every player unready (bots as they join).
 void lobby_back(Lobby& l);
 
 int lobby_seated(const Lobby& l);
@@ -169,7 +184,7 @@ int lobby_warm_count(const Lobby& l);  // the seats in the warmup
 int lobby_ready_count(const Lobby& l);
 int lobby_humans(const Lobby& l);  // the seats players (not bots) hold
 int lobby_leader(const Lobby& l);  // -1 with no seat taken
-// Whole seconds left on the countdown, rounded up (0 outside it).
+// Whole seconds left on the countdown or the intermission, rounded up (0 outside them).
 int lobby_seconds_left(const Lobby& l, double now);
 // The team the next seat would join: the smaller, red on a tie (`except` left out of the count).
 Team lobby_smaller_team(const Lobby& l, int except = -1);

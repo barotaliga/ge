@@ -119,6 +119,9 @@ void classic_line(Announcer& a, const Lobby& l, const Info& info, const MatchLoo
       print(a, kEveryone, words(info, "begun"));
       a.shown = 0;
       break;
+    case LobbyNoteKind::over:  // the intermission: the engine's line, how long until the next map
+      print(a, kEveryone, line + "\n");
+      break;
     case LobbyNoteKind::refused:
       if (n.why == static_cast<uint8_t>(LobbyWhy::same) && n.slot >= 0 &&
           l.seats[static_cast<size_t>(n.slot)].ready && line.rfind("ready", 0) == 0)
