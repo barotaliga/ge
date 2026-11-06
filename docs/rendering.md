@@ -2544,11 +2544,18 @@ numbers and how they were measured are beside the table in `ladder.cpp`).
   fog; the bloom turns on and off by the post pass's two pipelines, one with it compiled in and
   one without (`PostSettings::bloom_switch`, `set_post_bloom`), both made at the load with the
   bloom's own; the lens turns off (its target black) and on where it was made at the load. The
-  snow's material and the trails are a terrain pipeline and maps of their own each: a change to
-  them waits for the frame to be made again, and the window says so. The `ladder` lab's `--live`
-  lowers a frame made at the top to each preset in place and draws it against a frame made fresh
-  with the options it took over the same run: the same picture (no pixel more than one level
-  apart) and no pipeline made.
+  snow's material turns on and off by the terrain's two pipeline pairs, the game's material and
+  the default one (`TerrainSource::plain_too`, `set_terrain_plain`), both made at the load; the
+  trails' maps and stamp are made at the load whatever the stop (a few texels while off), and a
+  new size or the trails turned on makes the maps again with every trail laid drawn back into
+  them (`resize_snow_marks`: the stamps' blend is the larger, so a stamp drawn twice leaves what
+  it left once), the snow's group rebound over them (`bind_snow_trails`). What is still kept for
+  the frame made again, and said: a falling snow's count over the pool made at the load, a bloom
+  share other than the one its pipelines were made for, a lens not made at the load. The
+  `ladder` lab's `--live` lowers a frame made at the top to each preset, and to the top with the
+  snow and with the trails off, in place, and draws it against a frame made fresh with the
+  options it took over the same run: the same picture (no pixel more than one level apart),
+  nothing left for later and no pipeline made.
 
 ## Measurement
 

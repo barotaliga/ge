@@ -111,25 +111,32 @@ void create_snow(gpu::Device& device, SnowMaterial& s, const mapgen::Level& leve
                             {r::Slot::uniform, r::Slot::texture, r::Slot::texture, r::Slot::texture,
                              r::Slot::uniform, r::Slot::uniform},
                             wgpu::ShaderStage::Fragment);
+  s.ground_view = s.ground.CreateView();
+  bind_snow_trails(device, s, trails);
+}
+
+void bind_snow_trails(gpu::Device& device, SnowMaterial& s, const Trails* trails) {
+  namespace r = ge::render;
   if (trails) {
     s.group = r::make_group(device, "snow", s.layout,
-                            {s.params, s.ground.CreateView(), trails->fine.view,
-                             trails->coarse.view, trails->rects[0], trails->rects[1]});
+                            {s.params, s.ground_view, trails->fine.view, trails->coarse.view,
+                             trails->rects[0], trails->rects[1]});
     return;
   }
-  // No tracks: a clear texel, and both rects a metre square far off the map.
-  s.no_trail = r::make_texture(device, "snow.no_trail", 1, 1, 1, wgpu::TextureFormat::RGBA8Unorm,
-                               wgpu::TextureUsage::TextureBinding);
-  const TrailRect nowhere{-1e7f, -1e7f, 1, 1};
-  for (int k = 0; k < 2; ++k) {
-    s.no_rects[k] =
-        r::make_buffer(device, "snow.no_trail.rect", sizeof nowhere, wgpu::BufferUsage::Uniform);
-    device.queue.WriteBuffer(s.no_rects[k], 0, &nowhere, sizeof nowhere);
+  // No tracks: a clear texel, and both rects a metre square far off the map (made once).
+  if (!s.no_trail) {
+    s.no_trail = r::make_texture(device, "snow.no_trail", 1, 1, 1, wgpu::TextureFormat::RGBA8Unorm,
+                                 wgpu::TextureUsage::TextureBinding);
+    const TrailRect nowhere{-1e7f, -1e7f, 1, 1};
+    for (int k = 0; k < 2; ++k) {
+      s.no_rects[k] =
+          r::make_buffer(device, "snow.no_trail.rect", sizeof nowhere, wgpu::BufferUsage::Uniform);
+      device.queue.WriteBuffer(s.no_rects[k], 0, &nowhere, sizeof nowhere);
+    }
   }
   const wgpu::TextureView none = s.no_trail.CreateView();
-  s.group =
-      r::make_group(device, "snow", s.layout,
-                    {s.params, s.ground.CreateView(), none, none, s.no_rects[0], s.no_rects[1]});
+  s.group = r::make_group(device, "snow", s.layout,
+                          {s.params, s.ground_view, none, none, s.no_rects[0], s.no_rects[1]});
 }
 
 void set_snow_look(gpu::Device& device, SnowMaterial& s, const SnowLook& look) {

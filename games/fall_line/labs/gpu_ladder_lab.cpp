@@ -342,10 +342,28 @@ void live(ge::lab::Lab& lab) {
   ge::lab::LabTable table{
       "Each preset put on a live frame made at the top, against a frame made "
       "fresh with the options it took",
-      {"preset", "pipelines made", "targets", "shadows", "later", "max diff", "pixels off"},
+      {"preset", "pipelines made", "targets", "shadows", "trails", "later", "max diff",
+       "pixels off"},
       {}};
-  for (fa::Preset p : {fa::Preset::high, fa::Preset::medium, fa::Preset::low, fa::Preset::top}) {
-    const std::string name(fa::preset_name(p));
+  // The presets, then the top with the snow's material off and with the trails off: no preset
+  // turns either off, and each is a pipeline or maps of its own.
+  struct Case {
+    std::string name;
+    gr::LadderPick pick;
+    bool shot;
+  };
+  std::vector<Case> cases;
+  for (fa::Preset p : {fa::Preset::high, fa::Preset::medium, fa::Preset::low, fa::Preset::top})
+    cases.push_back({std::string(fa::preset_name(p)), fa::preset_pick(p),
+                     p == fa::Preset::low || p == fa::Preset::top});
+  for (const auto& [row, label] : {std::pair{fa::PictureRow::snow, "snow-off"},
+                                   std::pair{fa::PictureRow::trails, "trails-off"}}) {
+    gr::LadderPick pick = fa::preset_pick(fa::Preset::top);
+    pick[static_cast<size_t>(row)] = 0;
+    cases.push_back({label, pick, std::string(label) == "snow-off"});
+  }
+  for (const Case& c : cases) {
+    const std::string& name = c.name;
     fa::FrameOptions top = fa::apply_picture(fa::preset_pick(fa::Preset::top));
     top.cloud_spread = st.spread;
     device.loading = true;
@@ -353,7 +371,7 @@ void live(ge::lab::Lab& lab) {
     if (!changed) return;
     fa::cut(*changed);
     draw_moments(st, *changed, 0, half);
-    fa::FrameOptions next = fa::apply_picture(fa::preset_pick(p));
+    fa::FrameOptions next = fa::apply_picture(c.pick);
     next.cloud_spread = st.spread;
     const uint32_t before = device.pipelines_after_load;
     const fa::PictureChange change = fa::set_picture(device, *changed, next);
@@ -376,8 +394,8 @@ void live(ge::lab::Lab& lab) {
     size_t off = 0;
     for (size_t i = 0; i < a.rgba.size() && i < b.rgba.size(); i += 4) {
       int d = 0;
-      for (size_t c = 0; c < 3; ++c)
-        d = std::max(d, std::abs(int(a.rgba[i + c]) - int(b.rgba[i + c])));
+      for (size_t ch = 0; ch < 3; ++ch)
+        d = std::max(d, std::abs(int(a.rgba[i + ch]) - int(b.rgba[i + ch])));
       most = std::max(most, d);
       off += d > 2 ? 1 : 0;
     }
@@ -387,15 +405,21 @@ void live(ge::lab::Lab& lab) {
     lab.metric("live." + name + ".pixels-off", share, "share", Det::measured);
     table.rows.push_back({name, std::to_string(made), change.targets ? "made again" : "kept",
                           change.shadows ? "made again" : "kept",
+                          change.trails ? "made again" : "kept",
                           change.later.empty() ? "none" : change.later, std::to_string(most),
                           fixed(100 * share, 3) + " %"});
+    if (!change.later.empty()) {
+      lab.fail("the " + name + " preset left " + change.later + " for the frame made again",
+               "Make it live in set_picture (games/fall_line/app/frame.cpp) with what it needs "
+               "made at the load. Skill: render.");
+    }
     if (made != 0) {
       lab.fail("putting the " + name + " preset on a live frame made " + std::to_string(made) +
                    " pipelines",
                "Make them at the load in create_frame (games/fall_line/app/frame.cpp) and pick "
                "between them in set_picture. Skill: render.");
     }
-    if (p == fa::Preset::low || p == fa::Preset::top) {
+    if (c.shot) {
       lab.shot({"live-" + name,
                 "THE TOP PUT TO " + name + " LIVE",
                 st.camera + " on seed " + fixed(st.seed, 0) +
@@ -403,8 +427,8 @@ void live(ge::lab::Lab& lab) {
                     "to the " +
                     name + " preset in place, drawn " + std::to_string(st.moments.size() - half) +
                     " frames on.",
-                "the same picture as a frame made at that preset; the snow and the trails as at "
-                "the top (they wait for the frame to be made again)",
+                "the same picture as a frame made at that preset, the trails laid before the "
+                "change drawn into its maps again",
                 {{"preset", name}}},
                ge::lab::Picture{st.width, st.height, a.rgba}, Det::measured);
     }

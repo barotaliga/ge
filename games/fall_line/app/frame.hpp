@@ -371,12 +371,16 @@ void resize(ge::gpu::Device& device, GameFrame& frame, uint32_t width, uint32_t 
 // made at the load), the cloud's march, its quarter and the reach are each frame's; a new
 // resolution makes the render-size targets again, a new shadow size the sun's maps (rebound into
 // what receives them), the bloom on or off picks the post pass's pipeline with or without it (both
-// made at the load), the lens goes off (and on when it was made at the load). The snow's material
-// and the trails are each a terrain pipeline and maps of their own: they take effect when the
-// frame is made again, and are named in `later`.
+// made at the load), the lens goes off (and on when it was made at the load); the snow's material
+// on or off picks the terrain's pipeline pair (both made at the load: TerrainSource::plain_too),
+// and the trails on, off or at a new size make their maps again with every trail laid drawn back
+// into them. `later` names what is kept until the frame is made again: a falling snow's count
+// over the pool made at the load, a bloom's share other than the one its pipelines were made for,
+// a lens not made at the load.
 struct PictureChange {
   bool targets = false;  // the render-size targets were made again (the history starts over)
   bool shadows = false;  // the sun's shadow maps were made again
+  bool trails = false;   // the trails' maps made again or turned on or off (the snow's group)
   std::string later;     // the settings kept until the frame is made again, by name; empty: none
 };
 PictureChange set_picture(ge::gpu::Device& device, GameFrame& frame, const FrameOptions& next);

@@ -139,6 +139,13 @@ struct SnowMarks {
 void create_snow_marks(gpu::Device& device, gpu::PipelineSet& pipelines, SnowMarks& marks,
                        double x0, double z0, double extent, const MarkOptions& options = {});
 
+// The maps made again at new sizes (a quality setting changed on a live frame), with no pipeline
+// made: the rects and groups over them, and every stamp of the history drawn into both again at
+// the next encode (their blend is the larger of what is there and the stamp's, so a stamp drawn
+// twice leaves what it left once).
+void resize_snow_marks(gpu::Device& device, SnowMarks& marks, uint32_t fine_size,
+                       uint32_t coarse_size);
+
 // New stamps, laid since the last frame: drawn into both maps at the next encode and kept.
 void add_mark_stamps(SnowMarks& marks, std::span<const MarkStamp> stamps);
 

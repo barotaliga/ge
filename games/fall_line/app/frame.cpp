@@ -105,6 +105,10 @@ constexpr std::string_view kLoadInputs =
 
 constexpr int kPasses = static_cast<int>(std::size(kPassTable));
 
+// The trails' maps' texels a side while they are off (made at the load all the same, so a stop
+// turns them on live: render/snow_marks.hpp's resize_snow_marks).
+constexpr uint32_t kTrailsAsleep = 16;
+
 // The lamps' tiles each casting family carries slots for (none without the lamps' shadows).
 int lamp_slots(const GameFrame& f) {
   return f.options.lights && f.options.light_shadows
@@ -252,16 +256,18 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   source.levels = kGroundLevels;
   source.overdraw_probe = options.overdraw_probe;
   source.wire_probe = options.wire_probe;
+  // The snow's material and the trails' maps and stamp whatever the stops, the ground drawn in the
+  // default material while the snow is off, so a ladder stop turns either on or off live
+  // (set_picture). Trails off at the load: their maps a few texels until a stop asks for them.
   f->tracks = options.snow && options.trails;
-  if (f->tracks) {
-    ge::mountain::app::create_trails(device, f->pipelines, f->trails, level, options.trail_maps);
-  }
-  if (options.snow) {
-    ge::mountain::app::create_snow(device, f->snow, level, {}, f->tracks ? &f->trails : nullptr);
-    source.shader = ge::mountain::app::snow_shader();
-    source.shader_label = "snow";
-    source.material = f->snow.layout;
-  }
+  ge::mountain::app::TrailOptions maps = options.trail_maps;
+  if (!options.trails) maps.fine_size = maps.coarse_size = kTrailsAsleep;
+  ge::mountain::app::create_trails(device, f->pipelines, f->trails, level, maps);
+  ge::mountain::app::create_snow(device, f->snow, level, {}, f->tracks ? &f->trails : nullptr);
+  source.shader = ge::mountain::app::snow_shader();
+  source.shader_label = "snow";
+  source.material = f->snow.layout;
+  source.plain_too = true;
   r::create_terrain(device, f->pipelines, f->terrain, source, f->frame_layout);
   r::create_particles(device, f->pipelines, f->particles, f->frame_layout, f->terrain,
                       options.particles);
@@ -367,7 +373,8 @@ std::unique_ptr<GameFrame> create_frame(ge::gpu::Device& device,
   f->piste_lamps = ge::mountain::app::piste_lamps(level);
   stand_posts(device, *f, f->masts, "lamps.masts", f->piste_lamps);
   r::bind_terrain_shadows(f->terrain, f->shadows.group);
-  if (options.snow) r::bind_terrain_material(f->terrain, f->snow.group);
+  r::bind_terrain_material(f->terrain, f->snow.group);
+  r::set_terrain_plain(f->terrain, !options.snow);
   r::bind_instance_shadows(f->instancing, f->shadows.group);
   r::bind_particle_shadows(f->particles, f->shadows.group);
   r::bind_fog_shadows(f->fog, f->shadows.group);
@@ -547,11 +554,27 @@ PictureChange set_picture(ge::gpu::Device& device, GameFrame& f, const FrameOpti
     r::bind_fog_shadows(f.fog, f.shadows.group);
     change.shadows = true;
   }
-  // A terrain pipeline and maps of their own each: kept until the frame is made again.
-  if (next.snow != o.snow) later("the snow's material");
-  if (next.trails != o.trails || next.trail_maps.fine_size != o.trail_maps.fine_size ||
-      next.trail_maps.coarse_size != o.trail_maps.coarse_size)
-    later("the trails");
+  // The snow's material and the trails: the terrain's pipeline pair switched, the trails' maps made
+  // again at a new size (every trail laid drawn into them again), the snow's group rebound over
+  // them or over none.
+  namespace ma = ge::mountain::app;
+  const bool was_tracks = f.tracks;
+  o.snow = next.snow;
+  o.trails = next.trails;
+  r::set_terrain_plain(f.terrain, !o.snow);
+  const bool resized = next.trails && (next.trail_maps.fine_size != f.trails.options.fine_size ||
+                                       next.trail_maps.coarse_size != f.trails.options.coarse_size);
+  if (next.trails) o.trail_maps = next.trail_maps;
+  if (resized) ma::resize_trails(device, f.trails, o.trail_maps);
+  f.tracks = o.snow && o.trails;
+  if (resized || f.tracks != was_tracks) {
+    ma::bind_snow_trails(device, f.snow, f.tracks ? &f.trails : nullptr);
+    r::bind_terrain_material(f.terrain, f.snow.group);
+    change.trails = true;
+  }
+  // The pens start again: a ski's last print from before the tracks went off is not joined to its
+  // next.
+  if (f.tracks && !was_tracks) f.pens.clear();
   return change;
 }
 
