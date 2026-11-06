@@ -128,7 +128,7 @@ struct BotTeam {
   std::unique_ptr<TeamNav> nav;
   bool movers_named = false;
   bool plan_said = false;  // the map plan's lines in the log
-  int maps = 0;  // maps loaded
+  int maps = 0;            // maps loaded
 
   int64_t now_us = 0, ticks = 0;
   std::vector<std::string> log;  // what the process prints: the server's lines once, the console's

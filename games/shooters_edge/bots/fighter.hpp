@@ -206,8 +206,8 @@ struct Fighter {
   double dive_wet_since = -1;  // when the dive under way went into the water (-1: none)
   double dive_off_until = -1;  // until when the dive given up (`dive_off`) is not tried again
   ge::ai::Why* why = nullptr;
-  Team* team = nullptr;                          // its side (team.hpp); null in a free-for-all
-  const ge::shooter::Locs* locs = nullptr;       // the map's place names (none: no names)
+  Team* team = nullptr;                     // its side (team.hpp); null in a free-for-all
+  const ge::shooter::Locs* locs = nullptr;  // the map's place names (none: no names)
   const MapPlan* plan = nullptr;  // the map's team plan (map_plan.hpp; none: the items alone)
   const ge::shooter::SwimField* swim = nullptr;  // the map's way out of its water (none: no water)
   int64_t buttons = 0;                           // buttons gone to
@@ -234,7 +234,9 @@ struct Fighter {
   int32_t last_dive = -1;     // the item the last think dived for
   int32_t explore_node = -1;  // a novice with nothing known walks the map to learn it
   int32_t dive_off = -1;      // the item whose dive it last gave up (-1: none)
-  ge::core::Rng rng{1};       // its own draws (where it explores), seeded off the bot's seed
+  int32_t swim_exit = -1;     // the exit node it is climbing out onto (shooter/swim.hpp), -1 none
+  double swim_exit_until = 0;
+  ge::core::Rng rng{1};  // its own draws (where it explores), seeded off the bot's seed
   FightMode mode = FightMode::roam;
   Role role = Role::free;
   sh::Temper temper = sh::Temper::balanced;  // when it takes a fight (shooter/temper.hpp)
