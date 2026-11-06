@@ -196,6 +196,29 @@ bool explosion_light(const double p[3], double age, Light* out) {
   return true;
 }
 
+void dynamic_light_at(std::span<const Light> lights, const double w[3], double strength,
+                      double rgb[3], double toward[3]) {
+  for (int c = 0; c < 3; c++) rgb[c] = toward[c] = 0;
+  constexpr double kLevelLuxel = 128.0 / 255.0;  // a light's level of 1, in the probe's units
+  double way[3] = {0, 0, 0};
+  for (const Light& l : lights) {
+    const double v[3] = {l.pos[0] - w[0], l.pos[1] - w[1], l.pos[2] - w[2]};
+    const double dist = std::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+    if (l.radius <= 0 || dist >= l.radius) continue;
+    const double f = (1 - dist / l.radius) * strength * kLevelLuxel;
+    double lum = 0;
+    for (int c = 0; c < 3; c++) {
+      rgb[c] += l.colour[c] * f;
+      lum += l.colour[c] * f;
+    }
+    if (dist > 1e-6)
+      for (int c = 0; c < 3; c++) way[c] += v[c] / dist * lum;
+  }
+  const double len = std::sqrt(way[0] * way[0] + way[1] * way[1] + way[2] * way[2]);
+  if (len > 1e-9)
+    for (int c = 0; c < 3; c++) toward[c] = way[c] / len;
+}
+
 double fade_hurt(double hurt, double dt) { return std::max(hurt - kHurtFade * dt, 0.0); }
 
 double take_hurt(double hurt, double damage) { return std::min(hurt + 3 * damage, 150.0); }

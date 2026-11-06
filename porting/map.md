@@ -293,6 +293,7 @@ the row when the file moves.
 | `plugins/paramotor/pilot.hpp` | `game5/engine/game/para-pilot.ts` | paraPilot ParaAim |
 | `plugins/paramotor/spec.hpp` | `game5/engine/game/defs/para.ts` | PARA |
 | `plugins/progs/entity_text.cpp` | `porting/shooters-edge/builtins.md` (clean room) | the map entity keys the engine handles: angle light _-prefixed keys, typed values, spawnflags inhibit (§ Map entity keys handled by the engine) |
+| `plugins/progs/qvm.cpp` | `porting/shooters-edge/qvm.md` (clean room) | the module file and its header, the memory image, the 60 opcodes, the calling convention, system calls and re-entry, the verifier's load-time checks, the CRC-16 a server reports (§ 1, § 2) |
 | `plugins/progs/stdlib.cpp` | `porting/shooters-edge/builtins.md` (clean room) | random normalize vlen vectoyaw vectoangles ftos vtos rint floor ceil fabs stof sin cos sqrt pow min max bound randomvec tokenize argc argv strlen strcat substr strzone strunzone |
 | `plugins/progs/text.cpp` | `porting/shooters-edge/builtins.md` (clean room) | ftos vtos number formatting (§ The standard numbers) |
 | `plugins/racing/records.hpp` | `oss-game-framework/src/racing/records.ts` | splitGap noteRecord |

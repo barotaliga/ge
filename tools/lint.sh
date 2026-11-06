@@ -8,6 +8,10 @@
 #                                      each changed .cpp, and each .cpp whose object includes a
 #                                      changed header (HeaderFilterRegex reports a header's
 #                                      findings through the files that include it)
+#   LINT_SAMPLE=1 tools/lint.sh ...    the same, but a changed header through one includer: its
+#                                      own findings, without every file that includes it
+#                                      (`make precheck` sets it; LINT_SAMPLE=0 there lints them
+#                                      all, and main's full lint checks every includer)
 #
 # A change to the lint's own rules (.clang-tidy, this script) lints everything, since any file's
 # findings can move. A change to the build's CMake does not: it most often adds a source, which
@@ -43,15 +47,37 @@ if [[ -n "$base" ]]; then
     done
     if (( ! full )); then
       root="$PWD"
-      # Ninja's deps: "<object>: #deps ..." then one indented path per line. The object's source
-      # is its first .cpp in the tree (GCC lists it first; Apple Clang puts toolchain headers
-      # before it). Print every source whose object reads a changed file. The list goes through
+      buildabs="$(cd "$build" && pwd)"
+      # Ninja's deps: "<dir>/CMakeFiles/<target>.dir/<object>: #deps ..." then one indented path
+      # per line, absolute or relative to the build directory (a build inside the tree writes
+      # "../../engine/x.hpp"). The object's source is its first .cpp in the tree (GCC lists it
+      # first; Apple Clang puts toolchain headers before it). Print every source whose object
+      # reads a changed file; with LINT_SAMPLE=1, a changed header is linted through its first
+      # includer alone, which reports the header's own findings (each changed .cpp is still linted). The list goes through
       # the environment: macOS's awk refuses a newline in a -v value.
-      affected="$(ninja -C "$build" -t deps | LINT_CHANGED="$(printf '%s\n' "${changed[@]}")" awk -v root="$root" '
-        function flush() { if (got && src != "") hit[src] = 1; src = ""; got = 0 }
+      affected="$(ninja -C "$build" -t deps | LINT_CHANGED="$(printf '%s\n' "${changed[@]}")" awk -v root="$root" -v build="$buildabs" -v sample="${LINT_SAMPLE:-0}" '
+        function norm(p) {
+          if (substr(p, 1, 1) != "/") p = build "/" p
+          while (sub(/\/\.\//, "/", p)) {}
+          while (sub(/\/[^\/]+\/\.\.\//, "/", p)) {}
+          return p
+        }
+        function flush(   h) {
+          if (src != "") {
+            if (direct || (src in want)) hit[src] = 1
+            for (h in heads) {
+              if (!sample || !(h in seen)) { seen[h] = 1; hit[src] = 1 }
+            }
+          }
+          src = ""; direct = 0; split("", heads)
+        }
         BEGIN { n = split(ENVIRON["LINT_CHANGED"], c, "\n"); for (i = 1; i <= n; i++) if (c[i] != "") want[root "/" c[i]] = 1 }
         /^[^ ]/ { flush(); next }
-        /^    / { p = substr($0, 5); if (src == "" && p ~ /\.cpp$/ && index(p, root "/") == 1) src = p; if (p in want) got = 1 }
+        /^    / {
+          p = norm(substr($0, 5))
+          if (src == "" && p ~ /\.cpp$/ && index(p, root "/") == 1) src = p
+          if (p in want) { if (p ~ /\.(hpp|h)$/) heads[p] = 1; else direct = 1 }
+        }
         END { flush(); for (s in hit) print substr(s, length(root) + 2) }')"
       files=()
       for f in "${all[@]}"; do

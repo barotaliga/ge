@@ -138,7 +138,7 @@ build/release/games/shooters_edge/shooters_edge -basedir ~/games/classic +map dm
   not ship comes from the base game (saves go to the mod's folder). **`-progs <file>`** runs a mod's progs in place of the
   baseline mod (§ Running your own mod), and **`-models <dir>`** names the held weapons' folder
   (by default the tree's `games/shooters_edge/content/models/view`). Each folder's packs are read in number order (`pak0.pak`, `pak1.pak`,
-  ...; any case), then its zips (`*.pk3`) and unpacked zips (`*.pk3dir`), and a loose file in the
+  ...; any case), then its other packs (a mod's `misc.pak`), zips (`*.pk3`) and unpacked zips (`*.pk3dir`), and a loose file in the
   folder (`maps/mymap.bsp`) overrides them all (`client/files.hpp`, over `engine/vfs/search.hpp`).
 - **`+<command>`**: console lines run at start. `+map dm6` loads that map; `+map arena` the
   built-in test arena (no packs needed, only the sky drawn). With no `+map`, the map `start`
@@ -1444,7 +1444,7 @@ list is in `porting/shooters-edge/survey.md`.
 | Better | The common QC extension builtins and fields (string handling, tracing, the extra entity fields), registered by name | M18c, M18l |
 | Later | Client-side QC (a mod drawing its own HUD and predicting its own entities) | M18m |
 | Later | Single-player campaigns and co-op on the single-player `progs` | M18s |
-| Better | The easy jump: `cl_speedjump 1` hops and gains on forward and jump alone where the server's `pm_speedjump` allows it (`docs/movement.md`) | M18e |
+| Better | The easy jump: `cl_speedjump 1` hops and gains on forward and jump alone where the server's `pm_speedjump` allows it, and on any other server by the client strafing for the player, disclosed in the user info (`docs/movement.md`) | M18e |
 | Later | Splitscreen; touch controls for phones and tablets | M18m |
 
 ## Labs

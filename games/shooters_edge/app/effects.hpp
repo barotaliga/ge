@@ -31,6 +31,7 @@
 //
 // ge:summary Shooter's Edge's effects: trails, bursts, dynamic lights and the screen's blend
 // ge:keywords effects particles trail rocket grenade explosion spark smoke blood teleport lava
+// ge:keywords dynamic_light_at model-lighting rocket-glow explosion-light
 // ge:keywords splash muzzle-flash dynamic-light screen-blend damage-flash powerup underwater
 // ge:keywords palette ramp classic-specks shining
 // ge:keywords warp dust dust_off dust_in ash flakes disintegrate spawn teleport respawn materialize
@@ -110,6 +111,15 @@ inline constexpr double kExplosionLight = 0.5;
 Light muzzle_light(const double at[3]);
 Light rocket_light(const double at[3]);
 bool explosion_light(const double at[3], double age, Light* out);
+
+// THE DYNAMIC LIGHTS ON A MODEL: the light the frame's dynamic lights add at `w` (engine metres)
+// in the floor probe's units (a luxel's byte over 255, what `light_under` reads), the classic's
+// rule: each light's level falls in a straight line from its middle to nothing at its radius,
+// and a light's level of 1 is a luxel of 128 (`DynamicLight::colour`), times `strength`.
+// `toward` takes the unit way to where the added light comes from, each light weighted by its
+// share (all 0 when none reaches).
+void dynamic_light_at(std::span<const Light> lights, const double w[3], double strength,
+                      double rgb[3], double toward[3]);
 
 // THE SCREEN'S BLEND: what surrounds the eye, how hurt the player is now, the powers held.
 enum class Medium : uint8_t { air, water, slime, lava };

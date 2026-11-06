@@ -48,9 +48,10 @@ std::vector<uint8_t> write_client_demo(const DemoScript& script, int cmd_size = 
 std::vector<uint8_t> write_multiview_demo(const DemoScript& script);
 // A MATCH written as a multiview recording, for the highlight finder's tests and lab: players
 // with a name and, frame by frame, an origin, health, armour, weapon in hand and frags (each list
-// held at its last value past its end), and rockets flying straight between two frames. A player
-// whose health is 0 or under is written dead, and gibbed at -40 or under; stats and frags are
-// written when they change, the players and the entity list every frame (a full list).
+// held at its last value past its end), and rockets flying straight between two frames, each
+// bursting where its flight ends (an explosion's temporary entity). A player whose health is 0 or
+// under is written dead, and gibbed at -40 or under; stats and frags are written when they change,
+// the players and the entity list every frame (a full list).
 struct MatchPlayer {
   std::string name;
   std::vector<ge::shooter::Vec3f> origins;

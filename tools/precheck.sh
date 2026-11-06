@@ -10,7 +10,8 @@
 #   4. release       the changeset fragments valid
 #   5. build         the preset's build (incremental); a change no build reads (prose, the gates'
 #                    Node and Python tools) stops after step 4
-#   6. lint          clang-tidy over what the change since BASE (default origin/main) reaches
+#   6. lint          clang-tidy over what the change since BASE (default origin/main) reaches,
+#                    a changed header through one includer (LINT_SAMPLE=0: every includer)
 #      shaders       every embedded WGSL shader through Tint (incremental: only what changed)
 #   7. tests         cli_diagnostics_test (every message held to the diagnostics convention),
 #                    each changed test, and the test every changed file's ge:test tag names
@@ -90,7 +91,7 @@ if ! gate build make -s build PRESET="$preset"; then
 fi
 # A good build's objects kept for the next cloud container (in the background; a no-op elsewhere).
 tools/ccache-share.sh save || true
-gate lint tools/lint.sh "$build" "$base" || true
+gate lint env LINT_SAMPLE="${LINT_SAMPLE:-1}" tools/lint.sh "$build" "$base" || true
 # shaders_check exists only where the build has the GPU and Tint (GE_GPU, GE_TINT).
 if grep -q 'shaders_check' "$build/build.ninja" 2>/dev/null; then
   gate shaders cmake --build "$build" --target shaders_check || true

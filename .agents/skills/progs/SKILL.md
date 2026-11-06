@@ -1,6 +1,6 @@
 ---
 name: progs
-description: "Use for plugins/progs in gameengine2: the QC virtual machine Shooter's Edge runs mods' bytecode on. The progs loader and checker (every bound and index refused with the section, record, field and value), the classic multiplayer engine-side layout (globals 28..89, the 102 fields, crc 54730), the interpreter (every opcode on 32-bit floats, the call convention, the call depth, the local stack, the run-away guard), entity, field, pointer, function and string values, temporaries, the builtin table a game fills and the extension registry, faults with a QC stack trace and lines, the profile and trace hooks, the assembler and the sample program, the QC compiler (compile_qc, ge qc build) and the language it reads, the qc tool behind ge qc, the qc lab, and the bytecode program on the shooter seam (games/shooters_edge/sim/qc_program); the standard builtins (stdlib: math, vectors, ftos and vtos text, tokenize, the string extensions, strzone), the map's entity text, and the mod server (games/shooters_edge/server: the builtin catalogue by number, checkextension, the hooks, the extension fields, loading a progs from --progs or sv_progs, the assembled test mod, a match with bots, the se-mod lab); the baseline deathmatch mod in QC (games/shooters_edge/qc, its arena, the se-baseline lab); the M18c, M18d and M18p rows."
+description: "Use for plugins/progs in gameengine2: the QC virtual machine Shooter's Edge runs mods' bytecode on. The progs loader and checker (every bound and index refused with the section, record, field and value), the classic multiplayer engine-side layout (globals 28..89, the 102 fields, crc 54730), the interpreter (every opcode on 32-bit floats, the call convention, the call depth, the local stack, the run-away guard), entity, field, pointer, function and string values, temporaries, the builtin table a game fills and the extension registry, faults with a QC stack trace and lines, the profile and trace hooks, the assembler and the sample program, the QC compiler (compile_qc, ge qc build) and the language it reads, the qc tool behind ge qc, the qc lab, and the bytecode program on the shooter seam (games/shooters_edge/sim/qc_program); the standard builtins (stdlib: math, vectors, ftos and vtos text, tokenize, the string extensions, strzone), the map's entity text, and the mod server (games/shooters_edge/server: the builtin catalogue by number, checkextension, the hooks, the extension fields, loading a progs from --progs or sv_progs, the assembled test mod, a match with bots, the se-mod lab); the baseline deathmatch mod in QC (games/shooters_edge/qc, its arena, the se-baseline lab); the compiled-module VM (qvm.hpp: a match mod's qwprogs.qvm loaded, checked and run, system calls and re-entry, faults with frames, qvm_asm and its sample, the qvm lab); the M18c, M18d and M18p rows."
 ---
 
 # The progs plugin
@@ -22,6 +22,8 @@ is the design, `docs/goals.md` M18c, M18d and M18p the rows.
 | `progs/sample.hpp` | The sample program that runs every opcode, and its five builtins |
 | `progs/disasm.hpp`, `progs/tool.hpp`, `tool/main.cpp` | The disassembler and the plugin's tool, the `progs` executable `ge qc` runs (engine/cli/qc.cpp hands to it) |
 | `labs/qc_lab.cpp` | The `qc` lab: opcode throughput, the sample's profile, a fault |
+| `progs/qvm.hpp` | The compiled-module VM (a mod shipped as `.qvm`): `load_qvm` and its load-time rules, the memory image, `qvm_call` and system calls (re-entrant), the checked memory helpers the host's system calls use, faults with frames. Its spec is `porting/shooters-edge/qvm.md` |
+| `progs/qvm_asm.hpp`, `labs/qvm_lab.cpp` | A module written by hand (the tests', the lab's) and `qvm_sample`; the `qvm` lab (the sample's instructions by size, throughput, and `--file=` a player's module: its facts, opcode mix, functions, init's system calls) |
 | `progs/text.hpp` | Numbers as QC text: `ftos` and `vtos` (the shortest form that reads back; at or past 1e21 the exponent form) |
 | `progs/stdlib.hpp` | The standard builtins that touch no world: math, vectors, random, text, `tokenize`/`argc`/`argv`, the string extensions, `strzone` |
 | `progs/entity_text.hpp` | The map's entity text parsed and spawned into a progs' fields (typed values, `angle`, `light`, `_` keys, the inhibit flags) |
@@ -96,8 +98,17 @@ is the design, `docs/goals.md` M18c, M18d and M18p the rows.
   README), keep its arena's entity text (`baseline_mod.cpp`) placing every entity it spawns, and
   run `make lab LAB=se-baseline` before and after; `tests/shooters_edge_baseline_mod_test.cpp`
   holds it to a clean spawn, a deathmatch, the door, the plat and a replay.
+- **The compiled-module VM is a second machine, not a QC mode.** One flat byte memory (a power of
+  two, address 0 null), code targets are instruction indices, the host's system call reads the
+  caller's outgoing arguments; it shares nothing with `vm.hpp` but the float rules. The loader runs
+  every load-time rule and measures each function's operand depth into its ENTER's `aux` (every
+  other instruction's `aux` is its static depth), so the loop checks the operand stack only at
+  ENTER and a computed JUMP only against its function and depth 0. Every load, store and block copy
+  is checked; a host reads module memory only through `qvm_ptr`, `qvm_string` and
+  `qvm_put_string`, and stops the module with `qvm_raise` (the outermost call returns 0).
 - **Run the lab before and after** a change to the VM: `make lab LAB=qc ARGS="--tag=before"`, then
   `--compare=before`; its digest (`make ge ARGS="digest qc --write"`) holds the sample's profile.
-  A change to the server or a builtin runs `make lab LAB=se-mod` the same way.
+  A change to the server or a builtin runs `make lab LAB=se-mod` the same way, and a change to
+  the compiled-module VM `make lab LAB=qvm` (with `ARGS=--file=<a qwprogs.qvm>` when one is at hand).
 
 Read this skill's lessons first: `make lessons ARGS=progs`.

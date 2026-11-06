@@ -277,3 +277,33 @@ TEST(dust_blown_off_is_thrown_once_wherever_the_cut_passes) {
   CHECK(first.size() + second.size() == whole.size());
   for (const auto& p : whole) CHECK(p.v[2] < 0);  // downwind, -z here
 }
+
+TEST(a_dynamic_light_adds_to_a_model_in_a_straight_line_to_nothing_at_its_radius) {
+  const double p[3] = {0, 0, 0};
+  const fx::Light rocket = fx::rocket_light(p);  // 200 units, level 200/128
+  const fx::Light lights[1] = {rocket};
+  double rgb[3], toward[3];
+  // At its middle: a luxel of 200 over 255 in the probe's units, whatever the strength's 1.
+  const double at_mid[3] = {0, 0, 0};
+  fx::dynamic_light_at(lights, at_mid, 1, rgb, toward);
+  CHECK(std::fabs(rgb[0] - 200.0 / 255.0) < 1e-9);
+  CHECK(rgb[1] < rgb[0] && rgb[2] < rgb[1]);  // a white a shade warm
+  // Half its radius off along +x: half the light, coming from -x.
+  const double half[3] = {rocket.radius / 2, 0, 0};
+  fx::dynamic_light_at(lights, half, 1, rgb, toward);
+  CHECK(std::fabs(rgb[0] - 100.0 / 255.0) < 1e-9);
+  CHECK(std::fabs(toward[0] + 1) < 1e-9 && toward[1] == 0 && toward[2] == 0);
+  // The strength scales it; at the radius and past it, nothing.
+  fx::dynamic_light_at(lights, half, 0.5, rgb, toward);
+  CHECK(std::fabs(rgb[0] - 50.0 / 255.0) < 1e-9);
+  const double edge[3] = {0, rocket.radius, 0};
+  fx::dynamic_light_at(lights, edge, 1, rgb, toward);
+  CHECK(rgb[0] == 0 && rgb[1] == 0 && rgb[2] == 0 && toward[0] == 0 && toward[1] == 0);
+  // Two lights either side add up, and the way leans to the nearer.
+  const double q[3] = {rocket.radius / 2, 0, 0};
+  const fx::Light two[2] = {rocket, fx::muzzle_light(q)};
+  const double near_second[3] = {rocket.radius / 3, 0, 0};
+  fx::dynamic_light_at(two, near_second, 1, rgb, toward);
+  CHECK(rgb[0] > 200.0 / 255.0);
+  CHECK(toward[0] > 0);
+}

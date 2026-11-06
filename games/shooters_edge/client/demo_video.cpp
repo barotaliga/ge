@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string_view>
 #include <system_error>
 #include <vector>
@@ -125,6 +126,69 @@ void demo_placed(const DemoState& s, std::vector<Placed>& out) {
   for (size_t i = 0; i < s.statics.size(); i++) put(-1 - static_cast<int>(i), s.statics[i]);
 }
 
+void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
+                   const ge::render::FrameView& view, FxScene& out) {
+  out.map = map;
+  out.server = nullptr;
+  out.pose.eye = {view.eye[0], view.eye[1], view.eye[2]};
+  out.pose.yaw = view.heading;
+  out.pose.pitch = view.pitch;
+  out.pose.fov_y = view.fov_y;
+  out.missiles = fx.missiles;
+  out.explosions = fx.explosions;
+  out.effects = fx.effects;
+  out.blows = {};
+  out.campaign = s.format == DemoFormat::single;  // the single protocol's codes (13: a beam)
+  out.effect_models = static_cast<int>(s.models.size());
+  demo_placed(s, out.models);
+  // The players: a client's or multiview's by slot, the single protocol's the first entities.
+  const bool single = s.format == DemoFormat::single;
+  const DemoEntity* players = single ? s.entities.data() + 1 : s.players.data();
+  const size_t count = single ? std::min<size_t>(s.entities.size() > 0 ? s.entities.size() - 1 : 0,
+                                                 static_cast<size_t>(s.max_clients))
+                              : s.players.size();
+  out.bodies.clear();
+  for (size_t k = 0; k < count; k++)
+    if (players[k].present && players[k].model > 0)
+      out.bodies.push_back({static_cast<int>(k) + 1, players[k].origin, !players[k].dead});
+  out.own = listener_of(s);
+  const DemoEntity* own =
+      out.own >= 1 && static_cast<size_t>(out.own) <= count ? &players[out.own - 1] : nullptr;
+  out.me = PlayerState{};
+  out.me.entity = out.own;
+  out.me.origin = s.eye;
+  out.me.health = static_cast<float>(s.stats[kStatHealth]);
+  out.me.dead = out.me.health <= 0;
+  out.me_effects = own ? own->effects : 0;
+  out.waterlevel = out.watertype = 0;
+  out.placed_of = [players, count, &s](int e) {
+    Placed p;
+    if (e < 1 || static_cast<size_t>(e) > count) return p;
+    const DemoEntity& d = players[e - 1];
+    if (d.model <= 0 || static_cast<size_t>(d.model) >= s.models.size()) return p;
+    p.entity = e;
+    p.modelindex = d.model;
+    p.frame = d.frame;
+    p.skin = d.skin;
+    p.effects = d.effects;
+    p.origin = d.origin;
+    p.angles = d.angles;
+    return p;
+  };
+  out.health_of = [players, count](int e) {
+    return e >= 1 && static_cast<size_t>(e) <= count && !players[e - 1].dead ? 1.0f : 0.0f;
+  };
+}
+
+void demo_fx_step(const DemoState& s, DemoFx& fx, const LoadedMap* map,
+                  const ge::render::FrameView& view, FxState& state, double t, double dt,
+                  FxFrame& out) {
+  thread_local FxScene scene;
+  demo_fx_frame(s, fx);
+  demo_fx_scene(s, fx, map, view, scene);
+  step_fx(scene, state, t, dt, out);
+}
+
 bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVideoOptions& o,
                 DemoVideoReport& report, std::string& error, const DemoVideoPicture& picture) {
   report = DemoVideoReport{};
@@ -193,6 +257,14 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   WorldDrawPtr world;
   size_t world_models = 0;  // the model list's length the world was made with
   FxFrame fx;
+  FxState fx_state;  // the demo's effects as they live (world_fx.hpp)
+  DemoFx demo_fx;    // its temporary entities this level (demo_fx.hpp)
+  fx_state.on = fx_switches(look);
+  {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> pal = find_file(files, "gfx/palette.lmp", store);
+    fx_state.palette.assign(pal.begin(), pal.end());
+  }
   const DemoState& s = t.demo.state;
 
   double from = std::max(o.from_s, 0.0);  // the clip's start on the demo's timeline, s
@@ -218,7 +290,13 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
       }
       world.reset();
       last = -1;
+      demo_fx = {};
+      const std::vector<uint8_t> palette = std::move(fx_state.palette);
+      fx_state = {};
+      fx_state.on = fx_switches(look);
+      fx_state.palette = palette;
     }
+    demo_fx_frame(s, demo_fx);
     const double dt = last < 0 ? 0 : std::clamp(s.time - last, 0.0, kMostDemoGap);
     last = s.time;
     vt += dt;
@@ -286,7 +364,14 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
       if (o.messages && at < notices.centre_until)
         draw_centre(overlay, glyphs, o.width, o.height, notices.centre);
     }
-    demo_placed(s, fx.models);
+    if (k == 0) {  // what went off before the clip's start is not thrown at its first frame
+      fx_state.explosions_seen = demo_fx.explosions.size();
+      fx_state.effects_seen = demo_fx.effects.size();
+    }
+    fx_state.models = &client::world_models(*world);
+    thread_local FxScene scene;
+    demo_fx_scene(s, demo_fx, map.get(), view, scene);
+    step_fx(scene, fx_state, at, 1.0 / o.fps, fx);
     draw_world(device, *world, view, fx, nullptr, 1.0 / o.fps, overlay, out.view);
     const ge::gpu::Image img = ge::gpu::read_now(device, out);
     const ge::lab::Picture p{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba};

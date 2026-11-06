@@ -1,8 +1,8 @@
 // THE SEARCH PATH: a base game directory and a mod over it, built on disk from our own fixture
-// archives. The packs mount in number order (pak10 after pak2), then pk3s and pk3dirs in name
-// order, then the loose files over every archive, and the mod over the base; names are found
-// whatever their case and separators; a pack's file is a view, a loose one is read from disk; a
-// lookup allocates nothing; a damaged archive is refused naming it; and the whole table (each
+// archives. The packs mount in number order (pak10 after pak2), then other packs, pk3s and pk3dirs
+// in name order, then the loose files over every archive, and the mod over the base; names are
+// found whatever their case and separators; a pack's file is a view, a loose one is read from disk;
+// a lookup allocates nothing; a damaged archive is refused naming it; and the whole table (each
 // name, the source that wins it, its size and a digest of its bytes) is held golden
 // (tests/golden/vfs_search.txt).
 //
@@ -78,7 +78,8 @@ fs::path fixture() {
   put(base / "a.pk3dir" / "g" / "h.txt", text("a.pk3dir deep"));
   put(base / "A.txt", text("loose"));
   put(base / "sound" / "Door.wav", text("loose wav"));
-  put_pak(mod / "pak0.pak", {{"b.txt", text("mod")}});
+  put_pak(mod / "pak0.pak", {{"b.txt", text("mod")}, {"m.txt", text("mod pak0")}});
+  put_pak(mod / "misc.pak", {{"m.txt", text("misc.pak")}, {"qwprogs.dat", text("misc progs")}});
   put(mod / "progs.dat", text("mod progs"));
   return root;
 }
@@ -118,9 +119,12 @@ TEST(each_name_is_won_by_the_last_source_mounted) {
   CHECK(contents(sp, "g/h.txt") == "a.pk3dir deep");
   CHECK(contents(sp, "f.txt") == "b.pk3");
   CHECK(contents(sp, "progs.dat") == "mod progs");
+  CHECK(contents(sp, "m.txt") == "misc.pak");  // an unnumbered pack after the numbered ones
+  CHECK(contents(sp, "qwprogs.dat") == "misc progs");
   CHECK(contents(sp, "missing.txt") == "<none>");
   // The archives themselves and the pk3dir's own files are not loose files.
   CHECK(vfs::find(sp, "pak0.pak") == nullptr);
+  CHECK(vfs::find(sp, "misc.pak") == nullptr);
   CHECK(vfs::find(sp, "a.pk3dir/d.txt") == nullptr);
 }
 

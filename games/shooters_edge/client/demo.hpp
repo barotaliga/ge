@@ -152,6 +152,16 @@ struct DemoVoice {
   std::vector<uint8_t> data;  // the frames: each a u16 length and its bytes
 };
 
+// A temporary entity the frame sent: a hit, a spike, an explosion, a beam, a splash, blood.
+enum class DemoEffectKind : uint8_t { spike, gunshot, explosion, beam, lava, teleport, blood };
+struct DemoEffect {
+  DemoEffectKind kind = DemoEffectKind::gunshot;
+  int code = 0;       // the message's kind byte
+  int count = 1;      // a gunshot's pellets, blood's drops (the multiplayer protocol's); else 1
+  int entity = 0;     // a beam's owner
+  sh::Vec3f at, end;  // units; a beam's start and end (`end` is `at` for the rest)
+};
+
 struct DemoState {
   DemoFormat format = DemoFormat::single;
   bool voice_format = false;                // a `.qwdv` or `.mvdv` (the voice header)
@@ -162,6 +172,7 @@ struct DemoState {
   sh::Vec3f eye;                            // the view's eye, units
   sh::Vec3f angles;                         // the view's angles, degrees
   int view_entity = 1;                      // single: the entity the eye rides
+  int max_clients = 1;                      // single: the players, entities 1 to this
   int player = 0;                           // the recording (client) or tracked (multiview) slot
   float view_height = 22;                   // over the origin, units
   bool intermission = false;                // the level ended: the eye is the intermission's
@@ -181,6 +192,7 @@ struct DemoState {
   std::vector<std::pair<int, int>> stopped;  // (entity, channel) stopped
   std::vector<DemoVoice> voice;              // voice messages, in order
   std::vector<DemoPrint> prints;             // lines printed (a multiview: the tracked one's)
+  std::vector<DemoEffect> effects;           // temporary entities, in order
   std::string centre;  // a centre message or the finale's text (the last); empty when none
   int64_t frames = 0;  // frames read
 };

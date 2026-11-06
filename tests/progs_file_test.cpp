@@ -151,6 +151,16 @@ TEST(every_record_is_checked) {
   put(b, fn + size_t{36} * 7 + 24, 9);
   refused(b, {"functions[7].num_parms = 9"}, "nine parameters");
   b = good;
+  put(b, fn + size_t{36} * 7 + 24, -1);
+  refused(b, {"functions[7].num_parms = -1", "-1..8 for a builtin"}, "a body declared variadic");
+  b = good;
+  put(b, fn + size_t{36} * 1 + 24, -1);  // a builtin taking any number of arguments
+  {
+    Progs any;
+    std::string why;
+    CHECK_MSG(load_progs(b.data(), b.size(), any, why), why);
+  }
+  b = good;
   b[fn + size_t{36} * 7 + 28] = 2;
   refused(b, {"functions[7].parm_size[0] = 2", "not 1 or 3"}, "a two-word parameter");
   b = good;

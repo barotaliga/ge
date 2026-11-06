@@ -5,8 +5,9 @@
 //
 // A GAME DIRECTORY (`add_game`: `<root>/<game>`) mounts, lowest first:
 // 1. its packs `pak<n>.pak` in number order (pak0, pak1, ... pak10);
-// 2. its zips `*.pk3` and unpacked zips `*.pk3dir` (a directory standing in for one while a mod is
-//    worked on, its files named from inside it), together in name order;
+// 2. its other packs `*.pak` (a mod's `misc.pak`), its zips `*.pk3` and unpacked zips `*.pk3dir` (a
+//    directory standing in for one while a mod is worked on, its files named from inside it),
+//    together in name order;
 // 3. its loose files, every file under the directory but those archives and what is inside a
 //    `.pk3dir`, which win over all of them.
 // Names (directory entries, archive entries, the files' own) are compared as the archives' systems

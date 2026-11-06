@@ -86,8 +86,8 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   sources of a model, run headless by `ge asset` (docs/goals.md M8g), whose output (a .glb)
   is committed and loaded by the engine in C++; they never run in a game, CI never needs
   Blender, and no other scripting enters the tree. The one runtime exception is
-  Shooter's Edge's QC VM (`plugins/progs`, `docs/shooters-edge.md`), which executes existing mods'
-  bytecode for compatibility; the tree's own QC is limited to that game's baseline mod and its test mod. Nothing about the reference sources'
+  Shooter's Edge's QC VM and compiled-module VM (`plugins/progs`, `docs/shooters-edge.md`), which
+  execute existing mods' bytecode (a `.dat` or a `.qvm`) for compatibility; the tree's own QC is limited to that game's baseline mod and its test mod. Nothing about the reference sources'
   architecture (their layers, module split, file layout, state shape, names or data
   formats) is assumed to carry over: each design decision is made here, for this engine,
   and recorded in `docs/architecture.md`. Where a carried-over module keeps a behaviour (a
@@ -325,7 +325,7 @@ characters.
 | `plugins/morph/` | Classic vertex-animated models and sprites (`ge::morph`): skins, the seam split, every frame a morph target, refused when damaged; fixture writers; smooth normals and optional rounding | `morph` |
 | `plugins/rooms/` | The engine's own level format (`ge::rooms`, `docs/levels.md`): rooms, openings and solids in a few bytes, the .gelv bytes and text form, rooms grown from seeds | `rooms` |
 | `plugins/shooter/` | The first-person shooter's simulation (`ge::shooter`): the classic player move in floats, clip hulls and their trace, hulls from brushes, the recorded scenarios | `shooter` |
-| `plugins/progs/` | The QC VM and compiler (`ge::progs`): the progs loader and checker, the interpreter, strings, the builtin table and extensions, the profiler, the assembler, the QC compiler, the `qc` tool | `progs` |
+| `plugins/progs/` | The QC VM and compiler (`ge::progs`): the progs loader and checker, the interpreter, strings, builtins and extensions, the profiler, the assembler, the QC compiler, the `qc` tool, the compiled-module VM | `progs` |
 | `games/fall_line/sim/` | Fall Line's own simulation (`fall_line_sim`): the state, the step, the course, the free ride and lifts, the bot and the field, the headless run, the hunt, the play contract | `sim` |
 | `games/fall_line/cfg/` | Fall Line's cvars (`fall_line_cfg`): every setting a cfg may change, bound to the Settings its app reads | `console` |
 | `games/fall_line/sound/` | Fall Line's sound (`fall_line_sound`, no GPU): the bank, the route, the listener, the mix | `audio`, `sim` |

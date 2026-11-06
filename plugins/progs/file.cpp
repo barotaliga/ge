@@ -156,9 +156,10 @@ bool check(Check& ck, const Progs& p, const LoadOptions& o) {
     if (!name_ok(ck, p, "functions", i, f.name, "name") ||
         !name_ok(ck, p, "functions", i, f.file, "file"))
       return false;
-    if (f.num_parms < 0 || f.num_parms > kMaxParms)
+    // A builtin taking any number of arguments (a print) is declared with -1 by some compilers.
+    if (f.num_parms < (f.first_statement < 0 ? -1 : 0) || f.num_parms > kMaxParms)
       return ck.refuse(at("functions", i, "num_parms") + " = " + std::to_string(f.num_parms) +
-                       " is outside 0..8");
+                       " is outside 0..8 (-1..8 for a builtin)");
     if (f.first_statement < 0) continue;  // a builtin: its globals are never touched
     if (f.first_statement >= static_cast<int32_t>(p.statements.size()))
       return ck.refuse(at("functions", i, "first_statement") + " = " +

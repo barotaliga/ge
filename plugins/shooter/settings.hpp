@@ -18,7 +18,9 @@
 // WHAT A CLIENT IS TOLD: a client predicts its own move with the server's numbers. The `sv_` move
 // settings travel in the connection's own data; the `pm_` switches (`Setting::info`) only in the
 // server info, so those that differ from the defaults are written there (`changed_info`):
-// `pm_ktjump 0` on a server that turned the jump fix off. At the defaults nothing is added.
+// `pm_ktjump 0` on a server that turned the jump fix off. At the defaults nothing is added but
+// `pm_speedjump`, which is always told: a client helps the easy jump along itself only on a
+// server that says nothing of it (speedjump_assist.hpp), so ours must always say.
 //
 // ge:summary The shooter's server settings by name: the move's and the loop's, ranges, server info
 // ge:keywords server-settings sv_mintic sv_maxtic sv_maxvelocity sv_speedcheck sv_minpitch
@@ -49,6 +51,7 @@ struct Setting {
   bool info;         // told to clients in the server info when not at its default
   double (*get)(const ServerSettings& set);
   void (*put)(ServerSettings& set, double value);
+  bool always_info = false;  // told in the server info at every value (`pm_speedjump`)
 };
 
 // Every setting, the loop's first, in the order a game registers them.

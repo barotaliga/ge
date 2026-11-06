@@ -172,9 +172,9 @@ bool server_info(Demo& d, DemoMsg& m, std::string& error) {
             "; next: only protocol 15 is read (re-record the demo with a client that writes it)";
     return false;
   }
-  m.u8();   // the most clients
-  m.u8();   // the game type
-  m.str();  // the level's title
+  s.max_clients = m.u8();  // the most clients: the players' entities
+  m.u8();                  // the game type
+  m.str();                 // the level's title
   s.models.assign(1, "");
   for (std::string name = m.str(); !name.empty() && !m.bad; name = m.str())
     s.models.push_back(name);
@@ -208,33 +208,52 @@ void sound(DemoState& s, DemoMsg& m) {
   if (!m.bad) s.started.push_back(e);
 }
 
-bool temp_entity(DemoMsg& m, std::string& error) {
-  const int kind = m.u8();
-  switch (kind) {
-    case 0:
+bool temp_entity(DemoMsg& m, DemoState& s, std::string& error) {
+  DemoEffect e;
+  e.code = m.u8();
+  const auto point = [&] {
+    const float x = coord(m), y = coord(m);
+    return sh::Vec3f{x, y, coord(m)};
+  };
+  switch (e.code) {
+    case 0:  // the spikes
     case 1:
-    case 2:
-    case 3:
-    case 4:
     case 7:
     case 8:
+      e.kind = DemoEffectKind::spike;
+      e.count = e.code == 1 ? 2 : 1;
+      break;
+    case 2:
+      e.kind = DemoEffectKind::gunshot;
+      break;
+    case 3:  // the explosions (12: one in a colour range)
+    case 4:
+    case 12:
+      e.kind = DemoEffectKind::explosion;
+      break;
     case 10:
+      e.kind = DemoEffectKind::lava;
+      break;
     case 11:
-      m.skip(6);  // a point
-      return true;
-    case 5:
+      e.kind = DemoEffectKind::teleport;
+      break;
+    case 5:  // the beams: an entity and two points
     case 6:
     case 9:
     case 13:
-      m.skip(2 + 12);  // an entity and two points
-      return true;
-    case 12:
-      m.skip(6 + 2);  // a point and a colour range
-      return true;
+      e.kind = DemoEffectKind::beam;
+      e.entity = m.i16();
+      break;
     default:
-      error = "a temporary entity of kind " + std::to_string(kind) + " is not one the protocol has";
+      error =
+          "a temporary entity of kind " + std::to_string(e.code) + " is not one the protocol has";
       return false;
   }
+  e.at = point();
+  e.end = e.kind == DemoEffectKind::beam ? point() : e.at;
+  if (e.code == 12) m.skip(2);  // its colour range
+  if (!m.bad) s.effects.push_back(e);
+  return true;
 }
 
 }  // namespace
@@ -333,7 +352,7 @@ bool read_single_messages(Demo& d, DemoMsg& m, std::string& error) {
           break;
         }
         case kTempEntity:
-          ok = temp_entity(m, error);
+          ok = temp_entity(m, d.state, error);
           break;
         case kSetPause:
         case kSignonNum:

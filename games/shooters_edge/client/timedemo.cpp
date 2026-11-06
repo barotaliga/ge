@@ -302,11 +302,17 @@ void DemoTimeline::frame(const DemoState& s, bool new_level) {
 }
 
 TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
+  std::vector<DemoEffect> effects;  // every frame read's, the ones not drawn too
   for (;;) {
     const DemoRead r = next_frame(t.demo, error);
     if (r == DemoRead::error) return TimedemoStep::error;
     if (r == DemoRead::end) return TimedemoStep::end;
-    const DemoState& s = t.demo.state;
+    DemoState& s = t.demo.state;
+    if (!effects.empty()) {
+      effects.insert(effects.end(), s.effects.begin(), s.effects.end());
+      s.effects.swap(effects);
+      effects.clear();
+    }
     if (t.hear) {  // the frame's own sounds and lines, kept for the next draw
       DemoHeard& h = t.heard;
       h.started.insert(h.started.end(), s.started.begin(), s.started.end());
@@ -315,7 +321,10 @@ TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
       h.prints.insert(h.prints.end(), s.prints.begin(), s.prints.end());
       if (!s.centre.empty()) h.centre = s.centre;
     }
-    if (s.map.empty()) continue;  // the signon before the level's map is named: nothing to draw
+    if (s.map.empty()) {  // the signon before the level's map is named: nothing to draw
+      effects.swap(s.effects);
+      continue;
+    }
     if (s.levels != t.levels) {
       t.levels = s.levels;
       t.skip = kSkipAfterLevel;
@@ -339,17 +348,25 @@ TimedemoStep playdemo_step(Timedemo& t, double wall_dt_s, double speed, std::str
   // second, so the run slows over the stall rather than skipping what it would have shown.
   t.clock += std::min(wall_dt_s, kMostPlayStep) * std::clamp(speed, 0.0, 20.0);
   TimedemoStep out = TimedemoStep::frame;
+  // The frames' temporary entities, every one read this draw (none when none was read: the last
+  // draw's are not thrown again).
+  std::vector<DemoEffect> effects;
   // The next demo frame is read once the clock reaches the time it will carry; its time is known
   // only after reading it, so the run reads while the last frame read is behind the clock.
   while (t.demo.state.time < t.clock) {
     const TimedemoStep s = timedemo_step(t, error);
-    if (s == TimedemoStep::end || s == TimedemoStep::error) return s;
+    effects.insert(effects.end(), t.demo.state.effects.begin(), t.demo.state.effects.end());
+    if (s == TimedemoStep::end || s == TimedemoStep::error) {
+      out = s;
+      break;
+    }
     if (s == TimedemoStep::new_level) {  // a level's clock starts over: the run's with it
       t.clock = t.demo.state.time;
       out = s;
       break;
     }
   }
+  t.demo.state.effects = std::move(effects);
   return out;
 }
 
@@ -374,7 +391,8 @@ TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error) {
   }
   t.clock = t.demo.state.time;
   t.skip = 0;
-  t.heard.clear();  // what the seek read past is not played
+  t.heard.clear();               // what the seek read past is not played
+  t.demo.state.effects.clear();  // nor thrown
   if (out == TimedemoStep::end) return out;
   return t.levels != level_before || t.demo.state.map != map_before ? TimedemoStep::new_level
                                                                     : TimedemoStep::frame;
