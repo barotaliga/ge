@@ -319,6 +319,7 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   std::vector<std::pair<int, int>> stopped;
   std::vector<client::DemoVoice> voice;
   std::vector<client::DemoPrint> prints;
+  std::vector<client::DemoEffect> effects;
   std::string centre;
   for (;;) {
     const client::DemoRead got = client::next_frame(d, error);
@@ -344,12 +345,14 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     stopped.insert(stopped.end(), st.stopped.begin(), st.stopped.end());
     voice.insert(voice.end(), st.voice.begin(), st.voice.end());
     prints.insert(prints.end(), st.prints.begin(), st.prints.end());
+    effects.insert(effects.end(), st.effects.begin(), st.effects.end());
     if (!st.centre.empty()) centre = st.centre;
   }
   d.state.started = std::move(started);
   d.state.stopped = std::move(stopped);
   d.state.voice = std::move(voice);
   d.state.prints = std::move(prints);
+  d.state.effects = std::move(effects);
   d.state.centre = std::move(centre);
   if (d.ended) {
     r.why = "the server disconnected";
