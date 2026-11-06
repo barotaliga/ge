@@ -83,8 +83,8 @@ TEST(a_layer_covers_the_share_its_cover_asks) {
 
 TEST(a_warped_layer_twists_its_cells_and_keeps_its_cover) {
   // The warp moves the cells' outlines (the columns differ), keeps the sky's share near the
-  // cover, never leaves the tile's wrap (the drift across a whole tile lands on the same column)
-  // and is in the rows for the shader.
+  // cover, keeps the drift's wrap seamless at kWarpTiles tiles
+  // and is in the rows for the shader; it never repeats tile by tile.
   for (double cover : {0.2, 0.4}) {
     gr::CloudLayer l = heap(cover);
     l.warp = 1.2;
@@ -96,9 +96,18 @@ TEST(a_warped_layer_twists_its_cells_and_keeps_its_cover) {
         ++differ;
     }
     CHECK(differ > 20);
-    gr::CloudLayer moved = l;
-    moved.drift_m = l.cell_m * gr::kCloudTileCells;
-    CHECK(std::fabs(gr::cloud_column(moved, 300, 700) - gr::cloud_column(l, 300, 700)) < 1e-9);
+    // A whole tile on, the warped cells are not the same ones again (the sky shows no repeat);
+    // kWarpTiles tiles on they are, so the drift's wrap is seamless.
+    const double tile = l.cell_m * gr::kCloudTileCells;
+    int again = 0;
+    for (int k = 0; k < 200; ++k) {
+      const double x = 173.0 * k, z = 61.0 * k;
+      if (std::fabs(gr::cloud_column(l, x, z) - gr::cloud_column(l, x + tile, z)) < 0.02) ++again;
+      gr::CloudLayer moved = l;
+      moved.drift_m = tile * gr::kWarpTiles;
+      CHECK(std::fabs(gr::cloud_column(moved, x, z) - gr::cloud_column(l, x, z)) < 1e-9);
+    }
+    CHECK(again < 160);
   }
   gr::Clouds c;
   c.count = 1;

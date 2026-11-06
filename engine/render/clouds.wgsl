@@ -131,7 +131,7 @@ fn cloud_density(l: CloudRows, p: vec3f, detail: bool) -> f32 {
     return 0.0;
   }
   let uvw = cloud_uvw(l, p.xz);
-  let n = textureSampleLevel(cloud_noise, linear_repeat, uvw, 0.0).r;
+  let n = cloud_column_noise(l, uvw);
   let c = cloud_column_of(l, uvw, n);
   // AN ANVIL (form.x): near the slab's top the same noise cut far lower, so the tower's top
   // spreads out flat to several times its width, thinning toward its rim; its base hangs in
