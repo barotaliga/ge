@@ -110,9 +110,19 @@ extension behind a feature tier, never a second graphics API.
 macOS (arm64): `cmake/Dawn.cmake` pins one release tag and each archive's SHA-256, and
 downloads it into `.cache/deps/` at configure time (the archive also carries `tint`, which
 `make shaders-check` runs). The prebuilt library is a Release build, so an MSVC Debug build
-refuses `GE_GPU=ON`. iOS, iPadOS and Android (and Linux arm64) will build Dawn from source with
-its CMake build, cached in CI (M11). Until then those rows build with `GE_GPU=OFF`, which
-builds and tests everything except `engine/gpu`, `engine/render` and the app.
+refuses `GE_GPU=ON`. The same release carries the MOBILE archives (M11a): an Apple
+xcframework (a static library for iOS and iPadOS devices, one for the iOS Simulator, one for
+the Mac), Android's static libraries (one an ABI) and a headers archive. Their CMake package
+was written by the Android build, with that machine's paths, so `cmake/Dawn.cmake` declares
+`dawn::webgpu_dawn` itself over the target's slice and the system libraries it needs (Metal,
+QuartzCore, IOSurface, UIKit; Android's log). Only Linux arm64 has no archive; it will build Dawn
+from source, and until then builds with `GE_GPU=OFF`, which builds and tests everything except
+`engine/gpu`, `engine/render` and the app.
+
+**The iOS Simulator draws no shadowed frame.** Dawn's Metal backend turns comparison samplers
+off there (the simulator's Metal has none), and every shadow lookup samples with one, so the
+device is lost at the first frame. A device has them. The simulator proves the build, the
+bundle and the start; the picture is a device's (M11b).
 
 **The C++ surface.** `engine/gpu` calls Dawn's `webgpu_cpp.h` (`wgpu::Device`,
 `wgpu::Buffer`, …), whose handles are reference-counted RAII already. The engine adds
@@ -2707,7 +2717,7 @@ Each library is added in the milestone that first needs it, pinned to a tag.
 
 | Library | Licence | For | Milestone |
 | --- | --- | --- | --- |
-| Dawn | BSD-3-Clause | The GPU API on every target (prebuilt on the desktop, from source for iOS, iPadOS and Android); Tint for `make shaders-check` | M6 |
+| Dawn | BSD-3-Clause | The GPU API on every target (the pinned release's prebuilt archives: the desktop's, and the mobile ones for iOS, iPadOS and Android); Tint for `make shaders-check` | M6 |
 | SDL3 | zlib | The window and the surface (already the platform layer) | M6 |
 | cgltf | MIT | Loading authored glTF models (`cmake/Cgltf.cmake`: one header, pinned by commit and SHA-256) | M8e1 |
 | Dear ImGui | MIT | The developer UI, behind `GE_DEV_UI` | M10 |

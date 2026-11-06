@@ -55,8 +55,31 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|amd64|i.86)$" AND NOT GE_NASM)
   message(STATUS "ge: nasm not found; libaom is built without its x86 assembly (slower encodes)")
 endif()
 
+# A cross build (iOS, the iOS Simulator, Android) hands the libraries' own configure the target it
+# builds for: the system, the SDK, the architectures, the oldest OS and the toolchain file.
+set(_ge_codec_cross "")
+set(_ge_codec_target "${CMAKE_SYSTEM_PROCESSOR}")
+if(CMAKE_CROSSCOMPILING)
+  foreach(v CMAKE_SYSTEM_NAME CMAKE_SYSTEM_PROCESSOR CMAKE_OSX_SYSROOT CMAKE_OSX_ARCHITECTURES
+            CMAKE_OSX_DEPLOYMENT_TARGET CMAKE_TOOLCHAIN_FILE ANDROID_ABI ANDROID_PLATFORM)
+    if(DEFINED ${v} AND NOT "${${v}}" STREQUAL "")
+      list(APPEND _ge_codec_cross "-D${v}=${${v}}")
+    endif()
+  endforeach()
+  if(CMAKE_OSX_ARCHITECTURES)
+    string(REPLACE ";" "+" _ge_codec_target "${CMAKE_OSX_ARCHITECTURES}")
+  endif()
+  if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
+    string(APPEND _ge_codec_target "-simulator")
+  endif()
+  # libaom's CPU detection reads /proc or the host: on a phone the NEON code is always there.
+  if(CMAKE_OSX_ARCHITECTURES STREQUAL "arm64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+    set(_ge_codec_cpu "arm64")
+  endif()
+endif()
+
 # One built copy per version, platform, compiler and CPU choice.
-string(TOLOWER "${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}-${CMAKE_C_COMPILER_ID}" _ge_codec_tag)
+string(TOLOWER "${CMAKE_SYSTEM_NAME}-${_ge_codec_target}-${CMAKE_C_COMPILER_ID}" _ge_codec_tag)
 if(_ge_codec_cpu)
   string(APPEND _ge_codec_tag "-${_ge_codec_cpu}")
 endif()
@@ -94,7 +117,7 @@ function(ge_codec_build name version sha url)
       "-DCMAKE_INSTALL_PREFIX=${prefix}" -DCMAKE_INSTALL_LIBDIR=lib
       -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DBUILD_SHARED_LIBS=OFF
       -DCMAKE_POLICY_DEFAULT_CMP0091=NEW -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL
-      ${ARGN}
+      ${_ge_codec_cross} ${ARGN}
     RESULT_VARIABLE result OUTPUT_VARIABLE log ERROR_VARIABLE log)
   if(result EQUAL 0)
     execute_process(COMMAND "${CMAKE_COMMAND}" --build "${build}" --config Release --parallel
@@ -136,9 +159,11 @@ ge_codec_build(opus ${GE_OPUS_VERSION} ${GE_OPUS_SHA256}
   -DOPUS_INSTALL_PKG_CONFIG_MODULE=OFF -DOPUS_INSTALL_CMAKE_CONFIG_MODULE=OFF)
 
 # The imported targets. libaom's static library needs the threads and, off Windows, libm.
-find_library(GE_AOM_LIBRARY NAMES aom libaom PATHS "${GE_AOM_PREFIX}/lib" NO_DEFAULT_PATH REQUIRED)
+# (NO_CMAKE_FIND_ROOT_PATH: a cross build looks under its SDK otherwise, and these are ours.)
+find_library(GE_AOM_LIBRARY NAMES aom libaom PATHS "${GE_AOM_PREFIX}/lib" NO_DEFAULT_PATH
+  NO_CMAKE_FIND_ROOT_PATH REQUIRED)
 find_library(GE_OPUS_LIBRARY NAMES opus libopus PATHS "${GE_OPUS_PREFIX}/lib" NO_DEFAULT_PATH
-  REQUIRED)
+  NO_CMAKE_FIND_ROOT_PATH REQUIRED)
 add_library(ge::aom STATIC IMPORTED GLOBAL)
 set_target_properties(ge::aom PROPERTIES IMPORTED_LOCATION "${GE_AOM_LIBRARY}")
 target_include_directories(ge::aom SYSTEM INTERFACE "${GE_AOM_PREFIX}/include")

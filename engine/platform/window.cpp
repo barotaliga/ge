@@ -8,6 +8,9 @@
 #include "platform/window.hpp"
 
 #include <SDL3/SDL.h>
+// SDL_RunApp alone: this file defines no main (SDL_MAIN_HANDLED keeps SDL's own out of it).
+#define SDL_MAIN_HANDLED
+#include <SDL3/SDL_main.h>
 
 #include "platform/devices_sdl.hpp"
 
@@ -32,6 +35,10 @@ struct Window::Impl {
   SDL_MetalView metal_view = nullptr;
   FolderPick pick;
 };
+
+int run_app(int argc, char** argv, int (*body)(int argc, char** argv)) {
+  return SDL_RunApp(argc, argv, body, nullptr);
+}
 
 bool display_available() {
   if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) return false;
