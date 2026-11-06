@@ -222,6 +222,8 @@ void Console::dispatch(Entry& e) {
       const std::string why = set_result_text(r, c->name);
       if (!why.empty()) error(why, "");
     }
+  } else if (unknown_ && unknown_(args)) {
+    // the host's own command
   } else {
     const std::string near = suggest(name);
     error("unknown command '" + name + "'",
