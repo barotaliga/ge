@@ -414,6 +414,30 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
   const float along_v = dot(s.velocity, dir);
   const float cosv = speed > 1 ? along_v / speed : 0;
   const float run_up = p.g->set.run_up;
+  if (v <= 0) {
+    // A standing jump (proven with no run-up: up a stair's tread): to S, then facing T, forward
+    // held to the full and the jump pressed, as the proof flew it.
+    target = S;
+    p.mode = PilotMode::jump;
+    const float d = across(s.origin, S);
+    if (d > p.set.arrive && along < 0) {
+      w.yaw = unwrap(yaw_at(s.origin, S), p.yaw);
+      w.forward = d > 2 * p.set.look ? 1 : d / (2 * p.set.look);
+      because = "to the foot of a standing jump";
+      return false;
+    }
+    const float up = heading(dir.x, dir.y);
+    w.yaw = unwrap(up, p.yaw);
+    w.forward = 1;
+    const float off = wrap(p.yaw - up);
+    if (s.onground && !p.jump_pressed && off < kFacing && off > -kFacing) {
+      w.jump = true;
+      because = "a standing jump up";
+      return true;
+    }
+    because = "turning to a standing jump";
+    return false;
+  }
   // The run-up point: as far back as the graph found room to run up.
   const Vec3f P = S - dir * run_up;
   if (p.mode != PilotMode::run_up && p.mode != PilotMode::jump) p.mode = PilotMode::jump;

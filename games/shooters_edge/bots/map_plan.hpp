@@ -57,12 +57,12 @@ struct PlanArea {
   double worth = 0;            // a minute
   int32_t ways_in = 0;
   std::vector<int32_t> entries;  // each way in's outer node (the first link's start found for it)
-  float height = 0;             // over the map's median floor, units
-  double from_spawns_s = 0;     // the mean quickest run from a spawn point
-  double hold = 0;              // the base's measure
-  bool power = false;           // holds the quad or the shield
-  bool reached = true;          // a way leads there from at least half the spawn points
-  std::vector<uint8_t> region;  // by node: 1 inside
+  float height = 0;              // over the map's median floor, units
+  double from_spawns_s = 0;      // the mean quickest run from a spawn point
+  double hold = 0;               // the base's measure
+  bool power = false;            // holds the quad or the shield
+  bool reached = true;           // a way leads there from at least half the spawn points
+  std::vector<uint8_t> region;   // by node: 1 inside
 };
 
 struct MapPlan {

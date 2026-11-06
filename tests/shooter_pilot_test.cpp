@@ -67,14 +67,19 @@ TEST(the_pit_is_crossed_by_a_jump_and_the_crate_climbed_by_one) {
 TEST(human_hands_arrive_too) {
   const pr::Course& c = course();
   int arrived = 0, runs = 0;
+  std::string missed;
   for (const pr::CourseRoute& r : pr::course_routes(c)) {
     for (uint32_t seed = 1; seed <= 3; seed++) {
       runs++;
-      if (pr::run_course(c, r.from, r.to, sh::PilotHands::human, seed).arrived) arrived++;
+      if (pr::run_course(c, r.from, r.to, sh::PilotHands::human, seed).arrived)
+        arrived++;
+      else
+        missed += std::string(" ") + r.name + " seed " + std::to_string(seed) + ";";
     }
   }
   CHECK_MSG(arrived == runs, "human hands arrived on " + std::to_string(arrived) + " of " +
-                                 std::to_string(runs) + " runs");
+                                 std::to_string(runs) + " runs; missed:" + missed +
+                                 " (the se-pilot lab draws each run)");
 }
 
 TEST(a_run_replays_to_the_bit_and_matches_its_golden) {

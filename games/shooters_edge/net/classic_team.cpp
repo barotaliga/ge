@@ -457,6 +457,11 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].dodging = fi.stats.dodging;
     r.players[k].dodge_turns = fi.stats.dodge_turns;
     r.players[k].watching = fi.stats.watching;
+    r.players[k].speed_sum = fi.stats.speed_sum;
+    for (int m = 0; m <= sh::kPilotModes; m++) {
+      r.players[k].mode_speed[m] = fi.stats.mode_speed[m];
+      r.players[k].mode_n[m] = fi.stats.mode_n[m];
+    }
     if (seats[k].mirror) {
       r.players[k].mirrored = seats[k].mirror->updates;
       r.players[k].predicted = seats[k].mirror->predicted;

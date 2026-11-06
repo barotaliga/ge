@@ -77,8 +77,10 @@ constexpr double kMegaHealBonus = 10;  // the mega's worth to a healer over the 
 constexpr double kSwimExit_s = 3;      // a climb out of the water kept this long at most
 constexpr double kHeardTurn_s = 3;     // a sound this lately turns a standing player's view to it
 constexpr double kWatchAgain_s = 0.5;  // the spots watched are worked out at most this often
-constexpr double kBaseHeal = 1.4;      // health in the team's base is worth this more to a healer
-constexpr float kBlastClear = 140;     // a rocket or grenade is held with a mate this near its aim
+constexpr double kLanding_s = 2;  // out of the water, its exit node walked onto this long at most
+constexpr double kLandingNear = 12;  // and until this near it, units
+constexpr double kBaseHeal = 1.4;    // health in the team's base is worth this more to a healer
+constexpr float kBlastClear = 140;   // a rocket or grenade is held with a mate this near its aim
 
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
 
@@ -531,8 +533,14 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     // Where it stands reaches only a small share of the map (a pool or a pit the links prove no
     // swim or climb out of): it heads for the nearest node outside what it can reach, swimming up
     // as well as across.
-    const bool pool =
-        !was_diving && f.reach_at >= 0 && static_cast<size_t>(f.reach_n) * 4 < g.nodes.size();
+    // A pocket it came into for an item still there (the launcher's room a dive leads into) is no
+    // pit: it is left once the item is taken, or another goal outside it wins.
+    const bool wanted_here = f.goal_item >= 0 &&
+                             f.items[static_cast<size_t>(f.goal_item)].present &&
+                             f.items[static_cast<size_t>(f.goal_item)].node >= 0 &&
+                             f.reach.reached(f.items[static_cast<size_t>(f.goal_item)].node);
+    const bool pool = !was_diving && !wanted_here && f.reach_at >= 0 &&
+                      static_cast<size_t>(f.reach_n) * 4 < g.nodes.size();
     const bool swim = self.waterlevel >= 2;
     sh::Vec3f way;
     f.swimming = !was_diving && f.swim && (self.waterlevel >= 1 || pool) &&
@@ -920,6 +928,17 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     f.next_think = 0;
   }
   f.was_dead = dead;
+  if (!dead) {
+    const sh::Vec3f v = s.world.entities[static_cast<size_t>(me)].velocity;
+    const double across =
+        std::sqrt(static_cast<double>(v.x) * v.x + static_cast<double>(v.y) * v.y);
+    // An aimed command is counted apart (as the pilot's `kPilotModes`th mode: under the aim).
+    const auto pm = f.bot.aiming ? static_cast<size_t>(sh::kPilotModes)
+                                 : static_cast<size_t>(f.bot.pilot.pilot.mode);
+    f.stats.speed_sum += across;
+    f.stats.mode_speed[pm] += across;
+    f.stats.mode_n[pm]++;
+  }
 
   // A goal held too long without getting it (a lift held up top, a way that keeps failing) is
   // let go of for a while: whatever it is worth, nothing else would be had meanwhile.
@@ -1058,7 +1077,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
 
   // In a fight, the side key across the line to him (the view is on him, so the side is across):
   // the dodge (shooter/dodge.hpp), not on a jump the route proved, a lift, a door, or in water.
-  if (!dead && f.bot.aiming && !f.unlocking && f.lost_to < 0 &&
+  if (!dead && f.bot.aiming && !f.unlocking && f.lost_to < 0 && f.escort.leader < 0 &&
       (f.mode == FightMode::fight || f.mode == FightMode::retreat) &&
       s.world.entities[static_cast<size_t>(me)].waterlevel < 2) {
     const sh::PilotMode pm = f.bot.pilot.pilot.mode;
@@ -1117,6 +1136,8 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     if (f.swim_exit >= 0 && t > f.swim_exit_until) f.swim_exit = -1;
     exit_node = f.swim_exit;
     if (exit_node >= 0) {
+      f.landing = exit_node;  // once out, walked onto before the route takes over
+      f.landing_until = t + kLanding_s;
       sh::MoveState ms;
       ms.origin = me_at;
       ms.waterlevel = s.world.entities[static_cast<size_t>(me)].waterlevel;
@@ -1125,6 +1146,22 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
       cmd.angles.x = out.angles.x;
       cmd.angles.y = out.angles.y;
       cmd.buttons = static_cast<uint8_t>((cmd.buttons & ~sh::kButtonJump) | out.buttons);
+    }
+  } else if (!dead && f.landing >= 0 && t < f.landing_until &&
+             s.world.entities[static_cast<size_t>(me)].waterlevel == 0) {
+    // Just climbed out: straight onto the exit node, the edge of the water behind it, before the
+    // route from the nearest node (which may stand in the water) takes over.
+    const sh::Vec3f to = f.bot.pilot.pilot.g->nodes[static_cast<size_t>(f.landing)].origin;
+    const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
+    const double dx = to.x - me_at.x, dy = to.y - me_at.y;
+    if (dx * dx + dy * dy < kLandingNear * kLandingNear) {
+      f.landing = -1;
+    } else {
+      const double rel = ge::core::libm::atan2(dy, dx) - cmd.angles.y * (ge::core::kPi / 180.0);
+      cmd.forward = sh::quantize_axis(static_cast<float>(ge::core::libm::cos(rel) * 320));
+      cmd.side = sh::quantize_axis(static_cast<float>(-ge::core::libm::sin(rel) * 320));
+      cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
+      f.stats.landings++;
     }
   } else if (!dead && f.lost_to >= 0) {
     const sh::Vec3f to = f.bot.pilot.pilot.g->nodes[static_cast<size_t>(f.lost_to)].origin;

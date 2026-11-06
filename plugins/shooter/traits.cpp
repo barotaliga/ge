@@ -13,7 +13,7 @@ namespace ge::shooter {
 namespace {
 
 constexpr const char* kNames[kTraits] = {
-    "aim_sg",  "aim_ng",     "aim_gl", "aim_rl",  "aim_lg", "reaction", "timing",    "knowledge",
+    "aim_sg",  "aim_ng",     "aim_gl", "aim_rl",  "aim_lg", "reaction", "timing",     "knowledge",
     "camping", "discipline", "moves",  "hearing", "comms",  "teamplay", "aggression", "dodge"};
 
 uint8_t preset_of(AimSkill skill) {
