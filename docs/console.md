@@ -66,7 +66,8 @@ A game reads, in order:
 1. `default.cfg`: the game's shipped defaults and binds.
 2. `config.cfg`: what `cfg_save` last wrote.
 3. `autoexec.cfg`: the player's own file, which the game never writes.
-4. The command line's `+commands`: `+set r_bloom 0 +exec race.cfg`.
+4. The command line's commands: `+set r_bloom 0 +exec race.cfg`. A `+` starts each command and
+   the first needs none, so `coopgame 2 expert` and `set r_bloom 0 +exec race.cfg` work too.
 
 A missing file is skipped. A dedicated server reads `server.cfg` in place of the first three. A
 latched value set during startup is applied once it is over.
@@ -110,6 +111,10 @@ latched value set during startup is applied once it is over.
   command with `-` when it comes up: `bind space +jump`, or `bind v +voice_prox` to talk to the
   players near you while the key is held. Any other bind runs on the press. A game registers
   its held actions as buttons (`Console::add_button`).
+- **Only buttons take a `+`.** Every other command is typed bare, in the console and in a cfg
+  (`coopgame 2 expert`, `map e1m2`). A `+` typed on a plain command (or alias) is dropped, so
+  `+coopgame 2 expert` runs `coopgame 2 expert`, and the `-coopgame` a key bound to it sends on
+  its release runs nothing.
 
 The backquote key (under the tilde) is bound to `toggleconsole` in the game and console modes
 by default.

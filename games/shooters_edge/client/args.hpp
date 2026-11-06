@@ -1,6 +1,7 @@
 // THE WINDOW'S COMMAND LINE: the flags `shooters_edge` takes, read into `Args`. The flags are read
 // wherever they stand; a `+` word starts a console line that runs to the next flag or `+`, so
-// `+r_look modern -timedemo demo1` is a look and a benchmark. A word that reads as a flag (`-x`,
+// `+r_look modern -timedemo demo1` is a look and a benchmark, and the first line needs no `+`
+// (`coopgame 2 expert`). A word that reads as a flag (`-x`,
 // `--x`: a dash and a letter; `-1` is a word) and is not one of the flags is refused, with the
 // console line it followed named, rather than taken as one of that line's words; `-benchmark`
 // names its new name, `-timedemo`.

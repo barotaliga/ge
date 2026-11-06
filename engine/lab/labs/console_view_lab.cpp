@@ -4,8 +4,8 @@
 // line) drawn by the 2D layer (ui/console.hpp) and pictured down, down in each charset `con_font`
 // names, half-way through its slide and closed with the notify lines over the game, then
 // autocomplete: the list under the input line, a row selected, and Enter on a cvar waiting for
-// its value. Each kind of line has its colour. The metrics count the lines by kind and the
-// slide's frames.
+// its value, and a `+` typed on a plain command (dropped) beside a button's. Each kind of line has
+// its colour. The metrics count the lines by kind and the slide's frames.
 //
 // ge:summary Lab: the drop-down console pictured down, sliding and closed, lines coloured by kind
 // ge:keywords lab console view drop-down picture scrollback chat notify slide tilde
@@ -230,6 +230,47 @@ void run(ge::lab::Lab& lab) {
   if (v.input().empty() || v.input().back() != ' ') {
     lab.fail("Enter on a selected cvar did not fill in its name for a value",
              "run tests/console_view_test.cpp; skill: console");
+  }
+
+  // Only a button takes a `+`: a command typed bare, then with a `+` (dropped, so it runs the
+  // same), a button pressed, and a `+` on a name nothing knows.
+  {
+    con::Console pc;
+    con::ConsoleView pv(pc);
+    int runs = 0;
+    pc.add_command("coopgame", "coopgame [bots] [skill]: a new coop game",
+                   [&runs](con::Console& cc, const con::Args& a) {
+                     ++runs;
+                     cc.print("coop game: " + (a.size() > 1 ? a[1] : std::string("1")) +
+                              " companion bots, " + (a.size() > 2 ? a[2] : std::string("average")));
+                   });
+    con::Button& attack = pc.add_button("attack", "fire while held");
+    pc.execute("con_bgtop 22304a; con_bgbottom 0a0d14; con_bgalpha 0.88");
+    for (const char* entry : {"coopgame 2 expert", "+coopgame 1 novice", "+attack", "+nothing"}) {
+      pv.type(entry);
+      pv.key(con::EditKey::enter);
+      pc.run();
+    }
+    pc.print(std::string("attack held: ") + (attack.down() ? "yes" : "no"));
+    pc.key("`", true);
+    pc.run();
+    for (int k = 0; k < 120 && pv.drop() < 1; ++k) pv.frame(1.0 / 60);
+    Picture plus = backdrop(w, h);
+    draw(plus, pv);
+    lab.shot({"plus",
+              "ONLY A BUTTON TAKES A +",
+              "coopgame typed bare runs; typed with a + it runs the same, the + dropped since "
+              "coopgame is not a button; +attack presses the attack button; +nothing is unknown "
+              "with or without its +.",
+              "two coop game lines, attack held: yes, one unknown command '+nothing' line",
+              {{"typed", "coopgame 2 expert, +coopgame 1 novice, +attack, +nothing"}}},
+             plus);
+    lab.metric("plus.coopgame_runs", runs, "runs");
+    if (runs != 2 || !attack.down()) {
+      lab.fail("a + on a plain command did not run it, or +attack did not press the button",
+               "run tests/console_console_test.cpp (a_plus_on_a_plain_command_is_dropped); skill: "
+               "console");
+    }
   }
 
   int counts[8] = {};

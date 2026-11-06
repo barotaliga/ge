@@ -122,12 +122,9 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
                             : " (after the console line starting " + a.plus.front() + ")") +
             "; next: rerun with the usage's flags only.";
       return false;
-    } else if (!a.plus.empty() || (!arg.empty() && arg[0] == '+')) {
-      a.plus.emplace_back(arg);
     } else {
-      why = "unknown word " + std::string(arg) +
-            "; next: put it after a +command, or rerun with the usage's flags only.";
-      return false;
+      // A console line's word, or the first command, which needs no `+` (`coopgame 2 expert`).
+      a.plus.emplace_back(arg);
     }
   }
   return true;

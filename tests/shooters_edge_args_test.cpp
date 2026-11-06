@@ -1,6 +1,6 @@
 // The shooters_edge window's command line: flags read wherever they stand, a `+` console line
 // running to the next flag, an unknown flag refused with the line it followed named, -benchmark
-// naming -timedemo, and a negative number kept as a console word.
+// naming -timedemo, a negative number kept as a console word, and the first command with no `+`.
 //
 // ge:summary Tests: the window's command line, its flags anywhere and its refusals
 // ge:keywords test command-line args parse unknown-flag plus-commands timedemo
@@ -72,11 +72,12 @@ TEST(a_negative_number_is_a_console_word) {
         cl::flag_like("--size=1x1"));
 }
 
-TEST(a_bare_word_before_any_console_line_is_refused) {
+TEST(the_first_command_needs_no_plus) {
   cl::Args a;
   std::string why;
-  CHECK(!parse_words({"demo1"}, a, why));
-  CHECK(why.find("unknown word demo1") != std::string::npos);
+  CHECK(parse_words({"coopgame", "2", "expert", "-game", "id1", "+map", "e1m2"}, a, why));
+  CHECK((a.plus == std::vector<std::string>{"coopgame", "2", "expert", "+map", "e1m2"}));
+  CHECK(a.game == "id1");
 }
 
 TEST(sizes_by_name_or_width_and_height) {
