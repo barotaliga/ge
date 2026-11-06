@@ -13,7 +13,6 @@
 // ge:test tests/shooters_edge_qvm_server_test.cpp
 #include <algorithm>
 #include <cstdio>
-#include <limits>
 #include <map>
 #include <memory>
 #include <span>
@@ -42,7 +41,6 @@ namespace sim = shooters_edge::sim;
 namespace cl = shooters_edge::client;
 using ge::core::num::to_fixed;
 
-constexpr double kNan = std::numeric_limits<double>::quiet_NaN();
 using Inputs = std::vector<std::pair<std::string, std::string>>;
 
 const char* const kExportNames[sim::kQvmExports] = {
