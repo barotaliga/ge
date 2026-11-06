@@ -384,6 +384,8 @@ void run(gl::Lab& lab) {
   lab.metric("team.faults", static_cast<double>(r.faults), "count");
   lab.metric("team.place-names", static_cast<double>(r.locs), "count");
   lab.note("place names: " + std::to_string(r.locs) + " from " + r.locs_from);
+  lab.note("the map's team plan (bots/map_plan.hpp):\n" + r.plan);
+  lab.metric("team.plan-areas", r.plan_areas, "count");
   lab.metric("team.lines-read", static_cast<double>(r.lines_read), "count");
   lab.metric("team.lines-missed", static_cast<double>(r.lines_missed), "count");
   lab.metric("team.nav-nodes", static_cast<double>(r.nav_nodes), "count");

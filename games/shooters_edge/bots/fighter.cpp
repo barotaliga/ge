@@ -20,6 +20,7 @@
 #include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/ears.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
+#include "shooters_edge/bots/map_plan.hpp"
 #include "shooters_edge/bots/spam.hpp"
 #include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/bots/temper.hpp"
@@ -70,6 +71,7 @@ constexpr double kEnemyNearScale = 0.5;
 constexpr double kEnemyKnown_s = 3;  // an enemy seen or heard this lately is known of now
 constexpr double kHotSpot_s = 60;     // two danger spots this lately near an item: no healing there
 constexpr double kMegaHealBonus = 10;  // the mega's worth to a healer over the health it gives
+constexpr double kBaseHeal = 1.4;      // health in the team's base is worth this more to a healer
 constexpr float kBlastClear = 140;     // a rocket or grenade is held with a mate this near its aim
 
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
@@ -296,6 +298,10 @@ int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& s
     // takes the health near him, not the room every hurt player of both teams runs to.
     if (heal && it.kind == ItemKind::mega) v = std::fmax(0.f, 100 - st.health) + kMegaHealBonus;
     if (v <= 0) return 0.0;
+    // The team's base (the map plan's) is where a hurt player falls back to.
+    if (heal && f.plan && f.plan->base >= 0 &&
+        plan_area_of(*f.plan, it.node) == f.plan->base)
+      v *= kBaseHeal;
     if (heal) {  // where two or more of its side fell lately is not healed at at all
       int fell = 0;
       for (const auto& [where, when] : f.danger)

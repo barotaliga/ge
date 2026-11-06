@@ -7,12 +7,14 @@
 // ge:test tests/shooters_edge_team_test.cpp
 #include "shooters_edge/bots/mind.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 #include "core/prng.hpp"
 #include "shooter/senses.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
+#include "shooters_edge/bots/map_plan.hpp"
 #include "shooters_edge/bots/team.hpp"
 
 namespace shooters_edge::bots {
@@ -163,6 +165,16 @@ int32_t rocket_launcher(const Fighter& f) {
         f.items[i].node >= 0)
       return static_cast<int32_t>(i);
   return -1;
+}
+
+// How long before the quad is due its rushers go: the map plan's run from the base to the quad's
+// area and its lead, else kRushAhead_s; never under kRushAhead_s / 2 nor over twice it.
+double rush_ahead_s(const Fighter& f, int32_t q) {
+  if (!f.plan) return kRushAhead_s;
+  for (size_t r = 0; r < f.plan->rushes.size(); r++)
+    for (const int32_t i : f.plan->areas[static_cast<size_t>(f.plan->rushes[r])].items)
+      if (i == q) return std::clamp(f.plan->rush_leave_s[r], kRushAhead_s / 2, kRushAhead_s * 2);
+  return kRushAhead_s;
 }
 
 // A way there by its links from where it stands (not known until its reach is worked out).
@@ -513,6 +525,16 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
   // mega health: holding the mega draws both teams' hurt players into one room), the mega's only
   // when no armour is reachable.
   int32_t ra = best_armour(f);
+  if (!reachable(f, ra) && f.plan && f.plan->base >= 0) {
+    // The map's own plan (map_plan.hpp): its base's best item a way leads to.
+    ra = -1;
+    double worth = 0;
+    for (const int32_t i : f.plan->areas[static_cast<size_t>(f.plan->base)].items)
+      if (reachable(f, i) && plan_worth(f.items[static_cast<size_t>(i)]) > worth) {
+        worth = plan_worth(f.items[static_cast<size_t>(i)]);
+        ra = i;
+      }
+  }
   if (!reachable(f, ra)) {
     ra = -1;
     for (const ItemKind k : {ItemKind::armor3, ItemKind::armor2, ItemKind::armor1})
@@ -570,7 +592,7 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
   if (quad_mine) {
     r = Role::carry;
   } else if (q >= 0 && f.teamwork != MapSense::novice && reachable(f, q) &&
-             due_of(f, q, t) - t <= kRushAhead_s) {
+             due_of(f, q, t) - t <= rush_ahead_s(f, q)) {
     // Among the two of its team it believes nearest the quad (those going for it counted).
     const float mine = dist(at, f.items[static_cast<size_t>(q)].at);
     int ahead = 0;

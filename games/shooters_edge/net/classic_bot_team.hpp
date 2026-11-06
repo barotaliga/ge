@@ -127,6 +127,7 @@ struct BotTeam {
   std::unique_ptr<server::RulesRunner> local;  // the map spawned locally, for its nav
   std::unique_ptr<TeamNav> nav;
   bool movers_named = false;
+  bool plan_said = false;  // the map plan's lines in the log
   int maps = 0;  // maps loaded
 
   int64_t now_us = 0, ticks = 0;

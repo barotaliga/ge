@@ -47,6 +47,11 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const server::RulesCommon& 
     }
   }
   f.locs = &tn.locs;
+  if (!tn.plan_made) {
+    tn.plan = bt::make_map_plan(graph, f.items, f.spawns, &tn.locs);
+    tn.plan_made = true;
+  }
+  f.plan = &tn.plan;
   if (!tn.dives_made && sw.leading > 0 && nav.main_n > 0) {
     tn.dives_made = true;
     const std::vector<bt::ItemSpot>& items = f.items;
