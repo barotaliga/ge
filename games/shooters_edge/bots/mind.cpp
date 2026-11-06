@@ -508,10 +508,19 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
   const bool quad_mine = (st.items & kItQuad) != 0;
   const float strong = fighter_strength(st);
   const int32_t q = first_of(f, ItemKind::quad);
-  // The areas worth holding: the best armour's, the launcher's and the quad's; the mega health's
-  // in place of the armour's on a map whose armour no way leads to.
+  // The areas worth holding: the best armour's, the launcher's and the quad's; on a map whose best
+  // armour no way leads to, the best armour a way does lead to (a team holds an armour, not the
+  // mega health: holding the mega draws both teams' hurt players into one room), the mega's only
+  // when no armour is reachable.
   int32_t ra = best_armour(f);
-  if (!reachable(f, ra)) ra = first_of(f, ItemKind::mega);
+  if (!reachable(f, ra)) {
+    ra = -1;
+    for (const ItemKind k : {ItemKind::armor3, ItemKind::armor2, ItemKind::armor1})
+      for (size_t i = 0; i < f.items.size() && ra < 0; i++)
+        if (f.items[i].kind == k && reachable(f, static_cast<int32_t>(i)))
+          ra = static_cast<int32_t>(i);
+    if (ra < 0) ra = first_of(f, ItemKind::mega);
+  }
   const int32_t rl = rocket_launcher(f);
 
   // The claim: at the start the nearest of the launcher, the best armour and the quad that no
