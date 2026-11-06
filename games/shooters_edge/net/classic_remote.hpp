@@ -27,13 +27,28 @@
 // players' boxes), with the move settings serverdata carried. A prediction the next frame proves
 // wrong by 4 to 64 units is not snapped but folded into a correction that decays (`Smoothing`).
 // The drawn eye and the player's own place are the prediction; `cl_nopred 1` draws the server's.
-// The other players are drawn where the last frame put them.
+//
+// THE OTHER PLAYERS are run forward from their newest record (plugins/shooter/predict.hpp's
+// `predict_other`): the record's time is its arrival less the milliseconds the server said had
+// passed since it last ran that player's command; the drawn time is the window's clock (the tick
+// clock plus the part of a tick owed) less the newest move's round trip plus 0.02 s; that
+// player's last command runs for the difference (at most 255 ms) over the level's solids. So a
+// player moves every window frame, not in the server's steps, and a player whose command came
+// late is not drawn behind the rest. `cl_predict_players 0` draws them where the last frame put
+// them; the player's own prediction then steers round those places.
+//
+// THE OTHER ENTITIES (missiles, movers, gibs) are drawn between the last two frames read, by the
+// time since the newest arrived over the time between the two (`cl_nolerp 1`: the newest frame's
+// places). An entity is drawn at the newest place when it was absent from the older frame, its
+// model changed, or it moved more than `kLerpMost` units (a teleport, a respawn). The movers the
+// prediction steers round are the newest frame's, as the server's moves were.
 //
 // ge:summary The window joined to a server: the classic client driven by the hands, drawn as a demo
 // ge:keywords remote-client connect disconnect join-server classic-client live-demo network-play
 // ge:keywords remote_connect remote_step remote_disconnect setangle tick-clock reconnect
 // ge:keywords remote_hands add_remote_commands netstatus prediction predict cl_nopred
-// ge:keywords remote_world smoothing replayed
+// ge:keywords remote_world smoothing replayed predict_other other-players cl_predict_players
+// ge:keywords interpolation lerp cl_nolerp entity-lerp draw-clock round-trip
 // ge:skill net shooter
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
@@ -53,8 +68,9 @@
 
 namespace shooters_edge::net {
 
-inline constexpr int kTickUs = 13000;  // a move's length: the server's frame
-inline constexpr int kMostTicks = 8;   // ticks a call may run; a longer stall drops the rest
+inline constexpr int kTickUs = 13000;    // a move's length: the server's frame
+inline constexpr int kMostTicks = 8;     // ticks a call may run; a longer stall drops the rest
+inline constexpr float kLerpMost = 200;  // units: an entity moved further between two frames snaps
 
 enum class RemoteStep : uint8_t {
   waiting,    // nothing new to draw yet (connecting, or no packet since the last call)
@@ -65,19 +81,25 @@ enum class RemoteStep : uint8_t {
 
 struct Remote {
   // In the order that packs it (the lint holds the padding).
-  gn::Transport* transport = nullptr;  // what it talks over (`own`, or remote_start's)
-  int64_t now_us = 0;                  // the tick clock
-  double owed_s = 0;                   // wall time not yet a tick
-  int64_t setangles = 0;               // the server's turns taken
+  gn::Transport* transport = nullptr;         // what it talks over (`own`, or remote_start's)
+  int64_t now_us = 0;                         // the tick clock
+  double owed_s = 0;                          // wall time not yet a tick
+  int64_t setangles = 0;                      // the server's turns taken
+  double frame_old_s = -1, frame_new_s = -1;  // lerp: the last two frames' times (network clock)
   const std::vector<sh::BrushModel>* world = nullptr;  // prediction: the level's models ([0] world)
   std::string server_name;                             // as asked ("host:port")
   std::string why;                                     // why it dropped
-  gn::Transport own;                                   // remote_connect's UDP socket
+  // Lerp: the last two frames' entities as read (by number), before anything drawn moved them.
+  std::vector<client::DemoEntity> ents_old, ents_new;
+  gn::Transport own;  // remote_connect's UDP socket
   ClientRecorder recording;
   client::Demo demo;  // the recording read back: what the window draws
   ClassicClientEnd end;
   int levels = 0;        // level starts drawn
   int replayed = 0;      // prediction: the moves it ran past the acknowledged one
+  int others = 0;        // other players predicted the last step
+  int others_msec = 0;   // the most milliseconds one of them was run forward the last step
+  int lerped = 0;        // entities drawn between two frames the last step
   sh::Vec3f view;        // the player's angles, degrees (sent with every move)
   sh::Vec3f prediction;  // the player's predicted origin, the correction not added
   sh::Smoothing smooth;  // the prediction's correction
@@ -87,6 +109,8 @@ struct Remote {
   ClientStage said = ClientStage::challenge;  // the stage last reported
   bool nopred = false;                        // cl_nopred: draw the server's place
   bool predicted = false;                     // the last step drew a prediction
+  bool predict_players = true;                // cl_predict_players: the other players run ahead
+  bool nolerp = false;                        // cl_nolerp: entities at the newest frame's places
 };
 
 // Joins `address` ("host", "host:port"; the classic server port when none) over a UDP socket of
@@ -115,7 +139,7 @@ void remote_hands(Remote& r, const client::Moves& m, const ge::input::InputState
                   const client::ControlSettings& c, double dt);
 
 // `connect <host>[:port]`, `disconnect`, `reconnect` (the last server again), `netstatus` and the
-// `cl_nopred` cvar; the
+// `cl_nopred`, `cl_predict_players` and `cl_nolerp` cvars; the
 // player's `name`, `topcolor` and `bottomcolor` cvars are read when a connect is made.
 void add_remote_commands(ge::console::Console& con, Remote& r);
 
