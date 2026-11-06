@@ -28,6 +28,7 @@ edges. `docs/shooters-edge.md` is the design;
 | `shooter/row.hpp/.cpp` | The classic row on the engine's mover and swimmer: `classic_rows` from the settings, `row_body`, `row_command` |
 | `shooter/row_recording.hpp/.cpp` | The row against the recordings, one command at a time and as runs (`replay_row`, `row_covers`) |
 | `labs/pmove_lab.cpp` | The `pmove` lab: every scenario's worst error, paths from above and the side |
+| `plugins/shooter/speedjump_assist.hpp` | `assisted_command`: the command a client sends for forward and jump on a server without `pm_speedjump` (the jump let go in the air, the side key and a sent yaw) |
 | `games/shooters_edge/labs/gpu_se_speedjump_lab.cpp` | The `se-speedjump` lab: the easy jump (`pm_speedjump`, `cl_speedjump`) against the classic move and the best strafe, alone and on the listen server |
 | `shooter/program.hpp` | The game-program seam: hooks and functions by number, the globals |
 | `shooter/entity.hpp`, `server.hpp/.cpp` | The entity record and pool, linking, trigger and impact touches, sounds, `server_hash` |
@@ -107,6 +108,9 @@ edges. `docs/shooters-edge.md` is the design;
   only for a player whose `ClientSlot::speedjump` is set (his user info's `cl_speedjump 1`);
   `run_player_command` zeroes it for everyone else. It acts on the forward key alone: a strafe
   must stay bit-identical with it on (`tests/shooter_pmove_test.cpp`, the `se-speedjump` lab).
+- **Our servers always say `pm_speedjump`, 0 included** (`Setting::always_info`): a client runs
+  its own aid (`assisted_command`) only where the server info lacks the key, so a server of ours
+  that dropped it would get the aid on top of its own easy jump.
 - Still to come: the cvars bound through `engine/console` (setting `pm_airstep` sets
   `pm_pground`), a map's compiled hulls (M18b) answering `MoveWorld`, and the other entities'
   interpolation on the client (M18h).
