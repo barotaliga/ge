@@ -42,7 +42,7 @@ inline constexpr double kBonfireLight = 1.6;
 // many times a large flame's width it burns, and how much brighter its light is.
 inline constexpr double kLanternHeight = 58, kLanternWidth = 1.5, kLanternLight = 1.25;
 // A bonfire's sparks a second.
-inline constexpr double kBonfireSparks = 40;
+inline constexpr double kBonfireSparks = 12;
 
 // How the fires burn this frame.
 struct FireLook {
@@ -65,7 +65,7 @@ double fire_light_size(const PointLight& light, bool bonfires = false);
 double fire_light_gain(const PointLight& light, bool bonfires = false);
 
 // How bright a fire's core is against a lightmap's 1 (a white face as the map's light lights it).
-inline constexpr double kFireGlow = 30;
+inline constexpr double kFireGlow = 8;
 
 // m: the room a bonfire needs over its bed and round it, free of the map's walls (a lantern's cage,
 // a low roof); a large flame without it burns as a plain flame.

@@ -41,6 +41,8 @@ struct LiquidRows {
   std::string lava = "lava", slime = "slime";                // rows of water/liquids.hpp
   double least_depth = 0.5;  // m: a pool's volume reaches at least this far under its top
   double lava_cover = 0.3;   // the share of the lava crusted over (the classic's lava is molten)
+  // degrees C: the melt, cooler than a basalt's 1150 so its light sits among the torch-lit rooms
+  double lava_core = 1000;
   // m: a crust plate's size and a young plate's crack (the classic's lava is fine-grained: its
   // texture's cells are a hand across, so the plates are too)
   double lava_plate = 0.25;
