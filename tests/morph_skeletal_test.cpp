@@ -76,9 +76,9 @@ TEST(the_triangles_keep_their_outside_through_the_mirror) {
   int out_ward = 0, in_ward = 0;
   const std::vector<float>& p = out.frames[0].positions;
   for (size_t t = 0; t + 2 < out.indices.size(); t += 3) {
-    const float* x = &p[out.indices[t] * 3];
-    const float* y = &p[out.indices[t + 1] * 3];
-    const float* z = &p[out.indices[t + 2] * 3];
+    const float* x = &p[size_t{out.indices[t]} * 3];
+    const float* y = &p[size_t{out.indices[t + 1]} * 3];
+    const float* z = &p[size_t{out.indices[t + 2]} * 3];
     const float e1[3] = {y[0] - x[0], y[1] - x[1], y[2] - x[2]};
     const float e2[3] = {z[0] - x[0], z[1] - x[1], z[2] - x[2]};
     const float n[3] = {e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2],
@@ -101,7 +101,7 @@ TEST(the_coordinates_move_into_their_material_s_rect) {
   CHECK_MSG(mo::bake_skeletal(m, "limb", {.rects = rects}, &out, &error), error);
   for (uint32_t v = 0; v < out.vertex_count(); ++v) {
     const uint8_t part = m.meshes[0].parts[v];
-    const float u = out.st[v * 2], t = out.st[v * 2 + 1];
+    const float u = out.st[size_t{v} * 2], t = out.st[size_t{v} * 2 + 1];
     if (part == 0) CHECK(std::abs(u - 0.5f) < 1e-6f && std::abs(t - 0.125f) < 1e-6f);
     if (part == 1) CHECK(std::abs(u - 0.25f) < 1e-6f && std::abs(t - 0.625f) < 1e-6f);
   }

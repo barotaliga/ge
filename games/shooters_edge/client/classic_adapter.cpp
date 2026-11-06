@@ -210,7 +210,7 @@ bool open_skeletal(const SearchPath& files, const std::string& name, std::span<c
         mat.name.empty() ? std::nullopt : stand_in(files, stems, "grey for " + mat.name);
     if (!img) {
       img = ge::assets::Image{8, 8, {}};
-      img->rgba.assign(8 * 8 * 4, 128);
+      img->rgba.assign(size_t{256}, 128);
     }
     width = std::max(width, img->width);
     height += img->height;
