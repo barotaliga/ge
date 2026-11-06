@@ -37,7 +37,7 @@ namespace shooters_edge::client {
 namespace sh = ge::shooter;
 namespace sv = shooters_edge::server;
 
-inline constexpr int kPartyMost = 3;  // companions at most (a coop game's four players)
+inline constexpr int kPartyMost = 7;  // companions at most (a coop game's eight players)
 
 struct PartyMate {
   bots::Fighter fighter;

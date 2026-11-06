@@ -32,6 +32,14 @@ void add_settings(QcServer& s) {
   s.cvars.add({"skill", "1", srv, "the monsters' skill, 0..3"});
   s.cvars.add({"teamplay", "0", info, "team rules, as the mod reads them"});
   s.cvars.add({"coop", "0", srv, "a single-player program's cooperative game (on: deathmatch 0)"});
+  s.cvars.add({"sv_friendlyfire", "0", info,
+               "coop: 1 lets one player's shots harm another (0: teammates are spared)"});
+  s.cvars.add({"sv_friendlypush", "0", info,
+               "coop with sv_friendlyfire 0: 1 lets a teammate's blow push you, harmless (a rocket "
+               "boost off a friend); 0 no push"});
+  s.cvars.add({"sv_episodes_done", "0", srv,
+               "coop: the episodes done, a bit each (1, 2, 4, 8); each next episode opens on the "
+               "start map once the one before is done; the host keeps it from game to game"});
   s.cvars.add({"registered", "0", srv,
                "1 when the packs carry the full game (a single-player program opens its "
                "episodes); the host sets it"});
