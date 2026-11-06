@@ -18,9 +18,9 @@ namespace {
 constexpr double kFlightStep = 1.0 / 60;  // s
 // A fire's sparks: the share of the slots' runs that are a pop's burst, a run's slots, and the
 // share of the rest that are flecks (the others floaters).
-constexpr uint64_t kPopRun = 5;
-constexpr double kPopShare = 0.07;
-constexpr double kFleckShare = 0.6;
+constexpr uint64_t kPopRun = 2;
+constexpr double kPopShare = 0.25;
+constexpr double kFleckShare = 0.55;
 
 float f32(double v) { return static_cast<float>(v); }
 
@@ -55,11 +55,11 @@ Particle birth(const AreaEmitter& e, uint64_t k) {
       break;
     case AreaEmitter::Kind::sparks: {
       // A fire's sparks are of three kinds (kPopShare of the slots in bursts, kFleckShare flecks,
-      // the rest floaters), each burning at a wood fire's heat (1900 to 2400 K, cooling as it
+      // the rest floaters), each burning at a wood fire's heat (1900 to 2500 K, cooling as it
       // flies: it reddens and goes out) and riding the eddies over the fire (`swirl`).
       // A POP: a pocket of sap bursting throws a handful at once from one point, every way, the
       // heavier arcing back down onto the bed and the floor round it. Its slots run together
-      // (kPopRun of them, a few hundredths of a second), so they leave as one burst.
+      // (kPopRun of them, a fraction of a second apart), so an ember or two leaves at once.
       const uint64_t run = k / kPopRun;
       core::Rng pop = core::make_rng(e.seed * 0x27d4eb2du ^ static_cast<uint32_t>(run) ^
                                      static_cast<uint32_t>(run >> 32) * 0x165667b1u);
@@ -77,14 +77,14 @@ Particle birth(const AreaEmitter& e, uint64_t k) {
         p.v[1] = f32(speed * up + e.air[1]);
         p.v[2] = f32(speed * flat * std::sin(yaw) + e.air[2]);
         p.life = f32(core::range(rng, 0.5, 1.4));
-        p.size = f32(core::range(rng, 0.012, 0.025));
-        p.drag = 0.5f;   // a bead of burning sap: the air barely holds it
-        p.fall = 0.55f;  // heavy enough to arc back down
-        p.streak = 0.06f;
+        p.size = f32(core::range(rng, 0.009, 0.015));
+        p.drag = 0.5f;     // a bead of burning sap: the air barely holds it
+        p.fall = 0.55f;    // heavy enough to arc back down
+        p.streak = 0.01f;  // a glowing bead: a dot, its motion barely smeared
         p.swirl = 0.3f;
         p.floor_y = f32(floor_y - 0.3 * e.half[1]);  // the floor round the bed, a little under it
         p.bounce = 0.3f;
-        p.kelvin = f32(core::range(rng, 2200, 2400));
+        p.kelvin = f32(core::range(rng, 2300, 2500));
         p.cool_s = f32(core::range(rng, 0.4, 0.8));
       } else if (kind < kFleckShare) {
         // A FLECK: a burning mote of the fuel, thrown out of the bed fast and wide, slowed in a
@@ -97,12 +97,12 @@ Particle birth(const AreaEmitter& e, uint64_t k) {
         p.v[1] = f32(core::range(rng, 1.5, 5.0) + e.air[1]);
         p.v[2] = f32(out * std::sin(yaw) + e.air[2]);
         p.life = f32(core::range(rng, 0.5, 1.6));
-        p.size = f32(core::range(rng, 0.015, 0.03));
+        p.size = f32(core::range(rng, 0.007, 0.012));
         p.drag = 2.2f;     // so light the air takes it at once
         p.fall = -0.08f;   // the plume lifts it
-        p.streak = 0.07f;  // a short streak: it never flies straight for long
+        p.streak = 0.01f;  // a dot
         p.swirl = f32(core::range(rng, 1.0, 1.8));
-        p.kelvin = f32(core::range(rng, 2100, 2400));
+        p.kelvin = f32(core::range(rng, 2200, 2500));
         p.cool_s = f32(core::range(rng, 0.4, 0.9));
       } else {
         // A FLOATER: a flake of glowing ash lifted on the plume, wandering slowly up and off,
@@ -113,10 +113,10 @@ Particle birth(const AreaEmitter& e, uint64_t k) {
         p.v[1] = f32(core::range(rng, 0.8, 2.0) + e.air[1]);
         p.v[2] = f32(core::range(rng, -0.5, 0.5) + e.air[2]);
         p.life = f32(core::range(rng, 1.8, 3.5));
-        p.size = f32(core::range(rng, 0.03, 0.05));
+        p.size = f32(core::range(rng, 0.01, 0.016));
         p.drag = 1.2f;
         p.fall = -0.11f;   // the plume holds it rising at about 0.9 m/s
-        p.streak = 0.02f;  // seen as a mote more than a streak
+        p.streak = 0.01f;  // a mote
         p.swirl = f32(core::range(rng, 0.9, 1.4));
         p.kelvin = f32(core::range(rng, 1900, 2150));
         p.cool_s = f32(core::range(rng, 1.0, 2.0));

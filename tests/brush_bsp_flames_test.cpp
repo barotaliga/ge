@@ -89,7 +89,7 @@ TEST(a_bonfire_throws_sparks_that_go_with_the_wind_where_the_sky_is_open) {
   ba::bonfire_sparks(s, 0, 4, look, in);  // under a roof: the wind does not reach it
   s.lights[2].sky = 1;
   ba::bonfire_sparks(s, 0, 4, look, out);  // under the open sky
-  CHECK(in.size() == out.size() && in.size() > 100);
+  CHECK(in.size() == out.size() && static_cast<double>(in.size()) > 3 * ba::kBonfireSparks);
   double rise = 0, drift_in = 0, drift_out = 0;
   for (size_t i = 0; i < in.size(); ++i) {
     CHECK(std::abs(in[i].p[0] - 4) < 3 && in[i].kelvin > 0);  // over the bonfire, not the torch

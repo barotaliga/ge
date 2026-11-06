@@ -42,7 +42,7 @@ inline constexpr double kBonfireLight = 1.6;
 // many times a large flame's width it burns, and how much brighter its light is.
 inline constexpr double kLanternHeight = 58, kLanternWidth = 1.5, kLanternLight = 1.25;
 // A bonfire's sparks a second.
-inline constexpr double kBonfireSparks = 40;
+inline constexpr double kBonfireSparks = 12;
 
 // How the fires burn this frame.
 struct FireLook {

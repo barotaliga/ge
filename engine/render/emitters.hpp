@@ -13,12 +13,13 @@
 //   frame's births are spread along their paths.
 // - EACH BIRTH is drawn off its own stream (the seed and its number): where in the area, its
 //   speed, its life, and for an ember its heat (1300 to 1700 K, cooling as it rises: it reddens
-//   and goes out). A fire's SPARKS are of three kinds, each at a wood fire's heat (1900 to 2400 K,
+//   and goes out). A fire's SPARKS are of three kinds, each at a wood fire's heat (1900 to 2500 K,
 //   cooling as it flies) and riding the eddies over the fire (render/particles.hpp's `swirl`): a
 //   FLECK thrown out of the bed fast and wide, slowed at once and whirled about until it goes out;
 //   a FLOATER, a flake of glowing ash lifted on the plume, wandering slowly, longest lived; and a
-//   POP's burst, a handful thrown every way from one point at once (a pocket of sap bursting),
-//   arcing back down and hopping on the floor round the bed. Every one is born moving with the air
+//   POP, an ember or two thrown out at once from one point (a pocket of sap bursting), arcing back
+//   down and hopping on the floor round the bed. Each is a tiny glowing bead (under 2 cm), drawn as
+//   a dot, never a streak. Every one is born moving with the air
 //   at the emitter (`air`, m/s), so a wind carries a fire's sparks off downwind. The pool lights
 //   them as it lights every particle (the sun, the sky, the lamps round them, the fog's haze), so
 //   an ember over a fire is lit by the fire and glows on its own.

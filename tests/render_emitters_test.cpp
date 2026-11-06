@@ -150,7 +150,7 @@ TEST(a_bonfires_sparks_are_of_three_kinds_at_a_wood_fires_heat_and_go_with_the_w
   double drift = 0;
   for (size_t i = 0; i < still.size(); ++i) {
     const r::Particle& p = still[i];
-    CHECK(p.kelvin >= 1900.0f && p.kelvin <= 2400.0f);
+    CHECK(p.kelvin >= 1900.0f && p.kelvin <= 2500.0f);
     CHECK(p.swirl > 0.0f);  // every one rides the eddies over the fire
     if (p.fall > 0) {
       ++pops;  // heavy enough to arc back down, and hop on the floor round the bed
