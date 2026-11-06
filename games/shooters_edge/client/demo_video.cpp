@@ -265,6 +265,12 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     const std::span<const uint8_t> pal = find_file(files, "gfx/palette.lmp", store);
     fx_state.palette.assign(pal.begin(), pal.end());
   }
+  ge::particles::Book book;  // the game's files' effects (particles/*.fx)
+  {
+    std::vector<std::string> faults;
+    load_effects(files, book, faults);
+  }
+  fx_state.book = &book;
   const DemoState& s = t.demo.state;
 
   double from = std::max(o.from_s, 0.0);  // the clip's start on the demo's timeline, s
@@ -295,6 +301,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
       fx_state = {};
       fx_state.on = fx_switches(look);
       fx_state.palette = palette;
+      fx_state.book = &book;
     }
     demo_fx_frame(s, demo_fx);
     const double dt = last < 0 ? 0 : std::clamp(s.time - last, 0.0, kMostDemoGap);

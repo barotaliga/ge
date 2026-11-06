@@ -1139,6 +1139,13 @@ every pass, and judged by captioned screenshots:
   fullbright palette colours as emissive.
 - **Models and sprites**: MDL frames as morph targets in one buffer, interpolated on the GPU;
   the player's colours remapped in the shader; sprites as instanced quads by orientation type.
+- **Effects from the game's files** (`client/world_fx.hpp`, M18l): a file `particles/<any>.fx`
+  in the game's files (a mod's over its base game's) defines effects as text
+  (`engine/particles/effect.hpp`, lengths in map units); one named `explosion`, `gunshot`, `spike`,
+  `blood`, `teleport`, `lava`, `rocket_trail` or `grenade_trail` is thrown in place of the classic
+  effect of that name (its light as strong as a classic light that far reaching). A file that
+  does not read is named on the console with its line and the fix. The `se-timedemo` lab's
+  `--particles=sample` plays the match with a mod's own blast and rocket trail.
 - **Effects, classic** (`games/shooters_edge/app/effects.hpp`): the classic client's effects in
   its own numbers, drawn as unlit specks of the pack's own palette colours (the engine's shining
   particles, read from `gfx/palette.lmp`) that run along the palette's ramps as they age: an

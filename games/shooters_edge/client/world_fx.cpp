@@ -29,6 +29,16 @@ namespace fx = shooters_edge::effects;
 
 namespace {
 
+constexpr double kUpWay[3] = {0, 1, 0};  // a scripted burst's way where nothing else gives one
+
+// The unit way from `p` toward the eye (engine metres): a scripted hit's `along`.
+std::array<double, 3> toward(const double p[3], const ge::camera::Vec3& eye) {
+  const double d[3] = {eye.x - p[0], eye.y - p[1], eye.z - p[2]};
+  const double len = ge::core::hypot3(d[0], d[1], d[2]);
+  if (len < 1e-9) return {0, 1, 0};
+  return {d[0] / len, d[1] / len, d[2] / len};
+}
+
 // The classic explosion sprite's frames and their rate, and the classic bolt's segment, units.
 constexpr int kSpriteFrames = 6;
 constexpr double kSpriteFps = 10;
@@ -737,10 +747,12 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       double from[3];
       put(was->second, from);
       if (!s.on.trails) {
-        if (m.grenade)
+        if (trail_scripted(s, m.grenade ? "grenade_trail" : "rocket_trail", from, to, out)) {
+        } else if (m.grenade) {
           fx::grenade_trail(from, to, s.seed++, s.palette, &out.births);
-        else
+        } else {
           fx::rocket_trail(from, to, s.seed++, s.palette, &out.births);
+        }
       } else if (m.grenade) {
         fx::smoke_trail(from, to, s.seed++, &out.births);
       } else if (!lit) {  // out of the tube, the motor not yet lit: a little smoke
@@ -835,7 +847,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         mark(s, ge::detail::DecalKind::scorch, on, normal, sc.size_m, sc.spin_rad, sc.variant, t);
       }
       s.mains.push_back(s.blasts[first]);
-    } else {
+    } else if (!throw_scripted(s, "explosion", p, kUpWay, 1, -1e9, t, out)) {
       fx::explosion(p, s.seed++, s.palette, &out.births);
       s.lit.push_back({at, t, l.explosions[s.explosions_seen]});  // its light, and its sprite
     }
@@ -1007,23 +1019,28 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
         } else {
           // 20 specks a pellet, 10 a nail, 20 a big nail.
           const int specks = e.kind == EffectKind::spike ? 10 * e.count : 20 * e.count;
-          fx::impact(p, specks, s.seed++, s.palette, &out.births);
+          if (!throw_scripted(s, e.kind == EffectKind::spike ? "spike" : "gunshot", p,
+                              toward(p, eye).data(), e.count, -1e9, t, out))
+            fx::impact(p, specks, s.seed++, s.palette, &out.births);
         }
         break;
       }
       case EffectKind::blood: {
         const bool arc = e.code == 13 && !l.campaign;  // a match's beam's blood
-        fx::blood(p, arc ? 50 : 20 * e.count, arc, s.seed++, s.palette, &out.births);
+        if (!throw_scripted(s, "blood", p, toward(p, eye).data(), arc ? 1 : e.count, -1e9, t, out))
+          fx::blood(p, arc ? 50 : 20 * e.count, arc, s.seed++, s.palette, &out.births);
         if (s.on.decals && !arc) wound(s, out.models, e.at, p, eye, std::clamp(e.count, 1, 8), t);
         break;
       }
       case EffectKind::teleport:
         // A player's own warp is the dust's when it is on: its fog is not thrown over it.
-        if (!s.on.warps || !near_warp(s.warps, e.at, t))
+        if ((!s.on.warps || !near_warp(s.warps, e.at, t)) &&
+            !throw_scripted(s, "teleport", p, kUpWay, 1, -1e9, t, out))
           fx::teleport_splash(p, s.seed++, s.palette, &out.births);
         break;
       case EffectKind::lava:
-        fx::lava_splash(p, s.seed++, s.palette, &out.births);
+        if (!throw_scripted(s, "lava", p, kUpWay, 1, -1e9, t, out))
+          fx::lava_splash(p, s.seed++, s.palette, &out.births);
         break;
       case EffectKind::beam: {
         double normal[3], dir[3];
@@ -1127,6 +1144,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   std::erase_if(s.lit, [&](const Blast& b) {
     return t - b.t > std::max(fx::kExplosionLight, kSpriteFrames / kSpriteFps);
   });
+  scripted_lights(s, t, out);
   int sprite = 0;
   for (const Blast& b : s.lit) {
     double p[3];
