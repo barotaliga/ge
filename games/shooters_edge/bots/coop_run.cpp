@@ -214,7 +214,7 @@ CoopReport run_coop(const CoopOptions& opt) {
   sv::CampaignOptions co;
   co.server.seed = opt.seed;
   co.server.loop.max_edicts = 512;
-  co.load = &load_hall;
+  co.load = opt.exit ? &coop_hall_exit_map : &load_hall;
   co.settings = {"deathmatch 0", "coop 1", "teamplay 1", "skill " + std::to_string(opt.skill)};
   if (!sv::campaign_new_game(c, progs, co, "hall", r.error)) {
     r.error = "run_coop: " + r.error;
@@ -283,7 +283,9 @@ CoopReport run_coop(const CoopOptions& opt) {
       return r;
     }
     Fighter& f = fighters[static_cast<size_t>(k)];
-    fighter_init(f, graph, s, k + 1, kCoopHallEntities, m.skill, m.traits, 1000.0 / kMsec,
+    const std::string ents =
+        std::string(kCoopHallEntities) + (opt.exit ? kCoopHallExitEntities : "");
+    fighter_init(f, graph, s, k + 1, ents.c_str(), m.skill, m.traits, 1000.0 / kMsec,
                  opt.seed + 31u * static_cast<uint32_t>(k + 1));
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 2].view_angles.y;
     f.bot.pilot.world = &world;
@@ -359,9 +361,14 @@ CoopReport run_coop(const CoopOptions& opt) {
       p.sequence = ++rc.sequence;
       for (int i = 0; i < 3; i++) p.cmds[i] = rc.cmds[i];
     }
+    const size_t entered = c.history.size();
     if (!sv::campaign_frame(c, packets.data(), mates + 1, r.error)) {
       r.error = "run_coop: " + r.error;
       return r;
+    }
+    if (c.history.size() != entered) {  // someone took the exit: the hall is over
+      r.exited = true;
+      break;
     }
     const sv::RulesCommon& after = *c.server;
     sv::clear_frame(c.server.common->out);

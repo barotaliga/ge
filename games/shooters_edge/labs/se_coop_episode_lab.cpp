@@ -215,6 +215,19 @@ void run(gl::Lab& lab) {
                       std::to_string(m.nav_nodes), std::to_string(m.faults)});
   }
   lab.table(t);
+  // Where the companions fell behind: the frames past their catch-up distance, by their mode.
+  std::vector<std::string> cols = {"map"};
+  for (int k = 0; k < fb::kEscortModes; k++)
+    cols.push_back(fb::escort_mode_name(static_cast<fb::EscortMode>(k)));
+  cols.push_back("in water");
+  gl::LabTable ft{"frames a companion was past its catch-up distance, by its mode", cols, {}};
+  for (const fb::EpisodeMap& m : r.maps) {
+    std::vector<std::string> row = {m.name};
+    for (int k = 0; k < fb::kEscortModes; k++) row.push_back(std::to_string(m.far_by_mode[k]));
+    row.push_back(std::to_string(m.far_in_water));
+    ft.rows.push_back(row);
+  }
+  lab.table(ft);
   const double n = r.maps.empty() ? 1 : static_cast<double>(r.maps.size());
   lab.metric("maps.played", static_cast<double>(r.maps.size()), "count");
   lab.metric("maps.finished", finished, "count");

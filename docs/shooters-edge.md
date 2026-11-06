@@ -906,9 +906,14 @@ blows never harm another; his own blast still harms himself. Monsters choose amo
 A COMPANION (`bots/companion.hpp`) is a fighter that plays beside the player rather than for
 him, an enabler: it keeps at his shoulder, steps out of his way, kills only what has come for him
 or itself (a monster asleep on its spot is left for him to find), holds its fire while he stands
-in the line, presses the button he stops by, catches up when left behind, and while he stands
-still it fidgets as a person does (`plugins/shooter/idle.hpp`: spins, looks at an item in sight,
-glances at him, hops round him, jumps, sways), stopping a human moment after he moves on. It reads
+in the line, presses the button he stops by, catches up when left behind (past 440 units), and
+never lets a blast off near a player: grenades and rockets only for a foe more than 260 units from
+everyone, itself among them, another weapon taken up otherwise. The exit is HIS: the nodes in an
+exit's box are closed to the companion's routes and goals and any step into it is turned back, and
+when he has stood a moment within 640 units of an exit it goes to stand beside it, faces him and
+jumps now and then to show him the way out. While he stands still it fidgets as a person does
+(`plugins/shooter/idle.hpp`: spins, looks at an item in sight, glances at him, hops round him,
+jumps, sways), stopping a human moment after he moves on. It reads
 only what its client is sent, like every bot here, and its personality's traits set its moves and
 its patience.
 

@@ -444,10 +444,15 @@ bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Ve
   return false;
 }
 
-// The weapon: the best loaded at `range`, asked for by its impulse.
-void choose_weapon(Fighter& f, const Stats& st, float range, double t, ai::Why* why) {
+bool blast_weapon(const WeaponRow& w) { return w.bit == kWGrenades || w.bit == kWRockets; }
+
+// The weapon: the best loaded at `range`, asked for by its impulse; a blast weapon only while
+// `blast_ok` (a companion's foe far enough from every player, companion.hpp).
+void choose_weapon(Fighter& f, const Stats& st, float range, double t, ai::Why* why,
+                   bool blast_ok = true) {
   const auto score = [&](int32_t i) {
     const WeaponRow& w = kWeapons[i];
+    if (!blast_ok && blast_weapon(w)) return -1.0;
     return loaded(st, w) ? weapon_score(w, range) : -1.0;
   };
   const auto name = [](int32_t i) { return kWeapons[i].name; };
@@ -580,7 +585,9 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     }
     if (f.diving < 0) f.last_dive = -1;
     const sh::Contact* foe = sh::freshest(f.bot.senses, eye);
-    choose_weapon(f, st, foe ? dist(eye, at_of(foe->seen)) : 400.f, t, why);
+    // No blast where it would reach a player (the companion itself among them): another weapon.
+    const bool blast_ok = !foe || escort_blast_clear(f, s, at_of(foe->seen));
+    choose_weapon(f, st, foe ? dist(eye, at_of(foe->seen)) : 400.f, t, why, blast_ok);
     return;
   }
 
@@ -829,6 +836,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   }
   knowledge_init(f);
   buttons_init(f, g, s, entities);
+  exits_init(f, g, s, entities);
   ears_init(f, sh::tier_of(traits[sh::Trait::hearing]), entities);
   spam_init(f, entities);
 }
@@ -1015,6 +1023,17 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
       fire = false;
       f.stats.held_fire++;
       f.escort.stats.shots_held++;
+    }
+    // A companion's blast never goes off where it reaches a player: held, and another weapon
+    // taken up at once.
+    if (f.escort.leader >= 0 && blast_weapon(*held) && !escort_blast_clear(f, s, at_of(c->seen))) {
+      if (fire) {
+        fire = false;
+        f.stats.held_fire++;
+        f.escort.stats.blasts_held++;
+      }
+      if (f.want_weapon == 0 && t - f.impulse_at >= kImpulseGap_s)
+        choose_weapon(f, st, d, t, nullptr, false);
     }
     if (fire) {
       cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);
