@@ -248,6 +248,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 
 - one command-line reader for every game window and tool `ge new` scaffolds (`ge::play` or `engine/cli`): flags read wherever they stand, a `+` console line ending at the next flag, an unknown flag refused with the console line it followed, and a renamed flag naming its new name (Shooter's Edge's client does this by hand since the timedemo thread; a Mac run waited ten minutes on `-benchmark` swallowed into a console line)
 - `ge pmove <scenario> --line=N` (one recorded movement scenario stepped against `engine/move`, stopping at the first line that differs, with both sides' state there; classic game loop thread)
+- `ge pmove run --hands=forward-jump|best-strafe --cfg="pm_speedjump 0.5" --seconds=8` (scripted hands on an open floor under a cfg, printing speed over time as a table, so tests and labs share one set of scripted hands; easy-jump thread, #555)
 - `ge bsp info/ents/shot` (a map's lumps and limits, its entity lump, a CPU picture of leaves, the PVS from a point and the hulls)
 - `ge lab views --map=<pak map> --near=<classname>` (eye positions framing every entity of a class, such as a large flame light, printed ready to paste into a lab's `--views`, so a lab's views are not found by reading the entity lump by hand; bonfires thread, #402)
 - `ge lab sky <map>` (a map's open sky shot automatically from the spot with the most sky faces, looking up, with no hand-picked `--view` coordinates; classic skies thread)
