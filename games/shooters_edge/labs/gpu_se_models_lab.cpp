@@ -590,6 +590,9 @@ void run(gl::Lab& lab) {
                   {{"map", map_name}, {"look", "modern"}, {"size", lab.arg("size")}}},
                  shade, gl::Det::measured);
         cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
+      } else {
+        // No adapter: the same shot ids, so the digest is the device path's.
+        ls::placeholders(lab, {(id + "-shade").c_str()});
       }
       // From the side: his figure (drawn, as another player sees him) and the shadow it throws.
       ge::render::FrameView side = v;
@@ -674,6 +677,8 @@ void run(gl::Lab& lab) {
                   "on the right the same floor evenly lit",
                   {{"map", map_name}, {"look", "modern"}, {"size", lab.arg("size")}}},
                  pair, gl::Det::measured);
+      } else {
+        ls::placeholders(lab, {(id + "-side-pair").c_str()});
       }
       fx.models.pop_back();
     };
@@ -682,7 +687,7 @@ void run(gl::Lab& lab) {
       // first.
       std::vector<std::pair<float, sh::Vec3f>> at;
       for (const cl::Placed& p : placed)
-        if (l.server->models[size_t(p.modelindex)] == lamp.source) at.push_back({0, p.origin});
+        if (l.server->models[size_t(p.modelindex)] == lamp.source) at.push_back({0.0f, p.origin});
       for (const br::Entity& e : world.entities) {
         if (e.get("classname") != lamp.source) continue;
         float o[3];

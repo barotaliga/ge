@@ -13,13 +13,13 @@
 //                 [+<command> ...]
 //
 // `-basedir` holds the game folder (`id1`, the multiplayer client's folder over it when present;
-// `-game` names another); `~` is home. Without it, the game loaded last; LOAD GAME or `basedir
-// <folder>` loads another in place, enhanced in the background (client/game_folder.hpp). `-progs`
-// runs a mod's progs in place of the baseline mod, `-models` names the held weapons' folder (by
-// default `games/shooters_edge/content/models/view`, from where the game runs or was built). The
-// `+` words are console lines run at start: `+map dm6` loads that map (`map arena` is the built-in
-// test arena); with none, the title (client/title.hpp) with the menu up, `start` (else the arena)
-// loading behind it. Every map loads behind the window, a spinner up (client/map_load.hpp).
+// `-game` names another); `~` is home. Without it, the game loaded last, however it was picked;
+// LOAD GAME or `basedir <folder>` loads another in place, enhanced in the background
+// (client/game_folder.hpp). `-progs` runs a mod's progs in place of the baseline mod, `-models`
+// names the held weapons' folder (by default the game's `content/models/view`). The `+` words are
+// console lines run at start: `+map dm6` loads that map (`map arena` is the built-in test arena);
+// with none, the title (client/title.hpp) with the menu up, `start` (else the arena) loading behind
+// it. Every map loads behind the window, a spinner up (client/map_load.hpp).
 //
 // THE KEYS are binds (controls.hpp: W A S D, SPACE jumps, the left button fires, SHIFT walks, 1..8
 // and the wheel the weapons, F12 a screenshot; OPTIONS ▸ CUSTOMIZE CONTROLS); TAB held shows the
@@ -367,6 +367,8 @@ int run_main(int argc, char** argv) {
   // The install's enhancing, in the background unless ce_auto is off or a run is measured.
   if (std::string basedir, why; opened && cl::check_game_folder(args.basedir, &basedir, &why)) {
     game_menu.set_game(basedir);
+    // The game played is the one the next start opens, however it was picked (-basedir too).
+    cl::remember_game(prefs, basedir);
     if (game_menu.auto_enhance() && !measured) {
       if (game_menu.enhance_game(false, &why))
         out::status("shooters_edge: enhancing " + basedir +
@@ -550,7 +552,7 @@ int run_main(int argc, char** argv) {
     fx_palette_read = false;
     next_map = game_content.first_map;
     game_menu.set_game(basedir);
-    cl::remember_folder(prefs, basedir);
+    cl::remember_game(prefs, basedir);
     save_settings();  // the player's settings go on in the new folder
     out::status("shooters_edge: loaded " + basedir + " (" + files.folder + ")");
     if (std::string why; game_menu.auto_enhance() && !game_menu.enhance_game(true, &why))

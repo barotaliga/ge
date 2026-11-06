@@ -7,7 +7,7 @@
 // commands taken away with no campaign.
 //
 // ge:summary Tests the game folder a player loads: the install checked, kept, its programs
-// ge:keywords test shooters-edge game-folder load-game check_game_folder game_of remember_folder
+// ge:keywords test shooters-edge game-folder load-game check_game_folder game_of remember_game
 // ge:keywords choose_folder load_programs campaign_commands
 // ge:skill shooter classicenhance testing
 #include <filesystem>
@@ -90,23 +90,31 @@ TEST(the_multiplayer_folder_is_played_over_the_base_when_the_install_has_one) {
   CHECK(cl::game_of(root.string()) == kMulti);
 }
 
-TEST(the_folder_loaded_is_kept_and_chosen_only_when_none_is_named) {
+TEST(the_game_loaded_is_kept_and_chosen_unless_basedir_names_another) {
   const fs::path prefs = fresh("prefs");
-  CHECK(cl::remembered_folder(prefs.string()).empty());
-  CHECK(cl::remembered_folder("").empty());
-  CHECK(!cl::remember_folder("", "/x"));
+  CHECK(cl::remembered_game(prefs.string()).basedir.empty());
+  CHECK(cl::remembered_game("").basedir.empty());
+  CHECK(!cl::remember_game("", "/x"));
   const fs::path root = fresh("kept");
   write_pack(root / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
   fs::create_directories(root / kMulti);
-  CHECK(cl::remember_folder(prefs.string(), root.string()));
-  CHECK(cl::remembered_folder(prefs.string()) == root.string());
-  // No -basedir and no install where the game runs: the folder kept, the multiplayer folder over
-  // it.
+  CHECK(cl::remember_game(prefs.string(), root.string()));
+  const cl::KeptGame kept = cl::remembered_game(prefs.string());
+  CHECK(kept.basedir == root.string());
+  CHECK(kept.profile == ge::classicenhance::classic_profile().id);
+  // No -basedir: the game kept, the multiplayer folder over it.
   cl::Args a;
   a.basedir = fresh("cwd").string();
   cl::choose_folder(a, prefs.string());
   CHECK(fs::equivalent(a.basedir, root));
   CHECK(a.game == kMulti);
+  // The game kept wins over an install where the game runs: it stays until another is loaded.
+  const fs::path here = fresh("here");
+  write_pack(here / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
+  cl::Args in_install;
+  in_install.basedir = here.string();
+  cl::choose_folder(in_install, prefs.string());
+  CHECK(fs::equivalent(in_install.basedir, root));
   // -basedir and -game given: kept as they are.
   cl::Args named;
   named.basedir = "/elsewhere";
@@ -115,6 +123,39 @@ TEST(the_folder_loaded_is_kept_and_chosen_only_when_none_is_named) {
   named.game_set = true;
   cl::choose_folder(named, prefs.string());
   CHECK(named.basedir == "/elsewhere" && named.game == "mod");
+}
+
+TEST(a_kept_game_that_no_longer_opens_falls_back_to_the_folder_the_game_runs_in) {
+  const fs::path prefs = fresh("prefs-gone");
+  const fs::path here = fresh("here-gone");
+  write_pack(here / kBase / "pak0.pak", {{"maps/start.bsp", {1}}});
+  CHECK(cl::remember_game(prefs.string(), (fresh("gone") / "nothing").string()));
+  cl::Args a;
+  a.basedir = here.string();
+  cl::choose_folder(a, prefs.string());
+  CHECK(a.basedir == here.string());
+  CHECK(a.game == kBase);
+  // A game this build does not know is passed over the same way.
+  {
+    std::ofstream f(prefs / "game_folder.txt", std::ios::trunc);
+    f << "profile no-such-game\nbasedir " << here.string() << "\n";
+  }
+  CHECK(cl::remembered_game(prefs.string()).profile == "no-such-game");
+  cl::Args b;
+  b.basedir = fresh("cwd-gone").string();
+  cl::choose_folder(b, prefs.string());
+  CHECK(b.basedir != here.string());
+}
+
+TEST(the_older_kept_file_of_a_folder_alone_reads_as_the_first_profile) {
+  const fs::path prefs = fresh("prefs-old");
+  {
+    std::ofstream f(prefs / "game_folder.txt", std::ios::trunc);
+    f << "/games/classic\r\n";
+  }
+  const cl::KeptGame kept = cl::remembered_game(prefs.string());
+  CHECK(kept.basedir == "/games/classic");
+  CHECK(kept.profile == ge::classicenhance::classic_profile().id);
 }
 
 TEST(a_folder_with_no_game_plays_the_baseline_mod_on_the_fallback_map) {

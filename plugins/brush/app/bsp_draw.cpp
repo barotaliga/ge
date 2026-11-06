@@ -723,7 +723,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // The moving casters along the sun, round the eye, the depth as deep as the map's.
   d.sun_caster = lights && !d.casters.empty() && sun[1] > 0;
   d.staged.sun_caster = ortho_job(toward, view.eye, kSunCasterHalfM, 2 * radius);
-  d.staged.sun_caster.info[2] = d.sun_caster ? 1 : 0;
+  d.staged.sun_caster.info[2] = d.sun_caster ? 1.0f : 0.0f;
   d.frame_jobs.back() = d.staged.sun_caster;
   d.staged.ortho[1] = ortho_job(down, centre, radius, radius);
   // The fall's: along the way the rain and the snow come, kept off the level (a gale's snow
