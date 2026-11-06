@@ -14,3 +14,8 @@ looks like. To picture an effect, throw it on the explosion labs' yard
 settled stills at chosen moments, as `gpu-particle-effects` does. A GPU lab run under ASan in
 the container ends with a leak report from the driver's threads: run it with
 `ASAN_OPTIONS=detect_leaks=0`, as precheck does.
+
+Count what is thrown before the adapter is asked for: the throw is the CPU's alone, and a digested
+metric logged only on the GPU path moves the digest on a GPU-less row (Windows CI), the trap
+`labs`' lesson "a GPU lab's digest is one with and without an adapter" names. Check with
+`GE_GPU_OFF=1` before the push.

@@ -99,18 +99,20 @@ constexpr double kFlightS = 0.5;                  // the trail's flight across t
 constexpr double kFrom[3] = {es::kMid - 3, 1.0, 134}, kTo[3] = {es::kMid + 3, 2.0, 134};
 
 // The effect `e` thrown at `kAt` at 0 s (a trail flown from `kFrom` to `kTo` over kFlightS), the
-// pool flown at 120 Hz, a picture at each moment.
-std::vector<gl::Picture> run_effect(ge::gpu::Device& d, es::Scene& s, const pt::Effect& e,
+// pool flown at 120 Hz, a picture at each moment. With no device (`d` null) only the throws are
+// made and counted: what is thrown is the CPU's alone, so its count is the same with or without
+// an adapter and feeds the digest on every machine.
+std::vector<gl::Picture> run_effect(ge::gpu::Device* d, es::Scene& s, const pt::Effect& e,
                                     const gr::FrameView& v0, const std::vector<double>& moments,
                                     int settle, size_t& thrown) {
-  gr::clear_particles(d, s.particles);
+  if (d != nullptr) gr::clear_particles(*d, s.particles);
   std::vector<pt::Spark> sparks;
   pt::Throw th;
   for (int k = 0; k < 3; ++k) th.at[k] = kAt[k];
   th.floor_y = 0;
   th.seed = 11;
   pt::throw_effect(e, th, sparks);
-  gr::add_sparks(sparks, s.particles.births);
+  if (d != nullptr) gr::add_sparks(sparks, s.particles.births);
   thrown = sparks.size();
   std::vector<gl::Picture> out;
   double t = 0;
@@ -128,17 +130,19 @@ std::vector<gl::Picture> run_effect(ge::gpu::Device& d, es::Scene& s, const pt::
         sparks.clear();
         th.seed++;
         pt::throw_trail(e, p0, p1, th, sparks);
-        gr::add_sparks(sparks, s.particles.births);
+        if (d != nullptr) gr::add_sparks(sparks, s.particles.births);
         thrown += sparks.size();
       }
       t += dt;
+      if (d == nullptr) continue;
       gr::FrameView v = v0;
       v.time_s = t;
-      es::draw(d, s, v, {}, dt);
+      es::draw(*d, s, v, {}, dt);
     }
+    if (d == nullptr) continue;
     gr::FrameView v = v0;
     v.time_s = m;
-    out.push_back(es::settled(d, s, v, {}, settle));
+    out.push_back(es::settled(*d, s, v, {}, settle));
   }
   return out;
 }
@@ -195,6 +199,17 @@ void run(gl::Lab& lab) {
                "ns", Det::measured);
   }
   const std::vector<std::string> ids = {"fountain", "embers", "puff", "trail"};
+  const gr::FrameView eye = es::eye_at(es::kMid, 1.4, 129.5, 0.08, -0.06, 0, 0);
+  const std::vector<double> moments = {0.15, 0.6, 1.5};
+  // The specks each effect throws, counted on the CPU before any adapter is asked for.
+  {
+    es::Scene none;
+    for (const std::string& id : ids) {
+      size_t thrown = 0;
+      run_effect(nullptr, none, *book.find(id), eye, moments, settle, thrown);
+      lab.metric("thrown." + id, static_cast<double>(thrown), "count");
+    }
+  }
   auto device = ge::gpu::create_device({.label = "gpu-particle-effects", .validation = 1});
   if (!device) {
     if (gpu_required())
@@ -208,17 +223,14 @@ void run(gl::Lab& lab) {
     lab.fail("the scene's pipelines did not build", "Read the gpu: lines above. Skill: render.");
     return;
   }
-  const gr::FrameView eye = es::eye_at(es::kMid, 1.4, 129.5, 0.08, -0.06, 0, 0);
-  const std::vector<double> moments = {0.15, 0.6, 1.5};
   std::vector<gl::Picture> pics;
   std::vector<std::string> names;
   for (const std::string& id : ids) {
     const pt::Effect* e = book.find(id);
     size_t thrown = 0;
-    for (gl::Picture& p : run_effect(*device, s, *e, eye, moments, settle, thrown))
+    for (gl::Picture& p : run_effect(device.get(), s, *e, eye, moments, settle, thrown))
       pics.push_back(std::move(p));
     for (const double m : moments) names.push_back(id + " " + fixed(m, 2) + " S");
-    lab.metric("thrown." + id, static_cast<double>(thrown), "count");
   }
   lab.shot({"effects",
             "FOUR EFFECTS WRITTEN AS TEXT",
