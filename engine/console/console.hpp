@@ -133,8 +133,8 @@ class Console {
 
   // `exec`: the file's commands inserted at the front. False, with a problem, when not found.
   bool exec_file(std::string_view name, Source source = Source::local, const Origin& from = {});
-  // The command line's `+cmd args …` runs (`+exec my.cfg +set r_x 1`), appended in order;
-  // words before the first `+` are ignored. Returns how many commands it appended.
+  // The command line's commands, appended in order: a `+` starts each (`+exec my.cfg +set r_x 1`),
+  // and the first needs none (`coopgame 2 expert +map e1m2` is two). Returns how many it appended.
   int append_command_line(const std::vector<std::string>& args);
 
   // FILES: the search directories, the first also where cfg_save writes.
@@ -229,6 +229,8 @@ class Console {
     std::string via;  // the alias or file it came from, for a depth problem
   };
   void dispatch(Entry& e);
+  // A command or an alias of that (lower-case) name.
+  bool known_name(const std::string& name) const;
   void queue_front(std::string_view text, Source source, const Origin& where, int depth,
                    const std::string& via, bool keep_lines);
   void register_builtins();
