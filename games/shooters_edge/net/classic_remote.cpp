@@ -8,6 +8,7 @@
 #include <cstdlib>
 #include <functional>
 
+#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
 
 namespace shooters_edge::net {
@@ -64,6 +65,10 @@ sh::MoveSettings settings_of(const ClassicClientEnd& c) {
   m.wateraccelerate = v[6];
   m.friction = v[7];
   m.waterfriction = v[8];
+  // The easy jump is predicted only where the server says it allows it (its pm_speedjump in the
+  // server info) and the player asked for it; a server that never heard of it says nothing.
+  if (c.cfg.speedjump)
+    m.speedjump = static_cast<float>(std::atof(info_get(c.serverinfo, "pm_speedjump").c_str()));
   return m;
 }
 
@@ -321,6 +326,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.name = cvar("name", "player");
     cfg.topcolor = std::atoi(cvar("topcolor", "0").c_str());
     cfg.bottomcolor = std::atoi(cvar("bottomcolor", "0").c_str());
+    cfg.speedjump = cvar("cl_speedjump", "0") == "1";
     cfg.qport = static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
     std::string error;
     if (!remote_connect(r, address, cfg, error))

@@ -27,13 +27,17 @@
 // players' boxes), with the move settings serverdata carried. A prediction the next frame proves
 // wrong by 4 to 64 units is not snapped but folded into a correction that decays (`Smoothing`).
 // The drawn eye and the player's own place are the prediction; `cl_nopred 1` draws the server's.
+// THE EASY JUMP: with `cl_speedjump 1` when joining, the user info carries `cl_speedjump 1` and the
+// prediction runs the easy jump at the server info's `pm_speedjump` (a server that does not offer
+// it has none, so the move stays the classic one on both ends). Changed later, it acts from the
+// next join.
 // The other players are drawn where the last frame put them.
 //
 // ge:summary The window joined to a server: the classic client driven by the hands, drawn as a demo
 // ge:keywords remote-client connect disconnect join-server classic-client live-demo network-play
 // ge:keywords remote_connect remote_step remote_disconnect setangle tick-clock reconnect
 // ge:keywords remote_hands add_remote_commands netstatus prediction predict cl_nopred
-// ge:keywords remote_world smoothing replayed
+// ge:keywords remote_world smoothing replayed cl_speedjump pm_speedjump easy-jump
 // ge:skill net shooter
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once

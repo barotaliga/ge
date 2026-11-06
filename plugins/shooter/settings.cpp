@@ -71,6 +71,10 @@ constexpr Setting kSettings[] = {
      GE_SETTING_SWITCH(move.airstep)},
     {"pm_pground", "1: standing on the ground carries over between moves", 0, 1, true, true, true,
      GE_SETTING_SWITCH(move.pground)},
+    {"pm_speedjump",
+     "0..1: players with cl_speedjump 1 gain this share of the best strafe's speed holding forward "
+     "in the air, and hop while jump is held (0 off)",
+     0, 1, true, false, true, GE_SETTING_FIELD(move.speedjump, float)},
 };
 
 #undef GE_SETTING_FIELD

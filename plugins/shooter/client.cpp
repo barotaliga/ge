@@ -181,7 +181,10 @@ void run_piece(Server& sv, int slot, const MoveCmd& in) {
     for (int i = 0; i < world.count; i++)
       if (ents[i] == ed.groundentity) ms.ground = i;
   }
-  const MoveResult r = player_move(ms, cmd, sv.set.move, world);
+  // The easy jump acts only for a player who asked for it (pmove.hpp `speedjump`).
+  MoveSettings mine = sv.set.move;
+  if (!c.speedjump) mine.speedjump = 0;
+  const MoveResult r = player_move(ms, cmd, mine, world);
 
   // Back into the fields.
   c.jump_held = ms.jump_held;
