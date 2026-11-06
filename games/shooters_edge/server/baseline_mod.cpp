@@ -81,6 +81,7 @@ const char* const kBaselineArenaEntities = R"({
 "speed" "100"
 "wait" "3"
 "lip" "8"
+"sounds" "1"
 }
 {
 "classname" "func_plat"
@@ -88,6 +89,7 @@ const char* const kBaselineArenaEntities = R"({
 "origin" "0 0 96"
 "height" "96"
 "speed" "64"
+"sounds" "1"
 }
 {
 "classname" "weapon_rocketlauncher"

@@ -128,6 +128,7 @@ float EF_RED = 128;     // the shield's
 .float wait;              // seconds a mover or trigger waits
 .float speed;             // a mover's units per second, a missile's
 .float lip;               // the units a door leaves showing
+.float worldtype;         // the world's: 0, 1 or 2, the locked doors' sounds by it
 .float height;            // the units a plat travels (its own height when not set)
 .float dmg;               // damage a mover or a trigger deals
 .float state;             // a mover's: STATE_ below
