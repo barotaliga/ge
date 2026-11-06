@@ -181,14 +181,27 @@ TEST(the_march_is_spread_only_with_the_last_frames_camera) {
   CHECK(u.cloud_info[3] == 2);
   gr::fill_uniforms(u, view, 64, 32, &history);
   CHECK(u.cloud_info[2] == 1);
-  // Not at a quarter, or not asked for: never.
+  // Not asked for: never.
   view.clouds.spread = false;
   gr::fill_uniforms(u, view, 64, 32, &history);
   CHECK(u.cloud_info[2] == 0);
+  // At every pixel, spread as at a quarter (every pixel's own ray, one frame in four).
   view.clouds.spread = true;
   view.clouds.quarter = false;
   gr::fill_uniforms(u, view, 64, 32, &history);
-  CHECK(u.cloud_info[2] == 0);
+  CHECK(u.cloud_info[2] == 1);
+}
+
+TEST(every_pixels_march_spread_takes_a_target_of_the_frames_size) {
+  gr::Clouds c;
+  CHECK(gr::cloud_grain(c) == 2);
+  c.quarter = false;
+  CHECK(gr::cloud_grain(c) == 1);
+  // The reference, every pixel each frame, draws without the target.
+  c.spread = false;
+  CHECK(gr::cloud_grain(c) == 2);
+  c.quarter = true;
+  CHECK(gr::cloud_grain(c) == 2);
 }
 
 TEST(a_layer_is_thin_in_patches_and_thick_in_its_cores) {

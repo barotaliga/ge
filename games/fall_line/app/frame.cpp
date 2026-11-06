@@ -133,6 +133,14 @@ void stand_posts(ge::gpu::Device& device, GameFrame& f, r::InstanceFamily& famil
   f.still.push_back(&family);
 }
 
+// The cloud march's grain the options ask for (render/clouds.hpp's cloud_grain).
+int cloud_grain_of(const FrameOptions& o) {
+  r::Clouds c;
+  c.quarter = o.cloud_quarter;
+  c.spread = o.cloud_spread;
+  return r::cloud_grain(c);
+}
+
 // The targets, the pyramid, the histories and the post pass's groups for outputs of w x h.
 void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h) {
   f.output_width = w;
@@ -156,7 +164,7 @@ void make_targets(ge::gpu::Device& device, GameFrame& f, uint32_t w, uint32_t h)
   r::bind_particle_targets(device, f.particles, f.targets);
   r::bind_flame_targets(device, f.flames, f.targets);
   r::bind_precip_targets(device, f.precip, f.targets);
-  r::bind_cloud_targets(device, f.clouds, f.targets);
+  r::bind_cloud_targets(device, f.clouds, f.targets, cloud_grain_of(f.options));
   r::create_water_targets(device, f.water, f.targets);
   r::bind_underwater(device, f.under, f.water);
   // The post pass (and the bloom) read TAA's two histories, or the HDR target for both.
@@ -511,6 +519,7 @@ PictureChange set_picture(ge::gpu::Device& device, GameFrame& f, const FrameOpti
   o.precip = next.precip;
   o.clouds = next.clouds;
   o.cloud_quarter = next.cloud_quarter;
+  o.cloud_spread = next.cloud_spread;
   o.reach_m = next.reach_m;
   if (next.fall.particles <= f.fall_capacity) {
     o.fall.particles = next.fall.particles;
@@ -541,6 +550,9 @@ PictureChange set_picture(ge::gpu::Device& device, GameFrame& f, const FrameOpti
     }
   }
   if (change.targets) make_targets(device, f, f.output_width, f.output_height);
+  // The cloud's march targets at a new grain (every pixel's march spread, or the quarter's).
+  if (!change.targets && cloud_grain_of(o) != f.clouds.grain)
+    r::bind_cloud_targets(device, f.clouds, f.targets, cloud_grain_of(o));
   if (r::lens_on(o.lens)) r::set_lens(device, f.lens, o.lens);
   // The sun's shadow maps at a new size, rebound into what receives them; drawn again.
   if (next.shadow_size != o.shadow_size) {

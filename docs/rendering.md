@@ -1172,8 +1172,9 @@ and a storm's 2. The cloud volume itself is M8f3 (below).
   it (R32F). Then each pixel of the frame takes the four half-size pixels round it, each weighted
   by its share of the bilinear footprint and by exp(−40 × how far its distance misses the
   pixel's own, as a share of the nearer); a pixel that none of the four matches within 10 %
-  (the near side of an edge) marches its own ray. Marching every pixel (the quality ladder's
-  top) draws "clouds" alone and leaves "clouds.march" empty; with no layer both are empty. The
+  (the near side of an edge) marches its own ray. Marching every pixel each frame (the
+  reference the labs hold the rest to: `Clouds::quarter` and `Clouds::spread` both false) draws
+  "clouds" alone and leaves "clouds.march" empty; with no layer both are empty. The
   ladder also takes a share of the steps (`Clouds::steps`, never under four) or draws no layer
   at all (§ The quality ladder). The `weather` lab holds the quarter to every pixel's march:
   under 1 % of the picture may differ by more than 8 levels of luma (`<sky>.quarter-misses`).
@@ -1204,6 +1205,19 @@ and a storm's 2. The cloud volume itself is M8f3 (below).
   full-size upsample, about 8, is the same either way); on a GPU, whose pass has no such floor,
   the march is nearer a quarter of its cost. In one ladder pricing run the clouds' high stop
   fell from 63 % of every pixel's march to 42 %.
+- EVERY PIXEL'S MARCH SPREAD (`Clouds::quarter` false, `Clouds::spread` true: the quality
+  ladder's top). The march target is a GRID over the frame (`kGrain`, a pipeline constant: the
+  three passes are made at the load at both grains, `cloud_grain` says which a view asks for and
+  `bind_cloud_targets` makes the targets at it): at grain 1 it is the frame's own size, so each
+  pixel marches its own ray to its own depth one frame in four, in the same turn order, and the
+  other three reproject as the half-size pixels do; "clouds" then lays the target over the
+  frame as it is. Targets bound at the other grain draw the reference instead. On the M3 Max at
+  2560 × 1440 from seed 38's start looking up into a flurry, the clouds' top stop fell from
+  8.17 ms over none to 4.61 (the frame's top from 11.77 to 8.17), the reprojection 0.4 of it
+  and the full-size lay-over 0.02; the `weather` lab's `--every=1` holds it to the reference
+  with the view swinging 30 degrees a second: 0.06 % of the fair sky's picture differs by more
+  than 8 levels (the quarter's spread march 0.87 %), the flurry's 0.38 % (the falling snow's
+  own, the same either way).
 
 What the mountain's broken skies stand is `plugins/mountain/app/cloud_field.hpp`: FAIR heaps at
 1.5 to 2 km over the valley floor and a few ice streaks at 8 km, FLURRIES' taller heaps under a
@@ -1314,10 +1328,17 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   Gaussian of the first's core (0.257 wavelengths over the radius) widened as the root of the
   order, so the disc melts into a bright smudge where the sun stands and, thicker still, into
   the deck's grey: frosted glass, then a bright patch, then nothing.
-- THE SHAFTS (`shafts` in `wgsl/frame.wgsl`): six points along the view ray, out to 20 km,
-  read the cloud's shadow; the air scatters that share of the sun (70 % of its in-scatter is
-  shadowed at most), on the world through the haze and on the sky strongest toward the sun, so
-  the gaps between heaps throw beams.
+- THE SHAFTS (`shafts` in `wgsl/frame.wgsl`): the mean of the cloud's shadow over the view
+  ray's points out to 20 km, bunched toward the eye (at R a² for a uniform a); the air scatters
+  that share of the sun (70 % of its in-scatter is shadowed at most), on the world through the
+  haze and on the sky strongest toward the sun, so the gaps between heaps throw beams. They are
+  the camera's alone, so a compute pass ("sky.shafts" in the sky's tables, `sky_shafts.wgsl`)
+  works them out once a frame in a volume over the screen (128 × 72 rays, 32 slices at
+  sqrt(distance / 20 km), 64 points a ray, the running mean kept at each slice's end) and every
+  pixel reads it once (group 0's binding 16). Every pixel's haze, the sky and each cloud layer's
+  haze once marched six points of their own; on the M3 Max at 2560 × 1440 from the chase camera
+  under a flurry that was 1.84 ms of the top's 8.40, and the `weather` lab's pictures against
+  the per-pixel march differ by a mean of 0.17 levels at most (a fair sky, 54 dB).
 - THE HEIGHT AND THE WIND (M8f9, `mountain/app/cloud_field.hpp`): every layer stands at its
   true height over the valley floor. The march walks the eye's rays through each slab, so a
   cirrus 8 km up needs no world under it. Each layer drifts on the wind aloft at its own
@@ -2575,6 +2596,12 @@ numbers and how they were measured are beside the table in `ladder.cpp`).
   (60 Hz) frame. The renderer's CPU half
   (every `prepare` and `encode`) stays under 1 ms on one core, whatever the instance
   counts. The `perf` skill says how a claim against these budgets is proven.
+  Held on the M3 Max (2026-11-06, the frame's GPU span, 2560 × 1440, seed 38): the top is
+  6.53 ms from the start looking up into a flurry (the `ladder` lab's `--price`, the heaviest
+  sky), 6.44 from the chase camera and 7.62 from the vista over the whole mountain; the
+  `profile` lab's chase frame 6.48 at the median and 6.96 at the p95, the middle of the ladder
+  4.02, and the CPU half 0.18 ms at the median. The phone's half is M11's: no device build
+  draws the frame yet.
 
 ## Where it is developed
 

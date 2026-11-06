@@ -14,7 +14,7 @@ if(GE_GPU)
   foreach(moon io ganymede triton)
     ge_embed_binary(ge_render ge_moon_colour_${moon} engine/render/moon_maps/${moon}_colour.png)
   endforeach()
-  ge_embed_wgsl(ge_render engine/render/sky_tables.wgsl engine/render/sky.wgsl
+  ge_embed_wgsl(ge_render engine/render/sky_tables.wgsl engine/render/sky_shafts.wgsl engine/render/sky.wgsl
     engine/render/terrain.wgsl engine/render/terrain_cull.wgsl engine/render/terrain_normals.wgsl
     engine/render/horizon.wgsl engine/render/hiz.wgsl engine/render/taa.wgsl engine/render/post.wgsl
     engine/render/instances.wgsl engine/render/instances_cull.wgsl engine/render/bloom.wgsl

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <string>
 
 #include "core/libm/libm.hpp"
 #include "render/clouds.wgsl.hpp"
@@ -332,7 +333,8 @@ namespace {
 uint32_t add_cloud_pipeline(gpu::Device& device, gpu::PipelineSet& pipelines,
                             const wgpu::ShaderModule& module, std::string_view label,
                             const char* entry, const wgpu::PipelineLayout& layout,
-                            std::initializer_list<wgpu::TextureFormat> formats, bool over) {
+                            std::initializer_list<wgpu::TextureFormat> formats, bool over,
+                            int grain = 2) {
   // Premultiplied over what is there: the cloud's light added, the rest kept by its
   // transmittance.
   wgpu::BlendState blend{};
@@ -351,6 +353,11 @@ uint32_t add_cloud_pipeline(gpu::Device& device, gpu::PipelineSet& pipelines,
   fragment.entryPoint = entry;
   fragment.targetCount = n;
   fragment.targets = colour.data();
+  wgpu::ConstantEntry grain_constant{};
+  grain_constant.key = "kGrain";
+  grain_constant.value = grain;
+  fragment.constantCount = 1;
+  fragment.constants = &grain_constant;
   wgpu::RenderPipelineDescriptor desc{};
   desc.label = label;
   desc.layout = layout;
@@ -403,21 +410,32 @@ void create_clouds(gpu::Device& device, gpu::PipelineSet& pipelines, CloudPass& 
       make_layout(device, "clouds.history",
                   {Slot::depth, Slot::texture, Slot::texture_raw, Slot::texture, Slot::texture_raw},
                   wgpu::ShaderStage::Fragment);
-  clouds.p_fresh = add_cloud_pipeline(device, pipelines, draw, "clouds.fresh", "fs_fresh", full,
-                                      {kHdrFormat, wgpu::TextureFormat::RG32Float}, false);
-  clouds.p_march =
-      add_cloud_pipeline(device, pipelines, draw, "clouds.march", "fs_march",
-                         make_pipeline_layout(device, "clouds.march", {frame, clouds.march_layout}),
-                         {kHdrFormat, wgpu::TextureFormat::RGBA32Float}, false);
-  clouds.p_upsample =
-      add_cloud_pipeline(device, pipelines, draw, "clouds.upsample", "fs_upsample",
-                         make_pipeline_layout(device, "clouds.upsample", {frame, clouds.up_layout}),
-                         {kHdrFormat}, true);
+  const wgpu::PipelineLayout march =
+      make_pipeline_layout(device, "clouds.march", {frame, clouds.march_layout});
+  const wgpu::PipelineLayout up =
+      make_pipeline_layout(device, "clouds.upsample", {frame, clouds.up_layout});
+  for (int grain = 1; grain <= 2; ++grain) {
+    const std::string at = grain == 2 ? "" : ".every";
+    clouds.p_fresh[grain - 1] =
+        add_cloud_pipeline(device, pipelines, draw, "clouds.fresh" + at, "fs_fresh", full,
+                           {kHdrFormat, wgpu::TextureFormat::RG32Float}, false, grain);
+    clouds.p_march[grain - 1] =
+        add_cloud_pipeline(device, pipelines, draw, "clouds.march" + at, "fs_march", march,
+                           {kHdrFormat, wgpu::TextureFormat::RGBA32Float}, false, grain);
+    clouds.p_upsample[grain - 1] =
+        add_cloud_pipeline(device, pipelines, draw, "clouds.upsample" + at, "fs_upsample", up,
+                           {kHdrFormat}, true, grain);
+  }
 }
 
-void bind_cloud_targets(gpu::Device& device, CloudPass& clouds, const FrameTargets& targets) {
-  clouds.quarter_width = std::max(1u, (targets.width + 1) / 2);
-  clouds.quarter_height = std::max(1u, (targets.height + 1) / 2);
+int cloud_grain(const Clouds& clouds) { return !clouds.quarter && clouds.spread ? 1 : 2; }
+
+void bind_cloud_targets(gpu::Device& device, CloudPass& clouds, const FrameTargets& targets,
+                        int grain) {
+  clouds.grain = grain == 1 ? 1 : 2;
+  const auto g = static_cast<uint32_t>(clouds.grain);
+  clouds.quarter_width = std::max(1u, (targets.width + g - 1) / g);
+  clouds.quarter_height = std::max(1u, (targets.height + g - 1) / g);
   const auto usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
   for (int k = 0; k < 2; ++k) {
     clouds.quarter[k] = make_texture(device, "clouds.quarter", clouds.quarter_width,
@@ -452,23 +470,28 @@ void encode_clouds(const CloudPass& clouds, const gpu::PipelineSet& pipelines, F
                    const FrameUniforms& block) {
   // A pass with nothing to do: an empty compute pass keeps its row without loading and storing a
   // target.
-  // Spread as fill_uniforms decided it (cloud_info.z: with the last frame's camera).
-  const bool spread = view.clouds.count > 0 && block.cloud_info[2] > 0;
+  // Marched into the target (at a quarter, or every pixel spread over frames, on targets bound at
+  // its grain), or every pixel each frame; spread as fill_uniforms decided it (cloud_info.z: with
+  // the last frame's camera).
+  const bool on_target = view.clouds.count > 0 && (view.clouds.quarter || view.clouds.spread) &&
+                         cloud_grain(view.clouds) == clouds.grain;
+  const bool spread = on_target && block.cloud_info[2] > 0;
   if (!spread) rec.compute(encoder, "clouds.fresh").End();
-  if (view.clouds.count <= 0 || !view.clouds.quarter) rec.compute(encoder, "clouds.march").End();
+  if (!on_target) rec.compute(encoder, "clouds.march").End();
   if (view.clouds.count <= 0) {
     rec.compute(encoder, "clouds").End();
     return;
   }
+  const size_t g = static_cast<size_t>(clouds.grain - 1);
   if (spread)
     draw_full(rec, encoder, "clouds.fresh", {clouds.fresh_view, clouds.fresh_dist_view}, false,
-              pipelines.render(clouds.p_fresh), frame, clouds.group);
-  if (view.clouds.quarter) {
+              pipelines.render(clouds.p_fresh[g]), frame, clouds.group);
+  if (on_target) {
     const size_t k = view.frame & 1;
     draw_full(rec, encoder, "clouds.march", {clouds.quarter_view[k], clouds.quarter_dist_view[k]},
-              false, pipelines.render(clouds.p_march), frame, clouds.march_group[k]);
-    draw_full(rec, encoder, "clouds", {targets.hdr_view}, true, pipelines.render(clouds.p_upsample),
-              frame, clouds.up_group[k]);
+              false, pipelines.render(clouds.p_march[g]), frame, clouds.march_group[k]);
+    draw_full(rec, encoder, "clouds", {targets.hdr_view}, true,
+              pipelines.render(clouds.p_upsample[g]), frame, clouds.up_group[k]);
   } else {
     draw_full(rec, encoder, "clouds", {targets.hdr_view}, true, pipelines.render(clouds.p_draw),
               frame, clouds.group);

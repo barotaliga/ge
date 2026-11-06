@@ -174,7 +174,9 @@ struct FrameOptions {
   const ge::render::CloudKind* cloud_kinds[ge::render::kCloudLayers] = {};
   int cloud_count = -1;
   bool cloud_quarter = true;  // the cloud marched at a quarter of the pixels (false: every one)
-  bool cloud_spread = true;   // the quarter's march spread over four frames, the rest reprojected
+  // The march spread over four frames, the rest reprojected: the quarter's, or every pixel's own
+  // ray (false with every pixel: each marched every frame, the reference).
+  bool cloud_spread = true;
   double reach_m = 0;  // how far the picture draws, misted (render/view.hpp); 0: the whole ground
   ge::render::PrecipSettings fall;
   ge::render::FogSettings froxels;             // the fog in areas' froxel volume

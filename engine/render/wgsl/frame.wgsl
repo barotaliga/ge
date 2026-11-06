@@ -65,6 +65,11 @@ struct SkyLight {
 // depth it was worked at), or the sky's 1 x 1 blank with it off.
 @group(0) @binding(12) var ao_map: texture_2d<f32>;
 
+// The shafts (render/sky.hpp's `Sky::shafts`, made each frame by sky_shafts.wgsl): the share of
+// the sun the air along the screen's rays gets, over the screen's uv and sqrt(distance / reach),
+// read by `shafts`.
+@group(0) @binding(16) var shaft_volume: texture_3d<f32>;
+
 // THE SHARE OF THE SKY a surface drawn at `at` (a fragment's position: the pixel and its depth)
 // sees, 0..1: the four half-size texels round it, each by how near it is and how like the
 // surface's own its depth is, so one surface's shade stays off the one beside it.
@@ -206,26 +211,23 @@ fn cloud_shadow(p: vec3f) -> f32 {
   return exp(-tau);
 }
 
-// THE SHAFTS: the share of the sun's light the air along a view ray `d` gets, out to `far` m (at
-// most kShaftReach), averaged over kShaftSteps points dithered per pixel `px` and per frame:
-// where the cloud's shadow crosses the air, the air scatters less of the sun, and the sky reads
-// as beams between the heaps. 1 with no layer, or with the sun low.
-const kShaftSteps = 6;
+// THE SHAFTS: the share of the sun's light the air along the view ray at the screen's `uv` gets,
+// out to `far` m (at most kShaftReach): the mean of the cloud's shadow over its points, bunched
+// toward the eye. Where the cloud's shadow crosses the air, the air scatters less of the sun, and
+// the sky reads as beams between the heaps. Read from the volume a pass makes each frame
+// (sky_shafts.wgsl, render/sky.hpp's kShaftW x kShaftH x kShaftD); 1 with no layer, or with the
+// sun low.
 const kShaftReach = 20000.0;
 const kShaftShare = 0.7;
+const kShaftSize = vec3f(128.0, 72.0, 32.0);
 
-fn shafts(d: vec3f, far: f32, px: vec2f) -> f32 {
+fn shafts(uv: vec2f, far: f32) -> f32 {
   if (i32(frame.cloud_info.x) == 0 || frame.sun.y < 0.02 || frame.weather.y > 0.99) {
     return 1.0;
   }
-  let reach = min(far, kShaftReach);
-  let j = fract(52.9829189 * fract(dot(px, vec2f(0.06711056, 0.00583715)) + 0.618034 * frame.time.y));
-  var lit = 0.0;
-  for (var i = 0; i < kShaftSteps; i++) {
-    let a = (f32(i) + j) / f32(kShaftSteps);
-    lit += cloud_shadow(frame.eye.xyz + d * (reach * a * a));
-  }
-  return lit / f32(kShaftSteps);
+  let s = sqrt(clamp(far / kShaftReach, 0.0, 1.0));
+  let w = max(s - 0.5 / kShaftSize.z, 0.5 / kShaftSize.z);
+  return textureSampleLevel(shaft_volume, linear_clamp, vec3f(uv, w), 0.0).r;
 }
 
 // The sun's light reaching a point at `world_y` (m) over the world's `xz`: illuminance times the
@@ -447,7 +449,7 @@ fn haze_air(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
     b = normalize(vec3f(b.x, max(b.y, 0.01), b.z));
     air += (1.0 - v.a) * select(moon_sky(b), sun_sky(b), frame.world.w > 0.5);
   }
-  let lit = shafts(view_ray(frame, uv), dist_m, uv * frame.size.xy);
+  let lit = shafts(uv, dist_m);
   air *= mix(1.0, lit, kShaftShare * (1.0 - frame.weather.y));
   let inscatter = mix(air, (1.0 - v.a) * deck_horizon(), frame.weather.y);
   var c = colour * mix(1.0, v.a, k) + inscatter * k;
