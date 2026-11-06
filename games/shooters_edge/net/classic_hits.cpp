@@ -4,6 +4,7 @@
 // ge:test tests/shooters_edge_team_test.cpp
 #include "shooters_edge/net/classic_hits.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -125,6 +126,18 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
       const float blow = b.life[i] - life;
       const int from = entity_of(s, e, f.dmg_inflictor);
       // (A blow under 3 points is a mega health's rot, not a hit.)
+      // A missile's hit proves its shot: one the ammunition did not show (fired on the frame he
+      // died, or took ammunition up) is counted with it.
+      const auto proven = [&](int at, HitWeapon hw) {
+        HitCount& c = count(at, hw);
+        if (c.fired >= c.hit) return;
+        c.fired = c.hit;
+        if (hw == HitWeapon::rocket_direct || hw == HitWeapon::rocket_blast) {
+          HitCount& d = count(at, HitWeapon::rocket_direct);
+          HitCount& bl = count(at, HitWeapon::rocket_blast);
+          d.fired = bl.fired = std::max(d.fired, bl.fired);
+        }
+      };
       if (blow >= kLeast && from > 0 && static_cast<size_t>(from) < n) {
         const bool missile = from > clients;
         // A missile is gone by the time its blow is read: what it was and whose, a frame ago.
@@ -153,9 +166,11 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
               if (direct) {
                 if (was == 1) count(at, HitWeapon::rocket_blast).hit--;
                 count(at, HitWeapon::rocket_direct).hit++;
+                proven(at, HitWeapon::rocket_direct);
                 struck[static_cast<size_t>(from)] = 2;
               } else if (was == 0) {
                 count(at, HitWeapon::rocket_blast).hit++;
+                proven(at, HitWeapon::rocket_blast);
                 struck[static_cast<size_t>(from)] = 1;
               }
             } else if (was == 0) {
@@ -163,6 +178,7 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
                                    : k == kHeavySpike ? HitWeapon::heavy
                                                       : HitWeapon::spiker;
               count(at, w2).hit++;
+              proven(at, w2);
               struck[static_cast<size_t>(from)] = 2;
             }
           }

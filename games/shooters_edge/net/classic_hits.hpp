@@ -16,6 +16,9 @@
 //   damage, which the blast then spares), or one that killed a player the rocket was within 32
 //   units of the frame before; any other rocket that hurt an enemy hit by its blast alone.
 //
+// A missile's hit proves its shot: when the ammunition did not show one (fired on the frame the
+// shooter died, or took ammunition up), the shot is counted with the hit.
+//
 // Read only: it changes nothing on the server, so it moves no digest of the game itself.
 //
 // ge:summary Each player's shots and hits per weapon, off ammunition spent and blows taken
