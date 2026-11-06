@@ -139,6 +139,9 @@ struct ClassicClientEnd {
   float movevars[10] = {800, 100, 320, 500, 10, 10, 10, 4, 4, 1};  // serverdata's, in its order
   sh::MoveCmd sent[64];        // each move's newest command, by its packet's sequence mod 64
   uint32_t sent_seq[64] = {};  // the sequence each `sent` slot holds (0: none)
+  double sent_at[64] = {};     // the network's time each `sent` slot went, s
+  double player_at[32] = {};   // the network's time each player's newest record arrived, s
+  double latency = 0;          // s: the newest acknowledged move's round trip
   int64_t setangles = 0;       // turns read
   int lightstyles = 0, statics = 0, static_sounds = 0;
   int valid_frame = -1;  // the newest frame's sequence held (-1: none)
