@@ -7,8 +7,8 @@
 #include "particles/effect.hpp"
 
 #include <algorithm>
-#include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <utility>
 
 #include "core/libm/libm.hpp"
@@ -34,9 +34,12 @@ std::vector<std::string_view> words_of(std::string_view line) {
 }
 
 bool number(std::string_view w, double& out) {
-  const char* end = w.data() + w.size();
-  const auto r = std::from_chars(w.data(), end, out);
-  return r.ec == std::errc() && r.ptr == end && std::isfinite(out);
+  // strtod, not from_chars: Apple's libc++ has no floating-point from_chars.
+  if (w.empty()) return false;
+  const std::string s(w);
+  char* end = nullptr;
+  out = std::strtod(s.c_str(), &end);
+  return end == s.c_str() + s.size() && std::isfinite(out);
 }
 
 bool good_name(std::string_view n) {
