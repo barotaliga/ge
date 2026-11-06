@@ -38,6 +38,7 @@
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -82,6 +83,10 @@ struct Remote {
   sh::Vec3f prediction;  // the player's predicted origin, the correction not added
   sh::Smoothing smooth;  // the prediction's correction
   sh::MoveCmd hands;     // the window's command, sent at the next tick (an impulse held to it)
+  // The game's files as the server's game folder holds them (ClientConfig::read_file: the map's
+  // checksum and the model checks a server asks for); unset, they are sent as 0 and unsent.
+  std::function<std::vector<uint8_t>(const std::string& gamedir, const std::string& path)>
+      read_file;
   gn::Address server;
   bool active = false;
   ClientStage said = ClientStage::challenge;  // the stage last reported

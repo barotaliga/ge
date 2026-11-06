@@ -16,6 +16,11 @@
 // Opus-coded (net/voice_codec.hpp) and sent as one voice message (clc 83) a tick with the frames
 // cut since the last. It counts the voice messages it is sent by talker.
 //
+// STUFFED LINES: `cmd ...` is sent on; `color`, `team`, `skin`, `name`, `topcolor`, `bottomcolor`
+// and `setinfo` change the user info and tell the server (a team mod sets the player's colours
+// and drops a player who does not take them); the first `kStuffedKept` lines are kept in
+// `stuffed`.
+//
 // RECORDING (`record`, set after `client_start`): every packet it reads and every command it sends
 // go into a ClientRecorder (classic_record.hpp), and its own voice with them in the voice format.
 //
@@ -24,7 +29,8 @@
 // ge:summary A scripted classic-protocol client: challenge, connect, signon, downloads, moves
 // ge:keywords classic-client scripted-client signon getchallenge connect pext skins download
 // ge:keywords nextdl chunked frames delta-request playerinfo packetentities client_tick
-// ge:keywords voice talk speech team record client-recording
+// ge:keywords voice talk speech team record client-recording map-checksum stuffed color setinfo
+// ge:keywords read_file pmodel emodel
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_server_test.cpp
 #pragma once
@@ -62,6 +68,8 @@ sh::MoveCmd default_script(int tick, int seed);
 // Whether the client speaks at a tick.
 using ClientTalk = bool (*)(int tick, int seed);
 
+inline constexpr size_t kStuffedKept = 256;
+
 struct ClientConfig {
   std::string name = "player";
   std::string skin = "base";
@@ -73,6 +81,12 @@ struct ClientConfig {
   ClientExtMode mode = ClientExtMode::lines;
   Ext ask = first_tier();          // what it understands
   std::vector<std::string> files;  // the files it already has ("skins/base.pcx")
+  // The game's file at `path` ("maps/dm4.bsp") in the server's game folder `gamedir`, empty when
+  // it has none. The first `prespawn` carries the map's checksum off it (classic_mapsum.hpp); with
+  // no reader or no file it carries 0, which a server checking maps refuses. Before it, the client
+  // reports its player and eyes models' CRC-16 (`setinfo pmodel`, `emodel`) when it has them.
+  std::function<std::vector<uint8_t>(const std::string& gamedir, const std::string& path)>
+      read_file;
   ClientScript script = &default_script;
   // A bot at the controls: when set, each move's command is asked of it (the tick) in place of
   // `script`. It may read anything its owner gives it; the client sends what it returns.
@@ -119,6 +133,7 @@ struct ClassicClientEnd {
   std::vector<std::string> sounds, models;  // [0] ""
   int sound_last = 0, model_last = 0;
   int stufftexts = 0;
+  std::vector<std::string> stuffed;  // the first kStuffedKept console lines stuffed, as sent
   ClientStage stage = ClientStage::challenge;
   bool begun = false;
   double connected_at = -1, active_at = -1;  // the network's times, s
