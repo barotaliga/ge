@@ -27,6 +27,7 @@
 #include "shooter/traits.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
+#include "shooters_edge/bots/map_plan.hpp"
 
 namespace shooters_edge::net {
 
@@ -47,11 +48,13 @@ struct TeamNav {
   std::vector<std::unique_ptr<TeamDive>> dives;
   std::vector<int32_t> item_dive;  // each item's dive, -1 none
   bool dives_made = false;
+  bt::MapPlan plan;  // the map's team plan (bots/map_plan.hpp), made with the first fighter
+  bool plan_made = false;
 };
 
 // Fighter `f` set up on player slot `slot` from what `seen` holds (our server's world, or a
 // client's: classic_mirror.hpp): its items off the map's `entities`, its yaw, the map's place
-// names, the dives and the swim field.
+// names, the dives and the swim field, and the map's team plan (made with the first).
 void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const server::RulesCommon& seen, int slot,
                         const char* entities, sh::AimSkill skill, const sh::Traits& traits,
                         double hz, uint32_t seed, const std::string& name);

@@ -109,6 +109,7 @@ bool load_map(BotTeam& t, const ClassicClientEnd& c, const std::string& file) {
   t.local.reset();
   t.loaded.reset();
   t.movers_named = false;
+  t.plan_said = false;
   for (auto& s : t.seats) s->set_up = false;
   Mount& m = *mount_of(t);
   const std::vector<uint8_t> bytes =
@@ -227,6 +228,15 @@ void set_up(BotTeam& t, BotSeat& s) {
     }
   t.team.name = t.cfg.team;
   bt::team_init(t.team);
+  if (t.nav->plan_made && !t.plan_said) {
+    t.plan_said = true;
+    std::string text = bt::plan_text(t.nav->plan, s.fighter->items);
+    for (size_t at = 0; at < text.size();) {
+      const size_t nl = text.find('\n', at);
+      say(t, "plan: " + text.substr(at, nl - at));
+      at = nl == std::string::npos ? text.size() : nl + 1;
+    }
+  }
   say(t, s.name + ": set up on " + t.map + " in slot " + std::to_string(c.playernum) + ", " +
              std::to_string(s.fighter->items.size()) + " items known of");
 }

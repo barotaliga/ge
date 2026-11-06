@@ -162,6 +162,8 @@ struct TeamMatchReport {
   std::string locs_from;                     // where the place names came from
   int64_t locs = 0;                          // how many points they name
   int64_t lines_read = 0, lines_missed = 0;  // team lines the fighters read and missed
+  std::string plan;  // the map's team plan as lines (bots/map_plan.hpp)
+  int32_t plan_areas = 0, plan_base = -1;
   uint64_t digest = 0;
   int64_t faults = 0;
   std::vector<uint8_t> mvd;  // the recording

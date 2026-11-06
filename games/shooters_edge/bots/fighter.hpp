@@ -163,6 +163,8 @@ struct FoeRead {
   double quad_until = -1e9;  // his quad heard taken, believed held until then
 };
 
+struct MapPlan;
+
 struct Fighter {
   // Ordered by size, largest first, so the struct packs tight.
   sh::Bot bot;
@@ -206,6 +208,7 @@ struct Fighter {
   ge::ai::Why* why = nullptr;
   Team* team = nullptr;                          // its side (team.hpp); null in a free-for-all
   const ge::shooter::Locs* locs = nullptr;       // the map's place names (none: no names)
+  const MapPlan* plan = nullptr;  // the map's team plan (map_plan.hpp; none: the items alone)
   const ge::shooter::SwimField* swim = nullptr;  // the map's way out of its water (none: no water)
   int64_t buttons = 0;                           // buttons gone to
   int64_t dives = 0;                             // dives begun
