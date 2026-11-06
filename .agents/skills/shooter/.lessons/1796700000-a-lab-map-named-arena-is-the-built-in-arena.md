@@ -2,7 +2,7 @@
 title: A lab's own map must not be called arena: the listen loads its built-in test arena
 date: 2026-11-06
 scope: games/shooters_edge/client/listen.hpp, games/shooters_edge/labs/gpu_se_speedjump_lab.cpp
-concepts: [load_named_map, arena, fixture-map, lab-map, map-name, built-in-arena]
+concepts: [load-named-map, arena, fixture-map, lab-map, map-name, built-in-arena]
 ---
 
 `cl::load_named_map(files, "arena", …)` returns the built-in test arena (its stairs, its pit,
