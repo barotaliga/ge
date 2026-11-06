@@ -84,7 +84,7 @@ struct Field {
   }
 };
 
-enum class Hands { forward_jump, best_strafe };
+enum class Hands : uint8_t { forward_jump, best_strafe };
 
 // A run on the field: the run-up, then `hands` for kSeconds; the plan speed at every command.
 struct MoveRun {
