@@ -303,7 +303,7 @@ characters.
 | `engine/gpu/` | The native GPU device over Dawn (`GE_GPU`): adapters and tiers, pipelines and the manifest, surfaces, targets, timers; the only place webgpu.h is included | `gpu` |
 | `engine/render/` | Generic rendering mechanisms (`docs/rendering.md`): the frame and its pass table, sky, terrain, shadows, Hi-Z, TAA-U, bloom, post, meshes, instances, skinning; WGSL beside each | `render` |
 | `engine/audio/` | The synth (`ge::audio`): the voice vocabulary, the DSP graph, sounds and racks, the meter, WAV; deterministic, no platform | `audio` |
-| `engine/assets/` | Authored models: the glTF loader and writer, the `Model`, posing and CPU skinning; no GPU | `assets` |
+| `engine/assets/` | Authored models: the glTF loader and writer, the skeletal model file (.iqm), the `Model`, posing and CPU skinning; no GPU | `assets` |
 | `engine/ui/` | The 2D layer (`ge::ui`): paints, the draw list, images, fonts, the CPU raster, backdrops, menus as a model and a view; no GPU | `ui` |
 | `engine/charset/` | The bitmap fonts (`ge::charset`, `docs/charsets.md`): ten ASCII charsets as committed atlases and their builder, the noise layers, the text looks, text layout | `ui` |
 | `engine/hud/` | The HUD kit (`ge::hud`): faces over TrueType or a charset, the frame and anchors, readouts, bars, pips, banners, the feed, the layout check | `ui` |
