@@ -131,8 +131,34 @@ void() intermission_start = {
   WriteByte(MSG_ALL, SVC_INTERMISSION);
 };
 
+// The episode (its bit, as a rune's) a start map's way in leads to; 0 for any other map.
+float(string m) episode_of = {
+  if (m == "e1m1") return 1;
+  if (m == "e2m1") return 2;
+  if (m == "e3m1") return 4;
+  if (m == "e4m1") return 8;
+  return 0;
+};
+
+// In coop the episodes open one at a time: the first always, each next once the one before is
+// done (`sv_episodes_done`, a rune's bit for each, kept by the host from game to game).
+float(string m) episode_shut = {
+  local float bit;
+  if (!coop || mapname != "start") return FALSE;
+  bit = episode_of(m);
+  if (bit <= 1) return FALSE;
+  return !(cvar("sv_episodes_done") & (bit / 2));
+};
+
 void() changelevel_touch = {
   if (other.classname != "player" || intermission_running) return;
+  if (episode_shut(self.map)) {
+    if (time >= self.attack_finished) {
+      centerprint(other, "This episode opens once the one before it is done.");
+      self.attack_finished = time + 2;
+    }
+    return;
+  }
   next_map = self.map;
   activator = other;
   use_targets();
@@ -277,6 +303,8 @@ string(float bit) episode_words = {
 void() sigil_touch = {
   if (other.classname != "player" || other.health <= 0) return;
   serverflags = serverflags | (self.spawnflags & 15);
+  // In coop the next episode opens for good (the host keeps it from game to game).
+  if (coop) cvar_set("sv_episodes_done", ftos(cvar("sv_episodes_done") | (self.spawnflags & 15)));
   if (!deathmatch) finale_words = episode_words(self.spawnflags & 15);
   centerprint(other, "The episode's rune is yours.");
   sound(other, CHAN_ITEM, "weapons/pkup.wav", 1, ATTN_NORM);

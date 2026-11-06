@@ -71,7 +71,7 @@ function(ge_add_plugin name)
 
   # A plugin's command-line tool (plugins/<name>/tool/): the executable `<name>` beside the labs
   # in the build's root, linking the plugin, run by `ge tool <name> -- <its arguments>`.
-  if(tool_sources)
+  if(tool_sources AND (NOT DEFINED GE_HOST_TOOLS OR GE_HOST_TOOLS))
     add_executable(${name} ${tool_sources})
     target_link_libraries(${name} PRIVATE ${target})
     set_target_properties(${name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")

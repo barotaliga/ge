@@ -40,12 +40,16 @@ void(entity killer, entity killed) note_frag = {};
 
 void(entity m) missile_now = {};
 
-// In coop with `teamplay` on, the players are one side: one player's shots never harm another
-// (his own blast still harms himself). Monsters are on no side. No backpacks are left.
+// In coop the players are one side unless `sv_friendlyfire` is on: one player's shots never harm
+// another (his own blast still harms himself). Monsters are on no side. No backpacks are left.
 float(entity a, entity b) same_team = {
-  if (!coop || !teamplay || a == b) return FALSE;
+  if (!coop || a == b || cvar("sv_friendlyfire")) return FALSE;
   return (a.flags & FL_CLIENT) && (b.flags & FL_CLIENT);
 };
+
+// And a teammate's blow that does not harm him pushes him only with `sv_friendlypush` on (off: no
+// rocket boost off a friend).
+float(entity a, entity b) team_shoves = { return cvar("sv_friendlypush"); };
 void() drop_on_death = {};
 
 // --- the jump: the single-player form's program jumps for itself (the move never does) ---
@@ -144,12 +148,42 @@ entity(string kind) next_spot = {
   return spot;
 };
 
+// A spot no living player stands on (within a player's width), self aside.
+float(entity spot) spot_free = {
+  local entity e;
+  e = findradius(spot.origin, 40);
+  while (e) {
+    if (e != self && (e.flags & FL_CLIENT) && e.health > 0) return FALSE;
+    e = e.chain;
+  }
+  return TRUE;
+};
+
+// In coop the next coop start no one stands on (round the map's list; the map's start counts as
+// one), the next in turn when every one is taken.
+entity() coop_spot = {
+  local entity first, spot;
+  local float n;
+  first = next_spot("info_player_coop");
+  spot = first;
+  n = 0;
+  while (spot && n < 16) {
+    if (spot_free(spot)) return spot;
+    spot = next_spot("info_player_coop");
+    if (spot == first) spot = world;
+    n = n + 1;
+  }
+  spot = find(world, classname, "info_player_start");
+  if (spot && spot_free(spot)) return spot;
+  return first;
+};
+
 // A coop start in coop, a deathmatch spawn point in deathmatch, else the map's start; the start
 // when the map has none of the kind asked for.
 entity() spawn_point = {
   local entity spot;
   spot = world;
-  if (coop) spot = next_spot("info_player_coop");
+  if (coop) spot = coop_spot();
   else if (deathmatch) spot = next_spot("info_player_deathmatch");
   if (!spot) spot = find(world, classname, "info_player_start");
   if (!spot) error("the map has no info_player_start");

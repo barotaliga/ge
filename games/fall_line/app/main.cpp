@@ -771,7 +771,7 @@ static int run_main(int argc, char** argv) {
 
 // What nothing else caught ends the program here, with a line that says so, rather than in
 // std::terminate's bare abort.
-int main(int argc, char** argv) {
+static int guarded_main(int argc, char** argv) {
   try {
     return run_main(argc, argv);
   } catch (const std::exception& e) {
@@ -788,3 +788,6 @@ int main(int argc, char** argv) {
   }
   return 1;
 }
+
+// The platform's app runs the game (inside the system's app on iOS: engine/platform/window.hpp).
+int main(int argc, char** argv) { return ge::platform::run_app(argc, argv, guarded_main); }

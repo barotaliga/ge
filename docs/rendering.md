@@ -110,9 +110,19 @@ extension behind a feature tier, never a second graphics API.
 macOS (arm64): `cmake/Dawn.cmake` pins one release tag and each archive's SHA-256, and
 downloads it into `.cache/deps/` at configure time (the archive also carries `tint`, which
 `make shaders-check` runs). The prebuilt library is a Release build, so an MSVC Debug build
-refuses `GE_GPU=ON`. iOS, iPadOS and Android (and Linux arm64) will build Dawn from source with
-its CMake build, cached in CI (M11). Until then those rows build with `GE_GPU=OFF`, which
-builds and tests everything except `engine/gpu`, `engine/render` and the app.
+refuses `GE_GPU=ON`. The same release carries the MOBILE archives (M11a): an Apple
+xcframework (a static library for iOS and iPadOS devices, one for the iOS Simulator, one for
+the Mac), Android's static libraries (one an ABI) and a headers archive. Their CMake package
+was written by the Android build, with that machine's paths, so `cmake/Dawn.cmake` declares
+`dawn::webgpu_dawn` itself over the target's slice and the system libraries it needs (Metal,
+QuartzCore, IOSurface, UIKit; Android's log). Only Linux arm64 has no archive; it will build Dawn
+from source, and until then builds with `GE_GPU=OFF`, which builds and tests everything except
+`engine/gpu`, `engine/render` and the app.
+
+**The iOS Simulator draws no shadowed frame.** Dawn's Metal backend turns comparison samplers
+off there (the simulator's Metal has none), and every shadow lookup samples with one, so the
+device is lost at the first frame. A device has them. The simulator proves the build, the
+bundle and the start; the picture is a device's (M11b).
 
 **The C++ surface.** `engine/gpu` calls Dawn's `webgpu_cpp.h` (`wgpu::Device`,
 `wgpu::Buffer`, …), whose handles are reference-counted RAII already. The engine adds
@@ -1297,8 +1307,12 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   `render/clouds.cpp`): the column's tile point pushed up to `warp` cells by two more reads of
   the noise a tile apart, at the tile's own scale so the drift's wrap stays seamless. A cell's
   outline leans and twists instead of standing as a dome its neighbours match; every read the
-  layer makes (its column, its thickness, its detail, its shadow) takes the warped point. 0 by
-  default; the classic maps' stacks deal it (`plugins/brush/app/bsp_sky.hpp`, M8f15).
+  layer makes (its column, its thickness, its detail, its shadow) takes the warped point. A warped
+  layer never shows its tile repeating: the warp's second read is at three sevenths of the tile's
+  scale, its column's noise is blended with a read at five sevenths (spread back to the noise's
+  range, so the cover holds), its islands are read at two sevenths, and its drift wraps at
+  `kWarpTiles` (7) tiles, so it repeats every 56 cells instead of every 8. 0 by default; the
+  classic maps' stacks deal it (`plugins/brush/app/bsp_sky.hpp`, M8f15).
 - THROUGH IT, THE DISC: the sky draws the sun's and the moon's discs behind the cloud, so a
   disc shows by the ray's own transmittance, exp(−τ), wherever on the ray its light was taken:
   bright through a thin patch, gone behind a core. Two things used to leak it: the march stopping
@@ -2703,7 +2717,7 @@ Each library is added in the milestone that first needs it, pinned to a tag.
 
 | Library | Licence | For | Milestone |
 | --- | --- | --- | --- |
-| Dawn | BSD-3-Clause | The GPU API on every target (prebuilt on the desktop, from source for iOS, iPadOS and Android); Tint for `make shaders-check` | M6 |
+| Dawn | BSD-3-Clause | The GPU API on every target (the pinned release's prebuilt archives: the desktop's, and the mobile ones for iOS, iPadOS and Android); Tint for `make shaders-check` | M6 |
 | SDL3 | zlib | The window and the surface (already the platform layer) | M6 |
 | cgltf | MIT | Loading authored glTF models (`cmake/Cgltf.cmake`: one header, pinned by commit and SHA-256) | M8e1 |
 | Dear ImGui | MIT | The developer UI, behind `GE_DEV_UI` | M10 |

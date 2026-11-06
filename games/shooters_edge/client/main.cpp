@@ -69,6 +69,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "capture/screenshot.hpp"
@@ -87,6 +88,7 @@
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/controls.hpp"
+#include "shooters_edge/client/coop_mode.hpp"
 #include "shooters_edge/client/demo_heard.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_video.hpp"
@@ -180,6 +182,8 @@ int run_main(int argc, char** argv) {
                         if (listen.server) listen.rules->console(a.rest(0));
                       });
   cl::add_lobby_commands(console, listen);
+  cl::CoopMode coop_mode;  // sv_coop and its settings (client/coop_mode.hpp)
+  cl::add_coop_cvars(console, coop_mode);
   cl::add_cvars(console, controls);
   cl::default_binds(console);  // before the configs, which rebind what the player changed
   shooters_edge::look::add_cvars(console, picture);
@@ -254,6 +258,26 @@ int run_main(int argc, char** argv) {
     out::status("shooters_edge: " + std::to_string(cl::archive_paths(files).size()) +
                 " archives on the search path of " + files.folder);
   }
+  // A server's game folder for `connect`: the window's own search path when it is the same game
+  // (or the base), else that folder under the base folder, mounted once.
+  remote.read_file = [&files, &args,
+                      other = std::make_shared<std::pair<std::string, cl::SearchPath>>()](
+                         const std::string& gamedir, const std::string& path) {
+    std::vector<uint8_t> store;
+    const cl::SearchPath* from = &files;
+    if (!gamedir.empty() && gamedir != args.game &&
+        gamedir != ge::classicenhance::classic_profile().base_dir) {
+      if (other->first != gamedir) {
+        std::string why;
+        other->second = {};
+        if (!cl::open_game_dir(args.basedir, gamedir, other->second, why)) return store;
+        other->first = gamedir;
+      }
+      from = &other->second;
+    }
+    const std::span<const uint8_t> got = cl::find_file(*from, path, store);
+    return std::vector<uint8_t>(got.begin(), got.end());
+  };
   if (!args.demovideo.empty()) return cl::demo_video_main(console, args, files, picture, playback);
   // The window first, the title's night in it at once (client/title.hpp); the rest of the start
   // (the pictures, the programs) and the first map (client/map_load.hpp) come in behind it.
@@ -380,6 +404,9 @@ int run_main(int argc, char** argv) {
   }
   // The first map is started where every map change is (the loop below, behind the window).
   listen.opt = listen_opt;
+  // `sv_coop 1` from a cfg or the command line: the game starts as a coop game on the start map.
+  cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,
+                 next_map);
 
   // The held weapons: a classic game's own, else ours from the folder given, the tree's from here
   // or from where it was built (client/held.hpp).
@@ -707,6 +734,10 @@ int run_main(int argc, char** argv) {
           cl::load_world(loader, files, *listen.map, picture, listen.server->models, adapter, t);
       }
     }
+
+    // Co-op as the window's mode: `sv_coop` turned on, the friendly-fire settings, the episodes.
+    cl::coop_frame(coop_mode, listen, game_content.campaign != nullptr, game_content.start_map,
+                   next_map);
 
     // A map asked for (the console's `map`, or the mod's level change at its limits), read behind
     // the window (client/map_load.hpp): started on the server once read, its world made behind

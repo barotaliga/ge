@@ -9,12 +9,14 @@
 
 #include <cstdio>
 #include <cstring>
+#include <utility>
 
 #include "net/voice_trial.hpp"
 #include "progs/text.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_info.hpp"
+#include "shooters_edge/net/classic_mapsum.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 
 namespace shooters_edge::net {
@@ -174,6 +176,7 @@ void on_stufftext(ClassicClientEnd& c, const std::string& text) {
     if (end == std::string::npos) end = text.size();
     const std::string line = text.substr(at, end - at);
     at = end + 1;
+    if (c.stuffed.size() < kStuffedKept) c.stuffed.push_back(line);
     pg::Words w;
     pg::tokenize_words(line.c_str(), w);
     const std::string cmd = pg::word(w, 0);
@@ -194,6 +197,34 @@ void on_stufftext(ClassicClientEnd& c, const std::string& text) {
       c.ext[ExtFamily::z] = c.cfg.ask[ExtFamily::z] & static_cast<uint32_t>(std::atoi(z.c_str()));
     } else if (cmd == "skins") {
       start_skins(c);
+    } else if (cmd == "color" && w.count >= 2) {
+      // The player's colours, as a mod sets them (a team's): the user info and the server told.
+      c.cfg.topcolor = std::atoi(pg::word(w, 1));
+      c.cfg.bottomcolor = w.count >= 3 ? std::atoi(pg::word(w, 2)) : c.cfg.topcolor;
+      client_command(c, "setinfo topcolor " + std::to_string(c.cfg.topcolor));
+      client_command(c, "setinfo bottomcolor " + std::to_string(c.cfg.bottomcolor));
+    } else if ((cmd == "team" || cmd == "skin" || cmd == "name" || cmd == "topcolor" ||
+                cmd == "bottomcolor") &&
+               w.count >= 2) {
+      const std::string value = pg::word(w, 1);
+      if (cmd == "team") c.cfg.team = value;
+      if (cmd == "skin") c.cfg.skin = value;
+      if (cmd == "name") c.cfg.name = value;
+      if (cmd == "topcolor") c.cfg.topcolor = std::atoi(value.c_str());
+      if (cmd == "bottomcolor") c.cfg.bottomcolor = std::atoi(value.c_str());
+      std::string ask = "setinfo ";
+      ask += cmd;
+      ask += " \"";
+      ask += value;
+      ask += '"';
+      client_command(c, ask);
+    } else if (cmd == "setinfo" && w.count >= 3) {
+      std::string ask = "setinfo ";
+      ask += pg::word(w, 1);
+      ask += " \"";
+      ask += pg::word(w, 2);
+      ask += '"';
+      client_command(c, ask);
     } else if (cmd == "reconnect" || cmd == "changing") {
       // The server changed the map: the signon again, to `begin` on the new one.
       if (cmd == "reconnect") {
@@ -203,6 +234,14 @@ void on_stufftext(ClassicClientEnd& c, const std::string& text) {
       }
     }
   }
+}
+
+// The map's second checksum as the first prespawn sends it (signed, as the server prints it).
+int32_t map_checksum(const ClassicClientEnd& c) {
+  if (!c.cfg.read_file || c.models.size() < 2) return 0;
+  const std::vector<uint8_t> bsp = c.cfg.read_file(c.gamedir, c.models[1]);
+  const MapChecksums sums = map_checksums(bsp);
+  return sums.ok ? static_cast<int32_t>(sent_checksum(c.models[1], sums)) : 0;
 }
 
 void on_list(ClassicClientEnd& c, const SvcMsg& m, bool models) {
@@ -224,7 +263,16 @@ void on_list(ClassicClientEnd& c, const SvcMsg& m, bool models) {
   } else if (!models) {
     client_command(c, "modellist " + sc + " 0");
   } else {
-    client_command(c, "prespawn " + sc + " 0 0");
+    // The model checks (the player's and the eyes' whole files, CRC-16), then the map's.
+    for (const auto& [key, path] :
+         {std::pair{"pmodel", "progs/player.mdl"}, std::pair{"emodel", "progs/eyes.mdl"}}) {
+      if (!c.cfg.read_file) break;
+      const std::vector<uint8_t> mdl = c.cfg.read_file(c.gamedir, path);
+      if (!mdl.empty())
+        client_command(
+            c, std::string("setinfo ") + key + " " + std::to_string(crc16(mdl.data(), mdl.size())));
+    }
+    client_command(c, "prespawn " + sc + " 0 " + std::to_string(map_checksum(c)));
   }
 }
 
@@ -344,6 +392,7 @@ void apply(ClassicClientEnd& c, const SvcMsg& m) {
       if (m.player.slot >= 0 && m.player.slot < 32) {
         c.players[m.player.slot] = m.player;
         c.player_seen[m.player.slot] = true;
+        c.player_at[m.player.slot] = c.now;
       }
       break;
     case svc::setangle:
@@ -546,7 +595,10 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
     }
     if (c.stage != ClientStage::signon && c.stage != ClientStage::active) continue;
     size_t at = 0;
+    const uint32_t acked = c.ch.incoming_acknowledged;
     if (!channel_process(c.ch, buf, size, c.now, at)) continue;
+    const uint32_t ack = c.ch.incoming_acknowledged;
+    if (ack != acked && c.sent_seq[ack & 63] == ack) c.latency = c.now - c.sent_at[ack & 63];
     read_payload(c, buf, size, at);
     if (!c.error.empty()) {
       c.stage = ClientStage::dropped;
@@ -592,6 +644,7 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
     write_move(w, c.cmds, static_cast<uint8_t>(loss), c.ch.outgoing_sequence);
     c.sent[c.ch.outgoing_sequence & 63] = cmd;
     c.sent_seq[c.ch.outgoing_sequence & 63] = c.ch.outgoing_sequence;
+    c.sent_at[c.ch.outgoing_sequence & 63] = c.now;
     if (c.record) record_command(*c.record, c.now, cmd);
     if (c.valid_frame >= 0) {
       write_byte(w, clc::delta);
