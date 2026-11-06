@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "arena_chart.hpp"
+#include "campaign_free.hpp"
 #include "campaign_movers.hpp"
 #include "classicenhance/source.hpp"
 #include "core/libm/libm.hpp"
@@ -871,6 +872,7 @@ void run(gl::Lab& lab) {
   autoaim(lab, in);
   campaign_flow(lab);
   if (!lab.arg("game").empty()) pack_campaign(lab, l);
+  if (lab.arg_num("free") > 0) la::free_campaign(lab, lab.arg("root"), lab.arg_num("free"));
 }
 
 const gl::LabSpec kSpec{
@@ -902,11 +904,15 @@ const gl::LabSpec kSpec{
         {"movers", "0",
          "with --game, s: first every door and plat of the map set off in turn and run this long, "
          "the sounds each plays (and a key door's without its key) tabled and folded by kind"},
+        {"free", "0",
+         "s: our campaign program (compiled from --root) on the free map, the test arena with five "
+         "monsters and an exit, fought by a scripted player this long: kills, the exit, a picture"},
+        {"root", ".", "the repository's root (our campaign program's sources are under it)"},
         {"exit", "0",
          "with --game, 1: then the player stood in the map's exit, the level's end read as the "
          "window reads it and the attack held until the next map"},
     },
-    "",
+    "--free=40",
     run,
 };
 GE_LAB(kSpec);
