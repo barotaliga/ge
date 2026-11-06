@@ -8,11 +8,14 @@
 // each clip's largest angle and acceleration. A mesh's morph targets (a vertex-animated
 // model's frames, a target a frame) are weighted as each clip weights them, so the filmstrips
 // draw such a model frame by frame. With no `--model` it is the test model
-// (assets/test_model.hpp) written as a .glb and loaded back, so the smoke run goes through the
-// loader too. CPU pictures (an orthographic raster of the model), so in the digest.
+// (assets/test_model.hpp) written as a .glb (or, `--format=iqm`, a skeletal model file,
+// assets/iqm.hpp) and loaded back, so the smoke run goes through the loader too; `--model` takes
+// a .glb, a .gltf or an .iqm (`--metres` its unit). CPU pictures (an orthographic raster of the
+// model), so in the digest.
 //
 // ge:summary Lab: a model's bind, filmstrips, onion skins and joint-angle graphs, its numbers
-// ge:keywords lab models model gltf glb animation clip filmstrip onion-skin wireframe joints
+// ge:keywords lab models model gltf glb iqm skeletal-model animation
+// ge:keywords clip filmstrip onion-skin wireframe joints
 // ge:keywords bones joint-angle angular-acceleration jolt pop skeleton weights outliers
 // ge:skill assets labs
 // ge:test tests/assets_pose_test.cpp
@@ -24,6 +27,7 @@
 
 #include "assets/gltf.hpp"
 #include "assets/gltf_write.hpp"
+#include "assets/iqm.hpp"
 #include "assets/pose.hpp"
 #include "assets/test_model.hpp"
 #include "lab/lab.hpp"
@@ -246,9 +250,18 @@ void run(ge::lab::Lab& lab) {
              "next: rerun with --size=256 --frames=8.");
     return;
   }
-  a::LoadResult loaded = path.empty()
-                             ? a::load_gltf(a::write_glb(a::make_test_model()), "test_model.glb")
-                             : a::load_gltf_file(path);
+  const std::string format = lab.arg("format");
+  const bool iqm = path.empty() ? format == "iqm" : path.ends_with(".iqm");
+  if (path.empty() && format != "glb" && format != "iqm") {
+    lab.fail("--format=" + format + " is not a file the lab writes",
+             "next: rerun with --format=glb or --format=iqm.");
+    return;
+  }
+  const a::IqmOptions units{.metres = lab.arg_num("metres")};
+  a::LoadResult loaded = !path.empty()
+                             ? (iqm ? a::load_iqm_file(path, units) : a::load_gltf_file(path))
+                         : iqm ? a::load_iqm(a::write_iqm(a::make_test_model()), "test_model.iqm")
+                               : a::load_gltf(a::write_glb(a::make_test_model()), "test_model.glb");
   if (!loaded.ok) {
     lab.fail(loaded.error,
              "next: fix the file the line names, or run without --model (skill: assets).");
@@ -256,7 +269,7 @@ void run(ge::lab::Lab& lab) {
   }
   for (const std::string& n : loaded.notes) lab.note("loader: " + n);
   const a::Model& m = loaded.model;
-  const std::string name = path.empty() ? "test model" : path;
+  const std::string name = path.empty() ? "test model (." + format + ")" : path;
   const std::vector<std::pair<std::string, std::string>> inputs = {{"model", name}};
 
   // ── What the model is ──
@@ -465,12 +478,14 @@ const ge::lab::LabSpec kSpec{
     "models",
     ge::lab::LabKind::picture,
     "engine",
-    "engine/assets (the glTF loader, the Model, posing)",
+    "engine/assets (the glTF and .iqm loaders, the Model, posing)",
     "assets",
     "What does a model look like at rest and through each clip, and do its weights and its "
     "joints' motion hold?",
     {
-        {"model", "", "a .glb or .gltf to load (default: the test model through a .glb)"},
+        {"model", "", "a .glb, .gltf or .iqm to load (default: the test model, see --format)"},
+        {"format", "glb", "the file the test model goes through: glb or iqm (a skeletal model)"},
+        {"metres", "1", "an .iqm's unit, m (a classic map unit's model: 0.025)"},
         {"size", "256", "a panel's side, px"},
         {"frames", "8", "a filmstrip's frames"},
     },
