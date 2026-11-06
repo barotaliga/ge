@@ -44,6 +44,7 @@
 // ge:test tests/progs_qvm_test.cpp
 #pragma once
 
+#include <bit>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -175,16 +176,7 @@ bool qvm_put_string(Qvm& vm, int32_t addr, int32_t size, std::string_view text, 
 int32_t qvm_word(const Qvm& vm, int32_t addr);  // caller checked the address
 void qvm_set_word(Qvm& vm, int32_t addr, int32_t value);
 
-inline float qvm_float(int32_t bits) {
-  float f;
-  static_assert(sizeof f == sizeof bits);
-  __builtin_memcpy(&f, &bits, sizeof f);
-  return f;
-}
-inline int32_t qvm_bits(float f) {
-  int32_t bits;
-  __builtin_memcpy(&bits, &f, sizeof f);
-  return bits;
-}
+inline float qvm_float(int32_t bits) { return std::bit_cast<float>(bits); }
+inline int32_t qvm_bits(float f) { return std::bit_cast<int32_t>(f); }
 
 }  // namespace ge::progs
