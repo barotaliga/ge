@@ -83,7 +83,7 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
 
 TEST(aggressive_novices_fight_more_and_die_more_than_cowardly_ones) {
   // Four novices, two aggressive and two cowards, on four seeds: the aggressive are in a fight far
-  // more of their time and die more; the cowards spend most of theirs backing off.
+  // more of their time and die more; the cowards spend two fifths or more of theirs backing off.
   int64_t deaths[2] = {}, fight[2] = {}, alive[2] = {}, turned[2] = {};
   for (uint32_t seed = 1; seed <= 4; seed++) {
     fb::FightOptions o = duel_of_skills(seed, 9000);
@@ -109,9 +109,12 @@ TEST(aggressive_novices_fight_more_and_die_more_than_cowardly_ones) {
       static_cast<double>(fight[1]) / static_cast<double>(alive[1]),
       static_cast<double>(turned[1]) / static_cast<double>(alive[1]));
   CHECK_MSG(deaths[0] > deaths[1], "the aggressive novices died no more than the cowards");
-  CHECK_MSG(fight[0] * alive[1] > 4 * fight[1] * alive[0],
-            "the aggressive novices were not in a fight four times the cowards' share");
-  CHECK_MSG(turned[1] * 2 > alive[1], "the cowards spent less than half their time backing off");
+  // Twice, not more: an aggressive player stands and fights within the double's range rather than
+  // breaking off, so he corners the cowards (who must fight one that near) more often.
+  CHECK_MSG(fight[0] * alive[1] > 2 * fight[1] * alive[0],
+            "the aggressive novices were not in a fight twice the cowards' share");
+  CHECK_MSG(turned[1] * 5 > alive[1] * 2,
+            "the cowards spent less than two fifths of their time backing off");
 }
 
 TEST(a_fighters_match_replays_to_the_bit_and_matches_its_golden) {

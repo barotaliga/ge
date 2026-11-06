@@ -53,6 +53,7 @@ constexpr double kRetake_s = 20;      // a key area believed lost this long ago 
 constexpr double kHeardChase_s = 2;   // and one heard this long ago is gone after
 constexpr float kCornered = 350;      // units: an enemy in sight this near is fought (the double's
                                       // range: a back turned on him this close is shot)
+constexpr float kCowardCornered = 192;  // a coward still runs from one farther than this
 constexpr double kImpulseGap_s = 0.5;
 constexpr double kWait_s = 20;      // an item back within this is worth going to wait for
 constexpr double kHealWait_s = 3;   // but a retreat goes for health that is there
@@ -639,7 +640,9 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   const float mine = sh::might(own_might(st));
   const float theirs = c ? foe_might(f, c->ent, t) : 0;
   // An enemy in sight this close is fought whatever the odds: turning away only shows him a back.
-  const bool cornered = seen_now && dist(eye, at_of(c->seen)) < kCornered;
+  const bool cornered =
+      seen_now && dist(eye, at_of(c->seen)) <
+                      (f.temper == sh::Temper::coward ? kCowardCornered : kCornered);
   const bool engage = c && (cornered || sh::takes_fight(f.temper, f.edge, mine, theirs));
   const bool recent = c && ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s && engage) ||
                             (by_ear && ai::age(c->heard, t) <= kHeardChase_s &&
@@ -666,7 +669,10 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     mind_say(f, t, help, self.origin);
   }
   f.outmatched = false;
-  if (heal_at >= 0 && item_value(f.items[static_cast<size_t>(heal_at)], st) > 0 && !cornered) {
+  // A coward backs off when weak with someone about, health worth going for or not.
+  const bool backs_off = (heal_at >= 0 && item_value(f.items[static_cast<size_t>(heal_at)], st) > 0) ||
+                         (c && weak && f.temper == sh::Temper::coward);
+  if (backs_off && !cornered) {
     set_mode(f, FightMode::retreat, why, "weak with someone about: health or armour first");
   } else if (seen_now && !engage) {
     f.outmatched = true;
