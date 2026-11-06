@@ -15,6 +15,7 @@
 #include "check.hpp"
 #include "progs/vm.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/server/campaign_save.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
@@ -185,7 +186,7 @@ TEST(the_listen_saves_and_loads_the_game_playing) {
     m->spec.entities = sv::kStubEntities;
     return m;
   };
-  cl::ListenOptions opt;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.console = {"deathmatch 0"};
   std::string error;
   cl::Listen a;

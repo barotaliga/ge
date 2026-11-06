@@ -46,6 +46,7 @@
 #include "shooters_edge/client/world_draw.hpp"
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/labs/staged.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -127,7 +128,7 @@ void run(gl::Lab& lab) {
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, map_name, error);
   // `--target`: a bot to shoot at, seated through the lobby (its warmup held for the run).
   const bool target = lab.arg_num("target") > 0;
-  cl::ListenOptions options;
+  cl::ListenOptions options = shooters_edge::net::listen_options();
   if (target) {
     options.lobby = true;
     options.lobby_settings.countdown_s = 1e6;

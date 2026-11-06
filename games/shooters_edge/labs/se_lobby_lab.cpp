@@ -33,6 +33,7 @@
 #include "shooters_edge/hud/lobby_page.hpp"
 #include "shooters_edge/hud/lobby_panel.hpp"
 #include "shooters_edge/labs/arena_chart.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/sim/arena.hpp"
 #include "ui/raster.hpp"
 
@@ -129,7 +130,7 @@ void run(gl::Lab& lab) {
     return;
   }
   cl::Listen l;
-  cl::ListenOptions opt;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.console = {"deathmatch 1", "fraglimit 30", "timelimit 10"};
   opt.player = "player";
   opt.lobby = true;

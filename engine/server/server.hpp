@@ -91,6 +91,10 @@ struct ServerConfig {
   std::string replay;          // replay this input log instead of running
   bool explain = false;        // print every server value with its source instead of running
   std::string explain_prefix;  // only the cvars starting with this
+  // A LISTEN server's content, prepared by the game's own client in its process (the program, the
+  // map it already read, its player): the game's own type, read by its `create`; null for a
+  // dedicated server, which makes everything from the settings above.
+  void* host = nullptr;
 };
 
 // What a replay found.

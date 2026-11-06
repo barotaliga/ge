@@ -20,6 +20,7 @@
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/server/client_data.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
@@ -116,7 +117,7 @@ TEST(a_blow_is_taken_once_with_its_source_and_reaches_the_listen_client) {
   std::string error;
   CHECK_MSG(sv::build_campaign_stub(stub, error), error);
   cl::Listen l;
-  cl::ListenOptions opt;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.console = {"deathmatch 0"};
   CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), opt, error), error);
   sv::QcServer& s = *sv::qc_of(*l.rules);
@@ -144,7 +145,9 @@ TEST(a_multiplayer_programs_damage_fields_are_left_alone) {
   std::string error;
   CHECK_MSG(sv::build_test_mod(mod, error), error);
   cl::Listen l;
-  CHECK_MSG(cl::listen_start(l, mod, stub_map("arena"), {}, error), error);
+  CHECK_MSG(
+      cl::listen_start(l, mod, stub_map("arena"), shooters_edge::net::listen_options(), error),
+      error);
   sv::QcServer& s = *sv::qc_of(*l.rules);
   const int take = s.q.layout->f.dmg_take;
   CHECK(s.q.layout->f.idealpitch < 0);
@@ -159,7 +162,7 @@ TEST(the_punch_reaches_the_program_and_decays_on_the_loop) {
   std::string error;
   CHECK_MSG(sv::build_campaign_stub(stub, error), error);
   cl::Listen l;
-  cl::ListenOptions opt;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.console = {"deathmatch 0"};
   CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), opt, error), error);
   sv::QcServer& s = *sv::qc_of(*l.rules);
@@ -208,7 +211,7 @@ TEST(a_blow_kicks_the_view_away_from_its_source) {
   CHECK_MSG(sv::build_campaign_stub(stub, error), error);
   const auto look = [&](bool hit) {
     cl::Listen l;
-    cl::ListenOptions opt;
+    cl::ListenOptions opt = shooters_edge::net::listen_options();
     opt.console = {"deathmatch 0"};
     CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), opt, error), error);
     cl::listen_frame(l, {});

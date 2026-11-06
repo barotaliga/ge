@@ -20,6 +20,7 @@
 #include "check.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 
@@ -156,7 +157,7 @@ TEST(the_listen_client_plays_a_single_player_program_on_the_campaign_host) {
   CHECK_MSG(sv::build_campaign_stub(stub, error), error);
   CHECK(cl::single_player(stub));
   cl::Listen l;
-  cl::ListenOptions opt;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.console = {"deathmatch 0"};
   CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), opt, error), error);
   CHECK(l.campaign_host != nullptr && !l.match);
@@ -253,7 +254,9 @@ TEST(a_campaigns_next_map_with_nowhere_to_read_it_from_fails_with_a_reason) {
   std::string error;
   CHECK_MSG(sv::build_campaign_stub(stub, error), error);
   cl::Listen l;
-  CHECK_MSG(cl::listen_start(l, stub, stub_map("first"), {}, error), error);
+  CHECK_MSG(
+      cl::listen_start(l, stub, stub_map("first"), shooters_edge::net::listen_options(), error),
+      error);
   for (int i = 0; i < 400 && l.failed.empty(); i++) cl::listen_frame(l, {});
   CHECK_MSG(l.failed.find("no search path") != std::string::npos, l.failed);
   CHECK(l.server == nullptr);
@@ -261,7 +264,7 @@ TEST(a_campaigns_next_map_with_nowhere_to_read_it_from_fails_with_a_reason) {
 }
 
 TEST(the_server_lines_say_which_game_a_map_starts) {
-  cl::ListenOptions o;
+  cl::ListenOptions o = shooters_edge::net::listen_options();
   CHECK(!cl::wants_campaign(o));  // deathmatch 1 by default
   o.console.emplace_back("deathmatch 0");
   CHECK(cl::wants_campaign(o));
