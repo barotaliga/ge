@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "arena_chart.hpp"
+#include "campaign_movers.hpp"
 #include "classicenhance/source.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
@@ -480,6 +481,7 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
   t.rows.push_back({"started", ok ? "yes" : "no: " + error});
   if (ok) {
     sv::campaign_join(c, 0, "player");
+    if (lab.arg_num("movers") > 0) la::movers_table(lab, c, l.progs, lab.arg_num("movers"));
     const int seconds = static_cast<int>(lab.arg_num("seconds"));
     const int frames = static_cast<int>(seconds / sv::kCampaignStep);
     // The player's hands: the forward axis held (and the view's yaw), a packet a frame.
@@ -897,6 +899,9 @@ const gl::LabSpec kSpec{
         {"save", "0",
          "with --game, s: after the walk the game saved, loaded into a second campaign, and "
          "both walked on this long with the same commands (their digests compared each frame)"},
+        {"movers", "0",
+         "with --game, s: first every door and plat of the map set off in turn and run this long, "
+         "the sounds each plays (and a key door's without its key) tabled and folded by kind"},
         {"exit", "0",
          "with --game, 1: then the player stood in the map's exit, the level's end read as the "
          "window reads it and the attack held until the next map"},

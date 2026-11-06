@@ -57,6 +57,57 @@ void() trigger_start = {
   self.model = "";
 };
 
+// --- the movers' sounds ---
+//
+// A door, plat or button sounds as the map's `sounds` says (the numbers the maps are written
+// with): a door 0 silent, 1 stone, 2 machine, 3 chain, 4 screech, its move as it starts and its
+// stop as it arrives; a plat 1 or 2 (2 when unset); a button 0 steam, 1 wood, 2 metal, 3 a switch.
+// A key door's locked and unlocking sounds follow the world's type (0, 1 or 2). Kept as `noise`
+// (a key door's unlocking, a button's press), `noise1` (moving), `noise2` (stopped) and `noise3`
+// (locked), each precached as the thing spawns.
+
+void(string a, string b) mover_sounds = {
+  self.noise1 = a;
+  self.noise2 = b;
+  precache_sound(a);
+  precache_sound(b);
+};
+
+void() door_sounds = {
+  if (self.sounds == 1) mover_sounds("doors/doormv1.wav", "doors/drclos4.wav");
+  else if (self.sounds == 2) mover_sounds("doors/hydro1.wav", "doors/hydro2.wav");
+  else if (self.sounds == 3) mover_sounds("doors/stndr1.wav", "doors/stndr2.wav");
+  else if (self.sounds == 4) mover_sounds("doors/ddoor1.wav", "doors/ddoor2.wav");
+  else mover_sounds("misc/null.wav", "misc/null.wav");
+  if (!(self.spawnflags & 24)) return;
+  if (world.worldtype == 1) {
+    self.noise = "doors/runeuse.wav";
+    self.noise3 = "doors/runetry.wav";
+  } else if (world.worldtype == 2) {
+    self.noise = "doors/baseuse.wav";
+    self.noise3 = "doors/basetry.wav";
+  } else {
+    self.noise = "doors/meduse.wav";
+    self.noise3 = "doors/medtry.wav";
+  }
+  precache_sound(self.noise);
+  precache_sound(self.noise3);
+};
+
+void() plat_sounds = {
+  if (!self.sounds) self.sounds = 2;
+  if (self.sounds == 1) mover_sounds("plats/plat1.wav", "plats/plat2.wav");
+  else mover_sounds("plats/medplat1.wav", "plats/medplat2.wav");
+};
+
+void() button_sounds = {
+  if (self.sounds == 1) self.noise = "buttons/switch21.wav";
+  else if (self.sounds == 2) self.noise = "buttons/switch02.wav";
+  else if (self.sounds == 3) self.noise = "buttons/switch04.wav";
+  else self.noise = "buttons/airbut1.wav";
+  precache_sound(self.noise);
+};
+
 // --- doors ---
 //
 // Doors whose boxes touch are one GROUP and open and shut together (spawnflag 4 keeps a door out
@@ -70,25 +121,31 @@ void() trigger_start = {
 float DOOR_APART = 4;
 float DOOR_GOLD = 8;
 float DOOR_SILVER = 16;
+float DOOR_TOGGLE = 32;  // opens on one use and stays, shuts on the next
 
 void() door_go_down;
 void() door_go_up;
 
+// A group sounds once: its master plays for it.
+void(string noise) door_sound = {
+  if (self.owner == self) sound(self, CHAN_VOICE, noise, 1, ATTN_NORM);
+};
+
 void() door_hit_bottom = {
-  sound(self, CHAN_VOICE, "doors/drclos4.wav", 1, ATTN_NORM);
+  door_sound(self.noise2);
   self.state = STATE_BOTTOM;
 };
 
 void() door_hit_top = {
-  sound(self, CHAN_VOICE, "doors/drclos4.wav", 1, ATTN_NORM);
+  door_sound(self.noise2);
   self.state = STATE_TOP;
-  if (self.wait < 0) return;  // stays open
+  if (self.wait < 0 || (self.owner.spawnflags & DOOR_TOGGLE)) return;  // stays open
   self.think = door_go_down;
   self.nextthink = self.ltime + self.wait;
 };
 
 void() door_go_down = {
-  sound(self, CHAN_VOICE, "doors/doormv1.wav", 1, ATTN_NORM);
+  door_sound(self.noise1);
   self.state = STATE_DOWN;
   calc_move(self.pos1, self.speed, door_hit_bottom);
 };
@@ -99,15 +156,25 @@ void() door_go_up = {
     self.nextthink = self.ltime + self.wait;
     return;
   }
-  sound(self, CHAN_VOICE, "doors/doormv1.wav", 1, ATTN_NORM);
+  door_sound(self.noise1);
   self.state = STATE_UP;
   calc_move(self.pos2, self.speed, door_hit_top);
   use_targets();
 };
 
-// Every door of `self`'s group opens (or, below, shuts).
+void() door_group_down;
+
+// Every door of `self`'s group opens (or, below, shuts). A toggle group open or opening shuts.
 void() door_group_up = {
   local entity d, was_self;
+  if ((self.owner.spawnflags & DOOR_TOGGLE) &&
+      (self.owner.state == STATE_UP || self.owner.state == STATE_TOP)) {
+    door_group_down();
+    return;
+  }
+  // A key group shut opens with the unlocking sound, from the door that opened it.
+  if ((self.owner.spawnflags & (DOOR_GOLD | DOOR_SILVER)) && self.owner.state == STATE_BOTTOM)
+    sound(self, CHAN_ITEM, self.owner.noise, 1, ATTN_NORM);
   was_self = self;
   d = self.owner;
   while (d) {
@@ -164,6 +231,7 @@ void() door_touch = {
   door_say(other, self.owner.netname);
 };
 
+// A player at a group's field, or at a key group's door: it opens, or says which key it needs.
 void() door_trigger_touch = {
   local entity field;
   local float key;
@@ -174,6 +242,7 @@ void() door_trigger_touch = {
   if (self.spawnflags & DOOR_SILVER) key = IT_KEY1;
   else if (self.spawnflags & DOOR_GOLD) key = IT_KEY2;
   if (key && !(other.items & key)) {
+    if (time >= self.attack_finished) sound(field, CHAN_ITEM, self.noise3, 1, ATTN_NORM);
     if (key == IT_KEY1) door_say(other, "This door needs the silver key.");
     else door_say(other, "This door needs the gold key.");
   } else {
@@ -253,6 +322,12 @@ void() door_link = {
   }
   if ((self.spawnflags & (DOOR_GOLD | DOOR_SILVER)) || (!named && !shot)) {
     door_spawn_field(lo, hi);
+    // A key group's doors answer a touch themselves too: a player who walks into one hears it.
+    d = self;
+    while (d && (self.spawnflags & (DOOR_GOLD | DOOR_SILVER))) {
+      d.touch = door_trigger_touch;
+      d = d.enemy;
+    }
     return;
   }
   // A named group shows its words on a touch, never as it opens.
@@ -284,6 +359,7 @@ void() func_door = {
   }
   self.state = STATE_BOTTOM;
   self.owner = self;  // alone until door_link gathers it
+  door_sounds();
   if (self.health) {
     self.max_health = self.health;
     self.takedamage = DAMAGE_YES;
@@ -299,25 +375,25 @@ void() func_door = {
 void() plat_go_down;
 
 void() plat_hit_top = {
-  sound(self, CHAN_VOICE, "plats/plat2.wav", 1, ATTN_NORM);
+  sound(self, CHAN_VOICE, self.noise2, 1, ATTN_NORM);
   self.state = STATE_TOP;
   self.think = plat_go_down;
   self.nextthink = self.ltime + 3;
 };
 
 void() plat_hit_bottom = {
-  sound(self, CHAN_VOICE, "plats/plat2.wav", 1, ATTN_NORM);
+  sound(self, CHAN_VOICE, self.noise2, 1, ATTN_NORM);
   self.state = STATE_BOTTOM;
 };
 
 void() plat_go_down = {
-  sound(self, CHAN_VOICE, "plats/plat1.wav", 1, ATTN_NORM);
+  sound(self, CHAN_VOICE, self.noise1, 1, ATTN_NORM);
   self.state = STATE_DOWN;
   calc_move(self.pos2, self.speed, plat_hit_bottom);
 };
 
 void() plat_go_up = {
-  sound(self, CHAN_VOICE, "plats/plat1.wav", 1, ATTN_NORM);
+  sound(self, CHAN_VOICE, self.noise1, 1, ATTN_NORM);
   self.state = STATE_UP;
   calc_move(self.pos1, self.speed, plat_hit_top);
 };
@@ -360,6 +436,7 @@ void() plat_use = {
 
 void() func_plat = {
   brush_start();
+  plat_sounds();
   self.blocked = plat_blocked;
   if (!self.speed) self.speed = 150;
   self.pos1 = self.origin;  // the top: where the map put it
@@ -394,7 +471,7 @@ void() button_pressed = {
 
 void() button_fire = {
   if (self.state == STATE_UP || self.state == STATE_TOP) return;
-  sound(self, CHAN_VOICE, "buttons/switch21.wav", 1, ATTN_NORM);
+  sound(self, CHAN_VOICE, self.noise, 1, ATTN_NORM);
   self.state = STATE_UP;
   calc_move(self.pos2, self.speed, button_pressed);
 };
@@ -421,6 +498,7 @@ void() button_killed = {
 void() func_button = {
   set_movedir();
   brush_start();
+  button_sounds();
   self.touch = button_touch;
   self.use = button_use;
   if (!self.speed) self.speed = 40;
