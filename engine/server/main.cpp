@@ -235,11 +235,9 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
   for (size_t i = 0; i < args.size(); i++) {
     const std::string& a = args[i];
     if (a.rfind("--", 0) != 0) {
-      if ((a.empty() || a[0] != '+') && rest.empty()) {
-        error = "'" + a + "' is not a flag or a +command; next: " + game.binary + " --help";
-        return false;
-      }
-      rest.push_back(a);
+      // The first command needs no `+` (`map dm2`); it gets one here, since the flags' `+set`
+      // lines go before it.
+      rest.push_back(rest.empty() && (a.empty() || a[0] != '+') ? "+" + a : a);
       continue;
     }
     const size_t eq = a.find('=');
@@ -319,8 +317,8 @@ std::string server_help(const ServerGame& game) {
   std::string out = std::string(game.binary) + ": " + game.title + "'s dedicated server.\n\n";
   out +=
       "Settings come from the base game directory's server.cfg, then each mod's, then a\n"
-      "profile, then these flags, then any +commands (+set sv_hostname \"Arena\"). Each flag\n"
-      "sets the cvar beside it.\n\n"
+      "profile, then these flags, then any commands, a + before each after the first\n"
+      "(map dm2 +set sv_hostname \"Arena\"). Each flag sets the cvar beside it.\n\n"
       "  --name=TEXT        sv_hostname: the name in the browser and the lobby\n"
       "  --description=TEXT sv_description: a line under the name\n"
       "  --ip=ADDR          net_ip: the address to listen on (default every interface)\n"

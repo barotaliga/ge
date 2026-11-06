@@ -16,8 +16,8 @@
 // `-game` names another); `~` is home. Without it, the game loaded last, however it was picked;
 // LOAD GAME or `basedir <folder>` loads another in place, enhanced in the background
 // (client/game_folder.hpp). `-progs` runs a mod's progs in place of the baseline mod, `-models`
-// names the held weapons' folder (by default the game's `content/models/view`). The `+` words are
-// console lines run at start: `+map dm6` loads that map (`map arena` is the built-in test arena);
+// names the held weapons' folder (by default the game's `content/models/view`). The other words are
+// console lines run at start (a `+` before each after the first): `map dm6` loads that map;
 // with none, the title (client/title.hpp) with the menu up, `start` (else the arena) loading behind
 // it. Every map loads behind the window, a spinner up (client/map_load.hpp).
 //

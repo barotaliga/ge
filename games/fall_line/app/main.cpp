@@ -198,7 +198,8 @@ void hand_in(ge::capture::Live& capture, ge::gpu::Image& img, ge::lab::Picture& 
 bool parse(int argc, char** argv, Args& a) {
   for (int i = 1; i < argc; ++i) {
     const std::string_view arg = argv[i];
-    if (!a.plus_args.empty() || (!arg.empty() && arg[0] == '+')) {
+    // The console's commands: a `+` starts each, and the first needs none (`exec race.cfg`).
+    if (!a.plus_args.empty() || (!arg.empty() && arg[0] != '-')) {
       a.plus_args.emplace_back(arg);
     } else if (arg.rfind("--frames=", 0) == 0) {
       a.frames = std::strtol(argv[i] + 9, nullptr, 10);
