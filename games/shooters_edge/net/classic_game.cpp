@@ -20,6 +20,7 @@
 #include "progs/file.hpp"
 #include "shooter/settings.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/net/classic_server.hpp"
@@ -169,6 +170,9 @@ bool open_map(const Game& g, const std::string& name, std::unique_ptr<cl::Loaded
   if (!qc) return false;
   rules = sv::qc_runner(std::move(qc));
   rules.console("deathmatch 1");
+  // A mod checks it runs from its own folder by the server's `*gamedir`.
+  if (g.cfg.gamedir != decltype(g.cfg){}.gamedir)
+    rules.console("serverinfo *gamedir \"" + g.cfg.gamedir + "\"");
   for (const std::string& line : g.info_lines) rules.console(line);
   for (const auto& [rule, value] : c.rules) {
     if (value.empty() || is_endpoint_rule(rule)) continue;
@@ -222,16 +226,47 @@ bool open_room(Game& g, std::string& error) {
   return true;
 }
 
+// The mod on top: the last of `sv_mod`'s comma-separated folders ("" when none is named).
+std::string top_mod(const std::string& mods) {
+  const size_t comma = mods.find_last_of(',');
+  std::string top = comma == std::string::npos ? mods : mods.substr(comma + 1);
+  while (!top.empty() && top.back() == ' ') top.pop_back();
+  while (!top.empty() && top.front() == ' ') top.erase(0, 1);
+  return top;
+}
+
+// The program: a named mod's own (its folder's program files, through the game's adapter, the
+// base game's under it), else the baseline mod.
+bool open_program(Game& g, const std::string& mod, std::string& error) {
+  if (mod.empty() || mod == kGameFolder) return cl::baseline_progs(g.progs, error);
+  const cl::GameAdapter& game = cl::classic_adapter();
+  cl::FoundProgram found;
+  std::string why;
+  if (game.find_program == nullptr || !game.find_program(game, g.files, false, found, why)) {
+    error = "the mod folder " + mod + " holds no multiplayer program this server runs" +
+            (why.empty() ? std::string() : " (" + why + ")") +
+            "; next: put the mod's qwprogs.dat in " + g.files.folder +
+            ", or leave sv_mod empty for the baseline mod";
+    return false;
+  }
+  g.progs = std::move(found.progs);
+  return true;
+}
+
 void* create(const gs::ServerConfig& c, std::string& error) {
   auto g = std::make_unique<Game>();
   g->settings = c;
-  if (!cl::baseline_progs(g->progs, error)) return nullptr;
-  // The built-in arena needs no game folder; any other map, or a rotation's, is read from one.
-  if (!cl::open_game_dir(c.root, kGameFolder, g->files, error)) {
-    if (c.map != "arena") return nullptr;
+  const std::string mod = top_mod(c.mod);
+  const std::string folder = mod.empty() ? std::string(kGameFolder) : mod;
+  // The built-in arena needs no game folder; any other map, a rotation's or a mod's, is read from
+  // one (the mod's over the base game's).
+  if (!cl::open_game_dir(c.root, folder, g->files, error)) {
+    if (c.map != "arena" || !mod.empty()) return nullptr;
     g->files = cl::SearchPath{};
     error.clear();
   }
+  if (!open_program(*g, mod, error)) return nullptr;
+  if (!mod.empty()) g->cfg.gamedir = mod;  // serverdata names it: a client mounts the mod too
   if (!cl::archive_paths(g->files).empty()) {
     const profiles::GameProfile& game = profiles::classic_game();
     g->info_lines = profiles::item_name_lines(game.tables.names);

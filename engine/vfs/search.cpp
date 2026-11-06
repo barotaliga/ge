@@ -146,7 +146,7 @@ bool walk(const fs::path& dir, bool skip_archives, std::vector<std::string>* fil
       continue;
     }
     if (!it->is_regular_file(ec)) continue;
-    if (skip_archives && it.depth() == 0 && (pak_number(top) >= 0 || ends_with(top, ".pk3"))) {
+    if (skip_archives && it.depth() == 0 && (ends_with(top, ".pak") || ends_with(top, ".pk3"))) {
       continue;
     }
     found.emplace_back(rel.generic_string(), uint64_t(it->file_size(ec)));
@@ -225,7 +225,8 @@ bool add_game(SearchPath* sp, const std::string& root, const std::string& game,
     const std::string name = e.path().filename().string(), folded = lower(name);
     if (e.is_regular_file(ec) && pak_number(folded) >= 0) {
       packs.emplace_back(pak_number(folded), name);
-    } else if ((e.is_regular_file(ec) && ends_with(folded, ".pk3")) ||
+    } else if ((e.is_regular_file(ec) &&
+                (ends_with(folded, ".pk3") || ends_with(folded, ".pak"))) ||
                (e.is_directory(ec) && ends_with(folded, ".pk3dir"))) {
       others.emplace_back(folded, name);
     }
