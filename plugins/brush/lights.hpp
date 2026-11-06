@@ -18,12 +18,14 @@
 // THE SPOT: a light with `mangle` (yaw, pitch up, roll in degrees) or a `target` (the entity whose
 // `targetname` it names) is aimed: full light inside its cone (`angle`, the whole cone in degrees,
 // 40 when unset; `_softangle` the full-light part, else the cone's inner three quarters), none
-// outside it.
+// outside it. That is how a bake lights it; the real-time path (bsp.wgsl's `spot_edge`) draws the
+// beam as a bell instead, brightest on its axis and fading past the cone's edge, since a lamp far
+// past white on a near wall would otherwise show a flat white disc with a hard rim.
 //
 // ge:summary A brush map's light entities read once, and each as a bake's light
 // ge:keywords bsp brush light-entity light torch flame fluoro colour reach bake-light strength
 // ge:keywords light_entities bake_light_of map_bake_lights delay falloff inverse-square spotlight
-// ge:keywords mangle cone softangle color-key overexposed
+// ge:keywords mangle cone softangle color-key overexposed spot-beam spot_edge
 // ge:skill brush
 // ge:test tests/brush_lights_test.cpp
 #pragma once
