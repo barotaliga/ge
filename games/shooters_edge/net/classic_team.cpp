@@ -437,6 +437,11 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].retakes = ts.retakes;
     r.teams[t].spam_shots = ts.spam_shots;
   }
+  if (tn.plan_made && !seats.empty()) {
+    r.plan = bt::plan_text(tn.plan, seats[0].fighter.items);
+    r.plan_areas = static_cast<int32_t>(tn.plan.areas.size());
+    r.plan_base = tn.plan.base;
+  }
   for (size_t k = 0; k < seats.size(); k++) {
     const bt::Mind& mn = seats[k].fighter.mind;
     r.players[k].read = mn.read;
