@@ -13,6 +13,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge golden diff` (which columns of a golden's rows moved) and `ge golden write`
 - `ge golden diff <test>` naming the component of a state hash that moved (skier, heli, army, wanted, gunfire), so a golden another PR's change moved is told from a cross-platform break; #279 (done: a parts word beside the digest, diffed part by part)
 - `ge digest --diff` (done: every lab's digest against the baseline in one command, nothing written, only the labs that moved printed)
+- `ge digest --affected --write` (done: every lab digest a deliberate change moved, rewritten in one step; it already worked, so precheck's digests gate now names it on a failure and `--write`'s help says so; easy-jump thread, which rewrote se-net, se-team, se-demo-pack and se-demo-video by hand)
 - `ge golden diff` pairing rows by their key when the count changes (done: a row inserted mid-table is one row added)
 - `ge golden write` listing every golden file it rewrote, and the engine's own tree pointed at it (`build/<preset>/ge golden write <test>`) rather than setting `GE_GOLDEN_WRITE` by hand
 - `ge digest-diff --base=<ref> --versions --regions` (which generator versions and regions a change moved)
@@ -264,6 +265,8 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - `ge demo shot <demo> --at=<s> --video` (one frame of `-demovideo` at a given time written as a PNG, its overlays (voice, team, captions) drawn as the export draws them, with no encoder and no full run, so an overlay is checked in seconds; demo video thread)
 - `ge demo pack|unpack|info <file>` (a folder of demos packed to .mvdz and back, and any demo file reported: its format, its wrapper layers, its frames; packed-demos thread, #429)
 - `ge net inspect --protocol=<name>` (pluggable decoders, so a capture of the classic protocol reads as its messages)
+- `ge net probe <host:port>` (the classic connectionless status and info queries sent to a live server, and its serverinfo, players, mod and the map checksum it expects printed, in place of a hand-scripted client run or a third-party client under a virtual display; interop thread)
+- `ge client drive --display=:N --type "<cmd>"` (a third-party client running headless under a virtual display driven from a lab: a console line typed, a key pressed, a screenshot taken, in place of keystrokes sent by hand with a desktop automation tool; interop thread)
 - `ge pmove <scenario>` (a movement scenario's trajectory as a table and a chart, against its parity recording)
 - `ge console <target> "<command>"` (a console command or cvar run in a headless server or client, its output returned)
 - `ge play` for first-person games (an angle axis on the protocol's grid, a step whose length the input sets, several players a run)

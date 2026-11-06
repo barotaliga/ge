@@ -26,7 +26,9 @@ namespace con = ge::console;
 constexpr int kFirstDynamic = 33;  // entities after the world and the 32 client slots
 constexpr int kNotInDeathmatch = 2048, kNotEasy = 256, kNotMedium = 512, kNotHard = 1024;
 
-void add_settings(QcServer& s) {
+}  // namespace
+
+void add_mod_settings(RulesCommon& s, const sh::ServerSettings& loop) {
   const uint32_t srv = con::kServer, info = con::kServer | con::kServerInfo;
   s.cvars.add({"deathmatch", "1", info, "the match's rules: 0 cooperative, 1 and up deathmatch"});
   s.cvars.add({"skill", "1", srv, "the monsters' skill, 0..3"});
@@ -58,7 +60,7 @@ void add_settings(QcServer& s) {
   const sh::Setting* table = sh::settings_table(count);
   for (int i = 0; i < count; i++) {
     const sh::Setting& t = table[i];
-    const std::string fallback = sh::setting_text(t, s.opt.loop);
+    const std::string fallback = sh::setting_text(t, loop);
     s.cvars.add({t.name, fallback, info, t.help,
                  t.flag ? con::CvarKind::boolean : con::CvarKind::number, t.low, t.high});
   }
@@ -74,6 +76,8 @@ void add_settings(QcServer& s) {
                con::CvarKind::text});
   s.cvars.add({"hostname", "unnamed", info, "the server's name", con::CvarKind::text});
 }
+
+namespace {
 
 // Records the loop's own hook calls (StartFrame, the thinks, connect, ...) as they start.
 void before_call(sim::QcProgram& q, sh::Func fn) {
@@ -260,7 +264,7 @@ bool set_info_value(std::vector<std::pair<std::string, std::string>>& info, cons
 
 // The settings' cvars written into `set`: every one (`live_only` false, a map starting) or the
 // move's alone (between frames).
-void settings_from_cvars(const QcServer& s, sh::ServerSettings& set, bool live_only) {
+void settings_from_cvars(const RulesCommon& s, sh::ServerSettings& set, bool live_only) {
   int count = 0;
   const sh::Setting* table = sh::settings_table(count);
   for (int i = 0; i < count; i++)
@@ -273,7 +277,7 @@ bool create_qc_server(QcServer& s, const pg::Progs& progs, const QcServerOptions
                       std::string& error) {
   s.opt = opt;
   s.progs = &progs;
-  if (s.cvars.find("deathmatch") == nullptr) add_settings(s);
+  if (s.cvars.find("deathmatch") == nullptr) add_mod_settings(s, s.opt.loop);
   if (pg::find_global(progs, "self") == nullptr) {
     error = "mod server: the progs has no engine-side globals; load a multiplayer progs";
     return false;

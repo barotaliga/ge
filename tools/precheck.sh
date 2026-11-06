@@ -129,7 +129,10 @@ labs_digests() {
 mapfile -t labs < <("$build/ge" digest --affected --list --preset="$preset" --base="$base" 2>/dev/null |
   grep -E '^[a-z0-9-]+$' || true)
 if ((${#labs[@]})); then
-  gate "digests (${labs[*]})" labs_digests "${labs[@]}" || true
+  gate "digests (${labs[*]})" labs_digests "${labs[@]}" ||
+    echo "precheck: a move you meant (a deliberate change of behaviour): $build/ge digest" \
+      "--affected --write --preset=$preset --base=$base rewrites every reached lab's digest" \
+      "in one step; say why in the PR." >&2
 fi
 if ((${#failed[@]})); then
   echo "precheck: red: ${failed[*]} (each above; every gate's output in $log). Fix them, then" \

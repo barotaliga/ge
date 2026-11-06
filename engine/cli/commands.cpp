@@ -127,7 +127,9 @@ constexpr FlagSpec kMergeMainFlags[] = {
     kEngine,
     kRepo};
 constexpr FlagSpec kDigestFlags[] = {
-    {"write", "", "rewrite the lab's file under tests/digests/ (every lab's with no lab named)"},
+    {"write", "",
+     "rewrite the lab's file under tests/digests/ (with --affected, every lab the change "
+     "reaches; with no lab named, every lab's)"},
     {"diff", "", "print only the labs whose digest is off the baseline; write nothing"},
     {"affected", "", "the labs the change since --base reaches, each by its own source's object"},
     {"base", "<ref>",

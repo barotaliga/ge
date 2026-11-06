@@ -85,11 +85,46 @@ TEST(a_secret_door_shot_moves_back_then_aside_and_closes_again) {
     back = std::max(back, g.ed(door).origin.x);
     aside = std::min(aside, g.ed(door).origin.y);
   }
-  CHECK_MSG(std::fabs(back - 16) < 1, std::to_string(back));     // its depth, along its angle
-  CHECK_MSG(std::fabs(aside + 128) < 1, std::to_string(aside));  // then its width, to its right
-  for (int i = 0; i < kFrames * 6; i++) CHECK_MSG(g.frame(0), g.error);
+  CHECK_MSG(std::fabs(aside + 128) < 1,
+            std::to_string(aside));                           // back to its right, its size there
+  CHECK_MSG(std::fabs(back - 16) < 1, std::to_string(back));  // then along its angle
+  for (int i = 0; i < kFrames * 7; i++) CHECK_MSG(g.frame(0), g.error);
   CHECK_MSG(std::fabs(g.ed(door).origin.x) < 0.5f && std::fabs(g.ed(door).origin.y) < 0.5f,
             std::to_string(g.ed(door).origin.x) + " " + std::to_string(g.ed(door).origin.y));
+  CHECK(g.s().q.faults == 0);
+}
+
+// Each leg sounds as it starts and stops, and the door rests a second at its first stop.
+TEST(a_secret_door_sounds_each_leg_and_rests_between_them) {
+  Game g(R"({
+"classname" "func_door_secret"
+"model" "*1"
+"angle" "0"
+"targetname" "s"
+}
+)");
+  const int door = g.find("func_door_secret");
+  CHECK_MSG(g.frame(0), g.error);
+  std::string played;
+  const auto take = [&] {
+    for (int i = 0; i < g.s().sv.sound_count; i++)
+      if (g.s().sv.sounds[i].ent == door) played += std::string(g.s().sv.sounds[i].sample) + " ";
+  };
+  CHECK(g.call("secret_use", {}, door));
+  take();
+  int rest = 0;  // frames spent still at the first stop
+  for (int i = 0; i < kFrames * 5; i++) {
+    CHECK_MSG(g.frame(0), g.error);
+    take();
+    if (std::fabs(g.ed(door).origin.x) < 0.5f && std::fabs(g.ed(door).origin.y + 128) < 0.5f)
+      rest++;
+  }
+  CHECK_MSG(played ==
+                "doors/basesec2.wav doors/basesec1.wav doors/basesec2.wav doors/basesec1.wav "
+                "doors/basesec2.wav ",
+            played);
+  CHECK_MSG(rest >= kFrames && rest <= kFrames + 4,
+            std::to_string(rest));  // a second, and the frames either side
   CHECK(g.s().q.faults == 0);
 }
 

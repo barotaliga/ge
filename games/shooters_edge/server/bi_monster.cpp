@@ -82,8 +82,8 @@ float turned_yaw(float yaw, float ideal, float speed) {
   return wrap_angle(current + move);
 }
 
-bool check_bottom(QcServer& s, int e) {
-  const sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
+bool check_bottom(sh::Server& sv, int e) {
+  const sh::Edict& ed = sv.edicts[static_cast<size_t>(e)];
   const sh::Vec3f mins = ed.origin + ed.mins, maxs = ed.origin + ed.maxs;
   sh::Vec3f start;
   start.z = mins.z - 1;
@@ -92,7 +92,7 @@ bool check_bottom(QcServer& s, int e) {
     for (int y = 0; y <= 1 && all_solid; y++) {
       start.x = x != 0 ? maxs.x : mins.x;
       start.y = y != 0 ? maxs.y : mins.y;
-      if (sh::world_contents(s.sv, start) != sh::kContentsSolid) all_solid = false;
+      if (sh::world_contents(sv, start) != sh::kContentsSolid) all_solid = false;
     }
   if (all_solid) return true;
 
@@ -101,38 +101,38 @@ bool check_bottom(QcServer& s, int e) {
   start.y = (mins.y + maxs.y) * 0.5f;
   sh::Vec3f stop = start;
   stop.z = start.z - 2 * kStepSize;
-  sh::HullTrace tr = sh::trace_move(s.sv, start, {}, {}, stop, sh::kTraceNoMonsters, e);
+  sh::HullTrace tr = sh::trace_move(sv, start, {}, {}, stop, sh::kTraceNoMonsters, e);
   if (tr.fraction == 1) return false;
   const float mid = tr.endpos.z;
   for (int x = 0; x <= 1; x++)
     for (int y = 0; y <= 1; y++) {
       start.x = stop.x = x != 0 ? maxs.x : mins.x;
       start.y = stop.y = y != 0 ? maxs.y : mins.y;
-      tr = sh::trace_move(s.sv, start, {}, {}, stop, sh::kTraceNoMonsters, e);
+      tr = sh::trace_move(sv, start, {}, {}, stop, sh::kTraceNoMonsters, e);
       if (tr.fraction == 1 || mid - tr.endpos.z > kStepSize) return false;
     }
   return true;
 }
 
 // The step move of `e` by `move` (the rules above); `enemy` is E's enemy (0 none).
-bool step_move(QcServer& s, int e, sh::Vec3f move, int enemy, bool relink) {
-  sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
+bool step_move(sh::Server& sv, int e, sh::Vec3f move, int enemy, bool relink) {
+  sh::Edict& ed = sv.edicts[static_cast<size_t>(e)];
   if ((ed.flags & (sh::kFlagFly | sh::kFlagSwim)) != 0) {
     for (int i = 0; i < 2; i++) {
       sh::Vec3f to = ed.origin + move;
       if (i == 0 && enemy != 0) {
-        const float dz = ed.origin.z - s.sv.edicts[static_cast<size_t>(enemy)].origin.z;
+        const float dz = ed.origin.z - sv.edicts[static_cast<size_t>(enemy)].origin.z;
         if (dz > 40) to.z = to.z - 8;
         if (dz < 30) to.z = to.z + 8;
       }
       const sh::HullTrace tr =
-          sh::trace_move(s.sv, ed.origin, ed.mins, ed.maxs, to, sh::kTraceNormal, e);
+          sh::trace_move(sv, ed.origin, ed.mins, ed.maxs, to, sh::kTraceNormal, e);
       if (tr.fraction == 1) {
         if ((ed.flags & sh::kFlagSwim) != 0 &&
-            sh::world_contents(s.sv, tr.endpos) == sh::kContentsEmpty)
+            sh::world_contents(sv, tr.endpos) == sh::kContentsEmpty)
           return false;  // a swimmer may not leave the water
         ed.origin = tr.endpos;
-        if (relink) sh::link_edict(s.sv, e, true);
+        if (relink) sh::link_edict(sv, e, true);
         return true;
       }
       if (enemy == 0) break;
@@ -144,36 +144,36 @@ bool step_move(QcServer& s, int e, sh::Vec3f move, int enemy, bool relink) {
   from.z = from.z + kStepSize;
   sh::Vec3f end = from;
   end.z = end.z - 2 * kStepSize;
-  sh::HullTrace tr = sh::trace_move(s.sv, from, ed.mins, ed.maxs, end, sh::kTraceNormal, e);
+  sh::HullTrace tr = sh::trace_move(sv, from, ed.mins, ed.maxs, end, sh::kTraceNormal, e);
   if (tr.allsolid) return false;
   if (tr.startsolid) {
     from.z = from.z - kStepSize;
-    tr = sh::trace_move(s.sv, from, ed.mins, ed.maxs, end, sh::kTraceNormal, e);
+    tr = sh::trace_move(sv, from, ed.mins, ed.maxs, end, sh::kTraceNormal, e);
     if (tr.allsolid || tr.startsolid) return false;
   }
   if (tr.fraction == 1) {
     if ((ed.flags & kFlagPartialGround) != 0) {
       ed.origin = ed.origin + move;
-      if (relink) sh::link_edict(s.sv, e, true);
-      s.sv.edicts[static_cast<size_t>(e)].flags &= ~sh::kFlagOnGround;
+      if (relink) sh::link_edict(sv, e, true);
+      sv.edicts[static_cast<size_t>(e)].flags &= ~sh::kFlagOnGround;
       return true;
     }
     return false;  // walked off an edge
   }
   const sh::Vec3f old = ed.origin;
   ed.origin = tr.endpos;
-  if (!check_bottom(s, e)) {
+  if (!check_bottom(sv, e)) {
     if ((ed.flags & kFlagPartialGround) != 0) {
-      if (relink) sh::link_edict(s.sv, e, true);
+      if (relink) sh::link_edict(sv, e, true);
       return true;
     }
-    s.sv.edicts[static_cast<size_t>(e)].origin = old;
+    sv.edicts[static_cast<size_t>(e)].origin = old;
     return false;
   }
-  sh::Edict& after = s.sv.edicts[static_cast<size_t>(e)];
+  sh::Edict& after = sv.edicts[static_cast<size_t>(e)];
   after.flags &= ~kFlagPartialGround;
   after.groundentity = tr.ent < 0 ? 0 : tr.ent;
-  if (relink) sh::link_edict(s.sv, e, true);
+  if (relink) sh::link_edict(sv, e, true);
   return true;
 }
 
@@ -189,7 +189,7 @@ bool step_direction(QcServer& s, pg::Vm& vm, int self, float yaw, float dist) {
   const sh::Vec3f move{static_cast<float>(ge::core::libm::cos(r) * dist),
                        static_cast<float>(ge::core::libm::sin(r) * dist), 0};
   const sh::Vec3f old = ed.origin;
-  const bool ok = step_move(s, self, move, vm_e(vm, self, pg::vm_layout(vm).f.enemy), false);
+  const bool ok = step_move(s.sv, self, move, vm_e(vm, self, pg::vm_layout(vm).f.enemy), false);
   sh::Edict& now = s.sv.edicts[static_cast<size_t>(self)];
   if (ok) {
     const float delta = now.angles.y - vm_f(vm, self, pg::vm_layout(vm).f.ideal_yaw);
@@ -240,7 +240,7 @@ void new_chase_dir(QcServer& s, pg::Vm& vm, int self, int goal, float dist) {
   }
   if (step_direction(s, vm, self, turnaround, dist)) return;
   vm_set_f(vm, self, pg::vm_layout(vm).f.ideal_yaw, olddir);
-  if (!check_bottom(s, self)) s.sv.edicts[static_cast<size_t>(self)].flags |= kFlagPartialGround;
+  if (!check_bottom(s.sv, self)) s.sv.edicts[static_cast<size_t>(self)].flags |= kFlagPartialGround;
 }
 
 // `self` for a monster move; -1 after a fault.
@@ -270,7 +270,7 @@ void bi_walkmove(pg::Vm& vm) {
   const sh::Vec3f move{static_cast<float>(ge::core::libm::cos(r) * dist),
                        static_cast<float>(ge::core::libm::sin(r) * dist), 0};
   const SavedGlobals saved = save_globals(vm);
-  const bool ok = step_move(s, self, move, vm_e(vm, self, pg::vm_layout(vm).f.enemy), true);
+  const bool ok = step_move(s.sv, self, move, vm_e(vm, self, pg::vm_layout(vm).f.enemy), true);
   restore_globals(vm, saved);
   refresh_from_world(qc_of(vm));
   pg::return_float(vm, ok ? 1.0f : 0.0f);
@@ -281,7 +281,7 @@ void bi_checkbottom(pg::Vm& vm) {
   const int e = sim::entity_parm(vm, 0, "checkbottom");
   if (e < 0) return;
   flush_to_world(qc_of(vm));
-  pg::return_float(vm, check_bottom(s, e) ? 1.0f : 0.0f);
+  pg::return_float(vm, check_bottom(s.sv, e) ? 1.0f : 0.0f);
 }
 
 void bi_changeyaw(pg::Vm& vm) {
