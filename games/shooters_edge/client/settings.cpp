@@ -65,10 +65,17 @@ void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) 
   info.name = name, info.sent_top = info.top, info.sent_bottom = info.bottom;
   l.opt.player = name;
   namespace sv = shooters_edge::server;
-  l.rules->user_info(0, "name", name);
+  // A match's server tells every client (ListenHost::set_info); a campaign's rules take it.
+  const auto set = [&l](const std::string& key, const std::string& value) {
+    if (l.host)
+      l.host->set_info(l.host->game, key, value);
+    else
+      l.rules->user_info(0, key, value);
+  };
+  set("name", name);
   if (l.room) return;  // a team game's lobby wears the team's colours (lobby.cpp)
-  l.rules->user_info(0, "topcolor", std::to_string(info.top));
-  l.rules->user_info(0, "bottomcolor", std::to_string(info.bottom));
+  set("topcolor", std::to_string(info.top));
+  set("bottomcolor", std::to_string(info.bottom));
 }
 
 void mouse_to_binds(ge::console::Console& con, const ge::input::InputState& in) {

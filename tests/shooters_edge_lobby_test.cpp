@@ -25,6 +25,7 @@
 #include "shooters_edge/hud/lobby_panel.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/server/lobby.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
@@ -124,7 +125,7 @@ TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
   std::string error;
   CHECK_MSG(cl::baseline_progs(progs, error), error);
   cl::Listen l;
-  cl::ListenOptions opt;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
   opt.console = {"deathmatch 1", "fraglimit 20", "timelimit 10"};
   opt.lobby = true;
   opt.lobby_settings.countdown_s = 2;
@@ -196,6 +197,7 @@ TEST(the_listen_server_warms_up_then_restarts_the_map_for_the_match) {
   CHECK(sv::info_value(l.server->clients[0].userinfo, "team") == "blue");
   CHECK(l.server->cvars.find("fraglimit")->number == 20);
   CHECK(cl::listen_lobby(l, "ready"));  // refused in the match, but a lobby word
+  cl::listen_frame(l, idle);            // the server's answer goes out with its next frame
   bool refused = false;
   for (const std::string& p : l.prints)
     refused = refused || p.find("the match is on") != std::string::npos;

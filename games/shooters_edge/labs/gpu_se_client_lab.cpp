@@ -65,6 +65,7 @@
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/labs/staged.hpp"
 #include "shooters_edge/labs/warp_film.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -219,7 +220,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
   }
-  cl::ListenOptions lo;
+  cl::ListenOptions lo = shooters_edge::net::listen_options();
   if (cl::single_player(progs)) lo.console.emplace_back("deathmatch 0");  // as NEW GAME starts it
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, lab.arg("map"), error);
   if (!map || !cl::listen_start(l, progs, std::move(map), lo, error)) {
@@ -442,7 +443,8 @@ void run(gl::Lab& lab) {
   if (!shooters_edge::labs::stage_asked(lab, files)) return;
   cl::Listen l;
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "halls", error);
-  if (!map || !cl::listen_start(l, progs, std::move(map), {}, error)) {
+  if (!map ||
+      !cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), error)) {
     lab.fail(error, "The fixture map should load under the baseline mod. Skill: shooter.");
     return;
   }

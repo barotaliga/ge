@@ -1286,6 +1286,12 @@ them (`menu/lobby_screen.hpp`): the screen and the banner in the menu's text box
 the glyph sheet's two sets, the countdown in the big figures, as the ESC menu is; without them it
 keeps the modern look.
 
+**Hosting from the window (M53a).** The window's match is the dedicated server's game run in the
+window's process (`client/listen.hpp`, `net/classic_game.hpp`): the same server core, the same
+lobby and bots, the player a seat of it. With `sv_port <port>` set before `map <name>`, others join
+it over UDP with a classic client (`connect <address>:<port>`) as they would `shooters_edge_server`;
+`sv_maxclients` is its slots (32). `sv_port 0`, the default, keeps the match the window's alone.
+
 **The lobby (M18q).** Before the match, on M17d's sessions: the players and their pings, teams,
 ready, chat to all or the team, a map vote, kick, and the host's start; at the end of the match
 everyone returns to it. Joining is from the server browser, an invite (M17j's friends), or an

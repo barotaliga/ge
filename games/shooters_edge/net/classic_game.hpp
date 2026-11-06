@@ -26,6 +26,11 @@
 // countdown run out restarts the map into the match, and the match's next map warms up again.
 // Bots alone never count down. Without `sv_lobby` the bots play every map as a match.
 //
+// A LISTEN SERVER is the same game in the window's process (client/listen.hpp's `ListenHost` in
+// `ServerConfig::host`): the window's program, map and lines, its player slot 0 (a local seat
+// the window moves and sees), the next map the mod asks for read by the window. Others join it
+// on the window's port like a dedicated server's clients.
+//
 // Offline (no socket: a test, a lab) the frame is the mod's own frame with the bots' moves; on
 // the network it is the endpoint's frame at the server's time, which is the same frame while
 // nobody is connected, so both give one digest.
@@ -33,12 +38,13 @@
 // ge:summary Shooter's Edge's playable dedicated server: the mod on the classic protocol
 // ge:keywords dedicated-server classic-server servergame serve net_frame baseline-mod deathmatch
 // ge:keywords classic_game playable-server game-rules fraglimit timelimit map-change maprotation
-// ge:keywords sv_bots sv_lobby bots lobby warmup addbot removebot
+// ge:keywords sv_bots sv_lobby bots lobby warmup addbot removebot listen-server listen_options
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_game_test.cpp
 #pragma once
 
 #include "server/server.hpp"
+#include "shooters_edge/client/listen.hpp"
 
 namespace shooters_edge::net {
 
@@ -46,5 +52,8 @@ namespace shooters_edge::net {
 inline constexpr const char* kGameFolder = "id1";
 
 const ge::server::ServerGame& classic_game();
+
+// A listen server's options with its matches on `classic_game()`.
+client::ListenOptions listen_options();
 
 }  // namespace shooters_edge::net

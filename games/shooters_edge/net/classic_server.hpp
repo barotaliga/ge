@@ -215,6 +215,12 @@ struct ClassicServer {
   bool (*game_command)(void* ctx, int slot, const std::string& line) = nullptr;
   void* game_ctx = nullptr;
   std::vector<sh::Packet> local_moves;  // the local seats' moves for the next frame (the game's)
+  // A listen server's own player, a local seat: the rules' frame handed to the game before the
+  // endpoint routes its events (what the player sees and hears), and the lines printed to a local
+  // seat (the lobby's answers), which no packet carries.
+  void (*local_tap)(void* ctx, const sv::RulesCommon& game) = nullptr;
+  void (*local_print)(void* ctx, int slot, const std::string& text) = nullptr;
+  void* local_ctx = nullptr;
 };
 
 // Serves `rules` (its map already started) over `t`. False with `error` when it cannot.
@@ -227,8 +233,9 @@ bool classic_change(ClassicServer& s, const sv::RulesRunner& next, std::string& 
 // A seat the game plays in its own process at `slot` (a bot it connected to the rules itself):
 // shown to every client as a player (`*bot` in its user info), sent nothing, never timed out, kept
 // over a map change (the game connects it to the next map's rules), its moves `local_moves`.
-// False with `error` when the slot is a client's.
-bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std::string& error);
+// False with `error` when the slot is a client's. `bot` false: a listen server's own player.
+bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std::string& error,
+                       bool bot = true);
 // One key of a seat's user info set, told to every client and to the rules (a lobby's team).
 void classic_set_info(ClassicServer& s, int slot, const std::string& key, const std::string& value);
 // A line printed to every spawned client.

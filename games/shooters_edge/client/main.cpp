@@ -114,6 +114,7 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -376,12 +377,14 @@ int run_main(int argc, char** argv) {
   bool on_title = next_map.empty() && !measured;
   bool menu_at_start = on_title;
   if (next_map.empty()) next_map = game_content.first_map;
-  cl::ListenOptions listen_opt;
+  cl::ListenOptions listen_opt = shooters_edge::net::listen_options();
   listen_opt.files = &files;
   if (const ge::console::Cvar* n = console.cvars().find("name"); n != nullptr && !n->value.empty())
     listen_opt.player = n->value;
   listen_opt.lobby = listen.opt.lobby;  // the lobby's settings, as the console set them
   listen_opt.lobby_settings = listen.opt.lobby_settings;
+  listen_opt.port = listen.opt.port;  // others join on it (sv_port)
+  listen_opt.maxclients = listen.opt.maxclients;
   listen_opt.registered = game_content.registered;
   listen_opt.item_names = game_content.item_names;
   listen_opt.arsenal = game_content.arsenal;

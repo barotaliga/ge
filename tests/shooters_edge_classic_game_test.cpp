@@ -8,12 +8,14 @@
 // name in serverdata and the serverinfo's `*gamedir`, and a mod folder with no program is refused;
 // the mod's changelevel takes the players to the next map (the rotation's when it has one); bots
 // are players every client sees, with their teams; the lobby warms up (its limits held, a bot
-// alone never counts down) until the client is ready, then restarts the map into the match.
+// alone never counts down) until the client is ready, then restarts the map into the match; the
+// window's own match (the listen server) is the same server, and a classic client joins it.
 //
 // ge:summary Test: Shooter's Edge's dedicated server on the core: one digest, a client plays on it
 // ge:keywords test classic-game dedicated-server classic-client simulated-network serve net_frame
 // ge:keywords game-rules fraglimit pack-map changelevel map-change maprotation reconnect
 // ge:keywords bots sv_bots sv_lobby lobby warmup ready countdown match-restart local-seat
+// ge:keywords listen-server listen_options join-the-window
 // ge:keywords sv_mod mod-folder gamedir qwprogs misc-pak
 // ge:skill net shooter testing
 #include <filesystem>
@@ -32,6 +34,7 @@
 #include "server/server.hpp"
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 #include "vfs/pak.hpp"
@@ -374,4 +377,42 @@ TEST(classic_game_the_lobby_warms_up_until_everyone_is_ready) {
   again.look_at = 399;
   run_session(again, c, 1100, "", 400);
   CHECK(r.digest == again.digest);
+}
+
+TEST(classic_game_a_client_joins_the_window_s_own_match) {
+  ge::progs::Progs progs;
+  std::string error;
+  CHECK_MSG(shooters_edge::client::baseline_progs(progs, error), error);
+  gn::LinkConditions lan;
+  gn::SimNetwork net = gn::make_sim_network(1, lan);
+  gn::Transport port, client_port;
+  gn::open_sim_transport(port, net, gn::sim_address(0, kPort));
+  gn::open_sim_transport(client_port, net, gn::sim_address(1, kClientPort));
+  shooters_edge::client::Listen l;
+  shooters_edge::client::ListenOptions opt = se::listen_options();
+  opt.transport = &port;
+  opt.player = "host";
+  shooters_edge::client::SearchPath none;
+  auto map = shooters_edge::client::load_named_map(none, "arena", error);
+  CHECK_MSG(map != nullptr, error);
+  CHECK_MSG(shooters_edge::client::listen_start(l, progs, std::move(map), opt, error), error);
+  CHECK(l.match != nullptr && l.match->own_protocol);  // the core's server, on the window's side
+  se::ClassicClientEnd visitor;
+  se::ClientConfig cc;
+  cc.name = "visitor";
+  cc.files = {"skins/base.pcx"};
+  se::client_start(visitor, client_port, gn::sim_address(0, kPort), cc, 0);
+  ge::shooter::MoveCmd idle;
+  for (int f = 0; f < 400; f++) {
+    const int64_t now = l.match->now_us;
+    gn::sim_advance(net, now);
+    se::client_tick(visitor, now);
+    shooters_edge::client::listen_frame(l, idle);
+  }
+  CHECK(visitor.stage == se::ClientStage::active);
+  CHECK(l.server->clients[0].active && l.server->clients[1].active);  // the host and the visitor
+  // The visitor sees the window's player as a player, not a bot.
+  CHECK(se::info_get(visitor.userinfos[0], "name") == "host");
+  CHECK(se::info_get(visitor.userinfos[0], "*bot").empty());
+  shooters_edge::client::listen_stop(l);
 }

@@ -2,7 +2,7 @@
 //
 // ge:summary The lobby's console commands and settings: ready, break, team, start, addbot
 // ge:keywords lobby console add_lobby_commands lobby_keys sv_lobby sv_countdown sv_minplayers
-// ge:keywords warmup
+// ge:keywords warmup sv_port sv_maxclients listen-server hosting
 // ge:skill shooter console
 // ge:test tests/shooters_edge_lobby_test.cpp
 #include "shooters_edge/client/lobby_console.hpp"
@@ -61,6 +61,17 @@ void add_lobby_commands(ge::console::Console& con, Listen& l) {
                     .help = "the fewest seated (bots count) before the match may start",
                     .kind = ge::console::CvarKind::integer},
                    &l.opt.lobby_settings.min_players);
+  con.cvars().bind({.name = "sv_port",
+                    .fallback = "0",
+                    .help = "the UDP port others join the next match on (0: nobody joins); "
+                            "takes effect with the next `map`",
+                    .kind = ge::console::CvarKind::integer},
+                   &l.opt.port);
+  con.cvars().bind({.name = "sv_maxclients",
+                    .fallback = "32",
+                    .help = "the match's slots: the player, the bots and who joins (1..32)",
+                    .kind = ge::console::CvarKind::integer},
+                   &l.opt.maxclients);
 }
 
 void lobby_keys(Listen& l, const LobbyKeys& k) {
