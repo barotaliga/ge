@@ -1,5 +1,5 @@
 // ge:summary The bot: senses, the pilot's command, the view on a contact, the axes under the view
-// ge:keywords bot bot_init bot_source bot_next aim hold release
+// ge:keywords bot bot_init bot_source bot_next aim hold release look watch pre-aim
 // ge:skill shooter bots
 // ge:test tests/shooter_senses_test.cpp
 #include "shooter/bot.hpp"
@@ -114,26 +114,43 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   } else {
     want[0] = unwrap(pilot_yaw, b.yaw);
     want[1] = 0;
-    if (b.aiming) {
-      const float off = wrap(b.yaw - pilot_yaw);
-      if (off < kRelease && off > -kRelease && b.pitch < kRelease && b.pitch > -kRelease) {
-        b.aiming = false;
-        b.target = -1;
-        b.pilot.pilot.set.strafe = b.strafe;
-        b.pilot.pilot.set.hop = b.hop;
-        if (why) {
-          why->decide("aim");
-          why->choose("release", "no contact: the view back on the pilot's way");
-        }
+    if (b.look) {
+      float yaw = 0, pitch = 0;
+      aim_angles(eye, b.look_at, yaw, pitch);
+      want[0] = unwrap(yaw, b.yaw);
+      want[1] = pitch;
+    }
+    const float off = wrap(b.yaw - pilot_yaw);
+    const bool on_way =
+        off < kRelease && off > -kRelease && b.pitch < kRelease && b.pitch > -kRelease;
+    if (b.aiming && (on_way || b.look)) {
+      // Let go: back onto the pilot's way, or straight on to the spot watched (the hands kept).
+      b.aiming = false;
+      b.target = -1;
+      b.pilot.pilot.set.strafe = b.strafe;
+      b.pilot.pilot.set.hop = b.hop;
+      b.looking = b.look;
+      if (why) {
+        why->decide("aim");
+        why->choose("release", b.look ? "no contact: the view on the spot watched"
+                                      : "no contact: the view back on the pilot's way");
       }
+    } else if (!b.aiming && b.look && !b.looking) {
+      // Took up watching: the hands start from where the view is.
+      const std::array<double, 2> from{b.yaw, b.pitch};
+      b.aim_hands.reset(from);
+      b.looking = true;
+    } else if (b.looking && !b.look && on_way) {
+      b.looking = false;  // back on the pilot's way
     }
   }
 
-  if (b.aiming) {
+  if (b.aiming || b.looking) {
     static constexpr const char* kNames[2] = {"aim_yaw", "aim_pitch"};
     ai::record_intent(why, kNames, want);
     double out[2];
     b.aim_hands.step(want, out);
+    if (!b.aiming) b.stats.looking++;
     b.wanted[0] = want[0];
     b.wanted[1] = want[1];
     b.pressed[0] = out[0];

@@ -381,6 +381,48 @@ void run(gl::Lab& lab) {
   }
   lab.metric("team.frags-per-minute", (r.teams[0].frags + r.teams[1].frags) / (secs / 60),
              "per-min");
+  // The dodge (shooter/dodge.hpp): the share of the fight spent side-stepping, its turns a minute,
+  // and every weapon's hits over its shots (what the dodge is for).
+  {
+    int64_t dodging = 0, turns = 0, fight = 0, fired = 0, hit = 0, watching = 0, alive = 0;
+    int64_t reacted = 0, pre = 0;
+    for (const cn::TeamPlayer& p : r.players) {
+      watching += p.watching;
+      reacted += p.reactions;
+      pre += p.pre_aimed;
+      for (int k = 0; k < 4; k++) alive += p.mode_commands[k];
+      dodging += p.dodging;
+      turns += p.dodge_turns;
+      fight += p.mode_commands[static_cast<int>(bt::FightMode::fight)];
+      for (const cn::HitCount& c : p.hits) {
+        fired += c.fired;
+        hit += c.hit;
+      }
+    }
+    lab.metric("team.dodge-share",
+               fight > 0 ? static_cast<double>(dodging) / static_cast<double>(fight) : 0, "share");
+    lab.metric("team.dodge-turns-per-min",
+               static_cast<double>(turns) / (secs / 60) / static_cast<double>(r.players.size()),
+               "per-min");
+    lab.metric("team.watch-share",
+               alive > 0 ? static_cast<double>(watching) / static_cast<double>(alive) : 0, "share");
+    lab.metric("team.pre-aimed-share",
+               reacted > 0 ? static_cast<double>(pre) / static_cast<double>(reacted) : 0, "share");
+    // What the match was fought with: each weapon's share of the commands holding one.
+    int64_t held[9] = {}, all = 0;
+    for (const cn::TeamPlayer& p : r.players)
+      for (int w = 1; w <= 8; w++) {
+        held[w] += p.weapon_commands[w];
+        all += p.weapon_commands[w];
+      }
+    static const char* kHeld[9] = {"",      "blade",    "scattergun", "double", "spiker",
+                                   "heavy", "grenades", "rockets",    "arc"};
+    for (int w = 1; w <= 8; w++)
+      lab.metric(std::string("team.held.") + kHeld[w],
+                 all > 0 ? static_cast<double>(held[w]) / static_cast<double>(all) : 0, "share");
+    lab.metric("team.accuracy",
+               fired > 0 ? 100.0 * static_cast<double>(hit) / static_cast<double>(fired) : 0, "%");
+  }
   lab.metric("team.faults", static_cast<double>(r.faults), "count");
   lab.metric("team.place-names", static_cast<double>(r.locs), "count");
   lab.note("place names: " + std::to_string(r.locs) + " from " + r.locs_from);

@@ -23,7 +23,8 @@ sh::Brush box(int contents, sh::Vec3f lo, sh::Vec3f hi) {
 }
 
 // The ground (x < 200, its top at z 0), the pool's floor (x >= 200, at z -256) and the water in
-// the pool up to 40 under the ground's top.
+// the pool up to 8 under the ground's top: low enough a swimmer's water jump takes him over the
+// edge (an exit is proven by the move; 40 under, no one climbs out).
 struct Pool {
   sh::HullData point, clip;
   sh::MoveWorld world;
@@ -32,7 +33,7 @@ struct Pool {
     const std::vector<sh::Brush> brushes = {
         box(sh::kContentsSolid, {-512, -512, -320}, {200, 512, 0}),
         box(sh::kContentsSolid, {200, -512, -320}, {1024, 512, -256}),
-        box(sh::kContentsWater, {200, -512, -256}, {1024, 512, -40})};
+        box(sh::kContentsWater, {200, -512, -256}, {1024, 512, -8})};
     point = sh::build_point_hull(brushes);
     clip = sh::build_box_hull(brushes, sh::kPlayerMins, sh::kPlayerMaxs);
     world.solids[0].point_hull = point.hull();
