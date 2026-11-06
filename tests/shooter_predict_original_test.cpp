@@ -120,6 +120,7 @@ TEST(the_original_move_predicts_the_servers_run_up_a_step_and_into_a_wall) {
   for (const size_t split : {size_t{10}, size_t{30}, size_t{60}}) {
     Host h(l);
     std::vector<sh::MoveCmd> cmds;
+    cmds.reserve(160);
     for (int i = 0; i < 120; i++) cmds.push_back(cmd(i, 0));
     const Race r = race(h, l, cmds, split);
     CHECK_MSG(r.error < 1.0f, "split " + std::to_string(split) + ": predicted " +
@@ -130,6 +131,7 @@ TEST(the_original_move_predicts_the_servers_run_up_a_step_and_into_a_wall) {
   // wall (x under 464).
   Host h(l);
   std::vector<sh::MoveCmd> cmds;
+  cmds.reserve(160);
   for (int i = 0; i < 160; i++) cmds.push_back(cmd(i, 0));
   const Race r = race(h, l, cmds, 100);
   CHECK_MSG(r.server.z > 39.9f && r.server.z < 40.1f && r.server.x > 463 && r.server.x < 464,
@@ -154,6 +156,7 @@ TEST(the_engines_jump_is_predicted_and_a_programs_is_not) {
   for (const bool program_jumps : {false, true}) {
     Host h(l, program_jumps);
     std::vector<sh::MoveCmd> cmds;
+    cmds.reserve(160);
     for (int i = 0; i < 20; i++) cmds.push_back(cmd(i, 90, 0));
     for (int i = 20; i < 24; i++) cmds.push_back(cmd(i, 90, 0, sh::kButtonJump));
     for (int i = 24; i < 40; i++) cmds.push_back(cmd(i, 90, 0));
@@ -169,6 +172,7 @@ TEST(a_mover_and_another_player_block_the_prediction_as_they_block_the_server) {
     Host h(l);
     h.block({0, 0, 0});
     std::vector<sh::MoveCmd> cmds;
+    cmds.reserve(160);
     for (int i = 0; i < 80; i++) cmds.push_back(cmd(i, 90));
     const Race r = race(h, l, cmds, 10, {{1, {0, 0, 0}}});
     CHECK_MSG(r.server.y < 165, at(r.server));
@@ -183,6 +187,7 @@ TEST(a_mover_and_another_player_block_the_prediction_as_they_block_the_server) {
     Host h(l);
     h.other({0, -120, 24});
     std::vector<sh::MoveCmd> cmds;
+    cmds.reserve(160);
     for (int i = 0; i < 60; i++) cmds.push_back(cmd(i, -90));
     const Race r = race(h, l, cmds, 5, {}, {{0, -120, 24}});
     CHECK_MSG(r.server.y > -89, at(r.server));
@@ -194,6 +199,7 @@ TEST(a_long_command_is_split_as_the_server_splits_it) {
   const Level l;
   Host h(l);
   std::vector<sh::MoveCmd> cmds;
+  cmds.reserve(160);
   for (int i = 0; i < 10; i++) cmds.push_back(cmd(i, 45, 400, 0, 120));
   const Race r = race(h, l, cmds, 3);
   CHECK_MSG(r.error < 1.0f, "predicted " + at(r.predicted.origin) + " server " + at(r.server));

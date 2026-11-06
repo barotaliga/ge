@@ -175,6 +175,7 @@ bool predict_from(Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& 
       r.original_level = r.levels;
     }
     std::vector<sh::ModelAt> at;
+    at.reserve(movers.size());
     for (const sh::ClientModel& m : movers)
       at.push_back({static_cast<int>(m.model - r.world->data()), m.origin});
     sh::original_prediction_place(r.original, at.data(), static_cast<int>(at.size()), others.data(),
