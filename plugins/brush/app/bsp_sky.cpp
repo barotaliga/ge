@@ -220,6 +220,7 @@ SkyPick pick_sky(const SkyColours& c, std::string_view map) {
   // A tint halfway toward the texture's own hue, its brightest channel 1.
   for (int k = 0; k < 3; ++k) p.tint[k] = std::sqrt(seen[k] / std::max(hi, 1e-9));
   p.cover = std::clamp(c.cover, 0.1, 0.9);
+  p.bright = y;
   deal_day(p);
   p.why = "a " + hue + " sky (" + pct(y) + " bright, " + pct(sat) + " saturated) with " +
           pct(c.cover) + " cloud: " + p.type + ", the sun at " +
@@ -227,6 +228,8 @@ SkyPick pick_sky(const SkyColours& c, std::string_view map) {
           " against the rooms, " + stack_words(p);
   return p;
 }
+
+bool dark_sky(const SkyPick& p) { return p.bright < kDarkSky; }
 
 void set_cover(SkyPick& p, double cover) {
   if (p.layer_count == 0 || p.layers[0].cover <= 0) return;

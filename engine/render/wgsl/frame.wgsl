@@ -141,13 +141,32 @@ fn cloud_uvw(l: CloudRows, xz: vec2f) -> vec3f {
   return cloud_warped(l, uvw);
 }
 
-// THE WARP (thick.w, render/clouds.cpp's `warped`): the point pushed up to thick.w cells by two
-// reads of the noise a tile apart from the column's, so a cell's outline leans and twists; at the
-// tile's own scale, so the drift's wrap stays seamless.
-fn cloud_warped(l: CloudRows, uvw: vec3f) -> vec3f {
-  let a = textureSampleLevel(cloud_noise, linear_repeat, uvw + vec3f(0.19, 0.53, 0.61), 0.0).r;
-  let b = textureSampleLevel(cloud_noise, linear_repeat, uvw + vec3f(0.67, 0.11, 0.83), 0.0).r;
-  return vec3f(uvw.xy + (vec2f(a, b) - 0.5) * (2.0 * l.thick.w / kCloudTileCells), uvw.z);
+// THE WARP (thick.w, render/clouds.cpp's `warped`): the point pushed up to thick.w cells by reads
+// of the noise set off from the column's, at the tile's scale and at three sevenths of it, so a
+// cell's outline leans and twists a different way in each tile and the sky never shows the tile
+// repeating (render/clouds.hpp's kWarpTiles; the drift wraps at that period).
+// 0.4285714 is 3 / kWarpTiles, 0.7142857 is 5 / kWarpTiles, 1.4072 is 1 / sqrt(0.55^2 + 0.45^2).
+const kWarpTiles = 7.0;
+fn cloud_warped(l: CloudRows, p: vec3f) -> vec3f {
+  let c = vec3f(p.xy * 0.4285714, p.z);
+  let a = cloud_read(p + vec3f(0.19, 0.53, 0.61)) + cloud_read(c + vec3f(0.41, 0.07, 0.29));
+  let b = cloud_read(p + vec3f(0.67, 0.11, 0.83)) + cloud_read(c + vec3f(0.13, 0.89, 0.47));
+  return vec3f(p.xy + (vec2f(a, b) - 1.0) * (l.thick.w / kCloudTileCells), p.z);
+}
+fn cloud_read(p: vec3f) -> f32 {
+  return textureSampleLevel(cloud_noise, linear_repeat, p, 0.0).r;
+}
+
+// The noise a layer's column is cut from at `uvw`. A WARPED layer's (thick.w) is blended with a
+// read at five sevenths of the tile's scale, spread back to the noise's own range, so the cells
+// of one tile are never the cells of the next (render/clouds.cpp's `column_noise`).
+fn cloud_column_noise(l: CloudRows, p: vec3f) -> f32 {
+  let n = cloud_read(p);
+  if (l.thick.w <= 0.0) {
+    return n;
+  }
+  let m = cloud_read(vec3f(p.xy * 0.7142857 + vec2f(0.23, 0.61), p.z + 0.37));
+  return clamp(0.5 + (0.55 * n + 0.45 * m - 0.5) * 1.4072, 0.0, 1.0);
 }
 
 // How far past the cut the noise climbs to a full column (render/clouds.hpp's kColumnRamp): a
@@ -160,7 +179,8 @@ const kColumnRamp = 0.3;
 fn cloud_column_of(l: CloudRows, uvw: vec3f, n: f32) -> f32 {
   var c = clamp((n - l.shape.z) / max(min(1.0 - l.shape.z, kColumnRamp), 1e-3), 0.0, 1.0);
   if (l.form.w > 0.0) {
-    let m = textureSampleLevel(cloud_noise, linear_repeat, vec3f(uvw.xy * 0.25, uvw.z + 0.5), 0.0).r;
+    let k = select(0.25, 2.0 / kWarpTiles, l.thick.w > 0.0);
+    let m = textureSampleLevel(cloud_noise, linear_repeat, vec3f(uvw.xy * k, uvw.z + 0.5), 0.0).r;
     c *= mix(1.0, clamp((m - 0.5) * 4.0 + 0.5, 0.0, 1.0), l.form.w);
   }
   return c;
@@ -185,7 +205,7 @@ fn cloud_thickness(l: CloudRows, uvw: vec3f, c: f32) -> f32 {
 // times how thick (the shadow's read).
 fn cloud_cast(l: CloudRows, xz: vec2f) -> f32 {
   let uvw = cloud_uvw(l, xz);
-  let c = cloud_column_of(l, uvw, textureSampleLevel(cloud_noise, linear_repeat, uvw, 0.0).r);
+  let c = cloud_column_of(l, uvw, cloud_column_noise(l, uvw));
   if (c <= 0.0) {
     return 0.0;
   }

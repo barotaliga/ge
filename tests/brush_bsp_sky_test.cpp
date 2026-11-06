@@ -176,3 +176,11 @@ TEST(an_hour_set_puts_the_sun_where_the_hour_has_it) {
   CHECK(midnight.adapt_cd == night.adapt_cd && midnight.layer_count == night.layer_count &&
         midnight.layers[0].cover == night.layers[0].cover);
 }
+
+TEST(a_dark_sky_texture_is_the_maps_night_and_a_bright_one_its_day) {
+  // The red-brown smoke (1% bright) is a night; the violet-blue sky (13%) and the Earth's fair
+  // day are days.
+  CHECK(ba::dark_sky(ba::pick_sky(colours(0.012, 0.006, 0.005, 0.6), "e1m5")));
+  CHECK(!ba::dark_sky(ba::pick_sky(colours(0.1, 0.1, 0.22, 0.25), "e1m1")));
+  CHECK(!ba::dark_sky(ba::pick_sky(ba::SkyColours{})));
+}

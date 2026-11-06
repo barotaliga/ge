@@ -145,23 +145,43 @@ const std::array<double, 256>& share_above() {
 
 double frac(double x) { return x - std::floor(x); }
 
-// cloud_rows' drift and age within the tile, the shader's wind.z and wind.w.
+// cloud_rows' drift and age within the tile, the shader's wind.z and wind.w. A warped layer's
+// drift is kept within kWarpTiles tiles, the period of its reads at sevenths of the tile's scale.
 double drift_in_tile(const CloudLayer& l) {
-  return frac(l.drift_m / (l.cell_m * std::max(l.stretch, 1e-3) * kCloudTileCells));
+  const double tiles = l.drift_m / (l.cell_m * std::max(l.stretch, 1e-3) * kCloudTileCells);
+  if (l.warp <= 0) return frac(tiles);
+  return frac(tiles / kWarpTiles) * kWarpTiles;
 }
 double age_in_tile(const CloudLayer& l) { return frac(l.evolve / kCloudTileCells); }
 
-// The layer's tile point (u, v) at age `w` pushed by its WARP (the shader's `cloud_warped`): two
-// reads of the noise a whole tile apart from the column's own, each moving the point up to
-// `warp` cells; at the tile's own scale, so the drift's wrap at a tile's edge stays seamless.
+// The layer's tile point (u, v) at age `w` pushed by its WARP (the shader's `cloud_warped`): reads
+// of the noise set off from the column's own, at the tile's scale and at three sevenths of it,
+// moving the point up to `warp` cells. The coarse read repeats only every kWarpTiles tiles, so
+// the tile's cells, pushed a different way in each tile, never repeat across the sky; the
+// drift is kept within those tiles, so its wrap stays seamless.
 void warped(const CloudLayer& l, double& u, double& v, double w) {
   const double warp = std::clamp(l.warp, 0.0, 4.0);
   if (warp <= 0) return;
-  const double a = cloud_noise_at(u + 0.19, v + 0.53, w + 0.61);
-  const double b = cloud_noise_at(u + 0.67, v + 0.11, w + 0.83);
+  constexpr double kCoarse = 3.0 / kWarpTiles;
+  const double a = 0.5 * cloud_noise_at(u + 0.19, v + 0.53, w + 0.61) +
+                   0.5 * cloud_noise_at(u * kCoarse + 0.41, v * kCoarse + 0.07, w + 0.29);
+  const double b = 0.5 * cloud_noise_at(u + 0.67, v + 0.11, w + 0.83) +
+                   0.5 * cloud_noise_at(u * kCoarse + 0.13, v * kCoarse + 0.89, w + 0.47);
   const double k = 2 * warp / kCloudTileCells;
   u += (a - 0.5) * k;
   v += (b - 0.5) * k;
+}
+
+// The noise a layer's column is cut from (the shader's `cloud_column_noise`): a warped layer's
+// blended with a read at five sevenths of the tile's scale and spread back to the noise's range,
+// so one tile's cells are never the next one's.
+double column_noise(const CloudLayer& l, double u, double v, double w) {
+  const double n = cloud_noise_at(u, v, w);
+  if (l.warp <= 0) return n;
+  constexpr double kFine = 5.0 / kWarpTiles;
+  constexpr double kSpread = 1.4072;  // 1 / sqrt(0.55^2 + 0.45^2)
+  const double m = cloud_noise_at(u * kFine + 0.23, v * kFine + 0.61, w + 0.37);
+  return std::clamp(0.5 + (0.55 * n + 0.45 * m - 0.5) * kSpread, 0.0, 1.0);
 }
 
 }  // namespace
@@ -223,12 +243,15 @@ double cloud_column(const CloudLayer& l, double x, double z) {
   double u = across * scale, v = along * scale / std::max(l.stretch, 1e-3) - drift_in_tile(l);
   const double w = age_in_tile(l);
   warped(l, u, v, w);
-  const double n = cloud_noise_at(u, v, w);
+  const double n = column_noise(l, u, v, w);
   const double cut = cloud_cut(l.cover);
   double c = std::clamp((n - cut) / std::max(std::min(1.0 - cut, kColumnRamp), 1e-3), 0.0, 1.0);
   const double patch = std::clamp(l.patch, 0.0, 1.0);
   if (patch > 0) {
-    const double m = cloud_noise_at(u * 0.25, v * 0.25, w + 0.5);
+    // A warped layer's islands at two sevenths of the tile's scale: they repeat only every
+    // kWarpTiles tiles.
+    const double k = l.warp > 0 ? 2.0 / kWarpTiles : 0.25;
+    const double m = cloud_noise_at(u * k, v * k, w + 0.5);
     c *= 1 + (std::clamp((m - 0.5) * 4 + 0.5, 0.0, 1.0) - 1) * patch;
   }
   return c;

@@ -621,9 +621,12 @@ void run(gl::Lab& lab) {
                  "toxic (engine/render/sky_style.hpp).");
     }
   }
-  // The classic night over each map's pick (--night=0: the picked hour by day).
+  // The classic night over each map's pick: auto where its sky texture is dark (the game's own
+  // hour, bsp_sky.hpp's dark_sky), 1 every map, 0 none (the picked hour by day).
   if (lab.arg("night") != "0") {
-    for (size_t i = 0; i < maps.size(); ++i) ba::night_over(maps[i]->sky, names[i]);
+    for (size_t i = 0; i < maps.size(); ++i)
+      if (lab.arg("night") != "auto" || ba::dark_sky(maps[i]->sky))
+        ba::night_over(maps[i]->sky, names[i]);
   }
   if (!lab.arg("adapt").empty()) {
     for (auto& m : maps) m->sky.adapt_cd = lab.arg_num("adapt");
@@ -961,7 +964,9 @@ const gl::LabSpec kSpec{
       "<map>:x,y,z,moon[,lens] aimed at the body; separated by ;"},
      {"sun", "", "the sun's elevation and azimuth, degrees (none: each map's picked sky's)"},
      {"clouds", "", "the heaps' cover, 0..1, 0 a clear sky (none: each map's picked sky's)"},
-     {"night", "1", "the classic night over every map (0: the picked sky's hour by day)"},
+     {"night", "auto",
+      "the classic night: auto over the maps whose sky texture is dark (the game's own hour), 1 "
+      "over every map, 0 over none (the picked sky's hour by day)"},
      {"farland", "auto",
       "the land round each map seen over its walls: auto (dealt to suit its sky), off or a kind"},
      {"farland-warm", "0", "the far land's air warmer than its kind's, C"},
