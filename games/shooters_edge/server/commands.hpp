@@ -16,7 +16,8 @@
 //
 // INFO: `set_user_info` changes one key of a client's user info and, when the value moved, calls
 // UserInfo_Changed (self the client; p0 key, p1 old value, p2 new value; a new `name` is the
-// entity's netname before the hook runs); `set_local_info` the
+// entity's netname before the hook runs; `cl_speedjump 1` is the player's ask for the easy jump,
+// `ClientSlot::speedjump`, which pm_speedjump allows); `set_local_info` the
 // same for the server's local info with localinfoChanged (self the world).
 //
 // THE CONSOLE (`server_command`): `set <name> <value>` (made when unknown), `serverinfo` and

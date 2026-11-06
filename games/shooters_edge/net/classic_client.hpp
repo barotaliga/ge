@@ -77,6 +77,7 @@ struct ClientConfig {
   int topcolor = 0, bottomcolor = 0;
   int rate = 25000;
   bool spectator = false;
+  bool speedjump = false;  // cl_speedjump: the easy jump asked for (sent only when set)
   std::string password;
   ClientExtMode mode = ClientExtMode::lines;
   Ext ask = first_tier();          // what it understands

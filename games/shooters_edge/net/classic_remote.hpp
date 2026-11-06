@@ -27,6 +27,10 @@
 // players' boxes), with the move settings serverdata carried. A prediction the next frame proves
 // wrong by 4 to 64 units is not snapped but folded into a correction that decays (`Smoothing`).
 // The drawn eye and the player's own place are the prediction; `cl_nopred 1` draws the server's.
+// THE EASY JUMP: with `cl_speedjump 1` when joining, the user info carries `cl_speedjump 1` and the
+// prediction runs the easy jump at the server info's `pm_speedjump` (a server that does not offer
+// it has none, so the move stays the classic one on both ends). Changed later, it acts from the
+// next join.
 //
 // THE OTHER PLAYERS are run forward from their newest record (plugins/shooter/predict.hpp's
 // `predict_other`): the record's time is its arrival less the milliseconds the server said had
@@ -49,6 +53,7 @@
 // ge:keywords remote_hands add_remote_commands netstatus prediction predict cl_nopred
 // ge:keywords remote_world smoothing replayed predict_other other-players cl_predict_players
 // ge:keywords interpolation lerp cl_nolerp entity-lerp draw-clock round-trip
+// ge:keywords cl_speedjump pm_speedjump easy-jump
 // ge:skill net shooter
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once

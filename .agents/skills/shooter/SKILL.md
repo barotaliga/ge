@@ -28,6 +28,7 @@ edges. `docs/shooters-edge.md` is the design;
 | `shooter/row.hpp/.cpp` | The classic row on the engine's mover and swimmer: `classic_rows` from the settings, `row_body`, `row_command` |
 | `shooter/row_recording.hpp/.cpp` | The row against the recordings, one command at a time and as runs (`replay_row`, `row_covers`) |
 | `labs/pmove_lab.cpp` | The `pmove` lab: every scenario's worst error, paths from above and the side |
+| `games/shooters_edge/labs/gpu_se_speedjump_lab.cpp` | The `se-speedjump` lab: the easy jump (`pm_speedjump`, `cl_speedjump`) against the classic move and the best strafe, alone and on the listen server |
 | `shooter/program.hpp` | The game-program seam: hooks and functions by number, the globals |
 | `shooter/entity.hpp`, `server.hpp/.cpp` | The entity record and pool, linking, trigger and impact touches, sounds, `server_hash` |
 | `shooter/area.hpp/.cpp`, `trace.hpp/.cpp` | The 31-node area tree and its listing; world traces and `test_entity_position` |
@@ -102,6 +103,10 @@ edges. `docs/shooters-edge.md` is the design;
   change to `engine/move/step.cpp` or `engine/water/swim.cpp` can move the second: rewrite it
   only when the first stays green. A classic behaviour the row lacks is a new engine KNOB, off
   by default (the `move` skill), never a branch on the classic in `engine/`.
+- **The easy jump is a permission and an ask.** `MoveSettings::speedjump` (`pm_speedjump`) acts
+  only for a player whose `ClientSlot::speedjump` is set (his user info's `cl_speedjump 1`);
+  `run_player_command` zeroes it for everyone else. It acts on the forward key alone: a strafe
+  must stay bit-identical with it on (`tests/shooter_pmove_test.cpp`, the `se-speedjump` lab).
 - Still to come: the cvars bound through `engine/console` (setting `pm_airstep` sets
   `pm_pground`), a map's compiled hulls (M18b) answering `MoveWorld`, and the other entities'
   interpolation on the client (M18h).

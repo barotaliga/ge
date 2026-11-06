@@ -58,6 +58,10 @@ namespace {
 // and its TE_ kinds, the multiplayer protocol's layout: a gunshot and blood carry a count).
 constexpr uint8_t kTempEntity = 23, kExplosion = 3;
 
+// The player's own server allows the easy jump (pm_speedjump) at half the best strafe's gain; it
+// acts only once he asks for it (cl_speedjump 1). A server.cfg or the console may change it.
+constexpr float kListenSpeedJump = 0.5f;
+
 // A match's temporary entity (one multicast's bytes) as an effect the window draws: false for a
 // kind it does not draw or bytes cut short. The explosion is Listen::explosions' already.
 bool arena_effect(std::span<const uint8_t> b, Effect& e) {
@@ -201,6 +205,7 @@ bool start_map(Listen& l, std::string& error) {
   sv::QcServerOptions so;
   so.seed = l.opt.seed;
   so.loop.max_edicts = 1024;
+  so.loop.move.speedjump = kListenSpeedJump;
   std::unique_ptr<sv::QcServer> made = sv::make_qc_server(*l.progs, so, error);
   if (!made) return false;
   l.match = sv::qc_runner(std::move(made));
@@ -301,6 +306,7 @@ sv::CampaignOptions campaign_options(Listen& l, const ListenOptions& opt) {
   sv::CampaignOptions co;
   co.server.seed = opt.seed;
   co.server.loop.max_edicts = 1024;
+  co.server.loop.move.speedjump = kListenSpeedJump;
   co.load = campaign_map;
   co.load_ctx = &l;
   co.registered = opt.registered;

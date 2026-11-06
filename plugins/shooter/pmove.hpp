@@ -17,6 +17,7 @@
 //     feet + 1, the middle and the eyes; then snapped to the ground trace's end.
 //  7. the water jump check at water level 2; 8. the water jump's clock; 9. the jump;
 //  10. friction; 11. the water, fly or walk/air move; 12. categorise again; 13. the landing fix.
+// The easy jump (`MoveSettings::speedjump`, off by default) changes steps 9 and 11 only.
 // The rules of each step are stated beside it in pmove.cpp and slide.cpp.
 //
 // Pure, allocation-free, no clock, transcendentals through core's libm only. Held within the
@@ -28,6 +29,7 @@
 // ge:keywords strafe-jump bunny-hop jump ktjump waterjump swim fly spectator noclip dead
 // ge:keywords stopspeed maxspeed gravity categorize unstick nudge ground slidefix airstep pground
 // ge:keywords bunnyspeedcap move-type player_move run_command move_settings move_state move_cmd
+// ge:keywords speedjump pm_speedjump cl_speedjump easy-jump easy-bunnyhop forward-jump
 // ge:skill shooter move
 // ge:test tests/shooter_pmove_test.cpp tests/shooter_recording_test.cpp
 #pragma once
@@ -76,10 +78,16 @@ struct MoveSettings {
   float waterfriction = 4;        // sv_waterfriction
   float ktjump = 1;               // pm_ktjump, 0..1: a weak jump pulled up toward 270
   float bunnyspeedcap = 0;        // pm_bunnyspeedcap: air gain capped at maxspeed x cap; 0 off
-  bool slidefix = false;          // pm_slidefix: downward speed kept on the ground
-  bool airstep = false;           // pm_airstep: steps climbed in the air (a console sets
-                                  // pm_pground with it)
-  bool pground = false;           // pm_pground: on the ground persists between moves
+  // pm_speedjump, 0..1: THE EASY JUMP. The forward key alone held in the air gains this share of
+  // what the best strafe would gain (and turns toward the view as fast), and a held jump hops
+  // again on landing. 0 off: the classic move to the bit. The server's value is a permission;
+  // the move a player runs reads it only when he asks (`cl_speedjump 1`: the server and his
+  // prediction set it to 0 for everyone else).
+  float speedjump = 0;
+  bool slidefix = false;  // pm_slidefix: downward speed kept on the ground
+  bool airstep = false;   // pm_airstep: steps climbed in the air (a console sets
+                          // pm_pground with it)
+  bool pground = false;   // pm_pground: on the ground persists between moves
 };
 
 // What a player carries from one command to the next.

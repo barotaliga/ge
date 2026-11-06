@@ -165,6 +165,7 @@ static void change_user_info(QcServer& s, int slot, const std::string& key,
   std::string old;
   if (!set_info_value(s.clients[slot].userinfo, key, value, old)) return;
   if (key == "name") set_netname(s, slot + 1, value);
+  if (key == "cl_speedjump") s.sv.clients[slot].speedjump = value == "1";  // pm_speedjump's ask
   call_hook(s, HookId::user_info_changed, s.named.user_info_changed, slot + 1, {key, old, value});
 }
 

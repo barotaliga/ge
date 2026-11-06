@@ -100,6 +100,8 @@ struct ClientSlot {
   bool any_packet = false;      // a packet has been received
   MoveCmd last_cmd;             // the newest command, buttons cleared
   bool jump_held = false;       // the move's jump-held flag between commands
+  bool speedjump = false;       // the player asked for the easy jump (cl_speedjump 1 in his
+                                // user info); pm_speedjump still decides whether it acts
   Vec3f ground_normal;          // the plane the move last stood on (its jump and landing fix)
   int speed_bank_ms = 0;        // the speed check's banked surplus, 0..500
   double speed_check_time = 0;  // the server time of the last speed check
