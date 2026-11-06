@@ -905,8 +905,9 @@ const gl::LabSpec kSpec{
          "with --game, s: first every door and plat of the map set off in turn and run this long, "
          "the sounds each plays (and a key door's without its key) tabled and folded by kind"},
         {"free", "0",
-         "s: our campaign program (compiled from --root) on the free map, the test arena with five "
-         "monsters and an exit, fought by a scripted player this long: kills, the exit, a picture"},
+         "s: our campaign program (compiled from --root) on the free episode: three fixture maps "
+         "(a hall, five monsters to an exit, a key door and the rune) played by a scripted player "
+         "this long"},
         {"root", ".", "the repository's root (our campaign program's sources are under it)"},
         {"exit", "0",
          "with --game, 1: then the player stood in the map's exit, the level's end read as the "
