@@ -294,9 +294,9 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
     error = "--base needs a directory; next: " + std::string(game.binary) + " --help";
     return false;
   }
-  // Files are named from the root (the layers' own paths: `qw/server.cfg`); a name the root does
+  // Files are named from the root (the layers' own paths: `mymod/server.cfg`); a name the root does
   // not have is looked for the way the game looks: in the top mod's directory, the mods under it,
-  // then the base game's (a mod's server.cfg that runs `exec ktx.cfg`).
+  // then the base game's (a mod's server.cfg that runs `exec mymod.cfg`).
   {
     const std::filesystem::path root = dir.empty() ? std::string(".") : dir;
     std::vector<std::filesystem::path> search{root};
