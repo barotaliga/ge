@@ -7,7 +7,10 @@
 // easy jump off (the classic move: one jump, then 320), the same hands with it on at the listen
 // server's share (0.5), and the best strafe (the side key alone, swapped each hop, the view on the
 // way, jump pressed on landing) with it on. The strafe is run with it off too and must agree to
-// the bit: the easy jump never touches a strafe.
+// the bit: the easy jump never touches a strafe. Then the client's aid for a server that does not
+// run the easy jump (shooter/speedjump_assist.hpp): forward and jump held, each command sent
+// through `assisted_command` to the classic move alone; it must gain within 10% of the server's
+// own.
 //
 // IN THE GAME: the listen server (the baseline mod on an open arena of our own) with the player
 // running forward for a second and then holding forward and jump, the view turning 45 degrees a
@@ -39,6 +42,7 @@
 #include "progs/file.hpp"
 #include "shooter/pmove.hpp"
 #include "shooter/recording.hpp"
+#include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -84,7 +88,8 @@ struct Field {
   }
 };
 
-enum class Hands : uint8_t { forward_jump, best_strafe };
+// The hands; `aided` holds forward and jump and sends them through the client's aid.
+enum class Hands : uint8_t { forward_jump, best_strafe, aided };
 
 // A run on the field: the run-up, then `hands` for kSeconds; the plan speed at every command.
 struct MoveRun {
@@ -116,6 +121,10 @@ MoveRun move_run(const Field& f, Hands hands, float share, const std::string& la
     if (hands == Hands::forward_jump) {
       cmd.forward = 400;
       cmd.buttons = sh::kButtonJump;
+    } else if (hands == Hands::aided) {
+      cmd.forward = 400;
+      cmd.buttons = sh::kButtonJump;
+      cmd = sh::assisted_command(cmd, s, kShare);
     } else {
       if (down) side = -side;
       cmd.side = static_cast<int16_t>(side);
@@ -153,13 +162,15 @@ void move_alone(gl::Lab& lab) {
   const MoveRun easy = move_run(f, Hands::forward_jump, kShare, "forward + jump, cl_speedjump 1");
   const MoveRun strafe = move_run(f, Hands::best_strafe, kShare, "best strafe, cl_speedjump 1");
   const MoveRun strafe_off = move_run(f, Hands::best_strafe, 0, "best strafe, cl_speedjump 0");
+  const MoveRun aided =
+      move_run(f, Hands::aided, 0, "forward + jump, the client's aid on a stock server");
   const bool untouched =
       same_bits(strafe.end, strafe_off.end) && strafe.speed.y == strafe_off.speed.y;
 
   gl::LabTable table{"the move alone: eight seconds of each pair of hands after a second's run-up",
                      {"hands", "jumps", "speed at 3 s", "speed at 9 s", "gain a second"},
                      {}};
-  for (const MoveRun* r : {&classic, &easy, &strafe}) {
+  for (const MoveRun* r : {&classic, &easy, &aided, &strafe}) {
     const double at3 = r->speed.y[static_cast<size_t>(3 * kRate - 1)];
     const double at9 = r->speed.y.back();
     table.rows.push_back({r->speed.label, std::to_string(r->jumps), to_fixed(at3, 1),
@@ -173,6 +184,13 @@ void move_alone(gl::Lab& lab) {
   lab.metric("move.strafe.speed", strafe.speed.y.back(), "u/s");
   lab.metric("move.strafe.jumps", strafe.jumps, "count");
   lab.metric("move.strafe.untouched", untouched ? 1 : 0, "bool");
+  lab.metric("move.aided.speed", aided.speed.y.back(), "u/s");
+  lab.metric("move.aided.jumps", aided.jumps, "count");
+  const double ratio = aided.speed.y.back() / easy.speed.y.back();
+  if (ratio < 0.9 || ratio > 1.1)
+    lab.fail("the client's aid on a stock server gained " + to_fixed(aided.speed.y.back(), 1) +
+                 " u/s against the server's easy jump's " + to_fixed(easy.speed.y.back(), 1),
+             "Read speedjump_assist.cpp (the wish's angle from the share). Skill: shooter.");
   if (!untouched)
     lab.fail("the best strafe moved differently with pm_speedjump on",
              "The easy jump must act on the forward key alone (pmove.cpp `speed_jump`, `easy` in "
@@ -191,14 +209,15 @@ void move_alone(gl::Lab& lab) {
                  "13 ms commands on an open floor; pm_speedjump " + to_fixed(kShare, 1) +
                      "; a second's run-up on the ground first",
                  "t (s)", "plan speed (units/s)"};
-  chart.traces = {classic.speed, easy.speed, strafe.speed};
+  chart.traces = {classic.speed, easy.speed, aided.speed, strafe.speed};
   chart.rules = {320};
   shoot_chart(lab, "speed-move", chart,
               "The player's plan speed command by command. Forward and jump held with the easy "
               "jump off is the classic move: one jump, then the run speed (dashed, 320). With "
               "cl_speedjump 1 the same hands hop on and gain about half what the best strafe "
               "gains; the best strafe (side key, view on the way) is the fastest and identical "
-              "with the easy jump on or off.",
+              "with the easy jump on or off. The client's aid on a server that does not run the "
+              "easy jump (the side key and a sent yaw in the air) tracks the server's own.",
               "the easy line climbing steadily between the flat classic line and the strafe's");
 }
 

@@ -74,7 +74,7 @@ constexpr Setting kSettings[] = {
     {"pm_speedjump",
      "0..1: players with cl_speedjump 1 gain this share of the best strafe's speed holding forward "
      "in the air, and hop while jump is held (0 off)",
-     0, 1, true, false, true, GE_SETTING_FIELD(move.speedjump, float)},
+     0, 1, true, false, true, GE_SETTING_FIELD(move.speedjump, float), true},
 };
 
 #undef GE_SETTING_FIELD
@@ -130,7 +130,8 @@ std::vector<std::pair<std::string, std::string>> changed_info(const ServerSettin
   const ServerSettings defaults;
   std::vector<std::pair<std::string, std::string>> out;
   for (const Setting& s : kSettings)
-    if (s.info && s.get(set) != s.get(defaults)) out.emplace_back(s.name, setting_text(s, set));
+    if (s.info && (s.always_info || s.get(set) != s.get(defaults)))
+      out.emplace_back(s.name, setting_text(s, set));
   return out;
 }
 

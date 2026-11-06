@@ -27,10 +27,13 @@
 // players' boxes), with the move settings serverdata carried. A prediction the next frame proves
 // wrong by 4 to 64 units is not snapped but folded into a correction that decays (`Smoothing`).
 // The drawn eye and the player's own place are the prediction; `cl_nopred 1` draws the server's.
-// THE EASY JUMP: with `cl_speedjump 1` when joining, the user info carries `cl_speedjump 1` and the
-// prediction runs the easy jump at the server info's `pm_speedjump` (a server that does not offer
-// it has none, so the move stays the classic one on both ends). Changed later, it acts from the
-// next join.
+// THE EASY JUMP: with `cl_speedjump 1` when joining, the user info carries `cl_speedjump 1` (so
+// the server, its admins and the other players can see the help is on). On a server whose server
+// info has `pm_speedjump` (ours) the server runs it and the prediction follows its value (0: off).
+// On any other server the client strafes for the player (shooter/speedjump_assist.hpp, at
+// `kStockShare`): from its newest prediction it sends the jump let go in the air and the side key
+// with a yaw that gains half the best strafe's gain, the drawn view untouched; it needs the
+// prediction (`cl_nopred 0`). Changed later, it acts from the next join.
 //
 // THE OTHER PLAYERS are run forward from their newest record (plugins/shooter/predict.hpp's
 // `predict_other`): the record's time is its arrival less the milliseconds the server said had
@@ -53,7 +56,7 @@
 // ge:keywords remote_hands add_remote_commands netstatus prediction predict cl_nopred
 // ge:keywords remote_world smoothing replayed predict_other other-players cl_predict_players
 // ge:keywords interpolation lerp cl_nolerp entity-lerp draw-clock round-trip
-// ge:keywords cl_speedjump pm_speedjump easy-jump
+// ge:keywords cl_speedjump pm_speedjump easy-jump assisted_command kstockshare
 // ge:skill net shooter
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
@@ -77,6 +80,7 @@ namespace shooters_edge::net {
 inline constexpr int kTickUs = 13000;    // a move's length: the server's frame
 inline constexpr int kMostTicks = 8;     // ticks a call may run; a longer stall drops the rest
 inline constexpr float kLerpMost = 200;  // units: an entity moved further between two frames snaps
+inline constexpr float kStockShare = 0.5f;  // the easy jump's share on a server without it
 
 enum class RemoteStep : uint8_t {
   waiting,    // nothing new to draw yet (connecting, or no packet since the last call)
@@ -108,6 +112,7 @@ struct Remote {
   int lerped = 0;        // entities drawn between two frames the last step
   sh::Vec3f view;        // the player's angles, degrees (sent with every move)
   sh::Vec3f prediction;  // the player's predicted origin, the correction not added
+  sh::MoveState ahead;   // the player's whole predicted state (the easy jump's help reads it)
   sh::Smoothing smooth;  // the prediction's correction
   sh::MoveCmd hands;     // the window's command, sent at the next tick (an impulse held to it)
   // The game's files as the server's game folder holds them (ClientConfig::read_file: the map's

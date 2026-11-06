@@ -73,13 +73,16 @@ TEST(live_settings_copy_and_the_loops_stay) {
 
 TEST(the_server_info_names_only_the_changed_switches) {
   sh::ServerSettings set;
-  CHECK(sh::changed_info(set).empty());
+  // pm_speedjump is always told, so a client knows whether the server runs the easy jump itself.
+  const auto told = sh::changed_info(set);
+  CHECK(told.size() == 1 && told[0].first == "pm_speedjump" && told[0].second == "0");
   set.move.gravity = 100;  // sent with the connection's own data, not the server info
-  CHECK(sh::changed_info(set).empty());
+  CHECK(sh::changed_info(set).size() == 1);
   set.move.ktjump = 0;
   set.move.slidefix = true;
   const auto info = sh::changed_info(set);
-  CHECK(info.size() == 2);
+  CHECK(info.size() == 3);
   CHECK(info[0].first == "pm_ktjump" && info[0].second == "0");
   CHECK(info[1].first == "pm_slidefix" && info[1].second == "1");
+  CHECK(info[2].first == "pm_speedjump");
 }
