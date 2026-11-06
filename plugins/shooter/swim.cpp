@@ -8,6 +8,10 @@
 
 #include <cmath>
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
+#include "shooter/pmove.hpp"
+
 namespace ge::shooter {
 
 namespace {
@@ -16,7 +20,38 @@ bool wet_at(const MoveWorld& world, Vec3f p) {
   return box_free(world, p) && water_contents(world, p) <= kContentsWater;
 }
 
+// A climb out from `from` onto the node at `to`, run on the move: there within `seconds`.
+bool proven_out(const MoveWorld& world, Vec3f from, Vec3f to, float seconds) {
+  MoveState s;
+  s.origin = from;
+  const MoveSettings set;
+  const int steps = static_cast<int>(seconds * 1000 / 13);
+  for (int i = 0; i < steps; i++) {
+    run_command(s, swim_out(s, to, 13), set, world);
+    const Vec3f d = s.origin - to;
+    if (d.x * d.x + d.y * d.y < 24 * 24 && std::fabs(d.z) < 24) return true;
+  }
+  return false;
+}
+
 }  // namespace
+
+MoveCmd swim_out(const MoveState& s, Vec3f exit, int msec) {
+  MoveCmd c;
+  c.msec = static_cast<uint8_t>(msec);
+  const float dx = exit.x - s.origin.x, dy = exit.y - s.origin.y;
+  const double rad = core::libm::atan2(static_cast<double>(dy), static_cast<double>(dx));
+  c.angles = {s.waterlevel >= 3   ? -30.f
+              : s.waterlevel <= 1 ? 25.f
+                                  : 0.f,
+              static_cast<float>(rad * (180.0 / core::kPi)), 0};
+  // In the water: head under, up; chest deep, level (the move's water jump takes him over the
+  // edge); feet alone wet, down a little to chest deep again. Out of it: at the node.
+  if (s.waterlevel == 0) c.angles.x = 0;
+  c.forward = 320;
+  if (s.waterlevel >= 3) c.buttons = kButtonJump;
+  return c;
+}
 
 void build_swim(const MoveWorld& world, const NavGraph& g, std::span<const uint8_t> exits,
                 const SwimSettings& set, SwimField& f, const SwimField* same_water) {
@@ -79,6 +114,8 @@ void build_swim(const MoveWorld& world, const NavGraph& g, std::span<const uint8
           if (d.z > 0 || -d.z > set.climb) continue;
           const float dd = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
           if (dd > set.exit_reach) continue;
+          if (f.exit_node[c] >= 0 && dd >= seed_d[c]) continue;
+          if (set.prove_s > 0 && !proven_out(world, centre(i, j, k), o, set.prove_s)) continue;
           if (f.exit_node[c] < 0) {
             queue.push_back(static_cast<int32_t>(c));
           } else if (dd >= seed_d[c]) {
@@ -114,6 +151,21 @@ void build_swim(const MoveWorld& world, const NavGraph& g, std::span<const uint8
     }
   }
   f.leading = static_cast<int64_t>(queue.size());
+}
+
+bool swim_exiting(const SwimField& f, Vec3f p, int32_t& exit_node) {
+  exit_node = -1;
+  if (f.next.empty()) return false;
+  const int32_t i = static_cast<int32_t>(std::floor((p.x - f.lo.x) / f.cell));
+  const int32_t j = static_cast<int32_t>(std::floor((p.y - f.lo.y) / f.cell));
+  const int32_t k = static_cast<int32_t>(std::floor((p.z - f.lo.z) / f.cell));
+  if (i < 0 || j < 0 || k < 0 || i >= f.nx || j >= f.ny || k >= f.nz) return false;
+  const size_t c = (static_cast<size_t>(k) * static_cast<size_t>(f.ny) + static_cast<size_t>(j)) *
+                       static_cast<size_t>(f.nx) +
+                   static_cast<size_t>(i);
+  if (f.next[c] != -2) return false;
+  exit_node = f.exit_node[c];
+  return true;
 }
 
 bool swim_wet(const SwimField& f, Vec3f p) {

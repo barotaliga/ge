@@ -53,21 +53,26 @@ void cut(TeamAreas& a, const BotTeam& t) {
 int32_t area_at(const TeamAreas& a, const BotTeam& t, sh::Vec3f p) {
   const int32_t n = sh::nav_nearest(t.nav->nav.graph, p);
   return n >= 0 && static_cast<size_t>(n) < a.node_area.size() ? a.node_area[static_cast<size_t>(n)]
-                                                                 : -1;
+                                                               : -1;
 }
 
 void mark(std::vector<double>& v, int32_t i, double t) {
-  if (i >= 0 && static_cast<size_t>(i) < v.size()) v[static_cast<size_t>(i)] = std::max(v[static_cast<size_t>(i)], t);
+  if (i >= 0 && static_cast<size_t>(i) < v.size())
+    v[static_cast<size_t>(i)] = std::max(v[static_cast<size_t>(i)], t);
 }
 
 }  // namespace
 
 const char* area_state_name(AreaState s) {
   switch (s) {
-    case AreaState::safe: return "safe";
-    case AreaState::lost: return "lost";
-    case AreaState::contested: return "contested";
-    default: return "unknown";
+    case AreaState::safe:
+      return "safe";
+    case AreaState::lost:
+      return "lost";
+    case AreaState::contested:
+      return "contested";
+    default:
+      return "unknown";
   }
 }
 
@@ -125,12 +130,19 @@ void team_areas_update(TeamAreas& a, const BotTeam& t) {
       const bt::Said said = bt::parse_say(words);
       const int32_t k = said.loc.empty() ? -1 : team_area_named(a, said.loc);
       switch (said.kind) {
-        case bt::SayKind::safe: mark(a.safe_t, k, now); break;
+        case bt::SayKind::safe:
+          mark(a.safe_t, k, now);
+          break;
         case bt::SayKind::lost:
         case bt::SayKind::enemy:
-        case bt::SayKind::enemy_power: mark(a.lost_t, k, now); break;
-        case bt::SayKind::help: mark(a.fight_t, k, now); break;
-        default: break;
+        case bt::SayKind::enemy_power:
+          mark(a.lost_t, k, now);
+          break;
+        case bt::SayKind::help:
+          mark(a.fight_t, k, now);
+          break;
+        default:
+          break;
       }
     }
   }

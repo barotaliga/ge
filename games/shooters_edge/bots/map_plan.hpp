@@ -56,19 +56,19 @@ struct PlanArea {
   sh::Vec3f at;                // its items' middle
   double worth = 0;            // a minute
   int32_t ways_in = 0;
-  float height = 0;            // over the map's median floor, units
-  double from_spawns_s = 0;    // the mean quickest run from a spawn point
-  double hold = 0;             // the base's measure
-  bool power = false;          // holds the quad or the shield
-  bool reached = true;         // a way leads there from at least half the spawn points
+  float height = 0;             // over the map's median floor, units
+  double from_spawns_s = 0;     // the mean quickest run from a spawn point
+  double hold = 0;              // the base's measure
+  bool power = false;           // holds the quad or the shield
+  bool reached = true;          // a way leads there from at least half the spawn points
   std::vector<uint8_t> region;  // by node: 1 inside
 };
 
 struct MapPlan {
-  std::vector<PlanArea> areas;  // by worth, most first
-  int32_t base = -1, forward = -1;  // into `areas`
-  std::vector<int32_t> rushes;      // the powers' areas
-  std::vector<double> between_s;    // areas x areas: the quickest run between their middles
+  std::vector<PlanArea> areas;       // by worth, most first
+  int32_t base = -1, forward = -1;   // into `areas`
+  std::vector<int32_t> rushes;       // the powers' areas
+  std::vector<double> between_s;     // areas x areas: the quickest run between their middles
   std::vector<double> rush_leave_s;  // by rush: how long before the power is due to leave the base
   int64_t nodes = 0;
 };

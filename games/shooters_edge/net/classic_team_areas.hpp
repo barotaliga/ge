@@ -55,8 +55,8 @@ struct TeamAreas {
   std::vector<int32_t> node_area;   // by nav node: its area (-1: none)
   std::vector<int8_t> node_liquid;  // by nav node: 0 dry, else the liquid's contents number
   std::vector<double> safe_t, lost_t, fight_t;  // by area: the newest news of each kind
-  std::vector<TeamLineSeen> feed;   // the team's lines, oldest first
-  size_t prints_read = 0;           // the first bot's prints taken so far
+  std::vector<TeamLineSeen> feed;               // the team's lines, oldest first
+  size_t prints_read = 0;                       // the first bot's prints taken so far
   int spawncount = -1;
 };
 

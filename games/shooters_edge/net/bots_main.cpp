@@ -19,6 +19,7 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -68,7 +69,7 @@ void usage() {
 
 }  // namespace
 
-int main(int argc, char** argv) {
+int run(int argc, char** argv) {
   sn::BotTeamConfig cfg;
   double seconds = 0, report_s = 10, view_fps = 10, snapshot_every = 5;
   bool until_end = false;
@@ -229,4 +230,16 @@ int main(int argc, char** argv) {
   std::printf("%s", sn::bot_team_report(team).c_str());
   if (!cfg.out.empty()) std::printf("bots: the match folder is %s\n", cfg.out.c_str());
   return 0;
+}
+
+int main(int argc, char** argv) {
+  try {
+    return run(argc, argv);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr,
+                 "shooters_edge_bots: stopped by an error: %s; next: run it again, and report it "
+                 "with the command line\n",
+                 e.what());
+    return 1;
+  }
 }
