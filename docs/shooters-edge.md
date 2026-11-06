@@ -1281,7 +1281,9 @@ frags are scored, and F4 again (`sitout`) takes him back. On the map only a bann
 phase, how many are ready, F1 and F4) and the countdown's seconds. The match needs at least
 `sv_minplayers` seated (2; a bot counts), and starting it restarts the map, which resets every
 frag the warmup scored and puts every seat on the map. `sv_lobby 0` starts the match with the
-map, as before. When the player's packs carry the classic menu's pictures, the lobby is drawn in
+map, as before. On the dedicated server `sv_countdown` sets the countdown's seconds (5) and
+`sv_intermission` keeps the scores up that many seconds after the mod ends a match, before the
+next map (0, none: the mod's own end alone). When the player's packs carry the classic menu's pictures, the lobby is drawn in
 them (`menu/lobby_screen.hpp`): the screen and the banner in the menu's text boxes, the words in
 the glyph sheet's two sets, the countdown in the big figures, as the ESC menu is; without them it
 keeps the modern look.

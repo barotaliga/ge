@@ -12,6 +12,11 @@ namespace ge::server {
 
 namespace {
 
+// The match or its intermission: ready, break and teams wait for the next warmup.
+bool in_play(const Lobby& l) {
+  return l.phase == LobbyPhase::match || l.phase == LobbyPhase::intermission;
+}
+
 bool seated(const Lobby& l, int slot) {
   return slot >= 0 && slot < kLobbySeats && l.seats[static_cast<size_t>(slot)].used;
 }
@@ -87,6 +92,8 @@ const char* phase_name(LobbyPhase p) {
       return "countdown";
     case LobbyPhase::match:
       return "match";
+    case LobbyPhase::intermission:
+      return "intermission";
   }
   return "?";
 }
@@ -139,7 +146,7 @@ int lobby_seated(const Lobby& l) {
 
 bool lobby_on_map(const Lobby& l, int slot) {
   if (!seated(l, slot)) return false;
-  return l.phase == LobbyPhase::match || l.seats[static_cast<size_t>(slot)].warm;
+  return in_play(l) || l.seats[static_cast<size_t>(slot)].warm;
 }
 
 int lobby_warm_count(const Lobby& l) {
@@ -170,8 +177,14 @@ int lobby_leader(const Lobby& l) {
 }
 
 int lobby_seconds_left(const Lobby& l, double now) {
-  if (l.phase != LobbyPhase::countdown) return 0;
-  const double left = l.countdown_ends - now;
+  double ends = 0;
+  if (l.phase == LobbyPhase::countdown)
+    ends = l.countdown_ends;
+  else if (l.phase == LobbyPhase::intermission)
+    ends = l.intermission_ends;
+  else
+    return 0;
+  const double left = ends - now;
   return left <= 0 ? 0 : static_cast<int>(std::ceil(left - 1e-9));
 }
 
@@ -217,7 +230,7 @@ void lobby_leave(Lobby& l, int slot, double now) {
 LobbyWhy lobby_ready(Lobby& l, int slot, bool ready, double now) {
   const char* what = ready ? "ready" : "break";
   if (!seated(l, slot)) return refuse(l, slot, what, LobbyWhy::no_seat);
-  if (l.phase == LobbyPhase::match) return refuse(l, slot, what, LobbyWhy::in_match);
+  if (in_play(l)) return refuse(l, slot, what, LobbyWhy::in_match);
   LobbySeat& s = seat(l, slot);
   if (s.ready == ready) return refuse(l, slot, what, LobbyWhy::same);
   s.ready = ready;
@@ -232,7 +245,7 @@ LobbyWhy lobby_ready(Lobby& l, int slot, bool ready, double now) {
 LobbyWhy lobby_team(Lobby& l, int slot, Team team, double now) {
   (void)now;
   if (!seated(l, slot)) return refuse(l, slot, "team", LobbyWhy::no_seat);
-  if (l.phase == LobbyPhase::match) return refuse(l, slot, "team", LobbyWhy::in_match);
+  if (in_play(l)) return refuse(l, slot, "team", LobbyWhy::in_match);
   LobbySeat& s = seat(l, slot);
   const Team to = team == Team::none ? lobby_smaller_team(l, slot) : team;
   if (to == s.team) return refuse(l, slot, "team", LobbyWhy::same);
@@ -243,7 +256,7 @@ LobbyWhy lobby_team(Lobby& l, int slot, Team team, double now) {
 
 LobbyWhy lobby_start(Lobby& l, int slot, double now) {
   if (!seated(l, slot)) return refuse(l, slot, "start", LobbyWhy::no_seat);
-  if (l.phase == LobbyPhase::match) return refuse(l, slot, "start", LobbyWhy::in_match);
+  if (in_play(l)) return refuse(l, slot, "start", LobbyWhy::in_match);
   if (slot != lobby_leader(l)) return refuse(l, slot, "start", LobbyWhy::not_leader);
   if (l.phase == LobbyPhase::countdown) return refuse(l, slot, "start", LobbyWhy::same);
   if (lobby_seated(l) < l.settings.min_players || lobby_humans(l) < l.settings.humans)
@@ -256,7 +269,7 @@ LobbyWhy lobby_warmup(Lobby& l, int slot, bool warm, double now) {
   (void)now;
   const char* what = warm ? "warmup" : "sitout";
   if (!seated(l, slot)) return refuse(l, slot, what, LobbyWhy::no_seat);
-  if (l.phase == LobbyPhase::match) return refuse(l, slot, what, LobbyWhy::in_match);
+  if (in_play(l)) return refuse(l, slot, what, LobbyWhy::in_match);
   LobbySeat& s = seat(l, slot);
   if (s.warm == warm) return refuse(l, slot, what, LobbyWhy::same);
   if (!warm && l.settings.warm_on_join && !s.bot) return refuse(l, slot, what, LobbyWhy::no_screen);
@@ -330,6 +343,23 @@ bool lobby_due(Lobby& l, double now) {
   l.phase = LobbyPhase::match;
   l.matches++;
   say(l, {LobbyNoteKind::begins, -1}, "the match begins");
+  return true;
+}
+
+void lobby_end(Lobby& l, double now) {
+  if (l.phase != LobbyPhase::match) return;
+  l.phase = LobbyPhase::intermission;
+  l.intermission_ends = now + l.settings.intermission_s;
+  say(l, {LobbyNoteKind::over, -1},
+      l.settings.intermission_s > 0 ? "the match is over: the next map in " +
+                                          std::to_string(lobby_seconds_left(l, now)) + " s"
+                                    : std::string("the match is over"));
+}
+
+bool lobby_next_due(Lobby& l, double now) {
+  if (l.phase != LobbyPhase::intermission || now < l.intermission_ends) return false;
+  l.phase = LobbyPhase::match;  // until the game's map change brings the warmup (`lobby_back`)
+  l.intermission_ends = 0;
   return true;
 }
 
