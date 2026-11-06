@@ -23,8 +23,8 @@ constexpr uint32_t kVersion = 2;
 constexpr size_t kHeaderBytes = 16 + 27 * 4;
 
 // The vertex arrays' types and formats.
-enum : uint32_t { kPosition = 0, kTexcoord = 1, kNormal = 2, kBlendIndexes = 4, kBlendWeights = 5 };
-enum : uint32_t {
+enum : uint8_t { kPosition = 0, kTexcoord = 1, kNormal = 2, kBlendIndexes = 4, kBlendWeights = 5 };
+enum : uint8_t {
   kByte = 0,
   kUbyte = 1,
   kShort = 2,
@@ -51,7 +51,7 @@ struct Header {
   uint32_t num_comment, ofs_comment;
   uint32_t num_extensions, ofs_extensions;
 };
-static_assert(sizeof(Header) == 27 * 4);
+static_assert(sizeof(Header) == size_t{27} * 4);
 
 uint32_t u32(const uint8_t* p) {
   return uint32_t{p[0]} | uint32_t{p[1]} << 8 | uint32_t{p[2]} << 16 | uint32_t{p[3]} << 24;
@@ -227,7 +227,7 @@ LoadResult load_iqm(std::span<const uint8_t> bytes, std::string_view where_in,
                     const IqmOptions& options) {
   LoadResult out;
   Reader r{bytes, std::string(where_in), {}};
-  const auto fail = [&](std::string why) {
+  const auto fail = [&](const std::string& why) {
     out.ok = false;
     out.model = {};
     out.error = r.error.empty() ? r.where + ": " + why : r.error;
@@ -302,9 +302,9 @@ LoadResult load_iqm(std::span<const uint8_t> bytes, std::string_view where_in,
                   std::to_string(j.parent) +
                   ", which is not before it; next: export it again (parents come first)");
     float t[3], q[4], s[3];
-    for (int k = 0; k < 3; ++k) t[k] = f32(p + 8 + k * 4);
-    for (int k = 0; k < 4; ++k) q[k] = f32(p + 20 + k * 4);
-    for (int k = 0; k < 3; ++k) s[k] = f32(p + 36 + k * 4);
+    for (int k = 0; k < 3; ++k) t[k] = f32(p + 8 + static_cast<size_t>(k) * 4);
+    for (int k = 0; k < 4; ++k) q[k] = f32(p + 20 + static_cast<size_t>(k) * 4);
+    for (int k = 0; k < 3; ++k) s[k] = f32(p + 36 + static_cast<size_t>(k) * 4);
     normalise4(q);
     point_in(t, metres, j.rest.t);
     rotation_in(q, j.rest.r);
@@ -386,7 +386,7 @@ LoadResult load_iqm(std::span<const uint8_t> bytes, std::string_view where_in,
       const uint8_t* tp = bytes.data() + h.ofs_triangles + (size_t{first_t} + t) * 12;
       uint32_t ix[3];
       for (int k = 0; k < 3; ++k) {
-        ix[k] = u32(tp + k * 4);
+        ix[k] = u32(tp + static_cast<size_t>(k) * 4);
         if (ix[k] < first_v || ix[k] >= first_v + count_v)
           return fail("triangle " + std::to_string(first_t + t) + " of mesh `" + name +
                       "` names vertex " + std::to_string(ix[k]) + ", outside the mesh's " +
@@ -467,8 +467,8 @@ LoadResult load_iqm(std::span<const uint8_t> bytes, std::string_view where_in,
       const uint8_t* p = bytes.data() + h.ofs_poses + size_t{i} * 88;
       poses[i].mask = u32(p + 4);
       for (int c = 0; c < 10; ++c) {
-        poses[i].offset[c] = f32(p + 8 + c * 4);
-        poses[i].scale[c] = f32(p + 48 + c * 4);
+        poses[i].offset[c] = f32(p + 8 + static_cast<size_t>(c) * 4);
+        poses[i].scale[c] = f32(p + 48 + static_cast<size_t>(c) * 4);
         if ((poses[i].mask >> c & 1) != 0) channels++;
       }
     }
@@ -486,7 +486,8 @@ LoadResult load_iqm(std::span<const uint8_t> bytes, std::string_view where_in,
         for (int c = 0; c < 10; ++c) {
           ch[c] = poses[j].offset[c];
           if ((poses[j].mask >> c & 1) != 0) {
-            ch[c] += poses[j].scale[c] * static_cast<float>(fp[k * 2] | fp[k * 2 + 1] << 8);
+            ch[c] += poses[j].scale[c] *
+                     static_cast<float>(fp[size_t{k} * 2] | fp[size_t{k} * 2 + 1] << 8);
             k++;
           }
         }
