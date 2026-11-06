@@ -1479,7 +1479,7 @@ odds: turning away only shows him a back. The labs take `--tempers` (`a`, `b`, `
 **Personalities (M18r11b).** A bot is a set of traits (`plugins/shooter/traits.hpp`), each from 1
 to 10: its aim with each kind of weapon (the scattergun, the spikers, the grenades, the rockets, the
 arc), its reaction, its timing of items, its knowledge of the map, camping, discipline, moves,
-hearing, communication, teamplay and aggression. Novice, average, expert and perfect are presets
+hearing, communication, teamplay, aggression and the dodge. Novice, average, expert and perfect are presets
 (every trait 2, 5, 8 or 10), and the temperament sets aggression (9, 5 or 2) and an aggressive
 player's teamplay at most 3, so the presets play exactly as the skills did. A trait read in steps
 reads 1 to 3 as a novice, 4 to 6 as average and 7 and up as an expert: knowledge (where items and
@@ -1503,6 +1503,19 @@ on, within 5 degrees (pre-aimed at a doorway), takes half the draw: the only way
 sound takes longer to act on than a sight: a chase after an enemy only heard starts the median
 reaction plus 100 ms (a quick player, trait 8) to 200 ms (a slow one, trait 2) after the sound.
 `se-team` prints each player's sightings, their mean reaction and the share pre-aimed.
+
+**The dodge and the watch.** In a fight a bot does not run its route under the enemy's crosshair:
+it steps across the line to him, left and right, turning back at drawn times (an expert's dodge
+trait 8 every 0.2 to 0.6 s, seldom running straight; a 2 every 0.45 to 1.35 s, half the key, half
+the time straight at him), and never to a side the player's box would leave the floor, meet a wall
+or stand in a liquid on (`plugins/shooter/dodge.hpp`). Not on a jump the route proved, a lift, at a
+door or in the water. Every bot's hit rate fell from 30 % to 27 % on e1m2 with it. Standing (on an
+item, waiting for one), or holding its area, a bot with nobody in sight watches the ways in
+(`bots/watch.hpp`): for each of the area's entries in the map plan, the first node of the way in it
+sees, one after another for 1.5 to 4 s, the one nearest a sound first; the view goes there on the
+aim's hands (`Bot::look`), so a man coming in is pre-aimed at. `se-team` prints the share of the
+fight spent dodging, the dodge's turns a minute, the share of the match spent watching and each
+weapon's share of the match.
 
 **Hit rates (M18r11d).** A team game counts every player's shots and hits by weapon
 (`games/shooters_edge/net/classic_hits.hpp`), the way a match's statistics do, and `se-team`

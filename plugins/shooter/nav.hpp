@@ -24,7 +24,7 @@
 // ground within `arrive` units across and 2 up or down of the target (reached), or runs out of
 // `limit_s`, or falls below the target, or gets no nearer for a quarter second on the ground (in
 // the air a player overshoots and comes back), or (a jump) touches the ground anywhere before the
-// target: a jump link is one flight (refused). The kinds,
+// target (refused: one flight; a standing jump may land 24 units short and step on). The kinds,
 // tried in this order until one reaches (a neighbour: walk, then jump when it is higher than a
 // step; anything further: jump):
 //   walk   no button; the target within a step's height of the start or below it (a drop when it
@@ -34,9 +34,8 @@
 //          pilot arrives at it), the jump pressed on the first command; kept only when the floor
 //          behind the start has room to run up (`run_up` units of free, level ground straight
 //          back: the move reaches full speed from standing in about a tenth of a second, some 16
-//          units). A standing jump is not tried: its 30 u/s of air control carries a player less
-//          than the 16 units its box needs to get over an edge, so it reaches nothing a moving
-//          jump does not.
+//          units); last, onto a neighbour, a STANDING jump (speed 0, no run-up): stairs too
+//          high to climb and too shallow to run up on, hopped against the riser as people do.
 // A link's TIME is the proof's, in seconds; the graph's search costs links by it.
 //
 // MOVERS (doors, plats, anything pushed) are left out of the proofs: the caller lists each as an

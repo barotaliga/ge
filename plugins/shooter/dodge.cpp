@@ -44,13 +44,13 @@ void dodge_init(Dodge& d, uint32_t seed) {
 int dodge_step(Dodge& d, const DodgeSkill& k, double t, bool left_clear, bool right_clear) {
   const bool clear = d.dir < 0 ? left_clear : d.dir > 0 ? right_clear : true;
   if (t < d.until && clear) return d.dir;
-  const int8_t was = d.dir;
+  const int32_t was = d.dir;
   if (core::chance(d.rng, k.straight)) {
     d.dir = 0;
   } else if (was == 0) {
     d.dir = core::chance(d.rng, 0.5) ? 1 : -1;
   } else {
-    d.dir = static_cast<int8_t>(-was);
+    d.dir = -was;
   }
   if (d.dir < 0 && !left_clear) d.dir = right_clear ? 1 : 0;
   if (d.dir > 0 && !right_clear) d.dir = left_clear ? -1 : 0;

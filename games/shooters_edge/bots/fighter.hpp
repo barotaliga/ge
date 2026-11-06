@@ -158,6 +158,10 @@ struct FighterStats {
   int64_t dodging = 0;              // commands spent stepping across an enemy's line (dodge.hpp)
   int64_t dodge_turns = 0;          // and the times it turned the step back
   int64_t watching = 0;             // commands standing with the view on a way in (watch.hpp)
+  int64_t landings = 0;             // commands walking onto an exit node just climbed out to
+  double speed_sum = 0;             // its speed across the floor summed over its commands alive
+  double mode_speed[sh::kPilotModes + 1] = {};  // and by the pilot's mode at the command
+  int64_t mode_n[sh::kPilotModes + 1] = {};
 };
 
 // What a fighter believes of one enemy (temper.hpp): his body and arms as last heard.
@@ -240,6 +244,8 @@ struct Fighter {
   int32_t dive_off = -1;      // the item whose dive it last gave up (-1: none)
   int32_t swim_exit = -1;     // the exit node it is climbing out onto (shooter/swim.hpp), -1 none
   double swim_exit_until = 0;
+  int32_t landing = -1;  // the exit node it climbed out to, walked onto first (-1: none)
+  double landing_until = 0;
   ge::core::Rng rng{1};  // its own draws (where it explores), seeded off the bot's seed
   sh::Dodge dodge;       // its side steps in a fight (shooter/dodge.hpp)
   // The ways in it watches from where it stands (watch.hpp): their spots, the node they were
