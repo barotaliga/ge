@@ -73,6 +73,19 @@ struct Options {
   double strength = 1;          // the point lights' strength against the classic's
   double dynamic_strength = 1;  // the dynamic lights' (set_dynamic_lights) against the classic's
   int shadowed = 32;            // the nearest lights that cast shadows
+  // THE MOVING CASTERS' SHADOWS (the caster cubes and capsules below; a game's quality stop):
+  // how many of the shadowed lights get a cube of the casters a frame (0 .. kCasterLights; 0
+  // none, and no sun's tile of them either), their edges soft by the light's size (PCSS: a
+  // blocker search and a disc of taps) or hard (one 2 x 2 compare), and whether the capsules
+  // shadow the lights with no cube. Each is the uniforms' and the passes' counts: no pipeline.
+  int caster_lights = kCasterLights;
+  bool soft_casters = true;
+  bool capsules = true;
+  // THE SHADOWS IN THE MAP DRAWN AGAIN FOR ITS WATER (bsp_views.hpp: the mirror, the view up):
+  // 2 as the frame's own, 1 the walls' kept cubes alone, 0 none. The views draw no model, so a
+  // figure's shadow there would be cast by nothing: 1 by default (the same price as 2, measured
+  // on the M3 Max at 1440p: the shadows' lookups are not what the mirror costs).
+  int view_shadows = 1;
   // The cubes drawn a frame at most for lights new to the shadowed few (each one the map drawn six
   // times); the rest wait their turn unshadowed. 0 draws none new. The map's first frame draws
   // every cube whatever this says (it is the load's), unless `first_all` is off: a window that
@@ -207,8 +220,10 @@ struct GpuBsp {
   float info5[4];
   float grid[4];  // the light grid's corner, world m; its cell, m (0: no grid this frame)
   float styles[kLightStyles];  // each light style's level now (draw_data.hpp)
-  // The moving casters as capsules for the lights without their cube: how many (x), then each
-  // capsule's two ends (xyz, the radius in the first's w), the nearest the eye.
+  // The moving casters as capsules for the lights without their cube: how many (x), their cubes'
+  // edges hard (y 1: Options::soft_casters off), a second view's shadows (z:
+  // Options::view_shadows), then each capsule's two ends (xyz, the radius in the first's w), the
+  // nearest the eye.
   float capsule_info[4];
   float capsules[kShadowCapsules * 2][4];
   // The moving casters under the sun: an orthographic map of them alone round the eye, a tile of

@@ -108,9 +108,10 @@ struct Price {
 std::vector<Price> prices(std::span<const PriceRun> bases, std::span<const PriceRun> off);
 // The largest gap between two neighbouring base runs' median frames, ms.
 double price_noise(std::span<const PriceRun> bases);
-// The price as lines: the base runs' spread (the noise) and each saving, most first.
-std::vector<std::string> price_report(std::span<const PriceRun> bases,
-                                      std::span<const Price> saved);
+// The price as lines: the base runs' spread (the noise) and each saving, most first, each run's
+// name followed by `what` (" off": "ce_water off saves ..."; "" for a name that says it all).
+std::vector<std::string> price_report(std::span<const PriceRun> bases, std::span<const Price> saved,
+                                      std::string_view what = " off");
 // The median of `v` (0 when empty).
 double median_of(std::vector<double> v);
 

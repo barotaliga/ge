@@ -22,11 +22,13 @@
 // without the HUD, each run between two all-on runs; each run's frames as a box and what each
 // switch saved off the median frame against the all-on runs either side (timedemo.hpp's `prices`).
 // A pass's own GPU timestamps cannot rank the passes (a tiled GPU overlaps them); the whole frame
-// with one thing gone can.
+// with one thing gone can. `--price-stops=1` prices the quality ladder's stops the same way
+// (app/ladder.hpp): each row lowered alone to each stop under its top, the presets and the floor.
+// A stop's cost in the ladder's table is its row's `off` saving less its own.
 //
 // ge:summary Lab: the demo benchmark headless: a demo played flat out, its frames and fps chart
 // ge:keywords lab se-timedemo timedemo benchmark demo fps frame-time one-percent-low chart gpu
-// ge:keywords offscreen price switch-off-pricing cpu-zones frame-in-flight
+// ge:keywords offscreen price switch-off-pricing cpu-zones frame-in-flight price-stops ladder
 // ge:skill shooter perf labs
 #include <algorithm>
 #include <chrono>
@@ -40,6 +42,7 @@
 #include "brush/write.hpp"
 #include "classicenhance/profile.hpp"
 #include "classicenhance/switches.hpp"
+#include "console/console.hpp"
 #include "core/libm/libm.hpp"
 #include "core/output.hpp"
 #include "gpu/device.hpp"
@@ -48,6 +51,7 @@
 #include "lab/lab.hpp"
 #include "lab/labs/liquid_scene.hpp"
 #include "prof/zones.hpp"
+#include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/demo_write.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -329,7 +333,8 @@ void run(gl::Lab& lab) {
   const uint32_t h = size.size() > 1 ? static_cast<uint32_t>(size[1]) : 540;
   const std::string basedir = lab.arg("basedir");
   const std::string name = lab.arg("demo");
-  const bool price = lab.arg("price") == "1";
+  const bool stops = lab.arg("price-stops") == "1" || !lab.arg("price-cvars").empty();
+  const bool price = lab.arg("price") == "1" || stops;
   std::string error;
   shooters_edge::look::Picture picture;  // the world reads it every frame
   if (!lab.arg("look").empty()) picture.look = lab.arg("look");
@@ -470,11 +475,57 @@ void run(gl::Lab& lab) {
       bases.push_back(price_run("", again));
       const std::vector<double> again_ms = ms_of(again.bench.frame_s);
       base_ms.insert(base_ms.end(), again_ms.begin(), again_ms.end());
-      lab.note("price: " + label + " off, median frame " + fixed(off.back().frame_p50_ms, 2) +
-               " ms, everything on after it " + fixed(bases.back().frame_p50_ms, 2) + " ms");
+      lab.note("price: " + label + (stops ? "" : " off") + ", median frame " +
+               fixed(off.back().frame_p50_ms, 2) + " ms, everything on after it " +
+               fixed(bases.back().frame_p50_ms, 2) + " ms");
       return true;
     };
+    // THE STOPS (--price-stops=1): each ladder row lowered alone from the top to each stop under
+    // it, then the presets and the floor (every row off), for app/ladder.cpp's price table.
+    if (lab.arg("price-stops") == "1") {
+      namespace lk = shooters_edge::look;
+      struct RowLevel {
+        const char* id;
+        bool ge::classicenhance::Switches::*on;
+        std::string lk::Picture::*level;
+      };
+      const RowLevel rows[] = {
+          {"shadows", &ge::classicenhance::Switches::shadows, &lk::Picture::shadows_quality},
+          {"water", &ge::classicenhance::Switches::water, &lk::Picture::water_quality},
+          {"skies", &ge::classicenhance::Switches::skies, &lk::Picture::skies_quality}};
+      for (const RowLevel& rl : rows) {
+        for (const lk::Stop st : {lk::Stop::off, lk::Stop::low, lk::Stop::medium}) {
+          lk::Picture at = picture;
+          at.ce.*rl.on = st != lk::Stop::off;
+          if (st != lk::Stop::off) at.*rl.level = lk::stop_name(st);
+          if (!row("ce_" + std::string(rl.id) + " " + lk::stop_name(st), at, false)) return;
+        }
+      }
+      for (const char* preset : {"low", "medium", "high"}) {
+        lk::Picture at = picture;
+        at.quality = preset;
+        if (!row("r_quality " + std::string(preset), at, false)) return;
+      }
+      lk::Picture floor = picture;
+      floor.ce.shadows = floor.ce.water = floor.ce.skies = false;
+      if (!row("every row off", floor, false)) return;
+    }
+    // ANY CVARS (--price-cvars="label=cvars|label=cvars"): each set run between all-on runs.
+    for (std::string_view rest = lab.arg("price-cvars"); !rest.empty();) {
+      const size_t bar = rest.find('|');
+      const std::string_view item = rest.substr(0, bar);
+      rest = bar == std::string_view::npos ? std::string_view{} : rest.substr(bar + 1);
+      const size_t eq = item.find('=');
+      const std::string label(item.substr(0, eq));
+      shooters_edge::look::Picture at;
+      ge::console::Console con;
+      shooters_edge::look::add_cvars(con, at);
+      at.look = picture.look;
+      con.execute(eq == std::string_view::npos ? item : item.substr(eq + 1));
+      if (!row(label, at, false)) return;
+    }
     for (const ge::classicenhance::SwitchSpec& sw : ge::classicenhance::switches()) {
+      if (stops || !lab.arg("price-cvars").empty()) break;
       if (sw.bake || sw.group == "SOUND" || !(picture.ce.*sw.field)) continue;
       const std::string only = "," + lab.arg("price-only") + ",";
       if (only != ",," && only.find("," + std::string(sw.id) + ",") == std::string::npos) continue;
@@ -482,11 +533,15 @@ void run(gl::Lab& lab) {
       without.ce.*sw.field = false;
       if (!row("ce_" + std::string(sw.id), without, false)) return;
     }
-    if (lab.arg("price-only").empty() && !row("the HUD", picture, true)) return;
+    if (!stops && lab.arg("price-only").empty() && !row("the HUD", picture, true)) return;
     const std::vector<cl::Price> saved = cl::prices(bases, off);
-    for (const std::string& line : cl::price_report(bases, saved)) lab.note(line);
-    for (const cl::Price& pr : saved)
-      lab.metric("price." + pr.name, pr.frame_ms, "ms", gl::Det::measured);
+    for (const std::string& line : cl::price_report(bases, saved, stops ? "" : " off"))
+      lab.note(line);
+    for (const cl::Price& pr : saved) {
+      std::string id = pr.name;  // "ce_water low" is metric price.ce_water.low
+      std::replace(id.begin(), id.end(), ' ', '.');
+      lab.metric("price." + id, pr.frame_ms, "ms", gl::Det::measured);
+    }
     lab.metric("price.noise", cl::price_noise(bases), "ms", gl::Det::measured);
     // Every all-on run's frames as one box, then each switched-off run's, the most saved first.
     std::vector<gl::Sample> boxes{
@@ -494,7 +549,8 @@ void run(gl::Lab& lab) {
     for (const cl::Price& pr : saved)
       for (size_t i = 0; i < off.size(); i++)
         if (off[i].name == pr.name)
-          boxes.push_back({pr.name + " off, saves " + fixed(pr.frame_ms, 2), frames_of[i]});
+          boxes.push_back(
+              {pr.name + (stops ? "" : " off") + ", saves " + fixed(pr.frame_ms, 2), frames_of[i]});
     const gl::Chart pc =
         gl::box_chart({"frame time with each thing off, " + bench.name + ", r_look " + picture.look,
                        setup, "frame time (ms)", "run"},
@@ -538,7 +594,15 @@ const gl::LabSpec kSpec{
       "between two all-on runs, and chart what each saved off the whole frame"},
      {"price-only", "",
       "with --price=1: price only these switches, ids without the ce_ (relief,parallax); empty: "
-      "every drawn one"}},
+      "every drawn one"},
+     {"price-stops", "0",
+      "1: price the quality ladder instead (app/ladder.hpp): each of shadows, water and skies "
+      "lowered alone to off, low and medium, then r_quality low, medium and high and every row "
+      "off, each between two all-on runs"},
+     {"price-cvars", "",
+      "label=cvars|label=cvars: price these sets of the picture's cvars instead (as the console "
+      "takes them: \"water low=ce_water_quality low|no mirror shadows=...\"), each between two "
+      "all-on runs"}},
     "--size=320,180",
     run,
 };

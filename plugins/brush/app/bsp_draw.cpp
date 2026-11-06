@@ -672,20 +672,24 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   // The moving casters as capsules: the nearest the eye, each its box's vertical capsule.
   {
     const std::vector<Capsule> caps =
-        lights ? shadow_capsules(d.caster_boxes, view.eye) : std::vector<Capsule>{};
-    set4(d.staged.capsule_info, double(caps.size()), 0, 0, 0);
+        lights && o.capsules ? shadow_capsules(d.caster_boxes, view.eye) : std::vector<Capsule>{};
+    set4(d.staged.capsule_info, double(caps.size()), o.soft_casters ? 0 : 1,
+         std::clamp(o.view_shadows, 0, 2), 0);
     for (size_t c = 0; c < caps.size(); ++c) {
       set4(d.staged.capsules[c * 2], caps[c].a[0], caps[c].a[1], caps[c].a[2], caps[c].r);
       set4(d.staged.capsules[c * 2 + 1], caps[c].b[0], caps[c].b[1], caps[c].b[2], 0);
     }
   }
   // The moving casters: the shadowed lights that light one of them most, each a cube of them
-  // this frame.
+  // this frame (the options' count of them at most).
   d.caster_lights = 0;
   d.caster_count = 0;
-  if (lights && !d.casters.empty()) {
+  const int cast_by = std::clamp(o.caster_lights, 0, kCasterLights);
+  const bool casting = lights && !d.casters.empty() && cast_by > 0;
+  if (casting) {
     d.caster_count = uint32_t(std::min<size_t>(d.casters.size() / 3, kMaxCasterVerts) / 3 * 3);
     for (const size_t c : caster_lights(d.frame_lights, casters, d.caster_boxes, view.eye)) {
+      if (d.caster_lights >= cast_by) break;
       GpuLight& g = d.frame_lights[c];
       const int n = d.caster_lights++;
       g.more[0] = float(n);
@@ -721,7 +725,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   const double down[3] = {0, -1, 0};
   d.staged.ortho[0] = ortho_job(toward, centre, radius, radius);
   // The moving casters along the sun, round the eye, the depth as deep as the map's.
-  d.sun_caster = lights && !d.casters.empty() && sun[1] > 0;
+  d.sun_caster = casting && sun[1] > 0;
   d.staged.sun_caster = ortho_job(toward, view.eye, kSunCasterHalfM, 2 * radius);
   d.staged.sun_caster.info[2] = d.sun_caster ? 1.0f : 0.0f;
   d.frame_jobs.back() = d.staged.sun_caster;
@@ -809,7 +813,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
                              (size_t(kGridCells) + 1 + d.grid_refs) * sizeof(uint32_t));
   }
   device.queue.WriteBuffer(d.jobs, 0, d.frame_jobs.data(), d.frame_jobs.size() * sizeof(GpuJob));
-  if (d.caster_lights > 0)
+  if (d.caster_lights > 0 || d.sun_caster)  // the sun's tile draws them too
     device.queue.WriteBuffer(d.caster_vertices, 0, d.casters.data(),
                              size_t(d.caster_count) * 3 * sizeof(float));
   if (d.movers_dirty) {

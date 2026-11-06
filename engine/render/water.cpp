@@ -465,6 +465,8 @@ void create_water_targets(gpu::Device& device, Water& water, const FrameTargets&
                                    wgpu::TextureFormat::R32Float, usage);
   water.scene_colour_view = water.scene_colour.CreateView();
   water.scene_depth_view = water.scene_depth.CreateView();
+  water.width = targets.width;
+  water.height = targets.height;
   water.copy_group =
       make_group(device, "water.copy", water.copy_layout, {targets.hdr_view, targets.depth_view});
   water.streams.group = make_group(device, "water.stream", water.streams.layout,
@@ -588,6 +590,8 @@ int add_water_body(gpu::Device& device, Water& water, const water::Body& body,
   upload_waves(device, slot, body);
   {
     const ShoreMask mask = shore_mask(body);
+    // water_shore.wgsl reads a mask of more than one column as a lake's, its band out past the box.
+    slot.shore_grow = mask.cols > 1 ? kShoreReach : 0;
     const auto cols = static_cast<uint32_t>(mask.cols), rows = static_cast<uint32_t>(mask.rows);
     slot.shore = make_texture(device, "water.shore", cols, rows, 1, wgpu::TextureFormat::R8Unorm,
                               wgpu::TextureUsage::TextureBinding | wgpu::TextureUsage::CopyDst);
@@ -643,7 +647,53 @@ void set_water_up_view(Water& water, const float up_view_proj[16]) {
   std::memcpy(water.views.up_view_proj, up_view_proj, sizeof water.views.up_view_proj);
 }
 
+namespace {
+
+// The slot's shore band's rectangle on screen (Slot::shore_rect) for the camera `cam` at `eye`.
+void shore_rect(Water::Slot& slot, const CameraMatrices& cam, const double eye[3], uint32_t width,
+                uint32_t height) {
+  uint32_t* r = slot.shore_rect;
+  r[0] = r[1] = r[2] = r[3] = 0;
+  const WaterGpuBody& b = slot.staged;
+  const double runup = b.surf[1];
+  if (!slot.shown || runup < 0 || width == 0 || height == 0) return;
+  const double g = slot.shore_grow;
+  const double xs[2] = {b.box[0] - g, b.box[2] + g}, zs[2] = {b.box[1] - g, b.box[3] + g};
+  const double ys[2] = {b.info[0] - 0.05, b.info[0] + 1.3 * runup};
+  double lo[2] = {1e30, 1e30}, hi[2] = {-1e30, -1e30};
+  for (int k = 0; k < 8; ++k) {
+    const float p[4] = {static_cast<float>(xs[k & 1] - eye[0]),
+                        static_cast<float>(ys[(k >> 1) & 1] - eye[1]),
+                        static_cast<float>(zs[(k >> 2) & 1] - eye[2]), 1.0f};
+    float c[4];
+    transform(cam.view_proj, p, c);
+    if (c[3] < 1e-3f) {  // a corner at or behind the eye: the slab may span the screen
+      r[2] = width;
+      r[3] = height;
+      return;
+    }
+    for (int a = 0; a < 2; ++a) {
+      lo[a] = std::min(lo[a], double(c[a]) / c[3]);
+      hi[a] = std::max(hi[a], double(c[a]) / c[3]);
+    }
+  }
+  // NDC to pixels (y down), two pixels' margin for the jitter, held on the screen.
+  const double x0 = std::max(0.0, (lo[0] * 0.5 + 0.5) * width - 2);
+  const double x1 = std::min(double(width), (hi[0] * 0.5 + 0.5) * width + 2);
+  const double y0 = std::max(0.0, (0.5 - hi[1] * 0.5) * height - 2);
+  const double y1 = std::min(double(height), (0.5 - lo[1] * 0.5) * height + 2);
+  if (x1 <= x0 || y1 <= y0) return;
+  r[0] = static_cast<uint32_t>(x0);
+  r[1] = static_cast<uint32_t>(y0);
+  r[2] = static_cast<uint32_t>(std::ceil(x1)) - r[0];
+  r[3] = static_cast<uint32_t>(std::ceil(y1)) - r[1];
+}
+
+}  // namespace
+
 void prepare_water(gpu::Device& device, Water& water, const FrameView& view, int eye_in) {
+  const CameraMatrices cam = camera_matrices(
+      view, static_cast<double>(std::max(water.width, 1u)) / std::max(water.height, 1u));
   water.eye_under = -1;
   water.eye_near = -1;
   if (eye_in >= 0 && eye_in < static_cast<int>(water.bodies.size()) &&
@@ -670,6 +720,11 @@ void prepare_water(gpu::Device& device, Water& water, const FrameView& view, int
     if (slot.shown && inside && view.eye[1] < b.info[0] + kWaterlineBand && water.eye_near < 0) {
       water.eye_near = static_cast<int>(&slot - water.bodies.data());
     }
+    // The quality's cuts on what is uploaded, the staged body kept whole for the next frame's.
+    const float chop = b.chop[0], sunlit = b.sun[0], mirror = b.view[0];
+    if (!water.quality.chop) b.chop[0] = 0;
+    if (!water.quality.sunlight) b.sun[0] = 0;
+    if (!water.quality.reflect) b.view[0] = -1;
     const int levels = static_cast<int>(b.grid[0]);
     const double half = kWaterGrid / 2.0;
     for (int i = 0; i < levels; ++i) {
@@ -682,6 +737,10 @@ void prepare_water(gpu::Device& device, Water& water, const FrameView& view, int
       b.levels[i][3] = 0;
     }
     device.queue.WriteBuffer(slot.uniform, 0, &b, sizeof b);
+    shore_rect(slot, cam, view.eye, water.width, water.height);
+    b.chop[0] = chop;
+    b.sun[0] = sunlit;
+    b.view[0] = mirror;
   }
   // Every body whose underside the eye may see: the eye in water, under the body's level, and
   // the body's water reaching down to it (a flooded passage's far pool, never a pool upstairs).
@@ -745,11 +804,14 @@ void encode_water(const Water& water, const gpu::PipelineSet& pipelines, FrameRe
   // then leaves alone.
   pass.SetPipeline(pipelines.render(water.p_shore));
   for (const Water::Slot& slot : water.bodies) {
-    if (!slot.shown) continue;
+    const uint32_t* r = slot.shore_rect;
+    if (!slot.shown || !water.quality.shore || r[2] == 0 || r[3] == 0) continue;
+    pass.SetScissorRect(r[0], r[1], r[2], r[3]);
     pass.SetBindGroup(1, slot.group);
     pass.Draw(3);
     ++rec.current().draws;
   }
+  pass.SetScissorRect(0, 0, targets.width, targets.height);
   pass.SetPipeline(pipelines.render(water.p_draw));
   pass.SetIndexBuffer(water.indices, wgpu::IndexFormat::Uint32);
   for (const Water::Slot& slot : water.bodies) {
