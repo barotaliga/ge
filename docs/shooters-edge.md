@@ -1463,7 +1463,7 @@ list is in `porting/shooters-edge/survey.md`.
 | Better | Coloured lightmaps, replacement textures, skyboxes, fog, transparency | M18i |
 | Better | Real-time shadows from the engine's shadow passes on models | M18i |
 | Better | Voice chat on the native protocol (M17h) | M18l |
-| Better | Skeletal models (IQM, glTF) beside MDL, on the engine's skinning | M18l |
+| Better | Skeletal models (IQM) beside MDL: read into the engine's model, baked into the model pass's frames (glTF later) | M18l |
 | Better | A data-driven particle system for mods (effects named in a script) | M18l |
 | Better | The common QC extension builtins and fields (string handling, tracing, the extra entity fields), registered by name | M18c, M18l |
 | Later | Client-side QC (a mod drawing its own HUD and predicting its own entities) | M18m |

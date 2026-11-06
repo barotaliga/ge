@@ -398,7 +398,12 @@ skeletal model file (`.iqm`, below).
   material names a game reads as textures, and each animation baked at 60 Hz from its 16-bit
   frames. Its frame is +z up and front +x, turned into the world's with a mirror, so a triangle
   faces as its normals say. `write_iqm` writes a `Model` back, which is how the tests and the
-  `models` lab (`--format=iqm`, or `--model=<file>.iqm --metres=0.025`) make one in code.
+  `models` lab (`--format=iqm`, or `--model=<file>.iqm --metres=0.025`) make one in code. A game
+  that draws vertex-animated models draws one as it draws them: `morph/skeletal.hpp` poses each
+  clip on the CPU at a steady rate (20 a second in Shooter's Edge) into a morph model's frames, a
+  clip a frame group, and the morph pass blends between them. A few hundred frames of a few
+  thousand vertices is a few megabytes, and every lighting, tint and warp path of the morph pass
+  is the skeletal model's with no new pipeline; the GPU skinning pass stays the authored models'.
 - **Morph targets are read too**: each mesh's targets (offsets of its positions and normals from
   the bind, named by the mesh's `targetNames`) and its default weights, and each clip's weights
   channels baked at 60 Hz into a track a mesh (`MorphTarget`, `MorphTrack` in
