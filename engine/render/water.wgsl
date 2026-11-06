@@ -143,6 +143,12 @@ fn fs_main(in: VertexOut) -> FragmentOut {
       seen = vec4f(vec3f(white_luminance() * body.emission.w * kRoomAlbedo), 1.0);
       sun_seen = 0.0;
     }
+  } else if (body.view.x < -0.5) {
+    // No reflection (render/water.hpp's WaterQuality::reflect off): the room's walls, lit as the
+    // room is, nothing marched. Not the sky's model over the open share: a pool among a
+    // courtyard's walls mirrors mostly the walls, and the sky's model unveiled is far brighter.
+    seen = vec4f(vec3f(white_luminance() * body.emission.w * kRoomAlbedo), 1.0);
+    sun_seen = 0.0;
   }
   // A body under a roof (a cave's pool) sees the sky through `open` of its dome (rough.w) and the
   // room's own light, a share of a white face's (emission.w), over the rest; the day lights the

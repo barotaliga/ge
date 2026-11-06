@@ -2235,6 +2235,22 @@ the silhouette, not the folds. The `crowd-look` lab
 films a lift's queue, a busy run, a group and one of them down at `--hour` (11: the sun on the
 runs), each with the crowd and without.
 
+### Effects as data
+
+A particle effect can be a few lines of text instead of code (`engine/particles/effect.hpp`,
+`ge::particles`, no GPU): `effect <name>` and its emitters, each a `burst <count>` thrown at once
+or a `trail <spacing>` laid along a flight, with where the specks start (`box`, `ball`), how they
+leave (`speed` any way, `along` the effect's way, `rise`), how long and how big, how they fall
+and slow, their colour (linear, or a run of the game's palette) and whether they shine as unlit
+specks or hang as lit smoke, how they cool, grow, streak and bounce, and an effect's light.
+Lengths are the game's own unit, scaled by `Throw::metres`. A file is read whole or refused with
+its file, line and fix; a later effect of a name replaces it, so a mod's file wins over its game's.
+`throw_effect` and `throw_trail` are pure functions of the place and a seed; `render/spark.hpp`
+copies the specks into the pool. The `gpu-particle-effects` lab throws a sample book on the yard
+and pictures it, and lists the faults a bad file meets. Shooter's Edge reads `particles/*.fx`
+from the game's files and throws an effect of a classic effect's name in its place
+(`docs/shooters-edge.md`).
+
 ### Beams
 
 A held electric beam (a weapon's lightning gun, a machine's arc, a spell) is a channel of
@@ -2559,6 +2575,20 @@ own bill, because a machine can be short of pixels and rich in passes, or the ot
 
 The table's costs are the reference machine's (an Apple M3 Max at 1920 × 1080, by the span; the
 numbers and how they were measured are beside the table in `ladder.cpp`).
+- **Shooter's Edge's ladder** (`games/shooters_edge/app/ladder.hpp`) is the same concept over its
+  three dearest enhancements: SHADOWS, WATER and SKIES, each `off` (its `ce_` switch off, the
+  classic original) and then on at low, medium and high (`ce_<id>_quality`, high the default and
+  the whole look). Each stop is the passes' parameters, or a pass left out: the shadows' moving
+  casters drawn into cubes or not, their edges soft (the blocker search and the disc of taps) or
+  one compare, and the capsules (`brush::app::Options`); the water's chop, the sun's caustics and
+  shafts, the reflection (the map drawn again in the pool's plane, the screen marched, or the
+  room's light) and the wet band (`render::WaterQuality`, a uniform a body); the sky's cloud layer
+  and its far land. Its prices are a demo's, not a still view's: the `se-timedemo` lab's
+  `--price-stops=1` plays the classic pack's demo at 1440p with each row lowered alone to each
+  stop, between runs with everything on, and the presets and the floor the same way;
+  `--price-cvars` prices any set of cvars so, which is how the parts were found (`docs/perf.md`).
+  Its window applies `r_quality` each frame (the pick worked out again only when the word, the
+  budget or the size changes), so a stop changes on a live frame with no pipeline made.
 - **The reach and its mist.** `FrameView::reach_m` is how far a picture draws. The ground's
   clipmap draws only the levels that cover it (`clipmap_levels_to`: 1, 2 or 4 km round the eye
   where all eight reach 8 km), the instances' cull drops every one past it (counted with the

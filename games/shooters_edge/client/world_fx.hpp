@@ -26,6 +26,14 @@
 // - THE HELD WEAPON'S FIRE: each shot's flame, smoke and sparks from the barrel the hand puts in
 //   the world (app/muzzle.hpp, each weapon's row at the size its gun is drawn), under ce_muzzles.
 //
+// THE GAME'S FILES' EFFECTS (engine/particles/effect.hpp, `FxState::book`): an effect a file
+// `particles/<any>.fx` in the game's files defines by one of these names is thrown in place of
+// the classic one of that name (the classic look, or the modern with that enhancement off), in
+// map units, its light as strong as the classic light that far reaching: `explosion` (its specks,
+// its light and the sprite), `gunshot` (a pellet's hit, once a pellet), `spike` (a nail's, once a
+// nail), `blood` (once a drop), `teleport`, `lava`, `rocket_trail` and `grenade_trail` (each
+// frame's stretch). A hit's way is toward the eye; a burst's floor the one under it.
+//
 // THE ENHANCED WEAPON EFFECTS (app/weapon_fx.hpp), each under its classic-enhance switch in the
 // modern look (`fx_switches`; off, or the classic look: the classic effects above):
 // - ce_explosions: an explosion is a layered fireball of the engine's (its billows, its smoke, the
@@ -48,7 +56,7 @@
 // ge:keywords ce_trails ce_hits ce_decals marks scorch bullet-hole burns mark_burns
 // ge:keywords held-fire muzzle-fire fire_held load_held_fire warp spawn-effect teleport-effect
 // ge:keywords respawn ghost materialize dematerialize player_dust dust ash held_shown
-// ge:keywords fx-scene fx_scene demo-effects
+// ge:keywords fx-scene fx_scene demo-effects load_effects particles-fx scripted-effects
 // ge:skill render shooter
 #pragma once
 
@@ -66,6 +74,7 @@
 #include "brush/light_probe.hpp"
 #include "camera/subject.hpp"
 #include "detail/decals.hpp"
+#include "particles/effect.hpp"
 #include "render/beam.hpp"
 #include "render/beams.hpp"
 #include "render/explosions.hpp"
@@ -141,8 +150,18 @@ struct MarkFaces {
 };
 inline constexpr double kBeamHoldS = 0.2;  // a beam not sent again for this long is let go
 
+// A scripted effect's light (engine/particles' Glow) and when it was thrown.
+struct LitGlow {
+  ge::particles::Glow glow;
+  double born = 0;
+};
+
 struct FxState {
-  FxSwitches on;                 // set by the caller each frame
+  FxSwitches on;  // set by the caller each frame
+  // The effects the game's files define (`particles/*.fx`, load_effects); null or without the
+  // name: the game's own. Set by the caller.
+  const ge::particles::Book* book = nullptr;
+  std::vector<LitGlow> glows;    // the scripted effects' lights still fading
   std::vector<uint8_t> palette;  // the pack's (gfx/palette.lmp), set once: the classic specks'
   std::vector<ge::render::Blast> blasts;  // the enhanced explosions' and hits' puffs, live
   std::vector<ge::render::Blast> mains;   // the explosions' main balls, for their light
@@ -261,6 +280,22 @@ struct FxScene {
 
 // The listen server's scene this frame.
 void fx_scene(const Listen& l, const ViewState& v, FxScene& out);
+// Every `particles/*.fx` the files hold read into `book` in the files' order (a mod's after the
+// game's, so its effect of a name wins). A file that does not read is left out, its fault in
+// `faults` (file, line, the fix).
+void load_effects(const SearchPath& files, ge::particles::Book& book,
+                  std::vector<std::string>& faults);
+// The book's effect `name` thrown at `p` (engine metres) along `way` (a pellet's count `times`),
+// its specks into `out.births` and its light kept fading in `s.glows`. False, nothing thrown,
+// when the book has no such effect (client/world_fx_book.cpp).
+bool throw_scripted(FxState& s, std::string_view name, const double p[3], const double way[3],
+                    int times, double floor_y, double t, FxFrame& out);
+// The book's trail `name` over a flight's stretch `from` to `to` (engine metres). False when the
+// book has no such effect.
+bool trail_scripted(FxState& s, std::string_view name, const double from[3], const double to[3],
+                    FxFrame& out);
+// The scripted effects' lights at `t`, each shrinking to nothing over its fade, into `out.lights`.
+void scripted_lights(FxState& s, double t, FxFrame& out);
 
 // The effects of the wall frame of `dt` s at time `t` s.
 void step_fx(const FxScene& scene, FxState& s, double t, double dt, FxFrame& out);
