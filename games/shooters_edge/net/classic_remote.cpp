@@ -85,6 +85,11 @@ sh::MoveSettings settings_of(const ClassicClientEnd& c) {
   return m;
 }
 
+// Whether the server says it steps the original move (its sv_playermove in the server info).
+bool original_move(const ClassicClientEnd& c) {
+  return info_get(c.serverinfo, "sv_playermove") == "original";
+}
+
 sh::MoveType move_type_of(const PlayerState& p) {
   switch (p.pm) {
     case PmType::spectator:
@@ -143,8 +148,8 @@ std::vector<sh::ClientModel> movers_of(const Remote& r) {
 // The player's place `acked`'s reply put him (`own`), with every move sent since run through the
 // move, steering round the other players where they are drawn. False when there is nothing to
 // predict from.
-bool predict_from(const Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& out,
-                  int& replayed, sh::MoveState* full = nullptr) {
+bool predict_from(Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& out, int& replayed,
+                  sh::MoveState* full = nullptr) {
   const ClassicClientEnd& c = r.end;
   if (!can_predict(r) || !c.player_seen[c.playernum] || acked == 0) return false;
   const sh::NetPlayer n = net_of(own);
@@ -159,10 +164,28 @@ bool predict_from(const Remote& r, const PlayerState& own, uint32_t acked, sh::V
   for (size_t i = 0; i < st.players.size(); i++)
     if (static_cast<int>(i) != c.playernum && st.players[i].present && !st.players[i].dead)
       others.push_back(st.players[i].origin);
-  sh::MoveWorld world;
-  sh::client_world((*r.world)[0], movers.data(), static_cast<int>(movers.size()), others.data(),
-                   static_cast<int>(others.size()), world);
-  const sh::MoveState ahead = sh::predict_player(n, cmds, count, settings_of(c), world);
+  sh::MoveState ahead;
+  if (original_move(c)) {
+    // The server steps the original move: the same step on the stand-in, built once a level.
+    if (r.original_for != r.world || r.original_level != r.levels) {
+      sh::ServerSettings set;
+      set.move = settings_of(c);
+      sh::original_prediction_level(r.original, *r.world, set);
+      r.original_for = r.world;
+      r.original_level = r.levels;
+    }
+    std::vector<sh::ModelAt> at;
+    for (const sh::ClientModel& m : movers)
+      at.push_back({static_cast<int>(m.model - r.world->data()), m.origin});
+    sh::original_prediction_place(r.original, at.data(), static_cast<int>(at.size()), others.data(),
+                                  static_cast<int>(others.size()));
+    ahead = sh::predict_player_original(r.original, n, cmds, count);
+  } else {
+    sh::MoveWorld world;
+    sh::client_world((*r.world)[0], movers.data(), static_cast<int>(movers.size()), others.data(),
+                     static_cast<int>(others.size()), world);
+    ahead = sh::predict_player(n, cmds, count, settings_of(c), world);
+  }
   out = ahead.origin;
   if (full != nullptr) *full = ahead;
   replayed = count;
