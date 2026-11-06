@@ -7,7 +7,9 @@
 //    at its predicted middle through the skill's hands, a new contact first waiting a reaction
 //    drawn for it (half of it when the view was already on him: pre-aimed) (the pilot does not
 //    strafe jump while the view is held: the strafe needs the view along the velocity); with none,
-//    the view turns back to the pilot's yaw and is handed back within `kRelease` degrees;
+//    the view turns back to the pilot's yaw and is handed back within `kRelease` degrees, unless
+//    the game set a spot to watch (`look`, `look_at`: a doorway an enemy comes in by), where it
+//    goes on the same hands, so a contact showing there is pre-aimed at;
 // 4. the pilot's forward and side turned under that view (`turn_axes`), so the route is run the
 //    same whichever way it looks; the jump and every other button as the pilot pressed them.
 // Every decision is on the `ai::Why` (the pilot's `link`, the senses', and `aim`), and the aim's
@@ -34,6 +36,7 @@ namespace ge::shooter {
 
 struct BotStats {
   int64_t commands = 0, aiming = 0, holding = 0;
+  int64_t looking = 0;                   // commands the view spent on a spot watched (`look`)
   int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and of them, ones pre-aimed at
   double react_s = 0;                    // the reaction times drawn, summed
 };
@@ -58,6 +61,12 @@ struct Bot {
   double freeze_until = -1e9, react_until = -1e9;
   double target_seen_at = -1e9;  // when the one in hand was last in sight
   double freeze_view[2] = {};
+  // A spot watched with no contact in hand (a doorway an enemy comes in by): while `look` is set
+  // the view goes to `look_at` on the aim's hands, pre-aimed there, and when it is let go, back
+  // onto the pilot's way the same way. `looking`: the view is the look's (or on its way back).
+  bool look = false;
+  bool looking = false;
+  Vec3f look_at;
   core::Rng react_rng{1};  // the reactions' draws, off the bot's seed
   BotStats stats;
 };

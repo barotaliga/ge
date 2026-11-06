@@ -454,6 +454,9 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].spam_shots = fi.stats.spam_shots;
     r.players[k].outmatched = fi.stats.outmatched;
     r.players[k].sound_chases = fi.stats.sound_chases;
+    r.players[k].dodging = fi.stats.dodging;
+    r.players[k].dodge_turns = fi.stats.dodge_turns;
+    r.players[k].watching = fi.stats.watching;
     if (seats[k].mirror) {
       r.players[k].mirrored = seats[k].mirror->updates;
       r.players[k].predicted = seats[k].mirror->predicted;
