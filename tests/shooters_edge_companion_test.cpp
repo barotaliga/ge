@@ -191,13 +191,13 @@ TEST(coop_under_teamplay_spares_the_other_player_but_not_oneself) {
   CHECK_MSG(g.field(1, g.f().health) < own, "a coop player's own blow spared him");
 }
 
-TEST(coop_without_teamplay_lets_players_harm_each_other) {
+TEST(coop_with_friendly_fire_lets_players_harm_each_other) {
   campfix::Game g(R"({
 "classname" "info_player_coop"
 "origin" "-416 96 24"
 }
 )",
-                  {"deathmatch 0", "coop 1", "teamplay 0"});
+                  {"deathmatch 0", "coop 1", "sv_friendlyfire 1"});
   shooters_edge::server::campaign_join(g.c, 1, "mate");
   const float before = g.field(2, g.f().health);
   CHECK(g.hit(2, 1, 30));

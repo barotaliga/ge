@@ -900,8 +900,13 @@ either.
 A campaign in coop is the campaign host (`server/campaign.hpp`) with more than one player and
 `coop 1`: every player starts at the map's coop starts, is carried from map to map in his own
 spawn parms, takes keys the others still find, and comes back on a coop start with a fresh
-inventory when he dies, the map going on. With `teamplay 1` (what `coopgame` sets) one player's
-blows never harm another; his own blast still harms himself. Monsters choose among the players.
+inventory when he dies, the map going on, on a coop start no one stands on. Teammates are spared:
+one player's blows never harm another unless `sv_friendlyfire 1`, and a spared teammate's blow
+does not push him either unless `sv_friendlypush 1` (then a rocket at a friend boosts him without
+harm); his own blast still harms himself. Monsters choose among the players. On the start map the
+episodes open one at a time: the first always, each next once the one before is done
+(`sv_episodes_done`, a rune's bit each, set by the program when the rune is taken and kept by the
+window from game to game).
 
 A COMPANION (`bots/companion.hpp`) is a fighter that plays beside the player rather than for
 him, an enabler: it keeps at his shoulder, steps out of his way, kills only what has come for him
@@ -928,9 +933,11 @@ it is out. He fights what he meets on the way, passing the monsters no weapon he
 `se-coop-episode` plays our campaign in coop on the player's own pack from `e1m1` with a companion
 beside him, map after map, and draws each map with the tracks, the exits and where monsters fell.
 
-In the window, `coopgame [bots] [novice|average|expert] [map]` starts a coop game with that many
-companions (one by default, at most three) and `addbot` and `removebot` change the party during
-it (`client/coop_party.hpp`). People playing co-op together over the network is the next step, on
+In the window, `sv_coop 1` makes the campaign a coop game (`client/coop_mode.hpp`): set in a cfg
+or on the command line the game starts as one on the start map, set in the console one starts at
+once, with `sv_coopbots` companions (1 by default, at most seven: eight players); `skill` is the
+monsters' for everyone. `coopgame [bots] [novice|average|expert] [map]` starts one by hand, and
+`addbot` and `removebot` change the party during it (`client/coop_party.hpp`). People playing co-op together over the network is the next step, on
 the engine's server core (M18s6b).
 
 ## Licensing and the clean room

@@ -237,8 +237,8 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
                   });
   con.add_command(
       "coopgame",
-      "coopgame [bots] [novice|average|expert] [map]: a new coop game (teamplay on: no harm "
-      "between players) with that many companion bots beside you, 1 by default, from the start "
+      "coopgame [bots] [novice|average|expert] [map]: a new coop game (teammates spared unless "
+      "sv_friendlyfire 1) with that many companion bots beside you, 1 by default, from the start "
       "map or the map named; `addbot` and `removebot` change the party during the game",
       [&listen, &next_map, &content](Con& c, const CArgs& a) {
         int bots = 1;
@@ -258,7 +258,6 @@ void campaign_commands(ge::console::Console& con, Listen& listen, const SearchPa
         }
         listen.opt.console.emplace_back("deathmatch 0");
         listen.opt.console.emplace_back("coop 1");
-        listen.opt.console.emplace_back("teamplay 1");
         listen.opt.companions = bots;
         listen.opt.companion_skill = skill;
         next_map = map;
