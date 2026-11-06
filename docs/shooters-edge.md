@@ -612,6 +612,18 @@ by `se-campaign --progs=games/shooters_edge/qc/campaign/progs.src`. What both va
   folders there are; so `-game mymod` runs `mymod/qwprogs.dat`. A file of the single-player form is passed
   over (the base game's own `progs.dat` is its campaign, found the same way for SINGLE
   PLAYER), and with none the baseline mod runs; the status line says which.
+- **Or ship it compiled** (M18p): a mod folder whose packs hold a `qwprogs.qvm` runs that
+  module on the dedicated server (`shooters_edge_server --root=<game> --mod=<folder>
+  --map=<map>`) ahead of any `qwprogs.dat`, on the module server
+  (`server/qvm_server.hpp`, the system calls in `server/qvm_calls.cpp`, the adapter to the loop
+  `sim/qvm_program.hpp`). The module starts the map itself (it reads the map's entity text token
+  by token and spawns everything), answers a client's commands before the server's overridable
+  ones, reads and writes the console, and reads its own config files through the mod's search
+  path; its file writes go only to the mod's folder. Classic clients join it unmodified. The
+  `se-qvm` lab is the front end: `make lab LAB=se-qvm ARGS="--root=<game> --mod=<folder>
+  --map=dm4 --seconds=10"` lists the exports and system calls it made, its entities by class,
+  its console lines and any fault, and draws the entities from above. The bot calls answer
+  "no bot" for now.
 - **Line numbers in faults**: put the line table beside the file as `<file>.lines` (a line
   number per statement, the sidecar `ge qc` reads: `parse_lines` in `plugins/progs/file.hpp`). Without it a fault names the function and the
   statement.
