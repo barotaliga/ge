@@ -19,6 +19,8 @@ namespace shooters_edge::bots {
 
 namespace {
 
+constexpr size_t kDangerKept = 12;  // the danger spots kept (mind_danger)
+
 constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit (games/shooters_edge/qc)
 constexpr int32_t kWRockets = 32, kWArc = 64;
 constexpr double kHelp_s = 6;         // a call for help holds this long
@@ -244,6 +246,33 @@ bool mate_going(const Fighter& f, int32_t i, double t) {
   return false;
 }
 
+void mind_danger(Fighter& f, sh::Vec3f at, double t) {
+  if (f.danger.size() >= kDangerKept) f.danger.erase(f.danger.begin());
+  f.danger.emplace_back(at, t);
+}
+
+bool mind_obituary(Fighter& f, const std::string& line, double t) {
+  // The words a death's line goes on with after the victim's name ("was nailed by", "ate 2 loads
+  // of", "sleeps with the fishes", "becomes bored with life", ...).
+  static constexpr const char* kDeathWords[] = {
+      "was ",     "ate ",    "rides ",      "accepts ", "chewed ", "eats ",    "gets ",
+      "sleeps ",  "sucks ",  "gulped ",     "burst ",   "visits ", "turned ",  "cratered",
+      "fell ",    "becomes ", "discovers ", "tries ",   "can't ",  "squished", "loses ",
+      "checks ",  "died",    "got "};
+  for (const Mate& m : f.mind.mates) {
+    if (m.name.empty() || line.size() <= m.name.size() + 1 || line.compare(0, m.name.size(), m.name) != 0 ||
+        line[m.name.size()] != ' ')
+      continue;
+    const std::string_view rest = std::string_view(line).substr(m.name.size() + 1);
+    bool death = false;
+    for (const char* w : kDeathWords) death |= rest.rfind(w, 0) == 0;
+    if (!death) return false;
+    if (t - m.at_t < mate_fresh_s(f)) mind_danger(f, m.at, t);
+    return true;
+  }
+  return false;
+}
+
 void mind_hear(Fighter& f, const std::string& from, const std::string& text, double t) {
   if (from == f.name) return;  // its own words, sent back to it
   Mind& mn = f.mind;
@@ -352,6 +381,7 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
       if (has_place) {
         mn.enemy_at = p;
         mn.enemy_t = t;
+        mind_danger(f, p, t);  // no healing there for a while
         // An area to take back (what an average player goes by: he keeps no map of his team).
         const int32_t area = key_near(f, p, 600);
         if (area >= 0 && f.teamwork != MapSense::novice) {
@@ -364,6 +394,7 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
       if (has_place) {
         mn.help_at = p;
         mn.help_until = t + kHelp_s;
+        mind_danger(f, p, t);  // a mate in trouble there: no healing there for a while
       }
       break;
     case SayKind::enemy:

@@ -68,7 +68,7 @@ void client_view(const Server& sv, int viewer, ClientView& out) {
     const SoundEvent& se = sv.sounds[i];
     if (se.ent < 0 || se.ent >= sv.num_edicts) continue;
     const Edict& d = sv.edicts[static_cast<size_t>(se.ent)];
-    const Vec3f at = d.solid == kSolidBsp ? middle_of(d) : d.origin;
+    const Vec3f at = se.placed ? se.at : d.solid == kSolidBsp ? middle_of(d) : d.origin;
     if (se.attenuation > 0) {
       const float reach = kHearAt / se.attenuation;
       if (dist2(at, me.origin) > reach * reach) continue;

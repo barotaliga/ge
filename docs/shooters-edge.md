@@ -1526,6 +1526,58 @@ held down longer, 14°, 9°, 6° and 4°), measured on the view the command carr
 button may have turned. The double is fired within 350 units and chosen under 250, the launcher
 within 1200, a rocket at a man within 400 aimed at his middle and at his feet farther off.
 
+**Bots on an existing server (M18r14).** The bots are tested where it matters: a team of them
+joins a live classic server running the common match mod and plays a 4on4 against people, and
+every match leaves data that is read here, learnt from, and played again. The server is an
+existing one, built beside the checkout and never in the tree; the bots are ours.
+
+- **One process, one team.** `shooters_edge_bots --server=<host:port>` runs a whole team: each
+  bot is its own classic client (`net/classic_client.hpp`) on its own UDP socket, one move a tick
+  at the server's rate, paced by the wall clock as the window's remote client is. The map is
+  loaded from the player's own packs by the name serverdata carries, and its nav built as
+  `run_team_match` builds it. Two processes can play the two teams of a bots-only match; each
+  knows nothing of the other but what its clients are sent.
+- **A bot knows only its own client.** On our server a fighter reads the server's world; on
+  someone else's there is none. So the fighter's world is rebuilt from what its client was sent
+  (`net/classic_mirror.hpp`): its own player and stats, the other players' places and dead flags,
+  the entities of the newest frame, the frame's sounds, the frags and the prints. Nothing else
+  reaches it, and a fact a client is never sent (another player's health) has no field to read.
+  Where the server culls by the map's visibility, an item that stops being sent counts as taken
+  only when its spot is in the client's own visibility set. What a bot knows of its team is what
+  its teammates said on `say_team`, as before (M18r9): four bots in one process share no memory.
+- **The match mod's ways.** The team and colours it stuffs are taken, `ready` and `break` are
+  said on the owner's word or once every person is ready, the countdown and the match's end are
+  read off its prints, and a map change is followed by the reconnect and a new nav.
+- **The bot client in the window.** `shooters_edge --bots=4 --server=<host:port> --team=<name>`
+  runs the same team in the game's window, which draws the team's world as its bots believe it
+  (`net/classic_team_view.hpp`): the map from above, each bot's route, goal and the enemies it
+  believes in, the item timers, the enemies the four clients were sent together (which no single
+  bot knows), each bot's plan and the team's lines. The console drives the bots: a line no command
+  names goes to every bot, `bot<N> <line>` to one (`bot1 skill expert`, `ready`, `status`); the
+  picture records as a video with `--bots-view=<file>`.
+- **The narrator.** The process describes its own team's game, read off its bots' beliefs and the
+  public scores and never written back into them: the score and its trend; each area by its
+  place name (held, lost, contested, last seen when) and the key items' believed timers; each
+  member's role, goal, health, armour, weapons, mode and last words. It prints every few seconds
+  and on `status`, and keeps a timeline. It knows no more than the team does; what the team
+  believes wrongly, it reports wrongly, and that is the point.
+- **The match folder.** Each bot's client recording (every packet read and every command sent),
+  its decisions, the team's lines and the narrator's timeline. A bot is a function of the packets
+  it was sent and its seed, so a fresh fighter fed its recording gives back its commands bit for
+  bit: `ge why` answers a live match's decisions here, and a changed bot run over the same
+  recording shows where it would have decided otherwise.
+- **The match's video.** `shooters_edge -demovideo <mvd> <file> --autotrack` follows the hottest
+  player (`client/demo_autotrack.hpp`): his kit (armour, the best weapon, powerups, frags) and his
+  kill streaks, cut to a challenger that beats him by a margin after a dwell, to the hottest alive
+  two seconds after he dies, and at once to one who takes the quad or the shield or kills twice
+  quickly. The plan reads the whole demo first, so a cut lands before the fight.
+- **Read against the truth.** The server's own multiview recording is the truth. The `se-live`
+  lab sets each bot's beliefs against it (where each enemy was against where he was believed,
+  each key item's timer against its respawn, the team lines read and missed), and draws the kill
+  map by area, item control over time, and hit rates per weapon and humanness for the bots and the
+  people of the same match side by side; given a folder of matches, it sets them side by side so a
+  change to a bot is read against the same people.
+
 **Place names (`.loc` files).** `plugins/shooter/locs.hpp` reads a map's place names in the
 community's `.loc` format (one point a line, `x y z name`, coordinates in eighths of a unit, the
 `$loc_name_<key>` macros expanded) and names any point by its nearest. The files themselves are

@@ -88,6 +88,10 @@ struct SoundEvent {
   int channel = 0;
   const char* sample = "";  // the content's sound name
   float volume = 1, attenuation = 1;
+  // Where it was started, when the one who keeps the record knows it (a client's packet says;
+  // a server's own sound is where its entity stands, so it leaves this unset).
+  bool placed = false;
+  Vec3f at;
 };
 
 // What a client's connection keeps for the loop (the player is entity slot + 1).

@@ -1003,8 +1003,12 @@ MoveCmd pilot_next(void* ctx, const Server& sv, int slot, int msec) {
     const NavMover& m = p.g->movers[i];
     const Edict& e = sv.edicts[static_cast<size_t>(m.ent)];
     b.now[i] = m;
-    b.now[i].absmin = e.absmin;
-    b.now[i].absmax = e.absmax;
+    // Where the mover stands now; one the player's client was not sent this frame (outside its
+    // visibility set: a free slot in a client's world) is taken as the graph planned it.
+    if (!e.free) {
+      b.now[i].absmin = e.absmin;
+      b.now[i].absmax = e.absmax;
+    }
   }
   s.movers = b.now;
   s.world = b.world;
