@@ -6,7 +6,8 @@
 //   each row is its own: RESOLUTION (the render size TAA-U brings up to the output), SHADOWS (the
 //   sun's maps' texels), SNOW (the snow's material, or the albedo lit), TRAILS (the trail maps'
 //   texels, or none), SPRAY (thrown or not), PRECIP (the snow and rain round the eye), CLOUDS (the
-//   march's share of its steps at a quarter of the pixels, every pixel at the top, or no layer:
+//   march's share of its steps at a quarter of the pixels, every pixel's own ray at the top, each
+//   spread over four frames, or no layer:
 //   the sky's mean cloud), BLOOM (off, on, or on with the lens pass: render/lens.hpp) and
 //   DISTANCE (how far the ground and what stands on it are drawn, closed into the sky by a mist;
 //   the whole ground, unmisted, at the top).

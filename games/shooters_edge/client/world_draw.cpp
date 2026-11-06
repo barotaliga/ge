@@ -48,6 +48,7 @@ struct WorldDraw {
   gr::FarLand far;  // the land round the map, seen through its sky faces (r_farland)
   ba::SkyPick sky;
   ba::SkyPick night;  // the map's own classic night, for an sv_hour after dusk (bsp_sky.hpp)
+  bool dark = false;  // its sky texture is dark: the map is seen under its night (dark_sky)
   double top_y = 0;   // the map's highest point, m: the clouds stand over it
   ge::gpu::PipelineSet pipelines;
   gr::FrameTargets targets;
@@ -233,6 +234,7 @@ struct WorldRead {
   ba::Scene scene;
   ba::SkyPick sky;
   ba::SkyPick night;  // the map's own classic night, for an sv_hour after dusk
+  bool dark = false;
   double top_y = 0;
   std::vector<uint8_t> grade_palette;
   std::vector<float> classic_grade;  // the classic look's grade to the palette (look.hpp)
@@ -305,6 +307,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   r->sky = ba::pick_sky(r->scene.sky_colours, map.name);
   r->night = r->sky;
   ba::night_over(r->night, map.name);
+  r->dark = ba::dark_sky(r->sky);
   r->top_y = r->scene.maxs[1];
   bool known = true;
   r->far_kind = ba::far_land_for(r->sky, map.name, picture.far_land, &known);
@@ -410,6 +413,7 @@ WorldDrawPtr begin_world(ge::gpu::Device& d, WorldReadPtr read, uint32_t width, 
   f->scene = std::move(read->scene);
   f->sky = read->sky;
   f->night = read->night;
+  f->dark = read->dark;
   f->top_y = read->top_y;
   f->format = format;
   f->weapons = weapons;
@@ -491,7 +495,8 @@ namespace {
 // The map's own sky (its pick) at the picture's sv_hour (the map's own at -1), dressed on `view`;
 // the title dresses its own.
 ba::SkyPick dress_world_sky(const WorldDraw& f, gr::FrameView& view) {
-  ba::SkyPick sky = f.sky;
+  // At the map's own hour (-1) a dark sky texture is the map's night, a bright one its day.
+  ba::SkyPick sky = f.dark ? f.night : f.sky;
   if (f.picture->weather.hour >= 0) ba::at_hour(sky, f.night, f.picture->weather.hour);
   if (!f.own_sky) ba::dress_sky(view, sky, f.top_y, view.time_s);
   return sky;

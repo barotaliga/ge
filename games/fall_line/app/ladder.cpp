@@ -41,9 +41,10 @@ constexpr int kReachLevels[] = {5, 6, 7, kGroundLevels};  // the ground's levels
 //   a third of it.
 // CLOUDS: a broken sky's layers, marched at a quarter of the pixels (a quarter of those each
 //   frame, the rest reprojected from the last) and upsampled; the low stop
-//   marches half the steps, a slightly blockier cloud; the top marches every pixel, the
-//   reference, a hair sharper at a ridge's edge; off, the sky keeps its mean cloud and loses its
-//   shapes and shadows.
+//   marches half the steps, a slightly blockier cloud; the top marches every pixel's own ray (a
+//   quarter of them each frame, the rest reprojected), as sharp at a ridge's edge as the
+//   reference that marches every pixel each frame; off, the sky keeps its mean cloud and loses
+//   its shapes and shadows.
 // BLOOM: the sun's glow off the snow and the lamps, small; its top stop adds the lens pass (the
 //   sun streaming through the trees and over the ridges, and the flare when the player has it on),
 //   a quarter of the pixels and only round the sun, worth a little more where the sun is in view.
@@ -58,23 +59,25 @@ constexpr int kReachLevels[] = {5, 6, 7, kGroundLevels};  // the ground's levels
 // overlap again and again. A stop that measured cheaper than the one under it is set level with
 // it. The DISTANCE row is priced where it is seen, from the `vista` over the whole mountain on a
 // clear day (`--view=vista --lift=0 --fall=0`): from the start the far ground is behind the slope
-// and costs nothing; from above, the ground past 1 km is most of it. The presets measured 1.52
-// (low), 2.88 (medium), 3.79 (high) and 7.89 ms (top): the top's every-pixel cloud march is
-// most of the step from high.
-constexpr r::PriceTable kTable{"Apple M3 Max (Metal), 1920x1080", 1920, 1080, 1.18};
+// and costs nothing; from above, the ground past 1 km is most of it. Priced on 2026-11-06, with
+// the top's cloud march spread over frames and the shafts read from a volume made once a frame
+// (render/sky.hpp): the presets measured 1.50 (low), 2.48 (medium), 3.09 (high) and 4.48 ms
+// (top). At 2560x1440 the top is 6.53 ms from the start, 6.44 from the chase camera and 7.62
+// from the vista, inside the 8.3 ms budget (docs/rendering.md § Measurement).
+constexpr r::PriceTable kTable{"Apple M3 Max (Metal), 1920x1080", 1920, 1080, 1.22};
 
 constexpr r::LadderStop kResolution[] = {
-    {"half", 0, 0}, {"two-thirds", 1.12, 3}, {"five-sixths", 2.16, 5}, {"full", 4.10, 6}};
-constexpr r::LadderStop kShadows[] = {{"1024", 0, 0}, {"2048", 0.02, 5}, {"4096", 0.02, 7}};
-constexpr r::LadderStop kSnow[] = {{"plain", 0, 0}, {"material", 0.25, 60}};
-constexpr r::LadderStop kTrails[] = {{"off", 0, 0}, {"low", 0.08, 30}, {"high", 0.17, 36}};
-constexpr r::LadderStop kSpray[] = {{"off", 0, 0}, {"on", 0.08, 20}};
-constexpr r::LadderStop kPrecip[] = {{"off", 0, 0}, {"low", 0.07, 10}, {"high", 0.17, 14}};
+    {"half", 0, 0}, {"two-thirds", 0.67, 3}, {"five-sixths", 0.90, 5}, {"full", 1.69, 6}};
+constexpr r::LadderStop kShadows[] = {{"1024", 0, 0}, {"2048", 0.03, 5}, {"4096", 0.03, 7}};
+constexpr r::LadderStop kSnow[] = {{"plain", 0, 0}, {"material", 0.22, 60}};
+constexpr r::LadderStop kTrails[] = {{"off", 0, 0}, {"low", 0.10, 30}, {"high", 0.10, 36}};
+constexpr r::LadderStop kSpray[] = {{"off", 0, 0}, {"on", 0, 20}};
+constexpr r::LadderStop kPrecip[] = {{"off", 0, 0}, {"low", 0.06, 10}, {"high", 0.08, 14}};
 constexpr r::LadderStop kClouds[] = {
-    {"off", 0, 0}, {"low", 1.81, 12}, {"high", 2.07, 15}, {"full", 5.57, 16}};
-constexpr r::LadderStop kBloomStops[] = {{"off", 0, 0}, {"on", 0.05, 4}, {"lens", 0.09, 6}};
+    {"off", 0, 0}, {"low", 0.74, 12}, {"high", 1.03, 15}, {"full", 1.92, 16}};
+constexpr r::LadderStop kBloomStops[] = {{"off", 0, 0}, {"on", 0.21, 4}, {"lens", 0.21, 6}};
 constexpr r::LadderStop kDistance[] = {
-    {"1 km", 0, 0}, {"2 km", 1.46, 10}, {"4 km", 3.05, 18}, {"full", 3.26, 22}};
+    {"1 km", 0, 0}, {"2 km", 0.91, 10}, {"4 km", 2.20, 18}, {"full", 2.20, 22}};
 
 const std::array<r::LadderRow, kPictureRows> kRows = {{
     {"resolution", kResolution, 1},

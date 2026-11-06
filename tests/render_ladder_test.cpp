@@ -1,7 +1,8 @@
 // engine/render/ladder.hpp: the fit keeps every row at its top when the budget allows; the exact
 // fit finds the dear stop a greedy walk would hide; a smaller budget never buys more worth; the
 // rows given up first go first, in their order; a free stop is always kept; a slower machine
-// fits less; and a picture over every budget comes back as the cheapest, marked as not fitting.
+// fits less; a picture said to fit is inside its budget to the last hundredth; and a picture over
+// every budget comes back as the cheapest, marked as not fitting.
 // The quality setting over any game's ladder: custom picks nothing, a preset by its name, a share
 // from 0 (every row's cheapest) to 1 (the top) whose worth never falls, auto inside a budget and
 // scaled by the window's pixels, and a word it does not know refused with a line naming the
@@ -111,6 +112,16 @@ TEST(a_budget_under_the_floor_gives_the_cheapest_picture_unfit) {
   const gr::LadderFit f = gr::fit_ladder(r, 4, 5);
   CHECK(!f.fits);
   CHECK((f.pick == gr::LadderPick{0, 0, 0, 0, 0}));
+}
+
+TEST(a_room_between_two_hundredths_takes_no_picture_over_it) {
+  // 0.995 ms over the floor: the trails' low stop (1 ms) is 0.005 over it, so it is not taken,
+  // though both are 100 hundredths rounded up.
+  const auto r = rows();
+  const gr::LadderFit f = gr::fit_ladder(r, 5.995, 5);
+  CHECK(f.fits);
+  CHECK(f.cost_ms <= 0.995 + 1e-9);
+  CHECK((f.pick == gr::LadderPick{0, 0, 1, 0, 0}));
 }
 
 TEST(the_quality_setting_reads_any_games_ladder) {

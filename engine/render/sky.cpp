@@ -12,6 +12,7 @@
 
 #include "render/lights.hpp"
 #include "render/sky.wgsl.hpp"
+#include "render/sky_shafts.wgsl.hpp"
 #include "render/sky_tables.wgsl.hpp"
 
 namespace ge::render {
@@ -40,7 +41,8 @@ wgpu::BindGroupLayout frame_layout(gpu::Device& device) {
       device, "render.frame",
       {Slot::uniform, Slot::sampler, Slot::texture, Slot::texture, Slot::texture, Slot::texture_3d,
        Slot::storage_read, Slot::texture, Slot::texture_3d, Slot::sampler, Slot::storage_shade,
-       Slot::texture_3d, Slot::texture, Slot::depth, Slot::compare, Slot::texture},
+       Slot::texture_3d, Slot::texture, Slot::depth, Slot::compare, Slot::texture,
+       Slot::texture_3d},
       wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment | wgpu::ShaderStage::Compute);
 }
 
@@ -55,12 +57,14 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   sky.sky_view = make_texture(device, "sky.view", kSkyViewW, kSkyViewH, 1, f16, table);
   sky.moon_view = make_texture(device, "sky.moon_view", kSkyViewW, kSkyViewH, 1, f16, table);
   sky.aerial = make_texture(device, "sky.aerial", kAerialW, kAerialH, kAerialD, f16, table);
+  sky.shafts = make_texture(device, "sky.shafts", kShaftW, kShaftH, kShaftD, f16, table);
   sky.blank = make_texture(device, "sky.blank", 1, 1, 1, f16, TU::TextureBinding);
   sky.transmittance_view = sky.transmittance.CreateView();
   sky.multiscatter_view = sky.multiscatter.CreateView();
   sky.sky_view_view = sky.sky_view.CreateView();
   sky.moon_view_view = sky.moon_view.CreateView();
   sky.aerial_view = sky.aerial.CreateView();
+  sky.shafts_view = sky.shafts.CreateView();
   sky.blank_view = sky.blank.CreateView();
   // Clear air for group 0's fog volume (render/fog.hpp): no in-scatter, all seen. Nothing reads it
   // while the frame block's fog range is 0; written all the same so a read is never undefined.
@@ -168,6 +172,41 @@ void create_sky(gpu::Device& device, gpu::PipelineSet& pipelines, Sky& sky,
   sky.g_sky_view[1] = out("sky.view.out", sky.out_2d, 0, sky.sky_view_view, nullptr);
   sky.g_aerial[0] = in("sky.aerial.in", sky.transmittance_view, sky.multiscatter_view);
   sky.g_aerial[1] = out("sky.aerial.out", sky.out_3d, 1, sky.aerial_view, nullptr);
+  // The shafts' group 0: the frame block (0), the cloud's noise (8) and its sampler (9).
+  {
+    wgpu::BindGroupLayoutEntry e[3]{};
+    e[0].binding = 0;
+    e[0].buffer.type = wgpu::BufferBindingType::Uniform;
+    e[1].binding = 8;
+    e[1].texture.sampleType = wgpu::TextureSampleType::Float;
+    e[1].texture.viewDimension = wgpu::TextureViewDimension::e3D;
+    e[2].binding = 9;
+    e[2].sampler.type = wgpu::SamplerBindingType::Filtering;
+    for (wgpu::BindGroupLayoutEntry& x : e) x.visibility = cs;
+    wgpu::BindGroupLayoutDescriptor d{};
+    d.label = "sky.shafts.in";
+    d.entryCount = 3;
+    d.entries = e;
+    sky.shafts_in = device.device.CreateBindGroupLayout(&d);
+    wgpu::BindGroupEntry g[3]{};
+    g[0].binding = 0;
+    g[0].buffer = uniforms;
+    g[1].binding = 8;
+    g[1].textureView = sky.cloud.view;
+    g[2].binding = 9;
+    g[2].sampler = sky.cloud.sampler;
+    wgpu::BindGroupDescriptor gd{};
+    gd.label = "sky.shafts.in";
+    gd.layout = sky.shafts_in;
+    gd.entryCount = 3;
+    gd.entries = g;
+    sky.g_shafts[0] = device.device.CreateBindGroup(&gd);
+  }
+  sky.g_shafts[1] = out("sky.shafts.out", sky.out_3d, 1, sky.shafts_view, nullptr);
+  sky.p_shafts =
+      add_table(device, pipelines, gpu::create_shader(device, wgsl::sky_shafts, "sky_shafts"),
+                make_pipeline_layout(device, "sky.shafts", {sky.shafts_in, sky.out_3d}),
+                "shafts_main", "sky.shafts");
   sky.g_light[0] = in("sky.light.in", sky.sky_view_view, sky.transmittance_view);
   sky.g_light[1] = out("sky.light.out", sky.out_buffer, 2, nullptr, sky.light);
   sky.g_moon_view[0] = in("sky.moon_view.in", sky.transmittance_view, sky.multiscatter_view);
@@ -221,7 +260,7 @@ wgpu::BindGroup frame_group(gpu::Device& device, const wgpu::BindGroupLayout& la
        sky.aerial_view, sky.light, sky.moon_view_view, sky.cloud.view, sky.cloud.sampler,
        lights ? lights : sky.no_lights, fog ? fog : sky.no_fog_view, ao ? ao : sky.blank_view,
        lamp_atlas ? lamp_atlas : sky.no_lamp_atlas_view, sky.lamp_compare,
-       mirror ? mirror : sky.blank_view});
+       mirror ? mirror : sky.blank_view, sky.shafts_view});
 }
 
 void prepare_sky(Sky& sky, const FrameView& view) {
@@ -286,6 +325,7 @@ void encode_sky_tables(Sky& sky, const gpu::PipelineSet& pipelines, FrameRecorde
     run(sky.p_moon_light, sky.g_moon_light, 1, 1);
   }
   run(sky.p_aerial, sky.g_aerial, groups(kAerialW, 8), groups(kAerialH, 8));
+  run(sky.p_shafts, sky.g_shafts, groups(kShaftW, 8), groups(kShaftH, 8));
   pass.End();
   sky.build_tables = false;
   sky.build_view = false;

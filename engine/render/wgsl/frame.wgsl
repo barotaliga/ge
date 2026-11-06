@@ -65,6 +65,11 @@ struct SkyLight {
 // depth it was worked at), or the sky's 1 x 1 blank with it off.
 @group(0) @binding(12) var ao_map: texture_2d<f32>;
 
+// The shafts (render/sky.hpp's `Sky::shafts`, made each frame by sky_shafts.wgsl): the share of
+// the sun the air along the screen's rays gets, over the screen's uv and sqrt(distance / reach),
+// read by `shafts`.
+@group(0) @binding(16) var shaft_volume: texture_3d<f32>;
+
 // THE SHARE OF THE SKY a surface drawn at `at` (a fragment's position: the pixel and its depth)
 // sees, 0..1: the four half-size texels round it, each by how near it is and how like the
 // surface's own its depth is, so one surface's shade stays off the one beside it.
@@ -136,13 +141,32 @@ fn cloud_uvw(l: CloudRows, xz: vec2f) -> vec3f {
   return cloud_warped(l, uvw);
 }
 
-// THE WARP (thick.w, render/clouds.cpp's `warped`): the point pushed up to thick.w cells by two
-// reads of the noise a tile apart from the column's, so a cell's outline leans and twists; at the
-// tile's own scale, so the drift's wrap stays seamless.
-fn cloud_warped(l: CloudRows, uvw: vec3f) -> vec3f {
-  let a = textureSampleLevel(cloud_noise, linear_repeat, uvw + vec3f(0.19, 0.53, 0.61), 0.0).r;
-  let b = textureSampleLevel(cloud_noise, linear_repeat, uvw + vec3f(0.67, 0.11, 0.83), 0.0).r;
-  return vec3f(uvw.xy + (vec2f(a, b) - 0.5) * (2.0 * l.thick.w / kCloudTileCells), uvw.z);
+// THE WARP (thick.w, render/clouds.cpp's `warped`): the point pushed up to thick.w cells by reads
+// of the noise set off from the column's, at the tile's scale and at three sevenths of it, so a
+// cell's outline leans and twists a different way in each tile and the sky never shows the tile
+// repeating (render/clouds.hpp's kWarpTiles; the drift wraps at that period).
+// 0.4285714 is 3 / kWarpTiles, 0.7142857 is 5 / kWarpTiles, 1.4072 is 1 / sqrt(0.55^2 + 0.45^2).
+const kWarpTiles = 7.0;
+fn cloud_warped(l: CloudRows, p: vec3f) -> vec3f {
+  let c = vec3f(p.xy * 0.4285714, p.z);
+  let a = cloud_read(p + vec3f(0.19, 0.53, 0.61)) + cloud_read(c + vec3f(0.41, 0.07, 0.29));
+  let b = cloud_read(p + vec3f(0.67, 0.11, 0.83)) + cloud_read(c + vec3f(0.13, 0.89, 0.47));
+  return vec3f(p.xy + (vec2f(a, b) - 1.0) * (l.thick.w / kCloudTileCells), p.z);
+}
+fn cloud_read(p: vec3f) -> f32 {
+  return textureSampleLevel(cloud_noise, linear_repeat, p, 0.0).r;
+}
+
+// The noise a layer's column is cut from at `uvw`. A WARPED layer's (thick.w) is blended with a
+// read at five sevenths of the tile's scale, spread back to the noise's own range, so the cells
+// of one tile are never the cells of the next (render/clouds.cpp's `column_noise`).
+fn cloud_column_noise(l: CloudRows, p: vec3f) -> f32 {
+  let n = cloud_read(p);
+  if (l.thick.w <= 0.0) {
+    return n;
+  }
+  let m = cloud_read(vec3f(p.xy * 0.7142857 + vec2f(0.23, 0.61), p.z + 0.37));
+  return clamp(0.5 + (0.55 * n + 0.45 * m - 0.5) * 1.4072, 0.0, 1.0);
 }
 
 // How far past the cut the noise climbs to a full column (render/clouds.hpp's kColumnRamp): a
@@ -155,7 +179,8 @@ const kColumnRamp = 0.3;
 fn cloud_column_of(l: CloudRows, uvw: vec3f, n: f32) -> f32 {
   var c = clamp((n - l.shape.z) / max(min(1.0 - l.shape.z, kColumnRamp), 1e-3), 0.0, 1.0);
   if (l.form.w > 0.0) {
-    let m = textureSampleLevel(cloud_noise, linear_repeat, vec3f(uvw.xy * 0.25, uvw.z + 0.5), 0.0).r;
+    let k = select(0.25, 2.0 / kWarpTiles, l.thick.w > 0.0);
+    let m = textureSampleLevel(cloud_noise, linear_repeat, vec3f(uvw.xy * k, uvw.z + 0.5), 0.0).r;
     c *= mix(1.0, clamp((m - 0.5) * 4.0 + 0.5, 0.0, 1.0), l.form.w);
   }
   return c;
@@ -180,7 +205,7 @@ fn cloud_thickness(l: CloudRows, uvw: vec3f, c: f32) -> f32 {
 // times how thick (the shadow's read).
 fn cloud_cast(l: CloudRows, xz: vec2f) -> f32 {
   let uvw = cloud_uvw(l, xz);
-  let c = cloud_column_of(l, uvw, textureSampleLevel(cloud_noise, linear_repeat, uvw, 0.0).r);
+  let c = cloud_column_of(l, uvw, cloud_column_noise(l, uvw));
   if (c <= 0.0) {
     return 0.0;
   }
@@ -206,26 +231,23 @@ fn cloud_shadow(p: vec3f) -> f32 {
   return exp(-tau);
 }
 
-// THE SHAFTS: the share of the sun's light the air along a view ray `d` gets, out to `far` m (at
-// most kShaftReach), averaged over kShaftSteps points dithered per pixel `px` and per frame:
-// where the cloud's shadow crosses the air, the air scatters less of the sun, and the sky reads
-// as beams between the heaps. 1 with no layer, or with the sun low.
-const kShaftSteps = 6;
+// THE SHAFTS: the share of the sun's light the air along the view ray at the screen's `uv` gets,
+// out to `far` m (at most kShaftReach): the mean of the cloud's shadow over its points, bunched
+// toward the eye. Where the cloud's shadow crosses the air, the air scatters less of the sun, and
+// the sky reads as beams between the heaps. Read from the volume a pass makes each frame
+// (sky_shafts.wgsl, render/sky.hpp's kShaftW x kShaftH x kShaftD); 1 with no layer, or with the
+// sun low.
 const kShaftReach = 20000.0;
 const kShaftShare = 0.7;
+const kShaftSize = vec3f(128.0, 72.0, 32.0);
 
-fn shafts(d: vec3f, far: f32, px: vec2f) -> f32 {
+fn shafts(uv: vec2f, far: f32) -> f32 {
   if (i32(frame.cloud_info.x) == 0 || frame.sun.y < 0.02 || frame.weather.y > 0.99) {
     return 1.0;
   }
-  let reach = min(far, kShaftReach);
-  let j = fract(52.9829189 * fract(dot(px, vec2f(0.06711056, 0.00583715)) + 0.618034 * frame.time.y));
-  var lit = 0.0;
-  for (var i = 0; i < kShaftSteps; i++) {
-    let a = (f32(i) + j) / f32(kShaftSteps);
-    lit += cloud_shadow(frame.eye.xyz + d * (reach * a * a));
-  }
-  return lit / f32(kShaftSteps);
+  let s = sqrt(clamp(far / kShaftReach, 0.0, 1.0));
+  let w = max(s - 0.5 / kShaftSize.z, 0.5 / kShaftSize.z);
+  return textureSampleLevel(shaft_volume, linear_clamp, vec3f(uv, w), 0.0).r;
 }
 
 // The sun's light reaching a point at `world_y` (m) over the world's `xz`: illuminance times the
@@ -447,7 +469,7 @@ fn haze_air(colour: vec3f, uv: vec2f, dist_m: f32) -> vec3f {
     b = normalize(vec3f(b.x, max(b.y, 0.01), b.z));
     air += (1.0 - v.a) * select(moon_sky(b), sun_sky(b), frame.world.w > 0.5);
   }
-  let lit = shafts(view_ray(frame, uv), dist_m, uv * frame.size.xy);
+  let lit = shafts(uv, dist_m);
   air *= mix(1.0, lit, kShaftShare * (1.0 - frame.weather.y));
   let inscatter = mix(air, (1.0 - v.a) * deck_horizon(), frame.weather.y);
   var c = colour * mix(1.0, v.a, k) + inscatter * k;

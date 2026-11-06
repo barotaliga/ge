@@ -4,7 +4,9 @@
 // veil, an OVERCAST, a steady SNOW, a STORM and a valley FOG), from a named view, --frames frames
 // at 60 a second up to --at seconds into the run (--lift raises the view's pitch, degrees, to show
 // more of the sky; --turn swings it round to its heading over the frames, so the spread cloud
-// march reprojects a moving picture, and --spread=0 takes the quarter whole every frame).
+// march reprojects a moving picture, and --spread=0 takes the quarter whole every frame; --every=1
+// holds every pixel's own march spread over the frames, the quality ladder's top, in the
+// quarter's place).
 //
 // Beside each: the look's numbers (the sun's pass, the deck's cover, the visual range, the deck
 // overhead hidden, the cloud's layers, the share of the sky its lowest layer covers and the share
@@ -192,6 +194,7 @@ void run(ge::lab::Lab& lab) {
   const int height = static_cast<int>(lab.arg_num("height"));
   const double lift = lab.arg_num("lift");
   const bool spread_march = lab.arg_bool("spread");
+  const bool every = lab.arg_bool("every");
   const double turn = lab.arg_num("turn") * 3.14159265358979 / 180;
   if (lift < -60 || lift > 60) {
     lab.fail("--lift must be -60..60 degrees", "next: pass --lift=10.");
@@ -338,13 +341,20 @@ void run(ge::lab::Lab& lab) {
         ms->push_back(row);
       }
     };
-    // The cloud marched at every pixel first (the reference the quarter is held to), then at a
-    // quarter of them (spread over the frames unless --spread=0), the picture shot.
-    frame->options.cloud_quarter = false;
+    // The cloud marched at every pixel each frame first (the reference the quarter is held to),
+    // then at a quarter of them (spread over the frames unless --spread=0; with --every, every
+    // pixel's own march spread), the picture shot. set_picture binds the march's targets at the
+    // grain each asks for.
+    fall_line::app::FrameOptions reference = frame->options;
+    reference.cloud_quarter = false;
+    reference.cloud_spread = false;
+    fall_line::app::set_picture(*device, *frame, reference);
     draw_frames(nullptr);
     const ge::lab::Picture full{width, height, ge::gpu::read_now(*device, target).rgba};
-    frame->options.cloud_quarter = true;
-    frame->options.cloud_spread = spread_march;
+    fall_line::app::FrameOptions held = frame->options;
+    held.cloud_quarter = !every;
+    held.cloud_spread = spread_march;
+    fall_line::app::set_picture(*device, *frame, held);
     fall_line::app::cut(*frame);
     std::vector<std::array<double, 4>> frame_ms;
     draw_frames(&frame_ms);
@@ -435,6 +445,8 @@ const ge::lab::LabSpec kSpec{
         {"height", "360", "the picture's height, px"},
         {"lift", "0", "degrees added to the view's pitch (up), to show more of the sky"},
         {"spread", "1", "the cloud's quarter march spread over the frames (0: whole every frame)"},
+        {"every", "0",
+         "hold every pixel's own march (spread unless --spread=0) in the quarter's place"},
         {"turn", "0", "degrees a second the view turns to its heading over the frames"},
     },
     "--frames=2 --width=160 --height=90",

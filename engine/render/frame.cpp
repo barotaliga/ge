@@ -115,9 +115,9 @@ void fill_uniforms(FrameUniforms& u, const FrameView& view, uint32_t width, uint
   u.night[3] = static_cast<float>(n.latitude);
   // THE CLOUD (render/clouds.hpp).
   cloud_rows(view.clouds, u.cloud_info, u.clouds);
-  // Spread over frames only with the last frame's camera to reproject by; the stamp is 1..4096.
-  u.cloud_info[2] =
-      view.clouds.quarter && view.clouds.spread && had_history && !flash_near ? 1.0f : 0.0f;
+  // Spread over frames (at a quarter of the pixels or at every pixel's) only with the last frame's
+  // camera to reproject by; the stamp is 1..4096.
+  u.cloud_info[2] = view.clouds.spread && had_history && !flash_near ? 1.0f : 0.0f;
   u.cloud_info[3] = static_cast<float>(view.frame % kCloudStamps + 1);
   // THE MOON'S FACE AND THE EARTH'S SHADOW ON IT (render/night.hpp).
   for (int i = 0; i < 3; ++i) {
