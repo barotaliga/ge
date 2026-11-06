@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <functional>
 
+#include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
 
@@ -34,6 +35,11 @@ void start(Remote& r, const ClientConfig& cfg) {
     sh::MoveCmd m = r.hands;
     m.angles = r.view;
     r.hands.impulse = 0;  // an impulse goes once
+    // The easy jump on a server that does not run it: the client strafes for the player, off
+    // its newest prediction (shooter/speedjump_assist.hpp). Our servers run it themselves
+    // (`pm_speedjump` in the server info: any value, 0 included, turns the client's help off).
+    if (r.end.cfg.speedjump && r.predicted && info_get(r.end.serverinfo, "pm_speedjump").empty())
+      m = sh::assisted_command(m, r.ahead, kStockShare);
     return m;
   };
   client_start(r.end, *r.transport, r.server, c, 0);
@@ -138,7 +144,7 @@ std::vector<sh::ClientModel> movers_of(const Remote& r) {
 // move, steering round the other players where they are drawn. False when there is nothing to
 // predict from.
 bool predict_from(const Remote& r, const PlayerState& own, uint32_t acked, sh::Vec3f& out,
-                  int& replayed) {
+                  int& replayed, sh::MoveState* full = nullptr) {
   const ClassicClientEnd& c = r.end;
   if (!can_predict(r) || !c.player_seen[c.playernum] || acked == 0) return false;
   const sh::NetPlayer n = net_of(own);
@@ -156,7 +162,9 @@ bool predict_from(const Remote& r, const PlayerState& own, uint32_t acked, sh::V
   sh::MoveWorld world;
   sh::client_world((*r.world)[0], movers.data(), static_cast<int>(movers.size()), others.data(),
                    static_cast<int>(others.size()), world);
-  out = sh::predict_player(n, cmds, count, settings_of(c), world).origin;
+  const sh::MoveState ahead = sh::predict_player(n, cmds, count, settings_of(c), world);
+  out = ahead.origin;
+  if (full != nullptr) *full = ahead;
   replayed = count;
   return true;
 }
@@ -370,8 +378,9 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
   }
   predict_others(r, draw_s);
   sh::Vec3f now;
-  r.predicted = me >= 0 && me == r.end.playernum &&
-                predict_from(r, r.end.players[me], r.end.ch.incoming_acknowledged, now, r.replayed);
+  r.predicted =
+      me >= 0 && me == r.end.playernum &&
+      predict_from(r, r.end.players[me], r.end.ch.incoming_acknowledged, now, r.replayed, &r.ahead);
   if (r.predicted) {
     sh::Vec3f before;
     int unused = 0;
