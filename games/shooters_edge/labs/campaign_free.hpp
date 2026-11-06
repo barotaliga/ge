@@ -11,7 +11,7 @@
 // number is deterministic, so the lab's digest holds the whole episode.
 // Header-only, beside the labs (a lab's helper never goes into a library: the labs skill).
 //
-// ge:summary The campaign lab's free episode: our program played through three fixture maps, no pack
+// ge:summary The campaign lab's free episode: our program through three fixture maps, no pack
 // ge:keywords lab free-map free-episode campaign-variant monsters-to-exit scripted-player
 // ge:keywords exit-trigger campaign-lab arena-campaign episode-end rune finale key-door
 // ge:skill progs shooter labs
