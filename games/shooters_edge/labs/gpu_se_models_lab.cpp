@@ -9,13 +9,15 @@
 //
 // With `--pak` (a pack holding the map, its models and `gfx/palette.lmp`) it is the pack's own
 // map (`--map`, default e1m1); without one, the fixture halls (plugins/brush) with the fixture
-// model (plugins/morph) under the names the mod asks for, so the loader and the passes run on any
-// machine. The models loaded by kind and the things placed by kind are deterministic metrics; the
-// pictures are measured (each adapter rasterises its own way).
+// model (plugins/morph) under the names the mod asks for (`--models=iqm`: the test limb as a
+// skeletal model instead, assets/iqm.hpp), so the loader and the passes run on any machine. The
+// models loaded by kind and the things placed by kind are deterministic metrics; the pictures are
+// measured (each adapter rasterises its own way).
 //
 // ge:summary Lab: the window's models on a map (armour, health, ammo, weapons, flames), both looks
 // ge:keywords lab se-models world-models items armour health ammo weapons flames torches statics
-// ge:keywords classic modern r_look pak warp spawn-effect teleport-effect dust ash
+// ge:keywords classic modern r_look pak warp spawn-effect teleport-effect dust ash iqm
+// ge:keywords skeletal-model
 // ge:skill shooter render labs
 #include <algorithm>
 #include <bit>
@@ -26,6 +28,10 @@
 #include <string>
 #include <vector>
 
+#include "assets/image.hpp"
+#include "assets/iqm.hpp"
+#include "assets/test_model.hpp"
+#include "assets/tga.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/read.hpp"
 #include "brush/write.hpp"
@@ -67,7 +73,7 @@ ge::brush::Entity entity(std::initializer_list<std::pair<std::string, std::strin
 
 // The halls with a thing of each kind on the floor, the fixture model under every name they
 // ask for, and a palette of our own ramps, in a pack.
-bool fixture_pack(std::vector<uint8_t>& out, std::string& error) {
+bool fixture_pack(bool skeletal, std::vector<uint8_t>& out, std::string& error) {
   br::Fixture f = br::sample_fixture();
   f.entities.push_back(
       entity({{"classname", "info_player_deathmatch"}, {"origin", "64 192 40"}, {"angle", "0"}}));
@@ -77,7 +83,11 @@ bool fixture_pack(std::vector<uint8_t>& out, std::string& error) {
       entity({{"classname", "light_flame_large_yellow"}, {"origin", "232 160 24"}}));
   std::vector<uint8_t> bsp;
   if (!br::write_bsp(f, br::Family::v29, &bsp, &error)) return false;
-  const std::vector<uint8_t> model = ge::morph::write_model(ge::morph::sample_model());
+  // `--models=iqm`: the test limb as a skeletal model (a metre tall, 40 units) under every name,
+  // its `skin` material's picture beside it, so the window's skeletal path draws in its place.
+  const std::vector<uint8_t> model =
+      skeletal ? ge::assets::write_iqm(ge::assets::make_test_model(), {.metres = 0.025})
+               : ge::morph::write_model(ge::morph::sample_model());
   std::vector<uint8_t> palette(768);
   for (int i = 0; i < 256; ++i) {
     const int ramp = i / 16, v = (i % 16) * 16 + 8;
@@ -92,6 +102,16 @@ bool fixture_pack(std::vector<uint8_t>& out, std::string& error) {
   for (const char* name :
        {"progs/armor.mdl", "progs/g_rock2.mdl", "progs/flame2.mdl", "progs/player.mdl"})
     files.push_back({name, model});
+  if (skeletal) {
+    ge::assets::Image skin{16, 16, {}};
+    for (int y = 0; y < 16; ++y)
+      for (int x = 0; x < 16; ++x) {
+        const bool band = (y / 4) % 2 == 0;
+        skin.rgba.insert(skin.rgba.end(), {uint8_t(band ? 200 : 60), uint8_t(band ? 120 : 70),
+                                           uint8_t(band ? 40 : 160), 255});
+      }
+    files.push_back({"progs/skin.tga", ge::assets::encode_tga(skin, true)});
+  }
   return ge::vfs::write_pak(files, &out, &error);
 }
 
@@ -171,7 +191,14 @@ void run(gl::Lab& lab) {
   std::string map_name = own ? "halls" : lab.arg("map");
   if (own) {
     std::vector<uint8_t> pak;
-    if (!fixture_pack(pak, error) || !cl::add_archive(files, "pak0.pak", std::move(pak), error)) {
+    const std::string& kind = lab.arg("models");
+    if (kind != "mdl" && kind != "iqm") {
+      lab.fail("--models=" + kind + " is not a model kind the fixture holds",
+               "next: pass --models=mdl or --models=iqm. Skill: shooter.");
+      return;
+    }
+    if (!fixture_pack(kind == "iqm", pak, error) ||
+        !cl::add_archive(files, "pak0.pak", std::move(pak), error)) {
       lab.fail(error, "Read the fixture writers' refusal above. Skill: shooter.");
       return;
     }
@@ -1037,6 +1064,7 @@ const gl::LabSpec kSpec{
     {{"size", "960,540", "the frame's width and height, px"},
      {"pak", "", "a pack holding the map, its models and gfx/palette.lmp (empty: the fixture)"},
      {"map", "e1m1", "the pack's map to stand in (with --pak)"},
+     {"models", "mdl", "the fixture's models: mdl (classic) or iqm (a skeletal model, baked)"},
      {"progs", "", "a progs.src compiled and played as a single game (empty: the arena mod)"},
      {"cvars", "", "picture cvars run before the frames (r_look is set per shot)"}},
     "--size=480,270",
