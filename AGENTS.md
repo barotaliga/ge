@@ -275,6 +275,7 @@ characters.
 | `engine/water/` | The water (`ge::water`): bodies and the one `sample` query, the sea a wind grows over a fetch, floating, swimming, the colour from what is in the water, flowing water and its tiers | `water` |
 | `engine/detail/` | Brush detail (`ge::detail`, `docs/detail.md`): convex solids and bevels on their exposed edges, the receivers grid, decals that age in a pool, seeded props by rules and their shapes, the test hall | `detail` |
 | `engine/bake/` | The light bake (`ge::bake`): charts and the atlas, a BVH ray tracer, direct light, colour bounce and the light's direction a luxel, worked out once on the CPU | `render` |
+| `engine/particles/` | Particle effects as data (`ge::particles`): the effect text a game or a mod ships, read into a book with faults by line, and a burst or a trail thrown from it on a seed; no GPU | `render` |
 | `engine/grass/` | The grass (`ge::grass`): kinds and recipes, covers from a heightfield's region or a mesh's floors, every blade scattered off its triangle's seed, a blade's sway in the engine's wind | `grass` |
 | `engine/cli/` | The `ge` command line for game repos (`cmake/Cli.cmake`): the command catalog, the answer shape and findings, and one file per command group | `agent-interface` |
 | `consumer-skills/` | The skills a game repo gets from `ge new` and `ge skills sync`, compiled into `ge`; written for a game repo, never for this one | `agent-interface` |

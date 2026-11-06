@@ -533,8 +533,20 @@ int run_main(int argc, char** argv) {
   cl::FxState fx_state;
   cl::FxFrame fx;
   // The pack's palette for the classic effects' specks, read again when the game folder changes.
+  // and the effects the game's files define (particles/*.fx, world_fx.hpp), read with it.
   std::vector<uint8_t> fx_palette;
+  ge::particles::Book fx_book;
   bool fx_palette_read = false;
+  const auto read_fx_files = [&] {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> pal = cl::find_file(files, "gfx/palette.lmp", store);
+    fx_palette.assign(pal.begin(), pal.end());
+    fx_book = {};
+    std::vector<std::string> faults;
+    cl::load_effects(files, fx_book, faults);
+    for (const std::string& f : faults) console.print("particles: " + f);
+    fx_palette_read = true;
+  };
   cl::HeldState in_hand;
   in_hand.hand.at_eye = weapons_at_eye;
   // LOAD GAME's folder and the console's `basedir` (client/game_folder.hpp): the install opened in
@@ -910,12 +922,11 @@ int run_main(int argc, char** argv) {
       }
       // Its entities, other players and effects (its explosions, trails, hits, beams).
       if (!fx_palette_read) {
-        std::vector<uint8_t> store;
-        const std::span<const uint8_t> pal = cl::find_file(files, "gfx/palette.lmp", store);
-        fx_palette.assign(pal.begin(), pal.end());
-        fx_palette_read = true;
+        read_fx_files();
+        bench_fx_state.palette.clear();
       }
       if (bench_fx_state.palette.empty()) bench_fx_state.palette = fx_palette;
+      bench_fx_state.book = &fx_book;
       bench_fx_state.models = &cl::world_models(*world);
       bench_fx_state.on = cl::fx_switches(picture);
       cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, t, wall, bench_fx);
@@ -1020,13 +1031,11 @@ int run_main(int argc, char** argv) {
     view.frame = static_cast<uint64_t>(presented);
     fx_state.models = world ? &cl::world_models(*world) : nullptr;
     if (!fx_palette_read) {
-      std::vector<uint8_t> store;
-      const std::span<const uint8_t> pal = cl::find_file(files, "gfx/palette.lmp", store);
-      fx_palette.assign(pal.begin(), pal.end());
-      fx_palette_read = true;
+      read_fx_files();
       fx_state.palette.clear();
     }
     if (fx_state.palette.empty()) fx_state.palette = fx_palette;
+    fx_state.book = &fx_book;
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
     const shooters_edge::view::HandFrame hand =

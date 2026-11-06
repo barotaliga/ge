@@ -2235,6 +2235,22 @@ the silhouette, not the folds. The `crowd-look` lab
 films a lift's queue, a busy run, a group and one of them down at `--hour` (11: the sun on the
 runs), each with the crowd and without.
 
+### Effects as data
+
+A particle effect can be a few lines of text instead of code (`engine/particles/effect.hpp`,
+`ge::particles`, no GPU): `effect <name>` and its emitters, each a `burst <count>` thrown at once
+or a `trail <spacing>` laid along a flight, with where the specks start (`box`, `ball`), how they
+leave (`speed` any way, `along` the effect's way, `rise`), how long and how big, how they fall
+and slow, their colour (linear, or a run of the game's palette) and whether they shine as unlit
+specks or hang as lit smoke, how they cool, grow, streak and bounce, and an effect's light.
+Lengths are the game's own unit, scaled by `Throw::metres`. A file is read whole or refused with
+its file, line and fix; a later effect of a name replaces it, so a mod's file wins over its game's.
+`throw_effect` and `throw_trail` are pure functions of the place and a seed; `render/spark.hpp`
+copies the specks into the pool. The `gpu-particle-effects` lab throws a sample book on the yard
+and pictures it, and lists the faults a bad file meets. Shooter's Edge reads `particles/*.fx`
+from the game's files and throws an effect of a classic effect's name in its place
+(`docs/shooters-edge.md`).
+
 ### Beams
 
 A held electric beam (a weapon's lightning gun, a machine's arc, a spell) is a channel of

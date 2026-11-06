@@ -95,6 +95,40 @@ bool fixture_pack(const std::string& format, std::vector<uint8_t>& out, std::str
   return ge::vfs::write_pak({{"maps/halls.bsp", bsp}, {"demo1.dem", demo}}, &out, &error);
 }
 
+// `--particles=sample`: a mod's own effects (engine/particles/effect.hpp) in a pack of their own
+// over the game's, thrown in place of the classic blast and rocket trail (the classic look).
+constexpr const char* kSampleEffects = R"(# The lab's sample: a mod's own blast and rocket trail.
+effect explosion
+  light 300 0.4 1 0.5 0.6
+  burst 400
+    ball 12
+    speed 120 260
+    life 0.4 0.9
+    size 6 9
+    colour 0.3 1 0.4 0.9 1 0.2
+    cool 0.5 0.15
+    fall 40
+    drag 1
+  burst 40
+    ball 24
+    rise 20 50
+    life 1.5 2.5
+    size 24 40
+    smoke 0.35 0.5
+    grow 30
+    fall 0
+
+effect rocket_trail
+  trail 2
+    box 1
+    speed 4 12
+    life 0.4 0.7
+    size 1.5 2
+    colour 0.3 0.6 1 0.8 0.9 1
+    cool 0.3 0.2
+    fall -20
+)";
+
 // One play of the demo with `picture` (and the HUD unless `no_hud`): every timed frame and its
 // GPU span; the three pictures when `picks` is given.
 // A point in front of the demo's eye: within about 40 degrees of where it looks.
@@ -116,6 +150,7 @@ struct Played {
   std::string stop;
   int64_t explosions = 0, effects = 0;  // the demo's temporary entities read (demo_fx.hpp)
   int64_t blast_frame = -1;             // the frame the `blast` picture caught (-1: none)
+  int64_t scripted = 0;                 // the effects the game's files define (particles/*.fx)
   // With `zones` asked for: each timing zone's ms in every timed frame (prof/zones.hpp), the
   // zones in the order they first opened.
   bool zones = false;
@@ -147,6 +182,13 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
   cl::FxState fx_state;  // the demo's effects as they live, as the window
   cl::DemoFx demo_fx;
   fx_state.on = cl::fx_switches(picture);
+  ge::particles::Book book;  // the game's files' effects, as the window reads them
+  std::vector<std::string> faults;
+  cl::load_effects(rig.files, book, faults);
+  for (const std::string& f : faults)
+    rig.lab.fail("particles: " + f, "Fix the file. Skill: render.");
+  fx_state.book = &book;
+  p.scripted = static_cast<int64_t>(book.effects.size());
   {
     std::vector<uint8_t> store;
     const std::span<const uint8_t> pal = cl::find_file(rig.files, "gfx/palette.lmp", store);
@@ -350,6 +392,21 @@ void run(gl::Lab& lab) {
     lab.fail(error, "Pass --basedir=<the folder that holds the game folder>. Skill: shooter.");
     return;
   }
+  if (lab.arg("particles") == "sample") {
+    std::vector<uint8_t> pak;
+    const std::string_view text = kSampleEffects;
+    if (!ge::vfs::write_pak(
+            {{"particles/sample.fx", std::vector<uint8_t>(text.begin(), text.end())}}, &pak,
+            &error) ||
+        !cl::add_archive(files, "particles.pak", std::move(pak), error)) {
+      lab.fail(error, "Read the reason above. Skill: shooter.");
+      return;
+    }
+  } else if (!lab.arg("particles").empty()) {
+    lab.fail("--particles=" + lab.arg("particles") + " is not one the lab knows",
+             "Pass --particles=sample, or leave it out. Skill: shooter.");
+    return;
+  }
   if (!shooters_edge::labs::stage_asked(lab, files)) return;
   {
     cl::Timedemo probe;
@@ -419,6 +476,7 @@ void run(gl::Lab& lab) {
   lab.metric("demo.levels", levels, "count");
   lab.metric("demo.explosions", static_cast<double>(base.explosions), "count");
   lab.metric("demo.effects", static_cast<double>(base.effects), "count");
+  lab.metric("particles.effects", static_cast<double>(base.scripted), "count");
   lab.metric("fps.average", s.avg_fps, "fps", gl::Det::measured);
   lab.metric("fps.max", s.max_fps, "fps", gl::Det::measured);
   lab.metric("fps.min", s.min_fps, "fps", gl::Det::measured);
@@ -589,6 +647,8 @@ const gl::LabSpec kSpec{
      {"game", ge::classicenhance::kProfiles[0].base_dir.data(), "the game folder under --basedir"},
      {"demo", "demo1", "the demo to play, by name or path"},
      {"look", "", "r_look for the run: classic or modern (empty: the game's default)"},
+     {"particles", "",
+      "sample: a mod's own blast and rocket trail as effect text over the game's (classic look)"},
      {"price", "0",
       "1: play the demo again with each drawn ce_ switch off in turn (and without the HUD), each "
       "between two all-on runs, and chart what each saved off the whole frame"},
