@@ -252,10 +252,11 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
   wgpu::ConstantEntry tile{};
   tile.key = "kTile";
   tile.value = kTileQuads;
-  auto pipeline = [&](const char* label, const char* entry,
-                      std::initializer_list<wgpu::TextureFormat> targets, bool write_depth,
-                      wgpu::CompareFunction compare, bool add,
-                      wgpu::PrimitiveTopology topology = wgpu::PrimitiveTopology::TriangleList) {
+  auto pipeline_of = [&](const wgpu::ShaderModule& shader, const wgpu::PipelineLayout& layout_of,
+                         const char* label, const char* entry,
+                         std::initializer_list<wgpu::TextureFormat> targets, bool write_depth,
+                         wgpu::CompareFunction compare, bool add,
+                         wgpu::PrimitiveTopology topology = wgpu::PrimitiveTopology::TriangleList) {
     wgpu::BlendState blend{};
     blend.color = {wgpu::BlendOperation::Add, wgpu::BlendFactor::One, wgpu::BlendFactor::One};
     blend.alpha = blend.color;
@@ -267,7 +268,7 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
       colours.push_back(c);
     }
     wgpu::FragmentState fragment{};
-    fragment.module = draw;
+    fragment.module = shader;
     fragment.entryPoint = entry;
     fragment.targetCount = colours.size();
     fragment.targets = colours.data();
@@ -277,8 +278,8 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
     depth.depthCompare = compare;
     wgpu::RenderPipelineDescriptor desc{};
     desc.label = label;
-    desc.layout = draw_layout;
-    desc.vertex.module = draw;
+    desc.layout = layout_of;
+    desc.vertex.module = shader;
     desc.vertex.entryPoint = "vs_main";
     desc.vertex.constantCount = 1;
     desc.vertex.constants = &tile;
@@ -288,10 +289,30 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
     desc.fragment = entry ? &fragment : nullptr;
     return pipelines.add_render(device, desc);
   };
+  auto pipeline = [&](const char* label, const char* entry,
+                      std::initializer_list<wgpu::TextureFormat> targets, bool write_depth,
+                      wgpu::CompareFunction compare, bool add,
+                      wgpu::PrimitiveTopology topology = wgpu::PrimitiveTopology::TriangleList) {
+    return pipeline_of(draw, draw_layout, label, entry, targets, write_depth, compare, add,
+                       topology);
+  };
   using CF = wgpu::CompareFunction;
   t.p_depth = pipeline("terrain.depth", nullptr, {}, true, CF::Greater, false);
   t.p_draw =
       pipeline("terrain.draw", "fs_main", {kHdrFormat, kMotionFormat}, false, CF::Equal, false);
+  // The default material's pair, each from its own module (the prepass and the colour pass of
+  // one material share a vertex stage, so their depths are the same bits).
+  t.has_plain = t.has_material && source.plain_too;
+  t.plain = false;
+  if (t.has_plain) {
+    const wgpu::ShaderModule plain = gpu::create_shader(device, wgsl::terrain, "terrain.plain");
+    const wgpu::PipelineLayout plain_layout =
+        make_pipeline_layout(device, "terrain.plain", {frame, t.layout, sun_shadow_layout(device)});
+    t.p_depth_plain = pipeline_of(plain, plain_layout, "terrain.depth.plain", nullptr, {}, true,
+                                  CF::Greater, false);
+    t.p_draw_plain = pipeline_of(plain, plain_layout, "terrain.draw.plain", "fs_main",
+                                 {kHdrFormat, kMotionFormat}, false, CF::Equal, false);
+  }
   if (source.overdraw_probe) {
     const auto r16 = wgpu::TextureFormat::R16Float;
     t.p_count_equal = pipeline("terrain.count.equal", "fs_count", {r16}, false, CF::Equal, true);
@@ -367,15 +388,19 @@ void bind_terrain_shadows(Terrain& t, const wgpu::BindGroup& shadows) { t.shadow
 
 void bind_terrain_material(Terrain& t, const wgpu::BindGroup& material) { t.material = material; }
 
+void set_terrain_plain(Terrain& t, bool on) { t.plain = on && t.has_plain; }
+
 namespace {
 
+// `material`: the pipeline is the game's material's (its group 3 bound), not the plain one's.
 void draw_tiles(const Terrain& t, wgpu::RenderPassEncoder& pass, uint32_t pipeline_id,
-                const gpu::PipelineSet& pipelines, const wgpu::BindGroup& frame) {
+                const gpu::PipelineSet& pipelines, const wgpu::BindGroup& frame,
+                bool material = true) {
   pass.SetPipeline(pipelines.render(pipeline_id));
   pass.SetBindGroup(0, frame);
   pass.SetBindGroup(1, t.group);
   pass.SetBindGroup(2, t.shadows);
-  if (t.has_material) pass.SetBindGroup(3, t.material);
+  if (t.has_material && material) pass.SetBindGroup(3, t.material);
   pass.SetIndexBuffer(t.indices, wgpu::IndexFormat::Uint16);
   pass.DrawIndexedIndirect(t.indirect, 0);
 }
@@ -402,7 +427,7 @@ void encode_terrain_depth(const Terrain& t, const gpu::PipelineSet& pipelines, F
   wgpu::RenderPassDescriptor desc{};
   desc.depthStencilAttachment = &depth;
   wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "terrain.depth");
-  draw_tiles(t, pass, t.p_depth, pipelines, frame);
+  draw_tiles(t, pass, t.plain ? t.p_depth_plain : t.p_depth, pipelines, frame, !t.plain);
   ++rec.current().draws;
   pass.End();
 }
@@ -425,7 +450,7 @@ void encode_terrain(const Terrain& t, const gpu::PipelineSet& pipelines, FrameRe
   desc.colorAttachments = colours;
   desc.depthStencilAttachment = &depth;
   wgpu::RenderPassEncoder pass = rec.render(encoder, desc, "terrain");
-  draw_tiles(t, pass, t.p_draw, pipelines, frame);
+  draw_tiles(t, pass, t.plain ? t.p_draw_plain : t.p_draw, pipelines, frame, !t.plain);
   ++rec.current().draws;
   pass.End();
 }

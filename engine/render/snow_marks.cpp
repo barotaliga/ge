@@ -158,6 +158,26 @@ void marks_from_records(std::span<const snow::ImprintRecord> records, std::vecto
   }
 }
 
+namespace {
+
+constexpr auto kMarkFormat = wgpu::TextureFormat::RGBA8Unorm;
+
+// The maps at the options' sizes over the coarse map's square (`t.coarse_rect`'s origin and
+// side), their rects and the stamp pass's groups.
+void make_mark_maps(gpu::Device& device, SnowMarks& t) {
+  const MarkOptions& o = t.options;
+  t.coarse_rect.texel = t.coarse_rect.span / static_cast<float>(o.coarse_size);
+  t.fine = gpu::create_target(device, t.pass_names[0], o.fine_size, o.fine_size, kMarkFormat);
+  t.coarse = gpu::create_target(device, t.pass_names[1], o.coarse_size, o.coarse_size, kMarkFormat);
+  write_rect(device, t.rects[1], t.coarse_rect);
+  write_rect(device, t.rects[0], fine_rect(t));
+  for (int k = 0; k < 2; ++k) {
+    t.groups[k] = make_group(device, t.pass_names[k], t.layout, {t.rects[k], t.stamps});
+  }
+}
+
+}  // namespace
+
 void create_snow_marks(gpu::Device& device, gpu::PipelineSet& pipelines, SnowMarks& t, double x0,
                        double z0, double extent, const MarkOptions& options) {
   t.options = options;
@@ -166,23 +186,15 @@ void create_snow_marks(gpu::Device& device, gpu::PipelineSet& pipelines, SnowMar
   t.pass_names[1] = l + ".coarse";
   t.coarse_rect = {static_cast<float>(x0), static_cast<float>(z0), static_cast<float>(extent),
                    static_cast<float>(extent / options.coarse_size)};
-  constexpr auto kFormat = wgpu::TextureFormat::RGBA8Unorm;
-  t.fine =
-      gpu::create_target(device, t.pass_names[0], options.fine_size, options.fine_size, kFormat);
-  t.coarse = gpu::create_target(device, t.pass_names[1], options.coarse_size, options.coarse_size,
-                                kFormat);
+  constexpr auto kFormat = kMarkFormat;
   t.stamps = make_buffer(device, l + ".stamps", uint64_t{options.capacity} * sizeof(MarkStamp),
                          wgpu::BufferUsage::Storage);
   t.rects[0] = make_buffer(device, l + ".fine.rect", sizeof(MarkRect), wgpu::BufferUsage::Uniform);
   t.rects[1] =
       make_buffer(device, l + ".coarse.rect", sizeof(MarkRect), wgpu::BufferUsage::Uniform);
-  write_rect(device, t.rects[1], t.coarse_rect);
-  write_rect(device, t.rects[0], fine_rect(t));
   t.layout = make_layout(device, l, {Slot::uniform, Slot::storage_read},
                          wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment);
-  for (int k = 0; k < 2; ++k) {
-    t.groups[k] = make_group(device, t.pass_names[k], t.layout, {t.rects[k], t.stamps});
-  }
+  make_mark_maps(device, t);
   const wgpu::ShaderModule module = gpu::create_shader(device, wgsl::snow_marks, l);
   wgpu::BlendState blend{};
   blend.color.operation = wgpu::BlendOperation::Max;
@@ -209,6 +221,19 @@ void create_snow_marks(gpu::Device& device, gpu::PipelineSet& pipelines, SnowMar
   t.bucket_cols = static_cast<int>(std::ceil(extent / kBucket)) + 1;
   t.bucket_rows = t.bucket_cols;
   t.buckets.assign(static_cast<size_t>(t.bucket_cols) * static_cast<size_t>(t.bucket_rows), {});
+}
+
+void resize_snow_marks(gpu::Device& device, SnowMarks& t, uint32_t fine_size,
+                       uint32_t coarse_size) {
+  t.options.fine_size = fine_size;
+  t.options.coarse_size = coarse_size;
+  make_mark_maps(device, t);
+  // Both drawn again from the history: the fine map's window placed anew (a redraw from its
+  // buckets), the coarse map's every stamp.
+  t.placed = false;
+  t.fine_clear = true;
+  t.coarse_clear = true;
+  t.pending = t.history;
 }
 
 void add_mark_stamps(SnowMarks& t, std::span<const MarkStamp> stamps) {

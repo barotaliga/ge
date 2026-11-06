@@ -279,6 +279,19 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
   d.cubes = depth_array(device, "bsp.cubes", kCubeSize, kMaxShadowed * 6);
   for (uint32_t k = 0; k < kMaxShadowed * 6; ++k) d.cube_layers.push_back(layer_view(d.cubes, k));
   d.cubes_view = array_view(d.cubes, kMaxShadowed * 6);
+  {
+    // One atlas, a row a light and a column a face, so a frame draws them all in one pass.
+    wgpu::TextureDescriptor desc{};
+    desc.label = "bsp.casters";
+    desc.size = {kCasterSize * 6, kCasterSize * uint32_t(kCasterLights + 1), 1};
+    desc.format = r::kDepthFormat;
+    desc.usage = wgpu::TextureUsage::RenderAttachment | wgpu::TextureUsage::TextureBinding;
+    d.caster_cubes = device.device.CreateTexture(&desc);
+    d.caster_target = layer_view(d.caster_cubes, 0);
+    d.caster_cubes_view = array_view(d.caster_cubes, 1);
+  }
+  d.caster_vertices = r::make_buffer(device, "bsp.casters", sizeof(float) * 3 * kMaxCasterVerts,
+                                     wgpu::BufferUsage::Vertex);
   d.orthos = depth_array(device, "bsp.orthos", kOrthoSize, kOrthos);
   for (uint32_t k = 0; k < kOrthos; ++k) d.ortho_layers[k] = layer_view(d.orthos, k);
   d.orthos_view = array_view(d.orthos, kOrthos);
@@ -311,24 +324,25 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
   d.grid = r::make_buffer(device, "bsp.grid", sizeof(uint32_t) * (kGridCells + 1 + kMaxGridRefs),
                           wgpu::BufferUsage::Storage);
   d.grid_rows.assign(kGridCells + 1 + kMaxGridRefs, 0);
-  d.jobs = r::make_buffer(device, "bsp.jobs", sizeof(GpuJob) * (kMaxShadowed * 6 + kOrthos),
+  d.jobs = r::make_buffer(device, "bsp.jobs",
+                          sizeof(GpuJob) * (kMaxShadowed * 6 + kOrthos + kCasterLights * 6 + 1),
                           wgpu::BufferUsage::Storage);
 
   using r::Slot;
   const auto both = wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment;
-  d.layout =
-      r::make_layout(device, "bsp",
-                     {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler,
-                      Slot::storage_read, Slot::depth_array, Slot::compare, Slot::depth_array,
-                      Slot::texture, Slot::texture, Slot::storage_read, Slot::storage_read,
-                      Slot::texture, Slot::texture, Slot::texture, Slot::storage_read},
-                     both);
-  d.group =
-      r::make_group(device, "bsp", d.layout,
-                    {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler,
-                     d.lights, d.cubes_view, d.compare, d.orthos_view, d.rebake_rgb.CreateView(),
-                     d.rebake_dir.CreateView(), d.frames, d.movers, d.surface.CreateView(),
-                     d.rebake_bounce.CreateView(), d.cover.CreateView(), d.grid});
+  d.layout = r::make_layout(
+      device, "bsp",
+      {Slot::uniform, Slot::texture, Slot::texture, Slot::sampler, Slot::storage_read,
+       Slot::depth_array, Slot::compare, Slot::depth_array, Slot::texture, Slot::texture,
+       Slot::storage_read, Slot::storage_read, Slot::texture, Slot::texture, Slot::texture,
+       Slot::storage_read, Slot::depth_array},
+      both);
+  d.group = r::make_group(
+      device, "bsp", d.layout,
+      {d.uniform, d.atlas.CreateView(), d.light.CreateView(), d.light_sampler, d.lights,
+       d.cubes_view, d.compare, d.orthos_view, d.rebake_rgb.CreateView(), d.rebake_dir.CreateView(),
+       d.frames, d.movers, d.surface.CreateView(), d.rebake_bounce.CreateView(),
+       d.cover.CreateView(), d.grid, d.caster_cubes_view});
   d.fix_layout = r::make_layout(device, "bsp.sky", {Slot::texture, Slot::uniform},
                                 wgpu::ShaderStage::Fragment);
   d.shadow_layout = r::make_layout(device, "bsp.shadows", {Slot::storage_read}, both);
@@ -457,6 +471,18 @@ void create_bsp(gpu::Device& device, gpu::PipelineSet& pipelines, BspDraw& d, co
     desc.depthStencil = &depth;
     desc.fragment = &fragment;
     d.p_shadow = pipelines.add_render(device, desc);
+    // The moving casters: the same shader over their bare positions.
+    wgpu::VertexAttribute at{};
+    at.format = wgpu::VertexFormat::Float32x3;
+    at.offset = 0;
+    at.shaderLocation = 0;
+    wgpu::VertexBufferLayout bare{};
+    bare.arrayStride = sizeof(float) * 3;
+    bare.attributeCount = 1;
+    bare.attributes = &at;
+    desc.label = "bsp.casters";
+    desc.vertex.buffers = &bare;
+    d.p_caster = pipelines.add_render(device, desc);
   }
   create_bsp_cull(device, pipelines, d.cull, scene, chunk_of, d.indices, frame);
   d.lava = lava_lights(scene, 1150, 0.3);
@@ -538,7 +564,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     if (picks.size() > size_t(std::min(o.most, 512))) picks.resize(size_t(std::min(o.most, 512)));
   }
   d.frame_lights.clear();
-  d.frame_jobs.assign(size_t(kMaxShadowed) * 6 + kOrthos, GpuJob{});
+  d.frame_jobs.assign(size_t(kMaxShadowed) * 6 + kOrthos + size_t(kCasterLights) * 6 + 1, GpuJob{});
   // The nearest lights that cast shadows, by their index in frame_lights.
   std::vector<size_t> casters;
   for (const Pick& p : picks) {
@@ -560,6 +586,8 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     const double soft = std::max(fire_light_size(l, o.bonfires), l.soft_m);
     // An aimed light: full inside info.w's cosine, none outside spot.w's.
     set4(g.info, -1, soft * soft, 0, l.spot ? l.cone_cos[0] : -1);
+    // Its shadows as soft as its source is big: a flame's over its size, a bulb's sharp.
+    set4(g.more, -1, std::max(soft * kFlameWidthShare, kPointSourceM), 0, 0);
     if (l.spot)
       set4(g.spot, l.dir[0], l.dir[1], l.dir[2], l.cone_cos[1]);
     else
@@ -641,6 +669,33 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   }
   const int shadowed = int(casters.size());
   d.shadowed = shadowed;
+  // The moving casters as capsules: the nearest the eye, each its box's vertical capsule.
+  {
+    const std::vector<Capsule> caps =
+        lights ? shadow_capsules(d.caster_boxes, view.eye) : std::vector<Capsule>{};
+    set4(d.staged.capsule_info, double(caps.size()), 0, 0, 0);
+    for (size_t c = 0; c < caps.size(); ++c) {
+      set4(d.staged.capsules[c * 2], caps[c].a[0], caps[c].a[1], caps[c].a[2], caps[c].r);
+      set4(d.staged.capsules[c * 2 + 1], caps[c].b[0], caps[c].b[1], caps[c].b[2], 0);
+    }
+  }
+  // The moving casters: the shadowed lights that light one of them most, each a cube of them
+  // this frame.
+  d.caster_lights = 0;
+  d.caster_count = 0;
+  if (lights && !d.casters.empty()) {
+    d.caster_count = uint32_t(std::min<size_t>(d.casters.size() / 3, kMaxCasterVerts) / 3 * 3);
+    for (const size_t c : caster_lights(d.frame_lights, casters, d.caster_boxes, view.eye)) {
+      GpuLight& g = d.frame_lights[c];
+      const int n = d.caster_lights++;
+      g.more[0] = float(n);
+      for (int f = 0; f < 6; ++f) {
+        GpuJob j = d.frame_jobs[size_t(g.info[0]) + size_t(f)];  // the world cube's face
+        set4(j.o, g.pos[0], g.pos[1], g.pos[2], g.pos[3]);
+        d.frame_jobs[size_t(kMaxShadowed) * 6 + kOrthos + size_t(n) * 6 + size_t(f)] = j;
+      }
+    }
+  }
   // The classic's and v2's lightmaps: the dynamic lights added to the lightmaps' light.
   if (!lights) {
     for (size_t i = 0; i < d.dynamic.size() && i < size_t(kMaxDynamic); ++i) {
@@ -651,6 +706,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       set4(g.colour, dl.colour[0] * k, dl.colour[1] * k, dl.colour[2] * k, 0);
       set4(g.info, -1, 0, 1, 0);
       set4(g.spot, 0, -1, 0, -2);
+      set4(g.more, -1, kPointSourceM, 0, 0);
       d.frame_lights.push_back(g);
     }
   }
@@ -664,6 +720,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   const double toward[3] = {-sun[0], -sun[1], -sun[2]};
   const double down[3] = {0, -1, 0};
   d.staged.ortho[0] = ortho_job(toward, centre, radius, radius);
+  // The moving casters along the sun, round the eye, the depth as deep as the map's.
+  d.sun_caster = lights && !d.casters.empty() && sun[1] > 0;
+  d.staged.sun_caster = ortho_job(toward, view.eye, kSunCasterHalfM, 2 * radius);
+  d.staged.sun_caster.info[2] = d.sun_caster ? 1.0f : 0.0f;
+  d.frame_jobs.back() = d.staged.sun_caster;
   d.staged.ortho[1] = ortho_job(down, centre, radius, radius);
   // The fall's: along the way the rain and the snow come, kept off the level (a gale's snow
   // driven near flat still comes from the sky).
@@ -748,6 +809,9 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
                              (size_t(kGridCells) + 1 + d.grid_refs) * sizeof(uint32_t));
   }
   device.queue.WriteBuffer(d.jobs, 0, d.frame_jobs.data(), d.frame_jobs.size() * sizeof(GpuJob));
+  if (d.caster_lights > 0)
+    device.queue.WriteBuffer(d.caster_vertices, 0, d.casters.data(),
+                             size_t(d.caster_count) * 3 * sizeof(float));
   if (d.movers_dirty) {
     device.queue.WriteBuffer(d.movers, 0, d.mover_rows.data(),
                              d.mover_rows.size() * sizeof(GpuMover));
@@ -777,6 +841,12 @@ void set_dynamic_lights(BspDraw& d, std::span<const DynamicLight> lights) {
   d.dynamic.assign(lights.begin(), lights.end());
 }
 
+void set_shadow_casters(BspDraw& d, std::span<const float> triangles,
+                        std::span<const CasterBox> boxes) {
+  d.casters.assign(triangles.begin(), triangles.end());
+  d.caster_boxes.assign(boxes.begin(), boxes.end());
+}
+
 void set_light_style(BspDraw& d, int style, std::string_view pattern) {
   if (style >= 0 && style < kLightStyles) d.light_styles[size_t(style)] = pattern;
 }
@@ -793,7 +863,8 @@ void encode_bsp_shadows(const BspDraw& d, const gpu::PipelineSet& pipelines, r::
   // that moved (the zenith's also for the lightning, and the fall's, with the weather on); timed
   // together as "bsp.shadows".
   const int cube_passes = lights ? int(d.fresh_slots.size()) * 6 : 0;
-  int parts = cube_passes;
+  const int caster_passes = lights && (d.caster_lights > 0 || d.sun_caster) ? 1 : 0;
+  int parts = cube_passes + caster_passes;
   for (uint32_t k = 0; k < kOrthos; ++k) parts += d.ortho_fresh[k] ? 1 : 0;
   if (parts == 0) rec.compute(encoder, "bsp.shadows").End();
   {
@@ -824,6 +895,36 @@ void encode_bsp_shadows(const BspDraw& d, const gpu::PipelineSet& pipelines, r::
           shadow_pass(d.cube_layers[size_t(slot) * 6 + size_t(f)], uint32_t(slot * 6 + f), true);
     for (uint32_t k = 0; k < kOrthos; ++k)
       if (d.ortho_fresh[k]) shadow_pass(d.ortho_layers[k], first_ortho + k, false);
+    // The moving casters, every frame: each lit cube's six faces of them alone, every face its
+    // tile of the atlas in one pass (a pass a face cost 0.1 ms each on a tiled GPU, whatever it
+    // drew).
+    if (caster_passes > 0) {
+      const uint32_t first_caster = first_ortho + kOrthos;
+      wgpu::RenderPassDepthStencilAttachment depth{};
+      depth.view = d.caster_target;
+      depth.depthLoadOp = wgpu::LoadOp::Clear;
+      depth.depthStoreOp = wgpu::StoreOp::Store;
+      depth.depthClearValue = 1.0f;
+      wgpu::RenderPassDescriptor desc{};
+      desc.depthStencilAttachment = &depth;
+      wgpu::RenderPassEncoder pass = rec.render_part(encoder, desc, "bsp.shadows", part++, parts);
+      pass.SetPipeline(pipelines.render(d.p_caster));
+      pass.SetBindGroup(0, d.shadow_group);
+      pass.SetVertexBuffer(0, d.caster_vertices);
+      const float size = float(kCasterSize);
+      for (int n = 0; n < d.caster_lights; ++n)
+        for (int f = 0; f < 6; ++f) {
+          pass.SetViewport(float(f) * size, float(n) * size, size, size, 0, 1);
+          ++rec.current().draws;
+          pass.Draw(d.caster_count, 1, 0, first_caster + uint32_t(n * 6 + f));
+        }
+      if (d.sun_caster) {
+        pass.SetViewport(0, float(kCasterLights) * size, size, size, 0, 1);
+        ++rec.current().draws;
+        pass.Draw(d.caster_count, 1, 0, first_caster + uint32_t(kCasterLights * 6));
+      }
+      pass.End();
+    }
   }
 }
 

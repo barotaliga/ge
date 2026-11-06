@@ -16,6 +16,7 @@
 // ge:keywords snow snow-material snow-look corduroy groomed piste lanes micro-relief glitter
 // ge:keywords glints crystal wrap-lighting terminator glare sheen rock-share ground-map
 // ge:keywords bake_snow_ground create_snow snow_shader rock_share snowlook tracks trail-maps
+// ge:keywords bind_snow_trails
 // ge:skill mountain render
 // ge:test tests/mountain_snow_test.cpp
 #pragma once
@@ -48,12 +49,16 @@ struct SnowMaterial {
   wgpu::Buffer params;
   wgpu::Texture no_trail;    // without trail maps: a clear texel for both
   wgpu::Buffer no_rects[2];  // and rects that lie nowhere
+  wgpu::TextureView ground_view;
 };
 
 // The material for `level`: its ground map uploaded, its gains, its layout and group, reading
 // `trails`' maps (none: no tracks).
 void create_snow(gpu::Device& device, SnowMaterial& snow, const mapgen::Level& level,
                  const SnowLook& look = {}, const Trails* trails = nullptr);
+// The group made again over `trails`' maps (none: no tracks), the ground and the gains kept: the
+// trails turned on or off, or their maps made again at a new size, in a live frame.
+void bind_snow_trails(gpu::Device& device, SnowMaterial& snow, const Trails* trails);
 // The gains changed (labs).
 void set_snow_look(gpu::Device& device, SnowMaterial& snow, const SnowLook& look);
 

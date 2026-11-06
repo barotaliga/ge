@@ -381,6 +381,47 @@ bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::v
   return !out.empty();
 }
 
+void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const Placed* self,
+                    const gr::FrameView& view, std::vector<float>& out,
+                    std::vector<ge::brush::app::CasterBox>& boxes) {
+  out.clear();
+  boxes.clear();
+  std::vector<float> body;
+  const auto cast = [&](const Placed& p) {
+    if (size_t(p.modelindex) >= m.kinds.size()) return;
+    const ModelKind& k = m.kinds[size_t(p.modelindex)];
+    if (k.is != ModelKind::Is::alias || k.effect.starts_with("fire")) return;
+    if (p.warp.shown < 1) return;  // half ash: its shadow would be whole
+    double w[3];
+    to_world(p.origin, w);
+    const double dx = w[0] - view.eye[0], dy = w[1] - view.eye[1], dz = w[2] - view.eye[2];
+    if (dx * dx + dy * dy + dz * dz > kCasterReachM * kCasterReachM) return;
+    if (!body_triangles(m, p, view.time_s, body)) return;
+    const float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
+    float q[4];
+    models::rotation_of(ang, true, q);
+    const double x = q[0], y = q[1], z = q[2], s = q[3];
+    const size_t first = out.size();
+    for (size_t i = 0; i + 2 < body.size(); i += 3) {
+      const double v[3] = {body[i], body[i + 1], body[i + 2]};
+      const double t[3] = {2 * (y * v[2] - z * v[1]), 2 * (z * v[0] - x * v[2]),
+                           2 * (x * v[1] - y * v[0])};
+      out.push_back(float(w[0] + v[0] + s * t[0] + (y * t[2] - z * t[1])));
+      out.push_back(float(w[1] + v[1] + s * t[1] + (z * t[0] - x * t[2])));
+      out.push_back(float(w[2] + v[2] + s * t[2] + (x * t[1] - y * t[0])));
+    }
+    ge::brush::app::CasterBox box{{1e30f, 1e30f, 1e30f}, {-1e30f, -1e30f, -1e30f}};
+    for (size_t i = first; i < out.size(); i += 3)
+      for (int a = 0; a < 3; ++a) {
+        box.lo[a] = std::min(box.lo[a], out[i + size_t(a)]);
+        box.hi[a] = std::max(box.hi[a], out[i + size_t(a)]);
+      }
+    if (out.size() > first) boxes.push_back(box);
+  };
+  for (const Placed& p : placed) cast(p);
+  if (self != nullptr) cast(*self);
+}
+
 void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                     std::span<const Placed> placed, const gr::FrameView& view, double brightness,
                     double minlight, bool smooth, const InPlace& in_place) {
