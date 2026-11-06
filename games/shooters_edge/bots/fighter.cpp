@@ -50,7 +50,8 @@ constexpr double kTired = 0.2;        // its worth meanwhile, as a share
 constexpr float kRetakeStrong = 120;  // strength (a launcher counted) to go and take an area back
 constexpr double kRetake_s = 20;      // a key area believed lost this long ago is still retaken
 constexpr double kHeardChase_s = 2;   // and one heard this long ago is gone after
-constexpr float kCornered = 192;      // units: an enemy in sight this near is fought
+constexpr float kCornered = 350;      // units: an enemy in sight this near is fought (the double's
+                                      // range: a back turned on him this close is shot)
 constexpr double kImpulseGap_s = 0.5;
 constexpr double kWait_s = 20;      // an item back within this is worth going to wait for
 constexpr double kHealWait_s = 3;   // but a retreat goes for health that is there
@@ -67,6 +68,9 @@ constexpr float kDangerReach = 384;
 constexpr double kDangerScale = 0.25;
 constexpr double kEnemyNearScale = 0.5;
 constexpr double kEnemyKnown_s = 3;  // an enemy seen or heard this lately is known of now
+constexpr double kHotSpot_s = 60;     // two danger spots this lately near an item: no healing there
+constexpr double kMegaHealBonus = 10;  // the mega's worth to a healer over the health it gives
+constexpr float kBlastClear = 140;     // a rocket or grenade is held with a mate this near its aim
 
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
 
@@ -287,8 +291,17 @@ int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& s
       return 0.0;  // shut, and its button out of reach
     // The map's weights are a team's plan (what to hold); a weak player, or one alone, wants
     // what does him good soonest.
-    const double v = heal || !f.team ? raw_value(it, st) : item_value(it, st);
+    double v = heal || !f.team ? raw_value(it, st) : item_value(it, st);
+    // Healing, the mega health is worth the health it gives back to 100, as a box is: a hurt player
+    // takes the health near him, not the room every hurt player of both teams runs to.
+    if (heal && it.kind == ItemKind::mega) v = std::fmax(0.f, 100 - st.health) + kMegaHealBonus;
     if (v <= 0) return 0.0;
+    if (heal) {  // where two or more of its side fell lately is not healed at at all
+      int fell = 0;
+      for (const auto& [where, when] : f.danger)
+        fell += t - when < kHotSpot_s && dist(where, it.at) < kDangerReach ? 1 : 0;
+      if (fell >= 2) return 0.0;
+    }
     const double run = dist(me, it.at) / kRun + (by_dive ? it.dive_s : 0);
     const double wait = it.present ? 0 : it.back_at - t;
     // Only the items a game turns on are waited for; the rest are taken when they are there.
@@ -647,7 +660,7 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     mind_say(f, t, help, self.origin);
   }
   f.outmatched = false;
-  if (heal_at >= 0 && item_value(f.items[static_cast<size_t>(heal_at)], st) > 0) {
+  if (heal_at >= 0 && item_value(f.items[static_cast<size_t>(heal_at)], st) > 0 && !cornered) {
     set_mode(f, FightMode::retreat, why, "weak with someone about: health or armour first");
   } else if (seen_now && !engage) {
     f.outmatched = true;
@@ -691,7 +704,10 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
       go_to(f, f.button_spots[static_cast<size_t>(f.poke)].node);  // a novice's whim
     } else {
       // Outmatched, anything that evens the odds will do, away from the enemy.
-      const bool heal = f.mode == FightMode::retreat && !f.outmatched;
+      // Weak with nobody about, it recovers too, rather than walk into the next fight for the
+      // item worth most.
+      const bool heal = (f.mode == FightMode::retreat && !f.outmatched) ||
+                        (f.mode == FightMode::roam && weak);
       const int32_t i = best_item(f, s, st, self.origin, t, heal, c ? &enemy : nullptr, why);
       const int32_t mate = f.outmatched ? nearest_mate_node(f, self.origin, t) : -1;
       if (i < 0 && mate >= 0) {
@@ -752,6 +768,16 @@ bool mate_in_line(const Fighter& f, const server::RulesCommon& s, sh::Vec3f eye,
     const sh::Vec3f off = to - line * u;
     if (off.x * off.x + off.y * off.y + off.z * off.z < kFireClearance * kFireClearance)
       return true;
+  }
+  return false;
+}
+
+// A living teammate within `reach` of `at` (a blast's aim: its splash would hurt him).
+bool mate_near(const Fighter& f, const server::RulesCommon& s, sh::Vec3f at, float reach) {
+  if (!f.team) return false;
+  for (const Fighter* m : f.team->members) {
+    if (m == &f || m->slot < 0 || !alive_slot(s, m->slot)) continue;
+    if (dist(s.world.entities[static_cast<size_t>(m->slot) + 1].origin, at) < reach) return true;
   }
   return false;
 }
@@ -1034,7 +1060,8 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     // The view the command carries, which a swim or a button may have turned off the aim.
     const float off = view_off(f.bot, cmd);
     bool fire = !reacting && d <= held->range && off <= tol;
-    if (fire && mate_in_line(f, s, eye, at_of(c->seen))) {
+    if (fire && (mate_in_line(f, s, eye, at_of(c->seen)) ||
+                 (blast_weapon(*held) && mate_near(f, s, at_of(c->seen), kBlastClear)))) {
       fire = false;
       f.stats.held_fire++;
       if (f.team) f.team->stats.held_shots++;
