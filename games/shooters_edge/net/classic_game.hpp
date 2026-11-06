@@ -53,7 +53,8 @@ inline constexpr const char* kGameFolder = "id1";
 
 const ge::server::ServerGame& classic_game();
 
-// A listen server's options with its matches on `classic_game()`.
+// A listen server's options with its matches on `classic_game()` and a coop campaign's door
+// `classic_coop()` (classic_coop.hpp).
 client::ListenOptions listen_options();
 
 }  // namespace shooters_edge::net

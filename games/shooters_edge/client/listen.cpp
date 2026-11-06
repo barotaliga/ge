@@ -193,8 +193,12 @@ void host_print(void* ctx, const std::string& text) {
   static_cast<Listen*>(ctx)->prints.push_back(text);
 }
 
-// The match server let go (its rules' views into the maps go before the maps do).
+void close_door(Listen& l);
+
+// The match server let go (its rules' views into the maps go before the maps do); a campaign's
+// door closed.
 void close_match(Listen& l) {
+  close_door(l);
   l.rules = nullptr;
   l.server = nullptr;
   l.room = nullptr;
@@ -338,8 +342,13 @@ bool seat_companion(Listen& l, sh::AimSkill skill) {
     l.prints.push_back("addbot: " + error);
     return false;
   }
-  l.prints.push_back(l.party->mates[static_cast<size_t>(slot)]->name + " (" +
-                     sh::aim_skill_name(skill) + ") joins the game");
+  const std::string& name = l.party->mates[static_cast<size_t>(slot)]->name;
+  if (l.door != nullptr && !l.door_calls->seat(l.door, slot, name, true, error)) {
+    party_remove(*l.party, *l.campaign_host);
+    l.prints.push_back("addbot: " + error);
+    return false;
+  }
+  l.prints.push_back(name + " (" + sh::aim_skill_name(skill) + ") joins the game");
   return true;
 }
 
@@ -359,9 +368,9 @@ sv::CampaignOptions campaign_options(Listen& l, const ListenOptions& opt) {
 
 // The program's client messages this frame (the all-clients stream, then the player's own), read
 // and emptied: nothing else drains a listen server's reliable streams.
-void read_streams(Listen& l) {
-  sv::MessageSink& out = l.server->out;
-  const double now = l.server->sv.time;
+void read_streams(Listen& l, const sv::RulesCommon& s, bool clear = true) {
+  const sv::MessageSink& out = s.out;
+  const double now = s.sv.time;
   if (l.campaign_host) {
     read_campaign(l.campaign, out.all, now);
     read_campaign(l.campaign, out.one[0], now);
@@ -379,8 +388,60 @@ void read_streams(Listen& l) {
     for (size_t i = first; i < l.effects.size(); i++)
       if (l.effects[i].kind == EffectKind::explosion) l.explosions.push_back(l.effects[i].at);
   }
-  out.all.clear();
-  for (auto& one : out.one) one.clear();  // the companions' streams: nobody reads them
+  if (!clear) return;  // the door routes them to the clients, then empties them
+  sv::MessageSink& sink = l.server->out;
+  sink.all.clear();
+  for (auto& one : sink.one) one.clear();  // the companions' streams: nobody reads them
+}
+
+// The door's view of each frame, before it routes it: what the player sees, hears and reads.
+void door_tap(void* ctx, const sv::RulesCommon& s) {
+  Listen& l = *static_cast<Listen*>(ctx);
+  take_events(l, s);
+  read_streams(l, s, false);
+}
+
+void close_door(Listen& l) {
+  if (l.door == nullptr) return;
+  l.door_calls->close(l.door);
+  l.door = nullptr;
+}
+
+// A coop campaign served to others: the door opened on the port, the player and the companions
+// its local seats. A failure is printed and the game stays the window's alone.
+void open_door(Listen& l) {
+  const ListenOptions& o = l.opt;
+  if (o.door == nullptr || (o.port <= 0 && o.transport == nullptr) || !coop_on(l)) return;
+  std::string error;
+  auto port = std::make_unique<ge::net::Transport>();
+  if (o.transport == nullptr) {
+    const auto at = static_cast<uint16_t>(o.port);
+    if (!ge::net::open_udp_transport(*port, ge::net::ipv4(0, 0, 0, 0, at), &error)) {
+      l.prints.push_back("coop: the port " + std::to_string(o.port) + " did not open: " + error +
+                         "; next: pick another sv_port (0: nobody joins)");
+      return;
+    }
+  }
+  l.port = std::move(port);
+  ge::net::Transport& t = o.transport != nullptr ? *o.transport : *l.port;
+  l.door_calls = o.door;
+  l.door =
+      o.door->open(*l.campaign_host, t, o.hostname, o.seed, kPartyMost + 1, door_tap, &l, error);
+  if (l.door == nullptr) {
+    l.prints.push_back("coop: others cannot join: " + error);
+    return;
+  }
+  l.net_s = 0;
+  bool seated = l.door_calls->seat(l.door, 0, o.player, false, error);
+  for (int i = 1; seated && l.party && i < sh::kMaxClients; i++)
+    if (const auto& m = l.party->mates[static_cast<size_t>(i)])
+      seated = l.door_calls->seat(l.door, i, m->name, true, error);
+  if (!seated) {
+    l.prints.push_back("coop: others cannot join: " + error);
+    close_door(l);
+    return;
+  }
+  l.prints.push_back("coop: others may join on port " + std::to_string(o.port) + "\n");
 }
 
 }  // namespace
@@ -444,6 +505,7 @@ bool listen_start(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMap> 
                   const ListenOptions& opt, std::string& error) {
   if (single_player(progs)) return listen_campaign(l, progs, std::move(map), opt, error);
   l.party.reset();
+  close_match(l);  // a campaign's door first: it reads the campaign
   l.campaign_host.reset();
   l.progs = &progs;
   l.opt = opt;
@@ -465,7 +527,15 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
   if (l.campaign_host) {
     const std::string name = map->name;
     l.next = std::move(map);
-    if (!sv::campaign_change(*l.campaign_host, sv::MapChange::new_game, name, error)) return false;
+    if (l.door != nullptr) l.door_calls->unbind(l.door);
+    if (!sv::campaign_change(*l.campaign_host, sv::MapChange::new_game, name, error)) {
+      close_door(l);
+      return false;
+    }
+    if (l.door != nullptr && !l.door_calls->rebind(l.door, error)) {
+      l.prints.push_back("coop: others cannot join: " + error);
+      close_door(l);
+    }
     campaign_entered(l);
     l.map_changed = false;
     return true;
@@ -503,6 +573,7 @@ bool listen_campaign(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMa
   campaign_entered(l);
   for (int k = 0; k < opt.companions && k < kPartyMost; k++)
     if (!seat_companion(l, opt.companion_skill)) break;
+  open_door(l);
   l.map_changed = false;
   return true;
 }
@@ -662,15 +733,27 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
       sent = ps.data();
       count = static_cast<int>(ps.size());
     }
-    if (!sv::campaign_frame(*l.campaign_host, sent, count, l.failed)) {
-      l.rules = nullptr;
-      l.server = nullptr;
-      return;
+    if (l.door != nullptr) {  // the endpoint's frame: the network's moves, then the local seats'
+      l.net_s += sv::kCampaignStep;
+      const auto now_us = static_cast<int64_t>(ge::core::num::round(l.net_s * 1e6));
+      if (!l.door_calls->frame(l.door, sent, count, now_us, l.failed)) {
+        close_door(l);
+        l.rules = nullptr;
+        l.server = nullptr;
+        return;
+      }
+      if (l.campaign_host->history.size() != l.maps_started) campaign_entered(l);
+    } else {
+      if (!sv::campaign_frame(*l.campaign_host, sent, count, l.failed)) {
+        l.rules = nullptr;
+        l.server = nullptr;
+        return;
+      }
+      if (l.campaign_host->history.size() != l.maps_started) campaign_entered(l);
+      take_events(l, *l.server);
+      read_streams(l, *l.server);
+      sv::clear_frame(l.server->out);
     }
-    if (l.campaign_host->history.size() != l.maps_started) campaign_entered(l);
-    take_events(l, *l.server);
-    read_streams(l);
-    sv::clear_frame(l.server->out);
   } else {  // the match server's frame: his move first, then the bots' and the network's
     l.host->ctx = &l;
     l.host->move(l.host->game, p);
@@ -694,8 +777,13 @@ bool listen_lobby(Listen& l, std::string_view line) {
   const bool bot_word = word == "addbot" || word == "removebot";
   if (bot_word && l.campaign_host && l.server != nullptr) {  // a campaign: the coop party
     if (word == "removebot") {
+      int last = 0;
+      for (int i = 1; l.party && i < sh::kMaxClients; i++)
+        if (l.party->mates[static_cast<size_t>(i)]) last = i;
       if (!l.party || !party_remove(*l.party, *l.campaign_host))
         l.prints.push_back("removebot: no companion is seated");
+      else if (l.door != nullptr)
+        l.door_calls->unseat(l.door, last);
       return true;
     }
     const size_t sp = line.find(' ');

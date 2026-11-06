@@ -56,7 +56,7 @@
 // ge:keywords stats choke rate ping user-info server-info classic_start classic_frame
 // ge:keywords classic_change map-change changing reconnect classic_add_local local-seat bots
 // ge:keywords verify_move_checksum antilag status voice voice-relay team-voice voice_route mvd
-// ge:keywords sv_timeout timed-out flood-protection sv_floodprot chat-flood
+// ge:keywords sv_timeout timed-out flood-protection sv_floodprot chat-flood most-players
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_server_test.cpp
 #pragma once
@@ -111,6 +111,8 @@ struct ServerConfig {
   bool voice = false;  // offer the voice bit and relay voice
   VoiceRoute voice_route = VoiceRoute::team;
   uint32_t seed = 1;  // the challenges' stream
+  // Players at most, the game's local seats counted (0: the loop's slots): a coop game's eight.
+  int most_players = 0;
 };
 
 enum class ConnState : uint8_t { free, connected, spawned };
@@ -221,6 +223,11 @@ struct ClassicServer {
   void (*local_tap)(void* ctx, const sv::RulesCommon& game) = nullptr;
   void (*local_print)(void* ctx, int slot, const std::string& text) = nullptr;
   void* local_ctx = nullptr;
+  // A game that seats its players itself (a campaign, which carries them from map to map): a
+  // client's `begin` and its drop go to it in place of the rules' connect and drop.
+  void (*seat)(void* ctx, int slot, const std::string& name, bool spectator) = nullptr;
+  void (*unseat)(void* ctx, int slot) = nullptr;
+  void* seat_ctx = nullptr;
 };
 
 // Serves `rules` (its map already started) over `t`. False with `error` when it cannot.
@@ -230,6 +237,9 @@ bool classic_start(ClassicServer& s, const sv::RulesRunner& rules, gn::Transport
 // go): every client is told the map is changing and to sign on again (`reconnect`), and the
 // next signon is the new map's. False with `error` when `next` has no map.
 bool classic_change(ClassicServer& s, const sv::RulesRunner& next, std::string& error);
+// The endpoint lets go of the rules it serves before the game destroys them in place (a campaign's
+// next map is made where the last one was): nothing reads them until `classic_change`.
+void classic_unbind(ClassicServer& s);
 // A seat the game plays in its own process at `slot` (a bot it connected to the rules itself):
 // shown to every client as a player (`*bot` in its user info), sent nothing, never timed out, kept
 // over a map change (the game connects it to the next map's rules), its moves `local_moves`.
