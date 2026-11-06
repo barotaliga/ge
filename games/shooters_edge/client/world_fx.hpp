@@ -48,12 +48,14 @@
 // ge:keywords ce_trails ce_hits ce_decals marks scorch bullet-hole burns mark_burns
 // ge:keywords held-fire muzzle-fire fire_held load_held_fire warp spawn-effect teleport-effect
 // ge:keywords respawn ghost materialize dematerialize player_dust dust ash held_shown
+// ge:keywords fx-scene fx_scene demo-effects
 // ge:skill render shooter
 #pragma once
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <span>
 #include <string>
@@ -233,7 +235,36 @@ effects::Dust player_dust(const sh::Vec3f& origin, const sh::Vec3f& angles, int 
 void warp_dust(const Warp& w, const effects::Dust& d, double was, double age, uint32_t seed,
                effects::Particles* out);
 
-// The effects of the wall frame of `dt` s at time `t` s, after frame_view brought `v` up to date.
+// WHAT THE EFFECTS READ, wherever the game comes from: the listen server (`fx_scene`, off the
+// server's state and the view), or a demo or a server joined (demo_fx.hpp, off what was sent).
+struct FxScene {
+  const LoadedMap* map = nullptr;         // the map's faces (marks, floors, what a blast hit)
+  const sh::Server* server = nullptr;     // the brush entities an explosion's floor is traced
+                                          // through too (null: the map's world alone)
+  ge::camera::Pose pose;                  // the eye this frame
+  std::span<const Missile> missiles;      // in flight now
+  std::span<const sh::Vec3f> explosions;  // every one this map so far, in order
+  std::span<const Effect> effects;        // every temporary entity this map so far, in order
+  std::span<const Blow> blows;            // a campaign's blows to the player this map so far
+  bool campaign = false;                  // a campaign's program (its own fog and blows)
+  int effect_models = 0;                  // where the effects' own models start (EffectModel)
+  std::vector<Placed> models;             // every entity to draw (not the local player)
+  std::vector<Body> bodies;               // the players: entity, place, alive
+  std::function<Placed(int)> placed_of;   // a player as placed (empty Placed: not known)
+  std::function<float(int)> health_of;    // an entity's health (a wound healed by a respawn)
+  // The local player (`own` 0: none, as in a demo's free view).
+  int own = 0;
+  PlayerState me;
+  int me_effects = 0;
+  float waterlevel = 0, watertype = 0;
+};
+
+// The listen server's scene this frame.
+void fx_scene(const Listen& l, const ViewState& v, FxScene& out);
+
+// The effects of the wall frame of `dt` s at time `t` s.
+void step_fx(const FxScene& scene, FxState& s, double t, double dt, FxFrame& out);
+// The same off the listen server, after frame_view brought `v` up to date.
 void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double dt, FxFrame& out);
 
 // The held weapons' fire: every built weapon's look (by its index) and the shots still burning.

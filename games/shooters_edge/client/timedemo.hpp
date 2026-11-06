@@ -201,14 +201,16 @@ enum class TimedemoStep : uint8_t {
   end,        // the demo is over: report
   error,      // a frame did not read: report what was timed and the error
 };
-// The next demo frame.
+// The next demo frame. Its `effects` hold every temporary entity read since the last step (the
+// signon's frames before a map too), for the effects (demo_fx.hpp).
 TimedemoStep timedemo_step(Timedemo& t, std::string& error);
 
 // PLAYBACK AT THE DEMO'S OWN PACE (`playdemo <demo>`): the same run, but each drawn frame reads
 // the demo frames up to the demo's clock moved on by the frame's wall time (at most
 // `kMostPlayStep`) times `speed` (`cl_demospeed`, 0..20; 0 pauses), none when the clock has not
 // reached the next one. A level start stops the step there as `new_level` and sets the clock to
-// that level's time; the frames are not timed.
+// that level's time; the frames are not timed. The state's `effects` are every frame's read this
+// step (none when none was read).
 TimedemoStep playdemo_step(Timedemo& t, double wall_dt_s, double speed, std::string& error);
 
 // SEEKING: the demo stood at the first frame at or after `timeline_s` on the timeline (a frame

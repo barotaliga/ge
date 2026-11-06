@@ -514,12 +514,12 @@ ge::render::Particle wound_speck(const double at[3], double size, float albedo, 
 }
 
 // Every wound of a body drawn this frame on its skin as it stands: a dark hole, drops round it.
-void draw_wounds(const Listen& l, FxState& s, const std::vector<Placed>& placed,
+void draw_wounds(const FxScene& sc, FxState& s, const std::vector<Placed>& placed,
                  const ge::camera::Vec3& eye, double t, double dt, effects::Particles& out) {
   if (s.wounds.empty()) return;
   // A body come back to life (its health above nothing again, a respawn) is whole.
   for (auto it = s.wound_health.begin(); it != s.wound_health.end();) {
-    const float h = field_named(l, it->first, "health");
+    const float h = sc.health_of ? sc.health_of(it->first) : 0;
     if (it->second <= 0 && h > 0) {
       std::erase_if(s.wounds, [&](const Wound& w) { return w.entity == it->first; });
       it = s.wound_health.erase(it);
@@ -530,7 +530,7 @@ void draw_wounds(const Listen& l, FxState& s, const std::vector<Placed>& placed,
   }
   for (const Wound& w : s.wounds)
     if (!s.wound_health.contains(w.entity))
-      s.wound_health[w.entity] = field_named(l, w.entity, "health");
+      s.wound_health[w.entity] = sc.health_of ? sc.health_of(w.entity) : 0;
   if (s.models == nullptr) return;
   int skinned = -1;  // the body whose skin s.skin holds
   for (const Placed& m : placed) {
@@ -588,8 +588,57 @@ void draw_wounds(const Listen& l, FxState& s, const std::vector<Placed>& placed,
 
 }  // namespace
 
-void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double dt, FxFrame& out) {
+void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
+  out.map = l.map.get();
+  out.server = l.server ? &l.server->sv : nullptr;
+  out.pose = v.pose;
+  out.missiles = v.missiles;
+  out.explosions = l.explosions;
+  out.effects = l.effects;
+  out.blows = l.blows;
+  out.campaign = l.campaign_host != nullptr;
+  out.effect_models = effect_model(l, EffectModel::explosion);
   place_models(l, out.models);
+  out.bodies.clear();
+  out.own = 0;
+  out.placed_of = nullptr;
+  out.health_of = nullptr;
+  if (!l.server) return;
+  const int clients = std::min(l.server->sv.num_edicts - 1, int(sh::kMaxClients));
+  for (int e = 1; e <= clients; e++) {
+    const sh::Edict& ed = l.server->sv.edicts[size_t(e)];
+    if (ed.free || ed.modelindex <= 0) continue;
+    out.bodies.push_back({e, ed.origin, field_named(l, e, "health") > 0});
+  }
+  out.me = player_state(l);
+  out.own = out.me.entity;
+  out.me_effects = int(field_named(l, out.own, "effects"));
+  out.waterlevel = field_named(l, out.own, "waterlevel");
+  out.watertype = field_named(l, out.own, "watertype");
+  const Listen* lp = &l;
+  out.placed_of = [lp](int e) {
+    Placed m;
+    if (lp->server == nullptr) return m;  // a warp outliving its server draws nothing new
+    const sh::Edict& ed = lp->server->sv.edicts[size_t(e)];
+    m.entity = e;
+    m.modelindex = ed.modelindex;
+    m.frame = int(field_named(*lp, e, "frame"));
+    m.skin = int(field_named(*lp, e, "skin"));
+    m.origin = ed.origin;
+    m.angles = ed.angles;
+    return m;
+  };
+  out.health_of = [lp](int e) { return field_named(*lp, e, "health"); };
+}
+
+void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double dt, FxFrame& out) {
+  thread_local FxScene scene;
+  fx_scene(l, v, scene);
+  step_fx(scene, s, t, dt, out);
+}
+
+void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
+  out.models = l.models;
   out.births.clear();
   out.lights.clear();
   out.puffs.clear();
@@ -610,18 +659,18 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
 
   // The eye's aim turning (rad/s: right and up), for a rocket's launch it fires.
   if (s.aimed && dt > 0) {
-    double turn = v.pose.yaw - s.aim_yaw;
+    double turn = l.pose.yaw - s.aim_yaw;
     turn -= 2 * ge::core::kPi * std::floor((turn + ge::core::kPi) / (2 * ge::core::kPi));
     s.aim_rate[0] = turn / dt;
-    s.aim_rate[1] = (v.pose.pitch - s.aim_pitch) / dt;
+    s.aim_rate[1] = (l.pose.pitch - s.aim_pitch) / dt;
   }
-  s.aim_yaw = v.pose.yaw;
-  s.aim_pitch = v.pose.pitch;
+  s.aim_yaw = l.pose.yaw;
+  s.aim_pitch = l.pose.pitch;
   s.aimed = true;
 
   // The missiles: a trail over the stretch each flew since the last frame, a rocket's glow.
   s.next.clear();
-  for (const Missile& m : v.missiles) {
+  for (const Missile& m : l.missiles) {
     ge::camera::Vec3 at = engine_point(m.origin);
     // A rocket's launch as it looks (ce_trails): off its true place while it leaves the tube, the
     // shooter's sway on it when it is the eye's own; its model, flame, trail, light and haze there.
@@ -629,15 +678,14 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     if (m.rocket && !m.grenade && s.on.trails) {
       auto [it, fresh] = s.launched.try_emplace(m.entity);
       FxState::Launched& la = it->second;
-      const ge::camera::Vec3 eye = v.pose.eye;
-      const double aim[3] = {std::cos(v.pose.pitch) * std::sin(v.pose.yaw), std::sin(v.pose.pitch),
-                             std::cos(v.pose.pitch) * std::cos(v.pose.yaw)};
+      const ge::camera::Vec3 eye = l.pose.eye;
+      const double aim[3] = {std::cos(l.pose.pitch) * std::sin(l.pose.yaw), std::sin(l.pose.pitch),
+                             std::cos(l.pose.pitch) * std::cos(l.pose.yaw)};
       if (fresh) {
         la.born = t;
         la.launch.seed = static_cast<uint32_t>(m.entity);
         if (ge::core::hypot3(at.x - eye.x, at.y - eye.y, at.z - eye.z) < kOwnRocketM) {
-          const PlayerState me = player_state(l);
-          const ge::camera::Vec3 vel = engine_point(me.velocity);
+          const ge::camera::Vec3 vel = engine_point(l.me.velocity);
           const double vv[3] = {vel.x, vel.y, vel.z};
           fx::launch_kick(aim, vv, s.aim_rate[0], s.aim_rate[1], la.launch.kick);
         }
@@ -767,7 +815,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
         double floor_y = floor_under(*l.map, over, {over.x, over.y, over.z + kNearSurfaceU});
         if (l.server) {
           const sh::HullTrace tr =
-              sh::trace_move(l.server->sv, over, {0, 0, 0}, {0, 0, 0},
+              sh::trace_move(*l.server, over, {0, 0, 0}, {0, 0, 0},
                              {over.x, over.y, over.z - kFloorReachU}, sh::kTraceNoMonsters, -1);
           if (!tr.startsolid && tr.fraction < 1)
             floor_y = std::max(floor_y, engine_point(tr.endpos).y);
@@ -793,41 +841,22 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     }
   }
   // The players' warps: who arrived and who left, from where each entity is now.
-  s.bodies.clear();
-  if (l.server) {
-    const int clients = std::min(l.server->sv.num_edicts - 1, int(sh::kMaxClients));
-    for (int e = 1; e <= clients; e++) {
-      const sh::Edict& ed = l.server->sv.edicts[size_t(e)];
-      if (ed.free || ed.modelindex <= 0) continue;
-      s.bodies.push_back({e, ed.origin, field_named(l, e, "health") > 0});
-    }
-  }
+  s.bodies.assign(l.bodies.begin(), l.bodies.end());
   s.began.clear();
   watch_warps(s.warps, s.bodies, t, dt, s.began);
-  const int own = l.server ? player_state(l).entity : 0;  // the local player's entity
+  const int own = l.own;  // the local player's entity (0: none)
   out.has_self = false;
   // A player as the window places him (the local player's own too, never drawn).
-  const auto placed_of = [&](int e) {
-    Placed m;
-    if (l.server == nullptr) return m;  // a warp outliving its server draws nothing new
-    const sh::Edict& ed = l.server->sv.edicts[size_t(e)];
-    m.entity = e;
-    m.modelindex = ed.modelindex;
-    m.frame = int(field_named(l, e, "frame"));
-    m.skin = int(field_named(l, e, "skin"));
-    m.origin = ed.origin;
-    m.angles = ed.angles;
-    return m;
-  };
+  const auto placed_of = [&](int e) { return l.placed_of ? l.placed_of(e) : Placed{}; };
   // The local player, as the world would place him: unseen in his own eyes, his shadow still his.
-  if (l.server != nullptr && own > 0 && !player_state(l).dead) {
+  if (own > 0 && !l.me.dead) {
     out.self = placed_of(own);
     out.has_self = out.self.modelindex > 0;
   }
   // ce_warps off (or the classic look): the original. The figure is there or gone at once, and
   // each end of the warp flashes the teleport's fog, the campaign's program throwing its own.
   if (!s.on.warps) {
-    if (!l.campaign_host) {
+    if (!l.campaign) {
       for (const Warp& w : s.began) {
         double p[3];
         put(engine_point(w.at), p);
@@ -859,7 +888,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
       m.warp = player_dust(m.origin, m.angles, m.entity).warp;
       m.warp.shown = float(shown);
     }
-    out.held_shown = l.server ? float(arrival_shown(s.warps, own, t)) : 1;
+    out.held_shown = own > 0 ? float(arrival_shown(s.warps, own, t)) : 1;
     for (const Warp& w : s.warps.live) {
       const double age = t - w.t0, was = w.t0 >= t ? -1 : std::max(t - dt - w.t0, 0.0);
       if (w.arriving) {
@@ -869,7 +898,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
         if (s.models != nullptr && body_triangles(*s.models, m, t, s.skin)) d.skin = s.skin;
         if (w.entity == own) {
           d.keep_off_eye = true;
-          put(v.pose.eye, d.eye);
+          put(l.pose.eye, d.eye);
         }
         warp_dust(w, d, was, age, s.seed++, &out.births);
         continue;
@@ -898,8 +927,8 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   // drawn above): a shot's or a spike's hit throws sparks back toward the eye, blood falls, a
   // teleport flares, lava splashes, a beam lights and sparks where it ends.
   if (l.effects.size() < s.effects_seen) s.effects_seen = 0;  // a new map
-  const ge::camera::Vec3 eye = v.pose.eye;
-  const PlayerState me = player_state(l);
+  const ge::camera::Vec3 eye = l.pose.eye;
+  const PlayerState& me = l.me;
   const sh::Vec3f eye_map = {me.origin.x + me.view_ofs.x, me.origin.y + me.view_ofs.y,
                              me.origin.z + me.view_ofs.z};
   const ge::brush::Map* map = l.map ? &l.map->bsp.map : nullptr;
@@ -983,7 +1012,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
         break;
       }
       case EffectKind::blood: {
-        const bool arc = e.code == 13 && !l.campaign_host;  // a match's beam's blood
+        const bool arc = e.code == 13 && !l.campaign;  // a match's beam's blood
         fx::blood(p, arc ? 50 : 20 * e.count, arc, s.seed++, s.palette, &out.births);
         if (s.on.decals && !arc) wound(s, out.models, e.at, p, eye, std::clamp(e.count, 1, 8), t);
         break;
@@ -1076,7 +1105,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     for (int i = 0; i * kBoltSegment < len; ++i) {
       Placed seg;
       seg.entity = kBoltEntities - segment++;
-      seg.modelindex = effect_model(l, b.model);
+      seg.modelindex = l.effect_models + static_cast<int>(b.model);
       const float k = static_cast<float>(i * kBoltSegment / len);
       seg.origin = {b.map_from.x + d.x * k, b.map_from.y + d.y * k, b.map_from.z + d.z * k};
       seg.angles = {pitch, yaw, static_cast<float>(ge::core::range(roll, 0, 360))};
@@ -1085,7 +1114,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   }
   burns_of(s, t, out.burns);
   if (s.on.decals)
-    draw_wounds(l, s, out.models, v.pose.eye, t, dt, out.births);
+    draw_wounds(l, s, out.models, l.pose.eye, t, dt, out.births);
   else
     s.wounds.clear();
   std::erase_if(s.sparked, [&](const Blast& b) { return t - b.t >= fx::kSparkLightS; });
@@ -1109,7 +1138,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     if (frame >= kSpriteFrames) continue;
     Placed spr;
     spr.entity = kSpriteEntities - sprite++;
-    spr.modelindex = effect_model(l, EffectModel::explosion);
+    spr.modelindex = l.effect_models + static_cast<int>(EffectModel::explosion);
     spr.frame = frame;
     spr.origin = b.map_at;
     out.models.push_back(spr);
@@ -1117,7 +1146,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
 
   // The powers held: a glow round each holder (blue the quad's, red the shield's), the local
   // player's own among them.
-  const PlayerState p = player_state(l);
+  const PlayerState& p = l.me;
   const auto glow = [&](int effects, const sh::Vec3f& at) {
     if (!(effects & kGlow)) return;
     fx::Light light;
@@ -1130,20 +1159,20 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     out.lights.push_back(light);
   };
   for (const Placed& m : out.models) glow(m.effects, m.origin);
-  const int mine = int(field_named(l, p.entity, "effects"));
-  glow(mine, p.origin);
+  const int mine = l.own > 0 ? l.me_effects : 0;
+  if (l.own > 0) glow(mine, p.origin);
 
   // The screen: the liquid round the eye, and a hit's flash from the blows reported (a campaign)
   // or the health lost (a match).
   s.hurt = fx::fade_hurt(s.hurt, dt);
   s.armour = fx::fade_hurt(s.armour, dt);
   if (l.blows.size() < s.blows_seen) s.blows_seen = 0;  // a new map
-  if (l.campaign_host) {
+  if (l.campaign) {
     for (; s.blows_seen < l.blows.size(); s.blows_seen++) {
       s.hurt = fx::take_hurt(s.hurt, l.blows[s.blows_seen].blood);
       s.armour = fx::take_hurt(s.armour, l.blows[s.blows_seen].armor);
     }
-  } else if (!p.dead && p.health < s.health) {
+  } else if (l.own > 0 && !p.dead && p.health < s.health) {
     s.hurt = fx::take_hurt(s.hurt, s.health - p.health);
   }
   s.health = p.health;
@@ -1152,8 +1181,8 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   screen.armour = s.armour;
   screen.power = (mine & kGlowBlue) != 0;
   screen.shield = (mine & kGlowRed) != 0;
-  if (field_named(l, p.entity, "waterlevel") >= kEyesUnder) {
-    const float type = field_named(l, p.entity, "watertype");
+  if (l.own > 0 && l.waterlevel >= kEyesUnder) {
+    const float type = l.watertype;
     screen.medium = type == kLava    ? fx::Medium::lava
                     : type == kSlime ? fx::Medium::slime
                     : type == kWater ? fx::Medium::water

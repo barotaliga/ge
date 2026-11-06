@@ -502,6 +502,14 @@ std::vector<uint8_t> write_multiview_match(const MatchScript& s) {
       m.u8(static_cast<int>(k));
       m.i16(frags);
     }
+    for (const MatchRocket& rk : s.rockets)  // a rocket's blast where its flight ends
+      if (i == rk.to) {
+        m.u8(23);  // temp entity: an explosion
+        m.u8(3);
+        m.coord(rk.end.x);
+        m.coord(rk.end.y);
+        m.coord(rk.end.z);
+      }
     multiview_record(file, i == 0 ? 0 : ms, kAll, 0, m);
     for (size_t k = 0; k < s.players.size(); k++) {  // each player's stats as they change
       const MatchPlayer& p = s.players[k];

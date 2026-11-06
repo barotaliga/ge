@@ -47,11 +47,14 @@
 
 #include "gpu/device.hpp"
 #include "lab/raster.hpp"
+#include "render/view.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_fx.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/client/world_models.hpp"
 
 namespace shooters_edge::client {
@@ -111,6 +114,18 @@ using DemoVideoPicture = std::function<void(int64_t frame, double t, const ge::l
 // model (not the eye's own), the other players in their colours, the level's statics. The video
 // and the window's playback (`playdemo`, `timedemo`) both draw these.
 void demo_placed(const DemoState& s, std::vector<Placed>& out);
+
+// A demo's frame as the effects read it (world_fx.hpp's FxScene): `fx`'s explosions, temporary
+// entities and missiles (demo_fx.hpp), what stands in the world (`demo_placed`), the players as
+// bodies (alive unless a multiview marks one dead), the eye's own as the local player (his place,
+// his health for the hit's flash, his glow). `map`: the level's faces (null: none).
+void demo_fx_scene(const DemoState& s, const DemoFx& fx, const LoadedMap* map,
+                   const ge::render::FrameView& view, FxScene& out);
+// `s`'s frames since the last draw (its effects) into `fx`, then the effects stepped for this
+// draw into `out` (its models too): what the window's playback, a joined game and the video draw.
+void demo_fx_step(const DemoState& s, DemoFx& fx, const LoadedMap* map,
+                  const ge::render::FrameView& view, FxState& state, double t, double dt,
+                  FxFrame& out);
 
 // `o.demo` from `files` into `o.file` on `device`. False with the reason and the next step.
 bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVideoOptions& o,

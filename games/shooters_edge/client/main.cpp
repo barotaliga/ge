@@ -451,7 +451,9 @@ int run_main(int argc, char** argv) {
   std::unique_ptr<cl::LoadedMap> bench_map;  // the benchmark's level (the world draws it)
   cl::DemoFolder bench_folder;               // the demo's game folder (timedemo.hpp's demo_folder)
   size_t bench_models = 0;         // the model list's length the demo's world was made with
-  cl::FxFrame bench_fx;            // the demo's entities and players this frame (demo_video.hpp)
+  cl::FxFrame bench_fx;            // the demo's entities, players and effects this frame
+  cl::FxState bench_fx_state;      // the demo's effects as they live (world_fx.hpp)
+  cl::DemoFx bench_demo_fx;        // its temporary entities this level (demo_fx.hpp)
   ge::gpu::Target bench_off;       // the benchmark's frames that are not shown
   uint64_t bench_shown_ns = 0;     // when the benchmark last showed a frame
   wgpu::Future bench_in_flight{};  // the frame before this one, waited before the next
@@ -854,6 +856,8 @@ int run_main(int argc, char** argv) {
         }
         if (!rebuild_world(*bench_map, {ds.models, {}}, from)) return 1;
         bench_models = ds.models.size();
+        bench_fx_state = {};  // a new level: what burned on the last one is gone
+        bench_demo_fx = {};
         if (drawn_remote) sn::remote_world(remote, &bench_map->spec.models);
         if (paced) hearing.level(ds, from, &bench_map->bsp.map);
       } else if (step != cl::TimedemoStep::frame) {
@@ -904,7 +908,17 @@ int run_main(int argc, char** argv) {
                                              static_cast<uint32_t>(h), surface.format());
         target = bench_off.view;
       }
-      cl::demo_placed(ds, bench_fx.models);  // its entities and other players, not its effects yet
+      // Its entities, other players and effects (its explosions, trails, hits, beams).
+      if (!fx_palette_read) {
+        std::vector<uint8_t> store;
+        const std::span<const uint8_t> pal = cl::find_file(files, "gfx/palette.lmp", store);
+        fx_palette.assign(pal.begin(), pal.end());
+        fx_palette_read = true;
+      }
+      if (bench_fx_state.palette.empty()) bench_fx_state.palette = fx_palette;
+      bench_fx_state.models = &cl::world_models(*world);
+      bench_fx_state.on = cl::fx_switches(picture);
+      cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, t, wall, bench_fx);
       const auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
       cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
