@@ -75,6 +75,9 @@ inline constexpr double kColumnRamp = 0.3;
 // The noise's edge in texels, and its base lattice's cells across the tile.
 inline constexpr int kCloudNoiseSize = 64;
 inline constexpr int kCloudTileCells = 8;
+// A WARPED layer (CloudLayer::warp) repeats only every this many tiles: its warp's coarse read
+// and its islands' read are at sevenths of the tile's scale, and its drift wraps at this period.
+inline constexpr double kWarpTiles = 7;
 
 // The noise, x fastest then y then z, 0..255: made once, the same bytes everywhere.
 const std::vector<uint8_t>& cloud_noise();

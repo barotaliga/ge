@@ -1297,8 +1297,12 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   `render/clouds.cpp`): the column's tile point pushed up to `warp` cells by two more reads of
   the noise a tile apart, at the tile's own scale so the drift's wrap stays seamless. A cell's
   outline leans and twists instead of standing as a dome its neighbours match; every read the
-  layer makes (its column, its thickness, its detail, its shadow) takes the warped point. 0 by
-  default; the classic maps' stacks deal it (`plugins/brush/app/bsp_sky.hpp`, M8f15).
+  layer makes (its column, its thickness, its detail, its shadow) takes the warped point. A warped
+  layer never shows its tile repeating: the warp's second read is at three sevenths of the tile's
+  scale, its column's noise is blended with a read at five sevenths (spread back to the noise's
+  range, so the cover holds), its islands are read at two sevenths, and its drift wraps at
+  `kWarpTiles` (7) tiles, so it repeats every 56 cells instead of every 8. 0 by default; the
+  classic maps' stacks deal it (`plugins/brush/app/bsp_sky.hpp`, M8f15).
 - THROUGH IT, THE DISC: the sky draws the sun's and the moon's discs behind the cloud, so a
   disc shows by the ray's own transmittance, exp(−τ), wherever on the ray its light was taken:
   bright through a thin patch, gone behind a core. Two things used to leak it: the march stopping
