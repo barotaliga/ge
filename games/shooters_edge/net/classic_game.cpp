@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <iterator>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -29,6 +30,7 @@
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/dedicated.hpp"
 #include "shooters_edge/server/lobby.hpp"
+#include "shooters_edge/server/qvm_server.hpp"
 
 namespace shooters_edge::net {
 
@@ -40,6 +42,7 @@ namespace sh = ge::shooter;
 
 struct Game {
   ge::progs::Progs progs;
+  std::vector<uint8_t> module;             // the mod's compiled module (a .qvm); empty: `progs`
   std::unique_ptr<cl::LoadedMap> map;      // the spec's models point into it: outlives `rules`
   sv::RulesRunner rules;                   // reads `progs`
   std::unique_ptr<ClassicServer> classic;  // serves `rules` once the core hands it the port
@@ -156,25 +159,53 @@ bool endpoint_settings(const gs::ServerConfig& c, ServerConfig& cfg, std::string
   return true;
 }
 
+// A file of the game's search path, for a compiled module's reads.
+bool read_game_file(void* ctx, const std::string& name, std::vector<uint8_t>& bytes) {
+  const auto& files = *static_cast<const cl::SearchPath*>(ctx);
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> found = cl::find_file(files, name, store);
+  if (found.empty()) return false;
+  bytes.assign(found.begin(), found.end());
+  return true;
+}
+
 // The mod's rules on the map `name`, set from the settings: into `map` and `rules`.
 bool open_map(const Game& g, const std::string& name, std::unique_ptr<cl::LoadedMap>& map,
               sv::RulesRunner& rules, std::string& error) {
   const gs::ServerConfig& c = g.settings;
   map = cl::load_named_map(g.files, name, error);
   if (!map) return false;
-  sv::QcServerOptions so;
-  so.seed = c.seed;
-  so.loop.maxclients = c.maxclients;
-  so.loop.max_edicts = 1024;
-  std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(g.progs, so, error);
-  if (!qc) return false;
-  rules = sv::qc_runner(std::move(qc));
+  if (!g.module.empty()) {
+    sv::QvmServerOptions so;
+    so.seed = c.seed;
+    so.loop.maxclients = c.maxclients;
+    so.loop.max_edicts = 1024;
+    so.read_file = &read_game_file;
+    so.files_ctx = const_cast<cl::SearchPath*>(&g.files);
+    so.list_dirs = {g.files.folder};
+    if (!c.root.empty()) so.list_dirs.push_back(c.root + "/" + kGameFolder);
+    so.write_dir = g.files.folder;
+    std::unique_ptr<sv::QvmServer> qvm = sv::make_qvm_server(g.module, so, error);
+    if (!qvm) return false;
+    rules = sv::qvm_runner(std::move(qvm));
+  } else {
+    sv::QcServerOptions so;
+    so.seed = c.seed;
+    so.loop.maxclients = c.maxclients;
+    so.loop.max_edicts = 1024;
+    std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(g.progs, so, error);
+    if (!qc) return false;
+    rules = sv::qc_runner(std::move(qc));
+  }
   rules.console("deathmatch 1");
   // A mod checks it runs from its own folder by the server's `*gamedir`.
   if (g.cfg.gamedir != decltype(g.cfg){}.gamedir)
     rules.console("serverinfo *gamedir \"" + g.cfg.gamedir + "\"");
   for (const std::string& line : g.info_lines) rules.console(line);
   for (const auto& [rule, value] : c.rules) {
+    // A module checks a client's rate against the endpoint's cap, so it is told the cap.
+    if (rule == "sv_maxrate" && !g.module.empty() && !value.empty() && value != "0")
+      rules.console("sv_maxrate \"" + value + "\"");
     if (value.empty() || is_endpoint_rule(rule)) continue;
     sh::ServerSettings check;
     if (sh::find_setting(rule) && !sh::set_setting(check, rule, value, error)) {
@@ -235,10 +266,12 @@ std::string top_mod(const std::string& mods) {
   return top;
 }
 
-// The program: a named mod's own (its folder's program files, through the game's adapter, the
-// base game's under it), else the baseline mod.
+// The program: a named mod's own (its compiled module `qwprogs.qvm` when it has one, else its
+// folder's program files through the game's adapter, the base game's under it), else the
+// baseline mod.
 bool open_program(Game& g, const std::string& mod, std::string& error) {
   if (mod.empty() || mod == kGameFolder) return cl::baseline_progs(g.progs, error);
+  if (read_game_file(&g.files, "qwprogs.qvm", g.module)) return true;
   const cl::GameAdapter& game = cl::classic_adapter();
   cl::FoundProgram found;
   std::string why;

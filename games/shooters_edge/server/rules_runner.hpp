@@ -133,6 +133,12 @@ struct RulesCommon {
   bool paused = false;
 };
 
+// The settings every runner of a classic mod registers (the match's rules, the move's and the
+// loop's, the server's own), their defaults `loop`'s; and their values written into `set`: every
+// one (`live_only` false, a map starting) or the move's alone (between frames).
+void add_mod_settings(RulesCommon& s, const sh::ServerSettings& loop);
+void settings_from_cvars(const RulesCommon& s, sh::ServerSettings& set, bool live_only);
+
 enum class CommandResult : uint8_t { mod, server, bad };
 
 // The calls a runner answers. `rules` is the runner's own state (`RulesRunner::rules`).

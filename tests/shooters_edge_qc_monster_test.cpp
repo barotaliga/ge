@@ -115,7 +115,7 @@ TEST(checkbottom_needs_ground_under_the_box) {
   fx.call(2, {ent(m), sh::Vec3f{-300, 0, 200}});
   fx.call(40, {ent(m)});
   CHECK(fx.rf == 0.0f);
-  CHECK(!sv::check_bottom(*fx.s, m));
+  CHECK(!sv::check_bottom(fx.s->sv, m));
 }
 
 TEST(a_flyer_corrects_its_height_toward_its_enemy) {

@@ -49,8 +49,8 @@ void bi_movetogoal(pg::Vm& vm);
 // move (with `enemy` 0 for none).
 float wrap_angle(float a);
 float turned_yaw(float yaw, float ideal, float speed);
-bool check_bottom(QcServer& s, int e);
-bool step_move(QcServer& s, int e, sh::Vec3f move, int enemy, bool relink);
+bool check_bottom(sh::Server& sv, int e);
+bool step_move(sh::Server& sv, int e, sh::Vec3f move, int enemy, bool relink);
 
 // Messages, prints and sounds (bi_message.cpp).
 void bi_sound(pg::Vm& vm);

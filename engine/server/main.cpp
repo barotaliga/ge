@@ -294,7 +294,16 @@ bool server_configure(console::Console& con, const std::vector<std::string>& arg
     error = "--base needs a directory; next: " + std::string(game.binary) + " --help";
     return false;
   }
-  if (!dir.empty()) con.set_search_path({std::filesystem::path(dir)});
+  // Files are named from the root (the layers' own paths: `mymod/server.cfg`); a name the root does
+  // not have is looked for the way the game looks: in the top mod's directory, the mods under it,
+  // then the base game's (a mod's server.cfg that runs `exec mymod.cfg`).
+  {
+    const std::filesystem::path root = dir.empty() ? std::string(".") : dir;
+    std::vector<std::filesystem::path> search{root};
+    for (auto m = cfg.mods.rbegin(); m != cfg.mods.rend(); ++m) search.push_back(root / *m);
+    search.push_back(root / cfg.base);
+    con.set_search_path(std::move(search));
+  }
   std::string mods;
   for (const std::string& m : cfg.mods) mods.append(mods.empty() ? "" : ",").append(m);
   con.cvars().set("sv_mod", mods, console::Source::code);
