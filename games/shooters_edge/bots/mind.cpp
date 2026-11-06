@@ -267,13 +267,12 @@ bool mind_obituary(Fighter& f, const std::string& line, double t) {
   // The words a death's line goes on with after the victim's name ("was nailed by", "ate 2 loads
   // of", "sleeps with the fishes", "becomes bored with life", ...).
   static constexpr const char* kDeathWords[] = {
-      "was ",     "ate ",    "rides ",      "accepts ", "chewed ", "eats ",    "gets ",
-      "sleeps ",  "sucks ",  "gulped ",     "burst ",   "visits ", "turned ",  "cratered",
-      "fell ",    "becomes ", "discovers ", "tries ",   "can't ",  "squished", "loses ",
-      "checks ",  "died",    "got "};
+      "was ",       "ate ",    "rides ", "accepts ", "chewed ", "eats ",    "gets ", "sleeps ",
+      "sucks ",     "gulped ", "burst ", "visits ",  "turned ", "cratered", "fell ", "becomes ",
+      "discovers ", "tries ",  "can't ", "squished", "loses ",  "checks ",  "died",  "got "};
   for (const Mate& m : f.mind.mates) {
-    if (m.name.empty() || line.size() <= m.name.size() + 1 || line.compare(0, m.name.size(), m.name) != 0 ||
-        line[m.name.size()] != ' ')
+    if (m.name.empty() || line.size() <= m.name.size() + 1 ||
+        line.compare(0, m.name.size(), m.name) != 0 || line[m.name.size()] != ' ')
       continue;
     const std::string_view rest = std::string_view(line).substr(m.name.size() + 1);
     bool death = false;

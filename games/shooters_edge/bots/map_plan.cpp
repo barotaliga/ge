@@ -60,7 +60,7 @@ void runs_from(const sh::NavGraph& g, int32_t from, std::vector<double>& out) {
     if (d > out[static_cast<size_t>(n)]) continue;
     const sh::NavNode& node = g.nodes[static_cast<size_t>(n)];
     for (int32_t k = 0; k < node.links; k++) {
-      const sh::NavLink& l = g.links[static_cast<size_t>(node.first_link + k)];
+      const sh::NavLink& l = g.links[static_cast<size_t>(node.first_link) + static_cast<size_t>(k)];
       const double nd = d + l.time_s;
       if (nd < out[static_cast<size_t>(l.to)]) {
         out[static_cast<size_t>(l.to)] = nd;
@@ -74,15 +74,25 @@ void runs_from(const sh::NavGraph& g, int32_t from, std::vector<double>& out) {
 
 double plan_worth(const ItemSpot& it) {
   switch (it.kind) {
-    case ItemKind::armor3: return 160;  // 200 at 80 %
-    case ItemKind::armor2: return 90;   // 150 at 60 %
-    case ItemKind::armor1: return 30;   // 100 at 30 %
-    case ItemKind::mega: return 100;
-    case ItemKind::quad: return 400;
-    case ItemKind::pent: return 500;
+    case ItemKind::armor3:
+      return 160;  // 200 at 80 %
+    case ItemKind::armor2:
+      return 90;  // 150 at 60 %
+    case ItemKind::armor1:
+      return 30;  // 100 at 30 %
+    case ItemKind::mega:
+      return 100;
+    case ItemKind::quad:
+      return 400;
+    case ItemKind::pent:
+      return 500;
     case ItemKind::weapon:
-      return it.weapon == kWRockets ? 150 : it.weapon == kWArc ? 120 : it.weapon == kWGrenades ? 40 : 10;
-    default: return 0;
+      return it.weapon == kWRockets    ? 150
+             : it.weapon == kWArc      ? 120
+             : it.weapon == kWGrenades ? 40
+                                       : 10;
+    default:
+      return 0;
   }
 }
 
@@ -115,7 +125,8 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
       stack.pop_back();
       for (size_t b = 0; b < keys.size(); b++)
         if (group[b] < 0 && is_power(items[static_cast<size_t>(keys[a])]) == false &&
-            is_power(items[static_cast<size_t>(keys[b])]) == false && between(a, b) <= set.cluster_s) {
+            is_power(items[static_cast<size_t>(keys[b])]) == false &&
+            between(a, b) <= set.cluster_s) {
           group[b] = groups;
           stack.push_back(b);
         }
@@ -130,7 +141,8 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
   const float median = zs[zs.size() / 2];
   // The spawn points' runs.
   std::vector<std::vector<double>> spawn_run(spawns.size());
-  for (size_t s = 0; s < spawns.size(); s++) runs_from(g, sh::nav_nearest(g, spawns[s]), spawn_run[s]);
+  for (size_t s = 0; s < spawns.size(); s++)
+    runs_from(g, sh::nav_nearest(g, spawns[s]), spawn_run[s]);
 
   for (int32_t a = 0; a < groups; a++) {
     PlanArea area;
@@ -155,7 +167,8 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
       if (area.region[n]) continue;
       const sh::NavNode& node = g.nodes[n];
       for (int32_t k = 0; k < node.links; k++) {
-        const sh::NavLink& l = g.links[static_cast<size_t>(node.first_link + k)];
+        const sh::NavLink& l =
+            g.links[static_cast<size_t>(node.first_link) + static_cast<size_t>(k)];
         if (!area.region[static_cast<size_t>(l.to)]) continue;
         bool known = false;
         for (const sh::Vec3f& e : entries) known = known || dist(e, node.origin) < kEntrySpot;
@@ -178,7 +191,8 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
     area.from_spawns_s = counted ? total / counted : 0;
     area.reached = counted * 2 >= static_cast<int>(spawn_run.size()) || spawn_run.empty();
     const double high = std::clamp(area.height / 64.0 * 0.1, 0.0, 0.3);
-    area.hold = area.reached ? area.worth / (1 + 0.1 * area.ways_in * area.ways_in) * (1 + high) : 0;
+    area.hold =
+        area.reached ? area.worth / (1 + 0.1 * area.ways_in * area.ways_in) * (1 + high) : 0;
     plan.areas.push_back(std::move(area));
   }
   std::stable_sort(plan.areas.begin(), plan.areas.end(),
@@ -213,7 +227,9 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
   }
   for (const int32_t r : plan.rushes) {
     const double run_s =
-        plan.base >= 0 ? plan.between_s[static_cast<size_t>(plan.base) * na + static_cast<size_t>(r)] : 0;
+        plan.base >= 0
+            ? plan.between_s[static_cast<size_t>(plan.base) * na + static_cast<size_t>(r)]
+            : 0;
     plan.rush_leave_s.push_back((run_s < kFar ? run_s : 10) + set.rush_lead_s);
   }
   return plan;
@@ -222,7 +238,8 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
 int32_t plan_area_of(const MapPlan& plan, int32_t n) {
   if (n < 0) return -1;
   for (size_t a = 0; a < plan.areas.size(); a++)
-    if (static_cast<size_t>(n) < plan.areas[a].region.size() && plan.areas[a].region[static_cast<size_t>(n)])
+    if (static_cast<size_t>(n) < plan.areas[a].region.size() &&
+        plan.areas[a].region[static_cast<size_t>(n)])
       return static_cast<int32_t>(a);
   return -1;
 }
@@ -233,7 +250,8 @@ std::string plan_text(const MapPlan& plan, const std::vector<ItemSpot>& items) {
   for (size_t a = 0; a < plan.areas.size(); a++) {
     const PlanArea& ar = plan.areas[a];
     std::string what;
-    for (const int32_t i : ar.items) what += std::string(what.empty() ? "" : "+") + item_call(items[static_cast<size_t>(i)]);
+    for (const int32_t i : ar.items)
+      what += std::string(what.empty() ? "" : "+") + item_call(items[static_cast<size_t>(i)]);
     out += "area " + std::to_string(a) + " " + (ar.name.empty() ? "-" : ar.name) + ": " + what +
            ", worth " + to_fixed(ar.worth, 0) + "/min, " + std::to_string(ar.ways_in) +
            " ways in, height " + to_fixed(ar.height, 0) + ", " + to_fixed(ar.from_spawns_s, 1) +
@@ -241,7 +259,8 @@ std::string plan_text(const MapPlan& plan, const std::vector<ItemSpot>& items) {
            (ar.reached ? "" : ", no way there from most spawns") + "\n";
   }
   const auto name = [&](int32_t a) {
-    return a < 0 ? std::string("none") : std::to_string(a) + " (" + plan.areas[static_cast<size_t>(a)].name + ")";
+    return a < 0 ? std::string("none")
+                 : std::to_string(a) + " (" + plan.areas[static_cast<size_t>(a)].name + ")";
   };
   out += "base " + name(plan.base) + ", forward " + name(plan.forward);
   for (size_t r = 0; r < plan.rushes.size(); r++)

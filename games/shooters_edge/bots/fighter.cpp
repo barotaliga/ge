@@ -63,15 +63,17 @@ constexpr double kCallAgain_s = 8;  // an enemy in sight is called out again aft
 constexpr double kTold_s = 10;      // a point at an item is followed this long
 constexpr float kRocketNear = 400;  // a rocket at a man nearer than this is aimed at his middle
 // A hurt player does not walk back into a fight his side is losing: health within this of a danger
-// spot (where he died, where a mate died, an area called lost, a call for help: mind.hpp) is worth this share while
-// he heals, and health an enemy he knows of now stands nearer to than he does is worth half.
+// spot (where he died, where a mate died, an area called lost, a call for help: mind.hpp) is worth
+// this share while he heals, and health an enemy he knows of now stands nearer to than he does is
+// worth half.
 constexpr double kDangerMemory_s = 40;
 constexpr float kDangerReach = 384;
 constexpr double kDangerScale = 0.25;
 constexpr double kEnemyNearScale = 0.5;
 constexpr double kEnemyKnown_s = 3;  // an enemy seen or heard this lately is known of now
-constexpr double kHotSpot_s = 60;     // two danger spots this lately near an item: no healing there
+constexpr double kHotSpot_s = 60;    // two danger spots this lately near an item: no healing there
 constexpr double kMegaHealBonus = 10;  // the mega's worth to a healer over the health it gives
+constexpr double kSwimExit_s = 3;      // a climb out of the water kept this long at most
 constexpr double kBaseHeal = 1.4;      // health in the team's base is worth this more to a healer
 constexpr float kBlastClear = 140;     // a rocket or grenade is held with a mate this near its aim
 
@@ -300,8 +302,7 @@ int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& s
     if (heal && it.kind == ItemKind::mega) v = std::fmax(0.f, 100 - st.health) + kMegaHealBonus;
     if (v <= 0) return 0.0;
     // The team's base (the map plan's) is where a hurt player falls back to.
-    if (heal && f.plan && f.plan->base >= 0 &&
-        plan_area_of(*f.plan, it.node) == f.plan->base)
+    if (heal && f.plan && f.plan->base >= 0 && plan_area_of(*f.plan, it.node) == f.plan->base)
       v *= kBaseHeal;
     if (heal) {  // where two or more of its side fell lately is not healed at at all
       int fell = 0;
@@ -641,8 +642,8 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   const float theirs = c ? foe_might(f, c->ent, t) : 0;
   // An enemy in sight this close is fought whatever the odds: turning away only shows him a back.
   const bool cornered =
-      seen_now && dist(eye, at_of(c->seen)) <
-                      (f.temper == sh::Temper::coward ? kCowardCornered : kCornered);
+      seen_now &&
+      dist(eye, at_of(c->seen)) < (f.temper == sh::Temper::coward ? kCowardCornered : kCornered);
   const bool engage = c && (cornered || sh::takes_fight(f.temper, f.edge, mine, theirs));
   const bool recent = c && ((ai::known(c->seen) && ai::age(c->seen, t) <= kChase_s && engage) ||
                             (by_ear && ai::age(c->heard, t) <= kHeardChase_s &&
@@ -670,8 +671,9 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   }
   f.outmatched = false;
   // A coward backs off when weak with someone about, health worth going for or not.
-  const bool backs_off = (heal_at >= 0 && item_value(f.items[static_cast<size_t>(heal_at)], st) > 0) ||
-                         (c && weak && f.temper == sh::Temper::coward);
+  const bool backs_off =
+      (heal_at >= 0 && item_value(f.items[static_cast<size_t>(heal_at)], st) > 0) ||
+      (c && weak && f.temper == sh::Temper::coward);
   if (backs_off && !cornered) {
     set_mode(f, FightMode::retreat, why, "weak with someone about: health or armour first");
   } else if (seen_now && !engage) {
@@ -718,8 +720,8 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
       // Outmatched, anything that evens the odds will do, away from the enemy.
       // Weak with nobody about, it recovers too, rather than walk into the next fight for the
       // item worth most.
-      const bool heal = (f.mode == FightMode::retreat && !f.outmatched) ||
-                        (f.mode == FightMode::roam && weak);
+      const bool heal =
+          (f.mode == FightMode::retreat && !f.outmatched) || (f.mode == FightMode::roam && weak);
       const int32_t i = best_item(f, s, st, self.origin, t, heal, c ? &enemy : nullptr, why);
       const int32_t mate = f.outmatched ? nearest_mate_node(f, self.origin, t) : -1;
       if (i < 0 && mate >= 0) {
@@ -1002,6 +1004,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
 
   sh::Vec3f way;
   const bool swim = water_way(f, s, me, t, msec, why, way);  // every command: it keeps the air
+  if (s.world.entities[static_cast<size_t>(me)].waterlevel == 0) f.swim_exit = -1;  // out
   if (!dead && swim) {
     // Swimming the field's way out: the view on the next cell (pitch down positive), forward,
     // and jump held, which rises in water and climbs out over the edge at the top.
@@ -1013,6 +1016,30 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     cmd.forward = sh::quantize_axis(320);
     cmd.side = 0;
     if (dz > 8) cmd.buttons |= sh::kButtonJump;
+    // In an exit cell, the last leg out as the field proved it (shooter/swim.hpp `swim_out`):
+    // chest deep and level, so the move's water jump lifts it over the edge.
+    const sh::SwimField* field = f.diving >= 0 && f.items[static_cast<size_t>(f.diving)].dive
+                                     ? f.items[static_cast<size_t>(f.diving)].dive
+                                     : f.swim;
+    int32_t exit_node = -1;
+    // Kept once it is in an exit cell, until it is out or kSwimExit_s has passed: the swimmer
+    // pressed at the edge drifts across the cell's side and would turn back.
+    if (field && sh::swim_exiting(*field, me_at, exit_node) && exit_node >= 0) {
+      f.swim_exit = exit_node;
+      f.swim_exit_until = t + kSwimExit_s;
+    }
+    if (f.swim_exit >= 0 && t > f.swim_exit_until) f.swim_exit = -1;
+    exit_node = f.swim_exit;
+    if (exit_node >= 0) {
+      sh::MoveState ms;
+      ms.origin = me_at;
+      ms.waterlevel = s.world.entities[static_cast<size_t>(me)].waterlevel;
+      const sh::MoveCmd out =
+          sh::swim_out(ms, f.bot.pilot.pilot.g->nodes[static_cast<size_t>(exit_node)].origin, msec);
+      cmd.angles.x = out.angles.x;
+      cmd.angles.y = out.angles.y;
+      cmd.buttons = static_cast<uint8_t>((cmd.buttons & ~sh::kButtonJump) | out.buttons);
+    }
   } else if (!dead && f.lost_to >= 0) {
     const sh::Vec3f to = f.bot.pilot.pilot.g->nodes[static_cast<size_t>(f.lost_to)].origin;
     const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;

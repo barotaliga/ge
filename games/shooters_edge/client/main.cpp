@@ -87,6 +87,7 @@
 #include "platform/window.hpp"
 #include "render/screenshot_copy.hpp"
 #include "shooters_edge/client/args.hpp"
+#include "shooters_edge/client/bot_view.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
@@ -115,10 +116,9 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
-#include "shooters_edge/client/bot_view.hpp"
 #include "shooters_edge/net/classic_bot_team.hpp"
-#include "shooters_edge/net/classic_team_areas.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
+#include "shooters_edge/net/classic_team_areas.hpp"
 #include "shooters_edge/net/classic_team_view.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
@@ -628,7 +628,8 @@ int run_main(int argc, char** argv) {
     }
     sn::BotTeam bot_team;
     if (!sn::bot_team_start(bot_team, bc, error)) {
-      out::error("shooters_edge: " + error);
+      out::error("shooters_edge: the bot client could not start its team (--bots=" +
+                 std::to_string(args.bots) + " --server=" + args.server + "): " + error);
       return 1;
     }
     console.set_unknown([&bot_team](const CArgs& a) {
@@ -647,7 +648,8 @@ int run_main(int argc, char** argv) {
     sn::TeamViewVideo bot_video;
     if (!args.bots_view.empty() &&
         !sn::team_view_video_open(bot_video, args.bots_view, w & ~1, h & ~1, 10, error)) {
-      out::error("shooters_edge: --bots-view=" + args.bots_view + ": " + error);
+      out::error("shooters_edge: the team view's video " + args.bots_view + " did not open: " +
+                 error + "; next: pass --bots-view=<a .mp4 in a folder that exists>");
       return 1;
     }
     const uint64_t bots_from = ge::platform::now_ns();
@@ -688,16 +690,19 @@ int run_main(int argc, char** argv) {
       sn::team_areas_update(bot_areas, bot_team);
       // The map's world, made once the team is on it (again on a new map).
       if (bot_team.loaded && bot_world_map != bot_team.map && !bot_team.seats.empty()) {
-        bot_world = cl::create_world_draw(*device, files, *bot_team.loaded, static_cast<uint32_t>(w),
-                                          static_cast<uint32_t>(h), surface.format(), picture, {},
-                                          error, {bot_team.seats[0]->c.models, {}});
-        if (!bot_world) out::error("shooters_edge: the bots' map did not draw: " + error);
+        bot_world = cl::create_world_draw(
+            *device, files, *bot_team.loaded, static_cast<uint32_t>(w), static_cast<uint32_t>(h),
+            surface.format(), picture, {}, error, {bot_team.seats[0]->c.models, {}});
+        if (!bot_world)
+          out::error("shooters_edge: the bots' map " + bot_team.map + " did not draw: " + error +
+                     "; next: the flat team view stands in; check the packs under -basedir");
         bot_world_map = bot_team.map;
         bot_cam.fitted = false;
       }
       if (bot_video.open && t >= next_picture) {
         next_picture += 0.1;
-        if (!sn::team_view_video_frame(bot_video, sn::team_view(bot_flat, bot_team, w & ~1, h & ~1), error))
+        if (!sn::team_view_video_frame(bot_video, sn::team_view(bot_flat, bot_team, w & ~1, h & ~1),
+                                       error))
           out::error(error);
       }
       overlay.begin(w, h);
@@ -723,7 +728,8 @@ int run_main(int argc, char** argv) {
       ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
       const wgpu::TextureView target = surface.acquire(*device);
       if (!target) continue;
-      cl::draw_world(*device, bot_world ? *bot_world : *title, view, {}, nullptr, dt, overlay, target);
+      cl::draw_world(*device, bot_world ? *bot_world : *title, view, {}, nullptr, dt, overlay,
+                     target);
       shot_copy.frame(*device, surface.frame_target(), shots, console);
       surface.present();
       // `--seconds=N`: a screenshot a second before the end, then quit (a run that leaves a

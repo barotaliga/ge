@@ -1,7 +1,7 @@
 // A MAP'S TEAM PLAN (games/shooters_edge/bots/map_plan.hpp), worked out from the fixture halls
 // furnished for a team game: the key items become areas, a base is chosen among the areas a way
-// leads to that hold no power, the quad's area is a rush with a lead, and the plan is the same every
-// run. An item's worth orders the powers over the armours over the weapons.
+// leads to that hold no power, the quad's area is a rush with a lead, and the plan is the same
+// every run. An item's worth orders the powers over the armours over the weapons.
 //
 // ge:summary Tests: a map's team plan from the halls: areas, a base, the quad's rush, the worths
 // ge:keywords test map-plan areas base rush worth halls

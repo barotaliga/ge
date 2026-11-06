@@ -386,7 +386,11 @@ bool bot_team_start(BotTeam& t, const BotTeamConfig& cfg, std::string& error) {
       return false;
     if (cfg.open ? !cfg.open(s->transport, k, error)
                  : !gn::open_udp_transport(s->transport, gn::ipv4(0, 0, 0, 0, 0), &error)) {
-      error = "bots: " + s->name + "'s socket did not open: " + error;
+      std::string why = "bots: ";
+      why += s->name;
+      why += "'s socket did not open: ";
+      why += error;
+      error = std::move(why);
       return false;
     }
     ClientConfig cc;
@@ -462,15 +466,20 @@ void bot_team_tick(BotTeam& t, int64_t now_us) {
       if (f.diving >= 0 && static_cast<size_t>(f.diving) < f.items.size())
         diving = bt::item_call(f.items[static_cast<size_t>(f.diving)]);
       s.deaths++;
-      say(t, "death " + s.name + " at " + (f.locs ? sh::loc_name_at(*f.locs, me.origin) : "?") +
-                 " (" + ge::core::num::to_fixed(me.origin.x, 0) + " " +
-                 ge::core::num::to_fixed(me.origin.y, 0) + " " +
-                 ge::core::num::to_fixed(me.origin.z, 0) + "): " + bt::fight_mode_name(f.mode) +
-                 "/" + bt::role_name(f.role) + " goal " + goal + " water " +
-                 std::to_string(me.waterlevel) + " under " +
-                 (f.under_since >= 0 ? ge::core::num::to_fixed(tn - f.under_since, 1) : "0") +
-                 " s diving " + diving + (f.swimming ? " swimming-out" : "") +
-                 (f.lost_to >= 0 ? " lost" : ""));
+      std::string line = "death " + s.name + " at ";
+      line += f.locs ? sh::loc_name_at(*f.locs, me.origin) : "?";
+      line += " (" + ge::core::num::to_fixed(me.origin.x, 0) + " ";
+      line += ge::core::num::to_fixed(me.origin.y, 0) + " ";
+      line += ge::core::num::to_fixed(me.origin.z, 0) + "): ";
+      line += bt::fight_mode_name(f.mode);
+      line += "/";
+      line += bt::role_name(f.role);
+      line += " goal " + goal + " water " + std::to_string(me.waterlevel) + " under ";
+      line += f.under_since >= 0 ? ge::core::num::to_fixed(tn - f.under_since, 1) : "0";
+      line += " s diving " + diving;
+      if (f.swimming) line += " swimming-out";
+      if (f.lost_to >= 0) line += " lost";
+      say(t, line);
     }
     s.last_health = health;
     if (t.cfg.ready && !s.said_ready && s.commands * bt::kPilotMsec * 1000 >= kReadyAfterUs) {
@@ -517,7 +526,7 @@ void bot_team_command(BotTeam& t, const std::string& line_in) {
 bool bot_team_stop(BotTeam& t, std::string& error) {
   for (auto& s : t.seats) client_command(s->c, "drop");
   for (int i = 0; i < 3; i++)
-    for (auto& s : t.seats) client_tick(s->c, t.now_us + (i + 1) * 13000);
+    for (auto& s : t.seats) client_tick(s->c, t.now_us + static_cast<int64_t>(i + 1) * 13000);
   if (t.cfg.out.empty()) return true;
   for (auto& s : t.seats) {
     record_stop(s->recording);
