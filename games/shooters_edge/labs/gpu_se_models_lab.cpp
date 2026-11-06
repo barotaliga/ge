@@ -590,6 +590,9 @@ void run(gl::Lab& lab) {
                   {{"map", map_name}, {"look", "modern"}, {"size", lab.arg("size")}}},
                  shade, gl::Det::measured);
         cl::step_fx(l, shown, fx_state, t + kFxSettle, 0, fx);
+      } else {
+        // No adapter: the same shot ids, so the digest is the device path's.
+        ls::placeholders(lab, {(id + "-shade").c_str()});
       }
       // From the side: his figure (drawn, as another player sees him) and the shadow it throws.
       ge::render::FrameView side = v;
@@ -674,6 +677,8 @@ void run(gl::Lab& lab) {
                   "on the right the same floor evenly lit",
                   {{"map", map_name}, {"look", "modern"}, {"size", lab.arg("size")}}},
                  pair, gl::Det::measured);
+      } else {
+        ls::placeholders(lab, {(id + "-side-pair").c_str()});
       }
       fx.models.pop_back();
     };
