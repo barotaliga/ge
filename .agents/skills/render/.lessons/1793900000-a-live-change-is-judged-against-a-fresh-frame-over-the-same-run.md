@@ -17,3 +17,9 @@ concepts: [quality-ladder, set-picture, live-change, pipelines-after-load, bloom
   "off" where the shader mixes toward it (`mix(c, bloom, k)` darkens).
 - A GPU timing on the Mac is only a measurement with nothing else drawing on its GPU: check for
   other threads' game windows (`ps`, `build/*/games/*`), not only for builds.
+- Judge a live change of a material where the material is seen: the ladder's own view (the
+  start looking up into a flurry) shows almost no ground, so a snow-off picture there is the
+  top's; `--view=chase --fall=0` shows the snow's relief and the plain ground side by side.
+- A resource sized by a stop (the trails' maps) is made at the load at a few texels when the stop
+  is off, so turning it on is a resize, not a pipeline; a map drawn with a MAX blend is redrawn
+  from its history safely, since a stamp drawn twice leaves what it left once.
