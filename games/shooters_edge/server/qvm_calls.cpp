@@ -1210,7 +1210,7 @@ int32_t fs_filelist(QvmServer& s, int32_t path_at, int32_t pattern_at, int32_t b
         const size_t dot = n.rfind('.');
         if (dot != std::string::npos && dot > 0) n.erase(dot);
       }
-      if ((flags & 2) != 0) n = s.opt.list_dirs[d] + "/" + n;
+      if ((flags & 2) != 0) n.insert(0, s.opt.list_dirs[d] + "/");
       names.push_back(n);
       if (names.size() >= 4096) break;
     }

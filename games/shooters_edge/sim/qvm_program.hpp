@@ -52,7 +52,7 @@ namespace shooters_edge::sim {
 namespace sh = ge::shooter;
 
 // The exports: the command numbers of the module's entry function.
-enum QvmExport : int32_t {
+enum QvmExport : uint8_t {
   kQvmInit = 0,
   kQvmLoadEntities = 1,
   kQvmShutdown = 2,

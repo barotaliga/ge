@@ -22,7 +22,7 @@ constexpr int32_t kCmd = kFrame + 8;  // the export's number
 constexpr int32_t kLocalI = 40, kLocalN = 44;
 
 // The system calls it makes.
-enum : int32_t {
+enum : uint8_t {
   kSysBprint = 12,
   kSysSprint = 13,
   kSysEntityToken = 3,

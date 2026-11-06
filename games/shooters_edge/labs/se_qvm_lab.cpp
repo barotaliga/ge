@@ -96,7 +96,9 @@ struct Run {
 };
 
 bool start(gl::Lab& lab, Run& r, std::string& error) {
-  const std::string root = lab.arg("root"), mod = lab.arg("mod"), map = lab.arg("map");
+  const std::string& root = lab.arg("root");
+  const std::string& mod = lab.arg("mod");
+  const std::string& map = lab.arg("map");
   sv::QvmServerOptions so;
   so.seed = static_cast<uint32_t>(lab.arg_num("seed"));
   so.loop.max_edicts = 1024;
@@ -213,7 +215,7 @@ void run(gl::Lab& lab) {
 
   gl::LabTable clients{"the clients at the end", {"slot", "name", "x", "y", "z", "health"}, {}};
   for (int p = 0; p < players; p++) {
-    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(p + 1)];
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(p) + 1];
     clients.rows.push_back({std::to_string(p), s.world.clients[static_cast<size_t>(p)].name,
                             to_fixed(d.origin.x, 1), to_fixed(d.origin.y, 1),
                             to_fixed(d.origin.z, 1),

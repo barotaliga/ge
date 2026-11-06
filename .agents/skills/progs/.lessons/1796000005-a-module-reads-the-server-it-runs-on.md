@@ -2,7 +2,7 @@
 title: A module reads the server it runs on; a cvar it reads and the server lacks is a silent bug
 date: 2026-11-06
 scope: games/shooters_edge/server/qvm_server.cpp, games/shooters_edge/server/qvm_calls.cpp
-concepts: [qvm, cvar, cvar_string, sv_maxrate, version, text-cvar, module-server, interop]
+concepts: [qvm, cvar, cvar-string, rate-cap, version, text-cvar, module-server, interop]
 ---
 
 A compiled match mod reads settings the server is expected to have, not ones it registers:
