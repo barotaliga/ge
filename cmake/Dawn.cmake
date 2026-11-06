@@ -4,9 +4,16 @@
 # procedure for moving the pin.
 #
 # GE_GPU decides whether engine/gpu (and everything that draws) is built. It defaults ON where
-# a prebuilt archive exists for the host (Linux x64, macOS arm64, Windows x64) and OFF elsewhere
-# (Linux arm64, until Dawn is built from source there: milestone M11). With it OFF the rest of
-# the engine builds and tests unchanged.
+# a prebuilt archive exists for the target (Linux x64, macOS arm64, Windows x64; iOS and the iOS
+# Simulator; Android) and OFF elsewhere (Linux arm64, until Dawn is built from source there:
+# milestone M11a). With it OFF the rest of the engine builds and tests unchanged.
+#
+# THE MOBILE TARGETS take the same release's mobile archives: the Apple xcframework (a static
+# library for the iPhone and iPad, one for the iOS Simulator, one for the Mac), the Android
+# static libraries (one an ABI), and the headers archive beside them. Their CMake package is
+# not usable (the headers archive's was written by the Android build, with that build machine's
+# paths), so dawn::webgpu_dawn is declared here over the target's slice, with the system's
+# libraries it needs.
 #
 # The archive is downloaded once into GE_DEPS_DIR (default .cache/deps/, gitignored, shared by
 # every preset and cached by CI) and checked against its SHA-256. GE_DAWN_DIR names an
@@ -23,6 +30,10 @@ set(GE_DAWN_COMMIT "67d4d6e64b0755d638f76549794692badfdbc8ab")
 set(GE_DAWN_SHA256_ubuntu-latest "20ff88448def9645ceeff30911e07295aeb433be23e26180c96019b4300bff5a")
 set(GE_DAWN_SHA256_macos-latest "736fccba78b8a2fde8bfd55d045e890933b0a01776aed5a29b9f024735404193")
 set(GE_DAWN_SHA256_windows-latest "57402c6aa887e30d3e5710707d6b0677d8292538ab941628c624635022bfa49f")
+# The mobile archives of the same release (dawn-<kind>-<commit>...tar.gz).
+set(GE_DAWN_SHA256_apple "9236e51e98e3423c1fd18cdf5d291a3c2021e8620960d44a97db219012182452")
+set(GE_DAWN_SHA256_android "6add2f7fa18b9ff3c34018c0b24474b73fb61111dcf2810e392d269cae1c6f99")
+set(GE_DAWN_SHA256_headers "6cb3c021fdee53938033157392337af0db942212b872168a01957ec0eff5e077")
 
 # Which archive serves this host, if any.
 set(ge_dawn_os "")
@@ -34,8 +45,22 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND ge_cpu MATCHES "^(arm64|aarch64)$
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND ge_cpu MATCHES "^(x86_64|amd64)$")
   set(ge_dawn_os "windows-latest")
 endif()
+# A mobile target: its archive and the slice in it (the SDK CMAKE_OSX_SYSROOT names for iOS, the
+# ABI for Android).
+set(ge_dawn_mobile "")
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+  set(ge_dawn_mobile "apple")
+  if(CMAKE_OSX_SYSROOT MATCHES "[Ss]imulator")
+    set(ge_dawn_slice "dawn-apple-${GE_DAWN_COMMIT}.xcframework/ios-arm64_x86_64-simulator")
+  else()
+    set(ge_dawn_slice "dawn-apple-${GE_DAWN_COMMIT}.xcframework/ios-arm64")
+  endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Android")
+  set(ge_dawn_mobile "android")
+  set(ge_dawn_slice "dawn-android-${GE_DAWN_COMMIT}/${CMAKE_ANDROID_ARCH_ABI}")
+endif()
 
-if(ge_dawn_os OR GE_DAWN_DIR)
+if(ge_dawn_os OR ge_dawn_mobile OR GE_DAWN_DIR)
   set(ge_gpu_default ON)
 else()
   set(ge_gpu_default OFF)
@@ -55,6 +80,59 @@ if(MSVC AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     "(PRESET=release), or configure with -DGE_GPU=OFF; skill: build.")
 endif()
 
+# One archive of the pinned release, downloaded into GE_DEPS_DIR, checked and unpacked there.
+function(ge_dawn_fetch file sha256)
+  set(archive "${GE_DEPS_DIR}/${file}")
+  set(url "https://github.com/google/dawn/releases/download/${GE_DAWN_TAG}/${file}")
+  message(STATUS "ge: downloading Dawn ${GE_DAWN_TAG} (${file}) into ${GE_DEPS_DIR}")
+  file(DOWNLOAD "${url}" "${archive}" EXPECTED_HASH SHA256=${sha256} STATUS status TLS_VERIFY ON)
+  list(GET status 0 code)
+  if(NOT code EQUAL 0)
+    list(GET status 1 why)
+    file(REMOVE "${archive}")
+    message(FATAL_ERROR "ge: downloading ${url} failed (${why}). Check the network, or pass "
+      "-DGE_DAWN_DIR=<an unpacked Dawn install>, or -DGE_GPU=OFF; skill: gpu.")
+  endif()
+  file(ARCHIVE_EXTRACT INPUT "${archive}" DESTINATION "${GE_DEPS_DIR}")
+  file(REMOVE "${archive}")
+endfunction()
+
+if(ge_dawn_mobile AND NOT GE_DAWN_DIR)
+  # The headers unpack as dawn-headers/: kept under the commit's name, so a new pin fetches anew.
+  set(ge_dawn_headers "${GE_DEPS_DIR}/dawn-headers-${GE_DAWN_COMMIT}")
+  if(NOT EXISTS "${ge_dawn_headers}/include/webgpu/webgpu_cpp.h")
+    ge_dawn_fetch("dawn-headers-${GE_DAWN_COMMIT}.tar.gz" ${GE_DAWN_SHA256_headers})
+    file(REMOVE_RECURSE "${ge_dawn_headers}")
+    file(RENAME "${GE_DEPS_DIR}/dawn-headers" "${ge_dawn_headers}")
+  endif()
+  set(ge_dawn_lib "${GE_DEPS_DIR}/${ge_dawn_slice}/libwebgpu_dawn.a")
+  if(NOT EXISTS "${ge_dawn_lib}")
+    if(ge_dawn_mobile STREQUAL "apple")
+      ge_dawn_fetch("dawn-apple-${GE_DAWN_COMMIT}.xcframework.tar.gz" ${GE_DAWN_SHA256_apple})
+    else()
+      ge_dawn_fetch("dawn-android-${GE_DAWN_COMMIT}.tar.gz" ${GE_DAWN_SHA256_android})
+    endif()
+  endif()
+  if(NOT EXISTS "${ge_dawn_lib}")
+    message(FATAL_ERROR "ge: Dawn's ${ge_dawn_mobile} archive has no ${ge_dawn_slice}/"
+      "libwebgpu_dawn.a for ${CMAKE_SYSTEM_NAME} (${CMAKE_OSX_SYSROOT}${CMAKE_ANDROID_ARCH_ABI}). "
+      "Configure with -DGE_GPU=OFF, or pass -DGE_DAWN_DIR=<a Dawn install for it>; skill: gpu.")
+  endif()
+  find_package(Threads REQUIRED)
+  add_library(dawn::webgpu_dawn STATIC IMPORTED GLOBAL)
+  set_target_properties(dawn::webgpu_dawn PROPERTIES
+    IMPORTED_LOCATION "${ge_dawn_lib}"
+    INTERFACE_INCLUDE_DIRECTORIES "${ge_dawn_headers}/include")
+  if(ge_dawn_mobile STREQUAL "apple")
+    target_link_libraries(dawn::webgpu_dawn INTERFACE Threads::Threads "-framework CoreFoundation"
+      "-framework Foundation" "-framework IOSurface" "-framework QuartzCore" "-framework Metal"
+      "-framework UIKit")
+  else()
+    target_link_libraries(dawn::webgpu_dawn INTERFACE Threads::Threads log android dl)
+  endif()
+  return()
+endif()
+
 if(NOT GE_DAWN_DIR)
   if(NOT ge_dawn_os)
     message(FATAL_ERROR "ge: GE_GPU=ON but Dawn publishes no prebuilt archive for "
@@ -64,20 +142,7 @@ if(NOT GE_DAWN_DIR)
   set(ge_dawn_name "Dawn-${GE_DAWN_COMMIT}-${ge_dawn_os}-Release")
   set(GE_DAWN_DIR "${GE_DEPS_DIR}/${ge_dawn_name}")
   if(NOT EXISTS "${GE_DAWN_DIR}/include/webgpu/webgpu.h")
-    set(archive "${GE_DEPS_DIR}/${ge_dawn_name}.tar.gz")
-    set(url "https://github.com/google/dawn/releases/download/${GE_DAWN_TAG}/${ge_dawn_name}.tar.gz")
-    message(STATUS "ge: downloading Dawn ${GE_DAWN_TAG} (${ge_dawn_os}) into ${GE_DEPS_DIR}")
-    file(DOWNLOAD "${url}" "${archive}" EXPECTED_HASH SHA256=${GE_DAWN_SHA256_${ge_dawn_os}}
-      STATUS status TLS_VERIFY ON)
-    list(GET status 0 code)
-    if(NOT code EQUAL 0)
-      list(GET status 1 why)
-      file(REMOVE "${archive}")
-      message(FATAL_ERROR "ge: downloading ${url} failed (${why}). Check the network, or pass "
-        "-DGE_DAWN_DIR=<an unpacked copy of that archive>, or -DGE_GPU=OFF; skill: gpu.")
-    endif()
-    file(ARCHIVE_EXTRACT INPUT "${archive}" DESTINATION "${GE_DEPS_DIR}")
-    file(REMOVE "${archive}")
+    ge_dawn_fetch("${ge_dawn_name}.tar.gz" ${GE_DAWN_SHA256_${ge_dawn_os}})
   endif()
 endif()
 

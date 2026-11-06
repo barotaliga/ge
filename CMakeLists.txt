@@ -30,6 +30,24 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(GE_WERROR "Treat warnings as errors" ON)
 option(GE_SANITIZE "Build with address + undefined sanitizers" OFF)
 
+# A MOBILE TARGET (iOS, the iOS Simulator, Android: docs/goals.md M11) builds one game's app
+# (GE_MOBILE_GAME) and what it links. The HOST TOOLS (the ge command line, the labs, the assets
+# tool, the tests, a game's play executable, the plugins' tools) run on the machine that builds,
+# so they are built only where they can run there.
+if(CMAKE_SYSTEM_NAME MATCHES "^(iOS|Android)$")
+  set(GE_MOBILE ON)
+else()
+  set(GE_MOBILE OFF)
+endif()
+if(GE_MOBILE)
+  set(ge_host_tools_default OFF)
+else()
+  set(ge_host_tools_default ON)
+endif()
+option(GE_HOST_TOOLS "Build the host tools: ge, labs, assets, the tests, play, plugin tools"
+  ${ge_host_tools_default})
+set(GE_MOBILE_GAME "fall_line" CACHE STRING "The game a mobile target builds (games/<name>)")
+
 # Two flag sets. ge_fp and ge_isa (cmake/Fp.cmake) are the floating-point half of the
 # DETERMINISM CONTRACT and the instruction-set baseline, and travel with ge_core into an installed
 # package, so a game built against a release computes the same bits as the engine's tests.
@@ -69,6 +87,7 @@ include(cmake/Modules.cmake)
 include(cmake/Dawn.cmake)
 include(cmake/SDL.cmake)
 include(cmake/Wgsl.cmake)
+include(cmake/App.cmake)
 file(GLOB GE_MODULE_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/*/module.cmake)
 foreach(module_cmake ${GE_MODULE_FILES})
   include(${module_cmake})
@@ -89,10 +108,16 @@ endforeach()
 # A game is the demo, not part of the published engine, so only the top-level build makes it.
 if(PROJECT_IS_TOP_LEVEL)
   file(GLOB GE_GAME_DIRS CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/games/*/CMakeLists.txt)
+  if(GE_MOBILE)
+    set(GE_GAME_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/games/${GE_MOBILE_GAME}/CMakeLists.txt)
+  endif()
   foreach(game_cmake ${GE_GAME_DIRS})
     get_filename_component(game_dir ${game_cmake} DIRECTORY)
     add_subdirectory(${game_dir})
   endforeach()
+endif()
+
+if(PROJECT_IS_TOP_LEVEL AND GE_HOST_TOOLS)
 
   # The one `labs` executable every lab is linked into (docs/labs.md).
   # A lab registers itself from a static initializer, so labs are compiled into the executable,

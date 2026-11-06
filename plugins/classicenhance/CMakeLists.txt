@@ -11,6 +11,9 @@ ge_add_plugin(classicenhance ENGINE core assets audio camera console lab ui vfs 
   APP gpu render)
 if(TARGET ge_classicenhance_app)
   ge_embed_wgsl(ge_classicenhance_app app/upscaler.wgsl)
+endif()
+# The tool is a host tool (not built for a mobile target).
+if(TARGET ge_classicenhance_app AND TARGET classicenhance)
   target_link_libraries(classicenhance PRIVATE ge_classicenhance_app)
   target_compile_definitions(classicenhance PRIVATE GE_CLASSICENHANCE_GPU=1)
 endif()

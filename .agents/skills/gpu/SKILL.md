@@ -13,8 +13,10 @@ there before the first edit.
 
 - **Dawn native on every target**: macOS, Linux, Windows, iOS, iPadOS, the Mac App
   Store and Android. There is no web build. Desktop links Dawn's prebuilt GitHub
-  release, pinned to its tag. iOS, iPadOS and Android build Dawn from source, cached in
-  CI.
+  release, pinned to its tag; iOS, iPadOS and Android link the same release's mobile
+  archives (the Apple xcframework, the Android libraries, the headers), declared as
+  `dawn::webgpu_dawn` by `cmake/Dawn.cmake` (docs/rendering.md § Where Dawn is built). Moving
+  the pin moves their three SHA-256s too.
 - **Debug validates, release does not.** Debug builds keep Dawn's validation. Release
   builds set `skip_validation` and `disable_robustness`.
 - **Keep to the standard header.** Use a Dawn-only entry point only behind a feature
@@ -101,12 +103,15 @@ there before the first edit.
 
 ## Moving the Dawn pin
 
-1. Pick a release tag on github.com/google/dawn whose release has all three archives
-   (`Dawn-<commit>-{ubuntu,macos,windows}-latest-Release.tar.gz`); not every nightly does.
-2. Set `GE_DAWN_TAG`, `GE_DAWN_COMMIT` and the three SHA-256s in `cmake/Dawn.cmake` together.
+1. Pick a release tag on github.com/google/dawn whose release has all three desktop archives
+   (`Dawn-<commit>-{ubuntu,macos,windows}-latest-Release.tar.gz`) and the three mobile ones
+   (`dawn-apple-<commit>.xcframework.tar.gz`, `dawn-android-<commit>.tar.gz`,
+   `dawn-headers-<commit>.tar.gz`); not every nightly does.
+2. Set `GE_DAWN_TAG`, `GE_DAWN_COMMIT` and the six SHA-256s in `cmake/Dawn.cmake` together.
 3. Rebuild from a clean `build/` and run every `gpu_` and `platform_` test, `make
    shaders-check` and the GPU labs. A header change shows as a compile error in
-   `engine/gpu` only (nothing else includes webgpu.h).
+   `engine/gpu` only (nothing else includes webgpu.h). On a Mac, build the iOS presets too
+   (`cmake --preset ios-sim && cmake --build --preset ios-sim --target fall_line`).
 
 ## Testing
 

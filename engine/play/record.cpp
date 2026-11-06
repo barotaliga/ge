@@ -12,6 +12,10 @@
 #include <cstdlib>
 #include <filesystem>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
 #include "capture/av_export.hpp"
 #include "capture/video.hpp"
 #include "core/num_text.hpp"
@@ -42,7 +46,9 @@ bool plain_word(std::string_view w) {
 std::string quoted(const std::string& s) { return "\"" + s + "\""; }
 
 bool ffmpeg_found() {
-#ifdef _WIN32
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+  return false;  // an app on iOS starts no other program: the built-in encoders serve it
+#elif defined(_WIN32)
   return std::system("ffmpeg -version > NUL 2>&1") == 0;
 #else
   return std::system("ffmpeg -version > /dev/null 2>&1") == 0;
