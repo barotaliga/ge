@@ -39,11 +39,8 @@
 // when he goes back to the lobby's screen (`sitout`), the bots fighting on meanwhile; the lobby's
 // lines are printed like the server's; when the countdown runs out the server restarts the map
 // with every seat on it (`restarted`), and a map change goes back to warmup. `listen_lobby` runs
-// the player's lobby words.
-//
-// THE EASY JUMP: the listen server allows it (`pm_speedjump 0.5`), so a player with
-// `cl_speedjump 1` (client/settings.hpp) hops by holding forward and jump; a dedicated server
-// allows it only when its owner sets pm_speedjump.
+// the player's lobby words. THE EASY JUMP: the window's server allows it (`pm_speedjump 0.5`,
+// ListenHost::speedjump) for a player with `cl_speedjump 1`; a dedicated one only when set.
 //
 // THE VIEW: the player's angles are the client's (`Listen::view`, degrees: pitch down positive,
 // yaw counter-clockwise from +x), sent with every command; when the server turns him (a spawn, a

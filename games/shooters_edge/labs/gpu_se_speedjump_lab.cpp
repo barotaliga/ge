@@ -48,6 +48,7 @@
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -241,7 +242,9 @@ bool game_run(const ge::progs::Progs& progs, const cl::SearchPath& files, bool s
               GameRun& out, std::string& error, AtSix at_six) {
   cl::Listen l;
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "sjarena", error);
-  if (!map || !cl::listen_start(l, progs, std::move(map), {}, error)) return false;
+  if (!map ||
+      !cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), error))
+    return false;
   l.rules->user_info(0, "cl_speedjump", speedjump ? "1" : "0");
   for (int i = 0; i < 2 * kRate; i++) cl::listen_frame(l, {});
   out.speed.label = speedjump ? "cl_speedjump 1" : "cl_speedjump 0";
