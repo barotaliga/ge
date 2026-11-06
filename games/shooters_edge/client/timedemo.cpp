@@ -164,8 +164,8 @@ double price_noise(std::span<const PriceRun> bases) {
   return most;
 }
 
-std::vector<std::string> price_report(std::span<const PriceRun> bases,
-                                      std::span<const Price> saved) {
+std::vector<std::string> price_report(std::span<const PriceRun> bases, std::span<const Price> saved,
+                                      std::string_view what) {
   std::vector<std::string> out;
   if (bases.empty()) return out;
   double lo = bases[0].frame_p50_ms, hi = lo;
@@ -177,8 +177,8 @@ std::vector<std::string> price_report(std::span<const PriceRun> bases,
                 " ms over " + std::to_string(bases.size()) + " runs; a saving under " +
                 fixed(price_noise(bases), 2) + " ms is noise");
   for (const Price& p : saved)
-    out.push_back("    " + p.name + " off saves " + fixed(p.frame_ms, 2) + " ms a frame (span " +
-                  fixed(p.span_ms, 2) + ")");
+    out.push_back("    " + p.name + std::string(what) + " saves " + fixed(p.frame_ms, 2) +
+                  " ms a frame (span " + fixed(p.span_ms, 2) + ")");
   return out;
 }
 

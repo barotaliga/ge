@@ -6,8 +6,12 @@
 // switch (plugins/classicenhance's `Switches`, the `ce_` cvars) every frame, so `ce_water 0` in the
 // console shows the pack's own warped water on the next frame; the classic look draws none of them.
 //
-// The switches that change the BSP renderer's own options (the shadows, the teleporters' and the
-// pools' light) are applied by `dress_extras`, with the weather's wet, puddles and fog. A liquid
+// The switches that change the BSP renderer's own options (the teleporters' and the pools' light)
+// are applied by `dress_extras`, with the weather's wet, puddles and fog. THE WATER'S STOP
+// (app/look.hpp's Stops, read every frame): low a still surface lit by the room (no chop, no
+// reflection, no wet band at the waterline, no sun under it), medium the chop and the screen
+// marched for its reflection, high the map drawn again in the pool's plane for its mirror (the
+// dearest part: the whole map's faces again) and the sun's caustics and shafts. A liquid
 // switched off is drawn by the BSP renderer as the pack's warped surface. Under the water the view
 // is the engine's (render/underwater.hpp), and the room over the surface is drawn without the
 // map's visibility, which the map's tools often worked out with the liquids opaque.
@@ -22,7 +26,7 @@
 // ge:keywords world-extras water lava slime liquids flames torches weather rain snow precip
 // ge:keywords underwater warped-liquids planar-mirror bsp-views pool-wind
 // ge:keywords classicenhance switches ce_water ce_lava ce_slime ce_flames ce_weather ce_shadows
-// ge:keywords bonfires ce_bonfires sparks extras_births
+// ge:keywords bonfires ce_bonfires sparks extras_births ce_water_quality water-stop
 // ge:skill render shooter classicenhance
 #pragma once
 
@@ -37,6 +41,7 @@
 #include "render/particles.hpp"
 #include "render/sky.hpp"
 #include "render/view.hpp"
+#include "shooters_edge/app/look.hpp"
 
 namespace shooters_edge::client {
 
@@ -47,19 +52,21 @@ struct WorldExtrasDeleter {
 using WorldExtrasPtr = std::unique_ptr<WorldExtras, WorldExtrasDeleter>;
 
 // The passes for `scene` (its liquids found and laid out), their pipelines into `pipelines` while
-// the map loads. `switches` and `weather` are read every frame and must outlive the extras.
+// the map loads. `switches` (the switches as drawn), `weather` and `stops` are read every frame
+// and must outlive the extras.
 WorldExtrasPtr create_extras(ge::gpu::Device& device, ge::gpu::PipelineSet& pipelines,
                              const wgpu::BindGroupLayout& frame, const ge::brush::app::Scene& scene,
                              const ge::classicenhance::Switches& switches,
                              const ge::brush::app::WeatherCvars& weather,
-                             const ge::render::Sky& sky);
+                             const shooters_edge::look::Stops& stops, const ge::render::Sky& sky);
 // The same in parts, so a window can make one a frame (each parses its shaders: 10 to 20 ms):
 // `new_extras`, then every part from 0 to kExtrasParts - 1 in order (0 the water, 1 the lava and
 // slime, 2 the flames, the weather and the map's bodies laid out).
 inline constexpr int kExtrasParts = 3;
 WorldExtrasPtr new_extras(const ge::brush::app::Scene& scene,
                           const ge::classicenhance::Switches& switches,
-                          const ge::brush::app::WeatherCvars& weather);
+                          const ge::brush::app::WeatherCvars& weather,
+                          const shooters_edge::look::Stops& stops);
 void create_extras_part(ge::gpu::Device& device, ge::gpu::PipelineSet& pipelines,
                         const wgpu::BindGroupLayout& frame, const ge::render::Sky& sky,
                         WorldExtras& x, int part);

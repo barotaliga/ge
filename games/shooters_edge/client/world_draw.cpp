@@ -31,6 +31,7 @@
 #include "render/sky.hpp"
 #include "render/ui_pass.hpp"
 #include "render/viewmodel.hpp"
+#include "shooters_edge/app/ladder.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/world_extras.hpp"
 #include "viewmodel/light.hpp"
@@ -43,6 +44,10 @@ namespace gr = ge::render;
 struct WorldDraw {
   const look::Picture* picture = nullptr;
   bool has_map = false;
+  // This frame's stops of the quality ladder's rows (look.hpp's Stops: r_quality's pick, else the
+  // switches and levels as set) and the switches as drawn at them, which the extras read.
+  look::Stops stops;
+  ge::classicenhance::Switches on;
   ba::Scene scene;
   ba::BspDraw bsp;
   gr::FarLand far;  // the land round the map, seen through its sky faces (r_farland)
@@ -98,6 +103,7 @@ struct WorldDraw {
   wgpu::TextureFormat format = wgpu::TextureFormat::Undefined;
   std::span<const ge::viewmodel::HeldModel> weapons;
   std::string build_error;
+  look::KeptStops kept_stops;  // r_quality's pick, kept between frames
 };
 
 void WorldDrawDeleter::operator()(WorldDraw* w) const { delete w; }
@@ -390,7 +396,7 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     create_models(d, f.pipelines, f.models, f.layout, std::move(read.models));
   } else {
     // The live switches and weather (read every frame), not the snapshot the world was made in.
-    if (!f.extras) f.extras = new_extras(f.scene, f.picture->ce, f.picture->weather);
+    if (!f.extras) f.extras = new_extras(f.scene, f.on, f.picture->weather, f.stops);
     create_extras_part(d, f.pipelines, f.layout, f.skypass, *f.extras, step - 4);
   }
   if (f.built >= kBuildSteps) f.pending.reset();
@@ -515,6 +521,15 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   GE_ZONE("world");
   const look::Look lk = look::look_of(*f.picture);
   const int p = lk == look::Look::classic ? 0 : 1;
+  {
+    std::string refused;
+    f.stops = look::picture_stops(*f.picture, f.w, f.h, f.kept_stops, refused);
+    f.on = look::drawn_switches(f.picture->ce, f.stops);
+    if (!refused.empty())
+      ge::core::output::warn("shooters_edge: the picture's quality word was refused: " + refused +
+                             "; next: set r_quality to custom, low, medium, high, top, auto or "
+                             "0..1 (see docs/shooters-edge.md)");
+  }
   if (f.picture->gamma != f.gamma) {  // the brightness changed (the menu's slider, `gamma`)
     f.gamma = f.picture->gamma;
     gr::set_grade(d, f.post[0], look::gamma_grade(f.classic_grade, f.gamma));
@@ -527,7 +542,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     view.clouds.quarter = false;
     view.clouds.spread = false;
   }
-  ba::Options o = look::world_options(lk, {}, *f.picture);
+  ba::Options o = look::world_options(lk, {}, *f.picture, f.stops);
   if (f.warm_cubes >= 0) {  // warmed up over frames: the first frame's cubes under a budget too
     o.first_all = false;
     o.fresh_cubes = f.warm_cubes;
@@ -554,8 +569,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     place_brushes(f.models, fx.models, f.movers);
     ba::set_movers(f.bsp, f.movers);
     ba::prepare_bsp(d, f.bsp, view, o);
-    // The far land shows through the sky faces where our sky does (the modern look's own sky).
-    const bool far = o.mode == ba::Mode::v2 && !o.pack_sky && !f.own_sky;
+    // The far land shows through the sky faces where our sky does (the modern look's own sky), at
+    // the skies' top stop.
+    const bool far =
+        o.mode == ba::Mode::v2 && !o.pack_sky && !f.own_sky && look::far_land_at(f.stops.skies);
     gr::prepare_far_land(d, f.far, view, f.picture->far_warm, far);
   }
   if (f.warm_cubes >= 0) {  // a warm-up (warm_world): the sky's tables and the new shadows alone
@@ -641,7 +658,8 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     encode_models(f.models, f.pipelines, f.rec, e, f.targets, f.frame);
     gr::encode_far_land(f.far, f.pipelines, f.rec, e, f.targets, f.frame, false);
     gr::encode_sky(f.skypass, f.pipelines, f.rec, e, f.targets, f.frame);
-    if (f.picture->ce.clouds)
+    // The map's cloud from the skies' medium stop up (none to fill under the pack's own sky).
+    if (f.picture->ce.clouds && (f.own_sky || look::cloud_at(f.stops.skies)))
       gr::encode_clouds(f.clouds, f.pipelines, f.rec, e, f.targets, f.frame, view, f.staged);
     if (f.has_map) ba::encode_bsp_veil(f.bsp, f.pipelines, f.rec, e, f.targets);
     if (f.extras) encode_extras(*f.extras, f.pipelines, f.rec, e, f.targets, f.frame);

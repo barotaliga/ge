@@ -44,7 +44,8 @@
 //
 // - THE FOAM (`foam_of`, water.wgsl's `foam_at`): whitecaps where the surface folds, surf over
 //   the shallows, kept as they drift (the waves' own past, per pixel), drawn as lace; and THE
-//   SHORE'S WET BAND (render/water_shore.wgsl), the ground the waves run up darkened.
+//   SHORE'S WET BAND (render/water_shore.wgsl), the ground the waves run up darkened, scissored
+//   to the slab of the screen it can darken (`Slot::shore_rect`).
 //
 // ge:summary The water's surface drawn: the snapped rings, the waves, Fresnel, refraction, glitter
 // ge:keywords render water surface ocean lake rings clipmap snapped morph fresnel reflection
@@ -55,7 +56,7 @@
 // ge:keywords water-below underside snell-window total-internal-reflection fresnel-exit daylight
 // ge:keywords set_water_views water-views foam whitecap jacobian fold surf foam-trail lace
 // ge:keywords wet-band shore-wet run-up swash foam_of chop chop_waves ambient-ripples pool-chop
-// ge:keywords used-pool set_water_up_view snell-rim dispersion
+// ge:keywords used-pool set_water_up_view snell-rim dispersion water-quality shore_rect
 // ge:skill render water
 // ge:test tests/render_water_test.cpp
 #pragma once
@@ -200,6 +201,19 @@ struct WaterGpuBody {
   float levels[kWaterLevels][4];
 };
 
+// THE WATER'S QUALITY (a game's ladder stop, read by `prepare_water` each frame, every body):
+// the chop summed or not (off: the stir and the laid waves alone, a stiller surface), the sun's
+// caustics on the bed and its shafts under the surface or not, the reflection read (the game's
+// planar mirror, else the screen marched) or, off, the room's own light in its place with no
+// march, and the shore's wet band drawn or not. Each is a uniform or a draw left out: no
+// pipeline.
+struct WaterQuality {
+  bool chop = true;
+  bool sunlight = true;
+  bool reflect = true;
+  bool shore = true;  // the shore's wet band (render/water_shore.wgsl)
+};
+
 struct Water {
   wgpu::BindGroupLayout layout, copy_layout;
   uint32_t p_copy = 0, p_draw = 0, p_shore = 0;
@@ -214,6 +228,12 @@ struct Water {
     wgpu::Texture shore;  // its shore mask (`shore_mask`, R8)
     wgpu::TextureView shore_view;
     wgpu::BindGroup group;
+    // THE SHORE'S BAND ON SCREEN (prepare_water): every pixel it may darken lies in a slab, the
+    // body's box (grown by kShoreReach when it has a shore mask) from 5 cm under its level to 1.3
+    // times its run-up over it, so its full-screen triangle is scissored to the slab's corners'
+    // rectangle (x, y, width, height in pixels; a width of 0 draws none: no band, or none seen).
+    double shore_grow = 0;
+    uint32_t shore_rect[4] = {0, 0, 0, 0};
     bool hidden = false;  // the caller's switch: not drawn (a lab's dry picture)
     bool shown = true;    // this frame's: not hidden and seen from over its level
     bool under = false;   // this frame's: the eye is in the water and under this body's level
@@ -242,6 +262,8 @@ struct Water {
   WaterViews views;                         // the game's (set_water_views)
   wgpu::Texture blank_colour, blank_depth;  // 1 x 1 stand-ins where a game hands in none
   wgpu::TextureView blank_colour_view, blank_depth_view;
+  WaterQuality quality;            // the caller's, each frame
+  uint32_t width = 0, height = 0;  // the targets' (create_water_targets)
   int eye_under = -1;  // this frame's: the body the eye is under (render/underwater.hpp), or -1
   int eye_near = -1;   // this frame's: the body the eye is just over (its waterline), or -1
 };

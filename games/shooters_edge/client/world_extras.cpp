@@ -31,6 +31,7 @@ struct WorldExtras {
   const ba::Scene* scene = nullptr;
   const ge::classicenhance::Switches* on = nullptr;
   const ba::WeatherCvars* weather = nullptr;
+  const shooters_edge::look::Stops* stops = nullptr;
   ba::LiquidRows rows;
   ba::LiquidWorld world;
   gr::Water water;
@@ -55,11 +56,13 @@ struct WorldExtras {
 void WorldExtrasDeleter::operator()(WorldExtras* x) const { delete x; }
 
 WorldExtrasPtr new_extras(const ba::Scene& scene, const ge::classicenhance::Switches& switches,
-                          const ba::WeatherCvars& weather) {
+                          const ba::WeatherCvars& weather,
+                          const shooters_edge::look::Stops& stops) {
   WorldExtrasPtr x(new WorldExtras);
   x->scene = &scene;
   x->on = &switches;
   x->weather = &weather;
+  x->stops = &stops;
   return x;
 }
 
@@ -105,8 +108,9 @@ void create_extras_part(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines,
 WorldExtrasPtr create_extras(ge::gpu::Device& d, ge::gpu::PipelineSet& pipelines,
                              const wgpu::BindGroupLayout& frame, const ba::Scene& scene,
                              const ge::classicenhance::Switches& switches,
-                             const ba::WeatherCvars& weather, const gr::Sky& sky) {
-  WorldExtrasPtr x = new_extras(scene, switches, weather);
+                             const ba::WeatherCvars& weather,
+                             const shooters_edge::look::Stops& stops, const gr::Sky& sky) {
+  WorldExtrasPtr x = new_extras(scene, switches, weather, stops);
   for (int part = 0; part < kExtrasParts; ++part)
     create_extras_part(d, pipelines, frame, sky, *x, part);
   return x;
@@ -127,7 +131,6 @@ void bind_extras_targets(ge::gpu::Device& d, WorldExtras& x, const gr::FrameTarg
 void dress_extras(WorldExtras& x, gr::FrameView& view, ba::Options& options, double dt) {
   const ge::classicenhance::Switches& on = *x.on;
   const bool v2 = options.mode == ba::Mode::v2;
-  if (!on.shadows) options.shadowed = 0;
   options.portal_lights = options.portal_lights && on.teleports;
   options.bonfires = v2 && on.flames && on.bonfires;
   x.fire_look.bonfires = options.bonfires;
@@ -217,8 +220,15 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   ba::light_pools_by_sun(x.water, x.scene->map, x.world, sun);
   // The eye in the water when the map's leaf there is water: at any depth, in any passage.
   const int eye_in = ba::eye_water_body(x.scene->map, x.world, view.eye);
-  const bool water_on = v2 && on.water;
-  const int body = water_on ? view_body(x, view, eye_in) : -1;
+  // The water's stop: what the surface sums and reads, and whether the map is drawn again for it.
+  using shooters_edge::look::Stop;
+  const Stop stop = x.stops->water;
+  x.water.quality = {.chop = stop >= Stop::medium,
+                     .sunlight = stop == Stop::high,
+                     .reflect = stop >= Stop::medium,
+                     .shore = stop >= Stop::medium};
+  const bool planar = v2 && on.water && stop == Stop::high;
+  const int body = planar ? view_body(x, view, eye_in) : -1;
   const double level = body >= 0 ? x.water.bodies[size_t(body)].staged.info[0] : 0;
   const float no_box[4] = {0, 0, 0, 0};
   const float* box = body >= 0 ? x.water.bodies[size_t(body)].staged.box : no_box;

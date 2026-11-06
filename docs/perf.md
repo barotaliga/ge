@@ -149,6 +149,26 @@ What the relief still costs at 1440p is its work: the parallax's march 0.41 ms (
 the loop's presence the rest; a coarser mip for the march saves nothing), the highlights 0.26,
 the texel's normal 0.10. Main had moved to 4.34 ms by the trades' row.
 
+The quality stops (M41o), the classic pack's demo1 on the M3 Max at 2560x1440, each part priced
+by `se-timedemo --price-cvars` (the demo with one thing changed, between runs with everything on,
+the GPU span's median saving; about 0.05 ms is noise). What the three dearest switches spend:
+the SHADOWS' 1.16 ms is the walls' kept cubes about 0.35, the moving casters' cubes 0.35 (their
+soft edges nearly all of it: hard, from all eight lights, they cost 0.02) and the capsules 0.43;
+the shadows in the water's mirror cost nothing measurable (0.01). The WATER's 1.0 ms is the
+planar mirror's map drawn again 0.21 more than a reflection marched off the screen (0.31 more
+than none; drawn at a quarter of the pixels it saves 0.05: the bill is the map's every face
+again, not its pixels), the wet band 0.26, the surface's own draw 0.18 and the scene's copy
+0.09; the chop 0.07, the sun's caustics and shafts 0.01 (demo1's pools are roofed), the detail
+waves 0.02 and the rings' levels nothing. The SKIES' 0.5 ms is the cloud layer 0.28 and the far
+land 0.10 (the cloud marched at a quarter of the pixels costs what every pixel does here).
+
+| Change | GPU span (median ms) | Where |
+| --- | --- | --- |
+| The shore's wet band (a full-screen triangle a pool) scissored to the slab it can darken on the screen, and not drawn for a body with no band: every pixel the same (dm3's pools, byte for byte) | the band 0.26 → 0.14 | `render/water.cpp` |
+| The mirror's fragments beyond the water's plane dropped before they are shaded, not after | both rows: the top 6.52 → 6.38 (main's run against this tree's) | `brush/app/bsp.wgsl` |
+| `r_quality medium` against the top (shadows hard-edged with no capsules, the water's reflection marched off the screen and no sun under it, the sky with no far land) | 6.38 → 5.21 (frame 6.63 → 5.49) | `shooters_edge/app/ladder.cpp` |
+| `r_quality low` (no figure's shadow, a still and unreflecting pool, our sky with its mean cloud) | 6.38 → 4.67 | |
+
 ## Shooter's Edge's start and map loads
 
 Measured on the M3 Max (Metal), release build, the remastered packs with their enhanced cache, a

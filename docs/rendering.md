@@ -2559,6 +2559,20 @@ own bill, because a machine can be short of pixels and rich in passes, or the ot
 
 The table's costs are the reference machine's (an Apple M3 Max at 1920 × 1080, by the span; the
 numbers and how they were measured are beside the table in `ladder.cpp`).
+- **Shooter's Edge's ladder** (`games/shooters_edge/app/ladder.hpp`) is the same concept over its
+  three dearest enhancements: SHADOWS, WATER and SKIES, each `off` (its `ce_` switch off, the
+  classic original) and then on at low, medium and high (`ce_<id>_quality`, high the default and
+  the whole look). Each stop is the passes' parameters, or a pass left out: the shadows' moving
+  casters drawn into cubes or not, their edges soft (the blocker search and the disc of taps) or
+  one compare, and the capsules (`brush::app::Options`); the water's chop, the sun's caustics and
+  shafts, the reflection (the map drawn again in the pool's plane, the screen marched, or the
+  room's light) and the wet band (`render::WaterQuality`, a uniform a body); the sky's cloud layer
+  and its far land. Its prices are a demo's, not a still view's: the `se-timedemo` lab's
+  `--price-stops=1` plays the classic pack's demo at 1440p with each row lowered alone to each
+  stop, between runs with everything on, and the presets and the floor the same way;
+  `--price-cvars` prices any set of cvars so, which is how the parts were found (`docs/perf.md`).
+  Its window applies `r_quality` each frame (the pick worked out again only when the word, the
+  budget or the size changes), so a stop changes on a live frame with no pipeline made.
 - **The reach and its mist.** `FrameView::reach_m` is how far a picture draws. The ground's
   clipmap draws only the levels that cover it (`clipmap_levels_to`: 1, 2 or 4 km round the eye
   where all eight reach 8 km), the instances' cull drops every one past it (counted with the
