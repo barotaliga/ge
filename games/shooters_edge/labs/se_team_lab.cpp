@@ -404,6 +404,29 @@ void run(gl::Lab& lab) {
     lab.metric("team.dodge-turns-per-min",
                static_cast<double>(turns) / (secs / 60) / static_cast<double>(r.players.size()),
                "per-min");
+    double speed = 0;
+    for (const cn::TeamPlayer& p : r.players) speed += p.speed_sum;
+    // People's 4on4 average on this kind of map: 284 units/s (KTX's match stats).
+    lab.metric("team.speed-avg", alive > 0 ? speed / static_cast<double>(alive) : 0, "units/s");
+    // Where the speed goes: each pilot mode's share of the commands alive and its mean speed.
+    gl::LabTable modes{
+        "the pilot's modes (aiming apart): share of the time alive and mean speed (units/s)",
+        {"mode", "share", "speed"},
+        {}};
+    for (int m = 0; m <= sh::kPilotModes; m++) {
+      double sum = 0;
+      int64_t n = 0;
+      for (const cn::TeamPlayer& p : r.players) {
+        sum += p.mode_speed[m];
+        n += p.mode_n[m];
+      }
+      if (n == 0) continue;
+      modes.rows.push_back(
+          {m == sh::kPilotModes ? "aiming" : sh::pilot_mode_name(static_cast<sh::PilotMode>(m)),
+           to_fixed(alive > 0 ? static_cast<double>(n) / static_cast<double>(alive) : 0, 2),
+           to_fixed(sum / static_cast<double>(n), 0)});
+    }
+    lab.table(modes);
     lab.metric("team.watch-share",
                alive > 0 ? static_cast<double>(watching) / static_cast<double>(alive) : 0, "share");
     lab.metric("team.pre-aimed-share",

@@ -16,6 +16,7 @@
 
 #include "check.hpp"
 #include "golden.hpp"
+#include "shooter/brush_hull.hpp"
 #include "shooter/nav.hpp"
 #include "shooters_edge/sim/arena.hpp"
 #include "shooters_edge/sim/nav_course.hpp"
@@ -121,6 +122,44 @@ TEST(the_pit_is_crossed_by_a_jump_and_left_up_its_steps) {
   r = sh::nav_route(g, sh::nav_nearest(g, c.map.pit_floor), sh::nav_nearest(g, c.map.east_floor),
                     search);
   CHECK_MSG(!r.nodes.empty(), "no way out of the pit to the east floor");
+}
+
+TEST(stairs_too_steep_to_walk_and_too_short_to_run_up_are_hopped) {
+  // A floor, then three steps 30 high and 32 deep (no tread to run up on), then a landing: each
+  // step is a standing jump against its riser, landing on the tread short of its node and walked.
+  const auto box = [](sh::Vec3f lo, sh::Vec3f hi) {
+    sh::Brush b;
+    b.planes = {{{1, 0, 0}, hi.x},   {{-1, 0, 0}, -lo.x}, {{0, 1, 0}, hi.y},
+                {{0, -1, 0}, -lo.y}, {{0, 0, 1}, hi.z},   {{0, 0, -1}, -lo.z}};
+    return b;
+  };
+  const std::vector<sh::Brush> brushes = {
+      box({-256, -128, -64}, {0, 128, 0}), box({0, -128, -64}, {32, 128, 30}),
+      box({32, -128, -64}, {64, 128, 60}), box({64, -128, -64}, {96, 128, 90}),
+      box({96, -128, -64}, {256, 128, 90})};
+  const sh::HullData point = sh::build_point_hull(brushes);
+  const sh::HullData clip = sh::build_box_hull(brushes, sh::kPlayerMins, sh::kPlayerMaxs);
+  sh::MoveWorld world;
+  world.solids[0].point_hull = point.hull();
+  world.solids[0].clip_hull = clip.hull();
+  world.solids[0].mins = {-256, -128, -64};
+  world.solids[0].maxs = {256, 128, 256};
+  world.count = 1;
+  sh::NavGraph g;
+  sh::build_nav(world, {}, sh::MoveSettings{}, sh::NavSettings{}, g);
+  const int32_t from = sh::nav_nearest(g, {-112, 0, 24});
+  const int32_t to = sh::nav_nearest(g, {176, 0, 114});
+  CHECK(from >= 0 && to >= 0);
+  ge::ai::Search search;
+  const sh::NavRoute r = sh::nav_route(g, from, to, search);
+  CHECK_MSG(!r.nodes.empty(),
+            "no way up stairs a person hops up: read the standing jump in nav.cpp");
+  int standing = 0;
+  for (size_t k = 0; k + 1 < r.nodes.size(); k++)
+    for (const sh::NavLink& l : links_of(g, r.nodes[k]))
+      if (l.to == r.nodes[k + 1] && l.kind == sh::NavKind::jump && l.speed == 0) standing++;
+  CHECK_MSG(standing >= 1, "the way up took " + std::to_string(standing) +
+                               " standing jumps: the treads leave no room to run up");
 }
 
 TEST(the_ledge_past_the_steep_ramp_is_out_of_reach) {

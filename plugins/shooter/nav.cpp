@@ -22,8 +22,11 @@ constexpr float kStepHeight = 18;  // the move climbs a step this high without a
 constexpr float kArriveUp = 2;     // a proof arrives within this up or down, units
 constexpr float kStall_s = 0.25f;  // a proof getting no nearer for this long is refused
 constexpr float kNearestUp = 64;   // nav_nearest's reach up and down, units
-constexpr float kGapUp = 24;   // a floor this near the straight line between two nodes bridges it
-constexpr float kJumpUp = 64;  // the most a jump link is tried upward, units (the apex is 45.6)
+constexpr float kGapUp = 24;  // a floor this near the straight line between two nodes bridges it
+// A jump may land this short of its target on the target's floor (a stair's tread), units.
+constexpr float kLandShort = 24;
+constexpr float kStandingJump_s = 0.4f;  // a standing jump's link costs this much more, s
+constexpr float kJumpUp = 64;      // the most a jump link is tried upward, units (the apex is 45.6)
 constexpr float kUpAcross = 2.5f;  // a jump up is tried only this many columns across
 constexpr float kJumpShares[3] = {1, 0.5f, 0.25f};  // a jump's speeds, of maxspeed
 constexpr double kDetour = 1.5;  // a walk this many times a straight run's time needs no jump
@@ -144,6 +147,7 @@ NavProof prove_link(const MoveWorld& world, const MoveSettings& move, Vec3f from
   const float floor_z = (from.z < to.z ? from.z : to.z) - kArriveUp;
   float best = across(from, to);
   float best_s = 0;
+  bool landed = false;  // a jump down on the target's floor, walking the rest
   p.lo = from + kPlayerMins;
   p.hi = from + kPlayerMaxs;
   if (path) path->push_back(from);
@@ -173,7 +177,13 @@ NavProof prove_link(const MoveWorld& world, const MoveSettings& move, Vec3f from
       return p;
     }
     if (grounded && s.origin.z < floor_z) return p;  // fell below both ends: missed
-    if (jump && grounded) return p;  // a jump that did not leave the ground, or landed short
+    if (jump && grounded && !landed) {
+      // A standing jump landed on the target's own floor just short of it (a stair's tread): the
+      // rest is walked, the stall rule holding the walk. Anything else did not leave the ground,
+      // or fell short (a moving jump is one flight).
+      if (speed > 0 || i == 0 || dz > kArriveUp || dz < -kArriveUp || h > kLandShort) return p;
+      landed = true;
+    }
     if (t >= set.limit_s) return p;
     // Getting no nearer counts only on the ground: a player in the air overshoots and comes back.
     if (h < best - 0.5f || !grounded) {
@@ -276,13 +286,16 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
       g.counts.proofs++;
       g.counts.commands += pr.commands;
       if (!pr.reached) continue;
-      if (tries[q].kind == NavKind::jump && !room_to_run_up(on, from, to, set.run_up)) {
+      if (tries[q].kind == NavKind::jump && tries[q].speed > 0 &&
+          !room_to_run_up(on, from, to, set.run_up)) {
         g.counts.no_run_up++;
         continue;
       }
       NavKind kind = tries[q].kind;
       if (kind == NavKind::walk && to.z < from.z - kStepHeight) kind = NavKind::drop;
-      out.push_back({b, kind, pr.time_s, mover_at(movers, pr.lo, pr.hi), tries[q].speed});
+      // A standing jump is the way of last resort: harder on a person's hands than a run's.
+      const float cost = kind == NavKind::jump && tries[q].speed <= 0 ? kStandingJump_s : 0;
+      out.push_back({b, kind, pr.time_s + cost, mover_at(movers, pr.lo, pr.hi), tries[q].speed});
       g.counts.by_kind[static_cast<int>(kind)]++;
       return;
     }
@@ -317,11 +330,13 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
       if (static_cast<size_t>(b) == a) return;
       const float rise = g.nodes[static_cast<size_t>(b)].origin.z - na.origin.z;
       if (rise > kJumpUp) return;
-      Try tries[1 + std::size(jumps)];
+      Try tries[2 + std::size(jumps)];
       int n = 0;
       tries[n++] = walk;
-      if (rise > kStepHeight)
+      if (rise > kStepHeight) {
         for (int q = 0; q < njumps; q++) tries[n++] = jumps[q];
+        tries[n++] = {NavKind::jump, 0};  // a standing jump: a stair's tread has no run-up
+      }
       prove(a, b, tries, n, out[a]);
     });
   }

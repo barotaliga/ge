@@ -42,7 +42,7 @@ DodgeSkill dodge_skill(uint8_t trait);
 struct Dodge {
   core::Rng rng{1};
   double until = -1e9;  // the stretch under way ends then
-  int8_t dir = 0;       // -1 left, +1 right, 0 straight
+  int32_t dir = 0;      // -1 left, +1 right, 0 straight
 };
 
 void dodge_init(Dodge& d, uint32_t seed);

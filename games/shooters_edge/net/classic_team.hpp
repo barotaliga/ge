@@ -111,8 +111,11 @@ struct TeamPlayer {
   int64_t spam_shots = 0;                     // rockets at the ways into its area
   int64_t outmatched = 0;                     // commands turned from a fight it believed it loses
   int64_t sound_chases = 0;                   // commands going at an enemy it only heard
-  int64_t dodging = 0, dodge_turns = 0;  // commands side-stepping in a fight, and turns back
+  int64_t dodging = 0, dodge_turns = 0;       // commands side-stepping in a fight, and turns back
   int64_t watching = 0;  // commands standing with the view on a way in (bots/watch.hpp)
+  double speed_sum = 0;  // its speed across the floor, summed over its commands alive
+  double mode_speed[sh::kPilotModes + 1] = {};  // and by the pilot's mode, with each mode's count
+  int64_t mode_n[sh::kPilotModes + 1] = {};
   int64_t mirrored = 0, predicted = 0;  // client-fed: commands on its client's world, predicted
   double mirror_err = 0;                // client-fed: summed units between its own place as its
   int64_t mirror_err_n = 0;             // world holds it and the server's, alive, and the count
