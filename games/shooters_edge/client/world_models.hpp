@@ -20,9 +20,10 @@
 //   colours as the server holds them.
 // - DRAWN (`prepare_models`, `encode_models`): a group of frames plays at its intervals; a model
 //   flagged to spin turns; each one lit by the lightmap on the floor under it (taken again only
-//   when it moves), shaded from above, a fullbright texel glowing; a player's shirt and pants in
-//   his own colours. The nearest `kMaxMorphDraws` are drawn. One short of whole (`Placed::warp`,
-//   a spawn or a teleport) is drawn warped and holds still for TAA.
+//   when it moves), shaded from above, the frame's dynamic lights (a muzzle's flash, a rocket's
+//   glow, an explosion) added from their side as they are to the floor, a fullbright texel glowing;
+//   a player's shirt and pants in his own colours. The nearest `kMaxMorphDraws` are drawn. One
+//   short of whole (`Placed::warp`, a spawn or a teleport) is drawn warped and holds still for TAA.
 //
 // ge:summary The window's models: items, weapons, flames, players, loaded from the packs and drawn
 // ge:keywords world-models create_models read_models place_models prepare_models encode_models
@@ -30,7 +31,7 @@
 // ge:keywords items armour health weapons flames torches players statics entity-models morph
 // ge:keywords sprites bare-flames topcolor bottomcolor place_brushes doors plats
 // ge:keywords ce_models enhanced-skins cached_skins replacement-skin skin-stand-in
-// ge:keywords body_triangles shapes warp-ash
+// ge:keywords body_triangles shapes warp-ash dynamic-lights model-lighting
 // ge:skill render shooter morph
 #pragma once
 
@@ -165,9 +166,16 @@ void place_brushes(const WorldModels& m, std::span<const Placed> placed,
 struct InPlace {
   bool flames = false, flares = false, bubbles = false;
 };
+// `dynamic` is the frame's dynamic lights (a muzzle's flash, a rocket's glow, an explosion, a
+// power's glow: what bsp_draw adds to the walls' lightmaps), at `dynamic_strength`: each adds to
+// every model in its reach as it adds to the floor under it (effects.hpp's `dynamic_light_at`),
+// from its side.
 void prepare_models(ge::gpu::Device& device, WorldModels& m, const ge::brush::Map& map,
                     std::span<const Placed> placed, const ge::render::FrameView& view,
-                    double brightness, double minlight, bool smooth, const InPlace& in_place);
+                    double brightness, double minlight, bool smooth, const InPlace& in_place,
+                    std::span<const ge::brush::app::DynamicLight> dynamic = {},
+                    double dynamic_strength = 1);
+
 // The triangles of `p`'s model as `prepare_models` draws it at `time_s` (its frame and skin
 // group): nine floats a triangle, its model's own frame (m). False for a sprite, a brush or none.
 bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::vector<float>& out);
