@@ -8,6 +8,7 @@
 //
 // ge:summary Test: the engine's lobby before the match: teams, ready, countdown, match, warmup
 // ge:keywords test lobby match-phases warmup countdown ready break leader lobby_due lobby_back
+// ge:keywords intermission lobby_end lobby_next_due
 // ge:keywords humans bots-alone warmup-join sitout too-few lobby_on_map
 // ge:skill net testing
 #include <string>
@@ -98,6 +99,35 @@ TEST(server_match_ready_counts_down_into_the_match_and_back) {
   CHECK(l.phase == LobbyPhase::warmup);
   CHECK(!l.seats[0].ready);
   CHECK(l.seats[1].ready);
+}
+
+TEST(server_match_the_intermission_keeps_the_scores_up_before_the_next_map) {
+  Lobby l;
+  l.settings.countdown_s = 1;
+  l.settings.intermission_s = 3;
+  lobby_join(l, 0, "host", false, 0);
+  lobby_end(l, 0.5);  // not in a match: nothing
+  CHECK(l.phase == LobbyPhase::warmup);
+  CHECK(lobby_command(l, 0, "ready", 1));
+  CHECK(lobby_due(l, 2));
+  lobby_end(l, 10);
+  CHECK(l.phase == LobbyPhase::intermission);
+  CHECK(said(l, "the match is over: the next map in 3 s"));
+  CHECK(lobby_seconds_left(l, 11.5) == 2);
+  CHECK(lobby_on_map(l, 0));
+  CHECK(lobby_ready(l, 0, false, 11) == LobbyWhy::in_match);  // the lobby waits, as in the match
+  CHECK(!lobby_next_due(l, 12.9));
+  CHECK(lobby_next_due(l, 13));
+  CHECK(!lobby_next_due(l, 13.1));  // once
+  lobby_back(l);
+  CHECK(l.phase == LobbyPhase::warmup);
+  Lobby none;  // 0 s: over at once
+  lobby_join(none, 0, "host", false, 0);
+  CHECK(lobby_command(none, 0, "start", 0));
+  CHECK(lobby_due(none, 5));
+  lobby_end(none, 6);
+  CHECK(said(none, "the match is over"));
+  CHECK(lobby_next_due(none, 6));
 }
 
 TEST(server_match_only_the_leader_starts_and_too_few_wait) {

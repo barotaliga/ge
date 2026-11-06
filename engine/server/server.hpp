@@ -18,7 +18,8 @@
 //
 // THE SETTINGS are `ServerConfig`, every field a cvar on the server's tier (`add_server_cvars`):
 // `sv_hostname`, `sv_description`, `net_ip`, `net_port`, `sv_maxclients`, `sv_map`, `sv_bots`,
-// `sv_lobby` (the engine's lobby, match.hpp, before every match), `sv_seed`, `sv_password`,
+// `sv_lobby` (the engine's lobby, match.hpp, before every match) and its timers `sv_countdown`
+// and `sv_intermission`, `sv_seed`, `sv_password`,
 // `sv_visibility`; and those kept for what reads them as it lands:
 // `sv_motd`, `sv_admin`, `sv_maprotation`, `sv_maxspectators`, `sv_spectatorpassword`,
 // `sv_rendezvous`, `sv_mod` (read-only: the mods the server was started with). The guards a game's
@@ -32,7 +33,8 @@
 // ge:keywords server dedicated-server listen-server server-core servergame server_frame
 // ge:keywords server_open hostname description port listen-address maxclients bots seed
 // ge:keywords sv_hostname sv_description net_ip net_port sv_maxclients sv_map sv_bots sv_seed
-// ge:keywords sv_lobby sv_timeout sv_floodprot sv_floodprotmsg client-timeout
+// ge:keywords sv_lobby sv_timeout sv_floodprot sv_floodprotmsg client-timeout sv_countdown
+// ge:keywords sv_intermission intermission
 // ge:keywords sv_password sv_visibility sv_motd sv_admin sv_maprotation sv_maxspectators
 // ge:keywords sv_spectatorpassword sv_rendezvous sv_mod lan-advert multiplayer hosting
 // ge:skill net
@@ -76,6 +78,8 @@ struct ServerConfig {
   std::string rendezvous;            // sv_rendezvous: the rendezvous to list with (M17r)
   std::string mod;                   // sv_mod: the mods' directories, lowest first (read-only)
   double timeout_s = 65;             // sv_timeout: a client silent this long is dropped
+  double countdown_s = 5;            // sv_countdown: everyone ready to the match, s (sv_lobby)
+  double intermission_s = 0;         // sv_intermission: a match's end to the next map, s
   std::string floodprot = "10 1 1";  // sv_floodprot: "N S T" chat lines (guards.hpp)
   std::string floodprot_msg;         // sv_floodprotmsg: what a flooder is told ("": the silence)
   std::string root = ".";            // where the game directories are (`--root`): maps, cfgs
