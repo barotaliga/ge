@@ -191,14 +191,25 @@ bit, so the best strafe (side key, view on the way, jump pressed on landing) sti
 over eight seconds from 320 the easy jump reaches about 616 units/s at the share 0.5, the best
 strafe about 810 (the `se-speedjump` lab).
 
-The server decides. `pm_speedjump` (0..1, a server setting like `pm_ktjump`, told to clients in
-the server info when not 0) is the share; a player's ask (`cl_speedjump 1` in his user info)
+The server decides. `pm_speedjump` (0..1, a server setting like `pm_ktjump`, always told to
+clients in the server info, 0 included) is the share; a player's ask (`cl_speedjump 1` in his user info)
 switches it on for him alone, so the server runs it only for those who asked and a predicting
 client runs it only when both his setting and the server info say so. The window's own listen
 server allows it at 0.5; a dedicated server allows it only when its owner sets `pm_speedjump`.
-A server that never heard of it (any other implementation) ignores the user info key and sends
-no server info key, so both ends stay on the classic move. With `pm_speedjump 0` (the default)
-the move is unchanged to the bit: `tests/golden/shooter_pmove.txt` and the recordings hold it.
+With `pm_speedjump 0` (the default) the move is unchanged to the bit:
+`tests/golden/shooter_pmove.txt` and the recordings hold it.
+
+On a server that never heard of it (any other implementation: its server info has no
+`pm_speedjump`) the client helps instead, so the setting works everywhere
+(`plugins/shooter/speedjump_assist.hpp`, `assisted_command`). From its own prediction it sends the
+jump let go while flying and pressed while standing, and in the air the side key in place of the
+forward key with a yaw that puts the wish where it gains half the best strafe's gain (a wish
+whose share along the way is `30 x sqrt(1 - share)` adds `share x 900` to v^2), on the side that
+turns the way toward the view. The player's own screen never turns and a command with attack
+carries his real view. It gains within a percent or two of the server's own (611 against 616
+units/s after eight seconds in the lab). It is disclosed, never hidden: the user info still says
+`cl_speedjump 1`, so the server, its admins and the other players can see it; a server that wants
+none of it says `pm_speedjump 0`. It needs the prediction (`cl_nopred 0`).
 
 The labs: `se-moves` (any demo, any player: the map as a wireframe from above and at an angle,
 the path coloured by speed, the longest chain close up with the view's ticks, a chase view from
