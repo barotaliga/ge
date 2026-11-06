@@ -344,6 +344,7 @@ void apply(ClassicClientEnd& c, const SvcMsg& m) {
       if (m.player.slot >= 0 && m.player.slot < 32) {
         c.players[m.player.slot] = m.player;
         c.player_seen[m.player.slot] = true;
+        c.player_at[m.player.slot] = c.now;
       }
       break;
     case svc::setangle:
@@ -546,7 +547,10 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
     }
     if (c.stage != ClientStage::signon && c.stage != ClientStage::active) continue;
     size_t at = 0;
+    const uint32_t acked = c.ch.incoming_acknowledged;
     if (!channel_process(c.ch, buf, size, c.now, at)) continue;
+    const uint32_t ack = c.ch.incoming_acknowledged;
+    if (ack != acked && c.sent_seq[ack & 63] == ack) c.latency = c.now - c.sent_at[ack & 63];
     read_payload(c, buf, size, at);
     if (!c.error.empty()) {
       c.stage = ClientStage::dropped;
@@ -592,6 +596,7 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
     write_move(w, c.cmds, static_cast<uint8_t>(loss), c.ch.outgoing_sequence);
     c.sent[c.ch.outgoing_sequence & 63] = cmd;
     c.sent_seq[c.ch.outgoing_sequence & 63] = c.ch.outgoing_sequence;
+    c.sent_at[c.ch.outgoing_sequence & 63] = c.now;
     if (c.record) record_command(*c.record, c.now, cmd);
     if (c.valid_frame >= 0) {
       write_byte(w, clc::delta);

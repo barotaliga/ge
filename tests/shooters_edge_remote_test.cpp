@@ -5,13 +5,17 @@
 // the way the view faces, an impulse is sent once, and leaving frees the server's slot. With the
 // level's solids handed over, the player's own moves are predicted: over a 50 ms link each
 // prediction lands where the server later says the player was, and `cl_nopred` draws the server's
-// place instead.
+// place instead. Beside a scripted player, the other player is run ahead every window frame from
+// his newest record, so he moves between the server's frames and sits nearer the server's place
+// than the frame put him; missiles are drawn between the last two frames.
 //
 // ge:summary Tests: the remote client signs on, draws the server's state, walks, and leaves
 // ge:keywords test remote-client connect disconnect classic-server live-demo setangle walk
-// ge:keywords prediction cl_nopred latency
+// ge:keywords prediction cl_nopred latency predict_other cl_predict_players cl_nolerp lerp
 // ge:skill net shooter testing
+#include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <vector>
@@ -38,7 +42,9 @@ struct Rig {
   std::unique_ptr<sv::QcServer> qc;
   sv::RulesRunner rules;  // over `qc`
   gn::SimNetwork net;
-  gn::Transport st, ct;
+  gn::Transport st, ct, bt;
+  cn::ClassicClientEnd other;  // a scripted player beside the window (`with_other`)
+  bool with_other = false;
   cn::ClassicServer server;
   cn::Remote remote;
   std::vector<std::string> said;
@@ -69,6 +75,12 @@ struct Rig {
     cn::ClientConfig cc;
     cc.name = "window";
     cn::remote_start(remote, ct, gn::sim_address(0, cn::kPortServer), cc);
+    if (with_other) {
+      gn::open_sim_transport(bt, net, gn::sim_address(2, cn::kPortClient));
+      cn::ClientConfig oc;
+      oc.name = "runner";
+      cn::client_start(other, bt, gn::sim_address(0, cn::kPortServer), oc, 0);
+    }
     return true;
   }
   // One server frame and one window frame of the same length; the last step's result.
@@ -76,6 +88,7 @@ struct Rig {
     now += cn::kTickUs;
     gn::sim_advance(net, now);
     cn::classic_frame(server, now);
+    if (with_other) cn::client_tick(other, now);
     return cn::remote_step(remote, cn::kTickUs * 1e-6, said);
   }
   // Frames until the client plays and has drawn a level; false if it never does.
@@ -222,4 +235,129 @@ TEST(cl_nopred_draws_the_player_where_the_server_last_put_him) {
   const int slot = rig.remote.end.playernum;
   const shooters_edge::client::DemoState& ds = rig.remote.demo.state;
   CHECK(std::fabs(ds.eye.x - rig.remote.end.players[slot].origin.x) < 1);
+}
+
+namespace {
+
+// The other player's slot on the window's side (-1: not seen yet).
+int other_slot(const Rig& rig) {
+  for (int i = 0; i < 32; i++)
+    if (i != rig.remote.end.playernum && rig.remote.end.player_seen[i] &&
+        rig.remote.end.players[i].has_command)
+      return i;
+  return -1;
+}
+
+struct OtherRun {
+  int frames = 0, moved = 0, predicted = 0;
+  double raw_err = 0, drawn_err = 0;  // mean distance to the server's place, units
+  int most_msec = 0;
+};
+
+// The window drawn at 240 frames a second beside the server's 77 for `seconds`: how often the
+// other player moved between window frames, and how far his drawn and his framed places sat from
+// where the server had him at that moment.
+OtherRun watch_other(Rig& rig, double seconds) {
+  OtherRun out;
+  const int slot = other_slot(rig);
+  if (slot < 0) return out;
+  const int64_t window_us = 1000000 / 240;
+  int64_t wall = rig.now;
+  sh::Vec3f last = rig.remote.demo.state.players[static_cast<size_t>(slot)].origin;
+  const int64_t end = rig.now + static_cast<int64_t>(seconds * 1e6);
+  while (wall < end) {
+    wall += window_us;
+    while (rig.now + cn::kTickUs <= wall) {
+      rig.now += cn::kTickUs;
+      gn::sim_advance(rig.net, rig.now);
+      cn::classic_frame(rig.server, rig.now);
+      cn::client_tick(rig.other, rig.now);
+    }
+    cn::remote_step(rig.remote, window_us * 1e-6, rig.said);
+    const sh::Vec3f drawn = rig.remote.demo.state.players[static_cast<size_t>(slot)].origin;
+    const sh::Vec3f framed = rig.remote.end.players[slot].origin;
+    const sh::NetPlayer truth = sh::net_player_of(rig.qc->sv, slot);
+    const sh::Vec3f at{static_cast<float>(truth.origin8[0]) / 8.0f,
+                       static_cast<float>(truth.origin8[1]) / 8.0f,
+                       static_cast<float>(truth.origin8[2]) / 8.0f};
+    out.frames++;
+    if (sh::length(drawn - last) > 0) out.moved++;
+    if (rig.remote.others > 0) out.predicted++;
+    out.most_msec = std::max(out.most_msec, rig.remote.others_msec);
+    out.raw_err += sh::length(framed - at);
+    out.drawn_err += sh::length(drawn - at);
+    last = drawn;
+  }
+  if (out.frames > 0) {
+    out.raw_err /= out.frames;
+    out.drawn_err /= out.frames;
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST(the_other_players_run_ahead_between_the_server_s_frames) {
+  Rig rig;
+  rig.with_other = true;
+  rig.latency_ms = 5;
+  CHECK(rig.start());
+  CHECK(rig.join());
+  for (int f = 0; f < 77 && rig.other.stage != cn::ClientStage::active; f++) rig.frame();
+  CHECK(rig.other.stage == cn::ClientStage::active);
+  for (int f = 0; f < 40; f++) rig.frame();
+  CHECK_MSG(other_slot(rig) >= 0, "the window never saw the other player's command");
+  const std::vector<sh::BrushModel> models = sv::arena_models();
+  cn::remote_world(rig.remote, &models);
+  rig.remote.predict_players = false;
+  const OtherRun off = watch_other(rig, 2);
+  rig.remote.predict_players = true;
+  const OtherRun on = watch_other(rig, 2);
+  std::printf(
+      "other player at 240 fps: off moved %d/%d err %.2f; on moved %d/%d err %.2f "
+      "(framed %.2f) most %d ms\n",
+      off.moved, off.frames, off.drawn_err, on.moved, on.frames, on.drawn_err, on.raw_err,
+      on.most_msec);
+  CHECK(off.predicted == 0);
+  CHECK_MSG(on.predicted > on.frames * 9 / 10,
+            "frames with the other player run ahead: " + std::to_string(on.predicted));
+  // Unpredicted he moves only when a frame arrives (about one window frame in three); run ahead
+  // he moves nearly every window frame.
+  CHECK_MSG(off.moved < off.frames / 2, "unpredicted moves: " + std::to_string(off.moved));
+  CHECK_MSG(on.moved > on.frames * 8 / 10, "predicted moves: " + std::to_string(on.moved));
+  CHECK_MSG(on.drawn_err < on.raw_err, "drawn " + std::to_string(on.drawn_err) +
+                                           " units from the server's place, framed " +
+                                           std::to_string(on.raw_err));
+  CHECK(on.most_msec > 0 && on.most_msec <= 255);
+  CHECK(rig.remote.end.latency > 0 && rig.remote.end.latency < 0.1);
+}
+
+TEST(missiles_are_drawn_between_the_last_two_frames) {
+  Rig rig;
+  rig.with_other = true;
+  rig.latency_ms = 5;
+  CHECK(rig.start());
+  CHECK(rig.join());
+  for (int f = 0; f < 200; f++) rig.frame();
+  // The window fires a missile now and then; the scripted player fires on its own.
+  int lerped = 0, frames = 0;
+  const int64_t window_us = 1000000 / 240;
+  int64_t wall = rig.now;
+  for (int i = 0; i < 4 * 240; i++) {
+    rig.remote.hands.buttons = i % 120 < 4 ? sh::kButtonAttack : 0;
+    wall += window_us;
+    while (rig.now + cn::kTickUs <= wall) {
+      rig.now += cn::kTickUs;
+      gn::sim_advance(rig.net, rig.now);
+      cn::classic_frame(rig.server, rig.now);
+      cn::client_tick(rig.other, rig.now);
+    }
+    cn::remote_step(rig.remote, window_us * 1e-6, rig.said);
+    frames++;
+    if (rig.remote.lerped > 0) lerped++;
+  }
+  CHECK_MSG(lerped > 0, "no entity was drawn between frames in " + std::to_string(frames));
+  rig.remote.nolerp = true;
+  for (int i = 0; i < 40; i++) rig.frame();
+  CHECK(rig.remote.lerped == 0);
 }
