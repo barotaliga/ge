@@ -117,7 +117,7 @@ ge_add_mod(shooters_edge_mod_rocket_bounce NAME rocket-bounce VERSION 1.0.0 GAME
 # the GPU and the platform are built. Headers are spelled "shooters_edge/client/<file>.hpp".
 file(GLOB SHOOTERS_EDGE_CLIENT_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/client/*.cpp)
 list(FILTER SHOOTERS_EDGE_CLIENT_SOURCES EXCLUDE REGEX
-     "/client/(main|window_cvars|world_draw|world_extras|world_fx|world_models|demo_video|title|map_load)\\.cpp$")
+     "/client/(main|window_cvars|bot_view|world_draw|world_extras|world_fx|world_models|demo_video|title|map_load)\\.cpp$")
 add_library(shooters_edge_client STATIC ${SHOOTERS_EDGE_CLIENT_SOURCES})
 target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_edge_bots shooters_edge_hud
                                                   shooters_edge_view shooters_edge_sound ge_vfs
@@ -150,7 +150,7 @@ if(GE_GPU AND TARGET ge_brush_app)
   set_property(GLOBAL APPEND PROPERTY GE_GAME_APPS shooters_edge_client_gpu)
 endif()
 if(GE_PLATFORM AND GE_GPU AND TARGET ge_brush_app)
-  add_executable(shooters_edge client/main.cpp client/window_cvars.cpp)
+  add_executable(shooters_edge client/main.cpp client/window_cvars.cpp client/bot_view.cpp)
   target_link_libraries(shooters_edge PRIVATE shooters_edge_client_gpu shooters_edge_classic
                                               shooters_edge_menu
                                               ge_platform ge_hud ge_console)

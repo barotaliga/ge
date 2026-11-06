@@ -115,7 +115,9 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/client/bot_view.hpp"
 #include "shooters_edge/net/classic_bot_team.hpp"
+#include "shooters_edge/net/classic_team_areas.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/classic_team_view.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
@@ -634,7 +636,13 @@ int run_main(int argc, char** argv) {
       return true;
     });
     ge::platform::set_relative_mouse(*window, false);
-    sn::TeamView bot_view;
+    // The map drawn from above (client/bot_view.hpp) once the team has loaded it; the flat
+    // picture (net/classic_team_view.hpp) until then, and for the recording.
+    sn::TeamView bot_flat;
+    sn::TeamAreas bot_areas;
+    cl::BotCam bot_cam;
+    cl::WorldDrawPtr bot_world;
+    std::string bot_world_map;
     ge::ui::Image bot_image;
     sn::TeamViewVideo bot_video;
     if (!args.bots_view.empty() &&
@@ -646,6 +654,7 @@ int run_main(int argc, char** argv) {
     uint64_t bots_last = bots_from;
     int64_t next_tick = 0;
     double next_picture = 0;
+    bool shot_asked = false;
     while (!quit) {
       queue.clear();
       ge::platform::poll_input(*window, input, *devices, queue);
@@ -659,6 +668,8 @@ int run_main(int argc, char** argv) {
         h = input.height_px;
         surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), true);
         cl::resize_world(*device, *title, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+        if (bot_world)
+          cl::resize_world(*device, *bot_world, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
       }
       ge::input::update(held, queue);
       ge::ui::feed_console(console, con_view, queue, con_keys);
@@ -674,28 +685,54 @@ int run_main(int argc, char** argv) {
       if (now_us - next_tick > 200000) next_tick = now_us;
       for (; bot_team.log_read < bot_team.log.size(); bot_team.log_read++)
         console.print(bot_team.log[bot_team.log_read]);
-      ge::lab::Picture pic = sn::team_view(bot_view, bot_team, w, h);
+      sn::team_areas_update(bot_areas, bot_team);
+      // The map's world, made once the team is on it (again on a new map).
+      if (bot_team.loaded && bot_world_map != bot_team.map && !bot_team.seats.empty()) {
+        bot_world = cl::create_world_draw(*device, files, *bot_team.loaded, static_cast<uint32_t>(w),
+                                          static_cast<uint32_t>(h), surface.format(), picture, {},
+                                          error, {bot_team.seats[0]->c.models, {}});
+        if (!bot_world) out::error("shooters_edge: the bots' map did not draw: " + error);
+        bot_world_map = bot_team.map;
+        bot_cam.fitted = false;
+      }
       if (bot_video.open && t >= next_picture) {
         next_picture += 0.1;
-        if (!sn::team_view_video_frame(bot_video, pic, error)) out::error(error);
+        if (!sn::team_view_video_frame(bot_video, sn::team_view(bot_flat, bot_team, w & ~1, h & ~1), error))
+          out::error(error);
       }
-      bot_image.width = pic.width;
-      bot_image.height = pic.height;
-      bot_image.rgba = std::move(pic.rgba);
-      bot_image.revision++;
       overlay.begin(w, h);
-      ge::ui::Box b;
-      b.rect = {0, 0, static_cast<float>(w), static_cast<float>(h)};
-      b.image = &bot_image;
-      b.uv = {0, 0, static_cast<float>(bot_image.width), static_cast<float>(bot_image.height)};
-      b.feather = 0;
-      overlay.box(b);
+      ge::render::FrameView view = cl::title_view(t);
+      if (bot_world) {
+        cl::bot_cam_input(bot_cam, bot_team, input, !con_view.open(), dt, h, px_per_unit);
+        view = cl::bot_cam_view(bot_cam, bot_team, w, h, t);
+        cl::draw_bot_view(overlay, view, w, h, bot_team, bot_areas);
+      } else {
+        ge::lab::Picture pic = sn::team_view(bot_flat, bot_team, w, h);
+        bot_image.width = pic.width;
+        bot_image.height = pic.height;
+        bot_image.rgba = std::move(pic.rgba);
+        bot_image.revision++;
+        ge::ui::Box b;
+        b.rect = {0, 0, static_cast<float>(w), static_cast<float>(h)};
+        b.image = &bot_image;
+        b.uv = {0, 0, static_cast<float>(bot_image.width), static_cast<float>(bot_image.height)};
+        b.feather = 0;
+        overlay.box(b);
+      }
       con_view.frame(dt);
       ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
       const wgpu::TextureView target = surface.acquire(*device);
       if (!target) continue;
-      cl::draw_world(*device, *title, cl::title_view(t), {}, nullptr, dt, overlay, target);
+      cl::draw_world(*device, bot_world ? *bot_world : *title, view, {}, nullptr, dt, overlay, target);
+      shot_copy.frame(*device, surface.frame_target(), shots, console);
       surface.present();
+      // `--seconds=N`: a screenshot a second before the end, then quit (a run that leaves a
+      // picture behind).
+      if (args.seconds > 0 && t >= args.seconds - 1 && !shot_asked) {
+        shot_asked = true;
+        console.execute("screenshot");
+      }
+      if (args.seconds > 0 && t >= args.seconds) break;
     }
     if (!sn::team_view_video_close(bot_video, error)) out::error(error);
     if (!sn::bot_team_stop(bot_team, error)) out::error(error);
