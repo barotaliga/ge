@@ -59,7 +59,8 @@ struct Bsp {
   info4: vec4f,
   // the sky faces' pixels times these (bsp_fix.wgsl's veil)
   veil: vec4f,
-  // the weather on (1), the rain falling now (0 .. 1), the fall's spread, 0
+  // the weather on (1), the rain falling now (0 .. 1), the fall's spread, the glowing texels' share
+  // under the real-time lights (Options::glow)
   weather: vec4f,
   // the sun's map, the zenith's and the fall's
   ortho: array<Job, 3>,
@@ -1150,7 +1151,7 @@ fn shade(in: VsOut) -> FsOut {
   let open = ortho_lit(bsp.ortho[1], 1, in.world + n * 0.3, 1.2);
   c += wl.albedo / PI * sky_irradiance(wl.n) * open * bsp.info3.z * cavity;
   c += wl.sheen;
-  c += albedo * white * glow;
+  c += albedo * white * glow * bsp.weather.w;
   out.colour = vec4f(c, 1.0);
   // A pixel whose light came out not a number (a degenerate face) or past a half float: black,
   // never a NaN for the bloom to spread over the frame.

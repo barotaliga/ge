@@ -13,18 +13,22 @@
 //   frame's births are spread along their paths.
 // - EACH BIRTH is drawn off its own stream (the seed and its number): where in the area, its
 //   speed, its life, and for an ember its heat (1300 to 1700 K, cooling as it rises: it reddens
-//   and goes out). A SPARK is thrown up out of the fuel bed fast (1.5 to 4 m/s), hotter (2900 to
-//   3400 K, from the hottest of the bed, cooling fast) and lofted by the fire's plume while it
-//   slows; it is born moving with the air at the emitter (`air`, m/s), so a wind carries a fire's
-//   sparks off downwind as they climb. The pool lights them as it lights every particle (the sun,
-//   the sky, the lamps round them, the fog's haze), so an ember over a fire is lit by the fire and
-//   glows on its own.
+//   and goes out). A fire's SPARKS are of three kinds, each at a wood fire's heat (1900 to 2400 K,
+//   cooling as it flies) and riding the eddies over the fire (render/particles.hpp's `swirl`): a
+//   FLECK thrown out of the bed fast and wide, slowed at once and whirled about until it goes out;
+//   a FLOATER, a flake of glowing ash lifted on the plume, wandering slowly, longest lived; and a
+//   POP's burst, a handful thrown every way from one point at once (a pocket of sap bursting),
+//   arcing back down and hopping on the floor round the bed. Every one is born moving with the air
+//   at the emitter (`air`, m/s), so a wind carries a fire's sparks off downwind. The pool lights
+//   them as it lights every particle (the sun, the sky, the lamps round them, the fog's haze), so
+//   an ember over a fire is lit by the fire and glows on its own.
 // - `embers_over` gives a glowing fog volume (render/fog.hpp) its embers: over its floor, as many
 //   as its glow and size give.
 //
 // ge:summary Emitters an area carries: embers, motes, drips and steam as seeded particle births
 // ge:keywords render particles emitter embers sparks motes dust drips ceiling icicle steam
 // ge:keywords area-emitter emit_area embers_over births cadence seeded bonfire fire-sparks
+// ge:keywords spark-kinds fleck floater pop burst eddies swirl
 // ge:skill render
 // ge:test tests/render_emitters_test.cpp
 #pragma once

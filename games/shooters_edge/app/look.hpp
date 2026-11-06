@@ -66,10 +66,12 @@ struct Picture {
   std::string look = "modern";  // r_look
   double fx_lights = 0.2;       // r_fx_lights: the dynamic lights' strength, the classic's 1
   double fx_glow = 0.15;        // r_fx_glow: the glowing particles' light, the classic's 1
-  double bloom = 0.3;           // r_bloom: the bloom's share, 0 none
-  double lava_glow = 0.2;       // r_lava_glow: the lava's light on the walls round it, 0 none
-  double slime_glow = 1;        // r_slime_glow: the slime's faint green light, 0 none
-  double gamma = 1;             // gamma: the picture's brightness, below 1 brighter
+  double bloom = 0.08;          // r_bloom: the bloom's share, 0 none
+  double lava_glow = 0.02;      // r_lava_glow: the lava's light on the walls round it, 0 none
+  double glow = 0.6;      // r_glow: the glowing texels' light (windows, lamps), 1 the classic's
+  double slime_glow = 1;  // r_slime_glow: the slime's faint green light, 0 none
+  double fire_glow = 1;   // r_fire_glow: the flames' own brightness, 1 as made
+  double gamma = 1;       // gamma: the picture's brightness, below 1 brighter
   // r_beam_style: the arc gun's bolt in the modern look under ce_beams, by number
   // (app/weapon_fx.hpp's kBoltStyles: 1 forked, 2 arc, 3 bolt, 4 braid)
   double beam_style = 3;

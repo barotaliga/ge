@@ -65,7 +65,7 @@ double fire_light_size(const PointLight& light, bool bonfires = false);
 double fire_light_gain(const PointLight& light, bool bonfires = false);
 
 // How bright a fire's core is against a lightmap's 1 (a white face as the map's light lights it).
-inline constexpr double kFireGlow = 30;
+inline constexpr double kFireGlow = 8;
 
 // m: the room a bonfire needs over its bed and round it, free of the map's walls (a lantern's cage,
 // a low roof); a large flame without it burns as a plain flame.

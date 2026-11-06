@@ -19,7 +19,9 @@ const kNearestSurface = 0.8;  // m: nearer than this is the eye's own (a held we
 fn fly(q: Particle, dt: f32, air: vec3f) -> Particle {
   var p = q;
   p.v.y -= kGravity * p.fall * dt;
-  p.v = air + (p.v - air) * exp(-p.drag * dt);
+  // Toward the air here: the wind, and the eddies it carries round the particle.
+  let here = air + eddy(p);
+  p.v = here + (p.v - here) * exp(-p.drag * dt);
   p.p += p.v * dt;
   p.age += dt;
   return p;

@@ -277,6 +277,7 @@ void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids&
       }
       if (lw.kinds[i] == kLava) {
         here.lava.cover = rows.lava_cover;
+        here.lava.core = rows.lava_core;
         here.lava.plate = rows.lava_plate;
         here.lava.crack = rows.lava_crack;
         here.lava.ropes = rows.lava_ropes;
