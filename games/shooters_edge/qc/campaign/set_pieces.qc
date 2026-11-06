@@ -82,19 +82,33 @@ void() func_train = {
 
 // --- the secret door (func_door_secret): back into the wall, then aside ---
 
-// Its angle is the way it first moves, by its depth (.t_length when set); then it slides to its
-// right by its width (.t_width when set), to its left with spawn flag 2, or down by its height
-// with 4. It stands open .wait seconds (5) and closes the way it came, or stays open with flag 1
-// or a wait of -1. Something names it: used; else shot (and flag 16 makes it shot as well; 8 never).
+// It first moves back into the wall, across its angle to its right (to its left with spawn flag
+// 2) by its depth that way (.t_length when set), rests a second, then slides along its angle by its
+// size that way (.t_width when set), or down by its height with flag 4. It stands open .wait
+// seconds (5) and closes the way it came, or stays open with flag 1 or a wait of -1. Something
+// names it: used; else shot (and flag 16 makes it shot as well; 8 never).
 .float t_length;
 .float t_width;
 .vector dest1;  // a secret door's first stop, back in the wall
 .vector dest2;  // its second, aside
 
 void() secret_shut;
+void() secret_aside;
+void() secret_back;
+
+// Each leg starts with its moving sound (on the body channel, beside the start's own sound on the
+// voice channel) and ends with the stop sound; at the first stop the door rests a second.
+void(vector to, void() then) secret_leg = {
+  if (self.noise2 != "") sound(self, CHAN_BODY, self.noise2, 1, ATTN_NORM);
+  calc_move(to, self.speed, then);
+};
+
+void() secret_stop = {
+  if (self.noise3 != "") sound(self, CHAN_VOICE, self.noise3, 1, ATTN_NORM);
+};
 
 void() secret_closed = {
-  if (self.noise3 != "") sound(self, CHAN_VOICE, self.noise3, 1, ATTN_NORM);
+  secret_stop();
   self.state = STATE_BOTTOM;
   if (self.max_health) {
     self.health = self.max_health;
@@ -102,28 +116,35 @@ void() secret_closed = {
   }
 };
 
-void() secret_back = {
-  if (self.noise2 != "") sound(self, CHAN_VOICE, self.noise2, 1, ATTN_NORM);
-  calc_move(self.pos1, self.speed, secret_closed);
+void() secret_back = { secret_leg(self.pos1, secret_closed); };
+
+// Back at the first stop on the way in: a second's rest, then home.
+void() secret_shut_rest = {
+  secret_stop();
+  self.think = secret_back;
+  self.nextthink = self.ltime + 1;
 };
 
 void() secret_shut = {
   self.state = STATE_DOWN;
-  if (self.noise2 != "") sound(self, CHAN_VOICE, self.noise2, 1, ATTN_NORM);
-  calc_move(self.dest1, self.speed, secret_back);
+  secret_leg(self.dest1, secret_shut_rest);
 };
 
 void() secret_open_full = {
-  if (self.noise3 != "") sound(self, CHAN_VOICE, self.noise3, 1, ATTN_NORM);
+  secret_stop();
   self.state = STATE_TOP;
   if (self.wait < 0 || (self.spawnflags & 1)) return;  // open for good
   self.think = secret_shut;
   self.nextthink = self.ltime + self.wait;
 };
 
-void() secret_aside = {
-  if (self.noise2 != "") sound(self, CHAN_VOICE, self.noise2, 1, ATTN_NORM);
-  calc_move(self.dest2, self.speed, secret_open_full);
+void() secret_aside = { secret_leg(self.dest2, secret_open_full); };
+
+// Back in the wall: a second's rest, then aside.
+void() secret_open_rest = {
+  secret_stop();
+  self.think = secret_aside;
+  self.nextthink = self.ltime + 1;
 };
 
 void() secret_use = {
@@ -132,7 +153,7 @@ void() secret_use = {
   self.takedamage = DAMAGE_NO;
   use_targets();
   if (self.noise1 != "") sound(self, CHAN_VOICE, self.noise1, 1, ATTN_NORM);
-  calc_move(self.dest1, self.speed, secret_aside);
+  secret_leg(self.dest1, secret_open_rest);
 };
 
 void() secret_shot = {
@@ -185,19 +206,20 @@ void() func_door_secret = {
   if (!self.speed) self.speed = 50;
   if (!self.wait) self.wait = 5;
   if (!self.dmg) self.dmg = 2;
+  // First back into the wall: across its angle, to its right (its left with flag 2), by its
+  // depth there. Then along its angle by its size that way, or down by its height with flag 4.
+  if (self.spawnflags & 2) side = '0 0 0' - side;
   depth = self.t_length;
-  if (!depth) depth = fabs(fwd * self.size);
+  if (!depth) depth = fabs(side * self.size);
   self.pos1 = self.origin;
-  self.dest1 = self.origin + fwd * depth;
+  self.dest1 = self.origin + side * depth;
+  width = self.t_width;
   if (self.spawnflags & 4) {
-    width = self.t_width;
     if (!width) width = self.size_z;
     self.dest2 = self.dest1 - '0 0 1' * width;
   } else {
-    if (self.spawnflags & 2) side = '0 0 0' - side;
-    width = self.t_width;
-    if (!width) width = fabs(side * self.size);
-    self.dest2 = self.dest1 + side * width;
+    if (!width) width = fabs(fwd * self.size);
+    self.dest2 = self.dest1 + fwd * width;
   }
   self.state = STATE_BOTTOM;
   self.use = secret_use;

@@ -23,6 +23,7 @@
 #include "check.hpp"
 #include "core/inflate.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_fx.hpp"
 #include "shooters_edge/client/demo_heard.hpp"
 #include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_write.hpp"
@@ -540,6 +541,63 @@ TEST(a_played_demo_gathers_what_the_frames_between_draws_carried) {
   // A seek back drops what it read past.
   CHECK(cl::demo_seek(t, 0, error) != cl::TimedemoStep::error);
   CHECK(t.heard.prints.empty());
+}
+
+TEST(a_played_demo_throws_each_blast_once_where_its_rocket_ended) {
+  const cl::MatchScript match = cl::highlight_match();
+  cl::SearchPath files;
+  std::string error;
+  std::vector<uint8_t> pak;
+  CHECK(ge::vfs::write_pak({{"match.mvd", cl::write_multiview_match(match)}}, &pak, &error));
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  cl::Timedemo t;
+  CHECK_MSG(cl::timedemo_start(files, "match", t, error), error);
+  cl::DemoFx fx;
+  int flying = 0, idle = 0;
+  for (cl::TimedemoStep st = cl::playdemo_step(t, 0, 1, error);
+       st == cl::TimedemoStep::frame || st == cl::TimedemoStep::new_level;
+       st = cl::playdemo_step(t, 0.02, 1, error)) {
+    const size_t before = fx.explosions.size();
+    cl::demo_fx_frame(t.demo.state, fx);
+    for (const cl::Missile& m : fx.missiles) flying += m.rocket && !m.grenade ? 1 : 0;
+    if (fx.explosions.size() == before) idle++;
+  }
+  // Every rocket burst once, where it ended, though most draws read no frame of the 20 Hz match.
+  CHECK(fx.explosions.size() == match.rockets.size());
+  for (size_t k = 0; k < std::min(fx.explosions.size(), match.rockets.size()); k++) {
+    CHECK(fx.explosions[k].x == match.rockets[k].end.x);
+    CHECK(fx.explosions[k].y == match.rockets[k].end.y);
+    CHECK(fx.explosions[k].z == match.rockets[k].end.z);
+  }
+  CHECK(idle > 0);
+  CHECK(flying > 0);  // the rockets in flight, by their model's name: their trails
+  CHECK(fx.effects.empty());
+}
+
+TEST(a_demo_s_temporary_entities_read_as_a_game_s_and_a_new_level_starts_them_again) {
+  cl::DemoEffect shot;
+  shot.kind = cl::DemoEffectKind::gunshot;
+  shot.code = 2;
+  shot.count = 7;
+  shot.at = {16, 32, 48};
+  const cl::Effect e = cl::effect_of(shot);
+  CHECK(e.kind == cl::EffectKind::impact && e.count == 7 && e.code == 2 && e.at.y == 32);
+  cl::Missile m;
+  CHECK(cl::missile_model("progs/grenade.mdl", m) && m.rocket && m.grenade);
+  CHECK(cl::missile_model("progs/spike.mdl", m) && !m.rocket);
+  CHECK(!cl::missile_model("progs/player.mdl", m));
+  cl::DemoState s;
+  s.levels = 1;
+  cl::DemoEffect blast;
+  blast.kind = cl::DemoEffectKind::explosion;
+  s.effects = {blast, shot};
+  cl::DemoFx fx;
+  cl::demo_fx_frame(s, fx);
+  CHECK(fx.explosions.size() == 1 && fx.effects.size() == 1);
+  s.effects.clear();
+  s.levels = 2;
+  cl::demo_fx_frame(s, fx);
+  CHECK(fx.explosions.empty() && fx.effects.empty());
 }
 
 TEST(a_line_printed_in_pieces_shows_as_one_line) {

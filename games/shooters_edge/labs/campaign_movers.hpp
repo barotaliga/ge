@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include "core/num_text.hpp"
 #include "lab/lab.hpp"
 #include "progs/file.hpp"
 #include "progs/vm.hpp"
@@ -79,14 +80,25 @@ inline void call_as(sv::QcServer& s, const Fields& f, int32_t fn, int self) {
 
 // The samples started on any of `ents` since the frame began, appended without repeats in a row.
 inline void take_sounds(const sv::QcServer& s, const std::vector<int>& ents,
-                        std::vector<std::string>& out) {
+                        std::vector<std::string>& out, std::vector<double>* when = nullptr,
+                        double t = 0) {
   for (int i = 0; i < s.sv.sound_count; i++) {
     const auto& ev = s.sv.sounds[i];
     bool ours = false;
     for (int e : ents) ours = ours || ev.ent == e;
     if (!ours) continue;
-    if (out.empty() || out.back() != ev.sample) out.emplace_back(ev.sample);
+    if (out.empty() || out.back() != ev.sample) {
+      out.emplace_back(ev.sample);
+      if (when) when->push_back(t);
+    }
   }
+}
+
+// The seconds each sample started at, after the mover was set off ("0 0.3 1.3").
+inline std::string times(const std::vector<double>& v) {
+  std::string t;
+  for (double x : v) t += (t.empty() ? "" : " ") + ge::core::num::to_fixed(x, 2);
+  return t;
 }
 
 inline std::string joined(const std::vector<std::string>& v) {
@@ -116,10 +128,10 @@ inline void movers_table(ge::lab::Lab& lab, server::Campaign& c, const ge::progs
   const int frames = static_cast<int>(seconds / sv::kCampaignStep);
   const std::string world =
       f.worldtype < 0 ? "-" : std::to_string(static_cast<int>(float_at(s, 0, f.worldtype)));
-  gl::LabTable rows{
-      "every door and plat set off in turn, and what it played",
-      {"entity", "kind", "flags", "sounds", "key", "set off by", "played", "back", "locked"},
-      {}};
+  gl::LabTable rows{"every door and plat set off in turn, and what it played",
+                    {"entity", "kind", "flags", "sounds", "key", "set off by", "played", "at (s)",
+                     "where (from its start)", "back", "locked"},
+                    {}};
   std::map<std::string, std::map<std::string, int>> folded;
   std::vector<int> movers;
   for (int e = 1; e < s.sv.num_edicts; e++) {
@@ -146,6 +158,9 @@ inline void movers_table(ge::lab::Lab& lab, server::Campaign& c, const ge::progs
     std::vector<int> ents = owned;
     ents.push_back(e);
     std::vector<std::string> locked, played;
+    std::vector<double> when;
+    std::string moved;  // where it stood, from its start, at each sample after the first
+    size_t seen = 1;
     if (key) {
       call_as(s, f, word_at(s, e, f.touch), e);
       for (int o : owned) call_as(s, f, word_at(s, o, f.touch), o);
@@ -166,10 +181,17 @@ inline void movers_table(ge::lab::Lab& lab, server::Campaign& c, const ge::progs
     } else {
       how = "(nothing)";
     }
-    take_sounds(s, ents, played);
+    take_sounds(s, ents, played, &when, 0);
     for (int i = 0; i < frames && c.server; i++) {
       if (!sv::campaign_frame(c, nullptr, 0, error)) break;
-      take_sounds(s, ents, played);
+      take_sounds(s, ents, played, &when, (i + 1) * sv::kCampaignStep);
+      for (; seen < when.size(); seen++) {
+        const auto o = s.sv.edicts[static_cast<size_t>(e)].origin;
+        moved += (moved.empty() ? "" : " ") + std::string("(") +
+                 std::to_string(static_cast<int>(o.x - origin.x)) + " " +
+                 std::to_string(static_cast<int>(o.y - origin.y)) + " " +
+                 std::to_string(static_cast<int>(o.z - origin.z)) + ")";
+      }
     }
     if (!c.server) break;
     // Back where it started? One that stays away is used once more, to see whether that returns it.
@@ -189,7 +211,7 @@ inline void movers_table(ge::lab::Lab& lab, server::Campaign& c, const ge::progs
                          : key == 8 ? "gold"
                          : key      ? "both"
                                     : "",
-                         how, joined(played), back, key ? joined(locked) : ""});
+                         how, joined(played), times(when), moved, back, key ? joined(locked) : ""});
     if (static_cast<int>(float_at(s, e, f.spawnflags)) & 32)
       folded[cn + " flag 32"]["back: " + back]++;
     folded[cn + " sounds " + std::to_string(snd)][joined(played)]++;

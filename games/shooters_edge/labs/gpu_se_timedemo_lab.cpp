@@ -35,6 +35,7 @@
 #include <cmath>
 #include <cstdio>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -42,6 +43,7 @@
 #include "classicenhance/profile.hpp"
 #include "classicenhance/switches.hpp"
 #include "console/console.hpp"
+#include "core/libm/libm.hpp"
 #include "core/output.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
@@ -95,10 +97,25 @@ bool fixture_pack(const std::string& format, std::vector<uint8_t>& out, std::str
 
 // One play of the demo with `picture` (and the HUD unless `no_hud`): every timed frame and its
 // GPU span; the three pictures when `picks` is given.
+// A point in front of the demo's eye: within about 40 degrees of where it looks.
+constexpr int64_t kBlastLag = 1;  // frames from a blast read to its picture
+constexpr double kDegToRad = 3.14159265358979323846 / 180;
+bool in_front(const cl::DemoState& s, const ge::shooter::Vec3f& at) {
+  const double yaw = s.angles.y * kDegToRad, pitch = s.angles.x * kDegToRad;
+  const double f[3] = {ge::core::libm::cos(pitch) * ge::core::libm::cos(yaw),
+                       ge::core::libm::cos(pitch) * ge::core::libm::sin(yaw),
+                       -ge::core::libm::sin(pitch)};
+  const double d[3] = {at.x - s.eye.x, at.y - s.eye.y, at.z - s.eye.z};
+  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+  return len > 0 && (f[0] * d[0] + f[1] * d[1] + f[2] * d[2]) / len > 0.75;
+}
+
 struct Played {
   cl::Timedemo bench;
   int64_t frames = 0;
   std::string stop;
+  int64_t explosions = 0, effects = 0;  // the demo's temporary entities read (demo_fx.hpp)
+  int64_t blast_frame = -1;             // the frame the `blast` picture caught (-1: none)
   // With `zones` asked for: each timing zone's ms in every timed frame (prof/zones.hpp), the
   // zones in the order they first opened.
   bool zones = false;
@@ -127,6 +144,14 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
   cl::WorldDrawPtr world;
   size_t world_models = 0;  // the model list's length the world was made with
   cl::FxFrame fx;
+  cl::FxState fx_state;  // the demo's effects as they live, as the window
+  cl::DemoFx demo_fx;
+  fx_state.on = cl::fx_switches(picture);
+  {
+    std::vector<uint8_t> store;
+    const std::span<const uint8_t> pal = cl::find_file(rig.files, "gfx/palette.lmp", store);
+    fx_state.palette.assign(pal.begin(), pal.end());
+  }
   std::unique_ptr<cl::LoadedMap> map;
   se::Hud hud = se::make_hud();
   se::HudArt art = se::free_art();
@@ -136,6 +161,7 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
                             total - 1};
   const char* ids[3] = {"start", "middle", "end"};
   int shot = shots ? 0 : 3;
+  int64_t blast_at = -1;  // the frame the `blast` picture is taken (-1: no blast seen yet)
   const uint32_t w = rig.w, h = rig.h;
   ge::gpu::Device* device = rig.device;
   const uint64_t first_ns = now_ns();
@@ -164,6 +190,8 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
     }
     if (st == cl::TimedemoStep::new_level) {
       settle();
+      demo_fx = {};
+      fx_state.explosions_seen = fx_state.effects_seen = 0;
       map = cl::load_named_map(rig.files, bench.demo.state.map, error);
       if (!map) {
         p.stop = "the demo's map " + bench.demo.state.map + ": " + error;
@@ -193,6 +221,8 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
       }
       world_models = bench.demo.state.models.size();
     }
+    for (const cl::DemoEffect& e : bench.demo.state.effects)
+      (e.kind == cl::DemoEffectKind::explosion ? p.explosions : p.effects)++;
     const double t = static_cast<double>(now_ns() - first_ns) * 1e-9;
     if (device && world) {
       ge::render::FrameView view =
@@ -208,13 +238,34 @@ bool play(Rig& rig, const shooters_edge::look::Picture& picture, bool no_hud, bo
                         se::hud_style());
       }
       {
-        GE_ZONE("placed");
-        cl::demo_placed(bench.demo.state, fx.models);  // the players and entities, as the window
+        GE_ZONE("placed");  // the players, entities and effects, as the window
+        fx_state.models = &cl::world_models(*world);
+        const size_t had = demo_fx.explosions.size();
+        cl::demo_fx_step(bench.demo.state, demo_fx, map.get(), view, fx_state, t, 1.0 / 72, fx);
+        // The first explosion in front of the eye: its picture a few frames into its burst.
+        for (size_t k = had; blast_at < 0 && k < demo_fx.explosions.size(); k++)
+          if (in_front(bench.demo.state, demo_fx.explosions[k])) blast_at = p.frames + kBlastLag;
       }
       cl::draw_world(*device, *world, view, fx, nullptr, 0, overlay, rig.out->view);
       // A picture's frame waits for its read back, which a window never does: not timed.
       if (shot < 3 && p.frames == picks[shot]) bench.skip = std::max(bench.skip, 1);
       if (bench.skip == 0) cl::record_span(*world, bench.passes);
+      if (shots && p.frames == blast_at) {
+        settle();
+        const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
+        lab.shot({"blast",
+                  "A BLAST IN A PLAYED DEMO",
+                  "The first explosion the demo sends in front of the recorded eye, " +
+                      std::to_string(kBlastLag) +
+                      " frames into its burst: the temporary entity the recording carries, drawn "
+                      "by the effects a game played here draws.",
+                  "the fireball and its light on the walls and floor where the rocket ended; "
+                  "the rocket's trail before it",
+                  {{"demo", bench.name}, {"frame", std::to_string(p.frames)}}},
+                 gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+                 gl::Det::measured);
+        p.blast_frame = p.frames;
+      }
       if (shot < 3 && p.frames == picks[shot]) {
         settle();
         const ge::gpu::Image img = ge::gpu::read_now(*device, *rig.out);
@@ -366,6 +417,8 @@ void run(gl::Lab& lab) {
   }
   lab.metric("demo.frames", static_cast<double>(base.frames), "count");
   lab.metric("demo.levels", levels, "count");
+  lab.metric("demo.explosions", static_cast<double>(base.explosions), "count");
+  lab.metric("demo.effects", static_cast<double>(base.effects), "count");
   lab.metric("fps.average", s.avg_fps, "fps", gl::Det::measured);
   lab.metric("fps.max", s.max_fps, "fps", gl::Det::measured);
   lab.metric("fps.min", s.min_fps, "fps", gl::Det::measured);
