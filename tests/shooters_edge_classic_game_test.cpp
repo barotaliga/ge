@@ -4,7 +4,8 @@
 // core counts it seated; the settings reach the endpoint (the name in its status, the password at
 // the connect); too many bots are refused with the next step; a whole session replays to the bit;
 // the mod's own rules come in as settings (`+set fraglimit 20`) and reach the mod; a map read from
-// a pack;
+// a pack; a mod folder's own program (from a pack of any name) runs over the base game, its
+// name in serverdata and the serverinfo's `*gamedir`, and a mod folder with no program is refused;
 // the mod's changelevel takes the players to the next map (the rotation's when it has one); bots
 // are players every client sees, with their teams; the lobby warms up (its limits held, a bot
 // alone never counts down) until the client is ready, then restarts the map into the match.
@@ -13,6 +14,7 @@
 // ge:keywords test classic-game dedicated-server classic-client simulated-network serve net_frame
 // ge:keywords game-rules fraglimit pack-map changelevel map-change maprotation reconnect
 // ge:keywords bots sv_bots sv_lobby lobby warmup ready countdown match-restart local-seat
+// ge:keywords sv_mod mod-folder gamedir qwprogs misc-pak
 // ge:skill net shooter testing
 #include <filesystem>
 #include <fstream>
@@ -31,6 +33,7 @@
 #include "shooters_edge/net/classic_client.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/server/test_mod.hpp"
 #include "vfs/pak.hpp"
 
 using namespace ge::server;
@@ -264,6 +267,47 @@ TEST(classic_game_a_map_from_the_game_folder_s_pack) {
   CHECK(server_status(s).find("map=halls") != std::string::npos);
   for (int f = 0; f < 800; f++) server_frame(s);  // 10.4 s
   CHECK_MSG(server_status(s).find("map=arena") != std::string::npos, server_status(s));
+  fs::remove_all(root);
+}
+
+TEST(classic_game_a_mod_folder_runs_its_own_program) {
+  namespace fs = std::filesystem;
+  const fs::path root = fs::temp_directory_path() / "ge_se_classic_game_mod";
+  fs::remove_all(root);
+  fs::create_directories(root / se::kGameFolder);
+  fs::create_directories(root / "mymod");
+  std::string error;
+  std::vector<uint8_t> bsp, pak, misc;
+  CHECK_MSG(ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bsp, &error),
+            error);
+  CHECK_MSG(ge::vfs::write_pak({{"maps/halls.bsp", bsp}}, &pak, &error), error);
+  std::vector<int32_t> lines;
+  CHECK_MSG(ge::vfs::write_pak({{"qwprogs.dat", shooters_edge::server::test_mod_bytes(lines)}},
+                               &misc, &error),
+            error);
+  auto put = [](const fs::path& at, const std::vector<uint8_t>& bytes) {
+    std::ofstream out(at, std::ios::binary);
+    out.write(reinterpret_cast<const char*>(bytes.data()),
+              static_cast<std::streamsize>(bytes.size()));
+  };
+  put(root / se::kGameFolder / "pak0.pak", pak);
+  ServerConfig c = arena();
+  c.map = "halls";
+  c.root = root.string();
+  c.mod = "mymod";
+  {
+    Server s;  // no program in the mod's folder: refused, naming it
+    CHECK(!server_open(s, se::classic_game(), c, nullptr, nullptr, error));
+    CHECK_MSG(error.find("the mod folder mymod holds no multiplayer program") == 0, error);
+  }
+  put(root / "mymod" / "misc.pak", misc);  // a mod's program in its unnumbered pack
+  Session r;
+  run_session(r, c, 300);
+  CHECK_MSG(r.opened, r.error);
+  CHECK(r.client.stage == se::ClientStage::active);
+  CHECK(r.client.gamedir == "mymod");
+  CHECK_MSG(r.client.serverinfo.find("\\*gamedir\\mymod") != std::string::npos,
+            r.client.serverinfo);
   fs::remove_all(root);
 }
 

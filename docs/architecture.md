@@ -116,7 +116,7 @@ One direction of dependency, held by `tools/check-agents.sh` once each layer exi
   bound as console cvars (`cvars.hpp`). It depends on `engine/core`, and on `engine/console` for
   that binding alone; the step is a pure function of its inputs, so a run replays from its commands.
 - **`engine/vfs`**: content files (`ge::vfs`, M18a): the search path over game directories (packs
-  in number order, then pk3 zips and `.pk3dir` directories in name order, then loose files; a later
+  in number order, then other packs, pk3 zips and `.pk3dir` directories in name order, then loose files; a later
   game directory over an earlier one), a lookup that never allocates, every archive's directory
   checked whole before anything is read, files handed out as views where they are stored; the wad
   and its pictures, the palette and the colour map. It depends on `engine/core` only (the inflater

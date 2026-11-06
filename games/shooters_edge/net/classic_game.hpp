@@ -12,6 +12,12 @@
 // `ServerGame::rules`), each left to the mod's default when unset, and `sv_maprotation` (the map
 // after each match's end; unset, the one the mod asks for).
 //
+// A MOD FOLDER (`sv_mod`, `--mod=<folder>`; the last of a comma list): the maps and files are its
+// folder's over the base game's, the program is the folder's own multiplayer program (the game
+// adapter's `find_program`: `qwprogs.dat`, loose or in any of its packs) in place of the baseline
+// mod, serverdata names the folder, and the server info's `*gamedir` says it before the map loads
+// (a mod checks it). A mod folder without a program this server runs is refused, naming it.
+//
 // BOTS AND THE LOBBY: `sv_bots` seats the listen server's fighters (client/lobby_room.hpp) in the
 // slots after 0, each a local seat of the endpoint every client sees as a player. `sv_lobby 1`
 // runs the engine's lobby (engine/server/match.hpp): every map warms up with the limits held, a
