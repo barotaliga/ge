@@ -415,6 +415,7 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.topcolor = std::atoi(cvar("topcolor", "0").c_str());
     cfg.bottomcolor = std::atoi(cvar("bottomcolor", "0").c_str());
     cfg.qport = static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
+    cfg.read_file = r.read_file;
     std::string error;
     if (!remote_connect(r, address, cfg, error))
       c.print("connect: " + error);

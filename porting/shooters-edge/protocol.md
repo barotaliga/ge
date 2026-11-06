@@ -346,7 +346,11 @@ reconnected).
 5. **`prespawn <sc> <n> [<map checksum>]`.** The first request carries the map's second checksum:
    for every lump except the entities, the four 32-bit words of its MD4 digest XORed together,
    and all of those XORed together; the second checksum also skips the visibility, leaf and node
-   lumps. The server compares it when `sv_mapcheck` is 1. The reply walks one index space: the
+   lumps. (Measured 2026-11-06 against a live server, `se-interop`: flipping one byte in each lump
+   moves the first checksum for every lump but the entities, and the second for every lump but
+   entities, visibility, nodes and leaves. The GPL rebuilds of dm2-dm6 are reported with the
+   original release's second checksum when name and content match: dm2 1710634548, dm3
+   367136248, dm4 -1670388545, dm5 -1339209475, dm6 1376311851.) The server compares it when `sv_mapcheck` is 1. The reply walks one index space: the
    static entities (20 or 21), then the baselines (22 or 66), then the signon buffers (static
    sounds, 29 or 94, and the game program's signon writes). Each reply fills about half a message
    and stuffs `cmd prespawn <sc> <next>`; the last stuffs `cmd spawn <sc> 0`.
