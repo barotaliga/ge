@@ -9,11 +9,17 @@
 // the snow's light from above and below; far cloud is hazed and melts into the sky behind it.
 // Marched for every pixel (`fs_main`), or at a quarter of them (`fs_march` into a half-size target)
 // and laid over the frame by a depth-aware upsample (`fs_upsample`); spread over four frames
-// (`cloud_info.z`), a quarter of the half-size pixels march each frame and the rest are the last
-// frame's, reprojected.
+// (`cloud_info.z`), a quarter of the march target's pixels march each frame and the rest are the
+// last frame's, reprojected. The march target is a GRID over the frame (`kGrain`): half its size,
+// or the frame's own size, where the spread march is every pixel's own ray, a quarter of them a
+// frame.
 #include "render/wgsl/frame.wgsl"
 
 @group(1) @binding(0) var scene_depth: texture_depth_2d;
+
+// The march target's grain: the frame's pixels a side each of its pixels stands for (2: the
+// half-size target, a quarter of the pixels; 1: every pixel its own ray, spread over four frames).
+override kGrain: i32 = 2;
 
 // The primary steps a heap and a sheet take through their slab at the top of the quality ladder
 // (`cloud_info.y` takes a share of them, never under four), the farthest a ray marches in
@@ -562,9 +568,13 @@ fn turn_of() -> vec2i {
   return kTurn[u32(frame.cloud_info.w) % 4u];
 }
 
-// The half-size pixel `q`'s depth: the farthest of its two by two, and its uv.
+// The march target's pixel `q`'s depth: the farthest of the frame's pixels it stands for (its two
+// by two at the half-size grain, its own at every pixel's).
 fn quarter_depth(q: vec2i) -> f32 {
   let size = vec2i(textureDimensions(scene_depth)) - 1;
+  if (kGrain == 1) {
+    return textureLoad(scene_depth, min(q, size), 0);
+  }
   var z = 1.0;
   for (var k = 0; k < 4; k++) {
     z = min(z, textureLoad(scene_depth, min(q * 2 + vec2i(k & 1, k >> 1), size), 0));
@@ -572,10 +582,10 @@ fn quarter_depth(q: vec2i) -> f32 {
   return z;
 }
 
-// The half-size pixel `q`'s centre in uv (as its own pass's full-screen triangle reads it).
+// The march target's pixel `q`'s centre in uv (as its own pass's full-screen triangle reads it).
 fn quarter_uv(q: vec2i) -> vec2f {
-  let half = (vec2i(textureDimensions(scene_depth)) + 1) / 2;
-  return (vec2f(q) + 0.5) / vec2f(half);
+  let grid = (vec2i(textureDimensions(scene_depth)) + kGrain - 1) / kGrain;
+  return (vec2f(q) + 0.5) / vec2f(grid);
 }
 
 // The half-size targets keep a pixel's TRANSMITTANCE in alpha, not one minus it: a half float
@@ -691,16 +701,21 @@ fn fs_march(in: VertexOut) -> MarchOut {
 // THE QUARTER PICTURE, laid over the frame: each pixel takes the four half-size pixels round it,
 // each weighted by its share of the bilinear footprint and by how near the distance it marched to
 // is to this pixel's own; a pixel none of the four matches (the near side of an edge) is marched
-// itself.
+// itself. At every pixel's grain the target is the frame's own picture, marched to each pixel's
+// own depth, and laid over it as it is.
 @group(1) @binding(1) var quarter: texture_2d<f32>;
 @group(1) @binding(2) var quarter_dist: texture_2d<f32>;
 
 @fragment
 fn fs_upsample(in: VertexOut) -> @location(0) vec4f {
+  if (kGrain == 1) {
+    let own = kept(textureLoad(quarter, vec2i(in.position.xy), 0));
+    return local_fog_over(valley_fog_over(own, in.uv, 1e30), in.uv, 1e30);
+  }
   let z = textureLoad(scene_depth, vec2i(in.position.xy), 0);
   let own = scene_dist(in.uv, z);
   let size = vec2i(textureDimensions(quarter)) - 1;
-  let f = in.position.xy * 0.5 - 0.5;
+  let f = in.position.xy / f32(kGrain) - 0.5;
   let i0 = vec2i(floor(f));
   let w = fract(f);
   var sum = vec4f(0.0);

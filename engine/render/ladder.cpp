@@ -22,8 +22,10 @@ constexpr double kGrain = 0.01;
 
 int top(const LadderRow& row) { return static_cast<int>(row.stops.size()) - 1; }
 
-// A cost in grains, rounded up, so a picture said to fit does.
+// A cost in grains, rounded up, and the room in grains, rounded down, so a picture said to fit
+// does.
 int64_t grains(double ms) { return static_cast<int64_t>(std::ceil(ms / kGrain - 1e-9)); }
+int64_t room_grains(double ms) { return static_cast<int64_t>(std::floor(ms / kGrain + 1e-9)); }
 
 }  // namespace
 
@@ -57,7 +59,7 @@ LadderFit fit_ladder(std::span<const LadderRow> rows, double budget_ms, double f
     fit.fits = fits;
     return fit;
   };
-  if (grains(ladder_cost(rows, fit.pick) * scale) <= grains(room)) return finish(true);
+  if (grains(ladder_cost(rows, fit.pick) * scale) <= room_grains(room)) return finish(true);
 
   // The rows given up first, in their order, a stop at a time, every other row at its top.
   std::vector<size_t> first;
@@ -68,7 +70,7 @@ LadderFit fit_ladder(std::span<const LadderRow> rows, double budget_ms, double f
   for (size_t r : first) {
     while (fit.pick[r] > 0) {
       --fit.pick[r];
-      if (grains(ladder_cost(rows, fit.pick) * scale) <= grains(room)) return finish(true);
+      if (grains(ladder_cost(rows, fit.pick) * scale) <= room_grains(room)) return finish(true);
     }
   }
 
@@ -83,7 +85,7 @@ LadderFit fit_ladder(std::span<const LadderRow> rows, double budget_ms, double f
     else
       rest.push_back(r);
   }
-  const int64_t budget = grains(room) - spent;
+  const int64_t budget = room_grains(room) - spent;
   if (budget < 0) {
     for (size_t r : rest) fit.pick[r] = 0;
     return finish(false);
