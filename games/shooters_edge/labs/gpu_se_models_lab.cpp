@@ -4,7 +4,8 @@
 // client/world_models.hpp): the ARMOUR, a HEALTH box, an AMMO box, a WEAPON lying about, a
 // TORCH or a FLAME (static: the server forgot them), and the view from the spawn. Then the
 // player WARPING (client/warps.hpp, client/world_fx.hpp, labs/warp_film.hpp): blown in as ash
-// from ahead of him at three moments, then crumbling into ash the wind takes at three.
+// from ahead of him at three moments, then crumbling into ash the wind takes at three; and the
+// player with a rocket's glow beside him (the dynamic lights on the models).
 //
 // With `--pak` (a pack holding the map, its models and `gfx/palette.lmp`) it is the pack's own
 // map (`--map`, default e1m1); without one, the fixture halls (plugins/brush) with the fixture
@@ -38,6 +39,7 @@
 #include "morph/write.hpp"
 #include "progs/qc_compile.hpp"
 #include "shooter/trace.hpp"
+#include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/world_draw.hpp"
@@ -461,6 +463,24 @@ void run(gl::Lab& lab) {
     v.pitch = lm::atan2(dy, std::sqrt(dx * dx + dz * dz));
     shoot(s.id, s.title, s.caption, s.look_for, v);
     if (k == kPlayer) shoot_warps(v, me);
+    if (k == kPlayer) {
+      // A rocket's glow hung beside him, a little toward the eye and to his right: the walls
+      // and the floor take it, and so does he (the dynamic lights on the models).
+      const double fw[3] = {eye[0] - at[0], 0, eye[2] - at[2]};
+      const double fl = std::sqrt(fw[0] * fw[0] + fw[2] * fw[2]) + 1e-9;
+      const double glow_at[3] = {at[0] + 0.3 * fw[0] - 0.8 * fw[2] / fl, at[1] + 0.4,
+                                 at[2] + 0.3 * fw[2] + 0.8 * fw[0] / fl};
+      fx.lights.push_back(shooters_edge::effects::rocket_light(glow_at));
+      shoot("player-glow", "A ROCKET'S GLOW BESIDE HIM",
+            "The player as another sees him, a rocket's glow (a dynamic light of 200 units) hung "
+            "at chest height to his side, a little toward the eye. The floor and the walls take "
+            "its light, and so does he: the side of him facing it brighter and warmer than the "
+            "rest, as the floor under him is.",
+            "the figure's near side lit warm like the floor round him; not left as dim as in the "
+            "plain view beside it",
+            v);
+      fx.lights.pop_back();
+    }
   }
   // THE PLAYER'S SHADOW (M54): the player stood a pace from a torch on its wall (and again from a
   // large flame), facing away from it, his own eyes looking down at the floor ahead where his

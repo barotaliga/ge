@@ -20,6 +20,7 @@
 #include "core/output.hpp"
 #include "morph/read.hpp"
 #include "render/sprite_shapes.hpp"
+#include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
 namespace shooters_edge::client {
@@ -424,7 +425,9 @@ void shadow_casters(const WorldModels& m, std::span<const Placed> placed, const 
 
 void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
                     std::span<const Placed> placed, const gr::FrameView& view, double brightness,
-                    double minlight, bool smooth, const InPlace& in_place) {
+                    double minlight, bool smooth, const InPlace& in_place,
+                    std::span<const ge::brush::app::DynamicLight> dynamic,
+                    double dynamic_strength) {
   const bool bare_flames = in_place.flames;
   m.morph_draws.clear();
   m.sprite_draws.clear();
@@ -526,19 +529,31 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
         lit.rgb[0] = lit.rgb[1] = lit.rgb[2] = 1;
       lit.at = p.origin;
     }
+    // The frame's dynamic lights at its middle (a figure's chest, an item's top), added as they
+    // are to the floor under it.
+    double dyn[3], toward[3];
+    const double mid[3] = {w[0], w[1] + 16 * br::kUnitM, w[2]};
+    effects::dynamic_light_at(dynamic, mid, dynamic_strength, dyn, toward);
+    double floor_lum = 0, dyn_lum = 0;
     for (int c = 0; c < 3; c++) {
       // The world's own soft floor (bsp_draw's r_minlight), so a thing in a dark corner reads
       // as the walls round it do.
       const double raw = lit.rgb[c];
-      const float l = float(std::sqrt(raw * raw + minlight * minlight) * brightness);
+      const double floor = std::sqrt(raw * raw + minlight * minlight);
+      const float l = float((floor + dyn[c]) * brightness);
       g.ambient[c] = kAmbientShare * l;
       g.shade[c] = kShadeShare * l;
+      floor_lum += floor;
+      dyn_lum += dyn[c];
     }
-    // From above and a little toward the eye, so a face turned to the player is never black.
+    // From above and a little toward the eye, so a face turned to the player is never black;
+    // turned toward the dynamic lights by their share of the light.
     const double len = std::sqrt(dist) + 1e-9;
-    const double sd[3] = {-0.3 * (w[0] - view.eye[0]) / len, 0.9,
-                          -0.3 * (w[2] - view.eye[2]) / len};
-    const double sl = std::sqrt(sd[0] * sd[0] + sd[1] * sd[1] + sd[2] * sd[2]);
+    double sd[3] = {-0.3 * (w[0] - view.eye[0]) / len, 0.9, -0.3 * (w[2] - view.eye[2]) / len};
+    const double sd_len = std::sqrt(sd[0] * sd[0] + sd[1] * sd[1] + sd[2] * sd[2]);
+    const double share = dyn_lum / (dyn_lum + floor_lum + 1e-9);
+    for (int c = 0; c < 3; c++) sd[c] = (1 - share) * sd[c] / sd_len + share * toward[c];
+    const double sl = std::sqrt(sd[0] * sd[0] + sd[1] * sd[1] + sd[2] * sd[2]) + 1e-9;
     for (int c = 0; c < 3; c++) g.shade_dir[c] = float(sd[c] / sl);
     g.outdoor = 0;
     g.glow = 1;
