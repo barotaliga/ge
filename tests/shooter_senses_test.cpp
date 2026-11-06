@@ -4,7 +4,8 @@
 // the axes turned under another view keep the wish in the world; and on a watched run the seer
 // sees the runner nearly whenever a line joins them (a late view loses it from its cone), aims
 // better the better its skill (perfect, expert, average, novice by the median error, on every seed
-// tried), reacts as late as its hands, keeps running its route while it looks, and replays to the
+// tried), reacts as late as its hands, keeps running its route while it looks, looks at a spot it
+// is set to watch while nobody is in sight, and replays to the
 // bit (tests/golden/shooter_senses.txt, GE_GOLDEN_WRITE=1 rewrites it; the PR says why).
 //
 // ge:summary Tests: what a client is sent, sight in a cone by trace, hearing, aim by skill, bits
@@ -12,6 +13,7 @@
 // ge:keywords golden
 // ge:skill shooter bots testing
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -162,6 +164,31 @@ TEST(the_seer_sees_aims_by_skill_and_keeps_its_route) {
   }
   for (int k = 1; k <= 3; k++)
     CHECK_MSG(timed[k] > 0, "a skill's seer timed no sighting over both runs");
+}
+
+TEST(a_bot_set_to_watch_a_spot_looks_there_and_keeps_its_route) {
+  pr::Duel d;
+  CHECK(pr::make_duel(d, sh::AimSkill::expert, 1));
+  // A spot far off along +x: its bearing from anywhere on the arena is about 0 degrees.
+  d.seer.look = true;
+  d.seer.look_at = {100000, 0, 0};
+  const pr::DuelResult r = pr::run_duel(d, 2400);
+  CHECK_MSG(r.bot.looking > 0, "the seer never looked at the spot it was set to watch");
+  int64_t unseen = 0, on_spot = 0;
+  for (size_t i = 100; i < r.view_yaw.size(); i++) {
+    if (r.seen[i] || (i >= 1 && r.seen[i - 1])) continue;
+    unseen++;
+    float off = std::fmod(r.view_yaw[i], 360.f);
+    if (off > 180) off -= 360;
+    if (off < -180) off += 360;
+    if (off < 10 && off > -10) on_spot++;
+  }
+  CHECK_MSG(unseen > 0 && on_spot * 10 >= unseen * 7,
+            "the view was on the watched spot " + std::to_string(on_spot) + " of " +
+                std::to_string(unseen) + " frames with nobody in sight");
+  CHECK_MSG(d.seer.pilot.arrivals >= 3, "the seer reached " +
+                                            std::to_string(d.seer.pilot.arrivals) +
+                                            " goals while watching: read turn_axes in aim.cpp");
 }
 
 TEST(a_watched_run_replays_to_the_bit_and_matches_its_golden) {

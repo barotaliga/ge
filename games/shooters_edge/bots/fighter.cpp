@@ -24,6 +24,7 @@
 #include "shooters_edge/bots/spam.hpp"
 #include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/bots/temper.hpp"
+#include "shooters_edge/bots/watch.hpp"
 #include "shooters_edge/bots/water.hpp"
 
 namespace shooters_edge::bots {
@@ -74,6 +75,8 @@ constexpr double kEnemyKnown_s = 3;  // an enemy seen or heard this lately is kn
 constexpr double kHotSpot_s = 60;    // two danger spots this lately near an item: no healing there
 constexpr double kMegaHealBonus = 10;  // the mega's worth to a healer over the health it gives
 constexpr double kSwimExit_s = 3;      // a climb out of the water kept this long at most
+constexpr double kHeardTurn_s = 3;     // a sound this lately turns a standing player's view to it
+constexpr double kWatchAgain_s = 0.5;  // the spots watched are worked out at most this often
 constexpr double kBaseHeal = 1.4;      // health in the team's base is worth this more to a healer
 constexpr float kBlastClear = 140;     // a rocket or grenade is held with a mate this near its aim
 
@@ -141,8 +144,8 @@ double weapon_score(const WeaponRow& w, float d) {
       return 35;
     case 5:
       return d < 600 ? 65 : 40;
-    case 6:
-      return d > 120 && d < 500 ? 45 : 5;
+    case 6:  // indoors at a room's range the blast beats the spikes (its own splash too near)
+      return d > 120 && d < 450 ? 70 : d > 100 && d < 550 ? 40 : 5;
     case 7:
       return d > 130 ? 90 : 15;
     default:
@@ -860,6 +863,8 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
                 static_cast<float>(sh::scale(traits[sh::Trait::reaction], {0.2, 0.15, 0.1, 0.08}))
           : 0;
   f.rng = ge::core::make_rng(seed * 2654435761u + 12345u);
+  sh::dodge_init(f.dodge, seed);
+  f.dodge_k = sh::dodge_skill(traits[sh::Trait::dodge]);
   const int me = slot + 1;
   sh::client_view(s.sv, me, f.bot.view);
   std::vector<pg::EntityBlock> blocks;
@@ -959,6 +964,55 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
 
   if (f.escort.leader >= 0) escort_sense(f, s, me, t);
   if (f.hunts) hunt_sense(f, s);
+  // Standing in an area with nobody about (holding it, waiting on an item): the view on its ways
+  // in (watch.hpp), a sound's first.
+  {
+    const sh::PilotMode pm = f.bot.pilot.pilot.mode;
+    const bool standing = pm == sh::PilotMode::arrived || pm == sh::PilotMode::idle;
+    // A holder walking about its own area watches the ways in as it goes.
+    const bool holding = f.role == Role::hold &&
+                         (pm == sh::PilotMode::walk || pm == sh::PilotMode::hop) && f.plan &&
+                         f.mind.claim >= 0;
+    f.bot.look = false;
+    if (!dead && (standing || holding) && f.mode == FightMode::roam && !f.unlocking &&
+        f.escort.leader < 0 && s.world.entities[static_cast<size_t>(me)].waterlevel < 2) {
+      const sh::Vec3f at = s.world.entities[static_cast<size_t>(me)].origin;
+      const sh::Vec3f eye{at.x, at.y, at.z + f.bot.senses.set.view_height};
+      const int32_t node = pm == sh::PilotMode::arrived && f.goal_node >= 0
+                               ? f.goal_node
+                               : sh::nav_nearest(*f.bot.pilot.pilot.g, at);
+      const int32_t area = holding ? plan_area_of(*f.plan, node) : -1;
+      const bool in_claim =
+          area >= 0 &&
+          plan_area_of(*f.plan, f.items[static_cast<size_t>(f.mind.claim)].node) == area;
+      if (standing || in_claim) {
+        if (node != f.watch_node && t - f.watch_at >= kWatchAgain_s) {
+          watch_spots(f, s, me, node, eye);
+          f.watch_at = t;
+        }
+        const sh::Vec3f* heard = nullptr;
+        sh::Vec3f sound;
+        for (const sh::Contact& k : f.bot.senses.contacts)
+          if (ai::known(k.heard) && ai::age(k.heard, t) < kHeardTurn_s) {
+            sound = at_of(k.heard);
+            heard = &sound;
+          }
+        const int32_t pick = watch_choose(f, eye, t, heard);
+        if (pick >= 0) {
+          f.bot.look = true;
+          f.bot.look_at = f.watch[static_cast<size_t>(pick)];
+          f.stats.watching++;
+          if (why) {
+            why->decide("watch");
+            why->fact("spots", static_cast<double>(f.watch.size()));
+            why->fact("spot", pick);
+            why->choose(heard ? "sound" : "way-in",
+                        heard ? "the way in nearest a sound" : "a way into its area");
+          }
+        }
+      }
+    }
+  }
   sh::MoveCmd cmd = sh::bot_source(f.bot).next(&f.bot, s.sv, slot, msec);
   f.stats.mode_commands[static_cast<int>(f.mode)]++;
   if (held) f.stats.weapon_commands[held->number]++;
@@ -998,6 +1052,38 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
         cmd.forward = 0;
         cmd.side = 0;
         if (f.stats.commands & 1) cmd.buttons |= sh::kButtonAttack;
+      }
+    }
+  }
+
+  // In a fight, the side key across the line to him (the view is on him, so the side is across):
+  // the dodge (shooter/dodge.hpp), not on a jump the route proved, a lift, a door, or in water.
+  if (!dead && f.bot.aiming && !f.unlocking && f.lost_to < 0 &&
+      (f.mode == FightMode::fight || f.mode == FightMode::retreat) &&
+      s.world.entities[static_cast<size_t>(me)].waterlevel < 2) {
+    const sh::PilotMode pm = f.bot.pilot.pilot.mode;
+    const bool free_feet = pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe ||
+                           pm == sh::PilotMode::hop || pm == sh::PilotMode::idle ||
+                           pm == sh::PilotMode::arrived;
+    bool in_sight = false;
+    for (const sh::Contact& k : f.bot.senses.contacts)
+      if (k.ent == f.bot.target && k.visible) in_sight = true;
+    if (free_feet && in_sight) {
+      const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
+      const float yaw = f.bot.yaw;
+      const int was = f.dodge.dir;
+      const int dir =
+          sh::dodge_step(f.dodge, f.dodge_k, t, sh::dodge_clear(s.sv, me_at, yaw, -1, me),
+                         sh::dodge_clear(s.sv, me_at, yaw, 1, me));
+      if (dir != was && was != 0 && dir != 0) f.stats.dodge_turns++;
+      if (dir != 0) {
+        cmd.side = sh::quantize_axis(static_cast<float>(dir) * 320 * f.dodge_k.press);
+        f.stats.dodging++;
+      }
+      if (why) {
+        why->decide("dodge");
+        why->fact("dir", dir);
+        why->choose(dir < 0 ? "left" : dir > 0 ? "right" : "straight", "across his line");
       }
     }
   }

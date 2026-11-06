@@ -47,6 +47,7 @@
 #include "ai/path.hpp"
 #include "core/prng.hpp"
 #include "shooter/bot.hpp"
+#include "shooter/dodge.hpp"
 #include "shooter/hearing.hpp"
 #include "shooter/swim.hpp"
 #include "shooter/temper.hpp"
@@ -154,6 +155,9 @@ struct FighterStats {
   double dive_wet_s = 0;            // time in the water on a dive
   int64_t outmatched = 0;           // commands spent turned from a fight it believed it loses
   int64_t sound_chases = 0;         // commands spent going at an enemy it only heard
+  int64_t dodging = 0;              // commands spent stepping across an enemy's line (dodge.hpp)
+  int64_t dodge_turns = 0;          // and the times it turned the step back
+  int64_t watching = 0;             // commands standing with the view on a way in (watch.hpp)
 };
 
 // What a fighter believes of one enemy (temper.hpp): his body and arms as last heard.
@@ -237,6 +241,14 @@ struct Fighter {
   int32_t swim_exit = -1;     // the exit node it is climbing out onto (shooter/swim.hpp), -1 none
   double swim_exit_until = 0;
   ge::core::Rng rng{1};  // its own draws (where it explores), seeded off the bot's seed
+  sh::Dodge dodge;       // its side steps in a fight (shooter/dodge.hpp)
+  // The ways in it watches from where it stands (watch.hpp): their spots, the node they were
+  // worked out for, the one watched and until when.
+  std::vector<sh::Vec3f> watch;
+  ge::ai::Search watch_search;
+  int32_t watch_node = -1, watch_pick = -1;
+  double watch_until = 0, watch_at = -1e9;
+  sh::DodgeSkill dodge_k;
   FightMode mode = FightMode::roam;
   Role role = Role::free;
   sh::Temper temper = sh::Temper::balanced;  // when it takes a fight (shooter/temper.hpp)

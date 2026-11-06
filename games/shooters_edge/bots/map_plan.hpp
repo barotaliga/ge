@@ -56,6 +56,7 @@ struct PlanArea {
   sh::Vec3f at;                // its items' middle
   double worth = 0;            // a minute
   int32_t ways_in = 0;
+  std::vector<int32_t> entries;  // each way in's outer node (the first link's start found for it)
   float height = 0;             // over the map's median floor, units
   double from_spawns_s = 0;     // the mean quickest run from a spawn point
   double hold = 0;              // the base's measure

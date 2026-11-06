@@ -172,7 +172,10 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
         if (!area.region[static_cast<size_t>(l.to)]) continue;
         bool known = false;
         for (const sh::Vec3f& e : entries) known = known || dist(e, node.origin) < kEntrySpot;
-        if (!known) entries.push_back(node.origin);
+        if (!known) {
+          entries.push_back(node.origin);
+          area.entries.push_back(static_cast<int32_t>(n));
+        }
       }
     }
     area.ways_in = static_cast<int32_t>(entries.size());

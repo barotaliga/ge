@@ -629,7 +629,9 @@ int run_main(int argc, char** argv) {
     sn::BotTeam bot_team;
     if (!sn::bot_team_start(bot_team, bc, error)) {
       out::error("shooters_edge: the bot client could not start its team (--bots=" +
-                 std::to_string(args.bots) + " --server=" + args.server + "): " + error);
+                 std::to_string(args.bots) + " --server=" + args.server + "): " + error +
+                 "; next: check the server answers (shooters_edge_bots --server=" + args.server +
+                 " --bots=1), then try again");
       return 1;
     }
     console.set_unknown([&bot_team](const CArgs& a) {
