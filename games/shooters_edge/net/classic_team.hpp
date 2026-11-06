@@ -17,7 +17,7 @@
 //
 // ge:summary A recorded team game of bots over our server: fighters on clients, an MVD of it
 // ge:keywords team-match run_team_match 4on4 teamplay bots fighters mvd multiview recording
-// ge:keywords classic-server simulated-network nav doors plats team-game record
+// ge:keywords classic-server simulated-network nav doors plats team-game record client_fed mirror
 // ge:skill shooter bots net
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
@@ -72,6 +72,9 @@ struct TeamMatchOptions {
   // ammunition topped up, so the hit rates measure one weapon's aim over the whole match (0: a
   // normal match).
   int32_t drill = 0;
+  // Every fighter reads only what its own client was sent (classic_mirror.hpp), as it must on a
+  // server it cannot read; false: it reads our server's world, as before.
+  bool client_fed = false;
 };
 
 struct TeamPlayer {
@@ -108,6 +111,9 @@ struct TeamPlayer {
   int64_t spam_shots = 0;                     // rockets at the ways into its area
   int64_t outmatched = 0;                     // commands turned from a fight it believed it loses
   int64_t sound_chases = 0;                   // commands going at an enemy it only heard
+  int64_t mirrored = 0, predicted = 0;  // client-fed: commands on its client's world, predicted
+  double mirror_err = 0;                // client-fed: summed units between its own place as its
+  int64_t mirror_err_n = 0;             // world holds it and the server's, alive, and the count
 };
 
 struct TeamTotals {

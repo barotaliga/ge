@@ -129,6 +129,12 @@ struct MoveResult {
   TouchList touches;
 };
 
+// How deep a player standing at `origin` is in water, as the move works it out: 0 dry, 1 the feet
+// (one unit over the box's bottom), 2 the box's middle, 3 the eyes (22 over the origin); and the
+// water's contents at the feet (`kContentsEmpty` when dry). A client reads its own player's depth
+// off its prediction with it even when no command has run since the server's state.
+int water_level(const MoveWorld& world, Vec3f origin, int* watertype = nullptr);
+
 // One command of at most 50 ms (`run_command` splits a longer one).
 MoveResult player_move(MoveState& state, const MoveCmd& cmd, const MoveSettings& settings,
                        const MoveWorld& world);

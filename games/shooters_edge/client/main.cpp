@@ -63,6 +63,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <exception>
+#include <filesystem>
 #include <functional>
 #include <future>
 #include <memory>
@@ -114,7 +115,9 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/net/classic_bot_team.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
+#include "shooters_edge/net/classic_team_view.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/commands.hpp"
 #include "shooters_edge/server/mod_match.hpp"
@@ -596,6 +599,108 @@ int run_main(int argc, char** argv) {
     held_fire.shots = {};
     user_info.sent_to = nullptr;
   };
+  // THE BOT CLIENT (`--bots=N --server=<host:port> --team=<name>`): a team of bots joins the
+  // server (net/classic_bot_team.hpp) and the window shows the team's world as its bots believe it
+  // (net/classic_team_view.hpp). The console drives them: a line no command names goes to every
+  // bot, `bot<N> <line>` to one (`bot1 skill expert`, `ready`, `status`).
+  if (args.bots > 0) {
+    sn::BotTeamConfig bc;
+    bc.server = args.server;
+    bc.bots = args.bots;
+    bc.team = args.team;
+    bc.colour = args.colour;
+    bc.basedir = args.basedir;
+    bc.out = args.bots_out;
+    if (!args.skills.empty()) {
+      bc.skills.clear();
+      for (size_t at = 0; at <= args.skills.size();) {
+        const size_t end = std::min(args.skills.find(',', at), args.skills.size());
+        if (end > at) bc.skills.push_back(args.skills.substr(at, end - at));
+        at = end + 1;
+      }
+    }
+    sn::bot_team_locs_from(bc, "ezquake");
+    if (!bc.out.empty()) {
+      std::error_code ec;
+      std::filesystem::create_directories(bc.out, ec);
+    }
+    sn::BotTeam bot_team;
+    if (!sn::bot_team_start(bot_team, bc, error)) {
+      out::error("shooters_edge: " + error);
+      return 1;
+    }
+    console.set_unknown([&bot_team](const CArgs& a) {
+      sn::bot_team_command(bot_team, a.raw);
+      return true;
+    });
+    ge::platform::set_relative_mouse(*window, false);
+    sn::TeamView bot_view;
+    ge::ui::Image bot_image;
+    sn::TeamViewVideo bot_video;
+    if (!args.bots_view.empty() &&
+        !sn::team_view_video_open(bot_video, args.bots_view, w & ~1, h & ~1, 10, error)) {
+      out::error("shooters_edge: --bots-view=" + args.bots_view + ": " + error);
+      return 1;
+    }
+    const uint64_t bots_from = ge::platform::now_ns();
+    uint64_t bots_last = bots_from;
+    int64_t next_tick = 0;
+    double next_picture = 0;
+    while (!quit) {
+      queue.clear();
+      ge::platform::poll_input(*window, input, *devices, queue);
+      if (input.quit) break;
+      const uint64_t now = ge::platform::now_ns();
+      const double dt = static_cast<double>(now - bots_last) * 1e-9;
+      const double t = static_cast<double>(now - bots_from) * 1e-9;
+      bots_last = now;
+      if (input.resized) {
+        w = input.width_px;
+        h = input.height_px;
+        surface.configure(*device, static_cast<uint32_t>(w), static_cast<uint32_t>(h), true);
+        cl::resize_world(*device, *title, static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+      }
+      ge::input::update(held, queue);
+      ge::ui::feed_console(console, con_view, queue, con_keys);
+      console.run();
+      if (con_view.open() != text_on) {
+        text_on = con_view.open();
+        ge::platform::set_text_input(*window, text_on);
+      }
+      // The bots' ticks on the wall clock, 13 ms each; a stall drops ticks, never floods them.
+      const auto now_us = static_cast<int64_t>((now - bots_from) / 1000);
+      for (int k = 0; next_tick <= now_us && k < 8; k++, next_tick += 13000)
+        sn::bot_team_tick(bot_team, next_tick);
+      if (now_us - next_tick > 200000) next_tick = now_us;
+      for (; bot_team.log_read < bot_team.log.size(); bot_team.log_read++)
+        console.print(bot_team.log[bot_team.log_read]);
+      ge::lab::Picture pic = sn::team_view(bot_view, bot_team, w, h);
+      if (bot_video.open && t >= next_picture) {
+        next_picture += 0.1;
+        if (!sn::team_view_video_frame(bot_video, pic, error)) out::error(error);
+      }
+      bot_image.width = pic.width;
+      bot_image.height = pic.height;
+      bot_image.rgba = std::move(pic.rgba);
+      bot_image.revision++;
+      overlay.begin(w, h);
+      ge::ui::Box b;
+      b.rect = {0, 0, static_cast<float>(w), static_cast<float>(h)};
+      b.image = &bot_image;
+      b.uv = {0, 0, static_cast<float>(bot_image.width), static_cast<float>(bot_image.height)};
+      b.feather = 0;
+      overlay.box(b);
+      con_view.frame(dt);
+      ge::ui::draw_console(overlay, con_view, {}, nullptr, t);
+      const wgpu::TextureView target = surface.acquire(*device);
+      if (!target) continue;
+      cl::draw_world(*device, *title, cl::title_view(t), {}, nullptr, dt, overlay, target);
+      surface.present();
+    }
+    if (!sn::team_view_video_close(bot_video, error)) out::error(error);
+    if (!sn::bot_team_stop(bot_team, error)) out::error(error);
+    return 0;
+  }
   size_t printed = 0, centred = 0;
   uint64_t last = first_ns;
   long presented = 0;

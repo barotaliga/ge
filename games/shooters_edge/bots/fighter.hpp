@@ -34,13 +34,14 @@
 //
 // ge:summary The fighter: a bot on the baseline mod choosing its mode, goal, weapon and trigger
 // ge:keywords fighter deathmatch mode roam fight chase retreat item-timing respawn weapon-choice
-// ge:keywords fire trigger tolerance stats items pick_best enter baseline-mod
+// ge:keywords fire trigger tolerance stats items pick_best enter baseline-mod danger danger-spots
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_fight_test.cpp
 #pragma once
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "ai/path.hpp"
@@ -175,6 +176,9 @@ struct Fighter {
   std::vector<ExitSpot> exits;           // the map's exits (buttons.hpp `exits_init`)
   // The doors only something else opens (a named door, a secret door), and where each rests:
   // shut to a route while at rest (buttons.hpp `exits_init`).
+  // Where and when it should not heal lately: where it died, where a mate died, an area called lost
+  // (mind.hpp `mind_danger`).
+  std::vector<std::pair<sh::Vec3f, double>> danger;
   std::vector<int> locked;
   std::vector<sh::Vec3f> locked_rest;
   Mind mind;             // what it believes of its team, its claim, its calls (mind.hpp)

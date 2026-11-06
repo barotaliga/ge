@@ -254,6 +254,19 @@ void update_stats(ClassicServer& s, int slot) {
   }
 }
 
+// Whether the client at `me` may see entity `ed`: its origin in the visibility set, or, for a brush
+// entity (a door, a plat, a button: its origin is its model's own, often the map's 0 0 0), its
+// box's middle or any of its corners, so a door is sent wherever its model stands.
+bool entity_seen(const ClassicServer& s, sh::Vec3f me, const sh::Edict& ed) {
+  const auto in = [&](sh::Vec3f p) { return s.game->vis(s.game->vis_ctx, me, p, true); };
+  if (ed.solid != sh::kSolidBsp) return in(ed.origin);
+  const sh::Vec3f lo = ed.absmin, hi = ed.absmax;
+  if (in({(lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f, (lo.z + hi.z) * 0.5f})) return true;
+  for (int k = 0; k < 8; k++)
+    if (in({(k & 1) ? hi.x : lo.x, (k & 2) ? hi.y : lo.y, (k & 4) ? hi.z : lo.z})) return true;
+  return false;
+}
+
 // The visible entities for a client, sorted by number, on its grid.
 void visible_entities(const ClassicServer& s, int slot, std::vector<EntityState>& out) {
   const ClassicClient& c = s.clients[slot];
@@ -269,7 +282,7 @@ void visible_entities(const ClassicServer& s, int slot, std::vector<EntityState>
     if (ed.free) continue;
     const EntityState st = entity_state(s, e);
     if (st.modelindex == 0) continue;
-    if (s.game->vis && !s.game->vis(s.game->vis_ctx, me, ed.origin, true)) continue;
+    if (s.game->vis && !entity_seen(s, me, ed)) continue;
     out.push_back(grid_entity(st, c.coords));
   }
   if (static_cast<int>(out.size()) > limit) {

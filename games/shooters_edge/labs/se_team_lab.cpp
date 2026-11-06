@@ -130,6 +130,7 @@ void run(gl::Lab& lab) {
   o.locs = std::move(locs);
   o.progs = &progs;
   o.seed = seed;
+  o.client_fed = lab.arg_num("client-fed") != 0;
   {
     // A weapon drill: its name in the hit table, the mod's bit for it (classic_hits.hpp's order).
     const std::string drill = lab.arg("drill");
@@ -609,6 +610,9 @@ const gl::LabSpec kSpec{
          "name=value joined by / (aim_rl=9/timing=3); empty: the preset"},
         {"items", "key",
          "the items noted with the nearest a player came: key (the held armour, the quad) or all"},
+        {"client-fed", "0",
+         "1: every fighter reads only what its own client was sent (net/classic_mirror.hpp), as "
+         "it must on a server it cannot read"},
         {"drill", "",
          "a weapon drill: every player holds only this weapon, its ammunition topped up "
          "(scattergun, double, spiker, heavy, grenades, rockets, arc); empty: a normal match"},

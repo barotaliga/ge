@@ -59,6 +59,14 @@ constexpr float kRun = 320;         // units/s, the run to an item
 constexpr double kCallAgain_s = 8;  // an enemy in sight is called out again after this
 constexpr double kTold_s = 10;      // a point at an item is followed this long
 constexpr float kRocketNear = 400;  // a rocket at a man nearer than this is aimed at his middle
+// A hurt player does not walk back into a fight his side is losing: health within this of a danger
+// spot (where he died, where a mate died, an area called lost, a call for help: mind.hpp) is worth this share while
+// he heals, and health an enemy he knows of now stands nearer to than he does is worth half.
+constexpr double kDangerMemory_s = 40;
+constexpr float kDangerReach = 384;
+constexpr double kDangerScale = 0.25;
+constexpr double kEnemyNearScale = 0.5;
+constexpr double kEnemyKnown_s = 3;  // an enemy seen or heard this lately is known of now
 
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
 
@@ -300,6 +308,17 @@ int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& s
     if (f.team && heal && f.mind.claim >= 0 &&
         dist(it.at, f.items[static_cast<size_t>(f.mind.claim)].at) < kLeash)
       sc *= 1.5;
+    if (heal) {
+      for (const auto& [where, when] : f.danger)
+        if (t - when < kDangerMemory_s && dist(where, it.at) < kDangerReach) sc *= kDangerScale;
+      for (const sh::Contact& k : f.bot.senses.contacts) {
+        if (k.ent < 0) continue;
+        const bool seen = ai::known(k.seen) && ai::age(k.seen, t) <= kEnemyKnown_s;
+        const bool heard = ai::known(k.heard) && ai::age(k.heard, t) <= kEnemyKnown_s;
+        if (!seen && !heard) continue;
+        if (dist(at_of(seen ? k.seen : k.heard), it.at) < dist(me, it.at)) sc *= kEnemyNearScale;
+      }
+    }
     return sc;
   };
   const auto name = [&](int32_t i) { return f.items[static_cast<size_t>(i)].name.c_str(); };
@@ -848,6 +867,8 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   ai::Why* why = f.bot.pilot.why ? f.bot.pilot.why->follow(slot, f.bot.pilot.command) : nullptr;
   f.stats.commands++;
   const bool dead = st.health <= 0;
+  if (!f.was_dead && dead)  // where it died: a danger spot (`best_item` heals away from it)
+    mind_danger(f, s.world.entities[static_cast<size_t>(me)].origin, t);
   if (f.was_dead && !dead) {
     f.stats.respawns++;
     f.goal_node = -1;

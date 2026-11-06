@@ -109,6 +109,15 @@ struct Stats;
 // skill, and what it says taken into its beliefs when read.
 void mind_hear(Fighter& f, const std::string& from, const std::string& text, double t);
 
+// A line its client was printed that is not a team line: when it is a teammate's obituary (his name
+// first, then the words of a death: "was", "ate", "sleeps", ...), where he was last believed to be
+// (his own news, or seen, while still fresh) is a danger spot (`mind_danger`). True when it was.
+bool mind_obituary(Fighter& f, const std::string& line, double t);
+// A place it should not heal at for a while: where it died, where a mate died (his last status or
+// sighting placed him, then his obituary), an area called lost, where a mate called for help (kept
+// the last 12; `best_item` reads them while it retreats to heal).
+void mind_danger(Fighter& f, ge::shooter::Vec3f at, double t);
+
 // The role and the calls, every `kPlan_s`, off its own beliefs (`me` is its entity).
 void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, double t);
 

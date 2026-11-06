@@ -312,6 +312,16 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     return true;
   };
 
+  if (o.autotrack) {  // the hottest player's cuts, worked out over the whole demo first
+    DemoScan scan;
+    if (!scan_demo(t.start, scan, error)) return false;
+    if (!autotrack_plan(t.start, scan, o.autotrack_set, report.autotrack, error)) return false;
+  }
+  const auto follow = [&] {
+    if (!o.autotrack) return;
+    const int slot = autotrack_at(report.autotrack, vt);
+    if (slot >= 0) t.demo.track = slot;
+  };
   if (o.highlight > 0) from = 1e300;  // nothing heard until the highlight is known
   if (!step()) return false;
   if (o.highlight > 0) {  // the clip is a highlight's window
@@ -334,8 +344,10 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   for (int64_t k = 0;; k++) {
     const double at = from + static_cast<double>(k) / o.fps;
     if (length > 0 && at >= from + length) break;
-    while (!ended && vt < at)
+    while (!ended && vt < at) {
+      follow();
       if (!step()) return false;
+    }
     if (ended) break;
     // The model list grows through a client recording's signon: the world is made again with it.
     if (map && (!world || s.models.size() != world_models)) {
@@ -431,6 +443,9 @@ std::vector<std::string> demo_video_lines(const DemoVideoOptions& o, const DemoV
   if (!r.highlight.empty() || r.from_s > 0)
     out.push_back("demovideo: the clip " + clock(r.from_s) + " to " + clock(r.to_s) +
                   (r.highlight.empty() ? "" : ": " + r.highlight));
+  if (o.autotrack)
+    out.push_back("demovideo: autotrack: " + std::to_string(r.autotrack.cuts.size()) +
+                  " cuts to the hottest player over " + clock(r.autotrack.length_s));
   out.push_back("demovideo: " + std::to_string(r.frames) + " pictures, " + num(r.seconds) + " s, " +
                 std::to_string(r.levels) + " levels, " + std::to_string(o.width) + "x" +
                 std::to_string(o.height) + " at " + num(o.fps) + " fps, " + r.container + " " +
@@ -491,6 +506,7 @@ int demo_video_main(ge::console::Console& console, const Args& args, const Searc
   o.highlight = args.highlight;
   o.gif_width = args.gif_width;
   o.track = playback.track;
+  o.autotrack = args.autotrack;
   o.picture = &picture;
   DemoVideoReport r;
   std::string error;

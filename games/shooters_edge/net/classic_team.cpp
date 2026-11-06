@@ -30,8 +30,10 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/net/classic_client.hpp"
+#include "shooters_edge/net/classic_mirror.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/net/classic_team_nav.hpp"
 #include "shooters_edge/net/classic_wire.hpp"
 #include "shooters_edge/server/commands.hpp"
 
@@ -85,19 +87,9 @@ struct Seat {
   int team = 0, index = 0;
   sh::AimSkill skill = sh::AimSkill::average;
   bool had_quad = false;
-  size_t heard = 0;  // its client's prints read so far
+  size_t heard = 0;                      // its client's prints read so far
+  std::unique_ptr<ClientMirror> mirror;  // client-fed: its world, off its client alone
 };
-
-// Place names off the items, for a map with no place names file: each key item, weapon and mega
-// health's spot by its callout ("ra", "rl", "mh").
-void locs_from_items(const std::vector<bt::ItemSpot>& items, sh::Locs& out) {
-  for (const bt::ItemSpot& it : items) {
-    if (!bt::key_item(it) && it.kind != bt::ItemKind::weapon && it.kind != bt::ItemKind::mega)
-      continue;
-    out.points.push_back({bt::item_call(it), it.at});
-  }
-  out.from = "the map's items";
-}
 
 }  // namespace
 
@@ -124,19 +116,18 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   sv::use_map_sets(q, map->bsp);
 
   // The nav graph off the world and the movers (bots/map_nav.hpp).
-  bt::MapNav nav;
+  TeamNav tn;
+  tn.given = opt.locs;
+  bt::MapNav& nav = tn.nav;
   if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, r.error)) {
     r.error = "run_team_match: " + r.error;
     return r;
   }
-  sh::MoveWorld& world = nav.world;
   sh::NavGraph& graph = nav.graph;
   sh::SwimField& swim = nav.swim;
   const std::vector<sh::NavMover>& movers = nav.movers;
   ge::ai::Search& best = nav.main;  // what the map's main part reaches
   const int32_t best_n = nav.main_n;
-  const std::vector<uint8_t>& wet = nav.wet;
-  const std::vector<sh::NavExtraLink>& entries = nav.entries;
   r.teleport_links = nav.teleport_links;
   r.closed_links = nav.closed_links;
   r.swim_wet = swim.wet;
@@ -176,7 +167,6 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     return r;
   }
   std::vector<Seat> seats(static_cast<size_t>(n));
-  sh::Locs locs;  // the map's place names, every fighter's
   std::vector<gn::Transport> ct(static_cast<size_t>(n));
   auto clients = std::make_unique<ClassicClientEnd[]>(static_cast<size_t>(n));
   bt::Team teams[2];
@@ -214,13 +204,18 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         Seat* sp = &seat;
         cc.brain = [sp, c, &s](int) -> sh::MoveCmd {
           if (!sp->ready) return {};
+          // Client-fed, its world is what its client was sent, nothing more.
+          if (sp->mirror) mirror_update(*sp->mirror, *c);
+          const server::RulesCommon& w = sp->mirror ? sp->mirror->s : s;
           // The team lines its client was sent, read (or missed) by its own mind.
           for (; sp->heard < c->prints.size(); sp->heard++) {
             std::string who, words;
             if (bt::split_team_line(c->prints[sp->heard], who, words))
-              bt::mind_hear(sp->fighter, who, words, s.sv.time);
+              bt::mind_hear(sp->fighter, who, words, w.sv.time);
+            else
+              bt::mind_obituary(sp->fighter, c->prints[sp->heard], w.sv.time);
           }
-          const sh::MoveCmd cmd = bt::fighter_command(sp->fighter, s, c->playernum, bt::kPilotMsec);
+          const sh::MoveCmd cmd = bt::fighter_command(sp->fighter, w, c->playernum, bt::kPilotMsec);
           // The fighter's team messages, as a player types them.
           for (const std::string& line : sp->fighter.outbox)
             client_command(*c, "say_team \"" + line + "\"");
@@ -232,17 +227,6 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     }
   }
 
-  // The dives: a field through the water into each pocket that holds an item no route reaches,
-  // and the node of the main part it is entered from; made once the items are known.
-  struct Dive {
-    std::vector<uint8_t> pocket;  // the pocket's dry nodes
-    sh::SwimField field;
-    int32_t node = -1, entry = -1;  // the node it is entered from, and the wet node it drops to
-    float swim_s = 0;
-  };
-  std::vector<std::unique_ptr<Dive>> dives;
-  std::vector<int32_t> item_dive;  // each item's dive, -1 none
-  bool dives_made = false;
   const std::vector<sh::Vec3f>* known_items = nullptr;
   int64_t now = 0;
   uint64_t h = 1469598103934665603ull;
@@ -259,73 +243,28 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       Seat& seat = seats[static_cast<size_t>(k)];
       const int slot = clients[k].playernum;
       if (seat.ready || slot < 0 || !server->clients[slot].rules_active) continue;
-      bt::fighter_init(seat.fighter, graph, s, slot, map->spec.entities.c_str(), seat.skill,
-                       r.players[static_cast<size_t>(k)].traits, kHz,
-                       opt.seed + 31u * static_cast<uint32_t>(k));
-      seat.fighter.bot.yaw = s.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
-      seat.fighter.bot.pilot.world = &world;  // the hop looks ahead through the map
-      seat.fighter.name = r.players[static_cast<size_t>(k)].name;
-      if (locs.points.empty()) {
-        if (!opt.locs.points.empty()) {
-          locs = opt.locs;
-        } else {
-          locs_from_items(seat.fighter.items, locs);
-        }
-        r.locs_from = locs.from;
-        r.locs = static_cast<int64_t>(locs.points.size());
+      if (opt.client_fed) {
+        // Its world off its client: started on the map file's models once the signon is in, and
+        // set up on the baselines (every item the map has, as a client that loaded it knows).
+        const ClassicClientEnd& ce = clients[k];
+        if (ce.stage != ClientStage::active || !ce.player_seen[slot]) continue;
+        seat.mirror = std::make_unique<ClientMirror>();
+        if (!mirror_start(*seat.mirror, map->spec.models, ce, r.error)) return r;
+        seat.mirror->baselines = true;
+        mirror_update(*seat.mirror, ce);
+        seat.mirror->baselines = false;
       }
-      seat.fighter.locs = &locs;
+      const server::RulesCommon& seen = seat.mirror ? seat.mirror->s : s;
+      team_fighter_setup(tn, seat.fighter, seen, slot, map->spec.entities.c_str(), seat.skill,
+                         r.players[static_cast<size_t>(k)].traits, kHz,
+                         opt.seed + 31u * static_cast<uint32_t>(k),
+                         r.players[static_cast<size_t>(k)].name);
       seat.ready = true;
-      if (!dives_made && swim.leading > 0 && best_n > 0) {
-        dives_made = true;
-        const std::vector<bt::ItemSpot>& items = seat.fighter.items;
-        item_dive.assign(items.size(), -1);
-        for (size_t i = 0; i < items.size(); i++) {
-          const int32_t node = items[i].node;
-          if (node < 0 || best.reached(node)) continue;
-          for (size_t d = 0; d < dives.size() && item_dive[i] < 0; d++)
-            if (dives[d]->pocket[static_cast<size_t>(node)]) item_dive[i] = static_cast<int32_t>(d);
-          if (item_dive[i] >= 0) continue;
-          auto dv = std::make_unique<Dive>();
-          ge::ai::Search pr;
-          sh::nav_reach(graph, node, pr);
-          dv->pocket.assign(graph.nodes.size(), 0);
-          for (size_t m = 0; m < graph.nodes.size(); m++)
-            dv->pocket[m] = pr.reached(static_cast<int32_t>(m)) && !wet[m] &&
-                                    !best.reached(static_cast<int32_t>(m))
-                                ? 1
-                                : 0;
-          dv->pocket[static_cast<size_t>(node)] = 1;
-          sh::build_swim(world, graph, dv->pocket, sh::SwimSettings{}, dv->field, &swim);
-          // Entered by a way into the water the graph closed, from a node of the main part that
-          // reaches most of it again (not a pit dropped into), the one nearest the pocket by water.
-          int32_t steps = -1;
-          ge::ai::Search back;
-          for (const sh::NavExtraLink& e : entries) {
-            if (!best.reached(e.from)) continue;
-            const int32_t way =
-                sh::swim_steps(dv->field, graph.nodes[static_cast<size_t>(e.to)].origin);
-            if (way < 0 || (steps >= 0 && way >= steps)) continue;
-            if (sh::nav_reach(graph, e.from, back) * 10 < best_n * 9) continue;
-            steps = way;
-            dv->node = e.from;
-            dv->entry = e.to;
-          }
-          if (dv->node < 0) continue;
-          dv->swim_s = static_cast<float>(steps) * dv->field.cell / 200.f;  // a swimmer's pace
-          item_dive[i] = static_cast<int32_t>(dives.size());
-          dives.push_back(std::move(dv));
-        }
-        r.dives = static_cast<int64_t>(dives.size());
+      if (r.locs_from.empty()) {
+        r.locs_from = tn.locs.from;
+        r.locs = static_cast<int64_t>(tn.locs.points.size());
       }
-      for (size_t i = 0; i < item_dive.size() && i < seat.fighter.items.size(); i++) {
-        if (item_dive[i] < 0) continue;
-        const Dive& dv = *dives[static_cast<size_t>(item_dive[i])];
-        seat.fighter.items[i].dive = &dv.field;
-        seat.fighter.items[i].dive_node = dv.node;
-        seat.fighter.items[i].dive_entry = dv.entry;
-        seat.fighter.items[i].dive_s = dv.swim_s;
-      }
+      r.dives = static_cast<int64_t>(tn.dives.size());
       r.players[static_cast<size_t>(k)].slot = slot;
       if (r.nav_reached.empty()) {
         ge::ai::Search search;
@@ -339,13 +278,26 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       bt::Team& tm = teams[seat.team];
       tm.members.push_back(&seat.fighter);
       seat.fighter.team = &tm;
-      if (swim.leading > 0) seat.fighter.swim = &swim;
       bt::team_init(tm);
       for (bt::Fighter* f : tm.members) f->bot.senses.friends = tm.friends;
     }
     for (bt::Team& tm : teams) bt::team_count(tm);
     for (int k = 0; k < n; k++) client_tick(clients[k], now);
     r.frames = frame + 1;
+    // Client-fed: how far each fighter's own place, as its world holds it, is from the server's.
+    for (int k = 0; k < n; k++) {
+      const Seat& seat = seats[static_cast<size_t>(k)];
+      const int slot = clients[k].playernum;
+      if (!seat.mirror || !seat.ready || slot < 0) continue;
+      const sh::Edict& truth = s.sv.edicts[static_cast<size_t>(slot) + 1];
+      if (truth.health <= 0) continue;
+      const sh::Vec3f d =
+          seat.mirror->s.sv.edicts[static_cast<size_t>(slot) + 1].origin - truth.origin;
+      TeamPlayer& p = r.players[static_cast<size_t>(k)];
+      p.mirror_err += std::sqrt(static_cast<double>(d.x) * d.x + static_cast<double>(d.y) * d.y +
+                                static_cast<double>(d.z) * d.z);
+      p.mirror_err_n++;
+    }
 
     // The report's frame.
     for (int k = 0; k < n; k++) {
@@ -497,6 +449,10 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].spam_shots = fi.stats.spam_shots;
     r.players[k].outmatched = fi.stats.outmatched;
     r.players[k].sound_chases = fi.stats.sound_chases;
+    if (seats[k].mirror) {
+      r.players[k].mirrored = seats[k].mirror->updates;
+      r.players[k].predicted = seats[k].mirror->predicted;
+    }
     r.lines_read += mn.read;
     r.lines_missed += mn.missed;
   }

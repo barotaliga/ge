@@ -38,6 +38,8 @@ link .gemini/skills ../.agents/skills
 skills=()
 for dir in .agents/skills/*/; do
   name="$(basename "$dir")"
+  # A `<name>-private` skill is a person's own, git-ignored (it holds their paths): never checked.
+  [[ "$name" == *-private ]] && continue
   skills+=("$name")
   file="$dir/SKILL.md"
   [[ -f "$file" ]] || { err "$file missing"; continue; }
