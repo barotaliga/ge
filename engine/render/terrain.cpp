@@ -252,7 +252,7 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
   wgpu::ConstantEntry tile{};
   tile.key = "kTile";
   tile.value = kTileQuads;
-  auto pipeline_of = [&](const wgpu::ShaderModule& draw, const wgpu::PipelineLayout& draw_layout,
+  auto pipeline_of = [&](const wgpu::ShaderModule& shader, const wgpu::PipelineLayout& layout_of,
                          const char* label, const char* entry,
                          std::initializer_list<wgpu::TextureFormat> targets, bool write_depth,
                          wgpu::CompareFunction compare, bool add,
@@ -268,7 +268,7 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
       colours.push_back(c);
     }
     wgpu::FragmentState fragment{};
-    fragment.module = draw;
+    fragment.module = shader;
     fragment.entryPoint = entry;
     fragment.targetCount = colours.size();
     fragment.targets = colours.data();
@@ -278,8 +278,8 @@ void create_terrain(gpu::Device& device, gpu::PipelineSet& pipelines, Terrain& t
     depth.depthCompare = compare;
     wgpu::RenderPipelineDescriptor desc{};
     desc.label = label;
-    desc.layout = draw_layout;
-    desc.vertex.module = draw;
+    desc.layout = layout_of;
+    desc.vertex.module = shader;
     desc.vertex.entryPoint = "vs_main";
     desc.vertex.constantCount = 1;
     desc.vertex.constants = &tile;
