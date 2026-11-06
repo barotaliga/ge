@@ -166,77 +166,119 @@ void entered(Listen& l) {
   join_stats(l.campaign, st.total_secrets, st.total_monsters, st.found_secrets, st.killed_monsters);
 }
 
-// The lobby's words (server/announce.hpp) printed to the player like the server's, at once.
-void said(Listen& l) {
-  if (!l.room || l.server == nullptr) return;
-  Room& r = *l.room;
-  const auto setting = [&l](const char* name) {
-    const ge::console::Cvar* c = l.server->cvars.find(name);
-    return c != nullptr ? static_cast<int>(c->number) : 0;
-  };
-  const sv::MatchLook look = sv::match_look(
-      {.deathmatch = setting("deathmatch"), .teamplay = setting("teamplay")}, l.opt.console);
-  sv::announce(r.announcer, r.lobby, l.server->localinfo, look, l.server->sv.time);
-  sv::announce_phase(l.server->localinfo, r.lobby.phase);
-  for (sv::NetEvent& ev : r.announcer.pending) {
-    if ((ev.to & 1u) == 0) continue;
-    if (ev.kind == sv::EventKind::print) l.prints.push_back(std::move(ev.text));
-    if (ev.kind == sv::EventKind::centerprint) l.centres.push_back(std::move(ev.text));
+// What the rules set off for the player in a frame (slot 0's prints and centre prints, the
+// explosions and the match's effects, the blow he took), read before anything routes it. A
+// match's prints come routed to him like any client's (ListenHost::print), so `prints` is false.
+void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
+  for (const sv::NetEvent& ev : s.out.events) {
+    if (prints && ev.kind == sv::EventKind::print && (ev.to & 1u) != 0) l.prints.push_back(ev.text);
+    if (ev.kind == sv::EventKind::centerprint && (ev.to & 1u) != 0) l.centres.push_back(ev.text);
+    // The baseline mod's explosion: its temporary-entity message's first two bytes.
+    if (ev.kind == sv::EventKind::multicast && ev.bytes.size() >= 2 && ev.bytes[0] == kTempEntity &&
+        ev.bytes[1] == kExplosion)
+      l.explosions.push_back(ev.origin);
+    else if (Effect e;
+             !l.campaign_host && ev.kind == sv::EventKind::multicast && arena_effect(ev.bytes, e))
+      l.effects.push_back(e);
   }
-  r.announcer.pending.clear();
+  if (const sv::ClientBlow& b = s.clients[0].blow; b.hit)
+    l.blows.push_back({b.armor, b.blood, b.from});
 }
 
-// The player put on the map when he joined the warmup, and taken off it when he went back to the
-// lobby's screen.
-void sync_player(Listen& l) {
-  if (!l.room || l.rules == nullptr) return;
-  const bool on = sv::lobby_on_map(l.room->lobby, 0);
-  const bool active = l.server->clients[0].active;
-  if (on && !active) {
-    l.rules->connect(0, l.opt.player, false, false);
-    sv::lobby_apply(*l.rules, l.room->lobby, 0);
-    l.entered_at = l.server->sv.time;
-  } else if (!on && active) {
-    l.rules->drop(0);
-  }
+// The match server's calls back into the listen (ListenHost::tap, ::print).
+void host_tap(void* ctx, const sv::RulesCommon& s) {
+  take_events(*static_cast<Listen*>(ctx), s, false);
+}
+void host_print(void* ctx, const std::string& text) {
+  static_cast<Listen*>(ctx)->prints.push_back(text);
 }
 
+// The match server let go (its rules' views into the maps go before the maps do).
+void close_match(Listen& l) {
+  l.rules = nullptr;
+  l.server = nullptr;
+  l.room = nullptr;
+  l.match.reset();
+  l.host.reset();
+  if (l.port) ge::net::close_transport(*l.port);
+  l.port.reset();
+}
+
+// The listen caught up with the match server: its rules, room and map now, and a map change it
+// made (a lobby's restart into the match, the same map: `restarted`, and true).
+bool catch_up(Listen& l) {
+  ListenHost& h = *l.host;
+  h.ctx = &l;
+  l.rules = h.rules;
+  l.server = h.rules != nullptr ? h.rules->common : nullptr;
+  l.room = h.room;
+  if (!h.asked.empty()) {
+    l.pending_map = h.asked;
+    h.asked.clear();
+  }
+  if (h.changes == l.changes) return false;
+  l.changes = h.changes;
+  const bool same = l.map && h.map && l.map->name == h.map->name;
+  l.map = h.map;
+  if (same) l.restarted = true;
+  return same;
+}
+
+// A match: the engine's server opened on `opt.game` with the window's program and map, the player
+// slot 0, on `opt.port` for others to join (none: a socket that is never read).
 bool start_map(Listen& l, std::string& error) {
-  sv::QcServerOptions so;
-  so.seed = l.opt.seed;
-  so.loop.max_edicts = 1024;
-  so.loop.move.speedjump = kListenSpeedJump;
-  std::unique_ptr<sv::QcServer> made = sv::make_qc_server(*l.progs, so, error);
-  if (!made) return false;
-  l.match = sv::qc_runner(std::move(made));
-  l.rules = &l.match;
-  l.server = l.match.common;
-  for (const std::string& line : l.opt.item_names) l.rules->console(line);
-  for (const std::string& line : l.opt.arsenal) l.rules->console(line);
-  for (const std::string& line : l.opt.console) l.rules->console(line);
-  if (!l.rules->start(l.map->spec, error)) {
-    error = "the map " + l.map->name + " did not load: " + error +
-            "; next: read the console's lines above";
+  close_match(l);
+  if (l.opt.game == nullptr) {
+    error =
+        "no server game for the match; next: set ListenOptions::game to "
+        "net/classic_game.hpp's classic_game()";
     return false;
   }
-  if (l.map->from_file) sv::use_map_sets(*l.server, l.map->bsp);
-  if (l.opt.lobby) {
-    if (!l.room) {
-      l.room = std::make_unique<Room>();
-      l.room->seed = l.opt.seed;
+  auto h = std::make_unique<ListenHost>();
+  h->progs = l.progs;
+  h->map = l.map;
+  h->files = l.opt.files;
+  h->lines = l.opt.item_names;
+  h->lines.insert(h->lines.end(), l.opt.arsenal.begin(), l.opt.arsenal.end());
+  h->lines.insert(h->lines.end(), l.opt.console.begin(), l.opt.console.end());
+  h->lobby = l.opt.lobby;
+  h->lobby_settings = l.opt.lobby_settings;
+  h->player = l.opt.player;
+  h->speedjump = kListenSpeedJump;
+  h->tap = host_tap;
+  h->print = host_print;
+  h->ctx = &l;
+  ge::server::ServerConfig c;
+  c.hostname = l.opt.hostname;
+  c.map = l.map->name;
+  c.seed = l.opt.seed;
+  c.maxclients = l.opt.maxclients;
+  c.lobby = l.opt.lobby ? 1 : 0;
+  c.port = l.opt.port;
+  c.host = h.get();
+  auto port = std::make_unique<ge::net::Transport>();
+  if (l.opt.port > 0 && l.opt.transport == nullptr) {
+    const auto at = static_cast<uint16_t>(l.opt.port);
+    if (!ge::net::open_udp_transport(*port, ge::net::ipv4(0, 0, 0, 0, at), &error)) {
+      error = "the match's port " + std::to_string(l.opt.port) + " did not open: " + error +
+              "; next: pick another port or 0 (nobody joins)";
+      return false;
     }
-    l.room->lobby.settings = l.opt.lobby_settings;
-    if (!l.room->lobby.seats[0].used)
-      sv::lobby_join(l.room->lobby, 0, l.opt.player, false, l.server->sv.time);
-    // The player is on the map only in the warmup or the match; on the lobby's screen he is not.
-    if (sv::lobby_on_map(l.room->lobby, 0)) l.rules->connect(0, l.opt.player, false, false);
-    room_enter(*l.room, *l.rules, l.map->spec);
-  } else {
-    l.rules->connect(0, l.opt.player, false, false);
-    l.room.reset();
   }
+  auto server = std::make_unique<ge::server::Server>();
+  l.host = std::move(h);
+  l.port = std::move(port);
+  ge::net::Transport* socket = l.opt.transport != nullptr ? l.opt.transport : l.port.get();
+  if (!ge::server::server_open(*server, *l.opt.game, c, socket, nullptr, error)) {
+    error = "the map " + l.map->name + " did not load: " + error +
+            "; next: read the console's lines above";
+    close_match(l);
+    return false;
+  }
+  l.match = std::move(server);
+  l.changes = l.host->changes;
+  catch_up(l);
   entered(l);
-  said(l);
   return true;
 }
 
@@ -411,10 +453,7 @@ bool listen_start(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMap> 
 
 void listen_stop(Listen& l) {
   ListenOptions opt = std::move(l.opt);
-  l.room.reset();
-  l.rules = nullptr;
-  l.server = nullptr;
-  l.match = {};  // the rules' views into the maps go before the maps do
+  close_match(l);  // the rules' views into the maps go before the maps do
   l.campaign_host.reset();
   l.next.reset();
   l.map.reset();
@@ -431,21 +470,22 @@ bool listen_change(Listen& l, std::unique_ptr<LoadedMap> map, std::string& error
     l.map_changed = false;
     return true;
   }
-  if (l.rules) l.rules->carry();
-  l.rules = nullptr;
-  l.server = nullptr;
-  l.match = {};                               // its views into the old map go before the map does
-  if (l.room) sv::lobby_back(l.room->lobby);  // a new map: warmup again
-  l.map = std::move(map);
-  return start_map(l, error);
+  if (!l.match) {
+    l.map = std::move(map);
+    return start_map(l, error);
+  }
+  // The server moves onto the map with everyone on it (a new map: warmup again).
+  if (!l.host->change(l.host->game, std::shared_ptr<LoadedMap>(std::move(map)), error))
+    return false;
+  catch_up(l);
+  l.restarted = false;
+  entered(l);
+  return true;
 }
 
 bool listen_campaign(Listen& l, const pg::Progs& progs, std::unique_ptr<LoadedMap> map,
                      const ListenOptions& opt, std::string& error) {
-  l.rules = nullptr;
-  l.server = nullptr;
-  l.match = {};
-  l.room.reset();  // a campaign has no lobby
+  close_match(l);  // a campaign has no lobby
   l.campaign_host.reset();
   l.progs = &progs;
   l.opt = opt;
@@ -523,10 +563,7 @@ bool load_game(Listen& l, const pg::Progs& progs, const ListenOptions& opt,
   if (!load(*host, co)) return false;
   host->opt.load = campaign_map;
   host->opt.load_ctx = &l;
-  l.rules = nullptr;
-  l.server = nullptr;
-  l.match = {};
-  l.room.reset();
+  close_match(l);
   l.campaign_host = std::move(host);
   l.progs = &progs;
   l.opt = opt;
@@ -631,33 +668,17 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
       return;
     }
     if (l.campaign_host->history.size() != l.maps_started) campaign_entered(l);
-  } else if (l.room) {  // the bots' packets after the player's (when he is on the map), in order
-    std::vector<sh::Packet>& ps = l.room->packets;
-    ps.clear();
-    if (l.server->clients[0].active) ps.push_back(p);
-    room_packets(*l.room, *l.server, cmd.msec, ps);
-    l.rules->frame(ps.data(), static_cast<int>(ps.size()));
-    for (int k = 1; k < sh::kMaxClients; k++) l.server->out.one[k].clear();  // nobody reads them
-  } else {
-    l.rules->frame(&p, 1);
+    take_events(l, *l.server);
+    read_streams(l);
+    sv::clear_frame(l.server->out);
+  } else {  // the match server's frame: his move first, then the bots' and the network's
+    l.host->ctx = &l;
+    l.host->move(l.host->game, p);
+    ge::server::server_frame(*l.match);
+    if (catch_up(l)) entered(l);  // the lobby's restart into the match: a new server
   }
   sv::RulesCommon& s = *l.server;
   l.frames++;
-  for (const sv::NetEvent& ev : s.out.events) {
-    if (ev.kind == sv::EventKind::print && (ev.to & 1u) != 0) l.prints.push_back(ev.text);
-    if (ev.kind == sv::EventKind::centerprint && (ev.to & 1u) != 0) l.centres.push_back(ev.text);
-    // The baseline mod's explosion: its temporary-entity message's first two bytes.
-    if (ev.kind == sv::EventKind::multicast && ev.bytes.size() >= 2 && ev.bytes[0] == kTempEntity &&
-        ev.bytes[1] == kExplosion)
-      l.explosions.push_back(ev.origin);
-    else if (Effect e;
-             !l.campaign_host && ev.kind == sv::EventKind::multicast && arena_effect(ev.bytes, e))
-      l.effects.push_back(e);
-  }
-  read_streams(l);
-  sv::clear_frame(s.out);
-  if (const sv::ClientBlow& b = s.clients[0].blow; b.hit)
-    l.blows.push_back({b.armor, b.blood, b.from});
   if (l.campaign.turned) {
     l.view = {l.campaign.angles.x, l.campaign.angles.y, 0};
     l.campaign.turned = false;
@@ -666,23 +687,6 @@ void listen_frame(Listen& l, sh::MoveCmd cmd) {
   const sh::Edict& me = s.sv.edicts[1];
   l.forced = s.clients[0].active && (me.v_angle.x != cmd.angles.x || me.v_angle.y != cmd.angles.y);
   if (l.forced) l.view = {me.v_angle.x, me.v_angle.y, 0};
-  if (!l.campaign_host && !s.pending_map.empty()) l.pending_map = s.pending_map;
-  if (l.room) {
-    // The countdown run out: the map restarted with every seat on it, the match's limits back.
-    const bool due = l.pending_map.empty() && sv::lobby_due(l.room->lobby, s.sv.time);
-    if (due) {
-      std::string error;
-      l.rules = nullptr;
-      l.server = nullptr;
-      l.match = {};
-      if (!start_map(l, error)) {
-        l.failed = error;
-        return;
-      }
-      l.restarted = true;
-    }
-    said(l);
-  }
 }
 
 bool listen_lobby(Listen& l, std::string_view line) {
@@ -715,29 +719,14 @@ bool listen_lobby(Listen& l, std::string_view line) {
     }
     return false;
   }
-  if (word == "addbot") {
-    const size_t sp = line.find(' ');
-    const std::string arg = sp == std::string_view::npos ? "" : std::string(line.substr(sp + 1));
-    sh::AimSkill skill = sh::AimSkill::average;
-    if (!arg.empty() && !skill_named(arg, skill)) {
-      l.prints.push_back("addbot: no skill " + arg + "; next: addbot novice|average|expert");
-      return true;
-    }
-    if (l.room->lobby.phase == sv::LobbyPhase::match) {
-      l.prints.push_back("addbot: the match is on; next: add bots in the warmup");
-      return true;
-    }
-    std::string error;
-    if (room_add_bot(*l.room, *l.rules, l.map->spec, skill, error) < 0)
-      l.prints.push_back("addbot: " + error);
-  } else if (word == "removebot") {
-    if (!room_remove_bot(*l.room, *l.rules)) l.prints.push_back("removebot: no bot is seated");
-  } else if (!sv::lobby_command(l.room->lobby, 0, line, l.server->sv.time)) {
-    return false;
+  if (word == "addbot" && l.room->lobby.phase == sv::LobbyPhase::match) {
+    l.prints.push_back("addbot: the match is on; next: add bots in the warmup");
+    return true;
   }
-  sync_player(l);
-  said(l);
-  return true;
+  l.host->ctx = &l;
+  const bool taken = l.host->words(l.host->game, std::string(line));
+  catch_up(l);
+  return taken;
 }
 
 hud::LobbyView listen_lobby_view(const Listen& l) {

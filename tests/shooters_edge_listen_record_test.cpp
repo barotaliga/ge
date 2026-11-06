@@ -24,6 +24,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/listen_record.hpp"
 #include "shooters_edge/client/timedemo.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/unpack.hpp"
@@ -76,7 +77,8 @@ bool start(cl::Listen& l, const cl::SearchPath& files) {
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "halls", error);
   CHECK_MSG(map != nullptr, error);
   if (!map) return false;
-  const bool ok = cl::listen_start(l, baseline(), std::move(map), {}, error);
+  const bool ok =
+      cl::listen_start(l, baseline(), std::move(map), shooters_edge::net::listen_options(), error);
   CHECK_MSG(ok, error);
   return ok;
 }

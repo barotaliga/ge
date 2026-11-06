@@ -31,6 +31,7 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/listen_record.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "vfs/pak.hpp"
 #include "vfs/unpack.hpp"
 
@@ -69,7 +70,7 @@ void run(gl::Lab& lab) {
   if (cl::add_archive(files, "pak0.pak", pak, error))
     map = cl::load_named_map(files, "halls", error);
   if (!map || !cl::baseline_progs(progs, error) ||
-      !cl::listen_start(l, progs, std::move(map), {}, error)) {
+      !cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), error)) {
     lab.fail("se-record: the listen server did not start: " + error,
              "next: run tests/shooters_edge_listen_test.cpp");
     return;

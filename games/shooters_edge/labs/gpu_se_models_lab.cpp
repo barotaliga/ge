@@ -46,6 +46,7 @@
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/client/world_models.hpp"
 #include "shooters_edge/labs/warp_film.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -184,7 +185,7 @@ void run(gl::Lab& lab) {
   }
   // The baseline mod (its arena), or `--progs`: a progs.src compiled here (the campaign's, whose
   // set pieces the arena removes: air bubbles), played as a single game.
-  cl::ListenOptions opt;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
   if (const std::string& src = lab.arg("progs"); !src.empty()) {
     const ge::progs::QcProject built = ge::progs::compile_project(src);
     if (!built.result.ok) {

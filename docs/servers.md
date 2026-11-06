@@ -43,7 +43,10 @@ map, until `warmup` puts him in the warmup (`sitout` takes him back, `lobby_on_m
 seat is); bots are in the warmup as they join, and the match puts every seat on the map. `start`
 is refused below `min_players` seated (bots count) or `humans` players. A dedicated server's
 clients have no lobby screen, so there `warm_on_join` stays on and they join the warmup at once.
-Running one:
+M53a part four: Shooter's Edge's listen server is the same `Server` on the same game, opened in
+the window's process (`ServerConfig::host` carries what the window prepared: its program, the map
+it read, its lines, its player), the player a local seat whose moves the window puts in and whose
+prints and effects the endpoint hands back; `sv_port` lets others join it. Running one:
 
 ```
 make build
@@ -100,8 +103,9 @@ needs all of it, and Shooter's Edge has its own copy of half of it today.
 
 - **One `Server`, two ways to run it.** A `Server` owns the node, the session host, the hosting,
   the server's console and cvars, the match's phases and the features. A listen server is a
-  `Server` the client loop steps between its own frames, with the host's player on a loopback
-  link (`net/local_pipe`) like anyone else; a dedicated server is the same `Server` stepped by
+  `Server` the client loop steps between its own frames, with the host's player in it (a local
+  seat of a game's own endpoint, as Shooter's Edge's is, or on a loopback link,
+  `net/local_pipe`); a dedicated server is the same `Server` stepped by
   `engine/server/main` on the run clock. Nothing in a game branches on which one it is in.
 - **The game plugs in through `ServerGame`.** A plain table of function pointers and a context
   pointer (the frame calls it once a tick, so the indirection costs nothing that matters): make
