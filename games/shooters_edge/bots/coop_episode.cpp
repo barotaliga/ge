@@ -228,6 +228,10 @@ EpisodeReport run_coop_episode(const EpisodeOptions& opt) {
           near += dd < kEscortFar ? 1 : 0;
           counted++;
           em.farthest = dd > em.farthest ? dd : em.farthest;
+          if (dd > kEscortCatchUp) {
+            em.far_by_mode[static_cast<int>(m.players[static_cast<size_t>(k)].escort.mode)]++;
+            if (d.waterlevel >= 2 || L.waterlevel >= 2) em.far_in_water++;
+          }
         }
       }
       if (frame % kSampleEvery == 0) {

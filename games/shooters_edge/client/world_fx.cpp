@@ -19,6 +19,7 @@
 #include "detail/surfaces.hpp"
 #include "detail/vec.hpp"
 #include "shooter/hull.hpp"
+#include "shooter/trace.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/view.hpp"
 
@@ -182,6 +183,8 @@ bool struck_along(const LoadedMap& m, const std::unordered_map<int, FxState::Fli
 // straight down from two units back along the round's line meets, as world y (m); far below when
 // none is within kFloorReachU.
 constexpr float kFloorReachU = 1024;
+constexpr float kOverBlastU = 16;    // a blast's floor is looked for from this far over it
+constexpr double kOwnRocketM = 1.5;  // a rocket first seen this near the eye is the eye's own
 double floor_under(const LoadedMap& m, const sh::Vec3f& at, const sh::Vec3f& shooter) {
   if (m.bsp.world.models.empty()) return -1e9;
   const sh::Hull& hull = m.bsp.world.models[0].hulls[0];
@@ -605,10 +608,59 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     s.receivers.reset();
   }
 
+  // The eye's aim turning (rad/s: right and up), for a rocket's launch it fires.
+  if (s.aimed && dt > 0) {
+    double turn = v.pose.yaw - s.aim_yaw;
+    turn -= 2 * ge::core::kPi * std::floor((turn + ge::core::kPi) / (2 * ge::core::kPi));
+    s.aim_rate[0] = turn / dt;
+    s.aim_rate[1] = (v.pose.pitch - s.aim_pitch) / dt;
+  }
+  s.aim_yaw = v.pose.yaw;
+  s.aim_pitch = v.pose.pitch;
+  s.aimed = true;
+
   // The missiles: a trail over the stretch each flew since the last frame, a rocket's glow.
   s.next.clear();
   for (const Missile& m : v.missiles) {
-    const ge::camera::Vec3 at = engine_point(m.origin);
+    ge::camera::Vec3 at = engine_point(m.origin);
+    // A rocket's launch as it looks (ce_trails): off its true place while it leaves the tube, the
+    // shooter's sway on it when it is the eye's own; its model, flame, trail, light and haze there.
+    double launch_age = 1e9;
+    if (m.rocket && !m.grenade && s.on.trails) {
+      auto [it, fresh] = s.launched.try_emplace(m.entity);
+      FxState::Launched& la = it->second;
+      const ge::camera::Vec3 eye = v.pose.eye;
+      const double aim[3] = {std::cos(v.pose.pitch) * std::sin(v.pose.yaw), std::sin(v.pose.pitch),
+                             std::cos(v.pose.pitch) * std::cos(v.pose.yaw)};
+      if (fresh) {
+        la.born = t;
+        la.launch.seed = static_cast<uint32_t>(m.entity);
+        if (ge::core::hypot3(at.x - eye.x, at.y - eye.y, at.z - eye.z) < kOwnRocketM) {
+          const PlayerState me = player_state(l);
+          const ge::camera::Vec3 vel = engine_point(me.velocity);
+          const double vv[3] = {vel.x, vel.y, vel.z};
+          fx::launch_kick(aim, vv, s.aim_rate[0], s.aim_rate[1], la.launch.kick);
+        }
+      }
+      launch_age = t - la.born;
+      double dir[3] = {aim[0], aim[1], aim[2]};
+      if (const auto f = s.flights.find(m.entity); f != s.flights.end()) {
+        const ge::camera::Vec3 d = engine_point(f->second.dir);  // a direction: no origin in it
+        const double dl = ge::core::hypot3(d.x, d.y, d.z);
+        if (dl > 1e-6) dir[0] = d.x / dl, dir[1] = d.y / dl, dir[2] = d.z / dl;
+      }
+      double off[3];
+      fx::launch_offset(launch_age, dir, la.launch, off);
+      at = {at.x + off[0], at.y + off[1], at.z + off[2]};
+      // Its model where it is seen (map units, z up).
+      for (Placed& p : out.models)
+        if (p.entity == m.entity) {
+          p.origin.x += float(off[0] / ge::brush::kUnitM);
+          p.origin.y += float(off[2] / ge::brush::kUnitM);
+          p.origin.z += float(off[1] / ge::brush::kUnitM);
+        }
+    }
+    const bool lit = launch_age >= fx::kIgniteS;  // the motor burning (a classic's always)
     s.next[m.entity] = at;
     if (const auto f = s.flights.find(m.entity); f != s.flights.end()) {
       const sh::Vec3f d = {m.origin.x - f->second.at.x, m.origin.y - f->second.at.y,
@@ -623,7 +675,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     put(at, to);
     const auto was = s.last.find(m.entity);
     // The hot air behind a nail and a rocket's motor (a grenade is not hot), a stretch a frame.
-    if (was != s.last.end() && s.on.trails && !m.grenade) {
+    if (was != s.last.end() && s.on.trails && !m.grenade && lit) {
       ge::render::HazeTrail h;
       put(was->second, h.a);
       put(at, h.b);
@@ -643,6 +695,9 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
           fx::rocket_trail(from, to, s.seed++, s.palette, &out.births);
       } else if (m.grenade) {
         fx::smoke_trail(from, to, s.seed++, &out.births);
+      } else if (!lit) {  // out of the tube, the motor not yet lit: a little smoke
+        fx::smoke_trail(from, to, s.seed++, &out.births);
+        continue;
       } else {
         fx::fire_trail(from, to, s.seed++, &out.births);
         const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
@@ -658,6 +713,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
       }
     }
     if (s.on.trails && !m.grenade) {  // its first frame seen: no flight yet, the light on it
+      if (!lit) continue;
       const double still[3] = {0, 0, 0};
       out.lights.push_back(fx::motor_light(to, still, static_cast<uint32_t>(m.entity), t));
     } else if (!s.on.trails) {
@@ -665,6 +721,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     }
   }
   std::swap(s.last, s.next);
+  std::erase_if(s.launched, [&](const auto& kv) { return !s.last.contains(kv.first); });
   std::erase_if(s.haze,
                 [&](const ge::render::HazeTrail& h) { return ge::render::haze_cold(h, t); });
   if (!s.on.trails) s.haze.clear();
@@ -674,10 +731,12 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   if (l.explosions.size() < s.explosions_seen) {  // a new map
     s.explosions_seen = 0;
     s.lit.clear();
+    s.sparked.clear();
     s.last.clear();
     s.blasts.clear();
     s.mains.clear();
     s.flights.clear();
+    s.launched.clear();
     s.haze.clear();
     s.wall_colours.clear();
     s.wounds.clear();
@@ -697,7 +756,29 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
       bool against = l.map && struck_along(*l.map, s.flights, boom, normal, &off);
       if (!against) against = l.map && surface_near(*l.map, boom, normal, &off);
       const size_t first = s.blasts.size();
+      const size_t thrown = out.births.size();
       fx::blast(p, against ? normal : nullptr, s.seed++, t, &s.blasts, &out.births);
+      // What it throws that falls meets what the frame draws (the pool collides); one flung out of
+      // the view has the floor under the blast to come down on, and hops there.
+      if (l.map) {
+        // From a little over the blast (it goes off just inside what it struck, a floor's top),
+        // down through the world and its brush entities (a lift's floor is one).
+        const sh::Vec3f over = {boom.x, boom.y, boom.z + kOverBlastU};
+        double floor_y = floor_under(*l.map, over, {over.x, over.y, over.z + kNearSurfaceU});
+        if (l.server) {
+          const sh::HullTrace tr =
+              sh::trace_move(l.server->sv, over, {0, 0, 0}, {0, 0, 0},
+                             {over.x, over.y, over.z - kFloorReachU}, sh::kTraceNoMonsters, -1);
+          if (!tr.startsolid && tr.fraction < 1)
+            floor_y = std::max(floor_y, engine_point(tr.endpos).y);
+        }
+        for (size_t i = thrown; i < out.births.size(); ++i) {
+          ge::render::Particle& q = out.births[i];
+          if (q.fall <= 0.5f || q.floor_y > -1e8f) continue;
+          q.floor_y = static_cast<float>(floor_y);
+          if (q.bounce <= 0) q.bounce = ge::render::kSurfaceBounce;
+        }
+      }
       // Its scorch on the surface it went off against.
       ge::render::Scorch sc;
       if (against && s.on.decals && ge::render::scorch_of(s.blasts[first], sc)) {
@@ -724,6 +805,7 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
   s.began.clear();
   watch_warps(s.warps, s.bodies, t, dt, s.began);
   const int own = l.server ? player_state(l).entity : 0;  // the local player's entity
+  out.has_self = false;
   // A player as the window places him (the local player's own too, never drawn).
   const auto placed_of = [&](int e) {
     Placed m;
@@ -737,6 +819,11 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     m.angles = ed.angles;
     return m;
   };
+  // The local player, as the world would place him: unseen in his own eyes, his shadow still his.
+  if (l.server != nullptr && own > 0 && !player_state(l).dead) {
+    out.self = placed_of(own);
+    out.has_self = out.self.modelindex > 0;
+  }
   // ce_warps off (or the classic look): the original. The figure is there or gone at once, and
   // each end of the warp flashes the teleport's fog, the campaign's program throwing its own.
   if (!s.on.warps) {
@@ -882,6 +969,12 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
           if (l.map) w.floor_y = floor_under(*l.map, e.at, eye_map);
           const int hits = nail ? 1 : std::clamp(e.count, 1, 4);
           for (int i = 0; i < hits; ++i) fx::hit(w, s.seed++, t, &s.blasts, &out.births);
+          // A nail off metal strikes sparks, and their flick lights the face round it.
+          if (nail && sc == ge::detail::SurfaceClass::metal) {
+            const double off[3] = {p[0] + normal[0] * 0.1, p[1] + normal[1] * 0.1,
+                                   p[2] + normal[2] * 0.1};
+            s.sparked.push_back({{off[0], off[1], off[2]}, t, e.at});
+          }
         } else {
           // 20 specks a pellet, 10 a nail, 20 a big nail.
           const int specks = e.kind == EffectKind::spike ? 10 * e.count : 20 * e.count;
@@ -995,6 +1088,13 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
     draw_wounds(l, s, out.models, v.pose.eye, t, dt, out.births);
   else
     s.wounds.clear();
+  std::erase_if(s.sparked, [&](const Blast& b) { return t - b.t >= fx::kSparkLightS; });
+  for (const Blast& b : s.sparked) {
+    double p[3];
+    put(b.at, p);
+    fx::Light light;
+    if (fx::spark_light(p, t - b.t, &light)) out.lights.push_back(light);
+  }
   std::erase_if(s.lit, [&](const Blast& b) {
     return t - b.t > std::max(fx::kExplosionLight, kSpriteFrames / kSpriteFps);
   });

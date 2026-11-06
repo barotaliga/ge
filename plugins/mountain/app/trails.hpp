@@ -9,6 +9,7 @@
 // ge:summary The trail map: the engine's fine marks spanned over a level, named for the mountain
 // ge:keywords trails trail-map tracks grooves berm pressed-snow stamp create_trails
 // ge:keywords add_trail_stamps prepare_trails encode_trails trail_window snow-marks
+// ge:keywords resize_trails trail-size live-resize
 // ge:skill mountain render
 // ge:test tests/mountain_trails_test.cpp
 #pragma once
@@ -62,6 +63,11 @@ inline void create_trails(gpu::Device& device, gpu::PipelineSet& pipelines, Trai
   o.capacity = options.capacity;
   o.label = "trails";
   render::create_snow_marks(device, pipelines, trails, g.origin_x, g.origin_z, extent, o);
+}
+// The maps made again at `options`' sizes with no pipeline made, every trail laid drawn into them
+// again (render/snow_marks.hpp's resize_snow_marks); rebind the snow's group over them after.
+inline void resize_trails(gpu::Device& device, Trails& trails, const TrailOptions& options) {
+  render::resize_snow_marks(device, trails, options.fine_size, options.coarse_size);
 }
 inline void add_trail_stamps(Trails& trails, std::span<const TrailStamp> stamps) {
   render::add_mark_stamps(trails, stamps);

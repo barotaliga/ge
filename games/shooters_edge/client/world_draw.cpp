@@ -48,6 +48,7 @@ struct WorldDraw {
   gr::FarLand far;  // the land round the map, seen through its sky faces (r_farland)
   ba::SkyPick sky;
   ba::SkyPick night;  // the map's own classic night, for an sv_hour after dusk (bsp_sky.hpp)
+  bool dark = false;  // its sky texture is dark: the map is seen under its night (dark_sky)
   double top_y = 0;   // the map's highest point, m: the clouds stand over it
   ge::gpu::PipelineSet pipelines;
   gr::FrameTargets targets;
@@ -65,10 +66,12 @@ struct WorldDraw {
   double gamma = 1;    // the gamma the grades were last made with
   look::Picture made;  // the picture as it was when the world was made
   gr::Particles particles;
-  gr::Explosions explosions;  // the muzzle fire, the enhanced blasts, a rocket's flame, hits' dust
-  gr::Beams beams;            // the arc guns' bolts (ce_beams)
-  gr::Haze haze;              // the hot air behind a nail or a rocket (ce_trails)
-  std::vector<gr::BeamShape> beam_shapes;  // kMaxBeamDraws, built each frame
+  gr::Explosions explosions;   // the muzzle fire, the enhanced blasts, a rocket's flame, hits' dust
+  gr::Beams beams;             // the arc guns' bolts (ce_beams)
+  gr::Haze haze;               // the hot air behind a nail or a rocket (ce_trails)
+  std::vector<float> casters;  // this frame's models as world triangles, for their shadows
+  std::vector<ba::CasterBox> caster_boxes;  // and each one's box
+  std::vector<gr::BeamShape> beam_shapes;   // kMaxBeamDraws, built each frame
   std::vector<gr::BeamDraw> beam_draws;
   // This frame's births, blasts and flames with the room's light on their smoke (light_at).
   std::vector<gr::Particle> lit_births;
@@ -231,6 +234,7 @@ struct WorldRead {
   ba::Scene scene;
   ba::SkyPick sky;
   ba::SkyPick night;  // the map's own classic night, for an sv_hour after dusk
+  bool dark = false;
   double top_y = 0;
   std::vector<uint8_t> grade_palette;
   std::vector<float> classic_grade;  // the classic look's grade to the palette (look.hpp)
@@ -303,6 +307,7 @@ WorldReadPtr read_world(const SearchPath& files, const LoadedMap& map, const loo
   r->sky = ba::pick_sky(r->scene.sky_colours, map.name);
   r->night = r->sky;
   ba::night_over(r->night, map.name);
+  r->dark = ba::dark_sky(r->sky);
   r->top_y = r->scene.maxs[1];
   bool known = true;
   r->far_kind = ba::far_land_for(r->sky, map.name, picture.far_land, &known);
@@ -356,6 +361,7 @@ void build_step(ge::gpu::Device& d, WorldDraw& f) {
     // off the wall, where a wider softening would fade them to nothing.
     gr::ParticleSettings ps;
     ps.soft_m = kParticleSoftM;
+    ps.collide = true;  // sparks, chips and debris meet the map's brushes and its models
     gr::create_particles(d, f.pipelines, f.particles, f.layout, ps);
     gr::create_explosions(d, f.pipelines, f.explosions, f.layout);
     // The marks' burns too (world_fx.hpp's marks, render/marks.hpp).
@@ -407,6 +413,7 @@ WorldDrawPtr begin_world(ge::gpu::Device& d, WorldReadPtr read, uint32_t width, 
   f->scene = std::move(read->scene);
   f->sky = read->sky;
   f->night = read->night;
+  f->dark = read->dark;
   f->top_y = read->top_y;
   f->format = format;
   f->weapons = weapons;
@@ -463,6 +470,10 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
 
 const WorldModels& world_models(const WorldDraw& w) { return w.models; }
 
+std::vector<gr::Particle> world_particles(ge::gpu::Device& d, const WorldDraw& w) {
+  return gr::read_particles(d, w.particles);
+}
+
 void resize_world(ge::gpu::Device& d, WorldDraw& f, uint32_t width, uint32_t height) {
   f.w = std::max(1u, width);
   f.h = std::max(1u, height);
@@ -479,6 +490,25 @@ bool world_stale(const WorldDraw& f) {
          a.far_land != b.far_land;
 }
 
+namespace {
+
+// The map's own sky (its pick) at the picture's sv_hour (the map's own at -1), dressed on `view`;
+// the title dresses its own.
+ba::SkyPick dress_world_sky(const WorldDraw& f, gr::FrameView& view) {
+  // At the map's own hour (-1) a dark sky texture is the map's night, a bright one its day.
+  ba::SkyPick sky = f.dark ? f.night : f.sky;
+  if (f.picture->weather.hour >= 0) ba::at_hour(sky, f.night, f.picture->weather.hour);
+  if (!f.own_sky) ba::dress_sky(view, sky, f.top_y, view.time_s);
+  return sky;
+}
+
+}  // namespace
+
+void world_sun(const WorldDraw& f, gr::FrameView view, double out[3]) {
+  dress_world_sky(f, view);
+  gr::sun_direction(view, out);
+}
+
 void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFrame& fx,
                 const shooters_edge::view::HandFrame* held, double dt,
                 const ge::ui::DrawList& overlay, const wgpu::TextureView& target) {
@@ -491,10 +521,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     gr::set_grade(d, f.post[1], look::gamma_grade(gr::identity_grade(), f.gamma));
   }
   // The map's own sky (its pick), keeping the eye and the look the caller set.
-  // sv_hour: the sun where the hour puts it (the map's own pick at -1); the title dresses its own.
-  ba::SkyPick sky = f.sky;
-  if (f.picture->weather.hour >= 0) ba::at_hour(sky, f.night, f.picture->weather.hour);
-  if (!f.own_sky) ba::dress_sky(view, sky, f.top_y, view.time_s);
+  const ba::SkyPick sky = dress_world_sky(f, view);
   view.altitude_m = 100;
   if (!f.own_sky) {  // a map's cloud seen through its sky faces: every pixel, every frame
     view.clouds.quarter = false;
@@ -520,6 +547,10 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   if (f.has_map) {
     GE_ZONE("world.bsp");
     ba::set_dynamic_lights(f.bsp, fx.lights);
+    // The moving models' shadows (M54): every model near the eye and the player himself.
+    shadow_casters(f.models, fx.models, fx.has_self ? &fx.self : nullptr, view, f.casters,
+                   f.caster_boxes);
+    ba::set_shadow_casters(f.bsp, f.casters, f.caster_boxes);
     place_brushes(f.models, fx.models, f.movers);
     ba::set_movers(f.bsp, f.movers);
     ba::prepare_bsp(d, f.bsp, view, o);
@@ -567,7 +598,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
       gr::emit_particles(f.particles, f.fire_births);
     }
     f.particles.settings.glow = static_cast<float>(look::effects_glow(lk, *f.picture));
-    gr::prepare_particles(d, f.particles, dt, view.near_m);
+    gr::prepare_particles(d, f.particles, dt, view, f.w, f.h);
     gr::prepare_explosions(d, f.explosions, f.lit_puffs, view, f.w, f.h, f.lit_flames);
     f.beam_draws.clear();
     for (const HeldBeam& b : fx.beams) {
@@ -643,6 +674,12 @@ bool warm_world(ge::gpu::Device& d, WorldDraw& f, const gr::FrameView& view, int
   return !f.has_map || f.bsp.shadows_waiting == 0;
 }
 
-void record_span(const WorldDraw& f, PassTimes& p) { span_add(p, f.rec.stats.gpu_span_ms()); }
+void record_span(const WorldDraw& f, PassTimes& p) {
+  span_add(p, f.rec.stats.gpu_span_ms());
+  for (int i = 0; i < f.rec.stats.count; i++) {
+    const gr::PassStat& s = f.rec.stats.passes[size_t(i)];
+    if (s.draws > 0 || s.dispatches > 0) pass_add(p, s.name, s.gpu_ms);
+  }
+}
 
 }  // namespace shooters_edge::client

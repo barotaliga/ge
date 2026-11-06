@@ -41,6 +41,9 @@ void(entity m) missile_now = { newmis = m; };
 
 // --- teams ---
 
+// A teammate's blow that does not harm him does not push him either.
+float(entity a, entity b) team_shoves = { return FALSE; };
+
 // Two players on the same named team while `teamplay` is on: a teammate is not harmed.
 float(entity a, entity b) same_team = {
   local string t;

@@ -18,9 +18,10 @@ namespace {
 constexpr double kFloorZ = 0.7;           // a plane whose normal z reaches this is ground
 constexpr float kGroundSpeedLimit = 180;  // rising faster than this is never on the ground
 constexpr float kJumpSpeed = 270;
-constexpr float kAirWishCap = 30;  // the air's wish speed cap in the gain's subtraction
-constexpr float kEdgeAhead = 16;   // the edge probe: this far ahead of the origin
-constexpr float kEdgeDepth = 34;   // and this far down from the feet
+constexpr float kAirWishCap = 30;      // the air's wish speed cap in the gain's subtraction
+constexpr float kSpeedJumpCos = 0.7f;  // the easy jump: the view within about 45 degrees of the way
+constexpr float kEdgeAhead = 16;       // the edge probe: this far ahead of the origin
+constexpr float kEdgeDepth = 34;       // and this far down from the feet
 constexpr float kWaterJumpUp = 310;
 constexpr float kWaterJumpOut = 50;
 constexpr float kWaterJumpTime = 2;  // s
@@ -136,7 +137,8 @@ void jump(Mover& m, const MoveCmd& cmd) {
     return;
   }
   if (s.ground == -1) return;
-  if (s.jump_held) return;  // no pogo: the button must be let go between jumps
+  // No pogo: the button must be let go between jumps; the easy jump hops again while it is held.
+  if (s.jump_held && m.set.speedjump <= 0) return;
 
   if (dot(s.velocity, s.ground_normal) < -0.1 && s.velocity.z < 0)
     s.velocity = clip_velocity(s.velocity, s.ground_normal, 1);
@@ -197,17 +199,56 @@ void accelerate(Mover& m, Vec3f wishdir, float wishspeed, float accel) {
 
 float horizontal_speed(Vec3f v) { return root_of(v.x * v.x + v.y * v.y); }
 
+// THE EASY JUMP (pm_speedjump, for a player whose cl_speedjump asks for it): the forward key alone
+// held in the air, the view within about 45 degrees of the way he moves, gains `speedjump` of what
+// the best strafe would gain this command, and turns the way toward the view at most as fast as
+// that strafe would. The best strafe adds `a` at right angles to the plan speed h (a = 30, or the
+// command's whole acceleration when that is less), so h^2 grows by 900 (or a x (60 - a)) and the
+// way turns to h + a across it: the easy jump keeps that turn and a share of that growth, so a
+// strafer still gains more. Off (0) it does nothing.
+void speed_jump(Mover& m, Vec3f wishdir, float wishspeed, float accel) {
+  MoveState& s = m.s;
+  const float h = horizontal_speed(s.velocity);
+  if (h < 1) return;
+  const float ux = s.velocity.x / h, uy = s.velocity.y / h;
+  const float c = ux * wishdir.x + uy * wishdir.y;  // the view's cosine to the way
+  if (c < kSpeedJumpCos) return;
+  const float most = accel * wishspeed * m.dt;  // the command's whole acceleration
+  const float a = most < kAirWishCap ? most : kAirWishCap;
+  const float grow = a < kAirWishCap ? a * (2 * kAirWishCap - a) : kAirWishCap * kAirWishCap;
+  const float k = m.set.speedjump > 1 ? 1 : m.set.speedjump;
+  const float speed = root_of(h * h + k * grow);
+  // The way turned toward the view: all the way when the view is within the strafe's turn.
+  float px = wishdir.x - c * ux, py = wishdir.y - c * uy;  // the view across the way
+  const float across = root_of(px * px + py * py);
+  float dx = wishdir.x, dy = wishdir.y;
+  if (across * h > a * c) {
+    px = px / across;
+    py = py / across;
+    dx = ux * h + px * a;
+    dy = uy * h + py * a;
+  }
+  const float d = root_of(dx * dx + dy * dy);
+  s.velocity.x = dx / d * speed;
+  s.velocity.y = dy / d * speed;
+}
+
 // In the air: the wish capped at 30 in the subtraction only, so turning keeps the gain coming.
-void air_accelerate(Mover& m, Vec3f wishdir, float wishspeed, float accel) {
+// With the easy jump on and the forward key alone held (`easy`), its gain follows the classic one.
+void air_accelerate(Mover& m, Vec3f wishdir, float wishspeed, float accel, bool easy) {
   MoveState& s = m.s;
   if (!accelerates(s)) return;
+  const float h0 = horizontal_speed(s.velocity);
   const float wishspd = wishspeed > kAirWishCap ? kAirWishCap : wishspeed;
   const float add = wishspd - dot(s.velocity, wishdir);
-  if (add <= 0) return;
-  float speed = accel * wishspeed * m.dt;
-  if (speed > add) speed = add;
-  const float h0 = horizontal_speed(s.velocity);
-  s.velocity = mad(s.velocity, speed, wishdir);
+  if (add > 0) {
+    float speed = accel * wishspeed * m.dt;
+    if (speed > add) speed = add;
+    s.velocity = mad(s.velocity, speed, wishdir);
+  } else if (!easy) {
+    return;
+  }
+  if (easy) speed_jump(m, wishdir, wishspeed, accel);
   if (m.set.bunnyspeedcap > 0) {
     const float cap = s.maxspeed * m.set.bunnyspeedcap;
     const float h1 = horizontal_speed(s.velocity);
@@ -261,7 +302,8 @@ int walk_move(Mover& m, const MoveCmd& cmd, const ViewAxes& ax) {
     return step_slide_move(m, false);
   }
 
-  air_accelerate(m, wishdir, wishspeed, m.set.accelerate);
+  const bool easy = m.set.speedjump > 0 && cmd.forward > 0 && cmd.side == 0;
+  air_accelerate(m, wishdir, wishspeed, m.set.accelerate, easy);
   s.velocity.z = s.velocity.z - fall;
   const int blocked = m.set.airstep ? step_slide_move(m, true) : slide_move(m);
   if (m.set.pground && (blocked & kBlockedFloor) != 0) {

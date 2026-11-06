@@ -11,8 +11,12 @@
 // - BUTTON: a button within `kEscortButtonNear` of the leader that he has stood near for
 //   `kEscortButtonWait_s` and that is still at rest, with a door it opens still shut: it goes and
 //   presses it (walks into it, or shoots it when it opens by a shot), once;
-// - CATCH UP: the leader more than `kEscortCatchUp` away: it runs to him (walked, never hopped:
-//   a hop on a map's ledges ends in its pit);
+// - CATCH UP: the leader more than `kEscortCatchUp` away: it hops to his shoulder (walking is
+//   his own speed, so a gap once opened would never close);
+// - SIGNAL: the leader within `kEscortExitShow` of an exit and standing there a while
+//   (`kEscortSignalAfter_s`: one walking to it needs no showing), nothing in sight: it stands on
+//   the node beside the exit (`ExitSpot::stand`), faces him and jumps now and then, a person's
+//   "here is the way out";
 // - FOLLOW: to a spot at the leader's shoulder (`kEscortNear` from him, behind his view, a side of
 // its
 //   own) whenever he moves on or it is further than `kEscortFar`;
@@ -31,6 +35,14 @@
 // while one stands in the line (the co-op rules spare teammates under teamplay; its own blast does
 // not).
 //
+// THE EXIT IS HIS: a companion never takes it. The nodes in an exit's box are closed to it (its
+// pilot plans no link onto one, its goals are moved off one to the exit's stand-by node), and
+// every command it would step into the box is turned back (`EscortStats::exit_turned`).
+//
+// BLASTS: grenades and rockets are taken up only for a foe more than `kEscortBlastClear` from
+// every player (the companion among them), and a blast already held is not fired at one nearer:
+// it switches (`EscortStats::blasts_held`).
+//
 // Every choice is on the `ai::Why`, and the counts (`EscortStats`) are what the `se-coop` lab and
 // the companion's test read.
 //
@@ -40,6 +52,7 @@
 // ge:summary The co-op companion: follows the leader, defends him, presses buttons, idles humanly
 // ge:keywords companion co-op coop escort follow leader defend threat monsters button press
 // ge:keywords bored idle enabler catch-up shoulder escort_init escort_think escort_command
+// ge:keywords exit signal stand-by blast explosive splash escort_blast_clear
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_companion_test.cpp
 #pragma once
@@ -66,18 +79,22 @@ struct Stats;
 constexpr float kEscortNear = 120;     // the shoulder spot's distance from the leader, units
 constexpr float kEscortFar = 220;      // further than this: follow again, units
 constexpr float kEscortLeash = 360;    // defending, never further than this from him, units
-constexpr float kEscortCatchUp = 720;  // further than this: run (and hop) to catch up, units
+constexpr float kEscortCatchUp = 440;  // further than this: run to catch up, units
 constexpr float kEscortGuard = 640;    // a waking monster this near the leader threatens, units
 constexpr float kEscortSelf = 420;     // or this near the companion, units
 constexpr float kEscortSight = 1400;   // a monster facing them within this threatens, units
 constexpr float kEscortFacing = 30;    // facing: its yaw within this of the line to them, degrees
 constexpr double kEscortStir_s = 2;  // a monster that moved or made a sound this long ago is awake
-constexpr float kEscortButtonNear = 480;     // a button this near the leader is his to need, units
-constexpr double kEscortButtonWait_s = 1.2;  // after he has been near it this long, s
-constexpr double kEscortButtonGive_s = 8;    // a press not done in this long is given up, s
+constexpr float kEscortButtonNear = 480;      // a button this near the leader is his to need, units
+constexpr double kEscortButtonWait_s = 1.2;   // after he has been near it this long, s
+constexpr double kEscortButtonGive_s = 8;     // a press not done in this long is given up, s
+constexpr float kEscortExitShow = 640;        // the leader this near an exit: show it, units
+constexpr double kEscortSignalAfter_s = 1.5;  // the leader still this long by an exit: show it
+constexpr float kEscortBlastClear = 260;      // a blast's point nearer a player than this: none
+constexpr double kEscortSignalEvery_s[2] = {0.6, 1.1};  // a signal's jumps come this far apart
 
-enum class EscortMode : uint8_t { follow, defend, button, catch_up, bored };
-inline constexpr int kEscortModes = 5;
+enum class EscortMode : uint8_t { follow, defend, button, catch_up, bored, signal };
+inline constexpr int kEscortModes = 6;
 const char* escort_mode_name(EscortMode m);
 
 struct EscortStats {
@@ -85,9 +102,12 @@ struct EscortStats {
   int64_t threats = 0;                  // monsters taken on (became its foe)
   int64_t buttons = 0;                  // buttons pressed (moved off their rest)
   int64_t buttons_given_up = 0;
-  int64_t idle_breaks = 0;  // boredom broken off (the leader moved, or something showed)
-  int64_t shots_held = 0;   // shots held for a player in the line
-  int64_t gave_way = 0;     // commands spent stepping out of his way
+  int64_t idle_breaks = 0;   // boredom broken off (the leader moved, or something showed)
+  int64_t shots_held = 0;    // shots held for a player in the line
+  int64_t gave_way = 0;      // commands spent stepping out of his way
+  int64_t blasts_held = 0;   // blast shots held for a player near the foe
+  int64_t exit_turned = 0;   // commands turned back from an exit's box
+  int64_t signal_jumps = 0;  // jumps by an exit, showing it
 };
 
 struct Escort {
@@ -99,6 +119,7 @@ struct Escort {
   std::vector<sh::Vec3f> rest;         // by entity: where it stood when the companion joined
   std::vector<sh::Vec3f> button_rest;  // by the fighter's button spot: its origin at rest
   std::vector<uint8_t> button_done;    // and whether it was pressed (or given up)
+  std::vector<int8_t> exit_of;         // by node: the exit whose box it is in (-1: none)
   sh::IdleState idle;
   sh::IdleWeights weights;
   EscortStats stats;
@@ -111,9 +132,11 @@ struct Escort {
   double button_since = -1;            // the press under way began then
   double break_at = -1;                // boredom broken: the act stops then (a human moment later)
   double last_t = -1;                  // the server time of the last command
+  double signal_at = 0;                // the signal's next jump
   int leader = -1;                     // the slot it escorts (-1: not a companion)
   int threat = -1;                     // the monster its view is on (-1: none)
   int button = -1;                     // the button spot it wants pressed (-1: none)
+  int exit = -1;                       // the exit it shows (-1: none)
   int32_t follow_node = -1;            // the shoulder spot's node
   int32_t hop_node = -1;               // a bored hop's turn point
   int side = 1;                        // its shoulder: -1 left, 1 right
@@ -142,5 +165,8 @@ void hunt_sense(Fighter& f, const server::RulesCommon& s);
 // to `target`, nearer than it.
 bool escort_player_in_line(const Fighter& f, const server::RulesCommon& s, sh::Vec3f eye,
                            sh::Vec3f target, float clear);
+// Whether a blast at `at` is clear of every living player (the companion too) by
+// `kEscortBlastClear`.
+bool escort_blast_clear(const Fighter& f, const server::RulesCommon& s, sh::Vec3f at);
 
 }  // namespace shooters_edge::bots

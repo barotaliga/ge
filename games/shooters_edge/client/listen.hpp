@@ -41,6 +41,10 @@
 // with every seat on it (`restarted`), and a map change goes back to warmup. `listen_lobby` runs
 // the player's lobby words.
 //
+// THE EASY JUMP: the listen server allows it (`pm_speedjump 0.5`), so a player with
+// `cl_speedjump 1` (client/settings.hpp) hops by holding forward and jump; a dedicated server
+// allows it only when its owner sets pm_speedjump.
+//
 // THE VIEW: the player's angles are the client's (`Listen::view`, degrees: pitch down positive,
 // yaw counter-clockwise from +x), sent with every command; when the server turns him (a spawn, a
 // teleport: the mod's forced view) the client takes the server's angles (`forced`).
@@ -118,6 +122,7 @@ struct ListenHost {
   bool lobby = false;
   sv::LobbySettings lobby_settings;
   std::string player = "player";  // slot 0, the window's own player: a local seat
+  float speedjump = 0;            // pm_speedjump on each map's server (the easy jump allowed)
   // The player's side of every frame: the rules' frame before the endpoint routes it (prints,
   // effects, blows), and a line printed to him (the lobby's and the room's answers).
   void (*tap)(void* ctx, const sv::RulesCommon& game) = nullptr;

@@ -288,20 +288,25 @@ std::span<const ClassicFire> classic_fires() {
   // is left; each preset's shape (the shotguns' short wide flash, the grenade launcher's thump,
   // the rocket launcher's jet) at that scale. A nailgun throws nails, not burning powder: no
   // flame, no flash, and next to no smoke, a breath of haze from the barrel that fired, thin and
-  // gone in under half a second, so a stream of them never builds a cloud. The rates are the
-  // classic game's.
+  // gone in under half a second, so a stream of them never builds a cloud. The rest leave a short
+  // grey puff at the muzzle, a hand or two across and gone in about a second, never a white cloud
+  // hanging between the shooter and what he shot (the pack's weapons are drawn at their true size,
+  // so the presets' smoke is turned down to it). The rates are the classic game's.
   static constexpr std::string_view kPuff =
       "length=0.02,width=0.02,glow=0,flash=0,sparks=0,light_range=0,smoke.smoke=0.02,"
       "smoke.smoke_grow=0.3,smoke.smoke_time=0.35,smoke.smoke_albedo=0.45,smoke_speed=1.2";
   static constexpr std::string_view kShotgun =
       "life=0.018,length=0.24,width=0.144,glow=0.0175,flash=0.2,sparks=2,light_range=3.6,"
-      "smoke.smoke=0.45";
+      "smoke.smoke=0.28,smoke.radius=0.1,smoke.smoke_grow=0.9,smoke.smoke_time=0.9,"
+      "smoke.smoke_albedo=0.38";
   static constexpr std::string_view kGrenade =
       "life=0.021,length=0.12,width=0.102,glow=0.0175,flash=0.12,sparks=0,light_range=2.4,"
-      "smoke.smoke=0.54";
+      "smoke.smoke=0.3,smoke.radius=0.1,smoke.smoke_grow=0.8,smoke.smoke_time=1.0,"
+      "smoke.smoke_albedo=0.32";
   static constexpr std::string_view kRocket =
       "life=0.036,length=0.54,width=0.12,glow=0.0315,flash=0.22,sparks=3,light_range=5.6,"
-      "smoke.smoke=0.63";
+      "smoke.smoke=0.3,smoke.radius=0.12,smoke.smoke_grow=0.8,smoke.smoke_time=1.1,"
+      "smoke.smoke_albedo=0.35";
   static constexpr ClassicFire kFires[] = {
       {"v_axe", "", "", 0.5},
       {"v_shot", "muzzle.shotgun", kShotgun, 0.5},

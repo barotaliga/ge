@@ -86,6 +86,8 @@ bool finish_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_
 void resize_world(ge::gpu::Device& device, WorldDraw& w, uint32_t width, uint32_t height);
 // The models it draws (world_models.hpp): their shapes, for where a warp's ash lands.
 const WorldModels& world_models(const WorldDraw& w);
+// Labs (blocks): every slot of its particle pool as the GPU holds it.
+std::vector<ge::render::Particle> world_particles(ge::gpu::Device& device, const WorldDraw& w);
 // With `own` the frame's sky is the view's as the caller dressed it (the title's), not the map's.
 void own_sky(WorldDraw& w, bool own);
 // Whether a setting read only when the world is made changed since it was made (`ce_textures`,
@@ -105,6 +107,10 @@ void draw_world(ge::gpu::Device& device, WorldDraw& w, ge::render::FrameView vie
 // once every caster near the view has its cube: the world can be shown with no hitch.
 bool warm_world(ge::gpu::Device& device, WorldDraw& w, const ge::render::FrameView& view,
                 int cubes);
+
+// The way to the sun (engine frame, unit) a frame drawn from `view` lights the map with: the map's
+// own sky, at the picture's sv_hour.
+void world_sun(const WorldDraw& w, ge::render::FrameView view, double out[3]);
 
 // The last GPU reading of the frame's span (a frame or more late) into `p`; nothing when the GPU
 // has no timestamp queries.

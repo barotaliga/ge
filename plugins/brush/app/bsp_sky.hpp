@@ -31,7 +31,8 @@
 // ge:summary Our sky picked by a classic map's sky texture: its type, light, tint and cloud
 // ge:keywords bsp brush sky sky-type match pick_sky sky-texture hue dusk cover v2 night_over
 // ge:keywords classic-night evening moon scud low-cloud wind dress_sky clouds_of adapt
-// ge:keywords at_hour sv_hour time-of-day sun-position cloud-stack sky-layer set_cover warp islands
+// ge:keywords dark_sky own-hour day-or-night at_hour sv_hour time-of-day sun-position
+// ge:keywords cloud-stack sky-layer set_cover warp islands
 // ge:keywords far-land far_land_for far_site_of r_farland skybox 3d-skybox
 // ge:skill brush render
 // ge:test tests/brush_bsp_sky_test.cpp
@@ -67,6 +68,7 @@ struct SkyPick {
   double sky_seen = 1;         // the sky as seen through the sky faces (Options::sky_seen)
   double tint[3] = {1, 1, 1};  // the sky's tint toward the texture's hue (Options::sky_tint)
   double cover = 0.3;          // the texture's own cloud share (0..1): how cloudy the map's sky is
+  double bright = 1;           // the texture's luminance as seen (0..1): a day's sky or a dark one
   std::string why;             // one line: what in the texture chose it (and the night's hour)
   // THE HOUR AND THE AIR (night_over). By day the sun stands at `sun_elevation`.
   bool night = false;
@@ -107,6 +109,12 @@ bool with_type(SkyPick& pick, std::string_view name);
 // dealt off the name, so a map always gets the same night). The type and tint are kept; the sky's
 // light against the rooms goes to 1, the hour doing the dimming.
 void night_over(SkyPick& pick, std::string_view map);
+
+// THE MAP'S OWN HOUR: a map whose sky texture is bright (the classic renderer draws it as a day
+// sky: the violet-blue one) is seen by day under `pick`; one whose sky is dark (the red-brown
+// smoke, under kDarkSky of the white) under its classic night.
+inline constexpr double kDarkSky = 0.05;
+bool dark_sky(const SkyPick& pick);
 
 // THE HOUR SET (sv_hour, `at_hour`): the sun where it stands at `hour` (0 .. 24) on a summer's day
 // at the latitude the night's stars turn over (46 N, the sun 15 degrees north of the equator): up

@@ -110,9 +110,19 @@ extension behind a feature tier, never a second graphics API.
 macOS (arm64): `cmake/Dawn.cmake` pins one release tag and each archive's SHA-256, and
 downloads it into `.cache/deps/` at configure time (the archive also carries `tint`, which
 `make shaders-check` runs). The prebuilt library is a Release build, so an MSVC Debug build
-refuses `GE_GPU=ON`. iOS, iPadOS and Android (and Linux arm64) will build Dawn from source with
-its CMake build, cached in CI (M11). Until then those rows build with `GE_GPU=OFF`, which
-builds and tests everything except `engine/gpu`, `engine/render` and the app.
+refuses `GE_GPU=ON`. The same release carries the MOBILE archives (M11a): an Apple
+xcframework (a static library for iOS and iPadOS devices, one for the iOS Simulator, one for
+the Mac), Android's static libraries (one an ABI) and a headers archive. Their CMake package
+was written by the Android build, with that machine's paths, so `cmake/Dawn.cmake` declares
+`dawn::webgpu_dawn` itself over the target's slice and the system libraries it needs (Metal,
+QuartzCore, IOSurface, UIKit; Android's log). Only Linux arm64 has no archive; it will build Dawn
+from source, and until then builds with `GE_GPU=OFF`, which builds and tests everything except
+`engine/gpu`, `engine/render` and the app.
+
+**The iOS Simulator draws no shadowed frame.** Dawn's Metal backend turns comparison samplers
+off there (the simulator's Metal has none), and every shadow lookup samples with one, so the
+device is lost at the first frame. A device has them. The simulator proves the build, the
+bundle and the start; the picture is a device's (M11b).
 
 **The C++ surface.** `engine/gpu` calls Dawn's `webgpu_cpp.h` (`wgpu::Device`,
 `wgpu::Buffer`, …), whose handles are reference-counted RAII already. The engine adds
@@ -875,6 +885,47 @@ too). An added sprite (a flame, a fireball) is light of its own and takes none. 
 `gpu-sprites`'s `lamp-night` (the yard's bushes and sign under a 400 cd lamp), each with `-off`
 beside it.
 
+### Shadows of moving models
+
+**As built (M54, in progress)** (`brush/app/casters.hpp`, `bsp_draw.cpp`, `bsp.wgsl`,
+`wgsl/capsules.wgsl`). The brush world's v2 look lit in real time keeps each shadowed light's cube
+of the map (drawn when the light takes a slot, not every frame). The models that move (players,
+monsters, and the first-person player, who is never drawn in his own eyes but casts) are handed
+over each frame (`set_shadow_casters`: their posed triangles in world metres and a box each) and
+shadow the lights in two tiers:
+
+- **The casters' cubes.** `caster_lights` ranks the shadowed lights by the most light each puts on
+  one caster (its strength over the squared distance to the box, inside its reach), a caster
+  counting less the further it is from the eye (half at 4 m), and the first 8 get a cube of the
+  casters alone, 384 texels a face. The 48 faces are one depth atlas (a light a row, a face a
+  column) drawn in ONE pass with a viewport a face, as the lamps' tiles above: as 48 passes they
+  cost 6 ms of GPU a frame on the M3 Max whatever they drew. A pixel reads the world's cube with
+  one 2 × 2 compare and the casters' cube with percentage-closer soft shadows: a blocker search
+  of 8 taps in the casters' cube alone (most pixels find none and stop there), the penumbra
+  `size × (d − d_blocker) / d_blocker`, then 12 compares. The taps are Vogel discs from constant
+  tables, turned by one spin a pixel and frame that the TAA resolves; they are directions round the
+  point's, so they cross a cube's seams with no special case (a tap is clamped half a texel inside
+  its face's tile). A light's source radius (`GpuLight::more.y`) sets how soft: a plain light's
+  4 cm is sharp, a flame's a quarter of its height (a wall torch 0.14 m, a large flame 0.26 m).
+- **The capsules.** A classic map lights a room with many overlapping fill lights (on e1m4 the 32
+  nearest shadowed ones carry 5 to 20 % of a floor's light), so 8 cubes alone leave no shadow
+  to see. The 4 casters nearest the eye become vertical capsules fitted to their boxes
+  (`shadow_capsules`), and every light without a casters' cube is shadowed by the ones within 6 m
+  of the pixel (found once a pixel), the penumbra from the light's size seen from the point.
+- **The sun.** A row more of the atlas: its first tile is the casters seen along the sun, an
+  orthographic view 16 m wide round the eye (4 cm texels), drawn in the same pass. A pixel inside
+  it multiplies the sun's map of the world by its 2 × 2 compare (`sun_casters_lit`).
+- **The room's own light.** A figure standing in the light hides some of what bounces round the
+  room too: the bounce and the `r_minlight` floor are dimmed by 0.8 of the share of the casters'
+  lights he hides at the pixel.
+
+Lab `se-models`: the views `shadow-lamp`, `shadow-torch`, `shadow-flame` and `shadow-sun` (at
+noon, on a map with open sky), each from his eyes and from high to one side, `-side-pair` (the
+side view with him and with him gone) and `-shade` (in red, how much darker each pixel is with
+him there, eight times over), with the metrics `-darker` (the lower half's mean) and `-deepest`
+(the 99th percentile). The cost is `se-timedemo`'s
+(`docs/perf.md` § Shooter's Edge's world frame): main + 7 % at 2560 × 1440 on demo1.
+
 ### Materials
 
 **As built (M39b)** (`render/surface.hpp`, `wgsl/surface.wgsl`). One physically based model for
@@ -1131,8 +1182,9 @@ and a storm's 2. The cloud volume itself is M8f3 (below).
   it (R32F). Then each pixel of the frame takes the four half-size pixels round it, each weighted
   by its share of the bilinear footprint and by exp(−40 × how far its distance misses the
   pixel's own, as a share of the nearer); a pixel that none of the four matches within 10 %
-  (the near side of an edge) marches its own ray. Marching every pixel (the quality ladder's
-  top) draws "clouds" alone and leaves "clouds.march" empty; with no layer both are empty. The
+  (the near side of an edge) marches its own ray. Marching every pixel each frame (the
+  reference the labs hold the rest to: `Clouds::quarter` and `Clouds::spread` both false) draws
+  "clouds" alone and leaves "clouds.march" empty; with no layer both are empty. The
   ladder also takes a share of the steps (`Clouds::steps`, never under four) or draws no layer
   at all (§ The quality ladder). The `weather` lab holds the quarter to every pixel's march:
   under 1 % of the picture may differ by more than 8 levels of luma (`<sky>.quarter-misses`).
@@ -1163,6 +1215,19 @@ and a storm's 2. The cloud volume itself is M8f3 (below).
   full-size upsample, about 8, is the same either way); on a GPU, whose pass has no such floor,
   the march is nearer a quarter of its cost. In one ladder pricing run the clouds' high stop
   fell from 63 % of every pixel's march to 42 %.
+- EVERY PIXEL'S MARCH SPREAD (`Clouds::quarter` false, `Clouds::spread` true: the quality
+  ladder's top). The march target is a GRID over the frame (`kGrain`, a pipeline constant: the
+  three passes are made at the load at both grains, `cloud_grain` says which a view asks for and
+  `bind_cloud_targets` makes the targets at it): at grain 1 it is the frame's own size, so each
+  pixel marches its own ray to its own depth one frame in four, in the same turn order, and the
+  other three reproject as the half-size pixels do; "clouds" then lays the target over the
+  frame as it is. Targets bound at the other grain draw the reference instead. On the M3 Max at
+  2560 × 1440 from seed 38's start looking up into a flurry, the clouds' top stop fell from
+  8.17 ms over none to 4.61 (the frame's top from 11.77 to 8.17), the reprojection 0.4 of it
+  and the full-size lay-over 0.02; the `weather` lab's `--every=1` holds it to the reference
+  with the view swinging 30 degrees a second: 0.06 % of the fair sky's picture differs by more
+  than 8 levels (the quarter's spread march 0.87 %), the flurry's 0.38 % (the falling snow's
+  own, the same either way).
 
 What the mountain's broken skies stand is `plugins/mountain/app/cloud_field.hpp`: FAIR heaps at
 1.5 to 2 km over the valley floor and a few ice streaks at 8 km, FLURRIES' taller heaps under a
@@ -1242,8 +1307,12 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   `render/clouds.cpp`): the column's tile point pushed up to `warp` cells by two more reads of
   the noise a tile apart, at the tile's own scale so the drift's wrap stays seamless. A cell's
   outline leans and twists instead of standing as a dome its neighbours match; every read the
-  layer makes (its column, its thickness, its detail, its shadow) takes the warped point. 0 by
-  default; the classic maps' stacks deal it (`plugins/brush/app/bsp_sky.hpp`, M8f15).
+  layer makes (its column, its thickness, its detail, its shadow) takes the warped point. A warped
+  layer never shows its tile repeating: the warp's second read is at three sevenths of the tile's
+  scale, its column's noise is blended with a read at five sevenths (spread back to the noise's
+  range, so the cover holds), its islands are read at two sevenths, and its drift wraps at
+  `kWarpTiles` (7) tiles, so it repeats every 56 cells instead of every 8. 0 by default; the
+  classic maps' stacks deal it (`plugins/brush/app/bsp_sky.hpp`, M8f15).
 - THROUGH IT, THE DISC: the sky draws the sun's and the moon's discs behind the cloud, so a
   disc shows by the ray's own transmittance, exp(−τ), wherever on the ray its light was taken:
   bright through a thin patch, gone behind a core. Two things used to leak it: the march stopping
@@ -1273,10 +1342,17 @@ layer's frame block (`CloudLayer::anvil`, `erode`, `fibre`, `patch`); its LIGHT 
   Gaussian of the first's core (0.257 wavelengths over the radius) widened as the root of the
   order, so the disc melts into a bright smudge where the sun stands and, thicker still, into
   the deck's grey: frosted glass, then a bright patch, then nothing.
-- THE SHAFTS (`shafts` in `wgsl/frame.wgsl`): six points along the view ray, out to 20 km,
-  read the cloud's shadow; the air scatters that share of the sun (70 % of its in-scatter is
-  shadowed at most), on the world through the haze and on the sky strongest toward the sun, so
-  the gaps between heaps throw beams.
+- THE SHAFTS (`shafts` in `wgsl/frame.wgsl`): the mean of the cloud's shadow over the view
+  ray's points out to 20 km, bunched toward the eye (at R a² for a uniform a); the air scatters
+  that share of the sun (70 % of its in-scatter is shadowed at most), on the world through the
+  haze and on the sky strongest toward the sun, so the gaps between heaps throw beams. They are
+  the camera's alone, so a compute pass ("sky.shafts" in the sky's tables, `sky_shafts.wgsl`)
+  works them out once a frame in a volume over the screen (128 × 72 rays, 32 slices at
+  sqrt(distance / 20 km), 64 points a ray, the running mean kept at each slice's end) and every
+  pixel reads it once (group 0's binding 16). Every pixel's haze, the sky and each cloud layer's
+  haze once marched six points of their own; on the M3 Max at 2560 × 1440 from the chase camera
+  under a flurry that was 1.84 ms of the top's 8.40, and the `weather` lab's pictures against
+  the per-pixel march differ by a mean of 0.17 levels at most (a fair sky, 54 dB).
 - THE HEIGHT AND THE WIND (M8f9, `mountain/app/cloud_field.hpp`): every layer stands at its
   true height over the valley floor. The march walks the eye's rays through each slab, so a
   cirrus 8 km up needs no world under it. Each layer drifts on the wind aloft at its own
@@ -1958,7 +2034,23 @@ brown, a trail's orange going to grey), and how a game lights smoke by its own l
 sun does not reach (Shooter's Edge pre-lights each puff by the lightmap under it). A particle may carry a
 FLOOR of its own (`floor_y`, world y) for a world the pool has no ground for: coming down on it, it
 hops back up at `bounce` of its speed while it falls faster than `kFloorRest`, else it lies there
-and fades (a chip knocked off a wall hops on the floor below). A slot is 96 bytes.
+and fades (a chip knocked off a wall hops on the floor below). It hops twice at most, a third of
+them three times (`max_hops`, off the particle's own size and life), then lies where it came down,
+off its own floor and off a drawn surface alike. A slot is 96 bytes.
+
+**What was drawn (M47c).** A pool made with `ParticleSettings::collide` lets what falls (a grain,
+a spark, debris) meet whatever the last frame drew, in a world of brushes or models with no
+heightfield. The sim runs before the frame is drawn, so the depth target still holds the last
+frame's, and `prepare_particles` (its view overload) keeps the camera that drew it. A particle
+that has gone behind the drawn surface there by less than kSurfaceSkin plus a step's travel is put
+back on the face, and its speed into the face is turned back at its `bounce` (kSurfaceBounce
+without one). Too slow for a hop, it lies on a floor and fades, or slides down a wall. The face's
+normal is rebuilt from the depth beside it, the nearer side each way. Nothing nearer the eye than
+0.8 m is met, because the held weapon is drawn into the same depth. Only what the last frame saw
+can be met: a spark flung out of the view or behind the eye flies on, so a game also gives it a
+floor (Shooter's Edge: the floor under the blast, traced through the world and its brush
+entities). `collide_particle` is the bounce's CPU twin (`tests/render_particles_test.cpp`).
+`se-weapon-fx`'s `<look>.<launcher>-sunk` counts what still fell through.
 
 **As built (M8d2).** The drag pulls a particle toward the AIR, not still air: the frame hands the
 pool the map's wind at the view's time (`plugins/mountain/air/air.hpp`), so a powder cloud (the
@@ -2478,11 +2570,27 @@ numbers and how they were measured are beside the table in `ladder.cpp`).
   on a clear day (`--view=vista --lift=0 --fall=0`): there the woods past 2 km are most of the
   frame's cost on the software adapter.
 
-The table's costs today are the software adapter's (lavapipe at 1280 × 720), whose ratios are a
-CPU raster's: the reference machine's prices (the Mac, § Where it is developed) replace them.
-What the ladder does not have yet: the cloud's march spread over frames with reprojection, and
-changing a stop without making the frame again (the reach already can: it is a field of the
-view, not of the frame).
+- **A stop changed on a live frame** (Fall Line's `set_picture`, `games/fall_line/app/frame.hpp`):
+  the window watches its `r_` cvars' revisions and puts the ladder's rows on the frame it has,
+  with no pipeline made after the load. The spray, the falling snow (its pool made at the
+  ladder's largest at the load), the cloud's march and quarter, and the reach are each frame's;
+  a new resolution makes the render-size targets again, as a resize does; a new shadow size makes
+  the sun's maps again and rebinds them into the terrain, the instances, the particles and the
+  fog; the bloom turns on and off by the post pass's two pipelines, one with it compiled in and
+  one without (`PostSettings::bloom_switch`, `set_post_bloom`), both made at the load with the
+  bloom's own; the lens turns off (its target black) and on where it was made at the load. The
+  snow's material turns on and off by the terrain's two pipeline pairs, the game's material and
+  the default one (`TerrainSource::plain_too`, `set_terrain_plain`), both made at the load; the
+  trails' maps and stamp are made at the load whatever the stop (a few texels while off), and a
+  new size or the trails turned on makes the maps again with every trail laid drawn back into
+  them (`resize_snow_marks`: the stamps' blend is the larger, so a stamp drawn twice leaves what
+  it left once), the snow's group rebound over them (`bind_snow_trails`). What is still kept for
+  the frame made again, and said: a falling snow's count over the pool made at the load, a bloom
+  share other than the one its pipelines were made for, a lens not made at the load. The
+  `ladder` lab's `--live` lowers a frame made at the top to each preset, and to the top with the
+  snow and with the trails off, in place, and draws it against a frame made fresh with the
+  options it took over the same run: the same picture (no pixel more than one level apart),
+  nothing left for later and no pipeline made.
 
 ## Measurement
 
@@ -2502,6 +2610,12 @@ view, not of the frame).
   (60 Hz) frame. The renderer's CPU half
   (every `prepare` and `encode`) stays under 1 ms on one core, whatever the instance
   counts. The `perf` skill says how a claim against these budgets is proven.
+  Held on the M3 Max (2026-11-06, the frame's GPU span, 2560 × 1440, seed 38): the top is
+  6.53 ms from the start looking up into a flurry (the `ladder` lab's `--price`, the heaviest
+  sky), 6.44 from the chase camera and 7.62 from the vista over the whole mountain; the
+  `profile` lab's chase frame 6.48 at the median and 6.96 at the p95, the middle of the ladder
+  4.02, and the CPU half 0.18 ms at the median. The phone's half is M11's: no device build
+  draws the frame yet.
 
 ## Where it is developed
 
@@ -2603,7 +2717,7 @@ Each library is added in the milestone that first needs it, pinned to a tag.
 
 | Library | Licence | For | Milestone |
 | --- | --- | --- | --- |
-| Dawn | BSD-3-Clause | The GPU API on every target (prebuilt on the desktop, from source for iOS, iPadOS and Android); Tint for `make shaders-check` | M6 |
+| Dawn | BSD-3-Clause | The GPU API on every target (the pinned release's prebuilt archives: the desktop's, and the mobile ones for iOS, iPadOS and Android); Tint for `make shaders-check` | M6 |
 | SDL3 | zlib | The window and the surface (already the platform layer) | M6 |
 | cgltf | MIT | Loading authored glTF models (`cmake/Cgltf.cmake`: one header, pinned by commit and SHA-256) | M8e1 |
 | Dear ImGui | MIT | The developer UI, behind `GE_DEV_UI` | M10 |

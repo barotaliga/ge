@@ -9,6 +9,7 @@
 //
 // ge:summary Tests: the classic player move's own bits per scenario, the split and still types
 // ge:keywords test pmove golden digest determinism run_command split none lock dead landing
+// ge:keywords speedjump easy-jump
 // ge:skill shooter testing
 #include <cstdio>
 #include <cstdlib>
@@ -18,6 +19,7 @@
 #include <vector>
 
 #include "check.hpp"
+#include "core/libm/libm.hpp"
 #include "golden.hpp"
 #include "shooter/pmove.hpp"
 #include "shooter/recording.hpp"
@@ -249,4 +251,118 @@ TEST(a_spectator_flies_through_the_floor) {
   CHECK(s.origin.z < -24);
   CHECK(s.ground == -1);
   CHECK(sh::length(s.velocity) <= set.spectatormaxspeed + 0.01f);
+}
+
+// THE EASY JUMP (pm_speedjump): forward and jump held hop on and gain; a strafe gains more; off,
+// or with a side key, it is the classic move to the bit.
+namespace {
+
+constexpr int kSecond = 77;  // commands of 13 ms
+
+// The heading of the plan velocity, degrees counter-clockwise from +x.
+float heading_of(sh::Vec3f v) {
+  return static_cast<float>(ge::core::libm::atan2(v.y, v.x) * 180 / 3.14159265358979323846);
+}
+
+float plan_speed(sh::Vec3f v) { return sh::root_of(v.x * v.x + v.y * v.y); }
+
+// A second of running east on the ground, to sv_maxspeed.
+sh::MoveState run_up(const Flat& flat, const sh::MoveSettings& set) {
+  sh::MoveState s = standing();
+  s.origin.x = -3000;
+  sh::MoveCmd cmd;
+  cmd.msec = 13;
+  cmd.forward = 400;
+  for (int i = 0; i < kSecond; i++) sh::player_move(s, cmd, set, flat.sw.world);
+  return s;
+}
+
+// Forward and jump held for `seconds`, the view on `yaw`; the jumps counted.
+int forward_jump(const Flat& flat, const sh::MoveSettings& set, sh::MoveState& s, int seconds,
+                 float yaw = 0) {
+  sh::MoveCmd cmd;
+  cmd.msec = 13;
+  cmd.forward = 400;
+  cmd.buttons = sh::kButtonJump;
+  cmd.angles = {0, yaw, 0};
+  int jumps = 0;
+  for (int i = 0; i < seconds * kSecond; i++) {
+    const bool was_down = s.ground != -1;
+    sh::player_move(s, cmd, set, flat.sw.world);
+    if (was_down && s.velocity.z > 200) jumps++;
+  }
+  return jumps;
+}
+
+// The best strafe: the side key alone (swapped each hop, held through the takeoff too), the view
+// on the way he moves, jump pressed on the command after landing and let go in the air.
+void best_strafe(const Flat& flat, const sh::MoveSettings& set, sh::MoveState& s, int seconds) {
+  int side = 400;
+  for (int i = 0; i < seconds * kSecond; i++) {
+    sh::MoveCmd cmd;
+    cmd.msec = 13;
+    const bool down = s.ground != -1;
+    if (down) side = -side;
+    cmd.side = static_cast<int16_t>(side);
+    cmd.buttons = down ? sh::kButtonJump : 0;
+    cmd.angles = {0, heading_of(s.velocity), 0};
+    sh::player_move(s, cmd, set, flat.sw.world);
+  }
+}
+
+}  // namespace
+
+TEST(the_easy_jump_off_leaves_forward_and_jump_classic) {
+  Flat flat;
+  sh::MoveSettings set;  // pm_speedjump 0
+  sh::MoveState s = run_up(flat, set);
+  const int jumps = forward_jump(flat, set, s, 3);
+  CHECK(jumps == 1);  // a held jump does not hop again
+  CHECK(plan_speed(s.velocity) <= 320.01f);
+}
+
+TEST(the_easy_jump_hops_on_and_gains_holding_forward_and_jump) {
+  Flat flat;
+  sh::MoveSettings set;
+  set.speedjump = 0.5f;
+  sh::MoveState s = run_up(flat, set);
+  const int jumps = forward_jump(flat, set, s, 5);
+  CHECK(jumps >= 6);  // a jump a landing: about 0.7 s each
+  CHECK_MSG(plan_speed(s.velocity) > 450, "5 s of the easy jump should pass 450 units/s");
+  CHECK(sh::length(s.velocity) < 2000);
+  // Straight on: the view never left +x.
+  CHECK(s.velocity.y > -1 && s.velocity.y < 1);
+}
+
+TEST(a_best_strafe_still_gains_more_than_the_easy_jump) {
+  Flat flat;
+  sh::MoveSettings set;
+  set.speedjump = 0.5f;
+  sh::MoveState easy = run_up(flat, set), strafe = easy;
+  forward_jump(flat, set, easy, 5);
+  best_strafe(flat, set, strafe, 5);
+  CHECK_MSG(plan_speed(strafe.velocity) > plan_speed(easy.velocity) + 50,
+            "the best strafe must out-gain the easy jump");
+}
+
+TEST(a_strafe_moves_to_the_bit_with_the_easy_jump_allowed) {
+  Flat flat;
+  sh::MoveSettings off, on;
+  on.speedjump = 0.5f;
+  sh::MoveState a = run_up(flat, off), b = run_up(flat, on);
+  CHECK(same_bits(a, b));
+  best_strafe(flat, off, a, 4);
+  best_strafe(flat, on, b, 4);
+  CHECK(same_bits(a, b));
+}
+
+TEST(the_easy_jump_turns_toward_the_view) {
+  Flat flat;
+  sh::MoveSettings set;
+  set.speedjump = 0.5f;
+  sh::MoveState s = run_up(flat, set);
+  s.origin.x = 0;
+  forward_jump(flat, set, s, 2, 30);  // the view 30 degrees left of the way
+  const float h = heading_of(s.velocity);
+  CHECK_MSG(h > 29 && h < 31, "the way should have turned to the view's 30 degrees");
 }

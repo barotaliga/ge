@@ -84,6 +84,24 @@ void blast(const double at[3], const double* normal, uint32_t seed, double now_s
 // The light of the main fireball `b` at `now_s`: false once its glow is gone.
 bool blast_light(const gr::Blast& b, double now_s, Light* out);
 
+// THE LAUNCH AS IT LOOKS (visual only: the server's rocket flies its straight line from the
+// muzzle at full speed). A rocket pops out of the tube slowly and drops a little, its motor lights
+// kIgniteS later, and it speeds up to catch its true place by kLaunchS; on the way the shooter's
+// own sway carries it off the line a moment (his movement across the line, his aim's swing: it
+// lags behind a turn) and it wavers a little off its own seed, all of it settling onto the line.
+// `launch_offset` is the offset from its true place `age_s` after it left, world m.
+inline constexpr double kIgniteS = 0.05, kLaunchS = 0.5;
+struct RocketLaunch {
+  double kick[3] = {0, 0, 0};  // m: the shooter's sway's push off the line at its most
+  uint32_t seed = 0;
+};
+void launch_offset(double age_s, const double dir[3], const RocketLaunch& launch, double out[3]);
+// The push of a shooter moving at `velocity` (world m/s) with his aim turning at `yaw_rate` and
+// `pitch_rate` (rad/s: right and up positive) when he fired along `dir` (unit); capped at kKickM.
+inline constexpr double kKickM = 0.6;
+void launch_kick(const double dir[3], const double velocity[3], double yaw_rate, double pitch_rate,
+                 double out[3]);
+
 // A rocket's motor flame at `at` going `dir` (unit) this frame.
 gr::MuzzleFire exhaust(const double at[3], const double dir[3], uint32_t seed, double now_s);
 // The light of that flame at `now_s`: at the nozzle, kNozzleM behind `at` along `dir` (a zero
@@ -116,6 +134,11 @@ struct WallHit {
 // one thin wisp of smoke that drifts up and spreads. Nothing for the sky.
 void hit(const WallHit& h, uint32_t seed, double now_s, std::vector<gr::Blast>* blasts,
          Particles* births);
+
+// The light of a nail's sparks off metal at `at` (world m), `age` s after the hit: a warm white
+// flick a metre and a half round, gone in kSparkLightS; false once it is.
+inline constexpr double kSparkLightS = 0.08;
+bool spark_light(const double at[3], double age, Light* out);
 
 // Where the bolt lands on `normal`'s face (unit): blue-white sparks.
 void bolt_hit(const double at[3], const double normal[3], uint32_t seed, Particles* out);

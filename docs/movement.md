@@ -179,6 +179,27 @@ curves (speed p90 372 on the pro's trips, against the walk's 368 and the expert'
 walk. On the pro's own
 trips over a real map the expert hop takes about 1.2 times his time, the walk 1.6 times.
 
+### The easy jump (`cl_speedjump`)
+
+A player who cannot strafe can still hop for speed. With `cl_speedjump 1` (the player's own
+setting, archived, 0 by default) holding forward and jump is enough: the held jump hops again on
+each landing, and while the forward key alone is held in the air with the view within about 45
+degrees of the way he moves, each command gains a share of what the best strafe would gain (v^2
+grows by `pm_speedjump` x 900) and turns the way toward the view as fast as that strafe would, so
+the mouse still steers. A side key, or a view further off the way, is the classic move to the
+bit, so the best strafe (side key, view on the way, jump pressed on landing) still gains more:
+over eight seconds from 320 the easy jump reaches about 616 units/s at the share 0.5, the best
+strafe about 810 (the `se-speedjump` lab).
+
+The server decides. `pm_speedjump` (0..1, a server setting like `pm_ktjump`, told to clients in
+the server info when not 0) is the share; a player's ask (`cl_speedjump 1` in his user info)
+switches it on for him alone, so the server runs it only for those who asked and a predicting
+client runs it only when both his setting and the server info say so. The window's own listen
+server allows it at 0.5; a dedicated server allows it only when its owner sets `pm_speedjump`.
+A server that never heard of it (any other implementation) ignores the user info key and sends
+no server info key, so both ends stay on the classic move. With `pm_speedjump 0` (the default)
+the move is unchanged to the bit: `tests/golden/shooter_pmove.txt` and the recordings hold it.
+
 The labs: `se-moves` (any demo, any player: the map as a wireframe from above and at an angle,
 the path coloured by speed, the longest chain close up with the view's ticks, a chase view from
 inside the map and its GIF, the lag and ground-frame histograms) and `se-hop` (the player's

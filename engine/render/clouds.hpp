@@ -40,9 +40,11 @@
 //   one, so the pixels that march are neighbours and a GPU's lanes march together) and the other
 //   three reproject the last frame's half-size picture where their cloud stood, marching after
 //   all where that history is off the screen, stale or over another scene: the two half-size
-//   sets swap each frame. At EVERY pixel (`Clouds::quarter`
-//   false), "clouds" marches each pixel and "clouds.march" runs empty. Either way the cloud is
-//   laid over the HDR target premultiplied (its light added, what is behind kept by its
+//   sets swap each frame. At EVERY pixel (`Clouds::quarter` false) the march target is the
+//   frame's own size (its GRAIN 1): spread, each pixel marches its own ray one frame in four and
+//   the other three reproject, the same passes over it; not spread (the reference), "clouds"
+//   marches each pixel every frame and "clouds.march" runs empty. Either way the cloud is laid
+//   over the HDR target premultiplied (its light added, what is behind kept by its
 //   transmittance); with no layer both run empty.
 //
 // ge:summary The cloud's layers marched and laid over the frame, their noise and their shadow
@@ -52,7 +54,8 @@
 // ge:keywords cloud-noise value-noise fbm cover cut quantile powder beer drift cloud_rows
 // ge:keywords cloud_cut cloud_column cloud_thickness cloud_cast optical-depth thickness
 // ge:keywords encode_clouds quarter-resolution half-resolution upsample depth-aware-upsample
-// ge:keywords bilateral temporal reprojection spread-over-frames history
+// ge:keywords bilateral temporal reprojection spread-over-frames history cloud-grain
+// ge:keywords every-pixel-spread
 // ge:skill render
 // ge:test tests/render_clouds_test.cpp
 #pragma once
@@ -72,6 +75,9 @@ inline constexpr double kColumnRamp = 0.3;
 // The noise's edge in texels, and its base lattice's cells across the tile.
 inline constexpr int kCloudNoiseSize = 64;
 inline constexpr int kCloudTileCells = 8;
+// A WARPED layer (CloudLayer::warp) repeats only every this many tiles: its warp's coarse read
+// and its islands' read are at sevenths of the tile's scale, and its drift wraps at this period.
+inline constexpr double kWarpTiles = 7;
 
 // The noise, x fastest then y then z, 0..255: made once, the same bytes everywhere.
 const std::vector<uint8_t>& cloud_noise();
@@ -115,22 +121,31 @@ struct CloudPass {
   // distance it marched to and its cloud lies at (RG32F).
   wgpu::Texture fresh, fresh_dist;
   wgpu::TextureView fresh_view, fresh_dist_view;
-  // The half-size targets, two sets that swap each frame: the cloud (RGBA16F), and (RGBA32F) the
+  // The march targets, two sets that swap each frame, at `grain` (the frame's pixels a side each
+  // stands for: 2, half its size, or 1, its own): the cloud (RGBA16F), and (RGBA32F) the
   // distance each pixel marched to, the distance its cloud lies at and the stamp of its frame.
   wgpu::Texture quarter[2], quarter_dist[2];
   wgpu::TextureView quarter_view[2], quarter_dist_view[2];
   uint32_t quarter_width = 0, quarter_height = 0;
-  uint32_t p_draw = 0, p_fresh = 0, p_march = 0, p_upsample = 0;
+  int grain = 2;
+  // The pipelines; the march's three by grain (index grain - 1), all made at the load so a stop
+  // changed on a live frame makes none.
+  uint32_t p_draw = 0, p_fresh[2] = {}, p_march[2] = {}, p_upsample[2] = {};
 };
+// The march target's grain a view's cloud asks for: 2 at a quarter of the pixels, 1 for every
+// pixel's march spread over frames (and 2, unused, for every pixel's march each frame).
+int cloud_grain(const Clouds& clouds);
 // The pass's pipeline (into an HDR target), added to the manifest.
 void create_clouds(gpu::Device& device, gpu::PipelineSet& pipelines, CloudPass& clouds,
                    const wgpu::BindGroupLayout& frame);
-// Its half-size targets and its groups over the frame's depth (again when the targets are made
-// again).
-void bind_cloud_targets(gpu::Device& device, CloudPass& clouds, const FrameTargets& targets);
+// Its march targets at `grain` (cloud_grain of the view it draws) and its groups over the frame's
+// depth (again when the targets are made again, or the grain changes).
+void bind_cloud_targets(gpu::Device& device, CloudPass& clouds, const FrameTargets& targets,
+                        int grain = 2);
 // The passes ("clouds.fresh", "clouds.march", then "clouds"): empty when `view` has no layer
-// ("clouds.fresh" unless spread, "clouds.march" unless at a quarter); `block` is the frame block
-// `frame` holds, whose cloud_info says whether the march is spread this frame.
+// ("clouds.fresh" unless spread, "clouds.march" when every pixel marches each frame); `block` is
+// the frame block `frame` holds, whose cloud_info says whether the march is spread this frame.
+// Targets bound at another grain than the view asks for draw every pixel's march each frame.
 void encode_clouds(const CloudPass& clouds, const gpu::PipelineSet& pipelines, FrameRecorder& rec,
                    wgpu::CommandEncoder& encoder, const FrameTargets& targets,
                    const wgpu::BindGroup& frame, const FrameView& view, const FrameUniforms& block);

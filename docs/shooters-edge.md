@@ -900,15 +900,25 @@ either.
 A campaign in coop is the campaign host (`server/campaign.hpp`) with more than one player and
 `coop 1`: every player starts at the map's coop starts, is carried from map to map in his own
 spawn parms, takes keys the others still find, and comes back on a coop start with a fresh
-inventory when he dies, the map going on. With `teamplay 1` (what `coopgame` sets) one player's
-blows never harm another; his own blast still harms himself. Monsters choose among the players.
+inventory when he dies, the map going on, on a coop start no one stands on. Teammates are spared:
+one player's blows never harm another unless `sv_friendlyfire 1`, and a spared teammate's blow
+does not push him either unless `sv_friendlypush 1` (then a rocket at a friend boosts him without
+harm); his own blast still harms himself. Monsters choose among the players. On the start map the
+episodes open one at a time: the first always, each next once the one before is done
+(`sv_episodes_done`, a rune's bit each, set by the program when the rune is taken and kept by the
+window from game to game).
 
 A COMPANION (`bots/companion.hpp`) is a fighter that plays beside the player rather than for
 him, an enabler: it keeps at his shoulder, steps out of his way, kills only what has come for him
 or itself (a monster asleep on its spot is left for him to find), holds its fire while he stands
-in the line, presses the button he stops by, catches up when left behind, and while he stands
-still it fidgets as a person does (`plugins/shooter/idle.hpp`: spins, looks at an item in sight,
-glances at him, hops round him, jumps, sways), stopping a human moment after he moves on. It reads
+in the line, presses the button he stops by, catches up when left behind (past 440 units), and
+never lets a blast off near a player: grenades and rockets only for a foe more than 260 units from
+everyone, itself among them, another weapon taken up otherwise. The exit is HIS: the nodes in an
+exit's box are closed to the companion's routes and goals and any step into it is turned back, and
+when he has stood a moment within 640 units of an exit it goes to stand beside it, faces him and
+jumps now and then to show him the way out. While he stands still it fidgets as a person does
+(`plugins/shooter/idle.hpp`: spins, looks at an item in sight, glances at him, hops round him,
+jumps, sways), stopping a human moment after he moves on. It reads
 only what its client is sent, like every bot here, and its personality's traits set its moves and
 its patience.
 
@@ -923,9 +933,11 @@ it is out. He fights what he meets on the way, passing the monsters no weapon he
 `se-coop-episode` plays our campaign in coop on the player's own pack from `e1m1` with a companion
 beside him, map after map, and draws each map with the tracks, the exits and where monsters fell.
 
-In the window, `coopgame [bots] [novice|average|expert] [map]` starts a coop game with that many
-companions (one by default, at most three) and `addbot` and `removebot` change the party during
-it (`client/coop_party.hpp`). People playing co-op together over the network is the next step, on
+In the window, `sv_coop 1` makes the campaign a coop game (`client/coop_mode.hpp`): set in a cfg
+or on the command line the game starts as one on the start map, set in the console one starts at
+once, with `sv_coopbots` companions (1 by default, at most seven: eight players); `skill` is the
+monsters' for everyone. `coopgame [bots] [novice|average|expert] [map]` starts one by hand, and
+`addbot` and `removebot` change the party during it (`client/coop_party.hpp`). People playing co-op together over the network is the next step, on
 the engine's server core (M18s6b).
 
 ## Licensing and the clean room
@@ -1432,6 +1444,7 @@ list is in `porting/shooters-edge/survey.md`.
 | Better | The common QC extension builtins and fields (string handling, tracing, the extra entity fields), registered by name | M18c, M18l |
 | Later | Client-side QC (a mod drawing its own HUD and predicting its own entities) | M18m |
 | Later | Single-player campaigns and co-op on the single-player `progs` | M18s |
+| Better | The easy jump: `cl_speedjump 1` hops and gains on forward and jump alone where the server's `pm_speedjump` allows it (`docs/movement.md`) | M18e |
 | Later | Splitscreen; touch controls for phones and tablets | M18m |
 
 ## Labs

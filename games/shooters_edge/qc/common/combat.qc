@@ -41,15 +41,26 @@ void(entity targ, entity attacker) score_death = {
   say_all(PRINT_MEDIUM, targ.netname, " ", how, "\n", "", "");
 };
 
+// The push of a blow: away from its centre, more for a lighter blow's target than a heavier.
+void(entity targ, entity inflictor, float damage) blow_push = {
+  local vector dir;
+  if (inflictor == world || targ.movetype != MOVETYPE_WALK) return;
+  dir = targ.origin - (inflictor.absmin + inflictor.absmax) * 0.5;
+  dir = normalize(dir);
+  targ.velocity = targ.velocity + dir * damage * 8;
+};
+
 // `damage` points from `attacker` through `inflictor` (the missile, or the attacker itself).
 void(entity targ, entity inflictor, entity attacker, float damage) damage = {
   local float saved, taken;
-  local vector dir;
   local entity was_self;
   if (!targ.takedamage || targ.health <= 0) return;
   if (match_over) return;
   if (targ.invincible_finished > time) return;  // the shield
-  if (!telefragging && same_team(targ, attacker)) return;  // a teammate, under teamplay
+  if (!telefragging && same_team(targ, attacker)) {  // a teammate: no harm, a push if the rules say
+    if (team_shoves(targ, attacker)) blow_push(targ, inflictor, damage);
+    return;
+  }
   if (attacker.super_damage_finished > time) damage = damage * 4;  // the quad
   // Armour takes its share, as far as it lasts.
   saved = ceil(targ.armortype * damage);
@@ -63,12 +74,7 @@ void(entity targ, entity inflictor, entity attacker, float damage) damage = {
   targ.dmg_take = targ.dmg_take + taken;
   targ.dmg_save = targ.dmg_save + saved;
   targ.dmg_inflictor = inflictor;
-  // The push: away from the blow's centre, more for a lighter blow's target than a heavier.
-  if (inflictor != world && targ.movetype == MOVETYPE_WALK) {
-    dir = targ.origin - (inflictor.absmin + inflictor.absmax) * 0.5;
-    dir = normalize(dir);
-    targ.velocity = targ.velocity + dir * damage * 8;
-  }
+  blow_push(targ, inflictor, damage);
   targ.health = targ.health - taken;
   damage_attacker = attacker;
   was_self = self;

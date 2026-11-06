@@ -72,6 +72,7 @@
 #include "shooters_edge/app/effects.hpp"
 #include "shooters_edge/app/look.hpp"
 #include "shooters_edge/app/muzzle.hpp"
+#include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/warps.hpp"
@@ -152,6 +153,15 @@ struct FxState {
   std::unordered_map<int, ge::camera::Vec3> last;  // each missile's place a frame ago, m
   std::unordered_map<int, ge::camera::Vec3> next;  // this frame's, swapped into `last`
   std::vector<ge::render::HazeTrail> haze;         // the flights' hot air still warm, oldest first
+  // Each rocket's launch as it looks (ce_trails; app/weapon_fx.hpp's launch_offset): when it was
+  // first seen and the shooter's sway it carries; and the eye's aim a frame ago, for that sway.
+  struct Launched {
+    double born = 0;
+    effects::RocketLaunch launch;
+  };
+  std::unordered_map<int, Launched> launched;
+  double aim_yaw = 0, aim_pitch = 0, aim_rate[2] = {0, 0};
+  bool aimed = false;
   // Each missile's place (map units) and the way it flew, a frame ago: the surface a blast went
   // off against lies along it.
   struct Flight {
@@ -163,6 +173,7 @@ struct FxState {
   std::unordered_map<int, float> wound_health;  // each wounded body's health a frame ago
   std::size_t explosions_seen = 0;              // of Listen::explosions
   std::vector<Blast> lit;                       // the explosions whose light still fades
+  std::vector<Blast> sparked;                   // a nail's sparks off metal, their flick fading
   double hurt = 0;                              // the hit's flash now (effects::Screen::hurt)
   double armour = 0;                            // the armour's share of it (Screen::armour)
   std::size_t blows_seen = 0;                   // of Listen::blows
@@ -205,6 +216,10 @@ struct FxFrame {
   std::vector<ge::render::BurnVertex> burns;
   // The hot air a nail's or a rocket's flight left (ce_trails), a stretch a frame, for the haze.
   std::vector<ge::render::HazeTrail> haze;
+  // The local player as the world would place him (never drawn in his own eyes, still casting his
+  // shadow, M54); `has_self` false when he is dead or there is no server.
+  Placed self;
+  bool has_self = false;
 };
 
 // A player's dust and the sweep of his warp from where he stands (`origin`, `angles`: map units

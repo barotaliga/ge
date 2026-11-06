@@ -189,6 +189,7 @@ bool open_map(const Game& g, const std::string& name, std::shared_ptr<cl::Loaded
   so.seed = c.seed;
   so.loop.maxclients = c.maxclients;
   so.loop.max_edicts = 1024;
+  so.loop.move.speedjump = g.host != nullptr ? g.host->speedjump : 0.0f;  // pm_speedjump
   std::unique_ptr<sv::QcServer> qc = sv::make_qc_server(*g.program, so, error);
   if (!qc) return false;
   rules = sv::qc_runner(std::move(qc));

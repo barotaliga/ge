@@ -25,6 +25,8 @@
 #include <string>
 #include <vector>
 
+#include "brush/map.hpp"
+#include "brush/read.hpp"
 #include "brush/write.hpp"
 #include "camera/pose.hpp"
 #include "camera/to_view.hpp"
@@ -313,6 +315,10 @@ void run(gl::Lab& lab) {
   // eye's height (a target near enough to see the hits, far enough to see the rounds fly); no
   // --side: a camera beside the line of fire, back from its middle, looking at the far end.
   const sh::Hull& hull = l.map->bsp.world.models[0].hulls[0];
+  // The map read for its point tree, where a thrown thing that fell through it lies (29's code).
+  constexpr int32_t kSolid = -2;
+  ge::brush::Map points;
+  const bool points_read = ge::brush::read_bsp(l.map->file, &points, &error);
   constexpr float kAimAt = 320, kEyeZ = 22;
   if (!placed) {
     // A PLAIN WALL: from the spawn or a few steps off it, the way whose wall a 3x3 grid of parallel
@@ -488,6 +494,26 @@ void run(gl::Lab& lab) {
         picture(label, std::string("The ") + gun.name + " " + std::to_string(int(when[next])) +
                            (blasts_ ? " ms after its blast." : " ms after its first shot."));
         next++;
+      }
+    }
+    // A launcher's thrown things at its last moment, each look's, inside the level's solid: fallen
+    // through a floor where the frame never drew it (flung out of the view over another floor).
+    // Measured: the GPU flew them.
+    if (blasts_ && device && points_read) {
+      for (int k = 0; k < 2; ++k) {
+        double sunk = 0;
+        for (const ge::render::Particle& q : cl::world_particles(*device, *world[k])) {
+          if (q.age >= q.life || q.fall <= 0.5f) continue;
+          // The map's point tree (hull 0), not a player's clip hull.
+          const float in_map[3] = {float(q.p[0] / ge::brush::kUnitM),
+                                   float(q.p[2] / ge::brush::kUnitM),
+                                   float(q.p[1] / ge::brush::kUnitM)};
+          if (ge::brush::hull_contents(points, in_map, 0, 0) == kSolid) {
+            sunk++;
+          }
+        }
+        const std::string named = kLooks[k];
+        lab.metric(named + "." + gun.name + "-sunk", sunk, "particles", gl::Det::measured);
       }
     }
   }

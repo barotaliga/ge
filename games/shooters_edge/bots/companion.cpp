@@ -169,6 +169,64 @@ int32_t hop_node(Fighter& f, sh::Vec3f leader) {
   return best;
 }
 
+// A goal node off every exit: one in an exit's box is that exit's stand-by node instead (-1 when
+// the exit has none: no goal, it stays where it is).
+int32_t off_exits(const Fighter& f, int32_t n) {
+  const Escort& e = f.escort;
+  if (n < 0 || static_cast<size_t>(n) >= e.exit_of.size() || e.exit_of[static_cast<size_t>(n)] < 0)
+    return n;
+  return f.exits[static_cast<size_t>(e.exit_of[static_cast<size_t>(n)])].stand;
+}
+
+// The exit nearest the leader within kEscortExitShow with a stand-by node, or -1.
+int exit_to_show(const Fighter& f, sh::Vec3f leader) {
+  int best = -1;
+  float best_d = kEscortExitShow;
+  for (size_t k = 0; k < f.exits.size(); k++) {
+    const ExitSpot& x = f.exits[k];
+    if (x.stand < 0) continue;
+    const float d = dist((x.lo + x.hi) * 0.5f, leader);
+    if (d < best_d) {
+      best_d = d;
+      best = static_cast<int>(k);
+    }
+  }
+  return best;
+}
+
+// A step that would carry the companion into an exit's box (where it is a moment on, its box
+// grown by a margin): turned back, away from the box's middle, the jump let go.
+void keep_off_exits(Fighter& f, const server::RulesCommon& s, int me, sh::MoveCmd& cmd) {
+  Escort& e = f.escort;
+  if (f.exits.empty()) return;
+  const server::WorldEntity& self = ent_of(s, me);
+  const double yaw = cmd.angles.y / kDeg;
+  const float fx = static_cast<float>(libm::cos(yaw)), fy = static_cast<float>(libm::sin(yaw));
+  const float wx = fx * cmd.forward + fy * cmd.side, wy = fy * cmd.forward - fx * cmd.side;
+  const float wl = std::sqrt(wx * wx + wy * wy);
+  const sh::Vec3f v = self.velocity;
+  sh::Vec3f ahead = self.origin + v * 0.15f;
+  if (wl > 1) {
+    ahead.x += wx / wl * 24;
+    ahead.y += wy / wl * 24;
+  }
+  constexpr float m = 12;  // the margin round the player's box
+  for (const ExitSpot& x : f.exits) {
+    const auto touches = [&](sh::Vec3f o) {
+      return o.x + 16 + m >= x.lo.x && o.x - 16 - m <= x.hi.x && o.y + 16 + m >= x.lo.y &&
+             o.y - 16 - m <= x.hi.y && o.z + 32 + m >= x.lo.z && o.z - 24 - m <= x.hi.z;
+    };
+    if (!touches(ahead) && !touches(self.origin)) continue;
+    const sh::Vec3f mid = (x.lo + x.hi) * 0.5f;
+    const double away = libm::atan2(self.origin.y - mid.y, self.origin.x - mid.x) - yaw;
+    cmd.forward = sh::quantize_axis(static_cast<float>(libm::cos(away) * 320));
+    cmd.side = sh::quantize_axis(static_cast<float>(-libm::sin(away) * 320));
+    cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
+    e.stats.exit_turned++;
+    return;
+  }
+}
+
 bool moved_off(sh::Vec3f now, sh::Vec3f rest) { return dist(now, rest) > 0.5f; }
 
 // Whether the button spot `k` is still to press: at rest, not done, and a door it opens shut (a
@@ -245,6 +303,8 @@ const char* escort_mode_name(EscortMode m) {
       return "catch-up";
     case EscortMode::bored:
       return "bored";
+    case EscortMode::signal:
+      return "signal";
   }
   return "?";
 }
@@ -274,6 +334,22 @@ void escort_init(Fighter& f, const server::RulesCommon& s, int slot, int leader)
   for (const ButtonSpot& b : f.button_spots) {
     e.button_rest.push_back(ent_of(s, b.ent).origin);
     e.button_done.push_back(0);
+  }
+  // The exits are the leader's: their nodes closed to its routes and its goals.
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  e.exit_of.assign(g.nodes.size(), -1);
+  for (size_t k = 0; k < f.exits.size(); k++)
+    for (const int32_t in : f.exits[k].inside)
+      e.exit_of[static_cast<size_t>(in)] = static_cast<int8_t>(k);
+  std::vector<sh::NavExtraLink>& shut = f.bot.pilot.pilot.shut_links;
+  shut.clear();
+  for (size_t a = 0; a < g.nodes.size(); a++) {
+    const sh::NavNode& node = g.nodes[a];
+    for (int32_t k = 0; k < node.links; k++) {
+      const sh::NavLink& l = g.links[static_cast<size_t>(node.first_link) + static_cast<size_t>(k)];
+      if (e.exit_of[static_cast<size_t>(l.to)] >= 0)
+        shut.push_back({static_cast<int32_t>(a), l.to, l.kind, l.time_s});
+    }
   }
   const server::WorldEntity& me = ent_of(s, slot + 1);
   e.view_yaw = me.view_angles.y;
@@ -416,6 +492,10 @@ void escort_think(Fighter& f, const server::RulesCommon& s, int me, const Stats&
   }
   const bool press = e.button >= 0 || (candidate >= 0 && e.near_button_since >= 0 &&
                                        t - e.near_button_since >= kEscortButtonWait_s);
+  // The exit to show, once the leader has stood a moment (or it is shown already).
+  const int32_t show = e.mode == EscortMode::signal || t - e.still_since >= kEscortSignalAfter_s
+                           ? exit_to_show(f, L)
+                           : -1;
 
   EscortMode next;
   const char* because;
@@ -428,6 +508,10 @@ void escort_think(Fighter& f, const server::RulesCommon& s, int me, const Stats&
   } else if (d > kEscortCatchUp) {
     next = EscortMode::catch_up;
     because = "the leader far ahead";
+  } else if (show >= 0) {
+    e.exit = show;
+    next = EscortMode::signal;
+    because = "the leader near the exit: showing it";
   } else if (leader_still && t - e.still_since >= e.bored_after_s && d < kEscortFar * 1.5f) {
     next = EscortMode::bored;
     because = "the leader standing still with nothing about";
@@ -454,13 +538,20 @@ void escort_think(Fighter& f, const server::RulesCommon& s, int me, const Stats&
   }
   set_mode(e, next, why, because);
   f.mode = fight ? FightMode::fight : FightMode::roam;
+  // The doors only something else opens, while they rest shut: no route of its own goes through
+  // one (it would wait at it for ever); the leader opens them, or the button it presses does.
+  std::vector<int32_t>& shut = f.bot.pilot.pilot.shut;
+  shut.clear();
+  for (size_t k = 0; k < f.locked.size(); k++)
+    if (dist(ent_of(s, f.locked[k]).origin, f.locked_rest[k]) < 1) shut.push_back(f.locked[k]);
 
   switch (e.mode) {
     case EscortMode::defend:
       set_moves(f, false, false);
       if (d > kEscortLeash) {
-        e.follow_node = shoulder_node(f, L, leader_yaw, e.side);
-        fighter_go(f, e.follow_node);
+        const int32_t n = off_exits(f, shoulder_node(f, L, leader_yaw, e.side));
+        if (n >= 0) e.follow_node = n;
+        if (e.follow_node >= 0) fighter_go(f, e.follow_node);
       }
       break;
     case EscortMode::button: {
@@ -472,11 +563,29 @@ void escort_think(Fighter& f, const server::RulesCommon& s, int me, const Stats&
       fighter_go(f, f.button_spots[static_cast<size_t>(e.button)].node);
       break;
     }
-    case EscortMode::catch_up:
-      set_moves(f, false, false);  // walked: a hop on a map's ledges ends in its pit
-      e.follow_node = sh::nav_nearest(*f.bot.pilot.pilot.g, L);
-      fighter_go(f, e.follow_node);
+    case EscortMode::catch_up: {
+      // Hopped: walking is his own speed, so a gap once opened never closes (the pilot's hop
+      // keeps to links it can land, `plugins/shooter/pilot.hpp`).
+      set_moves(f, true, false);
+      // The spot at his shoulder among the nodes it can reach (the node he stands on may be one
+      // it cannot: a ledge, the water), kept until he has gone kRetarget beyond it: a route
+      // planned again at every think starts its run-ups and its turns over.
+      const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+      const int32_t n = off_exits(f, shoulder_node(f, L, leader_yaw, e.side));
+      if (n >= 0 && (e.follow_node < 0 || f.goal_node != e.follow_node ||
+                     dist(g.nodes[static_cast<size_t>(n)].origin,
+                          g.nodes[static_cast<size_t>(e.follow_node)].origin) > kRetarget)) {
+        e.follow_node = n;
+        fighter_go(f, e.follow_node);
+      }
       break;
+    }
+    case EscortMode::signal: {
+      set_moves(f, false, false);
+      const int32_t n = f.exits[static_cast<size_t>(e.exit)].stand;
+      if (f.goal_node != n) fighter_go(f, n);
+      break;
+    }
     case EscortMode::follow: {
       set_moves(f, d > kEscortFar * 2, false);
       const sh::NavGraph& g = *f.bot.pilot.pilot.g;
@@ -484,7 +593,7 @@ void escort_think(Fighter& f, const server::RulesCommon& s, int me, const Stats&
       const bool stale = e.follow_node < 0 ||
                          dist(g.nodes[static_cast<size_t>(e.follow_node)].origin, L) > kEscortFar;
       if (far || stale || (!leader_still && d > kEscortNear * 1.4f)) {
-        const int32_t n = shoulder_node(f, L, leader_yaw, e.side);
+        const int32_t n = off_exits(f, shoulder_node(f, L, leader_yaw, e.side));
         if (n >= 0 && (e.follow_node < 0 ||
                        dist(g.nodes[static_cast<size_t>(n)].origin,
                             g.nodes[static_cast<size_t>(e.follow_node)].origin) > kRetarget ||
@@ -512,6 +621,7 @@ void escort_think(Fighter& f, const server::RulesCommon& s, int me, const Stats&
         }
         if (act == sh::IdleAct::hop) {
           e.hop_node = hop_node(f, L);
+          if (e.hop_node >= 0 && e.exit_of[static_cast<size_t>(e.hop_node)] >= 0) e.hop_node = -1;
           if (e.hop_node < 0) {
             is.until = t;  // nowhere to hop: over at once
           } else {
@@ -544,6 +654,7 @@ void escort_command(Fighter& f, const server::RulesCommon& s, int me, double t, 
     e.view_yaw = cmd.angles.y;
     e.view_pitch = cmd.angles.x;
     give_way(e, self, cmd);
+    keep_off_exits(f, s, me, cmd);
     return;
   }
 
@@ -624,6 +735,24 @@ void escort_command(Fighter& f, const server::RulesCommon& s, int me, double t, 
       case sh::IdleAct::hop:
         break;
     }
+  } else if (e.mode == EscortMode::signal && e.exit >= 0 &&
+             (f.bot.pilot.pilot.mode == sh::PilotMode::arrived ||
+              flat_dist(self,
+                        f.bot.pilot.pilot.g
+                            ->nodes[static_cast<size_t>(f.exits[static_cast<size_t>(e.exit)].stand)]
+                            .origin) < 40)) {
+    // Beside the exit: facing him, and a jump now and then, "here".
+    own_view = true;
+    cmd.forward = cmd.side = 0;
+    want_yaw = yaw_to(eye, leader_eye);
+    want_pitch = pitch_to(eye, leader_eye);
+    rate = kLookRate;
+    cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonJump);
+    if (t >= e.signal_at) {
+      cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonJump);
+      e.signal_at = t + ge::core::range(f.rng, kEscortSignalEvery_s[0], kEscortSignalEvery_s[1]);
+      e.stats.signal_jumps++;
+    }
   } else if (e.mode == EscortMode::follow && f.bot.pilot.pilot.mode == sh::PilotMode::arrived) {
     // Standing at his shoulder: the view drifts the way he looks, as a partner keeps watch.
     own_view = true;
@@ -637,6 +766,7 @@ void escort_command(Fighter& f, const server::RulesCommon& s, int me, double t, 
   if (!own_view && hopping) {  // the hop's hands keep the view on the velocity
     e.view_yaw = cmd.angles.y;
     e.view_pitch = cmd.angles.x;
+    keep_off_exits(f, s, me, cmd);
     return;
   }
   const float pilot_yaw = cmd.angles.y;
@@ -647,8 +777,18 @@ void escort_command(Fighter& f, const server::RulesCommon& s, int me, double t, 
   e.view_pitch = pitch;
   give_way(e, self, cmd);
   cmd.angles = {sh::quantize_angle(e.view_pitch), sh::quantize_angle(e.view_yaw), 0};
+  keep_off_exits(f, s, me, cmd);
   f.bot.yaw = e.view_yaw;  // an aim taken up starts from where the view is
   f.bot.pitch = e.view_pitch;
+}
+
+bool escort_blast_clear(const Fighter& f, const server::RulesCommon& s, sh::Vec3f at) {
+  for (int k = 0; k < s.sv.set.maxclients && k < sh::kMaxClients; k++) {
+    if (!alive_player(s, k)) continue;
+    if (dist(ent_of(s, k + 1).origin, at) < kEscortBlastClear) return false;
+  }
+  (void)f;
+  return true;
 }
 
 bool escort_player_in_line(const Fighter& f, const server::RulesCommon& s, sh::Vec3f eye,

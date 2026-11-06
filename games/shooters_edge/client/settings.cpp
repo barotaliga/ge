@@ -41,12 +41,23 @@ void add_user_info_cvars(ge::console::Console& con, UserInfo& info) {
                       .min = 0,
                       .max = 13},
                      field);
+  con.cvars().bind({.name = "cl_speedjump",
+                    .fallback = "0",
+                    .flags = ge::console::kArchive | ge::console::kUserInfo,
+                    .help = "1: the easy jump: hold forward and jump to gain speed without "
+                            "strafing (a strafe still gains more); acts where the server's "
+                            "pm_speedjump allows it",
+                    .kind = ge::console::CvarKind::boolean},
+                   &info.speedjump);
 }
 
 void send_user_info(Listen& l, const ge::console::Console& con, UserInfo& info) {
   if (l.server == nullptr) return;
   const ge::console::Cvar* n = con.cvars().find("name");
   const std::string name = n != nullptr && !n->value.empty() ? n->value : "player";
+  // The easy jump's ask again whenever the slot lost it (a rejoin clears the server's user info).
+  if (l.server->sv.clients[0].active && l.server->sv.clients[0].speedjump != info.speedjump)
+    l.rules->user_info(0, "cl_speedjump", info.speedjump ? "1" : "0");
   if (l.server == info.sent_to && name == info.name && info.top == info.sent_top &&
       info.bottom == info.sent_bottom)
     return;

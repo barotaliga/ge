@@ -17,7 +17,7 @@
 // ge:keywords focus quit resize pixel-size hidpi input-snapshot poll clock ticks monotonic
 // ge:keywords headless display_available open_window poll_input now_ns prefs_dir prefs user-dir
 // ge:keywords fullscreen set_fullscreen displays external-monitor pick_folder folder_picked
-// ge:keywords folder-dialog file-dialog folder-chooser
+// ge:keywords folder-dialog file-dialog folder-chooser run_app app-entry uikit ios-main
 // ge:skill platform
 // ge:test tests/platform_window_test.cpp
 #pragma once
@@ -96,6 +96,11 @@ struct WindowDesc {
 // Whether this process can open a window (a display server, a desktop session). False in a
 // container with no display: a test that needs a window skips.
 bool display_available();
+
+// THE APP'S ENTRY: a windowed game's `main` hands its body to `run_app`, which returns what the
+// body returns. On iOS it starts the system's app first (UIKit) and runs the body inside it, which
+// is the only way a window can open there; elsewhere it runs the body directly.
+int run_app(int argc, char** argv, int (*body)(int argc, char** argv));
 
 class Window {
  public:

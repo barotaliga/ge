@@ -10,9 +10,13 @@
 // its player
 //   skins and its multiplayer program) when the install has one, else the base folder, so the
 //   install plays as the multiplayer client sees it.
-// - **The folder kept** (`remembered_folder`, `remember_folder`): the last folder loaded, one line
-//   in `<prefs>/game_folder.txt`, opened at the next start when `-basedir` names none and the
-//   folder the game runs in holds no game (`choose_folder`).
+// - **The game kept** (`remembered_game`, `remember_game`): the classic game loaded last, which
+//   one (its content profile's id) and its install, in `<prefs>/game_folder.txt` (`profile <id>`,
+//   `basedir <folder>`; the older single line of a folder reads as the first profile's). Kept
+//   whenever a game opens (at the start, LOAD GAME, `basedir`) and opened at the next start unless
+//   `-basedir` names another (`choose_folder`), so the game starts as that classic game (its
+//   pictures, menus, HUD, programs and maps) until another is loaded. With none kept, the folder
+//   the game runs in.
 // - **What it holds** (`load_programs`): the multiplayer program (`-progs`, else the game's own
 //   program files, a mod's folder first, else the baseline mod), the single-player program the
 //   campaign runs, whether the packs are the full game, and the first map (the profile's start
@@ -21,7 +25,8 @@
 //
 // ge:summary The game folder a player loads: the install checked, its game folder, programs
 // ge:keywords game-folder load-game basedir install check_game_folder game_of multiplayer-dir
-// ge:keywords remembered_folder remember_folder prefs load_programs first-map campaign-program
+// ge:keywords remembered_game remember_game kept-game last-game prefs load_programs first-map
+// ge:keywords campaign-program
 // ge:keywords choose_folder campaign_commands newgame coopgame save load
 // ge:skill shooter classicenhance
 // ge:test tests/shooters_edge_game_folder_test.cpp
@@ -52,16 +57,25 @@ bool check_game_folder(
 std::string game_of(const std::string& basedir, const ge::classicenhance::Profile& content =
                                                     ge::classicenhance::classic_profile());
 
-// The install the window opens, into `args`: `-basedir`, else the folder loaded last (kept under
-// `prefs`) when the folder the game runs in is no install; then the game folder over it, `-game`,
-// else `game_of`.
+// The install the window opens, into `args`: `-basedir`, else the game loaded last (kept under
+// `prefs`) while its install still checks, else the folder the game runs in; then the game folder
+// over it, `-game`, else `game_of`.
 void choose_folder(Args& args, const std::string& prefs);
 
-// The folder loaded last, kept under `prefs` (the platform's per-user folder); "" when none was
-// kept or `prefs` is empty.
-std::string remembered_folder(const std::string& prefs);
-// Keeps `basedir` for the next start; false (nothing kept) when `prefs` is empty or unwritable.
-bool remember_folder(const std::string& prefs, const std::string& basedir);
+// The classic game loaded last: its content profile's id and its install.
+struct KeptGame {
+  std::string profile;  // a `ge::classicenhance::kProfiles` row's id
+  std::string basedir;  // the install's folder; "" when no game was kept
+};
+
+// The game loaded last, kept under `prefs` (the platform's per-user folder); an empty `basedir`
+// when none was kept or `prefs` is empty.
+KeptGame remembered_game(const std::string& prefs);
+// Keeps `basedir`, played as `content`, for the next start; false (nothing kept) when `prefs` is
+// empty or unwritable.
+bool remember_game(
+    const std::string& prefs, const std::string& basedir,
+    const ge::classicenhance::Profile& content = ge::classicenhance::classic_profile());
 
 // What the window plays out of an open game folder. `campaign` points into this struct (at
 // `progs` or `pack_progs`) or is null, so it is filled in place and never moved.

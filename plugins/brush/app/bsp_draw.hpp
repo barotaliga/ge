@@ -50,6 +50,7 @@
 #include <vector>
 
 #include "brush/app/bsp_cull.hpp"
+#include "brush/app/casters.hpp"
 #include "brush/app/draw_data.hpp"
 #include "brush/app/light_grid.hpp"
 #include "gpu/device.hpp"
@@ -153,6 +154,24 @@ inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side
 inline constexpr uint32_t kOrthoSize = 2048;  // the sun's and the zenith's maps
 inline constexpr int kMaxShadowed = 48;
 inline constexpr uint32_t kOrthos = 3;  // the sun's, the zenith's and the fall's
+// THE MOVING CASTERS' CUBES (v2 lit in real time; `set_shadow_casters`): the models a frame hands
+// over (players, monsters, the first-person player who is not drawn), drawn each frame into a cube
+// of their own for each of the kCasterLights shadowed lights that light them most (the light each
+// puts on the middle of their box), and read beside the world's kept cube, the nearer of the two
+// the shadow: the shadows that show. The cubes are one atlas, a light's six faces a row, drawn in
+// one pass; under it a row more, its first tile the casters seen along the sun (kSunCasterHalfM
+// round the eye). A frame's casters are kMaxCasterVerts vertices at most.
+inline constexpr uint32_t kCasterSize = 384;  // a caster cube's face, texels a side
+inline constexpr uint32_t kMaxCasterVerts = 3 * 24576;
+inline constexpr double kSunCasterHalfM = 8;  // the sun's tile of them: half its width, m
+// THE CAPSULES (wgsl/capsules.wgsl): the kShadowCapsules casters nearest the eye as vertical
+// capsules (their boxes'), shadowing every light that has no caster cube of its own. Which lights
+// get the cubes and which casters the capsules: casters.hpp.
+// A light's source when the map says nothing of its size, m: a bulb's glow (its shadows sharp).
+inline constexpr double kPointSourceM = 0.04;
+// A flame's source radius as a share of its height (a flame is tall and thin): a wall torch's
+// 0.14 m, a large flame's 0.26 m, a bonfire's 0.5 m.
+inline constexpr double kFlameWidthShare = 0.25;
 // A DYNAMIC LIGHT: one a game lights for a moment (a muzzle's flash, a rocket's glow, an
 // explosion, a glowing pickup), set each frame (`set_dynamic_lights`). The classic path adds it
 // to the lightmaps' light as the classic did, falling off in a straight line to nothing at its
@@ -188,6 +207,13 @@ struct GpuBsp {
   float info5[4];
   float grid[4];  // the light grid's corner, world m; its cell, m (0: no grid this frame)
   float styles[kLightStyles];  // each light style's level now (draw_data.hpp)
+  // The moving casters as capsules for the lights without their cube: how many (x), then each
+  // capsule's two ends (xyz, the radius in the first's w), the nearest the eye.
+  float capsule_info[4];
+  float capsules[kShadowCapsules * 2][4];
+  // The moving casters under the sun: an orthographic map of them alone round the eye, a tile of
+  // their atlas (info.z 1 when drawn this frame).
+  GpuJob sun_caster;
 };
 
 struct BspDraw {
@@ -208,6 +234,16 @@ struct BspDraw {
   uint32_t grid_refs = 0;
   wgpu::Texture cubes, orthos;
   std::vector<wgpu::TextureView> cube_layers;  // a view a cube face
+  // The moving casters (set_shadow_casters): their triangles, world m, and this frame's cubes.
+  std::vector<float> casters;
+  std::vector<CasterBox> caster_boxes;
+  uint32_t caster_count = 0;  // vertices uploaded this frame
+  wgpu::Buffer caster_vertices;
+  wgpu::Texture caster_cubes;  // the atlas: a light a row, a face a column
+  wgpu::TextureView caster_target, caster_cubes_view;
+  int caster_lights = 0;    // this frame's lights with a caster cube (prepare_bsp)
+  bool sun_caster = false;  // this frame's casters drawn along the sun (prepare_bsp)
+  uint32_t p_caster = 0;
   wgpu::TextureView ortho_layers[kOrthos];
   wgpu::TextureView cubes_view, orthos_view;
   wgpu::Sampler light_sampler, compare;
@@ -261,6 +297,11 @@ void prepare_bsp(gpu::Device& device, BspDraw& draw, const render::FrameView& vi
 // This frame's dynamic lights (before `prepare_bsp`); the classic draws at most kMaxDynamic.
 inline constexpr int kMaxDynamic = 32;
 void set_dynamic_lights(BspDraw& draw, std::span<const DynamicLight> lights);
+// This frame's moving casters (before `prepare_bsp`): their triangles, world m, nine floats a
+// triangle (kMaxCasterVerts vertices at most; past them, the rest cast nothing), and each one's box
+// (the lights that light one of them most get the cubes).
+void set_shadow_casters(BspDraw& draw, std::span<const float> triangles,
+                        std::span<const CasterBox> boxes);
 // THE MOVING MODELS: a brush model (a door, a plat, a button; model k of the map, k > 0) drawn
 // `offset` engine metres from where the map built it, or not drawn at all when `hidden` (an
 // entity the game removed). A model not named keeps its last place; all start at the map's.

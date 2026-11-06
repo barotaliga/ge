@@ -152,7 +152,10 @@ struct Clouds {
   CloudLayer layers[kCloudLayers];
   double steps = 1;     // the share of the march's full steps taken (the quality ladder's), 0.25..1
   bool quarter = true;  // marched at a quarter of the pixels, then upsampled (false: every pixel)
-  bool spread = true;   // the quarter's march spread over four frames, the rest reprojected
+  // The march spread over four frames, a quarter of its pixels a frame and the rest reprojected:
+  // the quarter's, or with `quarter` false every pixel's own (false there: the reference, every
+  // pixel marched each frame).
+  bool spread = true;
 };
 
 // A MOON OF ANOTHER WORLD where it stands at the frame's moment (render/night.hpp's `set_moons`
