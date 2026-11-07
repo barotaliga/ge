@@ -15,6 +15,9 @@
 // - A ROCKET'S DIRECT HIT is a blow of exactly 100 (400 under the quad: the mod's direct
 //   damage, which the blast then spares), or one that killed a player the rocket was within 32
 //   units of the frame before; any other rocket that hurt an enemy hit by its blast alone.
+// - DAMAGE GIVEN is every hit's blow summed (health and armour together, the part past a kill
+//   left out), the number a match's statistics hold as `given`: per player-minute it is the
+//   plainest measure of how much a player fights.
 //
 // A missile's hit proves its shot: when the ammunition did not show one (fired on the frame the
 // shooter died, or took ammunition up), the shot is counted with the hit.
@@ -23,7 +26,7 @@
 //
 // ge:summary Each player's shots and hits per weapon, off ammunition spent and blows taken
 // ge:keywords hit-rate accuracy shots hits pellets direct-hit splash per-weapon statistics
-// ge:keywords dmg_inflictor ammo divisions bands team-game
+// ge:keywords dmg_inflictor ammo divisions bands team-game damage-given
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
@@ -56,6 +59,7 @@ struct HitCount {
 
 struct HitBook {
   std::vector<std::array<HitCount, kHitWeapons>> players;  // by client slot
+  std::vector<double> given;                               // damage given, by client slot
   // What the last frame read, by entity.
   std::vector<float> life;                 // a player's health and armour
   std::vector<float> health;               // and his health alone (at or under 0: dead)

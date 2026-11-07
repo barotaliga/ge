@@ -12,12 +12,13 @@
 // - POINT `ra at [ra]`: "that item is there: you take it"; ENEMY `enemy at [quad]`
 // - ENEMY POWER `enemy quad [ra]`; HAVE `have quad [rl]`; GET `get quad`; OVER `quad over`
 // - TIMER `quad in 15`, `ra in 10`, `quad delayed 15 secs` (seconds until it is back)
+// - ATTACK `attack ya [gl]` (or `push`): "we take X back together: gather on me here"
 //
 // Pure text: deterministic, no state.
 //
 // ge:summary The team's words: team messages written and read, for bots and players alike
 // ge:keywords team-message say_team teamplay callout report took safe lost help coming point
-// ge:keywords enemy powerup timer quad-in parse_say say_text status-report colour-codes
+// ge:keywords enemy powerup timer quad-in parse_say say_text status-report colour-codes attack push
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_talk_test.cpp
 #pragma once
@@ -43,6 +44,7 @@ enum class SayKind : uint8_t {
   get,
   over,
   timer,
+  attack,
 };
 const char* say_kind_name(SayKind k);
 

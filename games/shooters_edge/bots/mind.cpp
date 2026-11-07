@@ -35,6 +35,15 @@ constexpr float kSafeNear = 250;      // a holder this near his item calls it sa
 constexpr float kHelpNear = 700;      // help is called by a key item this near, enemies as near
 constexpr double kHelpSeen_s = 2;     // an enemy seen this lately is about
 constexpr float kCovered = 700;       // a key area a teammate is this near is his, not the enemy's
+constexpr double kLostFresh_s = 8;    // an enemy in the base this lately makes it the enemy's
+constexpr float kBaseReach = 600;     // an enemy this near the base's item is in the base
+constexpr float kPushStrong = 130;    // strength to call a push; to join one, 0.8 of it
+constexpr float kStageOut = 400;      // a gather spot at least this far from the base's item
+constexpr float kGatherNear = 350;    // a mate this near the gather spot has gathered
+constexpr double kGather_s = 8;       // the gather waits this long at most
+constexpr double kPush_s = 30;        // a push lasts this long at most
+constexpr double kPushGap_s = 25;     // one player calls a push no oftener than this
+constexpr double kPushClear_s = 4;    // on the base with no enemy seen this long: the push is over
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
@@ -191,6 +200,48 @@ double due_of(const Fighter& f, int32_t i, double t) {
   return it.present ? t : it.back_at;
 }
 
+// Whether the base round item `ra` is believed the enemy's: an enemy in it seen or called out
+// within `kLostFresh_s` and no mate believed there, or worked out lost (`retake`).
+bool base_lost(const Fighter& f, int32_t ra, sh::Vec3f at, double t) {
+  const Mind& mn = f.mind;
+  const sh::Vec3f there = f.items[static_cast<size_t>(ra)].at;
+  if (dist(at, there) < kSafeNear || mate_near(f, there, kSafeNear * 2, t)) return false;
+  if (mn.retake == ra && t - mn.retake_t < kLostFresh_s) return true;
+  const auto in = [&](sh::Vec3f p, double when) {
+    return t - when < kLostFresh_s && dist(p, there) < kBaseReach;
+  };
+  return in(mn.enemy_at, mn.enemy_t) || in(mn.sighted_at, mn.sighted_t);
+}
+
+// The place to gather at before a push on the base round item `ra`: of the places outside the
+// map plan's ways into it (named, at least `kStageOut` from the item, a way leading there), the one
+// nearest `at`. False with no plan or no such place.
+bool gather_spot(const Fighter& f, int32_t ra, sh::Vec3f at, std::string& name, sh::Vec3f& pos) {
+  if (!f.plan || f.plan->base < 0 || !f.bot.pilot.pilot.g) return false;
+  const PlanArea& base = f.plan->areas[static_cast<size_t>(f.plan->base)];
+  if (std::find(base.items.begin(), base.items.end(), ra) == base.items.end()) return false;
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sh::Vec3f there = f.items[static_cast<size_t>(ra)].at;
+  const std::string inside = place_of(f, there);
+  float best = 0;
+  bool found = false;
+  for (const int32_t e : base.entries) {
+    const std::string n = place_of(f, g.nodes[static_cast<size_t>(e)].origin);
+    sh::Vec3f p;
+    if (n.empty() || n == inside || !place_pos(f, n, p) || dist(p, there) < kStageOut) continue;
+    const int32_t node = sh::nav_nearest(g, p);
+    if (node < 0 || (f.reach_at >= 0 && !f.reach.reached(node))) continue;
+    const float d = dist(p, at);
+    if (!found || d < best) {
+      found = true;
+      best = d;
+      name = n;
+      pos = p;
+    }
+  }
+  return found;
+}
+
 void say_status(Fighter& f, double t, SayKind kind, const Stats& st, sh::Vec3f at) {
   Said s;
   s.kind = kind;
@@ -328,6 +379,7 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
     case SayKind::coming:
     case SayKind::have:
     case SayKind::lost:
+    case SayKind::attack:
       if (has_place) {
         m.at = p;
         m.at_t = t;
@@ -437,6 +489,19 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
         it.known = true;  // a novice told where the quad is learns it
         if (!it.present && it.back_at > t + 3) it.back_at = t + 3;
       }
+      break;
+    }
+    case SayKind::attack: {
+      // "We take it back together: gather on me": joined by a player strong enough to.
+      const int32_t i = item_named(f, s.item, nullptr);
+      if (i < 0 || !has_place || f.teamwork == MapSense::novice || f.role == Role::carry ||
+          f.role == Role::rush || (mn.push_item >= 0 && t - mn.push_t < kPush_s))
+        break;
+      mn.push_item = i;
+      mn.push_t = t;
+      mn.push_at = p;
+      mn.push_go_t = -1e9;
+      if (f.team) f.team->stats.joins++;
       break;
     }
     case SayKind::none:
@@ -610,6 +675,43 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
   }
   // An aggressive player holds nothing: he goes where the frags are.
   if (r == Role::free && mn.claim >= 0 && !ge::shooter::selfish(f.traits)) r = Role::hold;
+  // The push (above): called on the base believed the enemy's, joined off a mate's call; over
+  // on the base with nobody seen a while, or once it has run its time.
+  if (mn.push_item >= 0 && t - mn.push_t >= kPush_s) mn.push_item = -1;
+  if (mn.push_item >= 0 && dist(at, f.items[static_cast<size_t>(mn.push_item)].at) < kSafeNear &&
+      t - mn.sighted_t > kPushClear_s)
+    mn.push_item = -1;
+  if (r == Role::free || r == Role::hold) {
+    std::string name;
+    sh::Vec3f spot;
+    if (mn.push_item < 0 && f.teamwork != MapSense::novice && strong >= kPushStrong && ra >= 0 &&
+        reachable(f, ra) && t - mn.push_said_at >= kPushGap_s && base_lost(f, ra, at, t) &&
+        gather_spot(f, ra, at, name, spot)) {
+      Said a;
+      a.kind = SayKind::attack;
+      a.item = item_call(f.items[static_cast<size_t>(ra)]);
+      a.loc = name;
+      if (mind_say(f, t, a, at)) {
+        mn.push_item = ra;
+        mn.push_t = mn.push_said_at = t;
+        mn.push_at = spot;
+        mn.push_go_t = -1e9;
+        f.team->stats.pushes++;
+      }
+    }
+    if (mn.push_item >= 0 && strong >= kPushStrong * 0.8f) {
+      r = Role::push;
+      // In once a mate has gathered with it, or the gather has waited its time.
+      if (mn.push_go_t < 0) {
+        const bool here = dist(at, mn.push_at) < kGatherNear;
+        bool mate = false;
+        for (const Mate& m : mn.mates)
+          mate = mate || (t - m.at_t < 2 && dist(m.at, mn.push_at) < kGatherNear);
+        if ((here && (mate || t - mn.push_t >= kGather_s)) || t - mn.push_t >= 2 * kGather_s)
+          mn.push_go_t = t;
+      }
+    }
+  }
   if (r == Role::rush && was != Role::rush) f.team->stats.rushes++;
   if (r == Role::carry && was != Role::carry) {
     f.team->stats.quads++;

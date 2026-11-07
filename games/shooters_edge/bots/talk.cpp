@@ -155,6 +155,8 @@ const char* say_kind_name(SayKind k) {
       return "get";
     case SayKind::over:
       return "over";
+    case SayKind::attack:
+      return "attack";
     case SayKind::timer:
       break;
   }
@@ -192,6 +194,8 @@ std::string say_text(const Said& s) {
       return "get " + s.item;
     case SayKind::over:
       return s.item + " over";
+    case SayKind::attack:
+      return "attack " + s.item + at;
     case SayKind::timer:
       break;
   }
@@ -255,6 +259,8 @@ Said parse_say(std::string_view text) {
     out.kind = SayKind::took;
   } else if (has({"safe"})) {
     out.kind = SayKind::safe;
+  } else if (has({"attack", "push"})) {
+    out.kind = SayKind::attack;
   } else if (has({"lost"})) {
     out.kind = SayKind::lost;
   } else if (has({"help"})) {

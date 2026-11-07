@@ -14,6 +14,7 @@
 #include "progs/vm.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 
 namespace shooters_edge::net {
@@ -142,6 +143,7 @@ void signon(ClassicServer& s, MultiviewRecorder& r) {
   r.start_time = q.sv.time;
   r.written_ms = 0;
   for (auto& known : r.stats_known) std::fill(std::begin(known), std::end(known), false);
+  for (std::string& i : r.info) i.clear();
 }
 
 // The statics and static sounds the level has that the recording has not.
@@ -409,6 +411,22 @@ void mvd_frame(ClassicServer& s, MultiviewRecorder& r) {
       r.stats_known[k][i] = true;
     }
     if (so.w.size > 0) put_record(r.bytes, 0, kRecStats, k, 0, so.bytes());
+  }
+  // Each player's public user info (his name, team and colours) when it is new or changed, so a
+  // viewer names him and knows his side.
+  for (int k = 0; k < sh::kMaxClients; k++) {
+    if (!playing(s, k)) continue;
+    const ClassicClient& c = s.clients[k];
+    std::string info = info_public(c.userinfo);
+    if (info == r.info[k]) continue;
+    SvcMsg m;
+    m.id = svc::updateuserinfo;
+    m.ints = {k, c.userid};
+    m.strings = {info};
+    Scratch ui;
+    write_svc(ui.w, m, WireCtx{});
+    put_record(r.bytes, 0, kRecAll, 0, 0, ui.bytes());
+    r.info[k] = std::move(info);
   }
   for (const MultiviewRecorder::Held& h : r.held)
     put_record(r.bytes, 0, h.kind, h.target, h.mask, h.msg);

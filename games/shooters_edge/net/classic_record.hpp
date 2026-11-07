@@ -44,6 +44,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 #include <vector>
 
 #include "shooter/pmove.hpp"
@@ -96,6 +97,7 @@ struct MultiviewRecorder {
   int statics = 0, static_sounds = 0;  // written so far
   int32_t stats[32][kStats] = {};
   bool stats_known[32][kStats] = {};
+  std::string info[32];  // each slot's public user info as last written (name, team, colours)
   struct Held {
     int kind = 6;  // all, multiple or single
     int target = 0;
