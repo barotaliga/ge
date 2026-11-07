@@ -293,13 +293,22 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
         }
       }
       // Its path: the line it means to walk, its lane off the route in (the console's `paths`).
-      std::vector<Vec2> route;
-      if (t.cfg.paths)
-        for (const sh::Vec3f& n : sh::pilot_path(f.bot.pilot.pilot, me.origin)) {
+      if (t.cfg.paths) {
+        std::vector<uint8_t> breaks;
+        const std::vector<sh::Vec3f> path = sh::pilot_path(f.bot.pilot.pilot, me.origin, &breaks);
+        std::vector<Vec2> run;  // drawn a stretch at a time, broken at a teleporter
+        for (size_t i = 0; i <= path.size(); i++) {
           Vec2 p;
-          if (pr.at(n, p)) route.push_back(p);
+          const bool end = i == path.size() || breaks[i] || !pr.at(path[i], p);
+          if (end) {
+            if (run.size() > 1) o.polyline(run, 2, {col.r, col.g, col.b, 0.85f});
+            run.clear();
+            if (i < path.size() && pr.at(path[i], p)) run.push_back(p);
+            continue;
+          }
+          run.push_back(p);
         }
-      if (route.size() > 1) o.polyline(route, 2, {col.r, col.g, col.b, 0.85f});
+      }
       if (f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()) {
         Vec2 p;
         if (pr.at(f.items[static_cast<size_t>(f.goal_item)].at, p))

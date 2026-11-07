@@ -1115,8 +1115,9 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   return c;
 }
 
-std::vector<Vec3f> pilot_path(const Pilot& p, Vec3f at) {
+std::vector<Vec3f> pilot_path(const Pilot& p, Vec3f at, std::vector<uint8_t>* breaks) {
   std::vector<Vec3f> out{at};
+  if (breaks) breaks->assign(1, 0);
   if (p.g == nullptr || p.k + 1 >= p.route.size()) return out;
   const NavGraph& g = *p.g;
   bool lane = p.offset != 0;
@@ -1124,6 +1125,12 @@ std::vector<Vec3f> pilot_path(const Pilot& p, Vec3f at) {
     const Vec3f a = node(g, p.route[k]).origin, b = node(g, p.route[k + 1]).origin;
     const NavLink* l = link_of(g, p.route[k], p.route[k + 1]);
     lane = lane && l != nullptr && through(*l) && level(g, p.route[k], p.route[k + 1]);
+    // A teleporter's link: far across and next to no time.
+    if (breaks)
+      breaks->push_back(l != nullptr && l->kind == NavKind::walk && l->time_s < 0.2f &&
+                                across(a, b) > 4 * g.set.spacing
+                            ? 1
+                            : 0);
     Vec3f side{-(b.y - a.y), b.x - a.x, 0};
     if (!lane || normalize(side) <= 0) {
       out.push_back(b);
