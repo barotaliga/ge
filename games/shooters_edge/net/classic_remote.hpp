@@ -27,28 +27,24 @@
 // players' boxes), with the move settings serverdata carried. A prediction the next frame proves
 // wrong by 4 to 64 units is not snapped but folded into a correction that decays (`Smoothing`).
 // The drawn eye and the player's own place are the prediction; `cl_nopred 1` draws the server's.
-// THE EASY JUMP: with `cl_speedjump 1` when joining, the user info carries `cl_speedjump 1` (so
-// the server, its admins and the other players can see the help is on). On a server whose server
-// info has `pm_speedjump` (ours) the server runs it and the prediction follows its value (0: off).
-// On any other server the client strafes for the player (shooter/speedjump_assist.hpp, at
-// `kStockShare`): from its newest prediction it sends the jump let go in the air and the side key
-// with a yaw that gains half the best strafe's gain, the drawn view untouched; it needs the
-// prediction (`cl_nopred 0`). Changed later, it acts from the next join.
+// THE EASY JUMP: with `cl_speedjump 1` when joining, the user info says so (the server, its admins
+// and the players see the help is on). A server with `pm_speedjump` in its server info (ours) runs
+// it and the prediction follows its value; on any other the client strafes for the player
+// (shooter/speedjump_assist.hpp, `kStockShare` of the best strafe's gain) off its newest
+// prediction, the drawn view untouched (it needs `cl_nopred 0`). Changed later, it acts next join.
 //
 // THE OTHER PLAYERS are run forward from their newest record (plugins/shooter/predict.hpp's
-// `predict_other`): the record's time is its arrival less the milliseconds the server said had
-// passed since it last ran that player's command; the drawn time is the window's clock (the tick
-// clock plus the part of a tick owed) less the newest move's round trip plus 0.02 s; that
-// player's last command runs for the difference (at most 255 ms) over the level's solids. So a
-// player moves every window frame, not in the server's steps, and a player whose command came
-// late is not drawn behind the rest. `cl_predict_players 0` draws them where the last frame put
-// them; the player's own prediction then steers round those places.
+// `predict_other`) to the drawn time (the window's clock less the newest move's round trip plus
+// 0.02 s), their last command run for the difference (at most 255 ms) over the level's solids, so
+// they move every window frame; `cl_predict_players 0` draws them where the last frame put them.
+// THE OTHER ENTITIES (missiles, movers, gibs) are drawn between the last two frames read
+// (`cl_nolerp 1`: the newest's places), at the newest place when absent from the older frame,
+// their model changed or moved more than `kLerpMost` units (a teleport, a respawn).
 //
-// THE OTHER ENTITIES (missiles, movers, gibs) are drawn between the last two frames read, by the
-// time since the newest arrived over the time between the two (`cl_nolerp 1`: the newest frame's
-// places). An entity is drawn at the newest place when it was absent from the older frame, its
-// model changed, or it moved more than `kLerpMost` units (a teleport, a respawn). The movers the
-// prediction steers round are the newest frame's, as the server's moves were.
+// VOICE (`cl_voip 1` when joining): the client asks for voice; the voices the server routes to the
+// player are kept in the live recording (classic_record.hpp's `live`) and heard as a demo's are,
+// his own left out. While `+voip` is held he speaks the microphone the window hands to
+// `remote_mic`.
 //
 // ge:summary The window joined to a server: the classic client driven by the hands, drawn as a demo
 // ge:keywords remote-client connect disconnect join-server classic-client live-demo network-play
@@ -57,12 +53,14 @@
 // ge:keywords remote_world smoothing replayed predict_other other-players cl_predict_players
 // ge:keywords interpolation lerp cl_nolerp entity-lerp draw-clock round-trip
 // ge:keywords cl_speedjump pm_speedjump easy-jump assisted_command kstockshare
+// ge:keywords voice voice-chat cl_voip push-to-talk microphone remote_mic
 // ge:skill net shooter
 // ge:test tests/shooters_edge_remote_test.cpp
 #pragma once
 
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -81,7 +79,8 @@ namespace shooters_edge::net {
 inline constexpr int kTickUs = 13000;    // a move's length: the server's frame
 inline constexpr int kMostTicks = 8;     // ticks a call may run; a longer stall drops the rest
 inline constexpr float kLerpMost = 200;  // units: an entity moved further between two frames snaps
-inline constexpr float kStockShare = 0.5f;  // the easy jump's share on a server without it
+inline constexpr float kStockShare = 0.5f;         // the easy jump's share on a server without it
+inline constexpr int kMicMostSamples = 48000 / 4;  // the microphone's samples a frame may hold
 
 enum class RemoteStep : uint8_t {
   waiting,    // nothing new to draw yet (connecting, or no packet since the last call)
@@ -92,10 +91,11 @@ enum class RemoteStep : uint8_t {
 
 struct Remote {
   // In the order that packs it (the lint holds the padding).
-  gn::Transport* transport = nullptr;         // what it talks over (`own`, or remote_start's)
-  int64_t now_us = 0;                         // the tick clock
-  double owed_s = 0;                          // wall time not yet a tick
-  int64_t setangles = 0;                      // the server's turns taken
+  gn::Transport* transport = nullptr;             // what it talks over (`own`, or remote_start's)
+  const ge::console::Button* voip_key = nullptr;  // `+voip` (add_remote_commands)
+  int64_t now_us = 0;                             // the tick clock
+  double owed_s = 0;                              // wall time not yet a tick
+  int64_t setangles = 0;                          // the server's turns taken
   double frame_old_s = -1, frame_new_s = -1;  // lerp: the last two frames' times (network clock)
   const std::vector<sh::BrushModel>* world = nullptr;  // prediction: the level's models ([0] world)
   std::string server_name;                             // as asked ("host:port")
@@ -132,6 +132,7 @@ struct Remote {
   bool predicted = false;                     // the last step drew a prediction
   bool predict_players = true;                // cl_predict_players: the other players run ahead
   bool nolerp = false;                        // cl_nolerp: entities at the newest frame's places
+  bool voip = true;                           // cl_voip: ask for voice when joining
 };
 
 // Joins `address` ("host", "host:port"; the classic server port when none) over a UDP socket of
@@ -158,10 +159,17 @@ std::string remote_status(const Remote& r);
 // command the next tick sends (an impulse not yet sent is kept until one is).
 void remote_hands(Remote& r, const client::Moves& m, const ge::input::InputState& in,
                   const client::ControlSettings& c, double dt);
+// The microphone's samples since the last call (48 kHz mono), sent at the next ticks while `+voip`
+// is held. Dropped when not joined, when the server has no voice, or past `kMicMostSamples` unsent.
+void remote_mic(Remote& r, std::span<const float> samples);
+// True while the player is joined with voice and holds `+voip` (the window opens the microphone the
+// first time, and shows that he is talking).
+bool remote_talking(const Remote& r);
 
-// `connect <host>[:port]`, `disconnect`, `reconnect` (the last server again), `netstatus` and the
-// `cl_nopred`, `cl_predict_players` and `cl_nolerp` cvars; the
-// player's `name`, `topcolor` and `bottomcolor` cvars are read when a connect is made.
+// `connect <host>[:port]`, `disconnect`, `reconnect` (the last server again), `netstatus`, the
+// `+voip` button (talk while held) and the `cl_nopred`, `cl_predict_players`, `cl_nolerp` and
+// `cl_voip` cvars; the player's `name`, `topcolor`, `bottomcolor` and `cl_speedjump` cvars are read
+// when a connect is made.
 void add_remote_commands(ge::console::Console& con, Remote& r);
 
 }  // namespace shooters_edge::net

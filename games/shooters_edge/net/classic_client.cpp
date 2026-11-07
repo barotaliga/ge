@@ -450,7 +450,13 @@ void read_payload(ClassicClientEnd& c, const uint8_t* data, size_t size, size_t 
 
 // The voice cut since the last tick (`samples` of it) and, while talking, sent as one message.
 void speak(ClassicClientEnd& c, int samples) {
-  const bool talking = c.cfg.talk != nullptr && c.cfg.talk(c.tick, c.cfg.seed);
+  const bool talking =
+      c.cfg.live_mic ? c.mic_talking : c.cfg.talk != nullptr && c.cfg.talk(c.tick, c.cfg.seed);
+  if (c.cfg.live_mic) {  // the microphone's samples as they came, whatever the tick's length
+    c.mic.insert(c.mic.end(), c.mic_in.begin(), c.mic_in.end());
+    c.mic_in.clear();
+    samples = 0;
+  }
   for (int i = 0; i < samples; i++) {
     const bool say = talking && !c.speech.empty();
     c.mic.push_back(say ? c.speech[c.speech_at] : 0.0f);
@@ -568,9 +574,10 @@ void client_start(ClassicClientEnd& c, gn::Transport& t, const gn::Address& serv
     c.encoder = std::make_unique<gn::VoiceEncoder>();
     std::string error;
     if (!c.encoder->open(gn::VoiceCodecConfig{}, error)) c.encoder.reset();
-    c.speech = cfg.speech ? *cfg.speech
-                          : gn::voice_trial_speech(static_cast<uint32_t>(cfg.seed) * 7919u + 17u,
-                                                   6.0, 100.0 + 25.0 * (cfg.seed % 5));
+    if (!cfg.live_mic)
+      c.speech = cfg.speech ? *cfg.speech
+                            : gn::voice_trial_speech(static_cast<uint32_t>(cfg.seed) * 7919u + 17u,
+                                                     6.0, 100.0 + 25.0 * (cfg.seed % 5));
   }
 }
 

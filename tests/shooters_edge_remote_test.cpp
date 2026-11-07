@@ -9,11 +9,13 @@
 // his newest record, so he moves between the server's frames and sits nearer the server's place
 // than the frame put him; missiles are drawn between the last two frames. A mod's named effects
 // reach the window by name over the game's own set and are never sent to a client without it.
+// On a server with voice the window hears the other player's talk, never its own, and while
+// `+voip` is held the microphone's samples it is handed reach the other player.
 //
 // ge:summary Tests: the remote client signs on, draws the server's state, walks, and leaves
 // ge:keywords test remote-client connect disconnect classic-server live-demo setangle walk
 // ge:keywords prediction cl_nopred latency predict_other cl_predict_players cl_nolerp lerp
-// ge:keywords named-effects ge-ext pointparticles trailparticles
+// ge:keywords named-effects ge-ext pointparticles trailparticles voice cl_voip push-to-talk
 // ge:skill net shooter testing
 #include <algorithm>
 #include <cmath>
@@ -23,6 +25,7 @@
 #include <vector>
 
 #include "check.hpp"
+#include "console/console.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "progs/file.hpp"
@@ -39,6 +42,8 @@ namespace sh = ge::shooter;
 
 namespace {
 
+bool talk(int, int) { return true; }
+
 // The test arena served on a LAN of the simulated network, and one remote client on it.
 struct Rig {
   ge::progs::Progs progs;
@@ -48,6 +53,7 @@ struct Rig {
   gn::Transport st, ct, bt;
   cn::ClassicClientEnd other;  // a scripted player beside the window (`with_other`)
   bool with_other = false;
+  bool voice = false;  // the server relays voice to everyone; the window and the other ask for it
   cn::ClassicServer server;
   cn::Remote remote;
   std::vector<std::string> said;
@@ -74,15 +80,22 @@ struct Rig {
     gn::open_sim_transport(st, net, gn::sim_address(0, cn::kPortServer));
     gn::open_sim_transport(ct, net, gn::sim_address(1, cn::kPortClient));
     rules = sv::qc_runner_over(*qc);
-    if (!cn::classic_start(server, rules, st, cn::ServerConfig{}, error)) return false;
+    cn::ServerConfig sc;
+    sc.voice = voice;
+    sc.voice_route = cn::VoiceRoute::all;
+    if (!cn::classic_start(server, rules, st, sc, error)) return false;
     cn::ClientConfig cc;
     cc.name = "window";
+    cc.voice = voice;
+    cc.live_mic = true;  // as the window joins: its microphone, while +voip is held
     cn::remote_start(remote, ct, gn::sim_address(0, cn::kPortServer), cc);
     if (with_other) {
       gn::open_sim_transport(bt, net, gn::sim_address(2, cn::kPortClient));
       cn::ClientConfig oc;
       oc.name = "runner";
       oc.ask[cn::ExtFamily::ge] = 0;  // as a classic client: the game's own set unknown
+      oc.voice = voice;
+      oc.talk = talk;  // talks from his first tick when the server has voice
       cn::client_start(other, bt, gn::sim_address(0, cn::kPortServer), oc, 0);
     }
     return true;
@@ -407,4 +420,44 @@ TEST(a_mods_named_effects_reach_the_game_s_own_client_by_name_and_no_classic_cli
   // The other client (a classic one's ask) was sent neither: both counted as dropped for it.
   CHECK_MSG(rig.server.counts.effects_dropped == dropped + 2,
             std::to_string(rig.server.counts.effects_dropped - dropped) + " dropped");
+}
+
+TEST(the_window_hears_the_other_player_talk_and_its_microphone_is_heard_while_voip_is_held) {
+  Rig rig;
+  rig.with_other = true;
+  rig.voice = true;
+  ge::console::Console con;
+  cn::add_remote_commands(con, rig.remote);
+  CHECK(rig.start());
+  CHECK(rig.join());
+  for (int f = 0; f < 200 && rig.other.stage != cn::ClientStage::active; f++) rig.frame();
+  const int me = rig.remote.end.playernum;
+  const int other = rig.other.playernum;
+  CHECK(me >= 0 && other >= 0 && rig.remote.end.ext.has(cn::ExtFamily::x2, cn::kX2Voice));
+  // A tone of a microphone, handed in every frame (13 ms of it); silent until +voip is held.
+  std::vector<float> tone(static_cast<size_t>(48000 * cn::kTickUs / 1000000));
+  for (size_t i = 0; i < tone.size(); i++)
+    tone[i] = (i / 24) % 2 == 0 ? 0.25f : -0.25f;  // a 1 kHz square
+  int64_t heard_other = 0, heard_self = 0;
+  const auto run = [&](int frames) {
+    for (int f = 0; f < frames; f++) {
+      cn::remote_mic(rig.remote, tone);
+      rig.frame();
+      for (const auto& v : rig.remote.demo.state.voice)
+        (v.sender == other ? heard_other : heard_self)++;
+    }
+  };
+  run(80);
+  CHECK_MSG(heard_other > 0, "the window heard no voice from the other player");
+  CHECK_MSG(rig.other.voice_heard[me] == 0, "the window talked without +voip held");
+  CHECK(!cn::remote_talking(rig.remote));
+  con.execute("+voip");
+  CHECK(cn::remote_talking(rig.remote));
+  run(80);
+  CHECK_MSG(rig.other.voice_heard[me] > 0, "the other player heard nothing of the window's mic");
+  CHECK_MSG(heard_self == 0, std::to_string(heard_self) + " of the window's own voice played back");
+  con.execute("-voip");
+  const int64_t sent = rig.remote.end.voice_sent;
+  run(20);
+  CHECK(rig.remote.end.voice_sent == sent);
 }

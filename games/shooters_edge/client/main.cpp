@@ -81,6 +81,7 @@
 #include "gpu/target.hpp"
 #include "hud/spinner.hpp"
 #include "input/state.hpp"
+#include "net/voice_codec.hpp"
 #include "platform/audio.hpp"
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
@@ -447,6 +448,11 @@ int run_main(int argc, char** argv) {
   out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
                       : std::string("shooters_edge: no audio device; a demo plays silent"));
   cl::DemoHearing hearing(synth);  // a played demo's sounds, voices and printed lines
+  // The microphone, opened the first time +voip is held on a server joined (the system asks the
+  // player's leave then, never at start) and read every frame after (net/classic_remote.hpp).
+  std::unique_ptr<ge::platform::AudioIn> mic;
+  bool mic_tried = false;
+  std::vector<float> mic_samples(static_cast<size_t>(sn::kMicMostSamples));
   ge::platform::set_relative_mouse(*window, true);
   bool captured = true;
   bool vsync = true;
@@ -833,6 +839,19 @@ int run_main(int argc, char** argv) {
       const bool hands = playing && !game_menu.open();
       sn::remote_hands(remote, hands ? cl::button_moves(controls) : cl::Moves{}, played, controls,
                        wall);
+      if (!mic_tried && sn::remote_talking(remote)) {
+        mic_tried = true;
+        mic = ge::platform::open_audio_in(ge::net::kVoiceRate);
+        tell(mic ? "voice: the microphone is on while +voip is held"
+                 : "voice: no microphone opened (none, or the system's permission refused); next: "
+                   "allow the microphone for shooters_edge and restart",
+             t);
+      }
+      if (mic) {
+        const int n = ge::platform::read_audio_in(*mic, mic_samples.data(),
+                                                  static_cast<int>(mic_samples.size()));
+        sn::remote_mic(remote, {mic_samples.data(), static_cast<size_t>(n)});
+      }
       std::vector<std::string> lines;
       joined = sn::remote_step(remote, wall, lines);
       for (const std::string& line : lines) tell(line, t);
@@ -888,7 +907,10 @@ int run_main(int argc, char** argv) {
       if (paced) {  // what the frames read carried: heard, and its lines shown
         synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
         std::vector<std::string> lines;
-        if (hearing.frame(ds, bench.heard, static_cast<float>(wall), lines, hud.centre))
+        cl::DemoHeard joined_heard;  // a game joined: what its frames read carried (remote_step)
+        if (drawn_remote) joined_heard = {ds.started, ds.stopped, ds.voice, ds.prints, ds.centre};
+        if (hearing.frame(ds, drawn_remote ? joined_heard : bench.heard, static_cast<float>(wall),
+                          lines, hud.centre))
           hud.centre_until = t + 2;
         for (const std::string& line : lines) tell(line, t);
       }

@@ -522,6 +522,10 @@ bit) among their messages. Without the header and the voice messages it is a pla
   out (`net/classic_record.hpp`).
 - **The server's multiview recording (`.mvdv`)** holds every voice it relayed, whoever heard it:
   all the teams.
+- **The window joined to a server** (`connect`, `net/classic_remote.hpp`) asks for voice with
+  `cl_voip 1` and hears what the server routes to the player through the same players, its own
+  voice left out; while `+voip` is held (V) the microphone is sent. The live recording it reads
+  (`ClientRecorder::live`) keeps the voices with no header; a file it records is unchanged.
 - **Playing one back** (`playdemo`, `-demovideo`, the labs): the reader finds the header by its
   bytes; each talker's frames play on a stream of their own, a gap of up to three frames
   concealed by the codec (`client/demo_voice.hpp`).
