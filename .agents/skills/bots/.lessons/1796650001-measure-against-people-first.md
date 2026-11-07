@@ -15,3 +15,7 @@ changes: a pilot standing arrived on its goal plans again every command. Split s
 mode (`se-team`'s mode table, aiming apart) before changing the walk. A fighter change reaches the
 co-op companion too (it is a fighter): the dodge put a companion out of position and a monster
 fell to the leader instead; gate a deathmatch behaviour off `escort.leader >= 0`.
+A third try, also taken out: pressing the walk's keys at the target from the view as it stands
+(forward and side together, instead of cutting the forward key while the view turns) sent human
+hands off the course's jumps and ledges (4 of 12 runs arrived): their side key comes as late as
+their yaw, so the wish wanders; the cut on turning is what keeps late hands on the line.
