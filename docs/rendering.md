@@ -385,13 +385,25 @@ measures how much of the skier each outside lens sees in the densest wood of see
 
 Most of what the game draws is built in code at load (above). A few things are worth
 authoring: the rigged, detailed objects the camera sits close to (the skis, the player's
-figure, the machines). They come in as **glTF 2.0** and nothing else.
+figure, the machines). They come in as **glTF 2.0**, and a mod's skinned model as the
+skeletal model file (`.iqm`, below).
 
 - **Loaded once, into the engine's form** (`engine/assets`, the `assets` skill). The loader
   (cgltf) fills a `Model`: every node a joint, every mesh skinned (a rigid part bound
   whole to its node's joint), the base colours as materials, the clips baked at 60 Hz. glTF's
   frame is mirrored in x into the world's, so a model faces heading 0. Nothing after the
   load reads glTF.
+- **A mod's skeletal model** (`assets/iqm.hpp`): the `.iqm` file (version 2) is read into the
+  same `Model`: its joints at rest, one mesh a file's mesh (a run of one name joined), the
+  material names a game reads as textures, and each animation baked at 60 Hz from its 16-bit
+  frames. Its frame is +z up and front +x, turned into the world's with a mirror, so a triangle
+  faces as its normals say. `write_iqm` writes a `Model` back, which is how the tests and the
+  `models` lab (`--format=iqm`, or `--model=<file>.iqm --metres=0.025`) make one in code. A game
+  that draws vertex-animated models draws one as it draws them: `morph/skeletal.hpp` poses each
+  clip on the CPU at a steady rate (20 a second in Shooter's Edge) into a morph model's frames, a
+  clip a frame group, and the morph pass blends between them. A few hundred frames of a few
+  thousand vertices is a few megabytes, and every lighting, tint and warp path of the morph pass
+  is the skeletal model's with no new pipeline; the GPU skinning pass stays the authored models'.
 - **Morph targets are read too**: each mesh's targets (offsets of its positions and normals from
   the bind, named by the mesh's `targetNames`) and its default weights, and each clip's weights
   channels baked at 60 Hz into a track a mesh (`MorphTarget`, `MorphTrack` in

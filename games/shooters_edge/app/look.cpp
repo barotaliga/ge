@@ -37,13 +37,13 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .max = 4},
           &picture.fx_glow);
   cv.bind({.name = "r_bloom",
-           .fallback = "0.3",
+           .fallback = "0.08",
            .help = "the modern look's bloom, 0 none to 1; read when the picture is built",
            .min = 0,
            .max = 1},
           &picture.bloom);
   cv.bind({.name = "r_lava_glow",
-           .fallback = "0.2",
+           .fallback = "0.02",
            .help = "how much the lava lights the walls round it in the modern look, 0 none",
            .min = 0,
            .max = 4},
@@ -55,6 +55,22 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0,
            .max = 4},
           &picture.slime_glow);
+  cv.bind({.name = "r_glow",
+           .fallback = "0.6",
+           .flags = gc::kArchive,
+           .help = "how bright the glowing parts of the walls (windows, lamps' panels) are in the "
+                   "modern look, 1 as the classic draws them",
+           .min = 0,
+           .max = 2},
+          &picture.glow);
+  cv.bind({.name = "r_fire_glow",
+           .fallback = "1",
+           .flags = gc::kArchive,
+           .help = "how bright the torches', braziers' and bonfires' flames burn in the modern "
+                   "look, 1 as made",
+           .min = 0,
+           .max = 4},
+          &picture.fire_glow);
   cv.bind({.name = "r_farland",
            .fallback = "auto",
            .help = "the land round the map seen over its walls from high up: auto (one to suit "
@@ -187,6 +203,10 @@ constexpr int kCasterLightsAt[] = {0, 0, ba::kCasterLights, ba::kCasterLights};
 constexpr bool kSoftAt[] = {false, false, false, true};
 constexpr bool kCapsulesAt[] = {false, false, false, true};
 
+// The map's lights softened near them over this share of their half reach (bsp_draw.hpp's
+// Options::near_soft): a torch's wall a few times its half-reach light, never a white disc.
+constexpr double kNearSoft = 0.4;
+
 }  // namespace
 
 ba::Options world_options(Look look, ba::Options base, const Picture& picture) {
@@ -206,6 +226,9 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
     base.dynamic_strength = picture.fx_lights;
     base.lava_glow = picture.lava_glow;
     base.slime_glow = picture.slime_glow;
+    base.fire_glow = picture.fire_glow;
+    base.glow = picture.glow;
+    base.near_soft = kNearSoft;
     base.pack_sky = stops.skies == Stop::off;  // ce_skies off: the pack's own scrolling sky
     const auto at = static_cast<size_t>(stops.shadows);
     if (stops.shadows == Stop::off) base.shadowed = 0;  // ce_shadows off: none cast

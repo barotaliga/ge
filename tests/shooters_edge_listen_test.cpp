@@ -7,11 +7,12 @@
 // mouse as commands, the HUD's status off the player, and the weapon in his hand: the launcher
 // raised, one shot seen for one rocket and none for the spawn. The powers: the quad's and the
 // shield's glow round their holder, the shield taking a blast, both running out. A game stopped
-// lets go of its servers and map and starts again.
+// lets go of its servers and map and starts again. A mod's named effects (pointparticles,
+// trailparticles) reach the player by name, or as the classic effect of a classic name.
 //
 // ge:summary Tests: the listen server headless: a fixture map from a pack, a rocket jump, golden
 // ge:keywords test listen-server rocket-jump search-path pak baseline-mod controls hud-status
-// ge:keywords listen_stop
+// ge:keywords listen_stop pointparticles trailparticles named-effect
 // ge:keywords golden fixture held-weapon step_held quad shield powers effects
 // ge:skill shooter progs testing
 #include <algorithm>
@@ -498,4 +499,40 @@ TEST(the_hud_counts_down_the_quad_and_the_shield_and_drops_them_when_they_run_ou
   for (int i = 0; i < 10; i++) cl::listen_frame(l, {});
   const hud::Status gone = cl::status_of(l, 2.0);
   CHECK(!gone.powered(hud::Power::damage) && !gone.powered(hud::Power::shield));
+}
+
+TEST(a_mods_named_effects_reach_the_player_by_name_or_as_the_classic_effect) {
+  cl::Listen l;
+  if (!start(l)) return;
+  for (int i = 0; i < 10; i++) cl::listen_frame(l, {});
+  const size_t before = l.effects.size(), booms = l.explosions.size();
+  const auto event = [](shooters_edge::server::EventKind k, const char* name) {
+    shooters_edge::server::NetEvent ev;
+    ev.kind = k;
+    ev.to = 1;
+    ev.origin = {64, 0, 40};
+    ev.values[2] = 1;
+    ev.values[3] = 3;
+    ev.text = name;
+    return ev;
+  };
+  namespace sv = shooters_edge::server;
+  l.server->out.events.push_back(event(sv::EventKind::point_effect, "spark_fountain"));
+  l.server->out.events.push_back(event(sv::EventKind::point_effect, "TE_GUNSHOT"));
+  l.server->out.events.push_back(event(sv::EventKind::point_effect, "te_explosion"));
+  l.server->out.events.push_back(event(sv::EventKind::trail_effect, "spark_trail"));
+  sv::NetEvent other = event(sv::EventKind::point_effect, "for_someone_else");
+  other.to = 2;
+  l.server->out.events.push_back(other);
+  cl::listen_frame(l, {});
+  CHECK_MSG(l.effects.size() == before + 3, std::to_string(l.effects.size() - before));
+  if (l.effects.size() != before + 3) return;
+  const cl::Effect& named = l.effects[before];
+  CHECK(named.kind == cl::EffectKind::named && named.name == "spark_fountain" && named.count == 3 &&
+        named.way.z == 1.0f && named.at.x == 64.0f);
+  CHECK(l.effects[before + 1].kind == cl::EffectKind::impact && l.effects[before + 1].count == 3);
+  const cl::Effect& trail = l.effects[before + 2];
+  CHECK(trail.kind == cl::EffectKind::named_trail && trail.name == "spark_trail" &&
+        trail.end.y == 0.0f);
+  CHECK(l.explosions.size() == booms + 1);
 }

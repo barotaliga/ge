@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_listen_test.cpp
 #include "shooters_edge/client/listen.hpp"
 
+#include <algorithm>
 #include <bit>
 #include <cstddef>
 #include <cstdlib>
@@ -123,6 +124,44 @@ bool arena_effect(std::span<const uint8_t> b, Effect& e) {
   return true;
 }
 
+// A mod's named effect for the player (pointparticles, trailparticles; the events' `to` holds
+// slot 0): a classic name as the classic effect (its temporary entity's bytes read as a match's
+// are; an explosion into `explosions`), any other by its name, for the files' effect of it.
+void take_named(Listen& l, const sv::NetEvent& ev) {
+  if ((ev.to & 1u) == 0) return;
+  Effect e;
+  e.code = -1;
+  e.name = ev.text;
+  if (ev.kind == sv::EventKind::trail_effect) {
+    e.kind = EffectKind::named_trail;
+    e.entity = ev.ent;
+    e.at = ev.origin;
+    e.end = {ev.values[0], ev.values[1], ev.values[2]};
+    l.effects.push_back(std::move(e));
+    return;
+  }
+  if (ev.kind != sv::EventKind::point_effect) return;
+  const float n = ev.values[3];  // the times asked for, 1..255 (NaN: once)
+  const int count = !(n >= 1) ? 1 : n > 255 ? 255 : static_cast<int>(n);
+  if (uint8_t kind = 0; sv::classic_temp_entity(ev.text, kind)) {
+    if (kind == kExplosion || kind == 4) {
+      l.explosions.push_back(ev.origin);
+      return;
+    }
+    std::vector<uint8_t> b = {kTempEntity, kind};
+    if (kind == 2 || kind == 12) b.push_back(static_cast<uint8_t>(count));
+    for (float c : {ev.origin.x, ev.origin.y, ev.origin.z})
+      sv::encode(b, sv::WriteKind::coord, c, "");
+    if (Effect classic; arena_effect(b, classic)) l.effects.push_back(classic);
+    return;
+  }
+  e.kind = EffectKind::named;
+  e.at = e.end = ev.origin;
+  e.way = {ev.values[0], ev.values[1], ev.values[2]};
+  e.count = std::min(count, 64);
+  l.effects.push_back(std::move(e));
+}
+
 pg::QcSource source(const char* name, const unsigned char* bytes, std::size_t size) {
   pg::QcSource s;
   s.name = name;
@@ -180,6 +219,8 @@ void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
     else if (Effect e;
              !l.campaign_host && ev.kind == sv::EventKind::multicast && arena_effect(ev.bytes, e))
       l.effects.push_back(e);
+    else if (!l.campaign_host)
+      take_named(l, ev);
   }
   if (const sv::ClientBlow& b = s.clients[0].blow; b.hit)
     l.blows.push_back({b.armor, b.blood, b.from});
@@ -387,6 +428,7 @@ void read_streams(Listen& l, const sv::RulesCommon& s, bool clear = true) {
     }
     for (size_t i = first; i < l.effects.size(); i++)
       if (l.effects[i].kind == EffectKind::explosion) l.explosions.push_back(l.effects[i].at);
+    for (const sv::NetEvent& ev : out.events) take_named(l, ev);
   }
   if (!clear) return;  // the door routes them to the clients, then empties them
   sv::MessageSink& sink = l.server->out;

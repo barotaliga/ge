@@ -53,6 +53,7 @@ struct Game {
   cl::SearchPath files;       // the game folder the maps are read from (empty: the arena only)
   int changes = 0;            // maps changed to
   std::string failed;         // why the last change did not happen ("": it did)
+  std::string held_map;       // the next map, while the intermission keeps the scores up
   // The lobby and the bots (sv_lobby, sv_bots; null: neither). Without sv_lobby it stays in its
   // match: the bots play every map as it comes.
   std::unique_ptr<cl::Room> room;
@@ -277,7 +278,9 @@ bool open_room(Game& g, std::string& error) {
   cl::Room& r = *g.room;
   r.seed = c.seed;
   r.lobby.settings.humans = 1;  // bots alone warm up until a player joins
-  if (g.host != nullptr) {      // the window's own player has seat 0, the bots the ones after
+  r.lobby.settings.countdown_s = c.countdown_s;
+  r.lobby.settings.intermission_s = c.intermission_s;
+  if (g.host != nullptr) {  // the window's own player has seat 0, the bots the ones after
     r.lobby.settings = g.host->lobby_settings;
     gs::lobby_join(r.lobby, 0, g.host->player, false, g.rules->sv.time);
   }
@@ -418,16 +421,34 @@ bool move_to(Game& g, const std::string& name, bool match_over, std::string& err
 // next map is its window's to read (`ListenHost::asked`, then `change`); a restart is the same map.
 void change_if_asked(Game& g) {
   sv::RulesCommon& now = *g.rules;
-  if (now.pending_map.empty()) return;
   const std::string current = g.map->name;
-  std::string name = now.pending_map;
-  // The mod's end of a match asks for the next map, or for its own again: the rotation's turn.
-  if (now.pending_change == sv::MapChange::restart)
-    name = current;
-  else if (now.pending_change == sv::MapChange::change_level || name == current)
-    name = next_map(g.settings, current, name);
-  const bool match_over = now.pending_change != sv::MapChange::restart;
-  now.pending_map.clear();
+  std::string name;
+  bool match_over = true;
+  gs::Lobby* lobby = g.room && g.settings.lobby != 0 ? &g.room->lobby : nullptr;
+  if (lobby != nullptr && lobby->phase == gs::LobbyPhase::intermission) {
+    // The scores stay up: the map the match's end asked for waits until the intermission is over
+    // (what the mod asks meanwhile, its intermission's own, is dropped).
+    now.pending_map.clear();
+    if (!gs::lobby_next_due(*lobby, now.sv.time)) return;
+    name = std::move(g.held_map);
+    g.held_map.clear();
+  } else {
+    if (now.pending_map.empty()) return;
+    name = now.pending_map;
+    // The mod's end of a match asks for the next map, or for its own again: the rotation's turn.
+    if (now.pending_change == sv::MapChange::restart)
+      name = current;
+    else if (now.pending_change == sv::MapChange::change_level || name == current)
+      name = next_map(g.settings, current, name);
+    match_over = now.pending_change != sv::MapChange::restart;
+    now.pending_map.clear();
+    if (match_over && lobby != nullptr && lobby->phase == gs::LobbyPhase::match &&
+        lobby->settings.intermission_s > 0) {  // the intermission first, then this map
+      gs::lobby_end(*lobby, now.sv.time);
+      g.held_map = std::move(name);
+      return;
+    }
+  }
   if (g.host != nullptr && name != current) {
     g.host->asked = name;
     return;

@@ -92,7 +92,10 @@ struct Particle {
   float floor_y = -1e9f;
   float bounce = 0;
   float hops = 0;  // the hops it has made off a floor or a drawn surface (max_hops: then it lies)
-  float pad_ = 0;  // particles.wgsl's 16-byte alignment
+  // m/s: THE AIR'S EDDIES it rides (`eddy`: crossed travelling waves round it, its own phase), so
+  // a fleck over a fire swirls and zig-zags instead of rising on a line; 0: the still air or the
+  // wind alone.
+  float swirl = 0;
 };
 static_assert(sizeof(Particle) == 96, "match particles.wgsl's Particle");
 inline constexpr float kFloorRest = 0.35f;   // m/s: slower than this down, it lies still
@@ -107,8 +110,11 @@ inline constexpr double kGravity = 9.81;          // m/s²
 inline constexpr double kSparkEmissivity = 0.35;  // a glowing particle's light over a blackbody's
 
 // THE FLIGHT of one particle over `dt` s (no terrain; its own floor) in air moving at `air` m/s
-// (null: still): the CPU twin of particles_sim.wgsl's `fly` and its floor.
+// (null: still) and the eddies round it (`eddy`): the CPU twin of particles_sim.wgsl's `fly` and
+// its floor.
 void step_particle(Particle& p, float dt, const float air[3] = nullptr);
+// The eddies' air round `p` now, m/s (particle_types.wgsl's `eddy`, its twin).
+void eddy(const Particle& p, float out[3]);
 // THE BOUNCE off a drawn surface whose face at `at` (world m) points along `normal` (unit, out of
 // it): the CPU twin of particles_sim.wgsl's `off_surface`, for a particle found behind it.
 void collide_particle(Particle& p, const float at[3], const float normal[3]);

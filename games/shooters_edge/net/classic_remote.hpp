@@ -70,6 +70,7 @@
 #include "input/state.hpp"
 #include "net/transport.hpp"
 #include "shooter/predict.hpp"
+#include "shooter/predict_original.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/net/classic_client.hpp"
@@ -114,7 +115,12 @@ struct Remote {
   sh::Vec3f prediction;  // the player's predicted origin, the correction not added
   sh::MoveState ahead;   // the player's whole predicted state (the easy jump's help reads it)
   sh::Smoothing smooth;  // the prediction's correction
-  sh::MoveCmd hands;     // the window's command, sent at the next tick (an impulse held to it)
+  // Prediction on the original move (the server's `sv_playermove original`): the stand-in
+  // server, built for the level `original_level` counts and the models `original_for` points at.
+  sh::OriginalPrediction original;
+  const std::vector<sh::BrushModel>* original_for = nullptr;
+  int original_level = -1;
+  sh::MoveCmd hands;  // the window's command, sent at the next tick (an impulse held to it)
   // The game's files as the server's game folder holds them (ClientConfig::read_file: the map's
   // checksum and the model checks a server asks for); unset, they are sent as 0 and unsent.
   std::function<std::vector<uint8_t>(const std::string& gamedir, const std::string& path)>

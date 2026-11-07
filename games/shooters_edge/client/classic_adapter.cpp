@@ -1,31 +1,37 @@
 // The first game's adapter (game_adapter.hpp): its mods are folders over the base of numbered
 // packs, zips and loose files with QC programs for the server, its maps carry their textures'
 // pixels, its models are the classic families (plugins/morph, plugins/brush) with a picture file
-// standing in for a skin, its sounds WAV files under `sound/`, and its demos are the recordings
-// client/demo.hpp reads; its config files are console text in its packs and its place names
-// `locs/<map>.loc`.
+// standing in for a skin, or a mod's skeletal model (.iqm) baked into frames, its sounds WAV files
+// under `sound/`, and its demos are the recordings client/demo.hpp reads; its config files are
+// console text in its packs and its place names `locs/<map>.loc`.
 //
 // ge:summary The first classic game's adapter: mod folders, QC programs, maps, pictures, demos
 // ge:keywords classic-adapter list_mods find_program list_maps map_info map_textures list_demos
 // ge:keywords find_demo open_demo mod-folder qwprogs replacement-texture png tga open_model
-// ge:keywords open_sound replacement-skin mdl spr wav pictures replacement-picture gfx-wad lmp
+// ge:keywords open_sound replacement-skin mdl iqm skeletal-model spr wav pictures
+// ge:keywords replacement-picture gfx-wad lmp
 // ge:keywords find_config cfg open_locations loc-file held_weapons v-mdl classic_menu modes
 // ge:skill shooter
 // ge:test tests/shooters_edge_game_adapter_test.cpp
 #include <algorithm>
+#include <array>
+#include <cstring>
 #include <filesystem>
 #include <optional>
 #include <set>
+#include <span>
 #include <system_error>
 #include <utility>
 
 #include "assets/image.hpp"
+#include "assets/iqm.hpp"
 #include "assets/tga.hpp"
 #include "brush/read.hpp"
 #include "classicenhance/cached.hpp"
 #include "classicenhance/weapons.hpp"
 #include "core/output.hpp"
 #include "morph/read.hpp"
+#include "morph/skeletal.hpp"
 #include "progs/layout.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -183,6 +189,52 @@ void replace_picture(const SearchPath& files, std::string_view map, ge::brush::M
   p.rgba_height = static_cast<uint32_t>(img->height);
 }
 
+// A mod's skeletal model (`.iqm`): read, posed through its clips into frames (a clip a frame
+// group, morph/skeletal.hpp), its materials' pictures laid one under another in one skin, each
+// found as the material's name (its extension dropped) beside the model, at the files' root, or
+// under `textures/`; a material with no picture is the palette's grey.
+bool open_skeletal(const SearchPath& files, const std::string& name, std::span<const uint8_t> bytes,
+                   OpenedModel& out, std::string& error) {
+  const ge::assets::LoadResult read = ge::assets::load_iqm(bytes, name);
+  if (!read.ok) {
+    error = read.error;
+    return false;
+  }
+  const fs::path dir = fs::path(name).parent_path();
+  std::vector<ge::assets::Image> pictures;
+  int width = 0, height = 0;
+  for (const ge::assets::Material& mat : read.model.materials) {
+    const std::string stem = fs::path(mat.name).replace_extension().generic_string();
+    const std::string stems[] = {(dir / stem).generic_string(), stem, "textures/" + stem};
+    std::optional<ge::assets::Image> img =
+        mat.name.empty() ? std::nullopt : stand_in(files, stems, "grey for " + mat.name);
+    if (!img) {
+      img = ge::assets::Image{8, 8, {}};
+      img->rgba.assign(size_t{256}, 128);
+    }
+    width = std::max(width, img->width);
+    height += img->height;
+    pictures.push_back(std::move(*img));
+  }
+  std::vector<std::array<float, 4>> rects;
+  ge::assets::Image atlas{width, height, std::vector<uint8_t>(size_t(width) * height * 4, 0)};
+  int y = 0;
+  for (const ge::assets::Image& img : pictures) {
+    for (int r = 0; r < img.height; ++r)
+      std::copy_n(img.rgba.begin() + ptrdiff_t(r) * img.width * 4, size_t(img.width) * 4,
+                  atlas.rgba.begin() + (ptrdiff_t(y + r) * width) * 4);
+    rects.push_back({0, float(y) / float(height), float(img.width) / float(width),
+                     float(y + img.height) / float(height)});
+    y += img.height;
+  }
+  if (!ge::morph::bake_skeletal(read.model, name, {.rects = rects}, &out.morph, &error))
+    return false;
+  out.form = ModelForm::morph;
+  out.skins.clear();
+  if (width > 0 && height > 0) out.skins.push_back(std::move(atlas));
+  return true;
+}
+
 bool open_model(const GameAdapter&, const SearchPath& files, const std::string& name,
                 OpenedModel& out, std::string& error) {
   out = {};
@@ -191,6 +243,10 @@ bool open_model(const GameAdapter&, const SearchPath& files, const std::string& 
   const std::span<const uint8_t> bytes = find_file(files, name, store);
   if (bytes.empty()) return false;
   const std::string kind = folded(fs::path(name).extension().string());
+  // A skeletal model by its name, or by its first bytes under another name (a mod's stand-in).
+  constexpr char kSkeletal[16] = "INTERQUAKEMODEL";
+  if (kind == ".iqm" || (bytes.size() >= 16 && std::memcmp(bytes.data(), kSkeletal, 16) == 0))
+    return open_skeletal(files, name, bytes, out, error);
   if (kind == ".mdl") {
     if (!ge::morph::read_model(bytes, name, &out.morph, &error)) return false;
     out.form = ModelForm::morph;
@@ -214,8 +270,8 @@ bool open_model(const GameAdapter&, const SearchPath& files, const std::string& 
     out.form = ModelForm::brush;
     return true;
   }
-  error =
-      "a model of a kind this game does not draw (" + kind + "); next: name a .mdl, .spr or .bsp";
+  error = "a model of a kind this game does not draw (" + kind +
+          "); next: name a .mdl, .iqm, .spr or .bsp";
   return false;
 }
 

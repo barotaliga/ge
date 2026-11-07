@@ -59,7 +59,9 @@ NetPlayer net_player_of(const Server& sv, int slot) {
   s.origin = ed.origin + (ed.mins - kPlayerMins);
   s.velocity = ed.velocity;
   s.type = move_type_of(ed, c.old_spectator);
-  s.jump_held = c.jump_held;
+  // The original move keeps the jump in the player's flags; the predicted move in the slot.
+  s.jump_held =
+      sv.set.playermove == PlayerMove::original ? (ed.flags & kFlagJumpReleased) == 0 : c.jump_held;
   s.ground = (ed.flags & kFlagOnGround) != 0 ? 0 : -1;
   return quantize_player(s);
 }

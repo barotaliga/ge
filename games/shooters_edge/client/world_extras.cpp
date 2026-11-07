@@ -245,7 +245,8 @@ void prepare_extras(ge::gpu::Device& d, WorldExtras& x, const ba::BspDraw& bsp,
   gr::prepare_liquid(d, x.liquids, view);
   x.fires.clear();
   if (v2 && on.flames)
-    ba::bsp_fires(*x.scene, view.time_s, options.brightness, x.fires, x.fire_look);
+    ba::bsp_fires(*x.scene, view.time_s, options.brightness * options.fire_glow, x.fires,
+                  x.fire_look);
   gr::prepare_flames(d, x.flames, x.fires, view);
   const gr::PrecipShelter shelter = ba::bsp_shelter(bsp);
   gr::bind_precip_shelter(d, x.precip, x.raining ? &shelter : nullptr);

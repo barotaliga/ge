@@ -1,6 +1,7 @@
 // engine/render/emitters.hpp: a drip falls from its ceiling at its rate, once a slot, and two spans
 // that meet give each birth once, bit for bit as one span; embers are born over the floor, rise,
-// glow and cool; a bonfire's sparks fly up hot and drift with the wind; motes fill the box; steam
+// glow and cool; a bonfire's sparks are flecks, floaters and pops' bursts at a wood fire's heat,
+// whirled by the eddies, and drift with the wind; motes fill the box; steam
 // lifts off the floor; a long pause keeps its latest births only; the embers over a glowing volume
 // stand on its floor at a rate its glow gives.
 //
@@ -137,7 +138,7 @@ TEST(the_embers_over_a_glow_stand_on_its_floor_at_its_rate) {
   CHECK(r::embers_over(v, 100).rate == 4);
 }
 
-TEST(a_bonfires_sparks_fly_up_hot_and_go_with_the_wind) {
+TEST(a_bonfires_sparks_are_of_three_kinds_at_a_wood_fires_heat_and_go_with_the_wind) {
   r::AreaEmitter e = box(r::AreaEmitter::Kind::sparks, 30);
   std::vector<r::Particle> still;
   r::emit_area(e, 0, 10, still);
@@ -145,15 +146,56 @@ TEST(a_bonfires_sparks_fly_up_hot_and_go_with_the_wind) {
   std::vector<r::Particle> windy;
   r::emit_area(e, 0, 10, windy);
   CHECK(still.size() == windy.size() && still.size() > 250);
+  int pops = 0, flecks = 0, floaters = 0;
   double drift = 0;
   for (size_t i = 0; i < still.size(); ++i) {
     const r::Particle& p = still[i];
-    CHECK(p.kelvin >= 2900.0f && p.kelvin <= 3400.0f && p.fall < 0.0f);
-    // Thrown up out of the bed, faster than an ember rises.
-    if (p.age < 0.02f) CHECK(p.v[1] > 1.4f);
-    // The same spark in the wind: the same climb, carried downwind.
-    CHECK(std::fabs(windy[i].p[1] - p.p[1]) < 1e-4f);
+    CHECK(p.kelvin >= 1900.0f && p.kelvin <= 2500.0f);
+    CHECK(p.swirl > 0.0f);  // every one rides the eddies over the fire
+    if (p.fall > 0) {
+      ++pops;  // heavy enough to arc back down, and hop on the floor round the bed
+      CHECK(p.bounce > 0.0f && p.floor_y > -1e8f);
+    } else if (p.drag > 2) {
+      ++flecks;
+    } else {
+      ++floaters;
+      CHECK(p.life >= 1.8f);  // the longest lived
+    }
     drift += windy[i].p[0] - p.p[0];
   }
-  CHECK(drift / static_cast<double>(still.size()) > 0.5);
+  CHECK(pops > 0 && flecks > pops && floaters > pops);
+  CHECK(drift / static_cast<double>(still.size()) > 0.5);  // carried off downwind
+}
+
+TEST(a_pops_sparks_leave_in_a_burst_from_one_point) {
+  r::AreaEmitter e = box(r::AreaEmitter::Kind::sparks, 30);
+  std::vector<r::Particle> out;
+  r::emit_area(e, 0, 10, out);
+  // A pop's sparks are born a few at a time: consecutive births that arc are found together.
+  int runs = 0;
+  for (size_t i = 1; i < out.size(); ++i)
+    if (out[i].fall > 0 && out[i - 1].fall > 0) ++runs;
+  CHECK(runs > 0);
+}
+
+TEST(a_fleck_is_whirled_by_the_eddies_where_still_air_flies_it_straight) {
+  r::Particle p{};
+  p.p[1] = 1;
+  p.v[0] = 1.5f;
+  p.v[1] = 3;
+  p.life = 2;
+  p.size = 0.02f;
+  p.drag = 2.2f;
+  p.fall = -0.08f;
+  r::Particle calm = p;
+  p.swirl = 1.5f;
+  // Its heading across the plan, start and end of a second's flight: turned by the eddies.
+  const auto heading = [](const r::Particle& q) { return std::atan2(q.v[2], q.v[0]); };
+  const float h0 = heading(p);
+  for (int i = 0; i < 60; ++i) {
+    r::step_particle(p, 1 / 60.0f);
+    r::step_particle(calm, 1 / 60.0f);
+  }
+  CHECK(std::fabs(heading(calm) - h0) < 1e-3f);  // still air: the line it was thrown on
+  CHECK(std::fabs(std::sin(heading(p) - h0)) > 0.2f);
 }

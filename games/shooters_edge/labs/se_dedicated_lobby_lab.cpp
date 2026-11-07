@@ -3,13 +3,15 @@
 // over the simulated network. Every map opens in warmup with the limits held; each client says
 // `ready` a few seconds into each warmup, the countdown runs into the match (the map restarted with
 // every seat on it), the match plays to its `--match` seconds, the mod changes the map and warmup
-// comes back, round after round. It answers how long each warmup and countdown take, whether the
-// bots play as seats every client sees (their teams and frags on a client's scoreboard), and
-// whether a session replays to the bit. The phases over time are drawn as a chart.
+// comes back, round after round; with `--intermission` the scores stay up that long after the
+// mod's end of each match before the next map (`sv_intermission`). It answers how long each warmup
+// and countdown take, whether the bots play as seats every client sees (their teams and frags on a
+// client's scoreboard), and whether a session replays to the bit. The phases over time are drawn as
+// a chart.
 //
 // ge:summary Lab: the lobby on the dedicated server: bots seated, clients ready, warmup to match
 // ge:keywords lab se-dedicated-lobby lobby sv_lobby sv_bots bots warmup countdown match ready
-// ge:keywords scoreboard local-seat match-restart
+// ge:keywords scoreboard local-seat match-restart sv_countdown sv_intermission intermission
 // ge:skill net labs
 // ge:test tests/shooters_edge_classic_game_test.cpp
 #include <cstdio>
@@ -41,6 +43,7 @@ constexpr int kClients = 2;
 
 struct Round {
   double warmup_s = 0, countdown_s = 0;
+  double intermission_s = -1;  // the intermission after this round's match (-1: none seen)
 };
 
 struct Session {
@@ -57,16 +60,17 @@ struct Session {
   uint64_t digest = 1469598103934665603ull;
 };
 
-// The phase the server's status names: 0 warmup, 1 countdown, 2 match (-1: none).
+// The phase the server's status names: 0 warmup, 1 countdown, 2 match, 3 intermission (-1: none).
 int phase_of(const std::string& status) {
-  for (int p = 0; p < 3; p++)
+  for (int p = 0; p < 4; p++)
     if (status.find(std::string("lobby=") + gs::phase_name(static_cast<gs::LobbyPhase>(p))) !=
         std::string::npos)
       return p;
   return -1;
 }
 
-Session run_session(uint32_t seed, int bots, double seconds, double match_s) {
+Session run_session(uint32_t seed, int bots, double seconds, double match_s, double countdown_s,
+                    double intermission_s) {
   Session r;
   gn::LinkConditions lan;
   gn::SimNetwork net = gn::make_sim_network(seed, lan);
@@ -79,6 +83,8 @@ Session run_session(uint32_t seed, int bots, double seconds, double match_s) {
   c.seed = seed;
   c.bots = bots;
   c.lobby = 1;
+  c.countdown_s = countdown_s;
+  c.intermission_s = intermission_s;
   c.rules["timelimit"] = gc::num::to_fixed(match_s / 60, 4);
   gs::Server s;
   if (!gs::server_open(s, se::classic_game(), c, &port, nullptr, r.error)) return r;
@@ -89,7 +95,7 @@ Session run_session(uint32_t seed, int bots, double seconds, double match_s) {
     gn::open_sim_transport(ct[i], net, gn::sim_address(static_cast<uint32_t>(i + 1), kClientPort));
   const auto frames = static_cast<int64_t>(gc::num::round(seconds / s.frame_s));
   int last = -1;
-  double warm_at = 0, count_at = 0;
+  double warm_at = 0, count_at = 0, over_at = 0;
   for (int64_t f = 0; f <= frames; f++) {
     const int64_t now = s.now_us;
     const double t = static_cast<double>(now) / 1e6;
@@ -124,10 +130,12 @@ Session run_session(uint32_t seed, int bots, double seconds, double match_s) {
         for (int i = 0; i < kClients; i++) ready_at[i] = t + 3 + 2 * i;
       }
       if (p == 1) count_at = t;
-      if (p == 2) {
+      if (p == 2 && last == 1) {
         r.rounds.push_back({count_at - warm_at, t - count_at});
         r.matches++;
       }
+      if (p == 3) over_at = t;
+      if (last == 3 && !r.rounds.empty()) r.rounds.back().intermission_s = t - over_at;
       if (last >= 0) {  // a step, not a ramp
         r.t.push_back(t);
         r.phase.push_back(last);
@@ -154,7 +162,8 @@ Session run_session(uint32_t seed, int bots, double seconds, double match_s) {
   }
   for (const std::string& line : me.prints)
     if (line.find("ready") != std::string::npos || line.find("countdown") != std::string::npos ||
-        line.find("joins team") != std::string::npos || line.find("match") != std::string::npos)
+        line.find("joins team") != std::string::npos || line.find("match") != std::string::npos ||
+        line.find("next map") != std::string::npos)
       r.lines.push_back(line.substr(0, line.find('\n')));
   r.status = gs::server_status(s);
   return r;
@@ -171,14 +180,16 @@ void run(gl::Lab& lab) {
   const int bots = static_cast<int>(lab.arg_num("bots"));
   const double seconds = lab.arg_num("seconds");
   const double match_s = lab.arg_num("match");
+  const double countdown_s = lab.arg_num("countdown");
+  const double intermission_s = lab.arg_num("intermission");
   if (bots < 0 || bots > 5) {
     lab.fail("--bots=" + lab.arg("bots") + " does not leave the two clients their seats",
              "Pick 0 to 5 bots (the lab's server has 8 slots, slot 0 kept for a player); "
              "skill: net.");
     return;
   }
-  const Session a = run_session(seed, bots, seconds, match_s);
-  const Session b = run_session(seed, bots, seconds, match_s);
+  const Session a = run_session(seed, bots, seconds, match_s, countdown_s, intermission_s);
+  const Session b = run_session(seed, bots, seconds, match_s, countdown_s, intermission_s);
   if (!a.error.empty()) {
     lab.fail("the dedicated server did not open: " + a.error,
              "Fix what the error names in games/shooters_edge/net/classic_game.cpp's create, then "
@@ -188,9 +199,15 @@ void run(gl::Lab& lab) {
   gl::LabTable rounds{"each round: the warmup until the countdown, and the countdown (s)",
                       {"round", "warmup", "countdown"},
                       {}};
-  for (size_t i = 0; i < a.rounds.size(); i++)
-    rounds.rows.push_back({std::to_string(i + 1), gc::num::to_fixed(a.rounds[i].warmup_s, 2),
-                           gc::num::to_fixed(a.rounds[i].countdown_s, 2)});
+  if (intermission_s > 0) rounds.columns.push_back("intermission");
+  for (size_t i = 0; i < a.rounds.size(); i++) {
+    std::vector<std::string> row{std::to_string(i + 1), gc::num::to_fixed(a.rounds[i].warmup_s, 2),
+                                 gc::num::to_fixed(a.rounds[i].countdown_s, 2)};
+    if (intermission_s > 0)
+      row.push_back(
+          a.rounds[i].intermission_s < 0 ? "-" : gc::num::to_fixed(a.rounds[i].intermission_s, 2));
+    rounds.rows.push_back(std::move(row));
+  }
   gl::LabTable board{"player1's scoreboard at the end: every seat, its team and frags",
                      {"slot", "name", "team", "kind", "frags"},
                      a.board};
@@ -213,7 +230,7 @@ void run(gl::Lab& lab) {
   lab.note("last status: " + a.status);
   gl::LineChart line;
   line.frame = {"THE DEDICATED SERVER'S LOBBY", "seed " + lab.arg("seed"), "t (s)",
-                "phase (0 warmup, 1 countdown, 2 match)"};
+                "phase (0 warmup, 1 countdown, 2 match, 3 intermission)"};
   line.spikes = false;
   line.traces.push_back({"lobby", a.t, a.phase});
   const gl::Chart chart = gl::line_chart(line);
@@ -221,11 +238,16 @@ void run(gl::Lab& lab) {
             chart.title,
             "Shooter's Edge's dedicated server with sv_lobby 1 and bots seated: two classic "
             "clients join at 1 s and 2 s over the simulated network and say ready 3 s and 5 s "
-            "into every warmup. The countdown runs 5 s into the match (the map restarted with "
-            "every seat on it); the match lasts --match seconds, the mod's intermission, then "
-            "warmup again on the next map.",
-            "warmup until both are ready, a 5 s countdown, the match, warmup again, each round",
-            {{"bots", lab.arg("bots")}, {"match", lab.arg("match")}}},
+            "into every warmup. The countdown runs --countdown seconds into the match (the map "
+            "restarted with every seat on it); the match lasts --match seconds, the mod's "
+            "intermission, then --intermission seconds more with the scores up (sv_intermission, "
+            "phase 3; none at 0), then warmup again on the next map.",
+            "warmup until both are ready, the countdown, the match, the intermission when set, "
+            "warmup again, each round",
+            {{"bots", lab.arg("bots")},
+             {"match", lab.arg("match")},
+             {"countdown", lab.arg("countdown")},
+             {"intermission", lab.arg("intermission")}}},
            gl::to_picture(chart.plot));
   gl::LineChart fl;
   fl.frame = {"FRAGS ON PLAYER1'S SCOREBOARD", "seed " + lab.arg("seed"), "t (s)", "frags"};
@@ -255,6 +277,9 @@ const gl::LabSpec kSpec{
     "the match and back, with its bots as seats every client sees, and replay to the bit?",
     {
         {"bots", "3", "bots seated at the start (sv_bots)"},
+        {"countdown", "5", "everyone ready to the match, s (sv_countdown)"},
+        {"intermission", "0",
+         "the scores up after each match before the next map, s (sv_intermission)"},
         {"match", "15", "each match's length (the mod's timelimit), s"},
         {"seconds", "60", "server time to run, s"},
         {"seed", "1", "the network's and the game's stream"},

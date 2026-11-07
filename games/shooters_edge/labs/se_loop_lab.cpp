@@ -274,17 +274,21 @@ void run(gl::Lab& lab) {
   opt.lose_every = static_cast<int>(lab.arg_num("lose-every"));
   opt.client_frame_ms = static_cast<int>(lab.arg_num("client-frame"));
   opt.predict = lab.arg("predict") != "0";
+  opt.original_move = lab.arg("move") == "original";
+  if (lab.arg("move") != "arena" && !opt.original_move) {
+    lab.fail("se-loop: --move is arena or original, not '" + lab.arg("move") + "'",
+             "next: make lab LAB=se-loop ARGS=--help");
+    return;
+  }
   if (opt.frames < 1 || opt.client_frame_ms < 1 || opt.latency_ms < 0) {
     lab.fail("se-loop: --frames and --client-frame must be at least 1 and --latency not negative",
              "next: make lab LAB=se-loop ARGS=--help");
     return;
   }
   const std::vector<std::pair<std::string, std::string>> in = {
-      {"frames", lab.arg("frames")},
-      {"latency ms", lab.arg("latency")},
-      {"lose every", lab.arg("lose-every")},
-      {"client frame ms", lab.arg("client-frame")},
-      {"predict", lab.arg("predict")}};
+      {"frames", lab.arg("frames")},         {"latency ms", lab.arg("latency")},
+      {"lose every", lab.arg("lose-every")}, {"client frame ms", lab.arg("client-frame")},
+      {"predict", lab.arg("predict")},       {"move", lab.arg("move")}};
 
   const se::MatchReport r = se::run_match(opt);
   se::Arena arena;
@@ -377,6 +381,9 @@ const gl::LabSpec kSpec{
         {"lose-every", "23", "player 2 loses every Nth packet (0: none)"},
         {"client-frame", "8", "the clients' render frame, ms"},
         {"predict", "1", "1: the clients predict; 0: they show the server's state"},
+        {"move", "arena",
+         "the server's player move: arena (the predicted move) or original (the server's own "
+         "step a command, sv_playermove original), the clients predicting the same one"},
         {"vectors", "tests/golden/shooter_toss_recording.txt", "the recorded flights"},
     },
     "--frames=700",

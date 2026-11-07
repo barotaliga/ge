@@ -29,7 +29,7 @@
 //
 // - **open_model**: a model the server names ("progs/armor.mdl") read into a shared FORM the
 //   window draws (plugins/morph's `Model`, a sprite, a brush item), with a picture with alpha for
-//   each skin the files hold one for (the first game's `progs/player.mdl_0.png`, or `.tga`).
+//   each skin the files hold one for (`progs/player.mdl_0.png`, or `.tga`); an `.iqm` baked.
 // - **open_sound**: a sound the server or a demo names read to samples (`sound/*.wav`).
 // - **pictures**: the HUD's and the menus' pictures (client/classic_pictures.hpp), each from a PNG
 //   or TGA of its name where the files hold one (`gfx/sbar.png`; alpha kept, its size a whole

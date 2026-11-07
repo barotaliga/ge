@@ -142,6 +142,26 @@ void route_event(ClassicServer& s, const sv::NetEvent& ev) {
         m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
         unreliable_svc(s, j, m);
         break;
+      case sv::EventKind::point_effect: {
+        // A named effect reaches a classic client only as the temporary entity of its name.
+        uint8_t kind = 0;
+        if (!sv::classic_temp_entity(ev.text, kind)) {
+          s.counts.effects_dropped++;
+          break;
+        }
+        m.id = svc::temp_entity;
+        m.ints = {kind};
+        if (kind == te::gunshot || kind == te::blood) {
+          const float n = ev.values[3];  // NaN: once
+          m.ints.push_back(!(n >= 1) ? 1 : n > 255 ? 255 : static_cast<int>(n));
+        }
+        m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
+        unreliable_svc(s, j, m);
+        break;
+      }
+      case sv::EventKind::trail_effect:  // a classic client has no message for a named trail
+        s.counts.effects_dropped++;
+        break;
       case sv::EventKind::ambient:
         m.id = svc::spawnstaticsound;
         m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};

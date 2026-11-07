@@ -518,8 +518,8 @@ constexpr Entry kEntries[] = {
      .needs = "r_bloom",
      .target = Target::client,
      .min = 0,
-     .max = 1,
-     .step = 0.1},
+     .max = 0.4,
+     .step = 0.02},
     {.page = "ce_light", .id = "back", .text = "BACK", .kind = ItemKind::back},
 
     {.page = "ce_liquids",

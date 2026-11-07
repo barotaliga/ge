@@ -55,14 +55,28 @@ constexpr uint8_t temp_entity = 23;
 }  // namespace campaign_svc
 
 // What a temporary entity shows.
-enum class EffectKind : uint8_t { impact, spike, explosion, teleport, lava, beam, blood };
+// `named` and `named_trail`: an effect a mod named (pointparticles, trailparticles) that is no
+// classic one, drawn from the game's files' effect of that name or not at all.
+enum class EffectKind : uint8_t {
+  impact,
+  spike,
+  explosion,
+  teleport,
+  lava,
+  beam,
+  blood,
+  named,
+  named_trail
+};
 struct Effect {
   EffectKind kind = EffectKind::impact;
   int code = 0;            // the temporary entity's kind byte (-1: a particle burst)
   int entity = 0;          // a beam's owner
   int count = 1;           // a gunshot's pellets, a blood's drops (a match's; 1 elsewhere)
   ge::shooter::Vec3f at;   // map units; a beam's start
-  ge::shooter::Vec3f end;  // a beam's end
+  ge::shooter::Vec3f end;  // a beam's end; a named trail's
+  ge::shooter::Vec3f way;  // a named effect's way (zero: up)
+  std::string name;        // a named effect's
 };
 
 inline constexpr double kPrintSpeed = 8;  // scr_printspeed's default, characters a second

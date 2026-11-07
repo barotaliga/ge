@@ -114,6 +114,16 @@ void add_server_cvars(cn::Cvars& cvars, ServerConfig& c, const ServerGame& game)
   cvars.bind({"sv_timeout", timeout, cn::kServer,
               "seconds a client may go unheard before it is dropped", CvarKind::number, 1, 3600},
              &c.timeout_s);
+  const std::string countdown = core::num::to_string(c.countdown_s);
+  const std::string intermission = core::num::to_string(c.intermission_s);
+  cvars.bind(
+      {"sv_countdown", countdown, cn::kServer,
+       "with sv_lobby: seconds between everyone ready and the match", CvarKind::number, 0, 600},
+      &c.countdown_s);
+  cvars.bind({"sv_intermission", intermission, cn::kServer,
+              "with sv_lobby: seconds the scores stay up after a match before the next map",
+              CvarKind::number, 0, 600},
+             &c.intermission_s);
   cvars.bind({"sv_floodprot", flood, cn::kServer,
               "\"N S T\": N chat lines in S seconds, else silent for T seconds", CvarKind::text},
              &c.floodprot);

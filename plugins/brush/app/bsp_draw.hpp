@@ -73,6 +73,12 @@ struct Options {
   double strength = 1;          // the point lights' strength against the classic's
   double dynamic_strength = 1;  // the dynamic lights' (set_dynamic_lights) against the classic's
   int shadowed = 32;            // the nearest lights that cast shadows
+  // A map's light near it softened over this share of its half reach (0: over its source's size
+  // alone). Its inverse square matches the classic's straight fall-off at the half reach, but the
+  // classic's light is at most twice that at the light, where the square's grows without end: a
+  // wall a hand's breadth from a lamp lit dozens of times its half-reach light reads as a white
+  // disc. Softened so, its light near it stays a few times the half reach's (0.4: about six).
+  double near_soft = 0;
   // THE MOVING CASTERS' SHADOWS (the caster cubes and capsules below; a game's quality stop):
   // how many of the shadowed lights get a cube of the casters a frame (0 .. kCasterLights; 0
   // none, and no sun's tile of them either), their edges soft by the light's size (PCSS: a
@@ -93,10 +99,14 @@ struct Options {
   // says when every cube is in).
   int fresh_cubes = 2;
   bool first_all = true;
-  int most = 160;             // the lights a frame draws at most (the nearest)
-  bool lava_lights = true;    // the lava's glow lights the walls round it
-  double lava_glow = 1;       // that glow's strength, 0 none
-  double slime_glow = 1;      // the slime's faint green glow on the walls round it, 0 none
+  int most = 160;           // the lights a frame draws at most (the nearest)
+  bool lava_lights = true;  // the lava's glow lights the walls round it
+  double lava_glow = 1;     // that glow's strength, 0 none
+  double slime_glow = 1;    // the slime's faint green glow on the walls round it, 0 none
+  double fire_glow = 1;     // the flames' own brightness, a share of kFireGlow's (bsp_flames.hpp)
+  // The glowing texels' light under the real-time lights (a window's, a lamp's panel), a share of
+  // a white face's as the map lights it (the classic's fullbright: 1; the lightmaps' paths keep 1).
+  double glow = 1;
   bool portal_lights = true;  // each teleporter's panel lights its room with a slow pulse
   // A large flame's light as a bonfire's or a lantern's (bsp_flames.hpp, ce_bonfires): from higher
   // up, softer and brighter (`fire_light_gain`).
@@ -213,7 +223,7 @@ struct GpuBsp {
   float info4[4];    // the bump's depth, m; the pack's sky under v2 (1); the parallax's reach, m;
                      // the relief's highlights' strength
   float veil[4];     // the sky faces' pixels times these (the sky's light, seen and tinted)
-  float weather[4];  // on (1), the rain falling now, the fall's spread, 0
+  float weather[4];  // on (1), the rain falling now, the fall's spread, the glowing texels' share
   GpuJob ortho[kOrthos];
   // A lightmap layer's height in the atlas's uv, the layers, the relief on (1), the parallax's
   // depth, m.

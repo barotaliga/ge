@@ -570,6 +570,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   for (const Pick& p : picks) {
     const PointLight& l = *p.l;
     GpuLight g{};
+    double near = 0;  // m: what its light is softened over near it (`near_soft`)
     if (l.physical) {
       set4(g.pos, l.pos[0], l.pos[1], l.pos[2], l.reach);
       set4(g.colour, l.colour[0] * l.value, l.colour[1] * l.value, l.colour[2] * l.value, 1);
@@ -581,11 +582,13 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
                          flicker_at(l, view.time_s) * fire_light_gain(l, o.bonfires);
       set4(g.pos, l.pos[0], l.pos[1] + fire_light_lift(l, o.bonfires), l.pos[2], l.reach * 1.5);
       set4(g.colour, l.colour[0] * at1, l.colour[1] * at1, l.colour[2] * at1, 0);
+      near = o.near_soft * half;
     }
     // A fire lights the wall behind it from its whole flame: its light softened over its height.
     const double soft = std::max(fire_light_size(l, o.bonfires), l.soft_m);
+    const double spread = std::max(soft, near);
     // An aimed light: full inside info.w's cosine, none outside spot.w's.
-    set4(g.info, -1, soft * soft, 0, l.spot ? l.cone_cos[0] : -1);
+    set4(g.info, -1, spread * spread, 0, l.spot ? l.cone_cos[0] : -1);
     // Its shadows as soft as its source is big: a flame's over its size, a bulb's sharp.
     set4(g.more, -1, std::max(soft * kFlameWidthShare, kPointSourceM), 0, 0);
     if (l.spot)
@@ -739,7 +742,7 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   for (uint32_t k = 0; k < kOrthos; ++k)
     d.frame_jobs[size_t(kMaxShadowed) * 6 + k] = d.staged.ortho[k];
   set4(d.staged.weather, o.weather && o.mode == Mode::v2 ? 1 : 0, std::clamp(o.raining, 0.0, 1.0),
-       std::clamp(o.spread, 0.0, 1.0), 0);
+       std::clamp(o.spread, 0.0, 1.0), std::max(o.glow, 0.0));
   // The orthographic maps this frame reads (the sun's and the zenith's lit in real time, the
   // zenith's and the fall's under weather), drawn only when their camera moved.
   {

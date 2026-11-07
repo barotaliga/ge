@@ -16,12 +16,15 @@
 // ge:keywords pictures replacement-picture find_config read_configs_from open_locations
 // ge:keywords held_weapons menu-table game-modes hud_art_of
 // ge:skill shooter testing
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
 
 #include "assets/image.hpp"
+#include "assets/iqm.hpp"
+#include "assets/test_model.hpp"
 #include "assets/tga.hpp"
 #include "audio/wav.hpp"
 #include "brush/pictures.hpp"
@@ -233,6 +236,37 @@ TEST(a_model_is_read_into_its_form_with_a_picture_standing_in_for_a_skin) {
   // Not there: false with no reason. A kind the game does not draw: the reason, and what next.
   CHECK(!a.open_model(a, files, "progs/missing.mdl", m, error) && error.empty());
   CHECK(!a.open_model(a, files, "progs/odd.md9", m, error) &&
+        error.find("next:") != std::string::npos);
+}
+
+TEST(a_mods_skeletal_model_is_baked_into_frames_with_its_materials_pictures_in_one_skin) {
+  // The test model's two materials: `skin` has a picture beside the model, `fin` none (grey).
+  const as::Model limb = as::make_test_model();
+  as::Image skin;
+  skin.width = 4;
+  skin.height = 4;
+  skin.rgba.assign(size_t{4} * 4 * 4, 220);
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK(ge::vfs::write_pak({{"progs/limb.iqm", as::write_iqm(limb, {.metres = 0.025})},
+                            {"progs/skin.tga", as::encode_tga(skin, true)},
+                            {"progs/bad.iqm", {'I', 'N', 'T', 'E', 'R'}}},
+                           &pak, &error));
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  const cl::GameAdapter& a = cl::classic_adapter();
+  cl::OpenedModel m;
+  CHECK_MSG(a.open_model(a, files, "progs/limb.iqm", m, error), error);
+  CHECK(m.form == cl::ModelForm::morph && m.morph.skins.size() == 1 && m.skins.size() == 1);
+  // A frame group a clip (`wave`, `twist`); the skin the two pictures one under the other.
+  CHECK(!m.morph.frames.empty() && m.morph.frames.back().group == 1);
+  CHECK(m.skins.size() == 1 && m.skins[0].width == 8 && m.skins[0].height == 12);
+  CHECK(m.skins.size() == 1 && m.skins[0].rgba[0] == 220);
+  // The limb is a metre tall: 40 map units up the file's +z.
+  CHECK(!m.morph.frames.empty() && m.morph.frames[0].max[2] > 38 && m.morph.frames[0].max[2] < 48);
+  CHECK(!m.morph.frames.empty() && std::abs(m.morph.frames[0].min[2]) < 1);
+  CHECK(!a.open_model(a, files, "progs/bad.iqm", m, error) &&
+        error.find("progs/bad.iqm") != std::string::npos &&
         error.find("next:") != std::string::npos);
 }
 

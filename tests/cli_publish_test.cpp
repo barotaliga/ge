@@ -1,15 +1,22 @@
 // `ge lab publish` (engine/cli/publish.hpp): the page's pieces without a lab run: base64, the
-// escaping, a page with and without a kept run, and a long table cut short.
+// escaping, a page with and without a kept run, a long table cut short, and a page past its limit
+// built again with smaller pictures.
 //
 // ge:summary Test: ge lab publish's page, its escaping, its base64 and its before-and-after
-// ge:keywords test cli lab publish html base64 escape before after metric change
+// ge:keywords test cli lab publish html base64 escape before after metric change page-limit fit
 // ge:skill testing agent-interface
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <string>
+#include <vector>
 
 #include "check.hpp"
 #include "cli/publish.hpp"
+#include "lab/png.hpp"
 
 using namespace ge::cli;
+namespace fs = std::filesystem;
 
 namespace {
 
@@ -91,4 +98,42 @@ TEST(a_page_takes_the_title_it_is_given) {
   const std::string page = publish_html(std::vector<Page>{sample()}, 60, "Fog <and> glow");
   CHECK(has(page, "<title>Fog &lt;and&gt; glow</title>"));
   CHECK(has(publish_html(sample()), "<title>level lab run</title>"));
+}
+
+TEST(a_page_past_its_limit_is_built_again_with_smaller_pictures) {
+  const fs::path repo = fs::temp_directory_path() / "ge_cli_publish_fit";
+  fs::remove_all(repo);
+  const fs::path dir = repo / "previews" / "noise";
+  fs::create_directories(dir);
+  // Noise: the GIF cannot squeeze it, so the page's size follows the picture's width.
+  ge::lab::Picture p{720, 540, std::vector<uint8_t>(size_t{720} * 540 * 4)};
+  uint32_t x = 2463534242u;
+  for (size_t i = 0; i < p.rgba.size(); ++i) {
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    p.rgba[i] = i % 4 == 3 ? 255 : static_cast<uint8_t>(x);
+  }
+  CHECK(ge::lab::write_png((dir / "noise.png").string(), p));
+  std::ofstream(dir / "report.json")
+      << R"({"kind":"picture","question":"q","shots":[{"id":"noise","title":"NOISE",)"
+      << R"("caption":"","look_for":"","file":"noise.png","width":720,"height":540}]})";
+
+  PublishOptions o;
+  o.ids = {"noise"};
+  const Outcome whole = run_lab_publish(repo, o);
+  CHECK(whole.findings.empty());
+  const size_t full = fs::file_size(dir / "publish.html");
+
+  o.max_page = full / 3;
+  const Outcome fit = run_lab_publish(repo, o);
+  CHECK(fit.findings.size() == 1);
+  CHECK(fit.findings[0].severity == Severity::warn);
+  CHECK(has(fit.findings[0].what, "shrunk to"));
+  CHECK(fs::file_size(dir / "publish.html") <= o.max_page);
+
+  o.max_page = 1000;  // no width fits: the smallest is tried, and the page says it is too big
+  const Outcome over = run_lab_publish(repo, o);
+  CHECK(!over.findings.empty() && over.findings.back().severity == Severity::error);
+  fs::remove_all(repo);
 }

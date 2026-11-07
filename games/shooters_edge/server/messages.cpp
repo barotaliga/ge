@@ -83,6 +83,10 @@ const char* event_kind_name(EventKind k) {
       return "multicast";
     case EventKind::pause:
       return "pause";
+    case EventKind::point_effect:
+      return "point-effect";
+    case EventKind::trail_effect:
+      return "trail-effect";
   }
   return "?";
 }
@@ -90,6 +94,24 @@ const char* event_kind_name(EventKind k) {
 void clear_frame(MessageSink& m) {
   m.unreliable.clear();
   m.events.clear();
+}
+
+bool classic_temp_entity(std::string_view name, uint8_t& kind) {
+  std::string n;
+  for (char c : name) n += static_cast<char>(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c);
+  if (n.starts_with("te_")) n.erase(0, 3);
+  static constexpr struct {
+    const char* name;
+    uint8_t kind;
+  } kNames[] = {{"spike", 0},        {"superspike", 1}, {"gunshot", 2},     {"explosion", 3},
+                {"tarexplosion", 4}, {"wizspike", 7},   {"knightspike", 8}, {"lavasplash", 10},
+                {"lava", 10},        {"teleport", 11},  {"blood", 12},      {"lightningblood", 13}};
+  for (const auto& row : kNames)
+    if (n == row.name) {
+      kind = row.kind;
+      return true;
+    }
+  return false;
 }
 
 std::string event_text(const NetEvent& e) {
@@ -101,7 +123,8 @@ std::string event_text(const NetEvent& e) {
       if (c == '\n') c = '|';
     s += " \"" + t + "\"";
   }
-  if (e.kind == EventKind::sound || e.kind == EventKind::particle)
+  if (e.kind == EventKind::sound || e.kind == EventKind::particle ||
+      e.kind == EventKind::point_effect || e.kind == EventKind::trail_effect)
     s += " at " + ge::core::num::to_fixed(e.origin.x, 1) + " " +
          ge::core::num::to_fixed(e.origin.y, 1) + " " + ge::core::num::to_fixed(e.origin.z, 1);
   if (!e.bytes.empty()) s += " " + std::to_string(e.bytes.size()) + " bytes";

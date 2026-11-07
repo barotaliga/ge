@@ -36,11 +36,26 @@ struct Params {
 
 }  // namespace
 
+void eddy(const Particle& p, float out[3]) {
+  out[0] = out[1] = out[2] = 0;
+  if (p.swirl == 0) return;
+  const float x = p.size * 613.0f + p.life * 89.0f;
+  const float ph = (x - std::floor(x)) * 6.2831853f;
+  const float a[3] = {p.p[0] * 4.0f + ph, p.p[1] * 4.0f + ph * 1.7f, p.p[2] * 4.0f + ph * 2.3f};
+  const float t = p.age * 1.6f;
+  out[0] = (std::sin(a[1] * 1.3f + t * 2.7f) + 0.5f * std::sin(a[2] * 2.9f + t * 4.1f)) * p.swirl;
+  out[1] =
+      (0.6f * std::sin(a[2] * 1.1f + t * 2.3f) + 0.3f * std::sin(a[0] * 3.1f + t * 5.3f)) * p.swirl;
+  out[2] = (std::sin(a[0] * 1.7f + t * 3.1f) + 0.5f * std::sin(a[1] * 2.3f + t * 3.7f)) * p.swirl;
+}
+
 void step_particle(Particle& p, float dt, const float air[3]) {
   p.v[1] -= static_cast<float>(kGravity) * p.fall * dt;
   const float keep = std::exp(-p.drag * dt);
+  float swirl[3];
+  eddy(p, swirl);
   for (int k = 0; k < 3; ++k) {
-    const float a = air ? air[k] : 0.0f;
+    const float a = (air ? air[k] : 0.0f) + swirl[k];
     p.v[k] = a + (p.v[k] - a) * keep;
     p.p[k] += p.v[k] * dt;
   }
