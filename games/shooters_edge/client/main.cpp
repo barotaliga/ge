@@ -87,6 +87,7 @@
 #include "platform/devices.hpp"
 #include "platform/window.hpp"
 #include "render/screenshot_copy.hpp"
+#include "shooters_edge/bots/handles.hpp"
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/bot_view.hpp"
 #include "shooters_edge/client/classic_pictures.hpp"
@@ -666,6 +667,7 @@ int run_main(int argc, char** argv) {
     bc.basedir = args.basedir;
     bc.out = args.bots_out;
     bc.paths = args.bots_paths;
+    bc.names = shooters_edge::bots::bot_handles(bc.seed + 1000u, bc.bots);  // people's handles
     if (!args.skills.empty()) {
       bc.skills.clear();
       for (size_t at = 0; at <= args.skills.size();) {

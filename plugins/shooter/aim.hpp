@@ -16,8 +16,11 @@
 //
 // THE PROFILES (`aim_profile`): `perfect` passes its hands untouched (the measuring stick);
 // `novice`, `average` and `expert` react in 0.30, 0.22 and 0.17 s, wander 3, 1.5 and 0.6 degrees,
-// turn at most 360, 600 and 1000 degrees a second and lead 0, 0.1 and 0.2 s. They are stated, not
-// yet fitted to people's logs (docs/goals.md M16b's corpus replaces them).
+// turn at most 360, 600 and 1000 degrees a second and lead 0, 0.1 and 0.14 s (a lead covers the
+// hands' own lag; the expert's was 0.2 until the senses took the velocity the server sends, and
+// with it in full from the first sighting it measured between its hands' lag, 0.12, and 0.15,
+// where a fighter's shots pass a dodging player within a few units). They are stated, not yet
+// fitted to people's logs (docs/goals.md M16b's corpus replaces them).
 //
 // ge:summary The bot's aim: yaw and pitch at a contact through skill hands; axes under the view
 // ge:keywords aim aiming skill profile novice average expert perfect lead reaction yaw pitch

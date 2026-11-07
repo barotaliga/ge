@@ -23,7 +23,14 @@
 // - the FORWARD area: the next by the same measure, held by one;
 // - the RUSH: each power's area, gone for by the two nearest, leaving `rush_lead_s` plus the run
 //   from the base before it is due;
-// - every other area is taken on the way.
+// - every other area is taken on the way;
+// - THE OPENING (`opening`): the items a team goes for when the match starts, in order: the map's
+//   written order when it has one (`opening_order_of`), else pent > quad > rl > ra > ya > lg >
+//   sng > mh > ga > gl, each kind's items by the quickest spawn's run. Each takes up to its `cap`
+//   (every player who can for the pent, two for the quad, one for the rest), and each player only
+//   the item he reaches within `late_s` of the quickest spawn point's run to it: further back, an
+//   enemy who spawned nearer has it first. Every player works the same assignment out from his own
+//   spawn and his mates' as they said them (mind.hpp), so most of the time the team splits as one.
 //
 // A pure function of the graph and the items: the same plan every run.
 //
@@ -48,6 +55,19 @@ struct PlanSettings {
   double cluster_s = 2;    // key items this near by the run are one area (a power is always alone)
   double region_s = 2.5;   // an area's region: the nodes this near one of its items
   double rush_lead_s = 3;  // a rush arrives this long before the power is due
+  double late_s = 3;       // an opening item is too late past the quickest spawn's run by this
+  // The map's own opening order, as item calls ("pent", "quad", "rl", "ra", ...; items of a call
+  // not named are left out of the opening): `opening_order_of` a map with a written strategy.
+  // Empty: the kinds' order (below).
+  std::vector<std::string> order;
+};
+
+// One item of the opening (`MapPlan::opening`): how many of the team go for it, and the run from
+// a player's spawn past which he is too late for it (an enemy spawned nearer has it first).
+struct OpenItem {
+  int32_t item = -1;  // into the items
+  int cap = 1;
+  double late_s = 0;
 };
 
 struct PlanArea {
@@ -71,6 +91,7 @@ struct MapPlan {
   std::vector<int32_t> rushes;       // the powers' areas
   std::vector<double> between_s;     // areas x areas: the quickest run between their middles
   std::vector<double> rush_leave_s;  // by rush: how long before the power is due to leave the base
+  std::vector<OpenItem> opening;     // the opening's items, the first gone for first
   int64_t nodes = 0;
 };
 
@@ -83,6 +104,10 @@ double plan_worth(const ItemSpot& it);
 MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
                       const std::vector<sh::Vec3f>& spawns, const sh::Locs* locs,
                       const PlanSettings& set = {});
+
+// The opening order of a map with a written strategy (its name as "dm3" or "maps/dm3.bsp");
+// empty for the rest.
+std::vector<std::string> opening_order_of(std::string_view map);
 
 // The area of `plan` the node `n` stands in (-1: none).
 int32_t plan_area_of(const MapPlan& plan, int32_t n);

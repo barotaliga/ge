@@ -72,3 +72,38 @@ TEST(a_team_line_splits_into_speaker_and_text) {
   CHECK(name == "red2" && text == "safe [ra] ra:200 h:100 rl");
   CHECK(!bt::split_team_line("red2: gg\n", name, text));
 }
+
+TEST(a_plan_reads_as_the_strategy_its_words_mean) {
+  const auto plan = [](const char* text) { return bt::parse_say(text); };
+  for (const char* t : {"lets take quad", "all quad", "rush quad together", "Lets TAKE quad!"}) {
+    const bt::Said s = plan(t);
+    CHECK(s.kind == bt::SayKind::plan && s.strategy == bt::Strategy::take && s.item == "quad");
+  }
+  for (const char* t : {"camp ra and rl", "lets hold ra rl", "control ra + rl"}) {
+    const bt::Said s = plan(t);
+    CHECK(s.kind == bt::SayKind::plan && s.strategy == bt::Strategy::camp);
+    CHECK(s.item == "ra" && s.item2 == "rl");
+  }
+  CHECK(plan("camp ra").strategy == bt::Strategy::camp && plan("camp ra").item2.empty());
+  for (const char* t : {"free play", "go free", "play free now"})
+    CHECK(plan(t).kind == bt::SayKind::plan && plan(t).strategy == bt::Strategy::free);
+  for (const char* t : {"ok", "k", "np", "ok!"}) CHECK(plan(t).kind == bt::SayKind::ack);
+  // Not plans: the old kinds keep their words.
+  CHECK(plan("took quad").kind == bt::SayKind::took);
+  CHECK(plan("enemy quad [ra]").kind == bt::SayKind::enemy_power);
+  // Every wording a bot says reads back as its plan.
+  for (int v = 0; v < 3; v++) {
+    bt::Said s;
+    s.kind = bt::SayKind::plan;
+    s.strategy = bt::Strategy::camp;
+    s.item = "ya";
+    s.item2 = "gl";
+    s.variant = v;
+    const bt::Said r = bt::parse_say(bt::say_text(s));
+    CHECK(r.strategy == bt::Strategy::camp && r.item == "ya" && r.item2 == "gl");
+    s.strategy = bt::Strategy::take;
+    CHECK(bt::parse_say(bt::say_text(s)).strategy == bt::Strategy::take);
+    s.strategy = bt::Strategy::free;
+    CHECK(bt::parse_say(bt::say_text(s)).strategy == bt::Strategy::free);
+  }
+}

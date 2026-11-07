@@ -26,6 +26,7 @@ const gl::Rgba kBack{24, 26, 30, 255};
 const gl::Rgba kInk{230, 230, 225, 255};
 const gl::Rgba kDim{140, 140, 140, 255};
 const gl::Rgba kPlace{175, 185, 200, 255};  // the places' names
+const gl::Rgba kLeader{255, 205, 40, 255};  // the leader's star
 const gl::Rgba kEnemy{235, 60, 50, 255};
 const gl::Rgba kSent{255, 150, 30, 255};
 const gl::Rgba kBots[8] = {{80, 200, 255, 255},  {120, 255, 120, 255}, {255, 220, 80, 255},
@@ -221,6 +222,18 @@ gl::Picture team_view(TeamView& v, const BotTeam& t, int w, int h) {
       }
       const double yaw = me.v_angle.y * 3.14159265358979 / 180.0;
       gl::draw_line(p, mx, my, mx + 14 * std::cos(yaw), my - 14 * std::sin(yaw), col, 2);
+      if (s.index == t.leader) {
+        // The team's leader: a gold star round its marker.
+        double sx[10], sy[10];
+        for (int pt = 0; pt < 10; pt++) {
+          const double a = 3.14159265358979 * (0.5 + pt / 5.0);
+          const double r = pt % 2 == 0 ? 15 : 7;
+          sx[pt] = mx + r * std::cos(a);
+          sy[pt] = my - r * std::sin(a);
+        }
+        for (int pt = 0; pt < 10; pt++)
+          gl::draw_line(p, sx[pt], sy[pt], sx[(pt + 1) % 10], sy[(pt + 1) % 10], kLeader, 2);
+      }
       gl::fill_disc(p, mx, my, 7, me.health > 0 ? col : kDim);
       gl::draw_text(p, mx - 2, my - 3, std::to_string(s.index + 1), kBack);
     }
@@ -250,7 +263,8 @@ gl::Picture team_view(TeamView& v, const BotTeam& t, int w, int h) {
     const gl::Rgba col = kBots[k++ % 8];
     const BotSeat& s = *sp;
     gl::fill_rect(p, x0, y + 1, 8, 8, col);
-    std::string head = s.name + " " + sh::aim_skill_name(s.skill);
+    std::string head =
+        s.name + " " + sh::aim_skill_name(s.skill) + (s.index == t.leader ? "  LEAD" : "");
     if (!s.set_up || !s.fighter) {
       gl::draw_text(p, x0 + 12, y, head + "  " + client_stage_name(s.c.stage), kDim);
       y += 30;

@@ -343,6 +343,58 @@ bool mind_obituary(Fighter& f, const std::string& line, double t) {
   return false;
 }
 
+// The opening's item for this player (map_plan.hpp `opening`): down the plan's order, each item
+// still there takes the players (this one, and each mate whose spawn it read) who reach it within
+// its late run, the nearest first, up to its cap; -1 when none falls to this player.
+int32_t opening_pick(const Fighter& f, double t) {
+  if (!f.plan || f.plan->opening.empty() || f.reach_at < 0) return -1;
+  struct Who {
+    std::string name;
+    sh::Vec3f at;
+    bool me = false;
+    bool taken = false;
+  };
+  std::vector<Who> team{{f.name, {}, true, false}};
+  for (const Mate& m : f.mind.mates)
+    if (t - m.at_t < mate_fresh_s(f)) team.push_back({m.name, m.at, false, false});
+  for (const OpenItem& o : f.plan->opening) {
+    const ItemSpot& it = f.items[static_cast<size_t>(o.item)];
+    if (!it.present || !reachable(f, o.item)) continue;
+    std::vector<std::pair<double, size_t>> near;
+    for (size_t k = 0; k < team.size(); k++) {
+      if (team[k].taken) continue;
+      const double run = team[k].me ? f.reach.cost(it.node) : run_s(f, team[k].at, it.node);
+      if (run <= o.late_s) near.push_back({run, k});
+    }
+    std::sort(near.begin(), near.end(), [&](const auto& a, const auto& b) {
+      return a.first != b.first ? a.first < b.first : team[a.second].name < team[b.second].name;
+    });
+    for (size_t n = 0; n < near.size() && static_cast<int>(n) < o.cap; n++) {
+      team[near[n].second].taken = true;
+      if (team[near[n].second].me) return o.item;
+    }
+  }
+  return -1;
+}
+
+bool mind_take_plan(Fighter& f, const Said& said, double t) {
+  if (said.kind != SayKind::plan) return false;
+  Mind& mn = f.mind;
+  int32_t items[2] = {-1, -1};
+  if (said.strategy != Strategy::free) {
+    items[0] = item_named(f, said.item, nullptr);
+    items[1] = said.item2.empty() ? -1 : item_named(f, said.item2, nullptr);
+    if (items[0] < 0) return false;
+  }
+  mn.strategy = said.strategy;
+  mn.strategy_items[0] = items[0];
+  mn.strategy_items[1] = items[1];
+  mn.strategy_t = t;
+  mn.claim = -1;  // claimed again off the plan at the next plan
+  mn.claimed_said = false;
+  return true;
+}
+
 void mind_hear(Fighter& f, const std::string& from, const std::string& text, double t) {
   if (from == f.name) return;  // its own words, sent back to it
   Mind& mn = f.mind;
@@ -512,8 +564,12 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
       if (f.team) f.team->stats.joins++;
       break;
     }
+    case SayKind::plan:
+      if (mind_take_plan(f, s, t) && draw(f) < kAckChance) mn.ack_due = true;
+      break;
     case SayKind::none:
     case SayKind::report:
+    case SayKind::ack:
       break;
   }
 }
@@ -643,7 +699,10 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
     int32_t pick = -1;
     // The opening's quad first: claimed by the two of the team who believe themselves nearest it
     // (a mate's spawn as he said it, or one who said he is coming for it, counted ahead).
-    if (opening && q >= 0 && reachable(f, q) && f.items[static_cast<size_t>(q)].present) {
+    if (opening && f.plan && !f.plan->opening.empty()) {
+      // The map's opening order (map_plan.hpp): the first item still to be had in time.
+      pick = opening_pick(f, t);
+    } else if (opening && q >= 0 && reachable(f, q) && f.items[static_cast<size_t>(q)].present) {
       // By the run over the map's links, not the line through its walls.
       const int32_t qn = f.items[static_cast<size_t>(q)].node;
       const double mine = f.reach.cost(qn);
@@ -708,6 +767,34 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
   }
   // An aggressive player holds nothing: he goes where the frags are.
   if (r == Role::free && mn.claim >= 0 && !ge::shooter::selfish(f.traits)) r = Role::hold;
+  // The team's strategy over its own plan (above): take an item together, or camp one or two.
+  if (mn.strategy == Strategy::take && t - mn.strategy_t >= kTake_s) mn.strategy = Strategy::none;
+  if (mn.strategy == Strategy::camp && t - mn.strategy_t >= kCamp_s) mn.strategy = Strategy::none;
+  if (mn.strategy == Strategy::free) mn.strategy = Strategy::none;
+  if (mn.strategy != Strategy::none && !quad_mine && r != Role::carry) {
+    int32_t mine = mn.strategy_items[0];
+    if (mn.strategy == Strategy::camp && mn.strategy_items[1] >= 0) {
+      // Split by the roster's slot order: the first, third ... take the first item.
+      int order = 0;
+      for (const Fighter* m : f.team->members)
+        if (m->slot >= 0 && m->slot < me - 1) order++;
+      if (order % 2 == 1) mine = mn.strategy_items[1];
+    }
+    if (mine >= 0 && reachable(f, mine)) {
+      if (mn.claim != mine) {
+        mn.claim = mine;
+        mn.claimed_said = false;
+      }
+      r = mine == q && due_of(f, q, t) - t <= rush_ahead_s(f, q) ? Role::rush : Role::hold;
+    }
+  }
+  if (mn.ack_due && f.said_at < t - 1) {
+    Said a;
+    a.kind = SayKind::ack;
+    a.variant = static_cast<int>(draw(f) * 4);
+    mind_say(f, t, a, at);
+    mn.ack_due = false;
+  }
   // The push (above): called on the base believed the enemy's, joined off a mate's call; over
   // on the base with nobody seen a while, or once it has run its time.
   if (mn.push_item >= 0 && t - mn.push_t >= kPush_s) mn.push_item = -1;

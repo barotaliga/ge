@@ -157,10 +157,28 @@ const char* say_kind_name(SayKind k) {
       return "over";
     case SayKind::attack:
       return "attack";
+    case SayKind::plan:
+      return "plan";
+    case SayKind::ack:
+      return "ack";
     case SayKind::timer:
       break;
   }
   return "timer";
+}
+
+const char* strategy_name(Strategy s) {
+  switch (s) {
+    case Strategy::none:
+      return "none";
+    case Strategy::take:
+      return "take";
+    case Strategy::camp:
+      return "camp";
+    case Strategy::free:
+      return "free";
+  }
+  return "none";
 }
 
 bool item_word(std::string_view w) { return !as_item(w).empty(); }
@@ -196,6 +214,23 @@ std::string say_text(const Said& s) {
       return s.item + " over";
     case SayKind::attack:
       return "attack " + s.item + at;
+    case SayKind::plan: {
+      // As people type it, in one of a few wordings.
+      const int v = s.variant % 3;
+      if (s.strategy == Strategy::take)
+        return v == 0   ? "lets take " + s.item
+               : v == 1 ? "all " + s.item
+                        : "rush " + s.item + " together";
+      if (s.strategy == Strategy::camp) {
+        const std::string two = s.item2.empty() ? s.item : s.item + " and " + s.item2;
+        return v == 0 ? "camp " + two : v == 1 ? "lets hold " + two : "control " + two;
+      }
+      return v == 0 ? "free play" : v == 1 ? "go free" : "play free now";
+    }
+    case SayKind::ack: {
+      static const char* const kAcks[4] = {"ok", "k", "np", "ok!"};
+      return kAcks[s.variant % 4];
+    }
     case SayKind::timer:
       break;
   }
@@ -255,6 +290,29 @@ Said parse_say(std::string_view text) {
       return out;
     }
   out.item = first_item();
+  // The team's strategy: a free-play word, or a plan word with the item(s) it is about.
+  const bool free_words = has({"free"}) && (has({"play", "go", "now", "all"}) || w.size() == 1);
+  const bool take_words = has({"take", "rush", "all", "everyone", "everybody"});
+  const bool camp_words = has({"camp", "hold", "control", "stack"});
+  if (free_words && out.item.empty()) {
+    out.kind = SayKind::plan;
+    out.strategy = Strategy::free;
+    return out;
+  }
+  if ((take_words || camp_words) && !out.item.empty() && !has({"took", "got", "enemy", "en"})) {
+    out.kind = SayKind::plan;
+    out.strategy = camp_words ? Strategy::camp : Strategy::take;
+    for (std::string_view x : w)
+      if (item_word(x) && as_item(x) != out.item) {
+        out.item2 = std::string(as_item(x));
+        break;
+      }
+    return out;
+  }
+  if (w.size() <= 2 && has({"ok", "k", "np", "kk", "yes", "yep", "roger"}) && out.item.empty()) {
+    out.kind = SayKind::ack;
+    return out;
+  }
   if (has({"took", "got"})) {
     out.kind = SayKind::took;
   } else if (has({"safe"})) {

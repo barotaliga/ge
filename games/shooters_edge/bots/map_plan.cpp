@@ -19,7 +19,7 @@ namespace shooters_edge::bots {
 namespace {
 
 constexpr double kFar = std::numeric_limits<double>::infinity();
-constexpr int32_t kWGrenades = 16, kWRockets = 32, kWArc = 64;
+constexpr int32_t kWHeavySpiker = 8, kWGrenades = 16, kWRockets = 32, kWArc = 64;
 constexpr float kEntrySpot = 128;  // the outer ends of two links into an area this near: one way in
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
@@ -236,6 +236,69 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
       plan.forward = static_cast<int32_t>(a);
     }
   }
+  // The opening: the kinds' order, or the map's own; each item's late run off the spawns.
+  const auto rank = [&](const ItemSpot& it) -> int {
+    const std::string call = item_call(it);
+    const bool key = it.kind == ItemKind::pent || it.kind == ItemKind::quad ||
+                     it.kind == ItemKind::armor1 || it.kind == ItemKind::armor2 ||
+                     it.kind == ItemKind::armor3 || it.kind == ItemKind::mega ||
+                     it.kind == ItemKind::weapon;
+    if (!key) return -1;  // a health box, ammunition: taken on the way
+    if (!set.order.empty()) {
+      for (size_t k = 0; k < set.order.size(); k++)
+        if (set.order[k] == call) return static_cast<int>(k);
+      return -1;
+    }
+    switch (it.kind) {
+      case ItemKind::pent:
+        return 0;
+      case ItemKind::quad:
+        return 1;
+      case ItemKind::armor3:
+        return 3;
+      case ItemKind::armor2:
+        return 4;
+      case ItemKind::mega:
+        return 7;
+      case ItemKind::armor1:
+        return 8;
+      case ItemKind::weapon:
+        return it.weapon == kWRockets       ? 2
+               : it.weapon == kWArc         ? 5
+               : it.weapon == kWHeavySpiker ? 6
+                                            : -1;
+      default:
+        return -1;
+    }
+  };
+  struct Ranked {
+    int rank;
+    double quickest;
+    int32_t item;
+  };
+  std::vector<Ranked> ranked;
+  for (size_t i = 0; i < items.size(); i++) {
+    const ItemSpot& it = items[i];
+    const int r = it.node < 0 ? -1 : rank(it);
+    if (r < 0) continue;
+    double quickest = kFar;
+    for (const std::vector<double>& sr : spawn_run)
+      quickest = std::min(quickest, sr[static_cast<size_t>(it.node)]);
+    if (spawn_run.empty()) quickest = 0;
+    if (quickest >= kFar) continue;  // no spawn's way there on foot
+    ranked.push_back({r, quickest, static_cast<int32_t>(i)});
+  }
+  std::stable_sort(ranked.begin(), ranked.end(), [](const Ranked& a, const Ranked& b) {
+    return a.rank != b.rank ? a.rank < b.rank : a.quickest < b.quickest;
+  });
+  for (const Ranked& r : ranked) {
+    const ItemSpot& it = items[static_cast<size_t>(r.item)];
+    plan.opening.push_back({r.item,
+                            it.kind == ItemKind::pent   ? 4
+                            : it.kind == ItemKind::quad ? 2
+                                                        : 1,
+                            r.quickest + set.late_s});
+  }
   for (const int32_t r : plan.rushes) {
     const double run_s =
         plan.base >= 0
@@ -244,6 +307,15 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
     plan.rush_leave_s.push_back((run_s < kFar ? run_s : 10) + set.rush_lead_s);
   }
   return plan;
+}
+
+std::vector<std::string> opening_order_of(std::string_view map) {
+  std::string name(map);
+  if (name.rfind("maps/", 0) == 0) name.erase(0, 5);
+  if (name.size() > 4 && name.ends_with(".bsp")) name.resize(name.size() - 4);
+  // Written from how the maps are played (the pent first wherever it can be reached in time).
+  if (name == "dm3") return {"pent", "quad", "rl", "ra", "ya", "sng", "mh"};
+  return {};
 }
 
 int32_t plan_area_of(const MapPlan& plan, int32_t n) {
@@ -278,6 +350,13 @@ std::string plan_text(const MapPlan& plan, const std::vector<ItemSpot>& items) {
     out += ", rush " + name(plan.rushes[r]) + " leaving " + to_fixed(plan.rush_leave_s[r], 1) +
            " s before it is due";
   out += "\n";
+  if (!plan.opening.empty()) {
+    out += "opening";
+    for (const OpenItem& o : plan.opening)
+      out += " > " + std::string(item_call(items[static_cast<size_t>(o.item)])) + " (" +
+             std::to_string(o.cap) + ", late past " + to_fixed(o.late_s, 1) + " s)";
+    out += "\n";
+  }
   return out;
 }
 
