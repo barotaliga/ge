@@ -7,11 +7,13 @@
 // prediction lands where the server later says the player was, and `cl_nopred` draws the server's
 // place instead. Beside a scripted player, the other player is run ahead every window frame from
 // his newest record, so he moves between the server's frames and sits nearer the server's place
-// than the frame put him; missiles are drawn between the last two frames.
+// than the frame put him; missiles are drawn between the last two frames. A mod's named effects
+// reach the window by name over the game's own set and are never sent to a client without it.
 //
 // ge:summary Tests: the remote client signs on, draws the server's state, walks, and leaves
 // ge:keywords test remote-client connect disconnect classic-server live-demo setangle walk
 // ge:keywords prediction cl_nopred latency predict_other cl_predict_players cl_nolerp lerp
+// ge:keywords named-effects ge-ext pointparticles trailparticles
 // ge:skill net shooter testing
 #include <algorithm>
 #include <cmath>
@@ -26,6 +28,7 @@
 #include "progs/file.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/classic_server.hpp"
+#include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/server/mod_match.hpp"
 #include "shooters_edge/server/test_mod.hpp"
 
@@ -79,6 +82,7 @@ struct Rig {
       gn::open_sim_transport(bt, net, gn::sim_address(2, cn::kPortClient));
       cn::ClientConfig oc;
       oc.name = "runner";
+      oc.ask[cn::ExtFamily::ge] = 0;  // as a classic client: the game's own set unknown
       cn::client_start(other, bt, gn::sim_address(0, cn::kPortServer), oc, 0);
     }
     return true;
@@ -360,4 +364,47 @@ TEST(missiles_are_drawn_between_the_last_two_frames) {
   rig.remote.nolerp = true;
   for (int i = 0; i < 40; i++) rig.frame();
   CHECK(rig.remote.lerped == 0);
+}
+
+TEST(a_mods_named_effects_reach_the_game_s_own_client_by_name_and_no_classic_client) {
+  Rig rig;
+  rig.with_other = true;
+  CHECK(rig.start());
+  // The other player is a client that does not know the game's own set (a classic client's ask).
+  CHECK(rig.join());
+  for (int f = 0; f < 200 && rig.other.stage != cn::ClientStage::active; f++) rig.frame();
+  const int me = rig.remote.end.playernum;
+  CHECK(me >= 0 && rig.server.clients[me].ext.has(cn::ExtFamily::ge, cn::kGeNamedEffects));
+  CHECK(rig.remote.end.ext.has(cn::ExtFamily::ge, cn::kGeNamedEffects));
+  sv::NetEvent point;
+  point.kind = sv::EventKind::point_effect;
+  point.to = ~0u;
+  point.origin = {64, 32, 40};
+  point.values[0] = 1;
+  point.values[3] = 4;
+  point.text = "spark_fountain";
+  sv::NetEvent trail = point;
+  trail.kind = sv::EventKind::trail_effect;
+  trail.values[0] = 128, trail.values[1] = 32, trail.values[2] = 48;
+  trail.text = "spark_trail";
+  const int64_t dropped = rig.server.counts.effects_dropped;
+  rig.qc->out.events.push_back(point);
+  rig.qc->out.events.push_back(trail);
+  std::vector<shooters_edge::client::DemoEffect> seen;
+  for (int f = 0; f < 20 && seen.size() < 2; f++) {
+    rig.frame();
+    for (const auto& e : rig.remote.demo.state.effects)
+      if (!e.name.empty()) seen.push_back(e);
+  }
+  CHECK_MSG(seen.size() == 2, std::to_string(seen.size()) + " named effects read");
+  if (seen.size() == 2) {
+    CHECK(seen[0].kind == shooters_edge::client::DemoEffectKind::named &&
+          seen[0].name == "spark_fountain" && seen[0].count == 4 && seen[0].way.x == 1.0f &&
+          seen[0].at.y == 32.0f);
+    CHECK(seen[1].kind == shooters_edge::client::DemoEffectKind::named_trail &&
+          seen[1].name == "spark_trail" && seen[1].end.x == 128.0f && seen[1].end.z == 48.0f);
+  }
+  // The other client (a classic one's ask) was sent neither: both counted as dropped for it.
+  CHECK_MSG(rig.server.counts.effects_dropped == dropped + 2,
+            std::to_string(rig.server.counts.effects_dropped - dropped) + " dropped");
 }

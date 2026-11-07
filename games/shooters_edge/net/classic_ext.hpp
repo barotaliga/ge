@@ -6,12 +6,14 @@
 // (0x32455446, "FTE2") and the demo stream's `mvd` (0x3144564D, "MVD1") are negotiated in the
 // challenge and the connect (the server offers a bit set, the client answers the bits it accepts,
 // the server keeps the AND) or in the signon's `pext` step; the `z` set travels only in user info
-// and server info (`*z_ext`), with no handshake.
+// and server info (`*z_ext`), with no handshake, and the game's own `ge` set likewise (`*ge_ext`):
+// a classic client never asks for it, so never gets a message it does not know.
 //
-// THE FIRST TIER we offer: every z bit (511); x transparency, sound-double, model-double,
-// entity-double and entity-double2, spawnstatic2, 256 packet entities and chunked downloads; mvd
-// float coords and the teleport kind on setangle. Everything else is refused. x float coords
-// (only with sv_bigcoords) and the rest exist in the table so they can be named, never offered.
+// THE FIRST TIER we offer: every z bit (511), the ge set's named effects; x transparency,
+// sound-double, model-double, entity-double and entity-double2, spawnstatic2, 256 packet entities
+// and chunked downloads; mvd float coords and the teleport kind on setangle. Everything else is
+// refused. x float coords (only with sv_bigcoords) and the rest exist in the table so they can be
+// named, never offered.
 //
 // ge:summary The classic protocol's extension families and bits as a table; the first tier
 // ge:keywords extensions pext z_ext fte-bits mvd-bits negotiate offered first-tier transparency
@@ -27,7 +29,7 @@
 
 namespace shooters_edge::net {
 
-enum class ExtFamily : uint8_t { x, x2, mvd, z, count };
+enum class ExtFamily : uint8_t { x, x2, mvd, z, ge, count };
 constexpr uint32_t kMagicX = 0x58455446, kMagicX2 = 0x32455446, kMagicMvd = 0x3144564d;
 
 // The x family's bits.
@@ -43,6 +45,8 @@ constexpr uint32_t kMvdFloatCoords = 0x1, kMvdTeleport = 0x2;
 constexpr uint32_t kZPmType = 1, kZPmTypeNew = 2, kZViewHeight = 4, kZServerTime = 8;
 constexpr uint32_t kZPitchLimits = 0x10, kZJoinObserve = 0x20, kZOnGround = 0x40;
 constexpr uint32_t kZVwep = 0x80, kZSolid = 0x100, kZAll = 511;
+// The game's own set (`*ge_ext`, as the z set travels): named effects, svc ids 120 and 121.
+constexpr uint32_t kGeNamedEffects = 1;
 
 struct ExtBit {
   ExtFamily family;

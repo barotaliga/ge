@@ -315,3 +315,20 @@ TEST(the_demo_pack_cvars_default_to_packed) {
   con.execute("demo_pack 1; demo_pack_level 3");
   CHECK(cl::record_pack_level(rs) == 3);
 }
+
+TEST(a_recording_file_never_keeps_the_game_s_own_named_effects) {
+  // A packet of three messages: a nop, a named point effect (svc 120), a nop.
+  const std::vector<uint8_t> header = {1, 0, 0, 0, 1, 0, 0, 0};
+  const std::vector<uint8_t> payload = {
+      cn::svc::nop, cn::svc::ge_point, 'x', 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, cn::svc::nop};
+  const std::pair<size_t, size_t> messages[] = {{0, 1}, {1, 13}, {13, 14}};
+  cn::ClientRecorder file;
+  cn::record_start(file, false);
+  cn::record_packet(file, 1.0, header, payload, messages);
+  CHECK(file.stripped == 1);
+  cn::ClientRecorder live;  // the remote view's own: kept for its reader
+  cn::record_start(live, false);
+  live.named_effects = true;
+  cn::record_packet(live, 1.0, header, payload, messages);
+  CHECK(live.stripped == 0 && live.bytes.size() == file.bytes.size() + 12);
+}

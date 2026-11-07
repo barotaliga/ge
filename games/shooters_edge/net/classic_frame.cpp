@@ -143,8 +143,25 @@ void route_event(ClassicServer& s, const sv::NetEvent& ev) {
         unreliable_svc(s, j, m);
         break;
       case sv::EventKind::point_effect: {
-        // A named effect reaches a classic client only as the temporary entity of its name.
+        // A named effect: by its name to a client of the game's own that agreed it (the ge set);
+        // to a classic client only as the temporary entity of its name.
         uint8_t kind = 0;
+        if (c.ext.has(ExtFamily::ge, kGeNamedEffects) && !ev.text.empty() && ev.text.size() < 64) {
+          m.id = svc::ge_point;
+          m.strings = {ev.text};
+          m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
+          const auto way = [](float v) {  // a unit way's part as a char of 1/127
+            const float q = v * 127;
+            return !(q > -127) ? -127 : q > 127 ? 127 : static_cast<int>(q);
+          };
+          const float n = ev.values[3];
+          m.ints = {way(ev.values[0]), way(ev.values[1]), way(ev.values[2]),
+                    !(n >= 1) ? 1
+                    : n > 255 ? 255
+                              : static_cast<int>(n)};
+          unreliable_svc(s, j, m);
+          break;
+        }
         if (!sv::classic_temp_entity(ev.text, kind)) {
           s.counts.effects_dropped++;
           break;
@@ -160,7 +177,15 @@ void route_event(ClassicServer& s, const sv::NetEvent& ev) {
         break;
       }
       case sv::EventKind::trail_effect:  // a classic client has no message for a named trail
-        s.counts.effects_dropped++;
+        if (!c.ext.has(ExtFamily::ge, kGeNamedEffects) || ev.text.empty() || ev.text.size() >= 64) {
+          s.counts.effects_dropped++;
+          break;
+        }
+        m.id = svc::ge_trail;
+        m.strings = {ev.text};
+        m.floats = {ev.origin.x,  ev.origin.y,  ev.origin.z,
+                    ev.values[0], ev.values[1], ev.values[2]};
+        unreliable_svc(s, j, m);
         break;
       case sv::EventKind::ambient:
         m.id = svc::spawnstaticsound;

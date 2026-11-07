@@ -27,6 +27,7 @@ void open_live(client::Demo& d) {
   d.state.players.resize(32);
   d.ring.resize(64);
   d.cmd_size = 24;
+  d.named_effects = true;  // ids 120 and 121 the game's own (the server sends them only if agreed)
 }
 
 void start(Remote& r, const ClientConfig& cfg) {
@@ -45,6 +46,7 @@ void start(Remote& r, const ClientConfig& cfg) {
   client_start(r.end, *r.transport, r.server, c, 0);
   r.recording = ClientRecorder{};
   record_start(r.recording, false);
+  r.recording.named_effects = true;  // read at once by the view (never written to a file)
   r.end.record = &r.recording;
   open_live(r.demo);
   r.active = true;

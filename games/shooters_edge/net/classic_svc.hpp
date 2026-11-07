@@ -62,6 +62,10 @@ constexpr uint8_t deltapacketentities = 48, maxspeed = 49, entgravity = 50, seti
 constexpr uint8_t serverinfo = 52, updatepl = 53, soundextended = 55, soundlistshort = 56;
 constexpr uint8_t modellistshort = 60, spawnbaseline2 = 66, updatestatstring = 78;
 constexpr uint8_t updatestatfloat = 79, voice = 84, spawnstaticsound2 = 94;
+// The game's own (the ge set's named effects; only on a connection that agreed it, `*ge_ext`):
+// a named effect at a point (name, origin, way as three chars of 1/127, count) and along a
+// trail (name, from, to).
+constexpr uint8_t ge_point = 120, ge_trail = 121;
 }  // namespace svc
 
 namespace clc {

@@ -153,13 +153,26 @@ struct DemoVoice {
 };
 
 // A temporary entity the frame sent: a hit, a spike, an explosion, a beam, a splash, blood.
-enum class DemoEffectKind : uint8_t { spike, gunshot, explosion, beam, lava, teleport, blood };
+// `named` and `named_trail`: the game's own named effects (svc 120, 121; `Demo::named_effects`).
+enum class DemoEffectKind : uint8_t {
+  spike,
+  gunshot,
+  explosion,
+  beam,
+  lava,
+  teleport,
+  blood,
+  named,
+  named_trail
+};
 struct DemoEffect {
   DemoEffectKind kind = DemoEffectKind::gunshot;
   int code = 0;       // the message's kind byte
   int count = 1;      // a gunshot's pellets, blood's drops (the multiplayer protocol's); else 1
   int entity = 0;     // a beam's owner
-  sh::Vec3f at, end;  // units; a beam's start and end (`end` is `at` for the rest)
+  sh::Vec3f at, end;  // units; a beam's start and end (`end` is `at` for the rest); a trail's
+  sh::Vec3f way;      // a named effect's way
+  std::string name;   // a named effect's
 };
 
 struct DemoState {
@@ -212,6 +225,9 @@ struct Demo {
   int cmd_size = 0;                   // the client format's usercmd struct: 24 or 28 (0: unknown)
   int player_model = 0;  // the client format's `progs/player.mdl` index: a playerinfo's default
   bool ended = false;
+  // The stream is a live connection's that agreed the game's own named effects (the ge set): its
+  // ids 120 and 121 are read as them. Off (every file), they are ids this reader does not know.
+  bool named_effects = false;
   // The multiview format: the player the view rides (-1: the lowest slot playing), each player's
   // own stats (the stats records write them; the tracked one's are copied to `state.stats`).
   int track = -1;
