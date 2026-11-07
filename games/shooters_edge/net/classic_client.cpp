@@ -63,6 +63,7 @@ std::string userinfo_of(const ClassicClientEnd& c) {
     info_set(u, "cl_speedjump", "1");  // a server that does not know it ignores it
   if (!c.cfg.password.empty()) info_set(u, "password", c.cfg.password);
   if (c.cfg.ask[ExtFamily::z]) info_set(u, "*z_ext", std::to_string(c.cfg.ask[ExtFamily::z]));
+  if (c.cfg.ask[ExtFamily::ge]) info_set(u, "*ge_ext", std::to_string(c.cfg.ask[ExtFamily::ge]));
   return u;
 }
 
@@ -197,6 +198,9 @@ void on_stufftext(ClassicClientEnd& c, const std::string& text) {
       c.serverinfo = pg::word(w, 1);
       const std::string z = info_get(c.serverinfo, "*z_ext");
       c.ext[ExtFamily::z] = c.cfg.ask[ExtFamily::z] & static_cast<uint32_t>(std::atoi(z.c_str()));
+      const std::string ge = info_get(c.serverinfo, "*ge_ext");
+      c.ext[ExtFamily::ge] =
+          c.cfg.ask[ExtFamily::ge] & static_cast<uint32_t>(std::atoi(ge.c_str()));
     } else if (cmd == "skins") {
       start_skins(c);
     } else if (cmd == "color" && w.count >= 2) {

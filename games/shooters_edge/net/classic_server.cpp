@@ -187,6 +187,9 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
   const std::string z = info_get(userinfo, "*z_ext");
   asked[ExtFamily::z] = z.empty() ? 0u : static_cast<uint32_t>(std::atoi(z.c_str()));
   info_remove(userinfo, "*z_ext");
+  const std::string ge = info_get(userinfo, "*ge_ext");
+  asked[ExtFamily::ge] = ge.empty() ? 0u : static_cast<uint32_t>(std::atoi(ge.c_str()));
+  info_remove(userinfo, "*ge_ext");
   c.ext = agree(s.cfg.offered, asked);
   c.coords = coords_of(c.ext);
   const bool proxy = !info_get(userinfo, "Qizmo").empty() || !info_get(userinfo, "*qtv").empty();
@@ -480,6 +483,9 @@ bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error
   s.serverinfo.clear();
   info_set(s.serverinfo, "*version", "ShootersEdge 0.1", kServerInfoBytes);
   info_set(s.serverinfo, "*z_ext", std::to_string(s.cfg.offered[ExtFamily::z]), kServerInfoBytes);
+  if (s.cfg.offered[ExtFamily::ge] != 0)
+    info_set(s.serverinfo, "*ge_ext", std::to_string(s.cfg.offered[ExtFamily::ge]),
+             kServerInfoBytes);
   info_set(s.serverinfo, "hostname", s.cfg.hostname, kServerInfoBytes);
   info_set(s.serverinfo, "maxclients", std::to_string(qc.sv.set.maxclients), kServerInfoBytes);
   info_set(s.serverinfo, "maxfps", std::to_string(s.cfg.maxfps), kServerInfoBytes);

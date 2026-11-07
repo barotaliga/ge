@@ -59,7 +59,10 @@ struct ClassicServer;
 inline constexpr int64_t kPackFlushBytes = int64_t{1} << 20;
 
 struct ClientRecorder {
-  bool voice = false;   // the voice format: the header, voice kept, own voice spliced in
+  bool voice = false;  // the voice format: the header, voice kept, own voice spliced in
+  // The game's own named effects (svc ge_point, ge_trail) kept: only for a recording our own
+  // reader reads at once (the remote view's); a file is never given them.
+  bool named_effects = false;
   bool packed = false;  // the packed form (above)
   std::vector<uint8_t>
       bytes;                 // the file so far (packed: the bytes not yet fed; whole once stopped)
@@ -75,7 +78,8 @@ void record_start(ClientRecorder& r, bool voice, int pack_level = 0);
 // The recording ended: a packed one's stream ended, its whole file in `bytes`.
 void record_stop(ClientRecorder& r);
 // A packet received at `time`: its channel header and its messages, each a span of the payload.
-// Voice messages are dropped from a plain recording; own voice is appended to a voice one.
+// Voice messages are dropped from a plain recording; own voice is appended to a voice one. The
+// game's own named effects are dropped unless `named_effects`.
 void record_packet(ClientRecorder& r, double time, std::span<const uint8_t> header,
                    std::span<const uint8_t> payload,
                    std::span<const std::pair<size_t, size_t>> messages);

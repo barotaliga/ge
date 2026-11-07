@@ -36,6 +36,15 @@ Effect effect_of(const DemoEffect& d) {
     case DemoEffectKind::teleport:
       e.kind = EffectKind::teleport;
       break;
+    case DemoEffectKind::named:
+      e.kind = EffectKind::named;
+      e.way = d.way;
+      e.name = d.name;
+      break;
+    case DemoEffectKind::named_trail:
+      e.kind = EffectKind::named_trail;
+      e.name = d.name;
+      break;
     case DemoEffectKind::blood:
       e.kind = EffectKind::blood;
       break;

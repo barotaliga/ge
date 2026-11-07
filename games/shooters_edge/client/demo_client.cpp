@@ -659,7 +659,30 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
       case 79:
         m.u8();
         m.f32();
-        break;  // updatestatfloat
+        break;   // updatestatfloat
+      case 120:  // the game's own named effects, on a live stream that agreed them
+      case 121: {
+        if (!d.named_effects) {
+          error = "message id " + std::to_string(id) + " is not one this reader knows";
+          ok = false;
+          break;
+        }
+        DemoEffect e;
+        e.code = -1;
+        e.kind = id == 120 ? DemoEffectKind::named : DemoEffectKind::named_trail;
+        e.name = m.str();
+        e.at = point(m, w);
+        if (id == 120) {
+          const float x = static_cast<float>(m.i8()) / 127, y = static_cast<float>(m.i8()) / 127;
+          e.way = {x, y, static_cast<float>(m.i8()) / 127};
+          e.count = m.u8();
+          e.end = e.at;
+        } else {
+          e.end = point(m, w);
+        }
+        s.effects.push_back(std::move(e));
+        break;
+      }
       default:
         error = "message id " + std::to_string(id) + " is not one this reader knows";
         ok = false;
