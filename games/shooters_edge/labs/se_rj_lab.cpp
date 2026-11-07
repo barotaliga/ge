@@ -430,6 +430,7 @@ void run(gl::Lab& lab) {
   std::vector<Trick> tricks;
   for (const Trick& t : all) {
     std::vector<std::pair<int, int>> who;
+    who.reserve(t.jumps.size());
     for (const int k : t.jumps)
       who.push_back({jumps[static_cast<size_t>(k)].demo, jumps[static_cast<size_t>(k)].slot});
     std::sort(who.begin(), who.end());
@@ -534,6 +535,7 @@ void run(gl::Lab& lab) {
 
   // Each map's picture: every jump from takeoff to landing, the tricks thick and numbered.
   std::vector<std::string> map_names;
+  map_names.reserve(maps.by_name.size());
   for (const auto& [name, m] : maps.by_name) map_names.push_back(name);
   for (size_t mi = 0; mi < map_names.size() && mi < 3; mi++) {
     const std::string& name = map_names[mi];
