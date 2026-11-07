@@ -537,6 +537,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       p.last = b;
     }
     p.plans = ps.plans;
+    p.goal_changes = seat.fighter.stats.goal_changes;
     p.stuck = ps.stuck;
     p.lost = ps.lost;
     p.waits = ps.waits;
@@ -565,6 +566,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   }
   if (tn.plan_made && !seats.empty()) {
     r.plan = bt::plan_text(tn.plan, seats[0].fighter.items);
+    r.goals = bt::goals_text(tn.goals);
     r.plan_areas = static_cast<int32_t>(tn.plan.areas.size());
     r.plan_base = tn.plan.base;
   }

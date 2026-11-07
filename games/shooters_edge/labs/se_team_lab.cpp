@@ -395,6 +395,14 @@ void run(gl::Lab& lab) {
              static_cast<double>(r.teams[0].lost_seen + r.teams[1].lost_seen), "count");
   lab.metric("team.retakes", static_cast<double>(r.teams[0].retakes + r.teams[1].retakes), "count");
   lab.metric("team.pushes", static_cast<double>(r.teams[0].pushes + r.teams[1].pushes), "count");
+  {
+    int64_t changes = 0;
+    for (const cn::TeamPlayer& p : r.players) changes += p.goal_changes;
+    lab.metric("team.goal-changes-per-min",
+               static_cast<double>(changes) /
+                   std::max(1.0, static_cast<double>(r.players.size()) * minutes),
+               "per player-min");
+  }
   lab.metric("team.push-joins", static_cast<double>(r.teams[0].joins + r.teams[1].joins), "count");
   lab.metric("team.spam-rockets",
              static_cast<double>(r.teams[0].spam_shots + r.teams[1].spam_shots), "count");
@@ -565,6 +573,7 @@ void run(gl::Lab& lab) {
   lab.metric("team.place-names", static_cast<double>(r.locs), "count");
   lab.note("place names: " + std::to_string(r.locs) + " from " + r.locs_from);
   lab.note("the map's team plan (bots/map_plan.hpp):\n" + r.plan);
+  lab.note("the map's goals (bots/goals.hpp):\n" + r.goals);
   lab.metric("team.plan-areas", r.plan_areas, "count");
   lab.metric("team.lines-read", static_cast<double>(r.lines_read), "count");
   lab.metric("team.lines-missed", static_cast<double>(r.lines_missed), "count");
