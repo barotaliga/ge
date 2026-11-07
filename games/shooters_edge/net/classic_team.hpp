@@ -112,6 +112,7 @@ struct TeamPlayer {
   int64_t pilot_modes[sh::kPilotModes] =
       {};  // live commands in each pilot mode (shooter/pilot.hpp)
   int64_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0;
+  int64_t goal_changes = 0;       // its item goal changed (bots/fighter.hpp's commitment)
   float travelled = 0;            // units along the path
   std::string last;               // where he stood at the end, and what he was going for
   std::vector<sh::Vec3f> path;    // every path_every frames
@@ -191,6 +192,7 @@ struct TeamMatchReport {
   std::vector<sh::Loc> places;               // each place once, at its points' middle
   int64_t lines_read = 0, lines_missed = 0;  // team lines the fighters read and missed
   std::string plan;                          // the map's team plan as lines (bots/map_plan.hpp)
+  std::string goals;                         // and its goals, a line each (bots/goals.hpp)
   int32_t plan_areas = 0, plan_base = -1;
   uint64_t digest = 0;
   int64_t faults = 0;

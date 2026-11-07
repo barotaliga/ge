@@ -60,6 +60,7 @@ constexpr double kImpulseGap_s = 0.5;
 constexpr double kWait_s = 20;      // an item back within this is worth going to wait for
 constexpr double kHealWait_s = 3;   // but a retreat goes for health that is there
 constexpr double kKeepGoal = 1.5;   // the goal's score is held up by this against the others
+constexpr double kDecide_s = 4;     // with no news, its item goal is chosen again this often
 constexpr float kRun = 320;         // units/s, the run to an item
 constexpr double kCallAgain_s = 8;  // an enemy in sight is called out again after this
 constexpr double kTold_s = 10;      // a point at an item is followed this long
@@ -285,6 +286,7 @@ bool door_shut(const server::RulesCommon& s, const ItemSpot& it) {
 // Goes for item `i`: through its button first while its door is shut.
 void go_item(Fighter& f, const server::RulesCommon& s, int32_t i) {
   const ItemSpot& it = f.items[static_cast<size_t>(i)];
+  if (f.goal_item != i) f.stats.goal_changes++;
   f.goal_item = i;
   if (it.dive && f.reach_at >= 0 && !f.reach.reached(it.node)) {
     // Through the water: to the dive's node, then the field (fighter_command) takes it in.
@@ -822,7 +824,22 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
       // item worth most.
       const bool heal =
           (f.mode == FightMode::retreat && !f.outmatched) || (f.mode == FightMode::roam && weak);
-      const int32_t i = best_item(f, s, st, self.origin, t, heal, c ? &enemy : nullptr, why);
+      // Committed: the goal held while nothing new has happened and its item is still to be had;
+      // only news, or a goal gone, makes the player think again (as a person does).
+      if (st.health < f.news_health) f.blows++;
+      f.news_health = st.health;
+      const int64_t now_news = f.bot.senses.stats.acquired + f.stats.taken + f.stats.heard_taken +
+                               f.stats.heard_spawns + f.mind.read + f.stats.pickups +
+                               f.stats.respawns + f.blows;
+      const bool kept = f.goal_item >= 0 && now_news == f.decided_news &&
+                        t - f.decided_at < kDecide_s &&
+                        f.items[static_cast<size_t>(f.goal_item)].present && !heal;
+      int32_t i = f.goal_item;
+      if (!kept) {
+        i = best_item(f, s, st, self.origin, t, heal, c ? &enemy : nullptr, why);
+        f.decided_news = now_news;
+        f.decided_at = t;
+      }
       const int32_t mate = f.outmatched ? nearest_mate_node(f, self.origin, t) : -1;
       if (i < 0 && mate >= 0) {
         go_to(f, mate);  // nothing to take: to the team

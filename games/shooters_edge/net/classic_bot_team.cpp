@@ -239,6 +239,8 @@ void set_up(BotTeam& t, BotSeat& s) {
   if (t.nav->plan_made && !t.plan_said) {
     t.plan_said = true;
     std::string text = bt::plan_text(t.nav->plan, s.fighter->items);
+    say(t, "goals: " + std::to_string(t.nav->goals.size()) +
+               " on the map (the se-team lab lists them)");
     for (size_t at = 0; at < text.size();) {
       const size_t nl = text.find('\n', at);
       say(t, "plan: " + text.substr(at, nl - at));
