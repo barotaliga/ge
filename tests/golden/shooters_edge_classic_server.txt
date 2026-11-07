@@ -1,7 +1,7 @@
 # games/shooters_edge/net/classic_trial.hpp's digest by preset (index into preset_names): 3 clients, 20 s, seed 1 (tests/shooters_edge_classic_server_test.cpp)
-0 a88bd044fe7be917
-1 8d69becab16fa363
-2 e30ada689bf1a656
-3 3a55d7d664b483a7
-4 4eafe1018feee6b9
-5 d6591f481ad83197
+0 9d908f6db26af809
+1 381e24ef5c5f0505
+2 1e901e60324748bb
+3 83f9b60ad9ce274e
+4 7e50e3c2d3351bbe
+5 4c8ba2b5d11f9dd3

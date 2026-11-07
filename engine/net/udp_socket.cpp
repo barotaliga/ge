@@ -6,6 +6,8 @@
 // ge:test tests/net_udp_socket_test.cpp
 #include "net/udp_socket.hpp"
 
+#include <cstdlib>
+#include <cstring>
 #include <random>
 
 #include "net/os_socket.hpp"
@@ -101,6 +103,43 @@ int udp_receive(UdpSocket& s, uint8_t* buffer, size_t capacity, Address& from) {
 uint64_t os_entropy() {
   std::random_device rd;
   return static_cast<uint64_t>(rd()) << 32 | rd();
+}
+
+bool resolve_ipv4(std::string_view text, uint16_t port, Address& out, std::string* error) {
+  std::string host(text);
+  const size_t colon = host.rfind(':');
+  if (colon != std::string::npos) {
+    const std::string digits = host.substr(colon + 1);
+    char* end = nullptr;
+    const unsigned long p = std::strtoul(digits.c_str(), &end, 10);
+    if (digits.empty() || *end != 0 || p == 0 || p > 65535) {
+      if (error) *error = "'" + std::string(text) + "' has no port a resolver reads (1..65535)";
+      return false;
+    }
+    port = static_cast<uint16_t>(p);
+    host.resize(colon);
+  }
+  if (!startup()) {
+    if (error) *error = "WSAStartup failed: Winsock 2.2 is not available";
+    return false;
+  }
+  addrinfo hints;
+  std::memset(&hints, 0, sizeof hints);
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_DGRAM;
+  addrinfo* found = nullptr;
+  const int r = getaddrinfo(host.c_str(), nullptr, &hints, &found);
+  if (r != 0 || found == nullptr) {
+    if (error) *error = "'" + host + "' does not resolve to an IPv4 address";
+    return false;
+  }
+  sockaddr_storage sa;
+  std::memset(&sa, 0, sizeof sa);
+  std::memcpy(&sa, found->ai_addr, found->ai_addrlen < sizeof sa ? found->ai_addrlen : sizeof sa);
+  freeaddrinfo(found);
+  out = from_sockaddr(sa);
+  out.port = port;
+  return true;
 }
 
 }  // namespace ge::net

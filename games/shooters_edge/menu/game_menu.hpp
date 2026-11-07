@@ -23,17 +23,24 @@
 // and the pointer move through them, ENTER views one, DELETE (or BACKSPACE, a Mac's delete) asks
 // to delete it, ESCAPE goes back to OPTIONS. It keeps the modern look in both looks.
 //
+// MULTIPLAYER ▸ JOIN A GAME shows the server browser (servers_page.hpp over the engine's server
+// list, net/server_list.hpp): the window hands it the game's protocol with `servers().set_query`
+// and the loaded install's masters with `servers().set_masters`; ENTER on a server runs
+// `connect <address>` and closes the menu, R or F5 refreshes, ESCAPE goes back to MULTIPLAYER. It
+// keeps the modern look in both looks.
+//
 // The commands it registers: `togglemenu` (what ESCAPE does), `menu_main`, `menu_options`,
-// `menu_quit`, `menu_screenshots` (the menu opened on that page); the cvars `menu_look` (auto,
-// classic, modern) and `ce_auto` (1: a game loaded is enhanced in the background at once). The game
-// keeps running under the menu (the listen server's frames go on); the player's keys and mouse go
-// to the menu while it is open.
+// `menu_quit`, `menu_screenshots`, `menu_servers` (the menu opened on that page); the cvars
+// `menu_look` (auto, classic, modern) and `ce_auto` (1: a game loaded is enhanced in the background
+// at once). The game keeps running under the menu (the listen server's frames go on); the player's
+// keys and mouse go to the menu while it is open.
 //
 // ge:summary The main menu over the game: ESCAPE, the presses, the classic or modern look, enhance
 // ge:keywords menu main-menu escape togglemenu menu_look classic modern look overlay pointer
 // ge:keywords classic-enhance enhance job switches help-pages window shooters-edge press_key
 // ge:keywords waiting-key rebind customize-controls load-game take_load enhance_game ce_auto
 // ge:keywords background-enhance take_ended screenshots gallery menu_screenshots set_screenshots
+// ge:keywords server-browser join-a-game menu_servers servers
 // ge:skill ui console classicenhance
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -53,6 +60,7 @@
 #include "shooters_edge/menu/classic_view.hpp"
 #include "shooters_edge/menu/gallery_page.hpp"
 #include "shooters_edge/menu/main_menu.hpp"
+#include "shooters_edge/menu/servers_page.hpp"
 #include "ui/draw.hpp"
 #include "ui/menu.hpp"
 #include "ui/menu_view.hpp"
@@ -113,6 +121,9 @@ class GameMenu {
   ge::capture::Gallery& gallery() { return gallery_; }
   // Whether the screenshots page is the one up.
   bool in_gallery() const { return in_gallery_; }
+  // The server browser (JOIN A GAME), and whether it is the page up.
+  ServersPage& servers() { return servers_; }
+  bool in_servers() const { return in_servers_; }
 
   // The next draw settles every animation where it is going (a lab's still).
   void settle() { settle_ = true; }
@@ -137,6 +148,8 @@ class GameMenu {
   void apply_enhance(const ge::ui::MenuEvent& e, Host& host);
   void show_gallery();
   void update_gallery(const ge::ui::MenuInput& in, Host& host);
+  void show_servers();
+  void update_servers(const ge::ui::MenuInput& in, Host& host);
 
   ge::console::Console* con_ = nullptr;
   std::string look_ = "auto";
@@ -173,6 +186,9 @@ class GameMenu {
   bool in_gallery_ = false;
   ge::capture::Gallery gallery_;
   GalleryPage gallery_page_;
+
+  bool in_servers_ = false;
+  ServersPage servers_;
 };
 
 }  // namespace shooters_edge::menu

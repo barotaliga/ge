@@ -83,7 +83,7 @@ constexpr Entry kEntries[] = {
     {.page = "multi",
      .id = "join",
      .text = "JOIN A GAME",
-     .hint = "Find a server and connect to it. The client's network play comes with M18g.",
+     .hint = "Find a server on the LAN or the internet and join it.",
      .needs = "connect"},
     {.page = "multi",
      .id = "host",
@@ -979,6 +979,7 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   if (e.page == "enhanced" && e.item == "load") return Outcome::load_game;
   if (e.page == "enhanced" && e.item == "enhance") return Outcome::classic_enhance;
   if (e.page == "options" && e.item == "screenshots") return Outcome::screenshots;
+  if (e.page == "multi" && e.item == "join") return Outcome::servers;
   if (e.page == "options" && e.item == "reset") {
     reset_defaults(host);
     refresh(menu, host);

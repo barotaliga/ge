@@ -268,10 +268,11 @@ bool remote_connect(Remote& r, const std::string& address, const ClientConfig& c
   if (text.rfind("localhost", 0) == 0) text = "127.0.0.1" + text.substr(9);
   if (text.find(':') == std::string::npos) text += ":" + std::to_string(kPortServer);
   gn::Address to;
-  if (!gn::parse_address(text, to)) {
-    error = "'" + address +
-            "' is not an address the client reads; next: give an IPv4 address with an optional "
-            "port (connect 192.168.1.20, connect 192.168.1.20:27500) or localhost";
+  if (std::string why;
+      !gn::parse_address(text, to) && !gn::resolve_ipv4(text, kPortServer, to, &why)) {
+    error = "'" + address + "' is not an address the client reads (" + why +
+            "); next: give a host name or an IPv4 address with an optional port (connect "
+            "192.168.1.20, connect 192.168.1.20:27500, connect example.org:27500) or localhost";
     return false;
   }
   if (!gn::open_udp_transport(r.own, gn::ipv4(0, 0, 0, 0, 0), &error)) {

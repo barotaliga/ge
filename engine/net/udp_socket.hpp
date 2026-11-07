@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "net/address.hpp"
 
@@ -36,5 +37,11 @@ int udp_receive(UdpSocket& s, uint8_t* buffer, size_t capacity, Address& from);
 
 // 64 bits from the OS's random source, for a real node's salts and secret.
 uint64_t os_entropy();
+
+// A host's IPv4 address by name, as the OS's resolver finds it: `text` is "host[:port]" or an
+// address "1.2.3.4[:port]" (`port` when it names none). It blocks while the resolver asks, so a
+// game calls it when the player acts (a refresh, a connect), never in a frame's hot path. False
+// and `error` when the name does not resolve.
+bool resolve_ipv4(std::string_view text, uint16_t port, Address& out, std::string* error);
 
 }  // namespace ge::net
