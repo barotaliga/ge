@@ -42,13 +42,19 @@ constexpr float kBrake = 0.25f;      // the least share of maxspeed walked into 
 constexpr float kFacing = 10;        // a run-up goes when the view is this near the jump's way, deg
 constexpr float kFlipFacing = 25;    // a flip goes with the view this near straight behind, deg
 constexpr float kFlipSpare_s = 0.05f;  // a flip's turn starts this much earlier than it takes, s
-constexpr float kGrenadeStill = 30;    // a grenade jump fires only this slow, units/s
-constexpr float kGrenadeAim = 4;       // and with the view this near the target's way, deg
-constexpr float kGrenadeNear = 32;     // and within this of its start, units
-constexpr float kGrenadeSlow = 160;    // slowing into the start from this far, units
-constexpr float kGrenadeStep = 4;      // the step to its stand: this times the way off, units/s
-constexpr float kOnLine = 10;          // a jump is run at on its line within this across, units
-constexpr float kStepHeight = 18;      // the move's step
+// In the air (`air`): the aim kAirPast past the target toward the node after it within kAirCorner
+// of it, units; slower
+// than kAirSlow across, or the aim more than kAirGiveUp off the velocity, forward at it (the
+// proof's way); within kAirHold of it, no key; the side key full from kAirFull off, degrees.
+constexpr float kAirCorner = 64, kAirPast = 24, kAirSlow = 100;
+constexpr float kAirGiveUp = 100, kAirHold = 2, kAirFull = 12;
+constexpr float kGrenadeStill = 30;  // a grenade jump fires only this slow, units/s
+constexpr float kGrenadeAim = 4;     // and with the view this near the target's way, deg
+constexpr float kGrenadeNear = 32;   // and within this of its start, units
+constexpr float kGrenadeSlow = 160;  // slowing into the start from this far, units
+constexpr float kGrenadeStep = 4;    // the step to its stand: this times the way off, units/s
+constexpr float kOnLine = 10;        // a jump is run at on its line within this across, units
+constexpr float kStepHeight = 18;    // the move's step
 
 float across(Vec3f a, Vec3f b) {
   const float dx = b.x - a.x, dy = b.y - a.y;
@@ -1102,7 +1108,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       w.yaw = unwrap(yaw_at(s.origin, B), p.yaw);
       if (p.grenade_s < 0) {
         const float d = across(s.origin, A);
-        const float v = std::sqrt(s.velocity.x * s.velocity.x + s.velocity.y * s.velocity.y);
+        const float v = root_of(s.velocity.x * s.velocity.x + s.velocity.y * s.velocity.y);
         // Slowing into the start from `kGrenadeSlow` off, and still anywhere within `kGrenadeNear`
         // of it (late hands coming in at a run overshoot a point and circle it); the stand is
         // taken from where the grenade really lies.
@@ -1162,13 +1168,49 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     } else if (flies(l.kind) && p.airborne) {
       if (!s.onground) {
         p.mode = PilotMode::air;
-        w.yaw = unwrap(yaw_at(s.origin, B), p.yaw);
-        w.forward = 1;
-        because = "in the air: toward the target";
-        if (l.kind == NavKind::rocket && l.back) {
+        // STEERED IN THE AIR (pilot.hpp `air`): the aim the target, or near it the node after it
+        // when the route walks on from there (the momentum carried round the corner it turns).
+        Vec3f aim = B;
+        if (l2 && (l2->kind == NavKind::walk || l2->kind == NavKind::drop) &&
+            across(s.origin, B) < kAirCorner) {
+          // A point a little past the target toward the next node: the landing stays on the
+          // target, the velocity already turning the route's way.
+          Vec3f on = node(g, p.route[p.k + 2]).origin - B;
+          on.z = 0;
+          const float len = root_of(on.x * on.x + on.y * on.y);
+          if (len > 1) aim = B + on * (kAirPast / len);
+        }
+        const float vh = heading(s.velocity.x, s.velocity.y);
+        const float view_off = wrap(p.yaw - vh);
+        const float err = wrap(yaw_at(s.origin, aim) - vh);
+        const float err_abs = err < 0 ? -err : err;
+        if (l.kind == NavKind::rocket && l.back && (view_off > 90 || view_off < -90)) {
           // The flip's view turning back to the target, strafing round the other way.
+          w.yaw = unwrap(yaw_at(s.origin, B), p.yaw);
           flip_keys(w.yaw, view_when_keys_land(p, w.yaw, msec), w.forward, w.side);
           because = "in the flip: the view back to the target";
+        } else if (speed < kAirSlow || err_abs > kAirGiveUp) {
+          // Slow (straight up off a standing jump), or the aim behind (passed over it): the view
+          // at the aim and forward, as the proof flew.
+          w.yaw = unwrap(yaw_at(s.origin, aim), p.yaw);
+          w.forward = 1;
+          because = "in the air: toward the target";
+        } else if (err_abs <= kAirHold) {
+          // On the line: the view along the velocity, no key (nothing taken off the speed).
+          w.yaw = unwrap(vh, p.yaw);
+          because = "in the air: on the line";
+        } else {
+          // Off the line: the side key toward the turn (the right side turns the velocity
+          // clockwise), pressed by how far off, the view led on the velocity by the turn the
+          // move gives (late hands get there as it has turned).
+          const float side = err > 0 ? -1.f : 1.f;
+          const float share = err_abs < kAirFull ? err_abs / kAirFull : 1.f;
+          float lead = -side * hop_turn_rate(speed, dt) * p.set.lead_s;
+          lead = lead > 45 ? 45 : lead < -45 ? -45 : lead;
+          w.yaw = unwrap(vh + lead, p.yaw);
+          w.side = side * share;
+          because = aim.x == B.x && aim.y == B.y ? "in the air: strafing onto the target"
+                                                 : "in the air: strafing round the corner";
         }
       } else {
         // Landed, and not on the target (passed() would have moved on): plan again. A jump

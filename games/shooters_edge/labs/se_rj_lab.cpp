@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <map>
 #include <memory>
@@ -69,6 +70,16 @@ struct Jump {
   int demo = 0, slot = 0, player = 0;  // the player: an index into the players read
   std::string map;
   sh::RocketJump j;
+};
+
+// An arrival at the asked spot (`--spot`): who, when, and the blasts and takeoff before it.
+struct Arrival {
+  std::string map, name, how;  // how: his own blasts by him before, in order ("G R": a grenade,
+                               // then a rocket), "-" none
+  double t = 0;
+  sh::Vec3f from;      // where he left the ground last before arriving (the takeoff)
+  float rise = 0;      // the most he rose at, units/s, over the window
+  float before_s = 0;  // the first blast's time before the arrival, s
 };
 
 struct Player {
@@ -236,6 +247,14 @@ void run(gl::Lab& lab) {
     }
   });
 
+  // The spot asked about: arrivals within `spot-r` across of it (and 48 up or down).
+  sh::Vec3f spot;
+  const bool asked = !lab.arg("spot").empty() && std::sscanf(lab.arg("spot").c_str(), "%f,%f,%f",
+                                                             &spot.x, &spot.y, &spot.z) == 3;
+  const float spot_r = static_cast<float>(lab.arg_num("spot-r"));
+  const double window_s = lab.arg_num("spot-s");
+  const float rise_least = static_cast<float>(lab.arg_num("spot-rise"));
+  std::vector<Arrival> arrivals;
   Maps maps{lab.arg("basedir"), lab.arg("game"), {}};
   std::vector<Player> players;
   std::vector<Jump> jumps;
@@ -300,6 +319,67 @@ void run(gl::Lab& lab) {
       for (const sh::RocketJump& j : found[k])
         jumps.push_back({static_cast<int>(i), static_cast<int>(k), at, scan.map, j});
     }
+    if (asked)
+      for (size_t k = 0; k < 32; k++) {
+        const std::vector<sh::TrackPoint>& tr = scan.tracks[k];
+        double last_in = -1e9;
+        for (size_t f = 0; f < tr.size(); f++) {
+          const sh::TrackPoint& p = tr[f];
+          const sh::Vec3f d = p.origin - spot;
+          const bool in =
+              !p.dead && d.x * d.x + d.y * d.y <= spot_r * spot_r && d.z <= 48 && d.z >= -48;
+          if (!in) continue;
+          const bool fresh = p.t - last_in > window_s;
+          last_in = p.t;
+          if (!fresh || f == 0) continue;
+          Arrival a;
+          a.map = scan.map;
+          a.name = scan.names[k].empty() ? "slot " + std::to_string(k) : scan.names[k];
+          a.t = p.t;
+          // Back over the window: died or teleported in it (a step longer than 128) ends it.
+          size_t first = f;
+          while (first > 0 && p.t - tr[first - 1].t <= window_s && !tr[first - 1].dead) {
+            const sh::Vec3f s = tr[first].origin - tr[first - 1].origin;
+            if (s.x * s.x + s.y * s.y + s.z * s.z > 128 * 128) break;
+            first--;
+          }
+          // The takeoff: the last frame on the ground before he rose into the spot (the
+          // ground read off the hops), else the window's start.
+          a.from = tr[first].origin;
+          for (size_t g = f; g > first; g--) {
+            const double dt = tr[g].t - tr[g - 1].t;
+            const float vz =
+                dt > 0 ? (tr[g].origin.z - tr[g - 1].origin.z) / static_cast<float>(dt) : 0.f;
+            if (vz > a.rise) a.rise = vz;
+          }
+          // With `spot-rise`, only an arrival from below: the takeoff the last frame on the
+          // ground that much lower (none in the window: not one).
+          bool below = rise_least <= 0;
+          for (size_t g = f; g-- > first;)
+            if (g < hops[k].frames.size() && hops[k].frames[g].phase == sh::HopPhase::ground &&
+                (rise_least <= 0 || tr[g].origin.z <= spot.z - rise_least)) {
+              a.from = tr[g].origin;
+              below = true;
+              break;
+            }
+          if (!below) continue;
+          // His own blasts that went within 160 of him in the window.
+          for (const cl::DemoFlight& fl : scan.flights) {
+            if (fl.shooter != static_cast<int>(k) || fl.t1 < tr[first].t || fl.t1 > p.t) continue;
+            const auto it =
+                std::lower_bound(tr.begin(), tr.end(), fl.t1,
+                                 [](const sh::TrackPoint& q, double t) { return q.t < t; });
+            if (it == tr.end()) continue;
+            const sh::Vec3f e = it->origin - fl.to;
+            if (e.x * e.x + e.y * e.y + e.z * e.z > 160 * 160) continue;
+            if (a.how.empty()) a.before_s = static_cast<float>(p.t - fl.t1);
+            a.how += a.how.empty() ? "" : " ";
+            a.how += fl.grenade ? "G" : "R";
+          }
+          if (a.how.empty()) a.how = "-";
+          arrivals.push_back(a);
+        }
+      }
     sc.scan.tracks = {};  // the tracks are read; free them
   }
   if (read == 0) {
@@ -616,6 +696,30 @@ void run(gl::Lab& lab) {
   lab.table(levels);
   lab.table(tt);
   lab.table(bt);
+  if (asked) {
+    // The arrivals at the spot, by how (his own blasts before) and each one.
+    std::map<std::string, int> by_how;
+    for (const Arrival& a : arrivals) by_how[a.how]++;
+    gl::LabTable ht{"how people arrived at the spot (" + lab.arg("spot") +
+                        "): their own blasts "
+                        "by them in the " +
+                        lab.arg("spot-s") + " s before (R a rocket, G a grenade)",
+                    {"blasts", "arrivals"},
+                    {}};
+    for (const auto& [how, n] : by_how) ht.rows.push_back({how, std::to_string(n)});
+    gl::LabTable at{
+        "each arrival at the spot",
+        {"map", "player", "t s", "blasts", "first before s", "takeoff (x y z)", "most rise u/s"},
+        {}};
+    for (const Arrival& a : arrivals)
+      at.rows.push_back(
+          {a.map, a.name, to_fixed(a.t, 1), a.how, a.how == "-" ? "-" : to_fixed(a.before_s, 2),
+           to_fixed(a.from.x, 0) + " " + to_fixed(a.from.y, 0) + " " + to_fixed(a.from.z, 0),
+           to_fixed(a.rise, 0)});
+    lab.metric("rj.spot.arrivals", static_cast<double>(arrivals.size()), "count");
+    lab.table(ht);
+    lab.table(at);
+  }
   lab.attach("tricks.tsv", std::vector<uint8_t>(tsv.begin(), tsv.end()));
   lab.attach("jumps.tsv", std::vector<uint8_t>(jtsv.begin(), jtsv.end()));
 }
@@ -645,6 +749,12 @@ const gl::LabSpec kSpec{
         {"gold", "3", "a gathering jumped this often or more, by two players or more, is a trick"},
         {"rows", "20", "the tricks and best jumps tabled"},
         {"yaw", "30", "the angled views' turn about z, degrees"},
+        {"spot", "",
+         "x,y,z: how people got there (every arrival, his own blasts before, the takeoff)"},
+        {"spot-r", "48", "an arrival is within this across of --spot, units"},
+        {"spot-s", "6", "the blasts and the takeoff looked for this long before, s"},
+        {"spot-rise", "0",
+         "only arrivals from this much lower or more (the takeoff the last ground there), units"},
     },
     "--least=1",
     run,

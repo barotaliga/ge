@@ -121,11 +121,18 @@ struct PilotSettings {
 
 // `swim`: on a swim link (nav.hpp), the view pitched at the next node, forward held, jump to rise;
 // onto a dry node out of the water by the climb the nav proved (swim.hpp `swim_out`).
-// `grenade`: a GRENADE JUMP (nav.hpp `NavKind::grenade`), on the ground: to its start and still
-// there, the view on the target and `NavLink::pitch` down, the grenade fired (only while the
-// sense says the launcher is in hand), then to the link's `lead` past where it will lie (the
-// nav's `grenade_at`, with the world), and jump as the fuse runs out (the jump key passes the
-// hands at once); the flight is a jump's.
+// `air`: in a flight (a jump's, a rocket jump's, a grenade jump's) STEERED as a player steers in
+// the air: the aim its target, or near it a point a little past it toward the node after it when
+// the route walks on (the momentum carried round the corner it turns there); off the velocity's
+// line, the side key toward the turn (pressed by how far off) and the view led on the velocity by
+// the move's turn, as the hop does (the air's 30 unit/s cap turns a fast flight only with the wish
+// across it: forward does nothing past 30 units/s); on the line, the view along the velocity and no
+// key; slow, or the aim behind, forward at it as the proof flew. A flip's view turns back to its
+// target first (`flip_keys`). `grenade`: a GRENADE JUMP (nav.hpp `NavKind::grenade`), on the
+// ground: to its start and still there, the view on the target and `NavLink::pitch` down, the
+// grenade fired (only while the sense says the launcher is in hand), then to the link's `lead` past
+// where it will lie (the nav's `grenade_at`, with the world), and jump as the fuse runs out (the
+// jump key passes the hands at once); the flight is a jump's.
 enum class PilotMode : uint8_t {
   idle,
   walk,
