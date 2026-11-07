@@ -142,7 +142,9 @@ struct Team;
 
 struct FighterStats {
   int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;
-  int64_t goal_changes = 0;         // its item goal changed (the commitment's measure)
+  int64_t goal_changes = 0;  // its item goal changed (the commitment's measure)
+  // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
+  int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
   int64_t taken = 0;                // items seen to go (by anyone)
   int64_t modes = 0;                // mode changes
   int64_t mode_commands[4] = {};    // commands spent in each mode

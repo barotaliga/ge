@@ -431,6 +431,12 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         p.in_view += any;
         p.seen_n += seen;
         p.unnoticed += any && seat.fighter.mode == bt::FightMode::roam;
+        // With one in plain view: did it see him, aim at him, hold its fire?
+        if (any) {
+          p.in_view_seen += seen;
+          p.in_view_aiming += seat.fighter.bot.aiming;
+          p.in_view_reacting += sh::bot_reacting(seat.fighter.bot, s.sv.time);
+        }
       }
       if (live) {
         static_assert(std::size(TeamPlayer{}.role_commands) == bt::kRoles);
@@ -501,6 +507,9 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.switches = fs.switches;
     p.packs = fs.packs;
     p.held_fire = fs.held_fire;
+    p.trigger_checks = fs.trigger_checks;
+    p.trigger_far = fs.trigger_far;
+    p.trigger_off = fs.trigger_off;
     p.reactions = seat.fighter.bot.stats.reactions;
     p.pre_aimed = seat.fighter.bot.stats.pre_aimed;
     p.react_s = seat.fighter.bot.stats.react_s;

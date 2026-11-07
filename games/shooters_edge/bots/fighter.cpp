@@ -1048,6 +1048,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   const Stats st = read_stats(s, me);
   const double t = s.sv.time;
   f.bot.pilot.grenade_ready = st.weapon == kWGrenades;  // a grenade jump fires with it in hand
+  f.bot.calm = f.escort.leader < 0;  // a companion's view is its own (it faces the leader)
   ai::Why* why = f.bot.pilot.why ? f.bot.pilot.why->follow(slot, f.bot.pilot.command) : nullptr;
   f.stats.commands++;
   const bool dead = st.health <= 0;
@@ -1267,6 +1268,9 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     // The view the command carries, which a swim or a button may have turned off the aim.
     const float off = view_off(f.bot, cmd);
     bool fire = !reacting && d <= held->range && off <= tol;
+    f.stats.trigger_checks++;
+    f.stats.trigger_far += d > held->range;
+    f.stats.trigger_off += d <= held->range && off > tol;
     if (fire && (mate_in_line(f, s, eye, at_of(c->seen)) ||
                  (blast_weapon(*held) && mate_near(f, s, at_of(c->seen), kBlastClear)))) {
       fire = false;
