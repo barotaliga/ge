@@ -54,7 +54,8 @@ TEST(a_held_jump_jumps_once_on_either_move) {
     CHECK((g.s().sv.set.playermove == sh::PlayerMove::arena) == (std::string(move) == "arena"));
     settle(g);
     const Jumps j = hold_jump(g, 3 * kFrames);
-    CHECK_MSG(j.takeoffs == 1, std::string(move) + ": " + std::to_string(j.takeoffs) + " take-offs");
+    CHECK_MSG(j.takeoffs == 1,
+              std::string(move) + ": " + std::to_string(j.takeoffs) + " take-offs");
     tops[k++] = j.top;
   }
   // The program's jump of 270 rises about 45 units on both moves.
