@@ -341,14 +341,16 @@ void run_bots(gl::Lab& lab) {
   ge::progs::Progs progs;
   std::string error;
   if (!cl::baseline_progs(progs, error)) {
-    lab.fail("the baseline mod did not build: " + error, "the progs skill");
+    lab.fail("the baseline mod did not build: " + error,
+             "next: compile it with ge qc build. Skill: progs.");
     return;
   }
   cl::SearchPath files;
   cl::OwnSounds own;
   if (!cl::mount_own_sounds(files, content, own, error)) {
-    lab.fail("the game's own sounds did not mount: " + error,
-             "pass --content=<the content folder>");
+    lab.fail(
+        "the game's own sounds did not mount: " + error,
+        "next: run from the tree's root or pass --content=<the content folder>. Skill: audio.");
     return;
   }
   cl::Listen l;
@@ -357,7 +359,8 @@ void run_bots(gl::Lab& lab) {
   opt.lobby = true;
   std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "arena", error);
   if (!map || !cl::listen_start(l, progs, std::move(map), opt, error)) {
-    lab.fail("the built-in arena did not start: " + error, "the shooter skill");
+    lab.fail("the built-in arena did not start: " + error,
+             "next: run the shooters_edge_lobby test. Skill: shooter.");
     return;
   }
   const int bots = static_cast<int>(lab.arg_num("bots"));
@@ -410,7 +413,8 @@ void run_bots(gl::Lab& lab) {
 void run(gl::Lab& lab) {
   const std::string fight = lab.arg("fight");
   if (fight != "script" && fight != "bots" && fight != "both") {
-    lab.fail("--fight=" + fight + " is not a fight", "pass --fight=script, bots or both");
+    lab.fail("--fight=" + fight + " is not a fight",
+             "next: pass --fight=script, bots or both. Skill: labs.");
     return;
   }
   if (fight != "bots") run_script(lab);
