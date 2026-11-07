@@ -483,6 +483,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   }
   for (size_t k = 0; k < seats.size(); k++) {
     const bt::Mind& mn = seats[k].fighter.mind;
+    if (k == 0) r.prints = clients[0].prints;
     r.players[k].read = mn.read;
     r.players[k].missed = mn.missed;
     const bt::Fighter& fi = seats[k].fighter;
@@ -495,6 +496,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].sound_chases = fi.stats.sound_chases;
     r.players[k].dodging = fi.stats.dodging;
     r.players[k].dodge_turns = fi.stats.dodge_turns;
+    r.players[k].rocket_jumps = fi.bot.pilot.pilot.stats.rocket_jumps;
+    r.players[k].flips = fi.bot.pilot.pilot.stats.flips;
     r.players[k].watching = fi.stats.watching;
     r.players[k].speed_sum = fi.stats.speed_sum;
     for (int m = 0; m <= sh::kPilotModes; m++) {

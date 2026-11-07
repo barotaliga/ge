@@ -38,14 +38,6 @@
 //          high to climb and too shallow to run up on, hopped against the riser as people do.
 // A link's TIME is the proof's, in seconds; the graph's search costs links by it.
 //
-// MOVERS (doors, plats, anything pushed) are left out of the proofs: the caller lists each as an
-// entity and its box (`NavMover`), and a node or a link whose swept box meets a mover's box carries
-// that entity (`mover`): the way is open only while the mover is out of it, which the bot checks
-// at run time. A mover the caller gives a `travel` (a plat) is also RIDDEN: for every node its box
-// holds at rest, a node on its top at the far end of the travel (the columns traced again with
-// the mover's model placed there), a `ride` link up to it costing the mover's `ride_s`, and links
-// off that top node to the nodes beside it, proven with the mover there like any other.
-//
 // Built once a map, off the hot path (it allocates); `nav_route`, `nav_nearest` and the reads do
 // not allocate beyond the route's own vector. Deterministic to the bit: floats in the move's own
 // order, the view's yaw through core's libm. Held by tests/shooter_nav_test.cpp and drawn by the
@@ -56,7 +48,9 @@
 // ge:keywords running-jump moving-jump run-up prove prove_link build_nav nav_route nav_nearest
 // ge:keywords nav_add_links nav_close_entries teleport-link nav_reach nav_hash map_world
 // ge:keywords reachability mover door plat ride route path a-star bot swim swim-node water
-// ge:keywords rocket-jump flip back-rocket-jump rocket_burst rocket_blast turn-room
+// ge:keywords rocket-jump flip back-rocket-jump rocket_burst rocket_blast turn-room tricks
+// ge:keywords nav_add_tricks rocket-jump-level nav-jumper jump-level grenade-jump
+// ge:keywords prove_grenade_jump grenade_at grenade-fuse blast-jump
 // ge:skill shooter bots
 // ge:test tests/shooter_nav_test.cpp
 #pragma once
@@ -86,10 +80,20 @@ struct NavSettings {
 // `nav_add_swim`).
 // `rocket`: a ROCKET JUMP (`prove_rocket_jump`): only for a player with the rocket launcher, its
 // rockets and the health for the blast; left out of routes and reach unless asked for.
-enum class NavKind : uint8_t { walk, drop, jump, ride, swim, rocket };
-inline constexpr int kNavKinds = 6;
+// `grenade`: a GRENADE JUMP (`prove_grenade_jump`): the same, for a player with the grenade
+// launcher (a slow way up: the grenade's fuse is waited out).
+enum class NavKind : uint8_t { walk, drop, jump, ride, swim, rocket, grenade };
+inline constexpr int kNavKinds = 7;
 const char* nav_kind_name(NavKind k);
 
+// MOVERS (doors, plats, anything pushed) are left out of the proofs: the caller lists each as an
+// entity and its box (`NavMover`), and a node or a link whose swept box meets a mover's box carries
+// that entity (`mover`): the way is open only while the mover is out of it, which the bot checks
+// at run time. A mover the caller gives a `travel` (a plat) is also RIDDEN: for every node its box
+// holds at rest, a node on its top at the far end of the travel (the columns traced again with
+// the mover's model placed there), a `ride` link up to it costing the mover's `ride_s`, and links
+// off that top node to the nodes beside it, proven with the mover there like any other.
+//
 // A mover the proofs leave out: its entity and its box in the world.
 struct NavMover {
   int ent = 0;
@@ -120,6 +124,30 @@ struct NavLink {
   float speed = 0;     // a jump's speed toward the target at its start, units/s
   bool back = false;   // a rocket jump played as the flip (`RocketJumpSpec::back`)
   float pitch = 0;     // a rocket jump's shot, degrees down (0: the player's own)
+  uint8_t level = 0;   // a rocket jump's: the least jumper's level that takes it (`NavJumper`)
+  float lead = 0;      // a grenade jump's: the jumper stands this far past the grenade, units
+};
+
+// A blast jump: a rocket jump or a grenade jump.
+inline bool nav_blast(NavKind k) { return k == NavKind::rocket || k == NavKind::grenade; }
+
+// WHO TAKES A BLAST JUMP on a route or a reach: nobody, by default. Rocket jumps with `rockets`,
+// grenade jumps with `grenades`; a jumper of `level` (0 amateur, 1 intermediate, 2 expert) takes
+// none above his level, and each costs him `extra_s` more than its link's time (the health and
+// the ammunition, weighed by how sure his hands are: the less sure, the more a jump must save
+// before he tries it).
+struct NavJumper {
+  bool rockets = false;
+  bool grenades = false;
+  uint8_t level = 2;
+  float extra_s = 0;
+  // Whether he takes `l` at all (any link but a blast jump: always).
+  bool takes(const NavLink& l) const {
+    if (!nav_blast(l.kind)) return true;
+    return (l.kind == NavKind::rocket ? rockets : grenades) && l.level <= level;
+  }
+  // What `l` costs him, s.
+  float cost_s(const NavLink& l) const { return nav_blast(l.kind) ? l.time_s + extra_s : l.time_s; }
 };
 
 // How the build went, for the lab.
@@ -154,7 +182,8 @@ struct NavGraph {
 // One proof's result.
 struct NavProof {
   bool reached = false;
-  float time_s = 0;  // to arrival (or to the refusal)
+  bool landed = false;  // a blast jump's: blown into the air and down again, standing (anywhere)
+  float time_s = 0;     // to arrival (or to the refusal)
   int commands = 0;
   Vec3f end;     // where the player stood at the end
   Vec3f lo, hi;  // the player's box swept over the proof
@@ -189,6 +218,8 @@ struct NavExtraLink {
   float speed = 0;    // a jump's speed at its start, units/s (NavLink::speed)
   bool back = false;  // a rocket jump's flip (NavLink::back)
   float pitch = 0;    // and its shot (NavLink::pitch)
+  uint8_t level = 0;  // and its level (NavLink::level)
+  float lead = 0;     // a grenade jump's stand past the grenade (NavLink::lead)
 };
 
 // THE ROCKET JUMP, as the baseline mod makes it (games/shooters_edge/qc: weapons.qc's `launch`,
@@ -242,6 +273,31 @@ NavProof prove_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec
                            float speed, const NavSettings& set, const RocketJumpSpec& rj = {},
                            float* health = nullptr, std::vector<Vec3f>* path = nullptr);
 
+// THE GRENADE JUMP, as the baseline mod throws a grenade (weapons.qc's `fire_grenade`): from the
+// eye less 8 (and 8 down) along the view at `speed`, `up` more upward, falling at `gravity`,
+// bouncing off the world (its speed into the surface turned back by `bounce` less one), at rest
+// on a floor once a bounce leaves it rising slower than 60, and bursting `fuse` seconds after the
+// shot with a rocket's blast (`blast`: its damage, share and push). The player stands still at
+// the start and fires `pitch` down toward the target; the grenade rolls to rest ahead of him; he
+// walks to `lead` units past it toward the target (its owner passes through it: the blast behind
+// throws him forward as well as up), presses jump `jump_before_s` before the fuse and holds
+// forward at the target through the flight.
+struct GrenadeJumpSpec {
+  float pitch = 80;
+  float speed = 600, up = 200, gravity = 800, bounce = 1.5f, fuse = 2.5f;
+  float jump_before_s = 0.1f;
+  RocketJumpSpec blast;  // the burst's damage, self share and push, and the eye's height
+};
+// Where a grenade fired by a player standing at `origin` along the view `angles` is `t` seconds
+// after the shot (its flight run in `msec` steps against the world).
+Vec3f grenade_at(const MoveWorld& world, Vec3f origin, Vec3f angles, float t,
+                 const GrenadeJumpSpec& gj = {}, int msec = 13);
+// The grenade jump from `from` toward `to`, standing `lead` past the grenade, run on the move with
+// the blast's push; reached as a rocket jump is. `health`, when given, gets the blast's points.
+NavProof prove_grenade_jump(const MoveWorld& world, const MoveSettings& move, Vec3f from, Vec3f to,
+                            float lead, const NavSettings& set, const GrenadeJumpSpec& gj = {},
+                            float* health = nullptr, std::vector<Vec3f>* path = nullptr);
+
 struct NavRoute {
   std::vector<int32_t> nodes;  // from the start to the goal; empty: no way
   float time_s = 0;            // the links' proof times summed
@@ -251,14 +307,16 @@ struct NavRoute {
 // The quickest way from node `from` to node `to` (A* on the proofs' times, the heuristic the
 // straight distance at the fastest speed any link has); links through a mover cost
 // `mover_penalty_s` more, links through a mover in `barred` (a door found shut) are not taken, and
-// nor is any link in `cut` (its `from` and `to`: a way an open door's leaf still stands across).
+// nor is any link in `cut` (its `from` and `to`: a way an open door's leaf still stands across);
+// rocket jumps as `jumper` takes them.
 NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& search,
                    float mover_penalty_s = 1, std::span<const int32_t> barred = {},
-                   std::span<const NavExtraLink> cut = {}, bool rockets = false);
+                   std::span<const NavExtraLink> cut = {}, const NavJumper& jumper = {});
 
 // Every node a player at node `from` can get to (`search.reached(n)` after; costs the links'
-// times), and how many, `from` itself included; rocket jumps only when `rockets`.
-int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, bool rockets = false);
+// times), and how many, `from` itself included; rocket jumps as `jumper` takes them.
+int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search,
+                  const NavJumper& jumper = {});
 
 // Adds `extra` to each node's run of links (after the proven ones), keeping the runs contiguous.
 void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra);
@@ -303,12 +361,53 @@ struct NavBridgeSettings {
   // The nodes worth a rocket jump (one byte a node: an item's); empty: any pocket. With them, a
   // landing from which one of its pocket's is reached on foot is taken before any other.
   std::span<const uint8_t> wanted;
+  // The nodes no way may lead into (one byte a node: a floor under lava or slime); empty: none.
+  // They are in no pocket and no link lands on them.
+  std::span<const uint8_t> avoid;
 };
 struct NavBridgeCounts {
   int64_t pockets = 0, bridged_in = 0, bridged_out = 0, by_rocket = 0, by_flip = 0, proofs = 0;
 };
 NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& move, NavGraph& g,
                                    std::vector<uint8_t>& main, const NavBridgeSettings& set = {});
+
+// THE TRICKS (`nav_add_tricks`): rocket jumps people make on a map again and again, read off
+// their recorded games (the `se-rj` lab's tricks; a game keeps each map's as data), each proven by
+// the move as any rocket jump: from the floor nodes within `near` of where people took off (the
+// nearest `takeoffs` of them), as the flip when people flipped it, at their pitch and 8 and 16
+// degrees either side, from the run they had (no faster than the move's maxspeed, with the floor
+// behind to run it), three quarters of it and standing. The first proof that lands standing on a
+// node within `land` across (and 32 up or down) of where people landed, one from which a way leads
+// back on foot to the main part (`back`, one byte a node; empty: any), is kept as a rocket link at
+// the trick's level, costing its flight and `cost_s`. With `grenades`, a GRENADE JUMP is proven
+// for each too (`prove_grenade_jump`, from the same takeoffs, standing each of `leads` past the
+// grenade) and kept the same way at the first level (a standing jump timed by the fuse needs no
+// skilled hands): the way up for a player with the grenade launcher and no rocket launcher.
+struct NavTrick {
+  Vec3f from, to;     // where people took off and landed (their origins)
+  bool back = false;  // flipped (`RocketJumpSpec::back`)
+  float pitch = 45;   // the shot, degrees down
+  float run = 320;    // the run at the shot, units/s (0: standing)
+  uint8_t level = 0;  // the least level that makes it (`NavLink::level`)
+};
+struct NavTrickSettings {
+  float near = 64;   // a takeoff node within this of people's takeoff, units
+  int takeoffs = 4;  // the nearest this many tried
+  float land = 64;   // a landing within this across of people's, units
+  float cost_s = 0;  // the link costs its flight and this (a jumper's own price is `NavJumper`)
+  RocketJumpSpec rj;
+  bool rockets = true, grenades = false;
+  float leads[4] = {16, 32, 0, 48};
+  GrenadeJumpSpec gj;
+};
+struct NavTrickCounts {
+  int64_t held = 0, flips = 0, grenades = 0, proofs = 0;
+  // Each trick's link start, -1 where no proof landed: its rocket jump's and its grenade jump's.
+  std::vector<int32_t> rocket_from, grenade_from;
+};
+NavTrickCounts nav_add_tricks(const MoveWorld& world, const MoveSettings& move, NavGraph& g,
+                              std::span<const NavTrick> tricks, std::span<const uint8_t> back,
+                              const NavTrickSettings& set = {});
 
 // The nodes from which a way leads, on foot (or swimming, riding, teleported: anything but a
 // rocket jump), to a node `mark` marks; one byte a node.

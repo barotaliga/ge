@@ -100,13 +100,14 @@ struct PilotSettings {
   // turns, the view kept 45 degrees outside the velocity so the two keys' wish lies across it;
   // no side switch to weave, no look ahead for walls, no brake.
   bool hop_simple = false;
-  // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while this is set (the caller's say:
-  // the launcher in hand, its rockets, the health for the blast); played as a jump, the view
+  // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while `jumper.rockets` is set (the
+  // caller's say: the launcher in hand, its rockets, the health for the blast), those of its
+  // level and at its price (`NavJumper`); played as a jump, the view
   // `rocket_pitch` down (or the link's own, `NavLink::pitch`: the one its proof landed) and the
   // trigger pressed with the jump; a flip (`NavLink::back`) turned into from as long before its
   // start as the view's hand takes to turn round (its delay and its slew over 180 degrees), its
   // run-up that much longer, and `rocket_back_pitch` down behind.
-  bool rockets = false;
+  NavJumper jumper;
   float rocket_pitch = 80;
   float rocket_back_pitch = 55;
   float swim_arrive = 24;  // a swim node is reached within this, units (any way, not across)
@@ -120,6 +121,11 @@ struct PilotSettings {
 
 // `swim`: on a swim link (nav.hpp), the view pitched at the next node, forward held, jump to rise;
 // onto a dry node out of the water by the climb the nav proved (swim.hpp `swim_out`).
+// `grenade`: a GRENADE JUMP (nav.hpp `NavKind::grenade`), on the ground: to its start and still
+// there, the view on the target and `NavLink::pitch` down, the grenade fired (only while the
+// sense says the launcher is in hand), then to the link's `lead` past where it will lie (the
+// nav's `grenade_at`, with the world), and jump as the fuse runs out (the jump key passes the
+// hands at once); the flight is a jump's.
 enum class PilotMode : uint8_t {
   idle,
   walk,
@@ -131,9 +137,10 @@ enum class PilotMode : uint8_t {
   strafe,
   arrived,
   hop,
-  swim
+  swim,
+  grenade
 };
-inline constexpr int kPilotModes = 11;  // PilotMode's count: a table indexed by mode is this long
+inline constexpr int kPilotModes = 12;  // PilotMode's count: a table indexed by mode is this long
 const char* pilot_mode_name(PilotMode m);
 
 enum class PilotHands : uint8_t { none, human, practised, steady };
@@ -152,13 +159,16 @@ struct PilotSense {
   // The map's solids, when the pilot may look ahead through them (the hop checks its arc for a
   // wall, as a player sees the room); null: the hop flies blind.
   const MoveWorld* world = nullptr;
+  bool grenade_ready = true;  // the grenade launcher in hand: a grenade jump fires only then
 };
 
 struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
   int32_t rides = 0, strafes = 0;
   int32_t hops = 0, hop_jumps = 0;  // hop stretches entered, jumps pressed on a landing in them
-  int32_t flips = 0;                // rocket jumps taken as the flip
+  int32_t rocket_jumps = 0;         // rocket jumps fired
+  int32_t flips = 0;                // of them, taken as the flip
+  int32_t grenade_jumps = 0;        // grenades fired for a grenade jump
   double time_s = 0;                // the commands' time since the last pilot_go
 };
 
@@ -177,6 +187,9 @@ struct Pilot {
   float side_s = 0;              // the hop's side held this long, s
   bool jump_pressed = false;     // the jump button in the last command
   bool airborne = false;         // left the ground on the current jump link
+  float grenade_s = -1;          // a grenade jump's: since its shot, s (-1: not fired yet)
+  Vec3f grenade_stand;           // and where the jumper stands for its blast
+  float grenade_yaw = 0;         // and the view's yaw at the shot, held through the fuse
   int32_t barred[4] = {-1, -1, -1, -1};    // doors found shut: planned round
   std::vector<NavExtraLink> cut;           // links an open door's leaf stands across: round
   std::vector<NavExtraLink> short_jumps;   // jumps missed (short, or no nearer), one entry a time
@@ -221,6 +234,7 @@ struct PilotBot {
   size_t next_goal = 0;
   std::vector<NavMover> now;   // the movers as they stand (reused)
   MoveWorld* world = nullptr;  // the map's solids the hop looks ahead through (null: none)
+  bool grenade_ready = true;   // the grenade launcher in hand (the caller's say, each command)
   ai::Why* why = nullptr;
   int64_t command = 0;
   int32_t arrivals = 0;

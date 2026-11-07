@@ -15,6 +15,7 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "shooter/slide.hpp"
 
 namespace ge::shooter {
 
@@ -121,6 +122,8 @@ const char* nav_kind_name(NavKind k) {
       return "swim";
     case NavKind::rocket:
       return "rocket";
+    case NavKind::grenade:
+      return "grenade";
   }
   return "?";
 }
@@ -509,7 +512,7 @@ int32_t nav_nearest(const NavGraph& g, Vec3f p) {
 
 NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& search,
                    float mover_penalty_s, std::span<const int32_t> barred,
-                   std::span<const NavExtraLink> cut, bool rockets) {
+                   std::span<const NavExtraLink> cut, const NavJumper& jumper) {
   auto is_cut = [&](int32_t a, int32_t b) {
     for (const NavExtraLink& c : cut)
       if (c.from == a && c.to == b) return true;
@@ -547,10 +550,10 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
           // A shut door is crossed neither by a link it is tagged on nor into a node inside it
           // (a link that crosses two doors carries one of them).
           if (is_barred(l.mover) || is_barred(g.nodes[static_cast<size_t>(l.to)].mover) ||
-              (l.mover >= 0 && !cut.empty() && is_cut(a, l.to)) ||
-              (l.kind == NavKind::rocket && !rockets))
+              (l.mover >= 0 && !cut.empty() && is_cut(a, l.to)) || !jumper.takes(l))
             continue;
-          const double cost = search.cost(a) + l.time_s + (l.mover >= 0 ? mover_penalty_s : 0);
+          const double cost =
+              search.cost(a) + jumper.cost_s(l) + (l.mover >= 0 ? mover_penalty_s : 0);
           if (search.improves(l.to, cost)) search.reach(l.to, cost, a, heuristic(l.to));
         }
       },
@@ -571,7 +574,7 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
   return r;
 }
 
-int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, bool rockets) {
+int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, const NavJumper& jumper) {
   search.reset(g.nodes.size());
   if (from < 0) return 0;
   search.seed(from);
@@ -579,8 +582,8 @@ int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, bool rock
     const NavNode& n = g.nodes[static_cast<size_t>(a)];
     for (int32_t k = 0; k < n.links; k++) {
       const NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
-      if (l.kind == NavKind::rocket && !rockets) continue;
-      const double cost = search.cost(a) + l.time_s;
+      if (!jumper.takes(l)) continue;
+      const double cost = search.cost(a) + jumper.cost_s(l);
       if (search.improves(l.to, cost)) search.reach(l.to, cost, a);
     }
   });
@@ -625,6 +628,8 @@ void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra) {
       l.speed = e.speed;
       l.back = e.back;
       l.pitch = e.pitch;
+      l.level = e.level;
+      l.lead = e.lead;
       links.push_back(l);
     }
     n.first_link = first;
@@ -775,11 +780,109 @@ NavProof prove_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec
     const bool grounded = s.ground >= 0;
     if (burst && grounded) {
       // One flight: on the target, or landed elsewhere (`end` tells where).
+      p.landed = true;
       p.reached = h <= set.arrive * 3 && dz <= kArriveUp && dz >= -kArriveUp;
       return p;
     }
     if (grounded && s.origin.z < floor_z) return p;
     if (t >= set.limit_s) return p;
+  }
+}
+
+Vec3f grenade_at(const MoveWorld& world, Vec3f origin, Vec3f angles, float t,
+                 const GrenadeJumpSpec& gj, int msec) {
+  const Vec3f fwd = angle_vectors(angles).forward;
+  Vec3f at = origin + Vec3f{0, 0, gj.blast.eye} + fwd * 8 - Vec3f{0, 0, 8};
+  Vec3f v = fwd * gj.speed + Vec3f{0, 0, gj.up};
+  const float dt = static_cast<float>(msec) * 0.001f;
+  const Solid& w = world.solids[0];
+  bool rest = false;
+  for (float done = 0; done + dt * 0.5f < t && !rest; done += dt) {
+    // The toss: gravity first, then the move, then the bounce off what it met.
+    v.z -= gj.gravity * dt;
+    const Vec3f end = at + v * dt;
+    const HullTrace tr = trace_hull(w.point_hull, at - w.origin, end - w.origin);
+    if (tr.startsolid || tr.allsolid) break;
+    at = at + (end - at) * tr.fraction;
+    if (tr.fraction >= 1) continue;
+    v = clip_velocity(v, tr.plane.normal, gj.bounce);
+    if (tr.plane.normal.z > 0.7f && v.z < 60) rest = true;
+  }
+  return at;
+}
+
+NavProof prove_grenade_jump(const MoveWorld& world, const MoveSettings& move, Vec3f from, Vec3f to,
+                            float lead, const NavSettings& set, const GrenadeJumpSpec& gj,
+                            float* health, std::vector<Vec3f>* path) {
+  NavProof p;
+  MoveState s;
+  s.origin = from;
+  s.maxspeed = move.maxspeed;
+  Vec3f dir{to.x - from.x, to.y - from.y, 0};
+  normalize(dir);
+  const float aim = yaw_at(from, to);
+  const float step_s = static_cast<float>(set.msec) * 0.001f;
+  const float floor_z = (from.z < to.z ? from.z : to.z) - kArriveUp;
+  p.end = from;
+  p.lo = from + kPlayerMins;
+  p.hi = from + kPlayerMaxs;
+  if (path) path->push_back(from);
+  Vec3f burst_at, stand;
+  float shot_t = 0;
+  bool burst = false, jumped = false;
+  const float limit = gj.fuse + set.limit_s;
+  for (int i = 0;; i++) {
+    const float t = static_cast<float>(i + 1) * step_s;
+    MoveCmd c;
+    c.msec = static_cast<uint8_t>(set.msec);
+    if (i == 0) {
+      c.angles = {gj.pitch, aim, 0};  // the shot, standing
+    } else if (!jumped && t < shot_t + gj.fuse - gj.jump_before_s) {
+      // To the stand past the grenade, slowing into it (the friction stops a player in a few
+      // units from a walk).
+      const float d = across(s.origin, stand);
+      c.angles = {0, d > 1 ? yaw_at(s.origin, stand) : aim, 0};
+      const float want = d * 6;
+      c.forward = static_cast<int16_t>(d > 2 ? (want < move.maxspeed ? want : move.maxspeed) : 0);
+    } else {
+      // The jump with the fuse nearly out, then forward at the target through the flight.
+      c.angles = {0, across(s.origin, to) > 0.01f ? yaw_at(s.origin, to) : aim, 0};
+      c.forward = static_cast<int16_t>(move.maxspeed);
+      if (!jumped) c.buttons = kButtonJump;
+      jumped = true;
+    }
+    player_move(s, c, move, world);
+    if (i == 0) {
+      // The grenade, thrown after the command's move; where it lies when the fuse runs out.
+      shot_t = t;
+      burst_at = grenade_at(world, s.origin, {gj.pitch, aim, 0}, gj.fuse, gj, set.msec);
+      stand = burst_at + dir * lead;
+      stand.z = s.origin.z;
+    }
+    if (!burst && t >= shot_t + gj.fuse) {
+      burst = true;
+      const float d = rocket_blast(s, burst_at, gj.blast);
+      if (d <= 0) return p;  // too far from the blast: no push
+      if (health) *health = d;
+    }
+    p.commands++;
+    if (path) path->push_back(s.origin);
+    const Vec3f blo = s.origin + kPlayerMins, bhi = s.origin + kPlayerMaxs;
+    for (int a = 0; a < 3; a++) {
+      if (blo[a] < p.lo[a]) p.lo[a] = blo[a];
+      if (bhi[a] > p.hi[a]) p.hi[a] = bhi[a];
+    }
+    p.end = s.origin;
+    p.time_s = t;
+    const bool grounded = s.ground >= 0;
+    if (burst && grounded) {
+      const float h = across(s.origin, to), dz = s.origin.z - to.z;
+      p.landed = true;
+      p.reached = h <= set.arrive * 3 && dz <= kArriveUp && dz >= -kArriveUp;
+      return p;
+    }
+    if (grounded && s.origin.z < floor_z) return p;
+    if (t >= limit) return p;
   }
 }
 
@@ -806,7 +909,7 @@ void grow_marks(const NavGraph& g, std::vector<uint8_t>& mark) {
 std::vector<uint8_t> reaching(const NavGraph& g, const std::vector<uint8_t>& mark) {
   std::vector<int32_t> start(g.nodes.size() + 1, 0);
   for (const NavLink& l : g.links)
-    if (l.kind != NavKind::rocket) start[static_cast<size_t>(l.to) + 1]++;
+    if (!nav_blast(l.kind)) start[static_cast<size_t>(l.to) + 1]++;
   for (size_t n = 0; n < g.nodes.size(); n++) start[n + 1] += start[n];
   std::vector<int32_t> from(static_cast<size_t>(start.back())),
       fill(start.begin(), start.end() - 1);
@@ -814,7 +917,7 @@ std::vector<uint8_t> reaching(const NavGraph& g, const std::vector<uint8_t>& mar
     const NavNode& n = g.nodes[a];
     for (int32_t k = 0; k < n.links; k++) {
       const NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
-      if (l.kind == NavKind::rocket) continue;
+      if (nav_blast(l.kind)) continue;
       from[static_cast<size_t>(fill[static_cast<size_t>(l.to)]++)] = static_cast<int32_t>(a);
     }
   }
@@ -890,6 +993,7 @@ NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& m
     float d;
     int32_t from, to;
   };
+  const auto avoided = [&](size_t n) { return n < set.avoid.size() && set.avoid[n] != 0; };
   // One way for a pocket: `inward` from the main part into it, else out of it into the main part.
   // True when a link was added to `extra`.
   const std::vector<uint8_t>* landing_back = nullptr;  // the nodes a rocket jump may land on
@@ -902,7 +1006,9 @@ NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& m
       if (group[p] != pocket || g.nodes[p].swim || g.nodes[p].col < 0) continue;
       const Vec3f po = g.nodes[p].origin;
       floor_near(g, po, set.far, [&](int32_t m) {
-        if (!land[static_cast<size_t>(m)] || g.nodes[static_cast<size_t>(m)].mover >= 0) return;
+        if (!land[static_cast<size_t>(m)] || g.nodes[static_cast<size_t>(m)].mover >= 0 ||
+            avoided(static_cast<size_t>(m)))
+          return;
         const Vec3f mo = g.nodes[static_cast<size_t>(m)].origin;
         const Vec3f from = inward ? mo : po, to = inward ? po : mo;
         if (to.z - from.z > up || from.z - to.z > set.down || across(from, to) > set.far) return;
@@ -919,7 +1025,8 @@ NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& m
       const int32_t q = nav_nearest(g, end);
       if (q < 0) return -1;
       const bool ok =
-          inward ? group[static_cast<size_t>(q)] == pocket : land[static_cast<size_t>(q)];
+          !avoided(static_cast<size_t>(q)) &&
+          (inward ? group[static_cast<size_t>(q)] == pocket : land[static_cast<size_t>(q)]);
       const Vec3f o = g.nodes[static_cast<size_t>(q)].origin;
       const float dz = end.z - o.z;
       return ok && across(end, o) <= 24 && dz <= kStepHeight && dz >= -kStepHeight ? q : -1;
@@ -944,7 +1051,7 @@ NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& m
           for (int32_t k = 0; k < g.nodes[n].links; k++) {
             const NavLink& l =
                 g.links[static_cast<size_t>(g.nodes[n].first_link) + static_cast<size_t>(k)];
-            if (l.kind == NavKind::rocket || seen[static_cast<size_t>(l.to)]) continue;
+            if (nav_blast(l.kind) || seen[static_cast<size_t>(l.to)]) continue;
             seen[static_cast<size_t>(l.to)] = 1;
             queue.push_back(l.to);
           }
@@ -1035,7 +1142,7 @@ NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& m
   bool rockets_now = false;
   for (int round = 0; round < 12; round++) {
     std::vector<uint8_t> outside(g.nodes.size());
-    for (size_t n = 0; n < outside.size(); n++) outside[n] = main[n] ? 0 : 1;
+    for (size_t n = 0; n < outside.size(); n++) outside[n] = main[n] || avoided(n) ? 0 : 1;
     const std::vector<int32_t> group = pockets_of(g, outside);
     const std::vector<uint8_t> back_now = rockets_now ? reaching(g, main) : std::vector<uint8_t>{};
     std::vector<int32_t> size(g.nodes.size(), 0);
@@ -1068,7 +1175,7 @@ NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& m
   {
     const std::vector<uint8_t> back = reaching(g, main);
     std::vector<uint8_t> stuck(g.nodes.size());
-    for (size_t n = 0; n < stuck.size(); n++) stuck[n] = main[n] && !back[n] ? 1 : 0;
+    for (size_t n = 0; n < stuck.size(); n++) stuck[n] = main[n] && !back[n] && !avoided(n) ? 1 : 0;
     // `back` within the main part: the land a way out lands on.
     std::vector<uint8_t> land(g.nodes.size());
     for (size_t n = 0; n < land.size(); n++) land[n] = main[n] && back[n] ? 1 : 0;
@@ -1080,6 +1187,101 @@ NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& m
         out.bridged_out++;
     nav_add_links(g, extra);
   }
+  return out;
+}
+
+NavTrickCounts nav_add_tricks(const MoveWorld& world, const MoveSettings& move, NavGraph& g,
+                              std::span<const NavTrick> tricks, std::span<const uint8_t> back,
+                              const NavTrickSettings& set) {
+  NavTrickCounts out;
+  out.rocket_from.assign(tricks.size(), -1);
+  out.grenade_from.assign(tricks.size(), -1);
+  if (!back.empty() && back.size() != g.nodes.size()) return out;
+  // Where a proof ended, as a node: the floor node under it (within 24 across and a step up or
+  // down), within `land` of people's landing; -1 none.
+  const auto landed = [&](Vec3f end, Vec3f people) {
+    const int32_t q = nav_nearest(g, end);
+    if (q < 0) return -1;
+    const NavNode& n = g.nodes[static_cast<size_t>(q)];
+    const float dz = end.z - n.origin.z, pz = n.origin.z - people.z;
+    const bool under = across(end, n.origin) <= 24 && dz <= kStepHeight && dz >= -kStepHeight;
+    const bool there = across(n.origin, people) <= set.land && pz <= 32 && pz >= -32;
+    const bool out_again = back.empty() || back[static_cast<size_t>(q)];
+    return under && there && out_again && !n.swim ? q : -1;
+  };
+  std::vector<NavExtraLink> extra;
+  for (size_t t = 0; t < tricks.size(); t++) {
+    const NavTrick& tr = tricks[t];
+    // The takeoff nodes: the floor nodes within `near` of people's, nearest first.
+    struct Near {
+      float d;
+      int32_t n;
+    };
+    std::vector<Near> starts;
+    floor_near(g, tr.from, set.near, [&](int32_t n) {
+      const NavNode& nd = g.nodes[static_cast<size_t>(n)];
+      const Vec3f d = nd.origin - tr.from;
+      const float dist = std::sqrt(dot(d, d));
+      if (dist <= set.near && nd.mover < 0 && !nd.wet) starts.push_back({dist, n});
+    });
+    std::sort(starts.begin(), starts.end(),
+              [](const Near& a, const Near& b) { return a.d != b.d ? a.d < b.d : a.n < b.n; });
+    if (static_cast<int>(starts.size()) > set.takeoffs)
+      starts.resize(static_cast<size_t>(set.takeoffs));
+    const float run = tr.run < move.maxspeed ? tr.run : move.maxspeed;
+    const float speeds[3] = {run, run * 0.75f, 0};
+    const float offs[5] = {0, -8, 8, -16, 16};
+    bool done = !set.rockets;
+    for (size_t x = 0; x < starts.size() && !done; x++) {
+      const Vec3f from = g.nodes[static_cast<size_t>(starts[x].n)].origin;
+      for (const float speed : speeds) {
+        if (done) break;
+        const float share = speed / move.maxspeed;
+        if (speed > 0 && !room_to_run_up(world, from, tr.to,
+                                         g.set.run_up + (tr.back ? set.rj.turn_room * share : 0)))
+          continue;
+        for (const float off : offs) {
+          RocketJumpSpec rj = set.rj;
+          rj.back = tr.back;
+          float pitch = tr.pitch + off;
+          pitch = pitch < 10 ? 10 : pitch > 89 ? 89 : pitch;
+          (tr.back ? rj.back_pitch : rj.pitch) = pitch;
+          out.proofs++;
+          const NavProof pr = prove_rocket_jump(world, move, from, tr.to, speed, g.set, rj);
+          const int32_t at = pr.landed ? landed(pr.end, tr.to) : -1;
+          if (at < 0 || at == starts[x].n) continue;
+          NavExtraLink l{starts[x].n, at,   NavKind::rocket, pr.time_s + set.cost_s, speed,
+                         tr.back,     pitch};
+          l.level = tr.level;
+          extra.push_back(l);
+          out.held++;
+          out.flips += tr.back;
+          out.rocket_from[t] = starts[x].n;
+          done = true;
+          break;
+        }
+      }
+    }
+    // The grenade jump: standing at the takeoff, each stand past the grenade in turn.
+    done = !set.grenades;
+    for (size_t x = 0; x < starts.size() && !done; x++)
+      for (const float lead : set.leads) {
+        out.proofs++;
+        const Vec3f from = g.nodes[static_cast<size_t>(starts[x].n)].origin;
+        const NavProof pr = prove_grenade_jump(world, move, from, tr.to, lead, g.set, set.gj);
+        const int32_t at = pr.landed ? landed(pr.end, tr.to) : -1;
+        if (at < 0 || at == starts[x].n) continue;
+        NavExtraLink l{starts[x].n, at, NavKind::grenade, pr.time_s + set.cost_s};
+        l.pitch = set.gj.pitch;
+        l.lead = lead;
+        extra.push_back(l);
+        out.grenades++;
+        out.grenade_from[t] = starts[x].n;
+        done = true;
+        break;
+      }
+  }
+  nav_add_links(g, extra);
   return out;
 }
 

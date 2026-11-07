@@ -15,7 +15,8 @@
 // gathered (each into the first gathering whose mean takeoff and landing are that near); one
 // seen `--gold` times or more, by two players or more, is a TRICK, a rocket jump people make on
 // that spot again and again: tabled with its xyz, how it is done (the kind most used, the pitch,
-// the run) and the best level seen doing it, and written to tricks.tsv for the nav (a rocket link
+// the run), its jumps by level and its LEVEL (the lowest whose players made a fifth of them or
+// more: a bot of that level learns it), and written to tricks.tsv for the nav (a rocket link
 // to prove), beside jumps.tsv with every jump.
 //
 // What it shows: the tables; each map from above and at an angle with every jump as a line from
@@ -443,10 +444,11 @@ void run(gl::Lab& lab) {
   const int rows = static_cast<int>(lab.arg_num("rows"));
   gl::LabTable tt{"the tricks: rocket jumps made on the same spot again and again, most first",
                   {"#", "map", "from (x y z)", "to (x y z)", "jumps", "kind", "standing", "pitch",
-                   "run u/s", "height", "across", "best level"},
+                   "run u/s", "height", "across", "by level", "level"},
                   {}};
   std::string tsv =
-      "map\tfrom_x\tfrom_y\tfrom_z\tto_x\tto_y\tto_z\tjumps\tkind\tstanding\tpitch\trun\n";
+      "map\tfrom_x\tfrom_y\tfrom_z\tto_x\tto_y\tto_z\tjumps\tkind\tstanding\tpitch\trun\t"
+      "amateur\tintermediate\texpert\tlevel\n";
   const auto v3 = [](sh::Vec3f v) {
     return to_fixed(v.x, 0) + " " + to_fixed(v.y, 0) + " " + to_fixed(v.z, 0);
   };
@@ -455,7 +457,7 @@ void run(gl::Lab& lab) {
     const Trick& t = tricks[n];
     sh::Vec3f from, to;
     std::vector<float> pitch, run, height, across;
-    int kind[3] = {}, standing = 0, best = -1;
+    int kind[3] = {}, standing = 0, by_level[kLevels] = {}, graded = 0;
     for (const int k : t.jumps) {
       const Jump& j = jumps[static_cast<size_t>(k)];
       from = from + j.j.from;
@@ -466,8 +468,15 @@ void run(gl::Lab& lab) {
       across.push_back(j.j.across);
       kind[static_cast<int>(j.j.kind)]++;
       standing += j.j.standing;
-      best = std::max(best, level_of(j));
+      if (level_of(j) >= 0) by_level[level_of(j)]++, graded++;
     }
+    // Its LEVEL: the lowest whose players made a fifth of its graded jumps or more (a bot of that
+    // level learns it).
+    int level = kLevels - 1;
+    for (int lv = kLevels - 1; lv >= 0; lv--)
+      if (graded > 0 && by_level[lv] * 5 >= graded) level = lv;
+    const std::string counts = std::to_string(by_level[0]) + "/" + std::to_string(by_level[1]) +
+                               "/" + std::to_string(by_level[2]);
     const float inv = 1.0f / static_cast<float>(t.jumps.size());
     from = from * inv;
     to = to * inv;
@@ -480,12 +489,14 @@ void run(gl::Lab& lab) {
       tt.rows.push_back({std::to_string(n + 1), t.map, v3(from), v3(to),
                          std::to_string(t.jumps.size()), kname, st, to_fixed(median(pitch), 0),
                          run.empty() ? "-" : to_fixed(median(run), 0), to_fixed(median(height), 0),
-                         to_fixed(median(across), 0), best >= 0 ? kLevelName[best] : "-"});
+                         to_fixed(median(across), 0), counts, kLevelName[level]});
     tsv += t.map + "\t" + to_fixed(from.x, 0) + "\t" + to_fixed(from.y, 0) + "\t" +
            to_fixed(from.z, 0) + "\t" + to_fixed(to.x, 0) + "\t" + to_fixed(to.y, 0) + "\t" +
            to_fixed(to.z, 0) + "\t" + std::to_string(t.jumps.size()) + "\t" + kname + "\t" +
            to_fixed(static_cast<float>(standing) * inv, 2) + "\t" + to_fixed(median(pitch), 0) +
-           "\t" + (run.empty() ? "0" : to_fixed(median(run), 0)) + "\n";
+           "\t" + (run.empty() ? "0" : to_fixed(median(run), 0)) + "\t" +
+           std::to_string(by_level[0]) + "\t" + std::to_string(by_level[1]) + "\t" +
+           std::to_string(by_level[2]) + "\t" + kLevelName[level] + "\n";
   }
 
   // The best jumps: the fastest across among those landed.

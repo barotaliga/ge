@@ -42,6 +42,11 @@ constexpr float kBrake = 0.25f;      // the least share of maxspeed walked into 
 constexpr float kFacing = 10;        // a run-up goes when the view is this near the jump's way, deg
 constexpr float kFlipFacing = 25;    // a flip goes with the view this near straight behind, deg
 constexpr float kFlipSpare_s = 0.05f;  // a flip's turn starts this much earlier than it takes, s
+constexpr float kGrenadeStill = 30;    // a grenade jump fires only this slow, units/s
+constexpr float kGrenadeAim = 4;       // and with the view this near the target's way, deg
+constexpr float kGrenadeNear = 32;     // and within this of its start, units
+constexpr float kGrenadeSlow = 160;    // slowing into the start from this far, units
+constexpr float kGrenadeStep = 4;      // the step to its stand: this times the way off, units/s
 constexpr float kOnLine = 10;          // a jump is run at on its line within this across, units
 constexpr float kStepHeight = 18;      // the move's step
 
@@ -132,6 +137,8 @@ struct Want {
 
 // A leap off the ground at its start: a jump, or a rocket jump played the same way.
 bool leaps(NavKind k) { return k == NavKind::jump || k == NavKind::rocket; }
+// A flight off the ground on the link: a leap, or a grenade jump (its start played apart).
+bool flies(NavKind k) { return leaps(k) || k == NavKind::grenade; }
 
 bool reached(const Pilot& p, const PilotSense& s, int32_t n) {
   const NavNode& b = node(*p.g, n);
@@ -297,6 +304,7 @@ void restart(Pilot& p, const PilotSense& s) {
   p.best_s = static_cast<float>(p.stats.time_s);
   p.wait_s = 0;
   p.airborne = false;
+  p.grenade_s = -1;
   (void)s;
 }
 
@@ -304,7 +312,8 @@ void advance(Pilot& p, const PilotSense& s) {
   p.k++;
   restart(p, s);
   if (p.mode == PilotMode::wait || p.mode == PilotMode::ride || p.mode == PilotMode::air ||
-      p.mode == PilotMode::jump || p.mode == PilotMode::run_up || p.mode == PilotMode::swim)
+      p.mode == PilotMode::jump || p.mode == PilotMode::run_up || p.mode == PilotMode::swim ||
+      p.mode == PilotMode::grenade)
     p.mode = PilotMode::walk;
 }
 
@@ -325,7 +334,7 @@ bool passed(const Pilot& p, const PilotSense& s, size_t k) {
   const int32_t a = p.route[k], b = p.route[k + 1];
   const NavLink* l = link_of(g, a, b);
   const NavLink* l2 = k + 2 < p.route.size() ? link_of(g, b, p.route[k + 2]) : nullptr;
-  if (l && leaps(l->kind)) {
+  if (l && flies(l->kind)) {
     // A jump lands where its flight ends, near the target but rarely on its point.
     const float dz = s.origin.z - node(g, b).origin.z;
     return p.airborne && s.onground && across(s.origin, node(g, b).origin) <= kLanded &&
@@ -656,6 +665,8 @@ const char* pilot_mode_name(PilotMode m) {
       return "hop";
     case PilotMode::swim:
       return "swim";
+    case PilotMode::grenade:
+      return "grenade";
   }
   return "?";
 }
@@ -730,7 +741,7 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
     cut = p.cut_all;
   }
   p.route = nav_route(*p.g, from, goal, p.search, 1,
-                      std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut, p.set.rockets)
+                      std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut, p.set.jumper)
                 .nodes;
   if (p.route.empty()) {
     p.mode = PilotMode::idle;
@@ -1079,7 +1090,76 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         replan(p, s);
         because = "waited too long: barred";
       }
-    } else if (leaps(l.kind) && p.airborne) {
+    } else if (l.kind == NavKind::grenade && !p.airborne) {
+      // The grenade jump's start (pilot.hpp `grenade`).
+      if (p.mode != PilotMode::grenade) {
+        p.mode = PilotMode::grenade;
+        p.best_s = t;
+      }
+      const GrenadeJumpSpec gj;
+      Vec3f dir{B.x - A.x, B.y - A.y, 0};
+      normalize(dir);
+      w.yaw = unwrap(yaw_at(s.origin, B), p.yaw);
+      if (p.grenade_s < 0) {
+        const float d = across(s.origin, A);
+        const float v = std::sqrt(s.velocity.x * s.velocity.x + s.velocity.y * s.velocity.y);
+        // Slowing into the start from `kGrenadeSlow` off, and still anywhere within `kGrenadeNear`
+        // of it (late hands coming in at a run overshoot a point and circle it); the stand is
+        // taken from where the grenade really lies.
+        if (d > kGrenadeNear) {
+          w.yaw = unwrap(yaw_at(s.origin, A), p.yaw);
+          w.forward = facing(w.yaw, p.yaw) * (d < kGrenadeSlow ? d / kGrenadeSlow : 1);
+          because = "to a grenade jump's start";
+        } else {
+          w.pitch = l.pitch > 0 ? l.pitch : gj.pitch;
+          const float off = wrap(yaw_at(s.origin, B) - p.yaw);
+          if (s.onground && v < kGrenadeStill && (off < 0 ? -off : off) < kGrenadeAim &&
+              s.grenade_ready) {
+            w.attack = true;
+            p.grenade_s = 0;
+            const Vec3f at = s.world ? grenade_at(*s.world, s.origin, {w.pitch, wrap(p.yaw), 0},
+                                                  gj.fuse, gj, msec)
+                                     : s.origin;
+            p.grenade_stand = at + dir * l.lead;
+            p.grenade_yaw = wrap(yaw_at(s.origin, B));
+            p.stats.grenade_jumps++;
+            because = "a grenade jump: the grenade at the feet";
+          } else {
+            because = s.grenade_ready ? "lining up a grenade jump" : "a grenade jump: the launcher";
+          }
+        }
+        // Never fired (walled off its start, the launcher never in hand): planned round.
+        if (t - p.best_s > 2 * p.set.stuck_s) {
+          missed_jump(p, {a, b, l.kind, l.time_s});
+          missed_jump(p, {a, b, l.kind, l.time_s});
+          replanned = true;
+          replan(p, s);
+          because = "a grenade jump never fired: planned round";
+        }
+      } else {
+        p.grenade_s += dt;
+        if (p.grenade_s < gj.fuse - gj.jump_before_s) {
+          // The view kept on the target, stepped to the stand with the keys in its frame (a
+          // person does not turn to walk a few units; late hands turning to a point circle it).
+          w.yaw = unwrap(p.grenade_yaw, p.yaw);
+          const ViewAxes ax = angle_vectors({0, p.yaw, 0});
+          const Vec3f d{p.grenade_stand.x - s.origin.x, p.grenade_stand.y - s.origin.y, 0};
+          const auto key = [&](float along) {
+            const float k = along * kGrenadeStep / s.maxspeed;
+            return k > 1 ? 1.f : k < -1 ? -1.f : k;
+          };
+          w.forward = key(dot(d, ax.forward));
+          w.side = key(dot(d, ax.right));
+          because = "to the stand past the grenade, the fuse burning";
+        } else {
+          w.forward = 1;
+          w.jump = true;
+          p.airborne = true;
+          p.stats.jumps++;
+          because = "the grenade jump: jump as the fuse runs out";
+        }
+      }
+    } else if (flies(l.kind) && p.airborne) {
       if (!s.onground) {
         p.mode = PilotMode::air;
         w.yaw = unwrap(yaw_at(s.origin, B), p.yaw);
@@ -1125,6 +1205,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           w.attack = true;
           because = flip ? "a flip: the shot behind with the jump"
                          : "a rocket jump: the shot at the feet with the jump";
+          p.stats.rocket_jumps++;
           if (flip) p.stats.flips++;
         }
         p.stats.jumps++;
@@ -1279,6 +1360,7 @@ MoveCmd pilot_next(void* ctx, const Server& sv, int slot, int msec) {
   }
   s.movers = b.now;
   s.world = b.world;
+  s.grenade_ready = b.grenade_ready;
   if ((p.mode == PilotMode::idle || p.mode == PilotMode::arrived) && !b.goals.empty()) {
     if (p.mode == PilotMode::arrived) b.arrivals++;
     for (int32_t& d : p.barred) d = -1;
