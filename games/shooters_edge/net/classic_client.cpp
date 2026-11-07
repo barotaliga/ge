@@ -452,36 +452,22 @@ void read_payload(ClassicClientEnd& c, const uint8_t* data, size_t size, size_t 
 void speak(ClassicClientEnd& c, int samples) {
   const bool talking =
       c.cfg.live_mic ? c.mic_talking : c.cfg.talk != nullptr && c.cfg.talk(c.tick, c.cfg.seed);
-  if (c.cfg.live_mic) {  // the microphone's samples as they came, whatever the tick's length
-    c.mic.insert(c.mic.end(), c.mic_in.begin(), c.mic_in.end());
-    c.mic_in.clear();
-    samples = 0;
-  }
-  for (int i = 0; i < samples; i++) {
-    const bool say = talking && !c.speech.empty();
-    c.mic.push_back(say ? c.speech[c.speech_at] : 0.0f);
-    if (say) c.speech_at = (c.speech_at + 1) % c.speech.size();
+  std::vector<float> said;  // the samples cut this tick
+  if (c.cfg.live_mic) {     // the microphone's samples as they came, whatever the tick's length
+    said.swap(c.mic_in);
+  } else {
+    said.resize(static_cast<size_t>(samples), 0.0f);
+    for (float& x : said) {
+      if (!talking || c.speech.empty()) break;
+      x = c.speech[c.speech_at];
+      c.speech_at = (c.speech_at + 1) % c.speech.size();
+    }
   }
   ClcMsg m;
   m.id = clc::voice;
   m.gen = cl::kVoiceOpus << 4;
-  m.seq = c.voice_seq;
-  int frames = 0;
-  while (c.mic.size() >= static_cast<size_t>(gn::kVoiceFrame)) {
-    if (talking && c.encoder) {
-      uint8_t frame[gn::kVoiceMaxBytes];
-      const int n = c.encoder->encode(c.mic.data(), frame, sizeof frame);
-      if (n > 0) {
-        m.data.push_back(static_cast<uint8_t>(n & 0xFF));
-        m.data.push_back(static_cast<uint8_t>(n >> 8));
-        m.data.insert(m.data.end(), frame, frame + n);
-        frames++;
-      }
-    }
-    c.mic.erase(c.mic.begin(), c.mic.begin() + gn::kVoiceFrame);
-  }
+  const int frames = cl::voice_out_cut(c.voice, said, talking, m.data, m.seq);
   if (frames == 0) return;
-  c.voice_seq = (c.voice_seq + frames) & 0xFF;
   c.voice_sent += frames;
   uint8_t buf[kMaxMsgLen];
   gn::Writer w = gn::make_writer(buf, sizeof buf);
@@ -571,9 +557,7 @@ void client_start(ClassicClientEnd& c, gn::Transport& t, const gn::Address& serv
   c.now = now;
   if (cfg.voice) {
     c.cfg.ask[ExtFamily::x2] |= kX2Voice;
-    c.encoder = std::make_unique<gn::VoiceEncoder>();
-    std::string error;
-    if (!c.encoder->open(gn::VoiceCodecConfig{}, error)) c.encoder.reset();
+    cl::voice_out_open(c.voice);
     if (!cfg.live_mic)
       c.speech = cfg.speech ? *cfg.speech
                             : gn::voice_trial_speech(static_cast<uint32_t>(cfg.seed) * 7919u + 17u,

@@ -391,6 +391,7 @@ int run_main(int argc, char** argv) {
   listen_opt.registered = game_content.registered;
   listen_opt.item_names = game_content.item_names;
   listen_opt.arsenal = game_content.arsenal;
+  listen_opt.voice = remote.voip;  // cl_voip: the window's match relays its players' voices
   // The saves (the campaign's whole game: listen.hpp's `listen_save`), `<game>/saves/<name>.save`.
   std::string load_ask;  // a save the console asked to load (loaded where a map change is made)
   cl::campaign_commands(console, listen, files, game_content, next_map, load_ask);
@@ -843,24 +844,32 @@ int run_main(int argc, char** argv) {
     }
     // Joined to a server (`connect`): its game drawn as a played demo's is (classic_remote.hpp),
     // from the frame its first level is known to the frame it drops, the listen server held.
+    // The microphone: opened the first time +voip is held where voice is carried (a server
+    // joined, or the window's own match), then read every frame into the game that carries it.
+    const bool talk_key = remote.voip_key != nullptr && remote.voip_key->down();
+    const bool voice_here = !remote.active && cl::listen_voice(listen);
+    if (!mic_tried && (sn::remote_talking(remote) || (voice_here && talk_key))) {
+      mic_tried = true;
+      mic = ge::platform::open_audio_in(ge::net::kVoiceRate);
+      tell(mic ? "voice: the microphone is on while +voip is held"
+               : "voice: no microphone opened (none, or the system's permission refused); next: "
+                 "allow the microphone for shooters_edge and restart",
+           t);
+    }
+    if (mic) {
+      const int n = ge::platform::read_audio_in(*mic, mic_samples.data(),
+                                                static_cast<int>(mic_samples.size()));
+      const std::span<const float> heard_mic{mic_samples.data(), static_cast<size_t>(n)};
+      if (remote.active)
+        sn::remote_mic(remote, heard_mic);
+      else if (voice_here)
+        cl::listen_mic(listen, heard_mic, talk_key);
+    }
     auto joined = sn::RemoteStep::waiting;
     if (remote.active || (bench_map && !bench.active)) {
       const bool hands = playing && !game_menu.open();
       sn::remote_hands(remote, hands ? cl::button_moves(controls) : cl::Moves{}, played, controls,
                        wall);
-      if (!mic_tried && sn::remote_talking(remote)) {
-        mic_tried = true;
-        mic = ge::platform::open_audio_in(ge::net::kVoiceRate);
-        tell(mic ? "voice: the microphone is on while +voip is held"
-                 : "voice: no microphone opened (none, or the system's permission refused); next: "
-                   "allow the microphone for shooters_edge and restart",
-             t);
-      }
-      if (mic) {
-        const int n = ge::platform::read_audio_in(*mic, mic_samples.data(),
-                                                  static_cast<int>(mic_samples.size()));
-        sn::remote_mic(remote, {mic_samples.data(), static_cast<size_t>(n)});
-      }
       std::vector<std::string> lines;
       joined = sn::remote_step(remote, wall, lines);
       for (const std::string& line : lines) tell(line, t);

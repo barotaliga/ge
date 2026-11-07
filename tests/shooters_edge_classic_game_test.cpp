@@ -9,13 +9,14 @@
 // the mod's changelevel takes the players to the next map (the rotation's when it has one); bots
 // are players every client sees, with their teams; the lobby warms up (its limits held, a bot
 // alone never counts down) until the client is ready, then restarts the map into the match; the
-// window's own match (the listen server) is the same server, and a classic client joins it.
+// window's own match (the listen server) is the same server, and a classic client joins it; on
+// it the window's player hears the visitor talk and is heard by him while talking.
 //
 // ge:summary Test: Shooter's Edge's dedicated server on the core: one digest, a client plays on it
 // ge:keywords test classic-game dedicated-server classic-client simulated-network serve net_frame
 // ge:keywords game-rules fraglimit pack-map changelevel map-change maprotation reconnect
 // ge:keywords bots sv_bots sv_lobby lobby warmup ready countdown match-restart local-seat
-// ge:keywords listen-server listen_options join-the-window
+// ge:keywords listen-server listen_options join-the-window listen_mic local-voice sv_voip
 // ge:keywords sv_mod mod-folder gamedir qwprogs misc-pak
 // ge:skill net shooter testing
 #include <filesystem>
@@ -437,4 +438,64 @@ TEST(classic_game_a_client_joins_the_window_s_own_match) {
   CHECK(se::info_get(visitor.userinfos[0], "name") == "host");
   CHECK(se::info_get(visitor.userinfos[0], "*bot").empty());
   shooters_edge::client::listen_stop(l);
+}
+
+namespace {
+bool always_talks(int, int) { return true; }
+}  // namespace
+
+TEST(classic_game_the_window_s_player_hears_a_visitor_and_is_heard_on_its_own_match) {
+  namespace cl = shooters_edge::client;
+  ge::progs::Progs progs;
+  std::string error;
+  CHECK_MSG(cl::baseline_progs(progs, error), error);
+  gn::LinkConditions lan;
+  gn::SimNetwork net = gn::make_sim_network(1, lan);
+  gn::Transport port, client_port;
+  gn::open_sim_transport(port, net, gn::sim_address(0, kPort));
+  gn::open_sim_transport(client_port, net, gn::sim_address(1, kClientPort));
+  cl::Listen l;
+  cl::ListenOptions opt = se::listen_options();
+  opt.transport = &port;
+  opt.player = "host";
+  cl::SearchPath none;
+  auto map = cl::load_named_map(none, "arena", error);
+  CHECK_MSG(map != nullptr, error);
+  CHECK_MSG(cl::listen_start(l, progs, std::move(map), opt, error), error);
+  CHECK(cl::listen_voice(l));
+  se::ClassicClientEnd visitor;
+  se::ClientConfig cc;
+  cc.name = "visitor";
+  cc.voice = true;
+  cc.talk = always_talks;
+  se::client_start(visitor, client_port, gn::sim_address(0, kPort), cc, 0);
+  std::vector<float> tone(48000 / 77);  // a frame's worth of a microphone
+  for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 24) % 2 == 0 ? 0.25f : -0.25f;
+  ge::shooter::MoveCmd idle;
+  size_t heard = 0, from_visitor = 0;
+  const auto run = [&](int frames, bool talking) {
+    for (int f = 0; f < frames; f++) {
+      const int64_t now = l.match->now_us;
+      gn::sim_advance(net, now);
+      se::client_tick(visitor, now);
+      cl::listen_mic(l, tone, talking);
+      cl::listen_frame(l, idle);
+      for (const cl::DemoVoice& v : l.voices) {
+        heard++;
+        if (v.sender == visitor.playernum) from_visitor++;
+      }
+      l.voices.clear();
+    }
+  };
+  run(400, false);
+  CHECK(visitor.stage == se::ClientStage::active);
+  CHECK(visitor.ext.has(se::ExtFamily::x2, se::kX2Voice));
+  CHECK_MSG(
+      from_visitor > 0 && from_visitor == heard,
+      std::to_string(from_visitor) + " of " + std::to_string(heard) + " voices the visitor's");
+  CHECK_MSG(visitor.voice_heard[0] == 0, "the host was heard without talking");
+  run(200, true);
+  CHECK_MSG(visitor.voice_heard[0] > 0, "the visitor heard nothing of the host");
+  CHECK(l.voice.sent > 0);
+  cl::listen_stop(l);
 }

@@ -4,14 +4,16 @@
 // the pack's recordings, the channels, the fall with distance, the pan, the map's ambience by
 // leaf), for a listener at the player's eye. The listen keeps what the server sent the player
 // (`Listen::sounds`, `static_sounds`) and each `frame` plays and empties it; a sound on an entity
-// follows the entity where the server has it now; the player's own sounds are centred.
+// follows the entity where the server has it now; the player's own sounds are centred. A
+// match's voices (`Listen::voices`, what the server relayed to him) play as a demo's do
+// (demo_voice.hpp).
 //
 // A NEW MAP (a map change, the campaign's next level, a new game): the sound list read again
 // and the old map's loops stopped, found by the map the listen plays.
 //
 // ge:summary The window's own game heard: the listen server's sounds and loops on the synth
 // ge:keywords listen-sound listen-hearing sound sounds door lift shot ambience listener
-// ge:keywords listen_sound static-sound ambientsound channels
+// ge:keywords listen_sound static-sound ambientsound channels voice listen-voice
 // ge:skill audio shooter
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -21,6 +23,7 @@
 #include "audio/synth.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_sound.hpp"
+#include "shooters_edge/client/demo_voice.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 
@@ -39,6 +42,7 @@ class ListenHearing {
 
   // The players' counts (null before the first game).
   const DemoSoundStats* stats() const { return sounds_ ? &sounds_->stats() : nullptr; }
+  const DemoVoiceStats* voice_stats() const { return voices_ ? &voices_->stats() : nullptr; }
   // The state the players read, for a test: the sound list, the loops, the entities, the eye.
   const DemoState& state() const { return state_; }
 
@@ -46,6 +50,7 @@ class ListenHearing {
   ge::audio::Synth& synth_;
   float volume_;
   std::unique_ptr<DemoSounds> sounds_;
+  std::unique_ptr<DemoVoices> voices_;  // a match's players' voices (`Listen::voices`)
   const SearchPath* files_ = nullptr;
   int entries_ = -1;  // the listen's map entry the loops are of
   size_t names_ = 0;  // the sound list's length when last read
