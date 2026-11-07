@@ -78,8 +78,8 @@ struct TeamMatchOptions {
   // The network between every client and the server, one way (0: a LAN), with a jitter of a
   // tenth of it: 50 is a round trip of about 100 ms, a player across an ocean.
   double latency_ms = 0;
-  bool antilag =
-      false;  // the server rewinds hitscan to what the shooter saw (ServerConfig::antilag)
+  bool antilag = false;  // the server rewinds hitscan to what the shooter saw (its antilag)
+  bool lead_lag = true;  // the fighters lead their shots on the round trip (false: as on a LAN)
 };
 
 struct TeamPlayer {
@@ -96,6 +96,8 @@ struct TeamPlayer {
   double react_s = 0;                    // the reactions' times, summed
   std::array<HitCount, kHitWeapons> hits{};  // shots and hits by weapon (classic_hits.hpp)
   double given = 0;                          // damage given to enemies (classic_hits.hpp)
+  double lead_sum = 0, lead_abs = 0;         // hitscan shots' lead miss (classic_hits.hpp)
+  int64_t lead_n = 0;
   // Sampled alive every 4 frames: an enemy in plain view (any way he looks), one seen (in his
   // cone), and an enemy in view while he roams with nobody known.
   int64_t view_n = 0, in_view = 0, seen_n = 0, unnoticed = 0;
@@ -129,6 +131,8 @@ struct TeamPlayer {
   double mode_speed[sh::kPilotModes + 1] = {};  // and by the pilot's mode, with each mode's count
   int64_t mode_n[sh::kPilotModes + 1] = {};
   int64_t mirrored = 0, predicted = 0;  // client-fed: commands on its client's world, predicted
+  double lag_s = 0;                     // client-fed: the round trips its aim led by, summed
+  int64_t lag_n = 0;                    // and their count
   double mirror_err = 0;                // client-fed: summed units between its own place as its
   int64_t mirror_err_n = 0;             // world holds it and the server's, alive, and the count
 };

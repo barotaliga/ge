@@ -8,6 +8,8 @@
 #include <cmath>
 #include <cstring>
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "progs/vm.hpp"
 
 namespace shooters_edge::net {
@@ -75,6 +77,41 @@ const char* hit_weapon_name(HitWeapon w) {
   return kNames[static_cast<int>(w)];
 }
 
+// The lead's miss of the hitscan shot player `e` fired this frame (classic_hits.hpp).
+void lead_probe(HitBook& b, const server::QcServer& s, int e, int slot) {
+  const sh::Edict& me = s.sv.edicts[static_cast<size_t>(e)];
+  const double yaw = me.v_angle.y * (ge::core::kPi / 180),
+               pitch = me.v_angle.x * (ge::core::kPi / 180);
+  const sh::Vec3f dir{static_cast<float>(ge::core::libm::cos(pitch) * ge::core::libm::cos(yaw)),
+                      static_cast<float>(ge::core::libm::cos(pitch) * ge::core::libm::sin(yaw)),
+                      static_cast<float>(-ge::core::libm::sin(pitch))};
+  const sh::Vec3f eye{me.origin.x, me.origin.y, me.origin.z + 22};
+  int best = -1;
+  float best_cos = 0.94f;  // within 20 degrees
+  for (int o = 1; o <= s.sv.set.maxclients; o++) {
+    if (o == e || field(s, o, s.q.layout->f.health) <= 0) continue;
+    const sh::Edict& him = s.sv.edicts[static_cast<size_t>(o)];
+    const sh::Vec3f d = him.origin - eye;
+    const float len = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+    if (len < 1) continue;
+    const float c = (d.x * dir.x + d.y * dir.y + d.z * dir.z) / len;
+    if (c > best_cos) best_cos = c, best = o;
+  }
+  if (best < 0) return;
+  const sh::Edict& him = s.sv.edicts[static_cast<size_t>(best)];
+  const float speed = std::sqrt(him.velocity.x * him.velocity.x + him.velocity.y * him.velocity.y);
+  if (speed < 100) return;
+  const sh::Vec3f d = him.origin - eye;
+  const float along = d.x * dir.x + d.y * dir.y + d.z * dir.z;
+  const sh::Vec3f passed{eye.x + dir.x * along, eye.y + dir.y * along, eye.z + dir.z * along};
+  const float miss =
+      ((passed.x - him.origin.x) * him.velocity.x + (passed.y - him.origin.y) * him.velocity.y) /
+      speed;
+  b.lead_sum[static_cast<size_t>(slot)] += miss;
+  b.lead_abs[static_cast<size_t>(slot)] += std::fabs(miss);
+  b.lead_n[static_cast<size_t>(slot)]++;
+}
+
 void hits_frame(HitBook& b, const server::QcServer& s) {
   const pg::LayoutFields& f = s.q.layout->f;
   const int clients = s.sv.set.maxclients;
@@ -83,6 +120,9 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
   if (first) {
     b.players.assign(static_cast<size_t>(clients), {});
     b.given.assign(static_cast<size_t>(clients), 0);
+    b.lead_sum.assign(static_cast<size_t>(clients), 0);
+    b.lead_abs.assign(static_cast<size_t>(clients), 0);
+    b.lead_n.assign(static_cast<size_t>(clients), 0);
     b.life.assign(n, 0);
     b.health.assign(n, 0);
     b.ammo.assign(n, {});
@@ -123,6 +163,8 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
         count(slot, HitWeapon::rocket_blast).fired += spent(2);
       }
       if (w == kArc) count(slot, HitWeapon::arc).fired += spent(3);
+      if ((w == kScatter || w == kDouble) && spent(0) > 0) lead_probe(b, s, e, slot);
+      if (w == kArc && spent(3) > 0) lead_probe(b, s, e, slot);
       // Hits: a blow taken, from whatever last hurt him.
       const float blow = b.life[i] - life;
       const int from = entity_of(s, e, f.dmg_inflictor);

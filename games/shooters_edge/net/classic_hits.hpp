@@ -60,6 +60,12 @@ struct HitCount {
 struct HitBook {
   std::vector<std::array<HitCount, kHitWeapons>> players;  // by client slot
   std::vector<double> given;                               // damage given, by client slot
+  // THE LEAD'S MISS, by client slot: at each hitscan shot (a scattergun's, a double's, an arc's),
+  // the other player nearest the shot's line within 20 degrees moving at 100 units/s or more, and
+  // how far past him the line went along his motion (+ ahead of him: led too much; - behind: too
+  // little), summed, its size summed, and counted.
+  std::vector<double> lead_sum, lead_abs;
+  std::vector<int64_t> lead_n;
   // What the last frame read, by entity.
   std::vector<float> life;                 // a player's health and armour
   std::vector<float> health;               // and his health alone (at or under 0: dead)

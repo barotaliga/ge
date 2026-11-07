@@ -1085,6 +1085,10 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
                                        f.traits[sh::Trait::reaction]));
   }
   f.bot.shot_speed = held ? held->shot_speed : 0;
+  // A novice fires at the plain distance; the rest at where he will be, on his arc in the air.
+  f.bot.lob = held && held->bit == kWGrenades;
+  f.bot.intercepts = f.skill == sh::AimSkill::novice ? 1 : 3;
+  f.bot.target_arc = f.skill != sh::AimSkill::novice;
   f.bot.aim_dz = held ? held->aim_dz : 0;
   // A rocket near at hand is aimed at his middle for the direct blow; farther off at his feet,
   // where the blast reaches him whichever way he steps.

@@ -73,6 +73,8 @@ struct BotTeamConfig {
   std::string team = "bots";
   int colour = 4;                     // top and bottom
   std::string name_prefix = "gebot";  // the bots' names: the prefix and a number (1..)
+  std::vector<std::string>
+      names;  // or each bot's own name (bot k's the k-th; past them, the prefix's)
   // Each bot's skill and traits (cycled when fewer than `bots`): "expert", "average", "novice",
   // "perfect"; traits over the skill's preset as shooter/traits.hpp reads them ("aim_rl=9").
   std::vector<std::string> skills = {"expert", "expert", "average", "average"};

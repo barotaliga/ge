@@ -149,6 +149,9 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
         why->choose("acquired", "in the cone with a clear line to it");
       }
     }
+    // A player's velocity is what the server sent with him: across a network the sightings come
+    // as the packets do, bunched, so two of them a tick apart read 0 or twice the speed.
+    if (is_player(sv, v.ent)) c.velocity = sv.edicts[static_cast<size_t>(v.ent)].velocity;
     ai::see(c.seen, v.origin.x, v.origin.y, v.origin.z, t);
     c.visible = true;
     c.since = t;

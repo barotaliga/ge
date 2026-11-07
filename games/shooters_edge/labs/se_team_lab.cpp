@@ -135,6 +135,7 @@ void run(gl::Lab& lab) {
   o.client_fed = lab.arg_num("client-fed") != 0;
   o.latency_ms = lab.arg_num("latency");
   o.antilag = lab.arg_num("antilag") != 0;
+  o.lead_lag = lab.arg_num("lead") != 0;
   {
     // A weapon drill: its name in the hit table, the mod's bit for it (classic_hits.hpp's order).
     const std::string drill = lab.arg("drill");
@@ -265,6 +266,25 @@ void run(gl::Lab& lab) {
           if (ch == ' ') ch = '-';
         lab.metric(key, 100.0 * static_cast<double>(c.hit) / static_cast<double>(c.fired), "%");
       }
+  }
+  {
+    // Where the hitscan shots passed a moving target along his motion, by skill: + led too much.
+    static const char* kSkillName[3] = {"novice", "average", "expert"};
+    double sum[3] = {}, abs_sum[3] = {};
+    int64_t n[3] = {};
+    for (const cn::TeamPlayer& p : r.players) {
+      const int k = p.skill == sh::AimSkill::novice ? 0 : p.skill == sh::AimSkill::expert ? 2 : 1;
+      sum[k] += p.lead_sum;
+      abs_sum[k] += p.lead_abs;
+      n[k] += p.lead_n;
+    }
+    for (int k = 0; k < 3; k++) {
+      if (n[k] == 0) continue;
+      lab.metric(std::string("team.lead-miss.") + kSkillName[k], sum[k] / static_cast<double>(n[k]),
+                 "units");
+      lab.metric(std::string("team.lead-miss-abs.") + kSkillName[k],
+                 abs_sum[k] / static_cast<double>(n[k]), "units");
+    }
   }
   lab.metric("team.sightings", static_cast<double>(sightings), "count");
   lab.metric("team.reaction-mean-ms",
@@ -567,6 +587,15 @@ void run(gl::Lab& lab) {
     lab.metric("team.dives-given-up", static_cast<double>(given_up), "count");
     lab.metric("team.dive-wet-s", wet_s, "s");
   }
+  {
+    double lag = 0;
+    int64_t n = 0;
+    for (const cn::TeamPlayer& p : r.players) {
+      lag += p.lag_s;
+      n += p.lag_n;
+    }
+    if (n > 0) lab.metric("team.round-trip-ms", 1000 * lag / static_cast<double>(n), "ms");
+  }
   lab.metric("team.nav-build-ms", r.nav_build_ms, "ms", gl::Det::measured);
   lab.metric("team.mvd-bytes", static_cast<double>(r.mvd.size()), "bytes");
   for (int key = 0; key < static_cast<int>(r.item_at.size()); key++) {
@@ -785,6 +814,7 @@ const gl::LabSpec kSpec{
         {"latency", "0",
          "ms one way between every client and the server, jitter a tenth of it (50: a round trip "
          "of about 100 ms, a server across an ocean); 0: a LAN"},
+        {"lead", "1", "0: the fighters do not lead their shots on the round trip (as on a LAN)"},
         {"antilag", "0",
          "1: the server rewinds hitscan to what the shooter saw, as KTX servers do"},
         {"drill", "",
