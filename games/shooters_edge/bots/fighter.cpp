@@ -78,9 +78,11 @@ constexpr double kMegaHealBonus = 10;  // the mega's worth to a healer over the 
 constexpr double kSwimExit_s = 3;      // a climb out of the water kept this long at most
 constexpr double kLanding_s = 2;   // out of the water, its exit node walked onto this long at most
 constexpr double kBaseHeal = 1.4;  // health in the team's base is worth this more to a healer
-constexpr double kLauncherWorth = 240;  // the launcher lacked: worth a long run
-constexpr float kRocketsLow = 25;       // a launcher with fewer rockets than this wants more
-constexpr float kBlastClear = 140;      // a rocket or grenade is held with a mate this near its aim
+constexpr double kLauncherWorth = 240;     // the launcher lacked: worth a long run
+constexpr float kRocketsLow = 25;          // a launcher with fewer rockets than this wants more
+constexpr float kRocketsStock = 50;        // rockets stocked with no launcher yet, up to this
+constexpr double kRocketsStockWorth = 15;  // and worth this from none
+constexpr float kBlastClear = 140;  // a rocket or grenade is held with a mate this near its aim
 
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
 
@@ -218,6 +220,11 @@ double raw_value(const ItemSpot& it, const Stats& st) {
   bool uses = false;
   for (const WeaponRow& w : kWeapons) uses |= w.ammo == a && (st.items & w.bit) != 0;
   const float have = ammo_of(st, a);
+  // Rockets are stocked for the launcher still to come, as people stock them: worth something to
+  // a player who has neither launcher yet.
+  if (a == Ammo::rockets && !uses)
+    return have >= kRocketsStock ? 1
+                                 : std::fmax(1.0, kRocketsStockWorth * (1 - have / kRocketsStock));
   if (!uses || have >= kAmmoMax) return 1;
   const double fill = 30.0 * (kAmmoMax - have) / kAmmoMax;
   // Rockets for a launcher in hand running dry are worth half the launcher: it is no use without.
@@ -1012,6 +1019,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   if (f.escort.leader >= 0) escort_sense(f, s, me, t);
   if (f.hunts) hunt_sense(f, s);
   watch_look(f, s, me, dead, t, why);  // the ways in watched (watch.hpp)
+  spam_news_look(f, s, me, st, t);     // or one an enemy comes by, a rocket ready (spam.hpp)
   sh::MoveCmd cmd = sh::bot_source(f.bot).next(&f.bot, s.sv, slot, msec);
   f.stats.mode_commands[static_cast<int>(f.mode)]++;
   if (held) f.stats.weapon_commands[held->number]++;
@@ -1132,6 +1140,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   }
 
   if (!dead) spam_fire(f, s, me, st, t, cmd);
+  if (!dead) spam_news_fire(f, s, me, st, t, cmd);
   if (!dead) button_poke_cmd(f, s, me, t, cmd);
   if (!dead && f.escort.leader >= 0) escort_command(f, s, me, t, msec, cmd);
 

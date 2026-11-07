@@ -265,6 +265,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       if (r.locs_from.empty()) {
         r.locs_from = tn.locs.from;
         r.locs = static_cast<int64_t>(tn.locs.points.size());
+        r.places = sh::loc_places(tn.locs);
       }
       r.dives = static_cast<int64_t>(tn.dives.size());
       r.players[static_cast<size_t>(k)].slot = slot;

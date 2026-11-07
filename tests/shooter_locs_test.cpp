@@ -44,3 +44,14 @@ TEST(a_point_is_named_by_its_nearest_place) {
   CHECK(sh::loc_name_at(l, {900, 50, 0}) == "b");
   CHECK(sh::loc_name_at(sh::Locs{}, {0, 0, 0}).empty());
 }
+
+TEST(each_place_is_named_once_at_its_points_middle) {
+  sh::Locs l;
+  sh::parse_locs("0 0 0 a\n8000 0 0 b\n1600 800 0 a\n", l);
+  const std::vector<sh::Loc> p = sh::loc_places(l);
+  CHECK(p.size() == 2);
+  CHECK(p[0].name == "a" && p[1].name == "b");
+  CHECK(p[0].at.x == 100 && p[0].at.y == 50 && p[0].at.z == 0);
+  CHECK(p[1].at.x == 1000);
+  CHECK(sh::loc_places(sh::Locs{}).empty());
+}

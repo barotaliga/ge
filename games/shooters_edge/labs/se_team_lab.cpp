@@ -578,6 +578,13 @@ void run(gl::Lab& lab) {
       gl::draw_line(p, v.px(a.x), v.py(a.y), v.px(b.x), v.py(b.y), c, 2);
     }
   }
+  // The map's places by name (the team's callouts), each at its points' middle.
+  for (const sh::Loc& l : r.places) {
+    const int lw = gl::text_width(l.name, 2), lx = static_cast<int>(v.px(l.at.x)) - lw / 2,
+              ly = static_cast<int>(v.py(l.at.y)) - 30;
+    gl::fill_rect(p, lx - 3, ly - 3, lw + 6, 20, gl::Rgba{255, 255, 255, 220});
+    gl::draw_text(p, lx, ly, l.name, gl::Rgba{40, 70, 150, 255}, 2);
+  }
   for (size_t i = 0; i < r.item_at.size(); i++) {
     const sh::Vec3f a = r.item_at[i];
     const bool key = static_cast<int>(i) == r.hold_item || static_cast<int>(i) == r.quad_item;

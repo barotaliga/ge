@@ -200,6 +200,14 @@ double due_of(const Fighter& f, int32_t i, double t) {
   return it.present ? t : it.back_at;
 }
 
+// The run from `p` to node `to` over the nav's links, s (`ai::kUnreached` where none leads).
+double run_s(const Fighter& f, sh::Vec3f p, int32_t to) {
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  ge::ai::Search search;
+  sh::nav_reach(g, sh::nav_nearest(g, p), search);
+  return search.cost(to);
+}
+
 // Whether the base round item `ra` is believed the enemy's: an enemy in it seen or called out
 // within `kLostFresh_s` and no mate believed there, or worked out lost (`retake`).
 bool base_lost(const Fighter& f, int32_t ra, sh::Vec3f at, double t) {
@@ -555,10 +563,17 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
   }
   mn.next_plan = t + kPlan_s;
   const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
-  // Its first plan alive with its reach known: the match's start.
-  const bool opening = !mn.opened && self.health > 0 && f.reach_at >= 0;
-  if (opening) mn.opened = true;
+  // Its first plan alive with its reach known: the match's start. Its spawn is said first, and
+  // the opening's claims wait for the next plan, the team's spawns read.
   const sh::Vec3f at = self.origin;
+  if (!mn.opened && self.health > 0 && f.reach_at >= 0) {
+    mn.opened = mn.opening_due = true;
+    say_status(f, t, SayKind::report, st, at);
+    mn.reported_at = t;
+    return;
+  }
+  bool opening = mn.opening_due && self.health > 0;
+  mn.opening_due = false;
   const Role was = f.role;
   if (self.health <= 0) {
     if (was == Role::carry) {
@@ -611,8 +626,12 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
 
   // The claim: at the start the nearest of the launcher, the best armour and the quad that no
   // mate said he is coming for; later the best armour's area when no mate is believed to hold it.
-  if (mn.claim >= 0 && mn.claim == q && !f.items[static_cast<size_t>(q)].present && !quad_mine)
-    mn.claim = -1;  // the quad gone: the claim is free again
+  if (mn.claim >= 0 && mn.claim == q && !f.items[static_cast<size_t>(q)].present && !quad_mine) {
+    // The quad gone: a rusher takes up the opening's claim at once (the nearest of the launcher
+    // and the armour no mate holds), so the team still holds its key areas.
+    mn.claim = -1;
+    opening = true;
+  }
   if (mn.claim < 0 && f.teamwork != MapSense::novice && !quad_mine && f.reach_at >= 0) {
     const auto taken = [&](int32_t i) {
       for (const Mate& m : mn.mates)
@@ -622,9 +641,22 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
       return false;
     };
     int32_t pick = -1;
-    if (opening || f.teamwork == MapSense::expert) {
+    // The opening's quad first: claimed by the two of the team who believe themselves nearest it
+    // (a mate's spawn as he said it, or one who said he is coming for it, counted ahead).
+    if (opening && q >= 0 && reachable(f, q) && f.items[static_cast<size_t>(q)].present) {
+      // By the run over the map's links, not the line through its walls.
+      const int32_t qn = f.items[static_cast<size_t>(q)].node;
+      const double mine = f.reach.cost(qn);
+      int ahead = 0;
+      for (const Mate& m : mn.mates)
+        if ((t - m.at_t < mate_fresh_s(f) && run_s(f, m.at, qn) < mine) ||
+            (m.going == q && t - m.going_t < kGoingFresh_s))
+          ahead++;
+      if (ahead < 2) pick = q;
+    }
+    if (pick < 0 && (opening || f.teamwork == MapSense::expert)) {
       float best = 0;
-      for (int32_t i : {rl, ra, q}) {
+      for (int32_t i : {rl, ra}) {
         if (!reachable(f, i) || taken(i)) continue;
         if (!opening && i != ra) continue;  // later only the armour's area is taken on
         // The nearest, as far as the map's rating of it goes (a lone 200 is worth a longer run).
@@ -636,7 +668,7 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
           best = d;
         }
       }
-    } else if (reachable(f, ra) && !taken(ra) && strong >= kHoldStrong) {
+    } else if (pick < 0 && reachable(f, ra) && !taken(ra) && strong >= kHoldStrong) {
       pick = ra;
     }
     if (pick >= 0 && (opening || strong >= kHoldStrong)) {
@@ -645,6 +677,7 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
     }
   }
   if (mn.claim >= 0 && !mn.claimed_said) {
+    if (opening) f.said_at = -1e9;  // the opening's claim follows its spawn at once
     Said c;
     c.kind = SayKind::coming;
     c.item = item_call(f.items[static_cast<size_t>(mn.claim)]);
