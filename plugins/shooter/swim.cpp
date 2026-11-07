@@ -20,6 +20,12 @@ bool wet_at(const MoveWorld& world, Vec3f p) {
   return box_free(world, p) && water_contents(world, p) <= kContentsWater;
 }
 
+// Water a route swims through: slime and lava harm the swimmer, so the graph never enters them
+// (the escape field still leads out of them).
+bool swum_at(const MoveWorld& world, Vec3f p) {
+  return box_free(world, p) && water_contents(world, p) == kContentsWater;
+}
+
 // A climb out from `from` onto the node at `to`, run on the move: its time when there within
 // `seconds`, else -1.
 float out_time(const MoveWorld& world, Vec3f from, Vec3f to, float seconds) {
@@ -223,7 +229,7 @@ SwimNavCounts nav_add_swim(const MoveWorld& world, NavGraph& g, std::span<const 
     for (int32_t j = 0; j < ny; j++)
       for (int32_t i = 0; i < nx; i++) {
         const Vec3f c = centre(i, j, k);
-        if (!wet_at(world, c)) continue;
+        if (!swum_at(world, c)) continue;
         NavNode node;
         node.origin = c;
         node.col = node.row = -1;

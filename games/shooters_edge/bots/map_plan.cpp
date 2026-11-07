@@ -62,7 +62,7 @@ void runs_from(const sh::NavGraph& g, int32_t from, std::vector<double>& out, bo
     const sh::NavNode& node = g.nodes[static_cast<size_t>(n)];
     for (int32_t k = 0; k < node.links; k++) {
       const sh::NavLink& l = g.links[static_cast<size_t>(node.first_link) + static_cast<size_t>(k)];
-      if (l.kind == sh::NavKind::rocket ||
+      if (sh::nav_blast(l.kind) ||
           (dry && (l.kind == sh::NavKind::swim || g.nodes[static_cast<size_t>(l.to)].wet)))
         continue;
       const double nd = d + l.time_s;
@@ -176,7 +176,7 @@ MapPlan make_map_plan(const sh::NavGraph& g, const std::vector<ItemSpot>& items,
         const sh::NavLink& l =
             g.links[static_cast<size_t>(node.first_link) + static_cast<size_t>(k)];
         if (!area.region[static_cast<size_t>(l.to)] || l.kind == sh::NavKind::swim ||
-            l.kind == sh::NavKind::rocket)
+            sh::nav_blast(l.kind))
           continue;
         bool known = false;
         for (const sh::Vec3f& e : entries) known = known || dist(e, node.origin) < kEntrySpot;

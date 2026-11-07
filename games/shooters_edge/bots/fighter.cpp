@@ -78,9 +78,15 @@ constexpr double kMegaHealBonus = 10;  // the mega's worth to a healer over the 
 constexpr double kSwimExit_s = 3;      // a climb out of the water kept this long at most
 constexpr double kLanding_s = 2;   // out of the water, its exit node walked onto this long at most
 constexpr double kBaseHeal = 1.4;  // health in the team's base is worth this more to a healer
-constexpr double kLauncherWorth = 240;     // the launcher lacked: worth a long run
-constexpr float kRocketJumpHealth = 70;    // the health a rocket jump is tried with (it costs ~50)
-constexpr float kRocketJumpMoves = 5;      // and the moves trait
+constexpr double kLauncherWorth = 240;   // the launcher lacked: worth a long run
+constexpr float kRocketJumpHealth = 70;  // the health a rocket jump is tried with (it costs ~50)
+constexpr float kRocketJumpMoves = 4;    // and the moves trait (an amateur jumper's)
+// THE ROCKET JUMPER'S LEVEL by the moves trait (amateur from 4, intermediate from 6, expert from 8)
+// and what a rocket jump must save before he tries it, s: people's rates (the `se-rj` lab on dm2:
+// an expert jumps 1.9 times in ten minutes, an intermediate 0.5, an amateur 0.3) say the less sure
+// the hands, the more a jump must be worth.
+constexpr float kRocketLevelMoves[3] = {4, 6, 8};
+constexpr float kRocketLevelExtra_s[3] = {3, 1.5f, 0.5f};
 constexpr float kRocketsLow = 25;          // a launcher with fewer rockets than this wants more
 constexpr float kRocketsStock = 50;        // rockets stocked with no launcher yet, up to this
 constexpr double kRocketsStockWorth = 15;  // and worth this from none
@@ -550,12 +556,19 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   if (f.reach_at < 0 || t - f.reach_at >= 1) {
     const sh::NavGraph& g = *f.bot.pilot.pilot.g;
     // Rocket jumps only while it can afford one: the launcher and a rocket, the health for the
-    // blast (about half a rocket's 120), a player who moves well enough to try (nav.hpp).
-    f.bot.pilot.pilot.set.rockets = (st.items & kWRockets) != 0 && st.rockets >= 1 &&
-                                    st.health >= kRocketJumpHealth && f.escort.leader < 0 &&
-                                    f.traits[sh::Trait::moves] >= kRocketJumpMoves;
+    // blast (about half a rocket's 120), a player who moves well enough to try (nav.hpp). Grenade
+    // jumps only when it must: the grenade launcher and no rocket launcher (dm2's quad with no
+    // launcher on the team), on the same terms.
+    sh::NavJumper& jumper = f.bot.pilot.pilot.set.jumper;
+    const float moves = f.traits[sh::Trait::moves];
+    const bool afford = st.rockets >= 1 && st.health >= kRocketJumpHealth && f.escort.leader < 0 &&
+                        moves >= kRocketJumpMoves;
+    jumper.rockets = (st.items & kWRockets) != 0 && afford;
+    jumper.grenades = (st.items & kWGrenades) != 0 && (st.items & kWRockets) == 0 && afford;
+    jumper.level = moves >= kRocketLevelMoves[2] ? 2 : moves >= kRocketLevelMoves[1] ? 1 : 0;
+    jumper.extra_s = kRocketLevelExtra_s[jumper.level];
     f.reach_n =
-        sh::nav_reach(g, sh::nav_nearest(g, self.origin), f.reach, f.bot.pilot.pilot.set.rockets);
+        sh::nav_reach(g, sh::nav_nearest(g, self.origin), f.reach, f.bot.pilot.pilot.set.jumper);
     f.reach_at = t;
   }
   bool escaping = false;  // on the way out of a pocket: no other goal this think
@@ -820,19 +833,22 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
 
   if (f.diving < 0) f.last_dive = -1;
   choose_weapon(f, st, range, t, why);
-  // A rocket jump on the way next: the launcher in hand for it.
+  // A blast jump on the way next: its launcher in hand for it (a rocket jump's, a grenade
+  // jump's).
   const sh::Pilot& pl = f.bot.pilot.pilot;
-  if (pl.set.rockets && st.weapon != kWRockets && t - f.impulse_at >= kImpulseGap_s)
+  if ((pl.set.jumper.rockets || pl.set.jumper.grenades) && t - f.impulse_at >= kImpulseGap_s)
     for (size_t k = pl.k; k + 1 < pl.route.size() && k < pl.k + 3; k++) {
       const sh::NavNode& from = pl.g->nodes[static_cast<size_t>(pl.route[k])];
-      bool rocket = false;
+      int number = 0;  // the launcher's
       for (int32_t q = 0; q < from.links; q++) {
         const sh::NavLink& l =
             pl.g->links[static_cast<size_t>(from.first_link) + static_cast<size_t>(q)];
-        rocket = rocket || (l.to == pl.route[k + 1] && l.kind == sh::NavKind::rocket);
+        if (l.to != pl.route[k + 1]) continue;
+        if (l.kind == sh::NavKind::rocket && st.weapon != kWRockets) number = 7;
+        if (l.kind == sh::NavKind::grenade && st.weapon != kWGrenades) number = 6;
       }
-      if (rocket) {
-        f.want_weapon = 7;  // the launcher's number
+      if (number > 0) {
+        f.want_weapon = number;
         break;
       }
     }
@@ -980,6 +996,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   const int me = slot + 1;
   const Stats st = read_stats(s, me);
   const double t = s.sv.time;
+  f.bot.pilot.grenade_ready = st.weapon == kWGrenades;  // a grenade jump fires with it in hand
   ai::Why* why = f.bot.pilot.why ? f.bot.pilot.why->follow(slot, f.bot.pilot.command) : nullptr;
   f.stats.commands++;
   const bool dead = st.health <= 0;

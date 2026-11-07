@@ -28,6 +28,7 @@
 #include "shooter/nav.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
+#include "shooters_edge/bots/rocket_tricks.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/classic_team.hpp"
@@ -62,9 +63,11 @@ struct MapReach {
   std::string name, error;
   int items = 0, reached = 0, back = 0, by_rocket = 0;
   int64_t rocket_links = 0, flips = 0;  // the graph's rocket jumps, and those played as the flip
-  int64_t nodes = 0, swim_nodes = 0, swim_links = 0;
+  int64_t nodes = 0, swim_nodes = 0, swim_links = 0, harm_nodes = 0;
   std::vector<Gap> gaps;
   std::vector<MoverRow> movers;
+  std::vector<std::vector<std::string>> tricks;  // the tricks table's rows
+  int64_t tricks_held = 0, grenade_links = 0;
 };
 
 bool vec_of(const char* s, sh::Vec3f& out) {
@@ -94,11 +97,57 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
   out.nodes = static_cast<int64_t>(g.nodes.size());
   out.swim_nodes = nav.swim_nav.cells;
   out.swim_links = g.counts.by_kind[static_cast<int>(sh::NavKind::swim)];
-  for (const sh::NavLink& l : g.links)
+  for (const uint8_t h : nav.harm) out.harm_nodes += h;
+  for (const sh::NavLink& l : g.links) {
+    out.grenade_links += l.kind == sh::NavKind::grenade;
     if (l.kind == sh::NavKind::rocket) {
       out.rocket_links++;
       out.flips += l.back;
     }
+  }
+  // The map's tricks: each one's link, its flight against the way on foot to where it lands.
+  {
+    const std::span<const bt::RocketTrick> tricks = bt::rocket_tricks(name);
+    constexpr const char* kLevel[3] = {"amateur", "intermediate", "expert"};
+    ge::ai::Search rs;
+    for (size_t k = 0; k < tricks.size() && k < nav.tricks_made.rocket_from.size(); k++) {
+      const bt::RocketTrick& tr = tricks[k];
+      const int32_t a = nav.tricks_made.rocket_from[k];
+      const int32_t ga = nav.tricks_made.grenade_from[k];
+      std::string jump_s = "-", foot_s = "-", lands = "-", grenade_s = "-";
+      if (ga >= 0) {
+        const sh::NavNode& n = g.nodes[static_cast<size_t>(ga)];
+        for (int32_t x = n.links - 1; x >= 0; x--) {
+          const sh::NavLink& l =
+              g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(x)];
+          if (l.kind != sh::NavKind::grenade) continue;
+          grenade_s = to_fixed(l.time_s, 2) + " (lead " + to_fixed(l.lead, 0) + ")";
+          break;
+        }
+      }
+      if (a >= 0) {
+        out.tricks_held++;
+        const sh::NavNode& n = g.nodes[static_cast<size_t>(a)];
+        for (int32_t x = n.links - 1; x >= 0; x--) {
+          const sh::NavLink& l =
+              g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(x)];
+          if (l.kind != sh::NavKind::rocket || l.level != tr.level) continue;
+          jump_s = to_fixed(l.time_s, 2);
+          const sh::Vec3f o = g.nodes[static_cast<size_t>(l.to)].origin;
+          lands = to_fixed(o.x, 0) + " " + to_fixed(o.y, 0) + " " + to_fixed(o.z, 0);
+          const sh::NavRoute r = sh::nav_route(g, a, l.to, rs);
+          foot_s = r.nodes.empty() ? "none" : to_fixed(r.time_s, 2);
+          break;
+        }
+      }
+      out.tricks.push_back(
+          {name, std::to_string(k + 1),
+           to_fixed(tr.from.x, 0) + " " + to_fixed(tr.from.y, 0) + " " + to_fixed(tr.from.z, 0),
+           to_fixed(tr.to.x, 0) + " " + to_fixed(tr.to.y, 0) + " " + to_fixed(tr.to.z, 0),
+           tr.flip ? "flip" : "feet", kLevel[tr.level], std::to_string(tr.jumps),
+           a >= 0 ? "held" : "no", lands, jump_s, foot_s, grenade_s});
+    }
+  }
   for (const sh::NavMover& m : g.movers) {
     MoverRow row{m.ent, m.model != nullptr, m.absmin, m.absmax, m.travel, 0};
     for (const sh::NavNode& nd : g.nodes)
@@ -114,7 +163,7 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
   // What the main part reaches with rocket jumps too (from any one of its nodes).
   for (size_t k = 0; k < g.nodes.size(); k++)
     if (nav.main.reached(static_cast<int32_t>(k))) {
-      sh::nav_reach(g, static_cast<int32_t>(k), with_rockets, true);
+      sh::nav_reach(g, static_cast<int32_t>(k), with_rockets, {.rockets = true});
       break;
     }
   for (const pg::EntityBlock& b : blocks) {
@@ -195,8 +244,8 @@ void run(gl::Lab& lab) {
   }
 
   gl::LabTable t{"each map: its items, those a route leads to from the spawns, and from back",
-                 {"map", "nodes", "swim nodes", "swim links", "rocket links", "flips", "items",
-                  "reached", "by rocket", "back", "gaps"},
+                 {"map", "nodes", "swim nodes", "swim links", "lava/slime", "rocket links", "flips",
+                  "items", "reached", "by rocket", "back", "gaps"},
                  {}};
   gl::LabTable mv{"each map's movers: plats (ridden) and doors, their box at rest, travel, rides",
                   {"map", "ent", "kind", "box lo", "box hi", "travel", "ride links"},
@@ -207,6 +256,12 @@ void run(gl::Lab& lab) {
   gl::LabTable gaps{"each item a bot cannot get to or back from (its node across from it, units)",
                     {"map", "item", "at (x y z)", "node off", "why"},
                     {}};
+  gl::LabTable tk{
+      "each map's rocket-jump tricks (people's, rocket_tricks.hpp) as the nav proved "
+      "them: the link's landing, its flight and the way there on foot, s",
+      {"map", "#", "people's from", "people's to", "kind", "level", "jumps", "proof",
+       "lands (x y z)", "jump s", "on foot s", "grenade jump s"},
+      {}};
   int items = 0, reached = 0, back = 0;
   for (const MapReach& m : maps) {
     if (!m.error.empty()) {
@@ -220,17 +275,21 @@ void run(gl::Lab& lab) {
       if (r.plat || lab.arg("movers") == "all")
         mv.rows.push_back({m.name, std::to_string(r.ent), r.plat ? "plat" : "door", v3(r.lo),
                            v3(r.hi), v3(r.travel), std::to_string(r.rides)});
-    t.rows.push_back({m.name, std::to_string(m.nodes), std::to_string(m.swim_nodes),
-                      std::to_string(m.swim_links), std::to_string(m.rocket_links),
-                      std::to_string(m.flips), std::to_string(m.items), std::to_string(m.reached),
-                      std::to_string(m.by_rocket), std::to_string(m.back),
-                      std::to_string(m.gaps.size())});
+    t.rows.push_back(
+        {m.name, std::to_string(m.nodes), std::to_string(m.swim_nodes),
+         std::to_string(m.swim_links), std::to_string(m.harm_nodes), std::to_string(m.rocket_links),
+         std::to_string(m.flips), std::to_string(m.items), std::to_string(m.reached),
+         std::to_string(m.by_rocket), std::to_string(m.back), std::to_string(m.gaps.size())});
     lab.metric("reach." + m.name + ".items", m.items, "count");
     lab.metric("reach." + m.name + ".reached", m.reached, "count");
     lab.metric("reach." + m.name + ".back", m.back, "count");
     lab.metric("reach." + m.name + ".by-rocket", m.by_rocket, "count");
     lab.metric("reach." + m.name + ".rocket-links", static_cast<double>(m.rocket_links), "count");
     lab.metric("reach." + m.name + ".flips", static_cast<double>(m.flips), "count");
+    if (!m.tricks.empty())
+      lab.metric("reach." + m.name + ".tricks-held", static_cast<double>(m.tricks_held), "count");
+    lab.metric("reach." + m.name + ".grenade-links", static_cast<double>(m.grenade_links), "count");
+    for (const auto& row : m.tricks) tk.rows.push_back(row);
     for (const Gap& gp : m.gaps)
       gaps.rows.push_back(
           {m.name, gp.item,
@@ -242,6 +301,7 @@ void run(gl::Lab& lab) {
   lab.metric("reach.back-share", items > 0 ? static_cast<double>(back) / items : 0, "share");
   lab.table(t);
   lab.table(gaps);
+  if (!tk.rows.empty()) lab.table(tk);
   lab.table(mv);
 }
 

@@ -72,8 +72,9 @@ void build_swim(const MoveWorld& world, const NavGraph& g, std::span<const uint8
                 const SwimSettings& set, SwimField& f, const SwimField* same_water = nullptr);
 
 // SWIMMING IN THE GRAPH (`nav_add_swim`): the water made part of the nav, so one route search
-// goes through it as through any room. Every wet cell becomes a SWIM NODE at its centre (after
-// every other node, found by its cell: NavGraph::swim_node), and `swim` links join:
+// goes through it as through any room. Every wet cell of water (never slime or lava: they harm
+// the swimmer) becomes a SWIM NODE at its centre (after every other node, found by its cell:
+// NavGraph::swim_node), and `swim` links join:
 // - each wet cell to its six neighbours that are wet with the box free half-way (`cell_s` a cell);
 // - a floor node standing in water (a pool's floor) and the wet cell it stands in, both ways;
 // - a dry node at the water's edge and a wet cell under it within `exit_reach`, both ways, where

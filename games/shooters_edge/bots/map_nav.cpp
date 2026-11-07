@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "progs/entity_text.hpp"
+#include "shooters_edge/bots/rocket_tricks.hpp"
 
 namespace shooters_edge::bots {
 
@@ -203,6 +204,20 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
     }
   }
   out.teleport_links = static_cast<int64_t>(teleports.size());
+  // LAVA AND SLIME: a floor node standing in either (or in them to the waist) harms whoever goes
+  // there; no way leads into one (the links out are kept: a player knocked in walks out).
+  {
+    sh::NavGraph& g = out.graph;
+    out.harm.assign(g.nodes.size(), 0);
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      const sh::Vec3f o = g.nodes[n].origin;
+      for (const float dz : {-10.f, 4.f}) {
+        const int c = sh::water_contents(out.world, {o.x, o.y, o.z + dz});
+        if (c == sh::kContentsSlime || c == sh::kContentsLava) out.harm[n] = 1;
+      }
+    }
+    out.harm_links = sh::nav_close_entries(g, out.harm);
+  }
   // Water: part of the graph (shooter/swim.hpp `nav_add_swim`): its cells are swim nodes, a pool's
   // floor joined to the water over it, a dry edge to the water under it by the climb out the
   // move proves. One route search goes through it as through any room.
@@ -210,10 +225,11 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
   out.wet.assign(graph.nodes.size(), 0);
   for (size_t n = 0; n < graph.nodes.size(); n++) {
     const sh::Vec3f o = graph.nodes[n].origin;
-    out.wet[n] = sh::water_contents(out.world, {o.x, o.y, o.z - 10}) <= sh::kContentsWater ? 1 : 0;
+    out.wet[n] = sh::water_contents(out.world, {o.x, o.y, o.z - 10}) == sh::kContentsWater ? 1 : 0;
   }
   out.swim_nav = sh::nav_add_swim(out.world, graph, out.wet);
-  out.wet.resize(graph.nodes.size(), 1);  // every swim node is wet
+  out.wet.resize(graph.nodes.size(), 1);   // every swim node is wet
+  out.harm.resize(graph.nodes.size(), 0);  // and none harms
   // The map's main part: the most a start spot reaches.
   const auto find_main = [&] {
     out.main_n = 0;
@@ -249,8 +265,45 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
     }
     sh::NavBridgeSettings bs;
     bs.wanted = wanted;
+    bs.avoid = out.harm;
     out.bridges_made = sh::nav_bridge_pockets(out.world, sh::MoveSettings{}, graph, main, bs);
     find_main();
+  }
+  // The map's tricks: rocket links people's jumps prove, landing where a way back on foot leads
+  // to the main part.
+  {
+    std::string base = spec.name;
+    if (const size_t slash = base.find_last_of('/'); slash != std::string::npos)
+      base = base.substr(slash + 1);
+    if (const size_t dot = base.rfind(".bsp"); dot != std::string::npos) base.resize(dot);
+    const std::vector<sh::NavTrick> tricks = nav_tricks(rocket_tricks(base));
+    if (!tricks.empty() && out.main_n > 0) {
+      std::vector<uint8_t> main(graph.nodes.size());
+      for (size_t n = 0; n < main.size(); n++)
+        main[n] = out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
+      std::vector<uint8_t> back = sh::nav_back(graph, main);
+      for (size_t n = 0; n < back.size(); n++) back[n] = back[n] && !out.harm[n] ? 1 : 0;
+      // The tricks as rocket jumps and as grenade jumps; then a grenade jump for each rocket
+      // jump the pockets were bridged by (the way into a pocket for a player with no launcher).
+      std::vector<sh::NavTrick> bridged;
+      for (const sh::NavNode& n : graph.nodes)
+        for (int32_t k = 0; k < n.links; k++) {
+          const sh::NavLink& l =
+              graph.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+          if (l.kind != sh::NavKind::rocket) continue;
+          sh::NavTrick t;
+          t.from = n.origin;
+          t.to = graph.nodes[static_cast<size_t>(l.to)].origin;
+          bridged.push_back(t);
+        }
+      sh::NavTrickSettings ts;
+      ts.grenades = true;
+      out.tricks_made = sh::nav_add_tricks(out.world, sh::MoveSettings{}, graph, tricks, back, ts);
+      ts.rockets = false;
+      ts.near = 8;  // from the bridge's own takeoff
+      out.bridged_grenades =
+          sh::nav_add_tricks(out.world, sh::MoveSettings{}, graph, bridged, back, ts);
+    }
   }
   // The traps: nodes no way on foot leads back from to the main part (a room a rocket jump or a
   // drop leads into and nothing out of): no goal of a bot's.
@@ -261,7 +314,7 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
       main[n] = found && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
     const std::vector<uint8_t> back = sh::nav_back(graph, main);
     out.trap.assign(graph.nodes.size(), 0);
-    for (size_t n = 0; n < back.size() && found; n++) out.trap[n] = back[n] ? 0 : 1;
+    for (size_t n = 0; n < back.size() && found; n++) out.trap[n] = back[n] && !out.harm[n] ? 0 : 1;
   }
   std::vector<uint8_t> exits(graph.nodes.size(), 0);
   for (size_t n = 0; n < graph.nodes.size(); n++)

@@ -112,9 +112,12 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
   int32_t planned = p.stats.plans;
   uint64_t hash = 1469598103934665603ull;
   const int most = static_cast<int>(limit_s * 1000 / kPilotMsec);
-  // A rocket in flight (a shot pressed: the pilot's rocket jumps): its burst and the time left.
+  // A rocket in flight (a shot pressed: the pilot's rocket jumps), or a grenade on its fuse (a
+  // grenade jump's): its burst and the time left.
   sh::Vec3f burst_at;
   float burst_in = -1;
+  const sh::GrenadeJumpSpec gj;
+  bool grenade = false;
   for (int i = 0; i < most; i++) {
     const sh::MoveCmd cmd = sh::pilot_step(p, s, kPilotMsec);
     if (p.stats.plans != planned) {
@@ -126,7 +129,14 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
       break;
     }
     sh::run_command(st, cmd, move, world);
-    if ((cmd.buttons & sh::kButtonAttack) != 0 && burst_in < 0) {
+    if ((cmd.buttons & sh::kButtonAttack) != 0 && burst_in < 0 &&
+        p.mode == sh::PilotMode::grenade) {
+      burst_at = sh::grenade_at(world, st.origin, cmd.angles, gj.fuse, gj, kPilotMsec);
+      burst_in = gj.fuse;
+      r.shots++;
+      grenade = true;
+    } else if ((cmd.buttons & sh::kButtonAttack) != 0 && burst_in < 0) {
+      grenade = false;
       const sh::RocketBurst rb = sh::rocket_burst(world, st.origin, cmd.angles);
       if (rb.ok) {
         burst_at = rb.at;
@@ -138,7 +148,7 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
     } else if (burst_in >= 0) {
       burst_in -= kPilotMsec * 0.001f;
       if (burst_in <= 0) {
-        r.blast += sh::rocket_blast(st, burst_at);
+        r.blast += sh::rocket_blast(st, burst_at, grenade ? gj.blast : sh::RocketJumpSpec{});
         burst_in = -1;
       }
     }
