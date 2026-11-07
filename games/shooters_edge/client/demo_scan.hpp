@@ -49,6 +49,7 @@
 #include <string>
 #include <vector>
 
+#include "shooter/hops.hpp"
 #include "shooter/vec.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/hud/status.hpp"
@@ -106,10 +107,15 @@ struct DemoScan {
   int64_t rockets = 0;                // rockets followed
   std::vector<DemoFlight> flights;    // every rocket and grenade, in the order they went
   std::string map;                    // the last level's map name
+  std::array<int32_t, 32> frags{};    // each slot's frags at the end
+  // With `tracks` asked for: every player's track on the scan's own clock (the flights'), one
+  // point a frame he is present (the movement readers', shooter/hops.hpp).
+  std::array<std::vector<ge::shooter::TrackPoint>, 32> tracks;
 };
 
-// `opened` (a demo as `open_demo` left it, at its first frame) read to its end. False with the
-// reason and the next step when a frame does not read.
-bool scan_demo(const Demo& opened, DemoScan& out, std::string& error);
+// `opened` (a demo as `open_demo` left it, at its first frame) read to its end, every player's
+// track kept too when `tracks`. False with the reason and the next step when a frame does not
+// read.
+bool scan_demo(const Demo& opened, DemoScan& out, std::string& error, bool tracks = false);
 
 }  // namespace shooters_edge::client

@@ -132,6 +132,8 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
         burst_at = rb.at;
         burst_in = rb.flight_s;
         r.shots++;
+        const double now = static_cast<double>(r.trail.size() + 1) * (kPilotMsec * 0.001);
+        r.rockets.push_back({now, now + rb.flight_s, st.origin, rb.at});
       }
     } else if (burst_in >= 0) {
       burst_in -= kPilotMsec * 0.001f;
@@ -151,6 +153,7 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
     r.forward_wanted.push_back(p.wanted[1]);
     r.side.push_back(p.pressed[2]);
     r.side_wanted.push_back(p.wanted[2]);
+    r.pitch.push_back(cmd.angles.x);
     const float v = across(st.velocity);
     if (v > r.top_speed) r.top_speed = v;
   }
