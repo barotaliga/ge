@@ -24,7 +24,6 @@ constexpr int kAll = 6, kStats = 5;        // the record kinds written
 constexpr int kMultiviewTag = 0x3144564D;  // the multiview extension family's tag
 constexpr int kProtocol = 28;              // the protocol's version
 constexpr int kMostNumbered = 512;         // entities above are left out (no extension byte)
-constexpr int kStatHealth = 0, kStatItems = 15;
 
 struct Out {
   std::vector<uint8_t> b;

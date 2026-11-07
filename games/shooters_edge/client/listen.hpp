@@ -73,6 +73,7 @@
 #include "shooter/pmove.hpp"
 #include "shooters_edge/client/campaign_view.hpp"
 #include "shooters_edge/client/coop_party.hpp"
+#include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/server/bsp_map.hpp"
@@ -84,7 +85,8 @@ namespace shooters_edge::client {
 namespace sh = ge::shooter;
 namespace sv = shooters_edge::server;
 
-inline constexpr int kMostFrames = 8;  // server frames a wall frame may run
+inline constexpr int kMostFrames = 8;             // server frames a wall frame may run
+inline constexpr size_t kMostListenSounds = 256;  // sounds kept for the window between its plays
 
 // The baseline mod compiled from the sources built into the game. False with every diagnostic.
 bool baseline_progs(ge::progs::Progs& out, std::string& error);
@@ -242,6 +244,11 @@ struct Listen {
   // in order.
   std::vector<sh::Vec3f> explosions;
   std::vector<Blow> blows;  // the blows the player took on this map, in order
+  // The sounds the server started for the player (the protocol's sound message to slot 0) since
+  // the window last played them (listen_sound.hpp empties it), and the map's looping sounds.
+  std::vector<DemoSound> sounds;
+  std::vector<DemoStaticSound> static_sounds;
+  int entries = 0;  // maps entered (a new one, the next level, a restart, a load), ever
   // A campaign's effects on this map (its temporary entities and particle bursts), in order; its
   // explosions are in `explosions` too.
   std::vector<Effect> effects;

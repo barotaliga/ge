@@ -184,6 +184,36 @@ std::string text_field(const Listen& l, int e, int field) {
   return t == nullptr ? "" : t;
 }
 
+// A sound name's place on the server's sound list (0: not on it).
+int sound_index(const sv::RulesCommon& s, const std::string& name) {
+  for (size_t i = 1; i < s.sounds.size(); i++)
+    if (s.sounds[i] == name) return static_cast<int>(i);
+  return 0;
+}
+
+// A sound the rules started (sound, ambientsound) as the player's client would read it.
+void take_sound(Listen& l, const sv::RulesCommon& s, const sv::NetEvent& ev) {
+  if (ev.kind == sv::EventKind::ambient) {  // every client hears the level's loops
+    DemoStaticSound st;
+    st.origin = ev.origin;
+    st.sound = sound_index(s, ev.text);
+    st.volume = byte_volume(static_cast<int>(ev.values[0]));
+    st.attenuation = byte_attenuation(static_cast<int>(ev.values[1]));
+    l.static_sounds.push_back(st);
+    return;
+  }
+  if (ev.kind != sv::EventKind::sound || (ev.to & 1u) == 0) return;
+  if (l.sounds.size() >= kMostListenSounds) return;  // nobody plays them (a test, a stall)
+  DemoSound d;
+  d.entity = ev.ent;
+  d.channel = ev.level;
+  d.sound = sound_index(s, ev.text);
+  d.volume = byte_volume(static_cast<int>(ev.values[0]));
+  d.attenuation = ev.values[1];
+  d.origin = ev.origin;
+  l.sounds.push_back(d);
+}
+
 // What the client keeps of a map is new: the commands, the counts, the view the server set.
 void entered(Listen& l) {
   l.sequence = 0;
@@ -194,6 +224,11 @@ void entered(Listen& l) {
   l.explosions.clear();
   l.blows.clear();
   l.effects.clear();
+  l.entries++;
+  l.sounds.clear();
+  l.static_sounds.clear();  // the map's load sets its loops off before the first frame
+  for (const sv::NetEvent& ev : l.server->out.events)
+    if (ev.kind == sv::EventKind::ambient) take_sound(l, *l.server, ev);
   l.server->pending_map.clear();
   const sh::Edict& me = l.server->sv.edicts[1];
   l.view = me.v_angle;
@@ -210,6 +245,7 @@ void entered(Listen& l) {
 // match's prints come routed to him like any client's (ListenHost::print), so `prints` is false.
 void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
   for (const sv::NetEvent& ev : s.out.events) {
+    take_sound(l, s, ev);
     if (prints && ev.kind == sv::EventKind::print && (ev.to & 1u) != 0) l.prints.push_back(ev.text);
     if (ev.kind == sv::EventKind::centerprint && (ev.to & 1u) != 0) l.centres.push_back(ev.text);
     // The baseline mod's explosion: its temporary-entity message's first two bytes.
