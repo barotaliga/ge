@@ -112,6 +112,8 @@ struct HookCall {
   int self = 0;
 };
 
+inline constexpr size_t kMaxEffectNames = 1024;  // particleeffectnum's names a server keeps
+
 struct QcServerOptions {
   sh::ServerSettings loop;  // the loop's settings (first_dynamic, max_edicts set by the server)
   uint32_t seed = 1;        // the generator random, randomvec and movetogoal draw from
@@ -129,6 +131,8 @@ struct QcServer : RulesCommon {
   std::vector<std::string> frag_log;      // logfrag's lines
   std::string command_buffer;             // localcmd's text, run at the next frame
   std::vector<std::string> map_messages;  // the entity text's messages ("x is not a field")
+  // particleeffectnum's names, number n the name at n - 1, kept for the server's life.
+  std::vector<std::string> effect_names;
 
   // Statement tracing (traceon / traceoff) into the console, at most `trace_lines` lines.
   pg::TraceHooks trace_hooks;

@@ -12,7 +12,8 @@
 //   classic protocol's own bytes and changes them here if a capture says otherwise.
 // - THE EVENTS: every other effect a builtin has on clients, typed (a sound, a stuffed command, a
 //   print, a centred print, a light style, a particle burst, an ambient sound, a static entity, a
-//   multicast, a pause), with its recipients as a bit per client slot and whether it is reliable.
+//   multicast, a pause, a named effect at a point or along a trail), with its recipients as a bit
+//   per client slot and whether it is reliable.
 //
 // Nothing here allocates once the vectors have grown; `clear_frame` empties the per-frame parts.
 //
@@ -20,12 +21,14 @@
 // ge:keywords qc progs message sink writebyte writecoord writeangle writestring writeentity
 // ge:keywords multicast unreliable reliable signon broadcast events recipients sound stuffcmd
 // ge:keywords bprint sprint centerprint lightstyle particle ambientsound makestatic encode
+// ge:keywords point-effect trail-effect pointparticles trailparticles
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_qc_messages_test.cpp
 #pragma once
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "shooter/vec.hpp"
@@ -53,6 +56,8 @@ enum class EventKind : uint8_t {
   static_entity,
   multicast,
   pause,
+  point_effect,  // a named effect at a point (pointparticles): `text` the name, values way, count
+  trail_effect,  // a named trail (trailparticles): `text`, from `origin` to values 0..2, `ent`
 };
 const char* event_kind_name(EventKind k);
 
@@ -78,6 +83,12 @@ struct MessageSink {
 
 // Empties the unreliable broadcast and the events (the reliable streams and the signon stay).
 void clear_frame(MessageSink& m);
+
+// The classic temporary entity a named effect (a mod's pointparticles) stands for, by the
+// protocol's kind byte: its classic name in any case, with or without "te_" (`gunshot` 2,
+// `te_explosion` 3, `lava` the lava splash 10, ...). False for any other name: a classic client
+// is sent nothing for it, and the game's own client draws it from its files alone.
+bool classic_temp_entity(std::string_view name, uint8_t& kind);
 
 // A short text for an event (the lab's tables, a test's message).
 std::string event_text(const NetEvent& e);

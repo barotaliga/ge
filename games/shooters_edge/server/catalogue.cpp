@@ -107,16 +107,34 @@ const CatalogueRow kCatalogue[] = {
     {231, "calltimeofday", bi_calltimeofday, "FTE_CALLTIMEOFDAY"},
     {531, "setpause", bi_setpause, "ZQ_PAUSE"},
     {532, "precache_vwep_model", bi_precache_vwep_model, "ZQ_VWEP"},
+    {335, "particleeffectnum", bi_particleeffectnum, "DP_SV_POINTPARTICLES"},
+    {336, "trailparticles", bi_trailparticles, "DP_SV_POINTPARTICLES"},
+    {337, "pointparticles", bi_pointparticles, "DP_SV_POINTPARTICLES"},
     {640, "words", bi_words, "GE_QC_WORDS"},
 };
 const int kCatalogueCount = static_cast<int>(sizeof kCatalogue / sizeof kCatalogue[0]);
 
 const char* const kExtensionNames[] = {
-    "DP_CON_SET",          "DP_QC_CVAR_STRING", "DP_QC_MINMAXBOUND", "DP_QC_RANDOMVEC",
-    "DP_QC_SINCOSSQRTPOW", "DP_QC_TRACEBOX",    "DP_REGISTERCVAR",   "FTE_CALLTIMEOFDAY",
-    "GE_QC_WORDS",         "QSG_CVARSTRING",    "ZQ_CLIENTCOMMAND",  "ZQ_ITEMS2",
-    "ZQ_MOVETYPE_NOCLIP",  "ZQ_MOVETYPE_FLY",   "ZQ_MOVETYPE_NONE",  "ZQ_PAUSE",
-    "ZQ_QC_STRINGS",       "ZQ_QC_TOKENIZE",    "ZQ_VWEP",
+    "DP_CON_SET",
+    "DP_QC_CVAR_STRING",
+    "DP_QC_MINMAXBOUND",
+    "DP_QC_RANDOMVEC",
+    "DP_QC_SINCOSSQRTPOW",
+    "DP_QC_TRACEBOX",
+    "DP_REGISTERCVAR",
+    "DP_SV_POINTPARTICLES",
+    "FTE_CALLTIMEOFDAY",
+    "GE_QC_WORDS",
+    "QSG_CVARSTRING",
+    "ZQ_CLIENTCOMMAND",
+    "ZQ_ITEMS2",
+    "ZQ_MOVETYPE_NOCLIP",
+    "ZQ_MOVETYPE_FLY",
+    "ZQ_MOVETYPE_NONE",
+    "ZQ_PAUSE",
+    "ZQ_QC_STRINGS",
+    "ZQ_QC_TOKENIZE",
+    "ZQ_VWEP",
 };
 const int kExtensionCount = static_cast<int>(sizeof kExtensionNames / sizeof kExtensionNames[0]);
 

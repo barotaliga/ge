@@ -13,10 +13,13 @@
 // `--map=<name>`) draws the player's own maps with the packs' own weapons in hand, for PRIVATE
 // pictures only. The births each look
 // threw, the explosions and beams drawn are deterministic metrics; the pictures are measured.
+// `--mod-effects=1` adds, after the weapons, a mod's own effects by names no classic effect has
+// (the server's pointparticles and trailparticles events) drawn from the lab's book of them.
 //
 // ge:summary Lab: every weapon's muzzle, rounds, hits, blasts and bolt in the game's frame
 // ge:keywords lab se-weapon-fx weapon-effects explosion rocket-trail lightning bolt beam hits
 // ge:keywords shotgun nailgun grenade rocket arc classic-vs-enhanced before-after side-view
+// ge:keywords mod-effects pointparticles trailparticles
 // ge:skill render shooter labs
 #include <algorithm>
 #include <cmath>
@@ -47,6 +50,7 @@
 #include "shooters_edge/client/world_fx.hpp"
 #include "shooters_edge/labs/staged.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge/server/messages.hpp"
 #include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
@@ -58,6 +62,34 @@ namespace sh = ge::shooter;
 namespace ls = ge::lab::liquid_scene;
 
 constexpr double kTic = 0.013;  // a server frame, s (77 Hz, as the window's)
+
+// `--mod-effects`: a mod's own effects by names no classic effect has, as its `particles/*.fx`
+// would define them (map units): a fountain of sparks it throws with pointparticles and a ribbon
+// of embers it lays with trailparticles.
+constexpr const char* kModEffects = R"(# The lab's mod: its own effects, in map units.
+effect spark_fountain
+  light 160 0.4 0.8 1 0.3
+  burst 60
+    box 2
+    along 160 260
+    speed 10 60
+    life 0.6 1.2
+    size 1.5 2.5
+    colour 0.4 0.8 1 0.9 1 1
+    cool 0.6 0.3
+    streak 0.04
+    bounce 0.3
+
+effect spark_trail
+  trail 3
+    box 1
+    rise 4 16
+    life 0.5 0.9
+    size 1.5 2.5
+    colour 1 0.5 0.1 1 0.8 0.3
+    cool 0.3 0.25
+    fall -10
+)";
 
 ge::brush::Entity entity(std::initializer_list<std::pair<std::string, std::string>> pairs) {
   ge::brush::Entity e;
@@ -176,6 +208,15 @@ void run(gl::Lab& lab) {
 
   cl::ViewState shown;
   cl::FxState fx_state[2];
+  ge::particles::Book mod_book;  // --mod-effects: the mod's own (kModEffects)
+  const bool mod_effects = lab.arg("mod-effects") == "1";
+  if (mod_effects) {
+    if (!ge::particles::parse_effects(kModEffects, "lab/mod.fx", mod_book, error)) {
+      lab.fail("the lab's mod effects did not read: " + error, "Fix kModEffects. Skill: render.");
+      return;
+    }
+    for (cl::FxState& f : fx_state) f.book = &mod_book;
+  }
   cl::FxFrame fx[2];
   cl::HeldFire held_fire[2];
   for (cl::HeldFire& f : held_fire)
@@ -517,6 +558,58 @@ void run(gl::Lab& lab) {
       }
     }
   }
+  // A MOD'S OWN EFFECTS: what its pointparticles and trailparticles send (the server's events),
+  // a fountain on the floor ahead, thrown up and toward the eye every few
+  // frames, and a ribbon laid across the view between the eye and the wall, swinging as it goes.
+  if (mod_effects) {
+    namespace sv = shooters_edge::server;
+    const double r = at[3] * ge::core::kPi / 180;
+    const float cx = static_cast<float>(ge::core::libm::cos(r)),
+                cy = static_cast<float>(ge::core::libm::sin(r));
+    const sh::Vec3f eye = {at[0], at[1], at[2] + kEyeZ};
+    const float reach =
+        sh::trace_hull(hull, eye, {eye.x + 2048 * cx, eye.y + 2048 * cy, eye.z}).fraction * 2048;
+    const sh::Vec3f foot = {eye.x + cx * reach * 0.3f, eye.y + cy * reach * 0.3f, at[2] - 24};
+    sh::Vec3f last{};
+    for (int i = 0; i < 160; i++) {
+      if (i % 12 == 0) {
+        sv::NetEvent ev;
+        ev.kind = sv::EventKind::point_effect;
+        ev.to = 1;
+        ev.origin = foot;
+        ev.values[0] = -cx * 0.3f, ev.values[1] = -cy * 0.3f, ev.values[2] = 1;
+        ev.values[3] = 1;
+        ev.text = "spark_fountain";
+        l.server->out.events.push_back(ev);
+      }
+      const double swing = ge::core::libm::sin(i * 0.08);
+      const float across = static_cast<float>(swing) * 56, along = reach * 0.2f;
+      const sh::Vec3f now = {eye.x + cx * along - cy * across, eye.y + cy * along + cx * across,
+                             eye.z + static_cast<float>(ge::core::libm::cos(i * 0.05)) * 10};
+      if (i > 0) {
+        sv::NetEvent ev;
+        ev.kind = sv::EventKind::trail_effect;
+        ev.to = 1;
+        ev.origin = last;
+        ev.values[0] = now.x, ev.values[1] = now.y, ev.values[2] = now.z;
+        ev.text = "spark_trail";
+        l.server->out.events.push_back(ev);
+      }
+      last = now;
+      frame({}, true);
+      if (i == 60 || i == 159) {
+        char label[64];
+        std::snprintf(label, sizeof label, "mod-effects-%03d", i);
+        picture(label,
+                "A mod's own effects: a fountain of sparks (pointparticles) on the floor "
+                "and a ribbon of embers (trailparticles) swinging across the view.");
+      }
+    }
+    const auto named = std::count_if(l.effects.begin(), l.effects.end(), [](const cl::Effect& e) {
+      return e.kind == cl::EffectKind::named || e.kind == cl::EffectKind::named_trail;
+    });
+    lab.metric("mod-effects", static_cast<double>(named), "count");
+  }
   for (int k = 0; k < 2; ++k) {
     lab.metric(std::string(kLooks[k]) + ".births", births[k], "particles");
     lab.metric(std::string(kLooks[k]) + ".blasts-drawn", blasts[k], "count");
@@ -568,7 +661,9 @@ const gl::LabSpec kSpec{
      {"flight-times", "", "the launchers' moments in flight, after the shot, ms (none: none)"},
      {"cvars", "", "the enhanced side's cvars, as the console takes them"},
      {"target", "0", "1: a bot stood in the line of fire, facing the player (its wounds)"},
-     {"before", "", "the left side's cvars in the modern look instead of the classic look"}},
+     {"before", "", "the left side's cvars in the modern look instead of the classic look"},
+     {"mod-effects", "0",
+      "1: after the weapons, a mod's own effects (pointparticles, trailparticles) by its book"}},
     "--size=240,135 --weapons=shotgun,rockets,arc --times=60,400 --blast-times=60",
     run,
 };

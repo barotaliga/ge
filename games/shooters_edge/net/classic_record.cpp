@@ -342,6 +342,25 @@ void mvd_events(ClassicServer& s, MultiviewRecorder& r) {
         }
         m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
         break;
+      case sv::EventKind::point_effect: {
+        // A named effect reaches a classic client only as the temporary entity of its name.
+        uint8_t kind = 0;
+        if (!sv::classic_temp_entity(ev.text, kind)) {
+          r.dropped++;
+          continue;
+        }
+        m.id = svc::temp_entity;
+        m.ints = {kind};
+        if (kind == te::gunshot || kind == te::blood) {
+          const float n = ev.values[3];  // NaN: once
+          m.ints.push_back(!(n >= 1) ? 1 : n > 255 ? 255 : static_cast<int>(n));
+        }
+        m.floats = {ev.origin.x, ev.origin.y, ev.origin.z};
+        break;
+      }
+      case sv::EventKind::trail_effect:  // a classic client has no message for a named trail
+        r.dropped++;
+        continue;
       case sv::EventKind::multicast:
         if (whole_messages(ev.bytes))
           hold(r, ev.to, all, ev.bytes);

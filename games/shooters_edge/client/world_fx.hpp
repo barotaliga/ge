@@ -54,7 +54,7 @@
 // ge:keywords underwater medium step_fx fx-state temp-entity gunshot spike teleport-splash beam
 // ge:keywords held-fire muzzle-fire fire_held load_held_fire fx_switches held-beam
 // ge:keywords ce_trails ce_hits ce_decals marks scorch bullet-hole burns mark_burns
-// ge:keywords held-fire muzzle-fire fire_held load_held_fire warp spawn-effect teleport-effect
+// ge:keywords pointparticles trailparticles named-effect warp spawn-effect teleport-effect
 // ge:keywords respawn ghost materialize dematerialize player_dust dust ash held_shown
 // ge:keywords fx-scene fx_scene demo-effects load_effects particles-fx scripted-effects
 // ge:skill render shooter
