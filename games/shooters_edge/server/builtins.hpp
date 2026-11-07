@@ -60,6 +60,9 @@ void bi_sprint(pg::Vm& vm);
 void bi_dprint(pg::Vm& vm);
 void bi_lightstyle(pg::Vm& vm);
 void bi_particle(pg::Vm& vm);
+void bi_particleeffectnum(pg::Vm& vm);  // DP_SV_POINTPARTICLES: 335, 336, 337
+void bi_trailparticles(pg::Vm& vm);
+void bi_pointparticles(pg::Vm& vm);
 void bi_writebyte(pg::Vm& vm);
 void bi_writechar(pg::Vm& vm);
 void bi_writeshort(pg::Vm& vm);

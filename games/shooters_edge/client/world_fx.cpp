@@ -1073,6 +1073,20 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       }
       case EffectKind::explosion:
         break;
+      case EffectKind::named: {  // a mod's own effect: the files' of its name, or nothing
+        double way[3] = {kUpWay[0], kUpWay[1], kUpWay[2]};
+        if (e.way.x != 0 || e.way.y != 0 || e.way.z != 0) engine_dir(e.way, way);
+        const double floor_y = l.map ? floor_under(*l.map, e.at, eye_map) : -1e9;
+        throw_scripted(s, e.name, p, way, e.count, floor_y, t, out);
+        break;
+      }
+      case EffectKind::named_trail: {  // a mod's own trail over its stretch
+        double from[3], to[3];
+        put(engine_point(e.at), from);
+        put(engine_point(e.end), to);
+        trail_scripted(s, e.name, from, to, out);
+        break;
+      }
     }
   }
   // The enhanced blasts and puffs while they are seen, their main balls' light while it lasts.
