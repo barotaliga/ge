@@ -14,8 +14,9 @@
 // - SEEN when it lies inside the view's cone (`fov` degrees across, about the view's yaw and
 //   pitch), within `range`, and the line from the eye (`view_height` over the origin) to its
 //   head or its middle is clear of the world and every brush entity (a shut door hides; another
-//   player does not). Seen, its place is remembered (`ai::Memory`), and its velocity is taken off
-//   the last two sightings when they are a frame apart.
+//   player does not). Seen, its place is remembered (`ai::Memory`), and its velocity is a
+//   player's as the server sent it (sightings across a network come bunched as the packets do),
+//   else taken off the last two sightings when they are a frame apart.
 // - DEAD (the protocol's flag on a player at no health): no contact; one kept is dropped, so a bot
 //   never aims at a body.
 // - HEARD when it started a sound this frame that reached the client: its place is remembered as
@@ -86,7 +87,7 @@ struct SenseSettings {
 struct Contact {
   int ent = -1;              // a player's entity; -1 a free contact
   ai::Memory seen;           // where and when it was last seen
-  Vec3f velocity;            // off the last two sightings a frame apart
+  Vec3f velocity;            // a player's as sent; else off the last two sightings a frame apart
   bool visible = false;      // seen this frame
   bool was_visible = false;  // seen the frame before
   ai::Memory heard;          // where and when it was last heard

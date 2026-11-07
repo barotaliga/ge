@@ -662,7 +662,11 @@ void client_tick(ClassicClientEnd& c, int64_t now_us) {
     const uint32_t acked = c.ch.incoming_acknowledged;
     if (!channel_process(c.ch, buf, size, c.now, at)) continue;
     const uint32_t ack = c.ch.incoming_acknowledged;
-    if (ack != acked && c.sent_seq[ack & 63] == ack) c.latency = c.now - c.sent_at[ack & 63];
+    if (ack != acked && c.sent_seq[ack & 63] == ack) {
+      c.latency = c.now - c.sent_at[ack & 63];
+      c.latency_avg =
+          c.latency_avg <= 0 ? c.latency : c.latency_avg + (c.latency - c.latency_avg) / 16;
+    }
     read_payload(c, buf, size, at);
     if (!c.error.empty()) {
       c.stage = ClientStage::dropped;
