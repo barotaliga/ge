@@ -55,11 +55,15 @@ constexpr float kEye = 22;      // the eye over the origin
 constexpr float kFastest = 1000;
 constexpr float kFov = 100;        // the bots' view cone across, degrees
 constexpr int32_t kLauncher = 32;  // the rocket launcher's item bit
+constexpr double kFired_s = 0.3;   // a shot this near a sample counts as firing then
 
 struct Player {
   std::string name, team;
   int64_t alive = 0, in_view = 0, in_cone = 0, near = 0, moved = 0, rl = 0, rl_loaded = 0;
-  double speed = 0;
+  // The view: samples after a live one, those turning under 10 and over 360 degrees a second, the
+  // turn summed; and of the samples with an enemy in plain view, those he fired within kFired_s.
+  int64_t turned_n = 0, still = 0, fast = 0, fired_in_view = 0;
+  double speed = 0, turn = 0;
 };
 
 struct Read {
@@ -90,6 +94,8 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<Player> by(32);
   std::vector<sh::Vec3f> was(32);
   std::vector<uint8_t> was_alive(32, 0);
+  std::vector<float> was_yaw(32, 0);
+  std::vector<double> fired_at(32, -1e9);  // each player's last weapon sound
   double next = 0, t0 = -1;
   for (;;) {
     const cl::DemoRead rd = cl::next_frame(d, out.error);
@@ -103,6 +109,10 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       return;
     }
     if (s.intermission || s.players.size() < 32) continue;
+    // Every frame's weapon sounds (the weapon channel, the player's own entity): his shots.
+    for (const cl::DemoSound& snd : s.started)
+      if (snd.channel == 1 && snd.entity >= 1 && snd.entity <= 32)
+        fired_at[static_cast<size_t>(snd.entity - 1)] = s.time;
     if (t0 < 0) t0 = s.time;
     if (s.time < next) continue;
     next = s.time + every;
@@ -138,6 +148,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         cone = hd < 1 || (fwd.x * h.x + fwd.y * h.y + fwd.z * h.z) / hd >= cone_edge;
       }
       pl.in_view += view;
+      pl.fired_in_view += view && s.time - fired_at[static_cast<size_t>(i)] <= kFired_s;
       pl.in_cone += cone;
       if (static_cast<size_t>(i) < d.player_stats.size()) {
         const auto& st = d.player_stats[static_cast<size_t>(i)];
@@ -155,6 +166,17 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
           pl.moved++;
         }
       }
+      if (was_alive[static_cast<size_t>(i)]) {
+        float dy = p.angles.y - was_yaw[static_cast<size_t>(i)];
+        while (dy > 180) dy -= 360;
+        while (dy < -180) dy += 360;
+        const double rate = std::fabs(dy) / every;
+        pl.turned_n++;
+        pl.turn += rate;
+        pl.still += rate < 10;
+        pl.fast += rate > 360;
+      }
+      was_yaw[static_cast<size_t>(i)] = p.angles.y;
       was[static_cast<size_t>(i)] = p.origin;
       was_alive[static_cast<size_t>(i)] = 1;
     }
@@ -252,6 +274,11 @@ void run(gl::Lab& lab) {
       sum.near += p.near;
       sum.speed += p.speed;
       sum.moved += p.moved;
+      sum.turned_n += p.turned_n;
+      sum.still += p.still;
+      sum.fast += p.fast;
+      sum.turn += p.turn;
+      sum.fired_in_view += p.fired_in_view;
     }
     all.alive += sum.alive;
     all.in_view += sum.in_view;
@@ -260,6 +287,11 @@ void run(gl::Lab& lab) {
     all.rl_loaded += sum.rl_loaded;
     all.near += sum.near;
     all.speed += sum.speed;
+    all.turned_n += sum.turned_n;
+    all.still += sum.still;
+    all.fast += sum.fast;
+    all.turn += sum.turn;
+    all.fired_in_view += sum.fired_in_view;
     all.moved += sum.moved;
     const auto share = [&](int64_t k) {
       return to_fixed(sum.alive > 0 ? static_cast<double>(k) / static_cast<double>(sum.alive) : 0,
@@ -285,6 +317,17 @@ void run(gl::Lab& lab) {
   lab.metric("people.rl-loaded", of(all.rl_loaded), "share");
   lab.metric("people.speed", all.moved > 0 ? all.speed / static_cast<double>(all.moved) : 0,
              "units/s");
+  const auto per_turn = [&](double k) {
+    return all.turned_n > 0 ? k / static_cast<double>(all.turned_n) : 0;
+  };
+  lab.metric("people.view-still", per_turn(static_cast<double>(all.still)), "share");
+  lab.metric("people.view-fast", per_turn(static_cast<double>(all.fast)), "share");
+  lab.metric("people.view-turn", per_turn(all.turn), "degrees/s");
+  lab.metric("people.fire-in-view",
+             all.in_view > 0
+                 ? static_cast<double>(all.fired_in_view) / static_cast<double>(all.in_view)
+                 : 0,
+             "share");
   if (used == 0)
     lab.fail("se-people: no recording of " + m.name + " read",
              "next: pass --mapname=<the recordings' map> with --basedir, or --dir of that map's");

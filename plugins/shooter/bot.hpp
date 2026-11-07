@@ -71,6 +71,14 @@ struct Bot {
   // How the aim meets a projectile's target (intercept.hpp): the flight worked out this many
   // times (1: the plain distance over the speed), the target's own arc when he is in the air, and
   // the held weapon thrown as a grenade is (its pitch off the arc).
+  // THE CALM VIEW (`calm`): walking, waiting or riding with nobody to aim at, the view is a hand
+  // on a mouse, not the route's heading: it looks at the route's point a second or so on (turning
+  // before a corner, to see round it), still within `kCalmBand` of that (the keys
+  // turned under it, so the walk is the same), turned at a hand's pace past it (`kCalmTurn`, an
+  // about-face `kCalmAbout`), with a slow drift of a degree or two. A strafe jump, a hop or a
+  // jump keeps the pilot's own view: their air control is the view's.
+  bool calm = false;
+  double calm_t = 0;  // the drift's clock, s
   int intercepts = 1;
   bool target_arc = false;
   bool lob = false;

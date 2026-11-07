@@ -101,6 +101,10 @@ struct TeamPlayer {
   // Sampled alive every 4 frames: an enemy in plain view (any way he looks), one seen (in his
   // cone), and an enemy in view while he roams with nobody known.
   int64_t view_n = 0, in_view = 0, seen_n = 0, unnoticed = 0;
+  // Of the samples with an enemy in plain view: those it saw one (in its cone), aimed, and was
+  // still reacting (no shot yet).
+  int64_t in_view_seen = 0, in_view_aiming = 0, in_view_reacting = 0;
+  int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;  // bots/fighter.hpp's
   // The launcher: taken (a pack's counted), and sampled with the view's: had, and had loaded.
   int64_t rl_pickups = 0, rl_samples = 0, rl_loaded = 0;
   int64_t dives = 0,

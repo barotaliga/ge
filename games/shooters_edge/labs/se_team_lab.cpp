@@ -286,6 +286,37 @@ void run(gl::Lab& lab) {
                  abs_sum[k] / static_cast<double>(n[k]), "units");
     }
   }
+  {
+    // Of the time an enemy is in plain view: seen (in the cone), aimed at, still reacting.
+    int64_t v = 0, seen = 0, aim = 0, react = 0;
+    for (const cn::TeamPlayer& p : r.players) {
+      v += p.in_view;
+      seen += p.in_view_seen;
+      aim += p.in_view_aiming;
+      react += p.in_view_reacting;
+    }
+    const auto of = [&](int64_t k) {
+      return v > 0 ? static_cast<double>(k) / static_cast<double>(v) : 0;
+    };
+    lab.metric("team.in-view.seen", of(seen), "share");
+    lab.metric("team.in-view.aiming", of(aim), "share");
+    lab.metric("team.in-view.reacting", of(react), "share");
+    int64_t checks = 0, far = 0, off = 0, shots = 0;
+    for (const cn::TeamPlayer& p : r.players) {
+      checks += p.trigger_checks;
+      far += p.trigger_far;
+      off += p.trigger_off;
+      shots += p.shots;
+    }
+    const auto per = [&](int64_t k) {
+      return checks > 0 ? static_cast<double>(k) / static_cast<double>(checks) : 0;
+    };
+    lab.metric("team.trigger.fired", per(shots), "share");
+    lab.metric("team.trigger.out-of-range", per(far), "share");
+    lab.metric("team.trigger.view-off", per(off), "share");
+    lab.metric("team.trigger.per-in-view",
+               v > 0 ? static_cast<double>(checks) / (4.0 * static_cast<double>(v)) : 0, "share");
+  }
   lab.metric("team.sightings", static_cast<double>(sightings), "count");
   lab.metric("team.reaction-mean-ms",
              sightings > 0 ? react_s / static_cast<double>(sightings) * 1000 : 0, "ms");
