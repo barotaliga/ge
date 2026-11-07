@@ -623,6 +623,8 @@ void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra) {
       l.kind = e.kind;
       l.time_s = e.time_s;
       l.speed = e.speed;
+      l.back = e.back;
+      l.pitch = e.pitch;
       links.push_back(l);
     }
     n.first_link = first;
@@ -656,6 +658,45 @@ int64_t nav_close_entries(NavGraph& g, std::span<const uint8_t> closed,
   return cut;
 }
 
+void flip_keys(float way, float view, float& forward, float& side) {
+  const ViewAxes ax = angle_vectors({0, view, 0});
+  const Vec3f w = angle_vectors({0, way, 0}).forward;
+  const float f = dot(w, ax.forward), r = dot(w, ax.right);
+  // Each axis pressed when the way lies within 67.5 degrees of it (cos 67.5 = 0.383).
+  constexpr float kPress = 0.383f;
+  forward = f > kPress ? 1.f : f < -kPress ? -1.f : 0.f;
+  side = r > kPress ? 1.f : r < -kPress ? -1.f : 0.f;
+}
+
+RocketBurst rocket_burst(const MoveWorld& world, Vec3f origin, Vec3f angles,
+                         const RocketJumpSpec& rj) {
+  RocketBurst out;
+  const Vec3f fwd = angle_vectors(angles).forward;
+  const Vec3f start = origin + Vec3f{0, 0, rj.eye} + fwd * 8 - Vec3f{0, 0, 8};
+  const Vec3f end = start + fwd * 4096;
+  const HullTrace tr = trace_hull(world.solids[0].point_hull, start - world.solids[0].origin,
+                                  end - world.solids[0].origin);
+  if (tr.fraction >= 1 || tr.startsolid) return out;
+  out.ok = true;
+  out.at = start + (end - start) * tr.fraction - fwd * rj.back_off;
+  out.flight_s = tr.fraction * 4096 / rj.missile_speed;
+  return out;
+}
+
+float rocket_blast(MoveState& s, Vec3f at, const RocketJumpSpec& rj) {
+  const Vec3f centre = s.origin + (kPlayerMins + kPlayerMaxs) * 0.5f;
+  const float d = (rj.damage - 0.5f * length(at - centre)) * rj.self_share;
+  if (d <= 0) return 0;
+  Vec3f away = s.origin - at;
+  normalize(away);
+  s.velocity = s.velocity + away * (d * rj.push);
+  s.ground = -1;
+  return d;
+}
+
+// A rocket jump's running start keeps at least this share of its speed through the first command.
+constexpr float kRunKept = 0.8f;
+
 NavProof prove_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec3f from, Vec3f to,
                            float speed, const NavSettings& set, const RocketJumpSpec& rj,
                            float* health, std::vector<Vec3f>* path) {
@@ -669,42 +710,55 @@ NavProof prove_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec
   float yaw = yaw_at(from, to);
   const float step_s = static_cast<float>(set.msec) * 0.001f;
   const float floor_z = (from.z < to.z ? from.z : to.z) - kArriveUp;
+  p.end = from;  // a refusal ends where it started
   p.lo = from + kPlayerMins;
   p.hi = from + kPlayerMaxs;
   if (path) path->push_back(from);
   bool burst = false;
   float burst_t = -1;
   Vec3f burst_at;
+  // The flip's view: behind at the shot, then turned back toward the target in flight.
+  float view = rj.back ? yaw + 180 : yaw;
+  const float shot_pitch = rj.back ? rj.back_pitch : rj.pitch;
   for (int i = 0;; i++) {
     const float t = static_cast<float>(i + 1) * step_s;
     if (i > 0 && across(s.origin, to) > 0.01f) yaw = yaw_at(s.origin, to);
+    if (!rj.back) {
+      view = yaw;
+    } else if (i > 0) {
+      float off = yaw - view;
+      while (off > 180) off -= 360;
+      while (off < -180) off += 360;
+      const float most = rj.turn * step_s;
+      view += off > most ? most : off < -most ? -most : off;
+    }
     MoveCmd c;
     c.msec = static_cast<uint8_t>(set.msec);
-    c.angles = {i == 0 ? rj.pitch : 0, yaw, 0};
-    c.forward = static_cast<int16_t>(move.maxspeed);
+    c.angles = {i == 0 ? shot_pitch : 0, view, 0};
+    if (rj.back) {
+      // Strafing round: the keys nearest the way to the target in the view's frame.
+      float f = 0, r = 0;
+      flip_keys(yaw, view, f, r);
+      c.forward = static_cast<int16_t>(move.maxspeed * f);
+      c.side = static_cast<int16_t>(move.maxspeed * r);
+    } else {
+      c.forward = static_cast<int16_t>(move.maxspeed);
+    }
     c.buttons = i == 0 ? kButtonJump : 0;
     player_move(s, c, move, world);
+    // A running start a wall stops at once is not a run (the jumper never has the speed there).
+    if (i == 0 && speed > 0 && dot(s.velocity, dir) < kRunKept * speed) return p;
     if (i == 0) {
-      // The rocket, fired after the command's move: from the eye along the view to the world.
-      const Vec3f fwd = angle_vectors({rj.pitch, yaw, 0}).forward;
-      const Vec3f start = s.origin + Vec3f{0, 0, rj.eye} + fwd * 8 - Vec3f{0, 0, 8};
-      const Vec3f end = start + fwd * 4096;
-      const HullTrace tr = trace_hull(world.solids[0].point_hull, start - world.solids[0].origin,
-                                      end - world.solids[0].origin);
-      if (tr.fraction >= 1 || tr.startsolid) return p;  // nothing to burst on
-      const Vec3f hit = start + (end - start) * tr.fraction;
-      burst_at = hit - fwd * rj.back_off;
-      burst_t = t + tr.fraction * 4096 / rj.missile_speed;
+      // The rocket, fired after the command's move.
+      const RocketBurst rb = rocket_burst(world, s.origin, {shot_pitch, view, 0}, rj);
+      if (!rb.ok) return p;  // nothing to burst on
+      burst_at = rb.at;
+      burst_t = t + rb.flight_s;
     }
     if (!burst && t >= burst_t) {
       burst = true;
-      const Vec3f centre = s.origin + (kPlayerMins + kPlayerMaxs) * 0.5f;
-      const float d = (rj.damage - 0.5f * length(burst_at - centre)) * rj.self_share;
+      const float d = rocket_blast(s, burst_at, rj);
       if (d <= 0) return p;  // too far from the blast: no push
-      Vec3f away = s.origin - burst_at;
-      normalize(away);
-      s.velocity = s.velocity + away * (d * rj.push);
-      s.ground = -1;
       if (health) *health = d;
     }
     p.commands++;
@@ -871,23 +925,82 @@ NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& m
       return ok && across(end, o) <= 24 && dz <= kStepHeight && dz >= -kStepHeight ? q : -1;
     };
     if (rocket) {
-      for (size_t x = 0; x < pairs.size() && static_cast<int>(x) < set.rocket_tries; x++) {
+      // In tiers, each over the pairs: the flips that land on their target (the skilled jump,
+      // placed by its pitch) from the full speed on the nearest pairs with the floor behind for
+      // the run and the turn, then from half of it, then standing; then the shots at the feet
+      // that do (the nearest pairs); failing all, the best landing of any (`attempt`'s score).
+      NavExtraLink first;
+      int best = -1;  // the score of `first`, -1: none landed
+      // From `at`, by any link but a rocket jump, a node the pocket wants (always, with none
+      // wanted).
+      const auto leads_to_wanted = [&](int32_t at) {
+        if (set.wanted.size() != g.nodes.size()) return true;
+        std::vector<uint8_t> seen(g.nodes.size(), 0);
+        std::vector<int32_t> queue{at};
+        seen[static_cast<size_t>(at)] = 1;
+        for (size_t q = 0; q < queue.size(); q++) {
+          const size_t n = static_cast<size_t>(queue[q]);
+          if (group[n] == pocket && set.wanted[n]) return true;
+          for (int32_t k = 0; k < g.nodes[n].links; k++) {
+            const NavLink& l =
+                g.links[static_cast<size_t>(g.nodes[n].first_link) + static_cast<size_t>(k)];
+            if (l.kind == NavKind::rocket || seen[static_cast<size_t>(l.to)]) continue;
+            seen[static_cast<size_t>(l.to)] = 1;
+            queue.push_back(l.to);
+          }
+        }
+        return false;
+      };
+      const auto attempt = [&](size_t x, float share, float pitch, bool back) {
         const Vec3f from = g.nodes[static_cast<size_t>(pairs[x].from)].origin;
         const Vec3f to = g.nodes[static_cast<size_t>(pairs[x].to)].origin;
-        for (const float share : {1.f, 0.5f, 0.f}) {
-          out.proofs++;
-          const float speed = share * move.maxspeed;
-          const NavProof pr = prove_rocket_jump(world, move, from, to, speed, g.set, set.rj);
-          const int32_t at = pr.reached ? pairs[x].to : lands_in(pr.end);
-          // Never onto a node with no way back out (a jumper there would be trapped).
-          if (at < 0 || (landing_back && !(*landing_back)[static_cast<size_t>(at)])) continue;
-          extra.push_back(
-              {pairs[x].from, at, NavKind::rocket, pr.time_s + set.rocket_cost_s, speed});
-          out.by_rocket++;
-          return true;
+        const float speed = share * move.maxspeed;
+        out.proofs++;
+        RocketJumpSpec rj = set.rj;
+        rj.back = back;
+        (back ? rj.back_pitch : rj.pitch) = pitch;
+        const NavProof pr = prove_rocket_jump(world, move, from, to, speed, g.set, rj);
+        const int32_t at = pr.reached ? pairs[x].to : lands_in(pr.end);
+        // Never onto a node with no way back out (a jumper there would be trapped).
+        if (at < 0 || (landing_back && !(*landing_back)[static_cast<size_t>(at)])) return false;
+        // On its target, and on the way to what the pocket holds: taken. Any other landing is
+        // kept while it is the best yet: leading to what the pocket holds first, then on target
+        // (a ledge with nothing on it may be the step to one a later round bridges on foot).
+        const int score = (leads_to_wanted(at) ? 2 : 0) + (pr.reached ? 1 : 0);
+        if (score > best) {
+          best = score;
+          first = {pairs[x].from, at,   NavKind::rocket, pr.time_s + set.rocket_cost_s, speed,
+                   back,          pitch};
+        }
+        return score == 3;
+      };
+      // A running start needs the floor behind to run on, as a jump's does (a flip's the more
+      // for its turn).
+      const auto room = [&](size_t x, float share, bool back) {
+        const Vec3f from = g.nodes[static_cast<size_t>(pairs[x].from)].origin;
+        const Vec3f to = g.nodes[static_cast<size_t>(pairs[x].to)].origin;
+        return share <= 0 || room_to_run_up(world, from, to,
+                                            g.set.run_up + (back ? set.rj.turn_room * share : 0));
+      };
+      const auto keep = [&] {
+        extra.push_back(first);
+        out.by_rocket++;
+        out.by_flip += first.back;
+        return true;
+      };
+      for (const float share : {1.f, 0.5f, 0.f}) {
+        int tried = 0;
+        for (size_t x = 0; x < pairs.size() && tried < set.rocket_tries; x++) {
+          if (!room(x, share, true)) continue;
+          tried++;
+          for (const float pitch : set.flip_pitches)
+            if (attempt(x, share, pitch, true)) return keep();
         }
       }
-      return false;
+      for (size_t x = 0; x < pairs.size() && static_cast<int>(x) < set.rocket_tries; x++)
+        for (const float share : {1.f, 0.5f, 0.f})
+          if (room(x, share, false) && attempt(x, share, set.rj.pitch, false)) return keep();
+      return best >= 0 ? keep() : false;
     }
     for (size_t x = 0; x < pairs.size() && static_cast<int>(x) < set.tries; x++) {
       const Vec3f from = g.nodes[static_cast<size_t>(pairs[x].from)].origin;

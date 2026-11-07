@@ -55,6 +55,7 @@
 // ge:summary The pilot: a nav route played one command at a time through the player move
 // ge:keywords pilot bot route follow usercmd command jump run-up ride plat door wait strafe-jump
 // ge:keywords bunny-hop air-strafe stuck replan lost hands why pilot_step pilot_go pilot_source
+// ge:keywords rocket-jump flip back-rocket-jump strafe-turn flip_keys
 // ge:skill shooter bots
 // ge:test tests/shooter_pilot_test.cpp
 #pragma once
@@ -101,9 +102,13 @@ struct PilotSettings {
   bool hop_simple = false;
   // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while this is set (the caller's say:
   // the launcher in hand, its rockets, the health for the blast); played as a jump, the view
-  // `rocket_pitch` down and the trigger pressed with the jump.
+  // `rocket_pitch` down (or the link's own, `NavLink::pitch`: the one its proof landed) and the
+  // trigger pressed with the jump; a flip (`NavLink::back`) turned into from as long before its
+  // start as the view's hand takes to turn round (its delay and its slew over 180 degrees), its
+  // run-up that much longer, and `rocket_back_pitch` down behind.
   bool rockets = false;
   float rocket_pitch = 80;
+  float rocket_back_pitch = 55;
   float swim_arrive = 24;  // a swim node is reached within this, units (any way, not across)
   // THE LANE: a person does not walk the route's line. On a level walk with room either side (the
   // graph's `nav_room`), the walker keeps `lane` of that room off the line, to one side or the
@@ -153,6 +158,7 @@ struct PilotStats {
   int32_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0, jumps = 0, run_ups = 0;
   int32_t rides = 0, strafes = 0;
   int32_t hops = 0, hop_jumps = 0;  // hop stretches entered, jumps pressed on a landing in them
+  int32_t flips = 0;                // rocket jumps taken as the flip
   double time_s = 0;                // the commands' time since the last pilot_go
 };
 
