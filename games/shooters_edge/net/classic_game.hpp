@@ -26,6 +26,9 @@
 // countdown run out restarts the map into the match, and the match's next map warms up again.
 // Bots alone never count down. Without `sv_lobby` the bots play every map as a match.
 //
+// COOP (`sv_coop 1`, a dedicated server only): the game folder's campaign in coop in place of a
+// match, with `sv_coopbots` companions, listed as coop (classic_coop_game.hpp).
+//
 // A LISTEN SERVER is the same game in the window's process (client/listen.hpp's `ListenHost` in
 // `ServerConfig::host`): the window's program, map and lines, its player slot 0 (a local seat
 // the window moves and sees), the next map the mod asks for read by the window. Others join it
@@ -39,6 +42,7 @@
 // ge:keywords dedicated-server classic-server servergame serve net_frame baseline-mod deathmatch
 // ge:keywords classic_game playable-server game-rules fraglimit timelimit map-change maprotation
 // ge:keywords sv_bots sv_lobby bots lobby warmup addbot removebot listen-server listen_options
+// ge:keywords sv_coop dedicated-coop
 // ge:skill net shooter
 // ge:test tests/shooters_edge_classic_game_test.cpp
 #pragma once

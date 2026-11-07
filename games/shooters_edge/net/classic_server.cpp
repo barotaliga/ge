@@ -521,6 +521,15 @@ bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error
   // The move's switches a client predicts with, when not at their defaults (pm_ktjump 0).
   for (const auto& [k, v] : sh::changed_info(qc.sv.set))
     info_set(s.serverinfo, k, v, kServerInfoBytes);
+  // A cooperative campaign is listed as one: a browser's status query reads `coop 1`,
+  // `deathmatch 0`, the monsters' `skill` and the map playing (a match's info is as before).
+  if (const ge::console::Cvar* coop = qc.cvars.find("coop"); coop != nullptr && coop->on()) {
+    info_set(s.serverinfo, "coop", "1", kServerInfoBytes);
+    info_set(s.serverinfo, "deathmatch", "0", kServerInfoBytes);
+    if (const ge::console::Cvar* skill = qc.cvars.find("skill"))
+      info_set(s.serverinfo, "skill", skill->value, kServerInfoBytes);
+    info_set(s.serverinfo, "map", qc.map_name, kServerInfoBytes);
+  }
   for (const auto& [k, v] : qc.serverinfo) info_set(s.serverinfo, k, v, kServerInfoBytes);
   if (s.cfg.antilag) {
     qc.lag_rewind = &lag_rewind;
