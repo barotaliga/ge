@@ -68,6 +68,7 @@ struct MapReach {
   std::vector<MoverRow> movers;
   std::vector<std::vector<std::string>> tricks;  // the tricks table's rows
   int64_t tricks_held = 0, grenade_links = 0;
+  int64_t risky = 0, risky_removed = 0;  // jumps over lava or slime, and those removed
 };
 
 bool vec_of(const char* s, sh::Vec3f& out) {
@@ -98,6 +99,9 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
   out.swim_nodes = nav.swim_nav.cells;
   out.swim_links = g.counts.by_kind[static_cast<int>(sh::NavKind::swim)];
   for (const uint8_t h : nav.harm) out.harm_nodes += h;
+  out.risky = nav.hardened.over;
+  out.risky_removed = nav.hardened.removed;
+
   for (const sh::NavLink& l : g.links) {
     out.grenade_links += l.kind == sh::NavKind::grenade;
     if (l.kind == sh::NavKind::rocket) {
@@ -289,6 +293,8 @@ void run(gl::Lab& lab) {
     if (!m.tricks.empty())
       lab.metric("reach." + m.name + ".tricks-held", static_cast<double>(m.tricks_held), "count");
     lab.metric("reach." + m.name + ".grenade-links", static_cast<double>(m.grenade_links), "count");
+    lab.metric("reach." + m.name + ".risky-jumps", static_cast<double>(m.risky), "count");
+    lab.metric("reach." + m.name + ".risky-removed", static_cast<double>(m.risky_removed), "count");
     for (const auto& row : m.tricks) tk.rows.push_back(row);
     for (const Gap& gp : m.gaps)
       gaps.rows.push_back(

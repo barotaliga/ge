@@ -7,6 +7,7 @@
 #include "shooters_edge/net/classic_team.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -89,7 +90,17 @@ struct Seat {
   sh::AimSkill skill = sh::AimSkill::average;
   bool had_quad = false;
   bool had_rl = false;
-  size_t heard = 0;                      // its client's prints read so far
+  size_t heard = 0;  // its client's prints read so far
+  // The last frames' places and pilot modes (a ring), for where a death came from.
+  struct Was {
+    double t = -1;
+    sh::Vec3f at;
+    uint8_t mode = 0;
+    sh::Vec3f from, to;  // the link it was on
+    uint8_t kind = 0;
+  };
+  std::array<Was, 512> was{};
+  size_t was_n = 0;
   std::unique_ptr<ClientMirror> mirror;  // client-fed: its world, off its client alone
 };
 
@@ -309,7 +320,64 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       if (!seat.ready) continue;
       const sh::Edict& d = s.sv.edicts[static_cast<size_t>(p.slot) + 1];
       const bool live = d.health > 0;
-      if (seat.alive && !live) p.deaths++;
+      if (live) {
+        const sh::Pilot& pw = seat.fighter.bot.pilot.pilot;
+        Seat::Was w{s.sv.time, d.origin, static_cast<uint8_t>(pw.mode), {}, {}, 0};
+        if (pw.g && pw.k + 1 < pw.route.size()) {
+          w.from = pw.g->nodes[static_cast<size_t>(pw.route[pw.k])].origin;
+          w.to = pw.g->nodes[static_cast<size_t>(pw.route[pw.k + 1])].origin;
+          const sh::NavNode& na = pw.g->nodes[static_cast<size_t>(pw.route[pw.k])];
+          for (int32_t x = 0; x < na.links; x++) {
+            const sh::NavLink& l =
+                pw.g->links[static_cast<size_t>(na.first_link) + static_cast<size_t>(x)];
+            if (l.to == pw.route[pw.k + 1]) w.kind = static_cast<uint8_t>(l.kind);
+          }
+        }
+        seat.was[seat.was_n++ % seat.was.size()] = w;
+      }
+      if (seat.alive && !live) {
+        p.deaths++;
+        // Where it was three seconds before.
+        Seat::Was back;
+        for (const Seat::Was& w : seat.was)
+          if (w.t >= 0 && w.t <= s.sv.time - 3 && w.t > back.t) back = w;
+        const sh::Pilot& pl = seat.fighter.bot.pilot.pilot;
+        const char* link = "-";
+        if (pl.g && pl.k + 1 < pl.route.size()) {
+          const sh::NavNode& a = pl.g->nodes[static_cast<size_t>(pl.route[pl.k])];
+          for (int32_t x = 0; x < a.links; x++) {
+            const sh::NavLink& l =
+                pl.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(x)];
+            if (l.to == pl.route[pl.k + 1]) link = sh::nav_kind_name(l.kind);
+          }
+        }
+        const char* liquid = d.watertype == sh::kContentsLava    ? "lava"
+                             : d.watertype == sh::kContentsSlime ? "slime"
+                             : d.watertype == sh::kContentsWater ? "water"
+                                                                 : "-";
+        // And its way in: where it was 2, 1 and a half second before.
+        std::string way;
+        for (const double ago : {3.0, 2.5, 2.0, 1.5, 1.0, 0.5}) {
+          Seat::Was at;
+          for (const Seat::Was& w : seat.was)
+            if (w.t >= 0 && w.t <= s.sv.time - ago && w.t > at.t) at = w;
+          char c[128];
+          std::snprintf(c, sizeof c, "%s%.0f %.0f %.0f %s", way.empty() ? "" : " > ", at.at.x,
+                        at.at.y, at.at.z, sh::pilot_mode_name(static_cast<sh::PilotMode>(at.mode)));
+          way += c;
+          if (ago > 3.5) continue;
+          std::snprintf(c, sizeof c, " [%s %.0f %.0f %.0f to %.0f %.0f %.0f]",
+                        sh::nav_kind_name(static_cast<sh::NavKind>(at.kind)), at.from.x, at.from.y,
+                        at.from.z, at.to.x, at.to.y, at.to.z);
+          way += c;
+        }
+        char b[1400];
+        std::snprintf(b, sizeof b, "%.1f\t%s\t%.0f %.0f %.0f\t%s\t%s\t%s\t%.0f %.0f %.0f\t%s\t%s",
+                      s.sv.time, p.name.c_str(), d.origin.x, d.origin.y, d.origin.z, liquid,
+                      sh::pilot_mode_name(pl.mode), link, back.at.x, back.at.y, back.at.z,
+                      sh::pilot_mode_name(static_cast<sh::PilotMode>(back.mode)), way.c_str());
+        r.deaths.push_back(b);
+      }
       seat.alive = live;
       const bt::Stats rst = bt::read_stats(s, p.slot + 1);
       const bool quad = (rst.items & kItQuad) != 0;

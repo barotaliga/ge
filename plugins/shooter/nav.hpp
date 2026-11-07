@@ -409,6 +409,21 @@ NavTrickCounts nav_add_tricks(const MoveWorld& world, const MoveSettings& move, 
                               std::span<const NavTrick> tricks, std::span<const uint8_t> back,
                               const NavTrickSettings& set = {});
 
+// RISKY JUMPS (`nav_harden_jumps`): a jump over a floor that harms (lava, slime: the nodes `harm`
+// marks, one byte a node, in a grid column under the jump's line and below both its ends), or
+// landing within `beside` of one lower than its target (an edge over it: the jumper's momentum
+// carries him on past where the proof stood), is one a miss of kills. Each jump of them is flown
+// again at a point `overshoot` past its target (the momentum a landing keeps): one whose flight
+// ends in the harm or well below its target is removed; each running jump left is proven again
+// from `slow` of its speed (late hands arrive slower than the proof ran; 0: none is kept), removed
+// when it no longer lands; every one left (blast jumps too) costs `risk_s` more.
+struct NavHardenCounts {
+  int64_t over = 0, removed = 0, proofs = 0;
+};
+NavHardenCounts nav_harden_jumps(const MoveWorld& world, const MoveSettings& move, NavGraph& g,
+                                 std::span<const uint8_t> harm, float slow = 0.9f, float risk_s = 2,
+                                 float beside = 192, float overshoot = 48);
+
 // The nodes from which a way leads, on foot (or swimming, riding, teleported: anything but a
 // rocket jump), to a node `mark` marks; one byte a node.
 std::vector<uint8_t> nav_back(const NavGraph& g, const std::vector<uint8_t>& mark);

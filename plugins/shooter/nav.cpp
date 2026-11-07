@@ -1285,6 +1285,89 @@ NavTrickCounts nav_add_tricks(const MoveWorld& world, const MoveSettings& move, 
   return out;
 }
 
+NavHardenCounts nav_harden_jumps(const MoveWorld& world, const MoveSettings& move, NavGraph& g,
+                                 std::span<const uint8_t> harm, float slow, float risk_s,
+                                 float beside, float overshoot) {
+  NavHardenCounts out;
+  if (harm.size() != g.nodes.size()) return out;
+  // Whether a harm node stands in a grid column under the line from `a` to `b`, below both.
+  const auto over_harm = [&](Vec3f a, Vec3f b) {
+    const float len = across(a, b);
+    const int steps = static_cast<int>(len / (g.set.spacing * 0.5f)) + 1;
+    const float low = (a.z < b.z ? a.z : b.z) - kStepHeight;
+    for (int i = 1; i < steps; i++) {
+      const Vec3f p = a + (b - a) * (static_cast<float>(i) / static_cast<float>(steps));
+      const auto ci = static_cast<int32_t>((p.x - g.lo.x) / g.set.spacing);
+      const auto cj = static_cast<int32_t>((p.y - g.lo.y) / g.set.spacing);
+      if (ci < 0 || ci >= g.cols || cj < 0 || cj >= g.rows) continue;
+      const size_t c =
+          static_cast<size_t>(ci) * static_cast<size_t>(g.rows) + static_cast<size_t>(cj);
+      for (int32_t k = 0; k < g.col_n[c]; k++) {
+        const int32_t n = g.col_first[c] + k;
+        if (harm[static_cast<size_t>(n)] && g.nodes[static_cast<size_t>(n)].origin.z < low)
+          return true;
+      }
+    }
+    return false;
+  };
+  // Whether a harm node lower than `p` stands within `beside` across of it (a landing at an edge
+  // over it: the momentum carries a jumper on past where the proof stood still).
+  const auto harm_beside = [&](Vec3f p) {
+    bool found = false;
+    floor_near(g, p, beside, [&](int32_t m) {
+      const Vec3f o = g.nodes[static_cast<size_t>(m)].origin;
+      found = found ||
+              (harm[static_cast<size_t>(m)] && o.z < p.z - kStepHeight && across(o, p) <= beside);
+    });
+    return found;
+  };
+  std::vector<NavLink> links;
+  links.reserve(g.links.size());
+  for (size_t a = 0; a < g.nodes.size(); a++) {
+    NavNode& n = g.nodes[a];
+    const int32_t first = static_cast<int32_t>(links.size());
+    for (int32_t k = 0; k < n.links; k++) {
+      NavLink l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+      const bool leap = l.kind == NavKind::jump || nav_blast(l.kind);
+      const Vec3f to = g.nodes[static_cast<size_t>(l.to)].origin;
+      if (leap && (over_harm(n.origin, to) || harm_beside(to))) {
+        out.over++;
+        // Flown again at a point `overshoot` past the target: a flight that ends in the harm, or
+        // falls well below the target, lands at an edge over it.
+        Vec3f dir{to.x - n.origin.x, to.y - n.origin.y, 0};
+        normalize(dir);
+        const NavProof past =
+            prove_link(world, move, n.origin, to + dir * overshoot,
+                       l.kind == NavKind::jump ? NavKind::jump : NavKind::walk, l.speed, g.set);
+        out.proofs++;
+        const int c = water_contents(world, {past.end.x, past.end.y, past.end.z - 22});
+        if (l.kind == NavKind::jump &&
+            (c == kContentsLava || c == kContentsSlime || past.end.z < to.z - 2 * kStepHeight)) {
+          out.removed++;
+          continue;
+        }
+        if (l.kind == NavKind::jump && l.speed > 0) {
+          NavProof pr;
+          if (slow > 0) {
+            out.proofs++;
+            pr = prove_link(world, move, n.origin, to, NavKind::jump, l.speed * slow, g.set);
+          }
+          if (!pr.reached) {
+            out.removed++;
+            continue;
+          }
+        }
+        l.time_s += risk_s;
+      }
+      links.push_back(l);
+    }
+    n.first_link = first;
+    n.links = static_cast<int32_t>(links.size()) - first;
+  }
+  g.links = std::move(links);
+  return out;
+}
+
 void nav_room(NavGraph& g, int most) {
   const size_t n = g.nodes.size();
   g.room.assign(n, 0);
