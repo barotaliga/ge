@@ -48,6 +48,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   double want[2];
   if (fresh) {
     double ahead = ai::age(c->seen, sv.time) + b.aim.lead_s;
+    if (b.shot_speed > 0 || !b.rewound) ahead += b.lag_s;
     if (b.shot_speed > 0) {
       const double dx = c->seen.x - eye.x, dy = c->seen.y - eye.y, dz = c->seen.z - eye.z;
       ahead += std::sqrt(dx * dx + dy * dy + dz * dz) / b.shot_speed;
