@@ -546,7 +546,9 @@ Outcome run_digest(const BuildOptions& o, const DigestOptions& d) {
     out.exit = 2;
     return out;
   }
-  if (!build_into(o, out)) return out;
+  // Only the labs executable: the digests need nothing else, and the whole tree's test
+  // binaries fill a small cloud disk.
+  if (!build_targets(o, out, "labs")) return out;
   const fs::path baseline = o.repo / kDigestBaseline;
   const std::string rel(kDigestBaseline);
   std::error_code ec;
