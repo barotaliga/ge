@@ -38,7 +38,8 @@ struct Args {
   int bots = 0;
   std::string server = "127.0.0.1:27500", team = "bots", skills, bots_out, bots_view;
   int colour = 4;
-  int gif_width = 480;  // -demovideo to a .gif: its width in pixels
+  bool bots_paths = true;  // `--bots-paths=0`: the bots' overview draws no paths
+  int gif_width = 480;     // -demovideo to a .gif: its width in pixels
   std::string codec = "auto";
   std::string playdemo;  // a demo to play at its own pace ("": none)
   long frames = 0;       // 0: until quit

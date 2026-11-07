@@ -4,18 +4,23 @@
 // ge:test tests/shooter_pilot_test.cpp
 #include "shooter/pilot.hpp"
 
+#include <algorithm>
 #include <utility>
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "shooter/server.hpp"
+#include "shooter/swim.hpp"
 #include "shooter/usercmd.hpp"
 
 namespace ge::shooter {
 
 namespace {
 
-constexpr float kRideArrive = 2;    // a ride is over within this of the top node's height, units
+constexpr float kRideArrive = 2;       // a ride is over within this of the top node's height, units
+constexpr float kSwimPitch = 70;       // a swimmer's view pitched at most this far, degrees
+constexpr float kSwimRise = 16;        // the next node this much higher: jump held to rise, units
+constexpr float kLaneSettle_s = 0.4f;  // a lane's offset follows the room ahead this fast, s
 constexpr float kRideRest = 12;     // a ridden mover this near its rest may be stepped onto, units
 constexpr float kStandUp = 8;       // a node is arrived at within this up or down, units
 constexpr float kJumpAlong = 0.9f;  // a jump goes moving at least this share of its speed
@@ -119,12 +124,20 @@ bool on_height(const PilotSense& s, Vec3f a, Vec3f b, float f) {
 
 struct Want {
   float yaw = 0, forward = 0, side = 0;  // degrees; shares of maxspeed
-  bool jump = false;
+  float pitch = 0;                       // the view's pitch, down positive (not on the hands)
+  bool jump = false, attack = false;
 };
 
+// A leap off the ground at its start: a jump, or a rocket jump played the same way.
+bool leaps(NavKind k) { return k == NavKind::jump || k == NavKind::rocket; }
+
 bool reached(const Pilot& p, const PilotSense& s, int32_t n) {
-  if (!s.onground) return false;
   const NavNode& b = node(*p.g, n);
+  if (b.swim || s.waterlevel >= 2) {  // a wet cell's centre, or any node to a swimmer: near it
+    const Vec3f d = s.origin - b.origin;
+    return dot(d, d) <= p.set.swim_arrive * p.set.swim_arrive;
+  }
+  if (!s.onground) return false;
   // A ride's top is wherever on the mover the player boarded: arrived by height alone.
   if (b.ride >= 0) return s.origin.z >= b.origin.z - kRideArrive;
   if (across(s.origin, b.origin) > p.set.arrive) return false;
@@ -195,7 +208,7 @@ int32_t hop_stretch(const Pilot& p, Vec3f at) {
     if (l == nullptr || (l->kind != NavKind::walk && l->kind != NavKind::drop) || l->mover >= 0)
       break;
     const NavLink* l2 = j + 1 < p.route.size() ? link_of(g, p.route[j], p.route[j + 1]) : nullptr;
-    if (l2 != nullptr && l2->kind == NavKind::jump) break;
+    if (l2 != nullptr && leaps(l2->kind)) break;
     if (j > p.k + 1) along += across(node(g, p.route[j - 1]).origin, node(g, p.route[j]).origin);
     if (along >= p.set.hop_min) best = static_cast<int32_t>(j);
   }
@@ -289,7 +302,7 @@ void advance(Pilot& p, const PilotSense& s) {
   p.k++;
   restart(p, s);
   if (p.mode == PilotMode::wait || p.mode == PilotMode::ride || p.mode == PilotMode::air ||
-      p.mode == PilotMode::jump || p.mode == PilotMode::run_up)
+      p.mode == PilotMode::jump || p.mode == PilotMode::run_up || p.mode == PilotMode::swim)
     p.mode = PilotMode::walk;
 }
 
@@ -310,19 +323,21 @@ bool passed(const Pilot& p, const PilotSense& s, size_t k) {
   const int32_t a = p.route[k], b = p.route[k + 1];
   const NavLink* l = link_of(g, a, b);
   const NavLink* l2 = k + 2 < p.route.size() ? link_of(g, b, p.route[k + 2]) : nullptr;
-  if (l && l->kind == NavKind::jump) {
+  if (l && leaps(l->kind)) {
     // A jump lands where its flight ends, near the target but rarely on its point.
     const float dz = s.origin.z - node(g, b).origin.z;
     return p.airborne && s.onground && across(s.origin, node(g, b).origin) <= kLanded &&
            dz <= kStandUp && dz >= -kStandUp;
   }
-  if (l && l2 && l2->kind == NavKind::jump && l->mover < 0 && l->kind != NavKind::drop)
-    return false;
+  if (l && l2 && leaps(l2->kind) && l->mover < 0 && l->kind != NavKind::drop) return false;
   if (l && l2 && through(*l) && through(*l2) && level(g, a, b) && level(g, b, p.route[k + 2])) {
     float f = 0;
     const float off = off_segment(s.origin, node(g, a).origin, node(g, b).origin, &f);
     if (!on_height(s, node(g, a).origin, node(g, b).origin, f)) return false;
-    return across(s.origin, node(g, b).origin) <= p.set.arrive || (f >= 1 && off <= p.set.corner);
+    // (a walker keeping a lane off the line passes a node as far off it as the lane is)
+    const float lane = p.offset < 0 ? -p.offset : p.offset;
+    return across(s.origin, node(g, b).origin) <= p.set.arrive + lane ||
+           (f >= 1 && off <= p.set.corner + lane);
   }
   return reached(p, s, b);
 }
@@ -335,12 +350,46 @@ bool nearer_on(const Pilot& p, const PilotSense& s) {
   const int32_t a = p.route[p.k], b = p.route[p.k + 1], c = p.route[p.k + 2];
   const NavLink* l = link_of(g, a, b);
   const NavLink* l2 = link_of(g, b, c);
-  if (!l || !l2 || l->mover >= 0 || !through(*l2) || !level(g, b, c) || l->kind == NavKind::jump)
+  if (!l || !l2 || l->mover >= 0 || !through(*l2) || !level(g, b, c) || leaps(l->kind))
     return false;
   const float here = off_segment(s.origin, node(g, a).origin, node(g, b).origin);
   float f = 0;
   const float there = off_segment(s.origin, node(g, b).origin, node(g, c).origin, &f);
   return there + 1 < here && on_height(s, node(g, b).origin, node(g, c).origin, f);
+}
+
+// The point `target` moved off the route's line by the walker's lane (PilotSettings::lane): the
+// lane drifts to a side and an amount drawn now and then, within the room of the next few nodes,
+// and back to the line before anything but a level walk.
+Vec3f lane_target(Pilot& p, float dt, float t, Vec3f target) {
+  const NavGraph& g = *p.g;
+  if (p.set.lane <= 0 || g.room.size() != g.nodes.size() || p.k + 1 >= p.route.size()) {
+    p.offset = 0;
+    return target;
+  }
+  if (t >= p.lane_until) {
+    p.lane_want = static_cast<float>(core::range(p.lane_rng, -1, 1));
+    p.lane_until =
+        t + static_cast<float>(core::range(p.lane_rng, p.set.lane_min_s, p.set.lane_max_s));
+  }
+  float room = 1e9f;
+  for (size_t k = p.k; k + 1 < p.route.size() && k < p.k + 3; k++) {
+    const NavLink* l = link_of(g, p.route[k], p.route[k + 1]);
+    if (l == nullptr || !through(*l) || !level(g, p.route[k], p.route[k + 1])) {
+      room = 0;
+      break;
+    }
+    room = std::min({room, static_cast<float>(g.room[static_cast<size_t>(p.route[k])]),
+                     static_cast<float>(g.room[static_cast<size_t>(p.route[k + 1])])});
+  }
+  if (room > 1e8f) room = 0;
+  p.lane += (p.lane_want - p.lane) * std::min(1.f, dt / p.set.lane_ease_s);
+  const float want = p.lane * room * g.set.spacing * p.set.lane;
+  p.offset += (want - p.offset) * std::min(1.f, dt / kLaneSettle_s);
+  const Vec3f a = node(g, p.route[p.k]).origin, b = node(g, p.route[p.k + 1]).origin;
+  Vec3f side{-(b.y - a.y), b.x - a.x, 0};
+  if (normalize(side) <= 0) return target;
+  return target + side * p.offset;
 }
 
 // The point `look` units along the route from where `at` stands on the current link, carried
@@ -516,6 +565,8 @@ const char* pilot_mode_name(PilotMode m) {
       return "arrived";
     case PilotMode::hop:
       return "hop";
+    case PilotMode::swim:
+      return "swim";
   }
   return "?";
 }
@@ -559,6 +610,7 @@ void pilot_init(Pilot& p, const NavGraph& g, const PilotSettings& set,
   p.g = &g;
   p.set = set;
   p.hands = ai::Hands(hands, hz, seed);
+  p.lane_rng = core::make_rng(seed * 2246822519u + 3266489917u);
   p.search.reset(g.nodes.size());
 }
 
@@ -589,7 +641,7 @@ bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
     cut = p.cut_all;
   }
   p.route = nav_route(*p.g, from, goal, p.search, 1,
-                      std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut)
+                      std::span<const int32_t>(barred, static_cast<size_t>(nb)), cut, p.set.rockets)
                 .nodes;
   if (p.route.empty()) {
     p.mode = PilotMode::idle;
@@ -639,7 +691,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     // The hop's stretch (an expert's), entered on the ground on a walk moving near full speed.
     if (p.set.hop && p.mode == PilotMode::walk && s.onground &&
         (l.kind == NavKind::walk || l.kind == NavKind::drop) && l.mover < 0 &&
-        speed >= kStrafeSpeed * s.maxspeed && !(l2 && l2->kind == NavKind::jump)) {
+        speed >= kStrafeSpeed * s.maxspeed && !(l2 && leaps(l2->kind))) {
       const int32_t j = hop_stretch(p, s.origin);
       if (j >= 0) {
         p.mode = PilotMode::hop;
@@ -676,9 +728,9 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       } else if (t - p.best_s > p.set.stuck_s) {
         p.stats.stuck++;
         // No nearer on the way to a jump (its run-up walled in): a miss of that jump.
-        if (l.kind == NavKind::jump)
+        if (leaps(l.kind))
           missed_jump(p, {a, b, l.kind, l.time_s});
-        else if (l2 && l2->kind == NavKind::jump)
+        else if (l2 && leaps(l2->kind))
           missed_jump(p, {b, p.route[p.k + 2], l2->kind, l2->time_s});
         replanned = true;
         replan(p, s);
@@ -806,6 +858,51 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         w.jump = !p.jump_pressed;  // pressed afresh every other command: a landing catches one
         because = "in the air: the wish across the velocity";
       }
+    } else if (l.kind == NavKind::swim || node(g, b).swim ||
+               (s.waterlevel >= 2 && node(g, a).swim)) {
+      // Swimming: the view pitched at the next node, forward, and jump held to rise; out of the
+      // water onto a dry node by the climb the nav proved; into it off a dry edge, walked.
+      const Vec3f me = s.origin;
+      const float flat = across(me, B);
+      const float dz = B.z - me.z;
+      w.yaw = unwrap(yaw_at(me, B), p.yaw);
+      w.forward = facing(w.yaw, p.yaw);
+      if (!node(g, b).swim && s.waterlevel >= 1 && dz > -kSwimRise) {
+        MoveState ms;
+        ms.origin = me;
+        ms.waterlevel = s.waterlevel;
+        const MoveCmd out = swim_out(ms, B, msec);
+        w.pitch = out.angles.x;
+        w.jump = (out.buttons & kButtonJump) != 0;
+        w.forward = 1;
+        because = "climbing out of the water";
+      } else if (s.waterlevel >= 2 || (!node(g, b).swim && s.waterlevel >= 1)) {
+        // Through the water at the next node: a cell's centre, or a pool's floor under it.
+        const double up = core::libm::atan2(static_cast<double>(dz), static_cast<double>(flat));
+        float pitch = static_cast<float>(-up * (180.0 / core::kPi));
+        pitch = pitch > kSwimPitch ? kSwimPitch : pitch < -kSwimPitch ? -kSwimPitch : pitch;
+        w.pitch = pitch;
+        w.jump = dz > kSwimRise;
+        because = "swimming the route";
+      } else {
+        because = "into the water";
+      }
+      if (p.mode != PilotMode::swim) {
+        p.mode = PilotMode::swim;
+        p.best = 1e30f;
+        p.best_s = t;
+      }
+      const Vec3f d = me - B;
+      const float d3 = length(d);
+      if (d3 < p.best - 0.5f) {
+        p.best = d3;
+        p.best_s = t;
+      } else if (t - p.best_s > 2 * p.set.stuck_s) {
+        p.stats.stuck++;
+        replanned = true;
+        replan(p, s);
+        because = "no nearer in the water: plan again";
+      }
     } else if (l.kind == NavKind::ride) {
       if (p.mode != PilotMode::ride) p.stats.rides++;
       p.mode = PilotMode::ride;
@@ -893,7 +990,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         replan(p, s);
         because = "waited too long: barred";
       }
-    } else if (l.kind == NavKind::jump && p.airborne) {
+    } else if (leaps(l.kind) && p.airborne) {
       if (!s.onground) {
         p.mode = PilotMode::air;
         w.yaw = unwrap(yaw_at(s.origin, B), p.yaw);
@@ -908,10 +1005,9 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         replan(p, s);
         because = "landed short";
       }
-    } else if (l.kind == NavKind::jump ||
-               (l2 && l2->kind == NavKind::jump && l.mover < 0 && l.kind != NavKind::drop)) {
+    } else if (leaps(l.kind) || (l2 && leaps(l2->kind) && l.mover < 0 && l.kind != NavKind::drop)) {
       // A jump: from this link's start, or (a walk into a jump's start) from the next one's.
-      const bool on_it = l.kind == NavKind::jump;
+      const bool on_it = leaps(l.kind);
       const Vec3f S = on_it ? A : B;
       const Vec3f T = on_it ? B : node(g, p.route[p.k + 2]).origin;
       const float v = on_it ? l.speed : l2->speed;
@@ -924,6 +1020,12 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       }
       const int32_t run_ups = p.stats.run_ups;
       if (approach_jump(p, s, S, T, v, w, target, because)) {
+        // A rocket jump: the shot at the feet with the jump (its blast does the rest).
+        if ((on_it ? l.kind : l2->kind) == NavKind::rocket) {
+          w.pitch = p.set.rocket_pitch;
+          w.attack = true;
+          because = "a rocket jump: the shot at the feet with the jump";
+        }
         p.stats.jumps++;
         if (!on_it) advance(p, s);
         p.airborne = true;
@@ -939,9 +1041,10 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         because = "a jump never made: planned round";
       }
     } else {
-      if (p.mode == PilotMode::wait || p.mode == PilotMode::run_up || p.mode == PilotMode::jump)
+      if (p.mode == PilotMode::wait || p.mode == PilotMode::run_up || p.mode == PilotMode::jump ||
+          p.mode == PilotMode::swim)
         p.mode = PilotMode::walk;
-      target = pursue(p, ahead);
+      target = lane_target(p, dt, t, pursue(p, ahead));
       if (across(ahead, target) > 1) w.yaw = unwrap(yaw_at(ahead, target), p.yaw);
       w.forward = facing(w.yaw, p.yaw);
       // Slowing into the goal (late hands run past a small top and off it, or orbit it).
@@ -960,9 +1063,9 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       } else if (t - p.best_s > p.set.stuck_s) {
         p.stats.stuck++;
         // No nearer on the way to a jump (its run-up walled in): a miss of that jump.
-        if (l.kind == NavKind::jump)
+        if (leaps(l.kind))
           missed_jump(p, {a, b, l.kind, l.time_s});
-        else if (l2 && l2->kind == NavKind::jump)
+        else if (l2 && leaps(l2->kind))
           missed_jump(p, {b, p.route[p.k + 2], l2->kind, l2->time_s});
         replan(p, s);
         because = "no nearer: plan again";
@@ -1003,12 +1106,32 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   p.yaw = static_cast<float>(pressed[0]);
   MoveCmd c;
   c.msec = static_cast<uint8_t>(msec);
-  c.angles = {0, quantize_angle(wrap(p.yaw)), 0};
+  c.angles = {quantize_angle(w.pitch), quantize_angle(wrap(p.yaw)), 0};
   c.forward = quantize_axis(static_cast<float>(pressed[1]) * s.maxspeed);
   c.side = quantize_axis(static_cast<float>(pressed[2]) * s.maxspeed);
   p.jump_pressed = pressed[3] > 0.5;
-  c.buttons = p.jump_pressed ? kButtonJump : 0;
+  c.buttons =
+      static_cast<uint8_t>((p.jump_pressed ? kButtonJump : 0) | (w.attack ? kButtonAttack : 0));
   return c;
+}
+
+std::vector<Vec3f> pilot_path(const Pilot& p, Vec3f at) {
+  std::vector<Vec3f> out{at};
+  if (p.g == nullptr || p.k + 1 >= p.route.size()) return out;
+  const NavGraph& g = *p.g;
+  bool lane = p.offset != 0;
+  for (size_t k = p.k; k + 1 < p.route.size(); k++) {
+    const Vec3f a = node(g, p.route[k]).origin, b = node(g, p.route[k + 1]).origin;
+    const NavLink* l = link_of(g, p.route[k], p.route[k + 1]);
+    lane = lane && l != nullptr && through(*l) && level(g, p.route[k], p.route[k + 1]);
+    Vec3f side{-(b.y - a.y), b.x - a.x, 0};
+    if (!lane || normalize(side) <= 0) {
+      out.push_back(b);
+      continue;
+    }
+    out.push_back(b + side * p.offset);
+  }
+  return out;
 }
 
 namespace {
@@ -1021,6 +1144,7 @@ MoveCmd pilot_next(void* ctx, const Server& sv, int slot, int msec) {
   s.origin = me.origin;
   s.velocity = me.velocity;
   s.onground = (me.flags & kFlagOnGround) != 0;
+  s.waterlevel = me.waterlevel;
   s.maxspeed = me.maxspeed > 0 ? me.maxspeed : 320;
   b.now.resize(p.g->movers.size());
   for (size_t i = 0; i < b.now.size(); i++) {

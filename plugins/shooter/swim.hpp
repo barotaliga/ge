@@ -24,6 +24,7 @@
 // ge:summary The way out of a map's water: a breadth-first field over wet cells to the exits
 // ge:keywords swim water pool underwater escape flow-field wet-cell exit swim_field swim_next
 // ge:keywords swim_wet swim_steps dive swim_out water-jump proven-exit swim_exiting
+// ge:keywords nav_add_swim swim-node swim-link water-in-graph
 // ge:skill shooter bots
 // ge:test tests/shooter_swim_test.cpp
 #pragma once
@@ -69,6 +70,38 @@ MoveCmd swim_out(const MoveState& s, Vec3f exit, int msec);
 // exits over the same water: a field INTO a pocket only the water reaches).
 void build_swim(const MoveWorld& world, const NavGraph& g, std::span<const uint8_t> exits,
                 const SwimSettings& set, SwimField& f, const SwimField* same_water = nullptr);
+
+// SWIMMING IN THE GRAPH (`nav_add_swim`): the water made part of the nav, so one route search
+// goes through it as through any room. Every wet cell becomes a SWIM NODE at its centre (after
+// every other node, found by its cell: NavGraph::swim_node), and `swim` links join:
+// - each wet cell to its six neighbours that are wet with the box free half-way (`cell_s` a cell);
+// - a floor node standing in water (a pool's floor) and the wet cell it stands in, both ways;
+// - a dry node at the water's edge and a wet cell under it within `exit_reach`, both ways, where
+//   a climb out from that cell onto the node is proven by the move (`swim_out`, the one a bot
+//   swims), tried on at most `exit_tries` cells, the nearest first: out at the proof's time, in
+//   (off the edge into the water) at `in_s`;
+// - a dry node with no such cell and the water's top under it further down, within `fall_across`:
+//   in alone, where a walk off the edge toward it lands the player swimming in it (the move's
+//   proof, its time).
+// Links walked or dropped into a pool's floor are kept as they were proven.
+struct SwimNavSettings {
+  float cell = 32;
+  float cell_s = 0.25f;    // a cell's swim, s (about 128 units/s: a bot's swim, turns and drag in)
+  float floor_s = 0.3f;    // between a pool's floor and the water above it, s
+  float in_s = 0.5f;       // off a dry edge into the water, s
+  float exit_reach = 112;  // a wet cell this near a dry node (at or under it) may climb out onto it
+  float climb = 80;        // and the node no higher above the cell's centre than this
+  float prove_s = 2.5f;    // a climb out proven within this long, s
+  int exit_tries = 3;      // cells tried for a dry node's climb out
+  float fall_across = 96;  // a dry node with no climb out falls into water this near across
+};
+struct SwimNavCounts {
+  int64_t cells = 0, cell_links = 0, floor_links = 0, exits = 0, falls = 0, proofs = 0;
+};
+// Adds the water of `world` inside the graph's bounds to `g` as above; `wet_floor` marks the floor
+// nodes standing in water (one byte a node of `g` as it was). Call once, after every other node.
+SwimNavCounts nav_add_swim(const MoveWorld& world, NavGraph& g, std::span<const uint8_t> wet_floor,
+                           const SwimNavSettings& set = {});
 
 // Where a swimmer at `p` heads next: true with `to` the next cell's centre (or the exit node's
 // origin from an exit cell), false when `p` is in no wet cell that has a way out.

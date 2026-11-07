@@ -5,8 +5,9 @@
 // the lighter), drawn once a map and kept, and the map's places by name (its `.loc` file's, else
 // the bots' own off the items), each at its points' middle.
 //
-// EACH BOT in its own colour: where its own world puts it, its facing, its ROUTE (the pilot's
-// nodes from where it is to the end) and its GOAL (the item it is going for, ringed, with its
+// EACH BOT in its own colour: where its own world puts it, its facing, its PATH (the line it
+// means to walk: the pilot's route ahead with its lane off the line in; `BotTeamConfig::paths`, the
+// console's `paths 0|1`, hides it) and its GOAL (the item it is going for, ringed, with its
 // call); the ENEMIES IT BELIEVES IN: where each was last seen (a filled mark, fading over the six
 // seconds it is remembered) or heard (a ring), joined to the bot that believes it.
 //

@@ -500,6 +500,11 @@ void bot_team_command(BotTeam& t, const std::string& line_in) {
     say(t, bot_team_report(t));
     return;
   }
+  if (line.rfind("paths", 0) == 0) {
+    t.cfg.paths = line.size() < 7 || line[6] != '0';
+    say(t, std::string("bots: paths ") + (t.cfg.paths ? "drawn" : "hidden"));
+    return;
+  }
   if (line.rfind("autoready", 0) == 0) {
     t.cfg.ready = line.size() < 11 || line[10] != '0';
     say(t, std::string("bots: autoready ") + (t.cfg.ready ? "on" : "off"));
