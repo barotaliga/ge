@@ -14,8 +14,8 @@
 // 47 nextent, 48 particle, 49 changeyaw, 51 vectoangles, 52..59 the Write family, 67 movetogoal,
 // 68 precache_file, 69 makestatic, 70 changelevel, 72 cvar_set, 73 centerprint, 74 ambientsound,
 // 75..77 precache_model2, precache_sound2, precache_file2, 78 setspawnparms, 79 logfrag,
-// 80 infokey, 81 stof, 82 multicast. Unlisted numbers (0, 5, 33, 39, 42, 50, 63..66, 71) are
-// left empty: the VM faults "builtin N is not provided by this game".
+// 80 infokey, 81 stof, 82 multicast. Unlisted numbers (0, 5, 33, 39, 42, 50, 63, 64, 66, 71) are
+// left empty (65 is etos, an extension): the VM faults "builtin N is not provided by this game".
 //
 // THE SINGLE-PLAYER FORM (a program of crc 5927, the campaign's): 79..82 are left empty;
 // bprint takes no level (`(s ...)`) and sprint none (`(client, s ...)`); aim is the autoaim under
@@ -28,14 +28,17 @@
 // strzone, 119 strunzone), DP_SV_POINTPARTICLES (335 particleeffectnum, 336 trailparticles, 337
 // pointparticles: named effects the client draws from its files), FTE_CALLTIMEOFDAY (231), ZQ_PAUSE
 // (531 setpause; the pause hooks), ZQ_VWEP (532 precache_vwep_model; vw_index), GE_QC_WORDS (640
-// words: a loaded game's own words filled in, words.hpp), and with no builtin: DP_CON_SET (the
+// words: a loaded game's own words filled in, words.hpp), DP_QC_ETOS (65 etos), DP_QC_FINDFLOAT (98
+// findfloat), DP_QC_VECTORVECTORS (432), DP_QC_ASINACOSATANATAN2TAN (471..475),
+// DP_QC_STRING_CASE_FUNCTIONS (480 strtolower, 481 strtoupper), DP_QC_STRREPLACE (484 strreplace,
+// 485 strireplace), and with no builtin: DP_CON_SET (the
 // console's `set`), ZQ_CLIENTCOMMAND (the GE_ClientCommand hook), ZQ_ITEMS2 (items2),
 // ZQ_MOVETYPE_NOCLIP, ZQ_MOVETYPE_FLY, ZQ_MOVETYPE_NONE (the loop's move types). `checkextension`
 // (#99) answers 1 for any of these names in any case.
 //
 // ge:summary The builtin catalogue: every number, its function and its extension; checkextension
 // ge:keywords qc builtins catalogue table numbers extensions checkextension extension-list
-// ge:keywords install_catalogue offers_extension dp_qc zq_qc fte qsg
+// ge:keywords install_catalogue offers_extension dp_qc zq_qc fte qsg etos findfloat vectorvectors
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_qc_builtins_test.cpp
 #pragma once

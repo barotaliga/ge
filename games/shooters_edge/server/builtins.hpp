@@ -26,6 +26,8 @@ void bi_traceline(pg::Vm& vm);
 void bi_tracebox(pg::Vm& vm);
 void bi_checkclient(pg::Vm& vm);
 void bi_find(pg::Vm& vm);
+void bi_findfloat(pg::Vm& vm);
+void bi_vectorvectors(pg::Vm& vm);
 void bi_findradius(pg::Vm& vm);
 void bi_droptofloor(pg::Vm& vm);
 void bi_pointcontents(pg::Vm& vm);

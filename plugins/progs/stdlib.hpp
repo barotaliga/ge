@@ -28,11 +28,16 @@
 //                     freeing twice is allowed)
 //   tokenize, argc, argv   text.hpp's words in `vm.words` (argv out of range: empty)
 //   precache_file     returns its argument
+//   asin, acos, atan, atan2, tan   as sin; etos "entity <number>"; strtolower, strtoupper the ASCII
+//                     letters only; strreplace (search, with, subject) every occurrence left to
+//                     right, never inside a replacement, an empty search the subject unchanged;
+//                     strireplace the same, the search matched in any case
 //
 // ge:summary The standard builtins over the VM alone: math, vectors, text, strings, words, random
 // ge:keywords qc progs builtins stdlib normalize vlen vectoyaw vectoangles random randomvec rint
 // ge:keywords floor ceil fabs sin cos sqrt pow min max bound ftos vtos stof strlen strcat substr
 // ge:keywords strzone strunzone tokenize argc argv precache_file arg_string arg_float kstdlib
+// ge:keywords asin acos atan atan2 tan etos strtolower strtoupper strreplace strireplace
 // ge:skill progs
 // ge:test tests/progs_stdlib_test.cpp
 #pragma once
