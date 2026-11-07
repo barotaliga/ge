@@ -46,7 +46,7 @@ void start(Remote& r, const ClientConfig& cfg) {
   client_start(r.end, *r.transport, r.server, c, 0);
   r.recording = ClientRecorder{};
   record_start(r.recording, false);
-  r.recording.named_effects = true;  // read at once by the view (never written to a file)
+  r.recording.live = true;  // read at once by the view (never written to a file)
   r.end.record = &r.recording;
   open_live(r.demo);
   r.active = true;
@@ -314,8 +314,21 @@ void remote_disconnect(Remote& r) {
   r.active = false;
 }
 
+void remote_mic(Remote& r, std::span<const float> samples) {
+  if (!r.active || !r.end.cfg.live_mic || !r.end.ext.has(ExtFamily::x2, kX2Voice)) return;
+  std::vector<float>& in = r.end.mic_in;
+  in.insert(in.end(), samples.begin(), samples.end());
+  if (in.size() > static_cast<size_t>(kMicMostSamples))  // a stall: the oldest dropped
+    in.erase(in.begin(), in.end() - kMicMostSamples);
+}
+
+bool remote_talking(const Remote& r) {
+  return r.active && r.end.cfg.voice && r.voip_key != nullptr && r.voip_key->down();
+}
+
 RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said) {
   if (!r.active) return RemoteStep::waiting;
+  if (r.end.cfg.live_mic) r.end.mic_talking = remote_talking(r);
   r.owed_s += wall_s;
   // What the player's place was before this frame's packets, for the correction they make.
   const int me = r.end.playernum;
@@ -458,6 +471,8 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
     cfg.topcolor = std::atoi(cvar("topcolor", "0").c_str());
     cfg.bottomcolor = std::atoi(cvar("bottomcolor", "0").c_str());
     cfg.speedjump = cvar("cl_speedjump", "0") == "1";
+    cfg.voice = r.voip;
+    cfg.live_mic = true;  // the window's microphone (remote_mic), while +voip is held
     cfg.qport = static_cast<uint16_t>(1 + std::hash<std::string>{}(cfg.name) % 65000);
     cfg.read_file = r.read_file;
     std::string error;
@@ -507,6 +522,14 @@ void add_remote_commands(ge::console::Console& con, Remote& r) {
                             "frame put them; 0: drawn between the last two frames",
                     .kind = ge::console::CvarKind::boolean},
                    &r.nolerp);
+  con.cvars().bind({.name = "cl_voip",
+                    .fallback = "1",
+                    .flags = ge::console::kArchive,
+                    .help = "1: on a server joined, ask for voice: hear the players the server "
+                            "routes to you and talk while +voip is held (from the next connect)",
+                    .kind = ge::console::CvarKind::boolean},
+                   &r.voip);
+  r.voip_key = &con.add_button("voip", "+voip: talk to the server's players while held");
   con.add_command(
       "netstatus", "netstatus: the server joined, its stage and the traffic",
       [&r](Con& c, const Args&) {

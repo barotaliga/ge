@@ -14,7 +14,9 @@
 // `talk` script says so, speaks: `speech` when given, else a voice of its own
 // (net/voice_trial.hpp's speech off its seed), from where it last stopped, cut into 20 ms frames,
 // Opus-coded (net/voice_codec.hpp) and sent as one voice message (clc 83) a tick with the frames
-// cut since the last. It counts the voice messages it is sent by talker.
+// cut since the last. It counts the voice messages it is sent by talker. With `live_mic` it
+// speaks the player's own microphone instead (`mic_in`, handed in by the window), while
+// `mic_talking`.
 //
 // STUFFED LINES: `cmd ...` is sent on; `color`, `team`, `skin`, `name`, `topcolor`, `bottomcolor`
 // and `setinfo` change the user info and tell the server (a team mod sets the player's colours
@@ -95,6 +97,9 @@ struct ClientConfig {
   bool voice = false;                          // ask for voice and speak while `talk` says so
   ClientTalk talk = nullptr;                   // null: never speaks
   const std::vector<float>* speech = nullptr;  // 48 kHz mono to speak (null: a voice of its own)
+  // A player's own microphone in place of `talk` and `speech`: the samples the window hands in
+  // (`ClassicClientEnd::mic_in`), sent while `mic_talking` (the push-to-talk key held).
+  bool live_mic = false;
   int seed = 1;
   uint16_t qport = 1;
 };
@@ -169,6 +174,8 @@ struct ClassicClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): 
   std::vector<float> speech;  // the voice it speaks, looped
   size_t speech_at = 0;
   std::vector<float> mic;            // samples not yet a whole frame
+  std::vector<float> mic_in;         // live_mic: the microphone's samples not yet cut
+  bool mic_talking = false;          // live_mic: the talk key held
   std::vector<uint8_t> voice_out;    // this tick's voice message, sent with its move
   int voice_seq = 0;                 // frames sent, mod 256
   int64_t voice_sent = 0;            // frames sent

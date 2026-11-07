@@ -10,7 +10,7 @@ client's user info and the server's server info (a real server forwards an unkno
 the connect harmlessly; keep it short), so the challenge, the connect lines and serverdata stay
 byte-for-byte classic. Pick an id far from every family's (90 and 92 are taken; 120 and 121 are
 the game's), send it only where `c.ext` agreed, accept it in the demo reader only on the live
-stream (`Demo::named_effects`), and strip it in `record_packet` unless the recorder is the
-remote view's own, so a saved demo stays readable by classic players. Adding `*ge_ext` moves
+stream (`Demo::named_effects`), and strip it in `record_packet` unless the recorder is `live` (the
+remote view's own), so a saved demo stays readable by classic players. Adding `*ge_ext` moves
 the classic session's golden (`tests/golden/shooters_edge_classic_server.txt`) and the labs that
 digest a session's bytes: rewrite them in the same PR.

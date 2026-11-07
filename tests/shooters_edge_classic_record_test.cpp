@@ -328,7 +328,7 @@ TEST(a_recording_file_never_keeps_the_game_s_own_named_effects) {
   CHECK(file.stripped == 1);
   cn::ClientRecorder live;  // the remote view's own: kept for its reader
   cn::record_start(live, false);
-  live.named_effects = true;
+  live.live = true;
   cn::record_packet(live, 1.0, header, payload, messages);
   CHECK(live.stripped == 0 && live.bytes.size() == file.bytes.size() + 12);
 }

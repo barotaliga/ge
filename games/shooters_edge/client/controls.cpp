@@ -22,22 +22,37 @@ bool held(const ge::input::InputState& in, uint16_t k) { return ge::input::key_h
 
 bool down(const ge::console::Button* b) { return b != nullptr && b->down(); }
 
-// The default layout: a key, the command it runs.
+// The default layout: a key, the command it runs (+voip talks on a server joined:
+// net/classic_remote.hpp; screenshot: engine/capture/screenshot.hpp).
 constexpr const char* kDefaults[][2] = {
-    {"w", "+forward"},          {"s", "+back"},
-    {"a", "+moveleft"},         {"d", "+moveright"},
-    {"up", "+forward"},         {"down", "+back"},
-    {"left", "+left"},          {"right", "+right"},
-    {",", "+moveleft"},         {".", "+moveright"},
-    {"space", "+jump"},         {"mouse1", "+attack"},
-    {"ctrl", "+attack"},        {"mouse2", "+jump"},
-    {"shift", "+speed"},        {"alt", "+strafe"},
-    {"1", "impulse 1"},         {"2", "impulse 2"},
-    {"3", "impulse 3"},         {"4", "impulse 4"},
-    {"5", "impulse 5"},         {"6", "impulse 6"},
-    {"7", "impulse 7"},         {"8", "impulse 8"},
-    {"mwheelup", "impulse 10"}, {"mwheeldown", "impulse 10"},
-    {"f12", "screenshot"},  // engine/capture/screenshot.hpp
+    {"w", "+forward"},
+    {"s", "+back"},
+    {"a", "+moveleft"},
+    {"d", "+moveright"},
+    {"up", "+forward"},
+    {"down", "+back"},
+    {"left", "+left"},
+    {"right", "+right"},
+    {",", "+moveleft"},
+    {".", "+moveright"},
+    {"space", "+jump"},
+    {"mouse1", "+attack"},
+    {"ctrl", "+attack"},
+    {"mouse2", "+jump"},
+    {"shift", "+speed"},
+    {"alt", "+strafe"},
+    {"1", "impulse 1"},
+    {"2", "impulse 2"},
+    {"3", "impulse 3"},
+    {"4", "impulse 4"},
+    {"5", "impulse 5"},
+    {"6", "impulse 6"},
+    {"7", "impulse 7"},
+    {"8", "impulse 8"},
+    {"mwheelup", "impulse 10"},
+    {"mwheeldown", "impulse 10"},
+    {"v", "+voip"},
+    {"f12", "screenshot"},
 };
 
 }  // namespace
