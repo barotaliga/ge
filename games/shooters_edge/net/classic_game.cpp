@@ -25,6 +25,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
 #include "shooters_edge/net/classic_coop.hpp"
+#include "shooters_edge/net/classic_coop_game.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/announce.hpp"
@@ -66,7 +67,11 @@ struct Game {
   // A listen server (ServerConfig::host): the window's content and its view of the game; slot 0
   // its player, a local seat. Null on a dedicated server.
   cl::ListenHost* host = nullptr;
+  // A dedicated server with `sv_coop 1`: the campaign in coop in place of the match (every call
+  // below hands over to it; the match's own members stay empty).
+  std::unique_ptr<CoopGame> coop;
   ~Game() {
+    coop.reset();
     classic.reset();
     rules = {};  // its views into the map go before the map does
     map.reset();
@@ -118,6 +123,13 @@ constexpr gs::GameRule kEndpointRules[] = {
     {"allow_download_maps", "0: no maps/ file is offered (1)"},
     {"allow_download_other", "1: files outside those folders are offered too (0)"},
     {"sv_downloadchunksperframe", "chunks of 1 KB a downloading client gets a frame, 1..30 (30)"},
+    // The coop campaign in place of a match (classic_coop_game.hpp): the endpoint's, never a mod's.
+    {"sv_coop", "1: the game folder's campaign in coop, not a match (0)"},
+    {"sv_coopbots", "coop: companion bots playing beside the players, 0..7 (0)"},
+    {"skill", "coop: the monsters' skill for everyone, 0..3 (1)"},
+    {"sv_friendlyfire", "coop: 1 lets one player's shots harm another (0)"},
+    {"sv_friendlypush", "coop: 1 lets a spared teammate's blow push you, harmless (0)"},
+    {"sv_episodes_done", "coop: the episodes done, a bit each; the start map opens the next (0)"},
 };
 
 // Every rule, in the order `--explain` lists them: built once.
@@ -335,6 +347,10 @@ bool open_program(Game& g, const std::string& mod, std::string& error) {
 void* create(const gs::ServerConfig& c, std::string& error) {
   auto g = std::make_unique<Game>();
   g->settings = c;
+  if (c.host == nullptr && coop_asked(c)) {
+    g->coop = coop_open(c, error);
+    return g->coop ? g.release() : nullptr;
+  }
   if (c.host != nullptr) {  // a listen server: the window's program, folder and first map
     g->host = static_cast<cl::ListenHost*>(c.host);
     g->program = g->host->progs;
@@ -608,7 +624,10 @@ bool room_words(void* ctx, int slot, const std::string& line) {
 
 void destroy(void* g) { delete static_cast<Game*>(g); }
 
-double frame_seconds(const void* g) { return static_cast<const Game*>(g)->rules->sv.set.mintic; }
+double frame_seconds(const void* g) {
+  const Game& game = *static_cast<const Game*>(g);
+  return game.coop ? sv::kCampaignStep : game.rules->sv.set.mintic;
+}
 
 // A bot's move length: the server's frame, ms.
 int frame_msec(const Game& g) {
@@ -618,6 +637,7 @@ int frame_msec(const Game& g) {
 // Offline: the mod's frame with nobody's moves, its streams emptied as the endpoint would.
 void frame(void* g) {
   Game& game = *static_cast<Game*>(g);
+  if (game.coop) return coop_frame(*game.coop);
   std::vector<sh::Packet> moves;
   if (game.room) cl::room_packets(*game.room, *game.rules, frame_msec(game), moves);
   game.rules.frame(moves.data(), static_cast<int>(moves.size()));
@@ -632,6 +652,7 @@ void frame(void* g) {
 
 bool serve(void* g, ge::net::Transport& port, std::string& error) {
   Game& game = *static_cast<Game*>(g);
+  if (game.coop) return coop_serve(*game.coop, port, error);
   game.classic = std::make_unique<ClassicServer>();
   if (!classic_start(*game.classic, game.rules, port, game.cfg, error)) return false;
   game.classic->game_command = room_words;
@@ -651,6 +672,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
 
 void net_frame(void* g, int64_t now_us) {
   Game& game = *static_cast<Game*>(g);
+  if (game.coop) return coop_net_frame(*game.coop, now_us);
   if (game.room)
     cl::room_packets(*game.room, *game.rules, frame_msec(game), game.classic->local_moves);
   classic_frame(*game.classic, now_us);
@@ -665,16 +687,19 @@ void net_frame(void* g, int64_t now_us) {
 
 int seated(const void* g) {
   const Game& game = *static_cast<const Game*>(g);
+  if (game.coop) return coop_seated(*game.coop);
   return game.classic ? classic_count(*game.classic, ConnState::spawned) : 0;
 }
 
 uint64_t hash(const void* g) {
-  return ge::shooter::server_hash(static_cast<const Game*>(g)->rules->sv);
+  const Game& game = *static_cast<const Game*>(g);
+  return game.coop ? coop_hash(*game.coop) : ge::shooter::server_hash(game.rules->sv);
 }
 
 // The rules the mod is playing by, then the endpoint's counts.
 std::string status(const void* g) {
   const Game& game = *static_cast<const Game*>(g);
+  if (game.coop) return coop_status(*game.coop);
   std::string out = "map=" + game.map->name;
   if (!game.failed.empty()) out += " (no change: " + game.failed + ")";
   for (const char* name : {"deathmatch", "fraglimit", "timelimit"}) {
