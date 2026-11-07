@@ -54,6 +54,10 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const server::RulesCommon& 
     bt::PlanSettings ps;
     ps.order = bt::opening_order_of(seen.map_name);  // the map's written opening, if it has one
     tn.plan = bt::make_map_plan(graph, f.items, f.spawns, &tn.locs, ps);
+    std::string map = seen.map_name;
+    if (map.rfind("maps/", 0) == 0) map.erase(0, 5);
+    if (map.size() > 4 && map.ends_with(".bsp")) map.resize(map.size() - 4);
+    tn.goals = bt::map_goals(tn.plan, f.items, map);
     tn.plan_made = true;
   }
   f.plan = &tn.plan;

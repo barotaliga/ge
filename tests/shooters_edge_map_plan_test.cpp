@@ -11,6 +11,7 @@
 
 #include "brush/write.hpp"
 #include "check.hpp"
+#include "shooters_edge/bots/goals.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/classic_team.hpp"
@@ -53,4 +54,56 @@ TEST(the_halls_get_a_plan_with_a_base_and_a_rush) {
   CHECK(a.plan_base >= 0);
   CHECK(a.plan.find("rush") != std::string::npos && a.plan.find("quad") != std::string::npos);
   CHECK(a.plan == b.plan);
+}
+
+TEST(a_maps_goals_are_only_what_its_items_and_areas_allow) {
+  // Two armours and a launcher, held in two areas; no power on the map.
+  std::vector<bt::ItemSpot> items(3);
+  items[0].kind = bt::ItemKind::armor3;
+  items[1].kind = bt::ItemKind::armor2;
+  items[2].kind = bt::ItemKind::weapon;
+  items[2].weapon = 32;  // the rocket launcher's bit
+  for (size_t i = 0; i < items.size(); i++) items[i].node = static_cast<int32_t>(i);
+  bt::MapPlan plan;
+  plan.areas.resize(2);
+  plan.areas[0].name = "ra";
+  plan.areas[0].items = {0, 2};
+  plan.areas[0].entries = {5, 6};
+  plan.areas[1].name = "ya";
+  plan.areas[1].items = {1};
+  plan.base = 0;
+  const auto has = [](const std::vector<bt::Goal>& goals, bt::GoalKind k) {
+    for (const bt::Goal& g : goals)
+      if (g.kind == k) return true;
+    return false;
+  };
+  std::vector<bt::Goal> goals = bt::map_goals(plan, items, "no-map");
+  CHECK(has(goals, bt::GoalKind::take) && has(goals, bt::GoalKind::time));
+  CHECK(has(goals, bt::GoalKind::hold) && has(goals, bt::GoalKind::retake));
+  CHECK(has(goals, bt::GoalKind::arm));
+  CHECK(!has(goals, bt::GoalKind::rush) && !has(goals, bt::GoalKind::escort));  // no power
+  CHECK(!has(goals, bt::GoalKind::clear) && !has(goals, bt::GoalKind::drop));   // nor a quad run
+  int spam = 0;
+  for (const bt::Goal& g : goals) {
+    spam += g.kind == bt::GoalKind::spam;
+    CHECK(!(g.kind == bt::GoalKind::take && g.item == 2));  // a weapon is armed, not "taken"
+    if (g.kind == bt::GoalKind::retake) CHECK((g.needs & bt::kNeedLost) != 0);
+  }
+  CHECK(spam == 2);  // one a way into the base
+
+  // A quad on the map: its rush and escort, and the areas cleared on its run.
+  items.push_back({});
+  items.back().kind = bt::ItemKind::quad;
+  items.back().node = 3;
+  plan.areas.push_back({});
+  plan.areas.back().name = "quad";
+  plan.areas.back().items = {3};
+  plan.areas.back().power = true;
+  goals = bt::map_goals(plan, items, "no-map");
+  CHECK(has(goals, bt::GoalKind::rush) && has(goals, bt::GoalKind::escort));
+  CHECK(has(goals, bt::GoalKind::clear) && has(goals, bt::GoalKind::drop));
+  for (const bt::Goal& g : goals)
+    if (g.kind == bt::GoalKind::clear)
+      CHECK((g.needs & bt::kNeedPower) != 0 && g.horizon == bt::Horizon::power);
+  CHECK(!bt::goals_text(goals).empty());
 }

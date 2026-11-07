@@ -142,6 +142,7 @@ struct Team;
 
 struct FighterStats {
   int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;
+  int64_t goal_changes = 0;         // its item goal changed (the commitment's measure)
   int64_t taken = 0;                // items seen to go (by anyone)
   int64_t modes = 0;                // mode changes
   int64_t mode_commands[4] = {};    // commands spent in each mode
@@ -264,9 +265,16 @@ struct Fighter {
   double swim_exit_until = 0;
   int32_t landing = -1;  // the exit node it climbed out to, walked onto first (-1: none)
   double landing_until = 0;
+  // THE COMMITMENT (fighter.cpp `think`): its item goal is chosen again only on news (a new
+  // sighting, an item seen or heard taken, a spawn heard, a team line read, a blow taken, a
+  // pickup, a respawn), when the goal's item is gone, or after `kDecide_s` with none.
+  int64_t decided_news = -1;  // the news count at the last choice
+  double decided_at = -1e9;
+  int64_t blows = 0;          // blows taken
   ge::core::Rng rng{1};       // its own draws (where it explores), seeded off the bot's seed
   ge::core::Rng keys_rng{1};  // the side key's changes (footwork.hpp `fighter_keys`)
   float clean_keys = 1;       // the share of side key changes made clean (1: every one)
+  float news_health = 0;      // its health at the last think: a fall is a blow, news
   int8_t side_was = 0;        // the side key's sign last sent
   int8_t side_gap = 0;        // commands still held with no side key
   sh::Dodge dodge;            // its side steps in a fight (shooter/dodge.hpp)

@@ -26,6 +26,7 @@
 #include "shooter/swim.hpp"
 #include "shooter/traits.hpp"
 #include "shooters_edge/bots/fighter.hpp"
+#include "shooters_edge/bots/goals.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
 
@@ -49,6 +50,7 @@ struct TeamNav {
   std::vector<int32_t> item_dive;  // each item's dive, -1 none
   bool dives_made = false;
   bt::MapPlan plan;  // the map's team plan (bots/map_plan.hpp), made with the first fighter
+  std::vector<bt::Goal> goals;  // and every goal the map offers (bots/goals.hpp), made with it
   bool plan_made = false;
 };
 
