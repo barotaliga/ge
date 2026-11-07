@@ -226,7 +226,11 @@ struct Fighter {
   int32_t goal_was = -1;    // the goal item held since `goal_since`
   int32_t tired_item = -1;  // an item gone for too long in vain, worth less until `tired_until`
   double goal_since = 0, tired_until = 0;
-  int32_t spam_for = -1;    // the claim `spam_from` was found for (-1: none yet)
+  int32_t spam_for = -1;  // the claim `spam_from` was found for (-1: none yet)
+  sh::Vec3f news_spot;    // spam at news (spam.hpp): the way in fired at
+  double news_t = -1e9;   // the news it is fired at for (when it came), and the rockets spent
+  int32_t news_shots = 0;
+  bool news_on = false;     // a way in turned to this command
   int32_t spam_node = -1;   // where it fires at a spot from now (-1: not out)
   int32_t spam_spot = -1;   // and at which
   int32_t poke = -1;        // the button a novice is on

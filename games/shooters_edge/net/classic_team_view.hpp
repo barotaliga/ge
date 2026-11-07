@@ -2,7 +2,8 @@
 // believe it, drawn on the CPU (engine/lab/raster.hpp) for a window, a snapshot or a video.
 //
 // THE MAP from above: the nav graph's floor, each node a square shaded by its height (the higher,
-// the lighter), drawn once a map and kept.
+// the lighter), drawn once a map and kept, and the map's places by name (its `.loc` file's, else
+// the bots' own off the items), each at its points' middle.
 //
 // EACH BOT in its own colour: where its own world puts it, its facing, its ROUTE (the pilot's
 // nodes from where it is to the end) and its GOAL (the item it is going for, ringed, with its
@@ -24,7 +25,7 @@
 //
 // ge:summary The team's world pictured: map, bots, routes, goals, believed enemies, items, panel
 // ge:keywords team-view visualizer strategy-view bots-overview beliefs route goal contacts
-// ge:keywords item-timers team-packets panel video team_view_video
+// ge:keywords item-timers team-packets panel video team_view_video area-labels place-names
 // ge:skill bots net labs
 // ge:test tests/shooters_edge_bot_team_test.cpp
 #pragma once

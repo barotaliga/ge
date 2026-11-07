@@ -29,6 +29,12 @@
 // key areas. The calls that matter most (the quad's and the shield's) are said again more often
 // when he believes no teammate is near them.
 //
+// THE OPENING: at the match's start every player first says where he spawned (his status with
+// his place); at his next plan, the team's spawns read, the two of a team who believe themselves
+// nearest the quad (a mate's spawn as he said it) claim it and rush it, and the rest claim the
+// nearest of the launcher and the best armour: the quad, where a map has one, is taken first. A
+// rusher whose quad is gone claims the nearest of those two no mate holds, as at the opening.
+//
 // THE PUSH: a team that loses its base (the map plan's held armour) takes it back together, not
 // one by one as each comes back in (one at a time feeds the holders a frag apiece). A strong
 // player who believes the base the enemy's (an enemy seen or called out in it within
@@ -118,7 +124,8 @@ struct Mind {
   int32_t retake = -1;           // a key area believed lost: to take back (-1: none)
   double retake_t = -1e9;        // when it was last believed lost
   bool claimed_said = false;
-  bool opened = false;  // its first plan alive is behind it
+  bool opened = false;       // its first plan alive is behind it (its spawn said)
+  bool opening_due = false;  // the next plan is the match's opening: the claims, the quad first
 };
 
 struct Fighter;
