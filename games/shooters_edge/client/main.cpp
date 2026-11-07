@@ -101,6 +101,7 @@
 #include "shooters_edge/client/listen_sound.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
 #include "shooters_edge/client/map_load.hpp"
+#include "shooters_edge/client/own_sounds.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/scores.hpp"
 #include "shooters_edge/client/settings.hpp"
@@ -258,6 +259,22 @@ int run_main(int argc, char** argv) {
     }
     out::warn("shooters_edge: no game folder, so the built-in arena: " + error +
               "; see docs/shooters-edge.md § Playing it");
+    // Its sounds: the game's own recordings under the names the mod plays (own_sounds.hpp).
+#ifdef SE_CONTENT_DIR
+    const std::string content = cl::find_content_dir(SE_CONTENT_DIR);
+#else
+    const std::string content = cl::find_content_dir("");
+#endif
+    cl::OwnSounds own;
+    std::string why;
+    if (content.empty() || !cl::mount_own_sounds(files, content, own, why)) {
+      out::warn("shooters_edge: the arena is silent: " +
+                (content.empty() ? std::string("no games/shooters_edge/content here") : why) +
+                "; run from the tree's root");
+    } else {
+      out::status("shooters_edge: " + std::to_string(own.mounted) + " of " +
+                  std::to_string(own.mapped) + " sounds from " + content);
+    }
   } else {
     out::status("shooters_edge: " + std::to_string(cl::archive_paths(files).size()) +
                 " archives on the search path of " + files.folder);

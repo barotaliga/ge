@@ -368,15 +368,17 @@ named in the console with what to do.
 **Heard and read.** The window's own game, a match on its listen server or the campaign, is heard
 through the same players (`client/listen_sound.hpp`): each sound the server starts for the player
 (a shot, a door, a lift, a pickup) at its entity, moving with it, the map's loops from its load,
-and the ambience by leaf, for a listener at his eye. A played demo is heard on the window's audio
+and the ambience by leaf, for a listener at his eye. The built-in arena, with no classic game's
+folder open, is heard through the game's own recordings: `content/classic.assetmap`'s `sound` rows
+mount each under the classic name the baseline mod plays (`client/own_sounds.hpp`), never over a
+classic game's own folder. A played demo is heard on the window's audio
 device: its sounds (the pack's
 recordings, moving with what makes them, the level's loops and ambience) and the players' voices,
 the same players `-demovideo` renders (`client/demo_heard.hpp`), at `volume` (0..1, 0.7; the
 menu's SOUND VOLUME). The lines the server printed to the player the view rides (the deaths, the
 chat and team chat, the pickups) go to the HUD's feed and the console as plain words (the charset's
 coloured letters and the colour marks clients write into chat taken out), and a centre message to
-the HUD's centre for two seconds. A seek plays nothing of what it skipped. The game's own sound
-outside a demo is not played yet.
+the HUD's centre for two seconds. A seek plays nothing of what it skipped.
 
 ```sh
 build/release/games/shooters_edge/shooters_edge -basedir ~/Games/classic \
