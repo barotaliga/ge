@@ -76,6 +76,7 @@
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
+#include "shooters_edge/client/voice_out.hpp"
 #include "shooters_edge/server/bsp_map.hpp"
 #include "shooters_edge/server/campaign.hpp"
 #include "shooters_edge/server/qc_server.hpp"
@@ -126,6 +127,10 @@ struct ListenHost {
   // effects, blows), and a line printed to him (the lobby's and the room's answers).
   void (*tap)(void* ctx, const sv::RulesCommon& game) = nullptr;
   void (*print)(void* ctx, const std::string& text) = nullptr;
+  // A voice the server relayed to him (the match's `sv_voip`): the talker's slot, the protocol's
+  // generation and first sequence, the frames (demo.hpp's `DemoVoice`).
+  void (*heard)(void* ctx, int talker, int gen, int seq,
+                const std::vector<uint8_t>& data) = nullptr;
   void* ctx = nullptr;
 
   void* game = nullptr;  // the game's state, for the calls below
@@ -142,6 +147,8 @@ struct ListenHost {
   bool (*change)(void* game, std::shared_ptr<LoadedMap> map, std::string& error) = nullptr;
   // A key of the player's user info, told to every client.
   void (*set_info)(void* game, const std::string& key, const std::string& value) = nullptr;
+  // The player's voice message (voice_out.hpp's frames), relayed to those who hear him.
+  void (*speak)(void* game, int gen, int seq, const std::vector<uint8_t>& data) = nullptr;
 };
 
 // THE CAMPAIGN'S DOOR: a coop campaign served to others over the classic protocol, so they join
@@ -196,6 +203,9 @@ struct ListenOptions {
   ge::net::Transport* transport = nullptr;
   std::string hostname = "Shooter's Edge";
   int maxclients = 32;
+  // A match relays its players' voices (`sv_voip 1`), the window's player among them
+  // (`listen_mic`, `Listen::voices`).
+  bool voice = true;
   // A campaign in coop is served to others on `port` (or `transport`) through this door
   // (net/classic_coop.hpp's `classic_coop()`); null: a coop game is the window's alone.
   const CampaignDoor* door = nullptr;
@@ -248,7 +258,10 @@ struct Listen {
   // the window last played them (listen_sound.hpp empties it), and the map's looping sounds.
   std::vector<DemoSound> sounds;
   std::vector<DemoStaticSound> static_sounds;
-  int entries = 0;  // maps entered (a new one, the next level, a restart, a load), ever
+  // A match's voices: what the server relayed to the player since the window last played them
+  // (listen_sound.hpp empties it), and his own microphone cut into frames (`listen_mic`).
+  std::vector<DemoVoice> voices;
+  VoiceOut voice;
   // A campaign's effects on this map (its temporary entities and particle bursts), in order; its
   // explosions are in `explosions` too.
   std::vector<Effect> effects;
@@ -257,7 +270,9 @@ struct Listen {
   // entities, then this).
   Room* room = nullptr;  // the match server's
   bool restarted = false;
-  int changes = 0;  // the match server's map changes the listen has caught up with
+  bool voice_tried = false;  // `voice`'s encoder was opened (or failed to) for this game
+  int changes = 0;           // the match server's map changes the listen has caught up with
+  int entries = 0;           // maps entered (a new one, the next level, a restart, a load), ever
   // A campaign's companions (coop_party.hpp; null when none was ever seated).
   std::unique_ptr<Party> party;
   // A coop campaign's door open to others (`ListenOptions::door`; null: nobody joins) and the
@@ -326,6 +341,12 @@ hud::LobbyView listen_lobby_view(const Listen& l);
 // Whether the player is on the lobby's screen: a lobby runs and he is not on the map (he has not
 // joined the warmup, and the match is not on).
 bool on_lobby_screen(const Listen& l);
+
+// The player's microphone since the last call (48 kHz mono): while `talking` (his talk key held)
+// on a match with voice, sent to those who hear him. Nothing in a campaign or with no match.
+void listen_mic(Listen& l, std::span<const float> samples, bool talking);
+// Whether the game playing carries the player's voice (a match with `ListenOptions::voice`).
+bool listen_voice(const Listen& l);
 
 // One server frame with the player's command `cmd` (its angles are `l.view`, its length the
 // server's frame; an impulse waiting goes with it).

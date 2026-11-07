@@ -46,6 +46,7 @@
 
 #include "net/transport.hpp"
 #include "net/voice_codec.hpp"
+#include "shooters_edge/client/voice_out.hpp"
 #include "shooters_edge/net/classic_channel.hpp"
 #include "shooters_edge/net/classic_svc.hpp"
 
@@ -170,14 +171,12 @@ struct ClassicClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): 
   std::map<std::string, std::vector<uint8_t>> downloaded;
 
   // Voice.
-  std::unique_ptr<gn::VoiceEncoder> encoder;
+  client::VoiceOut voice;     // the frames cut and coded (client/voice_out.hpp)
   std::vector<float> speech;  // the voice it speaks, looped
   size_t speech_at = 0;
-  std::vector<float> mic;            // samples not yet a whole frame
   std::vector<float> mic_in;         // live_mic: the microphone's samples not yet cut
   bool mic_talking = false;          // live_mic: the talk key held
   std::vector<uint8_t> voice_out;    // this tick's voice message, sent with its move
-  int voice_seq = 0;                 // frames sent, mod 256
   int64_t voice_sent = 0;            // frames sent
   int64_t voice_heard[32] = {};      // voice messages received, by talker
   ClientRecorder* record = nullptr;  // a recording running (classic_record.hpp)

@@ -287,9 +287,14 @@ void relay_voice(ClassicServer& s, int slot, const ClcMsg& m) {
   for (int j = 0; j < sh::kMaxClients && !w.overflow; j++) {
     ClassicClient& d = s.clients[j];
     if (j == slot || d.state != ConnState::spawned || !d.ext.has(ExtFamily::x2, kX2Voice)) continue;
-    if (s.cfg.voice_route == VoiceRoute::team &&
-        (team.empty() || info_get(d.userinfo, "team") != team))
+    // By team: his team-mates; with no team (a free-for-all), the others with none.
+    if (s.cfg.voice_route == VoiceRoute::team && info_get(d.userinfo, "team") != team) continue;
+    if (d.local) {  // the listen server's own player: handed over, no packet carries it
+      if (s.local_voice == nullptr) continue;
+      s.local_voice(s.local_ctx, j, v);
+      s.counts.voice_out++;
       continue;
+    }
     if (d.datagram.size() + w.size > kMaxMsgLen / 2) {
       s.counts.voice_dropped++;
       continue;
@@ -597,9 +602,15 @@ bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std:
   c.connect_time = s.game->sv.time;
   info_set(c.userinfo, "name", name);
   if (bot) info_set(c.userinfo, "*bot", "1");
+  if (!bot && s.cfg.voice) c.ext[ExtFamily::x2] |= kX2Voice;  // the window's player talks, hears
   s.log.push_back("local " + std::to_string(slot) + " " + name);
   full_client_update(s, slot, -1);
   return true;
+}
+
+void classic_local_voice(ClassicServer& s, int slot, const ClcMsg& m) {
+  if (slot < 0 || slot >= sh::kMaxClients || !s.clients[slot].local) return;
+  relay_voice(s, slot, m);
 }
 
 void classic_set_info(ClassicServer& s, int slot, const std::string& key,

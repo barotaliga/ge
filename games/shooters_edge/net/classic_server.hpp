@@ -37,10 +37,9 @@
 // VOICE (`ServerConfig::voice`): the x2 family's voice bit offered, and each voice message a
 // client sends (clc 83, at most `kMostVoiceBytes`) relayed as svc 84 with the talker's slot to the
 // clients that agreed the bit and may hear it: by `voice_route`, everyone, or only the players
-// whose user info names the talker's `team` (a talker with no team is heard by nobody on that
-// route); a talker never gets his own back. With a multiview recording running
-// (`ClassicServer::mvd`, classic_record.hpp), every relayed message goes into it too, whoever heard
-// it.
+// whose `team` is the talker's (in a free-for-all, nobody's: everyone); never his own back. A
+// listen server's own player hears through `local_voice` and talks by `classic_local_voice`. A
+// multiview recording running (`ClassicServer::mvd`) gets every relayed message, whoever heard it.
 //
 // LAG COMPENSATION (`ServerConfig::antilag`, classic_antilag.hpp): each player's origins are kept
 // with their server times; a hitscan trace a mod marks lagged sees the other players where the
@@ -222,6 +221,9 @@ struct ClassicServer {
   // seat (the lobby's answers), which no packet carries.
   void (*local_tap)(void* ctx, const sv::RulesCommon& game) = nullptr;
   void (*local_print)(void* ctx, int slot, const std::string& text) = nullptr;
+  // A voice relayed to a listen server's own player (`slot`, a local seat that is no bot), which
+  // no packet carries: `v` the voice message as a client would read it (its talker in ints[0]).
+  void (*local_voice)(void* ctx, int slot, const SvcMsg& v) = nullptr;
   void* local_ctx = nullptr;
   // A game that seats its players itself (a campaign, which carries them from map to map): a
   // client's `begin` and its drop go to it in place of the rules' connect and drop.
@@ -246,6 +248,9 @@ void classic_unbind(ClassicServer& s);
 // False with `error` when the slot is a client's. `bot` false: a listen server's own player.
 bool classic_add_local(ClassicServer& s, int slot, const std::string& name, std::string& error,
                        bool bot = true);
+// A listen server's own player talking (`slot` a local seat that is no bot): his voice message
+// relayed as a client's is, by `voice_route`, when the server has voice (`ServerConfig::voice`).
+void classic_local_voice(ClassicServer& s, int slot, const ClcMsg& m);
 // One key of a seat's user info set, told to every client and to the rules (a lobby's team).
 void classic_set_info(ClassicServer& s, int slot, const std::string& key, const std::string& value);
 // A line printed to every spawned client.

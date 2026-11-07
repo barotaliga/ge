@@ -530,6 +530,9 @@ bit) among their messages. Without the header and the voice messages it is a pla
   `cl_voip 1` and hears what the server routes to the player through the same players, its own
   voice left out; while `+voip` is held (V) the microphone is sent. The live recording it reads
   (`ClientRecorder::live`) keeps the voices with no header; a file it records is unchanged.
+- **The window's own match** relays voice too (`sv_voip 1` while `cl_voip` is on): its player
+  hears the joined players and is heard while `+voip` is held (`listen_mic`). In a free-for-all
+  (nobody on a team) the team route reaches everyone.
 - **Playing one back** (`playdemo`, `-demovideo`, the labs): the reader finds the header by its
   bytes; each talker's frames play on a stream of their own, a gap of up to three frames
   concealed by the codec (`client/demo_voice.hpp`).

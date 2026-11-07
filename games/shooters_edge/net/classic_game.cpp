@@ -80,6 +80,13 @@ void host_print(void* ctx, int slot, const std::string& text) {
   if (slot == 0 && h.print != nullptr) h.print(h.ctx, text);
 }
 
+// A voice the endpoint relayed to a listen server's own player (slot 0), to the window.
+void host_voice(void* ctx, int slot, const SvcMsg& v) {
+  const cl::ListenHost& h = *static_cast<const cl::ListenHost*>(ctx);
+  if (slot == 0 && h.heard != nullptr && v.ints.size() >= 3)
+    h.heard(h.ctx, v.ints[0], v.ints[1], v.ints[2], v.data);
+}
+
 // The rules' frame handed to a listen server's window (its player's prints, effects, blows).
 void host_tap(void* ctx, const sv::RulesCommon& game) {
   const cl::ListenHost& h = *static_cast<const cl::ListenHost*>(ctx);
@@ -634,6 +641,7 @@ bool serve(void* g, ge::net::Transport& port, std::string& error) {
     game.classic->clients[0].rules_active = false;  // sync_host puts it on the map
     game.classic->local_tap = host_tap;
     game.classic->local_print = host_print;
+    game.classic->local_voice = host_voice;
     game.classic->local_ctx = game.host;
   }
   sync_host(game);
@@ -729,6 +737,18 @@ void host_info(void* g, const std::string& key, const std::string& value) {
   if (game.classic) classic_set_info(*game.classic, 0, key, value);
 }
 
+// The window's player talking: his voice message relayed by the endpoint as a client's.
+void host_speak(void* g, int gen, int seq, const std::vector<uint8_t>& data) {
+  Game& game = *static_cast<Game*>(g);
+  if (!game.classic) return;
+  ClcMsg m;
+  m.id = clc::voice;
+  m.gen = gen;
+  m.seq = seq;
+  m.data = data;
+  classic_local_voice(*game.classic, 0, m);
+}
+
 void host_bind(Game& g) {
   if (g.host == nullptr) return;
   cl::ListenHost& h = *g.host;
@@ -741,6 +761,7 @@ void host_bind(Game& g) {
   h.move = host_move;
   h.change = host_change;
   h.set_info = host_info;
+  h.speak = host_speak;
 }
 
 gs::ServerGame make() {

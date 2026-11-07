@@ -226,6 +226,7 @@ void entered(Listen& l) {
   l.effects.clear();
   l.entries++;
   l.sounds.clear();
+  l.voices.clear();
   l.static_sounds.clear();  // the map's load sets its loops off before the first frame
   for (const sv::NetEvent& ev : l.server->out.events)
     if (ev.kind == sv::EventKind::ambient) take_sound(l, *l.server, ev);
@@ -260,6 +261,13 @@ void take_events(Listen& l, const sv::RulesCommon& s, bool prints = true) {
   }
   if (const sv::ClientBlow& b = s.clients[0].blow; b.hit)
     l.blows.push_back({b.armor, b.blood, b.from});
+}
+
+// A voice the match relayed to the player (ListenHost::heard), kept for the window to play.
+void host_heard(void* ctx, int talker, int gen, int seq, const std::vector<uint8_t>& data) {
+  Listen& l = *static_cast<Listen*>(ctx);
+  if (l.voices.size() >= kMostListenSounds) return;  // nobody plays them (a test, a stall)
+  l.voices.push_back({talker, gen, seq, data});
 }
 
 // The match server's calls back into the listen (ListenHost::tap, ::print).
@@ -328,6 +336,7 @@ bool start_map(Listen& l, std::string& error) {
   h->speedjump = kListenSpeedJump;
   h->tap = host_tap;
   h->print = host_print;
+  h->heard = host_heard;
   h->ctx = &l;
   ge::server::ServerConfig c;
   c.hostname = l.opt.hostname;
@@ -336,6 +345,7 @@ bool start_map(Listen& l, std::string& error) {
   c.maxclients = l.opt.maxclients;
   c.lobby = l.opt.lobby ? 1 : 0;
   c.port = l.opt.port;
+  if (l.opt.voice) c.rules.emplace("sv_voip", "1");
   c.host = h.get();
   auto port = std::make_unique<ge::net::Transport>();
   if (l.opt.port > 0 && l.opt.transport == nullptr) {
@@ -911,6 +921,22 @@ hud::LobbyView listen_lobby_view(const Listen& l) {
 
 bool on_lobby_screen(const Listen& l) {
   return l.room && l.server != nullptr && !sv::lobby_on_map(l.room->lobby, 0);
+}
+
+bool listen_voice(const Listen& l) {
+  return l.match && l.host && l.host->speak != nullptr && l.opt.voice;
+}
+
+void listen_mic(Listen& l, std::span<const float> samples, bool talking) {
+  if (!listen_voice(l)) return;
+  if (!l.voice_tried) {
+    l.voice_tried = true;
+    voice_out_open(l.voice);
+  }
+  std::vector<uint8_t> data;
+  int seq = 0;
+  if (voice_out_cut(l.voice, samples, talking, data, seq) > 0)
+    l.host->speak(l.host->game, kVoiceOpus << 4, seq, data);
 }
 
 int listen_advance(Listen& l, double wall_s, const sh::MoveCmd& cmd) {
