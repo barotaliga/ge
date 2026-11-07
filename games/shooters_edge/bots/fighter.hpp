@@ -135,7 +135,8 @@ enum class FightMode : uint8_t { roam, fight, chase, retreat };
 const char* fight_mode_name(FightMode m);
 
 // A fighter's part in its team's plan (team.hpp); `free` when it plays alone.
-enum class Role : uint8_t { free, hold, rush, carry };
+enum class Role : uint8_t { free, hold, rush, carry, push };
+constexpr int kRoles = 5;
 const char* role_name(Role r);
 struct Team;
 

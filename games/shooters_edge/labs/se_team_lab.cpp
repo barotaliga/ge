@@ -50,10 +50,11 @@ using ge::core::num::to_fixed;
 using In = std::vector<std::pair<std::string, std::string>>;
 
 const gl::Rgba kTeam[2] = {{200, 50, 40, 255}, {40, 90, 210, 255}};
-const gl::Rgba kRole[5] = {{150, 160, 170, 255},  // free
+const gl::Rgba kRole[6] = {{150, 160, 170, 255},  // free
                            {40, 150, 70, 255},    // hold
                            {240, 160, 20, 255},   // rush
                            {150, 60, 200, 255},   // carry
+                           {220, 60, 90, 255},    // push
                            {40, 40, 40, 255}};    // dead
 const gl::Rgba kInk{30, 30, 30, 255};
 
@@ -189,11 +190,11 @@ void run(gl::Lab& lab) {
       "", "blade", "scattergun", "double", "spiker", "heavy spiker", "grenades", "rockets", "arc"};
   gl::LabTable t{"each player over the match",
                  {"player", "team", "aim", "frags", "deaths", "shots", "held for a mate", "packs",
-                  "hold", "rush", "carry", "free", "held most"},
+                  "hold", "rush", "carry", "push", "free", "held most"},
                  {}};
   for (const cn::TeamPlayer& p : r.players) {
     int64_t alive = 0;
-    for (int k = 0; k < 4; k++) alive += p.role_commands[k];
+    for (int k = 0; k < bt::kRoles; k++) alive += p.role_commands[k];
     const auto share = [&](int k) {
       return to_fixed(
           alive > 0 ? static_cast<double>(p.role_commands[k]) / static_cast<double>(alive) : 0, 2);
@@ -204,7 +205,7 @@ void run(gl::Lab& lab) {
     t.rows.push_back({p.name, o.teams[p.team].name, sh::aim_skill_name(p.skill),
                       to_fixed(p.frags, 0), std::to_string(p.deaths), std::to_string(p.shots),
                       std::to_string(p.held_fire), std::to_string(p.packs), share(1), share(2),
-                      share(3), share(0), kWeapon[most]});
+                      share(3), share(4), share(0), kWeapon[most]});
     lab.metric("team." + p.name + ".frags", p.frags, "count");
     lab.metric("team." + p.name + ".deaths", p.deaths, "count");
   }
@@ -370,6 +371,8 @@ void run(gl::Lab& lab) {
   lab.metric("team.areas-lost-seen",
              static_cast<double>(r.teams[0].lost_seen + r.teams[1].lost_seen), "count");
   lab.metric("team.retakes", static_cast<double>(r.teams[0].retakes + r.teams[1].retakes), "count");
+  lab.metric("team.pushes", static_cast<double>(r.teams[0].pushes + r.teams[1].pushes), "count");
+  lab.metric("team.push-joins", static_cast<double>(r.teams[0].joins + r.teams[1].joins), "count");
   lab.metric("team.spam-rockets",
              static_cast<double>(r.teams[0].spam_shots + r.teams[1].spam_shots), "count");
   // The team messages: the first lines in the report, all of them as a file.
@@ -418,6 +421,40 @@ void run(gl::Lab& lab) {
     for (const cn::TeamPlayer& p : r.players) speed += p.speed_sum;
     // People's 4on4 average on this kind of map: 284 units/s (KTX's match stats).
     lab.metric("team.speed-avg", alive > 0 ? speed / static_cast<double>(alive) : 0, "units/s");
+    // Damage given a player-minute: people's 4on4 on e1m2, 398 (KTX's `given`).
+    double given = 0;
+    for (const cn::TeamPlayer& p : r.players) given += p.given;
+    int64_t vn = 0, iv = 0, sn = 0, un = 0;
+    for (const cn::TeamPlayer& p : r.players) {
+      vn += p.view_n;
+      iv += p.in_view;
+      sn += p.seen_n;
+      un += p.unnoticed;
+    }
+    const auto of_alive = [&](int64_t k) {
+      return vn > 0 ? static_cast<double>(k) / static_cast<double>(vn) : 0;
+    };
+    int64_t rlp = 0, rls = 0, rll = 0, rockets = 0;
+    for (const cn::TeamPlayer& p : r.players) {
+      rlp += p.rl_pickups;
+      rls += p.rl_samples;
+      rll += p.rl_loaded;
+      rockets += p.hits[static_cast<size_t>(cn::HitWeapon::rocket_direct)].fired;
+    }
+    // People's 4on4 on e1m2: about 30 launchers taken in 10 minutes, 3.4 rockets a player-minute.
+    lab.metric("team.rl-pickups", static_cast<double>(rlp), "count");
+    lab.metric("team.rl-had", of_alive(rls), "share");
+    lab.metric("team.rl-loaded", of_alive(rll), "share");
+    lab.metric("team.rockets-per-min",
+               static_cast<double>(rockets) / (secs / 60) /
+                   static_cast<double>(std::max<size_t>(r.players.size(), 1)),
+               "per-min");
+    lab.metric("team.enemy-in-view", of_alive(iv), "share");
+    lab.metric("team.enemy-seen", of_alive(sn), "share");
+    lab.metric("team.roam-enemy-in-view", of_alive(un), "share");
+    lab.metric("team.damage-per-min",
+               given / (secs / 60) / static_cast<double>(std::max<size_t>(r.players.size(), 1)),
+               "per-min");
     // Where the speed goes: each pilot mode's share of the commands alive and its mean speed.
     gl::LabTable modes{
         "the pilot's modes (aiming apart): share of the time alive and mean speed (units/s)",
@@ -609,12 +646,12 @@ void run(gl::Lab& lab) {
       const size_t i = rl.size() * static_cast<size_t>(px) / static_cast<size_t>(strip_w);
       if (i >= rl.size()) break;
       gl::fill_rect(m, pad + px, y, 1, row_h - 4,
-                    kRole[rl[i] == 255 ? 4 : std::min<int>(rl[i], 3)]);
+                    kRole[rl[i] == 255 ? 5 : std::min<int>(rl[i], 4)]);
     }
   }
   int lx = pad;
-  static const char* kRoleName[5] = {"FREE", "HOLD", "RUSH", "CARRY THE QUAD", "DEAD"};
-  for (int i = 0; i < 5; i++) {
+  static const char* kRoleName[6] = {"FREE", "HOLD", "RUSH", "CARRY THE QUAD", "PUSH", "DEAD"};
+  for (int i = 0; i < 6; i++) {
     gl::fill_rect(m, lx, 10, 14, 8, kRole[i]);
     gl::draw_text(m, lx + 18, 9, kRoleName[i], kInk);
     lx += 18 + gl::text_width(kRoleName[i]) + 16;

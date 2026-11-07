@@ -59,6 +59,8 @@ const char* role_name(Role r) {
       return "rush";
     case Role::carry:
       return "carry";
+    case Role::push:
+      return "push";
   }
   return "?";
 }

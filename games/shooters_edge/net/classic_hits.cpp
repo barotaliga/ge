@@ -82,6 +82,7 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
   const bool first = b.players.empty();
   if (first) {
     b.players.assign(static_cast<size_t>(clients), {});
+    b.given.assign(static_cast<size_t>(clients), 0);
     b.life.assign(n, 0);
     b.health.assign(n, 0);
     b.ammo.assign(n, {});
@@ -147,6 +148,8 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
           const int at = by - 1;
           const bool quad = (static_cast<int32_t>(field(s, by, f.items)) & kQuadBit) != 0;
           const float scale = quad ? 4.f : 1.f;
+          const float team = field(s, by, f.team);
+          if (team == 0 || team != field(s, e, f.team)) b.given[static_cast<size_t>(at)] += blow;
           if (!missile) {
             const int32_t held = static_cast<int32_t>(field(s, by, f.weapon));
             const auto many = [&](float each) {

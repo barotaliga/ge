@@ -20,13 +20,14 @@ TEST(every_kind_reads_back_as_written) {
                                bt::SayKind::lost,   bt::SayKind::help,        bt::SayKind::coming,
                                bt::SayKind::point,  bt::SayKind::enemy,       bt::SayKind::have,
                                bt::SayKind::get,    bt::SayKind::enemy_power, bt::SayKind::over,
-                               bt::SayKind::timer};
+                               bt::SayKind::timer,  bt::SayKind::attack};
   for (bt::SayKind k : kinds) {
     bt::Said s;
     s.kind = k;
     s.loc = "quad-low";
     s.item = k == bt::SayKind::enemy ? "" : "quad";
-    if (k == bt::SayKind::took || k == bt::SayKind::point || k == bt::SayKind::coming)
+    if (k == bt::SayKind::took || k == bt::SayKind::point || k == bt::SayKind::coming ||
+        k == bt::SayKind::attack)
       s.item = "ra";
     s.secs = k == bt::SayKind::timer ? 15 : -1;
     if (k == bt::SayKind::report || k == bt::SayKind::safe || k == bt::SayKind::help) s.status = st;
@@ -37,7 +38,8 @@ TEST(every_kind_reads_back_as_written) {
     if (k != bt::SayKind::get && k != bt::SayKind::over && k != bt::SayKind::timer)
       CHECK_MSG(r.loc == "quad-low", text);
     if (k == bt::SayKind::timer) CHECK(r.item == "quad" && r.secs == 15);
-    if (k == bt::SayKind::point || k == bt::SayKind::took) CHECK(r.item == "ra");
+    if (k == bt::SayKind::point || k == bt::SayKind::took || k == bt::SayKind::attack)
+      CHECK_MSG(r.item == "ra", text);
     if (k == bt::SayKind::safe || k == bt::SayKind::report)
       CHECK_MSG(r.status.armor == 150 && r.status.health == 100 && r.status.weapon == "rl" &&
                     r.status.armor_kind == "ra",
@@ -60,6 +62,8 @@ TEST(what_people_type_reads_as_meant) {
   CHECK(bt::parse_say("get pent!").kind == bt::SayKind::get);
   CHECK(bt::parse_say("150/100 rl").kind == bt::SayKind::report);
   CHECK(bt::parse_say("gg").kind == bt::SayKind::none);
+  const bt::Said a = bt::parse_say("push ya [gl]");
+  CHECK(a.kind == bt::SayKind::attack && a.item == "ya" && a.loc == "gl");
 }
 
 TEST(a_team_line_splits_into_speaker_and_text) {

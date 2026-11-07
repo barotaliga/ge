@@ -76,9 +76,11 @@ constexpr double kEnemyKnown_s = 3;  // an enemy seen or heard this lately is kn
 constexpr double kHotSpot_s = 60;    // two danger spots this lately near an item: no healing there
 constexpr double kMegaHealBonus = 10;  // the mega's worth to a healer over the health it gives
 constexpr double kSwimExit_s = 3;      // a climb out of the water kept this long at most
-constexpr double kLanding_s = 2;    // out of the water, its exit node walked onto this long at most
-constexpr double kBaseHeal = 1.4;   // health in the team's base is worth this more to a healer
-constexpr float kBlastClear = 140;  // a rocket or grenade is held with a mate this near its aim
+constexpr double kLanding_s = 2;   // out of the water, its exit node walked onto this long at most
+constexpr double kBaseHeal = 1.4;  // health in the team's base is worth this more to a healer
+constexpr double kLauncherWorth = 240;  // the launcher lacked: worth a long run
+constexpr float kRocketsLow = 25;       // a launcher with fewer rockets than this wants more
+constexpr float kBlastClear = 140;      // a rocket or grenade is held with a mate this near its aim
 
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
 
@@ -101,7 +103,8 @@ const WeaponRow kWeapons[8] = {
     {kWSpiker, 4, "spiker", Ammo::nails, 1, 1000, 0, 16, 1500},
     {kWHeavy, 5, "heavy spiker", Ammo::nails, 2, 1000, 0, 20, 1500},
     {kWGrenades, 6, "grenades", Ammo::rockets, 1, 600, -20, 40, 500},
-    {kWRockets, 7, "rockets", Ammo::rockets, 1, 1000, -20, 48, 1200},
+    // Fired as people fire it, loosely: near him is enough, the blast reaches the rest.
+    {kWRockets, 7, "rockets", Ammo::rockets, 1, 1000, -20, 96, 1200},
     {kWArc, 8, "arc", Ammo::cells, 1, 0, 0, 20, 600},
 };
 
@@ -189,8 +192,9 @@ double raw_value(const ItemSpot& it, const Stats& st) {
     case ItemKind::weapon: {
       if (st.items & it.weapon) return 4;
       switch (it.weapon) {
-        case kWRockets:
-          return 120;
+        case kWRockets:  // the weapon that wins a team game (people take it 60 times in 20 min):
+          // worth a long run while it is there, not a long wait while it is away
+          return it.present ? kLauncherWorth : 120;
         case kWArc:
           return 90;
         case kWHeavy:
@@ -215,7 +219,11 @@ double raw_value(const ItemSpot& it, const Stats& st) {
   for (const WeaponRow& w : kWeapons) uses |= w.ammo == a && (st.items & w.bit) != 0;
   const float have = ammo_of(st, a);
   if (!uses || have >= kAmmoMax) return 1;
-  return 30.0 * (kAmmoMax - have) / kAmmoMax;
+  const double fill = 30.0 * (kAmmoMax - have) / kAmmoMax;
+  // Rockets for a launcher in hand running dry are worth half the launcher: it is no use without.
+  if (a == Ammo::rockets && (st.items & kWRockets) != 0 && have < kRocketsLow)
+    return std::fmax(fill, 0.5 * kLauncherWorth * (1.0 - have / kRocketsLow));
+  return fill;
 }
 
 // What an item is worth to it now, as it rates the map.
@@ -459,6 +467,24 @@ bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Ve
       note("carry", "the quad through the key areas");
       return true;
     }
+    case Role::push: {
+      // The team's push on its base (mind.hpp): gathered outside it first, then in together.
+      const int32_t area = mn.push_item;
+      if (!can_reach(area)) return false;
+      if (f.mode == FightMode::chase && c && dist(at_of(c->seen), at(area)) < kLeash) {
+        go_to(f, sh::nav_nearest(g, at_of(c->seen)));
+        note("push", "chasing in the base");
+        return true;
+      }
+      if (mn.push_go_t < 0) {
+        go_to(f, sh::nav_nearest(g, mn.push_at));
+        note("push", "gathering outside the base");
+        return true;
+      }
+      go_item(f, s, area);
+      note("push", "into the base together");
+      return true;
+    }
     case Role::free:
       // A teammate's call for help is answered by a player strong enough to give it.
       if (f.mode != FightMode::retreat && t < mn.help_until && strength(st) >= 120 &&
@@ -642,6 +668,10 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
 
   const sh::Contact* c = sh::freshest(f.bot.senses, eye);
   const bool seen_now = c && c->visible;
+  if (seen_now) {  // where it saw an enemy itself (the push reads it, mind.hpp)
+    f.mind.sighted_at = at_of(c->seen);
+    f.mind.sighted_t = t;
+  }
   // Lost from sight a moment ago, or heard a moment ago (the newer of the two is where it is).
   const bool by_ear = c && ai::known(c->heard) && (!ai::known(c->seen) || c->heard.at > c->seen.at);
   // The odds as this player sizes them (temper.hpp): his might against the enemy's as he believes
