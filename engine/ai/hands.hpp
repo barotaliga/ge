@@ -78,6 +78,8 @@ class Hands {
   Hands(std::span<const AxisHands> axes, double hz, uint32_t seed);
 
   size_t axes() const { return count_; }
+  // How axis `axis` moves (its reaction delay, its spring, its slew).
+  const AxisHands& spec(size_t axis) const { return axes_[axis].spec; }
   // `wanted` (one value an axis) through the hands, into `out`; one call a step.
   void step(std::span<const double> wanted, std::span<double> out);
   // Axis `axis` from now on moves as `spec` (a player who takes up another weapon holds it

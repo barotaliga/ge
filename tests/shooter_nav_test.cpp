@@ -320,6 +320,9 @@ TEST(a_pocket_only_a_rocket_jump_reaches_is_bridged_by_one) {
   for (size_t n = 0; n < main.size(); n++) main[n] = search.reached(static_cast<int32_t>(n));
   const sh::NavBridgeCounts c = sh::nav_bridge_pockets(b.world, sh::MoveSettings{}, b.g, main);
   CHECK_MSG(c.by_rocket >= 1, "no rocket jump bridged the block's top");
+  CHECK_MSG(c.by_flip >= 1,
+            "the block's top was bridged by the shot at the feet, not the flip "
+            "(tried first: the skilled jump)");
   CHECK_MSG(sh::nav_route(b.g, floor, top, search).nodes.empty(),
             "a route without rocket jumps reached the block's top");
   const sh::NavRoute r = sh::nav_route(b.g, floor, top, search, 1, {}, {}, true);
@@ -331,4 +334,40 @@ TEST(a_pocket_only_a_rocket_jump_reaches_is_bridged_by_one) {
   CHECK_MSG(rockets == 1, "the way up took " + std::to_string(rockets) + " rocket jumps, not one");
   sh::nav_reach(b.g, top, search);
   CHECK_MSG(search.reached(floor), "no way back down off the block's top");
+}
+
+TEST(the_flip_flies_flatter_farther_and_quicker_than_the_shot_at_the_feet) {
+  const auto box = [](sh::Vec3f lo, sh::Vec3f hi) {
+    sh::Brush b;
+    b.planes = {{{1, 0, 0}, hi.x},   {{-1, 0, 0}, -lo.x}, {{0, 1, 0}, hi.y},
+                {{0, -1, 0}, -lo.y}, {{0, 0, 1}, hi.z},   {{0, 0, -1}, -lo.z}};
+    return b;
+  };
+  const std::vector<sh::Brush> brushes = {box({-512, -256, -64}, {2048, 256, 0})};
+  const sh::HullData point = sh::build_point_hull(brushes);
+  const sh::HullData clip = sh::build_box_hull(brushes, sh::kPlayerMins, sh::kPlayerMaxs);
+  sh::MoveWorld world;
+  world.solids[0].point_hull = point.hull();
+  world.solids[0].clip_hull = clip.hull();
+  world.solids[0].mins = {-512, -256, -64};
+  world.solids[0].maxs = {2048, 256, 1024};
+  world.count = 1;
+  sh::NavSettings set;
+  set.limit_s = 4;
+  sh::RocketJumpSpec flip;
+  flip.back = true;
+  const sh::NavProof down =
+      sh::prove_rocket_jump(world, sh::MoveSettings{}, {0, 0, 24}, {1900, 0, 24}, 320, set, {});
+  const sh::NavProof back =
+      sh::prove_rocket_jump(world, sh::MoveSettings{}, {0, 0, 24}, {1900, 0, 24}, 320, set, flip);
+  const float down_v = down.end.x / down.time_s, back_v = back.end.x / back.time_s;
+  CHECK_MSG(back_v > down_v * 1.3f, "the flip crossed " + std::to_string(back_v) +
+                                        " units/s against the shot at the feet's " +
+                                        std::to_string(down_v) + ": its push is not forward");
+  CHECK_MSG(back.hi.z < down.hi.z - 80, "the flip's apex " + std::to_string(back.hi.z) +
+                                            " is not well under the shot at the feet's " +
+                                            std::to_string(down.hi.z));
+  CHECK_MSG(back.end.x > down.end.x, "the flip landed at x " + std::to_string(back.end.x) +
+                                         ", short of the shot at the feet's " +
+                                         std::to_string(down.end.x));
 }

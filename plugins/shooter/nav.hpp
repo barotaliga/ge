@@ -56,6 +56,7 @@
 // ge:keywords running-jump moving-jump run-up prove prove_link build_nav nav_route nav_nearest
 // ge:keywords nav_add_links nav_close_entries teleport-link nav_reach nav_hash map_world
 // ge:keywords reachability mover door plat ride route path a-star bot swim swim-node water
+// ge:keywords rocket-jump flip back-rocket-jump rocket_burst rocket_blast turn-room
 // ge:skill shooter bots
 // ge:test tests/shooter_nav_test.cpp
 #pragma once
@@ -117,6 +118,8 @@ struct NavLink {
   float time_s = 0;    // the proof's time
   int32_t mover = -1;  // a mover the proof's path crosses, or -1
   float speed = 0;     // a jump's speed toward the target at its start, units/s
+  bool back = false;   // a rocket jump played as the flip (`RocketJumpSpec::back`)
+  float pitch = 0;     // a rocket jump's shot, degrees down (0: the player's own)
 };
 
 // How the build went, for the lab.
@@ -183,7 +186,9 @@ struct NavExtraLink {
   int32_t from = 0, to = 0;
   NavKind kind = NavKind::walk;
   float time_s = 0.1f;
-  float speed = 0;  // a jump's speed at its start, units/s (NavLink::speed)
+  float speed = 0;    // a jump's speed at its start, units/s (NavLink::speed)
+  bool back = false;  // a rocket jump's flip (NavLink::back)
+  float pitch = 0;    // and its shot (NavLink::pitch)
 };
 
 // THE ROCKET JUMP, as the baseline mod makes it (games/shooters_edge/qc: weapons.qc's `launch`,
@@ -193,12 +198,43 @@ struct NavExtraLink {
 // meets the world; the blast takes `damage` less half the distance to the player's middle, half
 // of that to its own shooter, and pushes him `push` units/s a point away from the burst. From
 // there the view is on the target and forward held through the flight, as in a jump.
+// THE FLIP (`back`): the skilled rocket jump. The player runs at the target and turns into the
+// jump, strafing through the turn (`flip_keys`), so he leaves the floor at speed with his back to
+// it; he fires `back_pitch` down behind him with the jump and turns the view back to the target
+// in flight at `turn` degrees a second, strafing round the other way. The burst behind pushes him
+// forward as much as up: a flatter, faster flight than the shot at the feet, under a lower ceiling,
+// and the pitch places it (steeper: higher and shorter), so a skilled player lands it on the spot
+// he chose.
 struct RocketJumpSpec {
   float pitch = 80;  // degrees down at the shot (straight down leaves no wish across the floor)
   float missile_speed = 1000, back_off = 8;
   float damage = 120, self_share = 0.5f, push = 8;
   float eye = 22;
+  bool back = false;
+  float back_pitch = 55;  // degrees down at the shot behind
+  float turn = 720;       // the view's turn back in flight, degrees a second
+  // The free floor its turn into the jump needs beyond the run-up at the full speed, units (a
+  // human hand's turn round, 0.4 s, at 320; less in proportion slower).
+  float turn_room = 128;
 };
+// The keys a player holds turning round on a run toward heading `way` with the view at `view`
+// (degrees): of the eight a hand presses (forward, back, a side, or a side with either), the one
+// nearest the way in the view's frame; `forward` and `side` -1, 0 or 1 (side right positive).
+void flip_keys(float way, float view, float& forward, float& side);
+
+// The rocket a player standing at `origin` fires along the view `angles` (pitch down, yaw): where
+// it bursts and how long it flies first, s; `ok` false when it meets nothing within 4096.
+struct RocketBurst {
+  bool ok = false;
+  Vec3f at;
+  float flight_s = 0;
+};
+RocketBurst rocket_burst(const MoveWorld& world, Vec3f origin, Vec3f angles,
+                         const RocketJumpSpec& rj = {});
+// The blast at `at` on its own shooter `s`: the push away from it, off the ground; returns the
+// points it takes from him, 0 when he stands too far for any.
+float rocket_blast(MoveState& s, Vec3f at, const RocketJumpSpec& rj = {});
+
 // The rocket jump from `from` toward `to` run on the move with the blast's push; reached as a
 // jump is (standing on the target, or landed anywhere when the caller reads `end`). `health`, when
 // given, gets the blast's points to the jumper.
@@ -252,17 +288,24 @@ struct NavBridgeSettings {
   int least = 1;     // pockets smaller than this many nodes are left alone
   // Last, ROCKET JUMPS (`prove_rocket_jump`) from a running start at the full speed and half and
   // from standing, to a target at most `rocket_up` higher, on at most `rocket_tries` pairs; only
-  // once no other way adds a pocket, and only into a pocket with a way back out of it.
+  // once no other way adds a pocket, and only into a pocket with a way back out of it. The FLIP
+  // is tried first, at each of `flip_pitches` (the skilled jump, placed by its pitch) from the
+  // full speed on the nearest `rocket_tries` pairs with the floor behind for its run and turn,
+  // then from half of it, then standing; then the shot at the feet on the nearest pairs. The
+  // first that lands on its target, on the way to a wanted node, is kept; failing that, the best
+  // landing (leading to a wanted node first, then on target).
   bool rockets = true;
   float rocket_up = 280;
   int rocket_tries = 24;
   float rocket_cost_s = 3;  // a rocket jump's link costs this more (the rocket and the health)
+  float flip_pitches[5] = {55, 65, 45, 75, 35};
   RocketJumpSpec rj;
-  // The nodes worth a rocket jump (one byte a node: an item's); empty: any pocket.
+  // The nodes worth a rocket jump (one byte a node: an item's); empty: any pocket. With them, a
+  // landing from which one of its pocket's is reached on foot is taken before any other.
   std::span<const uint8_t> wanted;
 };
 struct NavBridgeCounts {
-  int64_t pockets = 0, bridged_in = 0, bridged_out = 0, by_rocket = 0, proofs = 0;
+  int64_t pockets = 0, bridged_in = 0, bridged_out = 0, by_rocket = 0, by_flip = 0, proofs = 0;
 };
 NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& move, NavGraph& g,
                                    std::vector<uint8_t>& main, const NavBridgeSettings& set = {});

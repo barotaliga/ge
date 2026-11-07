@@ -61,6 +61,7 @@ struct MoverRow {
 struct MapReach {
   std::string name, error;
   int items = 0, reached = 0, back = 0, by_rocket = 0;
+  int64_t rocket_links = 0, flips = 0;  // the graph's rocket jumps, and those played as the flip
   int64_t nodes = 0, swim_nodes = 0, swim_links = 0;
   std::vector<Gap> gaps;
   std::vector<MoverRow> movers;
@@ -93,6 +94,11 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
   out.nodes = static_cast<int64_t>(g.nodes.size());
   out.swim_nodes = nav.swim_nav.cells;
   out.swim_links = g.counts.by_kind[static_cast<int>(sh::NavKind::swim)];
+  for (const sh::NavLink& l : g.links)
+    if (l.kind == sh::NavKind::rocket) {
+      out.rocket_links++;
+      out.flips += l.back;
+    }
   for (const sh::NavMover& m : g.movers) {
     MoverRow row{m.ent, m.model != nullptr, m.absmin, m.absmax, m.travel, 0};
     for (const sh::NavNode& nd : g.nodes)
@@ -188,10 +194,10 @@ void run(gl::Lab& lab) {
     }
   }
 
-  gl::LabTable t{
-      "each map: its items, those a route leads to from the spawns, and from back",
-      {"map", "nodes", "swim nodes", "swim links", "items", "reached", "by rocket", "back", "gaps"},
-      {}};
+  gl::LabTable t{"each map: its items, those a route leads to from the spawns, and from back",
+                 {"map", "nodes", "swim nodes", "swim links", "rocket links", "flips", "items",
+                  "reached", "by rocket", "back", "gaps"},
+                 {}};
   gl::LabTable mv{"each map's movers: plats (ridden) and doors, their box at rest, travel, rides",
                   {"map", "ent", "kind", "box lo", "box hi", "travel", "ride links"},
                   {}};
@@ -215,13 +221,16 @@ void run(gl::Lab& lab) {
         mv.rows.push_back({m.name, std::to_string(r.ent), r.plat ? "plat" : "door", v3(r.lo),
                            v3(r.hi), v3(r.travel), std::to_string(r.rides)});
     t.rows.push_back({m.name, std::to_string(m.nodes), std::to_string(m.swim_nodes),
-                      std::to_string(m.swim_links), std::to_string(m.items),
-                      std::to_string(m.reached), std::to_string(m.by_rocket),
-                      std::to_string(m.back), std::to_string(m.gaps.size())});
+                      std::to_string(m.swim_links), std::to_string(m.rocket_links),
+                      std::to_string(m.flips), std::to_string(m.items), std::to_string(m.reached),
+                      std::to_string(m.by_rocket), std::to_string(m.back),
+                      std::to_string(m.gaps.size())});
     lab.metric("reach." + m.name + ".items", m.items, "count");
     lab.metric("reach." + m.name + ".reached", m.reached, "count");
     lab.metric("reach." + m.name + ".back", m.back, "count");
     lab.metric("reach." + m.name + ".by-rocket", m.by_rocket, "count");
+    lab.metric("reach." + m.name + ".rocket-links", static_cast<double>(m.rocket_links), "count");
+    lab.metric("reach." + m.name + ".flips", static_cast<double>(m.flips), "count");
     for (const Gap& gp : m.gaps)
       gaps.rows.push_back(
           {m.name, gp.item,
