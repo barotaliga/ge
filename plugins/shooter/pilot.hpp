@@ -202,8 +202,9 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& sense, int msec, ai::Why* why = n
 
 // The line the pilot at `at` means to walk, to draw: the route ahead with its lane applied along
 // the level walks (each node moved off the line by the offset it keeps now), the nodes as they
-// are from the first link that is not one.
-std::vector<Vec3f> pilot_path(const Pilot& p, Vec3f at);
+// are from the first link that is not one. `breaks`, when given, marks each point the line does
+// not run to (a teleporter's: the player is there at once, nothing is walked between).
+std::vector<Vec3f> pilot_path(const Pilot& p, Vec3f at, std::vector<uint8_t>* breaks = nullptr);
 
 // A pilot filling a server's slot: it reads the slot's player and the movers' edicts. Kept alive
 // and unmoved while the slot is filled. `goals` are visited in turn, round and round; a goal with
