@@ -399,6 +399,16 @@ void run(gl::Lab& lab) {
         hit += c.hit;
       }
     }
+    // The mind's modes: the share of the time alive roaming, fighting, chasing and retreating.
+    {
+      int64_t by[4] = {};
+      for (const cn::TeamPlayer& p : r.players)
+        for (int k = 0; k < 4; k++) by[k] += p.mode_commands[k];
+      for (int k = 0; k < 4; k++)
+        lab.metric(std::string("team.mode.") + bt::fight_mode_name(static_cast<bt::FightMode>(k)),
+                   alive > 0 ? static_cast<double>(by[k]) / static_cast<double>(alive) : 0,
+                   "share");
+    }
     lab.metric("team.dodge-share",
                fight > 0 ? static_cast<double>(dodging) / static_cast<double>(fight) : 0, "share");
     lab.metric("team.dodge-turns-per-min",
