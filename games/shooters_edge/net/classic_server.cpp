@@ -12,6 +12,7 @@
 #include <charconv>
 #include <cstring>
 #include <iterator>
+#include <string_view>
 
 #include "progs/file.hpp"
 #include "progs/layout.hpp"
@@ -501,18 +502,28 @@ bool bind_map(ClassicServer& s, const sv::RulesRunner& rules, std::string& error
   info_set(s.serverinfo, "maxclients", std::to_string(qc.sv.set.maxclients), kServerInfoBytes);
   info_set(s.serverinfo, "maxfps", std::to_string(s.cfg.maxfps), kServerInfoBytes);
   info_set(s.serverinfo, "sv_antilag", s.cfg.antilag ? "1" : "0", kServerInfoBytes);
+  // What a server browser lists (classic_browse.hpp): the map, the rules' kind and whether
+  // joining takes a password.
+  info_set(s.serverinfo, "map", qc.map_name, kServerInfoBytes);
+  // The skill only where monsters play it (a match's skill is the mod's leftover default).
+  bool monsters = true;
+  for (const char* rule : {"deathmatch", "teamplay", "coop"}) {
+    const ge::console::Cvar* c = qc.cvars.find(rule);
+    if (c == nullptr || c->value == "0") continue;
+    info_set(s.serverinfo, rule, c->value, kServerInfoBytes);
+    if (std::string_view(rule) == "deathmatch") monsters = false;
+  }
+  if (const ge::console::Cvar* c = qc.cvars.find("skill"); c != nullptr && monsters)
+    info_set(s.serverinfo, "skill", c->value, kServerInfoBytes);
+  // A cooperative campaign says `deathmatch 0` outright, as other coop servers do.
+  if (const ge::console::Cvar* coop = qc.cvars.find("coop"); coop != nullptr && coop->on())
+    info_set(s.serverinfo, "deathmatch", "0", kServerInfoBytes);
+  const int needpass =
+      (s.cfg.password.empty() ? 0 : 1) | (s.cfg.spectator_password.empty() ? 0 : 2);
+  if (needpass != 0) info_set(s.serverinfo, "needpass", std::to_string(needpass), kServerInfoBytes);
   // The move's switches a client predicts with, when not at their defaults (pm_ktjump 0).
   for (const auto& [k, v] : sh::changed_info(qc.sv.set))
     info_set(s.serverinfo, k, v, kServerInfoBytes);
-  // A cooperative campaign is listed as one: a browser's status query reads `coop 1`,
-  // `deathmatch 0`, the monsters' `skill` and the map playing (a match's info is as before).
-  if (const ge::console::Cvar* coop = qc.cvars.find("coop"); coop != nullptr && coop->on()) {
-    info_set(s.serverinfo, "coop", "1", kServerInfoBytes);
-    info_set(s.serverinfo, "deathmatch", "0", kServerInfoBytes);
-    if (const ge::console::Cvar* skill = qc.cvars.find("skill"))
-      info_set(s.serverinfo, "skill", skill->value, kServerInfoBytes);
-    info_set(s.serverinfo, "map", qc.map_name, kServerInfoBytes);
-  }
   for (const auto& [k, v] : qc.serverinfo) info_set(s.serverinfo, k, v, kServerInfoBytes);
   if (s.cfg.antilag) {
     qc.lag_rewind = &lag_rewind;

@@ -11,6 +11,7 @@
 // ge:summary Tests the main menu: pages, dimming by the console, cvars, START, ESCAPE, both looks
 // ge:keywords test menu main-menu dimmed cvar console new-game start escape classic modern layout
 // ge:keywords load-game take_load load_refused screenshots gallery menu_screenshots
+// ge:keywords server-browser join-a-game menu_servers servers connect
 // ge:skill ui testing
 #include <algorithm>
 #include <cmath>
@@ -21,6 +22,8 @@
 #include "check.hpp"
 #include "console/console.hpp"
 #include "lab/png.hpp"
+#include "net/sim_network.hpp"
+#include "net/transport.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/menu/classic_view.hpp"
 #include "shooters_edge/menu/game_menu.hpp"
@@ -491,4 +494,87 @@ TEST(screenshots_page_looks_through_and_deletes_the_screenshots) {
   w.con.execute("menu_screenshots");
   g.update({}, false, host, 0.016);
   CHECK(g.open() && g.in_gallery());
+}
+
+namespace {
+
+size_t toy_status(uint8_t* out, size_t cap) {
+  if (cap < 1) return 0;
+  out[0] = '?';
+  return 1;
+}
+
+bool toy_reply(const uint8_t* data, size_t size, ge::net::ServerInfo& out) {
+  if (size < 2 || data[0] != '!') return false;
+  out = {};
+  out.name = std::string(reinterpret_cast<const char*>(data) + 1, size - 1);
+  out.map = "keep";
+  out.mode = "coop";
+  out.players = 1;
+  out.max_players = 8;
+  return true;
+}
+
+}  // namespace
+
+TEST(join_a_game_lists_a_server_and_connects_to_it) {
+  namespace gn = ge::net;
+  gn::SimNetwork net = gn::make_sim_network(1, gn::LinkConditions{});
+  gn::Transport server, browser;
+  gn::open_sim_transport(server, net, gn::sim_address(5, 27500));
+  gn::open_sim_transport(browser, net, gn::sim_address(1, 27001));
+  ge::console::Console con;
+  std::string joined;
+  con.add_command("connect", "", [&](ge::console::Console&, const ge::console::Args& a) {
+    joined = a.size() > 1 ? a[1] : "";
+  });
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  sm::Host host{.console = &con};
+  menu.servers().set_query({toy_status, toy_reply, nullptr, nullptr});
+  menu.servers().use_transport(&browser);
+  menu.servers().set_lan_ports(27500, 27500);
+  menu.show(host, "multi");
+  ge::ui::MenuInput accept;
+  accept.accept = true;
+  menu.update(accept, false, host, 0.016);  // JOIN A GAME is the page's first row
+  CHECK(menu.in_servers());
+  int64_t now = 0;
+  uint8_t buf[64];
+  gn::Address from;
+  for (int i = 0; i < 60; i++) {
+    now += 16000;
+    gn::sim_advance(net, now);
+    while (gn::transport_receive(server, buf, sizeof buf, from, now) >= 0) {
+      const uint8_t reply[] = {'!', 'h', 'o', 'm', 'e'};
+      gn::transport_send(server, from, reply, sizeof reply, now);
+    }
+    menu.update({}, false, host, 0.016);
+  }
+  CHECK(menu.servers().rows().size() == 1);
+  CHECK(menu.servers().list().entries[0].info.name == "home");
+  menu.update(accept, false, host, 0.016);
+  CHECK(joined == "sim:5:27500");
+  CHECK(!menu.open());
+}
+
+TEST(join_a_game_without_a_protocol_says_so) {
+  ge::console::Console con;
+  con.add_command("connect", "", [](ge::console::Console&, const ge::console::Args&) {});
+  sm::GameMenu menu;
+  menu.add_cvars(con);
+  sm::Host host{.console = &con};
+  con.execute("menu_servers");
+  menu.update({}, false, host, 0.016);
+  CHECK(menu.in_servers());
+  CHECK(!menu.servers().note().empty());
+  ge::ui::DrawList dl;
+  dl.begin(1280, 720);
+  menu.draw(dl, 1280, 720, 0);
+  CHECK(menu.problems().empty());
+  ge::ui::MenuInput back;
+  back.back = true;
+  menu.update(back, false, host, 0.016);
+  CHECK(!menu.in_servers());
+  CHECK(menu.open());
 }

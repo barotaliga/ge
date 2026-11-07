@@ -78,6 +78,11 @@ void GameMenu::add_cvars(ge::console::Console& con) {
                   "menu_screenshots: the main menu opened at OPTIONS > SCREENSHOTS (the "
                   "screenshots F12 took)",
                   opener("screenshots"));
+  con.add_command("menu_servers",
+                  "menu_servers: the main menu opened at MULTIPLAYER > JOIN A GAME (the server "
+                  "browser)",
+                  opener("servers"));
+  servers_.add_cvars(con);
 }
 
 void GameMenu::set_art(ClassicArt art) { art_ = std::move(art); }
@@ -106,10 +111,13 @@ bool GameMenu::classic() const {
 void GameMenu::show(Host& host, std::string_view page) {
   in_enhance_ = false;
   in_gallery_ = false;
+  in_servers_ = false;
   waiting_.clear();
   main_.reset();
   const bool gallery = page == "screenshots";
   if (gallery) page = "options";
+  const bool servers = page == "servers";
+  if (servers) page = "multi";
   if (page != "main") main_.open(page);
   refresh_main(host);
   main_.top().focus = -1;
@@ -121,6 +129,11 @@ void GameMenu::show(Host& host, std::string_view page) {
     main_.focus("screenshots");
     show_gallery();
   }
+  if (servers) {
+    main_.top().focus = -1;
+    main_.focus("join");
+    show_servers();
+  }
 }
 
 void GameMenu::hide() {
@@ -128,6 +141,29 @@ void GameMenu::hide() {
   waiting_.clear();
   in_enhance_ = false;
   in_gallery_ = false;
+  in_servers_ = false;
+}
+
+void GameMenu::show_servers() {
+  in_servers_ = true;
+  std::string why;
+  if (!servers_.open(&why) && con_ != nullptr) con_->print("join a game: " + why);
+}
+
+void GameMenu::update_servers(const ui::MenuInput& in, Host& host) {
+  servers_.frame(dt_);
+  switch (servers_.input(in, in.refresh)) {
+    case ServersAction::leave:
+      in_servers_ = false;
+      refresh_main(host);
+      return;
+    case ServersAction::join:
+      if (host.console != nullptr) host.console->execute("connect " + servers_.chosen());
+      hide();
+      return;
+    case ServersAction::none:
+      return;
+  }
 }
 
 void GameMenu::show_gallery() {
@@ -284,6 +320,10 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
     update_gallery(in, host);
     return;
   }
+  if (in_servers_) {
+    update_servers(in, host);
+    return;
+  }
   if (in_enhance_) ce::sync_enhancing(enhance_, board());
   if (in_enhance_) {
     for (const ui::MenuEvent& e : enhance_.input(in, hits_)) apply_enhance(e, host);
@@ -319,6 +359,9 @@ void GameMenu::update(const ui::MenuInput& in, bool escape, Host& host, double d
       case Outcome::screenshots:
         show_gallery();
         return;
+      case Outcome::servers:
+        show_servers();
+        return;
       case Outcome::classic_enhance:
         if (std::string why; !enhance_game(true, &why) && con_ != nullptr)
           con_->print("classic enhance: " + why);
@@ -339,6 +382,11 @@ void GameMenu::draw(ui::DrawList& list, int width, int height, double t) {
   if (in_gallery_) {
     gallery_page_.draw(list, gallery_, width, height, style_);
     problems_ = gallery_page_.problems();
+    return;
+  }
+  if (in_servers_) {
+    servers_.draw(list, width, height, style_);
+    problems_ = servers_.problems();
     return;
   }
   if (classic() && !in_enhance_) {

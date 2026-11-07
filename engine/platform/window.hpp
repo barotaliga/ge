@@ -48,6 +48,7 @@ enum class Key : uint8_t {
   a = 4,
   c = 6,
   d = 7,
+  r = 21,
   s = 22,
   w = 26,
   enter = 40,

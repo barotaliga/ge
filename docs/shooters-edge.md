@@ -1318,6 +1318,18 @@ everyone returns to it. Joining is from the server browser, an invite (M17j's fr
 address, with NATs crossed by hole punching or the relay (M17e). A client speaking the
 compatible protocol skips the lobby and joins the match, as it would on an existing server.
 
+**The server browser (M18q).** MULTIPLAYER ▸ JOIN A GAME (`menu_servers`) lists the servers on the
+LAN (the status query broadcast to ports 27500 to 27505, `sb_lan`), at the masters (`sb_masters`,
+and the masters the loaded install's own `<folder>/sb/sources.txt` lists) and the player's own
+(`sb_servers`): any server answering the classic status query, ours or another program's. Each row
+is the name (`*` when it wants a password), the mode (the server's `mode` key, else coop, team,
+ffa or single from its `coop`, `deathmatch` and `teamplay`), the map, players over slots, the ping
+and the skill when the server says it; the foot holds the address, the game folder, what the match
+is doing and the players by name and team. UP and DOWN choose, LEFT and RIGHT sort, R or F5
+refreshes, ENTER runs `connect <address>`. Our server's info carries what a browser lists: `map`,
+`deathmatch`, `teamplay` and `coop` when set, `skill` where monsters play it, `needpass` when a
+password is set. `connect` takes a host name as well as an address.
+
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),
 which goes through the same move and the same game program as a person's, so a bot can do

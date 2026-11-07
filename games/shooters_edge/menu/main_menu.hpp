@@ -151,7 +151,8 @@ enum class Outcome : uint8_t {
   load_game,
   back_at_root,
   bind_key,
-  screenshots
+  screenshots,
+  servers
 };
 
 // One menu event applied: a client setting's line run, NEW GAME's START running the rules and the

@@ -117,6 +117,7 @@
 #include "shooters_edge/menu/game_menu.hpp"
 #include "shooters_edge/menu/level_screens.hpp"
 #include "shooters_edge/menu/lobby_screen.hpp"
+#include "shooters_edge/net/classic_browse.hpp"
 #include "shooters_edge/net/classic_game.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
@@ -241,6 +242,7 @@ int run_main(int argc, char** argv) {
   ge::capture::add_screenshot_cvars(console.cvars(), shot_settings);
   ge::capture::add_screenshot_command(console, shots, "<game folder>/screenshots/");
   game_menu.set_screenshots(shots.dir());  // OPTIONS > SCREENSHOTS looks through them
+  game_menu.servers().set_query(shooters_edge::net::classic_query());  // JOIN A GAME
   const auto save_settings = [&console] { cl::save_settings(console); };
   ge::console::start(console, args.plus);
   console.cvars().apply_latched();
@@ -415,6 +417,7 @@ int run_main(int argc, char** argv) {
   // The install's enhancing, in the background unless ce_auto is off or a run is measured.
   if (std::string basedir, why; opened && cl::check_game_folder(args.basedir, &basedir, &why)) {
     game_menu.set_game(basedir);
+    game_menu.servers().set_masters(shooters_edge::net::classic_install_masters(basedir));
     // The game played is the one the next start opens, however it was picked (-basedir too).
     cl::remember_game(prefs, basedir);
     if (game_menu.auto_enhance() && !measured) {
@@ -623,6 +626,7 @@ int run_main(int argc, char** argv) {
     fx_palette_read = false;
     next_map = game_content.first_map;
     game_menu.set_game(basedir);
+    game_menu.servers().set_masters(shooters_edge::net::classic_install_masters(basedir));
     cl::remember_game(prefs, basedir);
     save_settings();  // the player's settings go on in the new folder
     out::status("shooters_edge: loaded " + basedir + " (" + files.folder + ")");
@@ -688,6 +692,7 @@ int run_main(int argc, char** argv) {
         mi.accept = input.tapped(Key::enter) || input.tapped(Key::space);
         mi.back = input.tapped(Key::escape);
         mi.del = input.tapped(Key::del) || input.tapped(Key::backspace);  // a Mac's delete key
+        mi.refresh = input.tapped(Key::r) || input.tapped(Key::f5);
         mi.pointer_x = input.pointer_x * px_per_unit;
         mi.pointer_y = input.pointer_y * px_per_unit;
         mi.pointer_moved = mi.pointer_x != last_pointer.x || mi.pointer_y != last_pointer.y;
