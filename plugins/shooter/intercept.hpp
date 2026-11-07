@@ -17,7 +17,8 @@
 // Angles in degrees with the protocol's pitch (down positive); the transcendentals are core's
 // libm, so the same inputs give the same aim on every machine.
 //
-// ge:summary Where a shot meets a moving player: intercept by flight time, a target's own arc, the lob
+// ge:summary Where a shot meets a moving player: intercept by flight time, a target's own arc,
+// ge:summary the grenade's lob
 // ge:keywords intercept lead flight-time projectile rocket grenade lob arc gravity midair airborne
 // ge:keywords ballistic prediction distance aim-point lob_pitch mover_at
 // ge:skill shooter bots

@@ -39,9 +39,9 @@ AimProfile aim_profile(AimSkill s) {
   // The delay is the hands' tracking lag; a new sighting waits the reaction drawn round
   // `react_med` (a top player about 160 ms, an average one 230, a novice 300).
   const Row rows[3] = {
-      {0.20, 3.0, 0.5, 0.15, 0.7, 360, 0.0f, 0.24f, 0.30f, 0.42f},   // novice
-      {0.15, 1.5, 0.6, 0.10, 0.8, 600, 0.1f, 0.18f, 0.23f, 0.30f},   // average
-      {0.12, 0.6, 0.7, 0.07, 0.9, 1000, 0.2f, 0.14f, 0.16f, 0.22f},  // expert
+      {0.20, 3.0, 0.5, 0.15, 0.7, 360, 0.0f, 0.24f, 0.30f, 0.42f},    // novice
+      {0.15, 1.5, 0.6, 0.10, 0.8, 600, 0.1f, 0.18f, 0.23f, 0.30f},    // average
+      {0.12, 0.6, 0.7, 0.07, 0.9, 1000, 0.14f, 0.14f, 0.16f, 0.22f},  // expert
   };
   const Row& r = rows[static_cast<int>(s) - 1];
   p.hands[0] = {false,     r.delay_s, r.wander, r.wander_hz, r.settle_s,
@@ -72,7 +72,7 @@ AimProfile aim_profile(uint8_t aim, uint8_t reaction) {
   p.hands.resize(2);
   p.hands[0] = {false, delay_s, wander, wander_hz, settle_s, damping, slew, -1e9, 1e9, 0};
   p.hands[1] = {false, delay_s, wander * 0.5, wander_hz, settle_s, damping, slew * 0.5, -70, 80, 0};
-  p.lead_s = static_cast<float>(at(aim, 0.0, 0.1, 0.2, 0.25));
+  p.lead_s = static_cast<float>(at(aim, 0.0, 0.1, 0.14, 0.17));
   p.react_lo = static_cast<float>(at(reaction, 0.24f, 0.18f, 0.14f, 0.12f));
   p.react_med = static_cast<float>(at(reaction, 0.30f, 0.23f, 0.16f, 0.14f));
   p.react_hi = static_cast<float>(at(reaction, 0.42f, 0.30f, 0.22f, 0.19f));

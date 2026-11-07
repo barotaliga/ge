@@ -59,7 +59,8 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     m.at = {static_cast<float>(c->seen.x), static_cast<float>(c->seen.y),
             static_cast<float>(c->seen.z)};
     m.velocity = c->velocity;
-    if (b.target_arc) {
+    if (b.target_arc && c->ent >= 1 &&
+        c->ent <= sv.set.maxclients) {  // a player falls; a monster flies
       const Vec3f down{m.at.x, m.at.y, m.at.z - 4096};
       const HullTrace tr = trace_move(sv, m.at, {}, {}, down, kTraceNoMonsters, c->ent);
       m.floor_z = tr.endpos.z + 24;

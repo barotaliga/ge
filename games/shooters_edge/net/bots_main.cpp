@@ -158,8 +158,8 @@ int run(int argc, char** argv) {
   }
   // Among people a bot is a person by its name too: made-up handles unless names were asked for.
   if (!named) cfg.names = shooters_edge::bots::bot_handles(cfg.seed, cfg.bots);
-  std::FILE* feed = nullptr;
-  if (!feed_file.empty() && !(feed = std::fopen(feed_file.c_str(), "a"))) {
+  std::FILE* feed = feed_file.empty() ? nullptr : std::fopen(feed_file.c_str(), "a");
+  if (!feed_file.empty() && feed == nullptr) {
     std::fprintf(stderr,
                  "shooters_edge_bots: --feed=%s does not open; next: a folder that exists\n",
                  feed_file.c_str());

@@ -6,6 +6,7 @@
 #include "shooters_edge/net/classic_bot_team.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <memory>
 #include <utility>
@@ -428,6 +429,7 @@ bool bot_team_start(BotTeam& t, const BotTeamConfig& cfg, std::string& error) {
     }
     t.seats.push_back(std::move(s));
   }
+  t.leader = bot_team_most_experienced(t);
   say(t, "bots: " + std::to_string(cfg.bots) + " joining " + text + " as team " + cfg.team);
   return true;
 }
@@ -502,6 +504,22 @@ void bot_team_tick(BotTeam& t, int64_t now_us) {
   }
 }
 
+int bot_team_most_experienced(const BotTeam& t) {
+  int best = 0;
+  int best_score = -1;
+  for (size_t k = 0; k < t.seats.size(); k++) {
+    const BotSeat& s = *t.seats[k];
+    const int rank = s.skill == sh::AimSkill::perfect   ? 3
+                     : s.skill == sh::AimSkill::expert  ? 2
+                     : s.skill == sh::AimSkill::average ? 1
+                                                        : 0;
+    int score = rank * 1000;
+    for (const uint8_t v : s.traits.v) score += v;
+    if (score > best_score) best_score = score, best = static_cast<int>(k);
+  }
+  return best;
+}
+
 void bot_team_command(BotTeam& t, const std::string& line_in) {
   std::string line = line_in;
   while (!line.empty() && (line[0] == '/' || line[0] == ' ')) line.erase(0, 1);
@@ -515,6 +533,37 @@ void bot_team_command(BotTeam& t, const std::string& line_in) {
   if (line.rfind("paths", 0) == 0) {
     t.cfg.paths = line.size() < 7 || line[6] != '0';
     say(t, std::string("bots: paths ") + (t.cfg.paths ? "drawn" : "hidden"));
+    return;
+  }
+  if (line.rfind("leader ", 0) == 0) {
+    const int n = std::atoi(line.c_str() + 7);
+    if (n < 1 || n > static_cast<int>(t.seats.size())) {
+      say(t, "bots: no bot" + std::to_string(n) + " to lead; next: leader 1 to leader " +
+                 std::to_string(t.seats.size()));
+      return;
+    }
+    t.leader = n - 1;
+    say(t, "bots: " + t.seats[static_cast<size_t>(t.leader)]->name + " leads");
+    return;
+  }
+  if (line.rfind("plan ", 0) == 0) {
+    std::string words = line.substr(5);
+    if (words.size() >= 2 && words.front() == '"' && words.back() == '"')
+      words = words.substr(1, words.size() - 2);
+    const bt::Said said = bt::parse_say(words);
+    if (said.kind != bt::SayKind::plan) {
+      say(t,
+          "bots: '" + words +
+              "' reads as no plan; next: plan lets take quad, plan camp ra and rl, plan free play");
+      return;
+    }
+    if (t.seats.empty()) return;
+    BotSeat& lead = *t.seats[static_cast<size_t>(t.leader) % t.seats.size()];
+    client_command(lead.c, "say_team \"" + words + "\"");
+    if (lead.fighter && lead.mirror)
+      bt::mind_take_plan(*lead.fighter, said, lead.mirror->s.sv.time);
+    say(t, "bots: " + lead.name + " leads: " + bt::strategy_name(said.strategy) + " " + said.item +
+               (said.item2.empty() ? "" : " " + said.item2));
     return;
   }
   if (line.rfind("autoready", 0) == 0) {

@@ -1,6 +1,7 @@
 // Where a shot meets a moving player (intercept.hpp).
 //
-// ge:summary Where a shot meets a moving player: intercept by flight time, a target's own arc, the lob
+// ge:summary Where a shot meets a moving player: intercept by flight time, a target's own arc,
+// ge:summary the grenade's lob
 // ge:keywords intercept mover_at lob_pitch
 // ge:skill shooter bots
 // ge:test tests/shooter_intercept_test.cpp

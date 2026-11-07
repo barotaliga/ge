@@ -25,7 +25,10 @@
 // expert`) to one. A bot takes its own settings (`skill <name>`, `temper <name>`, `traits
 // <name=v/...>`, `<trait> <1..10>`; a setting sets the bot up again on its next tick, its map
 // knowledge started over), `status`, and sends anything else to the server as a console line
-// (`ready`, `break`, `say hi`, `team red`).
+// (`ready`, `break`, `say hi`, `team red`). The team's STRATEGY (bots/talk.hpp `Strategy`):
+// `plan <words>` (`plan lets take quad`, `plan camp ra and rl`, `plan free play`) is said by the
+// team's leader as typed and taken up by every bot that reads it (a person's plan line too);
+// `leader <N>` makes bot N the one who says it.
 //
 // THE RECORDING: with `out` set, each bot's client recording (every packet read and every command
 // sent, classic_record.hpp) is written to `<out>/<name>.demo` at the end, and the team's lines to
@@ -133,6 +136,8 @@ struct BotTeam {
   bool plan_said = false;  // the map plan's lines in the log
   int maps = 0;            // maps loaded
 
+  int leader =
+      0;  // the seat whose words set the team's strategy: its most experienced at the start
   int64_t now_us = 0, ticks = 0;
   std::vector<std::string> log;  // what the process prints: the server's lines once, the console's
   size_t log_read = 0;           // the caller's place in `log`
@@ -141,6 +146,9 @@ struct BotTeam {
 // Opens a socket a bot and starts every client toward `cfg.server`. False (and `error`, with the
 // next step) when the address does not read or a socket does not open.
 bool bot_team_start(BotTeam& t, const BotTeamConfig& cfg, std::string& error);
+// The seat of the team's most experienced bot (the best skill, then the most in its traits): the
+// team's leader from the start (`leader <N>` names another).
+int bot_team_most_experienced(const BotTeam& t);
 // One tick of every bot at the caller's clock (microseconds since the start).
 void bot_team_tick(BotTeam& t, int64_t now_us);
 // A console line (see the header). Answers go into `log`.
