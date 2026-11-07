@@ -365,7 +365,11 @@ folder is beside it under `-basedir`, the demo plays from it, the base under it,
 models, skins and maps are found; a `-game` you pass always wins. A folder that is not there is
 named in the console with what to do.
 
-**Heard and read.** A played demo is heard on the window's audio device: its sounds (the pack's
+**Heard and read.** The window's own game, a match on its listen server or the campaign, is heard
+through the same players (`client/listen_sound.hpp`): each sound the server starts for the player
+(a shot, a door, a lift, a pickup) at its entity, moving with it, the map's loops from its load,
+and the ambience by leaf, for a listener at his eye. A played demo is heard on the window's audio
+device: its sounds (the pack's
 recordings, moving with what makes them, the level's loops and ambience) and the players' voices,
 the same players `-demovideo` renders (`client/demo_heard.hpp`), at `volume` (0..1, 0.7; the
 menu's SOUND VOLUME). The lines the server printed to the player the view rides (the deaths, the

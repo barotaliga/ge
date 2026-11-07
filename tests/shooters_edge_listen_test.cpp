@@ -26,6 +26,8 @@
 #include <string>
 #include <vector>
 
+#include "audio/synth.hpp"
+#include "audio/wav.hpp"
 #include "brush/write.hpp"
 #include "check.hpp"
 #include "golden.hpp"
@@ -35,10 +37,12 @@
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/listen_sound.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/settings.hpp"
 #include "shooters_edge/client/view.hpp"
 #include "shooters_edge/net/classic_game.hpp"
+#include "shooters_edge_campaign_fixture.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -119,6 +123,7 @@ struct Rjump {
   float health_before = 0, health_after = 0;
   float rockets_before = 0, rockets_after = 0;
   int weapon = 0;
+  std::vector<std::string> sounds;  // what the server started for the player, by name, in order
 };
 
 uint64_t bits(float f) {
@@ -136,6 +141,9 @@ Rjump rocket_jump() {
     for (int i = 0; i < frames; i++) {
       cl::listen_frame(l, cmd);
       cmd.impulse = 0;
+      for (const cl::DemoSound& d : l.sounds)
+        r.sounds.push_back(l.server->sounds[static_cast<size_t>(d.sound)]);
+      l.sounds.clear();
       const sh::Edict& me = l.server->sv.edicts[1];
       if (peak) *peak = std::max(*peak, me.origin.z);
       if (l.frames % 10 == 0)
@@ -535,4 +543,84 @@ TEST(a_mods_named_effects_reach_the_player_by_name_or_as_the_classic_effect) {
   CHECK(trail.kind == cl::EffectKind::named_trail && trail.name == "spark_trail" &&
         trail.end.y == 0.0f);
   CHECK(l.explosions.size() == booms + 1);
+}
+
+TEST(the_window_hears_its_own_game_the_launcher_picked_up_and_fired) {
+  const Rjump& r = the_jump();
+  const auto heard = [&r](std::string_view part) {
+    return std::any_of(r.sounds.begin(), r.sounds.end(),
+                       [part](const std::string& s) { return s.find(part) != std::string::npos; });
+  };
+  CHECK_MSG(!r.sounds.empty(), "the server started no sound for the player");
+  CHECK_MSG(heard("weapons/"), "no weapon's sound among " + std::to_string(r.sounds.size()));
+  // Played: every name on the sound list a short tone in the packs, the same game heard.
+  cl::Listen l;
+  if (!start(l)) return;
+  std::vector<float> tone(2400);
+  for (size_t i = 0; i < tone.size(); i++) tone[i] = (i / 24) % 2 == 0 ? 0.2f : -0.2f;
+  std::vector<std::pair<std::string, std::vector<uint8_t>>> entries;
+  for (size_t i = 1; i < l.server->sounds.size(); i++)
+    entries.push_back({"sound/" + l.server->sounds[i], ge::audio::wav_bytes(tone, 1, 22050)});
+  std::vector<uint8_t> pak;
+  std::string error;
+  CHECK_MSG(ge::vfs::write_pak(entries, &pak, &error), error);
+  cl::SearchPath files;
+  CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
+  ge::audio::Synth synth;
+  cl::ListenHearing hearing(synth);
+  const auto run = [&](int frames, sh::MoveCmd cmd) {
+    for (int i = 0; i < frames; i++) {
+      cl::listen_frame(l, cmd);
+      cmd.impulse = 0;
+      hearing.frame(l, files, 1.0f / 77);
+      CHECK(l.sounds.empty());  // played and emptied
+    }
+  };
+  run(80, {});
+  l.impulse = 7;
+  run(80, {});
+  sh::MoveCmd fire;
+  fire.buttons = sh::kButtonAttack;
+  run(2, fire);
+  run(40, {});
+  const cl::DemoSoundStats* st = hearing.stats();
+  CHECK(st != nullptr);
+  if (st == nullptr) return;
+  CHECK_MSG(st->started > 0, "nothing played");
+  CHECK_MSG(st->missing == 0, std::to_string(st->missing) + " recordings missing");
+  CHECK(hearing.state().sounds == l.server->sounds);
+  const sh::Edict& me = l.server->sv.edicts[1];
+  CHECK(hearing.state().eye.z > me.origin.z);  // the listener at the eye, above the origin
+  cl::listen_stop(l);
+  hearing.frame(l, files, 0.01f);  // no game: everything stopped
+  CHECK(hearing.stats() == nullptr);
+}
+
+TEST(the_campaign_s_looping_sounds_set_off_at_the_map_s_load_are_heard) {
+  auto map = std::make_unique<cl::LoadedMap>();
+  map->name = map->spec.name = "first";
+  map->spec.models = shooters_edge::server::arena_models(true);
+  map->spec.entities = R"({
+"classname" "worldspawn"
+}
+{
+"classname" "info_player_start"
+"origin" "-416 0 24"
+}
+{
+"classname" "ambient_drip"
+"origin" "-300 0 64"
+}
+)";
+  cl::Listen l;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.console = {"deathmatch 0"};
+  std::string error;
+  CHECK_MSG(cl::listen_start(l, campfix::mod(), std::move(map), opt, error), error);
+  if (l.server == nullptr) return;
+  CHECK_MSG(l.static_sounds.size() == 1, std::to_string(l.static_sounds.size()) + " loops");
+  if (l.static_sounds.size() != 1) return;
+  const cl::DemoStaticSound& drip = l.static_sounds[0];
+  CHECK(l.server->sounds[static_cast<size_t>(drip.sound)].find("drip") != std::string::npos);
+  CHECK(drip.origin.x == -300.0f && drip.volume > 0 && drip.attenuation > 0);
 }

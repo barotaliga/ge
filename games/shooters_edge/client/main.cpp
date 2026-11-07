@@ -98,6 +98,7 @@
 #include "shooters_edge/client/game_folder.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen_record.hpp"
+#include "shooters_edge/client/listen_sound.hpp"
 #include "shooters_edge/client/lobby_console.hpp"
 #include "shooters_edge/client/map_load.hpp"
 #include "shooters_edge/client/present.hpp"
@@ -204,7 +205,8 @@ int run_main(int argc, char** argv) {
   sn::add_remote_commands(console, remote);
   cl::DemoPlayback playback;  // a played demo's bar, controls and highlights (demo_playback.hpp)
   cl::add_playback_commands(console, playback, bench);
-  // The window's sound: a played demo's for now (client/demo_heard.hpp), at `volume`.
+  // The window's sound: its own game's (client/listen_sound.hpp) or a played demo's or a joined
+  // server's (client/demo_heard.hpp), at `volume`.
   ge::audio::Synth synth;  // outlives the device that pulls it (opened with the window)
   se::Hud hud = se::make_hud();
   const auto tell = [&](const std::string& line, double at) {  // the console and the HUD's feed
@@ -447,7 +449,8 @@ int run_main(int argc, char** argv) {
       ge::platform::open_audio({.rate = ge::audio::kRate, .pull = pull, .user = &synth});
   out::status(speaker ? std::string("shooters_edge: audio on '") + speaker->driver() + "'"
                       : std::string("shooters_edge: no audio device; a demo plays silent"));
-  cl::DemoHearing hearing(synth);  // a played demo's sounds, voices and printed lines
+  cl::DemoHearing hearing(synth);       // a played demo's sounds, voices and printed lines
+  cl::ListenHearing heard_here(synth);  // the window's own game's sounds (listen_sound.hpp)
   // The microphone, opened the first time +voip is held on a server joined (the system asks the
   // player's leave then, never at start) and read every frame after (net/classic_remote.hpp).
   std::unique_ptr<ge::platform::AudioIn> mic;
@@ -617,6 +620,11 @@ int run_main(int argc, char** argv) {
     held_fire.shots = {};
     user_info.sent_to = nullptr;
   };
+  // The window's own game heard this frame (`dt` s), at the player's volume.
+  const auto hear_here = [&](double dt) {
+    synth.bus_gain(0, static_cast<float>(win.volume) / cl::kDemoVolume);
+    heard_here.frame(listen, files, static_cast<float>(dt));
+  };
   size_t printed = 0, centred = 0;
   uint64_t last = first_ns;
   long presented = 0;
@@ -768,6 +776,7 @@ int run_main(int argc, char** argv) {
     if (next_map.empty() && !listen.pending_map.empty() && !cl::busy(loader))
       next_map = listen.pending_map;
     const bool elsewhere = bench.active || remote.active || bench_map;  // the world is theirs
+    if (elsewhere) heard_here.stop();  // a demo or a server joined is heard instead
     if (!next_map.empty() && !loader.map.valid() && !elsewhere) {
       cl::load_map(loader, files, next_map, t);
       next_map.clear();
@@ -1011,6 +1020,7 @@ int run_main(int argc, char** argv) {
     if (cl::on_lobby_screen(listen)) {
       const int frames = cl::listen_advance(listen, wall, ge::shooter::MoveCmd{});
       cl::record_tick(recorder, listen, frames, console);
+      hear_here(wall);
       if (std::exchange(listen.restarted, false)) forget_seen();
       for (; printed < listen.prints.size(); printed++) tell(listen.prints[printed], t);
       title_frame(t, wall, {}, 0, true);
@@ -1029,6 +1039,7 @@ int run_main(int argc, char** argv) {
     const bool paused = listen.campaign_host && (con_view.open() || game_menu.open());
     const int frames = paused ? 0 : cl::listen_advance(listen, wall, cmd);
     cl::record_tick(recorder, listen, frames, console);
+    hear_here(wall);
     if (!listen.failed.empty()) {
       out::error("shooters_edge: the campaign's next map did not start: " + listen.failed +
                  "; see docs/shooters-edge.md § Playing it");
