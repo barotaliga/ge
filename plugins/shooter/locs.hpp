@@ -17,7 +17,7 @@
 //
 // ge:summary A map's place names: the .loc format read, macros expanded, the nearest point named
 // ge:keywords loc locations place-name callout loc-file location-macro nearest-loc teamplay
-// ge:keywords parse_locs nearest_loc loc_name_at
+// ge:keywords parse_locs nearest_loc loc_name_at loc_places place-middle area-labels
 // ge:skill shooter bots
 // ge:test tests/shooter_locs_test.cpp
 #pragma once
@@ -51,6 +51,10 @@ std::string expand_loc_name(std::string_view raw);
 
 // The points of a `.loc` file's text, added to `out`; the number of lines read as points.
 int parse_locs(std::string_view text, Locs& out);
+
+// Each place once: its name at the middle of its points, in the order the names first appear (a map
+// pictured with its places named; a callout's place read as one spot).
+std::vector<Loc> loc_places(const Locs& locs);
 
 // The point nearest `p` (the first of equals), or nullptr with none.
 const Loc* nearest_loc(const Locs& locs, Vec3f p);

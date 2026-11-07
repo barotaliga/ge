@@ -25,6 +25,7 @@ constexpr int kPanel = 400;  // the panel's width, px
 const gl::Rgba kBack{24, 26, 30, 255};
 const gl::Rgba kInk{230, 230, 225, 255};
 const gl::Rgba kDim{140, 140, 140, 255};
+const gl::Rgba kPlace{175, 185, 200, 255};  // the places' names
 const gl::Rgba kEnemy{235, 60, 50, 255};
 const gl::Rgba kSent{255, 150, 30, 255};
 const gl::Rgba kBots[8] = {{80, 200, 255, 255},  {120, 255, 120, 255}, {255, 220, 80, 255},
@@ -134,8 +135,14 @@ gl::Picture team_view(TeamView& v, const BotTeam& t, int w, int h) {
 
   if (first && t.nav) {
     const sh::NavGraph& g = t.nav->nav.graph;
-    // The items as the team believes them.
     const bt::Fighter& f0 = *first->fighter;
+    // The map's places by name (the team's callouts), each at its points' middle, under the rest.
+    if (f0.locs)
+      for (const sh::Loc& l : sh::loc_places(*f0.locs)) {
+        const double x = px(l.at.x), y = py(l.at.y);
+        gl::draw_text(p, x - gl::text_width(l.name) / 2.0, y - 3, l.name, kPlace);
+      }
+    // The items as the team believes them.
     for (size_t i = 0; i < f0.items.size(); i++) {
       const bt::ItemSpot& it = f0.items[i];
       if (!key(it)) continue;

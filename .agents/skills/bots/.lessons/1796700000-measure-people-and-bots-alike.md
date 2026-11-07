@@ -19,3 +19,8 @@ moved 6 to 19 between seeds with nothing changed): A/B six seeds from one tree w
 compile switch (two binaries copied aside), and read the mean with its standard error. A gate
 that never fires does nothing: tally which condition stops it (`strength < 120` stopped 80 % of
 the hunts: most free players carry no armour) before tuning its threshold.
+A behaviour gated on a resource needs the resource counted first: the spam at news waited on 10 to
+19 rockets and fired 0 times on three maps because no bot ever carried more than 7 (a histogram of
+the rockets in hand while roaming showed it in one run); the gap was a rocket box no route reached.
+Team calls are rate-limited (`kSayGap_s`), so a call that must follow another at once (the
+opening's claim after the spawn report) is let through on purpose, or it lands 2.5 s late.
