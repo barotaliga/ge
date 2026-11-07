@@ -57,6 +57,8 @@ struct MatchPlayer {
   std::vector<ge::shooter::Vec3f> origins;
   std::vector<int> health, armour, weapon, frags;
   float yaw = 0;  // where he looks, degrees
+  // Where he looks each frame (pitch down positive, yaw, roll; the last held); empty: `yaw`.
+  std::vector<ge::shooter::Vec3f> angles;
 };
 struct MatchRocket {
   int from = 0, to = 0;  // the frames it is in the list
