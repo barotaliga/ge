@@ -208,10 +208,12 @@ gl::Picture team_view(TeamView& v, const BotTeam& t, int w, int h) {
       }
       // Its path: the line it means to walk, its lane off the route in (when drawn at all).
       if (t.cfg.paths) {
-        const std::vector<sh::Vec3f> path = sh::pilot_path(f.bot.pilot.pilot, me.origin);
+        std::vector<uint8_t> breaks;
+        const std::vector<sh::Vec3f> path = sh::pilot_path(f.bot.pilot.pilot, me.origin, &breaks);
         for (size_t i = 1; i < path.size(); i++)
-          gl::draw_line(p, px(path[i - 1].x), py(path[i - 1].y), px(path[i].x), py(path[i].y), col,
-                        2);
+          if (!breaks[i])
+            gl::draw_line(p, px(path[i - 1].x), py(path[i - 1].y), px(path[i].x), py(path[i].y),
+                          col, 2);
       }
       if (f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()) {
         const bt::ItemSpot& it = f.items[static_cast<size_t>(f.goal_item)];
