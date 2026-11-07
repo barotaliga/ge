@@ -13,12 +13,14 @@
 //
 // ge:summary A standing bot watches the ways into its area: the doorways, a sound's first
 // ge:keywords watch look pre-aim doorway entrance ways-in hold-spot watch_spots watch_choose
+// ge:keywords watch_look
 // ge:skill bots
 // ge:test tests/shooters_edge_fight_test.cpp
 #pragma once
 
 #include <cstdint>
 
+#include "ai/why.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 
 namespace shooters_edge::bots {
@@ -30,5 +32,11 @@ void watch_spots(Fighter& f, const server::RulesCommon& s, int me, int32_t node,
 // The spot to watch at time `t` (into `f.watch`; -1 none), a sound heard from `heard` (null: none)
 // turning it to the nearest.
 int32_t watch_choose(Fighter& f, sh::Vec3f eye, double t, const sh::Vec3f* heard);
+
+// The watch at a command (server time `t`): standing (arrived or idle), or a holder walking or
+// hopping in its claimed area, with nobody about (roam, no button errand, not a companion, not
+// swimming), the view set on the spot chosen (`f.bot.look`), else let go.
+void watch_look(Fighter& f, const server::RulesCommon& s, int me, bool dead, double t,
+                ge::ai::Why* why);
 
 }  // namespace shooters_edge::bots
