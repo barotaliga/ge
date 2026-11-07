@@ -19,6 +19,11 @@
 // aim leads for it (`shot_speed`: a projectile's speed, the time it flies added to the lead; 0 a
 // hitscan; `aim_dz`: aimed this far over the middle, below it for a blast at the feet).
 //
+// THE NETWORK'S LEAD (`lag_s`, `rewound`): on a server across a network, the others are seen
+// where the server last sent them and the shot starts there a one-way trip after it is pressed,
+// so the target has gone on a round trip: a projectile is led `lag_s` more, and a hitscan too
+// unless the server rewinds hitscan to what the shooter saw (`rewound`, its `sv_antilag`).
+//
 // ge:summary The bot: the pilot with senses and aim, a server slot's command source
 // ge:keywords bot pilot senses aim view look contact track hold release bot_source
 // ge:skill shooter bots
@@ -55,6 +60,8 @@ struct Bot {
   double wanted[2] = {}, pressed[2] = {};  // the aim's last yaw and pitch, wanted and pressed
   float shot_speed = 0;                    // the held weapon's projectile, units/s; 0 a hitscan
   float aim_dz = 0;                        // the aim point over the target's middle, units
+  float lag_s = 0;       // the round trip to the server, s (0: the bot's slot on the server)
+  bool rewound = false;  // the server rewinds hitscan to what the shooter saw (sv_antilag)
   // The reaction to the sighting in hand (aim.hpp `draw_reaction`): the view held where it was
   // until `freeze_until` (the hands' own lag then makes up the rest), and no shot before
   // `react_until`.

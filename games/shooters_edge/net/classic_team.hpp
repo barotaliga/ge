@@ -75,6 +75,11 @@ struct TeamMatchOptions {
   // Every fighter reads only what its own client was sent (classic_mirror.hpp), as it must on a
   // server it cannot read; false: it reads our server's world, as before.
   bool client_fed = false;
+  // The network between every client and the server, one way (0: a LAN), with a jitter of a
+  // tenth of it: 50 is a round trip of about 100 ms, a player across an ocean.
+  double latency_ms = 0;
+  bool antilag =
+      false;  // the server rewinds hitscan to what the shooter saw (ServerConfig::antilag)
 };
 
 struct TeamPlayer {

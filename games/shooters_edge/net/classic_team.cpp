@@ -31,6 +31,7 @@
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/record_cvars.hpp"
 #include "shooters_edge/net/classic_client.hpp"
+#include "shooters_edge/net/classic_info.hpp"
 #include "shooters_edge/net/classic_mirror.hpp"
 #include "shooters_edge/net/classic_record.hpp"
 #include "shooters_edge/net/classic_server.hpp"
@@ -159,12 +160,17 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   // The server over the simulated network, recording.
   gn::LinkConditions lan;
   gn::conditions_preset("lan", lan);
+  if (opt.latency_ms > 0) {
+    lan.latency_ms = opt.latency_ms;
+    lan.jitter_ms = opt.latency_ms / 10;
+  }
   gn::SimNetwork net = gn::make_sim_network(opt.seed, lan);
   gn::Transport st;
   gn::open_sim_transport(st, net, gn::sim_address(0, kPortServer));
   auto server = std::make_unique<ClassicServer>();
   ServerConfig cfg;
   cfg.hostname = "Shooter's Edge bots 4on4";
+  cfg.antilag = opt.antilag;
   if (!classic_start(*server, rules, st, cfg, r.error)) return r;
   MultiviewRecorder mvd;
   if (opt.record) {
@@ -227,6 +233,12 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
               bt::mind_hear(sp->fighter, who, words, w.sv.time);
             else
               bt::mind_obituary(sp->fighter, c->prints[sp->heard], w.sv.time);
+          }
+          // Its shots led on the network's round trip, as on any server across one (bot.hpp).
+          if (sp->mirror) {
+            sp->fighter.bot.lag_s = static_cast<float>(c->latency);
+            const std::string antilag = info_get(c->serverinfo, "sv_antilag");
+            sp->fighter.bot.rewound = !antilag.empty() && antilag != "0";
           }
           const sh::MoveCmd cmd = bt::fighter_command(sp->fighter, w, c->playernum, bt::kPilotMsec);
           // The fighter's team messages, as a player types them.

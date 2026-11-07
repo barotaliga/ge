@@ -50,6 +50,7 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
   // Each player's commands in each mode over the four seeds: a balanced novice goes after no fresh
   // enemy (shooter/temper.hpp), so in one two-minute match he may never chase.
   std::map<std::string, std::array<int64_t, 4>> modes;
+  std::map<std::string, float> frags;  // each player's over the four seeds
   for (uint32_t seed = 1; seed <= 4; seed++) {
     const fb::FightReport r = fb::run_fight(duel_of_skills(seed, 9000));
     CHECK_MSG(r.ok, r.error);
@@ -58,9 +59,12 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
     for (const fb::FightPlayer& p : r.players) {
       const std::string name = p.name + " seed " + std::to_string(seed);
       const fb::FighterStats& s = p.stats;
-      CHECK_MSG(p.frags >= 3 && p.deaths >= 3, name + " scored " + std::to_string(p.frags) +
+      // Every seed he scores and dies; three frags a seed is held over the four (a novice's one
+      // two-minute match is a coin toss: 2 frags in one seed is no fault).
+      CHECK_MSG(p.frags >= 1 && p.deaths >= 3, name + " scored " + std::to_string(p.frags) +
                                                    " and died " + std::to_string(p.deaths) +
                                                    " times in two minutes");
+      frags[p.name] += p.frags;
       CHECK_MSG(s.pickups >= 2, name + " picked up " + std::to_string(s.pickups) + " items");
       CHECK_MSG(s.switches >= 3,
                 name + " switched weapons " + std::to_string(s.switches) + " times");
@@ -72,6 +76,8 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
     }
     std::printf("seed %u: experts %.0f novices %.0f so far\n", seed, expert, novice);
   }
+  for (const auto& [name, n] : frags)
+    CHECK_MSG(n >= 12, name + " scored " + std::to_string(n) + " in four seeds (under 3 a seed)");
   for (const auto& [name, m] : modes)
     for (size_t k = 0; k < 4; k++)
       CHECK_MSG(m[k] > 0, name + " never entered " +

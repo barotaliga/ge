@@ -1,11 +1,12 @@
 // ge:summary A fighter's footwork: the dodge's side key in a fight, the walk onto an exit node
 // ge:keywords footwork fighter_dodge fighter_landing dodge_step dodge_clear landing exit-node
 // ge:skill bots
-// ge:test tests/shooters_edge_fight_test.cpp
+// ge:test tests/shooters_edge_footwork_test.cpp
 #include "shooters_edge/bots/footwork.hpp"
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "core/prng.hpp"
 #include "shooter/dodge.hpp"
 
 namespace shooters_edge::bots {
@@ -70,6 +71,28 @@ bool fighter_landing(Fighter& f, const server::RulesCommon& s, int me, double t,
     f.stats.landings++;
   }
   return true;
+}
+
+void fighter_keys(Fighter& f, sh::MoveCmd& cmd) {
+  const int8_t sign = static_cast<int8_t>((cmd.side > 0) - (cmd.side < 0));
+  const sh::PilotMode mode = f.bot.pilot.pilot.mode;
+  const bool proven = mode == sh::PilotMode::run_up || mode == sh::PilotMode::jump ||
+                      mode == sh::PilotMode::air || mode == sh::PilotMode::grenade;
+  const bool turned = !proven && sign != 0 && f.side_was == -sign;
+  if (turned) {
+    // Turned round this command: the old key let go, the other pressed 1 to 3 commands later,
+    // unless this change is a clean one.
+    const bool clean = static_cast<float>(ge::core::next(f.keys_rng)) < f.clean_keys;
+    f.side_gap =
+        clean ? 0 : static_cast<int8_t>(1 + static_cast<int>(ge::core::next(f.keys_rng) * 3));
+  } else if (proven || sign != f.side_was) {
+    f.side_gap = 0;  // a proven jump's keys, or one let go or pressed from none: no change
+  }
+  f.side_was = sign;
+  if (f.side_gap > 0) {
+    f.side_gap--;
+    cmd.side = 0;
+  }
 }
 
 }  // namespace shooters_edge::bots

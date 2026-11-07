@@ -52,7 +52,14 @@ std::vector<uint8_t> read_from(Mount& m, const std::string& gamedir, const std::
     std::string why;
     m.files = {};
     m.open = cl::open_game_dir(m.basedir, gamedir, m.files, why);
-    // A server's game folder the player does not have (a match mod's): the base game's alone.
+    // A server's game folder the player does not have (a match mod's): the multiplayer client's
+    // folder every such server shares (where downloaded maps go) over the base game's, else the
+    // base game's alone.
+    if (!m.open) {
+      m.files = {};
+      const std::string mp(ge::classicenhance::classic_profile().multiplayer_dir);
+      m.open = cl::open_game_dir(m.basedir, mp, m.files, why);
+    }
     if (!m.open) {
       m.files = {};
       m.open = cl::open_game_dir(m.basedir, "", m.files, why);
@@ -264,6 +271,10 @@ sh::MoveCmd brain(BotTeam& t, BotSeat& s) {
     else
       bt::mind_obituary(f, plain(c.prints[s.heard]), s.mirror->s.sv.time);
   }
+  // Its shots led on the round trip; hitscan not, where the server rewinds it (sv_antilag 1, 2).
+  f.bot.lag_s = static_cast<float>(c.latency);
+  const std::string antilag = info_get(c.serverinfo, "sv_antilag");
+  f.bot.rewound = !antilag.empty() && antilag != "0";
   const sh::MoveCmd cmd = bt::fighter_command(f, s.mirror->s, c.playernum, bt::kPilotMsec);
   for (const std::string& line : f.outbox) client_command(c, "say_team \"" + line + "\"");
   f.outbox.clear();
