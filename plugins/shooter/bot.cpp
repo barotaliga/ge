@@ -7,6 +7,7 @@
 #include <array>
 #include <cmath>
 
+#include "core/libm/libm.hpp"
 #include "shooter/intercept.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/usercmd.hpp"
@@ -28,6 +29,12 @@ float wrap(float deg) { return unwrap(deg, 0); }
 constexpr float kPreAim = 5;
 // The one in hand out of sight this long is a new sighting when he shows again, s.
 constexpr double kResight_s = 0.3;
+
+constexpr double kCalmBand = 25;    // degrees the view may lie off the way it walks, still
+constexpr double kCalmTurn = 180;   // degrees a second it turns past the band
+constexpr double kCalmAbout = 360;  // and for an about-face
+constexpr double kCalmDrift = 3;    // degrees a second of the hand's drift, at most
+constexpr float kCalmAhead = 320;   // units on along the route the calm view looks at
 
 MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   Bot& b = *static_cast<Bot*>(ctx);
@@ -189,10 +196,52 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
     cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
   } else {
-    b.yaw = pilot_yaw;
-    b.pitch = 0;
+    const PilotMode pm = b.pilot.pilot.mode;
+    const bool walking = pm == PilotMode::walk || pm == PilotMode::idle || pm == PilotMode::wait ||
+                         pm == PilotMode::ride || pm == PilotMode::arrived;
+    if (b.calm && walking) {
+      // The calm view (bot.hpp): still in the band, turned at a hand's pace past it, drifting.
+      const double dt = msec / 1000.0;
+      b.calm_t += dt;
+      // Where it looks: the route's point about `kCalmAhead` units on, so the view turns before a
+      // corner to see round it and holds still on a straight; else the way it walks.
+      float look_yaw = pilot_yaw;
+      {
+        const Edict& me_ent = sv.edicts[static_cast<size_t>(me)];
+        const std::vector<Vec3f> path = pilot_path(b.pilot.pilot, me_ent.origin, nullptr);
+        float run = 0;
+        for (size_t k = 1; k < path.size(); k++) {
+          const Vec3f d = path[k] - path[k - 1];
+          run += std::sqrt(d.x * d.x + d.y * d.y);
+          if (run >= kCalmAhead || k + 1 == path.size()) {
+            const Vec3f to = path[k] - me_ent.origin;
+            if (to.x * to.x + to.y * to.y > 64 * 64) {
+              float py = 0, pp = 0;
+              aim_angles(me_ent.origin, path[k], py, pp);
+              look_yaw = py;
+            }
+            break;
+          }
+        }
+      }
+      const double off = wrap(look_yaw - b.yaw);
+      const double rate = (off > 120 || off < -120) ? kCalmAbout : kCalmTurn;
+      double step = 0;
+      if (off > kCalmBand || off < -kCalmBand) {
+        const double want_step = off > 0 ? off - kCalmBand * 0.5 : off + kCalmBand * 0.5;
+        step = std::fmax(-rate * dt, std::fmin(rate * dt, want_step));
+      }
+      const double drift = kCalmDrift * core::libm::sin(b.calm_t * 0.7) * dt;
+      b.yaw = static_cast<float>(b.yaw + step + drift);
+      b.pitch = static_cast<float>(b.pitch * (1 - dt) + 2 * core::libm::sin(b.calm_t * 0.4) * dt);
+      turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
+      cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
+    } else {
+      b.yaw = pilot_yaw;
+      b.pitch = 0;
+    }
     b.wanted[0] = b.pressed[0] = b.yaw;
-    b.wanted[1] = b.pressed[1] = 0;
+    b.wanted[1] = b.pressed[1] = b.pitch;
   }
   return cmd;
 }
