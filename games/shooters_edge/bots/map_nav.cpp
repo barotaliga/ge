@@ -203,32 +203,71 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
     }
   }
   out.teleport_links = static_cast<int64_t>(teleports.size());
-  // Water: the links prove no swim, so a pool is closed to entry (no route leads into it, and an
-  // item under water is out of reach); a player knocked in finds his own way out (the fighter).
+  // Water: part of the graph (shooter/swim.hpp `nav_add_swim`): its cells are swim nodes, a pool's
+  // floor joined to the water over it, a dry edge to the water under it by the climb out the
+  // move proves. One route search goes through it as through any room.
   sh::NavGraph& graph = out.graph;
   out.wet.assign(graph.nodes.size(), 0);
   for (size_t n = 0; n < graph.nodes.size(); n++) {
     const sh::Vec3f o = graph.nodes[n].origin;
     out.wet[n] = sh::water_contents(out.world, {o.x, o.y, o.z - 10}) <= sh::kContentsWater ? 1 : 0;
   }
-  out.closed_links = sh::nav_close_entries(graph, out.wet, &out.entries);
-  // The way out of the water: to any dry node of the map's main part (the most a start reaches).
-  out.main_n = 0;
-  ge::ai::Search sr;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* org = pg::block_value(b, "origin");
-    if (!cn || !org || std::strcmp(cn, start_class) != 0) continue;
-    const int32_t k = sh::nav_reach(graph, sh::nav_nearest(graph, origin_of(org)), sr);
-    if (k > out.main_n) {
-      out.main_n = k;
-      std::swap(out.main, sr);
+  out.swim_nav = sh::nav_add_swim(out.world, graph, out.wet);
+  out.wet.resize(graph.nodes.size(), 1);  // every swim node is wet
+  // The map's main part: the most a start spot reaches.
+  const auto find_main = [&] {
+    out.main_n = 0;
+    ge::ai::Search sr;
+    for (const pg::EntityBlock& b : blocks) {
+      const char* cn = pg::block_value(b, "classname");
+      const char* org = pg::block_value(b, "origin");
+      if (!cn || !org || std::strcmp(cn, start_class) != 0) continue;
+      const int32_t k = sh::nav_reach(graph, sh::nav_nearest(graph, origin_of(org)), sr);
+      if (k > out.main_n) {
+        out.main_n = k;
+        std::swap(out.main, sr);
+      }
     }
+  };
+  find_main();
+  // The pockets it does not reach, and those that reach none of it back, bridged by the links the
+  // build never tries (shooter/nav.hpp `nav_bridge_pockets`); the main part found again.
+  if (out.main_n > 0) {
+    std::vector<uint8_t> main(graph.nodes.size());
+    for (size_t n = 0; n < main.size(); n++)
+      main[n] = out.main.reached(static_cast<int32_t>(n)) ? 1 : 0;
+    // A rocket jump only into a pocket that holds an item.
+    std::vector<uint8_t> wanted(graph.nodes.size(), 0);
+    for (const pg::EntityBlock& b : blocks) {
+      const char* cn = pg::block_value(b, "classname");
+      const char* org = pg::block_value(b, "origin");
+      if (!cn || !org || (std::strncmp(cn, "item_", 5) != 0 && std::strncmp(cn, "weapon_", 7) != 0))
+        continue;
+      const sh::Vec3f at = origin_of(org);
+      const int32_t n = sh::nav_nearest(graph, {at.x, at.y, at.z + 24});
+      if (n >= 0) wanted[static_cast<size_t>(n)] = 1;
+    }
+    sh::NavBridgeSettings bs;
+    bs.wanted = wanted;
+    out.bridges_made = sh::nav_bridge_pockets(out.world, sh::MoveSettings{}, graph, main, bs);
+    find_main();
+  }
+  // The traps: nodes no way on foot leads back from to the main part (a room a rocket jump or a
+  // drop leads into and nothing out of): no goal of a bot's.
+  {
+    std::vector<uint8_t> main(graph.nodes.size());
+    const bool found = out.main.nodes() == graph.nodes.size();
+    for (size_t n = 0; n < main.size(); n++)
+      main[n] = found && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
+    const std::vector<uint8_t> back = sh::nav_back(graph, main);
+    out.trap.assign(graph.nodes.size(), 0);
+    for (size_t n = 0; n < back.size() && found; n++) out.trap[n] = back[n] ? 0 : 1;
   }
   std::vector<uint8_t> exits(graph.nodes.size(), 0);
   for (size_t n = 0; n < graph.nodes.size(); n++)
     exits[n] = out.main_n > 0 && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
   sh::build_swim(out.world, graph, exits, sh::SwimSettings{}, out.swim);
+  sh::nav_room(graph);  // the room either side a walker strays into (pilot.hpp's lane)
   out.build_ms =
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
   if (graph.nodes.empty()) {

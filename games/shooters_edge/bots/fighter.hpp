@@ -218,6 +218,8 @@ struct Fighter {
   Team* team = nullptr;                     // its side (team.hpp); null in a free-for-all
   const ge::shooter::Locs* locs = nullptr;  // the map's place names (none: no names)
   const MapPlan* plan = nullptr;  // the map's team plan (map_plan.hpp; none: the items alone)
+  // The map's traps (map_nav.hpp: nodes no way on foot leads back from), never a goal; null none.
+  const std::vector<uint8_t>* trap = nullptr;
   const ge::shooter::SwimField* swim = nullptr;  // the map's way out of its water (none: no water)
   int64_t buttons = 0;                           // buttons gone to
   int64_t dives = 0;                             // dives begun

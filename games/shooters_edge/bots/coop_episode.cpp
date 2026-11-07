@@ -104,6 +104,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
     f.bot.yaw = s.world.entities[static_cast<size_t>(k) + 1].view_angles.y;
     f.bot.pilot.world = &nav.world;
     if (nav.swim.leading > 0) f.swim = &nav.swim;
+    f.trap = &nav.trap;
     if (k == 0) {
       hunt_init(f, s);
       way_init(m.way, f, nav, s, c.map);

@@ -95,3 +95,29 @@ TEST(a_field_is_built_the_same_twice) {
   sh::build_swim(pool().world, pool().g, exits, sh::SwimSettings{}, b);
   CHECK(a.next == b.next && a.exit_node == b.exit_node && a.steps == b.steps);
 }
+
+TEST(the_water_is_part_of_the_graph) {
+  const Pool& p = pool();
+  sh::NavGraph g = p.g;
+  const std::vector<uint8_t> wet_floor(g.nodes.size(), 0);
+  const sh::SwimNavCounts c = sh::nav_add_swim(p.world, g, wet_floor);
+  CHECK_MSG(c.cells > 100, "the pool has " + std::to_string(c.cells) + " swim nodes");
+  CHECK_MSG(c.exits == 1, "the ledge has " + std::to_string(c.exits) + " climbs out, not one");
+  // From the pool's far deep corner to the ledge: swum, then climbed out.
+  const int32_t deep = sh::nav_nearest(g, {900, 400, -150});
+  CHECK(deep >= g.swim_first);
+  ge::ai::Search search;
+  const sh::NavRoute r = sh::nav_route(g, deep, 0, search);
+  CHECK_MSG(!r.nodes.empty(), "no route out of the pool's far corner onto the ledge");
+  for (size_t k = 0; k + 1 < r.nodes.size(); k++) {
+    const sh::NavNode& n = g.nodes[static_cast<size_t>(r.nodes[k])];
+    bool swim = false;
+    for (int32_t q = 0; q < n.links; q++) {
+      const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(q)];
+      swim = swim || (l.to == r.nodes[k + 1] && l.kind == sh::NavKind::swim);
+    }
+    CHECK_MSG(swim, "a link of the way out of the water is not a swim");
+  }
+  // And back in off the ledge.
+  CHECK_MSG(!sh::nav_route(g, 0, deep, search).nodes.empty(), "no way off the ledge into the pool");
+}

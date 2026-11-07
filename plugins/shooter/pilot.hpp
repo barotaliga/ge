@@ -66,6 +66,7 @@
 #include "ai/hands.hpp"
 #include "ai/path.hpp"
 #include "ai/why.hpp"
+#include "core/prng.hpp"
 #include "shooter/cmd_source.hpp"
 #include "shooter/nav.hpp"
 
@@ -98,10 +99,36 @@ struct PilotSettings {
   // turns, the view kept 45 degrees outside the velocity so the two keys' wish lies across it;
   // no side switch to weave, no look ahead for walls, no brake.
   bool hop_simple = false;
+  // ROCKET JUMPS (nav.hpp `NavKind::rocket`): planned only while this is set (the caller's say:
+  // the launcher in hand, its rockets, the health for the blast); played as a jump, the view
+  // `rocket_pitch` down and the trigger pressed with the jump.
+  bool rockets = false;
+  float rocket_pitch = 80;
+  float swim_arrive = 24;  // a swim node is reached within this, units (any way, not across)
+  // THE LANE: a person does not walk the route's line. On a level walk with room either side (the
+  // graph's `nav_room`), the walker keeps `lane` of that room off the line, to one side or the
+  // other: a side and an amount drawn every `lane_min_s`..`lane_max_s` off its own stream, eased in
+  // over `lane_ease_s`, back to the line before a jump, a drop, a mover, water or a narrow place.
+  float lane = 0;  // 0: on the line
+  float lane_min_s = 1.2f, lane_max_s = 3.0f, lane_ease_s = 0.8f;
 };
 
-enum class PilotMode : uint8_t { idle, walk, run_up, jump, air, wait, ride, strafe, arrived, hop };
-inline constexpr int kPilotModes = 10;  // PilotMode's count: a table indexed by mode is this long
+// `swim`: on a swim link (nav.hpp), the view pitched at the next node, forward held, jump to rise;
+// onto a dry node out of the water by the climb the nav proved (swim.hpp `swim_out`).
+enum class PilotMode : uint8_t {
+  idle,
+  walk,
+  run_up,
+  jump,
+  air,
+  wait,
+  ride,
+  strafe,
+  arrived,
+  hop,
+  swim
+};
+inline constexpr int kPilotModes = 11;  // PilotMode's count: a table indexed by mode is this long
 const char* pilot_mode_name(PilotMode m);
 
 enum class PilotHands : uint8_t { none, human, practised, steady };
@@ -114,6 +141,7 @@ float pilot_lead_s(PilotHands profile);
 struct PilotSense {
   Vec3f origin, velocity;
   bool onground = false;
+  int waterlevel = 0;  // 0 dry .. 3 eyes under
   float maxspeed = 320;
   std::span<const NavMover> movers;  // each mover's entity and box as it stands now
   // The map's solids, when the pilot may look ahead through them (the hop checks its arc for a
@@ -153,6 +181,9 @@ struct Pilot {
   std::vector<NavExtraLink> shut_links;    // and links it knows are (onto a bridge still in)
   std::vector<NavExtraLink> cut_all;       // cut and shut_links together, for the route
   double wanted[3] = {}, pressed[3] = {};  // the last command's yaw, forward, side
+  float lane = 0, lane_want = 0, lane_until = 0;  // the lane now, wanted, and until when (s)
+  float offset = 0;                               // units off the line now (signed, left +)
+  core::Rng lane_rng{1};
   ai::Hands hands;
   ai::Search search;
   PilotStats stats;
@@ -168,6 +199,11 @@ void pilot_face(Pilot& p, float yaw);
 bool pilot_go(Pilot& p, int32_t goal, const PilotSense& sense);
 // The next command, `msec` long.
 MoveCmd pilot_step(Pilot& p, const PilotSense& sense, int msec, ai::Why* why = nullptr);
+
+// The line the pilot at `at` means to walk, to draw: the route ahead with its lane applied along
+// the level walks (each node moved off the line by the offset it keeps now), the nodes as they
+// are from the first link that is not one.
+std::vector<Vec3f> pilot_path(const Pilot& p, Vec3f at);
 
 // A pilot filling a server's slot: it reads the slot's player and the movers' edicts. Kept alive
 // and unmoved while the slot is filled. `goals` are visited in turn, round and round; a goal with
