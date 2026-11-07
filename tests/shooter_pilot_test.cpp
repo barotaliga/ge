@@ -9,6 +9,7 @@
 //
 // ge:summary Tests: the pilot's routes on the nav course and the arena, hands, strafe, bits
 // ge:keywords test pilot route jump run-up ride plat door wait barred strafe-jump hands golden
+// ge:keywords rocket-jump flip standing-flip
 // ge:skill shooter bots testing
 #include <cstdio>
 #include <cstdlib>
@@ -18,6 +19,8 @@
 
 #include "check.hpp"
 #include "golden.hpp"
+#include "shooter/brush_hull.hpp"
+#include "shooter/nav.hpp"
 #include "shooter/pilot.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 
@@ -148,4 +151,85 @@ TEST(human_hands_ride_to_the_ledge_too) {
     CHECK_MSG(res.arrivals >= 3, "human hands (seed " + std::to_string(seed) + ") reached " +
                                      std::to_string(res.arrivals) + " goals");
   }
+}
+
+namespace {
+
+// A room of box brushes, walled round as a map's room is (a late hand's circle does not walk off
+// into the void), its graph built and its pockets bridged with rocket jumps from `from`'s part.
+struct FlipRoom {
+  sh::HullData point, clip;
+  sh::MoveWorld world;
+  sh::NavGraph g;
+  sh::NavBridgeCounts bridged;
+  std::vector<sh::NavLink> rockets;  // the rocket links the bridge made
+  FlipRoom(std::vector<sh::Brush> brushes, sh::Vec3f lo, sh::Vec3f hi, sh::Vec3f from) {
+    brushes.push_back(box({lo.x - 32, lo.y - 32, lo.z}, {lo.x, hi.y + 32, hi.z}));
+    brushes.push_back(box({hi.x, lo.y - 32, lo.z}, {hi.x + 32, hi.y + 32, hi.z}));
+    brushes.push_back(box({lo.x - 32, lo.y - 32, lo.z}, {hi.x + 32, lo.y, hi.z}));
+    brushes.push_back(box({lo.x - 32, hi.y, lo.z}, {hi.x + 32, hi.y + 32, hi.z}));
+    point = sh::build_point_hull(brushes);
+    clip = sh::build_box_hull(brushes, sh::kPlayerMins, sh::kPlayerMaxs);
+    world.solids[0].point_hull = point.hull();
+    world.solids[0].clip_hull = clip.hull();
+    world.solids[0].mins = {lo.x - 32, lo.y - 32, lo.z};
+    world.solids[0].maxs = {hi.x + 32, hi.y + 32, hi.z};
+    world.count = 1;
+    sh::build_nav(world, {}, sh::MoveSettings{}, sh::NavSettings{}, g);
+    ge::ai::Search search;
+    sh::nav_reach(g, sh::nav_nearest(g, from), search);
+    std::vector<uint8_t> main(g.nodes.size());
+    for (size_t n = 0; n < main.size(); n++) main[n] = search.reached(static_cast<int32_t>(n));
+    bridged = sh::nav_bridge_pockets(world, sh::MoveSettings{}, g, main);
+    for (const sh::NavLink& l : g.links)
+      if (l.kind == sh::NavKind::rocket) rockets.push_back(l);
+  }
+  static sh::Brush box(sh::Vec3f lo, sh::Vec3f hi) {
+    sh::Brush b;
+    b.planes = {{{1, 0, 0}, hi.x},   {{-1, 0, 0}, -lo.x}, {{0, 1, 0}, hi.y},
+                {{0, -1, 0}, -lo.y}, {{0, 0, 1}, hi.z},   {{0, 0, -1}, -lo.z}};
+    return b;
+  }
+};
+
+// The pilot from `from` to `to` with rocket jumps, with no hands and a human's: arrives, by a
+// flip, its rocket bursting by the jumper.
+void flies_the_flip(const FlipRoom& room, sh::Vec3f from, sh::Vec3f to, const std::string& what) {
+  sh::PilotSettings set;
+  set.rockets = true;
+  for (const sh::PilotHands hands : {sh::PilotHands::none, sh::PilotHands::human}) {
+    const pr::RunResult r = pr::run_route(room.world, room.g, from, to, hands, 1, set);
+    const std::string who = what + (hands == sh::PilotHands::none ? ", no hands" : ", human hands");
+    CHECK_MSG(r.arrived, who + ": the pilot did not arrive (" + std::to_string(r.stats.flips) +
+                             " flips, " + std::to_string(r.shots) + " shots, " +
+                             std::to_string(r.stats.run_ups) + " run-ups)");
+    CHECK_MSG(r.stats.flips >= 1, who + ": climbed with no flip");
+    CHECK_MSG(r.shots >= 1 && r.blast > 0, who + ": no rocket burst near the jumper");
+  }
+}
+
+}  // namespace
+
+TEST(the_pilot_lands_a_flip_onto_the_block_no_jump_climbs) {
+  // A floor and a block 160 high on it: only a rocket jump climbs it, and the bridge makes it a
+  // running flip; the pilot turns into it strafing, fires behind with the jump and lands on top.
+  const FlipRoom room({FlipRoom::box({-384, -128, -64}, {384, 128, 0}),
+                       FlipRoom::box({96, -128, 0}, {384, 128, 160})},
+                      {-384, -128, -64}, {384, 128, 512}, {-256, 0, 24});
+  CHECK_MSG(room.bridged.by_flip >= 1, "the block's top was not bridged by a flip");
+  CHECK_MSG(!room.rockets.empty() && room.rockets[0].speed > 0,
+            "the flip onto the block is not run at: the floor before it has room");
+  flies_the_flip(room, {-256, 0, 24}, {320, 0, 184}, "the running flip");
+}
+
+TEST(a_standing_flip_climbs_a_block_with_no_room_to_run_at_it) {
+  // The floor before a block 128 high is 64 deep: room for no run and turn into a flip, so the
+  // bridge makes it a standing one; the pilot turns round on the spot, fires behind and lands.
+  const FlipRoom room(
+      {FlipRoom::box({0, -64, -64}, {384, 64, 0}), FlipRoom::box({64, -64, 0}, {384, 64, 128})},
+      {0, -64, -64}, {384, 64, 512}, {32, 0, 24});
+  CHECK_MSG(room.bridged.by_flip >= 1, "the block's top was not bridged by a flip");
+  CHECK_MSG(!room.rockets.empty() && room.rockets[0].back && room.rockets[0].speed == 0,
+            "the flip onto the block is not a standing one");
+  flies_the_flip(room, {32, 0, 24}, {320, 0, 152}, "the standing flip");
 }

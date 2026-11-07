@@ -112,6 +112,9 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
   int32_t planned = p.stats.plans;
   uint64_t hash = 1469598103934665603ull;
   const int most = static_cast<int>(limit_s * 1000 / kPilotMsec);
+  // A rocket in flight (a shot pressed: the pilot's rocket jumps): its burst and the time left.
+  sh::Vec3f burst_at;
+  float burst_in = -1;
   for (int i = 0; i < most; i++) {
     const sh::MoveCmd cmd = sh::pilot_step(p, s, kPilotMsec);
     if (p.stats.plans != planned) {
@@ -123,6 +126,20 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
       break;
     }
     sh::run_command(st, cmd, move, world);
+    if ((cmd.buttons & sh::kButtonAttack) != 0 && burst_in < 0) {
+      const sh::RocketBurst rb = sh::rocket_burst(world, st.origin, cmd.angles);
+      if (rb.ok) {
+        burst_at = rb.at;
+        burst_in = rb.flight_s;
+        r.shots++;
+      }
+    } else if (burst_in >= 0) {
+      burst_in -= kPilotMsec * 0.001f;
+      if (burst_in <= 0) {
+        r.blast += sh::rocket_blast(st, burst_at);
+        burst_in = -1;
+      }
+    }
     sense();
     hash = fold(fold(hash, st.origin), st.velocity);
     r.trail.push_back(st.origin);

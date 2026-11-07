@@ -40,8 +40,10 @@ constexpr float kSlow = 50;      // under this a velocity's way is not read, uni
 constexpr float kSlowing_s = 0.25f;  // a run slows to a jump's speed in about this, s
 constexpr float kBrake = 0.25f;      // the least share of maxspeed walked into the goal
 constexpr float kFacing = 10;        // a run-up goes when the view is this near the jump's way, deg
-constexpr float kOnLine = 10;        // a jump is run at on its line within this across, units
-constexpr float kStepHeight = 18;    // the move's step
+constexpr float kFlipFacing = 25;    // a flip goes with the view this near straight behind, deg
+constexpr float kFlipSpare_s = 0.05f;  // a flip's turn starts this much earlier than it takes, s
+constexpr float kOnLine = 10;          // a jump is run at on its line within this across, units
+constexpr float kStepHeight = 18;      // the move's step
 
 float across(Vec3f a, Vec3f b) {
   const float dx = b.x - a.x, dy = b.y - a.y;
@@ -451,8 +453,75 @@ void missed_jump(Pilot& p, NavExtraLink j) {
 // The run-up and the jump from S toward T at `v`: line up behind S (the run-up point, `run_up`
 // back along the jump's way), run at S with the forward axis held to `v`, and jump at S moving
 // at it along the way. True on the command the jump is pressed.
+// How long before a flip's start its turn round begins: what the view's hand takes to turn 180
+// degrees, its delay and its slew over them (within 0.02 s of the time each profile's hand
+// takes to come within 25 degrees), and a little to spare; at least a few commands.
+float flip_lead_s(const Pilot& p) {
+  const ai::AxisHands& h = p.hands.spec(0);
+  const double t = h.delay_s + (h.slew > 0 ? 180 / h.slew : 0) + kFlipSpare_s;
+  return t > 0.03 ? static_cast<float>(t) : 0.03f;
+}
+
+// The view the hands will show when keys pressed now arrive (the keys' delay), the view wanted
+// held meanwhile: worked out on a copy of the hands. A turn strafed with keys for the view as it
+// is now presses them for a view already gone.
+float view_when_keys_land(const Pilot& p, float want, int msec) {
+  const ai::AxisHands& k = p.hands.spec(1);
+  // The commands in the keys' delay, to the nearest.
+  int steps = 0;
+  while ((steps + 0.5) * msec < k.delay_s * 1000) steps++;
+  if (steps <= 0) return p.yaw;
+  ai::Hands h = p.hands;
+  const double wanted[4] = {want, p.wanted[1], p.wanted[2], 0};
+  double out[4] = {};
+  const size_t n = h.axes() < 4 ? h.axes() : 4;
+  for (int i = 0; i < steps; i++)
+    h.step(std::span<const double>(wanted, n), std::span<double>(out, n));
+  return static_cast<float>(out[0]);
+}
+
+// A FLIP on the route ahead past only walks: true, `back` the view's heading at its shot (behind,
+// away from its target) and `v` its speed; `d_to_flip` how far along the route its start is.
+size_t flip_index(const Pilot& p) {
+  const NavGraph& g = *p.g;
+  for (size_t j = p.k + 1; j + 1 < p.route.size() && j <= p.k + 12; j++) {
+    const NavLink* l = link_of(g, p.route[j], p.route[j + 1]);
+    if (!l) return 0;
+    if (l->kind == NavKind::rocket && l->back) return j;
+    if (l->kind != NavKind::walk) return 0;
+  }
+  return 0;
+}
+
+bool flip_ahead(const Pilot& p, const PilotSense& s, float& back, float& v) {
+  (void)s;
+  const size_t j = flip_index(p);
+  if (j == 0) return false;
+  const NavGraph& g = *p.g;
+  const Vec3f n = node(g, p.route[j]).origin, t = node(g, p.route[j + 1]).origin;
+  back = heading(t.x - n.x, t.y - n.y) + 180;
+  v = link_of(g, p.route[j], p.route[j + 1])->speed;
+  return true;
+}
+
+float d_to_flip(const Pilot& p, const PilotSense& s) {
+  const size_t j = flip_index(p);
+  if (j == 0) return 1e30f;
+  Vec3f at = s.origin;
+  float went = 0;
+  for (size_t i = p.k + 1; i <= j; i++) {
+    const Vec3f n = node(*p.g, p.route[i]).origin;
+    went += across(at, n);
+    at = n;
+  }
+  return went;
+}
+
+// `flip`: a rocket jump played as the flip (nav.hpp `RocketJumpSpec::back`): the view turned round
+// into the jump from `rocket_flip_lead_s` before its start, strafing through the turn (the keys a
+// hand presses nearest the way, `flip_keys`), and the shot only with the view behind.
 bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Want& w, Vec3f& target,
-                   const char*& because) {
+                   const char*& because, bool flip = false, int msec = 13) {
   Vec3f dir{T.x - S.x, T.y - S.y, 0};
   normalize(dir);
   const Vec3f rel{s.origin.x - S.x, s.origin.y - S.y, 0};
@@ -475,20 +544,24 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
       because = "to the foot of a standing jump";
       return false;
     }
-    const float up = heading(dir.x, dir.y);
+    // A standing flip: turned round on the spot, then the back key with the jump.
+    const float up = heading(dir.x, dir.y) + (flip ? 180 : 0);
     w.yaw = unwrap(up, p.yaw);
-    w.forward = 1;
+    w.forward = flip ? 0 : 1;
     const float off = wrap(p.yaw - up);
     if (s.onground && !p.jump_pressed && off < kFacing && off > -kFacing) {
+      if (flip) flip_keys(heading(dir.x, dir.y), p.yaw, w.forward, w.side);
       w.jump = true;
-      because = "a standing jump up";
+      because = flip ? "a standing flip" : "a standing jump up";
       return true;
     }
-    because = "turning to a standing jump";
+    because = flip ? "turning round for a standing flip" : "turning to a standing jump";
     return false;
   }
-  // The run-up point: as far back as the graph found room to run up.
-  const Vec3f P = S - dir * run_up;
+  // The run-up point: as far back as the graph found room to run up (a flip's farther: room for
+  // its turn at the speed).
+  const float back_up = run_up + (flip ? v * flip_lead_s(p) : 0);
+  const Vec3f P = S - dir * back_up;
   if (p.mode != PilotMode::run_up && p.mode != PilotMode::jump) p.mode = PilotMode::jump;
   if (p.mode == PilotMode::jump) {
     // Off the line at the start (the run steers back onto it before), or past it without the
@@ -527,17 +600,33 @@ bool approach_jump(Pilot& p, const PilotSense& s, Vec3f S, Vec3f T, float v, Wan
   }
   // On the line: run through S at the jump's speed, the view along the way.
   target = S;
-  const Vec3f aim = along < -(run_up + p.set.arrive) ? P : S + dir * p.set.look;
+  const Vec3f aim = along < -(back_up + p.set.arrive) ? P : S + dir * p.set.look;
   w.yaw = unwrap(yaw_at(s.origin, aim), p.yaw);
   // Down to the jump's speed before the run-up: friction takes about a quarter second.
   w.forward = along > -(run_up + p.set.corner + speed * kSlowing_s) ? v / s.maxspeed : 1;
+  bool behind = true;
+  if (flip && along > -(v * flip_lead_s(p) + 2)) {
+    // The flip: turning round into the jump, strafing through the turn.
+    const float way = w.yaw, share = w.forward;
+    const float back = heading(dir.x, dir.y) + 180;
+    w.yaw = unwrap(back, p.yaw);
+    flip_keys(way, view_when_keys_land(p, w.yaw, msec), w.forward, w.side);
+    w.forward *= share;
+    w.side *= share;
+    const float off = wrap(p.yaw - back);
+    behind = off < kFlipFacing && off > -kFlipFacing;
+  } else if (flip) {
+    behind = false;
+  }
   const bool fast = along_v >= kJumpAlong * v && along_v <= kJumpOver * v + 16 && cosv >= kJumpAim;
-  if (along >= -2 && lat_abs <= kOnLine && fast && s.onground && !p.jump_pressed) {
+  if (along >= -2 && lat_abs <= kOnLine && fast && behind && s.onground && !p.jump_pressed) {
     w.jump = true;
     because = "at the start at the jump's speed: jump";
     return true;
   }
-  because = "running at the jump";
+  because = flip && behind ? "running at the flip, the view behind"
+            : flip         ? "running at the flip, turning round"
+                           : "running at the jump";
   return false;
 }
 
@@ -996,6 +1085,11 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         w.yaw = unwrap(yaw_at(s.origin, B), p.yaw);
         w.forward = 1;
         because = "in the air: toward the target";
+        if (l.kind == NavKind::rocket && l.back) {
+          // The flip's view turning back to the target, strafing round the other way.
+          flip_keys(w.yaw, view_when_keys_land(p, w.yaw, msec), w.forward, w.side);
+          because = "in the flip: the view back to the target";
+        }
       } else {
         // Landed, and not on the target (passed() would have moved on): plan again. A jump
         // landed short twice is not one this player makes: never planned again.
@@ -1019,12 +1113,19 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         p.tries = 0;
       }
       const int32_t run_ups = p.stats.run_ups;
-      if (approach_jump(p, s, S, T, v, w, target, because)) {
-        // A rocket jump: the shot at the feet with the jump (its blast does the rest).
-        if ((on_it ? l.kind : l2->kind) == NavKind::rocket) {
-          w.pitch = p.set.rocket_pitch;
+      const NavLink& jumped = on_it ? l : *l2;
+      const bool flip = jumped.kind == NavKind::rocket && jumped.back;
+      if (approach_jump(p, s, S, T, v, w, target, because, flip, msec)) {
+        // A rocket jump: the shot at the feet with the jump (its blast does the rest); the flip's
+        // behind, down at the floor it runs off.
+        if (jumped.kind == NavKind::rocket) {
+          w.pitch = jumped.pitch > 0 ? jumped.pitch
+                    : flip           ? p.set.rocket_back_pitch
+                                     : p.set.rocket_pitch;
           w.attack = true;
-          because = "a rocket jump: the shot at the feet with the jump";
+          because = flip ? "a flip: the shot behind with the jump"
+                         : "a rocket jump: the shot at the feet with the jump";
+          if (flip) p.stats.flips++;
         }
         p.stats.jumps++;
         if (!on_it) advance(p, s);
@@ -1051,6 +1152,17 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       const float d = across(ahead, node(*p.g, p.route.back()).origin);
       if (d < p.set.look) w.forward *= d < p.set.look * kBrake ? kBrake : d / p.set.look;
       because = l.kind == NavKind::drop ? "walking off the edge" : "walking the route";
+      // A flip ahead within its turn: turning round into it already, strafing along the route.
+      float back = 0;
+      float flip_v = 0;
+      if (flip_ahead(p, s, back, flip_v) && d_to_flip(p, s) <= flip_v * flip_lead_s(p) + 2) {
+        const float way = w.yaw, share = w.forward;
+        w.yaw = unwrap(back, p.yaw);
+        flip_keys(way, view_when_keys_land(p, w.yaw, msec), w.forward, w.side);
+        w.forward *= share;
+        w.side *= share;
+        because = "turning round into a flip";
+      }
     }
 
     // STUCK and LOST, on the ground while moving under its own legs.
