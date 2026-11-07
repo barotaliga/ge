@@ -61,7 +61,7 @@ struct Gain {
 
 }  // namespace
 
-bool scan_demo(const Demo& opened, DemoScan& out, std::string& error) {
+bool scan_demo(const Demo& opened, DemoScan& out, std::string& error, bool tracks) {
   out = DemoScan{};
   Timedemo t;
   t.demo = opened;
@@ -106,6 +106,11 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error) {
       live_rocket.clear();
     }
     out.tracked = s.player;
+    if (tracks)
+      for (size_t k = 0; k < static_cast<size_t>(kSlots) && k < s.players.size(); k++) {
+        const DemoEntity& p = s.players[k];
+        if (p.present) out.tracks[k].push_back({now, p.origin, p.angles.y, p.angles.x, p.dead});
+      }
     // The rockets and grenades in flight: each followed while it is in the list.
     live_rocket.resize(s.entities.size(), 0);
     std::vector<bool> seen(flying.size(), false);
@@ -221,6 +226,7 @@ bool scan_demo(const Demo& opened, DemoScan& out, std::string& error) {
   for (const DemoFlight& r : flying) rockets.push_back(r);
   out.length_s = t.timeline.t;
   out.map = s.map;
+  out.frags = s.frags;
 
   // Each death given the nearest frag in time of another player within kKillMatchS.
   for (const Death& dd : deaths) {
