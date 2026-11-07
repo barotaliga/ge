@@ -6,6 +6,9 @@
 // ge:test tests/shooters_edge_team_test.cpp
 #include "shooters_edge/bots/water.hpp"
 
+#include "shooter/hull.hpp"
+#include "shooter/server.hpp"
+
 #include <cmath>
 
 #include "shooter/swim.hpp"
@@ -30,6 +33,43 @@ bool water_way(Fighter& f, const server::RulesCommon& s, int me, double t, int m
     if (f.under_since < 0) f.under_since = t;
   } else {
     f.under_since = -1;
+  }
+  // Up for air: under open water, rise straight to its top, a breath there, then on.
+  if (!f.surfacing && body.waterlevel >= 3 && f.under_since >= 0 && t - f.under_since > kAir_s &&
+      t >= f.surface_retry) {
+    const sh::Vec3f head{body.origin.x, body.origin.y, body.origin.z + 22};
+    for (int step = 1; step * 8 <= static_cast<int>(kSurfaceLook); step++) {
+      const auto up = static_cast<float>(step * 8);
+      const sh::Vec3f p{head.x, head.y, head.z + up};
+      const int c = sh::world_contents(s.sv, p);
+      if (c == sh::kContentsSolid) break;  // a ceiling: no air straight up
+      if (c == sh::kContentsEmpty) {
+        f.surfacing = true;
+        f.surface_at = {p.x, p.y, p.z};
+        f.breathe_until = -1;
+        f.surface_by = t + up / kRise + kRiseSlack_s;  // out by then, or the rise is given up
+        f.stats.surfaced++;
+        break;
+      }
+    }
+  }
+  if (f.surfacing) {
+    if (body.waterlevel < 3 && f.breathe_until < 0) f.breathe_until = t + kBreathe_s;  // out
+    if (f.breathe_until < 0 && t > f.surface_by) {
+      f.surfacing = false;  // never broke the surface (a ledge, a grate): the shorter way out
+      f.surface_retry = t + kSurfaceRetry_s;
+      f.stats.surface_failed++;
+    } else if (f.breathe_until >= 0 && t >= f.breathe_until) {
+      f.surfacing = false;  // breathed: on as it was going
+    } else {
+      way = f.surface_at;
+      if (why) {
+        why->decide("air");
+        why->choose(f.breathe_until < 0 ? "rise" : "breathe",
+                    "short of air under open water: up for a breath, then on");
+      }
+      return true;
+    }
   }
   const bool short_of_air = f.under_since >= 0 && t - f.under_since > kAir_s;
   const ItemSpot* dive_for = f.diving >= 0 ? &f.items[static_cast<size_t>(f.diving)] : nullptr;

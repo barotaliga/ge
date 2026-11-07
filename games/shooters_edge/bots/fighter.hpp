@@ -142,7 +142,9 @@ struct Team;
 
 struct FighterStats {
   int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;
-  int64_t goal_changes = 0;  // its item goal changed (the commitment's measure)
+  int64_t goal_changes = 0;    // its item goal changed (the commitment's measure)
+  int64_t surfaced = 0;        // times up for air (water.hpp)
+  int64_t surface_failed = 0;  // and rises given up short of the surface
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
   int64_t taken = 0;                // items seen to go (by anyone)
@@ -227,6 +229,9 @@ struct Fighter {
   double called_at = -1e9;     // its last enemy callout
   double under_since = -1;     // when its head last went under the water (-1: not under)
   double dive_wet_since = -1;  // when the dive under way went into the water (-1: none)
+  double breathe_until = -1;   // up for air (water.hpp): at the surface until then (-1: rising)
+  double surface_by = 0;       // out of the water by then, or the rise is given up
+  double surface_retry = 0;    // no rise for air before then
   double dive_off_until = -1;  // until when the dive given up (`dive_off`) is not tried again
   ge::ai::Why* why = nullptr;
   Team* team = nullptr;                     // its side (team.hpp); null in a free-for-all
@@ -277,6 +282,7 @@ struct Fighter {
   ge::core::Rng keys_rng{1};  // the side key's changes (footwork.hpp `fighter_keys`)
   float clean_keys = 1;       // the share of side key changes made clean (1: every one)
   float news_health = 0;      // its health at the last think: a fall is a blow, news
+  sh::Vec3f surface_at;       // the open water's top over its head it rises to (`surfacing`)
   int8_t side_was = 0;        // the side key's sign last sent
   int8_t side_gap = 0;        // commands still held with no side key
   sh::Dodge dodge;            // its side steps in a fight (shooter/dodge.hpp)
@@ -309,6 +315,7 @@ struct Fighter {
   bool was_dead = false;
   bool unlocking = false;  // on the way to the goal item's button
   bool swimming = false;   // in water no route leaves: following the swim field
+  bool surfacing = false;  // short of air under open water: up for a breath (water.hpp)
   bool hunts = false;      // every monster a foe (companion.hpp `hunt_init`)
 };
 
