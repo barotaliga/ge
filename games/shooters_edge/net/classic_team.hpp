@@ -116,11 +116,12 @@ struct TeamPlayer {
   int64_t pilot_modes[sh::kPilotModes] =
       {};  // live commands in each pilot mode (shooter/pilot.hpp)
   int64_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0;
-  int64_t goal_changes = 0;       // its item goal changed (bots/fighter.hpp's commitment)
-  float travelled = 0;            // units along the path
-  std::string last;               // where he stood at the end, and what he was going for
-  std::vector<sh::Vec3f> path;    // every path_every frames
-  std::vector<uint8_t> roles;     // beside it: its role, 255 dead
+  int64_t goal_changes = 0;  // its item goal changed (bots/fighter.hpp's commitment)
+  int64_t surfaced = 0, surface_failed = 0;  // up for air, rises given up (bots/water.hpp)
+  float travelled = 0;                       // units along the path
+  std::string last;                          // where he stood at the end, and what he was going for
+  std::vector<sh::Vec3f> path;               // every path_every frames
+  std::vector<uint8_t> roles;                // beside it: its role, 255 dead
   std::vector<int16_t> known;     // beside it: how many items it knows (recalls) of the map's
   int64_t said = 0;               // team messages it said
   int64_t read = 0, missed = 0;   // its mates' team lines it read, and missed
