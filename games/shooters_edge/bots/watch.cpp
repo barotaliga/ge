@@ -23,6 +23,14 @@ constexpr double kWatchMin_s = 1.5, kWatchMax_s = 4;
 constexpr float kTooNear = 96;
 // Where a head shows over a node, units above its origin.
 constexpr float kHead = 22;
+// A sound this lately turns a standing player's view to it, s.
+constexpr double kHeardTurn_s = 3;
+// The spots watched are worked out again at most this often, s.
+constexpr double kWatchAgain_s = 0.5;
+
+sh::Vec3f at_of(const ge::ai::Memory& m) {
+  return {static_cast<float>(m.x), static_cast<float>(m.y), static_cast<float>(m.z)};
+}
 
 double bearing(sh::Vec3f from, sh::Vec3f to) {
   return ge::core::libm::atan2(static_cast<double>(to.y - from.y),
@@ -96,6 +104,55 @@ int32_t watch_choose(Fighter& f, sh::Vec3f eye, double t, const sh::Vec3f* heard
     f.watch_until = t + ge::core::range(f.rng, kWatchMin_s, kWatchMax_s);
   }
   return f.watch_pick;
+}
+
+void watch_look(Fighter& f, const server::RulesCommon& s, int me, bool dead, double t,
+                ge::ai::Why* why) {
+  namespace ai = ge::ai;
+  const sh::PilotMode pm = f.bot.pilot.pilot.mode;
+  const bool standing = pm == sh::PilotMode::arrived || pm == sh::PilotMode::idle;
+  // A holder walking about its own area watches the ways in as it goes.
+  const bool holding = f.role == Role::hold &&
+                       (pm == sh::PilotMode::walk || pm == sh::PilotMode::hop) && f.plan &&
+                       f.mind.claim >= 0;
+  f.bot.look = false;
+  if (!dead && (standing || holding) && f.mode == FightMode::roam && !f.unlocking &&
+      f.escort.leader < 0 && s.world.entities[static_cast<size_t>(me)].waterlevel < 2) {
+    const sh::Vec3f at = s.world.entities[static_cast<size_t>(me)].origin;
+    const sh::Vec3f eye{at.x, at.y, at.z + f.bot.senses.set.view_height};
+    const int32_t node = pm == sh::PilotMode::arrived && f.goal_node >= 0
+                             ? f.goal_node
+                             : sh::nav_nearest(*f.bot.pilot.pilot.g, at);
+    const int32_t area = holding ? plan_area_of(*f.plan, node) : -1;
+    const bool in_claim =
+        area >= 0 && plan_area_of(*f.plan, f.items[static_cast<size_t>(f.mind.claim)].node) == area;
+    if (standing || in_claim) {
+      if (node != f.watch_node && t - f.watch_at >= kWatchAgain_s) {
+        watch_spots(f, s, me, node, eye);
+        f.watch_at = t;
+      }
+      const sh::Vec3f* heard = nullptr;
+      sh::Vec3f sound;
+      for (const sh::Contact& k : f.bot.senses.contacts)
+        if (ai::known(k.heard) && ai::age(k.heard, t) < kHeardTurn_s) {
+          sound = at_of(k.heard);
+          heard = &sound;
+        }
+      const int32_t pick = watch_choose(f, eye, t, heard);
+      if (pick >= 0) {
+        f.bot.look = true;
+        f.bot.look_at = f.watch[static_cast<size_t>(pick)];
+        f.stats.watching++;
+        if (why) {
+          why->decide("watch");
+          why->fact("spots", static_cast<double>(f.watch.size()));
+          why->fact("spot", pick);
+          why->choose(heard ? "sound" : "way-in",
+                      heard ? "the way in nearest a sound" : "a way into its area");
+        }
+      }
+    }
+  }
 }
 
 }  // namespace shooters_edge::bots
