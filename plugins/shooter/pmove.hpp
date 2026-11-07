@@ -88,6 +88,10 @@ struct MoveSettings {
   bool airstep = false;   // pm_airstep: steps climbed in the air (a console sets
                           // pm_pground with it)
   bool pground = false;   // pm_pground: on the ground persists between moves
+  // A single-player program jumps for itself in its pre-think (the jump, swimming up and the
+  // water jump, which it times itself): the move then never checks for a water jump, never
+  // jumps, and leaves `waterjump_time` as it was handed (the program's time left).
+  bool program_jumps = false;
 };
 
 // What a player carries from one command to the next.

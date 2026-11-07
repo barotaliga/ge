@@ -387,16 +387,18 @@ MoveResult player_move(MoveState& s, const MoveCmd& cmd, const MoveSettings& set
   nudge(m);
   categorize(m);
 
-  if (s.waterlevel == 2 && !flying(s)) check_water_jump(m, ax);
+  if (!set.program_jumps) {
+    if (s.waterlevel == 2 && !flying(s)) check_water_jump(m, ax);
 
-  if (s.velocity.z < 0 || s.type == MoveType::dead) {
-    s.waterjump_time = 0;
-  } else if (s.waterjump_time > 0) {
-    s.waterjump_time = s.waterjump_time - m.dt;
-    if (s.waterjump_time < 0) s.waterjump_time = 0;
+    if (s.velocity.z < 0 || s.type == MoveType::dead) {
+      s.waterjump_time = 0;
+    } else if (s.waterjump_time > 0) {
+      s.waterjump_time = s.waterjump_time - m.dt;
+      if (s.waterjump_time < 0) s.waterjump_time = 0;
+    }
+
+    jump(m, cmd);
   }
-
-  jump(m, cmd);
   friction(m);
 
   if (s.waterlevel >= 2)
