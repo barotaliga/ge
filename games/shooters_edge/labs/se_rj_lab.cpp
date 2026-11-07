@@ -63,6 +63,9 @@ using In = std::vector<std::pair<std::string, std::string>>;
 
 constexpr int kLevels = 3;
 constexpr float kNearAnother = 120;  // a rocket gone this near another player was a shot at him
+// A rise faster than this off the ground with no rocket of his seen is an unseen rocket's: a jump
+// gives 270 units/s (and a stair's step a little more), units/s.
+constexpr float kUnseenRise = 450;
 constexpr const char* kLevelName[kLevels] = {"amateur", "intermediate", "expert"};
 constexpr gl::Rgba kKindColour[3] = {{230, 120, 30, 255}, {200, 170, 20, 255}, {30, 140, 220, 255}};
 
@@ -80,6 +83,7 @@ struct Arrival {
   sh::Vec3f from;      // where he left the ground last before arriving (the takeoff)
   float rise = 0;      // the most he rose at, units/s, over the window
   float before_s = 0;  // the first blast's time before the arrival, s
+  std::string way;     // where he was 3, 2, 1 and a half second before (x y z)
 };
 
 struct Player {
@@ -346,10 +350,12 @@ void run(gl::Lab& lab) {
           // The takeoff: the last frame on the ground before he rose into the spot (the
           // ground read off the hops), else the window's start.
           a.from = tr[first].origin;
-          for (size_t g = f; g > first; g--) {
-            const double dt = tr[g].t - tr[g - 1].t;
-            const float vz =
-                dt > 0 ? (tr[g].origin.z - tr[g - 1].origin.z) / static_cast<float>(dt) : 0.f;
+          // The rise read over a tenth of a second (frames a hair apart make spikes).
+          for (size_t g = f, h = f; g > first; g--) {
+            while (h > first && tr[g].t - tr[h].t < 0.1) h--;
+            const double dt = tr[g].t - tr[h].t;
+            if (dt < 0.1) break;
+            const float vz = (tr[g].origin.z - tr[h].origin.z) / static_cast<float>(dt);
             if (vz > a.rise) a.rise = vz;
           }
           // With `spot-rise`, only an arrival from below: the takeoff the last frame on the
@@ -363,6 +369,12 @@ void run(gl::Lab& lab) {
               break;
             }
           if (!below) continue;
+          for (const double ago : {3.0, 2.0, 1.0, 0.5, 0.25, 0.0}) {
+            size_t g = f;
+            while (g > 0 && p.t - tr[g].t < ago) g--;
+            a.way += (a.way.empty() ? "" : " > ") + to_fixed(tr[g].origin.x, 0) + " " +
+                     to_fixed(tr[g].origin.y, 0) + " " + to_fixed(tr[g].origin.z, 0);
+          }
           // His own blasts that went within 160 of him in the window.
           for (const cl::DemoFlight& fl : scan.flights) {
             if (fl.shooter != static_cast<int>(k) || fl.t1 < tr[first].t || fl.t1 > p.t) continue;
@@ -376,6 +388,9 @@ void run(gl::Lab& lab) {
             a.how += a.how.empty() ? "" : " ";
             a.how += fl.grenade ? "G" : "R";
           }
+          // No rocket of his seen, but a rise no jump gives: a rocket fired point-blank at the
+          // floor bursts in the frame it is fired, so a recording never shows it.
+          if (a.how.empty() && a.rise > kUnseenRise) a.how = "R?";
           if (a.how.empty()) a.how = "-";
           arrivals.push_back(a);
         }
@@ -707,15 +722,15 @@ void run(gl::Lab& lab) {
                     {"blasts", "arrivals"},
                     {}};
     for (const auto& [how, n] : by_how) ht.rows.push_back({how, std::to_string(n)});
-    gl::LabTable at{
-        "each arrival at the spot",
-        {"map", "player", "t s", "blasts", "first before s", "takeoff (x y z)", "most rise u/s"},
-        {}};
+    gl::LabTable at{"each arrival at the spot",
+                    {"map", "player", "t s", "blasts", "first before s", "takeoff (x y z)",
+                     "most rise u/s", "the way (3, 2, 1, 0.5, 0.25 s before, there)"},
+                    {}};
     for (const Arrival& a : arrivals)
       at.rows.push_back(
           {a.map, a.name, to_fixed(a.t, 1), a.how, a.how == "-" ? "-" : to_fixed(a.before_s, 2),
            to_fixed(a.from.x, 0) + " " + to_fixed(a.from.y, 0) + " " + to_fixed(a.from.z, 0),
-           to_fixed(a.rise, 0)});
+           to_fixed(a.rise, 0), a.way});
     lab.metric("rj.spot.arrivals", static_cast<double>(arrivals.size()), "count");
     lab.table(ht);
     lab.table(at);
