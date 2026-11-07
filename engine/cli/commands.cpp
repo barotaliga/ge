@@ -78,7 +78,8 @@ constexpr FlagSpec kLabSweepFlags[] = {
 constexpr FlagSpec kLabPublishFlags[] = {
     {"before", "<tag>",
      "a kept run (ge lab <id> --tag=<tag>) shown beside this one, metric by metric"},
-    {"width", "<px>", "the pictures' width on the page (default 720)"},
+    {"width", "<px>",
+     "the pictures' width on the page (default 720; shrunk to fit the page limit)"},
     {"out", "<file>", "where the page goes (default previews/<id>/publish.html)"},
     {"title", "<text>", "the page's title (default \"<id> lab run\", or \"Lab runs\")"},
     kRepo};
@@ -605,7 +606,8 @@ const CommandSpec kCommands[] = {
      kMergeMainFlags, "ge merge-main", "commit"},
     {"digest", "[<lab>...]", 0, -1, "build",
      "the labs named (or every lab) at their smoke flags, twice: each digest beside the "
-     "committed baseline; --write moves only those labs' rows; --diff prints only the labs "
+     "committed baseline (only the labs executable is built); --write moves only those labs' rows; "
+     "--diff prints only the labs "
      "that moved; --why names what moved in each",
      kDigestFlags, "ge digest wind-sweep level --write", "labs"},
     {"golden diff", "[<golden|test>...]", 0, -1, "build",

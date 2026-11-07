@@ -5,7 +5,8 @@
 // kept run `previews/<id>@<tag>/` (`ge lab <id> --tag=<tag>`) stands beside it: each picture left
 // and right, each metric with its before and its change. The page follows the published-page
 // contract (a short title, colour tokens with a dark theme, a 16 px gutter, no outside file), so
-// it is ready to publish as it is, and it says when it is too big to.
+// it is ready to publish as it is; a page past the limit is built again with smaller pictures
+// (three quarters of the width a round, down to 180 px), and it says when even that is too big.
 //
 //   ge lab publish level
 //   ge lab publish world --before=before --width=560
@@ -37,6 +38,7 @@ struct PublishOptions {
   int width = 720;               // the pictures' width on the page
   std::string out;               // the page's path; "" for previews/<id>/publish.html
   std::string title;             // the page's <title>; "" for "<id> lab run" (or "Lab runs")
+  size_t max_page = 15u << 20;   // the largest page, in bytes: a published page's limit is 16 MB
 };
 
 // What the page shows, read off a run's report.json (and the kept run's).
