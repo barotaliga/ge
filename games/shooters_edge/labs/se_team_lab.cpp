@@ -428,7 +428,14 @@ void run(gl::Lab& lab) {
   lab.metric("team.pushes", static_cast<double>(r.teams[0].pushes + r.teams[1].pushes), "count");
   {
     int64_t changes = 0;
-    for (const cn::TeamPlayer& p : r.players) changes += p.goal_changes;
+    int64_t up = 0, failed = 0;
+    for (const cn::TeamPlayer& p : r.players) {
+      changes += p.goal_changes;
+      up += p.surfaced;
+      failed += p.surface_failed;
+    }
+    lab.metric("team.surfaced", static_cast<double>(up), "count");
+    lab.metric("team.surface-failed", static_cast<double>(failed), "count");
     lab.metric("team.goal-changes-per-min",
                static_cast<double>(changes) /
                    std::max(1.0, static_cast<double>(r.players.size()) * minutes),
