@@ -10,18 +10,21 @@
 // with eyes shut: the rocket's blast is on the left, the rival's beam on the left, the door on
 // the right, the player's own sounds centred, and nothing clips. The fight is a script of the
 // classic multiplayer game's sounds at its own distances (world units, attenuation 1/1000 for a
-// shot, 1/333 for a fixed ambient); the game's sound messages replace the script when the client
-// lands (M18h).
+// shot, 1/333 for a fixed ambient). Then a real fight (`--fight=bots`; both by default): the
+// built-in arena's warmup with bots fighting round the standing player, every sound the server
+// starts for him heard through the window's own hearing off the game's recordings under the
+// classic names (client/own_sounds.hpp), metered and written as WAV.
 //
-// ge:summary Lab: a scripted fight's sounds (the game's WAVs) heard by a player, metered, as WAV
+// ge:summary Lab: a scripted fight's and the arena bots' fight's sounds heard, metered, as WAV
 // ge:keywords lab audio shooter fight sounds wav spatial channels listener pan attenuation
-// ge:keywords rocket grenade beam door ambient ricochet se-audio
+// ge:keywords rocket grenade beam door ambient ricochet se-audio bots arena own-sounds
 // ge:skill audio labs
 // ge:test tests/audio_channels_test.cpp
 #include <cstdio>
 #include <fstream>
 #include <iterator>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -33,6 +36,10 @@
 #include "lab/chart.hpp"
 #include "lab/lab.hpp"
 #include "lab/sound.hpp"
+#include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/listen_sound.hpp"
+#include "shooters_edge/client/own_sounds.hpp"
+#include "shooters_edge/net/classic_game.hpp"
 
 namespace {
 
@@ -201,7 +208,7 @@ void map_shot(gl::Lab& lab) {
            gl::to_picture(chart.plot));
 }
 
-void run(gl::Lab& lab) {
+void run_script(gl::Lab& lab) {
   const std::string dir = lab.arg("sounds");
   std::map<std::string, Pcm> bank;
   for (const Cue& c : kScript) {
@@ -325,6 +332,95 @@ void run(gl::Lab& lab) {
   }
 }
 
+// The built-in arena's warmup with three bots fighting round the player, who stands still: the
+// sounds the server starts for him played through the window's hearing (client/listen_sound.hpp)
+// off the game's own recordings under the classic names (client/own_sounds.hpp).
+void run_bots(gl::Lab& lab) {
+  namespace cl = shooters_edge::client;
+  const std::string content = lab.arg("content");
+  ge::progs::Progs progs;
+  std::string error;
+  if (!cl::baseline_progs(progs, error)) {
+    lab.fail("the baseline mod did not build: " + error,
+             "next: compile it with ge qc build. Skill: progs.");
+    return;
+  }
+  cl::SearchPath files;
+  cl::OwnSounds own;
+  if (!cl::mount_own_sounds(files, content, own, error)) {
+    lab.fail(
+        "the game's own sounds did not mount: " + error,
+        "next: run from the tree's root or pass --content=<the content folder>. Skill: audio.");
+    return;
+  }
+  cl::Listen l;
+  cl::ListenOptions opt = shooters_edge::net::listen_options();
+  opt.console = {"deathmatch 1"};
+  opt.lobby = true;
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "arena", error);
+  if (!map || !cl::listen_start(l, progs, std::move(map), opt, error)) {
+    lab.fail("the built-in arena did not start: " + error,
+             "next: run the shooters_edge_lobby test. Skill: shooter.");
+    return;
+  }
+  const int bots = static_cast<int>(lab.arg_num("bots"));
+  for (int i = 0; i < bots; i++) cl::listen_lobby(l, "addbot");
+  cl::listen_lobby(l, "warmup");
+  Synth s;
+  cl::ListenHearing hearing(s);
+  const double seconds = lab.arg_num("seconds");
+  const int per = kRate / kFps;
+  const int frames = static_cast<int>(seconds * kFps);
+  std::vector<float> mix, chunk(2 * static_cast<size_t>(per));
+  mix.reserve(chunk.size() * static_cast<size_t>(frames));
+  const ge::shooter::MoveCmd idle;
+  for (int f = 0; f < frames; f++) {
+    cl::listen_frame(l, idle);
+    hearing.frame(l, files, 1.0f / kFps);
+    s.render(chunk.data(), per);
+    mix.insert(mix.end(), chunk.begin(), chunk.end());
+  }
+  const cl::DemoSoundStats none;
+  const cl::DemoSoundStats& st = hearing.stats() ? *hearing.stats() : none;
+  const Meter m = gl::sound_shot(
+      lab,
+      {"bots",
+       "THE ARENA'S BOTS FIGHTING, HEARD BY THE PLAYER",
+       "The built-in arena's warmup with " + std::to_string(bots) +
+           " bots, the player standing at his spawn: every sound the server started for him "
+           "played through the window's hearing off the game's own recordings (" +
+           std::to_string(own.mounted) + " of the asset map's " + std::to_string(own.mapped) +
+           " classic names have one).",
+       "shots, pickups and deaths standing out of a quiet bed, near ones loud and far ones "
+       "faint, swinging left and right with the fight; nothing clipping",
+       {{"bots", lab.arg("bots")}, {"seconds", lab.arg("seconds")}}},
+      mix);
+  lab.metric("bots.started", static_cast<double>(st.started), "sounds");
+  lab.metric("bots.missing", static_cast<double>(st.missing), "names");
+  lab.metric("bots.mounted", own.mounted, "names");
+  if (st.started == 0) {
+    lab.fail("the bots' fight played no sound in " + lab.arg("seconds") + " s",
+             "the listen's sounds (client/listen.cpp's take_sound) or the own sounds' mount. "
+             "Skill: audio.");
+  }
+  if (m.peak_db > -0.1f) {
+    lab.fail("the bots' fight clips: its peak is " + fmt(m.peak_db, 2) + " dBFS",
+             "the demo volume (kDemoVolume) or the bus. Skill: audio.");
+  }
+  cl::listen_stop(l);
+}
+
+void run(gl::Lab& lab) {
+  const std::string fight = lab.arg("fight");
+  if (fight != "script" && fight != "bots" && fight != "both") {
+    lab.fail("--fight=" + fight + " is not a fight",
+             "next: pass --fight=script, bots or both. Skill: labs.");
+    return;
+  }
+  if (fight != "bots") run_script(lab);
+  if (fight != "script") run_bots(lab);
+}
+
 const gl::LabSpec kSpec{
     "se-audio",
     gl::LabKind::sim,
@@ -336,6 +432,10 @@ const gl::LabSpec kSpec{
     {
         {"sounds", "games/shooters_edge/content/sounds", "the sounds' directory"},
         {"channels", "16", "the channel table's size"},
+        {"fight", "both", "script (the scripted fight), bots (the arena's bots) or both"},
+        {"bots", "3", "the bots in the arena's fight"},
+        {"seconds", "12", "how long the bots' fight is heard"},
+        {"content", "games/shooters_edge/content", "the game's content folder (its asset map)"},
     },
     "",
     run,
