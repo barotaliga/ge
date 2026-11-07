@@ -55,7 +55,7 @@
 // ge:keywords nav navigation nav-graph navmesh waypoint waypoints node link walk drop jump
 // ge:keywords running-jump moving-jump run-up prove prove_link build_nav nav_route nav_nearest
 // ge:keywords nav_add_links nav_close_entries teleport-link nav_reach nav_hash map_world
-// ge:keywords reachability mover door plat ride route path a-star bot
+// ge:keywords reachability mover door plat ride route path a-star bot swim swim-node water
 // ge:skill shooter bots
 // ge:test tests/shooter_nav_test.cpp
 #pragma once
@@ -79,8 +79,14 @@ struct NavSettings {
   int msec = 13;         // a proof's command length, ms
 };
 
-// `ride`: stand on a mover's top at rest and be carried to its far end (a plat).
-enum class NavKind : uint8_t { walk, drop, jump, ride };
+// `ride`: stand on a mover's top at rest and be carried to its far end (a plat). `swim`: through
+// the water, between two of its cells, from a pool's floor up into it or down out of it, into it
+// off a dry edge, or out of it onto a dry node by the climb the move proved (shooter/swim.hpp
+// `nav_add_swim`).
+// `rocket`: a ROCKET JUMP (`prove_rocket_jump`): only for a player with the rocket launcher, its
+// rockets and the health for the blast; left out of routes and reach unless asked for.
+enum class NavKind : uint8_t { walk, drop, jump, ride, swim, rocket };
+inline constexpr int kNavKinds = 6;
 const char* nav_kind_name(NavKind k);
 
 // A mover the proofs leave out: its entity and its box in the world.
@@ -101,6 +107,8 @@ struct NavNode {
   int32_t col = 0, row = 0;  // its grid column
   int32_t mover = -1;        // the entity a mover whose box holds this node, or -1
   int32_t ride = -1;         // a node on a ridden mover's top at the far end: that mover, or -1
+  bool swim = false;         // a swim node: a wet cell's centre (no floor under it)
+  bool wet = false;          // in water: a swim node, or a floor node under water (a pool's floor)
 };
 
 struct NavLink {
@@ -114,9 +122,9 @@ struct NavLink {
 // How the build went, for the lab.
 struct NavCounts {
   int64_t columns = 0, proofs = 0, commands = 0;
-  int64_t refused = 0;      // candidates no kind reached
-  int64_t no_run_up = 0;    // jumps that reached but had no room to run up
-  int64_t by_kind[4] = {};  // links kept, by NavKind
+  int64_t refused = 0;              // candidates no kind reached
+  int64_t no_run_up = 0;            // jumps that reached but had no room to run up
+  int64_t by_kind[kNavKinds] = {};  // links kept, by NavKind
 };
 
 struct NavGraph {
@@ -129,6 +137,15 @@ struct NavGraph {
                                           // mover's top nodes come after every column's
   std::vector<NavMover> movers;           // the movers it was built with, at rest
   NavCounts counts;
+  // The swim nodes (shooter/swim.hpp `nav_add_swim`), after every other node: from `swim_first`
+  // on, each a wet cell of the cube grid at `swim_lo`, `swim_cell` a side, found by its cell.
+  int32_t swim_first = -1;
+  Vec3f swim_lo;
+  float swim_cell = 0;
+  int32_t swim_nx = 0, swim_ny = 0, swim_nz = 0;
+  std::vector<int32_t> swim_node;  // each cell's swim node, -1 none
+  // Each node's ROOM (`nav_room`): grid steps to the nearest edge of its floor; empty until asked.
+  std::vector<uint8_t> room;
 };
 
 // One proof's result.
@@ -156,8 +173,8 @@ NavProof prove_link(const MoveWorld& world, const MoveSettings& move, Vec3f from
 void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const MoveSettings& move,
                const NavSettings& set, NavGraph& g);
 
-// The node nearest `p` among the columns round it and the ridden movers' top nodes, within 64
-// units up or down; -1 when none.
+// The node nearest `p` among the columns round it, the ridden movers' top nodes and the swim node
+// of the cell `p` is in, within 64 units up or down; -1 when none.
 int32_t nav_nearest(const NavGraph& g, Vec3f p);
 
 // A link a map adds that no proof finds (a teleporter: from every node its trigger holds to the
@@ -166,7 +183,28 @@ struct NavExtraLink {
   int32_t from = 0, to = 0;
   NavKind kind = NavKind::walk;
   float time_s = 0.1f;
+  float speed = 0;  // a jump's speed at its start, units/s (NavLink::speed)
 };
+
+// THE ROCKET JUMP, as the baseline mod makes it (games/shooters_edge/qc: weapons.qc's `launch`,
+// combat.qc's `radius_damage` and `blow_push`): the player runs at the target at `speed`, and on
+// one command presses jump and fires with the view `pitch` degrees down; the rocket starts at
+// the eye less 8 (and 8 down), flies at `missile_speed` and bursts `back_off` short of where it
+// meets the world; the blast takes `damage` less half the distance to the player's middle, half
+// of that to its own shooter, and pushes him `push` units/s a point away from the burst. From
+// there the view is on the target and forward held through the flight, as in a jump.
+struct RocketJumpSpec {
+  float pitch = 80;  // degrees down at the shot (straight down leaves no wish across the floor)
+  float missile_speed = 1000, back_off = 8;
+  float damage = 120, self_share = 0.5f, push = 8;
+  float eye = 22;
+};
+// The rocket jump from `from` toward `to` run on the move with the blast's push; reached as a
+// jump is (standing on the target, or landed anywhere when the caller reads `end`). `health`, when
+// given, gets the blast's points to the jumper.
+NavProof prove_rocket_jump(const MoveWorld& world, const MoveSettings& move, Vec3f from, Vec3f to,
+                           float speed, const NavSettings& set, const RocketJumpSpec& rj = {},
+                           float* health = nullptr, std::vector<Vec3f>* path = nullptr);
 
 struct NavRoute {
   std::vector<int32_t> nodes;  // from the start to the goal; empty: no way
@@ -180,11 +218,11 @@ struct NavRoute {
 // nor is any link in `cut` (its `from` and `to`: a way an open door's leaf still stands across).
 NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& search,
                    float mover_penalty_s = 1, std::span<const int32_t> barred = {},
-                   std::span<const NavExtraLink> cut = {});
+                   std::span<const NavExtraLink> cut = {}, bool rockets = false);
 
 // Every node a player at node `from` can get to (`search.reached(n)` after; costs the links'
-// times), and how many, `from` itself included.
-int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search);
+// times), and how many, `from` itself included; rocket jumps only when `rockets`.
+int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, bool rockets = false);
 
 // Adds `extra` to each node's run of links (after the proven ones), keeping the runs contiguous.
 void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra);
@@ -195,6 +233,50 @@ void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra);
 // lists them in `cut_links` when given (the ways in, for a caller that enters on purpose).
 int64_t nav_close_entries(NavGraph& g, std::span<const uint8_t> closed,
                           std::vector<NavExtraLink>* cut_links = nullptr);
+
+// REPAIRING POCKETS (`nav_bridge_pockets`): after the build (and the water, the teleporters),
+// a POCKET is a set of nodes, joined by links among themselves, that the map's main part (the
+// nodes `main` marks) does not reach. For each pocket the links the build never tries are tried,
+// proven by the move as any other: from a main node to a pocket node (in) and back (out), the two
+// within `far` across, the target at most `up` higher and at most `down` lower, the nearest pairs
+// first, at most `tries` of them a way: a walk or a drop, then a running jump at the full speed,
+// three quarters and a half, then a standing jump. A jump that lands standing on another node of
+// the pocket (or of the main part, going out) than the one aimed at is kept as a link to that
+// node: a long jump rarely lands on a grid point. The first way that holds for a pocket is kept;
+// `main` is grown by what the pocket's nodes reach, so a pocket beyond it is tried next.
+struct NavBridgeSettings {
+  float far = 384;   // the most across a link tried, units
+  float up = 60;     // the target at most this much higher, units
+  float down = 640;  // and at most this much lower, units
+  int tries = 32;    // pairs proven a pocket and way
+  int least = 1;     // pockets smaller than this many nodes are left alone
+  // Last, ROCKET JUMPS (`prove_rocket_jump`) from a running start at the full speed and half and
+  // from standing, to a target at most `rocket_up` higher, on at most `rocket_tries` pairs; only
+  // once no other way adds a pocket, and only into a pocket with a way back out of it.
+  bool rockets = true;
+  float rocket_up = 280;
+  int rocket_tries = 24;
+  float rocket_cost_s = 3;  // a rocket jump's link costs this more (the rocket and the health)
+  RocketJumpSpec rj;
+  // The nodes worth a rocket jump (one byte a node: an item's); empty: any pocket.
+  std::span<const uint8_t> wanted;
+};
+struct NavBridgeCounts {
+  int64_t pockets = 0, bridged_in = 0, bridged_out = 0, by_rocket = 0, proofs = 0;
+};
+NavBridgeCounts nav_bridge_pockets(const MoveWorld& world, const MoveSettings& move, NavGraph& g,
+                                   std::vector<uint8_t>& main, const NavBridgeSettings& set = {});
+
+// The nodes from which a way leads, on foot (or swimming, riding, teleported: anything but a
+// rocket jump), to a node `mark` marks; one byte a node.
+std::vector<uint8_t> nav_back(const NavGraph& g, const std::vector<uint8_t>& mark);
+
+// THE ROOM a node has: how many grid steps it stands from the nearest edge of its floor (an edge
+// node has fewer than eight walk links to the floor nodes of its neighbouring columns: a wall, a
+// drop, water beside it), at most `most`; a walker may stray `room x spacing` off the line between
+// two such nodes and stay on the floor. Swim nodes and ridden tops have none. Fills `g.room`; not
+// in `nav_hash` (a read of the graph, not part of it).
+void nav_room(NavGraph& g, int most = 3);
 
 // The graph's bits: every node's origin and mover (and the mover it rides, where any does), every
 // link's target, kind, time, mover and speed.

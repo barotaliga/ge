@@ -41,6 +41,7 @@ void make(Party& p, const sv::RulesCommon& s, const sv::MapSpec& map, int slot) 
   m.fighter.bot.yaw = s.world.entities[static_cast<size_t>(slot) + 1].view_angles.y;
   m.fighter.bot.pilot.world = &p.nav->world;
   if (p.nav->swim.leading > 0) m.fighter.swim = &p.nav->swim;
+  m.fighter.trap = &p.nav->trap;
   bots::escort_init(m.fighter, s, slot, 0);
 }
 

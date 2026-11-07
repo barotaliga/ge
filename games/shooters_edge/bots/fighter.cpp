@@ -79,6 +79,8 @@ constexpr double kSwimExit_s = 3;      // a climb out of the water kept this lon
 constexpr double kLanding_s = 2;   // out of the water, its exit node walked onto this long at most
 constexpr double kBaseHeal = 1.4;  // health in the team's base is worth this more to a healer
 constexpr double kLauncherWorth = 240;     // the launcher lacked: worth a long run
+constexpr float kRocketJumpHealth = 70;    // the health a rocket jump is tried with (it costs ~50)
+constexpr float kRocketJumpMoves = 5;      // and the moves trait
 constexpr float kRocketsLow = 25;          // a launcher with fewer rockets than this wants more
 constexpr float kRocketsStock = 50;        // rockets stocked with no launcher yet, up to this
 constexpr double kRocketsStockWorth = 15;  // and worth this from none
@@ -304,6 +306,7 @@ int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& s
     // Only what it knows of (or sees). One gone is waited for at its time back as the player
     // knows it: exact when timed, a guess (late) when not (knowledge.hpp).
     if (!item_in_mind(f, i)) return 0.0;
+    if (f.trap && (*f.trap)[static_cast<size_t>(it.node)]) return 0.0;  // no way back out of it
     // No way there from here, unless by its dive (from a node there is a way to).
     const bool by_dive = f.reach_at >= 0 && !f.reach.reached(it.node);
     if (by_dive && (!it.dive || !f.reach.reached(it.dive_node) || it.dive_s > kDiveMost_s ||
@@ -546,7 +549,13 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   // Where it can get to from here, worked out once a second (a teleporter or a drop is one way).
   if (f.reach_at < 0 || t - f.reach_at >= 1) {
     const sh::NavGraph& g = *f.bot.pilot.pilot.g;
-    f.reach_n = sh::nav_reach(g, sh::nav_nearest(g, self.origin), f.reach);
+    // Rocket jumps only while it can afford one: the launcher and a rocket, the health for the
+    // blast (about half a rocket's 120), a player who moves well enough to try (nav.hpp).
+    f.bot.pilot.pilot.set.rockets = (st.items & kWRockets) != 0 && st.rockets >= 1 &&
+                                    st.health >= kRocketJumpHealth && f.escort.leader < 0 &&
+                                    f.traits[sh::Trait::moves] >= kRocketJumpMoves;
+    f.reach_n =
+        sh::nav_reach(g, sh::nav_nearest(g, self.origin), f.reach, f.bot.pilot.pilot.set.rockets);
     f.reach_at = t;
   }
   bool escaping = false;  // on the way out of a pocket: no other goal this think
@@ -811,6 +820,22 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
 
   if (f.diving < 0) f.last_dive = -1;
   choose_weapon(f, st, range, t, why);
+  // A rocket jump on the way next: the launcher in hand for it.
+  const sh::Pilot& pl = f.bot.pilot.pilot;
+  if (pl.set.rockets && st.weapon != kWRockets && t - f.impulse_at >= kImpulseGap_s)
+    for (size_t k = pl.k; k + 1 < pl.route.size() && k < pl.k + 3; k++) {
+      const sh::NavNode& from = pl.g->nodes[static_cast<size_t>(pl.route[k])];
+      bool rocket = false;
+      for (int32_t q = 0; q < from.links; q++) {
+        const sh::NavLink& l =
+            pl.g->links[static_cast<size_t>(from.first_link) + static_cast<size_t>(q)];
+        rocket = rocket || (l.to == pl.route[k + 1] && l.kind == sh::NavKind::rocket);
+      }
+      if (rocket) {
+        f.want_weapon = 7;  // the launcher's number
+        break;
+      }
+    }
 }
 
 // A living teammate within kFireClearance of the line from `eye` to `target`, nearer than it.
@@ -877,6 +902,9 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   sh::PilotSettings ps;
   ps.hop = expert || average;
   ps.hop_simple = average;
+  // Its lane off the route's line (shooter/pilot.hpp): a person never walks the line; the less
+  // practised wander wider. A perfect player keeps to it.
+  ps.lane = skill == sh::AimSkill::perfect ? 0.f : expert ? 0.45f : average ? 0.6f : 0.75f;
   const sh::PilotHands hands = expert    ? sh::PilotHands::practised
                                : average ? sh::PilotHands::steady
                                          : sh::PilotHands::human;

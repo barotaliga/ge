@@ -134,7 +134,6 @@ gl::Picture team_view(TeamView& v, const BotTeam& t, int w, int h) {
     }
 
   if (first && t.nav) {
-    const sh::NavGraph& g = t.nav->nav.graph;
     const bt::Fighter& f0 = *first->fighter;
     // The map's places by name (the team's callouts), each at its points' middle, under the rest.
     if (f0.locs)
@@ -207,13 +206,12 @@ gl::Picture team_view(TeamView& v, const BotTeam& t, int w, int h) {
           gl::draw_ring(p, px(c.heard.x), py(c.heard.y), 6, kEnemy);
         }
       }
-      const sh::Pilot& pl = f.bot.pilot.pilot;
-      double lx = mx, ly = my;
-      for (size_t i = pl.k + 1; i < pl.route.size(); i++) {
-        const sh::Vec3f n = g.nodes[static_cast<size_t>(pl.route[i])].origin;
-        gl::draw_line(p, lx, ly, px(n.x), py(n.y), col, 2);
-        lx = px(n.x);
-        ly = py(n.y);
+      // Its path: the line it means to walk, its lane off the route in (when drawn at all).
+      if (t.cfg.paths) {
+        const std::vector<sh::Vec3f> path = sh::pilot_path(f.bot.pilot.pilot, me.origin);
+        for (size_t i = 1; i < path.size(); i++)
+          gl::draw_line(p, px(path[i - 1].x), py(path[i - 1].y), px(path[i].x), py(path[i].y), col,
+                        2);
       }
       if (f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()) {
         const bt::ItemSpot& it = f.items[static_cast<size_t>(f.goal_item)];

@@ -79,6 +79,7 @@ struct BotTeamConfig {
   std::vector<std::string> traits;
   std::string basedir;  // the folder holding the game folders (the player's own packs)
   bool ready = true;    // say `ready` once set up on the map
+  bool paths = true;    // the team's pictures draw each bot's path (the console's `paths 0|1`)
   std::string out;      // the match folder ("": nothing written)
   uint32_t seed = 1;    // bot k's hands seed + 31 k
   uint16_t first_qport = 2100;

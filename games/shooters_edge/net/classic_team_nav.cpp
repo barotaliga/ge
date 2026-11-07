@@ -52,6 +52,7 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const server::RulesCommon& 
     tn.plan_made = true;
   }
   f.plan = &tn.plan;
+  f.trap = &tn.nav.trap;
   if (!tn.dives_made && sw.leading > 0 && nav.main_n > 0) {
     tn.dives_made = true;
     const std::vector<bt::ItemSpot>& items = f.items;

@@ -59,11 +59,12 @@ void usage() {
       "shooters_edge_bots --server=<host:port> [--bots=4] [--team=bots] [--colour=4]\n"
       "  [--basedir=<folder holding id1>] [--skills=expert,average,...] [--traits=<a,b,...>]\n"
       "  [--name=gebot] [--out=<match folder>] [--seconds=<n>] [--until-end] [--report=10]\n"
-      "  [--no-ready] [--seed=1] [--qport=2100] [--view=<file.mp4>] [--view-fps=10] "
+      "  [--no-ready] [--paths=0|1] [--seed=1] [--qport=2100] [--view=<file.mp4>] [--view-fps=10] "
       "[--view-size=1280x720]\n"
       "  [--snapshot=<file.png>] [--snapshot-every=5] [--locs=<folder with locs/>]\n"
       "Console (stdin): a line goes to every bot; 'bot<N> <line>' to one. Bot settings: skill,\n"
-      "temper, traits, <trait> <1..10>; 'status'; 'autoready 0|1'; 'quit'. Anything else is sent\n"
+      "temper, traits, <trait> <1..10>; 'status'; 'autoready 0|1'; 'paths 0|1'; 'quit'. Anything "
+      "else is sent\n"
       "to the server as the bot's console line (ready, break, say ...).\n");
 }
 
@@ -126,6 +127,8 @@ int run(int argc, char** argv) {
       until_end = true;
     } else if (a == "--no-ready") {
       cfg.ready = false;
+    } else if (flag(a, "paths", v)) {
+      cfg.paths = v != "0";
     } else {
       std::fprintf(stderr, "shooters_edge_bots: unknown argument '%s'; next: --help\n", a.c_str());
       return 2;

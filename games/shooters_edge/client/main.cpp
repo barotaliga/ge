@@ -706,6 +706,7 @@ int run_main(int argc, char** argv) {
     bc.colour = args.colour;
     bc.basedir = args.basedir;
     bc.out = args.bots_out;
+    bc.paths = args.bots_paths;
     if (!args.skills.empty()) {
       bc.skills.clear();
       for (size_t at = 0; at <= args.skills.size();) {

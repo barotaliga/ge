@@ -106,6 +106,8 @@ bool parse(int argc, char** argv, Args& a, std::string& why) {
       a.colour = static_cast<int>(std::strtol(argv[i] + arg.find('=') + 1, nullptr, 10));
     } else if (arg.rfind("--skills=", 0) == 0) {
       a.skills = std::string(arg.substr(9));
+    } else if (arg.rfind("--bots-paths=", 0) == 0) {
+      a.bots_paths = arg.substr(13) != "0";
     } else if (arg.rfind("--bots-out=", 0) == 0) {
       a.bots_out = expand_home(std::string(arg.substr(11)));
     } else if (arg.rfind("--bots-view=", 0) == 0) {

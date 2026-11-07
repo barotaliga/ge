@@ -292,13 +292,13 @@ void draw_bot_view(ge::ui::DrawList& o, const ge::render::FrameView& view, int w
           o.line(m, p, 1, {col.r, col.g, col.b, 0.35f});
         }
       }
-      const sh::Pilot& pl = f.bot.pilot.pilot;
-      std::vector<Vec2> route{m};
-      for (size_t i = pl.k + 1; i < pl.route.size(); i++) {
-        Vec2 p;
-        if (pr.at(t.nav->nav.graph.nodes[static_cast<size_t>(pl.route[i])].origin, p))
-          route.push_back(p);
-      }
+      // Its path: the line it means to walk, its lane off the route in (the console's `paths`).
+      std::vector<Vec2> route;
+      if (t.cfg.paths)
+        for (const sh::Vec3f& n : sh::pilot_path(f.bot.pilot.pilot, me.origin)) {
+          Vec2 p;
+          if (pr.at(n, p)) route.push_back(p);
+        }
       if (route.size() > 1) o.polyline(route, 2, {col.r, col.g, col.b, 0.85f});
       if (f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()) {
         Vec2 p;

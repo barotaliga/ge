@@ -260,3 +260,75 @@ TEST(the_graph_matches_its_own_bits) {
               "the nav course's graph moved off its golden bits: if the move or the graph changed "
               "on purpose, rewrite with GE_GOLDEN_WRITE=1 and say why in the PR");
 }
+
+namespace {
+
+// A floor (its top at z 0) and a block 160 high beside it, too high for any jump (the apex is 46)
+// and in reach of a rocket jump's push (about 300 up): the block's top is a pocket a drop leaves.
+struct Block {
+  sh::HullData point, clip;
+  sh::MoveWorld world;
+  sh::NavGraph g;
+  Block() {
+    const auto box = [](sh::Vec3f lo, sh::Vec3f hi) {
+      sh::Brush b;
+      b.planes = {{{1, 0, 0}, hi.x},   {{-1, 0, 0}, -lo.x}, {{0, 1, 0}, hi.y},
+                  {{0, -1, 0}, -lo.y}, {{0, 0, 1}, hi.z},   {{0, 0, -1}, -lo.z}};
+      return b;
+    };
+    const std::vector<sh::Brush> brushes = {box({-384, -128, -64}, {384, 128, 0}),
+                                            box({96, -128, 0}, {384, 128, 160})};
+    point = sh::build_point_hull(brushes);
+    clip = sh::build_box_hull(brushes, sh::kPlayerMins, sh::kPlayerMaxs);
+    world.solids[0].point_hull = point.hull();
+    world.solids[0].clip_hull = clip.hull();
+    world.solids[0].mins = {-384, -128, -64};
+    world.solids[0].maxs = {384, 128, 512};
+    world.count = 1;
+    sh::build_nav(world, {}, sh::MoveSettings{}, sh::NavSettings{}, g);
+  }
+};
+
+}  // namespace
+
+TEST(a_rocket_jump_climbs_what_no_jump_does) {
+  const Block b;
+  const sh::Vec3f from{-64, 0, 24}, to{160, 0, 184};
+  const sh::NavProof jump =
+      sh::prove_link(b.world, sh::MoveSettings{}, from, to, sh::NavKind::jump, 320, b.g.set);
+  CHECK_MSG(!jump.reached, "a jump climbed 160 units: the apex is 46");
+  float health = 0;
+  const sh::NavProof rj =
+      sh::prove_rocket_jump(b.world, sh::MoveSettings{}, from, to, 320, b.g.set, {}, &health);
+  CHECK_MSG(rj.end.z > 160 + 20,
+            "the rocket jump did not land on the block: ended at z " + std::to_string(rj.end.z));
+  CHECK_MSG(health > 30 && health < 60, "the blast took " + std::to_string(health) +
+                                            " of the jumper's health: half of 120 less "
+                                            "half the distance");
+}
+
+TEST(a_pocket_only_a_rocket_jump_reaches_is_bridged_by_one) {
+  Block b;
+  const int32_t floor = sh::nav_nearest(b.g, {-256, 0, 24});
+  const int32_t top = sh::nav_nearest(b.g, {320, 0, 184});
+  CHECK(floor >= 0 && top >= 0);
+  if (floor < 0 || top < 0) return;
+  ge::ai::Search search;
+  sh::nav_reach(b.g, floor, search);
+  CHECK_MSG(!search.reached(top), "the block's top is reached before the bridge: no pocket");
+  std::vector<uint8_t> main(b.g.nodes.size());
+  for (size_t n = 0; n < main.size(); n++) main[n] = search.reached(static_cast<int32_t>(n));
+  const sh::NavBridgeCounts c = sh::nav_bridge_pockets(b.world, sh::MoveSettings{}, b.g, main);
+  CHECK_MSG(c.by_rocket >= 1, "no rocket jump bridged the block's top");
+  CHECK_MSG(sh::nav_route(b.g, floor, top, search).nodes.empty(),
+            "a route without rocket jumps reached the block's top");
+  const sh::NavRoute r = sh::nav_route(b.g, floor, top, search, 1, {}, {}, true);
+  CHECK_MSG(!r.nodes.empty(), "no route with rocket jumps reaches the block's top");
+  int rockets = 0;
+  for (size_t k = 0; k + 1 < r.nodes.size(); k++)
+    for (const sh::NavLink& l : links_of(b.g, r.nodes[k]))
+      rockets += l.to == r.nodes[k + 1] && l.kind == sh::NavKind::rocket;
+  CHECK_MSG(rockets == 1, "the way up took " + std::to_string(rockets) + " rocket jumps, not one");
+  sh::nav_reach(b.g, top, search);
+  CHECK_MSG(search.reached(floor), "no way back down off the block's top");
+}
