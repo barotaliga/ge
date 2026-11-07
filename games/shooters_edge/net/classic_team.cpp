@@ -50,6 +50,7 @@ namespace cl = shooters_edge::client;
 constexpr double kHz = 1000.0 / bt::kPilotMsec;
 constexpr int kTickUs = 13000;
 constexpr int32_t kItQuad = 4194304;
+constexpr int32_t kItRockets = 32;  // the launcher's weapon bit
 
 // The drill: every player's weapons cut to `bit` alone (the blade kept, so nothing is left with no
 // weapon), and the ammunition it fires topped up when it runs under half (so a refill, which the
@@ -87,6 +88,7 @@ struct Seat {
   int team = 0, index = 0;
   sh::AimSkill skill = sh::AimSkill::average;
   bool had_quad = false;
+  bool had_rl = false;
   size_t heard = 0;                      // its client's prints read so far
   std::unique_ptr<ClientMirror> mirror;  // client-fed: its world, off its client alone
 };
@@ -308,15 +310,47 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       const bool live = d.health > 0;
       if (seat.alive && !live) p.deaths++;
       seat.alive = live;
-      const bool quad = (static_cast<int32_t>(bt::read_stats(s, p.slot + 1).items) & kItQuad) != 0;
+      const bt::Stats rst = bt::read_stats(s, p.slot + 1);
+      const bool quad = (rst.items & kItQuad) != 0;
       if (quad && !seat.had_quad) r.teams[seat.team].quad_pickups++;
       seat.had_quad = quad;
+      // The launcher taken (off the map or out of a pack), and the rockets in hand when it was.
+      const bool rl = live && (rst.items & kItRockets) != 0;
+      if (rl && !seat.had_rl) p.rl_pickups++;
+      seat.had_rl = rl;
+      if (live && frame % 4 == 0) {
+        p.rl_samples += rl;
+        p.rl_loaded += rl && rst.rockets > 0;
+      }
       if (frame % opt.path_every == 0) {
         p.path.push_back(d.origin);
         p.roles.push_back(live ? static_cast<uint8_t>(seat.fighter.role) : 255);
         p.known.push_back(static_cast<int16_t>(bt::items_known(seat.fighter)));
       }
+      // How often an enemy stands in plain view of him (in range, a clear line, any way he looks),
+      // against how often he sees one (in his cone): a bot that roams with nobody known while
+      // an enemy is in view misses him; one with nobody in view is in the wrong place.
+      if (live && frame % 4 == 0) {
+        sh::SenseSettings all = seat.fighter.bot.senses.set;
+        all.fov = 360;
+        const sh::Vec3f eye{d.origin.x, d.origin.y, d.origin.z + all.view_height};
+        bool any = false;
+        for (int j = 0; j < n && !any; j++) {
+          const Seat& o = seats[static_cast<size_t>(j)];
+          const int os = r.players[static_cast<size_t>(j)].slot;
+          if (!o.ready || o.team == seat.team || os < 0) continue;
+          const sh::Edict& e = s.sv.edicts[static_cast<size_t>(os) + 1];
+          any = e.health > 0 && sh::sees_player(s.sv, all, p.slot + 1, eye, {}, e.origin);
+        }
+        bool seen = false;
+        for (const sh::Contact& c : seat.fighter.bot.senses.contacts) seen = seen || c.visible;
+        p.view_n++;
+        p.in_view += any;
+        p.seen_n += seen;
+        p.unnoticed += any && seat.fighter.mode == bt::FightMode::roam;
+      }
       if (live) {
+        static_assert(std::size(TeamPlayer{}.role_commands) == bt::kRoles);
         p.role_commands[static_cast<int>(seat.fighter.role)]++;
         p.pilot_modes[static_cast<int>(seat.fighter.bot.pilot.pilot.mode)]++;
       }
@@ -389,6 +423,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.react_s = seat.fighter.bot.stats.react_s;
     if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.players.size())
       p.hits = hits.players[static_cast<size_t>(p.slot)];
+    if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.given.size())
+      p.given = hits.given[static_cast<size_t>(p.slot)];
     p.dives = seat.fighter.dives;
     p.dives_given_up = fs.dives_given_up;
     p.dive_wet_s = fs.dive_wet_s;
@@ -435,6 +471,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.teams[t].messages = ts.messages;
     r.teams[t].lost_seen = ts.lost_seen;
     r.teams[t].retakes = ts.retakes;
+    r.teams[t].pushes = ts.pushes;
+    r.teams[t].joins = ts.joins;
     r.teams[t].spam_shots = ts.spam_shots;
   }
   if (tn.plan_made && !seats.empty()) {

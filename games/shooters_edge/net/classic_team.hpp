@@ -90,11 +90,17 @@ struct TeamPlayer {
   int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and pre-aimed (shooter/bot.hpp)
   double react_s = 0;                    // the reactions' times, summed
   std::array<HitCount, kHitWeapons> hits{};  // shots and hits by weapon (classic_hits.hpp)
+  double given = 0;                          // damage given to enemies (classic_hits.hpp)
+  // Sampled alive every 4 frames: an enemy in plain view (any way he looks), one seen (in his
+  // cone), and an enemy in view while he roams with nobody known.
+  int64_t view_n = 0, in_view = 0, seen_n = 0, unnoticed = 0;
+  // The launcher: taken (a pack's counted), and sampled with the view's: had, and had loaded.
+  int64_t rl_pickups = 0, rl_samples = 0, rl_loaded = 0;
   int64_t dives = 0,
           off_graph = 0;       // dives begun into a pocket; thinks spent off the graph or in a pool
   int64_t dives_given_up = 0;  // dives turned back, late or short of air
   double dive_wet_s = 0;       // time in the water on a dive
-  int64_t mode_commands[4] = {}, role_commands[4] = {};
+  int64_t mode_commands[4] = {}, role_commands[5] = {};  // by bots::Role
   int64_t weapon_commands[9] = {};
   int64_t pilot_modes[sh::kPilotModes] =
       {};  // live commands in each pilot mode (shooter/pilot.hpp)
@@ -128,6 +134,7 @@ struct TeamTotals {
   int64_t quad_pickups = 0;                            // the quad taken by a member
   int64_t messages = 0;                                // team messages said
   int64_t lost_seen = 0, retakes = 0, spam_shots = 0;  // areas worked out lost, retaken; spam
+  int64_t pushes = 0, joins = 0;                       // pushes on the base called, and joined
 };
 
 // A button on the map, as the fighters read it (bots/buttons.hpp).

@@ -19,7 +19,8 @@
 //
 // THE ROLE each player plans every `kPlan_s` from his own beliefs (team.hpp names the roles):
 // carry with the quad; rush when he believes the quad due within `kRushAhead_s` and himself one of
-// the two of his team nearest it; hold the key area he claimed (at the start the nearest of the
+// the two of his team nearest it; push when his team takes the base back together (below); hold
+// the key area he claimed (at the start the nearest of the
 // rocket launcher, the best armour and the quad that no teammate said he is coming for, called
 // with `coming X`, then held with `safe [X]`); free otherwise. A player gives an item up to a
 // teammate in sight near it when he has no use for it (the armour no better than his own, a weapon
@@ -28,11 +29,21 @@
 // key areas. The calls that matter most (the quad's and the shield's) are said again more often
 // when he believes no teammate is near them.
 //
+// THE PUSH: a team that loses its base (the map plan's held armour) takes it back together, not
+// one by one as each comes back in (one at a time feeds the holders a frag apiece). A strong
+// player who believes the base the enemy's (an enemy seen or called out in it within
+// `kLostFresh_s` and no mate believed there, or worked out lost) calls `attack ya [X]`, X a place
+// outside one of the base's ways in (the map plan's entries), the one nearest him. Each mate who
+// reads it and is strong enough goes there too, the base's own holder among them; once a mate is
+// there with him (or `kGather_s` has passed) he goes in, and the push holds until he stands on
+// the base with no enemy seen for a while, or `kPush_s` has passed.
+//
 // Deterministic: a pure function of what the fighter saw, heard and drew from its own stream.
 //
 // ge:summary A fighter's own mind: team lines read by skill, its role chosen alone, its calls
 // ge:keywords mind team-message read-by-skill beliefs mates claims timers role rush hold carry
 // ge:keywords point give-up opening-rush safe report spam quad-call separate-brains
+// ge:keywords push attack gather regroup retake-together base-lost staging
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
@@ -90,8 +101,16 @@ struct Mind {
   double quad_call_at = -1e9;  // its last call of the quad
   double pent_call_at = -1e9;
   double timer_call_at = -1e9;
-  double gave_at = -1e9;         // its last point at an item it gave up
-  double help_said_at = -1e9;    // its last call for help
+  double gave_at = -1e9;       // its last point at an item it gave up
+  double help_said_at = -1e9;  // its last call for help
+  // THE PUSH: its team's attack on the base it believes the enemy's.
+  ge::shooter::Vec3f push_at;     // where the team gathers before it goes in
+  ge::shooter::Vec3f sighted_at;  // where it last saw an enemy itself
+  double sighted_t = -1e9;
+  double push_t = -1e9;          // when the push was called (said or read)
+  double push_go_t = -1e9;       // when the gather was over and it went in (-1e9: not yet)
+  double push_said_at = -1e9;    // its last call of a push
+  int32_t push_item = -1;        // the key item the push is for (-1: none)
   int64_t read = 0, missed = 0;  // team lines read and missed
   int32_t told = -1;             // an item a mate pointed it at ("you take it")
   int32_t claim = -1;            // the key item whose area it claimed (-1: none)

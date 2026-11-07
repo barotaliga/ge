@@ -71,16 +71,30 @@ TEST(fighters_fed_only_their_clients_play_a_team_game) {
   CHECK(r.teams[0].frags > 0);
   CHECK(r.teams[1].frags > 0);
   for (const std::string& line : r.frag_log) CHECK(!team_kill(line));
+  // Every team finds the items its clients are sent; the halls hold four (one launcher, one
+  // armour, the quad, a health) for eight players, so in a minute one player of a team may spend
+  // it all fighting over the launcher and take nothing.
+  int64_t team_pickups[2] = {}, none[2] = {};
+  for (const cn::TeamPlayer& p : r.players) {
+    team_pickups[p.team] += p.pickups;
+    none[p.team] += p.pickups == 0;
+  }
+  for (int t = 0; t < 2; t++) {
+    CHECK_MSG(team_pickups[t] >= 4, "team " + std::to_string(t) + " picked up " +
+                                        std::to_string(team_pickups[t]) + " items in a minute");
+    CHECK_MSG(none[t] <= 1, "team " + std::to_string(t) + " had " + std::to_string(none[t]) +
+                                " players who picked up nothing");
+  }
   for (const cn::TeamPlayer& p : r.players) {
     const double err = p.mirror_err_n > 0 ? p.mirror_err / static_cast<double>(p.mirror_err_n) : -1;
     std::printf(
-        "  %-8s frags %3.0f deaths %2d mirrored %6lld predicted %6lld own place off %.2f u\n",
-        p.name.c_str(), p.frags, p.deaths, static_cast<long long>(p.mirrored),
-        static_cast<long long>(p.predicted), err);
+        "  %-8s frags %3.0f deaths %2d pickups %3lld mirrored %6lld predicted %6lld own place off "
+        "%.2f u\n",
+        p.name.c_str(), p.frags, p.deaths, static_cast<long long>(p.pickups),
+        static_cast<long long>(p.mirrored), static_cast<long long>(p.predicted), err);
     CHECK(p.mirrored > 1000);
     CHECK(p.predicted * 10 > p.mirrored * 9);
     CHECK(p.mirror_err_n > 0);
     CHECK(err >= 0 && err < 8);
-    CHECK(p.pickups > 0);
   }
 }
