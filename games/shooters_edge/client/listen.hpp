@@ -31,7 +31,7 @@
 //
 // THE PARTY (a campaign in coop: coop_party.hpp): companions seated by `addbot` or
 // `ListenOptions::companions`, carried from map to map by the campaign host, their packets in each
-// frame after the player's; `removebot` lets one go.
+// frame after the player's; `removebot` lets one go. With a port, others join it (`CampaignDoor`).
 //
 // THE LOBBY (`ListenOptions::lobby`, a match only): the server's (net/classic_game.hpp). Every
 // map opens in warmup with the player and the bots seated in `room` (lobby_room.hpp); the player is
@@ -54,7 +54,7 @@
 // ge:keywords match-restart restarted listen_lobby_view on_lobby_screen lobby-screen
 // ge:keywords listen_campaign campaign single-player map_changed level-change
 // ge:keywords listen_save listen_load savegame listen_save_text listen_load_text classic-save
-// ge:keywords coop party companions
+// ge:keywords coop party companions campaign-door coop-join coop-over-network
 // ge:skill shooter progs
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -142,6 +142,33 @@ struct ListenHost {
   void (*set_info)(void* game, const std::string& key, const std::string& value) = nullptr;
 };
 
+// THE CAMPAIGN'S DOOR: a coop campaign served to others over the classic protocol, so they join
+// the window's coop game as they would a server (net/classic_coop.hpp's `classic_coop()`, which
+// the client cannot name: it sits above it). The window's player and the companions are its local
+// seats; a client who joins enters the campaign (carried from map to map as the player is), and
+// the endpoint follows the campaign onto each next map.
+struct CampaignDoor {
+  // The endpoint opened on the campaign's map over `t` (which outlives it), `most` players at
+  // most; `tap` sees each frame's rules before the endpoint routes them. Null with `error`.
+  void* (*open)(sv::Campaign& c, ge::net::Transport& t, const std::string& hostname, uint32_t seed,
+                int most, void (*tap)(void* ctx, const sv::RulesCommon& game), void* ctx,
+                std::string& error) = nullptr;
+  // A seat the window plays (its player, `bot` false; a companion) shown to every client.
+  bool (*seat)(void* door, int slot, const std::string& name, bool bot,
+               std::string& error) = nullptr;
+  void (*unseat)(void* door, int slot) = nullptr;
+  // One frame at the network's time with the local seats' moves, then the change it asked for
+  // (the endpoint follows the campaign onto the next map). False with `error` when that map did
+  // not load.
+  bool (*frame)(void* door, const sh::Packet* local, int count, int64_t now_us,
+                std::string& error) = nullptr;
+  // The campaign moves maps outside a frame (a new game by hand): let go before, follow after.
+  void (*unbind)(void* door) = nullptr;
+  bool (*rebind)(void* door, std::string& error) = nullptr;
+  int (*joined)(const void* door) = nullptr;  // clients that joined over the network, playing
+  void (*close)(void* door) = nullptr;
+};
+
 struct ListenOptions {
   uint32_t seed = 1;
   std::vector<std::string> console = {"deathmatch 1"};  // server lines before each map loads
@@ -167,6 +194,9 @@ struct ListenOptions {
   ge::net::Transport* transport = nullptr;
   std::string hostname = "Shooter's Edge";
   int maxclients = 32;
+  // A campaign in coop is served to others on `port` (or `transport`) through this door
+  // (net/classic_coop.hpp's `classic_coop()`); null: a coop game is the window's alone.
+  const CampaignDoor* door = nullptr;
   // A campaign in coop starts with this many companions beside the player (coop_party.hpp).
   int companions = 0;
   sh::AimSkill companion_skill = sh::AimSkill::average;
@@ -223,6 +253,11 @@ struct Listen {
   int changes = 0;  // the match server's map changes the listen has caught up with
   // A campaign's companions (coop_party.hpp; null when none was ever seated).
   std::unique_ptr<Party> party;
+  // A coop campaign's door open to others (`ListenOptions::door`; null: nobody joins) and the
+  // network's time it runs on, s.
+  void* door = nullptr;
+  const CampaignDoor* door_calls = nullptr;
+  double net_s = 0;
 };
 
 // The server made for `progs` (which must outlive it) on `map`, the player connected.

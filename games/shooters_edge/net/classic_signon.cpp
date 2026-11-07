@@ -221,7 +221,10 @@ void cmd_begin(ClassicServer& s, int slot) {
   if (c.state == ConnState::spawned) return;
   c.state = ConnState::spawned;
   c.rules_active = true;
-  s.rules->connect(slot, c.name, c.spectator, false);
+  if (s.seat != nullptr)
+    s.seat(s.seat_ctx, slot, c.name, c.spectator);
+  else
+    s.rules->connect(slot, c.name, c.spectator, false);
   std::vector<std::pair<std::string, std::string>> pairs;
   info_pairs(c.userinfo, pairs);
   for (const auto& [k, v] : pairs)

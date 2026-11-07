@@ -169,6 +169,12 @@ void handle_connect(ClassicServer& s, const gn::Address& from, const std::string
       slot = i;
       break;
     }
+  if (s.cfg.most_players > 0) {
+    int seated = 0;
+    for (int i = 0; i < maxclients && i < sh::kMaxClients; i++)
+      if (s.clients[i].state != ConnState::free || s.game->clients[i].active) seated++;
+    if (seated >= s.cfg.most_players) slot = -1;
+  }
   if (slot < 0) {
     reject(s, from, "server is full");
     return;
@@ -515,8 +521,10 @@ bool classic_start(ClassicServer& s, const sv::RulesRunner& rules, gn::Transport
 bool classic_change(ClassicServer& s, const sv::RulesRunner& next, std::string& error) {
   for (int i = 0; i < sh::kMaxClients; i++)
     if (s.clients[i].state != ConnState::free) stuff(s, i, "changing\n");
-  s.game->lag_rewind = nullptr;
-  s.game->lag_ctx = nullptr;
+  if (s.game != nullptr) {
+    s.game->lag_rewind = nullptr;
+    s.game->lag_ctx = nullptr;
+  }
   if (!bind_map(s, next, error)) return false;
   s.spawncount++;
   for (int i = 0; i < sh::kMaxClients; i++) {
@@ -536,6 +544,15 @@ bool classic_change(ClassicServer& s, const sv::RulesRunner& next, std::string& 
   return true;
 }
 
+void classic_unbind(ClassicServer& s) {
+  if (s.game != nullptr) {
+    s.game->lag_rewind = nullptr;
+    s.game->lag_ctx = nullptr;
+  }
+  s.game = nullptr;
+  s.rules = nullptr;
+}
+
 void classic_drop(ClassicServer& s, int slot, const std::string& why) {
   ClassicClient& c = s.clients[slot];
   if (c.state == ConnState::free) return;
@@ -547,7 +564,10 @@ void classic_drop(ClassicServer& s, int slot, const std::string& why) {
     s.counts.datagrams_out++;
     s.counts.bytes_out += static_cast<int64_t>(n);
   }
-  if (c.rules_active) s.rules->drop(slot);
+  if (c.rules_active && s.unseat != nullptr)
+    s.unseat(s.seat_ctx, slot);
+  else if (c.rules_active && s.rules != nullptr)
+    s.rules->drop(slot);
   antilag_clear(s.antilag, slot);
   std::string line = "drop " + std::to_string(slot);
   line += ' ';

@@ -24,6 +24,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/lobby_room.hpp"
+#include "shooters_edge/net/classic_coop.hpp"
 #include "shooters_edge/net/classic_server.hpp"
 #include "shooters_edge/profiles/game_profile.hpp"
 #include "shooters_edge/server/announce.hpp"
@@ -776,6 +777,7 @@ const gs::ServerGame& classic_game() {
 cl::ListenOptions listen_options() {
   cl::ListenOptions o;
   o.game = &classic_game();
+  o.door = &classic_coop();
   return o;
 }
 

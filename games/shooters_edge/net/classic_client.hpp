@@ -115,7 +115,7 @@ struct ClientDownload {
   bool chunked = false, active = false;
 };
 
-struct ClassicClientEnd {
+struct ClassicClientEnd {  // NOLINT(clang-analyzer-optin.performance.Padding): one a client
   ClientConfig cfg;
   gn::Transport* transport = nullptr;
   gn::Address server;

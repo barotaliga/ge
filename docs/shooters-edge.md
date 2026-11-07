@@ -952,8 +952,12 @@ In the window, `sv_coop 1` makes the campaign a coop game (`client/coop_mode.hpp
 or on the command line the game starts as one on the start map, set in the console one starts at
 once, with `sv_coopbots` companions (1 by default, at most seven: eight players); `skill` is the
 monsters' for everyone. `coopgame [bots] [novice|average|expert] [map]` starts one by hand, and
-`addbot` and `removebot` change the party during it (`client/coop_party.hpp`). People playing co-op together over the network is the next step, on
-the engine's server core (M18s6b).
+`addbot` and `removebot` change the party during it (`client/coop_party.hpp`). With `sv_port`
+set, others join the coop game over the classic protocol as they would a server
+(`net/classic_coop.hpp`): the window's player and the companions are the endpoint's local seats, a
+client who joins enters the campaign and is carried from map to map with his parms as the player
+is (every client signs on again on each next map), and the ninth player is refused as the server
+being full.
 
 ## Licensing and the clean room
 
