@@ -118,6 +118,7 @@ struct TeamPlayer {
   int64_t outmatched = 0;                     // commands turned from a fight it believed it loses
   int64_t sound_chases = 0;                   // commands going at an enemy it only heard
   int64_t dodging = 0, dodge_turns = 0;       // commands side-stepping in a fight, and turns back
+  int64_t rocket_jumps = 0, flips = 0;        // rocket jumps fired on the way, and flips of them
   int64_t watching = 0;  // commands standing with the view on a way in (bots/watch.hpp)
   double speed_sum = 0;  // its speed across the floor, summed over its commands alive
   double mode_speed[sh::kPilotModes + 1] = {};  // and by the pilot's mode, with each mode's count
@@ -155,6 +156,7 @@ struct TeamMatchReport {
   TeamTotals teams[2];
   std::vector<std::string> frag_log;
   std::vector<std::string> chat;     // every team message, "t team name: words", in time order
+  std::vector<std::string> prints;   // every print the first player's client was sent (obituaries)
   std::vector<float> team_frags[2];  // every path_every frames
   std::vector<sh::Vec3f> item_at;    // the items as the fighters know them, for a picture
   std::vector<std::string> item_name;

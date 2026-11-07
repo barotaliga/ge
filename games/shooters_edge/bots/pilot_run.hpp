@@ -75,7 +75,7 @@ RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sh::PilotHan
 // The same on any map: a player on the node nearest `from` piloted to the node nearest `to`
 // over `g` (built on `world`), moved by `run_command` with no server, already moving at
 // `start_velocity` (a run that starts where a recorded player was, at his speed). A shot the
-// pilot fires (a rocket jump, with `set.rockets`) flies and bursts as the nav's proof has it
+// pilot fires (a rocket jump, with `set.jumper.rockets`) flies and bursts as the nav's proof has it
 // (shooter/nav.hpp `rocket_burst`, `rocket_blast`).
 RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f from, sh::Vec3f to,
                     sh::PilotHands hands, uint32_t seed,

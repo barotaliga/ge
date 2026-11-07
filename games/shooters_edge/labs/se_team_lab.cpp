@@ -21,6 +21,7 @@
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -382,6 +383,39 @@ void run(gl::Lab& lab) {
     lab.attach("chat.txt", std::vector<uint8_t>(all.begin(), all.end()), gl::Det::deterministic);
     for (size_t k = 0; k < r.chat.size() && k < 24; k++) lab.note(r.chat[k]);
   }
+  // The deaths by how (the server's obituaries, the names taken out): what kills the players.
+  {
+    std::vector<std::string> names;
+    names.reserve(r.players.size());
+    for (const cn::TeamPlayer& p : r.players) names.push_back(p.name);
+    std::map<std::string, int> how;
+    std::string all;
+    for (std::string l : r.prints) {
+      all += l;
+      while (!l.empty() && (l.back() == '\n' || l.back() == ' ')) l.pop_back();
+      bool death = false;
+      for (const std::string& n : names)
+        for (size_t at = l.find(n); at != std::string::npos; at = l.find(n, at + 1)) {
+          const bool word =
+              (at == 0 || l[at - 1] == ' ') &&
+              (at + n.size() == l.size() || l[at + n.size()] == ' ' || l[at + n.size()] == '\'');
+          if (!word) continue;
+          l.replace(at, n.size(), "*");
+          death = true;
+        }
+      if (death && l.size() > 2 && l.find(": ") == std::string::npos) how[l]++;
+    }
+    lab.attach("prints.txt", std::vector<uint8_t>(all.begin(), all.end()), gl::Det::deterministic);
+    std::vector<std::pair<int, std::string>> by;
+    by.reserve(how.size());
+    for (const auto& [k, v] : how) by.push_back({-v, k});
+    std::sort(by.begin(), by.end());
+    gl::LabTable dt{
+        "the deaths by how (the server's obituaries, * a player)", {"how", "count"}, {}};
+    for (size_t k = 0; k < by.size() && k < 16; k++)
+      dt.rows.push_back({by[k].second, std::to_string(-by[k].first)});
+    lab.table(dt);
+  }
   lab.metric("team.frags-per-minute", (r.teams[0].frags + r.teams[1].frags) / (secs / 60),
              "per-min");
   // The dodge (shooter/dodge.hpp): the share of the fight spent side-stepping, its turns a minute,
@@ -411,6 +445,13 @@ void run(gl::Lab& lab) {
         lab.metric(std::string("team.mode.") + bt::fight_mode_name(static_cast<bt::FightMode>(k)),
                    alive > 0 ? static_cast<double>(by[k]) / static_cast<double>(alive) : 0,
                    "share");
+    }
+    {
+      // People's on dm2 (the se-rj lab): an expert rocket jumps 1.9 times in ten minutes.
+      int64_t rj = 0, fl = 0;
+      for (const cn::TeamPlayer& p : r.players) rj += p.rocket_jumps, fl += p.flips;
+      lab.metric("team.rocket-jumps", static_cast<double>(rj), "count");
+      lab.metric("team.flips", static_cast<double>(fl), "count");
     }
     lab.metric("team.dodge-share",
                fight > 0 ? static_cast<double>(dodging) / static_cast<double>(fight) : 0, "share");

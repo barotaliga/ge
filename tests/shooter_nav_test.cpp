@@ -325,7 +325,7 @@ TEST(a_pocket_only_a_rocket_jump_reaches_is_bridged_by_one) {
             "(tried first: the skilled jump)");
   CHECK_MSG(sh::nav_route(b.g, floor, top, search).nodes.empty(),
             "a route without rocket jumps reached the block's top");
-  const sh::NavRoute r = sh::nav_route(b.g, floor, top, search, 1, {}, {}, true);
+  const sh::NavRoute r = sh::nav_route(b.g, floor, top, search, 1, {}, {}, {.rockets = true});
   CHECK_MSG(!r.nodes.empty(), "no route with rocket jumps reaches the block's top");
   int rockets = 0;
   for (size_t k = 0; k + 1 < r.nodes.size(); k++)

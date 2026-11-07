@@ -58,7 +58,7 @@ struct Room {
 std::vector<sh::RocketJump> flown(const Room& room, sh::Vec3f from, sh::Vec3f to,
                                   sh::PilotHands hands, std::vector<sh::RocketShot>* shots_out) {
   sh::PilotSettings set;
-  set.rockets = true;
+  set.jumper.rockets = true;
   const pr::RunResult r = pr::run_route(room.world, room.g, from, to, hands, 1, set);
   std::vector<sh::TrackPoint> track;
   for (size_t i = 0; i < r.trail.size(); i++)
@@ -122,7 +122,7 @@ TEST(a_rocket_gone_far_from_the_player_is_no_jump) {
   CHECK(!shots.empty());
   // The same track with its rocket moved 400 units off: no jump.
   sh::PilotSettings set;
-  set.rockets = true;
+  set.jumper.rockets = true;
   const pr::RunResult r =
       pr::run_route(room.world, room.g, {-256, 0, 24}, {320, 0, 184}, sh::PilotHands::none, 1, set);
   std::vector<sh::TrackPoint> track;

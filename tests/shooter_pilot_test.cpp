@@ -196,7 +196,7 @@ struct FlipRoom {
 // flip, its rocket bursting by the jumper.
 void flies_the_flip(const FlipRoom& room, sh::Vec3f from, sh::Vec3f to, const std::string& what) {
   sh::PilotSettings set;
-  set.rockets = true;
+  set.jumper.rockets = true;
   for (const sh::PilotHands hands : {sh::PilotHands::none, sh::PilotHands::human}) {
     const pr::RunResult r = pr::run_route(room.world, room.g, from, to, hands, 1, set);
     const std::string who = what + (hands == sh::PilotHands::none ? ", no hands" : ", human hands");
@@ -232,4 +232,34 @@ TEST(a_standing_flip_climbs_a_block_with_no_room_to_run_at_it) {
   CHECK_MSG(!room.rockets.empty() && room.rockets[0].back && room.rockets[0].speed == 0,
             "the flip onto the block is not a standing one");
   flies_the_flip(room, {32, 0, 24}, {320, 0, 152}, "the standing flip");
+}
+
+TEST(a_grenade_jump_climbs_a_block_for_a_player_with_no_rocket_launcher) {
+  // A block 112 high: no jump climbs it. Proven as a grenade jump (the grenade at the feet, a
+  // walk to past where it lies, the jump as its fuse runs out), the pilot with the grenade
+  // launcher alone plays it: fires, waits out the fuse and lands on top.
+  FlipRoom room({FlipRoom::box({-384, -128, -64}, {384, 128, 0}),
+                 FlipRoom::box({96, -128, 0}, {384, 128, 112})},
+                {-384, -128, -64}, {384, 128, 512}, {-256, 0, 24});
+  sh::NavTrick up;
+  up.from = {32, 0, 24};
+  up.to = {160, 0, 136};
+  sh::NavTrickSettings ts;
+  ts.rockets = false;
+  ts.grenades = true;
+  const sh::NavTrickCounts made = sh::nav_add_tricks(room.world, sh::MoveSettings{}, room.g,
+                                                     std::span<const sh::NavTrick>(&up, 1), {}, ts);
+  CHECK_MSG(made.grenades == 1, "no grenade jump onto the block was proven (" +
+                                    std::to_string(made.proofs) + " proofs)");
+  sh::PilotSettings set;
+  set.jumper.grenades = true;
+  for (const sh::PilotHands hands : {sh::PilotHands::none, sh::PilotHands::human}) {
+    const pr::RunResult r =
+        pr::run_route(room.world, room.g, {-256, 0, 24}, {288, 0, 136}, hands, 1, set);
+    const std::string who = hands == sh::PilotHands::none ? "no hands" : "human hands";
+    CHECK_MSG(r.arrived, who + ": the pilot did not arrive on the block (" +
+                             std::to_string(r.stats.grenade_jumps) + " grenades, " +
+                             std::to_string(r.shots) + " shots)");
+    CHECK_MSG(r.stats.grenade_jumps >= 1 && r.blast > 0, who + ": no grenade burst by the jumper");
+  }
 }
