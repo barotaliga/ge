@@ -29,7 +29,8 @@
 // pointparticles: named effects the client draws from its files), FTE_CALLTIMEOFDAY (231), ZQ_PAUSE
 // (531 setpause; the pause hooks), ZQ_VWEP (532 precache_vwep_model; vw_index), GE_QC_WORDS (640
 // words: a loaded game's own words filled in, words.hpp), DP_QC_ETOS (65 etos), DP_QC_FINDFLOAT (98
-// findfloat), DP_QC_VECTORVECTORS (432), DP_QC_ASINACOSATANATAN2TAN (471..475),
+// findfloat), DP_QC_VECTORVECTORS (432), DP_QC_COPYENTITY (400), DP_QC_FINDCHAIN (402),
+// DP_QC_FINDCHAINFLOAT (403), DP_QC_ASINACOSATANATAN2TAN (471..475),
 // DP_QC_STRING_CASE_FUNCTIONS (480 strtolower, 481 strtoupper), DP_QC_STRREPLACE (484 strreplace,
 // 485 strireplace), and with no builtin: DP_CON_SET (the
 // console's `set`), ZQ_CLIENTCOMMAND (the GE_ClientCommand hook), ZQ_ITEMS2 (items2),

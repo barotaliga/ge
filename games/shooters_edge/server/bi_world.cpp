@@ -6,10 +6,12 @@
 // ge:keywords makevectors setmodel setsize traceline tracebox checkclient find findradius
 // ge:keywords droptofloor pointcontents aim nextent makestatic setspawnparms coredump eprint
 // ge:keywords traceon traceoff trace-globals chain area-tree autoaim sv_aim findfloat vectorvectors
+// ge:keywords findchain findchainfloat copyentity
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_qc_builtins_test.cpp
 #include <cmath>
 #include <cstring>
+#include <string>
 
 #include "core/num_text.hpp"
 #include "progs/stdlib.hpp"
@@ -277,6 +279,60 @@ void bi_findfloat(pg::Vm& vm) {
     }
   }
   pg::return_int(vm, 0);
+}
+
+// Every entity in use whose string field equals the text (DP_QC_FINDCHAIN) or whose float field
+// equals the value (DP_QC_FINDCHAINFLOAT), linked through `chain` from the last to the first;
+// the head returned (world when none).
+void find_chain(pg::Vm& vm, bool by_float, const char* name) {
+  QcServer& s = server_of(vm);
+  const int32_t f = pg::arg_int(vm, 0);
+  if (f < 0 || f >= vm.entityfields) {
+    pg::vm_error(vm,
+                 (std::string(name) + ": the field argument is not a field of the entity").c_str());
+    return;
+  }
+  const char* want = by_float ? "" : pg::arg_string(vm, 1);
+  const float want_f = by_float ? pg::arg_float(vm, 1) : 0.0f;
+  if (vm.fault.set) return;
+  const int chain = pg::vm_layout(vm).f.chain;
+  int32_t head = 0;
+  for (int e = 1; e < s.sv.num_edicts; e++) {
+    if (!in_use(s, e)) continue;
+    const uint32_t w = *pg::entity_field(vm, e, f);
+    bool hit = false;
+    if (by_float) {
+      hit = pg::as_float(w) == want_f;
+    } else {
+      const char* have = pg::vm_string(vm, static_cast<int32_t>(w));
+      hit = have != nullptr && std::strcmp(have, want) == 0;
+    }
+    if (!hit) continue;
+    *pg::entity_field(vm, e, chain) = static_cast<uint32_t>(head);
+    head = pg::entity_value(vm, e);
+  }
+  pg::return_int(vm, head);
+}
+void bi_findchain(pg::Vm& vm) { find_chain(vm, false, "findchain"); }
+void bi_findchainfloat(pg::Vm& vm) { find_chain(vm, true, "findchainfloat"); }
+
+// Every field of one entity copied onto another (DP_QC_COPYENTITY), which is then linked where
+// it now stands; the world or a free entity as either side faults.
+void bi_copyentity(pg::Vm& vm) {
+  QcServer& s = server_of(vm);
+  const int from = any_entity(vm, 0, "copyentity");
+  const int to = any_entity(vm, 1, "copyentity");
+  if (from < 0 || to < 0) return;
+  if (from == 0 || to == 0 || !in_use(s, from) || !in_use(s, to)) {
+    pg::vm_error(vm, "copyentity: both entities must be in use and neither the world");
+    return;
+  }
+  if (from == to) return;
+  std::memcpy(pg::entity_field(vm, to, 0), pg::entity_field(vm, from, 0),
+              static_cast<size_t>(vm.entityfields) * sizeof(uint32_t));
+  flush_to_world(qc_of(vm));
+  sh::link_edict(s.sv, to, false);
+  refresh_from_world(qc_of(vm));
 }
 
 // v_forward, v_right and v_up from a direction (DP_QC_VECTORVECTORS): forward the direction

@@ -647,7 +647,7 @@ by `se-campaign --progs=games/shooters_edge/qc/campaign/progs.src`. What both va
   `server/catalogue.hpp`, each answered by `checkextension` (the maths, `tokenize`, `tracebox`,
   `randomvec`, `registercvar`, `min`/`max`/`bound`, `cvar_string`, the string extensions and
   `strzone`, `calltimeofday`, pausing, visible weapons, the console's `set`, client commands,
-  `items2`, the extra move types, `etos`, `findfloat`, `vectorvectors`, the inverse
+  `items2`, the extra move types, `etos`, `findfloat`, `findchain`, `findchainfloat`, `copyentity`, `vectorvectors`, the inverse
   trigonometry and `tan`, `strtolower`/`strtoupper`, `strreplace`/`strireplace`). A builtin the server does not offer faults with its number;
   an unknown map key is skipped with a message (`x is not a field`).
 - **When it does not load**: the message says why (a refused record, a missing engine-side
