@@ -272,7 +272,7 @@ sh::MoveCmd brain(BotTeam& t, BotSeat& s) {
       bt::mind_obituary(f, plain(c.prints[s.heard]), s.mirror->s.sv.time);
   }
   // Its shots led on the round trip; hitscan not, where the server rewinds it (sv_antilag 1, 2).
-  f.bot.lag_s = static_cast<float>(c.latency);
+  f.bot.lag_s = static_cast<float>(c.latency_avg);  // live: the server's answers, smoothed
   const std::string antilag = info_get(c.serverinfo, "sv_antilag");
   f.bot.rewound = !antilag.empty() && antilag != "0";
   const sh::MoveCmd cmd = bt::fighter_command(f, s.mirror->s, c.playernum, bt::kPilotMsec);
@@ -383,7 +383,8 @@ bool bot_team_start(BotTeam& t, const BotTeamConfig& cfg, std::string& error) {
   for (int k = 0; k < cfg.bots; k++) {
     auto s = std::make_unique<BotSeat>();
     s->index = k;
-    s->name = cfg.name_prefix + std::to_string(k + 1);
+    s->name = static_cast<size_t>(k) < cfg.names.size() ? cfg.names[static_cast<size_t>(k)]
+                                                        : cfg.name_prefix + std::to_string(k + 1);
     const std::string& sk = cfg.skills.empty()
                                 ? std::string("average")
                                 : cfg.skills[static_cast<size_t>(k) % cfg.skills.size()];

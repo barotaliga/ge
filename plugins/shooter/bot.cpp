@@ -7,6 +7,8 @@
 #include <array>
 #include <cmath>
 
+#include "shooter/intercept.hpp"
+#include "shooter/trace.hpp"
 #include "shooter/usercmd.hpp"
 
 namespace ge::shooter {
@@ -47,17 +49,42 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       c && ai::known(c->seen) && (c->visible || ai::age(c->seen, sv.time) <= b.aim.hold_s);
   double want[2];
   if (fresh) {
-    double ahead = ai::age(c->seen, sv.time) + b.aim.lead_s;
-    if (b.shot_speed > 0 || !b.rewound) ahead += b.lag_s;
-    if (b.shot_speed > 0) {
-      const double dx = c->seen.x - eye.x, dy = c->seen.y - eye.y, dz = c->seen.z - eye.z;
-      ahead += std::sqrt(dx * dx + dy * dy + dz * dz) / b.shot_speed;
+    const double head = ai::age(c->seen, sv.time) + b.aim.lead_s;
+    // The network's part, in the air only: a player's arc does not change in a round trip, but
+    // on the ground a strafer's steps do, and a lead of the round trip on them (measured on top
+    // of the hands' own) swings the aim wider than it gains (se-team at 200 ms: none on the
+    // ground keeps a strong aim at its LAN rate).
+    const double net = b.shot_speed > 0 || !b.rewound ? b.lag_s : 0;
+    Mover m;
+    m.at = {static_cast<float>(c->seen.x), static_cast<float>(c->seen.y),
+            static_cast<float>(c->seen.z)};
+    m.velocity = c->velocity;
+    if (b.target_arc) {
+      const Vec3f down{m.at.x, m.at.y, m.at.z - 4096};
+      const HullTrace tr = trace_move(sv, m.at, {}, {}, down, kTraceNoMonsters, c->ent);
+      m.floor_z = tr.endpos.z + 24;
+      m.airborne = m.at.z - m.floor_z > 4;
     }
-    const Vec3f at{static_cast<float>(c->seen.x + c->velocity.x * ahead),
-                   static_cast<float>(c->seen.y + c->velocity.y * ahead),
-                   static_cast<float>(c->seen.z + c->velocity.z * ahead + b.aim_dz)};
+    const double lead = head + (m.airborne ? net : 0);
     float yaw = 0, pitch = 0;
-    aim_angles(eye, at, yaw, pitch);
+    Vec3f at = mover_at(m, lead);
+    if (b.shot_speed > 0) {
+      Shot shot;
+      shot.speed = b.shot_speed;
+      shot.lob = b.lob;
+      const Vec3f muzzle = b.lob ? self.origin : eye;
+      const Intercept ic = intercept(muzzle, m, lead, shot, b.intercepts);
+      at = ic.at;
+      at.z += b.aim_dz;
+      aim_angles(eye, at, yaw, pitch);
+      if (ic.lobbed) {
+        double flight = 0;
+        lob_pitch(muzzle, at, shot, pitch, flight);  // the arc's pitch onto the aimed point
+      }
+    } else {
+      at.z += b.aim_dz;
+      aim_angles(eye, at, yaw, pitch);
+    }
     if (!b.aiming) {
       // Acquired: the hands start from where the view is, so the turn waits their reaction.
       const std::array<double, 2> from{b.yaw, b.pitch};

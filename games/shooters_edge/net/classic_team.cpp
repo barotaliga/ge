@@ -221,7 +221,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         cc.seed = k + 1;
         ClassicClientEnd* c = &clients[static_cast<size_t>(k)];
         Seat* sp = &seat;
-        cc.brain = [sp, c, &s](int) -> sh::MoveCmd {
+        cc.brain = [sp, c, &s, lead = opt.lead_lag](int) -> sh::MoveCmd {
           if (!sp->ready) return {};
           // Client-fed, its world is what its client was sent, nothing more.
           if (sp->mirror) mirror_update(*sp->mirror, *c);
@@ -236,7 +236,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           }
           // Its shots led on the network's round trip, as on any server across one (bot.hpp).
           if (sp->mirror) {
-            sp->fighter.bot.lag_s = static_cast<float>(c->latency);
+            sp->fighter.bot.lag_s = lead ? static_cast<float>(c->latency_avg) : 0.f;
             const std::string antilag = info_get(c->serverinfo, "sv_antilag");
             sp->fighter.bot.rewound = !antilag.empty() && antilag != "0";
           }
@@ -323,6 +323,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       p.mirror_err += std::sqrt(static_cast<double>(d.x) * d.x + static_cast<double>(d.y) * d.y +
                                 static_cast<double>(d.z) * d.z);
       p.mirror_err_n++;
+      p.lag_s += clients[k].latency;
+      p.lag_n++;
     }
 
     // The report's frame.
@@ -506,6 +508,11 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       p.hits = hits.players[static_cast<size_t>(p.slot)];
     if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.given.size())
       p.given = hits.given[static_cast<size_t>(p.slot)];
+    if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.lead_n.size()) {
+      p.lead_sum = hits.lead_sum[static_cast<size_t>(p.slot)];
+      p.lead_abs = hits.lead_abs[static_cast<size_t>(p.slot)];
+      p.lead_n = hits.lead_n[static_cast<size_t>(p.slot)];
+    }
     p.dives = seat.fighter.dives;
     p.dives_given_up = fs.dives_given_up;
     p.dive_wet_s = fs.dive_wet_s;

@@ -26,6 +26,8 @@
 #include <thread>
 
 #include "lab/png.hpp"
+#include "shooters_edge/bots/handles.hpp"
+#include "shooters_edge/net/classic_bot_feed.hpp"
 #include "shooters_edge/net/classic_bot_team.hpp"
 #include "shooters_edge/net/classic_team_view.hpp"
 
@@ -58,7 +60,10 @@ void usage() {
   std::printf(
       "shooters_edge_bots --server=<host:port> [--bots=4] [--team=bots] [--colour=4]\n"
       "  [--basedir=<folder holding id1>] [--skills=expert,average,...] [--traits=<a,b,...>]\n"
-      "  [--name=gebot] [--out=<match folder>] [--seconds=<n>] [--until-end] [--report=10]\n"
+      "  [--name=<prefix: name1, name2 ...> | --names=<a,b,c,d>: else made-up handles]\n"
+      "  [--feed=<file: the match as JSON lines>] [--feed-every=5] [--control=<file: lines\n"
+      "  appended to it are console lines>] [--out=<match folder>] [--seconds=<n>] [--until-end]\n"
+      "  [--report=10]\n"
       "  [--no-ready] [--paths=0|1] [--seed=1] [--qport=2100] [--view=<file.mp4>] [--view-fps=10] "
       "[--view-size=1280x720]\n"
       "  [--snapshot=<file.png>] [--snapshot-every=5] [--locs=<folder with locs/>]\n"
@@ -73,7 +78,10 @@ void usage() {
 int run(int argc, char** argv) {
   sn::BotTeamConfig cfg;
   double seconds = 0, report_s = 10, view_fps = 10, snapshot_every = 5;
-  bool until_end = false;
+  bool until_end = false, named = false;
+  std::string feed_file;
+  double feed_every = 5;
+  sn::ControlFile control;
   std::string view_file, snapshot_file, locs_folder = "ezquake";
   int view_w = 1280, view_h = 720;
   for (int i = 1; i < argc; i++) {
@@ -98,6 +106,16 @@ int run(int argc, char** argv) {
       cfg.traits = split(v);
     } else if (flag(a, "name", v)) {
       cfg.name_prefix = v;
+      named = true;
+    } else if (flag(a, "names", v)) {
+      cfg.names = split(v);
+      named = true;
+    } else if (flag(a, "feed", v)) {
+      feed_file = v;
+    } else if (flag(a, "feed-every", v)) {
+      feed_every = std::atof(v.c_str());
+    } else if (flag(a, "control", v)) {
+      control.path = v;
     } else if (flag(a, "out", v)) {
       cfg.out = v;
     } else if (flag(a, "seconds", v)) {
@@ -138,6 +156,20 @@ int run(int argc, char** argv) {
     std::error_code ec;
     std::filesystem::create_directories(cfg.out, ec);
   }
+  // Among people a bot is a person by its name too: made-up handles unless names were asked for.
+  if (!named) cfg.names = shooters_edge::bots::bot_handles(cfg.seed, cfg.bots);
+  std::FILE* feed = nullptr;
+  if (!feed_file.empty() && !(feed = std::fopen(feed_file.c_str(), "a"))) {
+    std::fprintf(stderr,
+                 "shooters_edge_bots: --feed=%s does not open; next: a folder that exists\n",
+                 feed_file.c_str());
+    return 1;
+  }
+  if (!control.path.empty()) {
+    // Only what is appended from now on: a control file kept from an earlier match is not replayed.
+    control.offset = 0;
+    (void)sn::control_poll(control);
+  }
   // The maps' place names: `locs/<map>.loc` in a game folder of the player's (a client's own).
   sn::bot_team_locs_from(cfg, locs_folder);
   std::signal(SIGINT, on_signal);
@@ -155,7 +187,7 @@ int run(int argc, char** argv) {
     std::fprintf(stderr, "shooters_edge_bots: --view=%s: %s\n", view_file.c_str(), error.c_str());
     return 1;
   }
-  double next_view = 0, next_snapshot = 0;
+  double next_view = 0, next_snapshot = 0, next_feed = 0;
   const auto start = std::chrono::steady_clock::now();
   int64_t next_tick = 0;
   double next_report = report_s;
@@ -189,15 +221,31 @@ int run(int argc, char** argv) {
           sn::bot_team_command(team, line);
       }
     }
+    const double now_s = static_cast<double>(now) / 1e6;
+    if (!control.path.empty() && team.ticks % 8 == 0)
+      for (const std::string& line : sn::control_poll(control)) {
+        if (feed)
+          std::fprintf(feed, "%s\n", sn::bot_feed_line(team, now_s, "control: " + line).c_str());
+        if (line == "quit" || line == "/quit")
+          g_stop = 1;
+        else
+          sn::bot_team_command(team, line);
+      }
+    if (feed && now_s >= next_feed) {
+      next_feed = now_s + feed_every;
+      std::fprintf(feed, "%s\n", sn::bot_feed_status(team, now_s).c_str());
+    }
     for (; team.log_read < team.log.size(); team.log_read++) {
       const std::string& l = team.log[team.log_read];
       std::printf("%s\n", l.c_str());
+      if (feed) std::fprintf(feed, "%s\n", sn::bot_feed_line(team, now_s, l).c_str());
       if (until_end &&
           (l.find("match over") != std::string::npos || l.find("Match over") != std::string::npos ||
            l.find("The match is over") != std::string::npos))
         ended = true;
     }
     std::fflush(stdout);
+    if (feed) std::fflush(feed);
     const double t = static_cast<double>(now) / 1e6;
     if (report_s > 0 && t >= next_report) {
       next_report += report_s;
@@ -226,6 +274,11 @@ int run(int argc, char** argv) {
   else if (!view_file.empty())
     std::printf("bots: the team's view is %s (%lld pictures)\n", view_file.c_str(),
                 static_cast<long long>(video.frames));
+  if (feed) {
+    std::fprintf(feed, "%s\n",
+                 sn::bot_feed_status(team, static_cast<double>(team.now_us) / 1e6).c_str());
+    std::fclose(feed);
+  }
   if (!sn::bot_team_stop(team, error)) {
     std::fprintf(stderr, "%s\n", error.c_str());
     return 1;

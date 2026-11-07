@@ -19,10 +19,18 @@
 // aim leads for it (`shot_speed`: a projectile's speed, the time it flies added to the lead; 0 a
 // hitscan; `aim_dz`: aimed this far over the middle, below it for a blast at the feet).
 //
+// THE INTERCEPT (`intercepts`, `target_arc`, `lob`; shooter/intercept.hpp): a projectile is fired
+// at where its target will be when it gets there, the flight worked out again from that place;
+// a target in the air is led along his own arc (where he comes down is where a midair shot goes,
+// a hitscan's too); a grenade's pitch is its arc's, from the origin it leaves at.
+//
 // THE NETWORK'S LEAD (`lag_s`, `rewound`): on a server across a network, the others are seen
 // where the server last sent them and the shot starts there a one-way trip after it is pressed,
 // so the target has gone on a round trip: a projectile is led `lag_s` more, and a hitscan too
-// unless the server rewinds hitscan to what the shooter saw (`rewound`, its `sv_antilag`).
+// unless the server rewinds hitscan to what the shooter saw (`rewound`, its `sv_antilag`) -- but
+// only while the target is in the air, on his own arc: on the ground a strafer's steps change
+// faster than a round trip, and that lead on top of the hands' own swings the aim wider than it
+// gains (measured: se-team at 200 ms keeps a strong aim at its LAN rate with none there).
 //
 // ge:summary The bot: the pilot with senses and aim, a server slot's command source
 // ge:keywords bot pilot senses aim view look contact track hold release bot_source
@@ -60,6 +68,12 @@ struct Bot {
   double wanted[2] = {}, pressed[2] = {};  // the aim's last yaw and pitch, wanted and pressed
   float shot_speed = 0;                    // the held weapon's projectile, units/s; 0 a hitscan
   float aim_dz = 0;                        // the aim point over the target's middle, units
+  // How the aim meets a projectile's target (intercept.hpp): the flight worked out this many
+  // times (1: the plain distance over the speed), the target's own arc when he is in the air, and
+  // the held weapon thrown as a grenade is (its pitch off the arc).
+  int intercepts = 1;
+  bool target_arc = false;
+  bool lob = false;
   float lag_s = 0;       // the round trip to the server, s (0: the bot's slot on the server)
   bool rewound = false;  // the server rewinds hitscan to what the shooter saw (sv_antilag)
   // The reaction to the sighting in hand (aim.hpp `draw_reaction`): the view held where it was
