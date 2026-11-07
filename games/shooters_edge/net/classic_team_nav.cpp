@@ -51,7 +51,9 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const server::RulesCommon& 
   }
   f.locs = &tn.locs;
   if (!tn.plan_made) {
-    tn.plan = bt::make_map_plan(graph, f.items, f.spawns, &tn.locs);
+    bt::PlanSettings ps;
+    ps.order = bt::opening_order_of(seen.map_name);  // the map's written opening, if it has one
+    tn.plan = bt::make_map_plan(graph, f.items, f.spawns, &tn.locs, ps);
     tn.plan_made = true;
   }
   f.plan = &tn.plan;

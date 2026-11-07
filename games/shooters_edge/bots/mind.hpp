@@ -44,6 +44,12 @@
 // there with him (or `kGather_s` has passed) he goes in, and the push holds until he stands on
 // the base with no enemy seen for a while, or `kPush_s` has passed.
 //
+// THE STRATEGY: a plan line (`lets take quad`, `camp ra and rl`, `free play`), from a mate bot or
+// person, read as any line is, sets the team's objectives for this player: TAKE claims the item
+// (the quad rushed when due) for `kTake_s`; CAMP holds the area of the first item or the second,
+// the roster split by slot order (the first, third ... the first item), until another plan; FREE
+// plays its own plan again. Taken up from someone else it says "ok" now and then, as people do.
+//
 // Deterministic: a pure function of what the fighter saw, heard and drew from its own stream.
 //
 // ge:summary A fighter's own mind: team lines read by skill, its role chosen alone, its calls
@@ -66,6 +72,9 @@
 namespace shooters_edge::bots {
 
 constexpr double kRepeatWindow_s = 12;     // a line said again within this reads as a repeat
+constexpr double kTake_s = 45;             // a TAKE plan holds this long
+constexpr double kCamp_s = 300;            // a CAMP plan this long, unless another is said
+constexpr double kAckChance = 0.35;        // a plan read from a mate is answered "ok" this often
 constexpr double kMateFresh_s = 15;        // a mate's place or status this old is still believed
 constexpr double kExpertMateFresh_s = 10;  // an expert drops a mate's place this old
 constexpr double kReport_s[3] = {40, 20, 12};  // a report this often: novice, average, expert
@@ -123,6 +132,12 @@ struct Mind {
   int32_t gave = -1;             // the item it gave up last
   int32_t retake = -1;           // a key area believed lost: to take back (-1: none)
   double retake_t = -1e9;        // when it was last believed lost
+  // THE TEAM'S STRATEGY (talk.hpp `Strategy`), as its leader last said it and this player read
+  // it: the items it is about (-1: none), when it was taken up, and an "ok" owed for it.
+  Strategy strategy = Strategy::none;
+  int32_t strategy_items[2] = {-1, -1};
+  double strategy_t = -1e9;
+  bool ack_due = false;
   bool claimed_said = false;
   bool opened = false;       // its first plan alive is behind it (its spawn said)
   bool opening_due = false;  // the next plan is the match's opening: the claims, the quad first
@@ -130,6 +145,10 @@ struct Mind {
 
 struct Fighter;
 struct Stats;
+
+// The team's strategy `said` (a plan) taken up at `t`; false when it names no item this player
+// knows (a take or a camp) or is no plan.
+bool mind_take_plan(Fighter& f, const Said& said, double t);
 
 // A team line this player's client was sent, from the player named `from`: read or missed by its
 // skill, and what it says taken into its beliefs when read.
