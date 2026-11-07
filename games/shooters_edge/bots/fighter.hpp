@@ -264,8 +264,12 @@ struct Fighter {
   double swim_exit_until = 0;
   int32_t landing = -1;  // the exit node it climbed out to, walked onto first (-1: none)
   double landing_until = 0;
-  ge::core::Rng rng{1};  // its own draws (where it explores), seeded off the bot's seed
-  sh::Dodge dodge;       // its side steps in a fight (shooter/dodge.hpp)
+  ge::core::Rng rng{1};       // its own draws (where it explores), seeded off the bot's seed
+  ge::core::Rng keys_rng{1};  // the side key's changes (footwork.hpp `fighter_keys`)
+  float clean_keys = 1;       // the share of side key changes made clean (1: every one)
+  int8_t side_was = 0;        // the side key's sign last sent
+  int8_t side_gap = 0;        // commands still held with no side key
+  sh::Dodge dodge;            // its side steps in a fight (shooter/dodge.hpp)
   // The ways in it watches from where it stands (watch.hpp): their spots, the node they were
   // worked out for, the one watched and until when.
   std::vector<sh::Vec3f> watch;

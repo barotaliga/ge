@@ -982,6 +982,8 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
                 static_cast<float>(sh::scale(traits[sh::Trait::reaction], {0.2, 0.15, 0.1, 0.08}))
           : 0;
   f.rng = ge::core::make_rng(seed * 2654435761u + 12345u);
+  f.keys_rng = ge::core::make_rng(seed * 2246822519u + 777u);
+  f.clean_keys = static_cast<float>(sh::scale(traits[sh::Trait::moves], {0.08, 0.2, 0.4, 0.5}));
   sh::dodge_init(f.dodge, seed);
   f.dodge_k = sh::dodge_skill(traits[sh::Trait::dodge]);
   const int me = slot + 1;
@@ -1281,6 +1283,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
                                                      : "off it");
     }
   }
+  fighter_keys(f, cmd);  // the side key turned round as a person's hand turns it (footwork.hpp)
   return cmd;
 }
 

@@ -133,6 +133,8 @@ void run(gl::Lab& lab) {
   o.progs = &progs;
   o.seed = seed;
   o.client_fed = lab.arg_num("client-fed") != 0;
+  o.latency_ms = lab.arg_num("latency");
+  o.antilag = lab.arg_num("antilag") != 0;
   {
     // A weapon drill: its name in the hit table, the mod's bit for it (classic_hits.hpp's order).
     const std::string drill = lab.arg("drill");
@@ -780,6 +782,11 @@ const gl::LabSpec kSpec{
         {"client-fed", "0",
          "1: every fighter reads only what its own client was sent (net/classic_mirror.hpp), as "
          "it must on a server it cannot read"},
+        {"latency", "0",
+         "ms one way between every client and the server, jitter a tenth of it (50: a round trip "
+         "of about 100 ms, a server across an ocean); 0: a LAN"},
+        {"antilag", "0",
+         "1: the server rewinds hitscan to what the shooter saw, as KTX servers do"},
         {"drill", "",
          "a weapon drill: every player holds only this weapon, its ammunition topped up "
          "(scattergun, double, spiker, heavy, grenades, rockets, arc); empty: a normal match"},
