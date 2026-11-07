@@ -155,8 +155,12 @@ struct TeamMatchReport {
   std::vector<TeamPlayer> players;
   TeamTotals teams[2];
   std::vector<std::string> frag_log;
-  std::vector<std::string> chat;     // every team message, "t team name: words", in time order
-  std::vector<std::string> prints;   // every print the first player's client was sent (obituaries)
+  std::vector<std::string> chat;    // every team message, "t team name: words", in time order
+  std::vector<std::string> prints;  // every print the first player's client was sent (obituaries)
+  // Every death: "t player x y z liquid mode link x y z mode" (the liquid the body was in: water,
+  // slime, lava or -; the pilot's mode and the kind of link it was on; where it was 3 s before
+  // and its mode then), in time order.
+  std::vector<std::string> deaths;
   std::vector<float> team_frags[2];  // every path_every frames
   std::vector<sh::Vec3f> item_at;    // the items as the fighters know them, for a picture
   std::vector<std::string> item_name;

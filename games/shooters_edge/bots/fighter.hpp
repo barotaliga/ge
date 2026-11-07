@@ -192,6 +192,17 @@ struct Fighter {
   std::vector<std::pair<sh::Vec3f, double>> danger;
   std::vector<int> locked;
   std::vector<sh::Vec3f> locked_rest;
+  // The map's BRIDGES (a plate a button slides out over a pit: map_nav.hpp `NavBridge`), as the
+  // fighter last saw each: one still where the map began (in) shuts every link onto its nodes
+  // (the pilot's `shut_links`), so no route walks off into the pit under it.
+  struct Bridge {
+    int ent = -1;
+    sh::Vec3f spawn;
+    std::vector<int32_t> nodes;
+    bool in = true;
+  };
+  std::vector<Bridge> bridges;
+  bool bridges_seen = false;
   Mind mind;             // what it believes of its team, its claim, its calls (mind.hpp)
   Escort escort;         // a co-op companion's own state (companion.hpp; leader -1: none)
   std::string name;      // its player name, as its teammates see it in their team lines

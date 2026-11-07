@@ -406,6 +406,11 @@ void run(gl::Lab& lab) {
       if (death && l.size() > 2 && l.find(": ") == std::string::npos) how[l]++;
     }
     lab.attach("prints.txt", std::vector<uint8_t>(all.begin(), all.end()), gl::Det::deterministic);
+    std::string dl =
+        "t\tplayer\tat\tliquid\tmode\tlink\tat 3 s before\tits mode\tthe way in (2, 1, 0.5 s "
+        "before)\n";
+    for (const std::string& l : r.deaths) dl += l + "\n";
+    lab.attach("deaths.tsv", std::vector<uint8_t>(dl.begin(), dl.end()), gl::Det::deterministic);
     std::vector<std::pair<int, std::string>> by;
     by.reserve(how.size());
     for (const auto& [k, v] : how) by.push_back({-v, k});

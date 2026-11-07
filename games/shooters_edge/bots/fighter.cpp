@@ -547,9 +547,41 @@ void choose_weapon(Fighter& f, const Stats& st, float range, double t, ai::Why* 
     f.want_weapon = kWeapons[w].number;
 }
 
+// The bridges as seen now (fighter.hpp `Bridge`): on a change, the links onto those still in are
+// shut and the way planned again.
+void watch_bridges(Fighter& f, const server::RulesCommon& s) {
+  if (f.bridges.empty()) return;
+  bool changed = !f.bridges_seen;
+  f.bridges_seen = true;
+  for (Fighter::Bridge& b : f.bridges) {
+    if (b.ent < 0 || static_cast<size_t>(b.ent) >= s.world.entities.size()) continue;
+    const bool in = dist(s.world.entities[static_cast<size_t>(b.ent)].origin, b.spawn) < 1;
+    changed = changed || in != b.in;
+    b.in = in;
+  }
+  if (!changed) return;
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  std::vector<uint8_t> on(g.nodes.size(), 0);
+  for (const Fighter::Bridge& b : f.bridges)
+    if (b.in)
+      for (const int32_t n : b.nodes) on[static_cast<size_t>(n)] = 1;
+  std::vector<sh::NavExtraLink>& shut = f.bot.pilot.pilot.shut_links;
+  shut.clear();
+  for (size_t a = 0; a < g.nodes.size(); a++) {
+    const sh::NavNode& n = g.nodes[a];
+    for (int32_t k = 0; k < n.links; k++) {
+      const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+      if (on[static_cast<size_t>(l.to)] && !on[a])
+        shut.push_back({static_cast<int32_t>(a), l.to, l.kind, l.time_s});
+    }
+  }
+  f.goal_node = -1;  // planned again
+}
+
 void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai::Why* why) {
   const double t = s.sv.time;
   const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+  watch_bridges(f, s);
   const sh::Vec3f eye{self.origin.x, self.origin.y, self.origin.z + f.bot.senses.set.view_height};
 
   // Where it can get to from here, worked out once a second (a teleporter or a drop is one way).

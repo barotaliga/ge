@@ -8,8 +8,11 @@
 //   (shooter/nav.hpp), a plat ridden from its foot to its top;
 // - a teleporter is a link from every node its trigger holds to the node at its destination (one
 //   another entity switches on, by its name, is left out: nothing says when it works);
-// - lava and slime: no way leads into a floor node standing in them (`harm`), no swim node is
-//   made in them and no bridge or trick lands there;
+// - lava and slime: no way leads into a floor node standing in them (`harm`), nor onto a bridge
+//   that moves when touched (a trap over its pit), no swim node is
+//   made in them and no bridge or trick lands there; a jump over them or landing at an edge
+//   over them is flown again past its target and from a slower run, kept only when both hold,
+//   and costs more (`nav_harden_jumps`);
 // - water: part of the graph (shooter/swim.hpp `nav_add_swim`): its cells swim nodes, joined to a
 //   pool's floor and, by the climb out the move proves, to the dry edges round it; the SWIM FIELD
 //   still leads a swimmer off the graph out to the map's main part (the most nodes a start spot
@@ -43,6 +46,7 @@ struct NavBridge {
   int ent = -1;                // the door's edict
   ge::shooter::Vec3f spawn;    // where it stood when the map began (in: no bridge yet)
   std::vector<int32_t> nodes;  // the nodes standing on it, out
+  bool touch = false;  // no name: it moves when touched (a trap: in, under whoever steps on)
 };
 
 struct MapNav {
@@ -56,6 +60,7 @@ struct MapNav {
   ge::shooter::NavBridgeCounts bridges_made;     // the pockets bridged
   ge::shooter::NavTrickCounts tricks_made;       // the map's tricks proven into blast jumps
   ge::shooter::NavTrickCounts bridged_grenades;  // grenade jumps beside the bridges' rocket jumps
+  ge::shooter::NavHardenCounts hardened;         // the jumps over lava or slime
   std::vector<uint8_t> trap;  // the nodes no way on foot leads back from to the main part
   std::vector<ge::shooter::NavExtraLink> entries;  // the links into the water the graph closed
   std::vector<NavBridge> bridges;

@@ -70,6 +70,7 @@ void open_doors_as_floor(const sv::QcServer& s, const sv::MapSpec& spec,
       NavBridge br;
       br.ent = e;
       br.spawn = so.origin;
+      br.touch = pg::block_value(b, "targetname") == nullptr;
       bridges.push_back(br);
       so.origin = {};  // out, where the map drew it
     }
@@ -204,18 +205,24 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
     }
   }
   out.teleport_links = static_cast<int64_t>(teleports.size());
-  // LAVA AND SLIME: a floor node standing in either (or in them to the waist) harms whoever goes
-  // there; no way leads into one (the links out are kept: a player knocked in walks out).
+  // LAVA AND SLIME: a floor node standing in either (a shallow pool at the feet too: it burns
+  // there as well) harms whoever goes there; no way leads into one (the links out are kept: a
+  // player knocked in walks out).
   {
     sh::NavGraph& g = out.graph;
     out.harm.assign(g.nodes.size(), 0);
     for (size_t n = 0; n < g.nodes.size(); n++) {
       const sh::Vec3f o = g.nodes[n].origin;
-      for (const float dz : {-10.f, 4.f}) {
+      for (const float dz : {-22.f, -10.f, 4.f}) {
         const int c = sh::water_contents(out.world, {o.x, o.y, o.z + dz});
         if (c == sh::kContentsSlime || c == sh::kContentsLava) out.harm[n] = 1;
       }
     }
+    // A bridge that moves when touched pulls out from under whoever steps onto it: its nodes
+    // harm as the pit under them does.
+    for (const NavBridge& br : out.bridges)
+      if (br.touch)
+        for (const int32_t n : br.nodes) out.harm[static_cast<size_t>(n)] = 1;
     out.harm_links = sh::nav_close_entries(g, out.harm);
   }
   // Water: part of the graph (shooter/swim.hpp `nav_add_swim`): its cells are swim nodes, a pool's
@@ -316,6 +323,10 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
     out.trap.assign(graph.nodes.size(), 0);
     for (size_t n = 0; n < back.size() && found; n++) out.trap[n] = back[n] && !out.harm[n] ? 0 : 1;
   }
+  // The jumps a miss of kills (over lava or slime, or landing at an edge over it): flown again
+  // past the target and from a slower run, kept only when both hold, and dearer (dm2's lava room
+  // took half the bots' deaths: a jump down onto its ramp carried them off the edge).
+  out.hardened = sh::nav_harden_jumps(out.world, sh::MoveSettings{}, graph, out.harm);
   std::vector<uint8_t> exits(graph.nodes.size(), 0);
   for (size_t n = 0; n < graph.nodes.size(); n++)
     exits[n] = out.main_n > 0 && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;

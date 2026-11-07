@@ -38,6 +38,9 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const server::RulesCommon& 
   bt::fighter_init(f, graph, seen, slot, entities, skill, traits, hz, seed);
   f.bot.yaw = seen.sv.edicts[static_cast<size_t>(slot) + 1].v_angle.y;
   f.bot.pilot.world = &world;  // the hop looks ahead through the map
+  f.bridges.clear();
+  for (const bt::NavBridge& br : nav.bridges)
+    f.bridges.push_back({br.ent, br.spawn, br.nodes, true});
   f.name = name;
   if (tn.locs.points.empty()) {
     if (!tn.given.points.empty()) {
