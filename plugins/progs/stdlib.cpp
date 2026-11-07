@@ -200,6 +200,81 @@ void bi_argv(Vm& vm) {
 
 void bi_precache_file(Vm& vm) { return_int(vm, arg_int(vm, 0)); }
 
+// The inverse and the tangent (DP_QC_ASINACOSATANATAN2TAN): in double through core/libm,
+// rounded to float, as sin and cos.
+void bi_asin(Vm& vm) {
+  return_float(vm, static_cast<float>(core::libm::asin(static_cast<double>(arg_float(vm, 0)))));
+}
+void bi_acos(Vm& vm) {
+  return_float(vm, static_cast<float>(core::libm::acos(static_cast<double>(arg_float(vm, 0)))));
+}
+void bi_atan(Vm& vm) {
+  return_float(vm, static_cast<float>(core::libm::atan(static_cast<double>(arg_float(vm, 0)))));
+}
+void bi_atan2(Vm& vm) {
+  return_float(vm, static_cast<float>(core::libm::atan2(static_cast<double>(arg_float(vm, 0)),
+                                                        static_cast<double>(arg_float(vm, 1)))));
+}
+void bi_tan(Vm& vm) {
+  return_float(vm, static_cast<float>(core::libm::tan(static_cast<double>(arg_float(vm, 0)))));
+}
+
+// ASCII letters only: other bytes (the charset's coloured letters among them) are kept.
+char lower(char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c + 32) : c; }
+char upper(char c) { return c >= 'a' && c <= 'z' ? static_cast<char>(c - 32) : c; }
+
+void change_case(Vm& vm, char (*to)(char)) {
+  const char* s = arg_string(vm, 0);
+  char buf[kTempStringBytes];
+  int n = 0;
+  for (; s[n] != 0 && n < kTempStringBytes - 1; n++) buf[n] = to(s[n]);
+  buf[n] = 0;
+  return_int(vm, builtin_temp_string(vm, buf));
+}
+void bi_strtolower(Vm& vm) { change_case(vm, lower); }
+void bi_strtoupper(Vm& vm) { change_case(vm, upper); }
+
+// Every occurrence of the search text in the subject replaced, left to right, never inside a
+// replacement; an empty search returns the subject. The result is cut at the temp string's size.
+void replace(Vm& vm, bool any_case) {
+  const char* search = arg_string(vm, 0);
+  const char* with = arg_string(vm, 1);
+  const char* subject = arg_string(vm, 2);
+  const size_t ns = std::strlen(search);
+  const size_t nw = std::strlen(with);
+  char buf[kTempStringBytes];
+  size_t used = 0;
+  const auto put = [&](const char* from, size_t n) {
+    const size_t take = n < sizeof buf - 1 - used ? n : sizeof buf - 1 - used;
+    std::memcpy(buf + used, from, take);
+    used += take;
+  };
+  for (const char* at = subject; *at != 0;) {
+    bool hit = ns > 0;
+    for (size_t i = 0; hit && i < ns; i++)
+      hit = at[i] != 0 && (any_case ? lower(at[i]) == lower(search[i]) : at[i] == search[i]);
+    if (hit) {
+      put(with, nw);
+      at += ns;
+    } else {
+      put(at, 1);
+      at++;
+    }
+  }
+  buf[used] = 0;
+  return_int(vm, builtin_temp_string(vm, buf));
+}
+void bi_strreplace(Vm& vm) { replace(vm, false); }
+void bi_strireplace(Vm& vm) { replace(vm, true); }
+
+// An entity as text (DP_QC_ETOS): "entity <number>".
+void bi_etos(Vm& vm) {
+  char buf[32];
+  const int32_t v = arg_int(vm, 0);
+  std::snprintf(buf, sizeof buf, "entity %d", vm.entity_bytes > 0 ? v / vm.entity_bytes : 0);
+  return_int(vm, builtin_temp_string(vm, buf));
+}
+
 }  // namespace
 
 float arg_float(const Vm& vm, int i) { return global_float(vm, parm(i)); }
@@ -275,6 +350,16 @@ const StdBuiltin kStdlib[] = {
     {116, "substr", bi_substr},
     {118, "strzone", bi_strzone},
     {119, "strunzone", bi_strunzone},
+    {65, "etos", bi_etos},
+    {471, "asin", bi_asin},
+    {472, "acos", bi_acos},
+    {473, "atan", bi_atan},
+    {474, "atan2", bi_atan2},
+    {475, "tan", bi_tan},
+    {480, "strtolower", bi_strtolower},
+    {481, "strtoupper", bi_strtoupper},
+    {484, "strreplace", bi_strreplace},
+    {485, "strireplace", bi_strireplace},
 };
 const int kStdlibCount = static_cast<int>(sizeof kStdlib / sizeof kStdlib[0]);
 

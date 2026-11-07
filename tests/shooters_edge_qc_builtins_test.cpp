@@ -8,6 +8,7 @@
 //
 // ge:summary Tests: every builtin of the catalogue by number over the world and the settings
 // ge:keywords test qc builtins catalogue checkextension traceline findradius makestatic cvar
+// ge:keywords findfloat vectorvectors
 // ge:keywords infokey logfrag calltimeofday setpause precache_vwep_model registercvar
 // ge:skill progs shooter testing
 #include <cmath>
@@ -50,7 +51,7 @@ TEST(every_row_of_the_catalogue_is_installed_by_number) {
               std::string("builtin #") + std::to_string(r.number) + " is named " + slot.name);
   }
   // The standard numbers 1..82 that the catalogue leaves empty stay empty.
-  for (int n : {5, 33, 39, 42, 50, 63, 64, 65, 66, 71})
+  for (int n : {5, 33, 39, 42, 50, 63, 64, 66, 71})
     CHECK_MSG(fx.vm().builtins[static_cast<size_t>(n)].fn == nullptr,
               "builtin #" + std::to_string(n) + " should be empty");
 }
@@ -151,6 +152,30 @@ TEST(find_nextent_and_findradius) {
     seen++;
   }
   CHECK(seen == 2);
+}
+
+TEST(findfloat_and_vectorvectors) {
+  Fixture fx;
+  const int a = fx.spawn();
+  const int b = fx.spawn();
+  fx.in_call([&] {  // health is mirrored: written inside a call, as QC writes it
+    fx.set_f(a, pg::kFHealth, 35);
+    fx.set_f(b, pg::kFHealth, 35);
+  });
+  fx.call(98, {ent(0), qcfix::raw(pg::kFHealth), 35});
+  CHECK(fx.re == a);
+  fx.call(98, {ent(a), qcfix::raw(pg::kFHealth), 35});
+  CHECK(fx.re == b);
+  fx.call(98, {ent(b), qcfix::raw(pg::kFHealth), 35});
+  CHECK(fx.re == 0);
+  // A direction: forward it normalized, right level and to its right, up square to both.
+  fx.call(432, {sh::Vec3f{0, 3, 0}});
+  CHECK(near(fx.g(pg::kGVForward + 1), 1) && near(fx.g(pg::kGVRight), 1));
+  CHECK(near(fx.g(pg::kGVUp + 2), 1));
+  // Straight down: right is +x, up is (1, 0, 0) turned from -forward z.
+  fx.call(432, {sh::Vec3f{0, 0, -2}});
+  CHECK(near(fx.g(pg::kGVForward + 2), -1) && near(fx.g(pg::kGVRight), 1));
+  CHECK(near(fx.g(pg::kGVUp), 1) && near(fx.g(pg::kGVUp + 2), 0));
 }
 
 TEST(checkclient_finds_a_living_client_and_skips_notarget) {

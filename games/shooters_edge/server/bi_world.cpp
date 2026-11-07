@@ -5,9 +5,10 @@
 // ge:summary Builtins over entities and the world: traces, finds, models, sizes, statics, dumps
 // ge:keywords makevectors setmodel setsize traceline tracebox checkclient find findradius
 // ge:keywords droptofloor pointcontents aim nextent makestatic setspawnparms coredump eprint
-// ge:keywords traceon traceoff trace-globals chain area-tree autoaim sv_aim
+// ge:keywords traceon traceoff trace-globals chain area-tree autoaim sv_aim findfloat vectorvectors
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_qc_builtins_test.cpp
+#include <cmath>
 #include <cstring>
 
 #include "core/num_text.hpp"
@@ -254,6 +255,52 @@ void bi_find(pg::Vm& vm) {
     }
   }
   pg::return_int(vm, 0);
+}
+
+// The next entity after the start whose float field equals the value (DP_QC_FINDFLOAT); an
+// entity field compares the same way, by its value.
+void bi_findfloat(pg::Vm& vm) {
+  QcServer& s = server_of(vm);
+  const int start = any_entity(vm, 0, "findfloat");
+  if (start < 0) return;
+  const int32_t f = pg::arg_int(vm, 1);
+  if (f < 0 || f >= vm.entityfields) {
+    pg::vm_error(vm, "findfloat: the field argument is not a field of the entity");
+    return;
+  }
+  const float want = pg::arg_float(vm, 2);
+  for (int e = start + 1; e < s.sv.num_edicts; e++) {
+    if (!in_use(s, e)) continue;
+    if (pg::as_float(*pg::entity_field(vm, e, f)) == want) {
+      pg::return_int(vm, pg::entity_value(vm, e));
+      return;
+    }
+  }
+  pg::return_int(vm, 0);
+}
+
+// v_forward, v_right and v_up from a direction (DP_QC_VECTORVECTORS): forward the direction
+// normalized as normalize does; straight up or down, right is +x and up is (-forward z, 0, 0);
+// else right is (forward y, -forward x, 0) normalized and up is right x forward.
+void bi_vectorvectors(pg::Vm& vm) {
+  const auto unit = [](sh::Vec3f v) {
+    const float sq = (v.x * v.x + v.y * v.y) + v.z * v.z;
+    const auto len = static_cast<float>(std::sqrt(static_cast<double>(sq)));
+    if (len == 0) return sh::Vec3f{0, 0, 0};
+    const float k = 1.0f / len;
+    return sh::Vec3f{v.x * k, v.y * k, v.z * k};
+  };
+  const sh::Vec3f fwd = unit(vec_arg(vm, 0));
+  sh::Vec3f right{1, 0, 0}, up{-fwd.z, 0, 0};
+  if (fwd.x != 0 || fwd.y != 0) {
+    right = unit({fwd.y, -fwd.x, 0});
+    up = {right.y * fwd.z - right.z * fwd.y, right.z * fwd.x - right.x * fwd.z,
+          right.x * fwd.y - right.y * fwd.x};
+  }
+  const pg::LayoutGlobals& g = pg::vm_layout(vm).g;
+  set_global_vec(vm, g.v_forward, fwd);
+  set_global_vec(vm, g.v_right, right);
+  set_global_vec(vm, g.v_up, up);
 }
 
 namespace {
