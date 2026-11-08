@@ -1,2 +1,2 @@
 # games/shooters_edge/bots/coop_episode.hpp: the coop hall with an exit, twice, a leader and an expert companion, seed 1: the run's digest (tests/shooters_edge_companion_test.cpp)
-fbd03572a00d5ff9
+7b683ba1d6d0be0a

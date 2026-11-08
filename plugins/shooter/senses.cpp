@@ -4,6 +4,7 @@
 // ge:test tests/shooter_senses_test.cpp
 #include "shooter/senses.hpp"
 
+#include <cmath>
 #include <limits>
 
 #include "shooter/trace.hpp"
@@ -83,7 +84,17 @@ bool sees_player(const Server& sv, const SenseSettings& set, int viewer, Vec3f e
   const Vec3f to = head - eye;
   const float d2 = to.x * to.x + to.y * to.y + to.z * to.z;
   if (d2 > set.range * set.range) return false;
-  if (d2 > 1) {
+  if (d2 > 1 && set.fov < 360 && set.fov_y > 0) {
+    // A screen: ahead, and within half its width and half its height of the view's axis (each
+    // half angle's tangent off the move's own angle vectors: a yaw's sine over its cosine).
+    const ViewAxes ax = angle_vectors(angles);
+    const float ahead = dot(ax.forward, to);
+    if (ahead <= 0) return false;
+    const Vec3f wide = angle_vectors({0, set.fov * 0.5f, 0}).forward;
+    const Vec3f high = angle_vectors({0, set.fov_y * 0.5f, 0}).forward;
+    if (std::fabs(dot(ax.right, to)) * wide.x > ahead * wide.y) return false;
+    if (std::fabs(dot(ax.up, to)) * high.x > ahead * high.y) return false;
+  } else if (d2 > 1) {
     const Vec3f fwd = angle_vectors(angles).forward;
     const float d = root_of(d2);
     const float c = (fwd.x * to.x + fwd.y * to.y + fwd.z * to.z) / d;
