@@ -24,8 +24,9 @@ namespace ba = ge::brush::app;
 namespace gr = ge::render;
 
 constexpr double kDegree = 3.14159265358979323846 / 180;
-// The rms slope of the short waves the pools keep from the players in them (rad).
-constexpr double kPoolChop = 0.05;
+// The rms slope of the swell the pools keep from the players in them (rad): low, so a pool no one
+// is in lies nearly still, the way a hall's water does.
+constexpr double kPoolChop = 0.02;
 
 struct WorldExtras {
   const ba::Scene* scene = nullptr;
@@ -134,6 +135,7 @@ void dress_extras(WorldExtras& x, gr::FrameView& view, ba::Options& options, dou
   options.portal_lights = options.portal_lights && on.teleports;
   options.bonfires = v2 && on.flames && on.bonfires;
   x.fire_look.bonfires = options.bonfires;
+  x.fire_look.pace = options.fire_pace;
   for (double& a : x.fire_look.air) a = 0;
   if (on.wind) ba::wind_air(*x.weather, view.time_s, x.fire_look.air);
   if (!on.lava) options.lava_glow = 0;

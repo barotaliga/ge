@@ -1011,6 +1011,14 @@ as tall (58 units) and 1.5 times as wide as the pack's flame, filling its cage, 
 times as bright (`fire_light_gain`), with no sparks. Wall torches and small flames stay as they
 were.
 
+**The fires' pace (M41p)** (`FireLook::pace`, `Options::fire_pace`, Shooter's Edge's
+`r_fire_pace`). A map's fires burn at `kFirePace` (0.4) of the presets' pace: each flame's gas is
+carried up at that share of its preset's rise (the air past it slowed alike, so it leans as far),
+and its light flickers on a clock slowed as much (`fire_time`), the gas and the wall it lights in
+step. At the presets' own pace a wall torch's tongues pass about three times a second and its light
+flutters thirteen; in a hall at the maps' scale that read two or three times a real fire's. The
+draught a fire wavers in under a roof is 0.15 m/s, a breath.
+
 **Shadows use three techniques, one for each scale:**
 
 1. **The mountain's own shadow: a horizon map.** For each texel of a grid over the

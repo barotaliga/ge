@@ -131,6 +131,18 @@ struct PointLight {
 // The light's share of its brightness at time t, s.
 double flicker_at(const PointLight& light, double t);
 
+// THE PACE: how fast the fires' gas churns and their light flickers, against the flame presets'
+// (render/flame.hpp's rise) and the candle flicker's own rate (`flicker_at`). At 1 a wall torch's
+// tongues pass about three times a second and its light flutters thirteen times; seen in a hall at
+// the maps' scale that reads two or three times too quick, so the fires burn at 0.4 of it. The gas
+// and the light it casts slow together (`fire_time`: the gas in bsp_flames, the light in bsp_draw),
+// and the wind's lean is kept.
+inline constexpr double kFirePace = 0.4;
+
+// The clock a fire's light flickers on at `t_s` under `pace` (kFirePace): a light that is no fire
+// keeps the map's own clock.
+double fire_time(const PointLight& light, double t_s, double pace);
+
 struct Atlas {
   uint32_t width = 0, height = 0, mips = 1;
   std::vector<std::vector<uint8_t>> levels;  // RGBA8 a level; alpha 255 a fullbright texel

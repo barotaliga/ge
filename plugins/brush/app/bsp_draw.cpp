@@ -579,7 +579,8 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
       // the strength a metre off is that times the half reach squared.
       const double half = l.value * kUnitM / 2;
       const double at1 = l.value / 256.0 * half * half * l.gain * o.strength *
-                         flicker_at(l, view.time_s) * fire_light_gain(l, o.bonfires);
+                         flicker_at(l, fire_time(l, view.time_s, o.fire_pace)) *
+                         fire_light_gain(l, o.bonfires);
       set4(g.pos, l.pos[0], l.pos[1] + fire_light_lift(l, o.bonfires), l.pos[2], l.reach * 1.5);
       set4(g.colour, l.colour[0] * at1, l.colour[1] * at1, l.colour[2] * at1, 0);
       near = o.near_soft * half;

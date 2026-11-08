@@ -71,6 +71,10 @@ struct LiquidRows {
   // The chop's rms slope (render/water.hpp's WaterDraw::chop): the short waves a pool in use keeps
   // running every way, its rings turned back off the walls; 0 a pool no one ever swims in.
   double chop = 0;
+  // The chop's shortest waves, m (render/water.hpp's WaterDraw::chop_shortest): a pool's chop is
+  // the swell left over from the last swimmer, so the quick ripples under 20 cm, which run 3 to 6
+  // times a second and read as wind, are left out.
+  double chop_shortest = 0.2;
 };
 
 // What the map says of a pool, worked out once (`pool_site`).

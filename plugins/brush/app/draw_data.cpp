@@ -191,6 +191,10 @@ double flicker_at(const PointLight& l, double t) {
   return 1;
 }
 
+double fire_time(const PointLight& l, double t_s, double pace) {
+  return l.fire == Fire::none ? t_s : t_s * std::max(pace, 0.0);
+}
+
 namespace {
 
 // sRGB 0..255 to linear light.
