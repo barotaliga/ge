@@ -6,8 +6,9 @@
 // - IN VIEW: an enemy alive within the bots' sight range (4096 units) with a clear line from the
 //   player's eye to the enemy's head or middle through the map's world (hull 0), whichever way the
 //   player looks: the share of the time a fight could be had;
-// - FACED: one of them inside the player's view cone as the bots' is (100 degrees across, off the
-//   recorded view angles): the share of the time a fight is in front of him;
+// - FACED: one of them on the player's screen as the bots' view is (120 degrees across and 88.5
+//   high, off the recorded view angles; bots/fighter.cpp): the share of the time a fight is in
+//   front of him;
 // - NEAR: an enemy alive within `--near` units, seen or not (where a player stands against the
 //   other team);
 // - THE LAUNCHER: had (its item bit), and had with rockets for it;
@@ -53,7 +54,8 @@ using ge::core::num::to_fixed;
 constexpr float kSight = 4096;  // the bots' sight range (shooter/senses.hpp)
 constexpr float kEye = 22;      // the eye over the origin
 constexpr float kFastest = 1000;
-constexpr float kFov = 100;        // the bots' view cone across, degrees
+constexpr float kFov = 120;        // the bots' view across, degrees (bots/fighter.cpp)
+constexpr float kFovY = 88.5f;     // and its height
 constexpr int32_t kLauncher = 32;  // the rocket launcher's item bit
 constexpr double kFired_s = 0.3;   // a shot this near a sample counts as firing then
 
@@ -89,8 +91,9 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   cl::Demo d;
   if (!cl::open_demo(std::move(bytes), d, out.error)) return;
   const sh::Hull& world = m.bsp.models[0].hulls[0];
-  // The bots' cone (shooter/senses.hpp: 100 degrees across), its edge as a cosine.
-  const float cone_edge = sh::angle_vectors({0, kFov * 0.5f, 0}).forward.x;
+  // The bots' screen (shooter/senses.hpp `sees_player`): each half angle as a cosine and sine.
+  const sh::Vec3f wide = sh::angle_vectors({0, kFov * 0.5f, 0}).forward;
+  const sh::Vec3f high = sh::angle_vectors({0, kFovY * 0.5f, 0}).forward;
   std::vector<Player> by(32);
   std::vector<sh::Vec3f> was(32);
   std::vector<uint8_t> was_alive(32, 0);
@@ -130,7 +133,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       pl.alive++;
       const sh::Vec3f eye{p.origin.x, p.origin.y, p.origin.z + kEye};
       bool view = false, cone = false, close = false;
-      const sh::Vec3f fwd = sh::angle_vectors(p.angles).forward;
+      const sh::ViewAxes ax = sh::angle_vectors(p.angles);
       for (int j = 0; j < 32; j++) {
         const cl::DemoEntity& e = s.players[static_cast<size_t>(j)];
         if (j == i || !e.present || e.dead || s.names[static_cast<size_t>(j)].empty() ||
@@ -144,8 +147,10 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         if (!clear(world, eye, head) && !clear(world, eye, e.origin)) continue;
         view = true;
         const sh::Vec3f h = head - eye;
-        const float hd = std::sqrt(h.x * h.x + h.y * h.y + h.z * h.z);
-        cone = hd < 1 || (fwd.x * h.x + fwd.y * h.y + fwd.z * h.z) / hd >= cone_edge;
+        const float ahead = sh::dot(ax.forward, h);
+        cone = sh::dot(h, h) < 1 ||
+               (ahead > 0 && std::fabs(sh::dot(ax.right, h)) * wide.x <= ahead * wide.y &&
+                std::fabs(sh::dot(ax.up, h)) * high.x <= ahead * high.y);
       }
       pl.in_view += view;
       pl.fired_in_view += view && s.time - fired_at[static_cast<size_t>(i)] <= kFired_s;

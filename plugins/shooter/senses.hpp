@@ -11,8 +11,9 @@
 // read.
 //
 // WHAT THE BOT TAKES FROM IT (`sense`), for each other player sent:
-// - SEEN when it lies inside the view's cone (`fov` degrees across, about the view's yaw and
-//   pitch), within `range`, and the line from the eye (`view_height` over the origin) to its
+// - SEEN when it lies inside the view (a round cone `fov` degrees across about the view's yaw
+//   and pitch, or a screen `fov` wide and `fov_y` high, as a player's monitor shows it), within
+//   `range`, and the line from the eye (`view_height` over the origin) to its
 //   head or its middle is clear of the world and every brush entity (a shut door hides; another
 //   player does not). Seen, its place is remembered (`ai::Memory`), and its velocity is a
 //   player's as the server sent it (sightings across a network come bunched as the packets do),
@@ -76,9 +77,12 @@ void client_view(const Server& sv, int viewer, ClientView& out);
 
 struct SenseSettings {
   float view_height = 22;  // the eye over the origin, units
-  float fov = 100;         // the view's cone across, degrees
-  float range = 4096;      // units
-  float forget_s = 6;      // a contact neither seen nor heard this long is forgotten
+  float fov = 100;         // the view across, degrees (360: all round)
+  // The view's height, degrees: set, the view is a screen's rectangle `fov` wide and `fov_y`
+  // high about the view's axes, as a player's monitor shows it; 0, a round cone `fov` across.
+  float fov_y = 0;
+  float range = 4096;  // units
+  float forget_s = 6;  // a contact neither seen nor heard this long is forgotten
   // Every player's sound that reaches the client is heard, exactly where it is. A bot with ears of
   // its own (hearing.hpp) turns this off and hands in what it takes in with `sense_heard`.
   bool hear_players = true;
@@ -111,7 +115,7 @@ struct Senses {
 };
 
 // Whether the eye at `eye` with the view `angles` (pitch down positive, yaw) sees the player at
-// `origin`: in the cone, in range, and a clear line to its head or its middle.
+// `origin`: in the view, in range, and a clear line to its head or its middle.
 bool sees_player(const Server& sv, const SenseSettings& set, int viewer, Vec3f eye, Vec3f angles,
                  Vec3f origin);
 

@@ -93,6 +93,10 @@ constexpr float kRocketsLow = 25;          // a launcher with fewer rockets than
 constexpr float kRocketsStock = 50;        // rockets stocked with no launcher yet, up to this
 constexpr double kRocketsStockWorth = 15;  // and worth this from none
 constexpr float kBlastClear = 140;  // a rocket or grenade is held with a mate this near its aim
+// What a fighter sees: a player's screen, 120 degrees across and as high as a 16:9 monitor shows
+// at that width (2 atan(tan 60 * 9/16)), people's own field of view.
+constexpr float kViewWide = 120;
+constexpr float kViewHigh = 88.5f;
 
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
 
@@ -1047,6 +1051,8 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   exits_init(f, g, s, entities);
   ears_init(f, sh::tier_of(traits[sh::Trait::hearing]), entities);
   spam_init(f, entities);
+  f.bot.senses.set.fov = kViewWide;
+  f.bot.senses.set.fov_y = kViewHigh;
 }
 
 sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, int msec) {

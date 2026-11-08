@@ -3,7 +3,8 @@
 // 1. what its client was sent this frame (`client_view`), and the senses taken from it, its view
 //    as it last pressed it;
 // 2. the pilot's command for the route (it reads only its own player and the movers, as before);
-// 3. the view: with a contact seen, or lost under the profile's `hold_s` ago, the yaw and pitch
+// 3. the view: with a contact seen, or lost under the profile's `hold_s` ago (the freshest; the
+//    one in hand kept while in sight unless another is half as far), the yaw and pitch
 //    at its predicted middle through the skill's hands, a new contact first waiting a reaction
 //    drawn for it (half of it when the view was already on him: pre-aimed) (the pilot does not
 //    strafe jump while the view is held: the strafe needs the view along the velocity); with none,
@@ -52,6 +53,7 @@ struct BotStats {
   int64_t looking = 0;                   // commands the view spent on a spot watched (`look`)
   int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and of them, ones pre-aimed at
   double react_s = 0;                    // the reaction times drawn, summed
+  int64_t kept = 0;  // commands the one in hand was kept over a nearer one in sight
 };
 
 struct Bot {
