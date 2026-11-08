@@ -118,6 +118,7 @@ struct TeamPlayer {
   int64_t plans = 0, stuck = 0, lost = 0, waits = 0, barred = 0;
   int64_t goal_changes = 0;  // its item goal changed (bots/fighter.hpp's commitment)
   int64_t surfaced = 0, surface_failed = 0;  // up for air, rises given up (bots/water.hpp)
+  int64_t swim_fights = 0;                   // commands swum with the view on an enemy in sight
   float travelled = 0;                       // units along the path
   std::string last;                          // where he stood at the end, and what he was going for
   std::vector<sh::Vec3f> path;               // every path_every frames
