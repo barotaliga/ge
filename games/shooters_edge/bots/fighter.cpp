@@ -1178,10 +1178,16 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   if (s.world.entities[static_cast<size_t>(me)].waterlevel == 0) f.swim_exit = -1;  // out
   if (!dead && swim) {
     // Swimming the field's way out: the view on the next cell (pitch down positive), forward,
-    // and jump held, which rises in water and climbs out over the edge at the top.
+    // and jump held, which rises in water and climbs out over the edge at the top; with an enemy
+    // in sight, the view kept on him (below).
     const sh::Vec3f me_at = s.world.entities[static_cast<size_t>(me)].origin;
     const double dx = way.x - me_at.x, dy = way.y - me_at.y, dz = way.z - me_at.z;
     const double flat = std::sqrt(dx * dx + dy * dy);
+    const sh::Vec3f aim_view = cmd.angles;  // the aim's, while it holds him in sight
+    bool fights = false;
+    if (f.bot.aiming)
+      for (const sh::Contact& k : f.bot.senses.contacts)
+        fights |= k.ent == f.bot.target && k.visible;
     cmd.angles.y = static_cast<float>(ge::core::libm::atan2(dy, dx) * (180.0 / ge::core::kPi));
     cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(dz, flat) * (180.0 / ge::core::kPi));
     cmd.forward = sh::quantize_axis(320);
@@ -1212,6 +1218,24 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
       cmd.angles.x = out.angles.x;
       cmd.angles.y = out.angles.y;
       cmd.buttons = static_cast<uint8_t>((cmd.buttons & ~sh::kButtonJump) | out.buttons);
+    } else if (fights) {
+      // Fighting in the water: the view stays on him, as a person's does, and the way is swum
+      // with the keys under it: forward and side along the view's axes, what they leave of the
+      // rise pressed straight up.
+      cmd.angles.x = aim_view.x;
+      cmd.angles.y = aim_view.y;
+      const sh::ViewAxes ax = sh::angle_vectors({aim_view.x, aim_view.y, 0});
+      const double len = std::sqrt(dx * dx + dy * dy + dz * dz);
+      if (len > 1) {
+        const double k = 320 / len, wx = dx * k, wy = dy * k, wz = dz * k;
+        const double fw = wx * ax.forward.x + wy * ax.forward.y + wz * ax.forward.z;
+        const double sd = wx * ax.right.x + wy * ax.right.y + wz * ax.right.z;
+        const double up = wz - fw * ax.forward.z - sd * ax.right.z;
+        cmd.forward = sh::quantize_axis(static_cast<float>(fw));
+        cmd.side = sh::quantize_axis(static_cast<float>(sd));
+        cmd.up = sh::quantize_axis(static_cast<float>(up));
+      }
+      f.stats.swim_fights++;
     }
   } else if (!dead && fighter_landing(f, s, me, t, cmd)) {
     // Just climbed out: onto its exit node first (footwork.hpp).

@@ -551,6 +551,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.goal_changes = seat.fighter.stats.goal_changes;
     p.surfaced = seat.fighter.stats.surfaced;
     p.surface_failed = seat.fighter.stats.surface_failed;
+    p.swim_fights = seat.fighter.stats.swim_fights;
     p.stuck = ps.stuck;
     p.lost = ps.lost;
     p.waits = ps.waits;
