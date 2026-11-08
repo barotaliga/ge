@@ -12,6 +12,9 @@
 // - NEAR: an enemy alive within `--near` units, seen or not (where a player stands against the
 //   other team);
 // - THE LAUNCHER: had (its item bit), and had with rockets for it;
+// - THE ARMS: the share of the time each weapon is owned, the mean health and armour, and the
+//   weapon sounds a player-minute alive by the sound (what is fired: the launcher's, the
+//   scattergun's);
 // - ITEM CONTROL: each key item (the armours, the mega, the quad, the shield, the launcher; its
 //   model and skin) the share of the samples it lay untaken, and the mean time from its showing
 //   to its going (people take the yellow armour within 4 s of its showing);
@@ -35,12 +38,14 @@
 // ge:keywords lab se-people people realism yardstick in-view line-of-sight engagement contact
 // ge:keywords speed mvd multiview recordings real-matches bots-against-people positioning
 // ge:keywords dodge strafe fight-across wet water swimming
+// ge:keywords weapons-owned shots-per-min firepower launcher health armour
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -95,7 +100,15 @@ struct Player {
   // Alive with the waist under water, slime or lava (a swimmer), and of those, with an enemy faced.
   int64_t wet = 0, wet_faced = 0;
   double fight_across = 0, fight_along = 0;
+  // The arms: samples with each weapon owned (kArmBits), the health and armour summed.
+  int64_t owned[8] = {};
+  double health = 0, armour = 0;
 };
+// The weapons by their item bit. What is in hand is not read: people's recordings keep neither the
+// active weapon nor the view model up to date; the weapon sounds say what is fired.
+constexpr int32_t kArmBits[8] = {4096, 1, 2, 4, 8, 16, 32, 64};
+constexpr const char* kArmNames[8] = {"axe",      "shotgun",  "double",  "nailgun",
+                                      "super-ng", "grenades", "rockets", "lightning"};
 constexpr double kAcross = 200;
 constexpr double kSideSpeed = 100;
 constexpr double kCalmSpeed = 100;
@@ -135,6 +148,7 @@ struct Read {
   double seconds = 0;
   std::vector<Player> players;  // by slot, those who played
   std::array<ItemControl, kItemKinds> items{};
+  std::map<std::string, int64_t> shots;  // the players' weapon sounds, by the sound's name
 };
 
 // A slot's team: its user info's `team`, else its shirt's colour (a recording without the key).
@@ -185,8 +199,11 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     if (s.intermission || s.players.size() < 32) continue;
     // Every frame's weapon sounds (the weapon channel, the player's own entity): his shots.
     for (const cl::DemoSound& snd : s.started)
-      if (snd.channel == 1 && snd.entity >= 1 && snd.entity <= 32)
+      if (snd.channel == 1 && snd.entity >= 1 && snd.entity <= 32) {
         fired_at[static_cast<size_t>(snd.entity - 1)] = s.time;
+        if (snd.sound > 0 && static_cast<size_t>(snd.sound) < s.sounds.size())
+          out.shots[s.sounds[static_cast<size_t>(snd.sound)]]++;
+      }
     if (t0 < 0) t0 = s.time;
     if (s.time < next) continue;
     next = s.time + every;
@@ -259,6 +276,11 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         const bool has = (st[cl::kStatItems] & kLauncher) != 0;
         pl.rl += has;
         pl.rl_loaded += has && st[cl::kStatRockets] > 0;
+        for (int w = 0; w < 8; w++) {
+          pl.owned[w] += (st[cl::kStatItems] & kArmBits[w]) != 0;
+        }
+        pl.health += st[cl::kStatHealth];
+        pl.armour += st[cl::kStatArmour];
       }
       pl.near += close;
       Sample sm;
@@ -438,6 +460,7 @@ void run(gl::Lab& lab) {
       {}};
   Player all;
   std::array<ItemControl, kItemKinds> items{};
+  std::map<std::string, int64_t> shots;
   int used = 0, skipped = 0;
   double seconds = 0;
   for (size_t i = 0; i < n; i++) {
@@ -457,6 +480,7 @@ void run(gl::Lab& lab) {
       items[static_cast<size_t>(k)].taken += r.items[static_cast<size_t>(k)].taken;
       items[static_cast<size_t>(k)].waited += r.items[static_cast<size_t>(k)].waited;
     }
+    for (const auto& [name, k] : r.shots) shots[name] += k;
     Player sum;
     for (const Player& p : r.players) {
       sum.alive += p.alive;
@@ -482,6 +506,11 @@ void run(gl::Lab& lab) {
       all.fight_turns += p.fight_turns;
       all.fight_across += p.fight_across;
       all.fight_along += p.fight_along;
+      for (int w = 0; w < 8; w++) {
+        all.owned[w] += p.owned[w];
+      }
+      all.health += p.health;
+      all.armour += p.armour;
     }
     all.alive += sum.alive;
     all.in_view += sum.in_view;
@@ -518,6 +547,18 @@ void run(gl::Lab& lab) {
   lab.metric("people.near", of(all.near), "share");
   lab.metric("people.rl-had", of(all.rl), "share");
   lab.metric("people.rl-loaded", of(all.rl_loaded), "share");
+  for (int w = 0; w < 8; w++) {
+    lab.metric(std::string("people.owned.") + kArmNames[w], of(all.owned[w]), "share");
+  }
+  // The weapon sounds a player-minute alive, by the sound (a weapon's own: its firing).
+  for (const auto& [name, k] : shots)
+    if (all.alive > 0)
+      lab.metric("people.shots-per-min." + name,
+                 static_cast<double>(k) * 60 / (static_cast<double>(all.alive) * every), "per-min");
+  lab.metric("people.health", all.alive > 0 ? all.health / static_cast<double>(all.alive) : 0,
+             "hp");
+  lab.metric("people.armour", all.alive > 0 ? all.armour / static_cast<double>(all.alive) : 0,
+             "points");
   lab.metric("people.speed", all.moved > 0 ? all.speed / static_cast<double>(all.moved) : 0,
              "units/s");
   const auto per_turn = [&](double k) {

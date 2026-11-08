@@ -12,8 +12,14 @@
 // is attached (`match.mvd`); `--save` writes it to a path as well, packed as it is recorded when
 // the path ends in `z` (`.mvdz`: net/classic_record.hpp).
 //
+// ITEM CONTROL (`team.lying.<item>`): each key item's share of the time it lay on its spot, and of
+// that time by what the bots made of it (classic_team.hpp `kLyingWhy`): nobody alive believed it
+// there, nobody wanted it, the one who wanted it was fighting, one on his way (far, within 400
+// units, standing on it). People take the yellow armour within 4 s of its showing (se-people).
+//
 // ge:summary Lab: a recorded 4on4 of bots on teamplay: roles, key areas, frags by team, the MVD
 // ge:keywords lab se-team team-game 4on4 teamplay roles hold rush carry quad key-area mvd record
+// ge:keywords item-control lying untaken armour-control
 // ge:skill shooter bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #include <algorithm>
@@ -481,6 +487,21 @@ void run(gl::Lab& lab) {
                    all > 0 ? static_cast<double>(r.frames_at[i]) / static_cast<double>(all) : 0,
                    "share");
       }
+    }
+    // The key items lying untaken (classic_team.hpp), and what the fighters made of it: nobody
+    // believed it there, nobody wanted it, the one who wanted it was fighting, one was on his way.
+    for (int k = 0; k < cn::kLyingItems; k++) {
+      const auto ki = static_cast<size_t>(k);
+      if (r.lying_n[ki] == 0) continue;
+      const std::string key = std::string("team.lying.") + cn::kLyingItemNames[k];
+      lab.metric(key, static_cast<double>(r.lying[ki]) / static_cast<double>(r.lying_n[ki]),
+                 "share");
+      for (int w = 0; w < cn::kLyingWhy; w++)
+        lab.metric(key + "." + cn::kLyingWhyNames[w],
+                   r.lying[ki] > 0 ? static_cast<double>(r.lying_why[ki][static_cast<size_t>(w)]) /
+                                         static_cast<double>(r.lying[ki])
+                                   : 0,
+                   "share");
     }
     // The wet time by cause (bots/fighter.hpp kWetWhy), as shares of it: what keeps the bots in
     // the water; and wet aiming, swimming and walking, each's share, speed and time still.

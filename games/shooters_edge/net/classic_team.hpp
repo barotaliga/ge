@@ -184,6 +184,12 @@ struct TeamButton {
   sh::Vec3f from;                  // where a player presses (or shoots) it from
 };
 
+// The key items whose lying untaken is broken down (TeamMatchReport::lying), and the causes.
+constexpr int kLyingItems = 6, kLyingWhy = 6;
+inline constexpr const char* kLyingItemNames[kLyingItems] = {"ga", "ya", "ra", "mh", "quad", "rl"};
+inline constexpr const char* kLyingWhyNames[kLyingWhy] = {"unknown", "unwanted", "busy",
+                                                          "going",   "near",     "on-it"};
+
 struct TeamMatchReport {
   bool ok = false;
   std::string error;  // why it did not run, with the next step
@@ -195,6 +201,12 @@ struct TeamMatchReport {
   std::array<HitCount, kTargetStates> pellets_at{}, rockets_at{};
   std::array<double, kTargetStates> given_at{};
   std::array<int64_t, kTargetStates> frames_at{};
+  // The key items (kLyingItems) sampled every 4 frames: the samples, those it lay on its spot, and
+  // of those, by what the fighters made of it (kLyingWhy): nobody alive believed it there; some
+  // believed it there and none wanted it; one wanted it while fighting; one on its way to it,
+  // within 400 units of it, or standing on it (within 64: an armour no better than his own).
+  std::array<int64_t, kLyingItems> lying_n{}, lying{};
+  std::array<std::array<int64_t, kLyingWhy>, kLyingItems> lying_why{};
   std::vector<std::string> frag_log;
   std::vector<std::string> chat;    // every team message, "t team name: words", in time order
   std::vector<std::string> prints;  // every print the first player's client was sent (obituaries)
