@@ -12,6 +12,9 @@
 // - NEAR: an enemy alive within `--near` units, seen or not (where a player stands against the
 //   other team);
 // - THE LAUNCHER: had (its item bit), and had with rockets for it;
+// - ITEM CONTROL: each key item (the armours, the mega, the quad, the shield, the launcher; its
+//   model and skin) the share of the samples it lay untaken, and the mean time from its showing
+//   to its going (people take the yellow armour within 4 s of its showing);
 // - SPEED: across the floor, between two samples alive (a jump past 1000 units/s, a teleport, left
 //   out).
 //
@@ -25,6 +28,7 @@
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <filesystem>
 #include <string>
@@ -68,11 +72,30 @@ struct Player {
   double speed = 0, turn = 0;
 };
 
+// The key items, by their model (and the armour's skin): how long each sits on its spot untaken.
+constexpr int kItemKinds = 7;
+const char* const kItemNames[kItemKinds] = {"ga", "ya", "ra", "mh", "quad", "pent", "rl"};
+int item_kind(const std::string& model, int skin) {
+  if (model == "progs/armor.mdl") return skin >= 0 && skin <= 2 ? skin : -1;
+  if (model == "maps/b_bh100.bsp") return 3;
+  if (model == "progs/quaddama.mdl") return 4;
+  if (model == "progs/invulner.mdl") return 5;
+  if (model == "progs/g_rock2.mdl") return 6;
+  return -1;
+}
+
+struct ItemControl {
+  int64_t samples = 0, present = 0;  // each spot's samples, and those it was there in
+  int64_t taken = 0;                 // times it went
+  double waited = 0;                 // from showing to going, summed over the times it went
+};
+
 struct Read {
   bool ok = false, other_map = false;
   std::string error, map;
   double seconds = 0;
   std::vector<Player> players;  // by slot, those who played
+  std::array<ItemControl, kItemKinds> items{};
 };
 
 // A slot's team: its user info's `team`, else its shirt's colour (a recording without the key).
@@ -99,6 +122,14 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<uint8_t> was_alive(32, 0);
   std::vector<float> was_yaw(32, 0);
   std::vector<double> fired_at(32, -1e9);  // each player's last weapon sound
+  // Each key item's entity: its kind, its model, whether it was there at the last sample, since
+  // when.
+  struct Spot {
+    int kind = -1, model = 0;
+    bool there = false;
+    double since = -1;
+  };
+  std::vector<Spot> spots;
   double next = 0, t0 = -1;
   for (;;) {
     const cl::DemoRead rd = cl::next_frame(d, out.error);
@@ -120,6 +151,28 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     if (s.time < next) continue;
     next = s.time + every;
     out.seconds = s.time - t0;
+    // The key items: an entity seen with a key item's model is that item's spot from then on.
+    if (spots.size() < s.entities.size()) spots.resize(s.entities.size());
+    for (size_t e = 33; e < s.entities.size(); e++) {
+      const cl::DemoEntity& en = s.entities[e];
+      Spot& sp = spots[e];
+      if (sp.kind < 0 && en.present && en.model > 0 &&
+          static_cast<size_t>(en.model) < s.models.size()) {
+        sp.kind = item_kind(s.models[static_cast<size_t>(en.model)], en.skin);
+        sp.model = en.model;
+      }
+      if (sp.kind < 0) continue;
+      const bool there = en.present && en.model == sp.model;
+      ItemControl& ic = out.items[static_cast<size_t>(sp.kind)];
+      ic.samples++;
+      ic.present += there;
+      if (there && !sp.there) sp.since = s.time;
+      if (!there && sp.there && sp.since >= 0) {
+        ic.taken++;
+        ic.waited += s.time - sp.since;
+      }
+      sp.there = there;
+    }
     for (int i = 0; i < 32; i++) {
       const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];
       const bool live = p.present && !p.dead && !s.names[static_cast<size_t>(i)].empty();
@@ -256,6 +309,7 @@ void run(gl::Lab& lab) {
       {"recording", "seconds", "players", "in view", "faced", "near", "speed"},
       {}};
   Player all;
+  std::array<ItemControl, kItemKinds> items{};
   int used = 0, skipped = 0;
   double seconds = 0;
   for (size_t i = 0; i < n; i++) {
@@ -269,6 +323,12 @@ void run(gl::Lab& lab) {
     }
     used++;
     seconds += r.seconds;
+    for (int k = 0; k < kItemKinds; k++) {
+      items[static_cast<size_t>(k)].samples += r.items[static_cast<size_t>(k)].samples;
+      items[static_cast<size_t>(k)].present += r.items[static_cast<size_t>(k)].present;
+      items[static_cast<size_t>(k)].taken += r.items[static_cast<size_t>(k)].taken;
+      items[static_cast<size_t>(k)].waited += r.items[static_cast<size_t>(k)].waited;
+    }
     Player sum;
     for (const Player& p : r.players) {
       sum.alive += p.alive;
@@ -333,6 +393,17 @@ void run(gl::Lab& lab) {
                  ? static_cast<double>(all.fired_in_view) / static_cast<double>(all.in_view)
                  : 0,
              "share");
+  // Item control: the share of the time each key item lay untaken, and how long it lay from showing
+  // to being taken (a team that times it takes it as it shows).
+  for (int k = 0; k < kItemKinds; k++) {
+    const ItemControl& ic = items[static_cast<size_t>(k)];
+    if (ic.samples == 0) continue;
+    const std::string key = kItemNames[k];
+    lab.metric("people.item-lying." + key,
+               static_cast<double>(ic.present) / static_cast<double>(ic.samples), "share");
+    lab.metric("people.item-wait." + key,
+               ic.taken > 0 ? ic.waited / static_cast<double>(ic.taken) : 0, "s");
+  }
   if (used == 0)
     lab.fail("se-people: no recording of " + m.name + " read",
              "next: pass --mapname=<the recordings' map> with --basedir, or --dir of that map's");
