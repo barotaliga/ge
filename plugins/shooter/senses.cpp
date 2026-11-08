@@ -148,9 +148,10 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
     }
     if (!sees_player(sv, s.set, viewer, eye, angles, v.origin)) continue;
     Contact& c = contact_for(s, v.ent);
-    if (c.was_visible && ai::age(c.seen, t) <= kFrameGap_s) {
-      const double dt = t - c.seen.at;
-      if (dt > 0) c.velocity = (v.origin - at_of(c.seen)) * static_cast<float>(1.0 / dt);
+    const bool follows = c.was_visible && ai::age(c.seen, t) <= kFrameGap_s;
+    const double gap = t - c.seen.at;
+    if (follows) {
+      if (gap > 0) c.velocity = (v.origin - at_of(c.seen)) * static_cast<float>(1.0 / gap);
     } else {
       c.velocity = {};
       s.stats.acquired++;
@@ -163,6 +164,13 @@ void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3
     // A player's velocity is what the server sent with him: across a network the sightings come
     // as the packets do, bunched, so two of them a tick apart read 0 or twice the speed.
     if (is_player(sv, v.ent)) c.velocity = sv.edicts[static_cast<size_t>(v.ent)].velocity;
+    // The course as the eye takes it in: a new sighting's as it is, then caught up on a change.
+    if (!follows || s.set.course_s <= 0)
+      c.course = c.velocity;
+    else
+      c.course =
+          c.course + (c.velocity - c.course) *
+                         static_cast<float>(gap >= s.set.course_s ? 1 : gap / s.set.course_s);
     ai::see(c.seen, v.origin.x, v.origin.y, v.origin.z, t);
     c.visible = true;
     c.since = t;

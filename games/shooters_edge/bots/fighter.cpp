@@ -1194,6 +1194,9 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   f.bot.keep = f.features[sh::Feature::keep];
   f.bot.paced = f.features[sh::Feature::pace];
   f.bot.trial = f.features[sh::Feature::trial];
+  // A change of course read a reaction late (`eye`), and the aim from its eye ahead (`selfaim`).
+  f.bot.senses.set.course_s = f.features[sh::Feature::eye] ? f.bot.aim.react_med : 0;
+  f.bot.selfaim = f.features[sh::Feature::selfaim];
   f.bot.glance = f.features[sh::Feature::glance];
 }
 
@@ -1209,6 +1212,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   ai::Why* why = f.bot.pilot.why ? f.bot.pilot.why->follow(slot, f.bot.pilot.command) : nullptr;
   f.stats.commands++;
   const bool dead = st.health <= 0;
+  f.stats.wet += !dead && s.world.entities[static_cast<size_t>(me)].waterlevel >= 2;
   if (!f.was_dead && dead)  // where it died: a danger spot (`best_item` heals away from it)
     mind_danger(f, s.world.entities[static_cast<size_t>(me)].origin, t);
   if (f.was_dead && !dead) {

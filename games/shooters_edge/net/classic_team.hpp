@@ -136,6 +136,7 @@ struct TeamPlayer {
   int64_t on_the_way = 0;                    // short goals taken up on the way (bots/fighter.hpp)
   int64_t took[12] = {};                     // pickups by the item's kind (bots/fighter.hpp)
   int64_t swim_fights = 0;                   // commands swum with the view on an enemy in sight
+  int64_t wet = 0;                           // commands alive waist deep in water
   float travelled = 0;                       // units along the path
   std::string last;                          // where he stood at the end, and what he was going for
   std::vector<sh::Vec3f> path;               // every path_every frames

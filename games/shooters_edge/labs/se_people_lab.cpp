@@ -16,7 +16,12 @@
 //   model and skin) the share of the samples it lay untaken, and the mean time from its showing
 //   to its going (people take the yellow armour within 4 s of its showing);
 // - SPEED: across the floor, between two samples alive (a jump past 1000 units/s, a teleport, left
-//   out).
+//   out);
+// - THE FIGHT'S FEET: with an enemy faced, the player's speed across the line to him and along it
+//   (closing positive), the share of it over 200 units/s across, and how often the side across
+//   turns (a strafe dodge's jink): the dodge measured alike for people and bots;
+// - WET: the share of the time alive with the waist in water, slime or lava, and of the time an
+//   enemy is faced.
 //
 // The map is the demos' own, from `--basedir`'s game folder; demos of another map are skipped.
 // Without a demo it records a short match of our bots on the fixture halls (classic_team.hpp) and
@@ -25,6 +30,7 @@
 // ge:summary Lab: people's and bots' matches measured alike: enemy in view, near, speed
 // ge:keywords lab se-people people realism yardstick in-view line-of-sight engagement contact
 // ge:keywords speed mvd multiview recordings real-matches bots-against-people positioning
+// ge:keywords dodge strafe fight-across wet water swimming
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #include <algorithm>
@@ -76,7 +82,16 @@ struct Player {
   // the bands kCalmBands (degrees), and its turn, summed.
   int64_t calm_n = 0, calm_off[4] = {};
   double calm_turn = 0;
+  // With an enemy faced, between two samples alive: the speed across the line to him and along it
+  // (closing positive), summed; the samples over kAcross across; the side's turns (each side held
+  // past kSideSpeed).
+  int64_t fight_n = 0, fight_wide = 0, fight_turns = 0;
+  // Alive with the waist under water, slime or lava (a swimmer), and of those, with an enemy faced.
+  int64_t wet = 0, wet_faced = 0;
+  double fight_across = 0, fight_along = 0;
 };
+constexpr double kAcross = 200;
+constexpr double kSideSpeed = 100;
 constexpr double kCalmSpeed = 100;
 constexpr float kCalmBands[3] = {15, 45, 90};
 
@@ -129,6 +144,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<sh::Vec3f> was(32);
   std::vector<uint8_t> was_alive(32, 0);
   std::vector<float> was_yaw(32, 0);
+  std::vector<int8_t> was_side(32, 0);     // the side he last moved across his faced enemy's line
   std::vector<double> fired_at(32, -1e9);  // each player's last weapon sound
   // Each key item's entity: its kind, its model, whether it was there at the last sample, since
   // when.
@@ -194,6 +210,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       pl.alive++;
       const sh::Vec3f eye{p.origin.x, p.origin.y, p.origin.z + kEye};
       bool view = false, cone = false, close = false;
+      int faced = -1;
       const sh::ViewAxes ax = sh::angle_vectors(p.angles);
       for (int j = 0; j < 32; j++) {
         const cl::DemoEntity& e = s.players[static_cast<size_t>(j)];
@@ -212,10 +229,14 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         cone = sh::dot(h, h) < 1 ||
                (ahead > 0 && std::fabs(sh::dot(ax.right, h)) * wide.x <= ahead * wide.y &&
                 std::fabs(sh::dot(ax.up, h)) * high.x <= ahead * high.y);
+        if (cone) faced = j;
       }
       pl.in_view += view;
       pl.fired_in_view += view && s.time - fired_at[static_cast<size_t>(i)] <= kFired_s;
       pl.in_cone += cone;
+      const bool wet = sh::point_contents(world, p.origin) <= sh::kContentsWater;
+      pl.wet += wet;
+      pl.wet_faced += wet && cone;
       if (static_cast<size_t>(i) < d.player_stats.size()) {
         const auto& st = d.player_stats[static_cast<size_t>(i)];
         const bool has = (st[cl::kStatItems] & kLauncher) != 0;
@@ -258,6 +279,30 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
                                             : 3]++;
           pl.calm_turn += rate;
         }
+      }
+      // His feet with an enemy faced: across the line to him and along it.
+      if (faced >= 0 && was_alive[static_cast<size_t>(i)]) {
+        const sh::Vec3f dv = p.origin - was[static_cast<size_t>(i)];
+        const sh::Vec3f to = s.players[static_cast<size_t>(faced)].origin - p.origin;
+        const double len =
+            std::sqrt(static_cast<double>(to.x) * to.x + static_cast<double>(to.y) * to.y);
+        const double vx = dv.x / every, vy = dv.y / every;
+        if (len > 1 && std::sqrt(vx * vx + vy * vy) < kFastest) {
+          const double ux = to.x / len, uy = to.y / len;
+          const double along = vx * ux + vy * uy, across = vx * uy - vy * ux;
+          pl.fight_n++;
+          pl.fight_across += std::fabs(across);
+          pl.fight_along += along;
+          pl.fight_wide += std::fabs(across) > kAcross;
+          if (std::fabs(across) > kSideSpeed) {
+            const int8_t side = across > 0 ? 1 : -1;
+            int8_t& ws = was_side[static_cast<size_t>(i)];
+            pl.fight_turns += ws != 0 && side != ws;
+            ws = side;
+          }
+        }
+      } else {
+        was_side[static_cast<size_t>(i)] = 0;
       }
       was_yaw[static_cast<size_t>(i)] = p.angles.y;
       was[static_cast<size_t>(i)] = p.origin;
@@ -372,6 +417,13 @@ void run(gl::Lab& lab) {
       all.calm_n += p.calm_n;
       all.calm_turn += p.calm_turn;
       for (int b = 0; b < 4; b++) all.calm_off[b] += p.calm_off[b];
+      all.wet += p.wet;
+      all.wet_faced += p.wet_faced;
+      all.fight_n += p.fight_n;
+      all.fight_wide += p.fight_wide;
+      all.fight_turns += p.fight_turns;
+      all.fight_across += p.fight_across;
+      all.fight_along += p.fight_along;
     }
     all.alive += sum.alive;
     all.in_view += sum.in_view;
@@ -430,6 +482,20 @@ void run(gl::Lab& lab) {
     lab.metric(std::string("people.moving-view-off.") + kCalmNames[b],
                of_calm(static_cast<double>(all.calm_off[b])), "share");
   lab.metric("people.moving-view-turn", of_calm(all.calm_turn), "degrees/s");
+  // The fight's feet: across the line to the enemy faced, along it, and the side's turns a second.
+  const auto of_fight = [&](double k) {
+    return all.fight_n > 0 ? k / static_cast<double>(all.fight_n) : 0;
+  };
+  lab.metric("people.wet", of(all.wet), "share");
+  lab.metric(
+      "people.faced-wet",
+      all.in_cone > 0 ? static_cast<double>(all.wet_faced) / static_cast<double>(all.in_cone) : 0,
+      "share");
+  lab.metric("people.fight-across", of_fight(all.fight_across), "units/s");
+  lab.metric("people.fight-along", of_fight(all.fight_along), "units/s");
+  lab.metric("people.fight-wide", of_fight(static_cast<double>(all.fight_wide)), "share");
+  lab.metric("people.fight-side-turns", of_fight(static_cast<double>(all.fight_turns)) / every,
+             "per s");
   // Item control: the share of the time each key item lay untaken, and how long it lay from showing
   // to being taken (a team that times it takes it as it shows).
   for (int k = 0; k < kItemKinds; k++) {

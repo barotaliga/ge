@@ -616,6 +616,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.surfaced = seat.fighter.stats.surfaced;
     p.surface_failed = seat.fighter.stats.surface_failed;
     p.swim_fights = seat.fighter.stats.swim_fights;
+    p.wet = seat.fighter.stats.wet;
     p.on_the_way = seat.fighter.stats.on_the_way;
     for (size_t w = 0; w < 12; w++) p.took[w] = seat.fighter.stats.took[w];
     p.stuck = ps.stuck;
