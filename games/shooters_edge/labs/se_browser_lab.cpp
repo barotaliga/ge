@@ -307,7 +307,12 @@ void run(gl::Lab& lab) {
       g.menu.draw(dl, v.w, v.h, 0);
       for (const std::string& p : g.menu.problems()) {
         problems++;
-        lab.fail(v.name() + ", " + id + ": " + p,
+        std::string what = v.name();
+        what += ", ";
+        what += id;
+        what += ": ";
+        what += p;
+        lab.fail(what,
                  "shorten the words in games/shooters_edge/menu/servers_page.cpp or fix its "
                  "layout; rerun `make lab LAB=se-browser`. Skill: ui.");
       }

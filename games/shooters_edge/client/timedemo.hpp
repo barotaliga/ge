@@ -38,6 +38,7 @@
 // ge:keywords gpu-span span_add span_report price prices price_report switch-off-pricing
 // ge:keywords demo_game_dir demo_folder gamedir game-folder mod-folder fortress
 // ge:keywords playdemo playdemo_step cl_demospeed demo-pace timeline demo_seek seek demo-timeline
+// ge:keywords demo_drawn smooth lerp
 // ge:skill shooter perf
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -52,6 +53,7 @@
 
 #include "render/view.hpp"
 #include "shooters_edge/client/demo.hpp"
+#include "shooters_edge/client/demo_lerp.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/hud/status.hpp"
@@ -189,7 +191,14 @@ struct Timedemo {
   double clock = -1;        // the paced run's demo clock, s (-1: not started)
   bool hear = false;        // gather each frame's sounds and prints into `heard`
   DemoHeard heard;
+  // Drawn between frames (demo_lerp.hpp; playdemo's `demo_lerp`): every frame read is kept.
+  bool smooth = false;
+  DemoLerp lerp;
 };
+
+// What the window draws of `t`: a paced run with `smooth` between its last two frames at its
+// clock (demo_lerp.hpp), else the last frame as read.
+const DemoState& demo_drawn(Timedemo& t);
 
 // `name` found and opened by the game's adapter (game_adapter.hpp); the run begins at the next
 // step.

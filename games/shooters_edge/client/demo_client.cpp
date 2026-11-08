@@ -460,10 +460,11 @@ bool read_client_messages(Demo& d, DemoMsg& m, std::string& error) {
         s.centre = m.str();
         break;
       case 10: {  // setangle; a multiview recording's names the player it turns first
-        if (s.format == DemoFormat::multiview) m.u8();
+        const int slot = s.format == DemoFormat::multiview ? m.u8() : s.player;
         if ((d.ext_mvd & kMvdHighLagTeleport) != 0) m.u8();
         const float a = angle(m, w), b = angle(m, w), c = angle(m, w);
         s.angles = {a, b, c};
+        if (slot >= 0 && slot < 32) s.set_angles |= 1u << slot;
         break;
       }
       case 11:

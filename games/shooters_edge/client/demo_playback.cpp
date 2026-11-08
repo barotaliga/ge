@@ -157,6 +157,14 @@ void add_playback_commands(ge::console::Console& console, DemoPlayback& p, Timed
                         .min = 0,
                         .max = 2},
                        &p.bar);
+  console.cvars().bind({.name = "demo_lerp",
+                        .fallback = "1",
+                        .help = "a played demo drawn between its frames, so it moves smoothly "
+                                "(1), or each frame as read (0)",
+                        .kind = ge::console::CvarKind::integer,
+                        .min = 0,
+                        .max = 1},
+                       &p.lerp);
 }
 
 bool playback_begin(DemoPlayback& p, const Timedemo& t, std::string& error) {
@@ -176,6 +184,7 @@ bool playback_begin(DemoPlayback& p, const Timedemo& t, std::string& error) {
 TimedemoStep playback_step(DemoPlayback& p, Timedemo& t, const PlaybackInput& in, int w, int h,
                            double wall_dt_s, double now_s, std::vector<std::string>& say,
                            std::string& error) {
+  t.smooth = p.lerp != 0;
   const float x = in.x, y = in.y;
   if (x != p.pointer_x || y != p.pointer_y) p.shown_until = now_s + kBarShowS;
   p.pointer_x = x;

@@ -206,8 +206,9 @@ struct DemoState {
   std::vector<DemoVoice> voice;              // voice messages, in order
   std::vector<DemoPrint> prints;             // lines printed (a multiview: the tracked one's)
   std::vector<DemoEffect> effects;           // temporary entities, in order
-  std::string centre;  // a centre message or the finale's text (the last); empty when none
-  int64_t frames = 0;  // frames read
+  std::string centre;       // a centre message or the finale's text (the last); empty when none
+  uint32_t set_angles = 0;  // client, multiview: a bit a slot whose view the server set (setangle)
+  int64_t frames = 0;       // frames read
 };
 
 struct Demo {

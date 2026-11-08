@@ -190,7 +190,8 @@ void demo_fx_step(const DemoState& s, DemoFx& fx, const LoadedMap* map,
 }
 
 bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVideoOptions& o,
-                DemoVideoReport& report, std::string& error, const DemoVideoPicture& picture) {
+                DemoVideoReport& report, std::string& error, const DemoVideoPicture& picture,
+                const DemoVideoLerp& picture_lerp) {
   report = DemoVideoReport{};
   report.adapter = ge::gpu::adapter_line(device);
   if (o.width <= 0 || o.height <= 0 || o.width % 2 != 0 || o.height % 2 != 0 || !(o.fps > 0)) {
@@ -205,6 +206,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   if (!timedemo_start(files, o.demo, t, error)) return false;
   t.demo.track = o.track;
   t.start.track = o.track;
+  t.smooth = o.lerp;
   report.found = t.found;
   report.format =
       std::string(format_name(t.demo.state.format)) + (t.demo.state.voice_format ? " + voice" : "");
@@ -271,7 +273,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     load_effects(files, book, faults);
   }
   fx_state.book = &book;
-  const DemoState& s = t.demo.state;
+  const DemoState& read = t.demo.state;  // the last frame read (what is heard)
 
   double from = std::max(o.from_s, 0.0);  // the clip's start on the demo's timeline, s
   double length = o.seconds;              // its length (0: to the end)
@@ -289,9 +291,9 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     report.demo_frames++;
     if (st == TimedemoStep::new_level) {
       report.levels++;
-      map = load_named_map(files, s.map, error);
+      map = load_named_map(files, read.map, error);
       if (!map) {
-        error = "the demo's map " + s.map + ": " + error;
+        error = "the demo's map " + read.map + ": " + error;
         return false;
       }
       world.reset();
@@ -303,17 +305,17 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
       fx_state.palette = palette;
       fx_state.book = &book;
     }
-    demo_fx_frame(s, demo_fx);
-    const double dt = last < 0 ? 0 : std::clamp(s.time - last, 0.0, kMostDemoGap);
-    last = s.time;
+    demo_fx_frame(read, demo_fx);
+    const double dt = last < 0 ? 0 : std::clamp(read.time - last, 0.0, kMostDemoGap);
+    last = read.time;
     vt += dt;
-    if (o.messages) notices.take(s, vt);
+    if (o.messages) notices.take(read, vt);
     if (o.sound && !gif) {
-      sounds.level(s, map ? &map->bsp.map : nullptr);
+      sounds.level(read, map ? &map->bsp.map : nullptr);
       if (vt >= from) {  // the clip's sounds, on the clip's own clock
         exp.sound_to(std::llround((vt - from) * ge::audio::kRate));
-        sounds.frame(s, listener_of(s), static_cast<float>(dt));
-        for (const DemoVoice& v : s.voice) voices.play(v);
+        sounds.frame(read, listener_of(read), static_cast<float>(dt));
+        for (const DemoVoice& v : read.voice) voices.play(v);
       }
     }
     return true;
@@ -324,7 +326,7 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
   if (o.highlight > 0) {  // the clip is a highlight's window
     DemoScan scan;
     if (!scan_demo(t.start, scan, error)) return false;
-    const int subject = s.format == DemoFormat::single ? -1 : s.player;
+    const int subject = read.format == DemoFormat::single ? -1 : read.player;
     const ge::replay::Highlights found = demo_highlights(scan, subject);
     if (static_cast<size_t>(o.highlight) > found.list.size()) {
       error = "the demo has " + std::to_string(found.list.size()) + " highlights for " +
@@ -344,6 +346,10 @@ bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVide
     while (!ended && vt < at)
       if (!step()) return false;
     if (ended) break;
+    // The picture at `at` is drawn between the last two frames read (demo_lerp.hpp): the
+    // timeline runs `vt - at` ahead of it, and in a level the demo's clock with it.
+    const DemoState& s = o.lerp ? lerp_at(t.lerp, read, read.time - (vt - at)) : read;
+    if (picture_lerp) picture_lerp(t.lerp);
     // The model list grows through a client recording's signon: the world is made again with it.
     if (map && (!world || s.models.size() != world_models)) {
       world.reset();
@@ -498,6 +504,7 @@ int demo_video_main(ge::console::Console& console, const Args& args, const Searc
   o.highlight = args.highlight;
   o.gif_width = args.gif_width;
   o.track = playback.track;
+  o.lerp = playback.lerp != 0;
   o.picture = &picture;
   DemoVideoReport r;
   std::string error;
