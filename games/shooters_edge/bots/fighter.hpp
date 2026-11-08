@@ -142,8 +142,9 @@ struct Team;
 
 struct FighterStats {
   int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;
-  int64_t goal_changes = 0;    // its item goal changed (the commitment's measure)
-  int64_t surfaced = 0;        // times up for air (water.hpp)
+  int64_t goal_changes = 0;  // its item goal changed (the commitment's measure)
+  int64_t packs_called = 0, packs_fetched = 0, bored = 0;  // launchers in packs (packs.hpp)
+  int64_t surfaced = 0;                                    // times up for air (water.hpp)
   int64_t surface_failed = 0;  // and rises given up short of the surface
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
@@ -183,8 +184,11 @@ struct Fighter {
   // Ordered by size, largest first, so the struct packs tight.
   sh::Bot bot;
   std::vector<ItemSpot> items;
-  std::vector<sh::Vec3f> spawns;         // the map's spawn points (ears.hpp)
-  std::vector<sh::HeardSound> heard;     // this frame's sounds taken in
+  std::vector<sh::Vec3f> spawns;  // the map's spawn points (ears.hpp)
+  std::vector<double> rl_fired = std::vector<double>(33, -1e9);  // by entity: a rocket heard fired
+  std::vector<double> last_seen_t = std::vector<double>(33, -1e9);   // and when last in sight
+  std::vector<sh::Vec3f> last_seen_at = std::vector<sh::Vec3f>(33);  // and where (packs.hpp)
+  std::vector<sh::HeardSound> heard;                                 // this frame's sounds taken in
   std::vector<sh::Vec3f> spam_spots;     // where enemies come in by (spam.hpp)
   std::vector<int32_t> spam_from;        // per spot, the node near its area it is fired from
   std::vector<FoeRead> foes;             // each enemy as believed, by entity (temper.hpp)
@@ -230,9 +234,12 @@ struct Fighter {
   double under_since = -1;     // when its head last went under the water (-1: not under)
   double dive_wet_since = -1;  // when the dive under way went into the water (-1: none)
   double breathe_until = -1;   // up for air (water.hpp): at the surface until then (-1: rising)
-  double surface_by = 0;       // out of the water by then, or the rise is given up
-  double surface_retry = 0;    // no rise for air before then
-  double dive_off_until = -1;  // until when the dive given up (`dive_off`) is not tried again
+  double bore_until = -1e9;    // its own rocket at its feet for the quad's carrier (packs.hpp)
+  double bored_at = -1e9;
+  double pack_call_until = -1e9;  // a pack's call pending until then (packs.hpp)
+  double surface_by = 0;          // out of the water by then, or the rise is given up
+  double surface_retry = 0;       // no rise for air before then
+  double dive_off_until = -1;     // until when the dive given up (`dive_off`) is not tried again
   ge::ai::Why* why = nullptr;
   Team* team = nullptr;                     // its side (team.hpp); null in a free-for-all
   const ge::shooter::Locs* locs = nullptr;  // the map's place names (none: no names)
@@ -283,8 +290,7 @@ struct Fighter {
   float clean_keys = 1;       // the share of side key changes made clean (1: every one)
   float news_health = 0;      // its health at the last think: a fall is a blow, news
   sh::Vec3f surface_at;       // the open water's top over its head it rises to (`surfacing`)
-  int8_t side_was = 0;        // the side key's sign last sent
-  int8_t side_gap = 0;        // commands still held with no side key
+  sh::Vec3f pack_call_at;     // where the pending pack call says the pack lies
   sh::Dodge dodge;            // its side steps in a fight (shooter/dodge.hpp)
   // The ways in it watches from where it stands (watch.hpp): their spots, the node they were
   // worked out for, the one watched and until when.
@@ -316,6 +322,8 @@ struct Fighter {
   bool unlocking = false;  // on the way to the goal item's button
   bool swimming = false;   // in water no route leaves: following the swim field
   bool surfacing = false;  // short of air under open water: up for a breath (water.hpp)
+  int8_t side_was = 0;     // the side key's sign last sent (footwork.hpp `fighter_keys`)
+  int8_t side_gap = 0;     // commands still held with no side key
   bool hunts = false;      // every monster a foe (companion.hpp `hunt_init`)
 };
 

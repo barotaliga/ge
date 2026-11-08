@@ -18,6 +18,7 @@
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/bots/mind.hpp"
+#include "shooters_edge/bots/packs.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/bots/talk.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -273,6 +274,7 @@ sh::MoveCmd brain(BotTeam& t, BotSeat& s) {
       bt::mind_hear(f, who, words, s.mirror->s.sv.time);
     else
       bt::mind_obituary(f, plain(c.prints[s.heard]), s.mirror->s.sv.time);
+    bt::packs_obituary(f, s.mirror->s, plain(c.prints[s.heard]), s.mirror->s.sv.time);
   }
   // Its shots led on the round trip; hitscan not, where the server rewinds it (sv_antilag 1, 2).
   f.bot.lag_s = static_cast<float>(c.latency_avg);  // live: the server's answers, smoothed
