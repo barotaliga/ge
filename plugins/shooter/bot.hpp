@@ -89,6 +89,12 @@ struct Bot {
   bool keep = true;
   bool paced = true;
   bool trial = false;  // the code under an A/B reads it (features.hpp `trial`)
+  // THE OWN MOTION (`selfaim`): the view is worked out from where its eye will be `aim.lead_s`
+  // on, along its own velocity, as a person's hand allows for his own strafe; off, the hands
+  // chase the turn its own motion makes. Measured on e1m2 (se-team, both sides reading a course
+  // change a reaction late): accuracy 31.7 -> 35.9 %, red with it against blue without 36.3 to
+  // 30.4 %, and the dodge no longer costs the dodger its aim.
+  bool selfaim = true;
   // THE GLANCE (`glance`): a calm walker looks aside every `kGlanceMin_s` to that plus
   // `kGlanceSpread_s` (drawn), 75 or 120 degrees off where it looks, to the side whose line of
   // sight runs longest (past 400 units), held a moment and turned back at the calm view's pace:

@@ -16,8 +16,10 @@
 #include <fstream>
 #include <map>
 #include <string>
+#include <vector>
 
 #include "check.hpp"
+#include "core/parallel.hpp"
 #include "golden.hpp"
 #include "shooters_edge/bots/fight_run.hpp"
 
@@ -95,18 +97,26 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
 }
 
 TEST(aggressive_novices_fight_more_and_frag_more_than_cowardly_ones) {
-  // Four novices, two aggressive and two cowards, on four seeds: the aggressive are in a fight far
-  // more of their time and score more; the cowards spend two fifths or more of theirs backing off.
-  // Not who dies more: in this small hall a coward is run down about as often as an aggressive
+  // Four novices, two aggressive and two cowards, on twelve seeds: the aggressive are in a fight
+  // far more of their time and score more; the cowards spend two fifths or more of theirs backing
+  // off. Not who dies more: in this small hall a coward is run down about as often as an aggressive
   // novice is shot in his fights (12 seeds: 249 deaths against 253, each side ahead in half the
   // seeds; backing off to cover, or fighting back nearer, did not change it).
   int64_t deaths[2] = {}, frags[2] = {}, fight[2] = {}, alive[2] = {}, turned[2] = {};
-  for (uint32_t seed = 1; seed <= 4; seed++) {
-    fb::FightOptions o = duel_of_skills(seed, 9000);
-    o.skills.assign(4, sh::AimSkill::novice);
-    o.tempers = {sh::Temper::aggressive, sh::Temper::aggressive, sh::Temper::coward,
-                 sh::Temper::coward};
-    const fb::FightReport r = fb::run_fight(o);
+  // Twelve seeds, played side by side: a frag count over four swings by block (seeds 1-4 gave the
+  // cowards 78 to 72, all twelve 241 to 215 the other way).
+  constexpr uint32_t kSeeds = 12;
+  std::vector<fb::FightReport> reports(kSeeds);
+  ge::core::parallel_bands(kSeeds, kSeeds, [&](size_t lo, size_t hi) {
+    for (size_t i = lo; i < hi; i++) {
+      fb::FightOptions o = duel_of_skills(static_cast<uint32_t>(i + 1), 9000);
+      o.skills.assign(4, sh::AimSkill::novice);
+      o.tempers = {sh::Temper::aggressive, sh::Temper::aggressive, sh::Temper::coward,
+                   sh::Temper::coward};
+      reports[i] = fb::run_fight(o);
+    }
+  });
+  for (const fb::FightReport& r : reports) {
     CHECK_MSG(r.ok, r.error);
     if (!r.ok) return;
     for (const fb::FightPlayer& p : r.players) {

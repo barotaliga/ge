@@ -100,7 +100,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     Mover m;
     m.at = {static_cast<float>(c->seen.x), static_cast<float>(c->seen.y),
             static_cast<float>(c->seen.z)};
-    m.velocity = c->velocity;
+    m.velocity = c->course;
     if (b.target_arc && c->ent >= 1 &&
         c->ent <= sv.set.maxclients) {  // a player falls; a monster flies
       const Vec3f down{m.at.x, m.at.y, m.at.z - 4096};
@@ -109,6 +109,8 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       m.airborne = m.at.z - m.floor_z > 4;
     }
     const double lead = head + (m.airborne ? net : 0);
+    // From where its own eye will be when the hands have caught up (`selfaim`).
+    const Vec3f look_from = b.selfaim ? eye + self.velocity * b.aim.lead_s : eye;
     float yaw = 0, pitch = 0;
     Vec3f at = mover_at(m, lead);
     if (b.shot_speed > 0) {
@@ -119,14 +121,14 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       const Intercept ic = intercept(muzzle, m, lead, shot, b.intercepts);
       at = ic.at;
       at.z += b.aim_dz;
-      aim_angles(eye, at, yaw, pitch);
+      aim_angles(look_from, at, yaw, pitch);
       if (ic.lobbed) {
         double flight = 0;
         lob_pitch(muzzle, at, shot, pitch, flight);  // the arc's pitch onto the aimed point
       }
     } else {
       at.z += b.aim_dz;
-      aim_angles(eye, at, yaw, pitch);
+      aim_angles(look_from, at, yaw, pitch);
     }
     if (!b.aiming) {
       // Acquired: the hands start from where the view is, so the turn waits their reaction.

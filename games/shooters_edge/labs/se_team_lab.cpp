@@ -450,6 +450,14 @@ void run(gl::Lab& lab) {
     }
     lab.metric("team.surfaced", static_cast<double>(up), "count");
     lab.metric("team.swim-fights", static_cast<double>(swum), "count");
+    // The share of the time alive waist deep in water (people's recordings: 9 %, se-people `wet`).
+    int64_t wet = 0, alive = 0;
+    for (const cn::TeamPlayer& p : r.players) {
+      wet += p.wet;
+      for (int k = 0; k < 4; k++) alive += p.mode_commands[k];
+    }
+    lab.metric("team.wet", alive > 0 ? static_cast<double>(wet) / static_cast<double>(alive) : 0,
+               "share");
     // Pickups by kind a player-minute, set beside people's (a match's statistics count them so).
     static const char* kKinds[12] = {"health", "mega",    "armor1", "armor2", "armor3", "shells",
                                      "nails",  "rockets", "cells",  "weapon", "quad",   "pent"};
@@ -605,7 +613,7 @@ void run(gl::Lab& lab) {
     for (int side = 0; side < 2 && differ; side++) {
       double dmg = 0, react = 0, s_fired = 0, s_hit = 0;
       int64_t n = 0, reactions = 0, s_pre = 0, view_n = 0, in_view = 0, seen = 0, checks = 0,
-              off = 0, shots = 0, deaths = 0;
+              off = 0, shots = 0, deaths = 0, s_wet = 0, s_alive = 0;
       for (const cn::TeamPlayer& p : r.players) {
         if (p.team != side) continue;
         n++;
@@ -620,6 +628,8 @@ void run(gl::Lab& lab) {
         off += p.trigger_off;
         shots += p.shots;
         deaths += p.deaths;
+        s_wet += p.wet;
+        for (int m = 0; m < 4; m++) s_alive += p.mode_commands[m];
         for (const cn::HitCount& h : p.hits) {
           s_fired += static_cast<double>(h.fired);
           s_hit += static_cast<double>(h.hit);
@@ -628,6 +638,8 @@ void run(gl::Lab& lab) {
       const auto ratio = [](double a, double b) { return b > 0 ? a / b : 0; };
       const std::string k = std::string("team.side.") + (side == 0 ? "red." : "blue.");
       lab.metric(k + "deaths", static_cast<double>(deaths), "count");
+      lab.metric(k + "wet", ratio(static_cast<double>(s_wet), static_cast<double>(s_alive)),
+                 "share");
       lab.metric(k + "damage-per-min", ratio(dmg, secs / 60 * static_cast<double>(n)), "per-min");
       lab.metric(k + "accuracy", 100 * ratio(s_hit, s_fired), "%");
       lab.metric(k + "sightings", static_cast<double>(reactions), "count");

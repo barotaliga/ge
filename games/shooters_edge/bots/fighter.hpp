@@ -153,6 +153,7 @@ struct FighterStats {
   int64_t on_the_way = 0;   // short goals taken up on the way
   int64_t took[12] = {};    // its own pickups by the item's kind (profiles/items.hpp ItemKind)
   int64_t swim_fights = 0;  // commands swum under the aim, an enemy in sight
+  int64_t wet = 0;          // commands alive with the waist in water (swimming or wading)
   int64_t taken = 0;        // items seen to go (by anyone)
   int64_t modes = 0;        // mode changes
   int64_t mode_commands[4] = {};    // commands spent in each mode

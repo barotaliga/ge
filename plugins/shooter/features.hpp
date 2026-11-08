@@ -35,6 +35,10 @@
 // - `surface`: up for air under open water before the air runs out.
 // - `glance`: the calm walker's glance aside every second or two, to the side with the longest
 //   open line of sight (bot.hpp `glance`).
+// - `eye`: a strafer's change of course read a reaction late, as a person's eye reads it
+//   (senses.hpp `course_s`); off, the instant the server has it, which no side step can fool.
+// - `selfaim`: the aim worked out from where its own eye will be when the hands catch up (a
+//   person's hand allows for his own strafe); off, the hands chase the turn its own motion makes.
 // - `trial`: the code under an A/B right now reads it (nothing, when no trial is under way). Off in
 //   every preset (`all` too), so `--features-red=+trial` plays the trial against the rest from
 //   one build: the per-bot replacement of a temporary environment switch.
@@ -50,7 +54,7 @@
 // ge:keywords features feature-switch bot-features apply_features features_text presets
 // ge:keywords calm pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch
 // ge:keywords spam packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot
-// ge:keywords ab-test trial
+// ge:keywords ab-test trial eye selfaim course-change own-motion
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -86,9 +90,11 @@ enum class Feature : uint8_t {
   airsteer,
   surface,
   glance,
+  eye,
+  selfaim,
   trial,
 };
-constexpr size_t kFeatures = 23;
+constexpr size_t kFeatures = 25;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

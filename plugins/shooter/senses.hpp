@@ -86,12 +86,16 @@ struct SenseSettings {
   // Every player's sound that reaches the client is heard, exactly where it is. A bot with ears of
   // its own (hearing.hpp) turns this off and hands in what it takes in with `sense_heard`.
   bool hear_players = true;
+  // A change of course is read this late, s (`Contact::course`): a person sees a strafer turn
+  // round a reaction after he does. 0: at once.
+  float course_s = 0;
 };
 
 struct Contact {
-  int ent = -1;              // a player's entity; -1 a free contact
-  ai::Memory seen;           // where and when it was last seen
-  Vec3f velocity;            // a player's as sent; else off the last two sightings a frame apart
+  int ent = -1;     // a player's entity; -1 a free contact
+  ai::Memory seen;  // where and when it was last seen
+  Vec3f velocity;   // a player's as sent; else off the last two sightings a frame apart
+  Vec3f course;     // the velocity as the eye takes it in: `velocity` caught up over `course_s`
   bool visible = false;      // seen this frame
   bool was_visible = false;  // seen the frame before
   ai::Memory heard;          // where and when it was last heard
