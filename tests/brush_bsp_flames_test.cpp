@@ -6,6 +6,7 @@
 //
 // ge:summary Tests for the map's fires: which lights burn, where, and their level
 // ge:keywords test brush bsp torch flame fire bsp_fires flicker-sync bonfire bonfire_sparks
+// ge:keywords fire_time fire-pace kfirepace
 // ge:skill brush testing
 #include <cmath>
 #include <vector>
@@ -51,9 +52,36 @@ TEST(a_fire_burns_as_its_light_flickers) {
   for (int i = 0; i < 20; ++i) {
     const double t = i * 0.07;
     ba::bsp_fires(s, t, 2.0, fires);
-    const double want = ba::flicker_at(s.lights[0], t) / 0.72;
+    const double want = ba::flicker_at(s.lights[0], t * ba::kFirePace) / 0.72;
     CHECK(fires[0].level > 0 && std::abs(fires[0].level - want) < 1e-5);
+    CHECK(ba::fire_time(s.lights[0], t, ba::kFirePace) == t * ba::kFirePace);
   }
+}
+
+TEST(the_fires_pace_slows_the_gas_and_the_light_and_keeps_the_lean) {
+  const ba::Scene s = three_lights();
+  std::vector<ge::render::Flame> as_made, slow;
+  ba::FireLook made;
+  made.pace = 1;
+  made.bonfires = true;
+  made.air[0] = 2;
+  ba::FireLook paced = made;
+  paced.pace = 0.4;
+  ba::bsp_fires(s, 3.0, 2.0, as_made, made);
+  ba::bsp_fires(s, 3.0, 2.0, slow, paced);
+  CHECK(as_made.size() == slow.size());
+  for (size_t i = 0; i < slow.size(); ++i) {
+    CHECK(std::abs(slow[i].rise_mps - 0.4f * as_made[i].rise_mps) < 1e-6f);
+    // The air past it slowed as much: the tip leans as far downwind.
+    CHECK(std::abs(slow[i].wind[0] / slow[i].rise_mps - as_made[i].wind[0] / as_made[i].rise_mps) <
+          1e-5f);
+  }
+  // The light keeps step: the paced fire at 3 s is the one as made at 1.2 s.
+  ba::bsp_fires(s, 1.2, 2.0, as_made, made);
+  CHECK(std::abs(slow[0].level - as_made[0].level) < 1e-6f);
+  // A light that is no fire keeps the map's clock.
+  ba::PointLight lamp;
+  CHECK(ba::fire_time(lamp, 3.0, 0.4) == 3.0);
 }
 
 TEST(a_large_flame_burns_as_a_bonfire_and_a_wall_torch_stays_a_torch) {

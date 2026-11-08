@@ -71,6 +71,15 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0,
            .max = 4},
           &picture.fire_glow);
+  cv.bind({.name = "r_fire_pace",
+           .fallback = "0.4",
+           .flags = gc::kArchive,
+           .help = "how fast the torches', braziers' and bonfires' flames churn and flicker in the "
+                   "modern look, 1 the flame presets' own pace (two or three times a real fire's "
+                   "at the maps' scale)",
+           .min = 0,
+           .max = 2},
+          &picture.fire_pace);
   cv.bind({.name = "r_farland",
            .fallback = "auto",
            .help = "the land round the map seen over its walls from high up: auto (one to suit "
@@ -227,6 +236,7 @@ ba::Options world_options(Look look, ba::Options base, const Picture& picture, c
     base.lava_glow = picture.lava_glow;
     base.slime_glow = picture.slime_glow;
     base.fire_glow = picture.fire_glow;
+    base.fire_pace = picture.fire_pace;
     base.glow = picture.glow;
     base.near_soft = kNearSoft;
     base.pack_sky = stops.skies == Stop::off;  // ce_skies off: the pack's own scrolling sky

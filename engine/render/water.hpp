@@ -129,6 +129,10 @@ struct WaterDraw {
   // (`chop_waves`); 0: none (a wild lake no one swims in), about 0.05 a pool people jump into all
   // day.
   double chop = 0;
+  // The chop's shortest waves, m (`chop_waves`' `shortest`): the shorter, the faster the fastest of
+  // them run (a 5 cm ripple about 6 times a second, a 20 cm one under 3). A pool left alone keeps
+  // only the longer, slower swell of what was stirred in it.
+  double chop_shortest = 0.05;
 };
 
 // A game's own pictures of the world for one body (`set_water_views`): THE MIRROR, the world
