@@ -26,6 +26,7 @@
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/bots/mind.hpp"
+#include "shooters_edge/bots/packs.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -233,6 +234,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
               bt::mind_hear(sp->fighter, who, words, w.sv.time);
             else
               bt::mind_obituary(sp->fighter, c->prints[sp->heard], w.sv.time);
+            bt::packs_obituary(sp->fighter, w, c->prints[sp->heard], w.sv.time);
           }
           // Its shots led on the network's round trip, as on any server across one (bot.hpp).
           if (sp->mirror) {

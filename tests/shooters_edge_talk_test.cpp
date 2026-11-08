@@ -107,3 +107,16 @@ TEST(a_plan_reads_as_the_strategy_its_words_mean) {
     CHECK(bt::parse_say(bt::say_text(s)).strategy == bt::Strategy::free);
   }
 }
+
+TEST(a_pack_call_reads_as_a_pack_and_its_launcher) {
+  const bt::Said s = bt::parse_say("rl pack [mh]");
+  CHECK(s.kind == bt::SayKind::pack && s.item == "rl" && s.loc == "mh");
+  CHECK(bt::parse_say("pack here [ra]").kind == bt::SayKind::pack);
+  CHECK(bt::parse_say("took rl pack").kind == bt::SayKind::took);  // taken, not called
+  bt::Said w;
+  w.kind = bt::SayKind::pack;
+  w.item = "rl";
+  w.loc = "ya";
+  const bt::Said r = bt::parse_say(bt::say_text(w));
+  CHECK(r.kind == bt::SayKind::pack && r.item == "rl" && r.loc == "ya");
+}

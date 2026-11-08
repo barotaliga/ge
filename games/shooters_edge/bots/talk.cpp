@@ -159,6 +159,8 @@ const char* say_kind_name(SayKind k) {
       return "attack";
     case SayKind::plan:
       return "plan";
+    case SayKind::pack:
+      return "pack";
     case SayKind::ack:
       return "ack";
     case SayKind::timer:
@@ -227,6 +229,8 @@ std::string say_text(const Said& s) {
       }
       return v == 0 ? "free play" : v == 1 ? "go free" : "play free now";
     }
+    case SayKind::pack:
+      return (s.item.empty() ? std::string("pack") : s.item + " pack") + at;
     case SayKind::ack: {
       static const char* const kAcks[4] = {"ok", "k", "np", "ok!"};
       return kAcks[s.variant % 4];
@@ -307,6 +311,11 @@ Said parse_say(std::string_view text) {
         out.item2 = std::string(as_item(x));
         break;
       }
+    return out;
+  }
+  if (has({"pack", "bp", "backpack"}) && !has({"took", "got"})) {
+    out.kind = SayKind::pack;
+    out.item = has({"rl"}) ? "rl" : has({"lg"}) ? "lg" : "";
     return out;
   }
   if (w.size() <= 2 && has({"ok", "k", "np", "kk", "yes", "yep", "roger"}) && out.item.empty()) {

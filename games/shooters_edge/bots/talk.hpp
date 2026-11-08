@@ -14,6 +14,7 @@
 // - TIMER `quad in 15`, `ra in 10`, `quad delayed 15 secs` (seconds until it is back)
 // - ATTACK `attack ya [gl]` (or `push`): "we take X back together: gather on me here"
 // - PLAN `lets take quad`, `camp ra and rl`, `free play` (the team's strategy, below); ACK `ok`
+// - PACK `rl pack [mh]` (a backpack with a launcher in it lies there: come and get it)
 //
 // Pure text: deterministic, no state.
 //
@@ -47,6 +48,7 @@ enum class SayKind : uint8_t {
   timer,
   attack,
   plan,  // the team's strategy (`Strategy`)
+  pack,  // a backpack worth having lies there ("rl pack [mh]": an enemy's launcher, or one dropped)
   ack,   // "ok", "k", "np": a line taken in
 };
 const char* say_kind_name(SayKind k);
