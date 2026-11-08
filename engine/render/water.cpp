@@ -126,8 +126,8 @@ void upload_waves(gpu::Device& device, Water::Slot& slot, const water::Body& bod
   };
   for (int c = 0; c < body.waves.count; ++c) put(body.waves.c[c]);
   for (const water::Component& c : detail.waves) put(c);
-  const std::vector<water::Component> chop =
-      chop_waves(slot.draw.chop, kWaterChopWaves, slot.draw.seed * 131u + 5u);
+  const std::vector<water::Component> chop = chop_waves(
+      slot.draw.chop, kWaterChopWaves, slot.draw.seed * 131u + 5u, 1.2, slot.draw.chop_shortest);
   for (const water::Component& c : chop) put(c);
   slot.staged.chop[0] = static_cast<float>(chop.size());
   slot.staged.chop[1] = static_cast<float>(slot.draw.chop);

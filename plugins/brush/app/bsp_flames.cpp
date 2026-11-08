@@ -123,7 +123,11 @@ void bsp_fires(const Scene& scene, double t_s, double brightness, std::vector<re
     base_of(l, base);
     // The map's light flickers about 0.72 of its value (flicker_at's candle): the gas at full
     // height there.
-    const auto level = static_cast<float>(std::clamp(flicker_at(l, t_s) / 0.72, 0.0, 1.5));
+    const auto level = static_cast<float>(
+        std::clamp(flicker_at(l, fire_time(l, t_s, look.pace)) / 0.72, 0.0, 1.5));
+    // The gas carried up at the pace's share of the preset's rise; the air past it too, so it
+    // leans as far as before.
+    const auto pace = static_cast<float>(std::max(look.pace, 0.0));
     const auto relative = static_cast<float>(kFireGlow * brightness);
     if (!bonfire) {
       render::Flame f =
@@ -136,6 +140,7 @@ void bsp_fires(const Scene& scene, double t_s, double brightness, std::vector<re
       f.height_m = static_cast<float>(h);
       f.level = level;
       f.relative = relative;
+      f.rise_mps *= pace;
       out.push_back(f);
       continue;
     }
@@ -156,7 +161,8 @@ void bsp_fires(const Scene& scene, double t_s, double brightness, std::vector<re
       const double h = kTongue[k] * kBonfireHeight * kUnitM;
       f.radius_m = static_cast<float>(f.radius_m * (k == 0 ? 1.3 : 0.75 * kTongue[k]));
       f.height_m = static_cast<float>(h);
-      for (int a = 0; a < 3; ++a) f.wind[a] = static_cast<float>(air[a]);
+      for (int a = 0; a < 3; ++a) f.wind[a] = static_cast<float>(air[a]) * pace;
+      f.rise_mps *= pace;
       f.level = level;
       f.relative = relative;
       out.push_back(f);

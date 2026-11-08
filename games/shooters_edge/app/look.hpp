@@ -71,7 +71,8 @@ struct Picture {
   double glow = 0.6;      // r_glow: the glowing texels' light (windows, lamps), 1 the classic's
   double slime_glow = 1;  // r_slime_glow: the slime's faint green light, 0 none
   double fire_glow = 1;   // r_fire_glow: the flames' own brightness, 1 as made
-  double gamma = 1;       // gamma: the picture's brightness, below 1 brighter
+  double fire_pace = ge::brush::app::kFirePace;  // r_fire_pace: the flames. pace, 1 the presets.
+  double gamma = 1;  // gamma: the picture's brightness, below 1 brighter
   // r_beam_style: the arc gun's bolt in the modern look under ce_beams, by number
   // (app/weapon_fx.hpp's kBoltStyles: 1 forked, 2 arc, 3 bolt, 4 braid)
   double beam_style = 3;

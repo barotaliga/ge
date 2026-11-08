@@ -298,6 +298,7 @@ void add_bsp_liquids(gpu::Device& device, render::Water& water, render::Liquids&
       draw.room = rows.room;
       draw.stir = rows.stir;
       draw.chop = rows.chop;
+      draw.chop_shortest = rows.chop_shortest;
       // The wind's gusts break the water into patches of ripples and calm as it reaches it.
       draw.gusts = lw.sites[i].exposure > 0 ? 1 : 0;
       render::add_water_body(device, water, b, draw);

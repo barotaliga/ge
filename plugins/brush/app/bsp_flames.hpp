@@ -16,6 +16,7 @@
 // ge:summary A map's torches and large flames as render::Flame gas synced to their lights; bonfires
 // ge:keywords brush bsp torch flame fire wall-torch light-entity flicker-sync bsp_fires bonfire
 // ge:keywords brazier sparks bonfire_sparks place_fires fire_air draught wind ce_bonfires lantern
+// ge:keywords fire-pace r_fire_pace slower-flames
 // ge:skill brush render
 // ge:test tests/brush_bsp_flames_test.cpp
 #pragma once
@@ -48,7 +49,8 @@ inline constexpr double kBonfireSparks = 12;
 struct FireLook {
   bool bonfires = false;      // a large flame burns as a bonfire, with sparks
   double air[3] = {0, 0, 0};  // m/s: the wind over the open map now (bsp_weather's wind_air)
-  double draught = 0.35;      // m/s: the slow draught every fire wavers in, open sky or not
+  double draught = 0.15;      // m/s: the slow draught every fire wavers in, open sky or not
+  double pace = kFirePace;    // the fires' pace (draw_data.hpp): 1 the presets', lower slower
 };
 
 // Whether a light's fire burns as a bonfire under `look`.
