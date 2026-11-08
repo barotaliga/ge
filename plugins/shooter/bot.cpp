@@ -37,8 +37,18 @@ constexpr float kSwitchNearer = 2;
 constexpr double kCalmBand = 25;    // degrees the view may lie off the way it walks, still
 constexpr double kCalmTurn = 180;   // degrees a second it turns past the band
 constexpr double kCalmAbout = 360;  // and for an about-face
-constexpr double kCalmDrift = 3;    // degrees a second of the hand's drift, at most
-constexpr float kCalmAhead = 320;   // units on along the route the calm view looks at
+// Nothing in sight any more, the view goes back to the way (or over to a spot watched) this many
+// degrees a second: a hand's pace, not the aim's flick. Measured on e1m2 (se-people on the bots'
+// recordings): the view turns 103 degrees a second on average, 7 % of it past 360 (people 107 and
+// 6 %; the aim's flick back gave 162 and 14 %); at 180 the bots fought less (frags -0.9 a minute).
+constexpr double kBackTurn = 360;
+
+bool walking_mode(PilotMode pm) {
+  return pm == PilotMode::walk || pm == PilotMode::idle || pm == PilotMode::wait ||
+         pm == PilotMode::ride || pm == PilotMode::arrived;
+}
+constexpr double kCalmDrift = 3;   // degrees a second of the hand's drift, at most
+constexpr float kCalmAhead = 320;  // units on along the route the calm view looks at
 
 MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   Bot& b = *static_cast<Bot*>(ctx);
@@ -174,9 +184,19 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       want[0] = unwrap(yaw, b.yaw);
       want[1] = pitch;
     }
+    // A calm view goes back onto the way, or over to a spot watched, at a hand's pace
+    // (`kBackTurn`), not the aim's flick: nothing is in sight to snap onto.
+    if (b.calm) {
+      const double dt = msec / 1000.0;
+      const double dy = want[0] - b.yaw, dp = want[1] - b.pitch;
+      want[0] = b.yaw + std::fmax(-kBackTurn * dt, std::fmin(kBackTurn * dt, dy));
+      want[1] = b.pitch + std::fmax(-kBackTurn * 0.5 * dt, std::fmin(kBackTurn * 0.5 * dt, dp));
+    }
     const float off = wrap(b.yaw - pilot_yaw);
-    const bool on_way =
-        off < kRelease && off > -kRelease && b.pitch < kRelease && b.pitch > -kRelease;
+    // A calm walker hands back once within the calm band, which holds the view still from there.
+    const bool calm_walk = b.calm && walking_mode(b.pilot.pilot.mode);
+    const float rel = calm_walk ? static_cast<float>(kCalmBand) : kRelease;
+    const bool on_way = off < rel && off > -rel && b.pitch < rel && b.pitch > -rel;
     if (b.aiming && (on_way || b.look)) {
       // Let go: back onto the pilot's way, or straight on to the spot watched (the hands kept).
       b.aiming = false;
@@ -214,10 +234,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
     cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
   } else {
-    const PilotMode pm = b.pilot.pilot.mode;
-    const bool walking = pm == PilotMode::walk || pm == PilotMode::idle || pm == PilotMode::wait ||
-                         pm == PilotMode::ride || pm == PilotMode::arrived;
-    if (b.calm && walking) {
+    if (b.calm && walking_mode(b.pilot.pilot.mode)) {
       // The calm view (bot.hpp): still in the band, turned at a hand's pace past it, drifting.
       const double dt = msec / 1000.0;
       b.calm_t += dt;

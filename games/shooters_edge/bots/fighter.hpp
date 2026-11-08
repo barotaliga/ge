@@ -149,9 +149,11 @@ struct FighterStats {
   int64_t surface_failed = 0;  // and rises given up short of the surface
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
-  int64_t swim_fights = 0;          // commands swum under the aim, an enemy in sight
-  int64_t taken = 0;                // items seen to go (by anyone)
-  int64_t modes = 0;                // mode changes
+  int64_t on_the_way = 0;   // short goals taken up on the way
+  int64_t took[12] = {};    // its own pickups by the item's kind (profiles/items.hpp ItemKind)
+  int64_t swim_fights = 0;  // commands swum under the aim, an enemy in sight
+  int64_t taken = 0;        // items seen to go (by anyone)
+  int64_t modes = 0;        // mode changes
   int64_t mode_commands[4] = {};    // commands spent in each mode
   int64_t weapon_commands[9] = {};  // commands holding each weapon, by its number (1..8)
   int64_t packs = 0;                // backpacks gone for
@@ -279,7 +281,11 @@ struct Fighter {
   int32_t dive_off = -1;      // the item whose dive it last gave up (-1: none)
   int32_t swim_exit = -1;     // the exit node it is climbing out onto (shooter/swim.hpp), -1 none
   double swim_exit_until = 0;
-  int32_t landing = -1;  // the exit node it climbed out to, walked onto first (-1: none)
+  int32_t short_item = -1;  // a short goal on the way (fighter.cpp on_the_way), -1 none
+  double short_until = 0;
+  bool swim_view_on = false;  // the swimmer's view turned at a hand's pace (fighter.cpp)
+  float view_sent[2] = {};    // the view (pitch, yaw) its last command carried
+  int32_t landing = -1;       // the exit node it climbed out to, walked onto first (-1: none)
   double landing_until = 0;
   // THE COMMITMENT (fighter.cpp `think`): its item goal is chosen again only on news (a new
   // sighting, an item seen or heard taken, a spawn heard, a team line read, a blow taken, a
