@@ -93,7 +93,8 @@ struct TeamPlayer {
   int deaths = 0;
   int64_t shots = 0, pickups = 0, switches = 0, packs = 0, held_fire = 0;
   int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and pre-aimed (shooter/bot.hpp)
-  double react_s = 0;                    // the reactions' times, summed
+  int64_t target_kept = 0;  // commands the one in hand was kept over a nearer one (bot.hpp)
+  double react_s = 0;       // the reactions' times, summed
   std::array<HitCount, kHitWeapons> hits{};  // shots and hits by weapon (classic_hits.hpp)
   double given = 0;                          // damage given to enemies (classic_hits.hpp)
   double lead_sum = 0, lead_abs = 0;         // hitscan shots' lead miss (classic_hits.hpp)

@@ -29,6 +29,10 @@ float wrap(float deg) { return unwrap(deg, 0); }
 constexpr float kPreAim = 5;
 // The one in hand out of sight this long is a new sighting when he shows again, s.
 constexpr double kResight_s = 0.3;
+// The one in hand, in sight, is kept over another in sight unless that one is this much nearer
+// (his distance over the other's): a player stays on whom he is shooting, and a wide view brings
+// others into it all the time.
+constexpr float kSwitchNearer = 2;
 
 constexpr double kCalmBand = 25;    // degrees the view may lie off the way it walks, still
 constexpr double kCalmTurn = 180;   // degrees a second it turns past the band
@@ -52,6 +56,20 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
 
   const Vec3f eye{self.origin.x, self.origin.y, self.origin.z + b.senses.set.view_height};
   const Contact* c = freshest(b.senses, eye);
+  if (b.aiming && c && c->ent != b.target && c->visible) {
+    for (const Contact& k : b.senses.contacts) {
+      if (k.ent != b.target || !k.visible) continue;
+      const auto from_eye = [&](const ai::Memory& m) {
+        return Vec3f{static_cast<float>(m.x) - eye.x, static_cast<float>(m.y) - eye.y,
+                     static_cast<float>(m.z) - eye.z};
+      };
+      const Vec3f to_k = from_eye(k.seen), to_c = from_eye(c->seen);
+      if (dot(to_k, to_k) <= kSwitchNearer * kSwitchNearer * dot(to_c, to_c)) {
+        c = &k;
+        b.stats.kept++;
+      }
+    }
+  }
   const bool fresh =
       c && ai::known(c->seen) && (c->visible || ai::age(c->seen, sv.time) <= b.aim.hold_s);
   double want[2];
