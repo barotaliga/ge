@@ -11,7 +11,7 @@
 namespace shooters_edge::bots {
 
 bool team_say(Fighter& f, double t, const std::string& text) {
-  if (!f.team || t - f.said_at < kSayGap_s) return false;
+  if (!f.team || !f.features[ge::shooter::Feature::talk] || t - f.said_at < kSayGap_s) return false;
   for (const HeardLine& h : f.mind.heard)
     if (h.text == text && t - h.t < kRepeat_s) return false;  // a mate just said it
   Team& tm = *f.team;

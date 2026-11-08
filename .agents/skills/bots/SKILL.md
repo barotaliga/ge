@@ -132,6 +132,13 @@ side, and charts the steer meant against pressed.
    hands'; a decision flipping is the bot's.
 5. Run with `--compare=before`, `ge graph` both timelines on one chart, put both in the PR.
 
+**Every behaviour a switch.** A shooter bot's behaviours are named features
+(`plugins/shooter/features.hpp`: `calm`, `dodge`, `shortgoals`, `rj` ...), on by default, off with
+`se-team --features=-dodge` (a side's own: `--features-red=plain`, an A/B by team in one match), the
+bot team's `--features=` and the console's `features -dodge`. A new behaviour lands with its switch
+and gates its code on `f.features[...]`, so its A/B is one flag on one build, not an env variable.
+The traits say how WELL a bot does a thing; a feature says WHETHER it does it.
+
 ## What lives where
 
 | Piece | Home | Status |
@@ -146,6 +153,7 @@ side, and charts the steer meant against pressed.
 | A first-person map's navigation, every link proven by running the player move (the first plugin user of `ai/path`'s graph search on its own) | `plugins/shooter/nav.hpp` | built (M18r1) |
 | A first-person pilot: a nav route played one usercmd at a time through `ai/hands` (pursuit, jumps at their proven speed from a run-up, the strafe jump, waiting for doors and riding a plat), a server slot's command source; its runs on the nav course and the arena | `plugins/shooter/pilot.hpp`, `games/shooters_edge/bots/pilot_run.hpp`, `se-pilot` | built (M18r2) |
 | A first-person bot's senses and aim: what its client is sent, sight in a cone by the hull trace, hearing, memory, aim on `ai/hands` by skill (perfect, expert, average, novice), the route kept while aiming | `plugins/shooter/senses.hpp`, `aim.hpp`, `bot.hpp`, `games/shooters_edge/bots/duel_run.hpp`, `se-senses` | built (M18r3) |
+| A shooter bot's behaviours as switches, the plain bot and the presets | `plugins/shooter/features.hpp` | built (M18r14) |
 | A deathmatch fighter on the baseline mod: its own stats, the map's items timed off what is sent, the mode (`ai::enter`), the item goal and the weapon (`ai::pick_best`), the trigger; four of them played on the arena | `games/shooters_edge/bots/fighter.hpp`, `fight_run.hpp`, `se-bots` | built (M18r4; the rocket jump M18r4b) |
 
 A piece lands with its first user, never before (G4). A bot a game writes before its piece exists

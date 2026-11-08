@@ -82,6 +82,11 @@ struct Bot {
   // jump keeps the pilot's own view: their air control is the view's.
   bool calm = false;
   double calm_t = 0;  // the drift's clock, s
+  // Switches (features.hpp): the one in hand kept over a nearer one unless that one is half as far
+  // (`keep`; off, the freshest is taken every command), and a calm view turned back at a hand's
+  // pace (`paced`; off, the aim's flick).
+  bool keep = true;
+  bool paced = true;
   int intercepts = 1;
   bool target_arc = false;
   bool lob = false;

@@ -318,6 +318,7 @@ bool mate_going(const Fighter& f, int32_t i, double t) {
 }
 
 void mind_danger(Fighter& f, sh::Vec3f at, double t) {
+  if (!f.features[sh::Feature::danger]) return;
   if (f.danger.size() >= kDangerKept) f.danger.erase(f.danger.begin());
   f.danger.emplace_back(at, t);
 }
@@ -396,7 +397,7 @@ bool mind_take_plan(Fighter& f, const Said& said, double t) {
 }
 
 void mind_hear(Fighter& f, const std::string& from, const std::string& text, double t) {
-  if (from == f.name) return;  // its own words, sent back to it
+  if (from == f.name || !f.features[sh::Feature::talk]) return;  // its own words, or deaf
   Mind& mn = f.mind;
   // The repeat count: the same words within the window.
   int count = 1;

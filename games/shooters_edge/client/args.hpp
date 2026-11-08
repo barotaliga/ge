@@ -37,6 +37,7 @@ struct Args {
   // shows the team's world (net/classic_team_view.hpp), the console driving the bots.
   int bots = 0;
   std::string server = "127.0.0.1:27500", team = "bots", skills, bots_out, bots_view;
+  std::string bot_features;  // `--bot-features=-dodge,+rj`: every bot's (shooter/features.hpp)
   int colour = 4;
   bool bots_paths = true;  // `--bots-paths=0`: the bots' overview draws no paths
   int gif_width = 480;     // -demovideo to a .gif: its width in pixels

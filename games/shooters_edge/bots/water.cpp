@@ -35,8 +35,8 @@ bool water_way(Fighter& f, const server::RulesCommon& s, int me, double t, int m
     f.under_since = -1;
   }
   // Up for air: under open water, rise straight to its top, a breath there, then on.
-  if (!f.surfacing && body.waterlevel >= 3 && f.under_since >= 0 && t - f.under_since > kAir_s &&
-      t >= f.surface_retry) {
+  if (!f.surfacing && f.features[sh::Feature::surface] && body.waterlevel >= 3 &&
+      f.under_since >= 0 && t - f.under_since > kAir_s && t >= f.surface_retry) {
     const sh::Vec3f head{body.origin.x, body.origin.y, body.origin.z + 22};
     for (int step = 1; step * 8 <= static_cast<int>(kSurfaceLook); step++) {
       const auto up = static_cast<float>(step * 8);

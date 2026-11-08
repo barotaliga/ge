@@ -49,6 +49,7 @@
 #include "core/prng.hpp"
 #include "shooter/bot.hpp"
 #include "shooter/dodge.hpp"
+#include "shooter/features.hpp"
 #include "shooter/hearing.hpp"
 #include "shooter/swim.hpp"
 #include "shooter/temper.hpp"
@@ -286,6 +287,8 @@ struct Fighter {
   bool swim_view_on = false;  // the swimmer's view turned at a hand's pace (fighter.cpp)
   float view_sent[2] = {};    // the view (pitch, yaw) its last command carried
   int32_t landing = -1;       // the exit node it climbed out to, walked onto first (-1: none)
+  // Which behaviours it has (shooter/features.hpp): set before `fighter_init`, which reads it.
+  sh::Features features = sh::features_all();
   double landing_until = 0;
   // THE COMMITMENT (fighter.cpp `think`): its item goal is chosen again only on news (a new
   // sighting, an item seen or heard taken, a spawn heard, a team line read, a blow taken, a
@@ -339,9 +342,9 @@ struct Fighter {
 float fighter_strength(const Stats& st);
 
 // A fighter on graph `g` with the personality `traits` (shooter/traits.hpp; `skill` perfect
-// passes its aim's hands untouched, the measuring stick), the map's items off `entities` (the
-// map's text) matched to what the server `s` sends client `slot`'s player now. Call after the
-// slot connects.
+// passes its aim's hands untouched, the measuring stick) and the behaviours `f.features`
+// (shooter/features.hpp), the map's items off `entities` (the map's text) matched to what the
+// server `s` sends client `slot`'s player now. Call after the slot connects.
 void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& s, int slot,
                   const char* entities, sh::AimSkill skill, const sh::Traits& traits, double hz,
                   uint32_t seed);

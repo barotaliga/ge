@@ -23,8 +23,9 @@
 //
 // THE CONSOLE (`bot_team_command`): a line goes to every bot; `bot<N> <line>` (`bot1 skill
 // expert`) to one. A bot takes its own settings (`skill <name>`, `temper <name>`, `traits
-// <name=v/...>`, `<trait> <1..10>`; a setting sets the bot up again on its next tick, its map
-// knowledge started over), `status`, and sends anything else to the server as a console line
+// <name=v/...>`, `<trait> <1..10>`, `features <-name,+name,...>` (shooter/features.hpp); a setting
+// sets the bot up again on its next tick, its map knowledge started over), `status`, and sends
+// anything else to the server as a console line
 // (`ready`, `break`, `say hi`, `team red`). The team's STRATEGY (bots/talk.hpp `Strategy`):
 // `plan <words>` (`plan lets take quad`, `plan camp ra and rl`, `plan free play`) is said by the
 // team's leader as typed and taken up by every bot that reads it (a person's plan line too);
@@ -58,6 +59,7 @@
 
 #include "net/transport.hpp"
 #include "shooter/aim.hpp"
+#include "shooter/features.hpp"
 #include "shooter/traits.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/team.hpp"
@@ -82,6 +84,9 @@ struct BotTeamConfig {
   // "perfect"; traits over the skill's preset as shooter/traits.hpp reads them ("aim_rl=9").
   std::vector<std::string> skills = {"expert", "expert", "average", "average"};
   std::vector<std::string> traits;
+  // Each bot's features over its skill's preset (cycled; shooter/features.hpp: "-dodge,+rj",
+  // "plain"; empty: the preset).
+  std::vector<std::string> features;
   std::string basedir;  // the folder holding the game folders (the player's own packs)
   bool ready = true;    // say `ready` once set up on the map
   bool paths = true;    // the team's pictures draw each bot's path (the console's `paths 0|1`)
@@ -104,6 +109,7 @@ struct BotSeat {
   std::string name;
   sh::AimSkill skill = sh::AimSkill::average;
   sh::Traits traits;
+  sh::Features features;  // its behaviours (shooter/features.hpp)
   gn::Transport transport;
   ClassicClientEnd c;
   ClientRecorder recording;

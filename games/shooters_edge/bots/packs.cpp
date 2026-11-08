@@ -64,7 +64,9 @@ void packs_hear(Fighter& f, double t) {
 }
 
 void packs_obituary(Fighter& f, const server::RulesCommon& s, const std::string& line, double t) {
-  if (!f.team || f.name.empty() || line.find(f.name, 1) == std::string::npos) return;
+  if (!f.team || !f.features[sh::Feature::packs] || f.name.empty() ||
+      line.find(f.name, 1) == std::string::npos)
+    return;
   // The victim: the player whose name the line starts with, not this one, not a mate.
   for (size_t i = 0; i < std::size(s.world.clients); i++) {
     const std::string& name = s.world.clients[i].name;

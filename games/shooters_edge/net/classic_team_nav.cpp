@@ -60,7 +60,7 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const server::RulesCommon& 
     tn.goals = bt::map_goals(tn.plan, f.items, map);
     tn.plan_made = true;
   }
-  f.plan = &tn.plan;
+  f.plan = f.features[sh::Feature::plan] ? &tn.plan : nullptr;  // the plan a switch (features)
   f.trap = &tn.nav.trap;
   if (!tn.dives_made && sw.leading > 0 && nav.main_n > 0) {
     tn.dives_made = true;
