@@ -9,7 +9,8 @@
 #   3. libm-check    no <cmath> transcendental in simulation code
 #   4. release       the changeset fragments valid
 #   5. build         the preset's build (incremental); a change no build reads (prose, the gates'
-#                    Node and Python tools) stops after step 4
+#                    Node and Python tools) stops after step 4; under PRECHECK_MIN_FREE_GB
+#                    (default 20) free it warns first, and a full disk is named as the cause
 #   6. lint          clang-tidy over what the change since BASE (default origin/main) reaches,
 #                    a changed header through one includer (LINT_SAMPLE=0: every includer)
 #      shaders       every embedded WGSL shader through Tint (incremental: only what changed)
@@ -84,7 +85,20 @@ if ! grep -Evq "$gate_only" <<<"$touched"; then
   exit 0
 fi
 
+# The debug build's ASan test executables alone reach about 20 GB, so a small cloud disk fills
+# mid-build. Say so before the build starts, with the safe cleanup (link outputs only: the
+# objects stay, and only the executables a later build needs are linked again).
+free_gb=$(df -Pk "$build" 2>/dev/null | awk 'NR==2 {print int($4 / 1048576)}')
+cleanup="find $build/tests -maxdepth 1 -type f -name '*_test' -delete"
+if [[ -n "$free_gb" ]] && ((free_gb < ${PRECHECK_MIN_FREE_GB:-20})); then
+  echo "precheck: only $free_gb GB free under $build; the build can fill the disk. Free space" \
+    "first: $cleanup (the test executables, linked again as needed)." >&2
+fi
 if ! gate build make -s build PRESET="$preset"; then
+  if grep -qE 'No space left on device|Bus error' "$log" 2>/dev/null; then
+    echo "precheck: the disk filled during the build. Free space ($cleanup, or remove other" \
+      "build trees), then make precheck again." >&2
+  fi
   echo "precheck: the build failed, so the lint, the tests and the digests could not run;" \
     "red: ${failed[*]}. Fix them, then make precheck again." >&2
   exit 1
