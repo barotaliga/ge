@@ -96,6 +96,18 @@ constexpr float kBlastClear = 140;  // a rocket or grenade is held with a mate t
 // What a fighter sees: a player's screen, 120 degrees across and as high as a 16:9 monitor shows
 // at that width (2 atan(tan 60 * 9/16)), people's own field of view.
 constexpr float kViewWide = 120;
+// A short goal on the way: within this many units, and its floor within this of the player's.
+constexpr float kOnTheWay = 256;
+constexpr float kOnTheWayRise = 40;
+constexpr float kFeet = 24;         // a player's origin over the floor
+constexpr double kShortHold_s = 3;  // a short goal is given up after this
+constexpr float kBeside = 96;       // nearer than this, any way it lies
+constexpr float kAhead = 0.34f;     // else the cosine off its motion, at least
+// Swimming, the view turns this many degrees a second past a band this wide off the swim's way
+// (an about-face faster), as the calm view walks (shooter/bot.cpp).
+constexpr double kSwimTurn = 180;
+constexpr double kSwimAbout = 360;
+constexpr float kSwimBand = 20;
 constexpr float kViewHigh = 88.5f;
 
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
@@ -183,6 +195,57 @@ float view_off(const sh::Bot& b, const sh::MoveCmd& cmd) {
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
   return std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+}
+
+float wrap180(float deg) {
+  return deg - 360.f * static_cast<float>(std::floor((deg + 180.f) / 360.f));
+}
+
+// Swimming (or wading on the swim's way), the view a person's: the way the swim pressed (its view
+// and the keys under it, as one wish in the world) kept, the view turned toward its way at a hand's
+// pace and still within a band of it, and the same wish pressed with forward, side and up under the
+// view it has. Not with an enemy in sight (the aim's view), nor on the last leg out of an exit cell
+// (a water jump needs the view level at the edge).
+void swim_view(Fighter& f, const server::RulesCommon& s, int me, int msec, bool swim,
+               sh::MoveCmd& cmd) {
+  const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
+  bool seen = false;
+  if (f.bot.aiming)
+    for (const sh::Contact& k : f.bot.senses.contacts) seen |= k.ent == f.bot.target && k.visible;
+  const bool wading =
+      self.waterlevel >= 1 && (swim || f.bot.pilot.pilot.mode == sh::PilotMode::swim);
+  if ((self.waterlevel < 2 && !wading) || seen || f.swim_exit >= 0) {
+    f.swim_view_on = false;
+    f.view_sent[0] = cmd.angles.x;
+    f.view_sent[1] = cmd.angles.y;
+    return;
+  }
+  const sh::ViewAxes want = sh::angle_vectors({cmd.angles.x, cmd.angles.y, 0});
+  const float fw = cmd.forward, sd = cmd.side;
+  const sh::Vec3f wish{want.forward.x * fw + want.right.x * sd,
+                       want.forward.y * fw + want.right.y * sd,
+                       want.forward.z * fw + want.right.z * sd + static_cast<float>(cmd.up)};
+  if (!f.swim_view_on) f.swim_view_on = true;  // from the view last sent
+  const double dt = msec / 1000.0;
+  const float dy = wrap180(cmd.angles.y - f.view_sent[1]);
+  const float dp = cmd.angles.x - f.view_sent[0];
+  const double rate = (dy > 120 || dy < -120) ? kSwimAbout : kSwimTurn;
+  const auto toward = [&](float off, double r) {
+    if (off > -kSwimBand && off < kSwimBand) return 0.f;
+    const double want_step = off > 0 ? off - kSwimBand * 0.5 : off + kSwimBand * 0.5;
+    return static_cast<float>(std::fmax(-r * dt, std::fmin(r * dt, want_step)));
+  };
+  const float yaw = wrap180(f.view_sent[1] + toward(dy, rate));
+  const float pitch = f.view_sent[0] + toward(dp, kSwimTurn * 0.5);
+  const sh::ViewAxes ax = sh::angle_vectors({pitch, yaw, 0});
+  const float nf = sh::dot(wish, ax.forward), ns = sh::dot(wish, ax.right);
+  cmd.angles.x = pitch;
+  cmd.angles.y = yaw;
+  cmd.forward = sh::quantize_axis(nf);
+  cmd.side = sh::quantize_axis(ns);
+  cmd.up = sh::quantize_axis(wish.z - nf * ax.forward.z - ns * ax.right.z);
+  f.view_sent[0] = pitch;
+  f.view_sent[1] = yaw;
 }
 
 float protection(float type, float value) { return type * value; }
@@ -379,6 +442,43 @@ int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& s
   const auto name = [&](int32_t i) { return f.items[static_cast<size_t>(i)].name.c_str(); };
   return ai::pick_best(static_cast<int32_t>(f.items.size()), score, why,
                        heal ? "heal_goal" : "item_goal", name, "worth over the time to have it");
+}
+
+// A SHORT GOAL ON THE WAY: an item there now that a person turns aside for, on its own floor within
+// kOnTheWay and ahead of where it runs (or beside it), that a way reaches, nobody of its side said
+// he takes, and not the goal itself; the nearest, or -1. Taken before the long goal, as a person
+// picks up what lies by his way: the goal is chosen again once it has it (a pickup is news).
+int32_t on_the_way(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
+                   sh::Vec3f velocity, double t) {
+  const float speed = std::sqrt(velocity.x * velocity.x + velocity.y * velocity.y);
+  int32_t best = -1;
+  float best_d = kOnTheWay;
+  for (size_t k = 0; k < f.items.size(); k++) {
+    const auto i = static_cast<int32_t>(k);
+    const ItemSpot& it = f.items[k];
+    if (i == f.goal_item || !it.present || it.node < 0 || !item_in_mind(f, i)) continue;
+    if (f.reach_at >= 0 && !f.reach.reached(it.node)) continue;
+    if (std::fabs(it.at.z - (me.z - kFeet)) > kOnTheWayRise || door_shut(s, it)) continue;
+    // What a person turns aside for: health it lacks, better armour, a weapon it has not got,
+    // rockets; shells and nails are taken as they lie on the way, not gone for.
+    const bool ammo =
+        it.kind == ItemKind::shells || it.kind == ItemKind::nails || it.kind == ItemKind::cells;
+    if (ammo || (it.kind == ItemKind::weapon && (st.items & it.weapon) != 0)) continue;
+    if (raw_value(it, st) <= 0 || mate_going(f, i, t) || gives_up(f, s, f.slot + 1, i, st, t))
+      continue;
+    const float d = dist(me, it.at);
+    // Ahead of where it runs (within about 70 degrees of its motion), or beside it.
+    if (d > kBeside && speed > 100) {
+      const float dx = it.at.x - me.x, dy = it.at.y - me.y;
+      const float flat = std::sqrt(dx * dx + dy * dy);
+      if (flat > 1 && (dx * velocity.x + dy * velocity.y) / (flat * speed) < kAhead) continue;
+    }
+    if (d < best_d) {
+      best = i;
+      best_d = d;
+    }
+  }
+  return best;
 }
 
 // A backpack in view within `reach` worth going for (ammunition short or a weapon lacking), or -1.
@@ -814,6 +914,28 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     }
   }
 
+  // A short goal on the way (on_the_way), held until it is had, gone or kShortHold_s has passed,
+  // unless the goal itself is that near, the way is a dive's, an escape's or the map's, or it
+  // backs off (a retreat chooses its health away from the enemy, best_item):
+  // people's small health 3.6 a player-minute against the bots' 0.5 without it.
+  int32_t near = -1;
+  if (!escaping && committed < 0 && f.objective < 0 && f.diving < 0 &&
+      f.mode != FightMode::retreat) {
+    const bool held = f.short_item >= 0 && t < f.short_until &&
+                      f.items[static_cast<size_t>(f.short_item)].present;
+    if (held) {
+      near = f.short_item;
+    } else if (f.goal_item < 0 ||
+               dist(f.items[static_cast<size_t>(f.goal_item)].at, self.origin) > kOnTheWay) {
+      near = on_the_way(f, s, st, self.origin, self.velocity, t);
+      if (near >= 0) {
+        f.short_until = t + kShortHold_s;
+        f.stats.on_the_way++;
+      }
+    }
+  }
+  f.short_item = near;
+
   // The goal: the role's first, then the items.
   if (committed >= 0) {
     // Kept on the dive's field whatever the reach from the water says (the nearest node under
@@ -823,6 +945,13 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     go_to(f, f.objective);  // the way through the map (way_through.hpp) before any item
     f.goal_item = -1;       // and no item's errand (a shot at its button) kept from before
     f.unlocking = false;
+  } else if (near >= 0) {
+    go_item(f, s, near);
+    if (why) {
+      why->decide("on_the_way");
+      why->fact("item", near);
+      why->choose(f.items[static_cast<size_t>(near)].name.c_str(), "worth having, by its way");
+    }
   } else if (!escaping && !team_goal(f, s, st, self.origin, t, c, why)) {
     if (f.mode == FightMode::chase && c) {
       go_to(f, sh::nav_nearest(*f.bot.pilot.pilot.g, enemy));
@@ -1346,6 +1475,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
                                                      : "off it");
     }
   }
+  if (!dead) swim_view(f, s, me, msec, swim, cmd);  // under water the view turns at a hand's pace
   fighter_keys(f, cmd);  // the side key turned round as a person's hand turns it (footwork.hpp)
   return cmd;
 }
