@@ -11,11 +11,13 @@ namespace ge::shooter {
 namespace {
 
 constexpr const char* kNames[kFeatures] = {
-    "calm",  "pace",       "swimaim", "screen", "keep",  "lead",     "lane",
-    "hop",   "shortgoals", "commit",  "danger", "dodge", "watch",    "spam",
-    "packs", "talk",       "plan",    "rj",     "gj",    "airsteer", "surface"};
+    "calm",       "pace",   "swimaim", "screen",   "keep",    "lead",   "lane",  "hop",
+    "shortgoals", "commit", "danger",  "dodge",    "watch",   "spam",   "packs", "talk",
+    "plan",       "rj",     "gj",      "airsteer", "surface", "glance", "trial"};
 
-constexpr uint64_t kAll = (uint64_t{1} << kFeatures) - 1;
+// Every switch but `trial` (the last).
+constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);
+constexpr uint64_t kAll = kTrial - 1;
 
 bool separator(char c) { return c == ',' || c == ' ' || c == '/' || c == '\t'; }
 
@@ -25,7 +27,12 @@ const char* feature_name(Feature f) { return kNames[static_cast<size_t>(f)]; }
 
 Features features_all() { return {kAll}; }
 Features features_none() { return {0}; }
-Features features_of(AimSkill) { return features_all(); }
+Features features_of(AimSkill skill) {
+  Features f = features_all();
+  // A novice looks where he goes: he does not check the open ground beside him.
+  if (skill == AimSkill::novice) f.set(Feature::glance, false);
+  return f;
+}
 
 bool apply_features(std::string_view text, Features& f, std::string& error) {
   size_t at = 0;
@@ -64,16 +71,18 @@ bool apply_features(std::string_view text, Features& f, std::string& error) {
 }
 
 std::string features_text(const Features& f) {
-  if (f.bits == kAll) return "all";
-  if (f.bits == 0) return "none";
+  const std::string trial = (f.bits & kTrial) ? ",+trial" : "";
+  const uint64_t bits = f.bits & kAll;
+  if (bits == kAll) return "all" + trial;
+  if (bits == 0) return "none" + trial;
   std::string off = "all", on = "none";
-  for (size_t k = 0; k < kFeatures; k++) {
+  for (size_t k = 0; k + 1 < kFeatures; k++) {
     if (f[static_cast<Feature>(k)])
       on += std::string(",+") + kNames[k];
     else
       off += std::string(",-") + kNames[k];
   }
-  return off.size() <= on.size() ? off : on;
+  return (off.size() <= on.size() ? off : on) + trial;
 }
 
 }  // namespace ge::shooter

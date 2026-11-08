@@ -16,6 +16,8 @@
 #include <memory>
 #include <utility>
 
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "net/conditions.hpp"
 #include "net/sim_network.hpp"
 #include "progs/entity_text.hpp"
@@ -426,15 +428,70 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         all.fov = 360;
         const sh::Vec3f eye{d.origin.x, d.origin.y, d.origin.z + all.view_height};
         bool any = false;
-        for (int j = 0; j < n && !any; j++) {
+        float near = 1e30f, near_off = 0;  // the nearest in plain view, and his yaw off the view
+        for (int j = 0; j < n; j++) {
           const Seat& o = seats[static_cast<size_t>(j)];
           const int os = r.players[static_cast<size_t>(j)].slot;
           if (!o.ready || o.team == seat.team || os < 0) continue;
           const sh::Edict& e = s.sv.edicts[static_cast<size_t>(os) + 1];
-          any = e.health > 0 && sh::sees_player(s.sv, all, p.slot + 1, eye, {}, e.origin);
+          if (e.health <= 0 || !sh::sees_player(s.sv, all, p.slot + 1, eye, {}, e.origin)) continue;
+          any = true;
+          const float dx = e.origin.x - eye.x, dy = e.origin.y - eye.y;
+          const float dd = dx * dx + dy * dy;
+          if (dd < near) {
+            near = dd;
+            float yaw = 0, pitch = 0;
+            sh::aim_angles(eye, e.origin, yaw, pitch);
+            float off = std::fmod(yaw - seat.fighter.bot.yaw, 360.f);
+            if (off > 180) off -= 360;
+            if (off < -180) off += 360;
+            near_off = std::fabs(off);
+          }
         }
         bool seen = false;
         for (const sh::Contact& c : seat.fighter.bot.senses.contacts) seen = seen || c.visible;
+        const sh::Vec3f vel = s.world.entities[static_cast<size_t>(p.slot) + 1].velocity;
+        const float vh = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+        if (!any && vh > 100) {
+          const sh::Bot& bb = seat.fighter.bot;
+          const sh::PilotMode pm = bb.pilot.pilot.mode;
+          const bool walk = pm == sh::PilotMode::walk || pm == sh::PilotMode::idle ||
+                            pm == sh::PilotMode::wait || pm == sh::PilotMode::arrived ||
+                            pm == sh::PilotMode::ride;
+          const int holder = bb.aiming    ? 0
+                             : bb.looking ? 1
+                             : walk       ? (bb.calm ? 2 : 3)
+                             : (pm == sh::PilotMode::hop || pm == sh::PilotMode::strafe ||
+                                pm == sh::PilotMode::air || pm == sh::PilotMode::jump ||
+                                pm == sh::PilotMode::run_up)
+                                 ? 4
+                                 : 5;
+          float off = static_cast<float>(
+              std::fmod(static_cast<double>(seat.fighter.view_sent[1]) -
+                            ge::core::libm::atan2(vel.y, vel.x) * 180 / ge::core::kPi,
+                        360.0));
+          if (off > 180) off -= 360;
+          if (off < -180) off += 360;
+          if (holder == 2) {
+            float ro = static_cast<float>(
+                std::fmod(static_cast<double>(bb.pilot.pilot.yaw) -
+                              ge::core::libm::atan2(vel.y, vel.x) * 180 / ge::core::kPi,
+                          360.0));
+            if (ro > 180) ro -= 360;
+            if (ro < -180) ro += 360;
+            p.calm_route_off += std::fabs(ro) > 45;
+          }
+          p.moving_n[holder]++;
+          p.moving_off[holder] += std::fabs(off) > 45;
+        }
+        if (any && !seen) {
+          p.unseen_off[near_off < 60 ? 0 : near_off < 90 ? 1 : near_off < 135 ? 2 : 3]++;
+          p.unseen_calm += seat.fighter.bot.calm && !seat.fighter.bot.aiming &&
+                           (seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::walk ||
+                            seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::idle ||
+                            seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::wait ||
+                            seat.fighter.bot.pilot.pilot.mode == sh::PilotMode::arrived);
+        }
         p.view_n++;
         p.in_view += any;
         p.seen_n += seen;

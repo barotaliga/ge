@@ -97,6 +97,7 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
   for (int k = 0; k < n; k++) {
     Fighter& f = m.players[static_cast<size_t>(k)];
     const sh::AimSkill skill = k == 0 ? opt.leader : opt.skills[static_cast<size_t>(k) - 1];
+    f.features = sh::features_of(skill);
     fighter_init(
         f, nav.graph, s, k, c.map.entities.c_str(), skill,
         sh::traits_of(skill, sh::Temper::balanced), kHz,

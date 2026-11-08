@@ -33,9 +33,15 @@
 // - `airsteer`: flights steered in the air with the side key and the view on the velocity; off,
 //   the view at the target and forward.
 // - `surface`: up for air under open water before the air runs out.
+// - `glance`: the calm walker's glance aside every second or two, to the side with the longest
+//   open line of sight (bot.hpp `glance`).
+// - `trial`: the code under an A/B right now reads it (nothing, when no trial is under way). Off in
+//   every preset (`all` too), so `--features-red=+trial` plays the trial against the rest from
+//   one build: the per-bot replacement of a temporary environment switch.
 //
-// THE PRESETS: `features_all` (every one; each skill's preset, `features_of`, is every one too, the
-// skill's differences being its traits'), `features_none` (a plain bot: it still roams, fights,
+// THE PRESETS: `features_all` (every one), each skill's (`features_of`: every one but what that
+// level of player does not do: a novice no `glance`; the rest of a skill's differences are its
+// traits'), `features_none` (a plain bot: it still roams, fights,
 // heals and takes items). The text form (`apply_features`) reads a list of words: `all`, `none`
 // (or `plain`), `+name` or `name` (on), `-name` (off), separated by commas, spaces or '/', applied
 // in order: "plain,+dodge", "-swimaim,+shortgoals".
@@ -43,7 +49,8 @@
 // ge:summary A bot's features: each behaviour switched on or off by name, and the presets
 // ge:keywords features feature-switch bot-features apply_features features_text presets
 // ge:keywords calm pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch
-// ge:keywords spam packs talk plan rocket-jump grenade-jump airsteer surface plain-bot ab-test
+// ge:keywords spam packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot
+// ge:keywords ab-test trial
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -78,8 +85,10 @@ enum class Feature : uint8_t {
   gj,
   airsteer,
   surface,
+  glance,
+  trial,
 };
-constexpr size_t kFeatures = 21;
+constexpr size_t kFeatures = 23;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
@@ -93,11 +102,11 @@ struct Features {
   bool operator==(const Features&) const = default;
 };
 
-// Every feature on.
+// Every feature on (but `trial`).
 Features features_all();
 // None: a plain bot.
 Features features_none();
-// The skill's preset: every feature (the skills differ in their traits, traits.hpp).
+// The skill's preset: every feature but a novice's glance (the skills differ in their traits too).
 Features features_of(AimSkill skill);
 
 // Applies a list of words to `f` ("plain,+dodge", "-swimaim"); false with `error` set (naming

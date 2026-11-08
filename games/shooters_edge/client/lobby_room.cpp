@@ -74,6 +74,7 @@ void make_fighter(Room& r, const sv::RulesCommon& s, const sv::MapSpec& map, int
   b.fighter = bots::Fighter();
   b.sequence = 0;
   for (sh::MoveCmd& c : b.cmds) c = {};
+  b.fighter.features = ge::shooter::features_of(b.skill);
   bots::fighter_init(b.fighter, *r.graph, s, slot, map.entities.c_str(), b.skill,
                      ge::shooter::traits_of(b.skill, ge::shooter::Temper::balanced), kBotHz,
                      bot_seed(r, slot));

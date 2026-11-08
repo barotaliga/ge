@@ -36,6 +36,8 @@
 #include <vector>
 
 #include "brush/write.hpp"
+#include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "core/parallel.hpp"
 #include "lab/lab.hpp"
@@ -70,7 +72,13 @@ struct Player {
   // turn summed; and of the samples with an enemy in plain view, those he fired within kFired_s.
   int64_t turned_n = 0, still = 0, fast = 0, fired_in_view = 0;
   double speed = 0, turn = 0;
+  // Moving (over kCalmSpeed) with no enemy in plain view: the view's yaw off the way he moves, in
+  // the bands kCalmBands (degrees), and its turn, summed.
+  int64_t calm_n = 0, calm_off[4] = {};
+  double calm_turn = 0;
 };
+constexpr double kCalmSpeed = 100;
+constexpr float kCalmBands[3] = {15, 45, 90};
 
 // The key items, by their model (and the armour's skin): how long each sits on its spot untaken.
 constexpr int kItemKinds = 7;
@@ -233,6 +241,23 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         pl.turn += rate;
         pl.still += rate < 10;
         pl.fast += rate > 360;
+        // Where he looks while on the move with nobody in view: off the way he moves.
+        const sh::Vec3f dv = p.origin - was[static_cast<size_t>(i)];
+        const double v =
+            std::sqrt(static_cast<double>(dv.x) * dv.x + static_cast<double>(dv.y) * dv.y) / every;
+        if (!view && v > kCalmSpeed && v < kFastest) {
+          float off = p.angles.y -
+                      static_cast<float>(ge::core::libm::atan2(dv.y, dv.x) * 180 / ge::core::kPi);
+          while (off > 180) off -= 360;
+          while (off < -180) off += 360;
+          off = std::fabs(off);
+          pl.calm_n++;
+          pl.calm_off[off < kCalmBands[0]   ? 0
+                      : off < kCalmBands[1] ? 1
+                      : off < kCalmBands[2] ? 2
+                                            : 3]++;
+          pl.calm_turn += rate;
+        }
       }
       was_yaw[static_cast<size_t>(i)] = p.angles.y;
       was[static_cast<size_t>(i)] = p.origin;
@@ -344,6 +369,9 @@ void run(gl::Lab& lab) {
       sum.fast += p.fast;
       sum.turn += p.turn;
       sum.fired_in_view += p.fired_in_view;
+      all.calm_n += p.calm_n;
+      all.calm_turn += p.calm_turn;
+      for (int b = 0; b < 4; b++) all.calm_off[b] += p.calm_off[b];
     }
     all.alive += sum.alive;
     all.in_view += sum.in_view;
@@ -393,6 +421,15 @@ void run(gl::Lab& lab) {
                  ? static_cast<double>(all.fired_in_view) / static_cast<double>(all.in_view)
                  : 0,
              "share");
+  // On the move with nobody in view: how far the view lies off the way he moves, and its turn.
+  const auto of_calm = [&](double k) {
+    return all.calm_n > 0 ? k / static_cast<double>(all.calm_n) : 0;
+  };
+  const char* const kCalmNames[4] = {"under-15", "15-45", "45-90", "over-90"};
+  for (int b = 0; b < 4; b++)
+    lab.metric(std::string("people.moving-view-off.") + kCalmNames[b],
+               of_calm(static_cast<double>(all.calm_off[b])), "share");
+  lab.metric("people.moving-view-turn", of_calm(all.calm_turn), "degrees/s");
   // Item control: the share of the time each key item lay untaken, and how long it lay from showing
   // to being taken (a team that times it takes it as it shows).
   for (int k = 0; k < kItemKinds; k++) {

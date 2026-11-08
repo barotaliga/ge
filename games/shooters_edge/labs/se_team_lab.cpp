@@ -598,6 +598,90 @@ void run(gl::Lab& lab) {
     lab.metric("team.damage-per-min",
                given / (secs / 60) / static_cast<double>(std::max<size_t>(r.players.size(), 1)),
                "per-min");
+    // Each side's fight apart, when the sides' features differ (an A/B by team): what one side
+    // does better than the other in the same matches.
+    bool differ = lab.arg("sides") == "1";
+    for (const cn::TeamPlayer& p : r.players) differ |= p.features != r.players.front().features;
+    for (int side = 0; side < 2 && differ; side++) {
+      double dmg = 0, react = 0, s_fired = 0, s_hit = 0;
+      int64_t n = 0, reactions = 0, s_pre = 0, view_n = 0, in_view = 0, seen = 0, checks = 0,
+              off = 0, shots = 0, deaths = 0;
+      for (const cn::TeamPlayer& p : r.players) {
+        if (p.team != side) continue;
+        n++;
+        dmg += p.given;
+        react += p.react_s;
+        reactions += p.reactions;
+        s_pre += p.pre_aimed;
+        view_n += p.view_n;
+        in_view += p.in_view;
+        seen += p.in_view_seen;
+        checks += p.trigger_checks;
+        off += p.trigger_off;
+        shots += p.shots;
+        deaths += p.deaths;
+        for (const cn::HitCount& h : p.hits) {
+          s_fired += static_cast<double>(h.fired);
+          s_hit += static_cast<double>(h.hit);
+        }
+      }
+      const auto ratio = [](double a, double b) { return b > 0 ? a / b : 0; };
+      const std::string k = std::string("team.side.") + (side == 0 ? "red." : "blue.");
+      lab.metric(k + "deaths", static_cast<double>(deaths), "count");
+      lab.metric(k + "damage-per-min", ratio(dmg, secs / 60 * static_cast<double>(n)), "per-min");
+      lab.metric(k + "accuracy", 100 * ratio(s_hit, s_fired), "%");
+      lab.metric(k + "sightings", static_cast<double>(reactions), "count");
+      lab.metric(k + "pre-aimed", ratio(static_cast<double>(s_pre), static_cast<double>(reactions)),
+                 "share");
+      lab.metric(k + "reaction-mean-ms", 1000 * ratio(react, static_cast<double>(reactions)), "ms");
+      lab.metric(k + "enemy-in-view",
+                 ratio(static_cast<double>(in_view), static_cast<double>(view_n)), "share");
+      lab.metric(k + "in-view.seen", ratio(static_cast<double>(seen), static_cast<double>(in_view)),
+                 "share");
+      lab.metric(k + "trigger.fired",
+                 ratio(static_cast<double>(shots), static_cast<double>(checks)), "share");
+      int64_t unseen[4] = {}, unseen_calm = 0, unseen_n = 0;
+      for (const cn::TeamPlayer& p : r.players) {
+        if (p.team != side) continue;
+        for (int b = 0; b < 4; b++) unseen[b] += p.unseen_off[b];
+        unseen_calm += p.unseen_calm;
+      }
+      for (int64_t u : unseen) unseen_n += u;
+      const char* kBands[4] = {"under-60", "60-90", "90-135", "behind"};
+      for (int b = 0; b < 4; b++)
+        lab.metric(k + "unseen." + kBands[b],
+                   ratio(static_cast<double>(unseen[b]), static_cast<double>(unseen_n)), "share");
+      int64_t mv[6] = {}, mo[6] = {}, mn = 0, moff = 0;
+      for (const cn::TeamPlayer& p : r.players) {
+        if (p.team != side) continue;
+        for (int h = 0; h < 6; h++) {
+          mv[h] += p.moving_n[h];
+          mo[h] += p.moving_off[h];
+        }
+      }
+      for (int h = 0; h < 6; h++) {
+        mn += mv[h];
+        moff += mo[h];
+      }
+      const char* kHolders[6] = {"aim", "look", "calm", "walk", "fly", "other"};
+      int64_t cro = 0;
+      for (const cn::TeamPlayer& p : r.players)
+        if (p.team == side) cro += p.calm_route_off;
+      lab.metric(k + "moving.calm.route-off45",
+                 ratio(static_cast<double>(cro), static_cast<double>(mv[2])), "share");
+      lab.metric(k + "moving.off45", ratio(static_cast<double>(moff), static_cast<double>(mn)),
+                 "share");
+      for (int h = 0; h < 6; h++) {
+        lab.metric(k + "moving." + kHolders[h],
+                   ratio(static_cast<double>(mv[h]), static_cast<double>(mn)), "share");
+        lab.metric(k + "moving." + kHolders[h] + ".off45",
+                   ratio(static_cast<double>(mo[h]), static_cast<double>(mv[h])), "share");
+      }
+      lab.metric(k + "unseen.calm",
+                 ratio(static_cast<double>(unseen_calm), static_cast<double>(unseen_n)), "share");
+      lab.metric(k + "trigger.view-off",
+                 ratio(static_cast<double>(off), static_cast<double>(checks)), "share");
+    }
     // Where the speed goes: each pilot mode's share of the commands alive and its mean speed.
     gl::LabTable modes{
         "the pilot's modes (aiming apart): share of the time alive and mean speed (units/s)",
@@ -888,6 +972,9 @@ const gl::LabSpec kSpec{
          "none (plain), comma separated (-swimaim,+shortgoals); empty: the preset"},
         {"features-red", "", "red's features over --features (the A/B by team: one side without)"},
         {"features-blue", "", "blue's features over --features"},
+        {"sides", "0",
+         "1: each side's fight apart (damage, accuracy, sightings, what it did not see), as when "
+         "the sides' features differ"},
         {"items", "key",
          "the items noted with the nearest a player came: key (the held armour, the quad) or all"},
         {"client-fed", "0",

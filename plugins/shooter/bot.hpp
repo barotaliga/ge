@@ -9,7 +9,8 @@
 //    drawn for it (half of it when the view was already on him: pre-aimed) (the pilot does not
 //    strafe jump while the view is held: the strafe needs the view along the velocity); with none,
 //    the view turns back to the pilot's yaw (a calm view at a hand's pace, `kBackTurn`) and is
-//    handed back within `kRelease` degrees (a calm walker's within the calm band), unless
+//    handed back within `kRelease` degrees (a calm walker's within the calm band, a glance aside
+//    now and then: `glance`), unless
 //    the game set a spot to watch (`look`, `look_at`: a doorway an enemy comes in by), where it
 //    goes on the same hands, so a contact showing there is pre-aimed at;
 // 4. the pilot's forward and side turned under that view (`turn_axes`), so the route is run the
@@ -87,6 +88,18 @@ struct Bot {
   // pace (`paced`; off, the aim's flick).
   bool keep = true;
   bool paced = true;
+  bool trial = false;  // the code under an A/B reads it (features.hpp `trial`)
+  // THE GLANCE (`glance`): a calm walker looks aside every `kGlanceMin_s` to that plus
+  // `kGlanceSpread_s` (drawn), 75 or 120 degrees off where it looks, to the side whose line of
+  // sight runs longest (past 400 units), held a moment and turned back at the calm view's pace:
+  // people check the open ground beside them, and a still view misses who comes from there.
+  // Measured on e1m2 (se-team, red with it against blue without, twelve seeds): about 65 frags a
+  // six-seed set to the side that glances, its view still turning 104 degrees a second (people
+  // 107).
+  bool glance = true;
+  double glance_next = 0, glance_until = -1;
+  float glance_off = 0;
+  core::Rng glance_rng{1};  // the glances' draws, off the bot's seed
   int intercepts = 1;
   bool target_arc = false;
   bool lob = false;
