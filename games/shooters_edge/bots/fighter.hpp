@@ -27,8 +27,9 @@
 //   within its beam), sent as the weapon's impulse;
 // and every command, whether to FIRE: a contact in sight, the view within the weapon's tolerance
 // of the aim (the target's width at its range, a blast's wider), and in range. A rocket and a
-// grenade are aimed at the feet, a projectile led by its flight time. Dead, it presses attack to
-// come back once the mod allows.
+// grenade are aimed at the feet, a projectile led by its flight time. In water with one in sight,
+// the view stays on him and the swim's way is pressed with the keys under it. Dead, it presses
+// attack to come back once the mod allows.
 //
 // Deterministic: a pure function of what it is sent and its hands' seeds.
 //
@@ -148,6 +149,7 @@ struct FighterStats {
   int64_t surface_failed = 0;  // and rises given up short of the surface
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
+  int64_t swim_fights = 0;          // commands swum under the aim, an enemy in sight
   int64_t taken = 0;                // items seen to go (by anyone)
   int64_t modes = 0;                // mode changes
   int64_t mode_commands[4] = {};    // commands spent in each mode
