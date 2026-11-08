@@ -916,7 +916,8 @@ int run_main(int argc, char** argv) {
                                   w, h, wall, t, said, error)
               : cl::timedemo_step(bench, error);
       for (const std::string& line : said) console.print(line);
-      const cl::DemoState& ds = drawn_remote ? remote.demo.state : bench.demo.state;
+      // A paced demo is drawn between its frames (demo_lerp.hpp), so it moves smoothly.
+      const cl::DemoState& ds = drawn_remote ? remote.demo.state : cl::demo_drawn(bench);
       if (step == cl::TimedemoStep::new_level) {
         // The game folder the recording's server ran, mounted when the window is not on it.
         std::vector<std::string> lines;

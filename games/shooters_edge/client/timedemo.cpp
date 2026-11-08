@@ -325,6 +325,10 @@ TimedemoStep timedemo_step(Timedemo& t, std::string& error) {
       effects.swap(s.effects);
       continue;
     }
+    if (t.smooth)
+      lerp_frame(t.lerp, s, s.levels != t.levels);
+    else
+      t.lerp.to.levels = -1;  // switched on again later: not drawn from a frame long gone
     if (s.levels != t.levels) {
       t.levels = s.levels;
       t.skip = kSkipAfterLevel;
@@ -391,11 +395,17 @@ TimedemoStep demo_seek(Timedemo& t, double timeline_s, std::string& error) {
   }
   t.clock = t.demo.state.time;
   t.skip = 0;
-  t.heard.clear();               // what the seek read past is not played
-  t.demo.state.effects.clear();  // nor thrown
+  if (t.smooth) lerp_frame(t.lerp, t.demo.state, true);  // not drawn from before the seek
+  t.heard.clear();                                       // what the seek read past is not played
+  t.demo.state.effects.clear();                          // nor thrown
   if (out == TimedemoStep::end) return out;
   return t.levels != level_before || t.demo.state.map != map_before ? TimedemoStep::new_level
                                                                     : TimedemoStep::frame;
+}
+
+const DemoState& demo_drawn(Timedemo& t) {
+  if (!t.paced || !t.smooth || t.clock < 0) return t.demo.state;
+  return lerp_at(t.lerp, t.demo.state, t.clock);
 }
 
 void timedemo_mark(Timedemo& t, uint64_t now_ns) {

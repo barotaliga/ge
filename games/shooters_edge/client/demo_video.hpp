@@ -12,7 +12,8 @@
 // are within a frame of each other whatever the machine's speed. The video's clock runs on through
 // the levels: a level's start (whose own clock starts over) and a stall between two frames longer
 // than `kMostDemoGap` move it on by no more than that, so a long pause in a recording does not
-// become a long still in the video.
+// become a long still in the video. A picture is drawn between the last two demo frames read
+// (demo_lerp.hpp, `lerp`), so a recording made at any rate moves smoothly at the video's.
 //
 // A CLIP is a part of the demo: from `from_s` on the play bar's timeline (timedemo.hpp's
 // `DemoTimeline`, the same clock as this one) for `seconds`, or one of the tracked player's
@@ -35,7 +36,7 @@
 // ge:keywords demo-video demovideo export video mp4 webm mkv record demo-to-video frame-clock
 // ge:keywords sound voice qwdv mvdv capture h264 av1 opus offscreen readback
 // ge:keywords clip gif animated-gif highlight from-to start-end excerpt caption text conchars
-// ge:keywords demo_placed demo-players other-players player-colours
+// ge:keywords demo_placed demo-players other-players player-colours smooth lerp between-frames
 // ge:skill shooter replay render
 // ge:test tests/shooters_edge_demo_test.cpp
 #pragma once
@@ -52,6 +53,7 @@
 #include "shooters_edge/client/args.hpp"
 #include "shooters_edge/client/demo.hpp"
 #include "shooters_edge/client/demo_fx.hpp"
+#include "shooters_edge/client/demo_lerp.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/world_fx.hpp"
@@ -81,6 +83,8 @@ struct DemoVideoOptions {
   bool text = true;      // the words in the upper left (demo_caption.hpp: the packs' console font)
   bool messages = true;  // the prints, the chat and the centre prints the recorded player read
   bool sound = true;
+  bool lerp =
+      true;  // drawn between the demo's frames (demo_lerp.hpp), as `demo_lerp` in the window
   float volume = 0.5f;                     // the game's sounds, under the voices
   float voice_volume = 1.5f;               // the players' voices, over the game as voice chat is
   const look::Picture* picture = nullptr;  // the look (null: the classic look's defaults)
@@ -109,6 +113,9 @@ struct DemoVideoReport {
 // Called with each picture as it goes into the file (a lab's strip): its index and its time on
 // the demo's timeline.
 using DemoVideoPicture = std::function<void(int64_t frame, double t, const ge::lab::Picture&)>;
+// Called before each picture is drawn with the state between frames it is drawn from (a lab's
+// chart of what moved and how far).
+using DemoVideoLerp = std::function<void(const DemoLerp&)>;
 
 // What a demo has standing in the world this frame, for `FxFrame::models`: its entities with a
 // model (not the eye's own), the other players in their colours, the level's statics. The video
@@ -130,7 +137,8 @@ void demo_fx_step(const DemoState& s, DemoFx& fx, const LoadedMap* map,
 // `o.demo` from `files` into `o.file` on `device`. False with the reason and the next step.
 bool demo_video(ge::gpu::Device& device, const SearchPath& files, const DemoVideoOptions& o,
                 DemoVideoReport& report, std::string& error,
-                const DemoVideoPicture& picture = nullptr);
+                const DemoVideoPicture& picture = nullptr,
+                const DemoVideoLerp& picture_lerp = nullptr);
 
 // The report as `-demovideo` prints it: where from and to, the clip, the pictures, the file, the
 // sounds, a line each.

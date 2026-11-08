@@ -427,6 +427,16 @@ LAB=se-demo ARGS="--file=<demo>"` reads any demo without a GPU and draws every p
 from above and his health over the clock, with a table of who played (`--track=<slot>` picks
 the view).
 
+**Smooth at any rate.** A played demo is drawn between its last two frames: the playback reads a
+frame once its clock passes the one before, and each picture places the players, the entities and
+the eye between the two by the time that passed, angles turned the shortest way round
+(`client/demo_lerp.hpp`). A recording made at 77 frames a second then moves evenly at 60, 120 or
+144 pictures a second and in a 30 fps video, instead of repeating one frame and jumping two. A
+teleport, a respawn, a gib and a model change are not drawn across, and a view the server turned
+jumps. `demo_lerp 0` draws each frame as read (`timedemo` always does: one frame a picture).
+`make lab LAB=se-demo-smooth ARGS="--file=<demo> --track=<slot>"` measures it: how far the eye
+moves each picture with and without, charted.
+
 ### A demo as a video
 
 `-demovideo <demo> <file>` turns a recorded game of any format into a video and quits; no window
