@@ -103,4 +103,14 @@ void turn_axes(int16_t& forward, int16_t& side, float from_yaw, float to_yaw) {
   side = quantize_axis(std::round(s * cs.x - f * cs.y));
 }
 
+void turn_axes_swim(int16_t& forward, int16_t& side, int16_t& up, Vec3f from, Vec3f to) {
+  const ViewAxes a = angle_vectors({from.x, from.y, 0}), b = angle_vectors({to.x, to.y, 0});
+  const float f = forward, s = side;
+  const Vec3f wish = a.forward * f + a.right * s + Vec3f{0, 0, static_cast<float>(up)};
+  const float nf = dot(wish, b.forward), ns = dot(wish, b.right);
+  forward = quantize_axis(std::round(nf));
+  side = quantize_axis(std::round(ns));
+  up = quantize_axis(std::round(wish.z - nf * b.forward.z - ns * b.right.z));
+}
+
 }  // namespace ge::shooter

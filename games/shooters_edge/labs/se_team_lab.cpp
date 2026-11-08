@@ -458,6 +458,30 @@ void run(gl::Lab& lab) {
     }
     lab.metric("team.wet", alive > 0 ? static_cast<double>(wet) / static_cast<double>(alive) : 0,
                "share");
+    // The wet time by cause (bots/fighter.hpp kWetWhy), as shares of it: what keeps the bots in
+    // the water; and wet aiming, swimming and walking, each's share, speed and time still.
+    for (size_t w = 0; w < 12; w++) {
+      int64_t why = 0;
+      for (const cn::TeamPlayer& p : r.players) why += p.wet_why[w];
+      lab.metric(std::string("team.wet-why.") + bt::kWetWhy[w],
+                 wet > 0 ? static_cast<double>(why) / static_cast<double>(wet) : 0, "share");
+    }
+    static const char* kWetHow[3] = {"aiming", "swim", "walk"};
+    for (size_t w = 0; w < 3; w++) {
+      double sp = 0;
+      int64_t n = 0, still = 0;
+      for (const cn::TeamPlayer& p : r.players) {
+        sp += p.wet_speed[w];
+        n += p.wet_n[w];
+        still += p.wet_still[w];
+      }
+      const std::string k = std::string("team.wet-") + kWetHow[w];
+      lab.metric(k + ".share", wet > 0 ? static_cast<double>(n) / static_cast<double>(wet) : 0,
+                 "share");
+      lab.metric(k + ".speed", n > 0 ? sp / static_cast<double>(n) : 0, "units/s");
+      lab.metric(k + ".still", n > 0 ? static_cast<double>(still) / static_cast<double>(n) : 0,
+                 "share");
+    }
     // Pickups by kind a player-minute, set beside people's (a match's statistics count them so).
     static const char* kKinds[12] = {"health", "mega",    "armor1", "armor2", "armor3", "shells",
                                      "nails",  "rockets", "cells",  "weapon", "quad",   "pent"};

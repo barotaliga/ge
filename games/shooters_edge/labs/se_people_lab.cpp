@@ -23,6 +23,10 @@
 // - WET: the share of the time alive with the waist in water, slime or lava, and of the time an
 //   enemy is faced.
 //
+// `--samples=<file.tsv>` writes every sample alive as a row (the recording, the clock, the slot,
+// the team, the place, wet, the eyes under, the speed, an enemy faced) for a question the
+// metrics do not answer: where people are in the water, and where the bots are.
+//
 // The map is the demos' own, from `--basedir`'s game folder; demos of another map are skipped.
 // Without a demo it records a short match of our bots on the fixture halls (classic_team.hpp) and
 // reads that, which is what `make labs-smoke` runs. Deterministic: the digest holds the counts.
@@ -47,6 +51,7 @@
 #include "core/num_text.hpp"
 #include "core/parallel.hpp"
 #include "lab/lab.hpp"
+#include "lab/png.hpp"
 #include "shooter/hull.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/demo.hpp"
@@ -73,6 +78,7 @@ constexpr double kFired_s = 0.3;   // a shot this near a sample counts as firing
 
 struct Player {
   std::string name, team;
+  int slot = 0;
   int64_t alive = 0, in_view = 0, in_cone = 0, near = 0, moved = 0, rl = 0, rl_loaded = 0;
   // The view: samples after a live one, those turning under 10 and over 360 degrees a second, the
   // turn summed; and of the samples with an enemy in plain view, those he fired within kFired_s.
@@ -113,8 +119,18 @@ struct ItemControl {
   double waited = 0;                 // from showing to going, summed over the times it went
 };
 
+// One sample alive, for `--samples`.
+struct Sample {
+  double t = 0;
+  int slot = 0;
+  sh::Vec3f at;
+  bool wet = false, under = false, faced = false;
+  float speed = -1;  // -1: not moved since a sample alive
+};
+
 struct Read {
   bool ok = false, other_map = false;
+  std::vector<Sample> samples;  // with --samples only
   std::string error, map;
   double seconds = 0;
   std::vector<Player> players;  // by slot, those who played
@@ -133,7 +149,7 @@ bool clear(const sh::Hull& h, sh::Vec3f a, sh::Vec3f b) {
 }
 
 void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, float near,
-              Read& out) {
+              bool keep, Read& out) {
   cl::Demo d;
   if (!cl::open_demo(std::move(bytes), d, out.error)) return;
   const sh::Hull& world = m.bsp.models[0].hulls[0];
@@ -206,6 +222,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       }
       Player& pl = by[static_cast<size_t>(i)];
       pl.name = s.names[static_cast<size_t>(i)];
+      pl.slot = i;
       pl.team = team_of(s, i);
       pl.alive++;
       const sh::Vec3f eye{p.origin.x, p.origin.y, p.origin.z + kEye};
@@ -244,6 +261,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         pl.rl_loaded += has && st[cl::kStatRockets] > 0;
       }
       pl.near += close;
+      Sample sm;
       if (was_alive[static_cast<size_t>(i)]) {
         const sh::Vec3f dv = p.origin - was[static_cast<size_t>(i)];
         const double v =
@@ -251,7 +269,17 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         if (v < kFastest) {
           pl.speed += v;
           pl.moved++;
+          sm.speed = static_cast<float>(v);
         }
+      }
+      if (keep) {
+        sm.t = s.time - t0;
+        sm.slot = i;
+        sm.at = p.origin;
+        sm.wet = wet;
+        sm.under = sh::point_contents(world, eye) <= sh::kContentsWater;
+        sm.faced = cone;
+        out.samples.push_back(sm);
       }
       if (was_alive[static_cast<size_t>(i)]) {
         float dy = p.angles.y - was_yaw[static_cast<size_t>(i)];
@@ -370,8 +398,38 @@ void run(gl::Lab& lab) {
   std::vector<Read> reads(n);
   ge::core::parallel_bands(n, n, [&](size_t b, size_t e) {
     for (size_t i = b; i < e; i++)
-      read_one(paths.empty() ? made : la::read_whole(paths[i]), m, every, near, reads[i]);
+      read_one(paths.empty() ? made : la::read_whole(paths[i]), m, every, near,
+               !lab.arg("samples").empty(), reads[i]);
   });
+  if (const std::string to = lab.arg("samples"); !to.empty()) {
+    std::string tsv = "recording\tt\tslot\tname\tteam\tx\ty\tz\twet\tunder\tfaced\tspeed\n";
+    for (size_t i = 0; i < n; i++) {
+      const Read& r = reads[i];
+      if (!r.ok || r.other_map) continue;
+      for (const Sample& sm : r.samples) {
+        // The slot's name and team as the read kept them (by slot; the last that held it).
+        std::string name, team;
+        for (const Player& p : r.players)
+          if (p.slot == sm.slot) {
+            name = p.name;
+            team = p.team;
+          }
+        for (const std::string& cell :
+             {std::to_string(i), to_fixed(sm.t, 2), std::to_string(sm.slot), name, team,
+              to_fixed(sm.at.x, 0), to_fixed(sm.at.y, 0), to_fixed(sm.at.z, 0),
+              std::string(sm.wet ? "1" : "0"), std::string(sm.under ? "1" : "0"),
+              std::string(sm.faced ? "1" : "0"),
+              sm.speed < 0 ? std::string("-") : to_fixed(sm.speed, 0)}) {
+          tsv += cell;
+          tsv += '\t';
+        }
+        tsv.back() = '\n';
+      }
+    }
+    if (!gl::write_file(to, {reinterpret_cast<const uint8_t*>(tsv.data()), tsv.size()}))
+      lab.fail("se-people: --samples " + to + " was not written",
+               "next: pass --samples=<a writable path>");
+  }
 
   gl::LabTable per{
       "each recording: the share of the time alive with an enemy in plain view, one "
@@ -529,6 +587,7 @@ const gl::LabSpec kSpec{
         {"mapname", "e1m2", "with --basedir: the recordings' map"},
         {"every", "0.1", "a sample every this many seconds of the match"},
         {"near", "1000", "an enemy this near is near, units"},
+        {"samples", "", "write every sample alive to this .tsv (place, wet, eyes under, speed)"},
     },
     "",
     run,

@@ -113,6 +113,15 @@ struct PilotSettings {
   // AIR STEERING (`air` below); off, a flight is flown with the view at its target and forward.
   bool air_steer = true;
   float swim_arrive = 24;  // a swim node is reached within this, units (any way, not across)
+  // A POOL'S FLOOR SWUM: a swimmer (waist deep, off the ground) on a walk between a pool's floor
+  // nodes is anywhere in the water over them, not on the floor: it reaches and passes them by
+  // the distance across, up to `floor_swim_up` over them; and it plans again when no nearer or
+  // off the way as a walker on the ground does (on a walk whose ends lie over `lost_under` above
+  // it, it was knocked or fell into the water under the way). Off: the floor's nodes are reached
+  // standing on them, and a swimmer on a walk never plans again by itself.
+  bool floor_swim = true;
+  float floor_swim_up = 96;
+  float lost_under = 48;
   // THE LANE: a person does not walk the route's line. On a level walk with room either side (the
   // graph's `nav_room`), the walker keeps `lane` of that room off the line, to one side or the
   // other: a side and an amount drawn every `lane_min_s`..`lane_max_s` off its own stream, eased in
