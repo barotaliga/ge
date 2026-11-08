@@ -35,21 +35,21 @@
 // - `surface`: up for air under open water before the air runs out.
 // - `glance`: the calm walker's glance aside every second or two, to the side with the longest
 //   open line of sight (bot.hpp `glance`).
-// - `eye`: a strafer's change of course read a reaction late, as a person's eye reads it
-//   (senses.hpp `course_s`); off, the instant the server has it, which no side step can fool.
+// - `eye`: a strafer's turn read a reaction late (senses.hpp `course_s`); off in every skill's
+//   preset (it held the aim under people's).
 // - `selfaim`: the aim worked out from where its own eye will be when the hands catch up (a
 //   person's hand allows for his own strafe); off, the hands chase the turn its own motion makes.
 // - `pools`: a pool's floor swum over (pilot.hpp `floor_swim`), and the swim's wish pressed in
 //   three dimensions under the aim's or the calm view (bot.hpp `pools`).
-// - `trial`: the code under an A/B right now reads it (nothing, when no trial is under way). Off in
-//   every preset (`all` too), so `--features-red=+trial` plays the trial against the rest from
-//   one build: the per-bot replacement of a temporary environment switch.
+// - `trial`: read by the code under an A/B now (nothing, when none is). Off in every preset (`all`
+//   too): `--features-red=+trial` plays it against the rest, from one build.
 //
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: every one but what that
-// level of player does not do: a novice no `glance`; the rest of a skill's differences are its
-// traits'), `features_none` (a plain bot: it still roams, fights, heals and takes items). The text
-// form (`apply_features`) reads `all`, `none` (or `plain`), `+name` or `name` (on), `-name` (off),
-// separated by commas, spaces or '/', applied in order: "plain,+dodge", "-swimaim,+shortgoals".
+// level of player does not do: none `eye`, a novice no `glance`; the rest of a skill's differences
+// are its traits'), `features_none` (a plain bot: it still roams, fights, heals and takes items).
+// The text form (`apply_features`) reads `all`, `none` (or `plain`), `+name` or `name` (on),
+// `-name` (off), separated by commas, spaces or '/', applied in order: "plain,+dodge",
+// "-swimaim,+shortgoals".
 //
 // ge:summary A bot's features: each behaviour switched on or off by name, and the presets
 // ge:keywords features feature-switch bot-features apply_features features_text presets

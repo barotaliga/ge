@@ -458,6 +458,30 @@ void run(gl::Lab& lab) {
     }
     lab.metric("team.wet", alive > 0 ? static_cast<double>(wet) / static_cast<double>(alive) : 0,
                "share");
+    // Shots and damage by the target's state (net/classic_hits.hpp): the pellets' and the rockets'
+    // hits over those fired at a target in that state, the damage he took a minute lived in it,
+    // and the share of the time lived in it.
+    {
+      int64_t all = 0;
+      for (const int64_t f : r.frames_at) all += f;
+      for (int k = 0; k < cn::kTargetStates; k++) {
+        const auto i = static_cast<size_t>(k);
+        const std::string key = std::string("team.target.") + cn::kTargetStateNames[k];
+        const auto rate = [](const cn::HitCount& c) {
+          return c.fired > 0 ? static_cast<double>(c.hit) / static_cast<double>(c.fired) : 0;
+        };
+        // (player-minutes: a frame lasts the match's seconds over its frames)
+        const double lived = static_cast<double>(r.frames_at[i]) * r.seconds /
+                             std::max<double>(1, static_cast<double>(r.frames)) / 60;
+        lab.metric(key + ".pellets", rate(r.pellets_at[i]), "share");
+        lab.metric(key + ".rockets", rate(r.rockets_at[i]), "share");
+        lab.metric(key + ".rockets-fired", static_cast<double>(r.rockets_at[i].fired), "count");
+        lab.metric(key + ".damage-per-min", lived > 0 ? r.given_at[i] / lived : 0, "hp/min");
+        lab.metric(key + ".time",
+                   all > 0 ? static_cast<double>(r.frames_at[i]) / static_cast<double>(all) : 0,
+                   "share");
+      }
+    }
     // The wet time by cause (bots/fighter.hpp kWetWhy), as shares of it: what keeps the bots in
     // the water; and wet aiming, swimming and walking, each's share, speed and time still.
     for (size_t w = 0; w < 12; w++) {
