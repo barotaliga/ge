@@ -66,7 +66,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
 
   const Vec3f eye{self.origin.x, self.origin.y, self.origin.z + b.senses.set.view_height};
   const Contact* c = freshest(b.senses, eye);
-  if (b.aiming && c && c->ent != b.target && c->visible) {
+  if (b.keep && b.aiming && c && c->ent != b.target && c->visible) {
     for (const Contact& k : b.senses.contacts) {
       if (k.ent != b.target || !k.visible) continue;
       const auto from_eye = [&](const ai::Memory& m) {
@@ -186,7 +186,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     }
     // A calm view goes back onto the way, or over to a spot watched, at a hand's pace
     // (`kBackTurn`), not the aim's flick: nothing is in sight to snap onto.
-    if (b.calm) {
+    if (b.calm && b.paced) {
       const double dt = msec / 1000.0;
       const double dy = want[0] - b.yaw, dp = want[1] - b.pitch;
       want[0] = b.yaw + std::fmax(-kBackTurn * dt, std::fmin(kBackTurn * dt, dy));

@@ -214,7 +214,8 @@ void swim_view(Fighter& f, const server::RulesCommon& s, int me, int msec, bool 
     for (const sh::Contact& k : f.bot.senses.contacts) seen |= k.ent == f.bot.target && k.visible;
   const bool wading =
       self.waterlevel >= 1 && (swim || f.bot.pilot.pilot.mode == sh::PilotMode::swim);
-  if ((self.waterlevel < 2 && !wading) || seen || f.swim_exit >= 0) {
+  if ((self.waterlevel < 2 && !wading) || seen || f.swim_exit >= 0 ||
+      !f.features[sh::Feature::pace]) {
     f.swim_view_on = false;
     f.view_sent[0] = cmd.angles.x;
     f.view_sent[1] = cmd.angles.y;
@@ -518,7 +519,7 @@ bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Ve
   }
   if (!f.team || f.mode == FightMode::retreat) return false;
   // A pack a mate called, when this player is the one to fetch it (packs.hpp).
-  if (const int32_t pn = packs_goal(f, me, st, t); pn >= 0) {
+  if (const int32_t pn = f.features[sh::Feature::packs] ? packs_goal(f, me, st, t) : -1; pn >= 0) {
     go_to(f, pn);
     return true;
   }
@@ -707,8 +708,9 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     const float moves = f.traits[sh::Trait::moves];
     const bool afford = st.rockets >= 1 && st.health >= kRocketJumpHealth && f.escort.leader < 0 &&
                         moves >= kRocketJumpMoves;
-    jumper.rockets = (st.items & kWRockets) != 0 && afford;
-    jumper.grenades = (st.items & kWGrenades) != 0 && (st.items & kWRockets) == 0 && afford;
+    jumper.rockets = (st.items & kWRockets) != 0 && afford && f.features[sh::Feature::rj];
+    jumper.grenades = (st.items & kWGrenades) != 0 && (st.items & kWRockets) == 0 && afford &&
+                      f.features[sh::Feature::gj];
     jumper.level = moves >= kRocketLevelMoves[2] ? 2 : moves >= kRocketLevelMoves[1] ? 1 : 0;
     jumper.extra_s = kRocketLevelExtra_s[jumper.level];
     f.reach_n =
@@ -920,7 +922,7 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   // people's small health 3.6 a player-minute against the bots' 0.5 without it.
   int32_t near = -1;
   if (!escaping && committed < 0 && f.objective < 0 && f.diving < 0 &&
-      f.mode != FightMode::retreat) {
+      f.mode != FightMode::retreat && f.features[sh::Feature::shortgoals]) {
     const bool held = f.short_item >= 0 && t < f.short_until &&
                       f.items[static_cast<size_t>(f.short_item)].present;
     if (held) {
@@ -970,8 +972,8 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
       const int64_t now_news = f.bot.senses.stats.acquired + f.stats.taken + f.stats.heard_taken +
                                f.stats.heard_spawns + f.mind.read + f.stats.pickups +
                                f.stats.respawns + f.blows;
-      const bool kept = f.goal_item >= 0 && now_news == f.decided_news &&
-                        t - f.decided_at < kDecide_s &&
+      const bool kept = f.features[sh::Feature::commit] && f.goal_item >= 0 &&
+                        now_news == f.decided_news && t - f.decided_at < kDecide_s &&
                         f.items[static_cast<size_t>(f.goal_item)].present && !heal;
       int32_t i = f.goal_item;
       if (!kept) {
@@ -1104,11 +1106,15 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   const bool expert = moves == sh::AimSkill::expert;
   const bool average = moves == sh::AimSkill::average;
   sh::PilotSettings ps;
-  ps.hop = expert || average;
+  ps.hop = (expert || average) && f.features[sh::Feature::hop];
   ps.hop_simple = average;
   // Its lane off the route's line (shooter/pilot.hpp): a person never walks the line; the less
   // practised wander wider. A perfect player keeps to it.
-  ps.lane = skill == sh::AimSkill::perfect ? 0.f : expert ? 0.45f : average ? 0.6f : 0.75f;
+  ps.lane = skill == sh::AimSkill::perfect || !f.features[sh::Feature::lane] ? 0.f
+            : expert                                                         ? 0.45f
+            : average                                                        ? 0.6f
+                                                                             : 0.75f;
+  ps.air_steer = f.features[sh::Feature::airsteer];
   const sh::PilotHands hands = expert    ? sh::PilotHands::practised
                                : average ? sh::PilotHands::steady
                                          : sh::PilotHands::human;
@@ -1180,8 +1186,13 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   exits_init(f, g, s, entities);
   ears_init(f, sh::tier_of(traits[sh::Trait::hearing]), entities);
   spam_init(f, entities);
-  f.bot.senses.set.fov = kViewWide;
-  f.bot.senses.set.fov_y = kViewHigh;
+  // A screen 120 degrees across (`screen`), or the round cone of the senses' own setting.
+  if (f.features[sh::Feature::screen]) {
+    f.bot.senses.set.fov = kViewWide;
+    f.bot.senses.set.fov_y = kViewHigh;
+  }
+  f.bot.keep = f.features[sh::Feature::keep];
+  f.bot.paced = f.features[sh::Feature::pace];
 }
 
 sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, int msec) {
@@ -1189,8 +1200,10 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   const Stats st = read_stats(s, me);
   const double t = s.sv.time;
   f.bot.pilot.grenade_ready = st.weapon == kWGrenades;  // a grenade jump fires with it in hand
-  f.bot.calm = f.escort.leader < 0;  // a companion's view is its own (it faces the leader)
-  packs_hear(f, t);                  // rocket launches heard, by who fired (packs.hpp)
+  // A companion's view is its own (it faces the leader).
+  f.bot.calm = f.escort.leader < 0 && f.features[sh::Feature::calm];
+  if (f.features[sh::Feature::packs])
+    packs_hear(f, t);  // rocket launches heard, by who fired (packs.hpp)
   ai::Why* why = f.bot.pilot.why ? f.bot.pilot.why->follow(slot, f.bot.pilot.command) : nullptr;
   f.stats.commands++;
   const bool dead = st.health <= 0;
@@ -1247,8 +1260,9 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   f.bot.shot_speed = held ? held->shot_speed : 0;
   // A novice fires at the plain distance; the rest at where he will be, on his arc in the air.
   f.bot.lob = held && held->bit == kWGrenades;
-  f.bot.intercepts = f.skill == sh::AimSkill::novice ? 1 : 3;
-  f.bot.target_arc = f.skill != sh::AimSkill::novice;
+  const bool leads = f.skill != sh::AimSkill::novice && f.features[sh::Feature::lead];
+  f.bot.intercepts = leads ? 3 : 1;
+  f.bot.target_arc = leads;
   f.bot.aim_dz = held ? held->aim_dz : 0;
   // A rocket near at hand is aimed at his middle for the direct blow; farther off at his feet,
   // where the blast reaches him whichever way he steps.
@@ -1261,8 +1275,10 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
 
   if (f.escort.leader >= 0) escort_sense(f, s, me, t);
   if (f.hunts) hunt_sense(f, s);
-  watch_look(f, s, me, dead, t, why);  // the ways in watched (watch.hpp)
-  spam_news_look(f, s, me, st, t);     // or one an enemy comes by, a rocket ready (spam.hpp)
+  if (f.features[sh::Feature::watch])
+    watch_look(f, s, me, dead, t, why);  // the ways in watched (watch.hpp)
+  // Or one an enemy comes by, a rocket ready (spam.hpp).
+  if (f.features[sh::Feature::spam]) spam_news_look(f, s, me, st, t);
   sh::MoveCmd cmd = sh::bot_source(f.bot).next(&f.bot, s.sv, slot, msec);
   f.stats.mode_commands[static_cast<int>(f.mode)]++;
   if (held) f.stats.weapon_commands[held->number]++;
@@ -1306,7 +1322,8 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     }
   }
 
-  if (!dead) fighter_dodge(f, s, me, t, why, cmd);  // the side steps (footwork.hpp)
+  if (!dead && f.features[sh::Feature::dodge])
+    fighter_dodge(f, s, me, t, why, cmd);  // the side steps (footwork.hpp)
 
   sh::Vec3f way;
   const bool swim = water_way(f, s, me, t, msec, why, way);  // every command: it keeps the air
@@ -1353,7 +1370,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
       cmd.angles.x = out.angles.x;
       cmd.angles.y = out.angles.y;
       cmd.buttons = static_cast<uint8_t>((cmd.buttons & ~sh::kButtonJump) | out.buttons);
-    } else if (fights) {
+    } else if (fights && f.features[sh::Feature::swimaim]) {
       // Fighting in the water: the view stays on him, as a person's does, and the way is swum
       // with the keys under it: forward and side along the view's axes, what they leave of the
       // rise pressed straight up.
@@ -1406,9 +1423,12 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     f.stats.switches++;
   }
 
-  if (!dead) spam_fire(f, s, me, st, t, cmd);
-  if (!dead) spam_news_fire(f, s, me, st, t, cmd);
-  if (!dead) packs_bore(f, s, me, st, t, cmd);  // its launcher to the quad (packs.hpp)
+  if (!dead && f.features[sh::Feature::spam]) {
+    spam_fire(f, s, me, st, t, cmd);
+    spam_news_fire(f, s, me, st, t, cmd);
+  }
+  if (!dead && f.features[sh::Feature::packs])
+    packs_bore(f, s, me, st, t, cmd);  // its launcher to the quad
   if (!dead) button_poke_cmd(f, s, me, t, cmd);
   if (!dead && f.escort.leader >= 0) escort_command(f, s, me, t, msec, cmd);
 

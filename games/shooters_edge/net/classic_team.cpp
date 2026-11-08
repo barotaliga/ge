@@ -212,6 +212,11 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
           r.error = p.name + ": " + r.error;
           return r;
         }
+        p.features = sh::features_of(p.skill);
+        if (!sh::apply_features(side.features, p.features, r.error)) {
+          r.error = p.name + ": " + r.error;
+          return r;
+        }
         gn::open_sim_transport(ct[static_cast<size_t>(k)], net,
                                gn::sim_address(static_cast<uint32_t>(k + 1), kPortClient));
         ClientConfig cc;
@@ -282,6 +287,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         seat.mirror->baselines = false;
       }
       const server::RulesCommon& seen = seat.mirror ? seat.mirror->s : s;
+      seat.fighter.features = r.players[static_cast<size_t>(k)].features;
       team_fighter_setup(tn, seat.fighter, seen, slot, map->spec.entities.c_str(), seat.skill,
                          r.players[static_cast<size_t>(k)].traits, kHz,
                          opt.seed + 31u * static_cast<uint32_t>(k),

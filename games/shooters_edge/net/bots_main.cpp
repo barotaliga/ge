@@ -15,6 +15,7 @@
 #include <poll.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
@@ -60,6 +61,8 @@ void usage() {
   std::printf(
       "shooters_edge_bots --server=<host:port> [--bots=4] [--team=bots] [--colour=4]\n"
       "  [--basedir=<folder holding id1>] [--skills=expert,average,...] [--traits=<a,b,...>]\n"
+      "  [--features=<-name,+name,...: every bot's; ';' between bots' own> "
+      "(shooter/features.hpp)]\n"
       "  [--name=<prefix: name1, name2 ...> | --names=<a,b,c,d>: else made-up handles]\n"
       "  [--feed=<file: the match as JSON lines>] [--feed-every=5] [--control=<file: lines\n"
       "  appended to it are console lines>] [--out=<match folder>] [--seconds=<n>] [--until-end]\n"
@@ -68,7 +71,8 @@ void usage() {
       "[--view-size=1280x720]\n"
       "  [--snapshot=<file.png>] [--snapshot-every=5] [--locs=<folder with locs/>]\n"
       "Console (stdin): a line goes to every bot; 'bot<N> <line>' to one. Bot settings: skill,\n"
-      "temper, traits, <trait> <1..10>; 'status'; 'autoready 0|1'; 'paths 0|1'; 'quit'. Anything "
+      "temper, traits, <trait> <1..10>, features <-name,+name>; 'status'; 'autoready 0|1'; 'paths "
+      "0|1'; 'quit'. Anything "
       "else is sent\n"
       "to the server as the bot's console line (ready, break, say ...).\n");
 }
@@ -104,6 +108,14 @@ int run(int argc, char** argv) {
       cfg.skills = split(v);
     } else if (flag(a, "traits", v)) {
       cfg.traits = split(v);
+    } else if (flag(a, "features", v)) {
+      // One set for every bot, or each bot's apart by ';' (shooter/features.hpp).
+      cfg.features.clear();
+      for (size_t at = 0; at <= v.size();) {
+        const size_t end = std::min(v.find(';', at), v.size());
+        cfg.features.push_back(v.substr(at, end - at));
+        at = end + 1;
+      }
     } else if (flag(a, "name", v)) {
       cfg.name_prefix = v;
       named = true;

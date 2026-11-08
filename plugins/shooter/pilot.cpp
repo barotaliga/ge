@@ -1189,7 +1189,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           w.yaw = unwrap(yaw_at(s.origin, B), p.yaw);
           flip_keys(w.yaw, view_when_keys_land(p, w.yaw, msec), w.forward, w.side);
           because = "in the flip: the view back to the target";
-        } else if (speed < kAirSlow || err_abs > kAirGiveUp) {
+        } else if (!p.set.air_steer || speed < kAirSlow || err_abs > kAirGiveUp) {
           // Slow (straight up off a standing jump), or the aim behind (passed over it): the view
           // at the aim and forward, as the proof flew.
           w.yaw = unwrap(yaw_at(s.origin, aim), p.yaw);

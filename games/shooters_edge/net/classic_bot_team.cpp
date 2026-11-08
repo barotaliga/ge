@@ -219,6 +219,7 @@ void set_up(BotTeam& t, BotSeat& s) {
   s.mirror->baselines = false;
   if (!t.movers_named) name_movers(t, c);
   s.fighter = std::make_unique<bt::Fighter>();
+  s.fighter->features = s.features;
   team_fighter_setup(*t.nav, *s.fighter, s.mirror->s, c.playernum, t.loaded->spec.entities.c_str(),
                      s.skill, s.traits, kHz, t.cfg.seed + 31u * static_cast<uint32_t>(s.index),
                      s.name);
@@ -316,8 +317,17 @@ bool seat_command(BotTeam& t, BotSeat& s, const std::string& line) {
       return false;
     }
     s.reset = true;
+  } else if (cmd == "features") {
+    // The rest of the line: "features -dodge, +rj" as well as "features -dodge,+rj".
+    const size_t at = line.find("features") + 8;
+    if (!sh::apply_features(line.substr(at), s.features, error)) {
+      say(t, s.name + ": " + error);
+      return false;
+    }
+    s.reset = true;
   } else if (cmd == "status") {
-    say(t, s.name + ": " + sh::aim_skill_name(s.skill) + " " + sh::traits_text(s.traits));
+    say(t, s.name + ": " + sh::aim_skill_name(s.skill) + " " + sh::traits_text(s.traits) +
+               " features " + sh::features_text(s.features));
     return true;
   } else {
     bool trait = false;
@@ -401,6 +411,13 @@ bool bot_team_start(BotTeam& t, const BotTeamConfig& cfg, std::string& error) {
     if (!cfg.traits.empty() &&
         !sh::apply_traits(cfg.traits[static_cast<size_t>(k) % cfg.traits.size()], s->traits, error))
       return false;
+    s->features = sh::features_of(s->skill);
+    if (!cfg.features.empty() &&
+        !sh::apply_features(cfg.features[static_cast<size_t>(k) % cfg.features.size()], s->features,
+                            error)) {
+      error.insert(0, "bots: " + s->name + ": ");
+      return false;
+    }
     if (cfg.open ? !cfg.open(s->transport, k, error)
                  : !gn::open_udp_transport(s->transport, gn::ipv4(0, 0, 0, 0, 0), &error)) {
       std::string why = "bots: ";

@@ -709,6 +709,7 @@ int run_main(int argc, char** argv) {
     bc.out = args.bots_out;
     bc.paths = args.bots_paths;
     bc.names = shooters_edge::bots::bot_handles(bc.seed + 1000u, bc.bots);  // people's handles
+    if (!args.bot_features.empty()) bc.features = {args.bot_features};
     if (!args.skills.empty()) {
       bc.skills.clear();
       for (size_t at = 0; at <= args.skills.size();) {

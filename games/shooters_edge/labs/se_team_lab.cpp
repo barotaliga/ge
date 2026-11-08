@@ -179,6 +179,12 @@ void run(gl::Lab& lab) {
       at = end + 1;
     }
   }
+  // The bots' features (shooter/features.hpp): every player's, then red's and blue's over them.
+  for (int k = 0; k < 2; k++) {
+    o.teams[k].features = lab.arg("features");
+    const std::string& own = lab.arg(k == 0 ? "features-red" : "features-blue");
+    if (!own.empty()) o.teams[k].features += "," + own;
+  }
   const std::string save = lab.arg("save");
   o.packed = save.ends_with("z");  // a `.mvdz`: recorded packed as it goes
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
@@ -418,6 +424,13 @@ void run(gl::Lab& lab) {
     traits_table.rows.push_back(row);
   }
   lab.table(traits_table);
+  // The features, when a player's are not his preset's (shooter/features.hpp).
+  gl::LabTable feat_table{
+      "each player's bot features (shooter/features.hpp)", {"player", "features"}, {}};
+  for (const cn::TeamPlayer& p : r.players)
+    if (p.features != sh::features_of(p.skill))
+      feat_table.rows.push_back({p.name, sh::features_text(p.features)});
+  if (!feat_table.rows.empty()) lab.table(feat_table);
   lab.metric("team.sounds-taken-in", static_cast<double>(heard), "count");
   lab.metric("team.sounds-missed", static_cast<double>(sounds - heard), "count");
   lab.metric("team.items-heard-taken", static_cast<double>(heard_taken), "count");
@@ -870,6 +883,11 @@ const gl::LabSpec kSpec{
         {"traits", "",
          "each player's traits over his preset, red's then blue's, comma separated, each "
          "name=value joined by / (aim_rl=9/timing=3); empty: the preset"},
+        {"features", "",
+         "every bot's features over its skill's preset (shooter/features.hpp): +name, -name, all, "
+         "none (plain), comma separated (-swimaim,+shortgoals); empty: the preset"},
+        {"features-red", "", "red's features over --features (the A/B by team: one side without)"},
+        {"features-blue", "", "blue's features over --features"},
         {"items", "key",
          "the items noted with the nearest a player came: key (the held armour, the quad) or all"},
         {"client-fed", "0",

@@ -110,6 +110,8 @@ struct PilotSettings {
   NavJumper jumper;
   float rocket_pitch = 80;
   float rocket_back_pitch = 55;
+  // AIR STEERING (`air` below); off, a flight is flown with the view at its target and forward.
+  bool air_steer = true;
   float swim_arrive = 24;  // a swim node is reached within this, units (any way, not across)
   // THE LANE: a person does not walk the route's line. On a level walk with room either side (the
   // graph's `nav_room`), the walker keeps `lane` of that room off the line, to one side or the

@@ -31,6 +31,7 @@
 
 #include "progs/file.hpp"
 #include "shooter/aim.hpp"
+#include "shooter/features.hpp"
 #include "shooter/locs.hpp"
 #include "shooter/pilot.hpp"
 #include "shooter/temper.hpp"
@@ -52,6 +53,9 @@ struct TeamSide {
   // Each player's traits over his skill's and temperament's preset ("aim_rl=9/timing=3",
   // shooter/traits.hpp; missing or empty: the preset).
   std::vector<std::string> traits;
+  // The side's bot features over each skill's preset (shooter/features.hpp: "-dodge,+rj",
+  // "plain"; empty: the preset), for every player on it.
+  std::string features;
   std::vector<std::string> names;  // the players' (empty: the team's name and a number)
 };
 
@@ -88,7 +92,8 @@ struct TeamPlayer {
   int slot = -1;
   sh::AimSkill skill = sh::AimSkill::average;
   sh::Temper temper = sh::Temper::balanced;
-  sh::Traits traits;  // what he played with
+  sh::Traits traits;      // what he played with
+  sh::Features features;  // and the behaviours he had (shooter/features.hpp)
   float frags = 0;
   int deaths = 0;
   int64_t shots = 0, pickups = 0, switches = 0, packs = 0, held_fire = 0;
