@@ -69,6 +69,10 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   // The pilot's command, with its own trace (pilot_next advances the command count).
   MoveCmd cmd = pilot_source(b.pilot).next(&b.pilot, sv, slot, msec);
   const float pilot_yaw = b.pilot.pilot.yaw;
+  // Swimming (`pools`), the pilot's wish is pressed again under another view in three dimensions:
+  // its pitch dives and rises.
+  const Vec3f pilot_view = cmd.angles;
+  const bool swim3d = b.pools && self.waterlevel >= 2;
   b.stats.commands++;
 
   const Vec3f eye{self.origin.x, self.origin.y, self.origin.z + b.senses.set.view_height};
@@ -240,7 +244,10 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     b.pressed[1] = out[1];
     b.yaw = static_cast<float>(out[0]);
     b.pitch = static_cast<float>(out[1]);
-    turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
+    if (swim3d)
+      turn_axes_swim(cmd.forward, cmd.side, cmd.up, pilot_view, {b.pitch, b.yaw, 0});
+    else
+      turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
     cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
   } else {
     if (b.calm && walking_mode(b.pilot.pilot.mode)) {
@@ -308,7 +315,10 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       const double drift = kCalmDrift * core::libm::sin(b.calm_t * 0.7) * dt;
       b.yaw = static_cast<float>(b.yaw + step + drift);
       b.pitch = static_cast<float>(b.pitch * (1 - dt) + 2 * core::libm::sin(b.calm_t * 0.4) * dt);
-      turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
+      if (swim3d)
+        turn_axes_swim(cmd.forward, cmd.side, cmd.up, pilot_view, {b.pitch, b.yaw, 0});
+      else
+        turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
       cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
     } else {
       b.yaw = pilot_yaw;

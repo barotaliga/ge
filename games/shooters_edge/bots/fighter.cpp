@@ -1198,6 +1198,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   f.bot.senses.set.course_s = f.features[sh::Feature::eye] ? f.bot.aim.react_med : 0;
   f.bot.selfaim = f.features[sh::Feature::selfaim];
   f.bot.glance = f.features[sh::Feature::glance];
+  f.bot.pools = f.bot.pilot.pilot.set.floor_swim = f.features[sh::Feature::pools];
 }
 
 sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, int msec) {
@@ -1212,7 +1213,28 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   ai::Why* why = f.bot.pilot.why ? f.bot.pilot.why->follow(slot, f.bot.pilot.command) : nullptr;
   f.stats.commands++;
   const bool dead = st.health <= 0;
-  f.stats.wet += !dead && s.world.entities[static_cast<size_t>(me)].waterlevel >= 2;
+  if (!dead && s.world.entities[static_cast<size_t>(me)].waterlevel >= 2) {
+    const auto& e = s.world.entities[static_cast<size_t>(me)];
+    f.stats.wet++;
+    int64_t* w = f.stats.wet_why;
+    w[static_cast<int>(f.mode)]++;
+    w[4] += f.bot.aiming;
+    const sh::Pilot& pl = f.bot.pilot.pilot;
+    const sh::NavGraph* g = pl.g;
+    w[5] += g && f.goal_node >= 0 && g->nodes[static_cast<size_t>(f.goal_node)].wet;
+    w[6] += e.velocity.x * e.velocity.x + e.velocity.y * e.velocity.y < 50 * 50;
+    const int how = f.bot.aiming ? 0 : pl.mode == sh::PilotMode::swim ? 1 : 2;
+    const double across = std::sqrt(static_cast<double>(e.velocity.x) * e.velocity.x +
+                                    static_cast<double>(e.velocity.y) * e.velocity.y);
+    f.stats.wet_speed[how] += across;
+    f.stats.wet_n[how]++;
+    f.stats.wet_still[how] += across < 50;
+    w[7] += f.bot.pilot.pilot.mode == sh::PilotMode::swim;
+    w[8] += f.bot.pilot.pilot.mode == sh::PilotMode::walk;
+    w[9] += e.waterlevel >= 3;
+    w[10] += f.role == Role::hold;
+    w[11] += g && pl.goal >= 0 && !g->nodes[static_cast<size_t>(pl.goal)].wet;  // passing through
+  }
   if (!f.was_dead && dead)  // where it died: a danger spot (`best_item` heals away from it)
     mind_danger(f, s.world.entities[static_cast<size_t>(me)].origin, t);
   if (f.was_dead && !dead) {

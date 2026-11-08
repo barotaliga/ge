@@ -137,10 +137,13 @@ struct TeamPlayer {
   int64_t took[12] = {};                     // pickups by the item's kind (bots/fighter.hpp)
   int64_t swim_fights = 0;                   // commands swum with the view on an enemy in sight
   int64_t wet = 0;                           // commands alive waist deep in water
-  float travelled = 0;                       // units along the path
-  std::string last;                          // where he stood at the end, and what he was going for
-  std::vector<sh::Vec3f> path;               // every path_every frames
-  std::vector<uint8_t> roles;                // beside it: its role, 255 dead
+  int64_t wet_why[12] = {};                  // and by cause (bots/fighter.hpp kWetWhy)
+  double wet_speed[3] = {};                  // wet and aiming, swimming, walking (bots/fighter.hpp)
+  int64_t wet_n[3] = {}, wet_still[3] = {};
+  float travelled = 0;            // units along the path
+  std::string last;               // where he stood at the end, and what he was going for
+  std::vector<sh::Vec3f> path;    // every path_every frames
+  std::vector<uint8_t> roles;     // beside it: its role, 255 dead
   std::vector<int16_t> known;     // beside it: how many items it knows (recalls) of the map's
   int64_t said = 0;               // team messages it said
   int64_t read = 0, missed = 0;   // its mates' team lines it read, and missed

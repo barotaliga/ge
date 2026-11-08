@@ -95,6 +95,9 @@ struct Bot {
   // change a reaction late): accuracy 31.7 -> 35.9 %, red with it against blue without 36.3 to
   // 30.4 %, and the dodge no longer costs the dodger its aim.
   bool selfaim = true;
+  // Swimming, the pilot's wish pressed under the aim's or the calm view in three dimensions (its
+  // dive and rise kept); off, turned in the plane alone (features.hpp `pools`).
+  bool pools = true;
   // THE GLANCE (`glance`): a calm walker looks aside every `kGlanceMin_s` to that plus
   // `kGlanceSpread_s` (drawn), 75 or 120 degrees off where it looks, to the side whose line of
   // sight runs longest (past 400 units), held a moment and turned back at the calm view's pace:

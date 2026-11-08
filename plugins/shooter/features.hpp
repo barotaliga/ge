@@ -39,22 +39,23 @@
 //   (senses.hpp `course_s`); off, the instant the server has it, which no side step can fool.
 // - `selfaim`: the aim worked out from where its own eye will be when the hands catch up (a
 //   person's hand allows for his own strafe); off, the hands chase the turn its own motion makes.
+// - `pools`: a pool's floor swum over (pilot.hpp `floor_swim`), and the swim's wish pressed in
+//   three dimensions under the aim's or the calm view (bot.hpp `pools`).
 // - `trial`: the code under an A/B right now reads it (nothing, when no trial is under way). Off in
 //   every preset (`all` too), so `--features-red=+trial` plays the trial against the rest from
 //   one build: the per-bot replacement of a temporary environment switch.
 //
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: every one but what that
 // level of player does not do: a novice no `glance`; the rest of a skill's differences are its
-// traits'), `features_none` (a plain bot: it still roams, fights,
-// heals and takes items). The text form (`apply_features`) reads a list of words: `all`, `none`
-// (or `plain`), `+name` or `name` (on), `-name` (off), separated by commas, spaces or '/', applied
-// in order: "plain,+dodge", "-swimaim,+shortgoals".
+// traits'), `features_none` (a plain bot: it still roams, fights, heals and takes items). The text
+// form (`apply_features`) reads `all`, `none` (or `plain`), `+name` or `name` (on), `-name` (off),
+// separated by commas, spaces or '/', applied in order: "plain,+dodge", "-swimaim,+shortgoals".
 //
 // ge:summary A bot's features: each behaviour switched on or off by name, and the presets
 // ge:keywords features feature-switch bot-features apply_features features_text presets
 // ge:keywords calm pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch
 // ge:keywords spam packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot
-// ge:keywords ab-test trial eye selfaim course-change own-motion
+// ge:keywords ab-test trial eye selfaim course-change own-motion pools pool-floor swim-under-view
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -92,9 +93,10 @@ enum class Feature : uint8_t {
   glance,
   eye,
   selfaim,
+  pools,
   trial,
 };
-constexpr size_t kFeatures = 25;
+constexpr size_t kFeatures = 26;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

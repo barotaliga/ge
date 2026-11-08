@@ -142,6 +142,11 @@ constexpr int kRoles = 5;
 const char* role_name(Role r);
 struct Team;
 
+// The wet commands' causes, FighterStats::wet_why's columns.
+inline constexpr const char* kWetWhy[12] = {"roam",       "fight",    "chase", "retreat",
+                                            "aiming",     "goal-wet", "still", "pilot-swim",
+                                            "pilot-walk", "under",    "hold",  "route-dry"};
+
 struct FighterStats {
   int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;
   int64_t goal_changes = 0;  // its item goal changed (the commitment's measure)
@@ -154,8 +159,15 @@ struct FighterStats {
   int64_t took[12] = {};    // its own pickups by the item's kind (profiles/items.hpp ItemKind)
   int64_t swim_fights = 0;  // commands swum under the aim, an enemy in sight
   int64_t wet = 0;          // commands alive with the waist in water (swimming or wading)
-  int64_t taken = 0;        // items seen to go (by anyone)
-  int64_t modes = 0;        // mode changes
+  // And the wet commands by what it was doing (`kWetWhy`): its mode, aiming, its goal in the
+  // water, standing still, the pilot swimming or walking a pool's floor, the head under.
+  int64_t wet_why[12] = {};
+  // Wet and aiming, swimming (the pilot's swim), walking (any other pilot mode): the speed across
+  // summed, the commands, those under 50 units/s.
+  double wet_speed[3] = {};
+  int64_t wet_n[3] = {}, wet_still[3] = {};
+  int64_t taken = 0;                // items seen to go (by anyone)
+  int64_t modes = 0;                // mode changes
   int64_t mode_commands[4] = {};    // commands spent in each mode
   int64_t weapon_commands[9] = {};  // commands holding each weapon, by its number (1..8)
   int64_t packs = 0;                // backpacks gone for

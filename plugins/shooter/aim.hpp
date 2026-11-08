@@ -67,5 +67,9 @@ void aim_angles(Vec3f eye, Vec3f at, float& yaw, float& pitch);
 // The forward and side axes `forward`, `side` meant from a view at `from_yaw`, pressed from a view
 // at `to_yaw` so the wish in the world is the same, on the protocol's grid.
 void turn_axes(int16_t& forward, int16_t& side, float from_yaw, float to_yaw);
+// The same in the water, where the move takes forward and side along the view's pitch too and up
+// straight up: the wish pressed under the view `from` (pitch, yaw) pressed again under `to`, what
+// forward and side leave of its height on up.
+void turn_axes_swim(int16_t& forward, int16_t& side, int16_t& up, Vec3f from, Vec3f to);
 
 }  // namespace ge::shooter

@@ -17,9 +17,10 @@ namespace ge::shooter {
 
 namespace {
 
-constexpr float kRideArrive = 2;       // a ride is over within this of the top node's height, units
-constexpr float kSwimPitch = 70;       // a swimmer's view pitched at most this far, degrees
-constexpr float kSwimRise = 16;        // the next node this much higher: jump held to rise, units
+constexpr float kRideArrive = 2;  // a ride is over within this of the top node's height, units
+constexpr float kSwimPitch = 70;  // a swimmer's view pitched at most this far, degrees
+constexpr float kSwimRise = 16;   // the next node this much higher: jump held to rise, units
+constexpr float kOffFloor = 12;   // a pool's floor swum over this far above its standing height
 constexpr float kLaneSettle_s = 0.4f;  // a lane's offset follows the room ahead this fast, s
 constexpr float kRideRest = 12;     // a ridden mover this near its rest may be stepped onto, units
 constexpr float kStandUp = 8;       // a node is arrived at within this up or down, units
@@ -146,8 +147,22 @@ bool leaps(NavKind k) { return k == NavKind::jump || k == NavKind::rocket; }
 // A flight off the ground on the link: a leap, or a grenade jump (its start played apart).
 bool flies(NavKind k) { return leaps(k) || k == NavKind::grenade; }
 
+// A swimmer over a pool's floor (PilotSettings::floor_swim): in the water at most `floor_swim_up`
+// over the floor's height `z` (and no more than a step under it).
+bool over_floor(const Pilot& p, const PilotSense& s, float z) {
+  const float dz = s.origin.z - z;
+  return p.set.floor_swim && s.waterlevel >= 2 && !s.onground && dz <= p.set.floor_swim_up &&
+         dz >= -kStepHeight - 2;
+}
+
+// A pool's floor node, as `floor_swim` swims over it: wet, not a cell's centre, and not on a mover
+// (a plat in the water is boarded standing on it).
+bool pool_floor(const NavNode& n) { return n.wet && !n.swim && n.mover < 0 && n.ride < 0; }
+
 bool reached(const Pilot& p, const PilotSense& s, int32_t n) {
   const NavNode& b = node(*p.g, n);
+  if (pool_floor(b) && over_floor(p, s, b.origin.z))  // a pool's floor node, swum over
+    return across(s.origin, b.origin) <= p.set.swim_arrive;
   if (b.swim || s.waterlevel >= 2) {  // a wet cell's centre, or any node to a swimmer: near it
     const Vec3f d = s.origin - b.origin;
     return dot(d, d) <= p.set.swim_arrive * p.set.swim_arrive;
@@ -166,12 +181,19 @@ bool is_barred(const Pilot& p, int32_t m) {
   return false;
 }
 
-// Whether the link's mover keeps the pilot at its start now.
+// Whether the link's mover keeps the pilot at its start now. A ride's plat away from its rest
+// with a swimmer under its top (`floor_swim`: on a pool's floor under a raised plat, which a plat
+// coming down onto him sends back up, so it would never come for him) is in his way too.
 bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t a, int32_t b) {
-  if (l.mover < 0 || l.kind == NavKind::ride) return false;
+  if (l.mover < 0) return false;
   const NavMover* rest = mover_of(p.g->movers, l.mover);
   const NavMover* now = mover_of(s.movers, l.mover);
   if (rest == nullptr || now == nullptr) return false;
+  if (l.kind == NavKind::ride) {
+    const float up = now->absmin.z - rest->absmin.z;
+    return p.set.floor_swim && s.waterlevel >= 2 && (up > kRideRest || up < -kRideRest) &&
+           s.origin.z + kPlayerMins.z < now->absmax.z - kStandUp;
+  }
   const NavNode& na = node(*p.g, a);
   const NavNode& nb = node(*p.g, b);
   if (rest->model != nullptr) {
@@ -350,7 +372,10 @@ bool passed(const Pilot& p, const PilotSense& s, size_t k) {
   if (l && l2 && through(*l) && through(*l2) && level(g, a, b) && level(g, b, p.route[k + 2])) {
     float f = 0;
     const float off = off_segment(s.origin, node(g, a).origin, node(g, b).origin, &f);
-    if (!on_height(s, node(g, a).origin, node(g, b).origin, f)) return false;
+    const bool swum =
+        pool_floor(node(g, a)) && pool_floor(node(g, b)) &&
+        over_floor(p, s, node(g, a).origin.z + (node(g, b).origin.z - node(g, a).origin.z) * f);
+    if (!swum && !on_height(s, node(g, a).origin, node(g, b).origin, f)) return false;
     // (a walker keeping a lane off the line passes a node as far off it as the lane is)
     const float lane = p.offset < 0 ? -p.offset : p.offset;
     return across(s.origin, node(g, b).origin) <= p.set.arrive + lane ||
@@ -362,9 +387,12 @@ bool passed(const Pilot& p, const PilotSense& s, size_t k) {
 // On a level walk on through its end (an overshoot off a drop, a corner cut), the next link's
 // line is nearer the player than this one's: it is on the next link already.
 bool nearer_on(const Pilot& p, const PilotSense& s) {
-  if (!s.onground || p.k + 2 >= p.route.size()) return false;
+  if (p.k + 2 >= p.route.size()) return false;
   const NavGraph& g = *p.g;
   const int32_t a = p.route[p.k], b = p.route[p.k + 1], c = p.route[p.k + 2];
+  const bool swum =
+      pool_floor(node(g, b)) && pool_floor(node(g, c)) && over_floor(p, s, node(g, b).origin.z);
+  if (!s.onground && !swum) return false;
   const NavLink* l = link_of(g, a, b);
   const NavLink* l2 = link_of(g, b, c);
   if (!l || !l2 || l->mover >= 0 || !through(*l2) || !level(g, b, c) || leaps(l->kind))
@@ -372,7 +400,7 @@ bool nearer_on(const Pilot& p, const PilotSense& s) {
   const float here = off_segment(s.origin, node(g, a).origin, node(g, b).origin);
   float f = 0;
   const float there = off_segment(s.origin, node(g, b).origin, node(g, c).origin, &f);
-  return there + 1 < here && on_height(s, node(g, b).origin, node(g, c).origin, f);
+  return there + 1 < here && (swum || on_height(s, node(g, b).origin, node(g, c).origin, f));
 }
 
 // The point `target` moved off the route's line by the walker's lane (PilotSettings::lane): the
@@ -965,15 +993,28 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         because = "in the air: the wish across the velocity";
       }
     } else if (l.kind == NavKind::swim || node(g, b).swim ||
-               (s.waterlevel >= 2 && node(g, a).swim)) {
+               (s.waterlevel >= 2 && node(g, a).swim) ||
+               (p.set.floor_swim && s.waterlevel >= 2 && !s.onground && l.mover < 0 &&
+                pool_floor(node(g, a)) && pool_floor(node(g, b)))) {
       // Swimming: the view pitched at the next node, forward, and jump held to rise; out of the
-      // water onto a dry node by the climb the nav proved; into it off a dry edge, walked.
+      // water onto a dry node by the climb the nav proved; into it off a dry edge, walked. A
+      // pool's floor swum over (`floor_swim`): level, off the floor (where its friction slows a
+      // swimmer) and no more than `floor_swim_up` over it, while the way to the next node is
+      // clear at that height; else down at the node (under a lintel at the floor's height).
       const Vec3f me = s.origin;
-      const float flat = across(me, B);
-      const float dz = B.z - me.z;
+      const bool floor = pool_floor(node(g, b)) && l.kind != NavKind::swim;
+      float aim_z = B.z;
+      if (floor && p.set.floor_swim && s.world != nullptr) {
+        const float z = std::clamp(me.z, B.z + kOffFloor, B.z + p.set.floor_swim_up);
+        const HullTrace tr = player_trace(*s.world, me, {B.x, B.y, z});
+        if (!tr.startsolid && tr.fraction >= 1) aim_z = z;
+      }
+      const float flat = floor ? std::max(across(me, B), p.set.look) : across(me, B);
+      const float dz = aim_z - me.z;
       w.yaw = unwrap(yaw_at(me, B), p.yaw);
       w.forward = facing(w.yaw, p.yaw);
-      if (!node(g, b).swim && s.waterlevel >= 1 && dz > -kSwimRise) {
+      if (!node(g, b).swim && !(floor && p.set.floor_swim) && s.waterlevel >= 1 &&
+          dz > -kSwimRise) {
         MoveState ms;
         ms.origin = me;
         ms.waterlevel = s.waterlevel;
@@ -1009,7 +1050,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         replan(p, s);
         because = "no nearer in the water: plan again";
       }
-    } else if (l.kind == NavKind::ride) {
+    } else if (l.kind == NavKind::ride && !mover_in_way(p, s, l, a, b)) {
       if (p.mode != PilotMode::ride) p.stats.rides++;
       p.mode = PilotMode::ride;
       because = "carried up";
@@ -1022,6 +1063,16 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
                                             : d < p.set.look        ? d / p.set.look
                                                                     : 1);
         because = "carried up, stepping to the middle";
+      }
+      // A plat in the water (`floor_swim`): a swimmer over its top swims down onto it, as a plat
+      // goes up only for a player standing on it.
+      const NavMover* now = mover_of(s.movers, l.mover);
+      if (p.set.floor_swim && now != nullptr && s.waterlevel >= 2 && !s.onground &&
+          s.origin.z > now->absmax.z - kPlayerMins.z + kStandUp) {
+        w.yaw = unwrap(yaw_at(s.origin, B), p.yaw);
+        w.pitch = kSwimPitch;
+        w.forward = 1;
+        because = "swimming down onto the plat";
       }
     } else if (mover_in_way(p, s, l, a, b) && p.mode != PilotMode::air) {
       if (p.mode != PilotMode::wait) {
@@ -1050,6 +1101,25 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
           away = {away.x < 0 ? -1.0f : 1.0f, 0, 0};
         else
           away = {0, away.y < 0 ? -1.0f : 1.0f, 0};
+        if (p.set.floor_swim && s.world != nullptr) {
+          // Out of the side nearest the player that is open (a plat in a shaft is walled on
+          // some sides): the four, by how far each is from his box's edge to the mover's.
+          const Vec3f sides[4] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}};
+          const float gaps[4] = {in->absmax.x - (s.origin.x + kPlayerMins.x),
+                                 (s.origin.x + kPlayerMaxs.x) - in->absmin.x,
+                                 in->absmax.y - (s.origin.y + kPlayerMins.y),
+                                 (s.origin.y + kPlayerMaxs.y) - in->absmin.y};
+          float best = 1e30f;
+          for (int i = 0; i < 4; i++) {
+            const float go = gaps[i] + kClear;
+            if (go >= best) continue;
+            const HullTrace tr = player_trace(*s.world, s.origin, s.origin + sides[i] * go);
+            if (!tr.startsolid && tr.fraction >= 1) {
+              best = go;
+              away = sides[i];
+            }
+          }
+        }
         w.yaw = unwrap(heading(away.x, away.y), p.yaw);
         w.forward = 0.5f;
         because = "a mover in the way: stepping clear of it";
@@ -1288,8 +1358,18 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
       }
     }
 
-    // STUCK and LOST, on the ground while moving under its own legs.
-    if (!replanned && s.onground &&
+    // STUCK and LOST, on the ground while moving under its own legs (or swimming a walk).
+    const bool swimming_walk =
+        p.set.floor_swim && s.waterlevel >= 2 && !s.onground && p.mode == PilotMode::walk;
+    if (!replanned && swimming_walk && p.k + 1 < p.route.size() &&
+        std::min(node(g, p.route[p.k]).origin.z, node(g, p.route[p.k + 1]).origin.z) - s.origin.z >
+            p.set.lost_under) {
+      p.stats.lost++;
+      replanned = true;
+      replan(p, s);
+      because = "in the water under the way: plan again";
+    }
+    if (!replanned && (s.onground || swimming_walk) &&
         (p.mode == PilotMode::walk || p.mode == PilotMode::jump || p.mode == PilotMode::run_up)) {
       const float d = across(s.origin, target);
       if (d < p.best - 0.5f) {
