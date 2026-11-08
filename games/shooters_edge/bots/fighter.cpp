@@ -22,6 +22,7 @@
 #include "shooters_edge/bots/footwork.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
+#include "shooters_edge/bots/packs.hpp"
 #include "shooters_edge/bots/spam.hpp"
 #include "shooters_edge/bots/team.hpp"
 #include "shooters_edge/bots/temper.hpp"
@@ -412,6 +413,11 @@ bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Ve
     }
   }
   if (!f.team || f.mode == FightMode::retreat) return false;
+  // A pack a mate called, when this player is the one to fetch it (packs.hpp).
+  if (const int32_t pn = packs_goal(f, me, st, t); pn >= 0) {
+    go_to(f, pn);
+    return true;
+  }
   const Mind& mn = f.mind;
   const auto node_of = [&](int32_t i) { return f.items[static_cast<size_t>(i)].node; };
   const auto can_reach = [&](int32_t i) {
@@ -1049,6 +1055,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   const double t = s.sv.time;
   f.bot.pilot.grenade_ready = st.weapon == kWGrenades;  // a grenade jump fires with it in hand
   f.bot.calm = f.escort.leader < 0;  // a companion's view is its own (it faces the leader)
+  packs_hear(f, t);                  // rocket launches heard, by who fired (packs.hpp)
   ai::Why* why = f.bot.pilot.why ? f.bot.pilot.why->follow(slot, f.bot.pilot.command) : nullptr;
   f.stats.commands++;
   const bool dead = st.health <= 0;
@@ -1242,6 +1249,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
 
   if (!dead) spam_fire(f, s, me, st, t, cmd);
   if (!dead) spam_news_fire(f, s, me, st, t, cmd);
+  if (!dead) packs_bore(f, s, me, st, t, cmd);  // its launcher to the quad (packs.hpp)
   if (!dead) button_poke_cmd(f, s, me, t, cmd);
   if (!dead && f.escort.leader >= 0) escort_command(f, s, me, t, msec, cmd);
 

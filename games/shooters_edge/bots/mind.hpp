@@ -87,6 +87,8 @@ struct Mate {
   double strength_t = -1e9;  // when his status was last read
   double quad_t = -1e9;      // when he was last believed to have the quad
   double going_t = -1e9;     // when he said where he is going
+  double weapon_t = -1e9;    // when his status last said his best weapon
+  bool has_rl = false;       // and whether it was the launcher
   double holds_t = -1e9;     // when he last said his area is safe
   float strength = 100;      // health plus armour's protection, a launcher counted extra
   int32_t going = -1;        // the item he said he is coming for
@@ -107,6 +109,9 @@ struct Mind {
   std::vector<HeardLine> heard;
   ge::shooter::Vec3f enemy_at;  // where the enemy was last called out (heard or seen)
   ge::shooter::Vec3f help_at;   // where a mate last called for help
+  ge::shooter::Vec3f pack_at;   // where a pack worth having was called (`rl pack [mh]`)
+  double pack_t = -1e9;         // when
+  bool pack_rl = false;         // a launcher in it
   double enemy_t = -1e9;
   double help_until = -1e9;
   double told_t = -1e9;        // when it was pointed at `told`

@@ -448,6 +448,10 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
     default:
       break;
   }
+  if (!s.status.weapon.empty()) {
+    m.has_rl = s.status.weapon == "rl";
+    m.weapon_t = t;
+  }
   if (s.status.health >= 0) {
     m.strength = static_cast<float>(s.status.health) + protection_of(s.status) +
                  (s.status.weapon == "rl" ? 50.f : 0.f);
@@ -566,6 +570,13 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
     }
     case SayKind::plan:
       if (mind_take_plan(f, s, t) && draw(f) < kAckChance) mn.ack_due = true;
+      break;
+    case SayKind::pack:
+      if (has_place) {
+        mn.pack_at = p;
+        mn.pack_t = t;
+        mn.pack_rl = s.item == "rl";
+      }
       break;
     case SayKind::none:
     case SayKind::report:
