@@ -78,6 +78,35 @@ const char* hit_weapon_name(HitWeapon w) {
 }
 
 // The lead's miss of the hitscan shot player `e` fired this frame (classic_hits.hpp).
+// The state of the player at entity `e` (classic_hits.hpp `kTargetStates`).
+int target_state(const server::QcServer& s, int e) {
+  const sh::Edict& him = s.sv.edicts[static_cast<size_t>(e)];
+  const float speed = std::sqrt(him.velocity.x * him.velocity.x + him.velocity.y * him.velocity.y);
+  return (speed < 100 ? 0 : speed < 250 ? 1 : 2) + (him.waterlevel >= 2 ? 3 : 0);
+}
+
+// The live player nearest the line of the view of entity `e` within 20 degrees, or -1.
+int nearest_on_line(const server::QcServer& s, int e) {
+  const sh::Edict& me = s.sv.edicts[static_cast<size_t>(e)];
+  const double yaw = me.v_angle.y * (ge::core::kPi / 180),
+               pitch = me.v_angle.x * (ge::core::kPi / 180);
+  const sh::Vec3f dir{static_cast<float>(ge::core::libm::cos(pitch) * ge::core::libm::cos(yaw)),
+                      static_cast<float>(ge::core::libm::cos(pitch) * ge::core::libm::sin(yaw)),
+                      static_cast<float>(-ge::core::libm::sin(pitch))};
+  const sh::Vec3f eye{me.origin.x, me.origin.y, me.origin.z + 22};
+  int best = -1;
+  float best_cos = 0.94f;
+  for (int o = 1; o <= s.sv.set.maxclients; o++) {
+    if (o == e || field(s, o, s.q.layout->f.health) <= 0) continue;
+    const sh::Vec3f d = s.sv.edicts[static_cast<size_t>(o)].origin - eye;
+    const float len = std::sqrt(d.x * d.x + d.y * d.y + d.z * d.z);
+    if (len < 1) continue;
+    const float c = (d.x * dir.x + d.y * dir.y + d.z * dir.z) / len;
+    if (c > best_cos) best_cos = c, best = o;
+  }
+  return best;
+}
+
 void lead_probe(HitBook& b, const server::QcServer& s, int e, int slot) {
   const sh::Edict& me = s.sv.edicts[static_cast<size_t>(e)];
   const double yaw = me.v_angle.y * (ge::core::kPi / 180),
@@ -127,6 +156,7 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
     b.health.assign(n, 0);
     b.ammo.assign(n, {});
     b.weapon.assign(n, 0);
+    b.state.assign(n, 0);
     b.at.assign(n, {});
     b.kind.assign(n, kNone);
     b.owner.assign(n, -1);
@@ -145,6 +175,7 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
     const std::array<float, 4> ammo{field(s, e, f.ammo_shells), field(s, e, f.ammo_nails),
                                     field(s, e, f.ammo_rockets), field(s, e, f.ammo_cells)};
     const int32_t weapon = static_cast<int32_t>(field(s, e, f.weapon));
+    if (in && health > 0) b.frames_at[static_cast<size_t>(target_state(s, e))]++;
     if (!first && in) {
       // Shots: ammunition spent on the weapon held at the frame before, alive in both frames (a
       // player coming back in has his ammunition emptied, which is no shot).
@@ -163,7 +194,17 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
         count(slot, HitWeapon::rocket_blast).fired += spent(2);
       }
       if (w == kArc) count(slot, HitWeapon::arc).fired += spent(3);
-      if ((w == kScatter || w == kDouble) && spent(0) > 0) lead_probe(b, s, e, slot);
+      if ((w == kScatter || w == kDouble) && spent(0) > 0) {
+        lead_probe(b, s, e, slot);
+        const int at = nearest_on_line(s, e);
+        if (at > 0)
+          b.pellets_at[static_cast<size_t>(target_state(s, at))].fired +=
+              w == kScatter ? 6 * spent(0) : 14 * (spent(0) / 2);
+      }
+      if (w == kRockets && spent(2) > 0) {
+        const int at = nearest_on_line(s, e);
+        if (at > 0) b.rockets_at[static_cast<size_t>(target_state(s, at))].fired += spent(2);
+      }
       if (w == kArc && spent(3) > 0) lead_probe(b, s, e, slot);
       // Hits: a blow taken, from whatever last hurt him.
       const float blow = b.life[i] - life;
@@ -191,7 +232,12 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
           const bool quad = (static_cast<int32_t>(field(s, by, f.items)) & kQuadBit) != 0;
           const float scale = quad ? 4.f : 1.f;
           const float team = field(s, by, f.team);
-          if (team == 0 || team != field(s, e, f.team)) b.given[static_cast<size_t>(at)] += blow;
+          // (his state the frame before: a blow's knockback is no speed of his own)
+          const auto state = static_cast<size_t>(b.state[i]);
+          if (team == 0 || team != field(s, e, f.team)) {
+            b.given[static_cast<size_t>(at)] += blow;
+            b.given_at[state] += blow;
+          }
           if (!missile) {
             const int32_t held = static_cast<int32_t>(field(s, by, f.weapon));
             const auto many = [&](float each) {
@@ -200,6 +246,7 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
             };
             if (held == kScatter) count(at, HitWeapon::scatter).hit += many(kPellet);
             if (held == kDouble) count(at, HitWeapon::dbl).hit += many(kPellet);
+            if (held == kScatter || held == kDouble) b.pellets_at[state].hit += many(kPellet);
             if (held == kArc) count(at, HitWeapon::arc).hit += many(kBeam);
           } else if (struck[static_cast<size_t>(from)] != 2) {
             const uint8_t was = struck[static_cast<size_t>(from)];
@@ -211,6 +258,7 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
               if (direct) {
                 if (was == 1) count(at, HitWeapon::rocket_blast).hit--;
                 count(at, HitWeapon::rocket_direct).hit++;
+                b.rockets_at[state].hit++;
                 proven(at, HitWeapon::rocket_direct);
                 struck[static_cast<size_t>(from)] = 2;
               } else if (was == 0) {
@@ -234,6 +282,7 @@ void hits_frame(HitBook& b, const server::QcServer& s) {
     b.health[i] = health;
     b.ammo[i] = ammo;
     b.weapon[i] = weapon;
+    b.state[i] = static_cast<uint8_t>(target_state(s, e));
   }
   // The missiles as they stand now, for the next frame's blows.
   for (size_t e = static_cast<size_t>(clients) + 1; e < n; e++) {

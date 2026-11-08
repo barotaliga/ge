@@ -29,6 +29,9 @@ Features features_all() { return {kAll}; }
 Features features_none() { return {0}; }
 Features features_of(AimSkill skill) {
   Features f = features_all();
+  // No skill reads a turn a whole reaction late (`eye`): it held every level's aim under people's
+  // (e1m2, six seeds: average players' scattergun 34 % with it, 40 % without; people 42 %).
+  f.set(Feature::eye, false);
   // A novice looks where he goes: he does not check the open ground beside him.
   if (skill == AimSkill::novice) f.set(Feature::glance, false);
   return f;

@@ -191,6 +191,10 @@ struct TeamMatchReport {
   double seconds = 0;  // the server's time at the end
   std::vector<TeamPlayer> players;
   TeamTotals teams[2];
+  // Shots, hits and damage by the target's state, and the frames lived in each (classic_hits.hpp).
+  std::array<HitCount, kTargetStates> pellets_at{}, rockets_at{};
+  std::array<double, kTargetStates> given_at{};
+  std::array<int64_t, kTargetStates> frames_at{};
   std::vector<std::string> frag_log;
   std::vector<std::string> chat;    // every team message, "t team name: words", in time order
   std::vector<std::string> prints;  // every print the first player's client was sent (obituaries)

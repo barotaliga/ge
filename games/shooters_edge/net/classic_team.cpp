@@ -581,6 +581,10 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.react_s = seat.fighter.bot.stats.react_s;
     if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.players.size())
       p.hits = hits.players[static_cast<size_t>(p.slot)];
+    r.pellets_at = hits.pellets_at;
+    r.rockets_at = hits.rockets_at;
+    r.given_at = hits.given_at;
+    r.frames_at = hits.frames_at;
     if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.given.size())
       p.given = hits.given[static_cast<size_t>(p.slot)];
     if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.lead_n.size()) {
