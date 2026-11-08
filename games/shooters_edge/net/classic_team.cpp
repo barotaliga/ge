@@ -337,6 +337,46 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
       p.lag_n++;
     }
 
+    // The key items lying untaken, and what the fighters made of each (every 4 frames). The items
+    // are read in the same order by every fighter, so an index names one spot for all of them.
+    if (frame % 4 == 0 && n > 0 && seats[0].ready) {
+      const std::vector<bt::ItemSpot>& spots = seats[0].fighter.items;
+      for (size_t i = 0; i < spots.size(); i++) {
+        const bt::ItemSpot& sp = spots[i];
+        int kind = -1;
+        if (sp.kind == bt::ItemKind::armor1) kind = 0;
+        if (sp.kind == bt::ItemKind::armor2) kind = 1;
+        if (sp.kind == bt::ItemKind::armor3) kind = 2;
+        if (sp.kind == bt::ItemKind::mega) kind = 3;
+        if (sp.kind == bt::ItemKind::quad) kind = 4;
+        if (sp.kind == bt::ItemKind::weapon && sp.weapon == kItRockets) kind = 5;
+        if (kind < 0 || sp.ent < 0) continue;
+        const sh::Edict& e = s.sv.edicts[static_cast<size_t>(sp.ent)];
+        const auto ki = static_cast<size_t>(kind);
+        r.lying_n[ki]++;
+        if (e.free || e.modelindex <= 0 || e.solid == sh::kSolidNot) continue;
+        r.lying[ki]++;
+        int why = 0;
+        for (int k = 0; k < n; k++) {
+          const Seat& seat = seats[static_cast<size_t>(k)];
+          const int sl = r.players[static_cast<size_t>(k)].slot;
+          if (!seat.ready || sl < 0 || s.sv.edicts[static_cast<size_t>(sl) + 1].health <= 0)
+            continue;
+          const bt::Fighter& f = seat.fighter;
+          if (i >= f.items.size()) continue;
+          const bt::ItemSpot& mine = f.items[i];
+          int w = mine.present && (mine.known || mine.in_sight) ? 1 : 0;
+          if (f.goal_item == static_cast<int32_t>(i)) {
+            const sh::Vec3f d = s.sv.edicts[static_cast<size_t>(sl) + 1].origin - mine.at;
+            const float far = std::sqrt(d.x * d.x + d.y * d.y);
+            w = f.mode != bt::FightMode::roam ? std::max(w, 2) : far < 64 ? 5 : far < 400 ? 4 : 3;
+          }
+          why = std::max(why, w);
+        }
+        r.lying_why[ki][static_cast<size_t>(why)]++;
+      }
+    }
+
     // The report's frame.
     for (int k = 0; k < n; k++) {
       Seat& seat = seats[static_cast<size_t>(k)];
