@@ -31,6 +31,7 @@ struct FightOptions {
   // Fighter k's traits over its skill's and temperament's preset ("aim_rl=9/timing=3",
   // shooter/traits.hpp; missing or empty: the preset).
   std::vector<std::string> traits;
+  std::string features;        // every fighter's over its skill's preset (shooter/features.hpp)
   int frames = 9000;           // server frames of 13 ms (about two minutes)
   uint32_t seed = 1;           // the mod's generator; fighter k's hands seed + 31 k
   std::string root = ".";      // the repository's root (the mod's sources)

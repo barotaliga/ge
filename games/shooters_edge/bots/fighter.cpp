@@ -1193,6 +1193,8 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   }
   f.bot.keep = f.features[sh::Feature::keep];
   f.bot.paced = f.features[sh::Feature::pace];
+  f.bot.trial = f.features[sh::Feature::trial];
+  f.bot.glance = f.features[sh::Feature::glance];
 }
 
 sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, int msec) {

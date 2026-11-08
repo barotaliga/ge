@@ -8,6 +8,7 @@
 #include <cmath>
 
 #include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "shooter/intercept.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/usercmd.hpp"
@@ -49,6 +50,12 @@ bool walking_mode(PilotMode pm) {
 }
 constexpr double kCalmDrift = 3;   // degrees a second of the hand's drift, at most
 constexpr float kCalmAhead = 320;  // units on along the route the calm view looks at
+// The glance (bot.hpp `glance`): how often, how far round, what counts as open, how long held.
+constexpr double kGlanceMin_s = 1.2, kGlanceSpread_s = 1.3;
+constexpr float kGlanceSide = 75, kGlanceBack = 120;
+constexpr float kGlanceReach = 2048, kGlanceOpen = 400;
+constexpr double kGlanceHold_s = 0.4;
+constexpr double kGlanceBand = 5;  // degrees: the glance looks right at its side
 
 MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   Bot& b = *static_cast<Bot*>(ctx);
@@ -259,11 +266,41 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
           }
         }
       }
+      double band = kCalmBand;
+      if (b.glance) {
+        // THE GLANCE (bot.hpp): to the side with the longest open line of sight, now and then.
+        if (sv.time >= b.glance_next && b.glance_until < sv.time) {
+          const Vec3f o_at = sv.edicts[static_cast<size_t>(me)].origin;
+          const Vec3f eye_at{o_at.x, o_at.y, o_at.z + b.senses.set.view_height};
+          float best = kGlanceOpen, pick = 0;
+          for (float o : {-kGlanceBack, -kGlanceSide, kGlanceSide, kGlanceBack}) {
+            const double a = (look_yaw + o) * (core::kPi / 180.0);
+            const Vec3f to{eye_at.x + static_cast<float>(core::libm::cos(a)) * kGlanceReach,
+                           eye_at.y + static_cast<float>(core::libm::sin(a)) * kGlanceReach,
+                           eye_at.z};
+            const HullTrace tr = trace_move(sv, eye_at, {}, {}, to, kTraceNoMonsters, me);
+            if (tr.fraction * kGlanceReach > best) {
+              best = tr.fraction * kGlanceReach;
+              pick = o;
+            }
+          }
+          if (pick != 0) {
+            // Held a moment past the turn there (at the calm view's pace).
+            b.glance_off = pick;
+            b.glance_until = sv.time + kGlanceHold_s + (pick > 90 || pick < -90 ? 0.6 : 0.42);
+          }
+          b.glance_next = sv.time + kGlanceMin_s + kGlanceSpread_s * core::next(b.glance_rng);
+        }
+        if (sv.time < b.glance_until) {
+          look_yaw += b.glance_off;
+          band = kGlanceBand;
+        }
+      }
       const double off = wrap(look_yaw - b.yaw);
       const double rate = (off > 120 || off < -120) ? kCalmAbout : kCalmTurn;
       double step = 0;
-      if (off > kCalmBand || off < -kCalmBand) {
-        const double want_step = off > 0 ? off - kCalmBand * 0.5 : off + kCalmBand * 0.5;
+      if (off > band || off < -band) {
+        const double want_step = off > 0 ? off - band * 0.5 : off + band * 0.5;
         step = std::fmax(-rate * dt, std::fmin(rate * dt, want_step));
       }
       const double drift = kCalmDrift * core::libm::sin(b.calm_t * 0.7) * dt;
@@ -297,6 +334,7 @@ void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands ha
   b.aim = aim;
   b.aim_hands = ai::Hands(b.aim.hands, hz, seed ^ 0x5bd1e995u);
   b.react_rng = core::make_rng(seed ^ 0x2c1b3c6du);
+  b.glance_rng = core::make_rng(seed ^ 0x6a09e667u);
   b.strafe = ps.strafe;
   b.hop = ps.hop;
 }

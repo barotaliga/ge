@@ -110,6 +110,15 @@ struct TeamPlayer {
   // Of the samples with an enemy in plain view: those it saw one (in its cone), aimed, and was
   // still reacting (no shot yet).
   int64_t in_view_seen = 0, in_view_aiming = 0, in_view_reacting = 0;
+  // Of those with none seen: the nearest one in plain view by his yaw off the view, degrees:
+  // within 60 (the screen's half width: out of its height, or not yet taken in), 60 to 90, 90 to
+  // 135, behind; and of all of them, those while its view was the calm walker's.
+  int64_t unseen_off[4] = {}, unseen_calm = 0;
+  // Moving (over 100 units/s) with no enemy in plain view, by what held the view (kViewHolders:
+  // the aim, a look at a spot, the calm walker, the pilot walking, the pilot flying or hopping,
+  // the rest): the samples, and those with the view over 45 degrees off the way it moves.
+  int64_t moving_n[6] = {}, moving_off[6] = {};
+  int64_t calm_route_off = 0;  // and of the calm walker's, the pilot's own yaw over 45 off
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;  // bots/fighter.hpp's
   // The launcher: taken (a pack's counted), and sampled with the view's: had, and had loaded.
   int64_t rl_pickups = 0, rl_samples = 0, rl_loaded = 0;

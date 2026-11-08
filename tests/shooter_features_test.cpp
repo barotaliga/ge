@@ -11,14 +11,17 @@
 
 namespace sh = ge::shooter;
 
-TEST(the_presets_are_every_feature_or_none_and_each_skill_has_every_one) {
+TEST(the_presets_are_every_feature_or_none_and_a_novice_does_not_glance) {
   for (size_t k = 0; k < sh::kFeatures; k++) {
-    CHECK(sh::features_all()[static_cast<sh::Feature>(k)]);
-    CHECK(!sh::features_none()[static_cast<sh::Feature>(k)]);
+    const auto x = static_cast<sh::Feature>(k);
+    CHECK(sh::features_all()[x] == (x != sh::Feature::trial));  // a trial is never on by default
+    CHECK(!sh::features_none()[x]);
   }
-  for (sh::AimSkill s :
-       {sh::AimSkill::novice, sh::AimSkill::average, sh::AimSkill::expert, sh::AimSkill::perfect})
+  for (sh::AimSkill s : {sh::AimSkill::average, sh::AimSkill::expert, sh::AimSkill::perfect})
     CHECK(sh::features_of(s) == sh::features_all());
+  sh::Features novice = sh::features_all();
+  novice.set(sh::Feature::glance, false);
+  CHECK(sh::features_of(sh::AimSkill::novice) == novice);
 }
 
 TEST(words_apply_in_order_and_an_unknown_one_names_every_feature) {
@@ -48,7 +51,10 @@ TEST(the_text_form_reads_back_to_the_same_set) {
   sh::Features g = sh::features_none();
   CHECK(sh::apply_features("+hop", g, error));
   CHECK(sh::features_text(g) == std::string("none,+hop"));
-  for (const sh::Features& x : {f, g}) {
+  sh::Features t = sh::features_all();
+  CHECK(sh::apply_features("+trial", t, error));
+  CHECK(sh::features_text(t) == std::string("all,+trial"));
+  for (const sh::Features& x : {f, g, t}) {
     sh::Features back = sh::features_all();
     CHECK(sh::apply_features(sh::features_text(x), back, error));
     CHECK(back == x);

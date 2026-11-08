@@ -35,6 +35,7 @@ void make(Party& p, const sv::RulesCommon& s, const sv::MapSpec& map, int slot) 
   m.fighter = bots::Fighter();
   m.sequence = 0;
   for (sh::MoveCmd& cmd : m.cmds) cmd = {};
+  m.fighter.features = sh::features_of(m.skill);
   bots::fighter_init(m.fighter, p.nav->graph, s, slot, map.entities.c_str(), m.skill,
                      sh::traits_of(m.skill, sh::Temper::balanced), kHz,
                      p.seed + 31u * static_cast<uint32_t>(slot));
