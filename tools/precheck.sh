@@ -8,14 +8,16 @@
 #   2. agents-check  the links, the router, the line cap (warns past 1000, fails past 2000), the ge: tags, the lessons
 #   3. libm-check    no <cmath> transcendental in simulation code
 #   4. release       the changeset fragments valid
-#   5. build         the preset's build (incremental); a change no build reads (prose, the gates'
-#                    Node and Python tools) stops after step 4; under PRECHECK_MIN_FREE_GB
-#                    (default 20) free it warns first, and a full disk is named as the cause
+#   5. build         every object and every program but the test executables, incremental
+#                    (PRECHECK_FULL_BUILD=1: the whole build); a change no build reads (prose,
+#                    the gates' Node and Python tools) stops after step 4; under PRECHECK_MIN_FREE_GB
+#                    (default 10) free it warns first, and a full disk is named as the cause
 #   6. lint          clang-tidy over what the change since BASE (default origin/main) reaches,
 #                    a changed header through one includer (LINT_SAMPLE=0: every includer)
 #      shaders       every embedded WGSL shader through Tint (incremental: only what changed)
 #   7. tests         cli_diagnostics_test (every message held to the diagnostics convention),
-#                    each changed test, and the test every changed file's ge:test tag names
+#                    each changed test, and the test every changed file's ge:test tag names,
+#                    only their executables linked
 #   8. digests       each lab the change reaches (`ge digest --affected --list`) at its smoke flags,
 #                    against tests/digests: a digest the change moved is caught here,
 #                    not by CI's labs_smoke a round later
@@ -69,6 +71,10 @@ gate release python3 tools/release.py check || true
 
 # A change no build reads (prose as ci.yml's gates job counts it, the gates' own Node and Python
 # tools, .gitignore) stops at the gates above: building 10 GB to test it proves nothing more.
+# A stale local base makes the lint and the reach read main's own newer files as this change's.
+if [[ "$base" == origin/* ]] && ! git fetch -q origin "${base#origin/}" 2>/dev/null; then
+  echo "precheck: could not fetch $base; the change is measured against the local copy." >&2
+fi
 merge_base="$(git merge-base "$base" HEAD 2>/dev/null || echo HEAD)"
 gate_only='^(docs/|\.agents/|\.changes/|porting/.*\.md$|[^/]*\.md$|LICENSE$|\.gitignore$|tools/[^/]*\.(mjs|py)$)'
 # The list is taken whole first: under pipefail, grep -q quitting at its first match would kill
@@ -90,11 +96,30 @@ fi
 # objects stay, and only the executables a later build needs are linked again).
 free_gb=$(df -Pk "$build" 2>/dev/null | awk 'NR==2 {print int($4 / 1048576)}')
 cleanup="find $build/tests -maxdepth 1 -type f -name '*_test' -delete"
-if [[ -n "$free_gb" ]] && ((free_gb < ${PRECHECK_MIN_FREE_GB:-20})); then
+if [[ -n "$free_gb" ]] && ((free_gb < ${PRECHECK_MIN_FREE_GB:-10})); then
   echo "precheck: only $free_gb GB free under $build; the build can fill the disk. Free space" \
     "first: $cleanup (the test executables, linked again as needed)." >&2
 fi
-if ! gate build make -s build PRESET="$preset"; then
+# Every object compiles (a compile error anywhere is caught, and the include graph the reach and
+# the lint read is whole), and every library and program links, but no test executable: those
+# are about 20 GB under ASan, so only the ones the change reaches are linked, below.
+# PRECHECK_FULL_BUILD=1 builds everything, as `make build` does.
+lean_build() {
+  tools/ccache-share.sh restore || true
+  cmake --preset "$preset" >/dev/null
+  local targets
+  mapfile -t targets < <(ninja -C "$build" -t targets all 2>/dev/null | awk -F': ' '
+    $2 ~ /^(C|CXX)_COMPILER|_LIBRARY_LINKER/ { print $1 }
+    $2 ~ /_EXECUTABLE_LINKER/ && $1 !~ /^tests\// { print $1 }' | grep -v '^/')
+  ((${#targets[@]})) || return 1
+  printf '%s\n' "${targets[@]}" | xargs ninja -C "$build"
+}
+if [[ "${PRECHECK_FULL_BUILD:-0}" == 1 ]]; then
+  build_step=(make -s build PRESET="$preset")
+else
+  build_step=(lean_build)
+fi
+if ! gate build "${build_step[@]}"; then
   if grep -qE 'No space left on device|Bus error' "$log" 2>/dev/null; then
     echo "precheck: the disk filled during the build. Free space ($cleanup, or remove other" \
       "build trees), then make precheck again." >&2
@@ -129,6 +154,13 @@ while read -r t; do
 done < <("$build/ge" test --affected --list --preset="$preset" --base="$base" 2>/dev/null || true)
 mapfile -t tests < <(printf '%s\n' "${tests[@]}" | sort -u)
 regex="^($(IFS='|'; echo "${tests[*]}"))\$"
+# Only the reached tests' executables are linked (lean_build linked none of them).
+mapfile -t test_targets < <(ninja -C "$build" -t targets all 2>/dev/null |
+  sed -n 's/^\(tests\/[a-z0-9_]*_test\): .*EXECUTABLE_LINKER.*/\1/p' |
+  grep -xF -f <(printf 'tests/%s\n' "${tests[@]}") || true)
+if ((${#test_targets[@]})); then
+  gate "link tests" ninja -C "$build" "${test_targets[@]}" || true
+fi
 gate "tests (${#tests[@]})" ctest --test-dir "$build" -R "$regex" -j "$(nproc 2>/dev/null || sysctl -n hw.ncpu)" \
   --output-on-failure || true
 
