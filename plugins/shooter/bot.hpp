@@ -8,7 +8,8 @@
 //    at its predicted middle through the skill's hands, a new contact first waiting a reaction
 //    drawn for it (half of it when the view was already on him: pre-aimed) (the pilot does not
 //    strafe jump while the view is held: the strafe needs the view along the velocity); with none,
-//    the view turns back to the pilot's yaw and is handed back within `kRelease` degrees, unless
+//    the view turns back to the pilot's yaw (a calm view at a hand's pace, `kBackTurn`) and is
+//    handed back within `kRelease` degrees (a calm walker's within the calm band), unless
 //    the game set a spot to watch (`look`, `look_at`: a doorway an enemy comes in by), where it
 //    goes on the same hands, so a contact showing there is pre-aimed at;
 // 4. the pilot's forward and side turned under that view (`turn_axes`), so the route is run the

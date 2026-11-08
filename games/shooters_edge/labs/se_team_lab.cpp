@@ -437,6 +437,19 @@ void run(gl::Lab& lab) {
     }
     lab.metric("team.surfaced", static_cast<double>(up), "count");
     lab.metric("team.swim-fights", static_cast<double>(swum), "count");
+    // Pickups by kind a player-minute, set beside people's (a match's statistics count them so).
+    static const char* kKinds[12] = {"health", "mega",    "armor1", "armor2", "armor3", "shells",
+                                     "nails",  "rockets", "cells",  "weapon", "quad",   "pent"};
+    int64_t ways = 0;
+    for (const cn::TeamPlayer& p : r.players) ways += p.on_the_way;
+    lab.metric("team.on-the-way", static_cast<double>(ways), "count");
+    const double player_min = static_cast<double>(r.players.size()) * r.seconds / 60.0;
+    for (size_t k = 0; k < 12; k++) {
+      int64_t n = 0;
+      for (const cn::TeamPlayer& p : r.players) n += p.took[k];
+      lab.metric(std::string("team.took-per-min.") + kKinds[k],
+                 player_min > 0 ? static_cast<double>(n) / player_min : 0, "per-min");
+    }
     lab.metric("team.surface-failed", static_cast<double>(failed), "count");
     lab.metric("team.goal-changes-per-min",
                static_cast<double>(changes) /
