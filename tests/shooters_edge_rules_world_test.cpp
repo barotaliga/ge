@@ -4,7 +4,7 @@
 // have it; after a client leaves, the slot empty and its numbers zero.
 //
 // ge:summary Tests: the rules' world filled by the QC server at the start and every frame
-// ge:keywords test rules-world fill_world entity-rows client-rows player-numbers
+// ge:keywords test rules-world fill_world entity-rows client-rows player-numbers model-shown
 // ge:skill progs shooter testing
 #include <string>
 
@@ -33,7 +33,8 @@ void check_rows(Fixture& fx) {
     CHECK_BITS(r.velocity.z, ed.velocity.z);
     CHECK_BITS(r.angles.y, ed.angles.y);
     CHECK_BITS(r.mins.z, ed.mins.z);
-    CHECK(r.modelindex == static_cast<int>(fx.f(e, s.q.layout->f.modelindex, 0)));
+    const bool shown = sv::model_shown(s, e);
+    CHECK(r.modelindex == (shown ? static_cast<int>(fx.f(e, s.q.layout->f.modelindex, 0)) : 0));
     CHECK(r.frame == static_cast<int>(fx.f(e, s.q.layout->f.frame, 0)));
   }
 }
@@ -78,6 +79,30 @@ TEST(a_client_and_every_entity_follow_each_frame) {
   CHECK_BITS(n.health, fx.f(p, fx.s->q.layout->f.health, 0));
   CHECK_BITS(n.frags, fx.f(p, fx.s->q.layout->f.frags, 0));
   CHECK_BITS(n.view_z, fx.f(p, fx.s->q.layout->f.view_ofs, 2));
+}
+
+// A program hides a taken item by emptying its model text and keeping its index: the row then has
+// no model (nothing draws or sends it), and the text set again brings it back.
+TEST(an_entity_whose_model_text_is_emptied_is_not_shown) {
+  Fixture fx;
+  const int p = fx.join(0, "runner");
+  const int model = fx.s->q.layout->f.model;
+  uint32_t& text = pg::entity_field(fx.vm(), p, model)[0];
+  const uint32_t kept = text;
+  CHECK(!fx.str_field(p, model).empty());
+  CHECK(fx.f(p, fx.s->q.layout->f.modelindex) > 0);
+  CHECK(sv::model_shown(*fx.s, p));
+  text = 0;  // the empty text
+  CHECK(!sv::model_shown(*fx.s, p));
+  sv::fill_world(*fx.s, fx.s->world, false);
+  CHECK(fx.s->world.entities[static_cast<size_t>(p)].modelindex == 0);
+  CHECK(fx.f(p, fx.s->q.layout->f.modelindex) > 0);  // the index kept for the way back
+  text = kept;
+  CHECK(sv::model_shown(*fx.s, p));
+  sv::fill_world(*fx.s, fx.s->world, false);
+  CHECK(fx.s->world.entities[static_cast<size_t>(p)].modelindex ==
+        static_cast<int>(fx.f(p, fx.s->q.layout->f.modelindex)));
+  check_rows(fx);
 }
 
 TEST(a_client_that_leaves_empties_its_slot) {
