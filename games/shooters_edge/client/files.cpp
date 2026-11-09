@@ -6,6 +6,7 @@
 // ge:test tests/shooters_edge_files_test.cpp
 #include "shooters_edge/client/files.hpp"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -14,6 +15,7 @@
 
 #include "classicenhance/profile.hpp"
 #include "save/file.hpp"
+#include "vfs/zip.hpp"
 
 namespace shooters_edge::client {
 
@@ -239,6 +241,52 @@ std::string save_label(const SearchPath& path, const std::string& name) {
   if (!line.empty() && line.back() == '\r') line.pop_back();
   for (char& c : line) c = c == '_' ? ' ' : c;
   return line;
+}
+
+std::shared_ptr<const ge::progs::LocalizedText> localized_text(const SearchPath& path) {
+  constexpr std::string_view kFile = "localization/loc_english.txt";
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> loose = find_file(path, kFile, store);
+  auto table = std::make_shared<ge::progs::LocalizedText>();
+  if (!loose.empty()) {
+    ge::progs::read_localized(
+        std::string_view(reinterpret_cast<const char*>(loose.data()), loose.size()), *table);
+    return table;
+  }
+  if (path.folder.empty()) return nullptr;
+  // The release's own archives (`*.kpf`, zips) beside the game folder: large and unchanging under a
+  // running game, so read once, kept by the folder.
+  const fs::path beside = fs::path(path.folder).parent_path();
+  static std::string cached_folder;
+  static std::shared_ptr<const ge::progs::LocalizedText> cached;
+  if (cached_folder == beside.string()) return cached;
+  cached_folder = beside.string();
+  cached = nullptr;
+  std::error_code ec;
+  std::vector<fs::path> archives;
+  for (const fs::directory_entry& e : fs::directory_iterator(beside, ec)) {
+    std::string ext = e.path().extension().string();
+    for (char& c : ext) c = c >= 'A' && c <= 'Z' ? static_cast<char>(c + 32) : c;
+    if (ext == ".kpf" && e.is_regular_file(ec)) archives.push_back(e.path());
+  }
+  std::sort(archives.begin(), archives.end());
+  for (const fs::path& kpf : archives) {
+    std::ifstream in(kpf, std::ios::binary);
+    const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)),
+                                     std::istreambuf_iterator<char>());
+    ge::vfs::Zip zip;
+    std::string error;
+    if (!ge::vfs::read_zip(bytes, &zip, &error)) continue;
+    const ge::vfs::ZipEntry* e = ge::vfs::zip_find(zip, kFile);
+    std::vector<uint8_t> text;
+    if (e == nullptr || !ge::vfs::zip_unpack(bytes, *e, &text, &error)) continue;
+    ge::progs::read_localized(
+        std::string_view(reinterpret_cast<const char*>(text.data()), text.size()), *table);
+    break;
+  }
+  if (table->words.empty()) return nullptr;
+  cached = table;
+  return cached;
 }
 
 }  // namespace shooters_edge::client

@@ -222,6 +222,45 @@ void b_callback(Vm& vm) {
 
 }  // namespace
 
+namespace {
+void b_seven(Vm& vm) { set_global_float(vm, kGlobalReturn, 7.0f); }
+}  // namespace
+
+// A builtin declared with no number (a function record with no code, only a name) runs the
+// numbered builtin a row binds to its name, matched in any case; one no row names faults.
+TEST(a_builtin_with_no_number_runs_the_one_bound_by_its_name) {
+  Assembler as;
+  const int32_t named = as.builtin("ex_Seven", 1);
+  const int32_t unbound = as.builtin("ex_unknown", 2);
+  const int32_t top = as.begin_function("top", {}, 1);
+  as.call(named);
+  as.emit(kOpReturn, kGlobalReturn);
+  as.end_function();
+  const int32_t broken = as.begin_function("broken", {}, 0);
+  as.call(unbound);
+  as.emit(kOpDone);
+  as.end_function();
+  Progs p;
+  std::string error;
+  CHECK_MSG(as.build(p, error), error);
+  for (const int32_t f : {named, unbound}) {
+    p.functions[static_cast<size_t>(f)].first_statement = 0;
+    p.functions[static_cast<size_t>(f)].parm_start = 0;
+    p.functions[static_cast<size_t>(f)].locals = 0;
+  }
+  Vm vm;
+  create_vm(vm, p);
+  set_builtin(vm, 40, b_seven, "seven");
+  const NamedBuiltin rows[] = {{"ex_seven", 40}};
+  CHECK(bind_by_name(vm, rows) == 1);
+  CHECK_MSG(call_function(vm, top), fault_text(vm));
+  CHECK(global_float(vm, kGlobalReturn) == 7.0f);
+  CHECK(vm.builtin_calls[40] == 1);
+  CHECK(call_function(vm, named));  // the engine's own call of it
+  CHECK(!call_function(vm, broken));
+  CHECK(std::string(vm.fault.message).starts_with("function ex_unknown has no code"));
+}
+
 TEST(builtins_run_from_the_table_and_may_call_back_into_qc) {
   Assembler as;
   const int32_t callback = as.builtin("callback", 7);

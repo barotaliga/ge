@@ -21,6 +21,19 @@
 // bprint takes no level (`(s ...)`) and sprint none (`(client, s ...)`); aim is the autoaim under
 // `sv_aim`; the Write family has no multicast destination (0..3).
 //
+// THE RE-RELEASE'S PROGRAM (`rerelease_program`: its strings hold a `$qc_` key, or a function
+// with no code is named `ex_...`): it prints keys with arguments (progs/localized.hpp, the server's
+// `localized` table) and calls builtins of its own. Its first form numbers them, over the
+// multiplayer and extension numbers it never uses: 79 finaleFinished, 80 localsound, 81..89 the
+// debug drawing (draw_point, draw_line, draw_arrow, draw_ray, draw_circle, draw_bounds,
+// draw_worldtext, draw_sphere, draw_cylinder), 90 centerprint, 91 bprint, 92 sprint (the key and
+// its arguments: the classic three, which take them); its later form binds them by name
+// (`ex_bprint` to 23, `ex_sprint` to 24, `ex_centerprint` to 73, the rest to the numbers above),
+// with CheckPlayerEXFlags, walkpathtogoal, bot_movetopoint and bot_followentity at
+// `kRereleaseOnly` + 0..3, slots no other row uses. All but the prints do nothing and return 0,
+// what each falls back to: the finale stays up, the weapon always switches, monsters use
+// movetogoal, nothing is drawn.
+//
 // THE EXTENSIONS: DP_QC_SINCOSSQRTPOW (60 sin, 61 cos, 62 sqrt, 97 pow), ZQ_QC_TOKENIZE (84
 // tokenize, 85 argc, 86 argv), DP_QC_TRACEBOX (90), DP_QC_RANDOMVEC (91), DP_REGISTERCVAR (93),
 // DP_QC_MINMAXBOUND (94 min, 95 max, 96 bound), QSG_CVARSTRING (103 cvar_string),
@@ -65,6 +78,11 @@ extern const int kExtensionCount;
 // The standard rows into the VM, every extension registered (and its builtins installed).
 // False with `error` when the registry refuses a row (a duplicate number).
 bool install_catalogue(QcServer& s, std::string& error);
+
+// The re-release's own builtins' first slot past every other row (above).
+constexpr int kRereleaseOnly = 1000;
+// Whether `p` is the re-release's program (above); `install_catalogue` then installs its builtins.
+bool rerelease_program(const pg::Progs& p);
 // Whether the server offers extension `name` (any case).
 bool offers_extension(const QcServer& s, const char* name);
 

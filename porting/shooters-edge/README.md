@@ -31,6 +31,7 @@ classic game", "QC" and "the classic protocol", and `make agents-check` holds it
 | `sequel-movement.md` | The sequel's player move (the packed state, the command, every step, snapping) and the brush trace and point contents it moves through |
 | `sequel-rules.md` | The sequel's rules: the 10 Hz frame, entities and physics, items, armour, damage, every weapon and projectile, a player's life, deathmatch and `dmflags`, the demo maps' entities |
 | `sequel-monsters.md` | The sequel's monsters on the demo maps: life, senses, the attack choice, the roster's numbers |
+| `localization.md` | The re-release's text keys (clean-room answers): which prints carry `$` keys, how arguments fill `{}`/`{N}`, its extra builtins by number and by name, the words file's place and format, where an engine resolves them |
 
 The recorded-game formats are built (M18h, `games/shooters_edge/client/demo.hpp`) and their note
 retired. Every fact marked `verify` is checked by a lab before code depends on it.
