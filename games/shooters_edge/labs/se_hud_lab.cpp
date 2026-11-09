@@ -190,24 +190,25 @@ ui::Image crop_bottom(const ui::Image& img, int w, int h) {
 }
 
 constexpr const char* kLookCaption[se::kLooks] = {
-    "The classic status bar across the bottom centre, scaled by a whole number of px per art "
-    "pixel: armour, the portrait, health and the ammunition on the bar; the four ammunition "
-    "counts, the guns (the one in hand lit, a new one flashing), the keys and powerups, the "
-    "runes and the frag plates on the inventory bar above it.",
-    "The corners: health and armour bottom left (icon, figure, bar), the keys above them, the "
-    "ammunition bottom right, the guns along the bottom with their rounds, the powerups down the "
-    "right edge with their seconds, the frags top right.",
-    "Round the crosshair: health's arc on the left and armour's on the right with their figures, "
-    "the ammunition under it and the powerups with their seconds under that, the keys over it, "
-    "small guns bottom right.",
-    "The arena look: health and armour big either side of the portrait at the bottom centre with "
-    "thin bars over them, the rounds under the crosshair, the guns and the four ammunition counts "
-    "down the right edge, the powerups across the top.",
-    "The tactical look: health beside its bar with the armour as a shield bar over it bottom "
-    "left; the rounds big bottom right beside the gun in hand, the ammunition kinds and the gun "
-    "slots over them; the powerups bottom centre.",
-    "The minimal look: small faded figures only, health and armour bottom left, the rounds bottom "
-    "right, the keys and powerups while held."};
+
+    ("The classic status bar across the bottom centre, scaled by a whole number of px per art "
+     "pixel: armour, the portrait, health and the ammunition on the bar; the four ammunition "
+     "counts, the guns (the one in hand lit, a new one flashing), the keys and powerups, the "
+     "runes and the frag plates on the inventory bar above it."),
+    ("The corners: health and armour bottom left (icon, figure, bar), the keys above them, the "
+     "ammunition bottom right, the guns along the bottom with their rounds, the powerups down the "
+     "right edge with their seconds, the frags top right."),
+    ("Round the crosshair: health's arc on the left and armour's on the right with their figures, "
+     "the ammunition under it and the powerups with their seconds under that, the keys over it, "
+     "small guns bottom right."),
+    ("The arena look: health and armour big either side of the portrait at the bottom centre with "
+     "thin bars over them, the rounds under the crosshair, the guns and the four ammunition counts "
+     "down the right edge, the powerups across the top."),
+    ("The tactical look: health beside its bar with the armour as a shield bar over it bottom "
+     "left; the rounds big bottom right beside the gun in hand, the ammunition kinds and the gun "
+     "slots over them; the powerups bottom centre."),
+    ("The minimal look: small faded figures only, health and armour bottom left, the rounds bottom "
+     "right, the keys and powerups while held.")};
 
 // An option the player sets over a look, and the line that sets it back.
 struct Option {
