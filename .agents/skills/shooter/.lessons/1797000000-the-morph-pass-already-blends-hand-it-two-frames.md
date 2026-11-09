@@ -2,7 +2,7 @@
 title: Smooth model animation is a game-side job; the morph pass already blends two frames
 date: 2026-11-09
 scope: games/shooters_edge/client/model_lerp.cpp, games/shooters_edge/client/world_models.cpp, games/shooters_edge/client/world_fx.cpp
-concepts: [model-lerp, r_lerpmodels, r_lerpmove, frame-lerp, step-lerp, morph, jittery, monster-steps]
+concepts: [model-lerp, r-lerpmodels, r-lerpmove, frame-lerp, step-lerp, morph, jittery, monster-steps]
 ---
 
 "Models move jittery" was never the renderer: `MorphPose` has `frame_a`, `frame_b` and `blend`,
