@@ -2,7 +2,8 @@
 // when the eye is under a lava's or a slime's level, drawn after the surfaces. A slime is a fog
 // of its own colour lit by the light that reaches the eye's depth, its surface from below a
 // window onto the world over it and a mirror past it, its scum a shadow on the window; a lava is
-// opaque, its melt's glow all round, cooler streaks rising through it.
+// opaque, its melt's glow all round, cooler streaks rising through it; with a game's reach a thick
+// light-red glowing goo the eye sees a few metres into, under a ceiling of opaque melt.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/liquid_body.wgsl"
 
@@ -46,6 +47,12 @@ fn scene_toward(rel: vec3f) -> vec4f {
 
 // The melt's luminance against a white face's, all round the eye.
 const kUnderKey = 0.6;
+// A game's goo: its colour at a luminance of 1 (a light red), each band's attenuation times the
+// reach (red carries farthest: at the reach 55 % of the red is left, 37 % of the green), what is
+// in it lit by its glow (1 + kGooLift times its tint). Its surface from below is the opaque melt.
+const kGooTint = vec3f(1.0, 0.32, 0.22) / 0.4573;
+const kGooBands = vec3f(0.6, 1.0, 1.2);
+const kGooLift = 2.0;
 
 @fragment
 fn fs_under(in: UnderOut) -> FragmentOut {
@@ -65,11 +72,36 @@ fn fs_under(in: UnderOut) -> FragmentOut {
     let core = body.lava0.x;
     let key = white_luminance() * kUnderKey / max(luma(glow_at(core)), 1e-6);
     let melt = glow_at(core - cool) * key;
-    // What touches the eye shows through the first few centimetres of melt.
-    let d = behind_distance(vec2i(in.position.xy), uv0);
-    let through = exp(-d * 120.0);
-    out.colour = vec4f(mix(melt, textureLoad(scene_colour, vec2i(in.position.xy), 0).rgb, through),
-                       1.0);
+    if (body.fx.w <= 0.0) {
+      // What touches the eye shows through the first few centimetres of melt.
+      let d = behind_distance(vec2i(in.position.xy), uv0);
+      let through = exp(-d * 120.0);
+      out.colour = vec4f(mix(melt, textureLoad(scene_colour, vec2i(in.position.xy), 0).rgb,
+                             through), 1.0);
+      return out;
+    }
+    // A GAME'S GOO (a reach set): a thick light-red glowing goo the eye sees a few metres into,
+    // the scene through it reddened (red carries farthest), its glow the melt's, lightened.
+    let uv = uv0 + 0.006 * vec2f(sin(t * 0.6 + uv0.y * 7.0), cos(t * 0.5 + uv0.x * 5.0));
+    let pixel = vec2i(clamp(uv, vec2f(0.0), vec2f(0.9999)) * frame.size.xy);
+    let gdir = ray_at(uv);
+    let ts = select(1e9, depth / max(gdir.y, 1e-5), gdir.y > 1e-5);
+    let path = min(behind_distance(pixel, uv), ts);
+    // The goo's glow: the melt's key, lightened by its swirl, the cooler streaks only a shade.
+    let shade = 0.8 + 0.25 * swirl - 0.15 * smoothstep(0.35, 0.8, streak);
+    let goo = white_luminance() * kUnderKey * kGooTint * shade;
+    let through = exp(-path * kGooBands / body.fx.w);
+    // What is in the goo is lit by it: its walls reddened and brighter than the room leaves them.
+    var beyond = textureLoad(scene_colour, pixel, 0).rgb * (1.0 + kGooLift * kGooTint);
+    if (ts < 1e8 && path >= ts) {
+      // The surface from below is the melt itself: opaque, churning, hell overhead.
+      let q2 = vec2f(atan2(gdir.x, gdir.z) * 2.0, gdir.y * 3.0);
+      let swirl2 = fbm(q2 * 1.5 + vec2f(0.0, -t * 0.35));
+      let streak2 = fbm(q2 * vec2f(2.5, 5.0) + vec2f(2.0 * swirl2, -t * 0.8));
+      let cool2 = smoothstep(0.35, 0.8, streak2) * 180.0 + (1.0 - swirl2) * 50.0;
+      beyond = glow_at(core - cool2) * key;
+    }
+    out.colour = vec4f(beyond * through + goo * (1.0 - through), 1.0);
     return out;
   }
   // SLIME: a slow wobble of the thick stuff before the eye.
