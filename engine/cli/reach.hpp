@@ -48,6 +48,13 @@ void reach_from_deps(const fs::path& repo, const fs::path& build, std::string_vi
                      const std::set<std::string>& libraries, Reach& r);
 // The library targets in `ninja -t targets all` output (`libge_core.a: <rule>` is ge_core).
 std::set<std::string> libraries_of(std::string_view targets);
+// A changed file the build may turn into source (not code, prose or a build file): its
+// `ninja -t query` is asked what it generates.
+bool generator_input(std::string_view path);
+// The generated sources (repository-relative, under the build directory) a `ninja -t query`
+// lists as a node's outputs; `build` is the canonical build directory, `prefix` the repository's.
+std::set<std::string> generated_from(std::string_view query, const fs::path& build,
+                                     const std::string& prefix);
 // Whether a path is the build's own (a CMakeLists.txt, a .cmake file, CMakePresets.json).
 bool build_file(std::string_view path);
 // The directory a build file builds alone: engine/<module>/module.cmake's, a plugin's or a game's

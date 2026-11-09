@@ -164,6 +164,24 @@ bool change_reach(const fs::path& repo, const fs::path& build, const std::string
       if (f.ends_with(".cpp") || f.ends_with(".hpp") || f.ends_with(".h")) r.changed.insert(f);
     }
   }
+  // A file the build turns into source (a mod's QC embedded as a generated .cpp, a font, a
+  // shader) is in no object's deps: Ninja's own graph names what it generates, and that
+  // generated source counts as changed too, so its object and the labs over it are reached.
+  std::error_code canon;
+  const fs::path built = fs::weakly_canonical(build, canon);
+  const std::string prefix = fs::weakly_canonical(repo, canon).generic_string() + "/";
+  std::vector<std::string> inputs;
+  for (const std::string& f : r.changed) {
+    if (generator_input(f)) inputs.push_back(f);
+  }
+  if (inputs.size() <= 200) {
+    for (const std::string& f : inputs) {
+      const Logged q = run_to_log(
+          "ninja -C " + in_quotes(build) + " -t query " + in_quotes(fs::path(prefix + f)), log);
+      if (q.code != 0) continue;  // not a file the build knows
+      for (const std::string& g : generated_from(q.output, built, prefix)) r.changed.insert(g);
+    }
+  }
   for (const std::string& f : r.changed) {
     if (f.ends_with(".cpp")) r.sources.insert(f);
   }
@@ -178,6 +196,39 @@ bool change_reach(const fs::path& repo, const fs::path& build, const std::string
                     targets.code == 0 ? libraries_of(targets.output) : std::set<std::string>{}, r);
   }
   return true;
+}
+
+bool generator_input(std::string_view path) {
+  static constexpr std::string_view kSource[] = {".cpp", ".hpp", ".h", ".c", ".md", ".txt"};
+  for (const std::string_view ext : kSource) {
+    if (path.ends_with(ext)) return false;
+  }
+  return !build_file(path) && !path.starts_with("docs/") && !path.starts_with(".");
+}
+
+std::set<std::string> generated_from(std::string_view query, const fs::path& build,
+                                     const std::string& prefix) {
+  std::set<std::string> out;
+  bool outputs = false;
+  for (const std::string_view line : split_lines(query)) {
+    if (!line.starts_with("  ")) {
+      outputs = false;  // the next node
+    } else if (!line.starts_with("    ")) {
+      outputs = line == "  outputs:";
+    } else if (outputs) {
+      const std::string raw(line.substr(4));
+      const std::string path = fs::path(raw).is_absolute()
+                                   ? fs::path(raw).lexically_normal().generic_string()
+                                   : (build / raw).lexically_normal().generic_string();
+      if (!path.starts_with(prefix)) continue;
+      const std::string rel = path.substr(prefix.size());
+      if (rel.ends_with(".cpp") || rel.ends_with(".hpp") || rel.ends_with(".h") ||
+          rel.ends_with(".c")) {
+        out.insert(rel);
+      }
+    }
+  }
+  return out;
 }
 
 std::set<std::string> libraries_of(std::string_view targets) {
