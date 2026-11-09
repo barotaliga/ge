@@ -62,6 +62,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "shooter/locs.hpp"
@@ -111,6 +112,8 @@ struct Mind {
   ge::shooter::Vec3f help_at;   // where a mate last called for help
   ge::shooter::Vec3f pack_at;   // where a pack worth having was called (`rl pack [mh]`)
   double pack_t = -1e9;         // when
+  double pack_claim_t = -1e9;   // a mate's `coming [ga]` right after it: he takes it
+  double pack_answered = -1e9;  // the call (its `pack_t`) this player said `coming` to
   bool pack_rl = false;         // a launcher in it
   double enemy_t = -1e9;
   double help_until = -1e9;
@@ -158,6 +161,9 @@ bool mind_take_plan(Fighter& f, const Said& said, double t);
 // A team line this player's client was sent, from the player named `from`: read or missed by its
 // skill, and what it says taken into its beliefs when read.
 void mind_hear(Fighter& f, const std::string& from, const std::string& text, double t);
+
+// Whether a server line's rest after a player's name reads as his death ("was nailed by", ...).
+bool death_words(std::string_view rest);
 
 // A line its client was printed that is not a team line: when it is a teammate's obituary (his name
 // first, then the words of a death: "was", "ate", "sleeps", ...), where he was last believed to be

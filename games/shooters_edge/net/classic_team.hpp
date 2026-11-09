@@ -155,9 +155,15 @@ struct TeamPlayer {
   int64_t on_the_way = 0;                    // short goals taken up on the way (bots/fighter.hpp)
   int64_t took[12] = {};                     // pickups by the item's kind (bots/fighter.hpp)
   int64_t swim_fights = 0;                   // commands swum with the view on an enemy in sight
-  int64_t wet = 0;                           // commands alive waist deep in water
-  int64_t wet_why[12] = {};                  // and by cause (bots/fighter.hpp kWetWhy)
-  double wet_speed[3] = {};                  // wet and aiming, swimming, walking (bots/fighter.hpp)
+  // Every death's pack it came to know of, by how its place was known (bots/packs.hpp
+  // `PackFrom`); its guesses of the weapon in them, right, launchers guessed and truly in them;
+  // its trips to one, packs reached and seen gone.
+  int64_t packs_known[5] = {};
+  int64_t pack_guesses = 0, pack_right = 0, pack_guess_rl = 0, pack_truth_rl = 0;
+  int64_t pack_trips = 0, pack_reached = 0, pack_seen_gone = 0;
+  int64_t wet = 0;           // commands alive waist deep in water
+  int64_t wet_why[12] = {};  // and by cause (bots/fighter.hpp kWetWhy)
+  double wet_speed[3] = {};  // wet and aiming, swimming, walking (bots/fighter.hpp)
   int64_t wet_n[3] = {}, wet_still[3] = {};
   float travelled = 0;            // units along the path
   std::string last;               // where he stood at the end, and what he was going for

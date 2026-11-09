@@ -40,8 +40,8 @@
 // - `routes`: a map's scripted ways to key items taken (nav_script.hpp, bots/item_routes).
 // - `corner`: an enemy lost from sight followed a reaction's worth, then held where he went.
 // - `mouse`: the view a hand's strokes on a mouse, shots timed, fire clicked (bot.hpp).
-// - `trial`: read by the code under an A/B now (nothing, when none is). Off in every preset (`all`
-//   too): `--features-red=+trial` plays it against the rest, from one build.
+// - `packinfer`: every death's pack known, its weapon guessed by level (bots/packs.hpp).
+// - `trial`: read by an A/B now; off in every preset (`all` too): `--features-red=+trial`.
 //
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: every one but what that
 // level of player does not do: none `eye`, a novice no `glance`; the rest of a skill's differences
@@ -55,7 +55,7 @@
 // ge:keywords calm pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch
 // ge:keywords spam packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot
 // ge:keywords ab-test trial eye selfaim course-change own-motion pools pool-floor swim-under-view
-// ge:keywords corner lost-enemy wall-hold mouse hand-strokes click
+// ge:keywords corner lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -97,9 +97,10 @@ enum class Feature : uint8_t {
   routes,
   corner,
   mouse,
+  packinfer,
   trial,
 };
-constexpr size_t kFeatures = 29;
+constexpr size_t kFeatures = 30;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

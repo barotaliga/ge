@@ -511,6 +511,40 @@ void run(gl::Lab& lab) {
       swum += p.swim_fights;
     }
     lab.metric("team.surfaced", static_cast<double>(up), "count");
+    // Every death's pack known (bots/packs.hpp), by how its place was known; the weapon guessed
+    // right by the guesser's skill (novice, average, expert); trips to them and what ended them.
+    {
+      static constexpr const char* kFrom[5] = {"seen", "cry", "blast", "aim", "lying"};
+      int64_t known[5] = {}, guesses[4] = {}, right[4] = {}, guess_rl[4] = {}, truth_rl[4] = {};
+      int64_t trips = 0, reached = 0, gone = 0;
+      for (const cn::TeamPlayer& p : r.players) {
+        for (int k = 0; k < 5; k++) known[k] += p.packs_known[k];
+        const auto sk = static_cast<size_t>(p.skill);
+        guesses[sk] += p.pack_guesses;
+        right[sk] += p.pack_right;
+        guess_rl[sk] += p.pack_guess_rl;
+        truth_rl[sk] += p.pack_truth_rl;
+        trips += p.pack_trips;
+        reached += p.pack_reached;
+        gone += p.pack_seen_gone;
+      }
+      for (int k = 0; k < 5; k++)
+        lab.metric(std::string("team.packs.known.") + kFrom[k], static_cast<double>(known[k]),
+                   "count");
+      for (int k = 1; k < 4; k++) {  // by the guesser's skill (none plays `perfect` here)
+        const std::string pre =
+            std::string("team.packs.guess.") + sh::aim_skill_name(static_cast<sh::AimSkill>(k));
+        lab.metric(pre + ".count", static_cast<double>(guesses[k]), "count");
+        lab.metric(pre + ".right",
+                   guesses[k] ? static_cast<double>(right[k]) / static_cast<double>(guesses[k]) : 0,
+                   "share");
+        lab.metric(pre + ".rl-guessed", static_cast<double>(guess_rl[k]), "count");
+        lab.metric(pre + ".rl-true", static_cast<double>(truth_rl[k]), "count");
+      }
+      lab.metric("team.packs.trips", static_cast<double>(trips), "count");
+      lab.metric("team.packs.reached", static_cast<double>(reached), "count");
+      lab.metric("team.packs.seen-gone", static_cast<double>(gone), "count");
+    }
     lab.metric("team.swim-fights", static_cast<double>(swum), "count");
     // The share of the time alive waist deep in water (people's recordings: 9 %, se-people `wet`).
     int64_t wet = 0, alive = 0;

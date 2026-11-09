@@ -27,6 +27,7 @@ constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit (games/shooters_edge
 constexpr int32_t kWRockets = 32, kWArc = 64;
 constexpr double kHelp_s = 6;         // a call for help holds this long
 constexpr double kHoldsFresh_s = 40;  // a mate's `safe` this old still says he holds his area
+constexpr double kPackClaim_s = 6;    // a bare `coming` this soon after a pack's call claims it
 constexpr double kGoingFresh_s = 12;  // a mate's `coming X` this old still says he goes for X
 constexpr float kMateSight = 1500;    // a teammate is made out within this, units
 constexpr float kGiveNear = 600;      // an item is left to a teammate in sight this near it
@@ -323,21 +324,24 @@ void mind_danger(Fighter& f, sh::Vec3f at, double t) {
   f.danger.emplace_back(at, t);
 }
 
-bool mind_obituary(Fighter& f, const std::string& line, double t) {
+bool death_words(std::string_view rest) {
   // The words a death's line goes on with after the victim's name ("was nailed by", "ate 2 loads
   // of", "sleeps with the fishes", "becomes bored with life", ...).
   static constexpr const char* kDeathWords[] = {
       "was ",       "ate ",    "rides ", "accepts ", "chewed ", "eats ",    "gets ", "sleeps ",
       "sucks ",     "gulped ", "burst ", "visits ",  "turned ", "cratered", "fell ", "becomes ",
       "discovers ", "tries ",  "can't ", "squished", "loses ",  "checks ",  "died",  "got "};
+  for (const char* w : kDeathWords)
+    if (rest.rfind(w, 0) == 0) return true;
+  return false;
+}
+
+bool mind_obituary(Fighter& f, const std::string& line, double t) {
   for (const Mate& m : f.mind.mates) {
     if (m.name.empty() || line.size() <= m.name.size() + 1 ||
         line.compare(0, m.name.size(), m.name) != 0 || line[m.name.size()] != ' ')
       continue;
-    const std::string_view rest = std::string_view(line).substr(m.name.size() + 1);
-    bool death = false;
-    for (const char* w : kDeathWords) death |= rest.rfind(w, 0) == 0;
-    if (!death) return false;
+    if (!death_words(std::string_view(line).substr(m.name.size() + 1))) return false;
     if (t - m.at_t < mate_fresh_s(f)) mind_danger(f, m.at, t);
     return true;
   }
@@ -492,6 +496,14 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
       break;
     }
     case SayKind::coming: {
+      // Right after a pack's call, a bare `coming [ga]` (or `coming rl`) answers it: that mate
+      // takes the pack, the rest let it be (packs.hpp `packs_goal`).
+      if (t - mn.pack_t < kPackClaim_s && (s.item.empty() || s.item == "rl" || s.item == "lg")) {
+        mn.pack_claim_t = t;
+        m.going = -1;
+        m.going_t = t;
+        break;
+      }
       int32_t i = s.item.empty() ? -1 : item_named(f, s.item, nullptr);
       if (i < 0 && has_place) i = key_near(f, p, 600);
       m.going = i;

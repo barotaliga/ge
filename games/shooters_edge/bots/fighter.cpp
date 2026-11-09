@@ -503,6 +503,8 @@ int32_t pack_near(const Fighter& f, const server::RulesCommon& s, const Stats& s
                   float reach) {
   bool short_of = st.rockets < 20 || st.shells < 40 || st.nails < 60 || st.cells < 30;
   short_of |= (st.items & (kWRockets | kWGrenades)) == 0;
+  // A novice wants every pack he sees (`packinfer`), whatever he carries.
+  short_of |= f.sense == MapSense::novice && f.features[sh::Feature::packinfer];
   if (!short_of) return -1;
   sh::SenseSettings look = f.bot.senses.set;
   look.range = reach;
@@ -540,6 +542,19 @@ bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Ve
       return true;
     }
     f.pack_ent = -1;  // none in sight: the next is chosen by sight again
+    // A pack it knows a death left (packs.hpp): one from a fight with rockets in it from far,
+    // any other near and with nothing else on.
+    if (f.features[sh::Feature::packinfer]) {
+      const int32_t pn = packs_known_goal(f, me, st, t, f.mode == FightMode::roam, c && c->visible);
+      if (pn >= 0) {
+        go_to(f, pn);
+        if (why) {
+          why->decide("pack");
+          why->choose("known pack", "a death's pack it knows of, worth the way");
+        }
+        return true;
+      }
+    }
   }
   if (!f.team || f.mode == FightMode::retreat) return false;
   // A pack a mate called, when this player is the one to fetch it (packs.hpp).
@@ -1247,8 +1262,8 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   f.bot.pilot.grenade_ready = st.weapon == kWGrenades;  // a grenade jump fires with it in hand
   // A companion's view is its own (it faces the leader).
   f.bot.calm = f.escort.leader < 0 && f.features[sh::Feature::calm];
-  if (f.features[sh::Feature::packs])
-    packs_hear(f, t);  // rocket launches heard, by who fired (packs.hpp)
+  if (f.features[sh::Feature::packs] || f.features[sh::Feature::packinfer])
+    packs_hear(f, s, me, t);  // shots heard by who fired, cries, its own shot, packs (packs.hpp)
   ai::Why* why = f.bot.pilot.why ? f.bot.pilot.why->follow(slot, f.bot.pilot.command) : nullptr;
   f.stats.commands++;
   const bool dead = st.health <= 0;

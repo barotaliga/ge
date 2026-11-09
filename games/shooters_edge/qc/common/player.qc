@@ -160,7 +160,9 @@ void() PlayerPreThink = {
 
 void() PlayerPostThink = {
   if (self.deadflag != DEAD_NO || match_over) return;
-  if (self.impulse) weapon_impulse();
+  // A weapon select waits out the refire, held until the weapon is ready (a newer one replaces
+  // it): a launcher fired stays in hand for its refire, and a pack dropped inside it holds it.
+  if (self.impulse && time >= self.attack_finished) weapon_impulse();
   weapon_frame();
   power_frame();
   self.dmg_take = 0;
