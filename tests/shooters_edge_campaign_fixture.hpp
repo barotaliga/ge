@@ -60,10 +60,13 @@ struct Game {
   std::string error;
   uint32_t sequence = 0;
   // `settings`: server lines before the map loads (an arsenal's rows), after `deathmatch 0`.
-  explicit Game(const std::string& things, const std::vector<std::string>& settings = {}) {
+  // `bounds`: where setmodel finds a brush model file's bounds (none: such a model keeps its size).
+  explicit Game(const std::string& things, const std::vector<std::string>& settings = {},
+                sv::ModelBounds bounds = nullptr) {
     g_things = things;
     sv::CampaignOptions o;
     o.server.loop.max_edicts = 128;
+    o.server.model_bounds = bounds;
     o.load = &load;
     o.settings = {"deathmatch 0"};
     o.settings.insert(o.settings.end(), settings.begin(), settings.end());

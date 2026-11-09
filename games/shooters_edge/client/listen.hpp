@@ -317,6 +317,10 @@ bool listen_save_text(const Listen& l, std::string& out, std::string& error);
 bool listen_load_text(Listen& l, const ge::progs::Progs& progs, const ListenOptions& opt,
                       std::string_view text, std::string_view name, std::string& error,
                       std::unique_ptr<LoadedMap> map = nullptr);
+// A brush model file's bounds read from the search path `ctx` (a `const SearchPath*`): the mod
+// server's ModelBounds (qc_server.hpp), so a single-player program's exploding box has its size.
+bool search_path_model_bounds(void* ctx, const std::string& name, ge::shooter::Vec3f& mins,
+                              ge::shooter::Vec3f& maxs);
 // Whether a program is a single-player one (its layout's form).
 bool single_player(const ge::progs::Progs& progs);
 // Whether the server's lines ask for a single-player game: the last `deathmatch` set is 0 (the

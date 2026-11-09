@@ -162,7 +162,26 @@ void bi_setmodel(pg::Vm& vm) {
     flush_to_world(qc_of(vm));
     sh::set_brush_model(s.sv, e, index);
     refresh_from_world(qc_of(vm));
+    return;
   }
+  // A single-player program sizes nothing it gives a brush model in its own file (the exploding
+  // boxes): the size is the file's first model's bounds, one unit wider on every side, unrotated.
+  // A multiplayer program sets such sizes itself, and its setmodel leaves them alone.
+  const size_t len = std::strlen(m);
+  const bool own_file = len > 4 && std::strcmp(m + len - 4, ".bsp") == 0;
+  if (!own_file || s.progs == nullptr || s.progs->layout == nullptr ||
+      !s.progs->layout->single_player || s.opt.model_bounds == nullptr)
+    return;
+  sh::Vec3f lo, hi;
+  if (!s.opt.model_bounds(s.opt.model_ctx, m, lo, hi)) {
+    console_print(s, std::string("setmodel: no bounds for ") + m +
+                         ": the entity stays pointlike, so shots pass through it; next: check "
+                         "the file is in the game folder's packs\n");
+    return;
+  }
+  flush_to_world(qc_of(vm));
+  sh::set_size(s.sv, e, {lo.x - 1, lo.y - 1, lo.z - 1}, {hi.x + 1, hi.y + 1, hi.z + 1});
+  refresh_from_world(qc_of(vm));
 }
 
 void bi_setsize(pg::Vm& vm) {

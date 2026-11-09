@@ -150,6 +150,24 @@ reserves for big things.
 - **Coop**: monsters choose among players as above; players do not hurt each other with
   `teamplay 1`; keys are shared (a key picked up is not removed).
 
+## The exploding boxes
+
+Read by a clean-room reader (2026-11-09) from the GPL single-player program, the multiplayer
+program, both engines and the modern multiplayer server; `measured` from the shareware pack.
+
+- Health 20, aimed damage, a bounding-box solid, no movement; raised 2 and dropped to the floor
+  (a failed drop leaves it floating). `read`
+- **The size**: the single-player program sets none; the single-player engine's `setmodel` gives
+  any model its bounds as loaded, a brush model's first model's bounds one unit wider on every
+  side, unrotated. The multiplayer engines give a size only to inline (`*N`) models, so the
+  multiplayer program sets 0..32 × 0..32 × 0..64 (the small box 0..32 × 0..32 × 0..32) itself.
+  `read`. The shareware `maps/b_explob.bsp` stores 1..31 × 1..31 × 1..63, so 0..32 × 0..32 ×
+  0..64 once widened. `measured`
+- **Dying**: at once, inside the damage that killed it (no delay): damage off, the classname
+  `explo_box`, a blast of 160 from its origin (falling to 60 at 200 units), then the rocket's
+  explosion sound and burst; the flash 32 units up. A box in the blast goes up in the same call. A
+  player it kills "blew up". `read`
+
 ## What our campaign mod is, then
 
 The same baseline sources (`common/`) with a campaign variant (`campaign/progs.src`): monsters on

@@ -447,6 +447,10 @@ sv::CampaignOptions campaign_options(Listen& l, const ListenOptions& opt) {
   co.server.loop.move.speedjump = kListenSpeedJump;
   co.load = campaign_map;
   co.load_ctx = &l;
+  if (opt.files != nullptr) {
+    co.server.model_bounds = &search_path_model_bounds;
+    co.server.model_ctx = const_cast<SearchPath*>(opt.files);
+  }
   co.registered = opt.registered;
   co.settings = opt.arsenal;
   co.settings.insert(co.settings.end(), opt.console.begin(), opt.console.end());
@@ -771,6 +775,15 @@ bool listen_load_text(Listen& l, const pg::Progs& progs, const ListenOptions& op
   // The text keeps no start: his level time from the settled start of the map.
   l.entered_at = sv::kSettleFrames * sv::kSettleSeconds + 1.0;
   return true;
+}
+
+bool search_path_model_bounds(void* ctx, const std::string& name, ge::shooter::Vec3f& mins,
+                              ge::shooter::Vec3f& maxs) {
+  std::vector<uint8_t> store;
+  const std::span<const uint8_t> bytes =
+      find_file(*static_cast<const SearchPath*>(ctx), name, store);
+  std::string why;
+  return !bytes.empty() && sv::bsp_file_bounds(bytes, mins, maxs, why);
 }
 
 bool single_player(const pg::Progs& progs) {
