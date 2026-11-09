@@ -178,6 +178,11 @@ inline constexpr uint32_t kCubeSize = 256;    // a cube face's texels a side
 inline constexpr uint32_t kOrthoSize = 2048;  // the sun's and the zenith's maps
 inline constexpr int kMaxShadowed = 48;
 inline constexpr uint32_t kOrthos = 3;  // the sun's, the zenith's and the fall's
+// The orthographic maps hold depth and a stencil: a map's level is closed but where its sky faces
+// open it, so a texel no sky face stands over is covered whatever lies under it (the seams, the
+// walls' thickness and the cracks between a closed level's faces show nothing above them, and
+// would read as open sky to the sun, the sky's light and the weather). encode_bsp_shadows.
+inline constexpr wgpu::TextureFormat kOrthoFormat = wgpu::TextureFormat::Depth24PlusStencil8;
 // THE MOVING CASTERS' CUBES (v2 lit in real time; `set_shadow_casters`): the models a frame hands
 // over (players, monsters, the first-person player who is not drawn), drawn each frame into a cube
 // of their own for each of the kCasterLights shadowed lights that light them most (the light each
@@ -279,6 +284,7 @@ struct BspDraw {
   wgpu::TextureView mask_view;
   // p_draw_lit: p_draw with only the real-time lights' path (v2, no weather; bsp.wgsl's kLitOnly)
   uint32_t p_draw = 0, p_draw_lit = 0, p_fix = 0, p_veil = 0, p_shadow = 0;
+  uint32_t p_ortho = 0, p_ortho_sky = 0, p_ortho_shut = 0;  // an orthographic map's three steps
   // This frame's (prepare_bsp).
   GpuBsp staged{};
   std::vector<GpuLight> frame_lights;
