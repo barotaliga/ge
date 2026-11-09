@@ -9,9 +9,12 @@ void() worldspawn = {
   last_spawn = world;
   match_over = 0;
   intermission_time = 0;
+  // Read now too: the map's items spawn before the first frame, and deathmatch 4 keeps fewer.
+  deathmatch = cvar("deathmatch");
   player_precache();
   weapon_precache();
   item_precache();
+  dmm4_precache();
   precache_model("progs/backpack.mdl");
   precache_sound("misc/r_tele1.wav");
   precache_sound("doors/drclos4.wav");

@@ -126,9 +126,10 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
   if (!qc) return r;
   sv::RulesRunner rules = sv::qc_runner(std::move(qc));
   sv::QcServer& q = *sv::qc_of(rules);
-  rules.console("deathmatch 1");
+  rules.console("deathmatch " + std::to_string(opt.deathmatch));
   rules.console("teamplay 1");
   rules.console("timelimit " + std::to_string(opt.timelimit));
+  for (const std::string& line : opt.settings) rules.console(line);
   if (!rules.start(map->spec, r.error)) return r;
   sv::use_map_sets(q, map->bsp);
 
@@ -619,6 +620,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.trigger_off = fs.trigger_off;
     p.reactions = seat.fighter.bot.stats.reactions;
     p.pre_aimed = seat.fighter.bot.stats.pre_aimed;
+    p.strokes = seat.fighter.bot.hand.stats.strokes;
+    p.lifts = seat.fighter.bot.hand.stats.lifts;
     p.target_kept = seat.fighter.bot.stats.kept;
     p.react_s = seat.fighter.bot.stats.react_s;
     if (p.slot >= 0 && static_cast<size_t>(p.slot) < hits.players.size())
