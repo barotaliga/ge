@@ -690,10 +690,11 @@ void run(gl::Lab& lab) {
   // and every weapon's hits over its shots (what the dodge is for).
   {
     int64_t dodging = 0, turns = 0, fight = 0, fired = 0, hit = 0, watching = 0, alive = 0;
-    int64_t reacted = 0, pre = 0, kept = 0;
+    int64_t reacted = 0, pre = 0, kept = 0, swipes = 0;
     for (const cn::TeamPlayer& p : r.players) {
       watching += p.watching;
       kept += p.target_kept;
+      swipes += p.sound_swipes;
       reacted += p.reactions;
       pre += p.pre_aimed;
       for (int k = 0; k < 4; k++) alive += p.mode_commands[k];
@@ -877,6 +878,7 @@ void run(gl::Lab& lab) {
     lab.metric("team.pre-aimed-share",
                reacted > 0 ? static_cast<double>(pre) / static_cast<double>(reacted) : 0, "share");
     lab.metric("team.target-kept", static_cast<double>(kept), "count");
+    lab.metric("team.sound-swipes", static_cast<double>(swipes), "count");
     // What the match was fought with: each weapon's share of the commands holding one.
     int64_t held[9] = {}, all = 0;
     for (const cn::TeamPlayer& p : r.players)

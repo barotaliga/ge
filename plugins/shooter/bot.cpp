@@ -59,6 +59,11 @@ constexpr float kGlanceSide = 75, kGlanceBack = 120;
 constexpr float kGlanceReach = 2048, kGlanceOpen = 400;
 constexpr double kGlanceHold_s = 0.4;
 constexpr double kGlanceBand = 5;  // degrees: the glance looks right at its side
+// The sound's swipe (bot.hpp `listen`): a sound this fresh is swiped at, unless its maker was seen
+// this recently this near it, or the view is already within `kSoundAhead` degrees of it.
+constexpr double kSoundFresh_s = 0.25, kSoundKnown_s = 3;
+constexpr float kSoundSame = 300;
+constexpr double kSoundAhead = 30;
 
 // The calm view's strokes take this many times a turn meant's (THE MOUSE HAND, bot.hpp): people
 // look round at ease while they walk and jump, and turn fast onto an enemy or about.
@@ -336,7 +341,52 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         }
       }
       double band = kCalmBand;
-      if (b.glance) {
+      if (b.listen) {
+        // THE SOUND'S SWIPE (bot.hpp): an enemy heard where none was known, looked at.
+        const Vec3f o_at = sv.edicts[static_cast<size_t>(me)].origin;
+        const Vec3f eye_at{o_at.x, o_at.y, o_at.z + b.senses.set.view_height};
+        if (sv.time >= b.sound_back_until) {
+          for (const Contact& k : b.senses.contacts) {
+            if (!ai::known(k.heard) || k.heard.at <= b.sound_heard_at ||
+                ai::age(k.heard, sv.time) > kSoundFresh_s)
+              continue;
+            b.sound_heard_at = k.heard.at;
+            const Vec3f heard{static_cast<float>(k.heard.x), static_cast<float>(k.heard.y),
+                              static_cast<float>(k.heard.z)};
+            if (ai::known(k.seen) && ai::age(k.seen, sv.time) < kSoundKnown_s) {
+              const Vec3f seen{static_cast<float>(k.seen.x), static_cast<float>(k.seen.y),
+                               static_cast<float>(k.seen.z)};
+              const Vec3f d = heard - seen;
+              if (dot(d, d) < kSoundSame * kSoundSame) continue;  // known there
+            }
+            float sy = 0, sp = 0;
+            aim_angles(eye_at, heard, sy, sp);
+            if (std::fabs(wrap(sy - b.yaw)) <= kSoundAhead) continue;  // in view already
+            b.sound_yaw = sy;
+            b.sound_landed = false;
+            b.sound_until = sv.time + 1.0;
+            b.sound_back_until = b.sound_until + 0.6;
+            b.stats.sound_swipes++;
+            if (why) {
+              why->decide("view");
+              why->fact("sound_yaw", sy);
+              why->choose("swipe", "an enemy heard where none was known");
+            }
+            break;
+          }
+        }
+        if (sv.time < b.sound_until) {
+          look_yaw = b.sound_yaw;
+          band = kGlanceBand;
+          if (!b.sound_landed && std::fabs(wrap(look_yaw - b.yaw)) <= 2 * kGlanceBand) {
+            b.sound_landed = true;
+            b.sound_until = sv.time + 2.0 * b.aim.react_med;
+          }
+          b.sound_back_until = b.sound_until + 0.6;
+          b.glance_until = -1;  // no glance over it
+        }
+      }
+      if (b.glance && sv.time >= b.sound_until) {
         // THE GLANCE (bot.hpp): to the side with the longest open line of sight, now and then.
         if (sv.time >= b.glance_next && b.glance_until < sv.time) {
           const Vec3f o_at = sv.edicts[static_cast<size_t>(me)].origin;
@@ -354,25 +404,35 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
             }
           }
           if (pick != 0) {
-            // Held a moment past the turn there (at the calm view's pace).
+            // A swipe there at a turn meant's pace, held `kGlanceHold_s` from when it lands (the
+            // turn's time at most a second), and a swipe back.
             b.glance_off = pick;
-            b.glance_until = sv.time + kGlanceHold_s + (pick > 90 || pick < -90 ? 0.6 : 0.42);
+            b.glance_landed = false;
+            b.glance_until = sv.time + 1.0;
           }
           b.glance_next = sv.time + kGlanceMin_s + kGlanceSpread_s * core::next(b.glance_rng);
         }
         if (sv.time < b.glance_until) {
           look_yaw += b.glance_off;
           band = kGlanceBand;
+          if (!b.glance_landed && std::fabs(wrap(look_yaw - b.yaw)) <= 2 * kGlanceBand) {
+            b.glance_landed = true;
+            b.glance_until = sv.time + kGlanceHold_s;
+          }
+          b.glance_back_until = b.glance_until + 0.6;
         }
       }
       const double off = wrap(look_yaw - b.yaw);
+      // A swipe there and back at a turn meant's pace (the glance, the sound's).
+      const bool swipe =
+          (b.glance && sv.time < b.glance_back_until) || (b.listen && sv.time < b.sound_back_until);
       b.view_by = "calm";
       if (b.mouse && b.aim.mouse) {
         // The hand's strokes onto the look, at ease (an about-face at a turn meant's pace); the
         // pitch let lie within kCalmPitchTol of level.
         const double want_view[2] = {b.yaw + off, 0};
         double out[2];
-        const double pace = (off > 120 || off < -120) ? 1.0 : kCalmPace;
+        const double pace = (off > 120 || off < -120 || swipe) ? 1.0 : kCalmPace;
         hand_step(b, want_view, dt, band, kCalmPitchTol, band, 0, pace, false, out);
         b.yaw = static_cast<float>(out[0]);
         b.pitch = static_cast<float>(out[1]);

@@ -11,10 +11,10 @@ namespace ge::shooter {
 namespace {
 
 constexpr const char* kNames[kFeatures] = {
-    "calm",       "pace",   "swimaim", "screen",   "keep",      "lead",   "lane",  "hop",
-    "shortgoals", "commit", "danger",  "dodge",    "watch",     "spam",   "packs", "talk",
-    "plan",       "rj",     "gj",      "airsteer", "surface",   "glance", "eye",   "selfaim",
-    "pools",      "routes", "corner",  "mouse",    "packinfer", "trial"};
+    "calm",       "pace",   "swimaim", "screen",   "keep",      "lead",   "lane",   "hop",
+    "shortgoals", "commit", "danger",  "dodge",    "watch",     "spam",   "packs",  "talk",
+    "plan",       "rj",     "gj",      "airsteer", "surface",   "glance", "eye",    "selfaim",
+    "pools",      "routes", "corner",  "mouse",    "packinfer", "listen", "stairs", "trial"};
 
 // Every switch but `trial` (the last).
 constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);

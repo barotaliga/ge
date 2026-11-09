@@ -83,8 +83,8 @@ void packs_obituary(Fighter& f, const server::RulesCommon& s, const std::string&
 // The lab's truth (the runner's, never the bot's): the weapon each pack it just placed really
 // holds, read off the server `truth`, its guesses counted right or wrong.
 void packs_truth(Fighter& f, const server::RulesCommon& truth);
-// The node of the known pack to go for now, or -1: `calm` (nobody in sight) for a lesser pack;
-// a pack from a fight with rockets in it is gone for unless an enemy is in sight.
+// The node of the known pack to go for now, or -1: a pack from a fight with rockets in it (any
+// pack for a novice) is gone for unless an enemy is in sight; `calm` is not read now.
 int32_t packs_known_goal(Fighter& f, ge::shooter::Vec3f me, const Stats& st, double t, bool calm,
                          bool in_sight);
 // The node to go to for a called pack this player should fetch, or -1.

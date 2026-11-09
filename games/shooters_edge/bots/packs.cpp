@@ -317,22 +317,12 @@ void packs_truth(Fighter& f, const server::RulesCommon& truth) {
   }
 }
 
-int32_t packs_known_goal(Fighter& f, sh::Vec3f me, const Stats& st, double t, bool calm,
+int32_t packs_known_goal(Fighter& f, sh::Vec3f me, const Stats& st, double t, bool /*calm*/,
                          bool in_sight) {
   if (f.known_packs.empty() || !f.bot.pilot.pilot.g || in_sight) return -1;
   const sh::NavGraph& g = *f.bot.pilot.pilot.g;
   const bool full = st.rockets >= 100 && st.shells >= 100 && st.nails >= 200 && st.cells >= 100;
   const bool greedy = f.sense == MapSense::novice;
-  const bool lesser = f.features[sh::Feature::trial];  // the lesser packs gone for (the trial)
-  // Something else on: a key item it is going for and believes there (an armour, the mega, the
-  // quad, a launcher) beats a lesser pack.
-  bool keyed = false;
-  if (f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()) {
-    const ItemSpot& it = f.items[static_cast<size_t>(f.goal_item)];
-    keyed = it.present && (it.kind == ItemKind::armor2 || it.kind == ItemKind::armor3 ||
-                           it.kind == ItemKind::mega || it.kind == ItemKind::quad ||
-                           (it.kind == ItemKind::weapon && it.weapon == 32));
-  }
   const KnownPack* best = nullptr;
   int32_t best_node = -1;
   float best_cost = 1e30f;
@@ -342,12 +332,12 @@ int32_t packs_known_goal(Fighter& f, sh::Vec3f me, const Stats& st, double t, bo
   for (const KnownPack& p : f.known_packs) {
     if (claimed && dist(p.at, mn.pack_at) < kPackSame) continue;  // a mate said he takes it
     // A fight with rockets in it: the launcher's rockets (the launcher too, likely) are worth
-    // going far for, calm or not; any other pack only near, calm, and when it bothers.
+    // going far for, calm or not; any other is left to `pack_near`.
     // A novice wants everything: every pack he knows of is worth the way, full or not.
     const bool big = p.rockets || p.weapon >= 6 || greedy;
     // A lesser pack is left to the one in sight (`pack_near`, ammunition short): going out of the
-    // way for one cost a head-to-head set about 35 frags (e1m2, twelve seeds).
-    if (!big && (!lesser || !calm || !p.wanted || full || keyed)) continue;
+    // way for one when calm cost a head-to-head set about 35 frags (e1m2, twelve seeds).
+    if (!big) continue;
     if (!greedy && full && (p.weapon == 0 || (st.items & (1 << (p.weapon - 2))) != 0))
       continue;  // nothing in it it lacks
     const float d = dist(me, p.at);
