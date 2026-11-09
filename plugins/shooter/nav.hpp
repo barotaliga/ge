@@ -343,9 +343,10 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
                    std::span<const NavExtraLink> cut = {}, const NavJumper& jumper = {});
 
 // Every node a player at node `from` can get to (`search.reached(n)` after; costs the links'
-// times), and how many, `from` itself included; rocket jumps as `jumper` takes them.
-int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search,
-                  const NavJumper& jumper = {});
+// times), and how many, `from` itself included; rocket jumps as `jumper` takes them, and no link
+// through a mover in `shut` (a door shut that no route goes through).
+int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, const NavJumper& jumper = {},
+                  std::span<const int32_t> shut = {});
 
 // Adds `extra` to each node's run of links (after the proven ones), keeping the runs contiguous.
 void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra);

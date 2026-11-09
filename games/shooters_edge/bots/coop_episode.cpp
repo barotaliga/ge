@@ -107,6 +107,8 @@ bool enter(OnMap& m, const sv::Campaign& c, const EpisodeOptions& opt, EpisodeMa
     if (nav.swim.leading > 0) f.swim = &nav.swim;
     f.trap = &nav.trap;
     if (k == 0) {
+      // The way through keeps its own doors and buttons (way_through.hpp), not `locked`'s.
+      f.features.set(sh::Feature::locked, false);
       hunt_init(f, s);
       way_init(m.way, f, nav, s, c.map);
       if (opt.plan) m.way.log = &em.plan;

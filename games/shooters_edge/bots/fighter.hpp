@@ -183,6 +183,7 @@ struct FighterStats {
   int64_t heard_spawns = 0;         // players heard spawning on a point it knows
   int64_t spam_shots = 0;           // rockets fired at a spot enemies come in by
   int64_t pokes = 0;                // buttons a novice tried on a whim
+  int64_t door_errands = 0;         // buttons pressed for a shut door on the way (`locked`)
   int64_t dives_given_up = 0;       // dives turned back (late, or short of air)
   double dive_wet_s = 0;            // time in the water on a dive
   int64_t outmatched = 0;           // commands spent turned from a fight it believed it loses
@@ -297,6 +298,7 @@ struct Fighter {
   double surface_by = 0;       // out of the water by then, or the rise is given up
   double surface_retry = 0;    // no rise for air before then
   double dive_off_until = -1;  // until when the dive given up (`dive_off`) is not tried again
+  double door_until = -1e9, door_avoid_until = -1e9;  // a door's errand and avoidance (below)
   ge::ai::Why* why = nullptr;
   Team* team = nullptr;                     // its side (team.hpp); null in a free-for-all
   const ge::shooter::Locs* locs = nullptr;  // the map's place names (none: no names)
@@ -315,10 +317,15 @@ struct Fighter {
   sh::Vec3f news_spot;    // spam at news (spam.hpp): the way in fired at
   double news_t = -1e9;   // the news it is fired at for (when it came), and the rockets spent
   int32_t news_shots = 0;
-  bool news_on = false;     // a way in turned to this command
-  int32_t spam_node = -1;   // where it fires at a spot from now (-1: not out)
-  int32_t spam_spot = -1;   // and at which
-  int32_t poke = -1;        // the button a novice is on
+  bool news_on = false;    // a way in turned to this command
+  int32_t spam_node = -1;  // where it fires at a spot from now (-1: not out)
+  int32_t spam_spot = -1;  // and at which
+  int32_t poke = -1;       // the button a novice is on (or a door's errand's, below)
+  // A door on the way that only a button opens, resting shut (`locked`): its button (an index into
+  // `button_spots`) gone to and pressed or shot first, and the door (until `door_until`); a door
+  // whose button no way reaches but through it (dm2's t11, pressed from the far side): no route
+  // through it until `door_avoid_until` (`door_avoid`, below).
+  int32_t door_button = -1, door_ent = -1;
   int32_t objective = -1;   // a goal set from outside (way_through.hpp): taken before any item
   int32_t mega_watch = -1;  // the mega it took, its timer waiting on its health (knowledge.hpp)
   int32_t goal_node = -1;
@@ -339,6 +346,7 @@ struct Fighter {
   int32_t swim_exit = -1;     // the exit node it is climbing out onto (shooter/swim.hpp), -1 none
   double swim_exit_until = 0;
   int32_t short_item = -1;  // a short goal on the way (fighter.cpp on_the_way), -1 none
+  int32_t door_avoid = -1;  // the door a button's errand cannot reach round (above), -1 none
   double short_until = 0;
   bool swim_view_on = false;  // the swimmer's view turned at a hand's pace (fighter.cpp)
   float view_sent[2] = {};    // the view (pitch, yaw) its last command carried
