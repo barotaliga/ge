@@ -81,6 +81,25 @@ bool named_as(std::string_view name, std::span<const std::string> extensions) {
   return false;
 }
 
+namespace {
+
+// `name` in the folder `dir`, joined with the separator `dir` already uses ('/', or on Windows
+// '\\' when the folder is written with it alone), so a path is written one way throughout and a
+// folder named with '/' reads the same on every system.
+std::string joined(const std::string& dir, const std::string& name) {
+  if (dir.empty()) return name;
+  const char last = dir.back();
+#ifdef _WIN32
+  if (last == '/' || last == '\\') return dir + name;
+  const bool back = dir.find('\\') != std::string::npos && dir.find('/') == std::string::npos;
+  return dir + (back ? '\\' : '/') + name;
+#else
+  return last == '/' ? dir + name : dir + '/' + name;
+#endif
+}
+
+}  // namespace
+
 bool list_folder(const std::string& dir, std::span<const std::string> extensions,
                  std::vector<FolderEntry>& out, std::string& error) {
   out.clear();
@@ -101,11 +120,11 @@ bool list_folder(const std::string& dir, std::span<const std::string> extensions
     if (name.empty() || name[0] == '.') continue;
     std::error_code ec2;
     if (e.is_directory(ec2)) {
-      folders.push_back({.name = name, .path = e.path().string(), .folder = true});
+      folders.push_back({.name = name, .path = joined(dir, name), .folder = true});
       continue;
     }
     if (!e.is_regular_file(ec2) || !named_as(name, extensions)) continue;
-    FolderEntry f{.name = name, .path = e.path().string()};
+    FolderEntry f{.name = name, .path = joined(dir, name)};
     f.bytes = e.file_size(ec2);
     if (ec2) f.bytes = 0;
     const fs::file_time_type t = e.last_write_time(ec2);
