@@ -206,7 +206,7 @@ void run(gl::Lab& lab) {
       return;
     }
     trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
-             "\tscript_step\tbecause\n";
+             "\tscript_step\tbecause\tyaw\tpitch\tview\n";
     const int every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
     static struct Tracer {
       std::ofstream* out = nullptr;
@@ -216,7 +216,7 @@ void run(gl::Lab& lab) {
     tracer = Tracer{&trace, every, {}};
     o.on_command_ctx = &tracer;
     o.on_command = [](void* ctx, int k, const shooters_edge::bots::Fighter& f,
-                      const shooters_edge::server::RulesCommon& w, const sh::MoveCmd&) {
+                      const shooters_edge::server::RulesCommon& w, const sh::MoveCmd& cmd) {
       Tracer& tr = *static_cast<Tracer*>(ctx);
       if (k < 0 || k >= 64 || (tr.count[static_cast<size_t>(k)]++ % tr.every) != 0) return;
       std::ofstream& out = *tr.out;
@@ -245,7 +245,8 @@ void run(gl::Lab& lab) {
           << to_fixed(sp, 0) << '\t' << to_fixed(e.health, 0) << '\t'
           << shooters_edge::bots::fight_mode_name(f.mode) << '\t' << goal << '\t' << f.goal_node
           << '\t' << (f.unlocking ? 1 : 0) << '\t' << sh::pilot_mode_name(p.mode) << '\t' << link
-          << '\t' << p.script_step << '\t' << p.because << '\n';
+          << '\t' << p.script_step << '\t' << p.because << '\t' << to_fixed(cmd.angles.y, 2) << '\t'
+          << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by << '\n';
     };
   }
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));

@@ -110,6 +110,10 @@ constexpr double kSwimTurn = 180;
 constexpr double kSwimAbout = 360;
 constexpr float kSwimBand = 20;
 constexpr float kViewHigh = 88.5f;
+// The finger clicks while the view is within this many times the trigger's tolerance of him.
+constexpr float kClickWide = 2.5f;
+// A view set for a shot (a button, a doorway) is fired at once the hand is this near it, degrees.
+constexpr float kHandThere = 3;
 
 enum class Ammo : uint8_t { none, shells, nails, rockets, cells };
 
@@ -123,18 +127,20 @@ struct WeaponRow {
   float aim_dz;      // aimed over the middle
   float width;       // the target's half width the trigger allows at range, units
   float range;       // fired within this, units
+  float refire_s;    // from one shot to the next, s (the mod's weapon rows)
+  bool stream;       // fired as a stream: the finger holds it down
 };
 
 const WeaponRow kWeapons[8] = {
-    {kWBlade, 1, "blade", Ammo::none, 0, 0, 0, 24, 72},
-    {kWScatter, 2, "scattergun", Ammo::shells, 1, 0, 0, 24, 1200},
-    {kWDouble, 3, "double", Ammo::shells, 2, 0, 0, 32, 350},
-    {kWSpiker, 4, "spiker", Ammo::nails, 1, 1000, 0, 16, 1500},
-    {kWHeavy, 5, "heavy spiker", Ammo::nails, 2, 1000, 0, 20, 1500},
-    {kWGrenades, 6, "grenades", Ammo::rockets, 1, 600, -20, 40, 500},
+    {kWBlade, 1, "blade", Ammo::none, 0, 0, 0, 24, 72, 0.5f, false},
+    {kWScatter, 2, "scattergun", Ammo::shells, 1, 0, 0, 24, 1200, 0.5f, false},
+    {kWDouble, 3, "double", Ammo::shells, 2, 0, 0, 32, 350, 0.7f, false},
+    {kWSpiker, 4, "spiker", Ammo::nails, 1, 1000, 0, 16, 1500, 0.1f, true},
+    {kWHeavy, 5, "heavy spiker", Ammo::nails, 2, 1000, 0, 20, 1500, 0.1f, true},
+    {kWGrenades, 6, "grenades", Ammo::rockets, 1, 600, -20, 40, 500, 0.6f, false},
     // Fired as people fire it, loosely: near him is enough, the blast reaches the rest.
-    {kWRockets, 7, "rockets", Ammo::rockets, 1, 1000, -20, 96, 1200},
-    {kWArc, 8, "arc", Ammo::cells, 1, 0, 0, 20, 600},
+    {kWRockets, 7, "rockets", Ammo::rockets, 1, 1000, -20, 96, 1200, 0.8f, false},
+    {kWArc, 8, "arc", Ammo::cells, 1, 0, 0, 20, 600, 0.1f, true},
 };
 
 float ammo_of(const Stats& st, Ammo a) {
@@ -215,8 +221,10 @@ void swim_view(Fighter& f, const server::RulesCommon& s, int me, int msec, bool 
     for (const sh::Contact& k : f.bot.senses.contacts) seen |= k.ent == f.bot.target && k.visible;
   const bool wading =
       self.waterlevel >= 1 && (swim || f.bot.pilot.pilot.mode == sh::PilotMode::swim);
+  // The mouse hand turns a swimmer's view itself (shooter/bot.hpp).
+  const bool hand = f.bot.mouse && f.bot.aim.mouse && f.features[sh::Feature::pools];
   if ((self.waterlevel < 2 && !wading) || seen || f.swim_exit >= 0 ||
-      !f.features[sh::Feature::pace]) {
+      !f.features[sh::Feature::pace] || hand) {
     f.swim_view_on = false;
     f.view_sent[0] = cmd.angles.x;
     f.view_sent[1] = cmd.angles.y;
@@ -1338,6 +1346,18 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     watch_look(f, s, me, dead, t, why);  // the ways in watched (watch.hpp)
   // Or one an enemy comes by, a rocket ready (spam.hpp).
   if (f.features[sh::Feature::spam]) spam_news_look(f, s, me, st, t);
+  // The weapon's rhythm as its holder knows it: a shot is its ammunition going down, the next
+  // ready the weapon's refire after it; the hand times its stroke to that (bot.hpp THE MOUSE
+  // HAND), and only the arc's beam is traced.
+  f.bot.mouse = f.features[sh::Feature::mouse];
+  if (held) {
+    const float ammo = ammo_of(st, held->ammo);
+    if (st.weapon == f.shot_weapon && ammo < f.shot_ammo) f.ready_at = t + held->refire_s;
+    f.shot_weapon = st.weapon;
+    f.shot_ammo = ammo;
+  }
+  f.bot.shot_due_s = std::fmax(0.0, f.ready_at - t);
+  f.bot.beam = held && held->bit == kWArc;
   sh::MoveCmd cmd = sh::bot_source(f.bot).next(&f.bot, s.sv, slot, msec);
   f.stats.mode_commands[static_cast<int>(f.mode)]++;
   if (held) f.stats.weapon_commands[held->number]++;
@@ -1492,6 +1512,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   if (!dead && f.escort.leader >= 0) escort_command(f, s, me, t, msec, cmd);
 
   // The trigger: a contact in sight, the view on the aim within the weapon's width at the range.
+  bool clicked = false;  // the finger stepped this command
   const sh::Contact* c = nullptr;
   for (const sh::Contact& k : f.bot.senses.contacts)
     if (k.ent == f.bot.target && k.visible) c = &k;
@@ -1514,18 +1535,20 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     // The view the command carries, which a swim or a button may have turned off the aim.
     const float off = view_off(f.bot, cmd);
     bool fire = !reacting && d <= held->range && off <= tol;
+    // The finger clicks while the view is roughly on him (sweeping onto him), not only on him.
+    bool click = !reacting && d <= held->range && off <= tol * kClickWide;
     f.stats.trigger_checks++;
     f.stats.trigger_far += d > held->range;
     f.stats.trigger_off += d <= held->range && off > tol;
     if (fire && (mate_in_line(f, s, eye, at_of(c->seen)) ||
                  (blast_weapon(*held) && mate_near(f, s, at_of(c->seen), kBlastClear)))) {
-      fire = false;
+      fire = click = false;
       f.stats.held_fire++;
       if (f.team) f.team->stats.held_shots++;
     }
     if (fire && f.escort.leader >= 0 &&
         escort_player_in_line(f, s, eye, at_of(c->seen), kFireClearance)) {
-      fire = false;
+      fire = click = false;
       f.stats.held_fire++;
       f.escort.stats.shots_held++;
     }
@@ -1533,14 +1556,22 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     // taken up at once.
     if (f.escort.leader >= 0 && blast_weapon(*held) && !escort_blast_clear(f, s, at_of(c->seen))) {
       if (fire) {
-        fire = false;
         f.stats.held_fire++;
         f.escort.stats.blasts_held++;
       }
+      fire = click = false;
       if (f.want_weapon == 0 && t - f.impulse_at >= kImpulseGap_s)
         choose_weapon(f, st, d, t, nullptr, false);
     }
-    if (fire) {
+    // The finger (`mouse`): fire clicked again and again, faster as its health runs out; a
+    // stream held. Without it, held down while on him.
+    const bool hand = f.bot.mouse && f.bot.aim.mouse;
+    const double stress = std::fmin(1.0, std::fmax(0.0, (100.0 - st.health) / 80.0));
+    const bool down =
+        hand ? f.bot.finger.step(msec / 1000.0, click, held->stream, stress, f.bot.shot_due_s)
+             : fire;
+    clicked = true;
+    if (down) {
       cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);
       f.stats.shots++;
     }
@@ -1554,7 +1585,15 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
                                                      : "off it");
     }
   }
+  if (!clicked) f.bot.finger.step(msec / 1000.0, false, false, 0);  // nothing to fire at: let go
   if (!dead) swim_view(f, s, me, msec, swim, cmd);  // under water the view turns at a hand's pace
+  // A view set above (a button, a doorway, the swim's way out) reached by the hand, not jumped
+  // to; no shot of its own until the hand is there (shooter/bot.hpp `bot_hand_override`).
+  if (!dead) {
+    const bool wet = s.world.entities[static_cast<size_t>(me)].waterlevel >= 2;
+    if (sh::bot_hand_override(f.bot, cmd, msec, wet) > kHandThere)
+      cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonAttack);
+  }
   fighter_keys(f, cmd);  // the side key turned round as a person's hand turns it (footwork.hpp)
   return cmd;
 }

@@ -3,7 +3,7 @@
 // minutes, on four seeds. Every one scores and dies, picks items up, switches weapons and holds one
 // better than the starting scattergun for a while, and over the four seeds spends time in each of
 // its four modes; the mod never faults; the experts outscore the novices over the four seeds (one
-// seed is a coin toss); aggressive novices fight and die more than cowardly ones
+// seed is a coin toss); aggressive novices fight more than cowardly ones, who back off
 // (shooter/temper.hpp); and a match replays to the bit and matches its golden
 // (tests/golden/shooters_edge_fight.txt, GE_GOLDEN_WRITE=1 rewrites it; the PR says why).
 //
@@ -96,9 +96,9 @@ TEST(fighters_play_the_baseline_mod_and_aim_tells) {
                                  ", the novices " + std::to_string(novice));
 }
 
-TEST(aggressive_novices_fight_more_and_frag_more_than_cowardly_ones) {
+TEST(aggressive_novices_fight_more_than_cowardly_ones) {
   // Four novices, two aggressive and two cowards, on twelve seeds: the aggressive are in a fight
-  // far more of their time and score more; the cowards spend two fifths or more of theirs backing
+  // far more of their time; the cowards spend two fifths or more of theirs backing
   // off. Not who dies more: in this small hall a coward is run down about as often as an aggressive
   // novice is shot in his fights (12 seeds: 249 deaths against 253, each side ahead in half the
   // seeds; backing off to cover, or fighting back nearer, did not change it).
@@ -136,7 +136,9 @@ TEST(aggressive_novices_fight_more_and_frag_more_than_cowardly_ones) {
       static_cast<long long>(frags[1]), static_cast<long long>(deaths[1]),
       static_cast<double>(fight[1]) / static_cast<double>(alive[1]),
       static_cast<double>(turned[1]) / static_cast<double>(alive[1]));
-  CHECK_MSG(frags[0] > frags[1], "the aggressive novices scored no more than the cowards");
+  // Who scores more is not claimed: with a person's hand on the mouse (ai/mouse.hpp, a novice's
+  // flick landing within about 45 degrees) a novice's eagerness no longer pays in frags (12
+  // seeds: 197 to the cowards' 209; with the old spring's aim 241 to 215 the other way).
   // Twice, not more: an aggressive player stands and fights within the double's range rather than
   // breaking off, so he corners the cowards (who must fight one that near) more often.
   CHECK_MSG(fight[0] * alive[1] > 2 * fight[1] * alive[0],

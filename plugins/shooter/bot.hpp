@@ -100,6 +100,22 @@ struct Bot {
   // holds where he went, as a person's crosshair waits at the corner; off, his spot is carried
   // along for the whole `aim.hold_s` and the view tracks him through the wall.
   bool corner = true;
+  // THE MOUSE HAND (`mouse`, ai/mouse.hpp, with the aim profile's `mouse` set): the aim's and the
+  // calm view's turns are a hand's strokes on a pad (a bell of speed, Fitts' time, landing a
+  // little off, lifts, a drag right running down), not a spring or a steady rate; a turn meant
+  // (onto an enemy) at full pace, the calm view's at `kCalmPace` of it. With a shot weapon the
+  // hand does not trace the enemy between shots: its stroke onto him is timed to land as the
+  // weapon comes ready (`shot_due_s`, from the fighter); a beam (`beam`) is traced. The finger
+  // clicks fire (`finger`, the fighter's) rather than holding it.
+  bool mouse = true;
+  ai::Mouse hand;
+  ai::Finger finger;
+  double shot_due_s = 0;  // the weapon ready again in this long, s (0: ready)
+  bool beam = false;      // the weapon in hand fires a stream: traced, and fire held
+  float aim_dist = 0;     // the contact aimed at this far, units (the stroke's target width)
+  // What turned the view this command ("aim", "look", "calm", "air", "swim", "pilot"): read by
+  // se-team's trace.
+  const char* view_by = "pilot";
   // Swimming, the pilot's wish pressed under the aim's or the calm view in three dimensions (its
   // dive and rise kept); off, turned in the plane alone (features.hpp `pools`).
   bool pools = true;
@@ -151,5 +167,10 @@ void bot_aim(Bot& b, const AimProfile& aim);
 float bot_aim_off(const Bot& b);
 // Whether the bot is still reacting to the contact it took up at server time `t` (no shot yet).
 bool bot_reacting(const Bot& b, double t);
+// A view the game set on `cmd` after the bot's step (a button aimed at, a doorway fired at, a
+// swim's way out) turned to by the mouse hand (`mouse`) instead of jumping there: the hand a
+// `msec` step toward it, the wish kept in the world (in three dimensions when `wet`). Returns
+// how far the view still lies off the one set, degrees (0: none set, or no hand).
+float bot_hand_override(Bot& b, MoveCmd& cmd, int msec, bool wet);
 
 }  // namespace ge::shooter

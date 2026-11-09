@@ -60,6 +60,36 @@ constexpr float kGlanceReach = 2048, kGlanceOpen = 400;
 constexpr double kGlanceHold_s = 0.4;
 constexpr double kGlanceBand = 5;  // degrees: the glance looks right at its side
 
+// The calm view's strokes take this many times a turn meant's (THE MOUSE HAND, bot.hpp): people
+// look round at ease while they walk and jump, and turn fast onto an enemy or about.
+constexpr double kCalmPace = 1.15;
+constexpr double kCalmPitchTol = 6;  // the calm view's pitch is put right past this, degrees
+constexpr double kSwimBand = 20;     // a swimmer's view may lie this far off the swim, degrees
+constexpr double kGameTol = 3;       // a view the game set is near enough this close, degrees
+
+// The view a step on through the mouse hand toward `want` (yaw, pitch; yaw unwrapped near the
+// view): close enough within `tol_x`, `tol_y` degrees, the target `width` degrees across, a shot
+// due in `due` s, strokes at `pace` of a turn meant, leading the target when `lead`.
+void hand_step(Bot& b, const double want[2], double dt, double tol_x, double tol_y, double width,
+               double due, double pace, bool lead, double out[2]) {
+  // The hand follows a view something else turned (a jump's air control, the swim's view).
+  if (std::fabs(b.hand.x() + b.yaw) > 0.01 || std::fabs(b.hand.y() + b.pitch) > 0.01)
+    b.hand.reset(-b.yaw, -b.pitch);
+  ai::MouseWant w;
+  w.x = -want[0];
+  w.y = -want[1];
+  w.tol_x = tol_x;
+  w.tol_y = tol_y;
+  w.width = width;
+  w.due_s = due;
+  w.pace = pace;
+  w.lead = lead;
+  double x = 0, y = 0;
+  b.hand.step(dt, w, x, y);
+  out[0] = -x;
+  out[1] = std::fmax(-70.0, std::fmin(80.0, -y));
+}
+
 MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   Bot& b = *static_cast<Bot*>(ctx);
   const int me = slot + 1;
@@ -98,10 +128,18 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       c && ai::known(c->seen) && (c->visible || ai::age(c->seen, sv.time) <= b.aim.hold_s);
   double want[2];
   if (fresh) {
+    // The lead for the hands' lag (`aim.lead_s`): the mouse hand leads its own strokes by the
+    // target's motion over each stroke's time (ai/mouse.hpp), so none is added for it.
+    const float hand_lead = b.mouse && b.aim.mouse ? 0.f : b.aim.lead_s;
     // Lost from sight, his course is followed a moment only (`corner`): no wall is seen through.
     const double age = ai::age(c->seen, sv.time);
-    const double head =
-        (b.corner && !c->visible ? std::fmin(age, kLostCarry_s) : age) + b.aim.lead_s;
+    const double head = (b.corner && !c->visible ? std::fmin(age, kLostCarry_s) : age) + hand_lead;
+    {
+      const Vec3f to = Vec3f{static_cast<float>(c->seen.x), static_cast<float>(c->seen.y),
+                             static_cast<float>(c->seen.z)} -
+                       eye;
+      b.aim_dist = std::sqrt(to.x * to.x + to.y * to.y + to.z * to.z);
+    }
     // The network's part, in the air only: a player's arc does not change in a round trip, but
     // on the ground a strafer's steps do, and a lead of the round trip on them (measured on top
     // of the hands' own) swings the aim wider than it gains (se-team at 200 ms: none on the
@@ -120,7 +158,7 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     }
     const double lead = head + (m.airborne ? net : 0);
     // From where its own eye will be when the hands have caught up (`selfaim`).
-    const Vec3f look_from = b.selfaim ? eye + self.velocity * b.aim.lead_s : eye;
+    const Vec3f look_from = b.selfaim ? eye + self.velocity * hand_lead : eye;
     float yaw = 0, pitch = 0;
     Vec3f at = mover_at(m, lead);
     if (b.shot_speed > 0) {
@@ -164,7 +202,9 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       b.stats.reactions++;
       b.stats.react_s += r;
       b.react_until = sv.time + r;
-      b.freeze_until = sv.time + r - b.aim.hands[0].delay_s;
+      // The hands' own lag makes up the reaction's last part; the mouse hand has none (its
+      // stroke's time is on top, as a person's is).
+      b.freeze_until = sv.time + r - (b.mouse && b.aim.mouse ? 0 : b.aim.hands[0].delay_s);
       b.freeze_view[0] = b.yaw;
       b.freeze_view[1] = b.pitch;
       if (why) {
@@ -242,8 +282,22 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     static constexpr const char* kNames[2] = {"aim_yaw", "aim_pitch"};
     ai::record_intent(why, kNames, want);
     double out[2];
-    b.aim_hands.step(want, out);
+    if (b.mouse && b.aim.mouse) {
+      // The hand: onto the enemy within his width (his middle's half width, 16 units, at his
+      // range), a shot weapon's stroke timed to its readiness, a beam traced; a lost one or a
+      // spot watched loosely.
+      const bool sighted = b.aiming && c && c->visible;
+      const double half = core::libm::atan2(16.0, std::fmax(1.0, static_cast<double>(b.aim_dist))) *
+                          (180 / core::kPi);
+      const double tol = sighted ? std::fmax(0.4, half * 0.7) : 3;
+      const double due = sighted && !b.beam ? b.shot_due_s : 0;
+      hand_step(b, want, msec / 1000.0, tol, tol, std::fmax(1.0, half * 2), due, b.aiming ? 1 : 1.3,
+                sighted, out);
+    } else {
+      b.aim_hands.step(want, out);
+    }
     if (!b.aiming) b.stats.looking++;
+    b.view_by = b.aiming ? "aim" : "look";
     b.wanted[0] = want[0];
     b.wanted[1] = want[1];
     b.pressed[0] = out[0];
@@ -312,21 +366,56 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
         }
       }
       const double off = wrap(look_yaw - b.yaw);
-      const double rate = (off > 120 || off < -120) ? kCalmAbout : kCalmTurn;
-      double step = 0;
-      if (off > band || off < -band) {
-        const double want_step = off > 0 ? off - band * 0.5 : off + band * 0.5;
-        step = std::fmax(-rate * dt, std::fmin(rate * dt, want_step));
+      b.view_by = "calm";
+      if (b.mouse && b.aim.mouse) {
+        // The hand's strokes onto the look, at ease (an about-face at a turn meant's pace); the
+        // pitch let lie within kCalmPitchTol of level.
+        const double want_view[2] = {b.yaw + off, 0};
+        double out[2];
+        const double pace = (off > 120 || off < -120) ? 1.0 : kCalmPace;
+        hand_step(b, want_view, dt, band, kCalmPitchTol, band, 0, pace, false, out);
+        b.yaw = static_cast<float>(out[0]);
+        b.pitch = static_cast<float>(out[1]);
+      } else {
+        const double rate = (off > 120 || off < -120) ? kCalmAbout : kCalmTurn;
+        double step = 0;
+        if (off > band || off < -band) {
+          const double want_step = off > 0 ? off - band * 0.5 : off + band * 0.5;
+          step = std::fmax(-rate * dt, std::fmin(rate * dt, want_step));
+        }
+        const double drift = kCalmDrift * core::libm::sin(b.calm_t * 0.7) * dt;
+        b.yaw = static_cast<float>(b.yaw + step + drift);
+        b.pitch = static_cast<float>(b.pitch * (1 - dt) + 2 * core::libm::sin(b.calm_t * 0.4) * dt);
       }
-      const double drift = kCalmDrift * core::libm::sin(b.calm_t * 0.7) * dt;
-      b.yaw = static_cast<float>(b.yaw + step + drift);
-      b.pitch = static_cast<float>(b.pitch * (1 - dt) + 2 * core::libm::sin(b.calm_t * 0.4) * dt);
+      if (swim3d)
+        turn_axes_swim(cmd.forward, cmd.side, cmd.up, pilot_view, {b.pitch, b.yaw, 0});
+      else
+        turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
+      cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
+    } else if (b.mouse && b.aim.mouse && b.pilot.pilot.mode != PilotMode::grenade &&
+               (swim3d || (pilot_view.x < 1 && pilot_view.x > -1))) {
+      // A jump, a hop, a strafe or a swim: the pilot's heading followed by the hand (its wish
+      // turned under the view, in three dimensions under water, so the air control and the swim
+      // are the same); a blast jump's pitched view stays the pilot's. Under water it looks along
+      // the swim within kSwimBand, at ease.
+      const double want_view[2] = {b.yaw + wrap(pilot_yaw - b.yaw), 0};
+      double out[2];
+      b.view_by = swim3d ? "swim" : "air";
+      if (swim3d) {
+        hand_step(b, want_view, msec / 1000.0, kSwimBand, kCalmPitchTol, kSwimBand, 0, kCalmPace,
+                  false, out);
+      } else {
+        hand_step(b, want_view, msec / 1000.0, 2, kCalmPitchTol, 4, 0, 1, true, out);
+      }
+      b.yaw = static_cast<float>(out[0]);
+      b.pitch = static_cast<float>(out[1]);
       if (swim3d)
         turn_axes_swim(cmd.forward, cmd.side, cmd.up, pilot_view, {b.pitch, b.yaw, 0});
       else
         turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
       cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
     } else {
+      b.view_by = "pilot";
       b.yaw = pilot_yaw;
       b.pitch = 0;
     }
@@ -351,6 +440,14 @@ void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands ha
   pilot_init(b.pilot.pilot, g, ps, h, hz, seed);
   b.aim = aim;
   b.aim_hands = ai::Hands(b.aim.hands, hz, seed ^ 0x5bd1e995u);
+  {
+    // One player in ten is left-handed: his drag right runs up.
+    ai::MouseHand hand = aim.hand;
+    core::Rng hr = core::make_rng(seed ^ 0x3c6ef372u);
+    if (core::next(hr) < 0.1) hand.tilt = -hand.tilt;
+    b.hand = ai::Mouse(hand, seed ^ 0x9b05688cu);
+    b.finger = ai::Finger(aim.finger, seed ^ 0x1f83d9abu);
+  }
   b.react_rng = core::make_rng(seed ^ 0x2c1b3c6du);
   b.glance_rng = core::make_rng(seed ^ 0x6a09e667u);
   b.strafe = ps.strafe;
@@ -358,6 +455,26 @@ void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands ha
 }
 
 CmdSource bot_source(Bot& b) { return {&b, bot_next}; }
+
+float bot_hand_override(Bot& b, MoveCmd& cmd, int msec, bool wet) {
+  if (!(b.mouse && b.aim.mouse)) return 0;
+  const float dy = wrap(cmd.angles.y - b.yaw), dp = cmd.angles.x - b.pitch;
+  if (dy < 0.05f && dy > -0.05f && dp < 0.05f && dp > -0.05f) return 0;  // the hand's own
+  const Vec3f set_view = cmd.angles;
+  const double want[2] = {b.yaw + dy, set_view.x};
+  double out[2];
+  hand_step(b, want, msec / 1000.0, kGameTol, kGameTol, 4, 0, 1, false, out);
+  b.yaw = static_cast<float>(out[0]);
+  b.pitch = static_cast<float>(out[1]);
+  b.view_by = "game";
+  if (wet)
+    turn_axes_swim(cmd.forward, cmd.side, cmd.up, set_view, {b.pitch, b.yaw, 0});
+  else
+    turn_axes(cmd.forward, cmd.side, set_view.y, b.yaw);
+  cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
+  const float ry = wrap(set_view.y - b.yaw), rp = set_view.x - b.pitch;
+  return std::sqrt(ry * ry + rp * rp);
+}
 
 void bot_goal(Bot& b, int32_t goal) {
   b.pilot.goals.assign(1, goal);

@@ -26,6 +26,35 @@ const char* aim_skill_name(AimSkill s) {
   return "?";
 }
 
+namespace {
+
+// The mouse hand of an aim trait `aim` and a reaction trait `reaction` (1 to 10; 2, 5 and 8 the
+// novice, the average and the expert): a 180-degree flip in about 0.5, 0.32 and 0.22 s, landing
+// within about 45, 15 and 5 degrees; the expert on a lower sensitivity and a wider reach.
+void mouse_of(AimProfile& p, uint8_t aim, uint8_t reaction) {
+  const auto at = [](uint8_t v, double a, double b, double c, double d) {
+    return scale(v, {a, b, c, d});
+  };
+  ai::MouseHand& h = p.hand;
+  p.mouse = true;
+  h.cm_per_360 = at(aim, 34, 30, 26, 24);
+  h.reach_cm = at(aim, 9, 11, 13, 14);
+  h.lift_s = at(aim, 0.24, 0.17, 0.13, 0.11);
+  h.fitts_a = at(aim, 0.10, 0.08, 0.06, 0.05);
+  h.fitts_b = at(aim, 0.07, 0.04, 0.027, 0.022);
+  h.gain = at(aim, 0.9, 0.97, 0.99, 0.995);
+  h.gain_sd = at(aim, 0.17, 0.056, 0.019, 0.012);
+  h.dir_sd_deg = at(aim, 9, 3.2, 1.2, 0.8);
+  h.setdown_cm = at(aim, 0.15, 0.1, 0.06, 0.05);
+  h.look_s = at(reaction, 0.17, 0.13, 0.10, 0.09);
+  ai::FingerSpec& f = p.finger;
+  f.gap_calm_s = at(reaction, 0.24, 0.2, 0.17, 0.16);
+  f.gap_stress_s = at(reaction, 0.13, 0.11, 0.1, 0.095);
+  f.sync = at(aim, 0.25, 0.5, 0.8, 0.9);
+}
+
+}  // namespace
+
 AimProfile aim_profile(AimSkill s) {
   AimProfile p;
   p.hands.resize(2);
@@ -53,6 +82,10 @@ AimProfile aim_profile(AimSkill s) {
   p.react_lo = r.react_lo;
   p.react_med = r.react_med;
   p.react_hi = r.react_hi;
+  const uint8_t trait = static_cast<uint8_t>(s == AimSkill::novice    ? 2
+                                             : s == AimSkill::average ? 5
+                                                                      : 8);
+  mouse_of(p, trait, trait);
   return p;
 }
 
@@ -76,6 +109,7 @@ AimProfile aim_profile(uint8_t aim, uint8_t reaction) {
   p.react_lo = static_cast<float>(at(reaction, 0.24f, 0.18f, 0.14f, 0.12f));
   p.react_med = static_cast<float>(at(reaction, 0.30f, 0.23f, 0.16f, 0.14f));
   p.react_hi = static_cast<float>(at(reaction, 0.42f, 0.30f, 0.22f, 0.19f));
+  mouse_of(p, aim, reaction);
   return p;
 }
 

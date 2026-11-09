@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "ai/hands.hpp"
+#include "ai/mouse.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooter/vec.hpp"
 
@@ -51,6 +52,13 @@ struct AimProfile {
   // draws under `react_med`, the rest thinning out to `react_hi` (a person's reaction times are
   // skewed to the slow side). The hands' own delay is the tracking lag inside it. All 0: none.
   float react_lo = 0, react_med = 0, react_hi = 0;
+  // THE MOUSE HAND and its finger (ai/mouse.hpp), used when the bot's `mouse` switch is on and
+  // `mouse` is set here (every skill but the perfect aim): how fast and how close a stroke lands
+  // (a 180-degree flip lands within about 5 degrees for an expert, 15 for an average player, 45
+  // for a novice), the pad, the eye's loop, and how fast the finger clicks.
+  bool mouse = false;
+  ai::MouseHand hand;
+  ai::FingerSpec finger;
 };
 AimProfile aim_profile(AimSkill s);
 // The hands of an aim trait `aim` and a reaction trait `reaction` (traits.hpp, 1 to 10): the
