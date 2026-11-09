@@ -447,14 +447,11 @@ sv::CampaignOptions campaign_options(Listen& l, const ListenOptions& opt) {
   co.server.loop.move.speedjump = kListenSpeedJump;
   co.load = campaign_map;
   co.load_ctx = &l;
-<<<<<<< HEAD
   if (opt.files != nullptr) {
     co.server.model_bounds = &search_path_model_bounds;
     co.server.model_ctx = const_cast<SearchPath*>(opt.files);
+    co.server.localized = localized_text(*opt.files);
   }
-=======
-  if (opt.files != nullptr) co.server.localized = localized_text(*opt.files);
->>>>>>> origin/main
   co.registered = opt.registered;
   co.settings = opt.arsenal;
   co.settings.insert(co.settings.end(), opt.console.begin(), opt.console.end());
