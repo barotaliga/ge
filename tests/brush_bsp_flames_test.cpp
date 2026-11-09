@@ -1,12 +1,12 @@
 // plugins/brush/app/bsp_flames.hpp: a wall torch's and a large flame's light entities become
-// flames over their origins, a plain lamp none, and each fire's level follows its light's flicker;
+// flames over their origins, a plain lamp none, and each fire's level and light follow its puffs;
 // as bonfires a large flame burns twice as tall in five tongues and throws sparks up its wind, and
 // a large one in a lantern's cage burns bigger with no sparks, and a wall torch and a small flame
 // stay as they were.
 //
 // ge:summary Tests for the map's fires: which lights burn, where, and their level
 // ge:keywords test brush bsp torch flame fire bsp_fires flicker-sync bonfire bonfire_sparks
-// ge:keywords fire_time fire-pace kfirepace
+// ge:keywords fire_flicker fire-pace kfirepace puff_hz flame-puffs
 // ge:skill brush testing
 #include <cmath>
 #include <vector>
@@ -52,13 +52,28 @@ TEST(a_fire_burns_as_its_light_flickers) {
   for (int i = 0; i < 20; ++i) {
     const double t = i * 0.07;
     ba::bsp_fires(s, t, 2.0, fires);
-    const double want = ba::flicker_at(s.lights[0], t * ba::kFirePace) / 0.72;
-    CHECK(fires[0].level > 0 && std::abs(fires[0].level - want) < 1e-5);
-    CHECK(ba::fire_time(s.lights[0], t, ba::kFirePace) == t * ba::kFirePace);
+    // The gas's level and the wall's light are one: the flame's puffs.
+    const double want = ba::fire_flicker(s.lights[0], t, {}) / ba::kFireFlickerMean;
+    CHECK(std::abs(fires[0].level - want) < 1e-5);
+    CHECK(fires[0].level > 0.85f && fires[0].level < 1.15f);
+    CHECK(std::abs(fires[0].level - ge::render::flame_puff_level(fires[0], t)) < 1e-6f);
   }
+  // A light that is no fire keeps its own flicker.
+  CHECK(ba::fire_flicker(s.lights[1], 2.0, {}) == ba::flicker_at(s.lights[1], 2.0));
 }
 
-TEST(the_fires_pace_slows_the_gas_and_the_light_and_keeps_the_lean) {
+TEST(a_fire_puffs_at_a_real_flames_rate_for_its_width) {
+  const ba::Scene s = three_lights();
+  std::vector<ge::render::Flame> fires;
+  ba::FireLook look;
+  look.bonfires = true;
+  ba::bsp_fires(s, 1.0, 2.0, fires, look);
+  // A wall torch puffs three or four times a second, a bonfire's body once or twice.
+  CHECK(fires[0].puff_hz > 2.5f && fires[0].puff_hz < 4.5f);
+  CHECK(fires[1].puff_hz > 1.0f && fires[1].puff_hz < 2.0f);
+}
+
+TEST(the_fires_pace_slows_the_puffs_and_the_light_and_keeps_the_lean) {
   const ba::Scene s = three_lights();
   std::vector<ge::render::Flame> as_made, slow;
   ba::FireLook made;
@@ -71,17 +86,15 @@ TEST(the_fires_pace_slows_the_gas_and_the_light_and_keeps_the_lean) {
   ba::bsp_fires(s, 3.0, 2.0, slow, paced);
   CHECK(as_made.size() == slow.size());
   for (size_t i = 0; i < slow.size(); ++i) {
-    CHECK(std::abs(slow[i].rise_mps - 0.4f * as_made[i].rise_mps) < 1e-6f);
-    // The air past it slowed as much: the tip leans as far downwind.
+    CHECK(std::abs(slow[i].puff_hz - 0.4f * as_made[i].puff_hz) < 1e-5f);
+    if (i == 0) continue;  // the torch stands in no wind
+    // The air past a bonfire slowed as much as its rise: the tip leans as far downwind.
     CHECK(std::abs(slow[i].wind[0] / slow[i].rise_mps - as_made[i].wind[0] / as_made[i].rise_mps) <
           1e-5f);
   }
   // The light keeps step: the paced fire at 3 s is the one as made at 1.2 s.
   ba::bsp_fires(s, 1.2, 2.0, as_made, made);
-  CHECK(std::abs(slow[0].level - as_made[0].level) < 1e-6f);
-  // A light that is no fire keeps the map's clock.
-  ba::PointLight lamp;
-  CHECK(ba::fire_time(lamp, 3.0, 0.4) == 3.0);
+  CHECK(std::abs(slow[0].level - as_made[0].level) < 1e-5f);
 }
 
 TEST(a_large_flame_burns_as_a_bonfire_and_a_wall_torch_stays_a_torch) {

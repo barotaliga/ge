@@ -109,12 +109,38 @@ LocalLight flame_light(const Flame& f) {
 
 float flame_level(const Flame& f, double t_s) { return flicker_level(flame_light(f), t_s); }
 
+float flame_puff_hz(float width_m) {
+  return std::clamp(1.5f / std::sqrt(std::max(width_m, 1e-4f)), 1.0f, 12.0f);
+}
+
+float flame_puff_rate(const Flame& f) {
+  return f.puff_hz > 0 ? f.puff_hz : flame_puff_hz(2.0f * f.radius_m);
+}
+
+double flame_seed_phase(uint32_t seed) { return static_cast<double>(seed % 1024u) / 1024.0; }
+
+double flame_puff_phase(double hz, double t_s, double phase) {
+  // Two slow beats on the rate (0.37 and 0.61 of it): the puffs drift early and late by a tenth.
+  const double c = hz * t_s;
+  constexpr double kTau = 6.283185307179586;
+  return c + 0.10 * std::sin(kTau * (0.37 * c + phase)) +
+         0.07 * std::sin(kTau * (0.61 * c + 1.7 * phase));
+}
+
+float flame_puff_level(const Flame& f, double t_s) {
+  const double hz = flame_puff_rate(f);
+  // Read where the gas is half way up, which left the fuel this long ago (the shader's age).
+  const double lag = kFlameTransit / hz * 0.62;
+  const double p = flame_puff_phase(hz, t_s - lag, flame_seed_phase(f.seed));
+  return static_cast<float>(1.0 + 0.13 * std::cos(6.283185307179586 * p));
+}
+
 void flame_bounds(const Flame& f, double lo[3], double hi[3]) {
   double lean[2];
   lean_of(f, lean);
-  // The tallest the gas stands (a level's 1.05 and the tongues' 0.25 over it), and its widest
-  // (the body and the turbulence's push, 1.6 radii).
-  const double h = f.height_m * 1.35, r = f.radius_m * 1.6 + 0.15 * f.height_m;
+  // The tallest the gas stands (a level's 1.05 and the pinched pockets' 0.3 over it), and its
+  // widest (the body, the turbulence's push and the spine's sway, 2.2 radii).
+  const double h = f.height_m * 1.35, r = f.radius_m * 2.2 + 0.15 * f.height_m;
   const double tip[2] = {lean[0] * h, lean[1] * h};
   lo[0] = f.base[0] + std::min(0.0, tip[0]) - r;
   hi[0] = f.base[0] + std::max(0.0, tip[0]) + r;
@@ -208,15 +234,16 @@ void prepare_flames(gpu::Device& device, Flames& fl, std::span<const Flame> list
     double lean[2];
     lean_of(f, lean);
     for (int k = 0; k < 3; ++k) g.base[k] = static_cast<float>(f.base[k] - view.eye[k]);
-    // The gas swells with its level: three quarters of its height at the bottom of its swing.
-    g.base[3] = f.height_m * (0.7f + 0.3f * level);
-    g.shape[0] = f.radius_m * (0.85f + 0.15f * level);
+    // The gas brightens with its level and swells a little: its puffs (the shader's) do the
+    // swelling and the pinching, so the body is never pumped as a whole.
+    g.base[3] = f.height_m * (0.93f + 0.07f * level);
+    g.shape[0] = f.radius_m * (0.96f + 0.04f * level);
     g.shape[1] = f.temperature_k * (0.94f + 0.06f * level);
     g.shape[2] = f.relative > 0 ? -f.relative * level : f.luminance_nits * level;
-    g.shape[3] = static_cast<float>(f.seed % 1024u) * 7.31f;
+    g.shape[3] = static_cast<float>(flame_seed_phase(f.seed));
     g.wind[0] = static_cast<float>(lean[0]);
     g.wind[1] = static_cast<float>(lean[1]);
-    g.wind[2] = std::max(f.rise_mps, 0.05f);
+    g.wind[2] = flame_puff_rate(f);
     g.wind[3] = f.blue;
     double c[3], r;
     sphere_of(f, c, r);

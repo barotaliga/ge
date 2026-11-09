@@ -3,7 +3,8 @@
 // teardrop torn by rising turbulence, its temperature hottest on the axis low down, every
 // temperature's colour and brightness off the blackbody table. Optically thin: added to the
 // picture, the march stopped at the scene's depth. Writes the motion target's reactive channel
-// so the resolve does not smear the fire.
+// so the resolve keeps only a couple of frames of the fire. The gas moves as a real flame's
+// (render/flame.hpp § THE MOTION): read in its own frame as it accelerates up, puffing.
 #include "render/wgsl/frame.wgsl"
 #include "render/wgsl/blackbody.wgsl"
 
@@ -22,6 +23,7 @@ struct GpuFlame {
 // The march's steps: the per-pixel jitter and the resolve average their banding away, so 14 (half
 // the 28 they were) show the same fire for half the noise.
 const kFlameSteps = 14u;
+const kFlameReactive = 0.5;  // the new frame's share of the resolve over the gas at most
 const kFlameFilm = 0.5;  // how fast each primary saturates past white
 const kFlameKnee = 0.4;   // the gas shows kFlameGlare x log2(1 + its light / this), in the
 const kFlameGlare = 0.38; // picture's units (white is about 1): every doubling a step brighter
@@ -106,6 +108,30 @@ fn flame_profile(y: f32) -> f32 {
   return 1.05 * sqrt(clamp(y / 0.12, 0.0, 1.0)) * pow(clamp(1.0 - y, 0.0, 1.0), 0.6);
 }
 
+// Smooth 1D value noise over time, 0..1, on channel `k`.
+fn flame_noise1(x: f32, k: i32) -> f32 {
+  let i = i32(floor(x));
+  let u = fract(x);
+  let w = u * u * (3.0 - 2.0 * u);
+  return mix(flame_hash(vec3i(i, k, 7)), flame_hash(vec3i(i + 1, k, 7)), w);
+}
+
+// The puffs' phase at `t` (render/flame.hpp's flame_puff_phase): the rate a little unsteady.
+fn flame_puff(hz: f32, t: f32, phase: f32) -> f32 {
+  let c = hz * t;
+  return c + 0.10 * sin(kTau * (0.37 * c + phase)) + 0.07 * sin(kTau * (0.61 * c + 1.7 * phase));
+}
+
+const kTau = 6.2831853;
+const kTransit = 1.3;  // render/flame.hpp's kFlameTransit: puff cycles from the fuel to the tip
+
+// How long ago the gas at height `y` (of the flame's) left the fuel, in transits: buoyant gas
+// speeds up as the square root of its height, so its time of flight grows as sqrt(y) (eased at the
+// fuel, where it starts at a crawl rather than at rest). 1 at the tip.
+fn flame_age(y: f32) -> f32 {
+  return (sqrt(max(y, 0.0) + 0.04) - 0.2) / (sqrt(1.04) - 0.2);
+}
+
 // The light the gas gives off per metre of the ray at camera-relative `p`, in cd/m^2 per radius.
 fn flame_glow(f: GpuFlame, p: vec3f, t: f32) -> vec3f {
   let h = f.base.w;
@@ -115,22 +141,32 @@ fn flame_glow(f: GpuFlame, p: vec3f, t: f32) -> vec3f {
   if (y < -0.1 || y > 1.4) {
     return vec3f(0.0);
   }
+  let hz = f.wind.z;
+  let phase = f.shape.w;
+  // When the gas here left the fuel: every motion below is read in the gas's own frame, so a
+  // parcel keeps its eddies as it climbs and stretches as it speeds up.
+  let born = t - flame_age(y) * kTransit / hz;
+  let yc = clamp(y, 0.0, 1.3);
   // Bent downwind, more toward the tip.
-  let bend = q.y * clamp(y, 0.0, 1.3);
-  q = vec3f(q.x - f.wind.x * bend, q.y, q.z - f.wind.y * bend);
+  let bend = q.y * yc;
+  // The spine snakes: the fuel's sway carried up at the gas's speed, wider the higher it is.
+  let sway_t = born * hz * 0.55 + phase * 37.0;
+  let sway = vec2f(flame_noise1(sway_t, 1), flame_noise1(sway_t, 2)) - 0.5;
+  let spine = sway * (1.6 * radius * yc * sqrt(yc));
+  q = vec3f(q.x - f.wind.x * bend - spine.x, q.y, q.z - f.wind.y * bend - spine.y);
   // Where no eddy can carry the gas: every term below is zero past m = 1.8 (the blue shell's past
-  // 1.35), the profile is at most 1.05 radii and the eddies move a point at most 1.35 amp an axis
-  // (1.91 amp across), so a point that far out is skipped before any noise is drawn: the picture
-  // is the same, and most of a flame's bounding sphere is air.
-  let amp = radius * (0.3 + 2.2 * clamp(y, 0.0, 1.2) * clamp(y, 0.0, 1.2));
-  let reach = 1.8 * (1.05 * radius + 1e-5);
+  // 1.35), the profile is at most 1.05 radii times the puff's 1.16 swell and the eddies move a
+  // point at most 1.35 amp an axis (1.91 amp across), so a point that far out is skipped before
+  // any noise is drawn: the picture is the same, and most of a flame's bounding sphere is air.
+  let amp = radius * (0.25 + 1.6 * yc * yc);
+  let reach = 1.8 * (1.05 * 1.16 * radius + 1e-5);
   if (length(q.xz) - 1.92 * amp >= reach) {
     return vec3f(0.0);
   }
-  // The turbulence, carried up with the gas, in cells of a few radii.
+  // The turbulence in the gas's frame: across, in cells of a few radii; along, the moment it left
+  // the fuel (two cells a puff), so the same eddy is read again as it rises.
   let cell = radius * 2.5;
-  let phase = f.shape.w;
-  let s = vec3f(q.x, q.y - t * f.wind.z, q.z) / cell + vec3f(phase, phase * 0.37, phase * 0.71);
+  let s = vec3f(q.x / cell + phase * 11.0, -born * hz * 2.0 + phase * 5.3, q.z / cell + phase * 7.1);
   // Two scales of eddy: the big sway and a finer churn that grows toward the tip.
   let n1 = flame_fbm(s * 0.8) + 0.35 * (flame_noise(s * 3.1 + vec3f(5.0, 1.0, 9.0)) - 0.5);
   let n2 = flame_fbm(s * 0.8 + vec3f(31.7, 5.1, 12.9)) +
@@ -140,17 +176,26 @@ fn flame_glow(f: GpuFlame, p: vec3f, t: f32) -> vec3f {
   if (length(xz) >= reach) {
     return vec3f(0.0);
   }
+  // The puff this gas rode up in: its ring vortex swells the body low down and, high up, pinches
+  // the flame off between two puffs, so the top leaves as a pocket that rises and burns out.
+  let puff = cos(kTau * flame_puff(hz, born, phase));
   let n3 = flame_fbm(s * 1.6 + vec3f(11.3, 23.9, 2.1));
   // The tip licks up and falls back: the profile read at a height the noise lifts or lowers.
-  let ye = y - (n3 - 0.5) * 0.45 * clamp(y * 1.5, 0.0, 1.0);
-  let m = length(xz) / (radius * flame_profile(ye) + 1e-5);
+  let ye = y - (n3 - 0.5) * 0.35 * clamp(y * 1.5, 0.0, 1.0);
+  let swell = 1.0 + 0.16 * puff * smoothstep(0.05, 0.35, ye);
+  // Past the neck a pocket burns on the puff's crest only, and its share shrinks as it climbs.
+  let pocket = smoothstep(-0.12, 0.12, 0.5 + 0.5 * puff - 1.4 * (ye - 0.55) + 0.3 * (n3 - 0.5));
+  // Above the tip the body's profile is spent: a pocket is a blob round the spine, its own size.
+  let shape = max(flame_profile(min(ye, 0.93)), 0.0) * swell;
+  let m = length(xz) / (radius * shape + 1e-5);
   // The gas thins out past its body smoothly (a Gaussian in its radius), so its edge fades over
   // decades of light rather than ending at a line; the body's own share sets its temperature.
   let body = clamp(1.0 - m, 0.0, 1.0);
   // High up the tongues tear loose: the gas is cut where the noise falls under the height.
-  let cut = smoothstep(0.0, 0.25, n3 * 1.3 - ye * 0.9 + 0.35);
+  let cut = smoothstep(0.0, 0.25, n3 * 1.3 - ye * 0.75 + 0.45) * pocket;
   var glow = vec3f(0.0);
   if (m < 1.8 && cut > 0.0) {
+    // A pocket cools as it climbs past the tip.
     let kelvin = f.shape.y * (0.62 + 0.38 * sqrt(body)) * (1.0 - 0.3 * clamp(ye, 0.0, 1.3));
     // The soot glows in streaks drawn up by the flow: noise stretched along the rise.
     let streak = flame_noise(vec3f(s.x * 3.0, s.y * 1.1, s.z * 3.0) + vec3f(7.0, 0.0, 3.0));
@@ -196,8 +241,12 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     discard;
   }
   let ds = (t1 - t0) / f32(kFlameSteps);
-  // A per-pixel, per-frame offset into the first step: the resolve averages the steps' banding.
-  let jitter = flame_hash(vec3i(vec2i(in.position.xy), i32(frame.time.y) & 255));
+  // A per-pixel offset into the first step: a white hash a pixel (no lattice a still could show),
+  // stepped by the golden ratio each frame, so each pixel covers its step evenly over a few frames
+  // (a fresh hash every frame left a grain that boiled at the frame rate) and the resolve's few
+  // frames of history average it out.
+  let px = vec2i(in.position.xy);
+  let jitter = fract(flame_hash(vec3i(px, 911)) + f32(i32(frame.time.y) & 255) * 0.6180340);
   let t = frame.time.x;
   var sum = vec3f(0.0);
   for (var k = 0u; k < kFlameSteps; k++) {
@@ -229,6 +278,8 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   }
   var out: FragmentOut;
   out.colour = vec4f(light, 0.0);
-  out.motion = vec4f(0.0, 0.0, clamp(lum * 4.0, 0.0, 1.0), 0.0);
+  // Reactive, but not wholly: the resolve keeps about two frames of history over the gas (its
+  // motion is slow beside a frame), which averages the march's steps without smearing the fire.
+  out.motion = vec4f(0.0, 0.0, kFlameReactive * clamp(lum * 4.0, 0.0, 1.0), 0.0);
   return out;
 }

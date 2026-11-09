@@ -104,7 +104,7 @@ struct Options {
   double lava_glow = 1;     // that glow's strength, 0 none
   double slime_glow = 1;    // the slime's faint green glow on the walls round it, 0 none
   double fire_glow = 1;     // the flames' own brightness, a share of kFireGlow's (bsp_flames.hpp)
-  double fire_pace = kFirePace;  // how fast a fire's light flickers (bsp_flames.hpp's pace)
+  double fire_pace = kFirePace;  // how fast the fires puff, 1 a real fire's (draw_data.hpp)
   // The glowing texels' light under the real-time lights (a window's, a lamp's panel), a share of
   // a white face's as the map lights it (the classic's fullbright: 1; the lightmaps' paths keep 1).
   double glow = 1;

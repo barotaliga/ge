@@ -4,7 +4,7 @@
 // - THE GAS: each flame is a volume marched per pixel ("flames", after the sky, before the
 //   resolve). Its body is a teardrop standing on `base` (narrow at the fuel, widest an eighth of
 //   the way up, tapering to a tip at `height_m`), torn by turbulence that rises with the hot gas
-//   (three octaves of 3D value noise carried up at `rise_mps`) and grows toward the tip, so the
+//   (3D value noise carried up with the gas, THE MOTION below) and grows toward the tip, so the
 //   top breaks into licking tongues. The gas is optically thin: it only adds light, so a flame
 //   never darkens what is behind it, and the march ends at the scene's depth (a bracket or the
 //   torch's head hides the flame behind it).
@@ -21,6 +21,16 @@
 //   brightens with it. A game puts the light in its lights list beside its other lamps; one whose
 //   lights flicker by their own rules sets `level` to its light's and the gas follows that.
 // - THE AIR: `wind` (m/s, the air moving past it) bends the flame downwind, more toward the tip.
+// - THE MOTION is a real flame's, not a noise scrolled up through a fixed teardrop. The hot gas
+//   ACCELERATES as it rises (buoyancy: its speed grows as the square root of its height, so a
+//   parcel takes `kFlameTransit` puff cycles from the fuel to the tip, slow at the base and fast
+//   at the top), and each parcel keeps its own eddies as it goes: the noise is read in the gas's
+//   own frame (when it left the fuel), so a lick stretches as it climbs. The flame PUFFS: a buoyant
+//   flame sheds a ring vortex at `puff_hz` (about 1.5 / sqrt(its width in m): 3 to 4 a second
+//   for a torch, 1.5 for a bonfire), which swells the body, travels up with the gas and pinches
+//   the top off as a pocket that rises and burns out; the tip's height swings with it. The whole
+//   flame SNAKES: the sway at the fuel is carried up the spine at the gas's speed. The light the
+//   flame casts swells and dims with the same puffs (`flame_puff_level`).
 //
 // Presentation only: the flames are a pure function of the list and the frame's time, and feed no
 // simulation.
@@ -29,6 +39,7 @@
 // ge:keywords render flame fire torch candle brazier campfire bonfire blackbody planck cie
 // ge:keywords colour-temperature kelvin turbulence value-noise volume ray-march emission additive
 // ge:keywords flame_light prepare_flames encode_flames blackbody flame-flicker wind-lean
+// ge:keywords puff puffing flame_puff_hz flame_puff_level buoyancy flame-motion vortex-shedding
 // ge:skill render
 // ge:test tests/render_flame_test.cpp
 #pragma once
@@ -53,8 +64,10 @@ struct Flame {
   float temperature_k = 1900;   // the hottest gas, on the axis low down (K)
   float luminance_nits = 9000;  // the core's luminance at full level, cd/m^2
   float wind[3] = {0, 0, 0};    // m/s: the air moving past it
-  float rise_mps = 1.0f;        // how fast the hot gas rises (the turbulence carried up)
-  float rate_hz = 9;            // its flicker's rate
+  float rise_mps = 1.0f;        // how fast the hot gas rises against the wind (the lean)
+  float rate_hz = 9;            // its light's own flicker's rate (`flame_light`, level < 0)
+  float puff_hz = 0;            // > 0: how often it puffs; 0: a real flame's for its width
+                                // (`flame_puff_hz`)
   float depth = 0.35f;          // its flicker's swing, 0..1
   float blue = 0.0f;            // the blue base's share: 0 a pitch torch, 0.6 a candle
   uint32_t seed = 0;            // its own turbulence, so two torches never burn as one
@@ -78,6 +91,24 @@ LocalLight flame_light(const Flame& flame);
 // The flame's level at `t_s`: its light's (`flicker_level` of `flame_light`).
 float flame_level(const Flame& flame, double t_s);
 
+// The puffs a second a flame `width_m` across sheds: 1.5 / sqrt(width), the pool fires' and gas
+// burners' measured law (a buoyant diffusion flame's ring vortices), held between 1 and 12.
+float flame_puff_hz(float width_m);
+// The flame's own puffing rate: `puff_hz`, else its width's (flame_puff_hz of twice its radius).
+float flame_puff_rate(const Flame& flame);
+// How many puff cycles the gas takes from the fuel to the tip (the flame shows one swelling low
+// and one pocket pinching off high).
+inline constexpr float kFlameTransit = 1.3f;
+// The puffs' phase at `t_s` for a flame puffing `hz` with seed phase `phase` (0..1): its rate held
+// a little unsteady, so two puffs are never alike. The shader's flame_puff is the same function.
+double flame_puff_phase(double hz, double t_s, double phase);
+// The flame's level at `t_s` by its puffs (mean 1, about +-0.13): as its gas swells it gives more
+// light, as its top pinches off less. A caller whose flame and light flicker as one sets both
+// from this (`level`, and its light's strength).
+float flame_puff_level(const Flame& flame, double t_s);
+// The seed's phase a flame puffs at (0..1).
+double flame_seed_phase(uint32_t seed);
+
 // The world box the flame's gas stays inside at any level and in its wind (min, max).
 void flame_bounds(const Flame& flame, double lo[3], double hi[3]);
 
@@ -87,8 +118,9 @@ inline constexpr uint32_t kMaxFlames = 256;
 struct GpuFlame {
   float base[4];   // camera-relative base, m; the height at this level
   float shape[4];  // radius; the hottest gas, K; the core's luminance, cd/m^2 (negative: times a
-                   // white face's, `Flame::relative`); the seed's phase
-  float wind[4];   // the tip's offset downwind per metre of height (x, z); the rise, m/s; the blue
+                   // white face's, `Flame::relative`); the seed's phase (0..1)
+  float wind[4];   // the tip's offset downwind per metre of height (x, z); the puffs a second; the
+                   // blue
   float bound[4];  // the bounding sphere's centre (camera-relative xyz) and radius
 };
 
