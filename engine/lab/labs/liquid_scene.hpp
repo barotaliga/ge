@@ -250,14 +250,14 @@ inline void paste(gl::Picture& sheet, const gl::Picture& p, int ox, int oy) {
   }
 }
 
-// The share of pixels that differ by more than a few levels.
-inline double changed(const gl::Picture& a, const gl::Picture& b) {
+// The share of pixels that differ by more than `above` levels (of 255) in any channel.
+inline double changed(const gl::Picture& a, const gl::Picture& b, int above = 6) {
   size_t n = 0;
   for (size_t i = 0; i < a.rgba.size(); i += 4) {
     int dmax = 0;
     for (size_t c = 0; c < 3; ++c)
       dmax = std::max(dmax, std::abs(int{a.rgba[i + c]} - int{b.rgba[i + c]}));
-    n += dmax > 6;
+    n += dmax > above;
   }
   return static_cast<double>(n) * 4 / static_cast<double>(a.rgba.size());
 }

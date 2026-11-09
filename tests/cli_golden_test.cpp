@@ -170,3 +170,10 @@ TEST(a_changed_asset_reaches_the_labs_that_read_it_by_path) {
   CHECK(reads_asset("games/g/labs/views_lab.cpp", "load(\"skier.glb\")", a[0]));
   CHECK(!reads_asset("games/g/labs/sled_lab.cpp", "#include \"sled.hpp\"", a[0]));
 }
+
+TEST(changed_data_reaches_the_labs_that_name_its_directory) {
+  const auto d = data_dirs({"games/g/qc/common/items.qc", "games/g/qc/README.md",
+                            "games/g/server/mod.cpp", "plugins/skier/assets/skier/skier.glb",
+                            "tests/digests/glide.txt", "games/g/top.qc"});
+  CHECK((d == std::set<std::string>{"games/g/qc/", "games/g/qc/common/"}));
+}

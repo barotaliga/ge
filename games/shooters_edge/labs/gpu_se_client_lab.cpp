@@ -19,7 +19,8 @@
 // variant: its monsters; `pack` the packs' own), and `--settle=<frames>` lets the world run at
 // each view. `--before="<cvars>"` draws the left side in the modern look with those cvars in
 // place of the classic look (`--before="ce_relief 0; ce_parallax 0"`: one switch's before and
-// after).
+// after). `--swings=<n>` then has the player take the axe and swing it n times with the game's
+// own held weapons in hand: a sheet, a GIF and which of the axe's two swings each one played.
 //
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
 // two wall torches, their textures enhanced into a cache of the lab's own (classic-enhance's
@@ -29,6 +30,7 @@
 // ge:summary Lab: the window's frame drawn headless: the halls, a rocket jump, its effects, the HUD
 // ge:keywords lab se-client listen-server window frame rocket-jump hud effects trail explosion
 // ge:keywords before-after relief parallax enhanced-textures fixture-cache
+// ge:keywords axe-swing swings two-swings weaponframe film_swings
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
@@ -36,6 +38,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -56,6 +59,7 @@
 #include "progs/file.hpp"
 #include "progs/qc_compile.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
@@ -162,6 +166,101 @@ bool enhance_fixture(std::span<const uint8_t> pack, const std::filesystem::path&
   return true;
 }
 
+// THE AXE'S SWINGS (`--swings=<n>`): from where the views left him, the player takes the axe
+// (impulse 1) and holds attack for `n` swings, the world drawn in the enhanced look with the game's
+// own axe in his hand a thirtieth of a second at a time. Each swing plays ONE of the axe's two
+// swings (frames 1-4 or 5-8): the one the mod's weapon frame names as the swing starts. Shown as a
+// sheet of the first swings' frames, a GIF of them all and a table of which swing each one was.
+void film_swings(gl::Lab& lab, ge::gpu::Device& device, cl::WorldDraw& world,
+                 const ge::gpu::Target& out, cl::Listen& l, cl::ViewState& shown,
+                 cl::FxState& fx_state, cl::FxFrame& fx, cl::HeldState& held,
+                 const shooters_edge::view::ViewSettings& settings,
+                 std::span<const ge::viewmodel::HeldModel> weapons, double& t, int swings) {
+  constexpr double kTic = 0.013;
+  sh::MoveCmd cmd;
+  cmd.msec = 13;
+  cmd.angles = {l.view.x, l.view.y, 0};
+  cmd.impulse = 1;  // the axe
+  shooters_edge::view::HandFrame hand;
+  for (int i = 0; i < 80; ++i) {  // the switch: the shotgun down, the axe up
+    cl::listen_frame(l, cmd);
+    cmd.impulse = 0;
+    t += kTic;
+    cl::frame_view(l, shown, 1, t, kTic);
+    cl::step_fx(l, shown, fx_state, t, kTic, fx);
+    hand = cl::step_held(l, shown, held, settings, weapons, t, kTic);
+  }
+  gl::LabTable table{"each swing", {"swing", "mod's weapon frame", "frames drawn", "which"}, {}};
+  std::vector<gl::Picture> sheet, gif;
+  std::vector<std::string> names;
+  int seen = 0, firsts = 0, lo = 99, hi = 0, mod_frame = 0, last_frame = -1, shown_a = 0,
+      shown_b = 0;
+  bool on_sheet = false;
+  const auto close_swing = [&] {
+    if (seen == 0) return;
+    const bool first = lo >= 1 && hi <= 4, second = lo >= 5 && hi <= 8;
+    firsts += first ? 1 : 0;
+    table.rows.push_back({std::to_string(seen), std::to_string(mod_frame),
+                          std::to_string(lo) + ".." + std::to_string(hi),
+                          first    ? "first"
+                          : second ? "second"
+                                   : "BOTH"});
+    lab.metric("swing-" + std::to_string(seen) + ".one", first || second ? 1 : 0, "bool");
+  };
+  double next_draw = t;
+  cmd.buttons = sh::kButtonAttack;
+  const int shots_before = held.shots;
+  for (int i = 0; seen < swings || held.hand.fire_t >= 0; ++i) {
+    if (held.shots - shots_before >= swings) cmd.buttons = 0;
+    if (i > 4000) break;
+    cl::listen_frame(l, cmd);
+    t += kTic;
+    cl::frame_view(l, shown, 1, t, kTic);
+    cl::step_fx(l, shown, fx_state, t, kTic, fx);
+    hand = cl::step_held(l, shown, held, settings, weapons, t, kTic);
+    if (hand.fired) {
+      close_swing();
+      ++seen;
+      lo = 99;
+      hi = 0;
+      mod_frame = static_cast<int>(cl::field_named(l, 1, "weaponframe"));
+      // The sheet: the first two swings of each of the two, as the program picked them.
+      int& shown_of = mod_frame >= 5 ? shown_b : shown_a;
+      on_sheet = shown_of++ < 2;
+    }
+    if (seen > 0) {
+      for (const int f : {hand.frame_a, hand.frame_t > 0 ? hand.frame_b : hand.frame_a})
+        if (f > 0) lo = std::min(lo, f), hi = std::max(hi, f);
+    }
+    if (seen == 0 || t < next_draw) continue;
+    next_draw += 1.0 / 30;
+    ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
+    cl::draw_world(device, world, view, fx, &hand, 1.0 / 30, {}, out.view);
+    const ge::gpu::Image img = ge::gpu::read_now(device, out);
+    const gl::Picture pic{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba};
+    if (seen <= 12) gif.push_back(gl::shrink(pic, 320));
+    if (on_sheet && hand.frame_a != last_frame) {  // each frame a swing shows, once
+      sheet.push_back(gl::shrink(pic, 320));
+      names.push_back("swing " + std::to_string(seen) + " frame " + std::to_string(hand.frame_a));
+      last_frame = hand.frame_a;
+    }
+  }
+  close_swing();
+  lab.metric("swings", seen, "count");
+  lab.metric("swings.first", firsts, "count");
+  lab.table(table);
+  if (!sheet.empty())
+    lab.shot({"swings",
+              "the axe's swings, one at a time",
+              "The player holds attack with the axe: each swing plays one of its two swings, "
+              "frames 1-4 or 5-8, the one the game's own program picked, then the rest frame.",
+              "each swing's frames inside one run of four, never the eight in a row (the sheet: "
+              "the first two swings of each kind)",
+              {{"map", lab.arg("map")}}},
+             es::sheet_of(sheet, names, 4), gl::Det::measured);
+  if (!gif.empty()) lab.attach("swings.gif", gl::encode_gif_frames(gif, 3), gl::Det::measured);
+}
+
 // A game folder's map from its start, four ways, classic beside enhanced (private pictures), or
 // `--game=fixture`'s halls (pictures for anywhere).
 void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
@@ -245,16 +344,19 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   float warp_at[4] = {0, 0, 0, 0};
   const bool warp = std::sscanf(lab.arg("warp").c_str(), "%f,%f,%f,%f", &warp_at[0], &warp_at[1],
                                 &warp_at[2], &warp_at[3]) == 4;
+  // `--swings`: the player takes the axe and swings it, the game's own held weapons in his hand.
+  const int swings = std::max(0, static_cast<int>(lab.arg_num("swings")));
   std::vector<ge::viewmodel::HeldModel> weapons;
   // `--hand`: the weapon in hand in every view, the game's own (client/held.hpp), raised over the
   // classic status bar as the window raises it.
   const bool in_hand = lab.arg("hand") == "1";
-  bool weapons_at_eye = false;
-  if (in_hand)
-    weapons_at_eye = cl::load_held_set(cl::classic_adapter(), files, {}, weapons);
-  else if (warp && !shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error))
+  cl::HeldState held;
+  if (swings > 0 || in_hand) {
+    held.hand.at_eye = cl::load_held_set(cl::classic_adapter(), files, {}, weapons);
+    if (!held.hand.at_eye) lab.note("no weapon is drawn: the game's held weapons did not load");
+  } else if (warp && !shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error)) {
     lab.note("no weapon is drawn: " + error);
-  if (in_hand && weapons.empty()) lab.note("--hand: the game's files hold no weapons in hand");
+  }
   cl::WorldDrawPtr world[2];
   for (int k = 0; k < 2; ++k) {
     const std::span<const ge::viewmodel::HeldModel> held_models =
@@ -290,10 +392,8 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   cl::ViewState shown;
   cl::FxState fx_state;
   cl::FxFrame fx;
-  cl::HeldState held;
   const shooters_edge::view::ViewSettings view_settings;
   shooters_edge::view::HandFrame hand;
-  held.hand.at_eye = weapons_at_eye;
   double t = 0;
   for (int i = 0; i < 80; i++) {
     cl::listen_frame(l, {});
@@ -379,17 +479,20 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       // of a second a frame, kept as an animated GIF (the flames, the sparks, the water moving).
       const int film = k == 1 ? static_cast<int>(lab.arg_num("film")) : 0;
       std::vector<gl::Picture> frames;
+      const double step = lab.arg_num("film-step");
       for (int f = 1; f <= film; ++f) {
         ge::render::FrameView on = view;
-        on.time_s = view.time_s + f / 30.0;
-        cl::draw_world(*device, *world[k], on, fx, nullptr, 1.0 / 30, {}, out.view);
+        on.time_s = view.time_s + f * step;
+        cl::draw_world(*device, *world[k], on, fx, nullptr, step, {}, out.view);
         const ge::gpu::Image fi = ge::gpu::read_now(*device, out);
         frames.push_back(gl::shrink(
             gl::Picture{static_cast<int>(fi.width), static_cast<int>(fi.height), fi.rgba}, 640));
       }
       if (!frames.empty())
-        lab.attach("film-" + std::to_string(v) + ".gif", gl::encode_gif_frames(frames, 3),
-                   gl::Det::measured);
+        lab.attach(
+            "film-" + std::to_string(v) + ".gif",
+            gl::encode_gif_frames(frames, std::max(2, static_cast<int>(std::lround(step * 100)))),
+            gl::Det::measured);
     }
     if (!warp) continue;
     // Another player at --warp arriving, then leaving, from this view.
@@ -447,6 +550,9 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
               {{"map", lab.arg("map")}}},
              es::sheet_of(eyes.pics, eyes.names, 4), gl::Det::measured);
   }
+  if (swings > 0)
+    film_swings(lab, *device, *world[1], out, l, shown, fx_state, fx, held, view_settings, weapons,
+                t, swings);
 }
 
 void run(gl::Lab& lab) {
@@ -635,13 +741,18 @@ const gl::LabSpec kSpec{
       "with --game: a progs.src compiled and run instead of the arena variant, or pack"},
      {"settle", "4", "with --game: host frames run at each view before it is drawn (at least 4)"},
      {"film", "0",
-      "with --game: the enhanced look run on this many thirtieths of a second from each view, "
+      "with --game: the enhanced look run on this many frames (--film-step apart) from each view, "
       "attached as film-<view>.gif (the flames and the sparks moving)"},
+     {"film-step", "0.0333333",
+      "with --film: seconds between the film's frames (0.2: the lava's crust over 12 s in 60)"},
      {"warp", "",
       "with --game: x,y,z,yaw where another player warps in and out, filmed from each view in the "
       "enhanced look, then the local player's own arrival through his eyes"},
      {"before", "",
-      "with --game: the left side's cvars in the modern look instead of the classic look"}},
+      "with --game: the left side's cvars in the modern look instead of the classic look"},
+     {"swings", "0",
+      "with --game: after the views, the player takes the axe and swings it this many times, the "
+      "game's own held weapons in hand (a sheet, a GIF and which swing each one played)"}},
     "--size=480,270",
     run,
 };

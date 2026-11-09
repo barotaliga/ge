@@ -1,5 +1,6 @@
 // ge:summary Shooter's Edge's first-person hand: the switch, the kick, the flash, the cvars
 // ge:keywords shooters-edge viewmodel step_hand held_row add_view_cvars switch flash
+// ge:keywords pick_take axe-swing takes
 // ge:skill render shooter
 // ge:test tests/shooters_edge_view_test.cpp
 #include "shooters_edge/view/hand.hpp"
@@ -73,6 +74,23 @@ vm::PlaceRow eye_row(const ViewSettings& s) {
   return r;
 }
 
+namespace {
+
+// The `fire` take a shot plays: the one whose frames hold `fire_frame` (the game's word), else one
+// at random with even odds; 0 for a model with one take.
+int pick_take(Hand& hand, const vm::HeldModel& m, int fire_frame) {
+  const int n = vm::count_held_clips(m, "fire");
+  if (n < 2) return 0;
+  for (int k = 0; k < n && fire_frame > 0; ++k) {
+    const vm::HeldClip& c = m.clips[static_cast<size_t>(vm::find_held_clip(m, "fire", k))];
+    if (fire_frame >= c.first && fire_frame < c.first + c.count) return k;
+  }
+  const int k = static_cast<int>(ge::core::next(hand.takes) * n);
+  return k < n ? k : n - 1;
+}
+
+}  // namespace
+
 HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
                     std::span<const vm::HeldModel> models, const ge::camera::Pose& view, double dt,
                     double motion) {
@@ -132,11 +150,17 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
       }
     } else {
       hand.barrel = -1;
-      if (in.fired && c != nullptr) hand.fire_t = 0;
-      if (hand.fire_t >= 0 && c != nullptr) {
-        vm::held_clip_frames(m, clip, hand.fire_t, false, f.frame_a, f.frame_b, f.frame_t);
+      if (in.fired && c != nullptr) {
+        hand.fire_t = 0;
+        hand.take = pick_take(hand, m, in.fire_frame);
+      }
+      const int played = c != nullptr ? vm::find_held_clip(m, "fire", hand.take) : -1;
+      const vm::HeldClip* p = played >= 0 ? &m.clips[static_cast<size_t>(played)] : c;
+      if (hand.fire_t >= 0 && p != nullptr) {
+        vm::held_clip_frames(m, played >= 0 ? played : clip, hand.fire_t, false, f.frame_a,
+                             f.frame_b, f.frame_t);
         hand.fire_t += dt;
-        if (hand.fire_t * c->fps > c->count - 1) hand.fire_t = -1;
+        if (hand.fire_t * p->fps > p->count - 1) hand.fire_t = -1;
       }
     }
   }

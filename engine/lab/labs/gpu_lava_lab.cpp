@@ -4,11 +4,11 @@
 // to the look); the pit at night lit by its lava (the glow handed to the frame's lamps), without
 // and with its lamps; the crust's cover from open melt to crusted over; a close look at the
 // plates, their cracks and the ropy folds; the crust carried by a flow, four moments two seconds
-// apart; the heat shimmer across the lake, off and on; three stones breaking the crust, at four
-// moments; the eye under the level; and the named looks side by side. It holds the glow's
-// brightness to the black body's (a
-// molten pixel's luminance at night against the table's), and fails on a GPU error, a pipeline
-// made after the load, or a view with no lava in it.
+// apart; the surface frame to frame over 20 s, still and flowing (no plate or phase popping); the
+// heat shimmer across the lake, off and on; three stones breaking the crust, at four moments; the
+// eye under the level; and the named looks side by side. It holds the glow's brightness to the
+// black body's (a molten pixel's luminance at night against the table's), and fails on a GPU error,
+// a pipeline made after the load, or a view with no lava in it.
 //
 // ge:summary Lab: lava drawn: day, dusk, night, cover, close, flow, shimmer, crust, from below
 // ge:keywords lab gpu lava crust plates cracks glow blackbody night dusk flow cover pahoehoe
@@ -17,12 +17,16 @@
 // ge:keywords picture software-adapter
 // ge:skill render water labs
 // ge:test tests/render_liquid_test.cpp
+#include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "gpu/device.hpp"
+#include "lab/chart.hpp"
+#include "lab/gif.hpp"
 #include "lab/lab.hpp"
 #include "lab/labs/liquid_scene.hpp"
 #include "lab/raster.hpp"
@@ -94,8 +98,11 @@ void run(gl::Lab& lab) {
     // The same deterministic numbers as a run with pictures, so the digest is the same on every
     // row.
     lab.note("No GPU adapter on this machine: no pictures.");
-    ls::placeholders(lab, {"day", "dusk", "night", "night-walls-off", "night-walls", "cover",
-                           "close", "flow", "shimmer", "crust-broken", "from-below", "looks"});
+    ls::placeholders(
+        lab, {"day", "dusk", "night", "night-walls-off", "night-walls", "cover", "close", "flow",
+              "steady", "shimmer", "crust-broken", "from-below", "looks"});
+    // The steady view's film by the same name (a file's name is in the digest).
+    lab.attach("steady.gif", {}, Det::measured);
     glow_table(lab);
     ls::checked(lab, 0, 0);
     return;
@@ -278,6 +285,103 @@ void run(gl::Lab& lab) {
               {{"flow", "0.6 m/s"}}},
              strip(pics, labels, 2), Det::measured);
   }
+  // The steady view's film, attached after the last shot as the no-GPU path attaches its own.
+  std::vector<gl::Picture> film;
+  // THE SURFACE OVER TIME: a still pool and a flowing one straight down from 6 m at dusk, drawn
+  // every 0.2 s for 20 s, and the share of each frame's pixels that jumped (moved by more than a
+  // sixth of their range) since the frame before. The crust only ever changes by degrees: a plate
+  // congeals, cools, melts back and sinks, and the flow's two phases swap where each is unseen,
+  // so a jump anywhere is a plate or the whole surface popping.
+  {
+    ls::Scene small;
+    ge::gpu::Device& ds = fresh();
+    ls::make_scene(ds, small, kBasalt, static_cast<uint32_t>(tw), static_cast<uint32_t>(th));
+    constexpr int kFrames = 101;
+    constexpr double kStep = 0.2;
+    std::vector<gl::Trace> traces;
+    double worst = 0;
+    for (const double flow : {0.0, 0.6}) {
+      gr::LiquidLook l = look_of("lava");
+      l.flow[0] = flow;
+      l.flow[1] = 0;
+      put(ds, small, "lava", l);
+      gl::Trace tr{flow > 0 ? "flowing 0.6 m/s" : "still", {}, {}};
+      gl::Picture last;
+      const auto t0 = std::chrono::steady_clock::now();
+      for (int i = 0; i < kFrames; ++i) {
+        const double at = t + kStep * i;
+        gr::FrameView over =
+            ls::view_at(ls::kPitX, ls::kLevel + 6, ls::kPitZ, 0.0, -kPi / 2 + 0.01, -0.03, 2.4, at);
+        over.adapt_cd = gr::adapt_for(l, 1.5);
+        gl::Picture pic = ls::draw(ds, small, over);
+        if (i > 0) {
+          const double jumped = ls::changed(last, pic, 40);
+          tr.x.push_back(at - t);
+          tr.y.push_back(jumped * 100);
+        }
+        if (flow == 0 && i < 60) film.push_back(gl::shrink(pic, 320));
+        last = std::move(pic);
+      }
+      // The cost of a frame filled with lava looking straight down into it (the software
+      // adapter's time, so the shader's work: a GPU's differs in scale, not in order).
+      const double ms =
+          std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() /
+          kFrames;
+      lab.metric(std::string("steady.") + (flow > 0 ? "flowing" : "still") + ".frame-ms", ms, "ms",
+                 Det::measured);
+      if (flow == 0) {
+        // The same frames with no liquid drawn: what is left is the lava's own cost.
+        const auto b0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < 20; ++i) {
+          gr::FrameView over = ls::view_at(ls::kPitX, ls::kLevel + 6, ls::kPitZ, 0.0,
+                                           -kPi / 2 + 0.01, -0.03, 2.4, t + kStep * i);
+          over.adapt_cd = gr::adapt_for(l, 1.5);
+          (void)ls::draw(ds, small, over, false);
+        }
+        const double bare =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - b0)
+                .count() /
+            20;
+        lab.metric("steady.still.lava-ms", ms - bare, "ms", Det::measured);
+      }
+      // A spike over the trace's own run: a flowing surface changes every frame by its motion,
+      // so what counts is a frame far over the usual one.
+      std::vector<double> sorted = tr.y;
+      std::sort(sorted.begin(), sorted.end());
+      const double usual = sorted[sorted.size() / 2] / 100;
+      const double spike = sorted.back() / 100 - usual;
+      worst = std::max(worst, spike);
+      lab.metric(std::string("steady.") + (flow > 0 ? "flowing" : "still") + ".worst-spike", spike,
+                 "", Det::measured);
+      traces.push_back(std::move(tr));
+    }
+    if (worst > 0.1) {
+      lab.fail("the lava's surface jumps between frames 0.2 s apart (" + ls::fixed(worst * 100, 1) +
+                   "% of the pixels at once over the usual frame's change)",
+               "A plate's age or the flow's phase wraps where it is seen: check lava_at's `gone` "
+               "and lava_flowing's weights in engine/render/liquid.wgsl. Skill: render.");
+    }
+    gl::LineChart line;
+    line.frame = {"THE LAVA'S SURFACE FRAME TO FRAME",
+                  "straight down from 6 m at dusk, a frame every 0.2 s", "t (s)",
+                  "pixels jumped (%)"};
+    line.traces = std::move(traces);
+    line.rules = {2.0};
+    line.spikes = false;
+    const gl::Chart chart = gl::line_chart(line);
+    lab.shot(
+        {"steady",
+         chart.title,
+         "A still pool and one flowing at 0.6 m/s, straight down from 6 m at dusk, drawn every "
+         "0.2 s for 20 s: the share of the pixels that changed by more than 40 of 255 since "
+         "the frame before (the flowing one's level is its motion; a spike is a pop). The still "
+         "pool's first 12 s are steady.gif.",
+         "both lines flat, the still one near zero, no spikes: no plate vanishing at once and no "
+         "swap of the "
+         "whole surface every 8 s",
+         {{"step", "0.2 s"}}},
+        gl::to_picture(chart.plot), Det::measured);
+  }
   // THE SHIMMER: across the lake from 1.6 m over the near rim at dusk, the far wall and the
   // quarry beyond seen through the hot air, without the shimmer and with it.
   {
@@ -412,6 +516,8 @@ void run(gl::Lab& lab) {
               {}},
              strip(pics, labels, 2), Det::measured);
   }
+  lab.attach("steady.gif", film.empty() ? std::vector<uint8_t>{} : gl::encode_gif_frames(film, 20),
+             Det::measured);
   glow_table(lab);
   int errors = 0, late = 0;
   for (const auto& dev : devices) {

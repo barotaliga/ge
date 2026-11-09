@@ -54,7 +54,11 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
   const double now = l.server ? l.server->sv.time : 0;
   in.fired = !p.dead && attack > s.attack_finished && static_cast<double>(attack) > now + 1e-3;
   s.attack_finished = attack;
-  if (in.fired) ++s.shots;
+  if (in.fired) {
+    ++s.shots;
+    // The mod's own weapon frame as the shot starts it: which of the axe's swings it chose.
+    in.fire_frame = static_cast<int>(field_named(l, p.entity, "weaponframe"));
+  }
   in.place.look_yaw = v.pose.yaw;
   in.place.look_pitch = v.pose.pitch;
   const double vx = p.velocity.x, vy = p.velocity.y;
