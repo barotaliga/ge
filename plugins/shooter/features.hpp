@@ -26,8 +26,7 @@
 // - `plan`: the map's team plan: roles, areas held, the opening, the quad's rush.
 // - `rj`: rocket jumps (the nav's rocket links and tricks).
 // - `gj`: grenade jumps.
-// - `airsteer`: flights steered in the air with the side key and the view on the velocity; off,
-//   the view at the target and forward.
+// - `airsteer`: flights steered by the side key, the view on the velocity (off: at the target).
 // - `surface`: up for air under open water before the air runs out.
 // - `glance`: the calm walker's swipe aside now and then, to the longest open line (bot.hpp).
 // - `eye`: a strafer's turn read a reaction late (senses.hpp `course_s`); off in every preset.
@@ -41,6 +40,7 @@
 // - `stairs`: a hop's stretch ends at a climb: stairs walked, the hop taken up at the top.
 // - `locked`: a door only a button or a trigger opens, resting shut, is no way (bots/buttons.hpp).
 // - `escape`: out of a pit's lava, slime or water by a rocket fired down (shooter/escape.hpp).
+// - `brink`: no lip of lava or slime walked, hopped or strafed over (shooter/brink.hpp).
 // - `trial`: read by an A/B now; off in every preset (`all` too): `--features-red=+trial`.
 //
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: every one but what that
@@ -55,7 +55,7 @@
 // ge:keywords packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot ab-test
 // ge:keywords trial eye selfaim course-change own-motion pools pool-floor swim-under-view corner
 // ge:keywords lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen sound-swipe
-// ge:keywords stairs stair-walk locked shut-door escape lava-escape
+// ge:keywords stairs stair-walk locked shut-door escape lava-escape brink lava-lip
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -102,9 +102,10 @@ enum class Feature : uint8_t {
   stairs,
   locked,
   escape,
+  brink,
   trial,
 };
-constexpr size_t kFeatures = 34;
+constexpr size_t kFeatures = 35;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

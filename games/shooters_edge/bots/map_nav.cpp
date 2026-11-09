@@ -148,6 +148,8 @@ void open_doors_as_floor(const sv::QcServer& s, const sv::MapSpec& spec,
       br.ent = e;
       br.spawn = so.origin;
       br.touch = pg::block_value(b, "targetname") == nullptr;
+      const char* wait = pg::block_value(b, "wait");
+      br.wait = wait ? static_cast<float>(std::atof(wait)) : 3;  // a door's default
       bridges.push_back(br);
       so.origin = {};  // out, where the map drew it
     }
@@ -475,6 +477,8 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
   for (size_t n = 0; n < graph.nodes.size(); n++)
     exits[n] = out.main_n > 0 && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
   sh::build_swim(out.world, graph, exits, sh::SwimSettings{}, out.swim);
+  // THE BRINK (shooter/brink.hpp): the harm kept on the graph, the walks along its lips marked.
+  out.brink_links = sh::nav_mark_harm(graph, out.harm);
   sh::nav_room(graph);  // the room either side a walker strays into (pilot.hpp's lane)
   out.build_ms =
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();

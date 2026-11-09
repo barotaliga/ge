@@ -189,6 +189,7 @@ struct FighterStats {
   int64_t outmatched = 0;           // commands spent turned from a fight it believed it loses
   int64_t sound_chases = 0;         // commands spent going at an enemy it only heard
   int64_t dodging = 0;              // commands spent stepping across an enemy's line (dodge.hpp)
+  int64_t brink = 0;                // commands whose keys the brink changed (shooter/brink.hpp)
   int64_t dodge_turns = 0;          // and the times it turned the step back
   int64_t watching = 0;             // commands standing with the view on a way in (watch.hpp)
   int64_t landings = 0;             // commands walking onto an exit node just climbed out to
@@ -260,8 +261,10 @@ struct Fighter {
     int ent = -1;
     sh::Vec3f spawn;
     std::vector<int32_t> nodes;
-    bool in = true;      // its floor is not there: its nodes shut
-    bool floor = false;  // a floor door (map_nav.hpp NavBridge): there at rest, not when away
+    bool in = true;         // its floor is not there: its nodes shut
+    bool floor = false;     // a floor door (map_nav.hpp NavBridge): there at rest, not when away
+    float wait = 0;         // a bridge's time out before it goes back, s (<= 0: stays out)
+    double out_since = -1;  // when it last came all the way out, server time; -1: not out
   };
   std::vector<Bridge> bridges;
   bool bridges_seen = false;

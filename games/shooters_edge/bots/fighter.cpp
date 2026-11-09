@@ -15,6 +15,7 @@
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
 #include "progs/entity_text.hpp"
+#include "shooter/brink.hpp"
 #include "shooter/trace.hpp"
 #include "shooter/usercmd.hpp"
 #include "shooters_edge/bots/buttons.hpp"
@@ -83,6 +84,7 @@ constexpr double kSwimWayFlat = 48;    // a swim's way nearer than this across i
 constexpr double kLanding_s = 2;   // out of the water, its exit node walked onto this long at most
 constexpr double kBaseHeal = 1.4;  // health in the team's base is worth this more to a healer
 constexpr double kLauncherWorth = 240;   // the launcher lacked: worth a long run
+constexpr double kBridgeSpare_s = 2.5;   // a bridge left this long before it goes back, s
 constexpr float kRocketJumpHealth = 70;  // the health a rocket jump is tried with (it costs ~50)
 constexpr float kRocketJumpMoves = 4;    // and the moves trait (an amateur jumper's)
 // THE ROCKET JUMPER'S LEVEL by the moves trait (amateur from 4, intermediate from 6, expert from 8)
@@ -726,8 +728,18 @@ void watch_bridges(Fighter& f, const server::RulesCommon& s) {
   f.bridges_seen = true;
   for (Fighter::Bridge& b : f.bridges) {
     if (b.ent < 0 || static_cast<size_t>(b.ent) >= s.world.entities.size()) continue;
-    const bool at_rest = dist(s.world.entities[static_cast<size_t>(b.ent)].origin, b.spawn) < 1;
-    const bool in = b.floor ? !at_rest : at_rest;
+    const sh::Vec3f o = s.world.entities[static_cast<size_t>(b.ent)].origin;
+    bool in = false;
+    if (b.floor) {
+      in = dist(o, b.spawn) >= 1;  // a floor door: there only at rest
+    } else {
+      // A bridge: a floor only all the way out where the map drew it, and not in the last
+      // moments of its wait (it goes back from under whoever is on it: dm2's red armour's).
+      const bool out = dist(o, sh::Vec3f{}) < 1;
+      if (!out) b.out_since = -1;
+      if (out && b.out_since < 0) b.out_since = s.sv.time;
+      in = !out || (b.wait > 0 && s.sv.time - b.out_since > b.wait - kBridgeSpare_s);
+    }
     changed = changed || in != b.in;
     b.in = in;
   }
@@ -1259,6 +1271,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   ps.hop = (expert || average) && f.features[sh::Feature::hop];
   ps.hop_simple = average;
   ps.hop_stairs_walked = f.features[sh::Feature::stairs];
+  ps.brink = f.features[sh::Feature::brink];
   // Its lane off the route's line (shooter/pilot.hpp): a person never walks the line; the less
   // practised wander wider. A perfect player keeps to it.
   ps.lane = skill == sh::AimSkill::perfect || !f.features[sh::Feature::lane] ? 0.f
@@ -1721,6 +1734,17 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     const bool wet = s.world.entities[static_cast<size_t>(me)].waterlevel >= 2;
     if (sh::bot_hand_override(f.bot, cmd, msec, wet) > kHandThere)
       cmd.buttons = static_cast<uint8_t>(cmd.buttons & ~sh::kButtonAttack);
+  }
+  // THE BRINK: on the ground with the feet free, no key carries it into lava or slime.
+  if (!dead && f.features[sh::Feature::brink]) {
+    const sh::Edict& d = s.sv.edicts[static_cast<size_t>(me)];
+    const sh::PilotMode pm = f.bot.pilot.pilot.mode;
+    const bool free_feet = pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe ||
+                           pm == sh::PilotMode::hop || pm == sh::PilotMode::idle ||
+                           pm == sh::PilotMode::arrived || pm == sh::PilotMode::wait;
+    if (free_feet && (d.flags & sh::kFlagOnGround) != 0 && d.waterlevel == 0 &&
+        sh::brink_guard(s.sv, *f.bot.pilot.pilot.g, me, d.origin, d.velocity, cmd).changed)
+      f.stats.brink++;
   }
   fighter_keys(f, cmd);  // the side key turned round as a person's hand turns it (footwork.hpp)
   return cmd;

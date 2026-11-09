@@ -55,6 +55,7 @@ struct NavBridge {
   // A FLOOR DOOR (`floor_door`): a plate resting shut as a floor that a button slides away (dm2's
   // big room). Its nodes stand on it at rest (`spawn`) and are shut while it is away from there.
   bool floor = false;
+  float wait = 0;  // a bridge's: how long it stays out once moved out, s (<= 0: for good)
 };
 
 struct MapNav {
@@ -84,7 +85,8 @@ struct MapNav {
   ge::ai::Search main;  // what the map's main part reaches (the most a start spot reaches)
   int32_t main_n = 0;
   int64_t teleport_links = 0, closed_links = 0, harm_links = 0;
-  double build_ms = 0;  // wall time, never in a digest
+  int64_t brink_links = 0;  // walks and drops along a lip over lava or slime (`nav_mark_harm`)
+  double build_ms = 0;      // wall time, never in a digest
 };
 
 // The doors and plats of `spec` as movers, off its entity text and the edicts `s` made of them.

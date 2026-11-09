@@ -164,6 +164,7 @@ struct NavLink {
   bool teleport =
       false;            // a teleporter's: walked INTO its trigger (at the link's start), not across
   int32_t escape = -1;  // a rocket out of a pit's liquid: its index in `NavGraph::escapes`
+  bool brink = false;   // a walk or drop along the lip over lava or slime (`nav_mark_harm`)
 };
 
 // A blast jump: a rocket jump or a grenade jump.
@@ -224,6 +225,8 @@ struct NavGraph {
   std::vector<NavScript> scripts;
   // The rockets out of a pit's liquid (`NavLink::escape` links index them; shooter/escape.hpp).
   std::vector<NavEscape> escapes;
+  // Each node's: a floor in lava or slime (`nav_mark_harm`); empty: none known.
+  std::vector<uint8_t> harm;
 };
 
 // One proof's result.
@@ -379,6 +382,15 @@ void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra);
 // lists them in `cut_links` when given (the ways in, for a caller that enters on purpose).
 int64_t nav_close_entries(NavGraph& g, std::span<const uint8_t> closed,
                           std::vector<NavExtraLink>* cut_links = nullptr);
+
+// THE HARM AND ITS BRINK (`nav_mark_harm`): the floor nodes in lava or slime kept on the graph
+// (`NavGraph::harm`), and every walk or drop passing within `reach` across of one lying a step or
+// more under it marked `brink`: the lip of a lava pit, where a hop's arc or a side step ends in
+// it (the pilot's hop and strafe stretches end there: `PilotSettings::brink`). Returns how many
+// links it marked.
+int64_t nav_mark_harm(NavGraph& g, std::span<const uint8_t> harm, float reach = 40);
+// Whether a harm node lies within `reach` across of `p` and a step or more under it.
+bool nav_harm_near(const NavGraph& g, Vec3f p, float reach);
 
 // REPAIRING POCKETS (`nav_bridge_pockets`): after the build (and the water, the teleporters),
 // a POCKET is a set of nodes, joined by links among themselves, that the map's main part (the

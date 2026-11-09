@@ -766,6 +766,54 @@ int64_t nav_close_entries(NavGraph& g, std::span<const uint8_t> closed,
   return cut;
 }
 
+bool nav_harm_near(const NavGraph& g, Vec3f p, float reach) {
+  if (g.harm.size() != g.nodes.size() || g.set.spacing <= 0 || g.cols == 0) return false;
+  const int32_t ci = static_cast<int32_t>((p.x - g.lo.x) / g.set.spacing);
+  const int32_t cj = static_cast<int32_t>((p.y - g.lo.y) / g.set.spacing);
+  const int32_t span = static_cast<int32_t>(reach / g.set.spacing) + 1;
+  for (int32_t i = ci - span; i <= ci + span; i++) {
+    if (i < 0 || i >= g.cols) continue;
+    for (int32_t j = cj - span; j <= cj + span; j++) {
+      if (j < 0 || j >= g.rows) continue;
+      const size_t c =
+          static_cast<size_t>(i) * static_cast<size_t>(g.rows) + static_cast<size_t>(j);
+      for (int32_t k = 0; k < g.col_n[c]; k++) {
+        const auto n = static_cast<size_t>(g.col_first[c]) + static_cast<size_t>(k);
+        if (!g.harm[n]) continue;
+        const Vec3f o = g.nodes[n].origin;
+        if (o.z < p.z - kStepHeight && across(o, p) <= reach) return true;
+      }
+    }
+  }
+  return false;
+}
+
+int64_t nav_mark_harm(NavGraph& g, std::span<const uint8_t> harm, float reach) {
+  if (harm.size() != g.nodes.size()) return 0;
+  g.harm.assign(harm.begin(), harm.end());
+  int64_t marked = 0;
+  for (size_t a = 0; a < g.nodes.size(); a++) {
+    const NavNode& n = g.nodes[a];
+    for (int32_t k = 0; k < n.links; k++) {
+      NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+      if ((l.kind != NavKind::walk && l.kind != NavKind::drop) || harm[a] ||
+          harm[static_cast<size_t>(l.to)])
+        continue;
+      // Along the link every 16 units, at the higher end's height (a drop's lip is its start).
+      const Vec3f A = n.origin, B = g.nodes[static_cast<size_t>(l.to)].origin;
+      const float len = across(A, B);
+      const int steps = 1 + static_cast<int>(len / 16);
+      for (int q = 0; q <= steps && !l.brink; q++) {
+        const float f = static_cast<float>(q) / static_cast<float>(steps);
+        const Vec3f p{A.x + (B.x - A.x) * f, A.y + (B.y - A.y) * f, A.z > B.z ? A.z : B.z};
+        l.brink = nav_harm_near(g, p, reach);
+      }
+      if (l.brink) marked++;
+    }
+  }
+  return marked;
+}
+
 void flip_keys(float way, float view, float& forward, float& side) {
   const ViewAxes ax = angle_vectors({0, view, 0});
   const Vec3f w = angle_vectors({0, way, 0}).forward;

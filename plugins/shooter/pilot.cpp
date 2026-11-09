@@ -249,6 +249,7 @@ int32_t strafe_stretch(const Pilot& p, Vec3f at) {
     const NavLink* l = link_of(g, p.route[j - 1], p.route[j]);
     const Vec3f nj = node(g, p.route[j]).origin;
     if (l == nullptr || l->kind != NavKind::walk || l->mover >= 0) break;
+    if (p.set.brink && l->brink) break;
     if (nj.z > z + kLevel || nj.z < z - kLevel) break;
     bool straight = true;
     for (size_t i = p.k + 1; i < j && straight; i++)
@@ -269,7 +270,7 @@ int32_t hop_stretch(const Pilot& p, Vec3f at) {
   for (size_t j = p.k + 1; j < p.route.size(); j++) {
     const NavLink* l = link_of(g, p.route[j - 1], p.route[j]);
     if (l == nullptr || (l->kind != NavKind::walk && l->kind != NavKind::drop) || l->mover >= 0 ||
-        l->teleport)
+        l->teleport || (p.set.brink && l->brink))
       break;
     const NavLink* l2 = j + 1 < p.route.size() ? link_of(g, p.route[j], p.route[j + 1]) : nullptr;
     if (l2 != nullptr && leaps(l2->kind)) break;

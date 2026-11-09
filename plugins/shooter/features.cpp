@@ -15,7 +15,7 @@ constexpr const char* kNames[kFeatures] = {
     "hop",       "shortgoals", "commit",  "danger", "dodge",  "watch",    "spam",
     "packs",     "talk",       "plan",    "rj",     "gj",     "airsteer", "surface",
     "glance",    "eye",        "selfaim", "pools",  "routes", "corner",   "mouse",
-    "packinfer", "listen",     "stairs",  "locked", "escape", "trial"};
+    "packinfer", "listen",     "stairs",  "locked", "escape", "brink",    "trial"};
 
 // Every switch but `trial` (the last).
 constexpr uint64_t kTrial = uint64_t{1} << (kFeatures - 1);

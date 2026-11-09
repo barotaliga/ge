@@ -92,6 +92,9 @@ struct PilotSettings {
   // (a stair, a steep ramp): a jump up a stair loses speed; people walk up and hop from the top.
   bool hop_stairs_walked = false;
   float hop_climb = 10;
+  // THE BRINK (`brink`): a hop's or a strafe's stretch ends at a link along a lip over lava or
+  // slime (`NavLink::brink`): an arc in the air there comes down in it.
+  bool brink = false;
   float hop_end = 96;       // hopping stops this far along the route before the stretch's end
   float hop_look_s = 0.3f;  // the hop aims at the route this long ahead at its speed, s
   float hop_hold = 12;      // the side holds until the aim is this far off the other way, deg
