@@ -1006,9 +1006,9 @@ from specifications, not source:
    it never quotes source.
 2. **The builder reads the note, not the source.** An agent writing engine or game code works
    from the note and from the black-box measurements (step 3). It does not open GPL source while
-   building that subsystem. Research that needs to read source to answer a question writes the
-   answer as a fact in the note, in a separate session, and the building session reads only
-   the note.
+   building that subsystem. Research that needs to read source to answer a question is done by a
+   separate reader agent, which writes the answer as facts in the note with no code; the
+   building agent reads only the note (the `clean-room` skill holds the procedure).
 3. **Behaviour is matched by measurement.** Where the feel must match (the player's movement,
    the timing of a weapon, what a server sends after a given input), a lab runs an existing
    server or client as a separate program, never linked and never committed (fetched and built
