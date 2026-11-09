@@ -75,6 +75,12 @@ constexpr double kSwimBand = 20;     // a swimmer's view may lie this far off th
 // side switch reversed it at speed; people's view reverses 0.09 times a second).
 constexpr double kTurnBackAtEase = 0.9;
 constexpr double kGameTol = 3;  // a view the game set is near enough this close, degrees
+// A rocket jump's shot (pilot.hpp `shot_pitch`): the hand's stroke down onto its pitch starts
+// its Fitts time onto a target this wide (degrees) and a little more (s) before the shot, so it
+// lands as the jump goes; the shot itself fires at the jump's pitch exactly.
+constexpr double kShotWidth = 4, kShotSpare_s = 0.04;
+// And the shot waits until the view is this near the jump's, degrees (yaw, pitch).
+constexpr double kShotReadyYaw = 12, kShotReadyPitch = 6;
 
 // The view a step on through the mouse hand toward `want` (yaw, pitch; yaw unwrapped near the
 // view): close enough within `tol_x`, `tol_y` degrees, the target `width` degrees across, a shot
@@ -109,7 +115,9 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   client_view(sv, me, b.view);
   sense(b.senses, sv, b.view, me, {b.pitch, b.yaw, 0}, sv.time, why);
 
-  // The pilot's command, with its own trace (pilot_next advances the command count).
+  // The pilot's command, with its own trace (pilot_next advances the command count). Under the
+  // mouse hand a rocket jump's shot waits for the hand's view (pilot.hpp `shot_hand`).
+  b.pilot.pilot.shot_hand = b.mouse && b.aim.mouse;
   MoveCmd cmd = pilot_source(b.pilot).next(&b.pilot, sv, slot, msec);
   const float pilot_yaw = b.pilot.pilot.yaw;
   // Swimming (`pools`), the pilot's wish is pressed again under another view in three dimensions:
@@ -288,7 +296,17 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
     }
   }
 
-  if (b.aiming || b.looking) {
+  // A rocket jump's shot this command: its view is the jump's, whatever the aim was on. And one
+  // coming: under the hand, the stroke onto the jump's view starts its Fitts time before the
+  // shot, so it lands as the jump goes (the aim and a look give way to it).
+  Pilot& jp = b.pilot.pilot;
+  const bool blast_shot = jp.shot_now;
+  const double shot_dx = wrap(jp.shot_yaw - b.yaw), shot_dy = jp.shot_pitch - b.pitch;
+  const bool shot_due =
+      b.mouse && b.aim.mouse && !swim3d && jp.shot_pitch != 0 && !blast_shot &&
+      jp.shot_in_s <=
+          b.hand.fitts(std::sqrt(shot_dx * shot_dx + shot_dy * shot_dy), kShotWidth) + kShotSpare_s;
+  if ((b.aiming || b.looking) && !blast_shot && !shot_due) {
     static constexpr const char* kNames[2] = {"aim_yaw", "aim_pitch"};
     ai::record_intent(why, kNames, want);
     double out[2];
@@ -463,14 +481,20 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       // turned under the view, in three dimensions under water, so the air control and the swim
       // are the same); a blast jump's pitched view stays the pilot's. Under water it looks along
       // the swim within kSwimBand, at ease.
-      const double want_view[2] = {b.yaw + wrap(pilot_yaw - b.yaw), 0};
+      double want_view[2] = {b.yaw + wrap(pilot_yaw - b.yaw), 0};
       double out[2];
       b.view_by = swim3d ? "swim" : "air";
+      if (shot_due) {  // the stroke onto the jump's view, timed to land with its shot
+        want_view[0] = b.yaw + shot_dx;
+        want_view[1] = jp.shot_pitch;
+        b.view_by = "shot";
+      }
       if (swim3d) {
         hand_step(b, want_view, msec / 1000.0, kSwimBand, kCalmPitchTol, kSwimBand, 0, kCalmPace,
                   false, out);
       } else {
-        hand_step(b, want_view, msec / 1000.0, 2, kCalmPitchTol, 4, 0, 1, true, out);
+        hand_step(b, want_view, msec / 1000.0, 2, shot_due ? 2 : kCalmPitchTol, 4, 0, 1, !shot_due,
+                  out);
       }
       b.yaw = static_cast<float>(out[0]);
       b.pitch = static_cast<float>(out[1]);
@@ -479,13 +503,35 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       else
         turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
       cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
+    } else if (b.mouse && b.aim.mouse) {
+      // The pilot's pitched view (a grenade jump's throw, a rocket jump's shot): the hand's
+      // strokes there; the command that fires takes the view exactly (the stroke timed to land
+      // with it, above, leaves only its error to put right).
+      const double want_view[2] = {b.yaw + wrap(pilot_yaw - b.yaw), pilot_view.x};
+      double out[2];
+      hand_step(b, want_view, msec / 1000.0, 2, 2, 4, 0, 1, false, out);
+      if (cmd.buttons & kButtonAttack) {
+        out[0] = want_view[0];
+        out[1] = want_view[1];
+      }
+      b.view_by = blast_shot ? "shot" : "pilot";
+      b.yaw = static_cast<float>(out[0]);
+      b.pitch = static_cast<float>(out[1]);
+      turn_axes(cmd.forward, cmd.side, pilot_yaw, b.yaw);
+      cmd.angles = {quantize_angle(b.pitch), quantize_angle(wrap(b.yaw)), 0};
     } else {
       b.view_by = "pilot";
       b.yaw = pilot_yaw;
-      b.pitch = 0;
+      b.pitch = blast_shot ? pilot_view.x : 0;
     }
     b.wanted[0] = b.pressed[0] = b.yaw;
     b.wanted[1] = b.pressed[1] = b.pitch;
+  }
+  // The view near enough the coming shot's for it to go (read by the pilot's next command).
+  {
+    const double dx = wrap(jp.shot_yaw - b.yaw), dy = jp.shot_pitch - b.pitch;
+    jp.shot_ready =
+        jp.shot_pitch == 0 || (std::fabs(dx) < kShotReadyYaw && std::fabs(dy) < kShotReadyPitch);
   }
   return cmd;
 }

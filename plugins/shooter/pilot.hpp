@@ -222,6 +222,13 @@ struct Pilot {
   size_t script_step = 0, script_seen = 0;   // its step aimed at, and the furthest yet
   bool script_done = false;                  // its last step reached
   const char* because = "";                  // the last command's reason, for a trace
+  // A rocket jump's shot ahead (this command's, read by the view's hand): the view it fires with
+  // (pitch 0: none ahead), the time until it, s (0: this command), and whether this command fires
+  // it. Under a hand that flies the view itself (`shot_hand`, set by its owner), the shot waits
+  // until the owner says the view is there (`shot_ready`, set each command).
+  float shot_pitch = 0, shot_yaw = 0, shot_in_s = 0;
+  bool shot_now = false;
+  bool shot_hand = false, shot_ready = true;
   std::vector<int32_t> shut;               // doors the caller knows are shut: never planned through
   std::vector<NavExtraLink> shut_links;    // and links it knows are (onto a bridge still in)
   std::vector<NavExtraLink> cut_all;       // cut and shut_links together, for the route

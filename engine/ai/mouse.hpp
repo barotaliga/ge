@@ -109,6 +109,8 @@ class Mouse {
   double y() const { return y_; }
   bool lifted() const { return lift_left_ > 0; }
   const MouseHand& hand() const { return hand_; }
+  // A stroke's Fitts time this many degrees onto a target this wide, s (at a turn meant's pace).
+  double fitts(double distance, double width) const;
   MouseStats stats;
 
  private:
@@ -118,7 +120,6 @@ class Mouse {
   };
   static constexpr int kStrokes = 4;
   void plan(const MouseWant& want);
-  double fitts(double distance, double width) const;
   MouseHand hand_;
   core::Rng rng_{0};
   std::array<Stroke, kStrokes> strokes_{};
