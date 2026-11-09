@@ -173,7 +173,8 @@ void run(ge::lab::Lab& lab) {
     return;
   }
   // Relative folders (the run's own, removed at the end): their paths are drawn on the page, so
-  // they read the same on every machine and the pictures stay in the digest.
+  // they read the same on every machine and the pictures stay in the digest (with '/' between
+  // folders on every system: the generic form).
   const fs::path root = "previews/se-demos-player";
   write_folders(root);
   const bool own = !lab.arg("dir").empty();
@@ -221,12 +222,12 @@ void run(ge::lab::Lab& lab) {
   for (const Viewport& v : viewports) {
     Game g;
     g.menu.demos().set_extensions(cl::listed_extensions(game.game->demo_extensions));
-    g.menu.demos().set_game_places({{"GAME", (root / "Games" / "base").string()}});
-    g.menu.demos().set_player_places({{"HOME", root.string()},
-                                      {"DOWNLOADS", downloads.string()},
-                                      {"DESKTOP", (root / "Desktop").string()}});
+    g.menu.demos().set_game_places({{"GAME", (root / "Games" / "base").generic_string()}});
+    g.menu.demos().set_player_places({{"HOME", root.generic_string()},
+                                      {"DOWNLOADS", downloads.generic_string()},
+                                      {"DESKTOP", (root / "Desktop").generic_string()}});
     g.menu.demos().set_check(check);
-    g.con.execute("menu_demo_dir \"" + downloads.string() + "\"");
+    g.con.execute("menu_demo_dir \"" + downloads.generic_string() + "\"");
     const auto press = [&](ui::MenuInput in) { g.menu.update(in, false, g.host, 0.016); };
     const auto snap = [&](const std::string& id, const std::string& title,
                           const std::string& caption, const std::string& look_for) {
