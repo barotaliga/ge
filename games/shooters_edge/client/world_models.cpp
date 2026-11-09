@@ -139,6 +139,7 @@ void place_models(const Listen& l, std::vector<Placed>& out) {
   for (int e = 1; e < s.sv.num_edicts; e++) {
     const sh::Edict& ed = s.sv.edicts[size_t(e)];
     if (ed.free || ed.modelindex <= 0 || ed.modelindex >= models || e == me) continue;
+    if (!model_shown(l, e)) continue;  // a taken item: its model text emptied
     Placed p;
     p.entity = e;
     p.modelindex = ed.modelindex;

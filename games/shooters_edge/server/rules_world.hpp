@@ -11,6 +11,7 @@
 // ge:summary The rules' world: the lists, the clients and one row an entity, filled by the runner
 // ge:keywords rules-world rules-runner runner world-view entity-rows client-rows player-numbers
 // ge:keywords fill_world model-list sound-list vwep statics lightstyles serverinfo frags stats
+// ge:keywords model-shown taken-item hidden-item model-text
 // ge:skill progs shooter
 // ge:test tests/shooters_edge_rules_world_test.cpp
 #pragma once
@@ -101,6 +102,11 @@ struct RulesWorld {
 };
 
 struct QcServer;
+
+// True when entity `e` is shown: drawn by a window and sent to clients. It needs a model index
+// AND a model text: a program hides a taken item by emptying its `model` (keeping the index, so
+// setting the text again brings it back), and such an entity is drawn and sent by no one.
+bool model_shown(const QcServer& s, int e);
 
 // The runner's half for the QC server: the lists, then the clients and every entity row. The lists
 // are copied only at the map's start (`full`); a frame's fill rewrites the rest in place.
