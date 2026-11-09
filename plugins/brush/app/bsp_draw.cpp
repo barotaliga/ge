@@ -565,8 +565,17 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
   }
   d.frame_lights.clear();
   d.frame_jobs.assign(size_t(kMaxShadowed) * 6 + kOrthos + size_t(kCasterLights) * 6 + 1, GpuJob{});
-  // The nearest lights that cast shadows, by their index in frame_lights.
-  std::vector<size_t> casters;
+  // The lights that cast shadows, by their index in frame_lights: the nearest of those the eye's
+  // cluster can see first, then the nearest of the rest. Nearness alone (the distance less the
+  // reach) let a map's big lights behind walls take the shadowed few from the room in view: on a
+  // map of a few score lights, the room ahead lit flat, its shadows popping in a few steps on.
+  std::vector<size_t> casters, unseen;
+  const Map& map = s.map;
+  const auto cluster_of = [&](const double p[3]) {
+    const float f[3] = {float(p[0] / kUnitM), float(p[2] / kUnitM), float(p[1] / kUnitM)};
+    return map.leaves.empty() ? -1 : map.leaves[leaf_at(map, f)].cluster;
+  };
+  const int32_t eye_cluster = cluster_of(view.eye);
   for (const Pick& p : picks) {
     const PointLight& l = *p.l;
     GpuLight g{};
@@ -600,10 +609,16 @@ void prepare_bsp(gpu::Device& device, BspDraw& d, const r::FrameView& view, cons
     // again every frame: it lights without a shadow.
     const bool dynamic = !d.dynamic_points.empty() && p.l >= d.dynamic_points.data() &&
                          p.l < d.dynamic_points.data() + d.dynamic_points.size();
-    if (!l.physical && !dynamic && int(casters.size()) < d.options.shadowed)
-      casters.push_back(d.frame_lights.size());
+    if (!l.physical && !dynamic) {
+      // A light in solid or outside the map (no cluster) counts as seen: nothing says it is not.
+      const int32_t at = cluster_of(l.pos);
+      const bool seen = eye_cluster < 0 || at < 0 || cluster_sees(map, eye_cluster, at);
+      (seen ? casters : unseen).push_back(d.frame_lights.size());
+    }
     d.frame_lights.push_back(g);
   }
+  casters.insert(casters.end(), unseen.begin(), unseen.end());
+  if (int(casters.size()) > d.options.shadowed) casters.resize(size_t(d.options.shadowed));
   // Each caster keeps the slot that already holds its cube; the rest, nearest first, take the
   // slot left unused longest (a light that steps out of the nearest few and back in finds its cube
   // still there), at most `fresh_cubes` a frame: one over the budget lights without a shadow until
