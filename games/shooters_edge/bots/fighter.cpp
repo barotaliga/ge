@@ -488,12 +488,17 @@ int32_t on_the_way(const Fighter& f, const server::RulesCommon& s, const Stats& 
   return best;
 }
 
-// A backpack in view within `reach` worth going for (ammunition short or a weapon lacking), or -1.
+// A backpack within `reach` worth going for (ammunition short or a weapon lacking), or -1: one
+// in sight on its screen (no wall, door or water's surface between), or the one already gone for
+// while it lies there.
 int32_t pack_near(const Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Vec3f me,
                   float reach) {
   bool short_of = st.rockets < 20 || st.shells < 40 || st.nails < 60 || st.cells < 30;
   short_of |= (st.items & (kWRockets | kWGrenades)) == 0;
   if (!short_of) return -1;
+  sh::SenseSettings look = f.bot.senses.set;
+  look.range = reach;
+  const sh::Vec3f eye{me.x, me.y, me.z + look.view_height};
   int32_t best = -1;
   float best_d = reach;
   for (const sh::ViewEntity& v : f.bot.view.entities) {
@@ -501,10 +506,14 @@ int32_t pack_near(const Fighter& f, const server::RulesCommon& s, const Stats& s
         s.models[static_cast<size_t>(v.modelindex)] != "progs/backpack.mdl")
       continue;
     const float d = dist(v.origin, me);
-    if (d < best_d) {
-      best_d = d;
-      best = v.ent;
-    }
+    if (d >= best_d) continue;
+    // A pack lies on the floor: seen at a few units over it (as a player's origin less his eye).
+    if (v.ent != f.pack_ent &&
+        !sh::sees_player(s.sv, look, f.slot + 1, eye, {f.bot.pitch, f.bot.yaw, 0},
+                         {v.origin.x, v.origin.y, v.origin.z + 8 - look.view_height}))
+      continue;
+    best_d = d;
+    best = v.ent;
   }
   return best;
 }
@@ -522,6 +531,7 @@ bool team_goal(Fighter& f, const server::RulesCommon& s, const Stats& st, sh::Ve
       go_to(f, sh::nav_nearest(g, s.world.entities[static_cast<size_t>(pack)].origin));
       return true;
     }
+    f.pack_ent = -1;  // none in sight: the next is chosen by sight again
   }
   if (!f.team || f.mode == FightMode::retreat) return false;
   // A pack a mate called, when this player is the one to fetch it (packs.hpp).
@@ -1217,6 +1227,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   // A change of course read a reaction late (`eye`), and the aim from its eye ahead (`selfaim`).
   f.bot.senses.set.course_s = f.features[sh::Feature::eye] ? f.bot.aim.react_med : 0;
   f.bot.selfaim = f.features[sh::Feature::selfaim];
+  f.bot.corner = f.features[sh::Feature::corner];
   f.bot.glance = f.features[sh::Feature::glance];
   f.bot.pools = f.bot.pilot.pilot.set.floor_swim = f.features[sh::Feature::pools];
 }

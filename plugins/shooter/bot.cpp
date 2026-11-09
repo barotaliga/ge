@@ -30,6 +30,9 @@ float wrap(float deg) { return unwrap(deg, 0); }
 constexpr float kPreAim = 5;
 // The one in hand out of sight this long is a new sighting when he shows again, s.
 constexpr double kResight_s = 0.3;
+// An enemy lost from sight is followed along his course this long (`corner`): a person's eye
+// carries on a reaction's worth before it sees him gone, then waits where he went.
+constexpr double kLostCarry_s = 0.2;
 // The one in hand, in sight, is kept over another in sight unless that one is this much nearer
 // (his distance over the other's): a player stays on whom he is shooting, and a wide view brings
 // others into it all the time.
@@ -95,7 +98,10 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
       c && ai::known(c->seen) && (c->visible || ai::age(c->seen, sv.time) <= b.aim.hold_s);
   double want[2];
   if (fresh) {
-    const double head = ai::age(c->seen, sv.time) + b.aim.lead_s;
+    // Lost from sight, his course is followed a moment only (`corner`): no wall is seen through.
+    const double age = ai::age(c->seen, sv.time);
+    const double head =
+        (b.corner && !c->visible ? std::fmin(age, kLostCarry_s) : age) + b.aim.lead_s;
     // The network's part, in the air only: a player's arc does not change in a round trip, but
     // on the ground a strafer's steps do, and a lead of the round trip on them (measured on top
     // of the hands' own) swings the aim wider than it gains (se-team at 200 ms: none on the

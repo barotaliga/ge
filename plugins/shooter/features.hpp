@@ -33,15 +33,12 @@
 // - `airsteer`: flights steered in the air with the side key and the view on the velocity; off,
 //   the view at the target and forward.
 // - `surface`: up for air under open water before the air runs out.
-// - `glance`: the calm walker's glance aside every second or two, to the side with the longest
-//   open line of sight (bot.hpp `glance`).
-// - `eye`: a strafer's turn read a reaction late (senses.hpp `course_s`); off in every skill's
-//   preset (it held the aim under people's).
-// - `selfaim`: the aim worked out from where its own eye will be when the hands catch up (a
-//   person's hand allows for his own strafe); off, the hands chase the turn its own motion makes.
-// - `pools`: a pool's floor swum over (pilot.hpp `floor_swim`), and the swim's wish pressed in
-//   three dimensions under the aim's or the calm view (bot.hpp `pools`).
+// - `glance`: the calm walker's glance aside now and then, to the longest open line (bot.hpp).
+// - `eye`: a strafer's turn read a reaction late (senses.hpp `course_s`); off in every preset.
+// - `selfaim`: the aim worked out from where its own eye will be as the hands catch up.
+// - `pools`: pool floors swum over, the swim's wish pressed in 3D (pilot.hpp, bot.hpp `pools`).
 // - `routes`: a map's scripted ways to key items taken (nav_script.hpp, bots/item_routes).
+// - `corner`: an enemy lost from sight followed a reaction's worth, then held where he went.
 // - `trial`: read by the code under an A/B now (nothing, when none is). Off in every preset (`all`
 //   too): `--features-red=+trial` plays it against the rest, from one build.
 //
@@ -57,6 +54,7 @@
 // ge:keywords calm pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch
 // ge:keywords spam packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot
 // ge:keywords ab-test trial eye selfaim course-change own-motion pools pool-floor swim-under-view
+// ge:keywords corner lost-enemy wall-hold
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -96,9 +94,10 @@ enum class Feature : uint8_t {
   selfaim,
   pools,
   routes,
+  corner,
   trial,
 };
-constexpr size_t kFeatures = 27;
+constexpr size_t kFeatures = 28;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

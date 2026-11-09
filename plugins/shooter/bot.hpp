@@ -95,6 +95,11 @@ struct Bot {
   // change a reaction late): accuracy 31.7 -> 35.9 %, red with it against blue without 36.3 to
   // 30.4 %, and the dodge no longer costs the dodger its aim.
   bool selfaim = true;
+  // THE CORNER (`corner`): an enemy lost from sight (behind a wall, under water) is carried along
+  // his course only `kLostCarry_s` (bot.cpp: the moment it takes to see him gone), then the view
+  // holds where he went, as a person's crosshair waits at the corner; off, his spot is carried
+  // along for the whole `aim.hold_s` and the view tracks him through the wall.
+  bool corner = true;
   // Swimming, the pilot's wish pressed under the aim's or the calm view in three dimensions (its
   // dive and rise kept); off, turned in the plane alone (features.hpp `pools`).
   bool pools = true;
