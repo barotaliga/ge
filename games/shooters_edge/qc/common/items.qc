@@ -1,5 +1,6 @@
 // THE ITEMS: health, armour, ammunition and weapons lying on the map. Each is a trigger a living
-// player picks up by touching; it is gone for its respawn time, then comes back with a sound.
+// player picks up by touching; it is gone for its respawn time, then comes back with a sound. Where
+// the glue's `items_come_back` says no (the campaign's single player and co-op) it is gone for good.
 //
 //   item_health      25 (spawnflags 1: 15; 2: 100 that may go over the maximum, to 250, and
 //                    decays back a point a second)                                  20 s
@@ -27,7 +28,8 @@ void() item_return = {
   sound(self, CHAN_VOICE, "items/itembk2.wav", 1, ATTN_NORM);
 };
 
-// Takes the item away for its respawn time.
+// Takes the item away for its respawn time, or for good where items do not come back (removed
+// on the next frame, once its targets have fired).
 void() item_taken = {
   sound(other, CHAN_ITEM, self.noise, 1, ATTN_NORM);
   stuffcmd(other, "bf\n");
@@ -35,6 +37,10 @@ void() item_taken = {
   self.modelindex = 0;
   self.nextthink = time + self.respawn_time;
   self.think = item_return;
+  if (!items_come_back()) {
+    self.nextthink = time;
+    self.think = remove_self;
+  }
   activator = other;
   use_targets();
 };
@@ -72,8 +78,12 @@ void() health_decay = {
     self.nextthink = time + 1;
     return;
   }
-  // Back at the maximum: the big box comes back after its own wait.
+  // Back at the maximum: the big box comes back after its own wait (or is gone for good).
   self.owner = world;
+  if (!items_come_back()) {
+    remove(self);
+    return;
+  }
   self.nextthink = time + self.respawn_time;
   self.think = item_return;
 };

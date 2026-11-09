@@ -174,6 +174,9 @@ string(entity targ, entity attacker) death_words = {
 // A dead player leaves a backpack (items.qc) with his ammunition and the weapon he held.
 void() backpack_drop;
 void() drop_on_death = { backpack_drop(); };
+
+// A taken item comes back after its wait: the arena is always a deathmatch.
+float() items_come_back = { return TRUE; };
 // The multiplayer form's move jumps for the program: nothing to do before it.
 void() player_jump = {};
 

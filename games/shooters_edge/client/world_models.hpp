@@ -18,7 +18,9 @@
 // - PLACED (`place_models`, each frame from the server): every live entity with a model but the
 //   local player (whose eyes the camera is), then the static ones; its frame, skin, angles and
 //   colours as the server holds them.
-// - DRAWN (`prepare_models`, `encode_models`): a group of frames plays at its intervals; a model
+// - DRAWN (`prepare_models`, `encode_models`): a group of frames plays at its intervals (flowing
+//   between them with `Placed::lerp`), an animation drawn between its last two frames
+//   (`Placed::frame_from`, model_lerp.hpp: the GPU blends the two frames' vertices); a model
 //   flagged to spin turns; each one lit by the lightmap on the floor under it (taken again only
 //   when it moves), shaded from above, the frame's dynamic lights (a muzzle's flash, a rocket's
 //   glow, an explosion) added from their side as they are to the floor, a fullbright texel glowing;
@@ -61,6 +63,13 @@ struct Placed {
   int entity = 0;  // a static: -1 - its index
   int modelindex = 0;
   int frame = 0, skin = 0;
+  // Its animation drawn between frames (model_lerp.hpp): `frame_from` the frame group it is
+  // leaving (-1: none) and `frame_f` the share of the way to `frame` (1: there); `lerp` flows a
+  // looping group (a torch's flame) between its own frames too. Off: each frame as the server
+  // holds it.
+  int frame_from = -1;
+  float frame_f = 1;
+  bool lerp = false;
   int effects = 0;  // the entity's effect bits (kGlow...)
   sh::Vec3f origin, angles;
   uint32_t top = models::kShirtRow, bottom = models::kPantsRow;  // palette rows for the tints

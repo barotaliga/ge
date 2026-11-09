@@ -375,6 +375,10 @@ struct Missile {
 };
 void missiles_of(const Listen& l, std::vector<Missile>& out);
 
+// True when the entity is drawn: a model index and a model text (a program hides a taken item by
+// emptying its text; server::model_shown). Without a QC program: a model index alone.
+bool model_shown(const Listen& l, int entity);
+
 // A float field of an entity by its name in the progs (0 when the progs has no such field).
 float field_named(const Listen& l, int entity, const char* name);
 // Sets that field (nothing when the progs has no such field): a lab hands the player its weapons.

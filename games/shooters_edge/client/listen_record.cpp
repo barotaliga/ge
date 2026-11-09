@@ -207,6 +207,7 @@ void record_listen_frame(ListenRecorder& r, const Listen& l) {
   for (int e = sh::kMaxClients + 1; e < std::min(s.sv.num_edicts, kMostNumbered); e++) {
     const sh::Edict& ed = s.sv.edicts[static_cast<size_t>(e)];
     if (ed.free || ed.modelindex <= 0 || ed.modelindex >= models || ed.modelindex > 255) continue;
+    if (!model_shown(l, e)) continue;  // a taken item: its model text emptied
     // The number, every origin and angle, the frame, then the more byte: angles 1 and 3, the
     // model, the skin, the effects.
     m.i16(e | 1 << 9 | 1 << 10 | 1 << 11 | 1 << 12 | 1 << 13 | 1 << 15);

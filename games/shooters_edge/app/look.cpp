@@ -48,6 +48,20 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
            .min = 0,
            .max = 4},
           &picture.lava_glow);
+  cv.bind({.name = "r_lerpmodels",
+           .fallback = "1",
+           .flags = gc::kArchive,
+           .help = "the models' animation drawn between their frames, so a figure moves smoothly "
+                   "(1), or each frame as the game steps it (0)",
+           .kind = gc::CvarKind::boolean},
+          &picture.lerp_models);
+  cv.bind({.name = "r_lerpmove",
+           .fallback = "1",
+           .flags = gc::kArchive,
+           .help = "the models' places in your own game drawn between the server's frames, and a "
+                   "monster's strides over their time (1), or where each frame puts them (0)",
+           .kind = gc::CvarKind::boolean},
+          &picture.lerp_move);
   cv.bind({.name = "r_slime_glow",
            .fallback = "1",
            .help = "how much the slime's green glow lights the walls round it in the modern look, "

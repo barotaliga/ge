@@ -296,6 +296,22 @@ uint32_t frame_in(const Groups& g, int group, double t) {
   return g.first[k] + g.count[k] - 1;
 }
 
+void frames_between(const Groups& g, int group, double t, uint32_t& a, uint32_t& b, float& f) {
+  a = b = frame_in(g, group, t);
+  f = 0;
+  if (g.first.empty()) return;
+  if (group < 0 || group >= int(g.first.size())) group = 0;
+  const auto k = size_t(group);
+  const std::vector<float>& ends = g.ends[k];
+  if (g.count[k] <= 1 || ends.size() != g.count[k] || ends.back() <= 0) return;
+  const double at = t - std::floor(t / ends.back()) * ends.back();
+  const uint32_t i = a - g.first[k];
+  const double start = i == 0 ? 0.0 : double(ends[i - 1]);
+  const double span = double(ends[i]) - start;
+  b = g.first[k] + (i + 1) % g.count[k];
+  f = span > 0 ? float(std::clamp((at - start) / span, 0.0, 1.0)) : 0.0f;
+}
+
 void rotation_of(const float angles[3], bool alias, float out[4]) {
   // The file turns yaw counter-clockwise from +x toward +y seen from above, which the engine's
   // frame (the file's y is its z) sees as a turn the other way about its up; pitch and roll
