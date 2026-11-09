@@ -42,7 +42,7 @@
 //
 // ge:summary The mouse hand: a view turned by minimum-jerk strokes, Fitts timing, lifts, the arc
 // ge:keywords ai bot mouse hand view aim submovement minimum-jerk fitts lift mousepad arc tilt
-// ge:keywords tremor stroke human-like sensitivity cm-per-360 shot-timing flick
+// ge:keywords tremor stroke human-like sensitivity cm-per-360 shot-timing flick turn-back reversal
 // ge:skill bots
 // ge:test tests/ai_mouse_test.cpp
 #pragma once
@@ -87,6 +87,9 @@ struct MouseWant {
   // The stroke's time over its Fitts time: 1 a turn meant (onto an enemy, an about-face); more
   // for the view's moves while walking and jumping about, which a person makes at ease.
   double pace = 1;
+  // A stroke the other way waits until the one under way is this share of its time done (a
+  // minimum-jerk stroke still runs at 1.3 times its mean speed at 0.7, a quarter at 0.9).
+  double turn_back = 0.7;
 };
 
 struct MouseStats {

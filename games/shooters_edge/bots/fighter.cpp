@@ -79,6 +79,7 @@ constexpr double kEnemyKnown_s = 3;  // an enemy seen or heard this lately is kn
 constexpr double kHotSpot_s = 60;    // two danger spots this lately near an item: no healing there
 constexpr double kMegaHealBonus = 10;  // the mega's worth to a healer over the health it gives
 constexpr double kSwimExit_s = 3;      // a climb out of the water kept this long at most
+constexpr double kSwimWayFlat = 48;    // a swim's way nearer than this across is risen or sunk to
 constexpr double kLanding_s = 2;   // out of the water, its exit node walked onto this long at most
 constexpr double kBaseHeal = 1.4;  // health in the team's base is worth this more to a healer
 constexpr double kLauncherWorth = 240;   // the launcher lacked: worth a long run
@@ -208,6 +209,23 @@ float wrap180(float deg) {
   return deg - 360.f * static_cast<float>(std::floor((deg + 180.f) / 360.f));
 }
 
+// A swim toward (dx, dy, dz) from here pressed under `view` (kept as the command's): forward and
+// side along the view's axes, what they leave of the way pressed straight up.
+void swim_under_view(sh::MoveCmd& cmd, sh::Vec3f view, double dx, double dy, double dz) {
+  cmd.angles.x = view.x;
+  cmd.angles.y = view.y;
+  const sh::ViewAxes ax = sh::angle_vectors({view.x, view.y, 0});
+  const double len = std::sqrt(dx * dx + dy * dy + dz * dz);
+  if (len <= 1) return;
+  const double k = 320 / len, wx = dx * k, wy = dy * k, wz = dz * k;
+  const double fw = wx * ax.forward.x + wy * ax.forward.y + wz * ax.forward.z;
+  const double sd = wx * ax.right.x + wy * ax.right.y + wz * ax.right.z;
+  const double up = wz - fw * ax.forward.z - sd * ax.right.z;
+  cmd.forward = sh::quantize_axis(static_cast<float>(fw));
+  cmd.side = sh::quantize_axis(static_cast<float>(sd));
+  cmd.up = sh::quantize_axis(static_cast<float>(up));
+}
+
 // Swimming (or wading on the swim's way), the view a person's: the way the swim pressed (its view
 // and the keys under it, as one wish in the world) kept, the view turned toward its way at a hand's
 // pace and still within a band of it, and the same wish pressed with forward, side and up under the
@@ -251,6 +269,7 @@ void swim_view(Fighter& f, const server::RulesCommon& s, int me, int msec, bool 
   const float nf = sh::dot(wish, ax.forward), ns = sh::dot(wish, ax.right);
   cmd.angles.x = pitch;
   cmd.angles.y = yaw;
+  f.bot.set_by = "swimview";
   cmd.forward = sh::quantize_axis(nf);
   cmd.side = sh::quantize_axis(ns);
   cmd.up = sh::quantize_axis(wish.z - nf * ax.forward.z - ns * ax.right.z);
@@ -1413,6 +1432,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
             static_cast<float>(-ge::core::libm::atan2(d.z, flat) * (180.0 / ge::core::kPi));
         cmd.forward = 0;
         cmd.side = 0;
+        f.bot.set_by = "button";
         if (f.stats.commands & 1) cmd.buttons |= sh::kButtonAttack;
       }
     }
@@ -1436,10 +1456,18 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     if (f.bot.aiming)
       for (const sh::Contact& k : f.bot.senses.contacts)
         fights |= k.ent == f.bot.target && k.visible;
-    cmd.angles.y = static_cast<float>(ge::core::libm::atan2(dy, dx) * (180.0 / ge::core::kPi));
-    cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(dz, flat) * (180.0 / ge::core::kPi));
-    cmd.forward = sh::quantize_axis(320);
-    cmd.side = 0;
+    if (flat < kSwimWayFlat && f.bot.mouse && f.bot.aim.mouse) {
+      // Nearly straight above or below (rising to the surface, sinking onto a lift): the view
+      // kept where the hand has it, as a person's is, and the way pressed under it. Turned to,
+      // the bearing of a point overhead swings with every unit of drift.
+      swim_under_view(cmd, aim_view, dx, dy, dz);
+    } else {
+      cmd.angles.y = static_cast<float>(ge::core::libm::atan2(dy, dx) * (180.0 / ge::core::kPi));
+      cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(dz, flat) * (180.0 / ge::core::kPi));
+      cmd.forward = sh::quantize_axis(320);
+      cmd.side = 0;
+      f.bot.set_by = "swimway";
+    }
     if (dz > 8) cmd.buttons |= sh::kButtonJump;
     // In an exit cell, the last leg out as the field proved it (shooter/swim.hpp `swim_out`):
     // chest deep and level, so the move's water jump lifts it over the edge.
@@ -1465,24 +1493,14 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
           sh::swim_out(ms, f.bot.pilot.pilot.g->nodes[static_cast<size_t>(exit_node)].origin, msec);
       cmd.angles.x = out.angles.x;
       cmd.angles.y = out.angles.y;
+      f.bot.set_by = "swimexit";
       cmd.buttons = static_cast<uint8_t>((cmd.buttons & ~sh::kButtonJump) | out.buttons);
     } else if (fights && f.features[sh::Feature::swimaim]) {
       // Fighting in the water: the view stays on him, as a person's does, and the way is swum
       // with the keys under it: forward and side along the view's axes, what they leave of the
       // rise pressed straight up.
-      cmd.angles.x = aim_view.x;
-      cmd.angles.y = aim_view.y;
-      const sh::ViewAxes ax = sh::angle_vectors({aim_view.x, aim_view.y, 0});
-      const double len = std::sqrt(dx * dx + dy * dy + dz * dz);
-      if (len > 1) {
-        const double k = 320 / len, wx = dx * k, wy = dy * k, wz = dz * k;
-        const double fw = wx * ax.forward.x + wy * ax.forward.y + wz * ax.forward.z;
-        const double sd = wx * ax.right.x + wy * ax.right.y + wz * ax.right.z;
-        const double up = wz - fw * ax.forward.z - sd * ax.right.z;
-        cmd.forward = sh::quantize_axis(static_cast<float>(fw));
-        cmd.side = sh::quantize_axis(static_cast<float>(sd));
-        cmd.up = sh::quantize_axis(static_cast<float>(up));
-      }
+      swim_under_view(cmd, aim_view, dx, dy, dz);
+      f.bot.set_by = "swimaim";
       f.stats.swim_fights++;
     }
   } else if (!dead && fighter_landing(f, s, me, t, cmd)) {
@@ -1501,6 +1519,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
           std::sqrt((to.x - me_at.x) * (to.x - me_at.x) + (to.y - me_at.y) * (to.y - me_at.y));
       const double up = to.z + 16 - me_at.z;
       cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(up, flat) * (180.0 / ge::core::kPi));
+      f.bot.set_by = "lost";
       cmd.buttons |= sh::kButtonJump;
     } else if ((f.stats.commands / 48) % 3 == 0) {
       cmd.buttons |= sh::kButtonJump;

@@ -254,6 +254,7 @@ void button_poke_cmd(Fighter& f, const server::RulesCommon& s, int me, double t,
   if (flat > 900) return;
   cmd.angles.y = static_cast<float>(ge::core::libm::atan2(d.y, d.x) * (180.0 / ge::core::kPi));
   cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(d.z, flat) * (180.0 / ge::core::kPi));
+  f.bot.set_by = "poke";
   if (flat < 200) {
     cmd.forward = 320;  // into it: a touch presses it
     cmd.side = 0;

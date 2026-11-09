@@ -70,7 +70,11 @@ constexpr double kSoundAhead = 30;
 constexpr double kCalmPace = 1.15;
 constexpr double kCalmPitchTol = 6;  // the calm view's pitch is put right past this, degrees
 constexpr double kSwimBand = 20;     // a swimmer's view may lie this far off the swim, degrees
-constexpr double kGameTol = 3;       // a view the game set is near enough this close, degrees
+// Off the aim (the calm view, a hop's sweeps, a swim), a stroke the other way waits until the one
+// under way is this far done: slowed to a quarter of its mean, the view never snaps round (a hop's
+// side switch reversed it at speed; people's view reverses 0.09 times a second).
+constexpr double kTurnBackAtEase = 0.9;
+constexpr double kGameTol = 3;  // a view the game set is near enough this close, degrees
 
 // The view a step on through the mouse hand toward `want` (yaw, pitch; yaw unwrapped near the
 // view): close enough within `tol_x`, `tol_y` degrees, the target `width` degrees across, a shot
@@ -89,6 +93,7 @@ void hand_step(Bot& b, const double want[2], double dt, double tol_x, double tol
   w.due_s = due;
   w.pace = pace;
   w.lead = lead;
+  if (!b.aiming) w.turn_back = kTurnBackAtEase;
   double x = 0, y = 0;
   b.hand.step(dt, w, x, y);
   out[0] = -x;
@@ -517,6 +522,8 @@ void bot_init(Bot& b, const NavGraph& g, const PilotSettings& set, PilotHands ha
 CmdSource bot_source(Bot& b) { return {&b, bot_next}; }
 
 float bot_hand_override(Bot& b, MoveCmd& cmd, int msec, bool wet) {
+  const char* by = b.set_by;
+  b.set_by = nullptr;
   if (!(b.mouse && b.aim.mouse)) return 0;
   const float dy = wrap(cmd.angles.y - b.yaw), dp = cmd.angles.x - b.pitch;
   if (dy < 0.05f && dy > -0.05f && dp < 0.05f && dp > -0.05f) return 0;  // the hand's own
@@ -526,7 +533,7 @@ float bot_hand_override(Bot& b, MoveCmd& cmd, int msec, bool wet) {
   hand_step(b, want, msec / 1000.0, kGameTol, kGameTol, 4, 0, 1, false, out);
   b.yaw = static_cast<float>(out[0]);
   b.pitch = static_cast<float>(out[1]);
-  b.view_by = "game";
+  b.view_by = by ? by : "game";
   if (wet)
     turn_axes_swim(cmd.forward, cmd.side, cmd.up, set_view, {b.pitch, b.yaw, 0});
   else

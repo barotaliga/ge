@@ -1,14 +1,17 @@
 // THE MOUSE HAND (engine/ai/mouse.hpp): a 90-degree turn is made in a few strokes whose speed
 // rises and falls as a bell (its peak well over its mean), never turning back at the step's rate;
-// a long drag right runs the view down and one left runs it up (the arc); a turn past the pad's
+// a view swept to and fro at a hop's pace never reverses at speed when strokes turn back late; a
+// long drag right runs the view down and one left runs it up (the arc); a turn past the pad's
 // reach lifts the hand and still gets there; with a shot due the hand waits, then lands on the
 // target as the shot comes due; the same seed moves the same bits.
 //
 // ge:summary Tests: the mouse hand's strokes, the arc's tilt, lifts, the shot-timed stroke, bits
-// ge:keywords test mouse hand stroke minimum-jerk bell tilt arc lift shot-timing jitter
+// ge:keywords test mouse hand stroke minimum-jerk bell tilt arc lift shot-timing jitter turn-back
 // ge:skill bots testing
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <string>
 #include <vector>
 
 #include "ai/mouse.hpp"
@@ -66,6 +69,43 @@ TEST(a_turn_is_strokes_with_a_bell_of_speed_and_no_jitter) {
   CHECK_MSG(peak > 1.4 * mean, "the stroke's speed was flat, not a bell");
   CHECK_MSG(reversals == 0, "the view turned back and forth at the step's rate");
   CHECK_MSG(peak < 900, "a 90-degree turn went faster than a hand");
+}
+
+// A view swept from side to side at a hop's pace (60 degrees each way, 0.2 s a sweep: 300
+// degrees a second): a hand that waits until a stroke is 90 % done before the stroke back never
+// reverses the view at speed; one that turns back at 70 % does, dozens of times in 20 s
+// (`MouseWant::turn_back`).
+TEST(a_stroke_turned_back_late_reverses_the_view_less) {
+  const auto reversals = [](double turn_back) {
+    constexpr double period = 0.4, amp = 60;
+    ai::MouseHand hand;
+    hand.tremor_cm = 0;
+    ai::Mouse m(hand, 11);
+    m.reset(0, 0);
+    ai::MouseWant w;
+    w.tol_x = w.tol_y = 2;
+    w.width = 4;
+    w.turn_back = turn_back;
+    int n = 0;
+    double was = 0, rate = 0;
+    for (int k = 0; k < static_cast<int>(20 / kDt); k++) {
+      const double ph = k * kDt / period - static_cast<int>(k * kDt / period);
+      w.x = ph < 0.5 ? -amp / 2 + 2 * amp * ph : 1.5 * amp - 2 * amp * ph;
+      double x = 0, y = 0;
+      m.step(kDt, w, x, y);
+      const double v = (x - was) / kDt;
+      n += k > 0 && v * rate < 0 && std::fabs(v) > 60 && std::fabs(rate) > 60;
+      was = x;
+      rate = v;
+    }
+    return n;
+  };
+  const int early = reversals(0.7), late = reversals(0.9);
+  std::printf("reversals in 20 s: turned back at 70 %%: %d, at 90 %%: %d\n", early, late);
+  CHECK_MSG(late == 0, "a stroke turned back at 90 % reversed the view " + std::to_string(late) +
+                           " times at a hop's pace");
+  CHECK_MSG(early > 10, "the stroke turned back at 70 % reversed the view only " +
+                            std::to_string(early) + " times: the case no longer tells them apart");
 }
 
 TEST(a_drag_right_runs_down_and_a_drag_left_up) {

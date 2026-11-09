@@ -155,6 +155,7 @@ constexpr double kLiftBefore = 60;    // a lift follows a sweep this long or mor
 constexpr double kLiftStillLo = 0.05, kLiftStillHi = 0.35;  // and a still stretch this long, s
 constexpr double kReverseRate = 60;  // a reversal: both turns past this, degrees/s
 constexpr double kTeleport = 3000;   // a turn past this is the server's (a teleport), degrees/s
+constexpr double kHopSpeed = 340;    // a player this fast across is hopping (past a run's 320), u/s
 
 // THE HAND (the view as a mouse turns it), every kHandEvery s for each player alive: rightward and
 // upward turn rates off the recorded angles. A SWEEP is a run of ticks turning one way across
@@ -167,9 +168,30 @@ constexpr double kTeleport = 3000;   // a turn past this is the server's (a tele
 struct HandRead {
   int64_t ticks = 0, sweeps = 0, level = 0, lifts = 0, big = 0, reversals = 0, flat = 0,
           turning = 0;
-  double xy = 0, xx = 0, ratio = 0, peak = 0, secs = 0;
+  double xy = 0, xx = 0, ratio = 0, peak = 0, secs = 0, size = 0;
   double up_right = 0, right_right = 0, up_left = 0, right_left = 0;
 };
+
+void add(HandRead& a, const HandRead& h) {
+  a.ticks += h.ticks;
+  a.sweeps += h.sweeps;
+  a.level += h.level;
+  a.lifts += h.lifts;
+  a.big += h.big;
+  a.reversals += h.reversals;
+  a.flat += h.flat;
+  a.turning += h.turning;
+  a.xy += h.xy;
+  a.xx += h.xx;
+  a.ratio += h.ratio;
+  a.peak += h.peak;
+  a.secs += h.secs;
+  a.size += h.size;
+  a.up_right += h.up_right;
+  a.right_right += h.right_right;
+  a.up_left += h.up_left;
+  a.right_left += h.right_left;
+}
 struct HandState {
   bool live = false;
   float yaw = 0, pitch = 0;
@@ -189,6 +211,7 @@ struct Read {
   std::array<ItemControl, kItemKinds> items{};
   std::map<std::string, int64_t> shots;  // the players' weapon sounds, by the sound's name
   HandRead hand;
+  HandRead hop;  // the hand while hopping alone (past kHopSpeed across)
   // Backpacks: how many fell, how many went before they ran out (taken), the time each lay
   // until taken summed, and those taken within 10 s.
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -200,6 +223,7 @@ void end_sweep(HandState& h, HandRead& r) {
   const double size = std::fabs(h.sx);
   if (h.sign != 0 && size >= kSweepMin) {
     r.sweeps++;
+    r.size += size;
     r.xy += h.sx * h.sy;
     r.xx += h.sx * h.sx;
     r.ratio += std::fabs(h.sy) / size;
@@ -270,6 +294,28 @@ void hand_tick(HandState& h, HandRead& r, float yaw, float pitch, double dt) {
   }
 }
 
+// The hand's measures under `key` (HandRead).
+void hand_metrics(gl::Lab& lab, const std::string& key, const HandRead& hand) {
+  const auto ratio = [](double a, double b) { return b > 0 ? a / b : 0; };
+  const double sw = static_cast<double>(hand.sweeps), mins = hand.secs / 60;
+  lab.metric(key + "sweeps-per-min", ratio(sw, mins), "per-min");
+  lab.metric(key + "big-per-min", ratio(static_cast<double>(hand.big), mins), "per-min");
+  lab.metric(key + "sweep-size", ratio(hand.size, sw), "deg");
+  lab.metric(key + "tilt", ratio(hand.xy, hand.xx), "deg-up-per-deg-right");
+  lab.metric(key + "up-per-right", ratio(hand.up_right, hand.right_right), "deg/deg");
+  lab.metric(key + "up-per-left", ratio(hand.up_left, hand.right_left), "deg/deg");
+  lab.metric(key + "sweep-pitch", ratio(hand.ratio, sw), "deg/deg");
+  lab.metric(key + "sweep-peak", ratio(hand.peak, sw), "peak/mean");
+  lab.metric(key + "sweep-level", ratio(static_cast<double>(hand.level), sw), "share");
+  lab.metric(key + "lifts-per-min", ratio(static_cast<double>(hand.lifts), mins), "per-min");
+  lab.metric(key + "lifts-per-big",
+             ratio(static_cast<double>(hand.lifts), static_cast<double>(hand.big)), "ratio");
+  lab.metric(key + "reversals-per-s", ratio(static_cast<double>(hand.reversals), hand.secs),
+             "per-s");
+  lab.metric(key + "flat-pitch",
+             ratio(static_cast<double>(hand.flat), static_cast<double>(hand.turning)), "share");
+}
+
 // A slot's team: its user info's `team`, else its shirt's colour (a recording without the key).
 std::string team_of(const cl::DemoState& s, int i) {
   const std::string& t = s.teams[static_cast<size_t>(i)];
@@ -305,7 +351,8 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
   std::vector<Spot> spots;
   std::vector<double> pack_since;  // by entity: the backpack lying there since (-1: none)
   double next = 0, t0 = -1;
-  std::vector<HandState> hands(32);
+  std::vector<HandState> hands(32), hops(32);
+  std::vector<sh::Vec3f> hand_was(32);
   double hand_next = 0, hand_at = -1;
   for (;;) {
     const cl::DemoRead rd = cl::next_frame(d, out.error);
@@ -335,13 +382,22 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
       for (int i = 0; i < 32; i++) {
         const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];
         HandState& h = hands[static_cast<size_t>(i)];
+        HandState& hh = hops[static_cast<size_t>(i)];
         const bool live = p.present && !p.dead && !s.names[static_cast<size_t>(i)].empty();
+        const sh::Vec3f was_at = hand_was[static_cast<size_t>(i)];
+        hand_was[static_cast<size_t>(i)] = p.origin;
         if (!live || dt <= 0 || dt > 4 * kHandEvery) {
-          h.live = false;
+          h.live = hh.live = false;
           if (live) hand_tick(h, out.hand, p.angles.y, p.angles.x, kHandEvery);
           continue;
         }
         hand_tick(h, out.hand, p.angles.y, p.angles.x, dt);
+        // Hopping (fast across, as only a hop or a blast moves a player): its own read.
+        const double ax = p.origin.x - was_at.x, ay = p.origin.y - was_at.y;
+        if (std::sqrt(ax * ax + ay * ay) / dt > kHopSpeed)
+          hand_tick(hh, out.hop, p.angles.y, p.angles.x, dt);
+        else
+          hh.live = false;
       }
     }
     if (s.time < next) continue;
@@ -621,7 +677,7 @@ void run(gl::Lab& lab) {
   Player all;
   std::array<ItemControl, kItemKinds> items{};
   std::map<std::string, int64_t> shots;
-  HandRead hand;
+  HandRead hand, hop;
   int used = 0, skipped = 0;
   double seconds = 0;
   int64_t packs = 0, packs_taken = 0, packs_quick = 0;
@@ -648,27 +704,8 @@ void run(gl::Lab& lab) {
     packs_taken += r.packs_taken;
     packs_quick += r.packs_quick;
     pack_wait += r.pack_wait;
-    {
-      const HandRead& h = r.hand;
-      HandRead& a = hand;
-      a.ticks += h.ticks;
-      a.sweeps += h.sweeps;
-      a.level += h.level;
-      a.lifts += h.lifts;
-      a.big += h.big;
-      a.reversals += h.reversals;
-      a.flat += h.flat;
-      a.turning += h.turning;
-      a.xy += h.xy;
-      a.xx += h.xx;
-      a.ratio += h.ratio;
-      a.peak += h.peak;
-      a.secs += h.secs;
-      a.up_right += h.up_right;
-      a.right_right += h.right_right;
-      a.up_left += h.up_left;
-      a.right_left += h.right_left;
-    }
+    add(hand, r.hand);
+    add(hop, r.hop);
     Player sum;
     for (const Player& p : r.players) {
       sum.alive += p.alive;
@@ -808,27 +845,11 @@ void run(gl::Lab& lab) {
     lab.metric("people.item-wait." + key,
                ic.taken > 0 ? ic.waited / static_cast<double>(ic.taken) : 0, "s");
   }
-  // The hand: how the view turns, off every live player's angles at 40 Hz (HandRead).
-  {
-    const auto ratio = [](double a, double b) { return b > 0 ? a / b : 0; };
-    const double sw = static_cast<double>(hand.sweeps), mins = hand.secs / 60;
-    lab.metric("people.hand.sweeps-per-min", ratio(sw, mins), "per-min");
-    lab.metric("people.hand.big-per-min", ratio(static_cast<double>(hand.big), mins), "per-min");
-    lab.metric("people.hand.tilt", ratio(hand.xy, hand.xx), "deg-up-per-deg-right");
-    lab.metric("people.hand.up-per-right", ratio(hand.up_right, hand.right_right), "deg/deg");
-    lab.metric("people.hand.up-per-left", ratio(hand.up_left, hand.right_left), "deg/deg");
-    lab.metric("people.hand.sweep-pitch", ratio(hand.ratio, sw), "deg/deg");
-    lab.metric("people.hand.sweep-peak", ratio(hand.peak, sw), "peak/mean");
-    lab.metric("people.hand.sweep-level", ratio(static_cast<double>(hand.level), sw), "share");
-    lab.metric("people.hand.lifts-per-min", ratio(static_cast<double>(hand.lifts), mins),
-               "per-min");
-    lab.metric("people.hand.lifts-per-big",
-               ratio(static_cast<double>(hand.lifts), static_cast<double>(hand.big)), "ratio");
-    lab.metric("people.hand.reversals-per-s", ratio(static_cast<double>(hand.reversals), hand.secs),
-               "per-s");
-    lab.metric("people.hand.flat-pitch",
-               ratio(static_cast<double>(hand.flat), static_cast<double>(hand.turning)), "share");
-  }
+  // The hand: how the view turns, off every live player's angles at 40 Hz (HandRead); `hop` the
+  // same while hopping alone, and the share of the hand's time it is.
+  hand_metrics(lab, "people.hand.", hand);
+  hand_metrics(lab, "people.hop.", hop);
+  lab.metric("people.hop.share", hand.secs > 0 ? hop.secs / hand.secs : 0, "share");
   if (used == 0)
     lab.fail("se-people: no recording of " + m.name + " read",
              "next: pass --mapname=<the recordings' map> with --basedir, or --dir of that map's");
