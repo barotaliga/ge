@@ -383,9 +383,9 @@ fn ggx(n: vec3f, l: vec3f, v: vec3f, rough: f32, spread: f32) -> f32 {
   return dist * vis * f * nl;
 }
 
-// THE TELEPORT'S MAGIC LIQUID (v2): a black ink marbled with grey, flowing UP the panel; silver
-// threads climbing it in lanes; motes rising and twinkling; a pale shimmer where it is seen edge
-// on; the whole breathing slowly. Its own light, in a white face's units (hash12 seeds it).
+// THE TELEPORT'S MAGIC LIQUID (v2): a black ink marbled with grey, flowing UP the panel; motes
+// rising and twinkling; a pale shimmer where it is seen edge on; the whole breathing slowly. No
+// bright lanes run up it: thin vertical lines read as white seams scratched on the panel. Its own light, in a white face's units (hash12 seeds it).
 fn t_noise(p: vec2f) -> f32 {
   let i = floor(p);
   let f = fract(p);
@@ -420,18 +420,6 @@ fn teleport(world: vec3f, n: vec3f, eye_dir: vec3f, t: f32) -> vec3f {
   let fine = pow(max(1.0 - abs(2.0 * t_fbm(p * 6.0 + 4.0 * w2 + 2.0 * up) - 1.0), 0.0), 14.0);
   var c = vec3f(0.003, 0.003, 0.005) + vec3f(0.025, 0.025, 0.03) * smoothstep(0.4, 0.8, w2.y);
   c += vec3f(0.09, 0.09, 0.1) * smoke + vec3f(0.3, 0.31, 0.36) * fine * smoke;
-  // The threads: a liquid that runs UP the panel, a few lanes of it, each swaying and lit in
-  // drops that climb it, with a halo.
-  let lane_at = p.x * 5.0 + 0.6 * sin(1.3 * p.y + 0.7 * t) + 1.2 * (w1.x - 0.5);
-  let lane_id = floor(lane_at);
-  let live = step(0.55, hash12(vec2f(lane_id, 7.0)));
-  let lane = abs(fract(lane_at) - 0.5);
-  let core = 1.0 - smoothstep(0.0, 0.025, lane);
-  let halo = exp(-lane * 22.0);
-  let speed = 1.2 + 1.4 * hash12(vec2f(lane_id, 3.0));
-  let drops = smoothstep(0.5, 0.95, t_noise(vec2f(lane_id * 3.1, p.y * 1.6 - speed * t)));
-  let flow = live * (0.25 + 1.6 * drops);
-  c += vec3f(1.1, 1.12, 1.2) * core * flow + vec3f(0.14, 0.15, 0.19) * halo * flow;
   // The motes: sparks in a few cells, rising and swaying, twinkling, each with a glow.
   let cp = vec2f(p.x * 6.0 + 0.3 * sin(p.y * 2.0 + t), p.y * 6.0 - 1.8 * t);
   let ci = floor(cp);
