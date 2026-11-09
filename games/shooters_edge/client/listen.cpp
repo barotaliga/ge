@@ -448,6 +448,7 @@ sv::CampaignOptions campaign_options(Listen& l, const ListenOptions& opt) {
   co.server.loop.move.speedjump = kListenSpeedJump;
   co.load = campaign_map;
   co.load_ctx = &l;
+  if (opt.files != nullptr) co.server.localized = localized_text(*opt.files);
   co.registered = opt.registered;
   co.settings = opt.arsenal;
   co.settings.insert(co.settings.end(), opt.console.begin(), opt.console.end());

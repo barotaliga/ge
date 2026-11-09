@@ -20,6 +20,7 @@ loose files, every name answered by the source that wins it. Roadmap row M18a's 
 | `vfs/zstd.hpp/.cpp` | Zstandard: `ZstdLevel` (the chosen setting: level 19, its own 8 MiB window; the long window measured no gain), `zstd_pack`, `zstd_unpack` (frame after frame, to a limit), the stream (`zstd_begin`, `zstd_write`, `zstd_flush`, `zstd_end`) a recorder packs with, `zstd_pack_memory` |
 | `vfs/lzma.hpp`, `lzma.cpp`, `lzma_write.cpp` | xz and 7z: `xz_unpack`, `read_7z`, `seven_unpack`, `zip_lzma_unpack`; the writers `xz_pack` and `write_7z` (tests, labs) in their own file so a reader links no encoder |
 | `vfs/tar.hpp/.cpp` | Tar: `is_tar` (the checksum), `read_tar` (regular files; GNU and pax long names), `write_tar` (fixtures) |
+| `vfs/browse.hpp/.cpp` | The folder browser's logic: `named_as` (a game's extensions, plain or under the packings `unpack_one` peels; an archive with no game name under it is not shown), `list_folder` (`..`, folders by name, files newest first, hidden left out), `user_places` (home, Downloads, Desktop, Documents, the roots), `FolderBrowser` (the selection and a frame's presses); no pixels: a game draws its own page (Shooter's Edge's DEMOS) |
 | `vfs/palette.hpp/.cpp` | The palette (768 bytes) and the colour map (64 levels of 256 indices, an optional trailing byte): `read_palette`, `read_colormap`, their writers |
 
 ## Rules
