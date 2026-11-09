@@ -201,6 +201,8 @@ const BeamKnob* beam_knobs() {
       {"glow_m", &BeamLook::glow_m, 0.01f, 3},
       {"core_cd", &BeamLook::core_cd, 0, 1e7f},
       {"glow_cd", &BeamLook::glow_cd, 0, 1e6f},
+      {"core_keys", &BeamLook::core_keys, 0, 1000},
+      {"glow_keys", &BeamLook::glow_keys, 0, 100},
       {"flash", &BeamLook::flash, 0, 4},
       {"flash_s", &BeamLook::flash_s, 0.001f, 0.2f},
       {"flicker", &BeamLook::flicker, 0, 1},

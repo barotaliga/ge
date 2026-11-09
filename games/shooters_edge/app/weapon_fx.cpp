@@ -154,45 +154,42 @@ gr::MuzzleLook make_exhaust() {
   return l;
 }
 
-// The light any style throws on the room: a cold glow along it and where it lands.
-void cold_light(gr::BeamLook& l) {
-  l.light_rgb[0] = 0.55f, l.light_rgb[1] = 0.65f, l.light_rgb[2] = 1.0f;
-  l.light_cd = 900;
-  l.hit_cd = 700;
-  l.root_cd = 150;
-}
-
-gr::BeamLook make_forked() {
+// The bolt: the size of the classic's (its model a zigzag some 30 cm across round a hair-thin
+// line), drawn as a modern arc. A core 1.5 cm across in a sheath of 9 cm, kinked every 12 cm and
+// wandering about 7 cm off its line (pulled back fast, so it never strays wider than the classic's
+// zigzag), struck afresh 30 times a second with short forks that crackle off it. Its brightness
+// keyed to the eye: the core several times the white the eye is set for (white-hot, a little
+// bloom round it), the sheath under it, so by day and at night it reads the same.
+gr::BeamLook make_bolt() {
   gr::BeamLook l;
   gr::beam_look("bolt", l);
-  l.step_m = 0.3f;  // kinked every 30 cm, wandering far off its line over a few metres
+  l.step_m = 0.12f;
   l.wander = 0.55f;
-  l.pull = 0.18f;
-  l.fork_chance = 0.07f;
-  l.fork_m = 0.5f;
-  l.strike_hz = 20;
-  l.core_m = 0.06f;
-  l.glow_m = 0.55f;
-  l.core_cd = 9e4f;
-  l.glow_cd = 7000;  // the ionised air's blue round it, bright enough to read by day
+  l.pull = 0.4f;
+  l.fork_chance = 0.035f;
+  l.fork_m = 0.22f;
+  l.strike_hz = 30;
+  l.core_m = 0.015f;
+  l.glow_m = 0.09f;
+  l.core_keys = 6;
+  l.glow_keys = 0.35f;
   l.core_rgb[0] = 0.86f, l.core_rgb[1] = 0.9f, l.core_rgb[2] = 1.0f;
-  l.glow_rgb[0] = 0.38f, l.glow_rgb[1] = 0.5f, l.glow_rgb[2] = 1.0f;
+  l.glow_rgb[0] = 0.35f, l.glow_rgb[1] = 0.5f, l.glow_rgb[2] = 1.0f;
   l.flash = 0.8f;
-  l.flicker = 0.5f;
-  l.shimmer = 0.35f;
+  l.flicker = 0.4f;
+  l.shimmer = 0.3f;
   l.attack_s = 0.02f;
   l.release_s = 0.06f;
-  cold_light(l);
+  // Its light: what bolt_lights turns into the world's lights (kBoltFullCd a level of 1).
+  l.light_rgb[0] = 0.62f, l.light_rgb[1] = 0.72f, l.light_rgb[2] = 1.0f;
+  l.light_every_m = 3;
+  l.light_cd = 2400;  // shared along it: 1200 cd a light down a 6 m beam
+  l.hit_cd = 3000;
+  l.root_cd = 2000;
   return l;
 }
 
-// One of the engine's presets as it makes it, its light turned down.
-gr::BeamLook make_preset(std::string_view name) {
-  gr::BeamLook l;
-  gr::beam_look(name, l);
-  cold_light(l);
-  return l;
-}
+constexpr double kBoltFullCd = 2500;  // a bolt light's candela at a level of 1
 
 constexpr float kWarmGrey[3] = {1.0f, 0.95f, 0.88f};
 constexpr float kPaleGrey[3] = {0.96f, 0.96f, 0.98f};
@@ -211,11 +208,9 @@ const gr::MuzzleLook& exhaust_look() {
   static const gr::MuzzleLook l = make_exhaust();
   return l;
 }
-const gr::BeamLook& bolt_look(int style) {
-  static const gr::BeamLook kLooks[] = {make_forked(), make_preset(kBoltStyles[1]),
-                                        make_preset(kBoltStyles[2]), make_preset(kBoltStyles[3])};
-  const int n = static_cast<int>(std::size(kLooks));
-  return kLooks[(style >= 1 && style <= n ? style : kDefaultBoltStyle) - 1];
+const gr::BeamLook& bolt_look() {
+  static const gr::BeamLook l = make_bolt();
+  return l;
 }
 
 void blast(const double p[3], const double* normal, uint32_t seed, double now_s,
@@ -561,13 +556,18 @@ bool spark_light(const double at[3], double age, Light* out) {
   return true;
 }
 
-Light dynamic_light(const gr::LocalLight& l) {
-  Light d;
-  for (int k = 0; k < 3; ++k) d.pos[k] = l.position[k];
-  d.radius = l.range_m;
-  const double level = std::min(static_cast<double>(l.candela) / 2500.0, 1.2);
-  for (int k = 0; k < 3; ++k) d.colour[k] = level * l.colour[k];
-  return d;
+int bolt_lights(const gr::BeamShot& shot, double t_s, Light* out) {
+  gr::LocalLight ll[gr::kBeamLights];
+  const int n = gr::beam_lights(bolt_look(), shot, t_s, ll);
+  for (int i = 0; i < n; ++i) {
+    Light& d = out[i];
+    for (int k = 0; k < 3; ++k) d.pos[k] = ll[i].position[k];
+    d.radius = kBoltReachM;
+    const double level = std::min(static_cast<double>(ll[i].candela) / kBoltFullCd, 1.5);
+    for (int k = 0; k < 3; ++k) d.colour[k] = level * ll[i].colour[k];
+    d.boost = kBoltBoost;
+  }
+  return n;
 }
 
 }  // namespace shooters_edge::effects

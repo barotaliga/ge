@@ -2293,13 +2293,20 @@ room round it and burning where it lands (`engine/render/beam.hpp`, `beams.hpp`,
   the glow along the beam (`shimmer`).
 - **The look is a core and a sheath in physical units.** The core (`core_m`, `core_cd`, cd/m²)
   is a Gaussian at least a pixel and a half wide (its light kept as it widens, so a far beam is
-  a fainter line, never a gap) and at most a hundredth of the screen's height (its brightness
-  kept, so the root by the eye is a thick line, not a white blot), and is whitened as it
-  brightens; the sheath (`glow_m`,
-  `glow_cd`) is the ionised air's glow round it. Both are emissive at the frame's pre-exposure,
-  added over the lit picture, depth-tested and softened against the depth behind so the beam
+  a fainter line, never a gap) and at most a hundred and fiftieth of the screen's height (its
+  brightness kept, so the root by the eye is a line, not a white blot), and is whitened as it
+  brightens; the sheath (`glow_m`, `glow_cd`, at most a fiftieth of the screen's height across)
+  is the ionised air's glow round it. Both are emissive at the frame's pre-exposure, added over
+  the lit picture, depth-tested and softened against the depth behind so the beam
   sinks into the wall it hits. A segment's ribbon runs a ramp past each end and the ramps of two
   segments cross-fade, so the glow is even along a bent channel with no bead at a joint.
+- **Or keyed to the eye.** A fixed luminance that reads right by day is hundreds of times the
+  white of a dark room at night, where the eye has opened to the dark: the core and the sheath
+  swell into a blinding blot that fills the screen, the bloom spreading it further. A look's
+  `core_keys` and `glow_keys` set them instead as the eye sees them, in multiples of the white it
+  is adapted to (the shader divides the frame's `exposure()` out), so the beam is as bright on
+  the screen by day as at night, the way the eye sees a bright light against whatever it is set
+  for. A game's weapon uses this (Shooter's Edge's bolt: a core of 6 whites, a sheath of 0.35).
 - **It lights the world through the local lights.** `beam_lights` hands render/lights a row of
   steady point lights along the beam (one each `light_every_m`, the look's `light_cd` shared
   among them, each as soft as their spacing), one at its root by the source (`root_cd`: the

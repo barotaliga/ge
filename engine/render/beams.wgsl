@@ -6,7 +6,7 @@
 // - A RIBBON is the segment's own length and a ramp of `ramp_m` past each end; the ramps of two
 //   segments meeting at a joint cross-fade (each falls as the other rises), so a channel's glow is
 //   even along its length with no bead at a joint and no notch on the outside of a bend.
-// - THE SHEATH's width is metric but held to a thirtieth of the screen's height at most, so the
+// - THE SHEATH's width is metric but held to a fiftieth of the screen's height at most, so the
 //   beam's root beside the eye glows round the core instead of fogging the view.
 // - THE CORE is a Gaussian `core_m` across, at least about a pixel and a half wide (its light
 //   kept as it widens: a far beam is a fainter line, never a gap), whitened toward its middle so
@@ -16,15 +16,19 @@
 //   landing on a wall sinks into it instead of being cut by it.
 // - A BURN's mask comes from the atlas the game handed the pass; its soot darkens what is there
 //   (alpha), its ember adds a glow from white-yellow through orange to a dull red as it cools,
-//   brightest in the mark's heart and in its cracks (the mask's relief).
-// All light in cd/m^2 at the frame's pre-exposure, as every emissive surface is.
+//   brightest in the mark's heart and in its cracks (the mask's relief), and never brighter on the
+//   screen than kEmberKeys times the white the eye is adapted to.
+// All light in cd/m^2 at the frame's pre-exposure, as every emissive surface is; or KEYED (a
+// look's `core_keys`, `glow_keys`): that many times the white the eye is adapted to (the frame's
+// `exposure()` divided out), so the beam is as bright on the screen by day as at night.
 #include "render/wgsl/frame.wgsl"
 
 struct BeamLookGpu {
   core: vec4f,   // rgb; the core's luminance at this frame's level (cd/m^2)
   glow: vec4f,   // rgb; the sheath's
   shape: vec4f,  // core width, sheath width (m), the shimmer, the shot's seed (0..1)
-  more: vec4f,   // the joints' ramp (m), the softening against the depth (m), 0, 0
+  more: vec4f,   // the joints' ramp (m), the softening against the depth (m); the core's and the
+                 // sheath's brightness as the eye sees it (keys; 0: core.w and glow.w)
 }
 
 struct BeamParams {
@@ -51,6 +55,8 @@ struct BurnVert {
 @group(1) @binding(2) var<storage, read> burns: array<BurnVert>;
 @group(1) @binding(3) var scene_depth: texture_depth_2d;
 @group(1) @binding(4) var burn_atlas: texture_2d<f32>;
+
+const kEmberKeys = 0.7;
 
 const kBeamCorners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0),
                                      vec2f(-1.0, -1.0), vec2f(1.0, 1.0), vec2f(-1.0, 1.0));
@@ -88,9 +94,9 @@ fn beam_vs(@builtin(vertex_index) vid: u32, @builtin(instance_index) iid: u32) -
   let clip1 = frame.view_proj * vec4f(base + across, 1.0);
   let px = length((clip1.xy / clip1.w - clip0.xy / clip0.w) * frame.size.xy * 0.5);
   let m_px = 1.0 / max(px, 1e-4);
-  // The sheath at its width, but never wider on the screen than a thirtieth of its height (a
+  // The sheath at its width, but never wider on the screen than a fiftieth of its height (a
   // beam's root by the eye would otherwise fog the view) nor narrower than three pixels.
-  let hw = max(min(look.shape.y * 0.5 * width, 0.033 * frame.size.y * m_px), 3.0 * m_px);
+  let hw = max(min(look.shape.y * 0.5 * width, 0.02 * frame.size.y * m_px), 3.0 * m_px);
   let ramp = look.more.x;
   let x = select(len + ramp, -ramp, c.x < 0.0);
   let corner = s.a.xyz + along * x + across * (c.y * hw);
@@ -133,10 +139,10 @@ fn beam_fs(in: BeamOut) -> BeamFrag {
   let y = abs(in.ribbon.y);
   let hw = in.ribbon.z;
   // The core: at least a pixel and a half across, its light kept; and never wider on the screen
-  // than a hundredth of its height, its brightness kept, so the root by the eye reads as a thick
-  // line and not a white blot.
+  // than a hundred and fiftieth of its height, its brightness kept, so the root by the eye reads
+  // as a line and not a white blot.
   let core_hw = look.shape.x * 0.5 * width;
-  let core_eff = clamp(core_hw, 0.75 * in.seg.z, max(0.01 * frame.size.y, 0.75) * in.seg.z);
+  let core_eff = clamp(core_hw, 0.75 * in.seg.z, max(0.0067 * frame.size.y, 0.75) * in.seg.z);
   let core_keep = min(core_hw / core_eff, 1.0);
   let cy = y / core_eff;
   let core = exp(-2.0 * cy * cy) * core_keep;
@@ -152,8 +158,13 @@ fn beam_fs(in: BeamOut) -> BeamFrag {
   let glow = s.c.x * joint * max(ripple, 0.0);
   // The core whitened as it brightens.
   let core_rgb = mix(look.core.rgb, vec3f(1.0), smoothstep(0.25, 0.9, core));
-  var c = core_rgb * (core * look.core.w) + look.glow.rgb * (sheath * look.glow.w);
-  c *= glow * frame.world.y / kSunLux;
+  // Each in cd/m^2 at the pre-exposure, or keyed: so many whites as the eye now sees white.
+  let absolute = frame.world.y / kSunLux;
+  let keyed = 1.0 / max(exposure(), 1e-20);
+  let core_l = select(look.core.w * absolute, look.more.z * keyed, look.more.z > 0.0);
+  let glow_l = select(look.glow.w * absolute, look.more.w * keyed, look.more.w > 0.0);
+  var c = core_rgb * (core * core_l) + look.glow.rgb * (sheath * glow_l);
+  c *= glow;
   // Softened where it nears what is behind it.
   let d = textureLoad(scene_depth, vec2i(in.position.xy), 0);
   let behind = bp.more.x / max(d, 1e-7);
@@ -212,7 +223,10 @@ fn burn_fs(in: BurnOut) -> @location(0) vec4f {
   let crack = 0.6 + 0.8 * clamp(1.0 - m.g, 0.0, 1.0);
   let ember = in.look.z * heart * crack;
   let heat = clamp(in.look.z / max(bp.more.y, 1e-3), 0.0, 1.0);
-  let glow = burn_ember(heat) * ember * frame.world.y / kSunLux;
+  // Never brighter on the screen than kEmberKeys whites: by day an ember is as hot as it is, but
+  // in a dark room at night the eye, opened to the dark, would see it swell into a blinding ball.
+  let ember_l = min(ember * frame.world.y / kSunLux, kEmberKeys / max(exposure(), 1e-20));
+  let glow = burn_ember(heat) * ember_l;
   if (in.look.w <= 0.0) {  // a scorch: its soot by its cover
     return vec4f(min(glow, vec3f(60000.0)), 1.0 - in.look.y * cover);
   }

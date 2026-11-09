@@ -393,7 +393,6 @@ FxSwitches fx_switches(const look::Picture& picture) {
   s.warps = picture.ce.warps;
   s.flares = picture.ce.flares;
   s.bubbles = picture.ce.bubbles;
-  s.bolt = &fx::bolt_look(static_cast<int>(picture.beam_style));
   return s;
 }
 
@@ -1145,7 +1144,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   for (HeldBeam& b : s.beams)
     if (b.shot.end_s < 0 && t - b.seen > kBeamHoldS) b.shot.end_s = b.seen + kBeamHoldS;
   std::erase_if(s.beams, [&](const HeldBeam& b) {
-    const double release = s.on.beams && b.look != nullptr ? b.look->release_s : 0;
+    const double release = s.on.beams ? fx::bolt_look().release_s : 0;
     return b.shot.end_s >= 0 && t > b.shot.end_s + release;
   });
   ge::core::Rng roll = ge::core::make_rng(s.seed++);  // the classic bolt's segments' roll
@@ -1154,15 +1153,15 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
     if (s.on.beams) {
       // Its burns where it lands, a few to fill a sweep's gap.
       ge::render::BeamBurn burn;
-      for (int i = 0; s.on.decals && b.look != nullptr && i < 4 &&
-                      ge::render::beam_burns(*b.look, b.shot, t, b.trail, burn);
+      for (int i = 0; s.on.decals && i < 4 &&
+                      ge::render::beam_burns(fx::bolt_look(), b.shot, t, b.trail, burn);
            ++i)
         mark(s, ge::detail::DecalKind::scorch, burn.at, burn.normal, burn.size_m, burn.spin_rad,
              burn.variant, burn.born_s);
       out.beams.push_back(b);
-      ge::render::LocalLight ll[ge::render::kBeamLights];
-      const int n = ge::render::beam_lights(b.look ? *b.look : fx::bolt_look(), b.shot, t, ll);
-      for (int i = 0; i < n; ++i) out.lights.push_back(fx::dynamic_light(ll[i]));
+      fx::Light ll[ge::render::kBeamLights];
+      const int n = fx::bolt_lights(b.shot, t, ll);
+      out.lights.insert(out.lights.end(), ll, ll + n);
       continue;
     }
     // The classic bolt: its model every kBoltSegment units from the root to the end, each turned

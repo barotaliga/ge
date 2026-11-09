@@ -115,7 +115,8 @@ bool explosion_light(const double at[3], double age, Light* out);
 // THE DYNAMIC LIGHTS ON A MODEL: the light the frame's dynamic lights add at `w` (engine metres)
 // in the floor probe's units (a luxel's byte over 255, what `light_under` reads), the classic's
 // rule: each light's level falls in a straight line from its middle to nothing at its radius,
-// and a light's level of 1 is a luxel of 128 (`DynamicLight::colour`), times `strength`.
+// and a light's level of 1 is a luxel of 128 (`DynamicLight::colour`), times `strength` and
+// its own `boost`.
 // `toward` takes the unit way to where the added light comes from, each light weighted by its
 // share (all 0 when none reaches).
 void dynamic_light_at(std::span<const Light> lights, const double w[3], double strength,

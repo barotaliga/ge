@@ -21,8 +21,12 @@
 //   adds a shimmer along its length (`shimmer`) on top: what moves inside one strike.
 // - THE LOOK: a white-hot core `core_m` wide in `core_rgb`, a glowing sheath `glow_m` wide in
 //   `glow_rgb` (the ionised air round it), both in cd/m^2 at full level (`core_cd`, `glow_cd`) so
-//   the frame's exposure takes them as it takes the sun and the lamps. The core is whitened as it
-//   brightens, so it burns white in the middle and holds its colour at the rim.
+//   the frame's exposure takes them as it takes the sun and the lamps; or, with `core_keys` and
+//   `glow_keys`, as bright as the eye sees them whatever the light (in multiples of the white it
+//   is adapted to), so a beam that reads right by day does not swell into a blinding blot in a
+//   dark room at night, where the eye has opened to the dark and a fixed luminance would be
+//   hundreds of times its white. The core is whitened as it brightens, so it burns white in the
+//   middle and holds its colour at the rim.
 // - THE WORLD LIT (`beam_lights`): one light at the beam's root by its source (`root_cd`: what
 //   lights the gun that fires it), a row along it (one each `light_every_m`, at most
 //   kBeamLights - 2, its `light_cd` shared among them, each as soft as the spacing), and one at
@@ -42,7 +46,8 @@
 // ge:summary Lightning beams: the channel, re-striking, flicker, the lights, scorches and embers
 // ge:keywords render beam lightning arc bolt electric plasma channel strike flicker shimmer
 // ge:keywords filament braid fork branch core glow sheath scorch burn ember beam_level
-// ge:keywords build_beam beam_lights beam_burns beam_knobs thunderbolt weapon-effect
+// ge:keywords build_beam beam_lights beam_burns beam_knobs thunderbolt weapon-effect core_keys
+// ge:keywords glow_keys keyed-brightness exposure night
 // ge:skill render
 // ge:test tests/render_beam_test.cpp
 #pragma once
@@ -73,6 +78,10 @@ struct BeamLook {
   float glow_m = 0.35f;   // the glowing sheath's width
   float core_cd = 6e4f;   // the core's luminance at full level, cd/m^2
   float glow_cd = 120;    // the sheath's at its axis, cd/m^2
+  // As the eye sees them, in multiples of the white it is adapted to (1: a white wall in the light
+  // the eye is set for), whatever the light; 0: core_cd and glow_cd as they are.
+  float core_keys = 0;
+  float glow_keys = 0;
   float core_rgb[3] = {0.85f, 0.9f, 1.0f};
   float glow_rgb[3] = {0.45f, 0.55f, 1.0f};
   float flash = 0.6f;       // a strike's first moments brighter by this share
@@ -111,7 +120,7 @@ struct BeamKnob {
   float BeamLook::*field;
   float lo, hi;
 };
-inline constexpr int kBeamKnobs = 28;
+inline constexpr int kBeamKnobs = 30;
 const BeamKnob* beam_knobs();
 // Set knob `name` (clamped to its ends); false for an unknown name.
 bool set_beam_knob(BeamLook& look, std::string_view name, float value);

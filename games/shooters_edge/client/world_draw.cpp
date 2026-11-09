@@ -622,7 +622,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     for (const HeldBeam& b : fx.beams) {
       if (f.beam_draws.size() >= f.beam_shapes.size()) break;
       gr::BeamShape& shape = f.beam_shapes[f.beam_draws.size()];
-      const gr::BeamLook* look = b.look != nullptr ? b.look : &effects::bolt_look();
+      const gr::BeamLook* look = &effects::bolt_look();
       gr::build_beam(*look, b.shot, view.time_s, shape);
       if (shape.count > 0) f.beam_draws.push_back({&shape, look, b.shot.seed});
     }
