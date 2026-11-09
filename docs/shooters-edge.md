@@ -918,6 +918,22 @@ armour, or both, once the sequel's profile lands. The design makes that possible
   arsenal). The exact classic campaign stays exact. Our campaign variant plays the classic maps
   with any arsenal.
 
+### The re-release: words by key
+
+The full game's later release ships a program and maps that print text KEYS (a `$`, then
+lower-case letters, digits and underscores: `$map_skill_normal`, `$qc_got_item`) instead of
+words, with values passed as further arguments to the print builtins. Its words are a UTF-8 text
+file of `key = "text"` rows (`localization/loc_english.txt`) in the release's own archive beside
+the game folder (a zip with its own extension), where `{}` or `{N}` mark where argument N goes.
+The client reads the file once (`client/files.hpp`'s `localized_text`; a loose copy on the search
+path wins) and hands it to the server (`QcServerOptions::localized`), which puts in the words
+(`plugins/progs/localized.hpp`) in bprint, sprint, centerprint, dprint and WriteString and in the
+level's name, so no client sees a key. The program's own builtins (the prints that take a key and
+arguments, the finale's end, a local sound, debug drawing, the player's weapon-switch flags, path
+walking, bots' moves) are installed by number in its first form and bound by name in its later one
+(`server/catalogue.hpp` § The re-release's program); all but the prints do nothing and return 0,
+the classic behaviour each falls back to. Its achievement message (52, one string) is stepped over.
+
 ### Single player and multiplayer as variants of our mod
 
 The baseline mod (M18d) becomes two variants built from one source tree, and the classic game's

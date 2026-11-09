@@ -83,7 +83,8 @@ void fill_world(const QcServer& s, RulesWorld& w, bool full) {
     {
       const char* title = pg::vm_string(
           s.q.vm, static_cast<int32_t>(*pg::entity_field(s.q.vm, 0, s.q.layout->f.message)));
-      if (title != nullptr) w.map_title = title;
+      // A release that names its levels by key (`$map_...`) has them in its words too.
+      if (title != nullptr) w.map_title = pg::resolve_key(s.opt.localized.get(), title);
     }
     w.entities.assign(static_cast<size_t>(s.sv.set.max_edicts), WorldEntity{});
     for (WorldClient& c : w.clients) c = WorldClient{};

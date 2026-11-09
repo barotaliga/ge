@@ -42,6 +42,9 @@ void read_campaign(CampaignView& v, std::span<const uint8_t> bytes, double time)
         v.text = string();
         v.text_at = time;
         break;
+      case svc::achievement:  // a store's achievement: nothing here keeps it
+        string();
+        break;
       case svc::sellscreen:
         v.sellscreen = true;
         break;
