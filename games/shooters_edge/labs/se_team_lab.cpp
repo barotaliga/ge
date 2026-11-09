@@ -39,12 +39,14 @@
 #include "lab/lab.hpp"
 #include "lab/raster.hpp"
 #include "shooter/nav.hpp"
+#include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/net/classic_team.hpp"
+#include "shooters_edge/server/rules_runner.hpp"
 
 namespace {
 
@@ -193,6 +195,59 @@ void run(gl::Lab& lab) {
   }
   const std::string save = lab.arg("save");
   o.packed = save.ends_with("z");  // a `.mvdz`: recorded packed as it goes
+  // THE TRACE (`--trace=<file>`): a TSV row per bot every `--trace-every` commands: where it is,
+  // how fast, what it means to do and what its pilot did and why. Read by the bot plan's scripts.
+  std::ofstream trace;
+  if (!lab.arg("trace").empty()) {
+    trace.open(lab.arg("trace"));
+    if (!trace) {
+      lab.fail("se-team: cannot write --trace=" + lab.arg("trace"),
+               "next: pass a path in a folder that exists");
+      return;
+    }
+    trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
+             "\tscript_step\tbecause\n";
+    const int every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
+    static struct Tracer {
+      std::ofstream* out = nullptr;
+      int every = 4;
+      std::array<int, 64> count{};
+    } tracer;
+    tracer = Tracer{&trace, every, {}};
+    o.on_command_ctx = &tracer;
+    o.on_command = [](void* ctx, int k, const shooters_edge::bots::Fighter& f,
+                      const shooters_edge::server::RulesCommon& w, const sh::MoveCmd&) {
+      Tracer& tr = *static_cast<Tracer*>(ctx);
+      if (k < 0 || k >= 64 || (tr.count[static_cast<size_t>(k)]++ % tr.every) != 0) return;
+      std::ofstream& out = *tr.out;
+      // The fighter's own entity is its slot's (not the client's player number).
+      const auto& e = w.world.entities[static_cast<size_t>(f.slot) + 1];
+      const sh::Pilot& p = f.bot.pilot.pilot;
+      const char* link = "-";
+      if (p.g != nullptr && p.k + 1 < p.route.size()) {
+        const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
+        for (int32_t q = 0; q < a.links; q++) {
+          const sh::NavLink& l =
+              p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
+          if (l.to == p.route[p.k + 1]) {
+            link = sh::nav_kind_name(l.kind);
+            break;
+          }
+        }
+      }
+      const char* goal =
+          f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
+              ? shooters_edge::bots::item_call(f.items[static_cast<size_t>(f.goal_item)])
+              : "-";
+      const float sp = std::sqrt(e.velocity.x * e.velocity.x + e.velocity.y * e.velocity.y);
+      out << to_fixed(w.sv.time, 2) << '\t' << k << '\t' << to_fixed(e.origin.x, 0) << '\t'
+          << to_fixed(e.origin.y, 0) << '\t' << to_fixed(e.origin.z - 24, 0) << '\t'
+          << to_fixed(sp, 0) << '\t' << to_fixed(e.health, 0) << '\t'
+          << shooters_edge::bots::fight_mode_name(f.mode) << '\t' << goal << '\t' << f.goal_node
+          << '\t' << (f.unlocking ? 1 : 0) << '\t' << sh::pilot_mode_name(p.mode) << '\t' << link
+          << '\t' << p.script_step << '\t' << p.because << '\n';
+    };
+  }
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
   if (!r.ok) {
@@ -1053,6 +1108,9 @@ const gl::LabSpec kSpec{
          "none (plain), comma separated (-swimaim,+shortgoals); empty: the preset"},
         {"features-red", "", "red's features over --features (the A/B by team: one side without)"},
         {"features-blue", "", "blue's features over --features"},
+        {"trace", "",
+         "a TSV of every bot's state each --trace-every commands (the bot plan's scripts)"},
+        {"trace-every", "4", "--trace's row every this many commands of a bot (77 a second)"},
         {"sides", "0",
          "1: each side's fight apart (damage, accuracy, sightings, what it did not see), as when "
          "the sides' features differ"},

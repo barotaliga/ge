@@ -229,7 +229,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
         cc.seed = k + 1;
         ClassicClientEnd* c = &clients[static_cast<size_t>(k)];
         Seat* sp = &seat;
-        cc.brain = [sp, c, &s, lead = opt.lead_lag](int) -> sh::MoveCmd {
+        cc.brain = [sp, c, &s, lead = opt.lead_lag, hook = opt.on_command,
+                    hook_ctx = opt.on_command_ctx, k](int) -> sh::MoveCmd {
           if (!sp->ready) return {};
           // Client-fed, its world is what its client was sent, nothing more.
           if (sp->mirror) mirror_update(*sp->mirror, *c);
@@ -250,6 +251,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
             sp->fighter.bot.rewound = !antilag.empty() && antilag != "0";
           }
           const sh::MoveCmd cmd = bt::fighter_command(sp->fighter, w, c->playernum, bt::kPilotMsec);
+          if (hook != nullptr) hook(hook_ctx, k, sp->fighter, w, cmd);
           // The fighter's team messages, as a player types them.
           for (const std::string& line : sp->fighter.outbox)
             client_command(*c, "say_team \"" + line + "\"");

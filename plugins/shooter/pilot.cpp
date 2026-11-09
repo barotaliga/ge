@@ -1468,6 +1468,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     }
     why->choose(pilot_mode_name(p.mode), because);
   }
+  p.because = because;
 
   // Through the hands.
   const double wanted[4] = {w.yaw, w.forward, w.side, w.jump ? 1.0 : 0.0};
