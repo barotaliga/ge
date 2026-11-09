@@ -89,8 +89,8 @@ bool open_at(const br::Map& m, float x, float y, float z) {
 
 // Solid within 96 units under the point: a floor to stand on (stairs and slopes too).
 bool floor_under(const br::Map& m, float x, float y, float z) {
-  for (float d = 24; d <= 96; d += 8)
-    if (!open_at(m, x, y, z - d)) return true;
+  for (int d = 24; d <= 96; d += 8)
+    if (!open_at(m, x, y, z - static_cast<float>(d))) return true;
   return false;
 }
 
@@ -102,7 +102,8 @@ float open_way(const br::Map& m, const sh::Vec3f& at, float want, float& yaw) {
     const auto dx = static_cast<float>(ge::core::libm::cos(a));
     const auto dy = static_cast<float>(ge::core::libm::sin(a));
     float open = 0;
-    for (float s = 16; s <= want; s += 16) {
+    for (int step = 1; 16.0f * static_cast<float>(step) <= want; step++) {
+      const float s = 16.0f * static_cast<float>(step);
       if (!open_at(m, at.x + dx * s, at.y + dy * s, at.z) ||
           !open_at(m, at.x + dx * s, at.y + dy * s, at.z + 24) ||
           !floor_under(m, at.x + dx * s, at.y + dy * s, at.z))
@@ -450,7 +451,8 @@ void run(gl::Lab& lab) {
               {{"map", map_name}}},
              strip, gl::Det::measured);
   }
-  lab.attach("se-model-lerp.gif", gl::encode_gif_frames(gif, static_cast<int>(100 / fps + 0.5)),
+  lab.attach("se-model-lerp.gif",
+             gl::encode_gif_frames(gif, static_cast<int>(std::lround(100 / fps))),
              gl::Det::measured);
   lab.note("se-model-lerp.gif: left as stepped, right drawn between, " +
            std::to_string(gif.size()) + " pictures");

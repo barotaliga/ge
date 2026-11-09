@@ -137,20 +137,14 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
     const vm::HeldClip* c = clip >= 0 ? &m.clips[static_cast<size_t>(clip)] : nullptr;
     if (c != nullptr && c->frame_a_shot && c->count > 0) {
       if (in.fired) {
-        hand.shot_from = hand.shot_frame >= 0 ? c->first + hand.shot_frame
-                         : hand.settle_t >= 0 ? hand.settle_from
-                                              : 0;
         hand.settle_t = -1;
         hand.shot_frame = (hand.shot_frame + 1) % c->count;
         hand.fire_t = 0;
         hand.barrel = vm::barrel_of_frame(m, c->first + hand.shot_frame);
       }
       if (hand.fire_t >= 0 && hand.shot_frame >= 0) {
-        f.frame_a = f.frame_b = c->first + hand.shot_frame;
-        if (s.lerp && hand.fire_t * c->fps < 1 && hand.shot_from != f.frame_b) {
-          f.frame_a = hand.shot_from;
-          f.frame_t = hand.fire_t * c->fps;
-        }
+        f.frame_a = f.frame_b =
+            c->first + hand.shot_frame;  // held: the shot's barrel is this frame's
         hand.fire_t += dt;
         if (hand.fire_t * c->fps > kShotFrameHold) {
           hand.settle_from = c->first + hand.shot_frame;
