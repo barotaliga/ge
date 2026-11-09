@@ -254,6 +254,14 @@ Said parse_say(std::string_view text) {
     while (!loc.empty() && loc.back() == ' ') loc.pop_back();
     out.loc = loc;
     t.erase(lb, (rb == std::string::npos ? t.size() : rb + 1) - lb);
+  } else if (const size_t at = t.find('@'); at != std::string::npos) {
+    // Or the word after an `@` ("rl pack @ ya", "coming @ga"), as some binds write a place.
+    size_t b = at + 1;
+    while (b < t.size() && t[b] == ' ') b++;
+    size_t e = b;
+    while (e < t.size() && t[e] != ' ') e++;
+    out.loc = t.substr(b, e - b);
+    t.erase(at, e - at);
   }
   const std::vector<std::string_view> all = words_of(t);
   // The status words out, the rest kept in order.

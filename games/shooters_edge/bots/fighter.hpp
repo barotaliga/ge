@@ -153,7 +153,12 @@ struct FighterStats {
   int64_t commands = 0, shots = 0, switches = 0, pickups = 0, respawns = 0;
   int64_t goal_changes = 0;  // its item goal changed (the commitment's measure)
   int64_t packs_called = 0, packs_fetched = 0, bored = 0;  // launchers in packs (packs.hpp)
-  int64_t surfaced = 0;                                    // times up for air (water.hpp)
+  // Every death's pack it came to know of (`packinfer`), by how its place was known (`PackFrom`),
+  // its guesses (the weapon believed against the truth where the runner knows it) and its trips.
+  int64_t packs_known[5] = {};
+  int64_t pack_guesses = 0, pack_guess_right = 0, pack_guess_rl = 0, pack_truth_rl = 0;
+  int64_t pack_trips = 0, pack_reached = 0, pack_seen_gone = 0;
+  int64_t surfaced = 0;        // times up for air (water.hpp)
   int64_t surface_failed = 0;  // and rises given up short of the surface
   // The trigger, with one in sight aimed at: looked at, out of the weapon's range, the view off.
   int64_t trigger_checks = 0, trigger_far = 0, trigger_off = 0;
@@ -191,6 +196,29 @@ struct FighterStats {
   int64_t mode_n[sh::kPilotModes + 1] = {};
 };
 
+// What one player was heard fire (by entity; packs.hpp): when each weapon (by its number 1..8)
+// was last heard, and the last weapon of all.
+struct ShotsHeard {
+  double at[9] = {-1e9, -1e9, -1e9, -1e9, -1e9, -1e9, -1e9, -1e9, -1e9};
+  int32_t last = 0;  // the number of the last weapon heard; 0 none
+  double last_t = -1e9;
+};
+
+// A backpack this player believes lies on the map (packs.hpp): where, since when, whose, and
+// what it believes is in it.
+struct KnownPack {
+  double t = -1e9;  // when it fell (or was first seen lying)
+  ge::shooter::Vec3f at;
+  int32_t ent = -1;      // the pack's entity, once seen
+  int32_t victim = -1;   // whose (his entity); -1 a pack found lying
+  int32_t weapon = 0;    // the weapon believed in it, by number (0: ammunition alone believed)
+  int32_t truth = -1;    // the weapon really in it (the lab's, filled by the runner; -1 unknown)
+  uint8_t how = 0;       // how its place is known (`PackFrom`)
+  bool sure = false;     // the weapon known for certain (an expert's: inside its refire)
+  bool rockets = false;  // he fired rockets in the fight: the pack is worth much more
+  bool wanted = true;    // this player bothers with it (drawn once: most often yes)
+};
+
 // What a fighter believes of one enemy (temper.hpp): his body and arms as last heard.
 struct FoeRead {
   float body = 100, arms = 1;
@@ -204,8 +232,11 @@ struct Fighter {
   // Ordered by size, largest first, so the struct packs tight.
   sh::Bot bot;
   std::vector<ItemSpot> items;
-  std::vector<sh::Vec3f> spawns;  // the map's spawn points (ears.hpp)
-  std::vector<double> rl_fired = std::vector<double>(33, -1e9);  // by entity: a rocket heard fired
+  std::vector<sh::Vec3f> spawns;                                // the map's spawn points (ears.hpp)
+  std::vector<ShotsHeard> fired = std::vector<ShotsHeard>(33);  // by entity: weapons heard fired
+  std::vector<sh::Vec3f> cried_at = std::vector<sh::Vec3f>(33);  // by entity: a pain or death cry
+  std::vector<double> cried_t = std::vector<double>(33, -1e9);   // heard there then
+  std::vector<KnownPack> known_packs;  // the packs it believes lie on the map (packs.hpp)
   std::vector<double> last_seen_t = std::vector<double>(33, -1e9);   // and when last in sight
   std::vector<sh::Vec3f> last_seen_at = std::vector<sh::Vec3f>(33);  // and where (packs.hpp)
   std::vector<sh::HeardSound> heard;                                 // this frame's sounds taken in
@@ -232,10 +263,11 @@ struct Fighter {
   };
   std::vector<Bridge> bridges;
   bool bridges_seen = false;
-  Mind mind;             // what it believes of its team, its claim, its calls (mind.hpp)
-  Escort escort;         // a co-op companion's own state (companion.hpp; leader -1: none)
-  std::string name;      // its player name, as its teammates see it in their team lines
-  ge::ai::Search reach;  // every node it can get to from where it stood at `reach_at`
+  Mind mind;         // what it believes of its team, its claim, its calls (mind.hpp)
+  Escort escort;     // a co-op companion's own state (companion.hpp; leader -1: none)
+  std::string name;  // its player name, as its teammates see it in their team lines
+  std::string pack_call_item = "rl";  // what the pending pack call says is in it ("rl", "lg")
+  ge::ai::Search reach;               // every node it can get to from where it stood at `reach_at`
   FighterStats stats;
   sh::HearStats hear_stats;
   sh::HearSkill ears;  // what it takes in of the sounds it is sent (hearing.hpp)
@@ -258,9 +290,13 @@ struct Fighter {
   double bore_until = -1e9;    // its own rocket at its feet for the quad's carrier (packs.hpp)
   double bored_at = -1e9;
   double pack_call_until = -1e9;  // a pack's call pending until then (packs.hpp)
-  double surface_by = 0;          // out of the water by then, or the rise is given up
-  double surface_retry = 0;       // no rise for air before then
-  double dive_off_until = -1;     // until when the dive given up (`dive_off`) is not tried again
+  // Its own last shot (packs.hpp): when, and when the blast was heard nearest its line after it
+  // (`shot_from`, `shot_dir`, `blast_at` below).
+  double shot_t = -1e9, blast_t = -1e9;
+  double pack_going = -1e9;    // the known pack gone for (its time as its name)
+  double surface_by = 0;       // out of the water by then, or the rise is given up
+  double surface_retry = 0;    // no rise for air before then
+  double dive_off_until = -1;  // until when the dive given up (`dive_off`) is not tried again
   ge::ai::Why* why = nullptr;
   Team* team = nullptr;                     // its side (team.hpp); null in a free-for-all
   const ge::shooter::Locs* locs = nullptr;  // the map's place names (none: no names)
@@ -322,7 +358,11 @@ struct Fighter {
   float news_health = 0;      // its health at the last think: a fall is a blow, news
   sh::Vec3f surface_at;       // the open water's top over its head it rises to (`surfacing`)
   sh::Vec3f pack_call_at;     // where the pending pack call says the pack lies
-  sh::Dodge dodge;            // its side steps in a fight (shooter/dodge.hpp)
+  // Its own last shot: from where, along which line; the blast heard near it (where a rocket
+  // into the water landed).
+  sh::Vec3f shot_from, shot_dir, blast_at;
+  int32_t shot_number = 0;  // and its weapon
+  sh::Dodge dodge;          // its side steps in a fight (shooter/dodge.hpp)
   // The ways in it watches from where it stands (watch.hpp): their spots, the node they were
   // worked out for, the one watched and until when.
   std::vector<sh::Vec3f> watch;

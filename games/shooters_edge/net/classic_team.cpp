@@ -58,8 +58,8 @@ constexpr int32_t kItQuad = 4194304;
 constexpr int32_t kItRockets = 32;  // the launcher's weapon bit
 
 // The drill: every player's weapons cut to `bit` alone (the blade kept, so nothing is left with no
-// weapon), and the ammunition it fires topped up when it runs under half (so a refill, which the
-// hit book would read as a pickup, comes once every hundred shots or so).
+// weapon) and put in hand, and the ammunition it fires topped up when it runs under half (so a
+// refill, which the hit book would read as a pickup, comes once every hundred shots or so).
 void drill_frame(server::QcServer& s, int32_t bit) {
   constexpr int32_t kWeapons = 1 | 2 | 4 | 8 | 16 | 32 | 64;  // the baseline mod's guns
   constexpr int32_t kBlade = 4096;
@@ -75,6 +75,13 @@ void drill_frame(server::QcServer& s, int32_t bit) {
     *items = pg::as_word(static_cast<float>((had & ~kWeapons) | bit | kBlade));
     uint32_t* a = pg::entity_field(s.q.vm, e, ammo);
     if (pg::as_float(*a) < 50) *a = pg::as_word(100.f);
+    // And in hand: a player comes in holding the starting gun, which he would fire before his
+    // switch to the drill's weapon went through.
+    if (f.weapon >= 0) {
+      uint32_t* held = pg::entity_field(s.q.vm, e, f.weapon);
+      const int32_t w = static_cast<int32_t>(pg::as_float(*held));
+      if ((w & kWeapons) != 0 && w != bit) *held = pg::as_word(static_cast<float>(bit));
+    }
   }
 }
 
@@ -245,6 +252,7 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
               bt::mind_obituary(sp->fighter, c->prints[sp->heard], w.sv.time);
             bt::packs_obituary(sp->fighter, w, c->prints[sp->heard], w.sv.time);
           }
+          bt::packs_truth(sp->fighter, s);  // the lab's score of its guesses, off the server
           // Its shots led on the network's round trip, as on any server across one (bot.hpp).
           if (sp->mirror) {
             sp->fighter.bot.lag_s = lead ? static_cast<float>(c->latency_avg) : 0.f;
@@ -665,6 +673,17 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     p.surfaced = seat.fighter.stats.surfaced;
     p.surface_failed = seat.fighter.stats.surface_failed;
     p.swim_fights = seat.fighter.stats.swim_fights;
+    {
+      const bt::FighterStats& pk = seat.fighter.stats;
+      for (size_t pf = 0; pf < 5; pf++) p.packs_known[pf] = pk.packs_known[pf];
+      p.pack_guesses = pk.pack_guesses;
+      p.pack_right = pk.pack_guess_right;
+      p.pack_guess_rl = pk.pack_guess_rl;
+      p.pack_truth_rl = pk.pack_truth_rl;
+      p.pack_trips = pk.pack_trips;
+      p.pack_reached = pk.pack_reached;
+      p.pack_seen_gone = pk.pack_seen_gone;
+    }
     p.wet = seat.fighter.stats.wet;
     for (size_t w = 0; w < 12; w++) {
       p.wet_why[w] = seat.fighter.stats.wet_why[w];

@@ -189,6 +189,10 @@ struct Read {
   std::array<ItemControl, kItemKinds> items{};
   std::map<std::string, int64_t> shots;  // the players' weapon sounds, by the sound's name
   HandRead hand;
+  // Backpacks: how many fell, how many went before they ran out (taken), the time each lay
+  // until taken summed, and those taken within 10 s.
+  int64_t packs = 0, packs_taken = 0, packs_quick = 0;
+  double pack_wait = 0;
 };
 
 // The sweep under way in `h` ends: measured into `r` when it is long enough.
@@ -299,6 +303,7 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
     double since = -1;
   };
   std::vector<Spot> spots;
+  std::vector<double> pack_since;  // by entity: the backpack lying there since (-1: none)
   double next = 0, t0 = -1;
   std::vector<HandState> hands(32);
   double hand_next = 0, hand_at = -1;
@@ -363,6 +368,27 @@ void read_one(std::vector<uint8_t> bytes, const la::StudyMap& m, double every, f
         ic.waited += s.time - sp.since;
       }
       sp.there = there;
+    }
+    // Backpacks: one appearing fell; one gone before its two minutes were up was taken.
+    if (pack_since.size() < s.entities.size()) pack_since.resize(s.entities.size(), -1);
+    for (size_t e = 33; e < s.entities.size(); e++) {
+      const cl::DemoEntity& en = s.entities[e];
+      const bool pack = en.present && en.model > 0 &&
+                        static_cast<size_t>(en.model) < s.models.size() &&
+                        s.models[static_cast<size_t>(en.model)] == "progs/backpack.mdl";
+      double& since = pack_since[e];
+      if (pack && since < 0) {
+        since = s.time;
+        out.packs++;
+      } else if (!pack && since >= 0) {
+        const double lay = s.time - since;
+        if (lay < 115) {
+          out.packs_taken++;
+          out.pack_wait += lay;
+          out.packs_quick += lay < 10;
+        }
+        since = -1;
+      }
     }
     for (int i = 0; i < 32; i++) {
       const cl::DemoEntity& p = s.players[static_cast<size_t>(i)];
@@ -598,6 +624,8 @@ void run(gl::Lab& lab) {
   HandRead hand;
   int used = 0, skipped = 0;
   double seconds = 0;
+  int64_t packs = 0, packs_taken = 0, packs_quick = 0;
+  double pack_wait = 0;
   for (size_t i = 0; i < n; i++) {
     const Read& r = reads[i];
     const std::string label =
@@ -616,6 +644,10 @@ void run(gl::Lab& lab) {
       items[static_cast<size_t>(k)].waited += r.items[static_cast<size_t>(k)].waited;
     }
     for (const auto& [name, k] : r.shots) shots[name] += k;
+    packs += r.packs;
+    packs_taken += r.packs_taken;
+    packs_quick += r.packs_quick;
+    pack_wait += r.pack_wait;
     {
       const HandRead& h = r.hand;
       HandRead& a = hand;
@@ -751,6 +783,20 @@ void run(gl::Lab& lab) {
   lab.metric("people.fight-wide", of_fight(static_cast<double>(all.fight_wide)), "share");
   lab.metric("people.fight-side-turns", of_fight(static_cast<double>(all.fight_turns)) / every,
              "per s");
+  // Backpacks: dropped a player-minute alive, the share taken, the time one lay until taken, the
+  // share taken within 10 s.
+  if (all.alive > 0)
+    lab.metric("people.packs-per-min",
+               static_cast<double>(packs) * 60 / (static_cast<double>(all.alive) * every),
+               "per-min");
+  lab.metric("people.packs-taken",
+             packs > 0 ? static_cast<double>(packs_taken) / static_cast<double>(packs) : 0,
+             "share");
+  lab.metric("people.pack-wait", packs_taken > 0 ? pack_wait / static_cast<double>(packs_taken) : 0,
+             "s");
+  lab.metric("people.packs-quick",
+             packs > 0 ? static_cast<double>(packs_quick) / static_cast<double>(packs) : 0,
+             "share");
   // Item control: the share of the time each key item lay untaken, and how long it lay from showing
   // to being taken (a team that times it takes it as it shows).
   for (int k = 0; k < kItemKinds; k++) {
