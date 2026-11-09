@@ -109,6 +109,12 @@ fn lava_at(q: vec2f, t: f32, foot: f32) -> vec3f {
   let v = voronoi(pq);
   let vs = voronoi(pq * 2.7 + vec2f(3.1, 7.7));
   let age = fract(v.y + t * body.lava1.w);
+  // A plate's life is a loop with no jump in it: it congeals out of the melt over the first 8 %
+  // of its age, cools, and over the last 15 % melts back and sinks, the melt eating in from its
+  // cracks to its middle, so where its age wraps the plate is melt on both sides and nothing pops.
+  let gone = max(1.0 - smoothstep(0.0, 0.08, age), smoothstep(0.85, 1.0, age));
+  let sunk = 1.0 - smoothstep(0.0, max(0.02 * plate, foot),
+                              v.x * plate - gone * 0.6 * plate + 0.02 * plate);
   // Plates near the open melt are young.
   let young = smoothstep(cover - 0.2, cover, field);
   let a = age * (1.0 - 0.85 * young);
@@ -122,39 +128,56 @@ fn lava_at(q: vec2f, t: f32, foot: f32) -> vec3f {
   let wsf = max(ws, foot);
   let crack = max(exp(-edge / wf) * (w / wf),
                   0.8 * exp(-vs.x * plate / 2.7 / wsf) * (ws / wsf) * (1.0 - a));
-  var temp = skin + (core - skin) * crack;
+  var temp = skin + (core - skin) * max(crack, sunk);
   // The melt's own skin: cooler swirls where a film has begun to form, wrinkled into threads
   // drawn out along the flow, and hotter streaks where fresh melt wells up between them.
-  let swirl = fbm(q * 0.9 + 0.8 * warp + vec2f(0.0, t * 0.05));
-  let threads = abs(sin(9.0 * fbm(q * 2.3 + 1.5 * warp) + 3.0 * swirl));
-  let thread_seen = smoothstep(0.02, 0.08, 0.25 / max(foot, 1e-3) * 0.01);
-  let skin_on = smoothstep(0.42, 0.78, swirl);
-  let melt = core + 45.0 * (1.0 - smoothstep(0.2, 0.5, swirl)) - 260.0 * skin_on -
-             90.0 * (1.0 - threads) * skin_on * thread_seen;
-  temp = mix(temp, max(melt, temp), open);
+  // Worked out only where there is open melt (most of a crusted lake has none).
+  if (open > 0.0) {
+    let swirl = fbm(q * 0.9 + 0.8 * warp + vec2f(0.0, t * 0.05));
+    let skin_on = smoothstep(0.42, 0.78, swirl);
+    let thread_seen = smoothstep(0.02, 0.08, 0.25 / max(foot, 1e-3) * 0.01);
+    var threads = 1.0;
+    if (skin_on * thread_seen > 0.0) {
+      threads = abs(sin(9.0 * fbm(q * 2.3 + 1.5 * warp) + 3.0 * swirl));
+    }
+    let melt = core + 45.0 * (1.0 - smoothstep(0.2, 0.5, swirl)) - 260.0 * skin_on -
+               90.0 * (1.0 - threads) * skin_on * thread_seen;
+    temp = mix(temp, max(melt, temp), open);
+  }
   // The height: plates stand over their cracks, the ropy folds across the flow on the crust.
   let flow = body.flow.xy;
   let along = select(vec2f(0.0, 1.0), normalize(flow), length(flow) > 1e-4);
   let rope_len = 0.12 * plate;
-  let ropes = body.lava1.z * 0.02 * sin(6.2831853 * (dot(q, along) / rope_len +
-              1.5 * fbm(q * 0.8))) * smoothstep(rope_len, 2.0 * rope_len, 3.0 * foot);
-  let stand = 0.05 * plate * smoothstep(0.0, 1.5 * w, edge) * (0.5 + 0.5 * a);
+  var ropes = 0.0;
+  if (body.lava1.z > 0.0) {
+    ropes = body.lava1.z * 0.02 * sin(6.2831853 * (dot(q, along) / rope_len +
+            1.5 * fbm(q * 0.8))) * smoothstep(rope_len, 2.0 * rope_len, 3.0 * foot);
+  }
+  let stand = 0.05 * plate * smoothstep(0.0, 1.5 * w, edge) * (0.5 + 0.5 * a) * (1.0 - gone);
   // The rind's own roughness: a fine knobbly texture where the pixel can hold it.
-  let knobs = 0.006 * fbm(q * 14.0) * smoothstep(0.08, 0.02, foot);
-  let h = (1.0 - open) * (stand + ropes + knobs);
+  var knobs = 0.0;
+  if (foot < 0.08) {
+    knobs = 0.006 * fbm(q * 14.0) * smoothstep(0.08, 0.02, foot);
+  }
+  let h = (1.0 - open) * (1.0 - sunk) * (stand + ropes + knobs);
   return vec3f(temp, h, open);
 }
 
-// The surface on the flow map's two phases, crossfaded.
+// The surface on the flow map's two phases, crossfaded: each phase is weighed by a tent that is
+// 0 where its offset jumps back (its phase wraps) and 1 half a period later, so the jump is never
+// seen. A still pool (no flow) needs no phases: one pattern, never moved, never swapped.
 fn lava_flowing(p: vec2f, t: f32, foot: f32) -> vec3f {
-  let period = 8.0;
   let flow = body.flow.xy;
+  if (dot(flow, flow) < 1e-8) {
+    return lava_at(p, t, foot);
+  }
+  let period = 8.0;
   let ph0 = fract(t / period);
   let ph1 = fract(t / period + 0.5);
   let s0 = lava_at(p - flow * ph0 * period + vec2f(31.0, 17.0) * floor(t / period), t, foot);
   let s1 = lava_at(p - flow * ph1 * period + vec2f(11.0, 43.0) * floor(t / period + 0.5) +
                    vec2f(5.3, 9.1), t, foot);
-  let k = abs(1.0 - 2.0 * ph0);
+  let k = 1.0 - abs(1.0 - 2.0 * ph0);  // s0's weight: 0 at ph0 = 0, where s0 jumps
   return mix(s1, s0, k);
 }
 
@@ -401,7 +424,6 @@ fn fs_main(in: VertexOut) -> FragmentOut {
 
   if (body.info.y < 0.5) {
     // LAVA.
-    let e = max(foot, 0.01);
     // The shimmer: the surface looked up where the ray, bent by the hot air it crossed, lands
     // (across the view by the bend times the distance, along it the more the flatter the ray).
     var at = in.xz;
@@ -415,10 +437,23 @@ fn fs_main(in: VertexOut) -> FragmentOut {
       let shift = across * th.x * dist + along * th.y * dist / max(abs(dir.y), 0.1);
       at += shift * min(1.0, 0.15 / max(length(shift), 1e-6));
     }
+    // The surface once a pixel; its slope from the height's change across the pixel's quad
+    // (the screen's derivatives of the height and of the plan point, solved for the height's
+    // gradient over the plan): a third of the cost of looking it up twice more a footprint away,
+    // the same as those lookups at the pixel's own scale.
     let s = lava_here(at, t, foot);
-    let sx = lava_here(at + vec2f(e, 0.0), t, foot);
-    let sz = lava_here(at + vec2f(0.0, e), t, foot);
-    let n = normalize(vec3f(-(sx.y - s.y) / e, 1.0, -(sz.y - s.y) / e));
+    let ax = dpdx(at);
+    let ay = dpdy(at);
+    let hx = dpdx(s.y);
+    let hy = dpdy(s.y);
+    let det = ax.x * ay.y - ax.y * ay.x;
+    var grad = vec2f(0.0);
+    if (abs(det) > 1e-12) {
+      grad = vec2f(hx * ay.y - hy * ax.y, hy * ax.x - hx * ay.x) / det;
+    }
+    // Never steeper than the relief across a footprint allows (a grazing quad's solve).
+    grad *= min(1.0, 4.0 / max(length(grad), 1e-6));
+    let n = normalize(vec3f(-grad.x, 1.0, -grad.y));
     let open = s.z;
     let rough = mix(body.lava2.y, body.lava2.z, open);
     let cos_v = max(dot(n, v), 1e-3);
@@ -428,7 +463,11 @@ fn fs_main(in: VertexOut) -> FragmentOut {
     let sky_mirror = mix(room, sky_luminance(normalize(vec3f(r.x, max(r.y, 0.01), r.z))), open_sky);
     // The scene's mirror is sharp, so only the smoother melt takes it; on the rough crust a
     // sharp ray's hits scatter into specks.
-    let seen_in = scene_mirror(in.rel, r);
+    // Marched only where the surface is smooth enough to take it (never on the rough crust).
+    var seen_in = vec4f(0.0);
+    if (rough < 0.3) {
+      seen_in = scene_mirror(in.rel, r);
+    }
     let sharp = seen_in.a * (1.0 - smoothstep(0.1, 0.3, rough));
     let mirror = mix(sky_mirror, seen_in.rgb, sharp) * fresnel(cos_v, 0.04) * (1.0 - rough) *
                  (1.0 - rough);
