@@ -37,6 +37,8 @@ constexpr int kRelayDepth = 4;        // relays followed from a button to the do
 constexpr float kExitMargin = 16;     // a node whose player box comes this near an exit is in it
 constexpr float kExitClear = 48;      // the stand-by node: at least this clear of the exit's box
 constexpr float kExitStandFar = 320;  // and no further than this from it
+constexpr double kDoorErrand_s = 12;  // a shut door's button gone for this long at most (`locked`)
+constexpr double kDoorAvoid_s = 20;   // and a door whose button only it leads to, left this long
 
 // The buttons off the map's entity text, linked to the server's entities, and the items behind
 // their doors (a novice's items get no link: he knows no button).

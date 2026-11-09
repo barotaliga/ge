@@ -749,6 +749,78 @@ void watch_bridges(Fighter& f, const server::RulesCommon& s) {
   f.goal_node = -1;  // planned again
 }
 
+// A DOOR ON THE WAY (`locked`): the doors only something else opens, while they rest shut. When
+// the route planned crosses one a known button opens, the button is gone to (round the door: no
+// route through it meanwhile) and pressed (walked into, or shot: button_poke_cmd) before the goal,
+// as a person hits the button by a shut door (dm2's yellow armour and its teleporter, behind a
+// touch button's doors). A button no way reaches but through its own door (pressed from the far
+// side) leaves that door off the routes a while. A door no known button opens (a trigger walked
+// into opens it, or nothing does) is waited at as before (the pilot bars it after `wait_s`).
+bool door_resting(const Fighter& f, const server::RulesCommon& s, int ent) {
+  for (size_t k = 0; k < f.locked.size(); k++)
+    if (f.locked[k] == ent)
+      return dist(s.world.entities[static_cast<size_t>(ent)].origin, f.locked_rest[k]) < 1;
+  return false;
+}
+
+// Whether this fighter runs the doors' errands: `locked`, and its own player (a companion and
+// the campaign's leader keep their own doors: companion.cpp, way_through.cpp).
+bool locked_errands(const Fighter& f) {
+  return f.features[sh::Feature::locked] && f.escort.leader < 0;
+}
+
+void door_errand(Fighter& f, const server::RulesCommon& s, double t) {
+  sh::Pilot& p = f.bot.pilot.pilot;
+  p.shut.clear();
+  if (f.door_button >= 0) {
+    const bool open = !door_resting(f, s, f.door_ent);
+    // No way to the button but through its door: that door off the routes a while.
+    const bool no_way = p.mode == sh::PilotMode::idle &&
+                        f.goal_node == f.button_spots[static_cast<size_t>(f.door_button)].node &&
+                        p.route.empty();
+    if (!open && !no_way && t < f.door_until) {
+      p.shut.push_back(f.door_ent);  // round it to the button
+      return;
+    }
+    if (no_way) {
+      f.door_avoid = f.door_ent;
+      f.door_avoid_until = t + kDoorAvoid_s;
+      f.reach_at = -1;  // where it can get to, worked out again without the door
+    }
+    f.door_button = -1;
+    f.door_ent = -1;
+    f.poke = -1;
+    f.goal_node = -1;  // the goal planned again, through the door now open (or round it)
+  }
+  if (f.door_avoid >= 0 && t < f.door_avoid_until && door_resting(f, s, f.door_avoid))
+    p.shut.push_back(f.door_avoid);
+  // A shut one on the route planned: its button first.
+  const sh::NavGraph& g = *p.g;
+  for (size_t i = p.k; i + 1 < p.route.size(); i++) {
+    const sh::NavNode& n = g.nodes[static_cast<size_t>(p.route[i])];
+    int32_t mover = -1;
+    for (int32_t j = 0; j < n.links; j++) {
+      const sh::NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(j)];
+      if (l.to == p.route[i + 1]) mover = l.mover;
+    }
+    if (mover < 0 || !door_resting(f, s, mover)) continue;
+    for (size_t b = 0; b < f.button_spots.size(); b++) {
+      const ButtonSpot& bs = f.button_spots[b];
+      bool opens = false;
+      for (const int d : bs.doors) opens |= d == mover;
+      if (!opens || bs.node < 0 || (f.reach_at >= 0 && !f.reach.reached(bs.node))) continue;
+      f.door_button = static_cast<int32_t>(b);
+      f.door_ent = mover;
+      f.door_until = t + kDoorErrand_s;
+      f.poke = f.door_button;
+      f.poke_until = f.door_until;
+      f.stats.door_errands++;
+      p.shut.push_back(mover);
+      return;
+    }
+  }
+}
+
 void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai::Why* why) {
   const double t = s.sv.time;
   const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
@@ -772,8 +844,12 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     jumper.level = moves >= kRocketLevelMoves[2] ? 2 : moves >= kRocketLevelMoves[1] ? 1 : 0;
     jumper.extra_s = kRocketLevelExtra_s[jumper.level];
     jumper.scripts = f.features[sh::Feature::routes];  // the map's scripted ways to key items
-    f.reach_n =
-        sh::nav_reach(g, sh::nav_nearest(g, self.origin), f.reach, f.bot.pilot.pilot.set.jumper);
+    // The doors its own errands keep off the routes kept off the reach too (door_errand).
+    const std::span<const int32_t> shut = locked_errands(f)
+                                              ? std::span<const int32_t>(f.bot.pilot.pilot.shut)
+                                              : std::span<const int32_t>();
+    f.reach_n = sh::nav_reach(g, sh::nav_nearest(g, self.origin), f.reach,
+                              f.bot.pilot.pilot.set.jumper, shut);
     f.reach_at = t;
   }
   bool escaping = false;  // on the way out of a pocket: no other goal this think
@@ -997,6 +1073,9 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   }
   f.short_item = near;
 
+  // A shut door on the way: its button first (door_errand).
+  if (locked_errands(f) && !escaping && committed < 0 && f.objective < 0) door_errand(f, s, t);
+
   // The goal: the role's first, then the items.
   if (committed >= 0) {
     // Kept on the dive's field whatever the reach from the water says (the nearest node under
@@ -1006,6 +1085,8 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     go_to(f, f.objective);  // the way through the map (way_through.hpp) before any item
     f.goal_item = -1;       // and no item's errand (a shot at its button) kept from before
     f.unlocking = false;
+  } else if (!escaping && f.door_button >= 0) {
+    go_to(f, f.button_spots[static_cast<size_t>(f.door_button)].node);  // a shut door's button
   } else if (near >= 0) {
     go_item(f, s, near);
     if (why) {

@@ -669,7 +669,8 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
   return r;
 }
 
-int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, const NavJumper& jumper) {
+int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, const NavJumper& jumper,
+                  std::span<const int32_t> shut) {
   search.reset(g.nodes.size());
   if (from < 0) return 0;
   search.seed(from);
@@ -678,6 +679,9 @@ int32_t nav_reach(const NavGraph& g, int32_t from, ai::Search& search, const Nav
     for (int32_t k = 0; k < n.links; k++) {
       const NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
       if (!jumper.takes(l)) continue;
+      bool closed = false;
+      for (const int32_t m : shut) closed |= l.mover == m;
+      if (closed) continue;
       const double cost = search.cost(a) + jumper.cost_s(l);
       if (search.improves(l.to, cost)) search.reach(l.to, cost, a);
     }

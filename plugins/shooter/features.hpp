@@ -39,6 +39,7 @@
 // - `packinfer`: every death's pack known, its weapon guessed by level (bots/packs.hpp).
 // - `listen`: a calm bot swipes its view at an enemy heard where none was known (bot.hpp).
 // - `stairs`: a hop's stretch ends at a climb: stairs walked, the hop taken up at the top.
+// - `locked`: a door only a button or a trigger opens, resting shut, is no way (bots/buttons.hpp).
 // - `trial`: read by an A/B now; off in every preset (`all` too): `--features-red=+trial`.
 //
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: every one but what that
@@ -54,7 +55,7 @@
 // ge:keywords spam packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot
 // ge:keywords ab-test trial eye selfaim course-change own-motion pools pool-floor swim-under-view
 // ge:keywords corner lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen
-// ge:keywords sound-swipe stairs stair-walk
+// ge:keywords sound-swipe stairs stair-walk locked shut-door
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -99,9 +100,10 @@ enum class Feature : uint8_t {
   packinfer,
   listen,
   stairs,
+  locked,
   trial,
 };
-constexpr size_t kFeatures = 32;
+constexpr size_t kFeatures = 33;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 
