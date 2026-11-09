@@ -49,6 +49,19 @@ sees plain structs.
   `libpulse-dev`, `libasound2-dev`, in `tools/setup-ubuntu.sh`); without them it builds with
   the dummy and disk drivers only, and a desktop build is silent.
 
+## What is built (M6a): frame pacing
+
+- `engine/platform/pacing.hpp`: the pacing cvars (`vid_vsync`, `cl_maxfps`, `cl_maxfps_hz`,
+  `vid_framelatency`, `vid_steady`, `scr_showfps`) and `framestats`; `pace` waits for the cap
+  before the frame reads its input and records the interval; `game_dt` is the steady game time.
+  The arithmetic is `engine/loop/pacing.hpp`, the frames in flight `engine/gpu/frame_gate.hpp`,
+  the on-screen graph `engine/hud/frame_graph.hpp`. `docs/rendering.md` § Frame pacing has the
+  order of a frame and why each default.
+- `window.hpp`: `wait_until_ns` (sleep, then a short spin), `refresh_hz` (the display under the
+  window), `set_swap_images` (Metal's drawable count; call it after every surface configure).
+- The `pacing` lab models every strategy on a display: run it before and after any change to the
+  loop's order, the gate or the swap chain.
+
 ## Rules
 
 - SDL is fetched with `FetchContent`, pinned to a release tag, and statically linked.
