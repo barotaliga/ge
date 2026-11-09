@@ -537,18 +537,25 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     own.figure.origin = player.origin;
     own.figure.angles = {0, p.yaw, 0};
     own.first_person = true;
-    own.moments = {0.1, 0.25, 0.45, 0.8};
+    own.palette = take.palette;
+    own.moments = {0.03, 0.15, 0.3, 0.5};
     own.seed = 23;
+    own.film_width = 640;
     sl::WarpFilm eyes;
     sl::film_warp(*device, *world[1], out, view, fx, &hand, own, eyes);
+    // A beat of the view as it stands after, so the film reads as an arrival into a place.
+    for (int i = 0; i < 9; ++i) eyes.frames.push_back(eyes.frames.back());
     lab.shot({"warp-eyes-" + std::to_string(v),
               "his own arrival through his eyes, enhanced",
-              "The local player spawning or coming out of a teleporter here: the ash blown at his "
-              "eyes from ahead, landing round him, the weapon in his hands assembling muzzle "
-              "first.",
-              "grey flakes streaming toward the eye and thinning; the gun ragged, then whole",
-              {{"map", lab.arg("map")}}},
+              "The local player spawning or coming out of a teleporter here: the whole view opens "
+              "out of a flash in the pack's teleport colour (r_arrival), pulled in and streaked "
+              "toward the middle, a clear disc with a bright rim growing out to the corners; the "
+              "ash blown at his eyes from ahead, the weapon in his hands assembling muzzle first.",
+              "a white-out first, then the world rushing in from the edges; whole by 0.65 s",
+              {{"map", lab.arg("map")}, {"cvars", lab.arg("cvars")}}},
              es::sheet_of(eyes.pics, eyes.names, 4), gl::Det::measured);
+    lab.attach("warp-eyes-" + std::to_string(v) + ".gif", gl::encode_gif_frames(eyes.frames, 3),
+               gl::Det::measured);
   }
   if (swings > 0)
     film_swings(lab, *device, *world[1], out, l, shown, fx_state, fx, held, view_settings, weapons,

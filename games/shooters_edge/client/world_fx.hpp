@@ -56,6 +56,7 @@
 // ge:keywords ce_trails ce_hits ce_decals marks scorch bullet-hole burns mark_burns
 // ge:keywords pointparticles trailparticles named-effect warp spawn-effect teleport-effect
 // ge:keywords respawn ghost materialize dematerialize player_dust dust ash held_shown
+// ge:keywords arrival_s arrival-flash r_arrival teleport-in first-person-teleport
 // ge:keywords fx-scene fx_scene demo-effects load_effects particles-fx scripted-effects
 // ge:skill render shooter
 #pragma once
@@ -97,6 +98,7 @@ namespace shooters_edge::client {
 struct FxSwitches {
   bool muzzles = false, explosions = false, trails = false, beams = false, hits = false;
   bool warps = false;  // ce_warps: a player's teleport and spawn as dust (warps.hpp)
+  double arrival = 0;  // r_arrival under ce_warps: the own arrival's warp of the view, 0 none
   bool decals =
       false;  // ce_decals: the marks the weapons leave (scorches, holes, the bolt's burns)
   // ce_flares, ce_bubbles: the pack's flare and bubble sprites drawn as the engine's (the models'
@@ -231,6 +233,11 @@ struct FxFrame {
   double blend_dry[4] = {0, 0, 0, 0};
   std::vector<Placed> models;  // the entities with a model (world_models.hpp)
   float held_shown = 1;        // the weapon in hand's warp: the local player's arrival
+  // The local player's own arrival (ce_warps): s into it (below 0: none), and the colour of its
+  // flash, the pack's teleport fog's brightest (sRGB-encoded), for the post pass's warp of the
+  // whole view (render/post.hpp's `arrival_warp`, at FxSwitches::arrival).
+  double arrival_s = -1;
+  double arrival_tint[3] = {1, 1, 1};
   // The weapon in hand's muzzle fire (app/muzzle.hpp): its shots' smoke left in the world and
   // their flames on this frame's muzzle, for the explosions' pass.
   std::vector<ge::render::Blast> puffs;
