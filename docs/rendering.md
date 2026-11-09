@@ -2237,7 +2237,8 @@ at 46 N, `bsp_sky.hpp`'s `at_hour`; past dusk the map's own classic night; -1 th
 the wind off `engine/wind`'s field with its gusts and veer, the fall's
 way, the wet ground and the snow's cover for the whole map stepped by the clock, the flash, and
 a storm's deck over the sky. The v2 renderer draws a third orthographic map of its `orthos`
-array along the fall (the sky faces do not block it), binds it as the fall's shelter, and reads
+array along the fall (the sky faces do not block it; every texel no sky face stands over is shut,
+below), binds it as the fall's shelter, and reads
 it in every face's material (`weathered` in `bsp.wgsl`): what faces the fall and the map reaches
 is wet, a flat's low noise pools into puddles that the drops ring while it rains, what faces up
 gathers the snow in drifts (a thin cover in the hollows first, the floor showing between), and a
@@ -2246,6 +2247,16 @@ decide all of it, through a cone of ways marched through the map whose spread is
 over the fall's pace (snow, slow, scatters wider than rain), with the wet and the snow struck in noise spots across it: lab `gpu-bsp-weather` (the weather fixture, a hall with windows onto a yard and
 a store behind it) shows eight weathers in four views and checks, with no GPU, that a ray back up
 the fall leaves by the sky from the yard and the window's patch and is stopped from the store.
+
+A classic level is closed all round and its sky shows only through its sky faces, so its
+orthographic maps (the sun's, the zenith's, the fall's: `kOrthoFormat`, depth and stencil) are
+drawn in three steps: the solid faces' depth; the sky faces that stand nearer the sky than them
+marking the stencil; and every texel left unmarked shut at the near plane. Without the last step
+a texel nothing was drawn into read as open sky: the thickness of every wall, the seams along a
+wall's top and the cracks between faces, so a closed room under a storm got streaks of rain, wet
+patches and the sky's light in its corners and down its walls (dm4, 2026-11-09). Now a map with
+no sky face over a place lets no sun, sky light, rain or snow in there, and a map with no sky at
+all has no weather inside.
 
 A classic map's own areas of fog (M38g, `plugins/brush/app/bsp_fog.hpp`) are read when it loads
 into the engine's `FogVolume`s (§ Fog in an area): a `fog_volume` entity, a brush entity (its
