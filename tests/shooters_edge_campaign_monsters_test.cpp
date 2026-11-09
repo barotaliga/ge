@@ -437,6 +437,8 @@ TEST(a_rifleman_shows_its_kinds_frames_standing_shooting_and_falling) {
   CHECK(shot);
   CHECK(g.hit(army, 1, 40));  // dead, not gibbed (-35 is the line)
   for (int i = 0; i < kFrames * 2; i++) CHECK_MSG(g.frame(180), g.error);
-  CHECK(g.field(army, g.f().frame) == 17);  // its death frames played to the last
+  // Its death frames played to the last, of one of its two sequences (8-17 or 18-28).
+  const float lying = g.field(army, g.f().frame);
+  CHECK_MSG(lying == 17 || lying == 28, std::to_string(lying));
   CHECK(g.s().q.faults == 0);
 }
