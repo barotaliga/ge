@@ -15,6 +15,7 @@
 // ge:test tests/shooters_edge_qc_messages_test.cpp
 #include <cstring>
 
+#include "progs/localized.hpp"
 #include "progs/stdlib.hpp"
 #include "shooters_edge/server/builtins.hpp"
 
@@ -87,7 +88,9 @@ void write(pg::Vm& vm, WriteKind kind) {
   float number = pg::arg_float(vm, 1);
   const char* text = "";
   if (kind == WriteKind::string) {
-    text = pg::arg_string(vm, 1);
+    // A program's key (`$qc_finale_e1`) goes out as its words (progs/localized.hpp).
+    const std::string_view words = pg::resolve_key(s.opt.localized.get(), pg::arg_string(vm, 1));
+    text = words.data();
     if (vm.fault.set) return;
   } else if (kind == WriteKind::entity) {
     const int n = pg::entity_number(vm, pg::arg_int(vm, 1));
@@ -276,7 +279,7 @@ void bi_bprint(pg::Vm& vm) {
   QcServer& s = server_of(vm);
   const bool solo = pg::vm_layout(vm).single_player;
   char buf[pg::kTempStringBytes];
-  pg::join_args(vm, solo ? 0 : 1, buf, sizeof buf);
+  pg::localize_join_args(vm, s.opt.localized.get(), solo ? 0 : 1, buf, sizeof buf);
   if (vm.fault.set) return;
   NetEvent ev;
   ev.kind = EventKind::print;
@@ -292,7 +295,7 @@ void bi_sprint(pg::Vm& vm) {
   const int e = pg::entity_number(vm, pg::arg_int(vm, 0));
   const bool solo = pg::vm_layout(vm).single_player;
   char buf[pg::kTempStringBytes];
-  pg::join_args(vm, solo ? 1 : 2, buf, sizeof buf);
+  pg::localize_join_args(vm, s.opt.localized.get(), solo ? 1 : 2, buf, sizeof buf);
   if (vm.fault.set) return;
   if (e < 1 || e > sh::kMaxClients || !s.clients[e - 1].active) {
     console_print(s, "tried to sprint to a non-client");
@@ -309,17 +312,18 @@ void bi_sprint(pg::Vm& vm) {
 }
 
 void bi_dprint(pg::Vm& vm) {
+  QcServer& s = server_of(vm);
   char buf[pg::kTempStringBytes];
-  pg::join_args(vm, 0, buf, sizeof buf);
+  pg::localize_join_args(vm, s.opt.localized.get(), 0, buf, sizeof buf);
   if (vm.fault.set) return;
-  console_print(server_of(vm), buf);
+  console_print(s, buf);
 }
 
 void bi_centerprint(pg::Vm& vm) {
   QcServer& s = server_of(vm);
   const int e = pg::entity_number(vm, pg::arg_int(vm, 0));
   char buf[pg::kTempStringBytes];
-  pg::join_args(vm, 1, buf, sizeof buf);
+  pg::localize_join_args(vm, s.opt.localized.get(), 1, buf, sizeof buf);
   if (vm.fault.set) return;
   if (e < 1 || e > sh::kMaxClients || !s.clients[e - 1].active) {
     console_print(s, "tried to centerprint to a non-client");

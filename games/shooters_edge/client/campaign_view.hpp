@@ -7,7 +7,8 @@
 // THE MESSAGES, by their byte: 30 intermission (none), 31 finale (a string), 34 cutscene (a
 // string), 33 sellscreen (none), 32 cdtrack (track and loop bytes: recorded, never played: the
 // game has no music), 27 killedmonster and 28 foundsecret (none: one more of statistic 14 or 13),
-// 10 setangle (three angles, a byte each of 360/256 degrees: the view snaps to them). A byte it
+// 10 setangle (three angles, a byte each of 360/256 degrees: the view snaps to them), 52 the
+// re-release's achievement (its id, a string: stepped over, no store here). A byte it
 // does not know ends the read of that buffer (what it cannot size it cannot step over): counted in
 // `unread` and the first one named in `unknown`.
 //
@@ -48,6 +49,7 @@ namespace shooters_edge::client {
 namespace campaign_svc {
 constexpr uint8_t setangle = 10, killedmonster = 27, foundsecret = 28, intermission = 30;
 constexpr uint8_t finale = 31, cdtrack = 32, sellscreen = 33, cutscene = 34;
+constexpr uint8_t achievement = 52;  // the re-release's: an achievement's id, a string (skipped)
 }  // namespace campaign_svc
 
 namespace campaign_svc {
