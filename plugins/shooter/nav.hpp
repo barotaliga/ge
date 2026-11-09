@@ -8,8 +8,13 @@
 // (`player_trace`); a hit on a plane with normal z >= 0.7 (a floor a player stands on) is a node at
 // the trace's end, the box's origin 24 above the feet and 1/32 above the floor, as the move itself
 // snaps a standing player. The column is searched again below that floor for the next free space,
-// so a room under a ledge gets its own nodes. A node is numbered in column order (x outer, y inner)
-// and then from the top down, so the graph is a pure function of the world and the settings.
+// so a room under a ledge gets its own nodes. TREADS: a stair's tread narrower than the grid (16
+// deep, between two columns' samples) would leave a riser too high to jump; between two
+// neighbouring columns more than a step and at most two jumps apart, the floor is sampled every 4
+// units on the line between them, and a floor strictly between their heights gets a node at the
+// middle of its run, in the column that holds it (`NavSettings::treads`, off by default). A node is
+// numbered in column order (x outer, y inner) and then from the top down, so the graph is a pure
+// function of the world and the settings.
 //
 // THE LINKS, in two passes. First from every node to every node of the eight neighbouring columns
 // (at most 64 units up). Then to nodes further away but within `reach` and 64 units up, where the
@@ -72,6 +77,10 @@ struct NavSettings {
   float limit_s = 2.5f;  // a proof gives up after this long, s
   float run_up = 32;     // a jump needs this much free, level floor behind its start
   int msec = 13;         // a proof's command length, ms
+  // The stairs' treads between the grid's columns get nodes (`build_nav`). Off: on e1m2 they
+  // found the yellow armour's south tread but cost frags elsewhere (many new standing jumps);
+  // a key item's last steps are a scripted route's (bots/item_routes) instead.
+  bool treads = false;
 };
 
 // `ride`: stand on a mover's top at rest and be carried to its far end (a plat). `swim`: through
@@ -82,8 +91,10 @@ struct NavSettings {
 // rockets and the health for the blast; left out of routes and reach unless asked for.
 // `grenade`: a GRENADE JUMP (`prove_grenade_jump`): the same, for a player with the grenade
 // launcher (a slow way up: the grenade's fuse is waited out).
-enum class NavKind : uint8_t { walk, drop, jump, ride, swim, rocket, grenade };
-inline constexpr int kNavKinds = 7;
+// `script`: a SCRIPTED WAY a game wrote for the map (shooter/nav_script.hpp): a run of walked and
+// hopped points proven by the move as one link, its steps `NavGraph::scripts[NavLink::script]`.
+enum class NavKind : uint8_t { walk, drop, jump, ride, swim, rocket, grenade, script };
+inline constexpr int kNavKinds = 8;
 const char* nav_kind_name(NavKind k);
 
 // MOVERS (doors, plats, anything pushed) are left out of the proofs: the caller lists each as an
@@ -116,16 +127,27 @@ struct NavNode {
   bool wet = false;          // in water: a swim node, or a floor node under water (a pool's floor)
 };
 
+// A scripted way's steps (shooter/nav_script.hpp): each point a standing player's origin,
+// jumped onto (`hop`, a stair's tread) or walked to.
+struct ScriptStep {
+  Vec3f at;
+  bool hop = false;
+};
+struct NavScript {
+  std::vector<ScriptStep> steps;
+};
+
 struct NavLink {
   int32_t to = 0;
   NavKind kind = NavKind::walk;
-  float time_s = 0;    // the proof's time
-  int32_t mover = -1;  // a mover the proof's path crosses, or -1
-  float speed = 0;     // a jump's speed toward the target at its start, units/s
-  bool back = false;   // a rocket jump played as the flip (`RocketJumpSpec::back`)
-  float pitch = 0;     // a rocket jump's shot, degrees down (0: the player's own)
-  uint8_t level = 0;   // a rocket jump's: the least jumper's level that takes it (`NavJumper`)
-  float lead = 0;      // a grenade jump's: the jumper stands this far past the grenade, units
+  float time_s = 0;     // the proof's time
+  int32_t mover = -1;   // a mover the proof's path crosses, or -1
+  float speed = 0;      // a jump's speed toward the target at its start, units/s
+  bool back = false;    // a rocket jump played as the flip (`RocketJumpSpec::back`)
+  float pitch = 0;      // a rocket jump's shot, degrees down (0: the player's own)
+  uint8_t level = 0;    // a rocket jump's: the least jumper's level that takes it (`NavJumper`)
+  float lead = 0;       // a grenade jump's: the jumper stands this far past the grenade, units
+  int32_t script = -1;  // a scripted way's: its index in `NavGraph::scripts`
 };
 
 // A blast jump: a rocket jump or a grenade jump.
@@ -139,10 +161,12 @@ inline bool nav_blast(NavKind k) { return k == NavKind::rocket || k == NavKind::
 struct NavJumper {
   bool rockets = false;
   bool grenades = false;
+  bool scripts = true;  // the scripted ways taken (a game's switch)
   uint8_t level = 2;
   float extra_s = 0;
   // Whether he takes `l` at all (any link but a blast jump: always).
   bool takes(const NavLink& l) const {
+    if (l.kind == NavKind::script) return scripts;
     if (!nav_blast(l.kind)) return true;
     return (l.kind == NavKind::rocket ? rockets : grenades) && l.level <= level;
   }
@@ -155,6 +179,7 @@ struct NavCounts {
   int64_t columns = 0, proofs = 0, commands = 0;
   int64_t refused = 0;              // candidates no kind reached
   int64_t no_run_up = 0;            // jumps that reached but had no room to run up
+  int64_t treads = 0;               // tread nodes added between columns
   int64_t by_kind[kNavKinds] = {};  // links kept, by NavKind
 };
 
@@ -177,6 +202,8 @@ struct NavGraph {
   std::vector<int32_t> swim_node;  // each cell's swim node, -1 none
   // Each node's ROOM (`nav_room`): grid steps to the nearest edge of its floor; empty until asked.
   std::vector<uint8_t> room;
+  // The scripted ways a game added (`NavKind::script` links index them).
+  std::vector<NavScript> scripts;
 };
 
 // One proof's result.
@@ -215,11 +242,13 @@ struct NavExtraLink {
   int32_t from = 0, to = 0;
   NavKind kind = NavKind::walk;
   float time_s = 0.1f;
-  float speed = 0;    // a jump's speed at its start, units/s (NavLink::speed)
-  bool back = false;  // a rocket jump's flip (NavLink::back)
-  float pitch = 0;    // and its shot (NavLink::pitch)
-  uint8_t level = 0;  // and its level (NavLink::level)
-  float lead = 0;     // a grenade jump's stand past the grenade (NavLink::lead)
+  float speed = 0;      // a jump's speed at its start, units/s (NavLink::speed)
+  bool back = false;    // a rocket jump's flip (NavLink::back)
+  float pitch = 0;      // and its shot (NavLink::pitch)
+  uint8_t level = 0;    // and its level (NavLink::level)
+  float lead = 0;       // a grenade jump's stand past the grenade (NavLink::lead)
+  int32_t mover = -1;   // a mover the way crosses (NavLink::mover): shut, it bars the link
+  int32_t script = -1;  // a scripted way's steps (NavLink::script)
 };
 
 // THE ROCKET JUMP, as the baseline mod makes it (games/shooters_edge/qc: weapons.qc's `launch`,

@@ -101,7 +101,9 @@ struct ItemSpot {
   int32_t node = -1;     // the nav node nearest it
   int door_ent = -1;     // the door's entity (-1: none)
   int32_t button_node = -1;
-  int button_ent = -1;                      // the button's entity
+  int button_ent = -1;    // the button's entity
+  int32_t after = -1;     // an item rule (item_routes.hpp): no goal while item `after` is up or due
+  float after_due_s = 0;  // within this
   int32_t dive_node = -1, dive_entry = -1;  // and the node in the water it drops or steps to
   float dive_s = 0;                         // the swim's time, s (its steps at a swimmer's pace)
   int32_t sightings = 0;                    // separate times it was seen (kSightingGap_s apart)

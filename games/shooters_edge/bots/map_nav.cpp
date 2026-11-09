@@ -12,6 +12,8 @@
 #include <utility>
 
 #include "progs/entity_text.hpp"
+#include "shooter/nav_script.hpp"
+#include "shooters_edge/bots/item_routes.hpp"
 #include "shooters_edge/bots/rocket_tricks.hpp"
 
 namespace shooters_edge::bots {
@@ -205,6 +207,51 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
     }
   }
   out.teleport_links = static_cast<int64_t>(teleports.size());
+  // SCRIPTED ROUTES to key items (item_routes.hpp): each proven by the move from the node at its
+  // entry to the node at its end and added as one link; one that does not hold is left out.
+  {
+    std::string base = spec.name;
+    if (const size_t slash = base.find_last_of('/'); slash != std::string::npos)
+      base = base.substr(slash + 1);
+    if (const size_t dot = base.rfind(".bsp"); dot != std::string::npos) base.resize(dot);
+    out.scripts_made.clear();
+    std::vector<sh::NavExtraLink> scripted;
+    for (const ItemRoute& r : item_routes(base)) {
+      MapNav::ScriptMade made;
+      made.name = r.name;
+      if (r.n < 2) continue;
+      const ItemRouteStep& first = r.steps[0];
+      const ItemRouteStep& last = r.steps[r.n - 1];
+      made.from = sh::nav_nearest(out.graph, {first.x, first.y, first.z + 24});
+      made.to = sh::nav_nearest(out.graph, {last.x, last.y, last.z + 24});
+      if (made.from >= 0 && made.to >= 0 && made.from != made.to) {
+        sh::NavScript sc;
+        for (size_t k = 0; k < r.n; k++)
+          sc.steps.push_back({{r.steps[k].x, r.steps[k].y, r.steps[k].z + 24}, r.steps[k].hop});
+        sc.steps.back().at = out.graph.nodes[static_cast<size_t>(made.to)].origin;
+        const sh::NavProof pr = sh::prove_script(
+            out.world, sh::MoveSettings{}, out.graph.nodes[static_cast<size_t>(made.from)].origin,
+            sc, out.graph.set);
+        if (pr.reached) {
+          made.held = true;
+          made.time_s = pr.time_s;
+          for (const sh::NavMover& m : out.movers)
+            if (pr.lo.x <= m.absmax.x && pr.lo.y <= m.absmax.y && pr.lo.z <= m.absmax.z &&
+                m.absmin.x <= pr.hi.x && m.absmin.y <= pr.hi.y && m.absmin.z <= pr.hi.z) {
+              made.mover = m.ent;
+              break;
+            }
+          sh::NavExtraLink e{made.from, made.to, sh::NavKind::script, pr.time_s};
+          e.mover = made.mover;
+          e.script = static_cast<int32_t>(out.graph.scripts.size());
+          out.graph.scripts.push_back(std::move(sc));
+          scripted.push_back(e);
+        }
+      }
+      out.scripts_made.push_back(made);
+    }
+    sh::nav_add_links(out.graph, scripted);
+  }
   // LAVA AND SLIME: a floor node standing in either (a shallow pool at the feet too: it burns
   // there as well) harms whoever goes there; no way leads into one (the links out are kept: a
   // player knocked in walks out).

@@ -20,6 +20,7 @@
 #include "shooters_edge/bots/buttons.hpp"
 #include "shooters_edge/bots/ears.hpp"
 #include "shooters_edge/bots/footwork.hpp"
+#include "shooters_edge/bots/item_routes.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_plan.hpp"
 #include "shooters_edge/bots/packs.hpp"
@@ -392,6 +393,11 @@ int32_t best_item(const Fighter& f, const server::RulesCommon& s, const Stats& s
     if (door_shut(s, it) &&
         (it.button_node < 0 || (f.reach_at >= 0 && !f.reach.reached(it.button_node))))
       return 0.0;  // shut, and its button out of reach
+    if (it.after >= 0 && f.features[sh::Feature::routes] && item_in_mind(f, it.after)) {
+      // An item rule: not while the one to be had first is believed up or due.
+      const ItemSpot& first = f.items[static_cast<size_t>(it.after)];
+      if (first.present || first.back_at - t < it.after_due_s) return 0.0;
+    }
     // The map's weights are a team's plan (what to hold); a weak player, or one alone, wants
     // what does him good soonest.
     double v = heal || !f.team ? raw_value(it, st) : item_value(it, st);
@@ -713,6 +719,7 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
                       f.features[sh::Feature::gj];
     jumper.level = moves >= kRocketLevelMoves[2] ? 2 : moves >= kRocketLevelMoves[1] ? 1 : 0;
     jumper.extra_s = kRocketLevelExtra_s[jumper.level];
+    jumper.scripts = f.features[sh::Feature::routes];  // the map's scripted ways to key items
     f.reach_n =
         sh::nav_reach(g, sh::nav_nearest(g, self.origin), f.reach, f.bot.pilot.pilot.set.jumper);
     f.reach_at = t;
@@ -1181,6 +1188,19 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
     it.node = sh::nav_nearest(g, {it.at.x, it.at.y, it.at.z + 24});
     f.items.push_back(it);
   }
+  // The map's item rules (item_routes.hpp): an item no goal while another is to be had first.
+  for (const ItemRule& r : item_rules(s.map_name))
+    for (ItemSpot& it : f.items) {
+      const float dx = it.at.x - r.x, dy = it.at.y - r.y, dz = it.at.z - r.z;
+      if (std::strcmp(item_call(it), r.item) != 0 || dx * dx + dy * dy + dz * dz > 48 * 48)
+        continue;
+      for (size_t q = 0; q < f.items.size(); q++)
+        if (std::strcmp(item_call(f.items[q]), r.after) == 0) {
+          it.after = static_cast<int32_t>(q);
+          it.after_due_s = r.due_s;
+          break;
+        }
+    }
   knowledge_init(f);
   buttons_init(f, g, s, entities);
   exits_init(f, g, s, entities);

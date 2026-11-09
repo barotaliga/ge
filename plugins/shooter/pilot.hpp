@@ -208,12 +208,15 @@ struct Pilot {
   float grenade_s = -1;          // a grenade jump's: since its shot, s (-1: not fired yet)
   Vec3f grenade_stand;           // and where the jumper stands for its blast
   float grenade_yaw = 0;         // and the view's yaw at the shot, held through the fuse
-  int32_t barred[4] = {-1, -1, -1, -1};    // doors found shut: planned round
-  std::vector<NavExtraLink> cut;           // links an open door's leaf stands across: round
-  std::vector<NavExtraLink> short_jumps;   // jumps missed (short, or no nearer), one entry a time
-  std::vector<NavExtraLink> failed;        // those missed twice: never planned again
-  int32_t try_from = -1, try_to = -1;      // the jump being lined up for
-  int tries = 0;                           // and the run-ups at it
+  int32_t barred[4] = {-1, -1, -1, -1};      // doors found shut: planned round
+  std::vector<NavExtraLink> cut;             // links an open door's leaf stands across: round
+  std::vector<NavExtraLink> short_jumps;     // jumps missed (short, or no nearer), one entry a time
+  std::vector<NavExtraLink> failed;          // those missed twice: never planned again
+  int32_t try_from = -1, try_to = -1;        // the jump being lined up for
+  int tries = 0;                             // and the run-ups at it
+  int32_t script_from = -1, script_to = -1;  // the scripted way being flown (nav_script.hpp)
+  size_t script_step = 0, script_seen = 0;   // its step aimed at, and the furthest yet
+  bool script_done = false;                  // its last step reached
   std::vector<int32_t> shut;               // doors the caller knows are shut: never planned through
   std::vector<NavExtraLink> shut_links;    // and links it knows are (onto a bridge still in)
   std::vector<NavExtraLink> cut_all;       // cut and shut_links together, for the route
