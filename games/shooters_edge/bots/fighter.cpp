@@ -726,7 +726,8 @@ void watch_bridges(Fighter& f, const server::RulesCommon& s) {
   f.bridges_seen = true;
   for (Fighter::Bridge& b : f.bridges) {
     if (b.ent < 0 || static_cast<size_t>(b.ent) >= s.world.entities.size()) continue;
-    const bool in = dist(s.world.entities[static_cast<size_t>(b.ent)].origin, b.spawn) < 1;
+    const bool at_rest = dist(s.world.entities[static_cast<size_t>(b.ent)].origin, b.spawn) < 1;
+    const bool in = b.floor ? !at_rest : at_rest;
     changed = changed || in != b.in;
     b.in = in;
   }

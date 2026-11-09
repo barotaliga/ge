@@ -50,9 +50,84 @@ bool plate(const sh::BrushModel& bm) {
   return d.z <= 32 && d.x >= 48 && d.y >= 48;
 }
 
+// The doors (not starting open) whose chain a name or a shot moves: a door with no name of its own
+// moves with every door its box touches (unless one of them keeps apart, spawnflags 4), and the
+// chain opens only by its name when any door in it has one. Edicts, by edict number.
+std::vector<uint8_t> named_doors(const sv::QcServer& s,
+                                 const std::vector<pg::EntityBlock>& blocks) {
+  struct D {
+    int e;
+    bool named, apart;
+  };
+  std::vector<D> ds;
+  for (const pg::EntityBlock& b : blocks) {
+    const char* cn = pg::block_value(b, "classname");
+    const char* model = pg::block_value(b, "model");
+    if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_door") != 0 || start_open(b))
+      continue;
+    const int e = edict_of(s, model);
+    if (e < 0) continue;
+    const char* sf = pg::block_value(b, "spawnflags");
+    ds.push_back({e, pg::block_value(b, "targetname") != nullptr || pg::block_value(b, "health"),
+                  sf && (std::atoi(sf) & 4) != 0});
+  }
+  std::vector<uint8_t> out(static_cast<size_t>(s.sv.num_edicts), 0);
+  // Spread the name along touching boxes until nothing changes (chains are a few doors long).
+  for (bool grew = true; grew;) {
+    grew = false;
+    for (D& a : ds)
+      for (const D& b : ds) {
+        if (a.named || !b.named || a.apart || b.apart) continue;
+        const sh::Edict& x = s.sv.edicts[static_cast<size_t>(a.e)];
+        const sh::Edict& y = s.sv.edicts[static_cast<size_t>(b.e)];
+        if (x.absmin.x <= y.absmax.x && y.absmin.x <= x.absmax.x && x.absmin.y <= y.absmax.y &&
+            y.absmin.y <= x.absmax.y && x.absmin.z <= y.absmax.z && y.absmin.z <= x.absmax.z) {
+          a.named = true;
+          grew = true;
+        }
+      }
+  }
+  for (const D& d : ds)
+    if (d.named) out[static_cast<size_t>(d.e)] = 1;
+  return out;
+}
+
+// A FLOOR DOOR: a plate resting shut that only a button (or a shot) moves: a floor to the nav at
+// rest, its nodes shut while it is away (dm2's big room and its entries, slid out by t1).
+bool floor_door(const pg::EntityBlock& b, const sh::BrushModel& bm,
+                const std::vector<uint8_t>& named, int e) {
+  const char* cn = pg::block_value(b, "classname");
+  return cn && std::strcmp(cn, "func_door") == 0 && !start_open(b) && plate(bm) && e >= 0 &&
+         static_cast<size_t>(e) < named.size() && named[static_cast<size_t>(e)];
+}
+
 void open_doors_as_floor(const sv::QcServer& s, const sv::MapSpec& spec,
                          const std::vector<pg::EntityBlock>& blocks, sh::MoveWorld& world,
                          std::vector<NavBridge>& bridges) {
+  const std::vector<uint8_t> named = named_doors(s, blocks);
+  for (const pg::EntityBlock& b : blocks) {
+    const char* model = pg::block_value(b, "model");
+    if (!model || model[0] != '*') continue;
+    const int m = std::atoi(model + 1);
+    if (m <= 0 || static_cast<size_t>(m) >= spec.models.size() || world.count >= sh::kMaxSolids)
+      continue;
+    const int e = edict_of(s, model);
+    const sh::BrushModel& bm = spec.models[static_cast<size_t>(m)];
+    if (!floor_door(b, bm, named, e)) continue;
+    sh::Solid& so = world.solids[world.count++];
+    so = sh::Solid{};
+    so.kind = sh::SolidKind::brush;
+    so.origin = s.sv.edicts[static_cast<size_t>(e)].origin;  // at rest
+    so.point_hull = bm.hulls[0];
+    so.clip_hull = bm.hulls[1];
+    so.mins = bm.mins;
+    so.maxs = bm.maxs;
+    NavBridge br;
+    br.ent = e;
+    br.spawn = so.origin;
+    br.floor = true;
+    bridges.push_back(br);
+  }
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
     const char* model = pg::block_value(b, "model");
@@ -86,6 +161,7 @@ void open_doors_as_floor(const sv::QcServer& s, const sv::MapSpec& spec,
 std::vector<sh::NavMover> movers_of(const sv::QcServer& s, const sv::MapSpec& spec,
                                     const std::vector<pg::EntityBlock>& blocks) {
   std::vector<sh::NavMover> out;
+  const std::vector<uint8_t> named = named_doors(s, blocks);
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
     const char* model = pg::block_value(b, "model");
@@ -97,6 +173,7 @@ std::vector<sh::NavMover> movers_of(const sv::QcServer& s, const sv::MapSpec& sp
     const int m = std::atoi(model + 1);
     if (m <= 0 || static_cast<size_t>(m) >= spec.models.size()) continue;
     const int ent = edict_of(s, model);
+    if (door && floor_door(b, spec.models[static_cast<size_t>(m)], named, ent)) continue;  // too
     if (ent < 0) continue;
     sh::NavMover mv;
     mv.ent = ent;
@@ -162,7 +239,9 @@ std::vector<sh::NavExtraLink> teleport_links(const sh::NavGraph& g, const sv::Ma
       if (o.x + 16 < box.mins.x || o.x - 16 > box.maxs.x || o.y + 16 < box.mins.y ||
           o.y - 16 > box.maxs.y || o.z + 32 < box.mins.z || o.z - 24 > box.maxs.z)
         continue;
-      out.push_back({static_cast<int32_t>(a), to, sh::NavKind::walk, 0.1f});
+      sh::NavExtraLink e{static_cast<int32_t>(a), to, sh::NavKind::walk, 0.1f};
+      e.teleport = true;
+      out.push_back(e);
     }
   }
   return out;
@@ -197,8 +276,10 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
   for (NavBridge& br : out.bridges) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(br.ent)];
     // Out, and a player's half-width beyond its edge (a node there stands on it too).
-    const sh::Vec3f lo = d.absmin - br.spawn - sh::Vec3f{16, 16, 0},
-                    hi = d.absmax - br.spawn + sh::Vec3f{16, 16, 0};
+    // A floor door's nodes stand on it where it rests; a bridge's where the map drew it.
+    const sh::Vec3f shift = br.floor ? sh::Vec3f{} : br.spawn;
+    const sh::Vec3f lo = d.absmin - shift - sh::Vec3f{16, 16, 0},
+                    hi = d.absmax - shift + sh::Vec3f{16, 16, 0};
     for (size_t n = 0; n < out.graph.nodes.size(); n++) {
       const sh::Vec3f o = out.graph.nodes[n].origin;
       if (o.x >= lo.x && o.x <= hi.x && o.y >= lo.y && o.y <= hi.y && o.z >= hi.z &&

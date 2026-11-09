@@ -148,6 +148,8 @@ struct NavLink {
   uint8_t level = 0;    // a rocket jump's: the least jumper's level that takes it (`NavJumper`)
   float lead = 0;       // a grenade jump's: the jumper stands this far past the grenade, units
   int32_t script = -1;  // a scripted way's: its index in `NavGraph::scripts`
+  bool teleport =
+      false;  // a teleporter's: walked INTO its trigger (at the link's start), not across
 };
 
 // A blast jump: a rocket jump or a grenade jump.
@@ -242,13 +244,14 @@ struct NavExtraLink {
   int32_t from = 0, to = 0;
   NavKind kind = NavKind::walk;
   float time_s = 0.1f;
-  float speed = 0;      // a jump's speed at its start, units/s (NavLink::speed)
-  bool back = false;    // a rocket jump's flip (NavLink::back)
-  float pitch = 0;      // and its shot (NavLink::pitch)
-  uint8_t level = 0;    // and its level (NavLink::level)
-  float lead = 0;       // a grenade jump's stand past the grenade (NavLink::lead)
-  int32_t mover = -1;   // a mover the way crosses (NavLink::mover): shut, it bars the link
-  int32_t script = -1;  // a scripted way's steps (NavLink::script)
+  float speed = 0;        // a jump's speed at its start, units/s (NavLink::speed)
+  bool back = false;      // a rocket jump's flip (NavLink::back)
+  float pitch = 0;        // and its shot (NavLink::pitch)
+  uint8_t level = 0;      // and its level (NavLink::level)
+  float lead = 0;         // a grenade jump's stand past the grenade (NavLink::lead)
+  int32_t mover = -1;     // a mover the way crosses (NavLink::mover): shut, it bars the link
+  int32_t script = -1;    // a scripted way's steps (NavLink::script)
+  bool teleport = false;  // a teleporter's (NavLink::teleport)
 };
 
 // THE ROCKET JUMP, as the baseline mod makes it (games/shooters_edge/qc: weapons.qc's `launch`,

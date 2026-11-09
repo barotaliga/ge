@@ -126,7 +126,8 @@ float off_segment(Vec3f p, Vec3f a, Vec3f b, float* along = nullptr) {
 }
 
 // A link the pursuit runs on through: a walk with no mover.
-bool through(const NavLink& l) { return l.kind == NavKind::walk && l.mover < 0; }
+// A walk passed through on the run (a teleporter's is not: it is stood in until it sends).
+bool through(const NavLink& l) { return l.kind == NavKind::walk && l.mover < 0 && !l.teleport; }
 
 // Two nodes within a step of one height (a stair is a level walk; a drop is not).
 bool level(const NavGraph& g, int32_t a, int32_t b) {
@@ -247,7 +248,8 @@ int32_t hop_stretch(const Pilot& p, Vec3f at) {
   float along = across(at, node(g, p.route[p.k + 1]).origin);
   for (size_t j = p.k + 1; j < p.route.size(); j++) {
     const NavLink* l = link_of(g, p.route[j - 1], p.route[j]);
-    if (l == nullptr || (l->kind != NavKind::walk && l->kind != NavKind::drop) || l->mover >= 0)
+    if (l == nullptr || (l->kind != NavKind::walk && l->kind != NavKind::drop) || l->mover >= 0 ||
+        l->teleport)
       break;
     const NavLink* l2 = j + 1 < p.route.size() ? link_of(g, p.route[j], p.route[j + 1]) : nullptr;
     if (l2 != nullptr && leaps(l2->kind)) break;
@@ -847,7 +849,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     const NavLink l = lp ? *lp : NavLink{b, NavKind::walk, 0, -1, 0};
     const Vec3f A = node(g, a).origin, B = node(g, b).origin;
     const NavLink* l2 = p.k + 2 < p.route.size() ? link_of(g, b, p.route[p.k + 2]) : nullptr;
-    Vec3f target = B;
+    // A teleporter's link: into its trigger, where the link starts (B is where it sends).
+    Vec3f target = l.teleport ? A : B;
 
     // The hop's stretch (an expert's), entered on the ground on a walk moving near full speed.
     if (p.set.hop && p.mode == PilotMode::walk && s.onground &&
@@ -1528,8 +1531,9 @@ std::vector<Vec3f> pilot_path(const Pilot& p, Vec3f at, std::vector<uint8_t>* br
     lane = lane && l != nullptr && through(*l) && level(g, p.route[k], p.route[k + 1]);
     // A teleporter's link: far across and next to no time.
     if (breaks)
-      breaks->push_back(l != nullptr && l->kind == NavKind::walk && l->time_s < 0.2f &&
-                                across(a, b) > 4 * g.set.spacing
+      breaks->push_back(l != nullptr &&
+                                (l->teleport || (l->kind == NavKind::walk && l->time_s < 0.2f &&
+                                                 across(a, b) > 4 * g.set.spacing))
                             ? 1
                             : 0);
     Vec3f side{-(b.y - a.y), b.x - a.x, 0};
