@@ -2,10 +2,12 @@
 // pushes it forward by its share; a turn to the right leaves it pointing left of the look and it
 // catches up; a shot pushes it back and lifts the muzzle and both settle; put away it drops out of
 // the picture; comfort 0 removes every motion the player did not command; and the same frames
-// give the same bits.
+// give the same bits. At rest it breathes, each breath its own, faster and deeper after a run and
+// settling as the exertion falls.
 //
-// ge:summary Tests: the held weapon's rest, bob, sway, kick, put-away, comfort and repeatability
+// ge:summary Tests: the held weapon's rest, bob, sway, kick, put-away, breath, comfort, repeats
 // ge:keywords test viewmodel place bob sway kick recoil lower comfort frame_viewmodel
+// ge:keywords breath exertion idle-sway
 // ge:skill render testing
 // ge:test tests/viewmodel_place_test.cpp
 #include <cmath>
@@ -18,10 +20,47 @@ namespace vm = ge::viewmodel;
 
 namespace {
 constexpr double kDt = 1.0 / 60.0;
+
+// The classic row without its breath, for the tests that look at one motion alone.
+vm::PlaceRow still_classic() {
+  vm::PlaceRow r = vm::classic_row();
+  r.breath_m = 0;
+  r.breath_pitch = 0;
+  r.breath_wander_m = 0;
+  return r;
 }
 
+// The breath's lift over `seconds` at rest after `run_s` s at `run_mps`: its lowest and highest,
+// how many breaths began (upward crossings of its middle) and the exertion at the end of the run.
+struct Breaths {
+  double low = 1, high = -1;
+  int count = 0;
+  double exertion_after_run = 0, exertion_end = 0;
+};
+Breaths breathe(const vm::PlaceRow& row, double run_s, double run_mps, double seconds) {
+  vm::PlaceState st;
+  vm::PlaceInput in;
+  in.ground_speed = run_mps;
+  vm::Placement p;
+  for (int i = 0; i < static_cast<int>(run_s / kDt); ++i) p = vm::frame_viewmodel(row, in, st, kDt);
+  Breaths b;
+  b.exertion_after_run = st.exertion;
+  in.ground_speed = 0;
+  double last = 0;
+  for (int i = 0; i < static_cast<int>(seconds / kDt); ++i) {
+    p = vm::frame_viewmodel(row, in, st, kDt);
+    b.low = std::fmin(b.low, p.breath);
+    b.high = std::fmax(b.high, p.breath);
+    if (i > 0 && last < 0 && p.breath >= 0) ++b.count;
+    last = p.breath;
+  }
+  b.exertion_end = st.exertion;
+  return b;
+}
+}  // namespace
+
 TEST(at_rest_it_sits_at_its_offset) {
-  const vm::PlaceRow row = vm::classic_row();
+  const vm::PlaceRow row = still_classic();
   vm::PlaceState st;
   vm::PlaceInput in;
   vm::Placement p;
@@ -31,7 +70,7 @@ TEST(at_rest_it_sits_at_its_offset) {
 }
 
 TEST(the_bob_pushes_it_forward_by_its_share) {
-  const vm::PlaceRow row = vm::classic_row();
+  const vm::PlaceRow row = still_classic();
   vm::PlaceState st;
   vm::PlaceInput in;
   in.bob_m = 0.05;
@@ -40,7 +79,7 @@ TEST(the_bob_pushes_it_forward_by_its_share) {
 }
 
 TEST(a_turn_leaves_it_behind_and_it_catches_up) {
-  const vm::PlaceRow row = vm::classic_row();
+  const vm::PlaceRow row = still_classic();
   vm::PlaceState st;
   vm::PlaceInput in;
   vm::frame_viewmodel(row, in, st, kDt);
@@ -58,7 +97,7 @@ TEST(a_turn_leaves_it_behind_and_it_catches_up) {
 }
 
 TEST(a_shot_kicks_it_back_and_up_and_it_settles) {
-  const vm::PlaceRow row = vm::classic_row();
+  const vm::PlaceRow row = still_classic();
   vm::PlaceState st;
   vm::PlaceInput in;
   vm::frame_viewmodel(row, in, st, kDt);
@@ -78,7 +117,7 @@ TEST(a_shot_kicks_it_back_and_up_and_it_settles) {
 }
 
 TEST(put_away_it_drops_and_tips_down) {
-  const vm::PlaceRow row = vm::classic_row();
+  const vm::PlaceRow row = still_classic();
   vm::PlaceState st;
   vm::PlaceInput in;
   in.lowered = 1;
@@ -126,7 +165,7 @@ TEST(the_same_frames_give_the_same_bits) {
 
 TEST(a_held_point_lands_on_the_same_screen_ray_in_the_world) {
   vm::PlaceState st;
-  const vm::Placement p = vm::frame_viewmodel(vm::classic_row(), vm::PlaceInput{}, st, kDt);
+  const vm::Placement p = vm::frame_viewmodel(still_classic(), vm::PlaceInput{}, st, kDt);
   ge::camera::Pose view;
   view.eye = {1, 2, 3};
   view.yaw = 0.3;
@@ -173,7 +212,7 @@ TEST(the_muzzle_in_the_world_points_down_the_barrel_with_the_guns_up) {
   model.frames[1].positions = {0.02f, 0.03f, 0.5f};
   model.muzzle_vertices = {0};
   vm::PlaceState st;
-  const vm::Placement p = vm::frame_viewmodel(vm::classic_row(), vm::PlaceInput{}, st, kDt);
+  const vm::Placement p = vm::frame_viewmodel(still_classic(), vm::PlaceInput{}, st, kDt);
   ge::camera::Pose view;
   view.eye = {1, 2, 3};
   view.yaw = 0.3;
@@ -192,4 +231,46 @@ TEST(the_muzzle_in_the_world_points_down_the_barrel_with_the_guns_up) {
   const ge::core::Vec3 fwd = ge::camera::look_forward(view.yaw, view.pitch);
   CHECK(dir[0] * fwd.x + dir[1] * fwd.y + dir[2] * fwd.z > 0.9);
   CHECK(up[1] > 0.9);
+}
+
+TEST(at_rest_the_gun_breathes) {
+  const vm::PlaceRow row = vm::classic_row();
+  const Breaths b = breathe(row, 0, 0, 20);
+  // About 15 breaths a minute: 4 to 6 in 20 s, each its own length.
+  CHECK(b.count >= 3 && b.count <= 7);
+  // It rises and falls about its rest place, never far past the deepest breath (a sigh's 1.7 of
+  // 1.2 of the row's depth).
+  CHECK(b.high > 0.3 * row.breath_m && b.low < -0.3 * row.breath_m);
+  CHECK(b.high - b.low < 2.1 * row.breath_m);
+}
+
+TEST(a_run_leaves_it_breathing_faster_and_deeper_then_it_settles) {
+  const vm::PlaceRow row = vm::classic_row();
+  const Breaths rested = breathe(row, 0, 0, 6);
+  const Breaths run = breathe(row, 12, 8, 6);
+  CHECK(rested.exertion_after_run == 0);
+  CHECK(run.exertion_after_run > 0.9);
+  CHECK(run.count > rested.count);
+  CHECK(run.high - run.low > 1.5 * (rested.high - rested.low));
+  // Rest brings the breath back: after 30 s the exertion is mostly gone.
+  const Breaths settled = breathe(row, 12, 8, 30);
+  CHECK(settled.exertion_end < 0.1);
+}
+
+TEST(a_walk_tires_less_than_a_run) {
+  const vm::PlaceRow row = vm::classic_row();
+  CHECK(breathe(row, 12, 2, 0).exertion_after_run < 0.3);
+  CHECK(breathe(row, 12, 8, 0).exertion_after_run > 0.9);
+}
+
+TEST(no_breath_without_depth_or_comfort) {
+  vm::PlaceState st, st2;
+  vm::PlaceInput in;
+  const vm::PlaceRow row = vm::modern_row();
+  for (int i = 0; i < 600; ++i) {
+    const vm::Placement p = vm::frame_viewmodel(still_classic(), in, st, kDt);
+    CHECK(p.breath == 0 && p.shift_m[0] == 0 && p.shift_m[1] == 0 && p.turn[1] == 0);
+    const vm::Placement q = vm::frame_viewmodel(row, in, st2, kDt, 0.0);
+    CHECK(q.breath == 0 && q.shift_m[1] == 0 && q.turn[1] == 0);
+  }
 }

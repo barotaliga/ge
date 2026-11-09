@@ -240,8 +240,23 @@ TEST(the_cvars_move_the_row) {
   const vm::PlaceRow moved = se::held_row(look, s);
   CHECK(std::fabs(moved.offset_m[0] - (-0.1)) < 1e-12);
   CHECK(std::fabs(moved.fov_y - 60 * 3.14159265358979 / 180) < 1e-9);
-  CHECK(moved.sway_max == 0 && moved.bob_side == 0 && moved.idle_m == 0);
+  CHECK(moved.sway_max == 0 && moved.bob_side == 0 && moved.breath_m == 0 &&
+        moved.breath_wander_m == 0);
   CHECK(!s.draw);
+  // The breath: cl_gunidle scales its depth, cl_gunidle_rate is breaths a minute at rest and
+  // cl_gunidle_exertion scales a run's mark on it.
+  CHECK(cvars.set("cl_gunsway", "1", ge::console::Source::local) ==
+        ge::console::SetResult::changed);
+  CHECK(cvars.set("cl_gunidle", "2", ge::console::Source::local) ==
+        ge::console::SetResult::changed);
+  CHECK(cvars.set("cl_gunidle_rate", "30", ge::console::Source::local) ==
+        ge::console::SetResult::changed);
+  CHECK(cvars.set("cl_gunidle_exertion", "0", ge::console::Source::local) ==
+        ge::console::SetResult::changed);
+  const vm::PlaceRow breathing = se::held_row(look, s);
+  CHECK(std::fabs(breathing.breath_m - 2 * game.breath_m) < 1e-12 && game.breath_m > 0);
+  CHECK(std::fabs(breathing.breath_hz - 0.5) < 1e-12);
+  CHECK(breathing.exert_rate == 0 && breathing.exert_depth == 0);
   // Not drawn: still switching and flashing, unseen.
   se::Hand hand;
   se::HandInput in;
@@ -308,6 +323,7 @@ TEST(the_muzzle_rides_the_gun_into_the_world) {
 TEST(a_classic_games_own_weapon_is_held_at_the_eye) {
   se::ViewSettings s;
   s.gun_m[1] = -0.02;
+  s.idle = 0;  // no breath: the place alone
   const vm::PlaceRow eye_row = se::eye_row(s);
   CHECK(eye_row.offset_m[0] == 0 && eye_row.offset_m[1] == -0.02 && eye_row.offset_m[2] == 0);
   // The same weapon at rest: at the eye it sits where its file put it, on a look it is moved out.

@@ -486,7 +486,10 @@ row M48). Three questions decide how it looks, and each has one answer in one fi
   at a time from the look, the eye's own bob and the moments (a shot, a landing, a weapon put
   away): the rest offset low and right, the bob pushed forward, the sway that lags a turn on a
   second-order follower (so a gun has weight), the kick on a stiff spring, the put-away at a
-  steady rate. Presentation only; comfort (`cl_motion`) scales every motion the player did not
+  steady rate, and the breath at rest: the gun rises and falls about 15 times a minute, each
+  breath drawn its own depth and length (now and then a sigh) and the hands wandering slowly, and
+  after a run the body's exertion (climbing with ground speed, falling over about ten seconds)
+  makes it faster and deeper until it settles. Presentation only; comfort (`cl_motion`) scales every motion the player did not
   command. A classic row and a modern one are the starting points.
 - **How it is lit** (`light.hpp`): by the place the player stands in, never by a fixed lamp. A
   game samples its baked light at the player (the lightmap under the feet, a light grid's cell,
@@ -505,7 +508,9 @@ light per pixel and is held to that reference.
 M48d) is its eight free models, each with its own mount (held length, grip), offset from the eye,
 kick, refire and muzzle light. Its hand switches weapons by putting one away and raising the
 next, and lights the muzzle on every shot. The player moves it with `r_drawviewmodel`,
-`r_viewmodel_fov`, `cl_gunx`/`cl_guny`/`cl_gunz` and `cl_gunsway`, `r_viewmodel_center` (1, the
+`r_viewmodel_fov`, `cl_gunx`/`cl_guny`/`cl_gunz` and `cl_gunsway`, the breath's `cl_gunidle` (its
+share, 0 off), `cl_gunidle_rate` (breaths a minute at rest) and `cl_gunidle_exertion` (how much a
+run quickens and deepens it), `r_viewmodel_center` (1, the
 default: centred under the crosshair as the classic arena games hold it; 0 to the right) and
 `r_viewmodel_hands` (0: the weapon without the hands and arms it is built holding, the triangles
 `HeldModel::hand` marks, left out by `HeldDraw::hide_hands` on the GPU and `DrawLit::hidden` on
