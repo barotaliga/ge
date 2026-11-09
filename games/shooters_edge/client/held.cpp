@@ -50,6 +50,7 @@ view::HandFrame step_held(const Listen& l, const ViewState& v, HeldState& s,
   const PlayerState p = player_state(l);
   view::HandInput in;
   in.weapon = static_cast<view::Weapon>(status_of(l, t).weapon);
+  in.dead = p.dead;  // the weapon sinks out of view (view/hand.hpp)
   const float attack = field_named(l, p.entity, "attack_finished");
   const double now = l.server ? l.server->sv.time : 0;
   in.fired = !p.dead && attack > s.attack_finished && static_cast<double>(attack) > now + 1e-3;
@@ -83,8 +84,12 @@ view::HandFrame step_demo_held(const DemoState& s, HeldState& h, const view::Vie
   in.place.look_yaw = pose.yaw;
   in.place.look_pitch = pose.pitch;
   in.place.grounded = true;
+  // Dead, the recorder's weapon sinks out of view (the recording clears the weapon at once: the
+  // one shown goes on being drawn as it sinks).
+  in.dead = s.stats[kStatHealth] <= 0;
   view::HandFrame f = view::step_hand(h.hand, in, settings, models, pose, dt);
-  f.drawn = f.drawn && s.stats[kStatWeapon] != 0 && s.stats[kStatHealth] > 0 && !s.intermission;
+  f.drawn = f.drawn && !s.intermission && (s.stats[kStatWeapon] != 0 || (in.dead && h.shown));
+  h.shown = f.drawn;
   return f;
 }
 

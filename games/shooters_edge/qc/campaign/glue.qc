@@ -58,7 +58,6 @@ float() items_come_back = { return deathmatch != 0; };
 // --- the jump: the single-player form's program jumps for itself (the move never does) ---
 
 float FL_WATERJUMP = 2048;     // out of the water onto a ledge: the move carries him by movedir
-float FL_JUMPRELEASED = 4096;  // the jump let go since the last one (no pogo)
 
 // A ledge ahead at the water's edge: the jump out (checked at water level 2, every frame).
 void() water_jump_check = {
@@ -81,6 +80,9 @@ void() water_jump_check = {
   self.teleport_time = time + 2;
 };
 
+void() jump_sound;
+void() swim_sound;
+
 // Before the move: the water jump's check, then the jump button: swimming up in deep water, a jump
 // of 270 off the ground once the button was let go since the last.
 void() player_jump = {
@@ -94,12 +96,14 @@ void() player_jump = {
     if (self.watertype == CONTENT_WATER) self.velocity_z = 100;
     else if (self.watertype == CONTENT_SLIME) self.velocity_z = 80;
     else self.velocity_z = 50;
+    swim_sound();
     return;
   }
   if (!(self.flags & FL_ONGROUND) || !(self.flags & FL_JUMPRELEASED)) return;
   self.flags = self.flags - (self.flags & FL_JUMPRELEASED);
   self.flags = self.flags - (self.flags & FL_ONGROUND);
   self.velocity_z = self.velocity_z + 270;
+  jump_sound();
 };
 
 // --- spawn parms: the inventory carried from map to map ---

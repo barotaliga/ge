@@ -10,6 +10,7 @@
 #include <string>
 
 #include "console/cvar.hpp"
+#include "shooter/usercmd.hpp"
 
 namespace shooters_edge::client {
 
@@ -41,6 +42,7 @@ constexpr const char* kDefaults[][2] = {
     {"mouse2", "+jump"},
     {"shift", "+speed"},
     {"alt", "+strafe"},
+    {"c", "+movedown"},
     {"1", "impulse 1"},
     {"2", "impulse 2"},
     {"3", "impulse 3"},
@@ -77,12 +79,6 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
                     .help = "1: the view's pitch centres (follows the slope) as you move",
                     .kind = ge::console::CvarKind::boolean},
                    &c.lookspring);
-  con.cvars().bind({.name = "cl_run",
-                    .fallback = "1",
-                    .flags = ge::console::kArchive,
-                    .help = "1: always run (+speed walks), 0: walk (+speed runs)",
-                    .kind = ge::console::CvarKind::boolean},
-                   &c.run);
   con.cvars().bind({.name = "lookstrafe",
                     .fallback = "0",
                     .flags = ge::console::kArchive,
@@ -104,7 +100,13 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
   b.moveright = &con.add_button("moveright", "+moveright: step right while held");
   b.jump = &con.add_button("jump", "+jump: jump (and swim up) while held");
   b.attack = &con.add_button("attack", "+attack: fire while held");
-  b.speed = &con.add_button("speed", "+speed: walk while held (run with cl_run 0)");
+  b.moveup = &con.add_button("moveup", "+moveup: swim up while held");
+  b.movedown =
+      &con.add_button("movedown", "+movedown: crouch (a move that ducks) or swim down while held");
+  b.speed = &con.add_button(
+      "speed",
+      "+speed: the run key: the moves x2 while held (no faster than the server's top speed, which "
+      "the moves already reach: there is no walking)");
   b.strafe = &con.add_button("strafe", "+strafe: the mouse and the turn keys sidestep while held");
   b.left = &con.add_button("left", "+left: turn left while held (cl_yawspeed)");
   b.right = &con.add_button("right", "+right: turn right while held (cl_yawspeed)");
@@ -131,6 +133,8 @@ Moves button_moves(ControlSettings& c) {
   m.back = down(b.back);
   m.moveleft = down(b.moveleft);
   m.moveright = down(b.moveright);
+  m.moveup = down(b.moveup);
+  m.movedown = down(b.movedown);
   m.jump = down(b.jump);
   m.attack = down(b.attack);
   m.speed = down(b.speed);
@@ -144,8 +148,8 @@ Moves button_moves(ControlSettings& c) {
 
 void release_buttons(ControlSettings& c) {
   ControlButtons& b = c.buttons;
-  for (ge::console::Button* p : {b.forward, b.back, b.moveleft, b.moveright, b.jump, b.attack,
-                                 b.speed, b.strafe, b.left, b.right})
+  for (ge::console::Button* p : {b.forward, b.back, b.moveleft, b.moveright, b.moveup, b.movedown,
+                                 b.jump, b.attack, b.speed, b.strafe, b.left, b.right})
     if (p != nullptr) p->held = 0;
   b.impulse = 0;
 }
@@ -196,10 +200,12 @@ void turn_view(const ge::input::InputState& in, const ControlSettings& c,
 ge::shooter::MoveCmd read_controls(const Moves& m, const ge::input::InputState& in,
                                    const ControlSettings& c) {
   ge::shooter::MoveCmd cmd;
-  // cl_run on: run, +speed walks; off: walk, +speed runs. Walking is half the run.
-  const bool run = c.run != m.speed;
-  const int fs = run ? c.forward_speed : c.forward_speed / 2;
-  const int ss = run ? c.side_speed : c.side_speed / 2;
+  // Always at the run: the speeds already ask for more than the server's top speed (320), which
+  // the move holds them to, so there is no walking. The run key (+speed) doubles them as the
+  // classic client does, inside the protocol's limit: no faster, kept for the configs that bind it.
+  const int k = m.speed ? 2 : 1;
+  const int fs = std::min(c.forward_speed * k, ge::shooter::kAxisMax);
+  const int ss = std::min(c.side_speed * k, ge::shooter::kAxisMax);
   int f = 0, s = 0;
   if (m.forward) f += fs;
   if (m.back) f -= fs;
@@ -213,8 +219,13 @@ ge::shooter::MoveCmd read_controls(const Moves& m, const ge::input::InputState& 
     const double side = in.mouse.dx * c.sensitivity * c.strafe_scale;
     s = std::clamp(s + static_cast<int>(side), -c.side_speed, c.side_speed);
   }
+  // Up and down: swimming in the classic move; down crouches in a move that ducks (the sequel's,
+  // plugins/shooter/sequel_move.hpp: up below 0 on the ground).
+  const int us = std::min(c.up_speed * k, ge::shooter::kAxisMax);
+  const int u = (m.moveup ? us : 0) - (m.movedown ? us : 0);
   cmd.forward = static_cast<int16_t>(f);
   cmd.side = static_cast<int16_t>(s);
+  cmd.up = static_cast<int16_t>(u);
   if (m.attack) cmd.buttons |= ge::shooter::kButtonAttack;
   if (m.jump) cmd.buttons |= ge::shooter::kButtonJump;
   cmd.impulse = static_cast<uint8_t>(m.impulse);

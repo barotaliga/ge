@@ -34,6 +34,7 @@ float FL_INWATER = 16;
 float FL_MONSTER = 32;
 float FL_ITEM = 256;
 float FL_ONGROUND = 512;
+float FL_JUMPRELEASED = 4096;  // the jump let go since the last one (no pogo)
 
 // takedamage
 float DAMAGE_NO = 0;
@@ -151,6 +152,7 @@ float EF_RED = 128;     // the shield's
 .float body_next;         // a player's next body frame is due (common/player.qc)
 .float body_first;        // the first frame of the cycle his body plays
 .float body_step;         // the cycle's next step
+.float splash_next;       // a swimmer's next splash may be heard (common/player.qc)
 
 float STATE_TOP = 0;
 float STATE_BOTTOM = 1;

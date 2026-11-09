@@ -21,6 +21,8 @@
 // place of the classic look (`--before="ce_relief 0; ce_parallax 0"`: one switch's before and
 // after). `--swings=<n>` then has the player take the axe and swing it n times with the game's
 // own held weapons in hand: a sheet, a GIF and which of the axe's two swings each one played.
+// `--death=1` has him jump once (the sounds heard, the jump's among them) and die, his weapon
+// sinking out of view: a sheet and a GIF.
 //
 // `--game=fixture` is that path on our own data, so its pictures may go anywhere: the halls lit by
 // two wall torches, their textures enhanced into a cache of the lab's own (classic-enhance's
@@ -30,7 +32,7 @@
 // ge:summary Lab: the window's frame drawn headless: the halls, a rocket jump, its effects, the HUD
 // ge:keywords lab se-client listen-server window frame rocket-jump hud effects trail explosion
 // ge:keywords before-after relief parallax enhanced-textures fixture-cache
-// ge:keywords axe-swing swings two-swings weaponframe film_swings
+// ge:keywords axe-swing swings two-swings weaponframe film_swings film_death death jump-sound
 // ge:skill shooter render labs
 #include <algorithm>
 #include <cmath>
@@ -261,6 +263,86 @@ void film_swings(gl::Lab& lab, ge::gpu::Device& device, cl::WorldDraw& world,
   if (!gif.empty()) lab.attach("swings.gif", gl::encode_gif_frames(gif, 3), gl::Det::measured);
 }
 
+// THE JUMP AND THE DEATH (`--death=1`): from where the views left him, the player jumps once (the
+// sounds the server starts for him named: the jump's own among them), then dies (the `kill`
+// command), the world drawn in the enhanced look with the game's own weapon in his hand a tenth of
+// a second at a time: the weapon sinks out of view as he falls (view/hand.hpp's death).
+void film_death(gl::Lab& lab, ge::gpu::Device& device, cl::WorldDraw& world,
+                const ge::gpu::Target& out, cl::Listen& l, cl::ViewState& shown,
+                cl::FxState& fx_state, cl::FxFrame& fx, cl::HeldState& held,
+                const shooters_edge::view::ViewSettings& settings,
+                std::span<const ge::viewmodel::HeldModel> weapons, double& t) {
+  constexpr double kTic = 0.013;
+  sh::MoveCmd cmd;
+  cmd.msec = 13;
+  cmd.angles = {l.view.x, l.view.y, 0};
+  shooters_edge::view::HandFrame hand;
+  const auto tic = [&] {
+    cl::listen_frame(l, cmd);
+    t += kTic;
+    cl::frame_view(l, shown, 1, t, kTic);
+    cl::step_fx(l, shown, fx_state, t, kTic, fx);
+    hand = cl::step_held(l, shown, held, settings, weapons, t, kTic);
+  };
+  for (int i = 0; i < 120; ++i) tic();  // a second and a half: on the ground, the weapon up
+  l.sounds.clear();
+  // The jump: the button held a few frames, then let go until he lands.
+  int jumps = 0;
+  gl::LabTable heard{"what the server played for him", {"moment", "sound", "channel"}, {}};
+  const auto listen_for = [&](const char* moment) {
+    for (const cl::DemoSound& d : l.sounds) {
+      const std::string name =
+          d.sound >= 0 && static_cast<size_t>(d.sound) < l.server->sounds.size()
+              ? l.server->sounds[static_cast<size_t>(d.sound)]
+              : "?";
+      if (name.find("jmp") != std::string::npos) ++jumps;
+      heard.rows.push_back({moment, name, std::to_string(d.channel)});
+    }
+    l.sounds.clear();
+  };
+  for (int i = 0; i < 100; ++i) {
+    cmd.buttons = i < 6 ? sh::kButtonJump : 0;
+    tic();
+    listen_for("the jump");
+  }
+  lab.metric("jump.sounds", jumps, "count");
+  // The death: the kill command, then a second and a half drawn a tenth of a second apart.
+  l.rules->client_command(0, "kill");
+  cmd.buttons = 0;
+  std::vector<gl::Picture> sheet, gif;
+  std::vector<std::string> names;
+  int drawn_after = 0;
+  for (int i = 0; i <= 120; ++i) {
+    if (i > 0) tic();
+    listen_for("the death");
+    if (i % 3 != 0) continue;  // ~25 frames a second for the GIF
+    ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
+    cl::draw_world(device, world, view, fx, hand.drawn ? &hand : nullptr, 3 * kTic, {}, out.view);
+    const ge::gpu::Image img = ge::gpu::read_now(device, out);
+    const gl::Picture pic{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba};
+    gif.push_back(gl::shrink(pic, 480));
+    if (i % 9 == 0 && sheet.size() < 8) {  // a ninth of the frames on the sheet, 0.117 s apart
+      sheet.push_back(gl::shrink(pic, 320));
+      char at[32];
+      std::snprintf(at, sizeof at, "%.2f s after", i * kTic);
+      names.push_back(std::string(at) + (hand.drawn ? "" : ", gone"));
+    }
+    if (i * kTic > 1.0 && hand.drawn) ++drawn_after;
+  }
+  lab.metric("death.weapon-drawn-after-1s", drawn_after, "frames");
+  lab.table(heard);
+  if (!sheet.empty())
+    lab.shot({"death",
+              "the weapon as the player dies",
+              "The player jumps once, then dies where he stands (the kill command), the game's own "
+              "weapon in his hand: it sinks out of view as he falls, never left floating in front "
+              "of a dead man's eyes.",
+              "the weapon lower in each frame, gone by the time the view settles on the floor",
+              {{"map", lab.arg("map")}}},
+             es::sheet_of(sheet, names, 4), gl::Det::measured);
+  if (!gif.empty()) lab.attach("death.gif", gl::encode_gif_frames(gif, 4), gl::Det::measured);
+}
+
 // A game folder's map from its start, four ways, classic beside enhanced (private pictures), or
 // `--game=fixture`'s halls (pictures for anywhere).
 void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
@@ -346,12 +428,14 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
                                 &warp_at[2], &warp_at[3]) == 4;
   // `--swings`: the player takes the axe and swings it, the game's own held weapons in his hand.
   const int swings = std::max(0, static_cast<int>(lab.arg_num("swings")));
+  // `--death`: the player jumps once and dies, the game's own held weapons in his hand.
+  const bool death = lab.arg("death") == "1";
   std::vector<ge::viewmodel::HeldModel> weapons;
   // `--hand`: the weapon in hand in every view, the game's own (client/held.hpp), raised over the
   // classic status bar as the window raises it.
   const bool in_hand = lab.arg("hand") == "1";
   cl::HeldState held;
-  if (swings > 0 || in_hand) {
+  if (swings > 0 || death || in_hand) {
     held.hand.at_eye = cl::load_held_set(cl::classic_adapter(), files, {}, weapons);
     if (!held.hand.at_eye) lab.note("no weapon is drawn: the game's held weapons did not load");
   } else if (warp && !shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error)) {
@@ -553,6 +637,9 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   if (swings > 0)
     film_swings(lab, *device, *world[1], out, l, shown, fx_state, fx, held, view_settings, weapons,
                 t, swings);
+  if (death)
+    film_death(lab, *device, *world[1], out, l, shown, fx_state, fx, held, view_settings, weapons,
+               t);
 }
 
 void run(gl::Lab& lab) {
@@ -752,7 +839,10 @@ const gl::LabSpec kSpec{
       "with --game: the left side's cvars in the modern look instead of the classic look"},
      {"swings", "0",
       "with --game: after the views, the player takes the axe and swings it this many times, the "
-      "game's own held weapons in hand (a sheet, a GIF and which swing each one played)"}},
+      "game's own held weapons in hand (a sheet, a GIF and which swing each one played)"},
+     {"death", "0",
+      "with --game: 1, after the views the player jumps once (the sounds heard) and dies, the "
+      "game's own weapon in hand sinking out of view (a sheet and a GIF)"}},
     "--size=480,270",
     run,
 };

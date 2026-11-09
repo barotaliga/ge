@@ -585,7 +585,7 @@ server's frames go on under it). Its pages are the classic game's:
 | MULTIPLAYER | JOIN A GAME, NEW GAME (the rules, then START), SETUP (name, shirt and pants colours) |
 | NEW GAME | MAX PLAYERS, GAME TYPE (`deathmatch`), TEAMPLAY, SKILL, FRAG LIMIT, TIME LIMIT, MAP, START |
 | SETUP | NAME, SHIRT COLOUR (`topcolor`), PANTS COLOUR (`bottomcolor`): the player's user info, sent to the server as it changes |
-| OPTIONS | CUSTOMIZE CONTROLS, GO TO CONSOLE, RESET TO DEFAULTS, SCREEN SIZE, BRIGHTNESS (`gamma`), MOUSE SPEED (`sensitivity`), MUSIC VOLUME, SOUND VOLUME, ALWAYS RUN (`cl_run`), INVERT MOUSE (`m_invert`), LOOKSPRING, LOOKSTRAFE, VIDEO OPTIONS, CLASSIC ENHANCED |
+| OPTIONS | CUSTOMIZE CONTROLS, GO TO CONSOLE, RESET TO DEFAULTS, SCREEN SIZE, BRIGHTNESS (`gamma`), MOUSE SPEED (`sensitivity`), MUSIC VOLUME, SOUND VOLUME, INVERT MOUSE (`m_invert`), LOOKSPRING, LOOKSTRAFE, VIDEO OPTIONS, CLASSIC ENHANCED |
 | CUSTOMIZE CONTROLS | ATTACK, MOVE FORWARD, MOVE BACK, STEP LEFT, STEP RIGHT, JUMP, WALK / RUN (`+speed`), SIDESTEP (`+strafe`), TURN LEFT, TURN RIGHT, NEXT WEAPON: each the keys bound to it; ENTER, then the key (BACKSPACE clears, ESCAPE leaves it, a third key replaces both) |
 | VIDEO | WORLD LOOK (`r_look`), HUD (`hud_style`), MENU LOOK (`menu_look`), FULLSCREEN, HELD WEAPON |
 | HELD WEAPON | SHOW WEAPON (`r_drawviewmodel`), HANDS AND ARMS, CENTRED, SWAY (`cl_gunsway`), MUZZLE FIRE (`ce_muzzles`) |

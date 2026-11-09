@@ -23,6 +23,8 @@
 //   nailgun's two in turn, the super nailgun's cluster one barrel at a time. Each shot's
 //   frame is held (its barrel fires); with `ViewSettings::lerp` a clip played or held ends by
 //   flowing back to the rest frame over a frame's time, never a jump.
+// - DEATH (`HandInput::dead`): the weapon sinks out of view over `kDeathLowerS` and is not drawn
+//   once down; it comes up again with the next life.
 // - A CLASSIC GAME'S OWN WEAPONS (`Hand::at_eye`): models authored at the eye, placed by the
 //   classic row (`eye_row`) with no offset of their own; the kick, the flash and the fire are
 //   still each weapon's look.
@@ -48,6 +50,7 @@
 // ge:keywords muzzle-light r_drawviewmodel r_viewmodel_fov cl_gunx cl_guny cl_gunz cl_gunsway
 // ge:keywords step_hand held_row add_view_cvars view-settings fire-clip animation frames
 // ge:keywords r_viewmodel_center centred-weapon centered r_viewmodel_hands hide-hands muzzle-pose
+// ge:keywords death dead lowered sink death-lower
 // ge:keywords at_eye eye_row classic-weapons axe-swing two-swings takes fire_frame weaponframe
 // ge:skill render shooter
 // ge:test tests/shooters_edge_view_test.cpp
@@ -72,6 +75,10 @@ struct ViewSettings {
   bool hands = true;            // r_viewmodel_hands
   bool lerp = true;  // r_lerpmodels (bound with the picture's): a clip's end flows back to rest
 };
+
+// How long the weapon takes to sink out of view when the player dies, s: slower than a switch's
+// put-away, so the death reads as the hand letting go. It comes back up at the switch's pace.
+inline constexpr double kDeathLowerS = 0.6;
 
 // How much nearer and higher a centred weapon is held than the place to the right, m
 // (r_viewmodel_center): seen down its length it would read as a thin stub, so it is brought in
@@ -117,6 +124,7 @@ struct HandInput {
   Weapon weapon = Weapon::shotgun;  // the game's weapon
   bool fired = false;               // a shot of it this frame
   int fire_frame = 0;  // the model's frame the game says the shot starts on (0: not said)
+  bool dead = false;   // the player is dead: the weapon sinks out of view (kDeathLowerS)
 };
 
 struct HandFrame {
