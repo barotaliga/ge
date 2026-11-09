@@ -6,6 +6,7 @@
 #include "platform/pacing.hpp"
 
 #include "console/console.hpp"
+#include "core/num.hpp"
 #include "core/num_text.hpp"
 
 namespace ge::platform {
@@ -55,6 +56,24 @@ void add_pacing_cvars(console::Console& con, Pacing& p) {
                             "whenever a frame starts; 0: by the measured time between frames",
                     .kind = CvarKind::boolean},
                    &p.settings.steady);
+  con.cvars().bind({.name = "vid_vsync_lag_fix",
+                    .fallback = "0",
+                    .flags = kArchive,
+                    .help = "1: with vsync, each frame starts just in time to finish before its "
+                            "refresh, its input that much fresher (for frames well under a "
+                            "refresh; a slower frame runs as at vid_framelatency 1); 0: frames "
+                            "start as soon as they may",
+                    .kind = CvarKind::boolean},
+                   &p.settings.late_start);
+  con.cvars().bind({.name = "vid_vsync_lag_tweak",
+                    .fallback = "1",
+                    .flags = kArchive,
+                    .help = "the time vid_vsync_lag_fix leaves spare before the refresh, ms: "
+                            "lower is less lag, too low misses refreshes",
+                    .kind = CvarKind::number,
+                    .min = 0,
+                    .max = 10},
+                   &p.settings.late_margin_ms);
   con.cvars().bind({.name = "scr_showfps",
                     .fallback = "0",
                     .flags = kArchive,
@@ -83,12 +102,34 @@ uint64_t pace(const Window& window, Pacing& p, double gpu_wait_s) {
   const uint64_t before = now_ns();
   const int64_t at = p.grid.start_at(static_cast<int64_t>(before), p.cap);
   if (at > static_cast<int64_t>(before)) wait_until_ns(static_cast<uint64_t>(at));
+  if (late_start_on(p)) {  // then just in time for the refresh
+    const int64_t now = static_cast<int64_t>(now_ns());
+    const int64_t late =
+        p.phase.start_at(now, loop::interval_ns(p.refresh),
+                         static_cast<int64_t>(core::num::round(p.settings.late_margin_ms * 1e6)));
+    if (late > now) wait_until_ns(static_cast<uint64_t>(late));
+  }
   const uint64_t start = now_ns();
   if (p.last_ns != 0)
     p.times.add(static_cast<double>(start - p.last_ns) * 1e-9,
                 static_cast<double>(start - before) * 1e-9, gpu_wait_s);
   p.last_ns = start;
   return start;
+}
+
+void acquired(Pacing& p, uint64_t before_ns, uint64_t after_ns) {
+  p.acquire_ns = after_ns - before_ns;
+  if (p.acquire_ns > 500'000) p.phase.blank(static_cast<int64_t>(after_ns));  // it blocked
+}
+
+bool late_start_on(const Pacing& p) {
+  return p.settings.vsync && p.settings.late_start && p.refresh > 0;
+}
+
+void frame_done(Pacing& p, uint64_t done_ns) {
+  // From the frame's start to its GPU's last work, less the wait for a free image (the display's).
+  if (p.last_ns != 0 && done_ns > p.last_ns + p.acquire_ns)
+    p.phase.cost(static_cast<int64_t>(done_ns - p.last_ns - p.acquire_ns));
 }
 
 double game_dt(Pacing& p, double dt) {
@@ -105,6 +146,9 @@ std::string pacing_text(const Pacing& p) {
   if (!p.present.empty()) line += " (" + p.present + ")";
   line += ", framelatency " + std::to_string(p.settings.latency);
   line += ", steady " + std::string(p.settings.steady ? "on" : "off");
+  if (late_start_on(p))
+    line += ", lag fix (frame " + to_fixed(static_cast<double>(p.phase.worst()) / 1e6, 2) +
+            " ms + " + to_fixed(p.settings.late_margin_ms, 2) + " ms spare)";
   return line;
 }
 

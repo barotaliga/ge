@@ -1207,12 +1207,18 @@ int run_main(int argc, char** argv) {
       ge::hud::draw_spinner(overlay, ge::hud::frame_for(w, h, se::hud_style()), se::hud_style(), t,
                             cl::load_caption(loader), t - loader.since_s);
 
+    const uint64_t acquiring = ge::platform::now_ns();
     wgpu::TextureView target = surface.acquire(*device);
+    ge::platform::acquired(pacing, acquiring, ge::platform::now_ns());
     if (!target) continue;
     cl::draw_world(*device, *world, view, fx, &hand, wall, overlay, target);
     shot_copy.frame(*device, surface.frame_target(), shots, console);
     surface.present();
     gate.submitted(*device);
+    if (ge::platform::late_start_on(pacing)) {  // the frame's cost, to its GPU's last work
+      gate.wait(*device, 1);
+      ge::platform::frame_done(pacing, ge::platform::now_ns());
+    }
     ++presented;
   }
   if (quit) save_settings();

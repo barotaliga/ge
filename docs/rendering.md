@@ -302,6 +302,8 @@ input read, the game stepped by the STEADY time, the frame drawn and presented, 
 | `vid_steady` | 1 | At vsync the game's frame time is whole refreshes (`loop::SteadyClock`), the difference from the wall clock repaid a twentieth a frame: the motion is even whenever the frame started |
 | `cl_maxfps` | 0 | A cap in frames a second on a fixed grid of deadlines (a late frame paid back by the next; a frame late by a whole interval restarts the grid) |
 | `cl_maxfps_hz` | 0 | The cap as a multiple of the display's refresh (`platform::refresh_hz`); wins over `cl_maxfps` |
+| `vid_vsync_lag_fix` | 0 | With vsync, each frame starts just in time to finish before its refresh (`loop::VsyncPhase`): the refresh's phase from the acquires that block, the frame's cost the worst of the last 8 (start to the GPU's last work, less the acquire's wait), the start the next refresh less the cost and `vid_vsync_lag_tweak`. The window waits for its GPU after each present to measure the cost, so a frame that takes more than a refresh runs as at `vid_framelatency 1` |
+| `vid_vsync_lag_tweak` | 1 | The ms the lag fix leaves spare before the refresh: lower is less lag, too low misses refreshes |
 | `scr_showfps` | 0 | 1 the rate in the top-right corner; 2 with the last 120 frames' times as bars, the refresh's interval dashed, a missed refresh red |
 | `framestats` | | One line: the rate, the 1% low, the percentiles, the jitter, the hitches, the waits, the display's refresh, the cap, the present mode |
 
@@ -313,7 +315,10 @@ pass one. A cap at the refresh looks ideal on paper and is undone by the display
 from the CPU's. Vsync off is the least lag at vsync's rate of pictures and the most judder unless
 the frame rate is far above the refresh (why the classic competitive setting is vsync off at
 hundreds of frames). Variable refresh with a cap a few percent under the panel's top rate is
-best of all where the display has it.
+best of all where the display has it. The lag fix (`vid_vsync_lag_fix 1`) keeps vsync's even
+pictures and takes the light load to ~8.8 ms (its frame plus the 1 ms margin and the wait for the
+display's scan); under the heavy load, where a frame does not fit a refresh, it cannot help and
+runs as one frame in flight.
 
 **Stated once:** the frame's own interpolation (models, the eye: the client's `model_lerp.hpp` and
 the eye in `present.cpp`) is what makes a 77 Hz server look smooth at 120 Hz; the pacing makes

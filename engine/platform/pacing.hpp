@@ -22,6 +22,9 @@
 //   holds two images (three at 3) where the platform takes it (`swap_images`).
 // - `vid_steady 1`: at vsync the game's frame time in whole refreshes (loop::SteadyClock): read it
 //   through `game_dt`.
+// - `vid_vsync_lag_fix 0`: 1 starts each vsynced frame just in time for its refresh
+//   (loop::VsyncPhase): the least lag vsync can give, for frames well under a refresh.
+//   `vid_vsync_lag_tweak 1` is the spare time it leaves, ms: raise it if the graph shows misses.
 // - `scr_showfps 0`: 1 the frame rate in a corner, 2 with the last frames' times as a graph.
 // - `framestats` (a command): the last frames summarised in one line (loop::summary_text), with the
 //   refresh, the cap and the present mode; `framestats clear` starts the record again.
@@ -29,7 +32,8 @@
 // ge:summary The window's frame pacing: the pacing cvars, the cap waited, the frames recorded
 // ge:keywords pacing frame-pacing add_pacing_cvars vid_vsync cl_maxfps cl_maxfps_hz
 // ge:keywords vid_framelatency scr_showfps framestats frame-cap refresh-multiple pace
-// ge:keywords vid_steady game_dt
+// ge:keywords vid_steady game_dt vid_vsync_lag_fix vid_vsync_lag_tweak late-start acquired
+// ge:keywords frame_done vsync-lag
 // ge:skill platform perf
 // ge:test tests/platform_pacing_test.cpp
 #pragma once
@@ -56,6 +60,8 @@ struct Pacing {
   uint64_t last_ns = 0;  // when the last frame started
   std::string present;   // the present mode in use, for `framestats` ("fifo", "immediate")
   loop::SteadyClock steady;
+  loop::VsyncPhase phase;   // the late start's refreshes and frame costs
+  uint64_t acquire_ns = 0;  // this frame's wait in the swap chain's acquire (not its cost)
 };
 
 // The pacing cvars over `p` (it must outlive `con`) and the `framestats` command.
@@ -65,6 +71,14 @@ void add_pacing_cvars(console::Console& con, Pacing& p);
 // last frame recorded with the waits (`gpu_wait_s` the frame gate's). Returns the frame's start,
 // ns on now_ns's clock.
 uint64_t pace(const Window& window, Pacing& p, double gpu_wait_s = 0);
+
+// THE LATE START's measurements (vid_vsync_lag_fix): `acquired` with the times around the swap
+// chain's acquire (one that blocked returned at a refresh), and, while `late_start_on`,
+// `frame_done` once the frame's GPU work is done (the gate waited down to 1 right after the
+// present).
+void acquired(Pacing& p, uint64_t before_ns, uint64_t after_ns);
+bool late_start_on(const Pacing& p);
+void frame_done(Pacing& p, uint64_t done_ns);
 
 // The game's time for a frame measured as `dt` s: whole refreshes when vsync and `vid_steady` are
 // on and the refresh is known (loop::SteadyClock), else `dt`.

@@ -15,9 +15,11 @@
 // 1`, which a display's clock drifting from the CPU's undoes), vsync off uncapped (`vid_vsync 0`:
 // the newest finished frame shown at each refresh, as a desktop's compositor does), and variable
 // refresh capped 3% under the panel's top rate (the competitive recommendation where the display
-// has it). The panel's true refresh drifts from the reported one by `--drift`. Two loads: a
-// light one (a classic map on a fast machine) and a heavy one, whose CPU and GPU together take
-// longer than a refresh, where one frame in flight costs frame rate.
+// has it). The lag fix row starts each frame just in time for its refresh, from the phase its
+// blocked acquires show and its last frames' worst cost (`vid_vsync_lag_fix`). The panel's true
+// refresh drifts from the reported one by `--drift`. Two loads: a light one (a classic map on a
+// fast machine) and a heavy one, whose CPU and GPU together take longer than a refresh, where one
+// frame in flight costs frame rate.
 //
 // THE EYE: a server stepping at 1/77 s under a 120 Hz display. A view placed at the server's
 // latest state moves 0 or 1 server steps a refresh (stairs: judder); placed one server step
@@ -53,10 +55,11 @@ enum class Show : uint8_t { fifo, latest, vrr };
 struct Strategy {
   std::string name;
   Show show;
-  int images;       // the swap chain's images (fifo and vrr block on them)
-  int gate;         // GPU frames in flight before the next frame reads input; 0: no gate
-  double cap_mult;  // the cap as a multiple of the refresh; 0: none
-  bool steady;      // the game's time in whole refreshes (loop::SteadyClock)
+  int images;          // the swap chain's images (fifo and vrr block on them)
+  int gate;            // GPU frames in flight before the next frame reads input; 0: no gate
+  double cap_mult;     // the cap as a multiple of the refresh; 0: none
+  bool steady;         // the game's time in whole refreshes (loop::SteadyClock)
+  double late_ms = 0;  // the late start's spare time, ms (loop::VsyncPhase); 0: no late start
 };
 
 struct Load {
@@ -150,6 +153,9 @@ Outcome run_model(const Strategy& s, const Load& load, double refresh_hz, double
   };
   ge::loop::FramePacer grid;
   ge::loop::SteadyClock steady;
+  ge::loop::VsyncPhase phase;  // the late start knows only the reported refresh, like the window
+  const int64_t reported = ge::loop::interval_ns(refresh_hz);
+  const int64_t margin = static_cast<int64_t>(s.late_ms * 1e6);
   const double cap = s.cap_mult * refresh_hz;
   double game = 0;
   int64_t last_sample = 0;
@@ -157,6 +163,7 @@ Outcome run_model(const Strategy& s, const Load& load, double refresh_hz, double
     if (s.gate > 0 && k - s.gate >= 0) t = std::max(t, gpu_done[static_cast<size_t>(k - s.gate)]);
     advance(t);
     t = std::max(t, grid.start_at(t, cap));
+    if (s.late_ms > 0) t = std::max(t, phase.start_at(t, reported, margin));
     advance(t);
     const int64_t sample = t;
     const double dt = static_cast<double>(sample - last_sample) / 1e9;
@@ -167,6 +174,7 @@ Outcome run_model(const Strategy& s, const Load& load, double refresh_hz, double
     t += static_cast<int64_t>(cpu * 1e6);
     advance(t);
     // The acquire: a free image (one is on the display, the queued ones hold theirs).
+    const int64_t acquiring = t;
     if (s.show != Show::latest) {
       while (1 + static_cast<int>(queue.size()) >= s.images) {
         int64_t at;
@@ -176,10 +184,12 @@ Outcome run_model(const Strategy& s, const Load& load, double refresh_hz, double
           at = next_scan;
           while (queue.front().ready > at) at += period;
         }
+        if (at - t > kMs / 2) phase.blank(at);  // the acquire blocked: it returns at a refresh
         t = std::max(t, at);
         advance(t);
       }
     }
+    const int64_t blocked = t - acquiring;  // not the frame's cost: the display's
     const int64_t start = std::max(t, gpu_free);
     const int64_t done = start + static_cast<int64_t>(gpu * 1e6);
     gpu_free = done;
@@ -187,18 +197,23 @@ Outcome run_model(const Strategy& s, const Load& load, double refresh_hz, double
     queue.push_back({done, sample, game});
     o.frames++;
     t += kPresentNs;
+    if (s.late_ms > 0) {  // the window waits for its GPU, and so learns the frame's cost
+      t = std::max(t, done);
+      phase.cost(t - sample - blocked);
+    }
     advance(t);
   }
   return o;
 }
 
-std::vector<Strategy> strategies() {
+std::vector<Strategy> strategies(double late_ms) {
   return {
       {"vsync, 3 images (before)", Show::fifo, 3, 0, 0, false},
       {"vsync, 2 images, 1 in flight", Show::fifo, 2, 1, 0, false},
       {"vsync, 1 in flight, steady", Show::fifo, 2, 1, 0, true},
       {"vsync, 2 in flight, steady (default)", Show::fifo, 2, 2, 0, true},
       {"vsync, 3 images, 2 in flight", Show::fifo, 3, 2, 0, true},
+      {"vsync, lag fix, steady", Show::fifo, 2, 1, 0, true, late_ms},
       {"vsync + cap at refresh", Show::fifo, 2, 1, 1, false},
       {"vsync off, uncapped", Show::latest, 3, 1, 0, false},
       {"VRR, cap 3% under refresh", Show::vrr, 2, 1, 0.97, false},
@@ -233,6 +248,7 @@ void shoot(gl::Lab& lab, const std::string& id, const gl::Chart& chart, const st
              {"heavy", lab.arg("heavy")},
              {"spread", lab.arg("spread")},
              {"drift", lab.arg("drift")},
+             {"lag-margin", lab.arg("lag-margin")},
              {"seconds", lab.arg("seconds")},
              {"seed", lab.arg("seed")}}},
            gl::to_picture(chart.plot));
@@ -247,7 +263,7 @@ void run_load(gl::Lab& lab, const Load& load, double refresh, double drift, doub
                   "latency mean ms", "latency p99 ms", "judder mean ms", "judder p99 ms"},
                  {}};
   std::vector<gl::Sample> lat, jud;
-  for (const Strategy& s : strategies()) {
+  for (const Strategy& s : strategies(lab.arg_num("lag-margin"))) {
     const Outcome o = run_model(s, load, refresh, drift, spread, seconds, seed);
     const gl::Summary l = gl::summarize(o.latency_ms), j = gl::summarize(o.judder_ms);
     t.rows.push_back({s.name, to_fixed(o.frames / seconds, 1), to_fixed(o.shown / o.seconds, 1),
@@ -350,6 +366,7 @@ const gl::LabSpec kSpec{
         {"heavy", "4.5,5", "the heavy load's CPU and GPU time a frame, ms"},
         {"spread", "0.3", "each frame's time varies by up to this share either way"},
         {"drift", "0.0005", "the panel's true refresh this share slower than the one reported"},
+        {"lag-margin", "1", "the lag fix row's spare time before the refresh, ms"},
         {"seconds", "10", "how long each strategy runs"},
         {"tic-hz", "77", "the server's step rate for the eye's chart"},
         {"seed", "1", "the frame times' stream"},

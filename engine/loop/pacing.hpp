@@ -14,6 +14,7 @@
 //   a refresh misses it; 2 (the default) lets the CPU build one frame while the GPU draws the
 //   last, a few milliseconds more lag and no missed refresh until either alone passes one.
 // - `steady`: at vsync, the game's frame time snapped to whole refreshes (`SteadyClock`).
+// - `late_start`: at vsync, each frame started just in time for its refresh (`VsyncPhase`).
 //
 // THE CAP'S GRID (`FramePacer`): the frames start on a fixed grid of deadlines one interval
 // apart, not one interval after the last frame began, so a frame that ran a little long is paid
@@ -39,6 +40,7 @@
 // ge:keywords frame-latency frames-in-flight frame-times percentile one-percent-low jitter hitch
 // ge:keywords stutter judder framestats pacesettings framepacer frametimes summarize
 // ge:keywords steady-clock steadyclock vid_steady snapped-frame-time display-time
+// ge:keywords vsync-lag late-start just-in-time vsyncphase vid_vsync_lag_fix vid_vsync_lag_tweak
 // ge:skill platform perf
 // ge:test tests/loop_pacing_test.cpp
 #pragma once
@@ -56,11 +58,13 @@
 namespace ge::loop {
 
 struct PaceSettings {
-  bool vsync = true;    // vid_vsync
-  double max_fps = 0;   // cl_maxfps: 0 no cap
-  double hz_mult = 0;   // cl_maxfps_hz: the cap as a multiple of the display's refresh; 0 off
-  int32_t latency = 2;  // vid_framelatency: GPU frames queued when the next frame reads input
-  bool steady = true;   // vid_steady: at vsync, the game's time in whole refreshes
+  bool vsync = true;          // vid_vsync
+  double max_fps = 0;         // cl_maxfps: 0 no cap
+  double hz_mult = 0;         // cl_maxfps_hz: the cap as a multiple of the display's refresh; 0 off
+  int32_t latency = 2;        // vid_framelatency: GPU frames queued when the next frame reads input
+  bool steady = true;         // vid_steady: at vsync, the game's time in whole refreshes
+  bool late_start = false;    // vid_vsync_lag_fix: at vsync, start each frame just in time
+  double late_margin_ms = 1;  // vid_vsync_lag_tweak: the spare time left before the refresh, ms
 };
 
 inline constexpr int32_t kMinLatency = 1, kMaxLatency = 3;
@@ -100,6 +104,54 @@ struct SteadyClock {
     const double repay = debt * 0.05;
     debt -= repay;
     return snapped + repay;
+  }
+};
+
+// THE LATE START at vsync (`VsyncPhase`, `vid_vsync_lag_fix`): a vsynced frame that starts as
+// soon as the last one was handed over waits in the swap chain for the refresh, its input read up
+// to a refresh before the picture shows. Started late instead, as late as its own cost allows, the
+// frame is finished a margin before the refresh it is meant for and its input is that much
+// fresher: at 120 Hz with a 5 ms frame, about 8 ms less lag than two images and two frames in
+// flight. It needs two things measured:
+// - WHEN THE REFRESHES FALL: a swap chain's acquire that blocks returns when the display frees an
+//   image, which is at a refresh (`blank`); the refreshes after it are a period apart. A frame
+//   started too late misses its refresh and the next acquire blocks again, and one started a whole
+//   refresh too early finds no free image and blocks too, so a drifting display clock corrects the
+//   phase by itself.
+// - WHAT A FRAME COSTS, start to the GPU's last work done (`cost`; the window waits for its GPU
+//   right after presenting while the late start is on, which delays nothing already presented): the
+//   largest of the last `kCosts`, so one slow frame in a run of quick ones does not miss.
+// The frame starts at the next refresh less the cost and the margin. When that has passed, it
+// starts at the refresh after it less the same: the refresh the frame before waits for cannot
+// take this one too. When the cost and the margin are more than a refresh (a frame that cannot
+// finish in one), it starts at once and the late start does nothing.
+struct VsyncPhase {
+  static constexpr size_t kCosts = 8;
+  int64_t blank_ns = 0;  // a refresh seen; 0 none yet
+  std::array<int64_t, kCosts> costs{};
+  size_t count = 0, head = 0;
+
+  void blank(int64_t at_ns) { blank_ns = at_ns; }
+  void cost(int64_t ns) {
+    costs[head] = ns;
+    head = (head + 1) % kCosts;
+    count = std::min(count + 1, kCosts);
+  }
+  int64_t worst() const {
+    int64_t w = 0;
+    for (size_t i = 0; i < count; i++) w = std::max(w, costs[i]);
+    return w;
+  }
+  // When the frame about to start should start, ns (at or before `now_ns`: at once), the display
+  // refreshing every `period_ns` and `margin_ns` kept spare.
+  int64_t start_at(int64_t now_ns, int64_t period_ns, int64_t margin_ns) const {
+    if (blank_ns == 0 || period_ns <= 0 || count < kCosts) return now_ns;
+    const int64_t need = worst() + margin_ns;
+    if (need >= period_ns) return now_ns;
+    const int64_t since = now_ns - blank_ns;
+    int64_t next = blank_ns + (since >= 0 ? since / period_ns + 1 : 0) * period_ns;
+    if (next - need < now_ns) next += period_ns;  // too late for that one: the one after
+    return next - need;
   }
 };
 

@@ -84,3 +84,21 @@ TEST(the_steady_clock_hands_whole_refreshes_and_repays_the_rest) {
   CHECK(c.debt == 0);
   CHECK(c.step(0.004, 0) == 0.004);  // no refresh known
 }
+
+TEST(the_lag_fix_starts_just_in_time_for_the_refresh) {
+  VsyncPhase v;
+  const int64_t period = 10'000'000, margin = 1'000'000;
+  CHECK(v.start_at(500, period, margin) == 500);  // no refresh seen: at once
+  v.blank(100'000'000);
+  for (size_t i = 0; i < VsyncPhase::kCosts - 1; i++) v.cost(2'000'000);
+  CHECK(v.start_at(101'000'000, period, margin) == 101'000'000);  // too few costs yet: at once
+  v.cost(3'000'000);
+  CHECK(v.worst() == 3'000'000);
+  // Next refresh at 110 ms; the frame needs 3 + 1 ms: it starts at 106 ms.
+  CHECK(v.start_at(101'000'000, period, margin) == 106'000'000);
+  // Past 106 ms that refresh is too near: the one after, at 116 ms.
+  CHECK(v.start_at(107'000'000, period, margin) == 116'000'000);
+  // A frame that cannot finish in a refresh: at once.
+  v.cost(9'500'000);
+  CHECK(v.start_at(101'000'000, period, margin) == 101'000'000);
+}
