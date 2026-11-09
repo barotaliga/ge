@@ -64,6 +64,13 @@ void fill_numbers(const QcServer& s, int slot, WorldClient& c) {
 
 }  // namespace
 
+bool model_shown(const QcServer& s, int e) {
+  if (field(s, e, s.q.layout->f.modelindex) == 0) return false;
+  const char* text = pg::vm_string(
+      s.q.vm, static_cast<int32_t>(*pg::entity_field(s.q.vm, e, s.q.layout->f.model)));
+  return text != nullptr && text[0] != 0;
+}
+
 void fill_world(const QcServer& s, RulesWorld& w, bool full) {
   // Before the first map there is no program running and nothing to show.
   if (s.q.layout == nullptr || s.q.vm.globals.empty() || s.sv.edicts.empty()) return;
@@ -137,7 +144,7 @@ void fill_world(const QcServer& s, RulesWorld& w, bool full) {
     r.flags = ed.flags;
     r.waterlevel = ed.waterlevel;
     r.health = ed.health;
-    r.modelindex = static_cast<int>(field(s, e, f.modelindex));
+    r.modelindex = model_shown(s, e) ? static_cast<int>(field(s, e, f.modelindex)) : 0;
     r.frame = static_cast<int>(field(s, e, f.frame));
     r.colormap = static_cast<int>(field(s, e, f.colormap));
     r.skin = static_cast<int>(field(s, e, f.skin));
