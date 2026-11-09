@@ -10,11 +10,14 @@
 // ge:keywords stuffcmd bprint sprint centerprint sv_specprint lightstyle particle ambientsound
 // ge:keywords particleeffectnum pointparticles trailparticles classic_temp_entity
 // ge:skill progs shooter testing
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "check.hpp"
 #include "progs/assembler.hpp"
+#include "progs/localized.hpp"
+#include "shooters_edge/server/catalogue.hpp"
 #include "shooters_edge/server/messages.hpp"
 #include "shooters_edge_qc_fixture.hpp"
 
@@ -172,6 +175,51 @@ TEST(the_prints_and_their_spectator_copies) {
   sv::set_user_info(*fx.s, spec - 1, "sp", "3");
   fx.call(73, {ent(p), "centre"});
   CHECK(fx.events(sv::EventKind::centerprint).back()->to == 1u);
+}
+
+// A release that prints keys: the server puts in the words (and each argument's) before a print,
+// a centre print or a written string leaves it; a key it lacks goes out as written.
+TEST(a_programs_keys_leave_the_server_as_their_words) {
+  Fixture fx;
+  const int p = fx.join(0, "player");
+  auto words = std::make_shared<pg::LocalizedText>();
+  pg::read_localized(
+      "qc_got_item = \"You got the {}\\n\"\nqc_nailgun = \"Nailgun\"\n"
+      "map_skill_normal = \"This hall selects NORMAL skill\"\nqc_finale_e1 = \"The end\"\n",
+      *words);
+  fx.s->opt.localized = words;
+  fx.call(24, {ent(p), 1, "$qc_got_item", "$qc_nailgun"});
+  CHECK(fx.events(sv::EventKind::print).back()->text == "You got the Nailgun\n");
+  fx.call(23, {2, "$qc_missing"});
+  CHECK(fx.events(sv::EventKind::print).back()->text == "$qc_missing");
+  fx.call(73, {ent(p), "$map_skill_normal"});
+  CHECK(fx.events(sv::EventKind::centerprint).back()->text == "This hall selects NORMAL skill");
+  fx.call(58, {2, "$qc_finale_e1"});
+  CHECK(fx.s->out.all == (Bytes{'T', 'h', 'e', ' ', 'e', 'n', 'd', 0}));
+}
+
+// The re-release's program (a `$qc_` key among its strings) gets its own builtins: its numbers
+// 79..92 over the multiplayer and extension ones, and the slots its names bind to.
+TEST(the_rereleases_program_gets_its_own_builtins) {
+  pg::Progs mod;
+  std::string error;
+  CHECK_MSG(sv::build_test_mod(mod, error), error);
+  CHECK(!sv::rerelease_program(mod));
+  const Fixture plain(sv::kArenaEntities, {}, &mod);
+  CHECK(std::string(plain.s->q.vm.builtins[90].name) == "tracebox");
+  const std::string key = "$qc_got_item";
+  mod.strings.insert(mod.strings.end(), key.begin(), key.end());
+  mod.strings.push_back(0);
+  CHECK(sv::rerelease_program(mod));
+  Fixture fx(sv::kArenaEntities, {}, &mod);
+  CHECK(std::string(fx.s->q.vm.builtins[90].name) == "centerprint");
+  CHECK(std::string(fx.s->q.vm.builtins[92].name) == "sprint");
+  CHECK(std::string(fx.s->q.vm.builtins[sv::kRereleaseOnly].name) == "CheckPlayerEXFlags");
+  const int p = fx.join(0, "player");
+  fx.call(92, {ent(p), 1, "$qc_got_item", " and more"});
+  CHECK(fx.events(sv::EventKind::print).back()->text == "$qc_got_item and more");
+  fx.call(79, {});
+  CHECK(!fx.fault && fx.rf == 0);
 }
 
 TEST(a_spectator_tracking_a_player_gets_the_copies_both_ask_for) {

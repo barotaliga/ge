@@ -43,6 +43,7 @@
 #include "console/cvar.hpp"
 #include "progs/entity_text.hpp"
 #include "progs/extensions.hpp"
+#include "progs/localized.hpp"
 #include "shooter/client.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 #include "shooters_edge/sim/qc_program.hpp"
@@ -127,6 +128,9 @@ struct QcServerOptions {
   // the size it gives the entity (bi_world.cpp's setmodel); null: such an entity keeps its size.
   ModelBounds model_bounds = nullptr;
   void* model_ctx = nullptr;
+  // The release's words by key (progs/localized.hpp): a program's `$key` prints, centre prints and
+  // written strings leave the server as their words. Null: they leave as the program wrote them.
+  std::shared_ptr<const pg::LocalizedText> localized;
 };
 
 struct QcServer : RulesCommon {

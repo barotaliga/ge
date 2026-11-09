@@ -7,6 +7,7 @@
 #include "shooters_edge/server/catalogue.hpp"
 
 #include <cstring>
+#include <string_view>
 
 #include "progs/stdlib.hpp"
 #include "shooters_edge/server/builtins.hpp"
@@ -180,7 +181,74 @@ void extras_of(pg::Extension& e) {
   if (e.name == "FTE_CALLTIMEOFDAY") e.hooks = {"timeofday"};
 }
 
+// The re-release's builtins that only report or draw for a debugger, or ask the player's
+// preferences: nothing done, 0 returned (the classic behaviour each falls back to).
+void bi_rerelease_nothing(pg::Vm& vm) { pg::return_float(vm, 0); }
+
+// The re-release's numbers (its first form; the later one binds the same builtins by name).
+struct RereleaseRow {
+  int number;
+  const char* name;
+  pg::Builtin fn;
+};
+const RereleaseRow kRerelease[] = {
+    {79, "finaleFinished", bi_rerelease_nothing},  // 0: the finale's text stays up
+    {80, "localsound", bi_rerelease_nothing},
+    {81, "draw_point", bi_rerelease_nothing},
+    {82, "draw_line", bi_rerelease_nothing},
+    {83, "draw_arrow", bi_rerelease_nothing},
+    {84, "draw_ray", bi_rerelease_nothing},
+    {85, "draw_circle", bi_rerelease_nothing},
+    {86, "draw_bounds", bi_rerelease_nothing},
+    {87, "draw_worldtext", bi_rerelease_nothing},
+    {88, "draw_sphere", bi_rerelease_nothing},
+    {89, "draw_cylinder", bi_rerelease_nothing},
+    {90, "centerprint", bi_centerprint},  // the key and its arguments
+    {91, "bprint", bi_bprint},
+    {92, "sprint", bi_sprint},
+    {kRereleaseOnly + 0, "CheckPlayerEXFlags", bi_rerelease_nothing},  // 0: always switch
+    {kRereleaseOnly + 1, "walkpathtogoal", bi_rerelease_nothing},      // 0: movetogoal instead
+    {kRereleaseOnly + 2, "bot_movetopoint", bi_rerelease_nothing},
+    {kRereleaseOnly + 3, "bot_followentity", bi_rerelease_nothing},
+};
+const pg::NamedBuiltin kRereleaseNames[] = {
+    {"ex_bprint", 23},
+    {"ex_sprint", 24},
+    {"ex_centerprint", 73},
+    {"ex_finaleFinished", 79},
+    {"ex_localsound", 80},
+    {"ex_draw_point", 81},
+    {"ex_draw_line", 82},
+    {"ex_draw_arrow", 83},
+    {"ex_draw_ray", 84},
+    {"ex_draw_circle", 85},
+    {"ex_draw_bounds", 86},
+    {"ex_draw_worldtext", 87},
+    {"ex_draw_sphere", 88},
+    {"ex_draw_cylinder", 89},
+    {"ex_CheckPlayerEXFlags", kRereleaseOnly + 0},
+    {"ex_walkpathtogoal", kRereleaseOnly + 1},
+    {"ex_bot_movetopoint", kRereleaseOnly + 2},
+    {"ex_bot_followentity", kRereleaseOnly + 3},
+};
+
 }  // namespace
+
+bool rerelease_program(const pg::Progs& p) {
+  const std::string_view strings(p.strings.data(), p.strings.size());
+  if (strings.find("$qc_") != std::string_view::npos) return true;
+  for (const pg::Function& f : p.functions) {
+    if (f.first_statement != 0 || f.name <= 0 || static_cast<size_t>(f.name) >= p.strings.size())
+      continue;
+    if (std::strncmp(p.strings.data() + f.name, "ex_", 3) == 0) return true;
+  }
+  return false;
+}
+
+void install_rerelease(QcServer& s) {
+  for (const RereleaseRow& r : kRerelease) pg::set_builtin(s.q.vm, r.number, r.fn, r.name);
+  pg::bind_by_name(s.q.vm, kRereleaseNames);
+}
 
 bool install_catalogue(QcServer& s, std::string& error) {
   for (int i = 0; i < kCatalogueCount; i++) {
@@ -207,6 +275,7 @@ bool install_catalogue(QcServer& s, std::string& error) {
     if (!pg::register_extension(s.extensions, std::move(e), error)) return false;
   }
   pg::install(s.extensions, s.q.vm);
+  if (rerelease_program(*s.q.vm.progs)) install_rerelease(s);
   return true;
 }
 

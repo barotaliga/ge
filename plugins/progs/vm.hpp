@@ -47,6 +47,7 @@
 
 #include <bit>
 #include <cstdint>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -133,6 +134,8 @@ struct Vm {
   bool world_locked = false;  // the map is running: ADDRESS of a world field faults
   EngineSlots slots;
   std::vector<BuiltinSlot> builtins;  // by number; [0] never called
+  // A builtin bound to a function by its name (`bind_by_name`), by function: its number, 0 none.
+  std::vector<int32_t> named;
   int argc = 0;                       // the running builtin's argument count
   void* user = nullptr;               // the game's, for its builtins
   const TraceHooks* trace = nullptr;  // when set, every hook runs (slower)
@@ -180,6 +183,17 @@ void clear_entity(Vm& vm, int number);
 
 // Builtin `number` (>= 1) is `fn`; `name` is what a trace and a profile call it.
 void set_builtin(Vm& vm, int number, Builtin fn, const char* name);
+
+// BUILTINS BOUND BY NAME. A program may declare a builtin with no number: its function record
+// has no code (first statement 0, no parameter start, no locals) and only a name. Each such
+// function whose name matches a row (ignoring case) runs the row's numbered builtin when called.
+// A function with no code that no row names faults when called ("has no code and no builtin
+// bound by its name"). Returns how many functions were bound.
+struct NamedBuiltin {
+  const char* name;
+  int number;
+};
+int bind_by_name(Vm& vm, std::span<const NamedBuiltin> rows);
 
 // The engine's call of function `fn`. True when it returned; false on a fault (`vm.fault`).
 bool call_function(Vm& vm, int32_t fn);

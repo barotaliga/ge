@@ -14,13 +14,15 @@
 //
 // ge:summary Our packed recording formats' names, and the pick that finds a recording in an archive
 // ge:keywords packed-demo qwdz mvdz qwdvz mvdvz demz zstd archive zip 7z tar-gz readme
-// ge:keywords packed_extension demo_name pick
+// ge:keywords packed_extension demo_name pick plain_extension listed_extensions
 // ge:skill shooter vfs
 // ge:test tests/shooters_edge_classic_record_test.cpp tests/shooters_edge_demo_test.cpp
 #pragma once
 
+#include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "shooters_edge/client/demo.hpp"
 
@@ -28,6 +30,12 @@ namespace shooters_edge::client {
 
 // The packed form's extension for a recording of `base` (voice or not): the plain one and `z`.
 std::string packed_extension(DemoFormat base, bool voice);
+// The plain recording's extension of `base`: `.dem`, `.mvd`, and the client recording's (its
+// voice form's without the `v`).
+std::string plain_extension(DemoFormat base);
+// The extensions the main menu's DEMOS lists: the game's (its profile's `demo_extensions`) and
+// each format's plain one, once each.
+std::vector<std::string> listed_extensions(std::span<const std::string_view> game);
 // Whether an archive's file `name` may be the recording, by its name alone (any case): anything
 // but the documents shipped beside one (a readme, a licence, `.txt`, `.nfo`, `.diz`, a web page, a
 // picture, a checksum or signature, a config). A recording is told by its bytes, so its own name

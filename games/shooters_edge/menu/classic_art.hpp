@@ -48,6 +48,10 @@ struct ClassicArt {
   ge::ui::Image glyphs;  // the 128 x 128 glyph sheet, 16 x 16 cells of 8 px; index 0 see-through
   std::array<uint8_t, 768> palette{};  // the pack's palette, RGB a colour (the scoreboard's fills)
   float density = 1;  // picture pixels a classic pixel: 1 the pack's own, 4 enhanced
+  // FNV-1a (64-bit) over the palette indices of `mainmenu` then `sp_menu` as the pack has them:
+  // which strips these are, so a word cut from their letters (classic_view.cpp) is cut only from
+  // the strips it was measured on. 0 when either is missing.
+  uint64_t strip_print = 0;
 
   // A picture's size in classic pixels.
   float width_of(const ge::ui::Image& img) const { return static_cast<float>(img.width) / density; }

@@ -107,6 +107,24 @@ bool run_builtin(Vm& vm, int32_t number, int argc) {
   return !vm.fault.set;
 }
 
+// The builtin bound to function `fn`, which has no code, by its name (bind_by_name); 0 with a
+// fault when none is.
+int32_t bound_builtin(Vm& vm, int32_t fn) {
+  const size_t i = static_cast<size_t>(fn);
+  if (i < vm.named.size() && vm.named[i] != 0) return vm.named[i];
+  const Progs& p = *vm.progs;
+  const int32_t name = p.functions[i].name;
+  const char* text =
+      name >= 0 && static_cast<size_t>(name) < p.strings.size() ? p.strings.data() + name : "?";
+  char m[sizeof vm.fault.message];
+  std::snprintf(m, sizeof m,
+                "function %.64s has no code and no builtin bound by its name; next: bind it "
+                "(bind_by_name) or give the program a numbered builtin",
+                text);
+  raise(vm, m);
+  return 0;
+}
+
 template <bool kTraced>
 bool execute(Vm& vm, int32_t fn) {
   const Progs& p = *vm.progs;
@@ -379,10 +397,11 @@ bool execute(Vm& vm, int32_t fn) {
         }
         const int argc = s.op - kOpCall0;
         const int32_t first = p.functions[static_cast<size_t>(callee)].first_statement;
-        if (first < 0) {
-          if (!run_builtin(vm, -first, argc)) break;
+        if (first <= 0) {  // a builtin: by its number, or one bound by its name (bind_by_name)
+          const int32_t number = first < 0 ? -first : bound_builtin(vm, callee);
+          if (number == 0 || !run_builtin(vm, number, argc)) break;
           if constexpr (kTraced) {
-            if (t->builtin != nullptr) t->builtin(t->ctx, vm, -first, argc, vm.depth);
+            if (t->builtin != nullptr) t->builtin(t->ctx, vm, number, argc, vm.depth);
           }
           vm.statement = st;
           break;
@@ -458,6 +477,7 @@ void create_vm(Vm& vm, const Progs& progs, const VmLimits& limits) {
   vm.world_locked = false;
   vm.builtins.assign(static_cast<size_t>(limits.max_builtins), BuiltinSlot{});
   vm.builtin_calls.assign(vm.builtins.size(), 0);
+  vm.named.clear();
   vm.depth = 0;
   vm.local_stack.assign(kLocalStackWords, 0u);
   vm.local_used = 0;
@@ -486,6 +506,33 @@ void clear_entity(Vm& vm, int number) {
   std::fill_n(entity_field(vm, number, 0), static_cast<size_t>(vm.entityfields), 0u);
 }
 
+int bind_by_name(Vm& vm, std::span<const NamedBuiltin> rows) {
+  const Progs& p = *vm.progs;
+  vm.named.assign(p.functions.size(), 0);
+  const auto same = [](const char* a, const char* b) {
+    for (; *a != 0 && *b != 0; a++, b++) {
+      const char x = *a >= 'A' && *a <= 'Z' ? static_cast<char>(*a + 32) : *a;
+      const char y = *b >= 'A' && *b <= 'Z' ? static_cast<char>(*b + 32) : *b;
+      if (x != y) return false;
+    }
+    return *a == *b;
+  };
+  int bound = 0;
+  for (size_t i = 1; i < p.functions.size(); i++) {
+    const Function& f = p.functions[i];
+    if (f.first_statement != 0 || f.parm_start != 0 || f.locals != 0) continue;
+    if (f.name <= 0 || static_cast<size_t>(f.name) >= p.strings.size()) continue;
+    const char* name = p.strings.data() + f.name;
+    for (const NamedBuiltin& r : rows) {
+      if (!same(name, r.name)) continue;
+      vm.named[i] = r.number;
+      bound++;
+      break;
+    }
+  }
+  return bound;
+}
+
 void set_builtin(Vm& vm, int number, Builtin fn, const char* name) {
   if (number <= 0 || number >= static_cast<int>(vm.builtins.size())) return;
   vm.builtins[static_cast<size_t>(number)] = {fn, name};
@@ -500,8 +547,9 @@ bool call_function(Vm& vm, int32_t fn) {
   }
   const Function& f = vm.progs->functions[static_cast<size_t>(fn)];
   bool ok = false;
-  if (f.first_statement < 0) {
-    ok = run_builtin(vm, -f.first_statement, f.num_parms);
+  if (f.first_statement <= 0) {
+    const int32_t number = f.first_statement < 0 ? -f.first_statement : bound_builtin(vm, fn);
+    ok = number != 0 && run_builtin(vm, number, f.num_parms);
   } else {
     ok = vm.trace != nullptr ? execute<true>(vm, fn) : execute<false>(vm, fn);
   }
