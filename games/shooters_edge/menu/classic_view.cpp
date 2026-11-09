@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <span>
 #include <string_view>
 
 namespace shooters_edge::menu {
@@ -22,15 +23,33 @@ constexpr float kLabelEnd = 192, kCursorX = 200, kValueX = 220;
 constexpr size_t kLabelChars = 22, kValueChars = 12;
 constexpr int kSliderCells = 10;
 
+constexpr float kBand = 20;  // a strip's row, classic px
+
+// The rows each strip's picture has words for, top to bottom.
+constexpr std::string_view kMainRows[] = {"single", "multi", "options", "help", "quit"};
+constexpr std::string_view kSingleRows[] = {"new", "load", "save"};
+constexpr std::string_view kMultiRows[] = {"join", "host", "setup"};
+
 struct PageArt {
   std::string_view page, title, strip;
+  std::span<const std::string_view> rows = {};
 };
 constexpr PageArt kPageArt[] = {
-    {"main", "ttl_main", "mainmenu"}, {"single", "ttl_sgl", "sp_menu"},
-    {"multi", "p_multi", "mp_menu"},  {"host", "p_multi", ""},
-    {"setup", "p_multi", ""},         {"options", "p_option", ""},
+    {"main", "ttl_main", "mainmenu", kMainRows},
+    {"single", "ttl_sgl", "sp_menu", kSingleRows},
+    {"multi", "p_multi", "mp_menu", kMultiRows},
+    {"host", "p_multi", ""},
+    {"setup", "p_multi", ""},
+    {"options", "p_option", ""},
     {"video", "p_option", ""},
 };
+
+// The band of `pa`'s strip that has the words of row `id`, or -1.
+int band_of(const PageArt& pa, std::string_view id) {
+  for (size_t k = 0; k < pa.rows.size(); k++)
+    if (pa.rows[k] == id) return static_cast<int>(k);
+  return -1;
+}
 
 const PageArt* art_of(std::string_view page) {
   for (const PageArt& a : kPageArt)
@@ -96,6 +115,7 @@ ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int wi
     return ui::Rect{l.x + x * l.scale, l.y + y * l.scale, w * l.scale, h * l.scale};
   };
   l.items.assign(page.items.size(), {});
+  l.bands.assign(page.items.size(), -1);
   const bool help = page.id == "help" && help_pages(art) > 0;
   const bool quit = page.id == "quit";
   float row = quit ? 84 : kRowTop;
@@ -105,8 +125,9 @@ ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int wi
     if (!drawn(it) || help) continue;
     if (l.strip) {
       if (it.kind == ui::ItemKind::back) continue;
+      l.bands[i] = band_of(*pa, it.id);
       l.items[i] =
-          rect(72, kRowTop + 20 * static_cast<float>(strip_row++), art.width_of(*strip), 20);
+          rect(72, kRowTop + kBand * static_cast<float>(strip_row++), art.width_of(*strip), kBand);
       continue;
     }
     l.items[i] = rect(16, row, kScreenW - 32, 8);
@@ -165,11 +186,29 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
   const auto local_y = [&](const ui::Rect& r) { return (r.y - l.y) / l.scale; };
 
   if (l.strip) {
-    const ui::Image* strip = art.find(art_of(page.id)->strip);
-    pen.picture(strip, 72, kRowTop);
+    // Each row its own band of the picture, so a row the picture has no words for (drawn in big
+    // letters) sits between them in the game's order.
+    const ui::Image* strip = art.find(pa->strip);
+    const float d = static_cast<float>(strip->height) / art.height_of(*strip);  // px a classic px
     for (size_t i = 0; i < page.items.size(); i++) {
       const ui::Rect& r = l.items[i];
       if (r.w <= 0) continue;
+      const int band = l.bands[i];
+      if (band >= 0) {
+        // The last band runs to the picture's foot (its shadow).
+        const bool last = band + 1 == static_cast<int>(pa->rows.size());
+        const float from = kBand * static_cast<float>(band);
+        const float tall = last ? std::max(kBand, art.height_of(*strip) - from) : kBand;
+        ui::Box b;
+        b.rect = {r.x, r.y, r.w, tall * l.scale};
+        b.image = strip;
+        b.uv = {0, from * d, static_cast<float>(strip->width), tall * d};
+        b.nearest = art.density <= 1;
+        b.feather = 0;
+        dl.box(b);
+      } else {
+        pen.big_text(page.items[i].text, 74, local_y(r) + 2);
+      }
       if (page.items[i].disabled) {
         ui::Box b;
         b.rect = r;

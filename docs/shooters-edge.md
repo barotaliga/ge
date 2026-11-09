@@ -1340,6 +1340,17 @@ refreshes, ENTER runs `connect <address>`. Our server's info carries what a brow
 `deathmatch`, `teamplay` and `coop` when set, `skill` where monsters play it, `needpass` when a
 password is set. `connect` takes a host name as well as an address.
 
+**Demos from anywhere (M18k2).** DEMOS on the main menu's root (`menu_demos`) browses the
+player's own folders (the game's folder first, then home, Downloads, Desktop, Documents and the
+machine's roots; it opens on the folder the last demo was played from, `menu_demo_dir`) through
+the engine's folder browser (`engine/vfs/browse.hpp`). It lists folders and the game's
+recordings (every format the window plays, the voice and packed formats too), also packed the way they are
+downloaded (`.gz`, `.zip`, `.7z`, `.xz`, `.zst`, `.tar.gz`): a packed file is listed only when a
+recording's extension stands before its packing, so `match.mvd.gz` is and `maps.zip` is not.
+ENTER checks the file before anything starts (`client/demo_check.hpp`: the bytes, not the name;
+unpacked, then read to its level's map) and plays it as `playdemo` does, or shows in the footer
+why it is no demo. BACKSPACE goes up a folder, LEFT and RIGHT through the places, R lists again.
+
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),
 which goes through the same move and the same game program as a person's, so a bot can do

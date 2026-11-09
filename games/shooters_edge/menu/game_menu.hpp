@@ -29,8 +29,15 @@
 // `connect <address>` and closes the menu, R or F5 refreshes, ESCAPE goes back to MULTIPLAYER. It
 // keeps the modern look in both looks.
 //
+// DEMOS (on the root) shows the demos page (demos_page.hpp over the engine's folder browser,
+// vfs/browse.hpp): the window hands it the game's recording extensions, the game's folder and its
+// check of a picked file (`demos()`); a demo that passes the check is handed back by `take_demo`
+// and the menu closes, the window playing it as `playdemo` does. It keeps the modern look in both
+// looks.
+//
 // The commands it registers: `togglemenu` (what ESCAPE does), `menu_main`, `menu_options`,
-// `menu_quit`, `menu_screenshots`, `menu_servers` (the menu opened on that page); the cvars
+// `menu_quit`, `menu_screenshots`, `menu_servers`, `menu_demos` (the menu opened on that page);
+// the cvars
 // `menu_look` (auto, classic, modern) and `ce_auto` (1: a game loaded is enhanced in the background
 // at once). The game keeps running under the menu (the listen server's frames go on); the player's
 // keys and mouse go to the menu while it is open.
@@ -40,7 +47,7 @@
 // ge:keywords classic-enhance enhance job switches help-pages window shooters-edge press_key
 // ge:keywords waiting-key rebind customize-controls load-game take_load enhance_game ce_auto
 // ge:keywords background-enhance take_ended screenshots gallery menu_screenshots set_screenshots
-// ge:keywords server-browser join-a-game menu_servers servers
+// ge:keywords server-browser join-a-game menu_servers servers demos menu_demos take_demo
 // ge:skill ui console classicenhance
 // ge:test tests/shooters_edge_menu_test.cpp
 #pragma once
@@ -58,6 +65,7 @@
 #include "console/console.hpp"
 #include "shooters_edge/menu/classic_art.hpp"
 #include "shooters_edge/menu/classic_view.hpp"
+#include "shooters_edge/menu/demos_page.hpp"
 #include "shooters_edge/menu/gallery_page.hpp"
 #include "shooters_edge/menu/main_menu.hpp"
 #include "shooters_edge/menu/servers_page.hpp"
@@ -124,6 +132,11 @@ class GameMenu {
   // The server browser (JOIN A GAME), and whether it is the page up.
   ServersPage& servers() { return servers_; }
   bool in_servers() const { return in_servers_; }
+  // The demos page (DEMOS), whether it is the page up, and the demo it asked to play since the
+  // last call ("" none): the window plays it.
+  DemosPage& demos() { return demos_; }
+  bool in_demos() const { return in_demos_; }
+  std::string take_demo() { return std::exchange(demo_ask_, std::string()); }
 
   // The next draw settles every animation where it is going (a lab's still).
   void settle() { settle_ = true; }
@@ -150,6 +163,8 @@ class GameMenu {
   void update_gallery(const ge::ui::MenuInput& in, Host& host);
   void show_servers();
   void update_servers(const ge::ui::MenuInput& in, Host& host);
+  void show_demos();
+  void update_demos(const ge::ui::MenuInput& in, Host& host);
 
   ge::console::Console* con_ = nullptr;
   std::string look_ = "auto";
@@ -189,6 +204,10 @@ class GameMenu {
 
   bool in_servers_ = false;
   ServersPage servers_;
+
+  bool in_demos_ = false;
+  DemosPage demos_;
+  std::string demo_ask_;  // the demo picked, the window not told yet
 };
 
 }  // namespace shooters_edge::menu

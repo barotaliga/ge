@@ -38,6 +38,10 @@ struct ClassicLayout {
   float x = 0, y = 0;               // the 320 x 200 screen's top left, px
   bool strip = false;               // the page is drawn as the pack's strip of rows
   std::vector<ge::ui::Rect> items;  // index for index with the page's items; empty: not drawn
+  // A strip page's rows, index for index with the items: the strip's band the row shows (its
+  // place in the pack's picture), or -1 for a row the picture has no words for (DEMOS on the
+  // root), drawn in the glyph sheet's menu letters at twice their size in its own 20 px band.
+  std::vector<int> bands;
 };
 
 // Draws on the classic screen of a layout: pictures and the glyph sheet's text at its scale.
@@ -77,6 +81,23 @@ struct ClassicPen {
     for (size_t i = 0; i < s.size(); i++) {
       const auto c = static_cast<uint8_t>(s[i]);
       glyph(static_cast<uint8_t>(alt ? (c | 0x80) : c), x + 8 * static_cast<float>(i), y, opacity);
+    }
+  }
+  // `s` in the second set at twice the glyphs' size (16 px a letter): a strip row the pack's
+  // picture has no words for.
+  void big_text(std::string_view s, float x, float y) const {
+    for (size_t i = 0; i < s.size(); i++) {
+      const auto code = static_cast<uint8_t>(static_cast<uint8_t>(s[i]) | 0x80);
+      if (s[i] == ' ') continue;
+      ge::ui::Box b;
+      b.rect = at(x + 16 * static_cast<float>(i), y, 16, 16);
+      b.image = &art.glyphs;
+      const float cell = 8 * art.density;
+      b.uv = {static_cast<float>(code & 15) * cell, static_cast<float>(code >> 4) * cell, cell,
+              cell};
+      b.nearest = art.density <= 1;
+      b.feather = 0;
+      dl.box(b);
     }
   }
   // The text box: `cols` x `rows` cells of 8 px inside its pieces' frame, its top left at (x, y).
