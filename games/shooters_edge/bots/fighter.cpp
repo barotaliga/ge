@@ -845,6 +845,14 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     jumper.level = moves >= kRocketLevelMoves[2] ? 2 : moves >= kRocketLevelMoves[1] ? 1 : 0;
     jumper.extra_s = kRocketLevelExtra_s[jumper.level];
     jumper.scripts = f.features[sh::Feature::routes];  // the map's scripted ways to key items
+    // Out of a pit by rocket (shooter/escape.hpp): the launcher and a rocket; in water the health
+    // for the blast too (lava and slime kill whoever stays, so any health tries it there).
+    int liquid = sh::kContentsEmpty;
+    if (self.waterlevel >= 1 && f.bot.pilot.world != nullptr)
+      sh::water_level(*f.bot.pilot.world, self.origin, &liquid);
+    const bool burns = liquid == sh::kContentsLava || liquid == sh::kContentsSlime;
+    jumper.escapes = (st.items & kWRockets) != 0 && st.rockets >= 1 &&
+                     (burns || st.health >= kRocketJumpHealth) && f.features[sh::Feature::escape];
     // The doors its own errands keep off the routes kept off the reach too (door_errand).
     const std::span<const int32_t> shut = locked_errands(f)
                                               ? std::span<const int32_t>(f.bot.pilot.pilot.shut)
@@ -1167,7 +1175,8 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   // A blast jump on the way next: its launcher in hand for it (a rocket jump's, a grenade
   // jump's).
   const sh::Pilot& pl = f.bot.pilot.pilot;
-  if ((pl.set.jumper.rockets || pl.set.jumper.grenades) && t - f.impulse_at >= kImpulseGap_s)
+  if ((pl.set.jumper.rockets || pl.set.jumper.grenades || pl.set.jumper.escapes) &&
+      t - f.impulse_at >= kImpulseGap_s)
     for (size_t k = pl.k; k + 1 < pl.route.size() && k < pl.k + 3; k++) {
       const sh::NavNode& from = pl.g->nodes[static_cast<size_t>(pl.route[k])];
       int number = 0;  // the launcher's
@@ -1363,6 +1372,7 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
   const Stats st = read_stats(s, me);
   const double t = s.sv.time;
   f.bot.pilot.grenade_ready = st.weapon == kWGrenades;  // a grenade jump fires with it in hand
+  f.bot.pilot.rocket_ready = st.weapon == kWRockets;    // and a rocket out of a pit with this
   // A companion's view is its own (it faces the leader).
   f.bot.calm = f.escort.leader < 0 && f.features[sh::Feature::calm];
   if (f.features[sh::Feature::packs] || f.features[sh::Feature::packinfer])

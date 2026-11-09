@@ -455,6 +455,22 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
   // past the target and from a slower run, kept only when both hold, and dearer (dm2's lava room
   // took half the bots' deaths: a jump down onto its ramp carried them off the edge).
   out.hardened = sh::nav_harden_jumps(out.world, sh::MoveSettings{}, graph, out.harm);
+  // OUT OF A PIT BY ROCKET (shooter/escape.hpp): from every liquid at least waist deep, a rocket
+  // fired down at the surface throws a swimmer backed against the wall onto the ledge behind him
+  // (dm2's lava under the red armour has no other way out); landing on the main part's dry floor.
+  {
+    std::vector<uint8_t> land(graph.nodes.size(), 0);
+    for (size_t n = 0; n < land.size(); n++)
+      land[n] = out.main_n > 0 && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] &&
+                        !out.harm[n] && !out.trap[n]
+                    ? 1
+                    : 0;
+    // Never onto a bridge: the nav's world holds one where the map drew it, in or not.
+    for (const NavBridge& br : out.bridges)
+      for (const int32_t n : br.nodes)
+        if (n >= 0 && static_cast<size_t>(n) < land.size()) land[static_cast<size_t>(n)] = 0;
+    out.escapes_made = sh::nav_add_escapes(out.world, sh::MoveSettings{}, graph, land);
+  }
   std::vector<uint8_t> exits(graph.nodes.size(), 0);
   for (size_t n = 0; n < graph.nodes.size(); n++)
     exits[n] = out.main_n > 0 && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;

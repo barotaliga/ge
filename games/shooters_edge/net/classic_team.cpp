@@ -745,6 +745,8 @@ TeamMatchReport run_team_match(const TeamMatchOptions& opt) {
     r.players[k].dodge_turns = fi.stats.dodge_turns;
     r.players[k].rocket_jumps = fi.bot.pilot.pilot.stats.rocket_jumps;
     r.players[k].flips = fi.bot.pilot.pilot.stats.flips;
+    r.players[k].escapes = fi.bot.pilot.pilot.stats.escapes;
+    r.players[k].escapes_out = fi.bot.pilot.pilot.stats.escapes_out;
     r.players[k].watching = fi.stats.watching;
     r.players[k].speed_sum = fi.stats.speed_sum;
     for (int m = 0; m <= sh::kPilotModes; m++) {
