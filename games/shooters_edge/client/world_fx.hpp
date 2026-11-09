@@ -117,6 +117,7 @@ struct HeldBeam {
   sh::Vec3f map_from, map_to;  // map units (the classic bolt's segments)
   EffectModel model = EffectModel::bolt2;
   ge::render::BurnTrail trail;  // where it last burnt the wall it lands on
+  bool across = false;          // the arc across the player's gun's prongs (fx::prong_arc_look)
   double seen = 0;
 };
 

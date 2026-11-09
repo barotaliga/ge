@@ -212,6 +212,19 @@ const gr::BeamLook& bolt_look() {
   static const gr::BeamLook l = make_bolt();
   return l;
 }
+const gr::BeamLook& prong_arc_look() {
+  static const gr::BeamLook l = [] {
+    gr::BeamLook a = make_bolt();
+    a.step_m = 0.03f;
+    a.wander = 0.9f;
+    a.pull = 0.3f;
+    a.fork_chance = 0;
+    a.core_m = 0.006f;
+    a.glow_m = 0.035f;
+    return a;
+  }();
+  return l;
+}
 
 void blast(const double p[3], const double* normal, uint32_t seed, double now_s,
            std::vector<gr::Blast>* blasts, Particles* births) {

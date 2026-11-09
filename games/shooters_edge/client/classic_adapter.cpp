@@ -343,6 +343,8 @@ bool held_weapons(const GameAdapter& self, const SearchPath& files,
     // firing frames that are several takes (the axe's two swings), one take a shot: each its own
     // `fire` clip, which the hand picks between.
     const ge::classicenhance::ClassicFire* fire = ge::classicenhance::classic_fire_of(name);
+    // The lightning gun's flash is an arc across its prongs: its ends, for the enhanced arc.
+    if (fire != nullptr && fire->arc) ge::classicenhance::find_arc(h);
     const int firing = int(h.frames.size()) - 1;
     const int takes =
         fire != nullptr && fire->takes > 1 && firing % fire->takes == 0 ? fire->takes : 1;

@@ -622,7 +622,7 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
     for (const HeldBeam& b : fx.beams) {
       if (f.beam_draws.size() >= f.beam_shapes.size()) break;
       gr::BeamShape& shape = f.beam_shapes[f.beam_draws.size()];
-      const gr::BeamLook* look = &effects::bolt_look();
+      const gr::BeamLook* look = b.across ? &effects::prong_arc_look() : &effects::bolt_look();
       gr::build_beam(*look, b.shot, view.time_s, shape);
       if (shape.count > 0) f.beam_draws.push_back({&shape, look, b.shot.seed});
     }
@@ -643,7 +643,11 @@ void draw_world(ge::gpu::Device& d, WorldDraw& f, gr::FrameView view, const FxFr
   gr::set_post_blend(d, f.post[p], round ? fx.blend_dry : fx.blend);
   const bool weapon = f.has_held && held != nullptr && held->drawn;
   if (weapon) {
-    gr::HeldDraw draw = held_draw(f, *held, view, fx_switches(*f.picture).muzzles, fx.held_shown);
+    // The engine's fire burns in place of the file's flash, and its arc across a lightning gun's
+    // prongs in place of the file's.
+    const FxSwitches on = fx_switches(*f.picture);
+    gr::HeldDraw draw =
+        held_draw(f, *held, view, on.muzzles || (held->arc && on.beams), fx.held_shown);
     gr::prepare_viewmodel(d, f.held, std::span<const gr::HeldDraw>(&draw, 1), view, f.w, f.h);
   } else {
     f.held_fresh = true;

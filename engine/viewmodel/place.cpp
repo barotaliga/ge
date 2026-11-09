@@ -172,4 +172,13 @@ void muzzle_to_world(const HeldModel& model, int a, int b, double t, const Place
   for (int k = 0; k < 3; ++k) up[k] = len > 0 ? up[k] / len : (k == 1 ? 1 : 0);
 }
 
+bool arc_to_world(const HeldModel& model, int a, int b, double t, const Placement& p,
+                  double gun_fov_y, const camera::Pose& view, double end0[3], double end1[3]) {
+  float e0[3], e1[3];
+  if (!arc_at(model, a, b, t, e0, e1)) return false;
+  held_to_world(p, gun_fov_y, view, e0, end0);
+  held_to_world(p, gun_fov_y, view, e1, end1);
+  return true;
+}
+
 }  // namespace ge::viewmodel

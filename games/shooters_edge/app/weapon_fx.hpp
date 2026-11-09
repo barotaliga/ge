@@ -67,6 +67,9 @@ const gr::BlastLook& billow_look();    // a later, smaller billow round it
 const gr::MuzzleLook& exhaust_look();  // a rocket's motor
 // The arc gun's bolt: the one look every player sees.
 const gr::BeamLook& bolt_look();
+// The same bolt across the gun's prongs while it fires: finer (kinked every 3 cm over the
+// prongs' 30 cm) and thinner, as it is a hand's breadth from the eye.
+const gr::BeamLook& prong_arc_look();
 
 // Billows round a blast's main ball, and when the last is born after it, s.
 inline constexpr int kBillows = 3;

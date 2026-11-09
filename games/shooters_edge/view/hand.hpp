@@ -133,6 +133,9 @@ struct HandFrame {
   double muzzle_at[3] = {0, 0, 0};   // the barrel's tip, world, m
   double muzzle_dir[3] = {0, 0, 1};  // the way it points, world, unit
   double muzzle_up[3] = {0, 1, 0};   // the gun's up, square to it
+  // A gun with an arc across its prongs (HeldModel::arc_ends): its two ends, world, m.
+  bool arc = false;
+  double arc_from[3] = {0, 0, 0}, arc_to[3] = {0, 0, 0};
   float lift = 0;  // the share of the screen the gun is raised by (over the classic status bar)
 };
 

@@ -205,6 +205,8 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
     vm::muzzle_to_world(models[static_cast<size_t>(hand.held)], f.frame_a, f.frame_b, f.frame_t,
                         f.placement, row.fov_y, view, f.muzzle_at, f.muzzle_dir, f.muzzle_up,
                         hand.barrel);
+    f.arc = vm::arc_to_world(models[static_cast<size_t>(hand.held)], f.frame_a, f.frame_b,
+                             f.frame_t, f.placement, row.fov_y, view, f.arc_from, f.arc_to);
   }
   return f;
 }

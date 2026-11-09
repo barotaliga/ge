@@ -1251,7 +1251,9 @@ every pass, and judged by captioned screenshots:
   (no style to pick, so nobody plays with a worse one): as thin as the classic's bolt, a hair-thin
   white-hot core in a narrow blue sheath, its brightness keyed to the eye so it reads the same by
   day and in a dark room at night, rooted on the gun's own muzzle, and the brightest light in the
-  room along it and where it lands (`bolt_lights`, boosted over `r_fx_lights`' share). Under `ce_decals` the weapons leave
+  room along it and where it lands (`bolt_lights`, boosted over `r_fx_lights`' share). While it fires, the same bolt crackles
+  across the gun's two prongs (`prong_arc_look`, between the ends `find_arc` reads off the pack's
+  own arc), in place of the file's flash. Under `ce_decals` the weapons leave
   their MARKS (`client/world_fx.hpp`): engine/detail's decals pressed onto the map's own faces, a
   scorch where a blast went off against a surface (its embers glowing for a second and a half), a
   bullet hole where each pellet hit a face (a classic program's one message for a shot spread over

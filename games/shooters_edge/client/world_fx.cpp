@@ -45,6 +45,7 @@ constexpr double kSpriteFps = 10;
 constexpr double kBoltSegment = 30;
 // The placed effects' entity numbers (below every static's): the sprites', then the bolts'.
 constexpr int kSpriteEntities = -(1 << 20), kBoltEntities = -(1 << 21);
+constexpr int kArcEntity = -(1 << 22);  // the arc across the player's gun's prongs
 // The hot air a nail's flight and a rocket's motor leave (render/haze.hpp's presets).
 const ge::render::HazeLook* const kNailHaze = ge::render::haze_look("haze.nail");
 const ge::render::HazeLook* const kRocketHaze = ge::render::haze_look("haze.rocket");
@@ -1291,10 +1292,28 @@ void fire_held(HeldFire& f, const view::HandFrame& hand, bool on, double now_s, 
   }
   fx::step_muzzle(f.shots, look, hand.fired && hand.drawn, pose, now_s, &out.births, &out.puffs,
                   &out.flames);
-  if (hand.drawn)
-    for (HeldBeam& b : out.beams)
-      if (b.entity == 1)
-        for (int k = 0; k < 3; ++k) b.shot.from[k] = hand.muzzle_at[k];
+  if (!hand.drawn) return;
+  for (HeldBeam& b : out.beams)
+    if (b.entity == 1)
+      for (int k = 0; k < 3; ++k) b.shot.from[k] = hand.muzzle_at[k];
+  // While the player's own bolt is held, an arc crackles across the gun's prongs too, as the
+  // classic gun's own flash does: the same bolt from one prong to the other, struck on its own
+  // seed; drawn only (the bolt's lights already light the gun).
+  if (!hand.arc) return;
+  for (size_t i = 0, n = out.beams.size(); i < n; ++i) {
+    if (out.beams[i].entity != 1) continue;
+    HeldBeam across = out.beams[i];
+    across.entity = kArcEntity;
+    across.across = true;
+    across.shot.seed ^= 0x5bd1e995u;
+    for (int k = 0; k < 3; ++k) {
+      across.shot.from[k] = hand.arc_from[k];
+      across.shot.to[k] = hand.arc_to[k];
+      across.shot.normal[k] = -hand.muzzle_dir[k];
+    }
+    out.beams.push_back(across);
+    return;
+  }
 }
 
 }  // namespace shooters_edge::client
