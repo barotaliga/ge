@@ -1,13 +1,15 @@
 // The main menu laid out and drawn in the classic look (classic_view.hpp).
 //
 // ge:summary Lays out and draws the main menu on the classic 320x200 screen in the pack's pictures
-// ge:keywords menu classic layout draw strip glyphs cursor slider text-box help dim
+// ge:keywords menu classic layout draw strip glyphs cursor slider text-box help dim carved-letters
 // ge:skill ui
 // ge:test tests/shooters_edge_menu_test.cpp
 #include "shooters_edge/menu/classic_view.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <span>
 #include <string_view>
 
 namespace shooters_edge::menu {
@@ -22,20 +24,91 @@ constexpr float kLabelEnd = 192, kCursorX = 200, kValueX = 220;
 constexpr size_t kLabelChars = 22, kValueChars = 12;
 constexpr int kSliderCells = 10;
 
+constexpr float kBand = 20;  // a strip's row, classic px
+
+// The rows each strip's picture has words for, top to bottom.
+constexpr std::string_view kMainRows[] = {"single", "multi", "options", "help", "quit"};
+constexpr std::string_view kSingleRows[] = {"new", "load", "save"};
+constexpr std::string_view kMultiRows[] = {"join", "host", "setup"};
+
 struct PageArt {
   std::string_view page, title, strip;
+  std::span<const std::string_view> rows = {};
 };
 constexpr PageArt kPageArt[] = {
-    {"main", "ttl_main", "mainmenu"}, {"single", "ttl_sgl", "sp_menu"},
-    {"multi", "p_multi", "mp_menu"},  {"host", "p_multi", ""},
-    {"setup", "p_multi", ""},         {"options", "p_option", ""},
+    {"main", "ttl_main", "mainmenu", kMainRows},
+    {"single", "ttl_sgl", "sp_menu", kSingleRows},
+    {"multi", "p_multi", "mp_menu", kMultiRows},
+    {"host", "p_multi", ""},
+    {"setup", "p_multi", ""},
+    {"options", "p_option", ""},
     {"video", "p_option", ""},
 };
+
+// The band of `pa`'s strip that has the words of row `id`, or -1.
+int band_of(const PageArt& pa, std::string_view id) {
+  for (size_t k = 0; k < pa.rows.size(); k++)
+    if (pa.rows[k] == id) return static_cast<int>(k);
+  return -1;
+}
 
 const PageArt* art_of(std::string_view page) {
   for (const PageArt& a : kPageArt)
     if (a.page == page) return &a;
   return nullptr;
+}
+
+// A strip row the pack's pictures have no words for, cut letter by letter out of the words they do
+// have (the menu's carved capitals and small capitals), measured on the strips whose print
+// (`ClassicArt::strip_print`) the word names. A piece: the `w` x `h` classic px at (x, y) of
+// `picture`, drawn at (dx, dy) from the row's top left. Every piece takes a letter's whole outline
+// and nothing of its neighbours', on the strips' common baseline.
+struct CarvedPiece {
+  std::string_view picture;
+  int x = 0, y = 0, w = 0, h = 0;
+  int dx = 0, dy = 0;
+};
+struct CarvedWord {
+  std::string_view row;
+  uint64_t print = 0;
+  std::span<const CarvedPiece> pieces;
+};
+// DEMOS: the capital D a capital L's stem and the right half of a capital O (the way the small d
+// is a stem and a bowl), then the small capitals e, m, o and s.
+constexpr CarvedPiece kDemosPieces[] = {
+    {"sp_menu", 2, 20, 8, 20, 0, 0},       // the stem of Load's L
+    {"mainmenu", 11, 40, 11, 20, 8, 0},    // the right half of Options' O ...
+    {"mainmenu", 22, 47, 1, 4, 19, 7},     // ... and its outline's widest column, beside the P
+    {"mainmenu", 153, 60, 17, 20, 20, 0},  // Ordering's e
+    {"sp_menu", 107, 0, 21, 20, 38, 1},    // Game's m (its strip sits a pixel higher)
+    {"mainmenu", 67, 40, 21, 20, 60, 0},   // Options' o
+    {"mainmenu", 106, 40, 17, 20, 82, 0},  // Options' s
+};
+constexpr CarvedWord kCarvedWords[] = {{"demos", 0xb378b8eec94a7f36ULL, kDemosPieces}};
+
+// Row `id`'s word cut from the strips at (x, y), classic px; false when these strips are not the
+// ones it was measured on (the caller draws the glyphs instead).
+bool carve(const ClassicPen& pen, std::string_view id, float x, float y) {
+  const ClassicArt& art = pen.art;
+  for (const CarvedWord& w : kCarvedWords) {
+    if (w.row != id || w.print != art.strip_print || art.strip_print == 0) continue;
+    for (const CarvedPiece& p : w.pieces) {
+      const ui::Image* img = art.find(p.picture);
+      if (img == nullptr) return false;
+      const float d = static_cast<float>(img->height) / art.height_of(*img);  // px a classic px
+      ui::Box b;
+      b.rect = pen.at(x + static_cast<float>(p.dx), y + static_cast<float>(p.dy),
+                      static_cast<float>(p.w), static_cast<float>(p.h));
+      b.image = img;
+      b.uv = {static_cast<float>(p.x) * d, static_cast<float>(p.y) * d, static_cast<float>(p.w) * d,
+              static_cast<float>(p.h) * d};
+      b.nearest = art.density <= 1;
+      b.feather = 0;
+      pen.dl.box(b);
+    }
+    return true;
+  }
+  return false;
 }
 
 bool drawn(const ui::Item& it) { return !(it.kind == ui::ItemKind::back && it.disabled); }
@@ -96,6 +169,7 @@ ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int wi
     return ui::Rect{l.x + x * l.scale, l.y + y * l.scale, w * l.scale, h * l.scale};
   };
   l.items.assign(page.items.size(), {});
+  l.bands.assign(page.items.size(), -1);
   const bool help = page.id == "help" && help_pages(art) > 0;
   const bool quit = page.id == "quit";
   float row = quit ? 84 : kRowTop;
@@ -105,8 +179,9 @@ ClassicLayout layout_classic(const ui::Menu& menu, const ClassicArt& art, int wi
     if (!drawn(it) || help) continue;
     if (l.strip) {
       if (it.kind == ui::ItemKind::back) continue;
+      l.bands[i] = band_of(*pa, it.id);
       l.items[i] =
-          rect(72, kRowTop + 20 * static_cast<float>(strip_row++), art.width_of(*strip), 20);
+          rect(72, kRowTop + kBand * static_cast<float>(strip_row++), art.width_of(*strip), kBand);
       continue;
     }
     l.items[i] = rect(16, row, kScreenW - 32, 8);
@@ -165,11 +240,29 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
   const auto local_y = [&](const ui::Rect& r) { return (r.y - l.y) / l.scale; };
 
   if (l.strip) {
-    const ui::Image* strip = art.find(art_of(page.id)->strip);
-    pen.picture(strip, 72, kRowTop);
+    // Each row its own band of the picture, so a row the picture has no words for (cut from its
+    // letters, or in big glyphs) sits between them in the game's order.
+    const ui::Image* strip = art.find(pa->strip);
+    const float d = static_cast<float>(strip->height) / art.height_of(*strip);  // px a classic px
     for (size_t i = 0; i < page.items.size(); i++) {
       const ui::Rect& r = l.items[i];
       if (r.w <= 0) continue;
+      const int band = l.bands[i];
+      if (band >= 0) {
+        // The last band runs to the picture's foot (its shadow).
+        const bool last = band + 1 == static_cast<int>(pa->rows.size());
+        const float from = kBand * static_cast<float>(band);
+        const float tall = last ? std::max(kBand, art.height_of(*strip) - from) : kBand;
+        ui::Box b;
+        b.rect = {r.x, r.y, r.w, tall * l.scale};
+        b.image = strip;
+        b.uv = {0, from * d, static_cast<float>(strip->width), tall * d};
+        b.nearest = art.density <= 1;
+        b.feather = 0;
+        dl.box(b);
+      } else if (!carve(pen, page.items[i].id, 74, local_y(r))) {
+        pen.big_text(page.items[i].text, 74, local_y(r) + 2);
+      }
       if (page.items[i].disabled) {
         ui::Box b;
         b.rect = r;
