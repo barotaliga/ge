@@ -182,5 +182,5 @@ TEST(ages_and_sizes_read_as_a_player_reads_them) {
   CHECK(vfs::age_text(int64_t{86400} * 90) == "3 MONTHS AGO");
   CHECK(vfs::size_text(812) == "812 B");
   CHECK(vfs::size_text(21800000) == "20.8 MB");
-  CHECK(vfs::size_text(1024 * 1024 * 300) == "300 MB");
+  CHECK(vfs::size_text(uint64_t{1024} * 1024 * 300) == "300 MB");
 }

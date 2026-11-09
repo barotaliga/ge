@@ -236,7 +236,12 @@ void run(ge::lab::Lab& lab) {
       g.menu.draw(dl, v.w, v.h, 0.25);
       for (const std::string& p : g.menu.problems()) {
         problems++;
-        lab.fail(v.name() + ", " + id + ": " + p,
+        std::string what = v.name();
+        what += ", ";
+        what += id;
+        what += ": ";
+        what += p;
+        lab.fail(what,
                  "shorten the words in games/shooters_edge/menu/demos_page.cpp or fix its "
                  "layout; rerun `make lab LAB=se-demos`. Skill: ui.");
       }
@@ -349,8 +354,9 @@ void run(ge::lab::Lab& lab) {
       lab.shot({"classic-root",
                 real ? "DEMOS IN THE PACK'S OWN MENU" : "DEMOS IN THE CLASSIC LOOK",
                 "The classic root: each row of the pack's strip its own band, DEMOS (no words for "
-                "it in the picture) in the menu's letters at the strip's size between MULTIPLAYER "
-                "and OPTIONS, the spinning cursor beside it.",
+                "it in the picture) between MULTIPLAYER and OPTIONS, cut letter by letter from the "
+                "strips' own carved words on the pack (big glyphs on other strips), the spinning "
+                "cursor beside it.",
                 "the strip's rows in order with DEMOS third; the cursor on DEMOS",
                 {{"look", real ? "pack" : "fixture"}}},
                picture_of(std::move(img)), real || backdrop ? ge::lab::Det::measured : det);

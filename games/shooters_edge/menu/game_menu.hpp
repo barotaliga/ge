@@ -198,16 +198,14 @@ class GameMenu {
   std::unique_ptr<ge::classicenhance::EnhanceJob> job_;
   std::vector<ge::ui::Image> thumbs_;
 
-  bool in_gallery_ = false;
   ge::capture::Gallery gallery_;
   GalleryPage gallery_page_;
-
-  bool in_servers_ = false;
   ServersPage servers_;
-
-  bool in_demos_ = false;
   DemosPage demos_;
   std::string demo_ask_;  // the demo picked, the window not told yet
+  bool in_gallery_ = false;
+  bool in_servers_ = false;
+  bool in_demos_ = false;
 };
 
 }  // namespace shooters_edge::menu

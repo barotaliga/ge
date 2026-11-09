@@ -410,6 +410,24 @@ TEST(both_looks_lay_every_page_out_clean) {
   // DEMOS has no words in the strip: its own band, the strip's next rows one band lower.
   CHECK(l.bands[0] == 0 && l.bands[1] == 1 && l.bands[2] == -1 && l.bands[3] == 2);
   CHECK(l.items[3].y - l.items[2].y == 60);
+
+  // DEMOS cut from the strips' own letters only on the strips it was measured on: the stand-in's
+  // strips have another print, so it falls back to the glyphs; with the pack's print, six pieces
+  // of the strips (two of SINGLE PLAYER's picture) and no glyph.
+  CHECK(art.strip_print != 0);
+  const auto pieces = [&](const sm::ClassicArt& a, const ge::ui::Image* img) {
+    DrawList dl;
+    dl.begin(1280, 720);
+    sm::draw_classic(dl, g.main(), a, l, 0, 0);
+    int n = 0;
+    for (const auto& c : dl.cmds()) n += c.box.image == img ? 1 : 0;
+    return n;
+  };
+  CHECK(pieces(art, art.find("sp_menu")) == 0);
+  sm::ClassicArt pack = art;
+  pack.strip_print = 0xb378b8eec94a7f36ULL;
+  CHECK(pieces(pack, pack.find("sp_menu")) == 2);
+  CHECK(pieces(pack, &pack.glyphs) < pieces(art, &art.glyphs));
 }
 
 TEST(enhanced_pictures_draw_at_the_classic_sizes) {

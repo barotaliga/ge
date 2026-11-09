@@ -1,13 +1,14 @@
 // The main menu laid out and drawn in the classic look (classic_view.hpp).
 //
 // ge:summary Lays out and draws the main menu on the classic 320x200 screen in the pack's pictures
-// ge:keywords menu classic layout draw strip glyphs cursor slider text-box help dim
+// ge:keywords menu classic layout draw strip glyphs cursor slider text-box help dim carved-letters
 // ge:skill ui
 // ge:test tests/shooters_edge_menu_test.cpp
 #include "shooters_edge/menu/classic_view.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <span>
 #include <string_view>
 
@@ -55,6 +56,56 @@ const PageArt* art_of(std::string_view page) {
   for (const PageArt& a : kPageArt)
     if (a.page == page) return &a;
   return nullptr;
+}
+
+// A strip row the pack's pictures have no words for, cut letter by letter out of the words they do
+// have (the menu's carved capitals and small capitals), measured on the strips whose print
+// (`ClassicArt::strip_print`) the word names. A piece: `w` columns from `x` of the band at `y` of
+// `picture`, set `gap` px before the next.
+struct CarvedPiece {
+  std::string_view picture;
+  int x = 0, w = 0, y = 0, gap = 0;
+};
+struct CarvedWord {
+  std::string_view row;
+  uint64_t print = 0;
+  std::span<const CarvedPiece> pieces;
+};
+// DEMOS: the capital D a capital L's stem and the right half of a capital O (the way the small d
+// is a stem and a bowl), then the small capitals e, m, o and s.
+constexpr CarvedPiece kDemosPieces[] = {
+    {"sp_menu", 2, 8, 20, 0},      // the stem of Load's L
+    {"mainmenu", 11, 10, 40, 1},   // the right half of Options' O
+    {"mainmenu", 153, 18, 60, 0},  // Ordering's e
+    {"sp_menu", 107, 22, 0, 0},    // Game's m
+    {"mainmenu", 67, 20, 40, 1},   // Options' o
+    {"mainmenu", 105, 18, 40, 0},  // Options' s
+};
+constexpr CarvedWord kCarvedWords[] = {{"demos", 0xb378b8eec94a7f36ULL, kDemosPieces}};
+
+// Row `id`'s word cut from the strips at (x, y), classic px; false when these strips are not the
+// ones it was measured on (the caller draws the glyphs instead).
+bool carve(const ClassicPen& pen, std::string_view id, float x, float y) {
+  const ClassicArt& art = pen.art;
+  for (const CarvedWord& w : kCarvedWords) {
+    if (w.row != id || w.print != art.strip_print || art.strip_print == 0) continue;
+    for (const CarvedPiece& p : w.pieces) {
+      const ui::Image* img = art.find(p.picture);
+      if (img == nullptr) return false;
+      const float d = static_cast<float>(img->height) / art.height_of(*img);  // px a classic px
+      ui::Box b;
+      b.rect = pen.at(x, y, static_cast<float>(p.w), kBand);
+      b.image = img;
+      b.uv = {static_cast<float>(p.x) * d, static_cast<float>(p.y) * d, static_cast<float>(p.w) * d,
+              kBand * d};
+      b.nearest = art.density <= 1;
+      b.feather = 0;
+      pen.dl.box(b);
+      x += static_cast<float>(p.w + p.gap);
+    }
+    return true;
+  }
+  return false;
 }
 
 bool drawn(const ui::Item& it) { return !(it.kind == ui::ItemKind::back && it.disabled); }
@@ -186,8 +237,8 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
   const auto local_y = [&](const ui::Rect& r) { return (r.y - l.y) / l.scale; };
 
   if (l.strip) {
-    // Each row its own band of the picture, so a row the picture has no words for (drawn in big
-    // letters) sits between them in the game's order.
+    // Each row its own band of the picture, so a row the picture has no words for (cut from its
+    // letters, or in big glyphs) sits between them in the game's order.
     const ui::Image* strip = art.find(pa->strip);
     const float d = static_cast<float>(strip->height) / art.height_of(*strip);  // px a classic px
     for (size_t i = 0; i < page.items.size(); i++) {
@@ -206,7 +257,7 @@ void draw_classic(ui::DrawList& dl, const ui::Menu& menu, const ClassicArt& art,
         b.nearest = art.density <= 1;
         b.feather = 0;
         dl.box(b);
-      } else {
+      } else if (!carve(pen, page.items[i].id, 74, local_y(r))) {
         pen.big_text(page.items[i].text, 74, local_y(r) + 2);
       }
       if (page.items[i].disabled) {

@@ -40,7 +40,9 @@ struct ClassicLayout {
   std::vector<ge::ui::Rect> items;  // index for index with the page's items; empty: not drawn
   // A strip page's rows, index for index with the items: the strip's band the row shows (its
   // place in the pack's picture), or -1 for a row the picture has no words for (DEMOS on the
-  // root), drawn in the glyph sheet's menu letters at twice their size in its own 20 px band.
+  // root), drawn in its own 20 px band in letters cut from the strips' other words (the pack's
+  // carved capitals; classic_view.cpp), or, on strips it was not measured on, the glyph sheet's
+  // menu letters at twice their size.
   std::vector<int> bands;
 };
 
@@ -83,8 +85,8 @@ struct ClassicPen {
       glyph(static_cast<uint8_t>(alt ? (c | 0x80) : c), x + 8 * static_cast<float>(i), y, opacity);
     }
   }
-  // `s` in the second set at twice the glyphs' size (16 px a letter): a strip row the pack's
-  // picture has no words for.
+  // `s` in the second set at twice the glyphs' size (16 px a letter): a strip row the pictures have
+  // no words for and no letters for (strips other than the pack's own).
   void big_text(std::string_view s, float x, float y) const {
     for (size_t i = 0; i < s.size(); i++) {
       const auto code = static_cast<uint8_t>(static_cast<uint8_t>(s[i]) | 0x80);
