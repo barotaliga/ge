@@ -111,6 +111,7 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
     hand.fire_t = -1;
     hand.shot_frame = -1;
     hand.barrel = -1;
+    hand.settle_t = -1;
   }
 
   const WeaponLook& look = weapon_look(hand.held);
@@ -136,14 +137,24 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
     const vm::HeldClip* c = clip >= 0 ? &m.clips[static_cast<size_t>(clip)] : nullptr;
     if (c != nullptr && c->frame_a_shot && c->count > 0) {
       if (in.fired) {
+        hand.shot_from = hand.shot_frame >= 0 ? c->first + hand.shot_frame
+                         : hand.settle_t >= 0 ? hand.settle_from
+                                              : 0;
+        hand.settle_t = -1;
         hand.shot_frame = (hand.shot_frame + 1) % c->count;
         hand.fire_t = 0;
         hand.barrel = vm::barrel_of_frame(m, c->first + hand.shot_frame);
       }
       if (hand.fire_t >= 0 && hand.shot_frame >= 0) {
         f.frame_a = f.frame_b = c->first + hand.shot_frame;
+        if (s.lerp && hand.fire_t * c->fps < 1 && hand.shot_from != f.frame_b) {
+          f.frame_a = hand.shot_from;
+          f.frame_t = hand.fire_t * c->fps;
+        }
         hand.fire_t += dt;
         if (hand.fire_t * c->fps > kShotFrameHold) {
+          hand.settle_from = c->first + hand.shot_frame;
+          hand.settle_t = s.lerp ? 0 : -1;
           hand.fire_t = -1;
           hand.shot_frame = -1;
         }
@@ -160,7 +171,23 @@ HandFrame step_hand(Hand& hand, const HandInput& in, const ViewSettings& s,
         vm::held_clip_frames(m, played >= 0 ? played : clip, hand.fire_t, false, f.frame_a,
                              f.frame_b, f.frame_t);
         hand.fire_t += dt;
-        if (hand.fire_t * p->fps > p->count - 1) hand.fire_t = -1;
+        if (hand.fire_t * p->fps > p->count - 1) {
+          hand.settle_from = p->first + p->count - 1;
+          hand.settle_t = s.lerp ? 0 : -1;
+          hand.fire_t = -1;
+        }
+      }
+    }
+    // Back to rest over a frame's time from the frame the clip ended on.
+    if (hand.fire_t < 0 && hand.settle_t >= 0) {
+      const double fps = c != nullptr ? c->fps : 10.0;
+      if (hand.settle_t * fps < 1 && hand.settle_from != 0) {
+        f.frame_a = hand.settle_from;
+        f.frame_b = 0;
+        f.frame_t = hand.settle_t * fps;
+        hand.settle_t += dt;
+      } else {
+        hand.settle_t = -1;
       }
     }
   }

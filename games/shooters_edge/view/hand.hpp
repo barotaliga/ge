@@ -20,7 +20,9 @@
 //   clip stepped a frame a shot
 //   (`HeldClip::frame_a_shot`, a nailgun held firing) goes one frame round on each shot and holds
 //   it, and the shot's muzzle, flash and fire are on the barrel that frame fires from: the
-//   nailgun's two in turn, the super nailgun's cluster one barrel at a time.
+//   nailgun's two in turn, the super nailgun's cluster one barrel at a time. With
+//   `ViewSettings::lerp` each such shot's frame is drawn from the last over a frame's time, and a
+//   clip played or held ends by flowing back to the rest frame over one, never a jump.
 // - A CLASSIC GAME'S OWN WEAPONS (`Hand::at_eye`): models authored at the eye, placed by the
 //   classic row (`eye_row`) with no offset of their own; the kick, the flash and the fire are
 //   still each weapon's look.
@@ -68,6 +70,7 @@ struct ViewSettings {
   double sway = 1;              // cl_gunsway
   bool centre = true;           // r_viewmodel_center
   bool hands = true;            // r_viewmodel_hands
+  bool lerp = true;  // r_lerpmodels (bound with the picture's): a frame-a-shot clip flows
 };
 
 // How much nearer and higher a centred weapon is held than the place to the right, m
@@ -98,7 +101,12 @@ struct Hand {
   double fire_t = -1;     // s into the `fire` clip (-1: at rest)
   int shot_frame = -1;  // a clip stepped a frame a shot: the frame of the clip the last shot is on
   int barrel = -1;      // the barrel the last shot left from (-1: the one muzzle)
-  int take = 0;         // the `fire` clip's take the last shot plays (a swing of two)
+  // Drawn between frames (ViewSettings::lerp): the frame a shot of a frame-a-shot clip came from,
+  // and the frame a played clip ended on and the time since, while it settles back to rest.
+  int shot_from = 0;
+  int settle_from = 0;
+  double settle_t = -1;
+  int take = 0;  // the `fire` clip's take the last shot plays (a swing of two)
   ge::core::Rng takes = ge::core::make_rng(0x5a1e);  // picks a take when the game does not say
   // The models are a classic game's own (GameAdapter::held_weapons), authored at the eye: placed
   // by `eye_row`, never on a look's offset.

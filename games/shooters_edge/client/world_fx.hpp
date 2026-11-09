@@ -85,6 +85,7 @@
 #include "shooters_edge/app/muzzle.hpp"
 #include "shooters_edge/app/weapon_fx.hpp"
 #include "shooters_edge/client/listen.hpp"
+#include "shooters_edge/client/model_lerp.hpp"
 #include "shooters_edge/client/present.hpp"
 #include "shooters_edge/client/warps.hpp"
 #include "shooters_edge/client/world_models.hpp"
@@ -102,6 +103,8 @@ struct FxSwitches {
   // `prepare_models`, through classic-enhance's replacement table).
   bool flares = false, bubbles = false;
   const ge::render::BeamLook* bolt = nullptr;  // r_beam_style's (null: the default style)
+  // r_lerpmodels, r_lerpmove (either look): the models drawn between their frames (model_lerp.hpp)
+  ModelLerpSwitches lerp;
 };
 // The switches `picture` asks for: each ce_ switch, in the modern look only, and its bolt's style.
 // The explosion is the engine's where classic-enhance's replacement table names `explosion` for the
@@ -181,6 +184,7 @@ struct FxState {
     effects::RocketLaunch launch;
   };
   std::unordered_map<int, Launched> launched;
+  ModelLerp lerp;  // each model's animation and place drawn between frames (FxSwitches::lerp)
   double aim_yaw = 0, aim_pitch = 0, aim_rate[2] = {0, 0};
   bool aimed = false;
   // Each missile's place (map units) and the way it flew, a frame ago: the surface a blast went
@@ -268,9 +272,10 @@ struct FxScene {
   bool campaign = false;                  // a campaign's program (its own fog and blows)
   int effect_models = 0;                  // where the effects' own models start (EffectModel)
   std::vector<Placed> models;             // every entity to draw (not the local player)
-  std::vector<Body> bodies;               // the players: entity, place, alive
-  std::function<Placed(int)> placed_of;   // a player as placed (empty Placed: not known)
-  std::function<float(int)> health_of;    // an entity's health (a wound healed by a respawn)
+  ModelLerpClock clock;      // the listen server's clock for drawing places between its states
+  std::vector<Body> bodies;  // the players: entity, place, alive
+  std::function<Placed(int)> placed_of;  // a player as placed (empty Placed: not known)
+  std::function<float(int)> health_of;   // an entity's health (a wound healed by a respawn)
   // The local player (`own` 0: none, as in a demo's free view).
   int own = 0;
   PlayerState me;

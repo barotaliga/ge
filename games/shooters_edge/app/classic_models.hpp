@@ -14,7 +14,8 @@
 // - A SPRITE (`sprite_frames_of`): each frame through the palette, index 255 clear, its origin
 //   where the file puts it; a texel a map unit.
 // - THE ANIMATION (`Groups`): the entity's `frame` (or `skin`) names a group; a group of more than
-//   one plays its frames at their intervals, looping (`frame_in`).
+//   one plays its frames at their intervals, looping (`frame_in`), or flows between them
+//   (`frames_between`).
 // - THE LIGHT UNDER IT (`LightProbe`, `light_under`): the map's lightmap where a line straight
 //   down from the point meets the floor, in the lightmap's units (1: the face as painted), from a
 //   grid of the floor's triangles made once a map.
@@ -22,7 +23,7 @@
 // ge:summary Classic models, sprites and brush items as the engine's morph meshes and sprites
 // ge:keywords classic-models mdl spr brush-item morph_from_alias morph_from_brush sprite_frames_of
 // ge:keywords palette tint shirt pants fullbright glow skin frame-group light-probe light_under
-// ge:keywords entity-pose items armour health weapons flames
+// ge:keywords entity-pose items armour health weapons flames frames_between frame-lerp
 // ge:skill render shooter morph
 // ge:test tests/shooters_edge_classic_models_test.cpp
 #pragma once
@@ -69,6 +70,10 @@ Groups skin_groups(const ge::morph::Model& model);
 Groups sprite_groups(const ge::morph::Sprite& sprite);
 // The frame group `group` shows at time `t` s (a group out of range: group 0).
 uint32_t frame_in(const Groups& groups, int group, double t);
+// The same drawn between its frames: the frame shown (`a`), the next round the loop (`b`) and the
+// share of the way to it (`f`, 0..1), so a looping group (a torch's flame) flows rather than
+// steps. A lone frame: `a` = `b`, `f` 0.
+void frames_between(const Groups& groups, int group, double t, uint32_t& a, uint32_t& b, float& f);
 
 // The rotation an entity's angles (degrees: pitch, yaw, roll, the file's) give a model drawn in
 // the engine's frame. `alias`: a vertex-animated model, whose pitch the classic draws reversed.
