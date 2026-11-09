@@ -926,6 +926,7 @@ int run_main(int argc, char** argv) {
     if (bench.active || drawn_remote) {
       std::vector<std::string> said;
       const bool paced = bench.paced || drawn_remote;  // every frame shown, nothing timed
+      bench.lerp.strides = picture.lerp_move;          // r_lerpmove: a monster's strides glide
       const cl::TimedemoStep step =
           drawn_remote ? (joined == decltype(joined)::new_level ? cl::TimedemoStep::new_level
                                                                 : cl::TimedemoStep::frame)
