@@ -203,10 +203,20 @@ bool mover_in_way(const Pilot& p, const PilotSense& s, const NavLink& l, int32_t
   const NavNode& na = node(*p.g, a);
   const NavNode& nb = node(*p.g, b);
   if (rest->model != nullptr) {
-    // A ridden mover is stepped onto only near its rest; stepped off any time.
-    if (nb.mover != l.mover || na.mover == l.mover) return false;
+    // A ridden mover is stepped onto only near its rest; stepped off any time, unless it hangs
+    // over the player (raised over the shaft he walked into: out from under it first).
     const float up = now->absmin.z - rest->absmin.z;
-    return up > kRideRest || up < -kRideRest;
+    const bool away = up > kRideRest || up < -kRideRest;
+    if (nb.mover != l.mover || na.mover == l.mover)
+      return away && s.onground && now->absmin.z > s.origin.z + kPlayerMins.z &&
+             s.origin.x + kPlayerMaxs.x > now->absmin.x &&
+             s.origin.x + kPlayerMins.x < now->absmax.x &&
+             s.origin.y + kPlayerMaxs.y > now->absmin.y &&
+             s.origin.y + kPlayerMins.y < now->absmax.y;
+    if (away) return true;
+    // Its top already more than a step over the feet (rising off its rest under another rider):
+    // walked on, the player goes in under it, and standing in its field holds it up for good.
+    return s.onground && now->absmax.z > s.origin.z + kPlayerMins.z + kStepHeight;
   }
   Vec3f lo = na.origin, hi = na.origin;
   for (int i = 0; i < 3; i++) {
