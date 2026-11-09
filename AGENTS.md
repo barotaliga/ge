@@ -97,6 +97,12 @@ porting ends, and nothing outside it may depend on it except `make golden`.
   them) are read-only: clone them beside this checkout, read them and run them, but never
   commit, push, open issues or comment there. If a reference has a bug, the engine
   reproduces it and you tell the user.
+- **CLEAN ROOM: THE IMPLEMENTER NEVER READS THE SOURCE.** Source this tree may not copy (a GPL
+  client, server, mod or tool; any third-party code under another licence) is read only by a
+  READER subagent, which answers your written questions in a document of facts with no code.
+  The agent that writes or verifies engine code builds from that document, the notes in
+  `porting/` and black-box measurements, and never opens, greps or diffs the source itself
+  (`clean-room` skill).
 - **THIS REPOSITORY IS PUBLIC.** Nothing sensitive goes in the tree, in workflow files or
   in repository variables: no tokens, keys, passwords, e-mail addresses, account or
   device ids, or paths under a home directory. Credentials live only in **GitHub
@@ -415,6 +421,7 @@ and the directories agree.
 | `skill-reflection` | At the start and end of a session: read and record a skill's lessons |
 | `determinism` | Anything in `engine/core`, any floating-point or RNG question, a golden failure |
 | `port` | Carrying a module over from its reference source (the working area's skill: `porting/`) |
+| `clean-room` | Any answer that needs source this tree may not copy (GPL or other third-party code): porting a behaviour, verifying ours against it; a reader subagent writes the facts, you never read the source |
 | `testing` | Writing a test, a golden table or a golden generator |
 | `build` | CMake, presets, dependencies (`FetchContent`), compiler flags, CI workflows |
 | `release` | A changeset fragment, `cmake/Packaging.cmake`, a public target, cutting or dry-running a release |
