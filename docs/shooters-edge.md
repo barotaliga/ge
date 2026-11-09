@@ -440,6 +440,21 @@ jumps. `demo_lerp 0` draws each frame as read (`timedemo` always does: one frame
 `make lab LAB=se-demo-smooth ARGS="--file=<demo> --track=<slot>"` measures it: how far the eye
 moves each picture with and without, charted.
 
+**Models drawn between their frames** (`client/model_lerp.hpp`, every path: your own game, a
+played demo, a joined server). A classic program steps a model's frame ten times a second; when an
+entity's frame changes, the window draws it from the frame it left to the new one over the time its
+frames last (the gap between its last two changes, 20 to 150 ms; at first 0.1 s), the GPU blending
+the two frames' vertices, and a looping group (a torch's flame) flows between its own frames. In
+your own game the places are drawn too: every model one server frame behind, between the last two
+states the window saw (the server's 72 or 77 frames a second fall unevenly on 50, 60 or 144
+pictures), and a walking monster, which the program moves a stride at a time, drawn over each
+stride's time rather than jumping. A first sight, a new model, a warp, a move over 128 units and a
+gap over a quarter second are not drawn across. The held weapon's frames flow too: a nailgun's shot
+frame from the last, and a played fire clip back to rest over a frame's time. `r_lerpmodels 0` and
+`r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
+films a monster walking up to the player both ways side by side (a GIF) and measures the judder
+and the pose jumps.
+
 ### A demo as a video
 
 `-demovideo <demo> <file>` turns a recorded game of any format into a video and quits; no window

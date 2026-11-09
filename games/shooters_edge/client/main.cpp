@@ -1128,6 +1128,7 @@ int run_main(int argc, char** argv) {
     fx_state.book = &fx_book;
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
+    view_settings.lerp = picture.lerp_models;  // r_lerpmodels: the held weapon's frames too
     shooters_edge::view::HandFrame hand =
         cl::step_held(listen, shown, in_hand, view_settings, weapons, t, wall);
     if (hand.flashing)
