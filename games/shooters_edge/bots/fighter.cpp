@@ -1148,6 +1148,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   sh::PilotSettings ps;
   ps.hop = (expert || average) && f.features[sh::Feature::hop];
   ps.hop_simple = average;
+  ps.hop_stairs_walked = f.features[sh::Feature::stairs];
   // Its lane off the route's line (shooter/pilot.hpp): a person never walks the line; the less
   // practised wander wider. A perfect player keeps to it.
   ps.lane = skill == sh::AimSkill::perfect || !f.features[sh::Feature::lane] ? 0.f
@@ -1252,6 +1253,7 @@ void fighter_init(Fighter& f, const sh::NavGraph& g, const server::RulesCommon& 
   f.bot.selfaim = f.features[sh::Feature::selfaim];
   f.bot.corner = f.features[sh::Feature::corner];
   f.bot.glance = f.features[sh::Feature::glance];
+  f.bot.listen = f.features[sh::Feature::listen];
   f.bot.pools = f.bot.pilot.pilot.set.floor_swim = f.features[sh::Feature::pools];
 }
 

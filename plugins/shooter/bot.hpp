@@ -55,7 +55,8 @@ struct BotStats {
   int64_t looking = 0;                   // commands the view spent on a spot watched (`look`)
   int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and of them, ones pre-aimed at
   double react_s = 0;                    // the reaction times drawn, summed
-  int64_t kept = 0;  // commands the one in hand was kept over a nearer one in sight
+  int64_t kept = 0;          // commands the one in hand was kept over a nearer one in sight
+  int64_t sound_swipes = 0;  // swipes of the view at a sound (`listen`)
 };
 
 struct Bot {
@@ -121,7 +122,7 @@ struct Bot {
   bool pools = true;
   // THE GLANCE (`glance`): a calm walker looks aside every `kGlanceMin_s` to that plus
   // `kGlanceSpread_s` (drawn), 75 or 120 degrees off where it looks, to the side whose line of
-  // sight runs longest (past 400 units), held a moment and turned back at the calm view's pace:
+  // sight runs longest (past 400 units), held a moment and swiped back:
   // people check the open ground beside them, and a still view misses who comes from there.
   // Measured on e1m2 (se-team, red with it against blue without, twelve seeds): about 65 frags a
   // six-seed set to the side that glances, its view still turning 104 degrees a second (people
@@ -129,6 +130,21 @@ struct Bot {
   bool glance = true;
   double glance_next = 0, glance_until = -1;
   float glance_off = 0;
+  // The glance is a SWIPE (a turn meant's pace there and back), held `kGlanceHold_s` from when
+  // it lands (the swipe against the calm view's pace, red alone, six seeds: sighting 57.7 ->
+  // 61.6 % of the enemies on its screen, frags +9 a set: neutral).
+  bool glance_landed = false;
+  double glance_back_until = -1;
+  // THE SOUND'S SWIPE (`listen`): a calm bot that hears an enemy where it knew of nobody (not
+  // seen within `kSoundKnown_s` near there) swipes its view there at a turn meant's pace, holds it
+  // twice its reaction's median (an expert about 0.3 s, a novice 0.6), and swipes back: a person
+  // hearing a step round him looks. Not a view fixed on the sound (tried and dropped: it stopped
+  // the scan).
+  bool listen = true;
+  double sound_heard_at = -1;  // the newest sound swiped at (or let be), s
+  double sound_until = -1, sound_back_until = -1;
+  float sound_yaw = 0;
+  bool sound_landed = false;
   core::Rng glance_rng{1};  // the glances' draws, off the bot's seed
   int intercepts = 1;
   bool target_arc = false;

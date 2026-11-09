@@ -250,6 +250,9 @@ int32_t hop_stretch(const Pilot& p, Vec3f at) {
       break;
     const NavLink* l2 = j + 1 < p.route.size() ? link_of(g, p.route[j], p.route[j + 1]) : nullptr;
     if (l2 != nullptr && leaps(l2->kind)) break;
+    if (p.set.hop_stairs_walked &&
+        node(g, p.route[j]).origin.z - node(g, p.route[j - 1]).origin.z >= p.set.hop_climb)
+      break;  // a climb is walked
     if (j > p.k + 1) along += across(node(g, p.route[j - 1]).origin, node(g, p.route[j]).origin);
     if (along >= p.set.hop_min) best = static_cast<int32_t>(j);
   }

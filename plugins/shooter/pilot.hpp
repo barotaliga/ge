@@ -86,8 +86,12 @@ struct PilotSettings {
   float look = 64;         // a walk aims this far along the route, units
   float lead_s = 0;        // and steers from where it will be this long ahead (late hands), s
   // THE HOP (an expert's bunny hop, off by default; replaces the strafe when on):
-  bool hop = false;         // hop the route's walks and drops, round its curves too
-  float hop_min = 256;      // the shortest stretch hopped, along the route, units
+  bool hop = false;     // hop the route's walks and drops, round its curves too
+  float hop_min = 256;  // the shortest stretch hopped, along the route, units
+  // STAIRS WALKED (`stairs`): a hop's stretch ends at a walk that climbs `hop_climb` units or more
+  // (a stair, a steep ramp): a jump up a stair loses speed; people walk up and hop from the top.
+  bool hop_stairs_walked = false;
+  float hop_climb = 10;
   float hop_end = 96;       // hopping stops this far along the route before the stretch's end
   float hop_look_s = 0.3f;  // the hop aims at the route this long ahead at its speed, s
   float hop_hold = 12;      // the side holds until the aim is this far off the other way, deg
