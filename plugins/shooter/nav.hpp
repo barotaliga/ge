@@ -137,6 +137,19 @@ struct NavScript {
   std::vector<ScriptStep> steps;
 };
 
+// A way out of a pit of liquid by a rocket (shooter/escape.hpp): where the swimmer starts backing
+// (eyes just under the surface), the view's heading away from the ledge, the shot's pitch down,
+// the node landed on, the blast's points and the proof's time (backing and flight), s.
+struct NavEscape {
+  Vec3f from;
+  float yaw = 0;
+  float pitch = 80;
+  int32_t to = -1;
+  float damage = 0;
+  float time_s = 0;
+  int8_t fire_level = 2;  // the shot goes rising at this waterlevel or less (3 under, 2 eyes out)
+};
+
 struct NavLink {
   int32_t to = 0;
   NavKind kind = NavKind::walk;
@@ -149,7 +162,8 @@ struct NavLink {
   float lead = 0;       // a grenade jump's: the jumper stands this far past the grenade, units
   int32_t script = -1;  // a scripted way's: its index in `NavGraph::scripts`
   bool teleport =
-      false;  // a teleporter's: walked INTO its trigger (at the link's start), not across
+      false;            // a teleporter's: walked INTO its trigger (at the link's start), not across
+  int32_t escape = -1;  // a rocket out of a pit's liquid: its index in `NavGraph::escapes`
 };
 
 // A blast jump: a rocket jump or a grenade jump.
@@ -163,12 +177,14 @@ inline bool nav_blast(NavKind k) { return k == NavKind::rocket || k == NavKind::
 struct NavJumper {
   bool rockets = false;
   bool grenades = false;
-  bool scripts = true;  // the scripted ways taken (a game's switch)
+  bool scripts = true;   // the scripted ways taken (a game's switch)
+  bool escapes = false;  // the rockets out of a pit's liquid (`NavLink::escape`) taken
   uint8_t level = 2;
   float extra_s = 0;
   // Whether he takes `l` at all (any link but a blast jump: always).
   bool takes(const NavLink& l) const {
     if (l.kind == NavKind::script) return scripts;
+    if (l.escape >= 0) return escapes;
     if (!nav_blast(l.kind)) return true;
     return (l.kind == NavKind::rocket ? rockets : grenades) && l.level <= level;
   }
@@ -206,6 +222,8 @@ struct NavGraph {
   std::vector<uint8_t> room;
   // The scripted ways a game added (`NavKind::script` links index them).
   std::vector<NavScript> scripts;
+  // The rockets out of a pit's liquid (`NavLink::escape` links index them; shooter/escape.hpp).
+  std::vector<NavEscape> escapes;
 };
 
 // One proof's result.
@@ -252,6 +270,7 @@ struct NavExtraLink {
   int32_t mover = -1;     // a mover the way crosses (NavLink::mover): shut, it bars the link
   int32_t script = -1;    // a scripted way's steps (NavLink::script)
   bool teleport = false;  // a teleporter's (NavLink::teleport)
+  int32_t escape = -1;    // a rocket out of a pit's liquid (NavLink::escape)
 };
 
 // THE ROCKET JUMP, as the baseline mod makes it (games/shooters_edge/qc: weapons.qc's `launch`,

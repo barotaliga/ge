@@ -17,6 +17,10 @@
 //   pool's floor and, by the climb out the move proves, to the dry edges round it; the SWIM FIELD
 //   still leads a swimmer off the graph out to the map's main part (the most nodes a start spot
 //   reaches; `start_class` names the starts);
+// - OUT OF A PIT BY ROCKET (shooter/escape.hpp `nav_add_escapes`): from every liquid at least
+//   waist deep, rockets fired down at the surface proven onto the ledges round it (the main part's
+//   dry floor, never a bridge), and a link from each liquid node to the cheapest; dm2's lava pits
+//   have no other way out;
 // - the map's ROCKET-JUMP TRICKS (rocket_tricks.hpp: the jumps people make there again and
 //   again), each proven by the move into a rocket link at its level (shooter/nav.hpp
 //   `nav_add_tricks`), after the pockets are bridged, landing only where a way back leads out;
@@ -26,7 +30,7 @@
 // ge:summary A real map's nav for the bots: movers, teleporters, water closed, the swim field
 // ge:keywords map-nav build_map_nav movers doors plats teleporters water swim-field nav-graph
 // ge:keywords open-doors-as-floor start-open real-map bridge swim-nodes water-in-graph
-// ge:keywords rocket-tricks tricks-in-nav
+// ge:keywords rocket-tricks tricks-in-nav escapes lava-escape
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
@@ -36,6 +40,7 @@
 #include <vector>
 
 #include "ai/path.hpp"
+#include "shooter/escape.hpp"
 #include "shooter/nav.hpp"
 #include "shooter/swim.hpp"
 #include "shooters_edge/server/qc_server.hpp"
@@ -64,6 +69,7 @@ struct MapNav {
   ge::shooter::NavTrickCounts tricks_made;       // the map's tricks proven into blast jumps
   ge::shooter::NavTrickCounts bridged_grenades;  // grenade jumps beside the bridges' rocket jumps
   ge::shooter::NavHardenCounts hardened;         // the jumps over lava or slime
+  ge::shooter::NavEscapeCounts escapes_made;     // the rockets out of a pit's liquid
   std::vector<uint8_t> trap;  // the nodes no way on foot leads back from to the main part
   std::vector<ge::shooter::NavExtraLink> entries;  // the links into the water the graph closed
   std::vector<NavBridge> bridges;

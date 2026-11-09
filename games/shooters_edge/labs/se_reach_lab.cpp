@@ -13,10 +13,13 @@
 // link onto each, its kind, time and jump speed; `--floors="x0 y0 x1 y1 [step]"` tables every
 // floor a standing player finds straight down along a line beside the nav's nodes in that grid
 // column (a tread with no node is one the grid missed). The `se-spot` lab draws the same place.
+// `--escapes=fly` flies every rocket out of a pit's liquid (shooter/escape.hpp) with the pilot
+// (bots/pilot_run.hpp `run_route`) from the liquid node at its takeoff, and tables which fired and
+// which landed: a staged run of a rare moment (a bot fallen into lava) a match seldom shows.
 //
 // ge:summary Lab: every item of every map asked: a route to it from the spawns, and one back
 // ge:keywords lab se-reach reachability coverage nav-gaps items pockets unreachable route maps
-// ge:keywords dm1 dm2 dm3 dm4 dm5 dm6 e1m2 route-probe floors-probe nav-debug
+// ge:keywords dm1 dm2 dm3 dm4 dm5 dm6 e1m2 route-probe floors-probe nav-debug escapes-fly lava
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #include <cmath>
@@ -34,6 +37,7 @@
 #include "shooter/nav.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
+#include "shooters_edge/bots/pilot_run.hpp"
 #include "shooters_edge/bots/rocket_tricks.hpp"
 #include "shooters_edge/client/files.hpp"
 #include "shooters_edge/client/listen.hpp"
@@ -51,6 +55,8 @@ namespace sv = shooters_edge::server;
 namespace bt = shooters_edge::bots;
 namespace cn = shooters_edge::net;
 using ge::core::num::to_fixed;
+
+constexpr float kEscapeLimit_s = 8;  // --escapes: a flight given this long to land
 
 struct Gap {
   std::string item, why;
@@ -75,6 +81,9 @@ struct MapReach {
   std::vector<std::vector<std::string>> tricks;  // the tricks table's rows
   int64_t tricks_held = 0, grenade_links = 0;
   int64_t risky = 0, risky_removed = 0;  // jumps over lava or slime, and those removed
+  int64_t escapes = 0, escape_links = 0, escape_proofs = 0;  // rockets out of a pit's liquid
+  int64_t escapes_flown = 0, escapes_fired = 0, escapes_landed = 0;  // --escapes: the pilot's
+  std::vector<std::vector<std::string>> escape_rows;
   std::vector<std::vector<std::string>> route_rows, floor_rows;  // --route's and --floors' rows
   std::vector<std::vector<std::string>> script_rows;  // the scripted routes, held or refused
 };
@@ -171,7 +180,7 @@ void probe_map(const bt::MapNav& nav, const Probe& pr, MapReach& out) {
 }
 
 void reach_map(std::span<const uint8_t> bytes, const std::string& name, const std::string& entities,
-               const ge::progs::Progs& progs, const Probe* probe, MapReach& out) {
+               const ge::progs::Progs& progs, const Probe* probe, bool fly_escapes, MapReach& out) {
   out.name = name;
   std::unique_ptr<cl::LoadedMap> map = cl::map_from_bytes(bytes, name, out.error);
   if (!map) return;
@@ -205,6 +214,29 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
   for (const uint8_t h : nav.harm) out.harm_nodes += h;
   out.risky = nav.hardened.over;
   out.risky_removed = nav.hardened.removed;
+  out.escapes = nav.escapes_made.held;
+  out.escape_links = nav.escapes_made.links;
+  out.escape_proofs = nav.escapes_made.proofs;
+  // --escapes: each escape flown by the pilot from the liquid node at its takeoff to its ledge
+  // (bots/pilot_run.hpp `run_route`: the move, the rocket's burst and blast as the proof's).
+  for (size_t x = 0; fly_escapes && x < g.escapes.size(); x++) {
+    const sh::NavEscape& e = g.escapes[x];
+    sh::PilotSettings ps;
+    ps.jumper.escapes = true;
+    const sh::Vec3f to = g.nodes[static_cast<size_t>(e.to)].origin;
+    const bt::RunResult r = bt::run_route(nav.world, g, e.from, to, sh::PilotHands::human,
+                                          static_cast<uint32_t>(1 + x), ps, kEscapeLimit_s);
+    const bool fired = r.stats.escapes > 0, landed = fired && r.arrived;
+    out.escapes_flown++;
+    out.escapes_fired += fired;
+    out.escapes_landed += landed;
+    auto at = [](sh::Vec3f o) {
+      return to_fixed(o.x, 0) + " " + to_fixed(o.y, 0) + " " + to_fixed(o.z - 24, 0);
+    };
+    out.escape_rows.push_back({name, std::to_string(x), at(e.from), at(to), to_fixed(e.pitch, 0),
+                               std::to_string(e.fire_level), fired ? "yes" : "no",
+                               landed ? "yes" : "no", to_fixed(r.time_s, 2), to_fixed(r.blast, 0)});
+  }
 
   for (const sh::NavLink& l : g.links) {
     out.grenade_links += l.kind == sh::NavKind::grenade;
@@ -334,6 +366,7 @@ void run(gl::Lab& lab) {
     probe.to.z += 24;
   }
   const std::string basedir = lab.arg("basedir");
+  const bool fly = lab.arg("escapes") == "fly";
   if (basedir.empty()) {
     std::vector<uint8_t> bytes;
     if (!ge::brush::write_bsp(ge::brush::sample_fixture(), ge::brush::Family::v29, &bytes,
@@ -342,7 +375,7 @@ void run(gl::Lab& lab) {
       return;
     }
     maps.emplace_back();
-    reach_map(bytes, "halls", cn::kTeamHallsEntities, progs, &probe, maps.back());
+    reach_map(bytes, "halls", cn::kTeamHallsEntities, progs, &probe, fly, maps.back());
   } else {
     cl::SearchPath files;
     if (!cl::open_game_dir(basedir, lab.arg("game"), files, error)) {
@@ -360,7 +393,7 @@ void run(gl::Lab& lab) {
         maps.back().error = "no maps/" + name + ".bsp in the game folder";
         continue;
       }
-      reach_map(f, name, "", progs, maps.size() == 1 ? &probe : nullptr, maps.back());
+      reach_map(f, name, "", progs, maps.size() == 1 ? &probe : nullptr, fly, maps.back());
     }
   }
 
@@ -412,6 +445,9 @@ void run(gl::Lab& lab) {
     lab.metric("reach." + m.name + ".grenade-links", static_cast<double>(m.grenade_links), "count");
     lab.metric("reach." + m.name + ".risky-jumps", static_cast<double>(m.risky), "count");
     lab.metric("reach." + m.name + ".risky-removed", static_cast<double>(m.risky_removed), "count");
+    lab.metric("reach." + m.name + ".escapes", static_cast<double>(m.escapes), "count");
+    lab.metric("reach." + m.name + ".escape-links", static_cast<double>(m.escape_links), "count");
+    lab.metric("reach." + m.name + ".escape-proofs", static_cast<double>(m.escape_proofs), "count");
     for (const auto& row : m.tricks) tk.rows.push_back(row);
     for (const Gap& gp : m.gaps)
       gaps.rows.push_back(
@@ -435,6 +471,25 @@ void run(gl::Lab& lab) {
   for (const MapReach& m : maps)
     for (const auto& row : m.script_rows) st.rows.push_back(row);
   if (!st.rows.empty()) lab.table(st);
+  if (fly) {
+    gl::LabTable et{
+        "--escapes=fly: every rocket out of a pit's liquid (shooter/escape.hpp) flown by "
+        "the pilot from the liquid node at its takeoff to its ledge: fired, landed",
+        {"map", "#", "takeoff (feet)", "ledge (feet)", "pitch", "level", "fired", "landed", "s",
+         "blast"},
+        {}};
+    int64_t flown = 0, fired = 0, landed = 0;
+    for (const MapReach& m : maps) {
+      for (const auto& row : m.escape_rows) et.rows.push_back(row);
+      flown += m.escapes_flown, fired += m.escapes_fired, landed += m.escapes_landed;
+      lab.metric("reach." + m.name + ".escapes-landed", static_cast<double>(m.escapes_landed),
+                 "count");
+    }
+    lab.metric("reach.escapes-flown", static_cast<double>(flown), "count");
+    lab.metric("reach.escapes-fired", static_cast<double>(fired), "count");
+    lab.metric("reach.escapes-landed", static_cast<double>(landed), "count");
+    lab.table(et);
+  }
   if (probe.route && !maps.empty())
     lab.table({"--route on " + maps.front().name + ": each node (feet) and the link onto it",
                {"#", "node", "at (x y feet)", "link", "s", "jump speed"},
@@ -464,6 +519,7 @@ const gl::LabSpec kSpec{
          "a route on the first map tabled node by node: 'x y z > x y z' (feet; nearest nodes)"},
         {"floors", "",
          "the floors along a line on the first map: 'x0 y0 x1 y1 [step]' (the nav's misses)"},
+        {"escapes", "", "fly: every rocket out of a pit's liquid flown by the pilot, tabled"},
     },
     "",
     run,

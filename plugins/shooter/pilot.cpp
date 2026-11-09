@@ -9,6 +9,7 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "shooter/escape.hpp"
 #include "shooter/nav_script.hpp"
 #include "shooter/server.hpp"
 #include "shooter/swim.hpp"
@@ -19,6 +20,15 @@ namespace ge::shooter {
 namespace {
 
 constexpr float kRideArrive = 2;  // a ride is over within this of the top node's height, units
+// Out of a pit (escape.hpp): the takeoff reached within this across, units; the rise to the
+// surface from under it reckoned this long for the hand's stroke down, s; given up after this
+// long no nearer the takeoff or never fired, s.
+constexpr float kEscapeAt = 16;
+constexpr float kEscapeDepth = 4;
+constexpr float kEscapeLanded = 128;  // a landing out counts this near the escape's ledge, units //
+                                      // the swim to the takeoff rises to this under its height
+constexpr float kEscapeRise_s = 0.3f;
+constexpr float kEscapeGiveUp_s = 3;
 constexpr float kSwimPitch = 70;  // a swimmer's view pitched at most this far, degrees
 constexpr float kSwimRise = 16;   // the next node this much higher: jump held to rise, units
 // A script's keys are pressed in full only with the view within ~14 degrees of the way (the cos).
@@ -347,6 +357,18 @@ float arc_clear(const MoveWorld& world, Vec3f o, Vec3f v, int side, float dt, fl
   return horizon;
 }
 
+// Out of a pit (escape.hpp): standing out of the liquid near the escape's ledge (not respawned
+// elsewhere after dying in its flight).
+bool landed_out(const Pilot& p, const PilotSense& s) {
+  if (p.escape_on < 0 || static_cast<size_t>(p.escape_on) >= p.g->escapes.size()) return false;
+  const NavEscape& e = p.g->escapes[static_cast<size_t>(p.escape_on)];
+  if (e.to < 0) return false;
+  const Vec3f ledge = node(*p.g, e.to).origin;
+  const bool dry = (s.world != nullptr ? water_level(*s.world, s.origin) : s.waterlevel) == 0;
+  return dry && across(s.origin, ledge) <= kEscapeLanded && s.origin.z > ledge.z - kEscapeLanded &&
+         s.origin.z < ledge.z + kEscapeLanded;
+}
+
 void restart(Pilot& p, const PilotSense& s) {
   p.best = 1e30f;
   p.best_s = static_cast<float>(p.stats.time_s);
@@ -391,7 +413,8 @@ bool passed(const Pilot& p, const PilotSense& s, size_t k) {
     return p.airborne && s.onground && across(s.origin, node(g, b).origin) <= kLanded &&
            dz <= kStandUp && dz >= -kStandUp;
   }
-  if (l && l2 && leaps(l2->kind) && l->mover < 0 && l->kind != NavKind::drop) return false;
+  if (l && l2 && leaps(l2->kind) && l2->escape < 0 && l->mover < 0 && l->kind != NavKind::drop)
+    return false;
   if (l && l2 && through(*l) && through(*l2) && level(g, a, b) && level(g, b, p.route[k + 2])) {
     float f = 0;
     const float off = off_segment(s.origin, node(g, a).origin, node(g, b).origin, &f);
@@ -791,7 +814,25 @@ void pilot_face(Pilot& p, float yaw) {
 }
 
 bool pilot_go(Pilot& p, int32_t goal, const PilotSense& s) {
+  // A rocket out of a pit in flight is flown to its ledge first: the new goal planned on landing.
+  // (Dead or respawned, the player stands: the flight is over and he plans as anyone does. A
+  // caller that set a new goal left the pilot idle: the flight's mode is put back.)
+  if (p.airborne && p.escape_on >= 0 && !s.onground && p.k + 1 < p.route.size()) {
+    const NavLink* l = link_of(*p.g, p.route[p.k], p.route[p.k + 1]);
+    if (l != nullptr && l->escape == p.escape_on) {
+      p.goal = goal;
+      p.plan_on_landing = true;
+      p.mode = PilotMode::air;
+      return true;
+    }
+  }
   p.goal = goal;
+  p.plan_on_landing = false;
+  if (s.onground || s.waterlevel == 0) {
+    // Out of the liquid: none under way (a flight that just landed out of it counted).
+    if (p.airborne && p.escape_on >= 0 && s.onground && landed_out(p, s)) p.stats.escapes_out++;
+    p.escape_on = -1;
+  }
   p.k = 0;
   p.strafe_end_node = -1;
   p.strafe_side = 0;
@@ -832,6 +873,7 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
   p.shot_pitch = 0;
   p.shot_in_s = 0;
   p.shot_now = false;
+  p.escaping = false;
   const float speed = across({}, s.velocity);
   // Where the player will be when the hands have caught up: the pilot steers from there.
   const Vec3f ahead = s.origin + s.velocity * p.set.lead_s;
@@ -845,7 +887,15 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
     }
     if (p.mode == PilotMode::strafe || p.mode == PilotMode::hop) break;
     if (passed(p, s, p.k) || nearer_on(p, s)) {
+      const NavLink* done = link_of(*p.g, p.route[p.k], p.route[p.k + 1]);
+      const bool escaped = done != nullptr && done->escape >= 0 && p.airborne;
+      if (escaped) p.stats.escapes_out++;
       advance(p, s);
+      if (escaped || (done != nullptr && done->escape >= 0)) p.escape_on = -1;
+      if (escaped && p.plan_on_landing) {
+        p.plan_on_landing = false;
+        replan(p, s);
+      }
       continue;
     }
     break;
@@ -1031,6 +1081,109 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         w.side = static_cast<float>(p.strafe_side);
         w.jump = !p.jump_pressed;  // pressed afresh every other command: a landing catches one
         because = "in the air: the wish across the velocity";
+      }
+    } else if (l.escape >= 0 && static_cast<size_t>(l.escape) < g.escapes.size() && p.airborne &&
+               s.onground) {
+      // Out of a pit, landed off the ledge's node (passed() takes it on it): out of the liquid,
+      // or fallen back into it (missed: twice, never planned again).
+      const bool out = landed_out(p, s);
+      if (out) {
+        p.stats.escapes_out++;
+      } else {
+        missed_jump(p, {a, b, l.kind, l.time_s});
+      }
+      p.escape_on = -1;
+      p.plan_on_landing = false;
+      replanned = true;
+      replan(p, s);
+      because =
+          out ? "out of the pit: landed beside the ledge's node" : "out of the pit: fell back";
+    } else if (l.escape >= 0 && static_cast<size_t>(l.escape) < g.escapes.size() && p.airborne &&
+               !s.onground) {
+      // Out of a pit, in the flight (still in the liquid too, until the blast): the view held
+      // away from the ledge and the back key, as the proof flew.
+      const EscapeKeys k = escape_flight_keys(g.escapes[static_cast<size_t>(l.escape)]);
+      p.escaping = true;
+      p.mode = PilotMode::air;
+      w.yaw = unwrap(k.yaw, p.yaw);
+      w.forward = k.forward;
+      because = "out of the pit: thrown back onto the ledge";
+    } else if (l.escape >= 0 && static_cast<size_t>(l.escape) < g.escapes.size() && !p.airborne) {
+      // OUT OF A PIT BY ROCKET (escape.hpp): swum to the takeoff under the ledge, then backed
+      // against the wall with the view away from the ledge, swimming up, and the shot down as the
+      // eyes come out (the launcher in hand and the view's hand there); its flight is `air`'s.
+      const NavEscape& e = g.escapes[static_cast<size_t>(l.escape)];
+      if (p.escape_on != l.escape) {
+        p.escape_on = l.escape;
+        p.escape_back_s = -1;
+        p.best = 1e30f;
+        p.best_s = t;
+      }
+      p.mode = PilotMode::swim;
+      if (p.escape_back_s < 0) {
+        // The view turned away from the ledge at once (the shot's heading), the takeoff swum to
+        // by the keys in the view's frame, rising all the way: the liquid burns while he turns.
+        const float d = across(s.origin, e.from);
+        w.yaw = unwrap(e.yaw, p.yaw);
+        const ViewAxes ax = angle_vectors({0, p.yaw, 0});
+        const Vec3f to{e.from.x - s.origin.x, e.from.y - s.origin.y, 0};
+        const float k = d > 1 ? (d < p.set.look ? d / p.set.look : 1) / d : 0;
+        w.forward = dot(to, ax.forward) * k;
+        w.side = dot(to, ax.right) * k;
+        // At the takeoff's depth, eyes under (out early, the swimmer bobs and sinks back: the shot
+        // must go on the rise from there, as its proof's).
+        w.jump = s.origin.z < e.from.z - kEscapeDepth;
+        because = "out of the pit: to the takeoff under the ledge";
+        if (d < p.best - 0.5f) {
+          p.best = d;
+          p.best_s = t;
+        }
+        if (d <= kEscapeAt) {
+          p.escape_back_s = 0;
+          p.best_s = t;
+        }
+      }
+      if (p.escape_back_s >= 0) {
+        p.escaping = true;
+        // The depth as the move works it out (the proof's), where the pilot sees the world.
+        const int depth = s.world != nullptr ? water_level(*s.world, s.origin) : s.waterlevel;
+        const EscapeKeys k = escape_back_keys(e, depth, s.velocity, p.escape_back_s);
+        p.escape_back_s += dt;
+        w.yaw = unwrap(k.yaw, p.yaw);
+        w.pitch = k.pitch;
+        w.forward = k.forward;
+        w.jump = k.jump;
+        p.shot_pitch = e.pitch;
+        p.shot_yaw = e.yaw;
+        p.shot_in_s =
+            k.fire
+                ? 0
+                : (depth >= 3 ? kEscapeRise_s : 0) +
+                      (p.escape_back_s < kEscapeBackMin_s ? kEscapeBackMin_s - p.escape_back_s : 0);
+        because = "out of the pit: backing against the wall, swimming up";
+        if (k.fire && s.rocket_ready && shot_view_ready(p)) {
+          w.pitch = k.pitch;
+          w.attack = true;
+          p.shot_now = true;
+          p.shot_in_s = 0;
+          p.airborne = true;
+          p.mode = PilotMode::air;
+          p.stats.rocket_jumps++;
+          p.stats.escapes++;
+          because = "out of the pit: the rocket down as the eyes come out";
+        } else if (k.fire) {
+          because = s.rocket_ready ? "out of the pit: the view down for the shot"
+                                   : "out of the pit: the launcher";
+        }
+      }
+      // Never fired (the takeoff out of reach, the launcher never in hand): planned round.
+      if (!p.airborne && t - p.best_s > kEscapeGiveUp_s) {
+        missed_jump(p, {a, b, l.kind, l.time_s});
+        missed_jump(p, {a, b, l.kind, l.time_s});
+        p.escape_on = -1;
+        replanned = true;
+        replan(p, s);
+        because = "out of the pit: never fired, planned round";
       }
     } else if (l.kind == NavKind::script && l.script >= 0 &&
                static_cast<size_t>(l.script) < g.scripts.size() && !mover_in_way(p, s, l, a, b)) {
@@ -1384,7 +1537,8 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         replan(p, s);
         because = "landed short";
       }
-    } else if (leaps(l.kind) || (l2 && leaps(l2->kind) && l.mover < 0 && l.kind != NavKind::drop)) {
+    } else if (leaps(l.kind) || (l2 && leaps(l2->kind) && l2->escape < 0 && l.mover < 0 &&
+                                 l.kind != NavKind::drop)) {
       // A jump: from this link's start, or (a walk into a jump's start) from the next one's.
       const bool on_it = leaps(l.kind);
       const Vec3f S = on_it ? A : B;
@@ -1583,6 +1737,7 @@ MoveCmd pilot_next(void* ctx, const Server& sv, int slot, int msec) {
   s.movers = b.now;
   s.world = b.world;
   s.grenade_ready = b.grenade_ready;
+  s.rocket_ready = b.rocket_ready;
   if ((p.mode == PilotMode::idle || p.mode == PilotMode::arrived) && !b.goals.empty()) {
     if (p.mode == PilotMode::arrived) b.arrivals++;
     for (int32_t& d : p.barred) d = -1;

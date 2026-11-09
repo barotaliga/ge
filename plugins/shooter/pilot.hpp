@@ -182,6 +182,7 @@ struct PilotSense {
   // wall, as a player sees the room); null: the hop flies blind.
   const MoveWorld* world = nullptr;
   bool grenade_ready = true;  // the grenade launcher in hand: a grenade jump fires only then
+  bool rocket_ready = true;   // the rocket launcher in hand: a rocket out of a pit fires only then
 };
 
 struct PilotStats {
@@ -191,6 +192,8 @@ struct PilotStats {
   int32_t rocket_jumps = 0;         // rocket jumps fired
   int32_t flips = 0;                // of them, taken as the flip
   int32_t grenade_jumps = 0;        // grenades fired for a grenade jump
+  int32_t escapes = 0;              // rockets fired out of a pit's liquid (escape.hpp)
+  int32_t escapes_out = 0;          // and of them, landed on their ledge
   double time_s = 0;                // the commands' time since the last pilot_go
 };
 
@@ -229,6 +232,13 @@ struct Pilot {
   float shot_pitch = 0, shot_yaw = 0, shot_in_s = 0;
   bool shot_now = false;
   bool shot_hand = false, shot_ready = true;
+  // OUT OF A PIT (escape.hpp, `NavLink::escape`): the escape under way, how long it has backed
+  // (-1: still swimming to its takeoff), and whether this command is one of it (the backing or
+  // its flight: the view's owner keeps the swim's 3D wish off then).
+  int32_t escape_on = -1;
+  float escape_back_s = -1;
+  bool escaping = false;
+  bool plan_on_landing = false;            // a goal given in its flight: planned once it lands
   std::vector<int32_t> shut;               // doors the caller knows are shut: never planned through
   std::vector<NavExtraLink> shut_links;    // and links it knows are (onto a bridge still in)
   std::vector<NavExtraLink> cut_all;       // cut and shut_links together, for the route
@@ -268,6 +278,7 @@ struct PilotBot {
   std::vector<NavMover> now;   // the movers as they stand (reused)
   MoveWorld* world = nullptr;  // the map's solids the hop looks ahead through (null: none)
   bool grenade_ready = true;   // the grenade launcher in hand (the caller's say, each command)
+  bool rocket_ready = true;    // the rocket launcher in hand (the caller's say, each command)
   ai::Why* why = nullptr;
   int64_t command = 0;
   int32_t arrivals = 0;

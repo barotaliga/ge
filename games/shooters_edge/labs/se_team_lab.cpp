@@ -722,6 +722,10 @@ void run(gl::Lab& lab) {
       for (const cn::TeamPlayer& p : r.players) rj += p.rocket_jumps, fl += p.flips;
       lab.metric("team.rocket-jumps", static_cast<double>(rj), "count");
       lab.metric("team.flips", static_cast<double>(fl), "count");
+      int64_t es = 0, eo = 0;
+      for (const cn::TeamPlayer& p : r.players) es += p.escapes, eo += p.escapes_out;
+      lab.metric("team.escapes", static_cast<double>(es), "count");
+      lab.metric("team.escapes-out", static_cast<double>(eo), "count");
     }
     lab.metric("team.dodge-share",
                fight > 0 ? static_cast<double>(dodging) / static_cast<double>(fight) : 0, "share");

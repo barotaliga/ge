@@ -180,6 +180,7 @@ struct TeamPlayer {
   int64_t sound_chases = 0;                   // commands going at an enemy it only heard
   int64_t dodging = 0, dodge_turns = 0;       // commands side-stepping in a fight, and turns back
   int64_t rocket_jumps = 0, flips = 0;        // rocket jumps fired on the way, and flips of them
+  int64_t escapes = 0, escapes_out = 0;       // rockets out of a pit's liquid, and those landed out
   int64_t watching = 0;  // commands standing with the view on a way in (bots/watch.hpp)
   double speed_sum = 0;  // its speed across the floor, summed over its commands alive
   double mode_speed[sh::kPilotModes + 1] = {};  // and by the pilot's mode, with each mode's count

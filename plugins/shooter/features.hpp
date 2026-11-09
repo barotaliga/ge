@@ -40,22 +40,22 @@
 // - `listen`: a calm bot swipes its view at an enemy heard where none was known (bot.hpp).
 // - `stairs`: a hop's stretch ends at a climb: stairs walked, the hop taken up at the top.
 // - `locked`: a door only a button or a trigger opens, resting shut, is no way (bots/buttons.hpp).
+// - `escape`: out of a pit's lava, slime or water by a rocket fired down (shooter/escape.hpp).
 // - `trial`: read by an A/B now; off in every preset (`all` too): `--features-red=+trial`.
 //
 // THE PRESETS: `features_all` (every one), each skill's (`features_of`: every one but what that
 // level of player does not do: none `eye`, a novice no `glance`; the rest of a skill's differences
 // are its traits'), `features_none` (a plain bot: it still roams, fights, heals and takes items).
 // The text form (`apply_features`) reads `all`, `none` (or `plain`), `+name` or `name` (on),
-// `-name` (off), separated by commas, spaces or '/', applied in order: "plain,+dodge",
-// "-swimaim,+shortgoals".
+// `-name` (off), separated by commas, spaces or '/', applied in order: "plain,+dodge,-swimaim".
 //
 // ge:summary A bot's features: each behaviour switched on or off by name, and the presets
-// ge:keywords features feature-switch bot-features apply_features features_text presets routes
-// ge:keywords calm pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch
-// ge:keywords spam packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot
-// ge:keywords ab-test trial eye selfaim course-change own-motion pools pool-floor swim-under-view
-// ge:keywords corner lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen
-// ge:keywords sound-swipe stairs stair-walk locked shut-door
+// ge:keywords features feature-switch bot-features apply_features features_text presets routes calm
+// ge:keywords pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch spam
+// ge:keywords packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot ab-test
+// ge:keywords trial eye selfaim course-change own-motion pools pool-floor swim-under-view corner
+// ge:keywords lost-enemy wall-hold mouse hand-strokes click packinfer pack-guess listen sound-swipe
+// ge:keywords stairs stair-walk locked shut-door escape lava-escape
 // ge:skill shooter bots
 // ge:test tests/shooter_features_test.cpp
 #pragma once
@@ -101,9 +101,10 @@ enum class Feature : uint8_t {
   listen,
   stairs,
   locked,
+  escape,
   trial,
 };
-constexpr size_t kFeatures = 33;
+constexpr size_t kFeatures = 34;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

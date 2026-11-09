@@ -121,9 +121,10 @@ MoveCmd bot_next(void* ctx, const Server& sv, int slot, int msec) {
   MoveCmd cmd = pilot_source(b.pilot).next(&b.pilot, sv, slot, msec);
   const float pilot_yaw = b.pilot.pilot.yaw;
   // Swimming (`pools`), the pilot's wish is pressed again under another view in three dimensions:
-  // its pitch dives and rises.
+  // its pitch dives and rises; not while it backs out of a pit (escape.hpp: its keys are the
+  // proof's, under the view it shoots with).
   const Vec3f pilot_view = cmd.angles;
-  const bool swim3d = b.pools && self.waterlevel >= 2;
+  const bool swim3d = b.pools && self.waterlevel >= 2 && !b.pilot.pilot.escaping;
   b.stats.commands++;
 
   const Vec3f eye{self.origin.x, self.origin.y, self.origin.z + b.senses.set.view_height};
