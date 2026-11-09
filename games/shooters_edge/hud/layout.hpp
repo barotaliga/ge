@@ -34,11 +34,7 @@
 // screen (the engine's mirrored layout); `hud_guns ammo|pairs|row` groups the guns (Grouping;
 // `look`, the default, each look's own); `hud_guns_all 0` shows only the guns owned and
 // `hud_ammo_all 0` only the ammunition in hand. The armour's icon shows its type in every look.
-// While the classic bars show, the weapon in hand is
-// raised over them (`status_lift`).
-//
-// Every look draws from the HUD's art (art.hpp), so a classic game's HUD is still its own
-// pictures in every look (its digits, icons, portrait and guns), only placed and sized anew.
+// While the classic bars show, the weapon in hand is raised over them (`status_lift`).
 //
 // `viewsize` steps the bars away as the classic game did: at 100 or under every element shows; at
 // 110 the classic look drops its inventory bar (the status bar alone); at 120 every look drops its
@@ -47,17 +43,17 @@
 //
 // Every look also shows the crosshair, the notify feed (pickups and frags, top left) and the
 // centre message. A look draws with the HUD's ART (art.hpp): the free set, or the player's own
-// classic pictures when classic-enhance has them.
+// classic pictures (its digits, icons, portrait and guns), only placed and sized anew.
 //
 // The figures' colours say what the classic bar said: a figure in the alarm colour is low
 // (health or armour 25 or under, ammunition 10 or under); the shield shows "666" over its disc.
 //
-// ge:summary Shooter's Edge's HUDs: the classic status bar and six other looks, hud_style
-// ge:keywords hud shooter status-bar inventory-bar classic modern compact hud_style looks
-// ge:keywords hud_sbar sbar-background transparent arena tactical minimal shield-bar loadout
-// ge:keywords hud_swap hud_guns hud_guns_all hud_ammo_all grouping pairs status_lift lift
-// ge:keywords health armour ammo face portrait weapons keys powerups runes frags crosshair
-// ge:keywords notify centre-message ring arcs fill_hud add_cvars layout elements viewsize
+// ge:summary Shooter's Edge's HUDs: the classic status bar and five other looks, hud_style
+// ge:keywords hud shooter status-bar inventory-bar classic modern compact hud_style looks hud_sbar
+// ge:keywords sbar-background transparent arena tactical minimal shield-bar loadout hud_swap
+// ge:keywords hud_guns hud_guns_all hud_ammo_all grouping pairs status_lift lift health armour ammo
+// ge:keywords face portrait weapons keys powerups runes frags crosshair notify centre-message ring
+// ge:keywords arcs fill_hud add_cvars layout elements viewsize
 // ge:skill ui console
 // ge:test tests/shooters_edge_hud_test.cpp
 #pragma once

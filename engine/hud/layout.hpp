@@ -108,6 +108,11 @@ struct ElementSpec {
   float fit = 0;
   int digit_cells = 3;  // kind digits: the field's width in cells
   bool snap = false;
+  // `fixed_side`: never mirrored (a status bar drawn as the classic game drew it). `flush`: an
+  // element at a top or bottom anchor drawn against the screen's own edge, past the margin and
+  // the insets, so no world shows between it and the edge.
+  bool fixed_side = false;
+  bool flush = false;
   // A PARENT: an element declared before this one. The child is drawn at the parent's scale
   // times its own, with its `attach` point (its own box's nine points) on the parent's box's
   // `anchor` point, moved by (x, y) in the parent's units (its picture px, or reference px for
@@ -117,11 +122,6 @@ struct ElementSpec {
   std::string_view parent = {};
   StripShape strip = {};  // kind strip
   RingShape ring = {};    // kind ring
-  // `fixed_side`: never mirrored (a status bar drawn as the classic game drew it). `flush`: an
-  // element at a top or bottom anchor drawn against the screen's own edge, past the margin and
-  // the insets, so no world shows between it and the edge.
-  bool fixed_side = false;
-  bool flush = false;
 };
 
 // What the player may change: bound to the element's cvars.
