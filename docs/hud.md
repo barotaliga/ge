@@ -110,9 +110,11 @@ takes its parent's scale times its own. A parent must be declared before its chi
 that is hidden or missing leaves the child standing alone. A face drawn from a 16x16 character
 sheet (`Face::glyph_sheet`) draws the counts in a set's own type.
 
-Shooter's Edge's three HUDs (`games/shooters_edge/hud/layout.hpp`) are the first user: the
-classic bar, the modern corners and the compact rings round the crosshair, one table picked by
-`hud_style`, drawn from the game's free art or the classic set's own pictures: the window reads
+Shooter's Edge's seven HUDs (`games/shooters_edge/hud/layout.hpp`) are the first user: the
+classic bar, the same bar's pieces without its panels (`bare`), the modern corners, the compact
+rings round the crosshair, and three layouts after today's shooters (`arena`: big figures at the
+bottom centre and the guns down the right edge; `tactical`: a shield bar over the health bar and
+the loadout bottom right; `minimal`: small figures only), one table picked by `hud_style`, drawn from the game's free art or the classic set's own pictures: the window reads
 those straight from the player's packs at start (or a lab from classic-enhance's cache). There is
 no choice between the two: with a classic game loaded its own pictures are drawn, and the free art
 only with Shooter's Edge's own content (`client/classic_pictures.hpp`'s `hud_art_of`).

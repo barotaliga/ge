@@ -31,7 +31,8 @@ constexpr Choice kColours[] = {{"0", "0"},   {"1", "1"},   {"2", "2"},   {"3", "
                                {"5", "5"},   {"6", "6"},   {"7", "7"},   {"8", "8"},  {"9", "9"},
                                {"10", "10"}, {"11", "11"}, {"12", "12"}, {"13", "13"}};
 constexpr Choice kHudStyle[] = {
-    {"CLASSIC", "classic"}, {"MODERN", "modern"}, {"COMPACT", "compact"}};
+    {"CLASSIC", "classic"},   {"BARE", "bare"},       {"MODERN", "modern"},  {"ARENA", "arena"},
+    {"TACTICAL", "tactical"}, {"MINIMAL", "minimal"}, {"COMPACT", "compact"}};
 constexpr Choice kWorldLook[] = {{"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kMenuLook[] = {{"AUTO", "auto"}, {"CLASSIC", "classic"}, {"MODERN", "modern"}};
 constexpr Choice kOnOff[] = {{"OFF", "0"}, {"ON", "1"}};
@@ -311,7 +312,7 @@ constexpr Entry kEntries[] = {
      .id = "hud_style",
      .text = "HUD",
      .kind = ItemKind::choice,
-     .hint = "The classic status bar, the modern corners or the compact rings.",
+     .hint = "The classic status bar, the bar without its panels, or a modern layout.",
      .needs = "hud_style",
      .target = Target::client,
      .choices = kHudStyle},

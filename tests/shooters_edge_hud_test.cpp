@@ -119,6 +119,31 @@ TEST(hud_style_picks_a_look_and_only_its_elements_show) {
   con.execute("hud_style nonsense");  // an unknown word is the classic look
   se::fill_hud(hud, armed(), art());
   CHECK(content(hud, "sbar").on);
+  con.execute("hud_style arena");
+  se::fill_hud(hud, armed(), art());
+  CHECK(!content(hud, "sbar").on && content(hud, "arena_health").on && !content(hud, "health").on);
+  con.execute("hud_style tactical");
+  se::fill_hud(hud, armed(), art());
+  CHECK(content(hud, "tac_health_bar").on && content(hud, "tac_gun").on &&
+        !content(hud, "arena_health").on);
+  con.execute("hud_style minimal");
+  se::fill_hud(hud, armed(), art());
+  CHECK(content(hud, "min_health").on && !content(hud, "frags").on && !content(hud, "guns").on);
+}
+
+TEST(the_bare_look_draws_the_classic_pieces_without_either_panel) {
+  se::Hud hud = se::make_hud();
+  ge::console::Console con;
+  se::add_cvars(con, hud);
+  se::fill_hud(hud, armed(), art());
+  CHECK(content(hud, "sbar").color.a == 1.0f && content(hud, "ibar").color.a == 1.0f);
+  con.execute("hud_style bare");
+  se::fill_hud(hud, armed(), art());
+  // The panels still lay out (their pieces hang from them) but draw nothing.
+  CHECK(content(hud, "sbar").on && content(hud, "sbar").color.a == 0.0f);
+  CHECK(content(hud, "ibar").on && content(hud, "ibar").color.a == 0.0f);
+  CHECK(content(hud, "sbar_health").on && content(hud, "ibar_guns").on);
+  CHECK(content(hud, "sbar_health").color.a == 1.0f);
 }
 
 TEST(the_classic_figures_turn_to_the_alarm_sheet_when_low_and_the_shield_shows_666) {
@@ -165,7 +190,8 @@ TEST(a_gun_picked_up_flashes_for_a_second) {
 }
 
 TEST(every_look_lays_out_on_the_screen_at_a_desktop_and_an_upright_phone) {
-  for (const char* look : {"classic", "modern", "compact"}) {
+  for (const char* look :
+       {"classic", "modern", "compact", "bare", "arena", "tactical", "minimal"}) {
     se::Hud hud = se::make_hud();
     ge::console::Console con;
     se::add_cvars(con, hud);

@@ -224,7 +224,8 @@ and sparks (`app/muzzle.hpp`; `ce_muzzles 0` leaves the light alone); `r_drawvie
 `r_viewmodel_fov`, `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`, `r_viewmodel_center` (1 by
 default: centred under the crosshair; 0 to the right) and `r_viewmodel_hands` (0: the weapon
 without its hands) in the console); the HUD (`hud_style
-classic|modern|compact`, the classic status bar by default, drawn in the packs' own pictures when
+classic|bare|modern|compact|arena|tactical|minimal`, the classic status bar by default, `bare`
+the same without its panels, drawn in the packs' own pictures when
 a classic game is loaded, the free art only for Shooter's Edge's own content; `viewsize
 110` drops the inventory bar and `viewsize 120` every bar); the console; the main menu (below). The map's own moving brush
 models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, and one

@@ -17,6 +17,21 @@
 //     left and armour on the right, with their figures beside them; the ammunition under it and
 //     the powerups with their seconds under that; the keys over it; the guns small at the
 //     bottom.
+//   - BARE: the classic look with neither bar's panel drawn, the way classic clients drew a
+//     see-through status bar: the same pieces at the same places straight over the world.
+//   - ARENA: the competitive look (arena shooters and the classic games' tuned configs): health
+//     and armour as big figures either side of the portrait at the bottom centre, each with a
+//     thin bar over it; the rounds small under the crosshair; the guns and the four ammunition
+//     counts down the right edge; the powerups and their seconds across the top.
+//   - TACTICAL: the hero and tactical shooters' look: health's figure bottom left beside its bar
+//     with the armour as a segmented shield bar over it; the rounds big bottom right beside the
+//     gun in hand, the four ammunition kinds over them and the guns as slots over those; the
+//     powerups bottom centre.
+//   - MINIMAL: figures only, small and a little faded: health and armour bottom left, the rounds
+//     bottom right, the keys and the powerups only while held.
+//
+// Every look draws from the HUD's art (art.hpp), so a classic game's HUD is still its own
+// pictures in every look (its digits, icons, portrait and guns), only placed and sized anew.
 //
 // `viewsize` steps the bars away as the classic game did: at 100 or under every element shows; at
 // 110 the classic look drops its inventory bar (the status bar alone); at 120 every look drops its
@@ -30,8 +45,9 @@
 // The figures' colours say what the classic bar said: a figure in the alarm colour is low
 // (health or armour 25 or under, ammunition 10 or under); the shield shows "666" over its disc.
 //
-// ge:summary Shooter's Edge's HUDs: the classic status bar, modern and compact looks, hud_style
+// ge:summary Shooter's Edge's HUDs: the classic status bar and six other looks, hud_style
 // ge:keywords hud shooter status-bar inventory-bar classic modern compact hud_style looks
+// ge:keywords bare sbar-background transparent arena tactical minimal shield-bar loadout
 // ge:keywords health armour ammo face portrait weapons keys powerups runes frags crosshair
 // ge:keywords notify centre-message ring arcs fill_hud add_cvars layout elements viewsize
 // ge:skill ui console
@@ -50,8 +66,8 @@
 
 namespace shooters_edge::hud {
 
-enum class Look : uint8_t { classic, modern, compact };
-inline constexpr int kLooks = 3;
+enum class Look : uint8_t { classic, modern, compact, bare, arena, tactical, minimal };
+inline constexpr int kLooks = 7;
 
 std::string_view look_name(Look l);
 // The look a word names; classic for a word that names none.

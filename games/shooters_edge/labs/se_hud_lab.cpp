@@ -1,4 +1,4 @@
-// LAB `se-hud`: Shooter's Edge's three HUD looks (games/shooters_edge/hud/layout.hpp) drawn by the
+// LAB `se-hud`: Shooter's Edge's seven HUD looks (games/shooters_edge/hud/layout.hpp) drawn by the
 // CPU raster over a painted arena at desktop, wide and phone sizes, with the free art painted in
 // code:
 //
@@ -7,7 +7,9 @@
 //   - MODERN: health and armour bottom left, the ammunition bottom right, the guns along the
 //     bottom, the powerups down the right edge, the frags top right;
 //   - COMPACT: two arcs round the crosshair with their figures, the ammunition and the powerups
-//     under it, the keys over it, small guns along the bottom.
+//     under it, the keys over it, small guns along the bottom;
+//   - BARE, ARENA, TACTICAL and MINIMAL: the classic bar without its panels, and three modern
+//     layouts (layout.hpp says where each puts what).
 //
 // Two moments are staged: a fight (a gun just picked up and flashing, the damage boost running,
 // a gold key, a frag board of four) and trouble (health, armour and ammunition low, the cloak's
@@ -18,8 +20,9 @@
 // classic pictures from classic-enhance's local cache (classic_art.hpp): `<cache>/pictures` as
 // the pack has them, `<cache>/pictures/enhanced` upscaled (`ce_pictures`).
 //
-// ge:summary Lab: Shooter's Edge's classic, modern and compact HUDs at five screen sizes
+// ge:summary Lab: Shooter's Edge's seven HUD looks at five screen sizes
 // ge:keywords lab hud se-hud shooter status-bar classic modern compact looks viewports
+// ge:keywords bare arena tactical minimal
 // ge:keywords free-art layout-problems screenshot
 // ge:skill ui labs
 // ge:test tests/shooters_edge_hud_test.cpp
@@ -195,7 +198,17 @@ constexpr const char* kLookCaption[se::kLooks] = {
     "right edge with their seconds, the frags top right.",
     "Round the crosshair: health's arc on the left and armour's on the right with their figures, "
     "the ammunition under it and the powerups with their seconds under that, the keys over it, "
-    "small guns along the bottom."};
+    "small guns along the bottom.",
+    "The classic look bare: the status bar's and the inventory bar's pieces at their places with "
+    "neither panel drawn, straight over the world.",
+    "The arena look: health and armour big either side of the portrait at the bottom centre with "
+    "thin bars over them, the rounds under the crosshair, the guns and the four ammunition counts "
+    "down the right edge, the powerups across the top.",
+    "The tactical look: health beside its bar with the armour as a shield bar over it bottom "
+    "left; the rounds big bottom right beside the gun in hand, the ammunition kinds and the gun "
+    "slots over them; the powerups bottom centre.",
+    "The minimal look: small faded figures only, health and armour bottom left, the rounds bottom "
+    "right, the keys and powerups while held."};
 
 void run(ge::lab::Lab& lab) {
   const gh::Style style = se::hud_style();
@@ -260,7 +273,8 @@ void run(ge::lab::Lab& lab) {
           }
           ui::Image img = arena(v.w, v.h);
           ui::render(dl, img);
-          const bool closeup = look == se::Look::classic && v.w == 1920 && v.h == 1080;
+          const bool closeup =
+              (look == se::Look::classic || look == se::Look::bare) && v.w == 1920 && v.h == 1080;
           ui::Image close = closeup ? crop_bottom(img, 1400, 230) : ui::Image{};
           lab.shot({join({look_word, tag, "-", moment, "-", v.name()}),
                     join({"THE ", look_word, " LOOK, ", moment, ", AT ", v.name(),
@@ -279,14 +293,14 @@ void run(ge::lab::Lab& lab) {
                      {"problems", std::to_string(found.size())}}},
                    picture_of(std::move(img)));
           if (closeup)
-            lab.shot({join({"classic", tag, "-", moment, "-closeup"}),
-                      "THE CLASSIC BARS CLOSE UP, " + moment,
+            lab.shot({join({look_word, tag, "-", moment, "-closeup"}),
+                      join({"THE ", look_word, " BARS CLOSE UP, ", moment}),
                       join({"The bottom of the 1920x1080 frame at the bar's own scale (4 px per "
                             "art pixel), in the ",
                             set_name, " art."}),
                       "each figure in its field; the icons in their wells; the counts over their "
                       "boxes",
-                      {{"look", "classic"}, {"moment", moment}, {"art", set_name}}},
+                      {{"look", look_word}, {"moment", moment}, {"art", set_name}}},
                      picture_of(std::move(close)));
         }
       }
@@ -302,7 +316,7 @@ const ge::lab::LabSpec kSpec{
     "game:shooters_edge",
     "games/shooters_edge/hud (the looks, the free art) over engine/hud's layout and pictures",
     "ui",
-    "Do Shooter's Edge's classic, modern and compact HUDs lay out clean and read at desktop, "
+    "Do Shooter's Edge's seven HUD looks lay out clean and read at desktop, "
     "wide and phone sizes?",
     {{"viewports", "1280x720,1920x1080,2560x1080,844x390,390x844",
       "the screen sizes, comma-separated WxH"},
