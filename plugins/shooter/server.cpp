@@ -126,7 +126,9 @@ void touch_links(Server& sv, int e) {
     sv.g.other = e;
     sv.g.time = static_cast<float>(sv.time);
     sv.counts.trigger_touches++;
+    if (sv.touch_watch != nullptr) sv.touch_watch(sv.touch_watch_ctx, sv, t, e, false);
     call_program(sv, trig.touch);
+    if (sv.touch_watch != nullptr) sv.touch_watch(sv.touch_watch_ctx, sv, t, e, true);
   }
   sv.g.self = old_self;
   sv.g.other = old_other;
