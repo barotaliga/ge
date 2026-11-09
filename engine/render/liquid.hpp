@@ -6,10 +6,12 @@
 // - LAVA (`LavaLook`): the surface's TEMPERATURE is the picture, and its colour and brightness
 //   follow from it as a black body's glow (water/glow.hpp's table, Planck under the CIE
 //   observer: no colour is picked). The crust is a field of plates (a Voronoi tiling at the
-//   plate's size) carried by the flow on two phases of a flow map so it never stretches; each
-//   plate has an age, which cools its skin from `crust_hot` to `crust_cold` (dull red to black)
-//   and widens the cracks between it and its neighbours, where the melt's own heat shows, falling
-//   off exp(-d / w) from the crack's line. Over the plates lie the open patches (a slow noise over
+//   plate's size) carried by the flow on two phases of a flow map so it never stretches (each
+//   phase unseen where it jumps back; a still pool one pattern); each plate has an age, which
+//   cools its skin from `crust_hot` to `crust_cold` (dull red to black) and widens the cracks
+//   between it and its neighbours, where the melt's own heat shows, falling off exp(-d / w) from
+//   the crack's line; it congeals out of the melt and at the end melts back and sinks, so no
+//   plate ever pops. Over the plates lie the open patches (a slow noise over
 //   `cover`), molten and nearly at `core`, a thin skin wrinkling on them; the crust's edge at a
 //   patch is the hottest. Pahoehoe's ropy folds run across the flow on the crust. The crust is a
 //   rough black glass lit by the sun and the sky; the melt a smoother one; both glow.

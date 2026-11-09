@@ -369,16 +369,18 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       // of a second a frame, kept as an animated GIF (the flames, the sparks, the water moving).
       const int film = k == 1 ? static_cast<int>(lab.arg_num("film")) : 0;
       std::vector<gl::Picture> frames;
+      const double step = lab.arg_num("film-step");
       for (int f = 1; f <= film; ++f) {
         ge::render::FrameView on = view;
-        on.time_s = view.time_s + f / 30.0;
-        cl::draw_world(*device, *world[k], on, fx, nullptr, 1.0 / 30, {}, out.view);
+        on.time_s = view.time_s + f * step;
+        cl::draw_world(*device, *world[k], on, fx, nullptr, step, {}, out.view);
         const ge::gpu::Image fi = ge::gpu::read_now(*device, out);
         frames.push_back(gl::shrink(
             gl::Picture{static_cast<int>(fi.width), static_cast<int>(fi.height), fi.rgba}, 640));
       }
       if (!frames.empty())
-        lab.attach("film-" + std::to_string(v) + ".gif", gl::encode_gif_frames(frames, 3),
+        lab.attach("film-" + std::to_string(v) + ".gif",
+                   gl::encode_gif_frames(frames, std::max(2, static_cast<int>(step * 100 + 0.5))),
                    gl::Det::measured);
     }
     if (!warp) continue;
@@ -624,8 +626,10 @@ const gl::LabSpec kSpec{
       "with --game: a progs.src compiled and run instead of the arena variant, or pack"},
      {"settle", "4", "with --game: host frames run at each view before it is drawn (at least 4)"},
      {"film", "0",
-      "with --game: the enhanced look run on this many thirtieths of a second from each view, "
+      "with --game: the enhanced look run on this many frames (--film-step apart) from each view, "
       "attached as film-<view>.gif (the flames and the sparks moving)"},
+     {"film-step", "0.0333333",
+      "with --film: seconds between the film's frames (0.2: the lava's crust over 12 s in 60)"},
      {"warp", "",
       "with --game: x,y,z,yaw where another player warps in and out, filmed from each view in the "
       "enhanced look, then the local player's own arrival through his eyes"},
