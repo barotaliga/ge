@@ -148,6 +148,9 @@ float EF_RED = 128;     // the shield's
 .void() th_hurt;          // what a hit that leaves it alive does (unset: a player's pain)
 .float show_hostile;      // a player is noisy until this (he fired): monsters hear him
 .float blast_share;       // the share of a blast it takes (0: all of it)
+.float body_next;         // a player's next body frame is due (common/player.qc)
+.float body_first;        // the first frame of the cycle his body plays
+.float body_step;         // the cycle's next step
 
 float STATE_TOP = 0;
 float STATE_BOTTOM = 1;
