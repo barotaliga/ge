@@ -23,6 +23,7 @@ router's Skills table and the directories against each other.
 | --- | --- |
 | `determinism` | Bits, not closeness: FP flags, the libm rule, number semantics, golden failures |
 | `port` | WORKING skill (deleted with `porting/`): carrying a module over from its reference, bottom-up, bit-exact |
+| `clean-room` | Source we may not copy: a reader subagent answers questions in a document with no code; the implementer builds from it and never reads the source |
 | `testing` | The header harness, golden tables, CTest |
 | `build` | CMake, presets, pinned dependencies, the CI matrix, workflow hygiene |
 | `release` | Changeset fragments, the installed package, cutting a release to GitHub Releases + Packages |
