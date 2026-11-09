@@ -416,6 +416,7 @@ bool packs_bore(Fighter& f, const server::RulesCommon& s, int me, const Stats& s
   }
   cmd.angles.x = sh::quantize_angle(89);
   cmd.forward = cmd.side = 0;
+  f.bot.set_by = "bore";
   return true;
 }
 

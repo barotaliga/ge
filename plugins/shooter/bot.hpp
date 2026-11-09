@@ -117,6 +117,9 @@ struct Bot {
   // What turned the view this command ("aim", "look", "calm", "air", "swim", "pilot"): read by
   // se-team's trace.
   const char* view_by = "pilot";
+  // Which of the game's views was set on the command after the step (`bot_hand_override`), for
+  // the trace: "button", "swimway", "swimexit", ...; null: "game".
+  const char* set_by = nullptr;
   // Swimming, the pilot's wish pressed under the aim's or the calm view in three dimensions (its
   // dive and rise kept); off, turned in the plane alone (features.hpp `pools`).
   bool pools = true;

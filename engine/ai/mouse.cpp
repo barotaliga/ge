@@ -15,8 +15,7 @@ namespace ge::ai {
 
 namespace {
 
-constexpr double kSlip_s = 0.05;   // a set-down's slide, s
-constexpr double kTurnBack = 0.7;  // a stroke the other way waits until one is this far done
+constexpr double kSlip_s = 0.05;  // a set-down's slide, s
 
 // A minimum-jerk stroke's share of its length done at `u` (0..1) of its time.
 double done(double u) {
@@ -92,10 +91,11 @@ void Mouse::plan(const MouseWant& want) {
   if (ex == 0 && ey == 0) return;
   if (count_ == kStrokes) return;  // the hand is busy enough
   // A hand does not turn back across while a stroke is under way: one the other way waits until
-  // it is nearly done (kTurnBack of its time), so the view never reverses at speed.
+  // it is nearly done (`turn_back` of its time), so the view never reverses at speed.
   for (int k = 0; k < count_; k++) {
     const Stroke& s = strokes_[static_cast<size_t>(k)];
-    if ((s.ax * ex < 0 || s.ay * ey < 0) && s.age < kTurnBack * s.dur && s.ax * ex + s.ay * ey < 0)
+    if ((s.ax * ex < 0 || s.ay * ey < 0) && s.age < want.turn_back * s.dur &&
+        s.ax * ex + s.ay * ey < 0)
       return;
   }
   d = std::sqrt(ex * ex + ey * ey);

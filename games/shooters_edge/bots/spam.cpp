@@ -132,6 +132,7 @@ bool spam_fire(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
   cmd.angles.y = static_cast<float>(ge::core::libm::atan2(d.y, d.x) * (180.0 / ge::core::kPi));
   cmd.angles.x = static_cast<float>(-ge::core::libm::atan2(d.z, flat) * (180.0 / ge::core::kPi));
   cmd.forward = cmd.side = 0;
+  f.bot.set_by = "spam";
   if (t - f.spam_fired < kSpamGap_s) return false;
   cmd.buttons = static_cast<uint8_t>(cmd.buttons | sh::kButtonAttack);
   f.spam_fired = t;
