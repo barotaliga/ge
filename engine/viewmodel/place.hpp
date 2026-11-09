@@ -21,17 +21,30 @@
 //   THE DIP        a landing pushes the gun down `dip_per_mps` m/s a m/s of fall, on `dip_poles`.
 //   PUT AWAY       `lowered` (0 up, 1 away) is chased at 1 / `switch_s` a second; away, the gun
 //                  is `lower_m` lower and pitched down by `lower_pitch`.
-//   IDLE           a slow breathing drift of `idle_m` at `idle_hz`, fading out with speed.
+//   THE BREATH     at rest the gun rises and falls with the holder's breath: `breath_m` deep and
+//                  `breath_hz` breaths a second, the muzzle tipping up `breath_pitch` rad at the
+//                  top of a breath of that depth. The breath in takes 40% of it, the breath out
+//                  the rest. No two breaths are alike: each draws its own depth and length from the
+//                  state's stream, and now and then a deeper sigh; the hands also WANDER, a slow
+//                  random drift `breath_wander_m` wide. While the body strides, `breath_moving` of
+//                  it is kept (the bob covers the rest).
+//   EXERTION       how hard the body has just worked, 0..1: it climbs towards the ground speed's
+//                  share of `exert_run_mps` over `exert_rise_s` (a landing adds `exert_landing` a
+//                  m/s of fall) and falls back over `exert_fall_s`. At 1 the breath is
+//                  1 + `exert_rate` times as fast and 1 + `exert_depth` times as deep, and the
+//                  wander quicker and wider: a run leaves the gun heaving, settling as the
+//                  breath comes back.
 //
 // `motion` (the player's comfort, 0..1) scales every motion the player did not command, as the
 // camera's does. The gun has its own lens, `fov_y` (0: the view's), so a wide view does not
 // stretch it; the renderer draws it in its own depth range over the world (it never sinks into
 // a wall).
 //
-// ge:summary The held weapon's place in the view: offset, bob, sway, kick, dip, put-away, idle
+// ge:summary The held weapon's place in the view: offset, bob, sway, kick, dip, put-away, breath
 // ge:keywords viewmodel view-model first-person weapon gun held place placement offset bob
 // ge:keywords gun-bob weapon-bob sway weapon-sway lag inertia kick recoil dip landing switch
 // ge:keywords lower raise put-away idle breathing viewmodel-fov frame_viewmodel placement-row
+// ge:keywords breath idle-sway weapon-breathing exertion out-of-breath wander
 // ge:keywords held_to_world held_dir_to_world muzzle-world lens-match muzzle_to_world muzzle-pose
 // ge:skill render camera
 // ge:test tests/viewmodel_place_test.cpp
@@ -39,6 +52,7 @@
 
 #include "camera/follow.hpp"
 #include "camera/pose.hpp"
+#include "core/prng.hpp"
 #include "viewmodel/held.hpp"
 
 namespace ge::viewmodel {
@@ -59,14 +73,24 @@ struct PlaceRow {
   camera::Poles dip_poles{3.0, 0.6, 0.0};
   double switch_s = 0.2;
   double lower_m = 0.25;
-  double lower_pitch = 0.6;  // rad, muzzle down
-  double idle_m = 0.0;
-  double idle_hz = 0.25;
+  double lower_pitch = 0.6;      // rad, muzzle down
+  double breath_m = 0.0;         // the rise and fall over a breath at rest, m (0: none)
+  double breath_hz = 0.25;       // breaths a second at rest (15 a minute)
+  double breath_pitch = 0.0;     // rad the muzzle tips up at the top of a breath `breath_m` deep
+  double breath_wander_m = 0.0;  // the hands' slow random drift at rest, m
+  double breath_moving = 0.35;   // share of the breath kept while striding
+  double exert_run_mps = 8.0;    // ground speed counted as all-out work, m/s
+  double exert_rise_s = 4.0;     // s of all-out work to 63% exerted
+  double exert_fall_s = 9.0;     // s of rest to fall back 63% of the way
+  double exert_landing = 0.02;   // exertion a m/s of a landing's fall
+  double exert_rate = 1.4;       // the breath's rate at full exertion: 1 + this times
+  double exert_depth = 1.5;      // its depth: 1 + this times
 };
 
 // THE TWO ROWS a game starts from: the classic arena feel (the gun rides forward with the bob and
-// lags the look a little; nothing swings across) and a modern one (a figure-eight stride sway,
-// more weight on a turn, a breath at rest). A game copies one and changes what it likes.
+// lags the look a little; nothing swings across; a shallow breath at rest) and a modern one (a
+// figure-eight stride sway, more weight on a turn, a deeper breath and wander at rest). A game
+// copies one and changes what it likes.
 PlaceRow classic_row();
 PlaceRow modern_row();
 
@@ -88,7 +112,17 @@ struct PlaceState {
   camera::Follower back{}, rise{};  // the kick
   camera::Follower dip{};
   double lowered = 0;
-  double clock = 0;  // the idle drift's own clock, s
+  double clock = 0;  // s since the first frame
+  // The breath: how hard the body has just worked (0..1), where in this breath it is (0..1, the
+  // breath in ends at 0.4), this breath's depth and length (shares of the row's), and the wander's
+  // leg (from, to, s into it, its length).
+  double exertion = 0;
+  double breath_phase = 0.2;  // a fresh gun starts mid-breath, at its rest place
+  double breath_depth = 1, breath_len = 1;
+  double breath_amp = -1;  // the depth as it eases to the breath's (-1: fresh, taken at once)
+  double wander_from[2] = {0, 0}, wander_to[2] = {0, 0};
+  double wander_t = 0, wander_s = 0;
+  ge::core::Rng breath_rng = ge::core::make_rng(0xb2ea7);
 };
 
 // THE PLACEMENT: the held frame into the view's, three rows of a 3x4 matrix (p' = M (x, y, z, 1)),
@@ -100,6 +134,8 @@ struct Placement {
   // forward, m) and the turn (yaw right, pitch up, roll right side down, rad).
   double shift_m[3] = {0, 0, 0};
   double turn[3] = {0, 0, 0};
+  double exertion = 0;  // the body's exertion this frame, 0..1
+  double breath = 0;    // the breath's own lift this frame, m (its share of shift_m[1])
 };
 
 // One display frame of `dt` seconds. `motion` is the comfort scale (0..1).
