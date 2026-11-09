@@ -45,8 +45,9 @@ without their code (`docs/shooters-edge.md` § Licensing and the clean room):
 - **Say where each fact came from**: a public format description, the language reference, a
   measurement (name the lab and its recording), or a research session that read source (named
   as such, so the building session knows not to look further).
-- **Separate sessions.** A session that reads GPL source to answer a question writes only the
-  note. The session that builds the subsystem reads the note and the measurements, not the
-  source.
+- **Separate agents.** A reader agent that reads GPL source to answer a question writes only the
+  note (or a scratch answer document) with no code. The agent that builds or verifies the
+  subsystem reads the note and the measurements, never the source, not even a grep hit. The
+  `clean-room` skill is the procedure: the questions, the reader's brief, the screen for code.
 - **Running is fine; shipping is not.** A lab may fetch and build an existing server or client
   into its cache to measure it. Nothing of it is committed, linked or distributed.
