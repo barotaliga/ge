@@ -123,7 +123,6 @@
 #include "shooters_edge/net/classic_bot_team.hpp"
 #include "shooters_edge/net/classic_browse.hpp"
 #include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/net/classic_team_areas.hpp"
 #include "shooters_edge/net/classic_remote.hpp"
 #include "shooters_edge/net/classic_team_areas.hpp"
 #include "shooters_edge/net/classic_team_view.hpp"
