@@ -11,13 +11,12 @@
 //     scaled by whole numbers (crisp pixel art) and never wider than the screen. Its pieces are
 //     the bar's children (`hud_sbar_*`, `hud_ibar_*`).
 //   - MODERN: the corners. Health and armour bottom left, each an icon, a big figure and a thin
-//     bar, the keys above them; the ammunition bottom right; the guns in a row at the bottom
-//     centre with each one's rounds; the powerups down the right edge with their seconds left;
-//     the frags top right.
-//   - COMPACT: everything near the crosshair, where the eyes are. Two arcs round it, health on the
-//     left and armour on the right, with their figures beside them; the ammunition under it and
-//     the powerups with their seconds under that; the keys over it; the guns small
-//     bottom right.
+//     bar, the keys above them; the rounds bottom right with the four ammunition counts and the
+//     guns in pairs over them; the powerups down the right edge with their seconds left; the
+//     frags top right.
+//   - COMPACT: one arch at the bottom centre: health's arc rising from the left and armour's from
+//     the right, their figures inside it either side of the weapon in hand, the rounds by its right
+//     foot, the keys and the powerups over it; the guns small on the right edge.
 //   - ARENA: the competitive look (arena shooters and the classic games' tuned configs): health
 //     and armour as big figures either side of the portrait at the bottom centre, each with a
 //     thin bar over it; the rounds small under the crosshair; the guns and the four ammunition

@@ -4,10 +4,10 @@
 //
 //   - CLASSIC: the status bar and the inventory bar along the bottom centre, scaled by whole
 //     numbers and never wider than the screen;
-//   - MODERN: health and armour bottom left, the ammunition bottom right, the guns along the
-//     bottom, the powerups down the right edge, the frags top right;
-//   - COMPACT: two arcs round the crosshair with their figures, the ammunition and the powerups
-//     under it, the keys over it, small guns bottom right;
+//   - MODERN: health and armour bottom left, the rounds bottom right with the ammunition and the
+//     guns over them, the powerups down the right edge, the frags top right;
+//   - COMPACT: an arch at the bottom centre, health's arc and armour's, their figures inside it,
+//     the rounds by its right foot, the keys and powerups over it, small guns on the right edge;
 //   - ARENA, TACTICAL and MINIMAL: three modern layouts (layout.hpp says where each puts what).
 //
 // Two moments are staged: a fight (a gun just picked up and flashing, the damage boost running,
@@ -196,11 +196,12 @@ constexpr const char* kLookCaption[se::kLooks] = {
      "counts, the guns (the one in hand lit, a new one flashing), the keys and powerups, the "
      "runes and the frag plates on the inventory bar above it."),
     ("The corners: health and armour bottom left (icon, figure, bar), the keys above them, the "
-     "ammunition bottom right, the guns along the bottom with their rounds, the powerups down the "
+     "rounds bottom right with the ammunition counts and the guns in pairs over them, the powerups "
+     "down the "
      "right edge with their seconds, the frags top right."),
-    ("Round the crosshair: health's arc on the left and armour's on the right with their figures, "
-     "the ammunition under it and the powerups with their seconds under that, the keys over it, "
-     "small guns bottom right."),
+    ("An arch at the bottom centre: health's arc rising from the left and armour's from the right, "
+     "their figures inside it either side of the weapon in hand, the rounds by its right foot, the "
+     "keys and powerups over it, small guns on the right edge."),
     ("The arena look: health and armour big either side of the portrait at the bottom centre with "
      "thin bars over them, the rounds under the crosshair, the guns and the four ammunition counts "
      "down the right edge, the powerups across the top."),

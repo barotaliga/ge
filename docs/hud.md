@@ -121,7 +121,7 @@ centred status bar), and one marked `flush` sits on the screen's own edge past t
 insets, so no row of the world shows under it.
 
 Shooter's Edge's six HUDs (`games/shooters_edge/hud/layout.hpp`) are the first user: the
-classic bar, the modern corners, the compact rings round the crosshair, and three layouts after
+classic bar, the modern corners, the compact arch at the bottom centre, and three layouts after
 today's shooters (`arena`: big figures at the bottom centre and the guns down the right edge;
 `tactical`: a shield bar over the health bar and the loadout bottom right; `minimal`: small figures
 only), one table picked by `hud_style`. Its options are cvars over every look: `hud_sbar 0` the

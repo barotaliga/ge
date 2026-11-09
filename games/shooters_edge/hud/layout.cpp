@@ -61,8 +61,8 @@ enum Id : uint8_t {
   keys,
   ammo_icon,
   ammo,
-  guns,
   stock,
+  guns,
   powers,
   ring_health,
   ring_armour,
@@ -246,54 +246,60 @@ std::vector<Row> table() {
              "the ammunition figure");
   e.scale = 0.62;
   put(ammo, e, kModern);
-  e = {.id = "guns", .kind = Kind::strip, .anchor = Anchor::bottom, .help = "the guns"};
-  e.unit = 2, e.fit = 0.3f, e.strip = lined(1);
-  put(guns, e, kModern);
   e = beside("stock", Kind::strip, "ammo_icon", Anchor::top_right, Anchor::bottom_right, 0, -6,
              "the four ammunition counts over the rounds");
   e.unit = 1.25f, e.strip = lined(2, 2);
   put(stock, e, kModern);
+  // The guns in the corner over the ammunition (over the rounds when the stock is off).
+  e = beside("guns", Kind::strip, "stock", Anchor::top_right, Anchor::bottom_right, 0, -6,
+             "the guns over the ammunition");
+  e.unit = 1.5f, e.strip = lined(2);
+  put(guns, e, kModern);
   e = {.id = "powers", .kind = Kind::strip, .anchor = Anchor::right, .help = "the powerups"};
   e.unit = 2, e.strip = strip(16, 16, 4);
   e.strip.vertical = true, e.strip.text_at = Anchor::right, e.strip.text_dx = -19;
   put(powers, e, kModern);
 
-  // COMPACT: round the crosshair.
-  e = beside("ring_health", Kind::ring, "crosshair", Anchor::center, Anchor::center, 0, 0,
-             "the health arc");
-  e.ring = {.radius = 64, .width = 5, .from_deg = 215, .to_deg = 325};
+  // COMPACT: an arch at the bottom centre: health's arc rising from the left and armour's from
+  // the right, their figures inside it either side of the weapon in hand, the rounds by the right
+  // foot of the arch, the keys and powerups either side of its top.
+  e = {.id = "ring_health",
+       .kind = Kind::ring,
+       .anchor = Anchor::bottom,
+       .help = "the health arc, the arch's left half"};
+  e.ring = {.radius = 110, .width = 6, .from_deg = 242, .to_deg = 354};
   put(ring_health, e, kCompact);
-  e = beside("ring_armour", Kind::ring, "crosshair", Anchor::center, Anchor::center, 0, 0,
-             "the armour arc");
-  e.ring = {.radius = 64, .width = 5, .from_deg = 35, .to_deg = 145, .reverse = true};
+  e = beside("ring_armour", Kind::ring, "ring_health", Anchor::center, Anchor::center, 0, 0,
+             "the armour arc, the arch's right half");
+  e.ring = {.radius = 110, .width = 6, .from_deg = 6, .to_deg = 118, .reverse = true};
   put(ring_armour, e, kCompact);
-  e = beside("ring_health_value", Kind::readout, "ring_health", Anchor::left, Anchor::right, -4, 0,
-             "the health figure by its arc");
-  e.scale = 0.6;
+  // The figures hang from the armour's arc, which hangs from health's: the arch is one piece.
+  e = beside("ring_health_value", Kind::readout, "ring_armour", Anchor::center,
+             Anchor::bottom_right, -44, -4, "the health figure inside the arch, left");
+  e.scale = 0.75;
   put(ring_health_value, e, kCompact);
-  e = beside("ring_armour_value", Kind::readout, "ring_health", Anchor::right, Anchor::left, 4, 0,
-             "the armour figure by its arc");
-  e.scale = 0.6;
+  e = beside("ring_armour_value", Kind::readout, "ring_armour", Anchor::center, Anchor::bottom_left,
+             44, -4, "the armour figure inside the arch, right");
+  e.scale = 0.75;
   put(ring_armour_value, e, kCompact);
-  e = beside("ring_ammo", Kind::readout, "ring_health", Anchor::bottom, Anchor::top, 0, 6,
-             "the ammunition under the crosshair");
-  e.scale = 0.6;
+  e = beside("ring_ammo", Kind::readout, "ring_armour", Anchor::bottom_right, Anchor::bottom_left,
+             6, 0, "the rounds by the arch's right foot");
+  e.scale = 0.75;
   put(ring_ammo, e, kCompact);
-  e = beside("ring_keys", Kind::strip, "ring_health", Anchor::top, Anchor::bottom, 0, -6,
-             "the keys over the crosshair");
+  e = beside("ring_keys", Kind::strip, "ring_armour", Anchor::top, Anchor::bottom_right, -4, -2,
+             "the keys over the arch, left of its top");
   e.unit = 1.5f, e.strip = strip(16, 16, 2);
   put(ring_keys, e, kCompact);
-  e = beside("ring_powers", Kind::strip, "ring_ammo", Anchor::bottom, Anchor::top, 0, 4,
-             "the powerups under the ammunition");
-  // A child takes its parent's scale: undo the ammunition's 0.6 so the icons match the keys.
-  e.unit = 1.5f, e.scale = 1 / 0.6, e.strip = strip(16, 16, 12);
+  e = beside("ring_powers", Kind::strip, "ring_armour", Anchor::top, Anchor::bottom_left, 4, -2,
+             "the powerups over the arch, right of its top");
+  e.unit = 1.5f, e.strip = strip(16, 16, 12);
   e.strip.text_at = Anchor::right, e.strip.text_dx = 9;
   put(ring_powers, e, kCompact);
   e = {.id = "ring_guns",
        .kind = Kind::strip,
-       .anchor = Anchor::bottom_right,
-       .help = "the guns, small, bottom right"};
-  e.unit = 1.5f, e.strip = lined(1);
+       .anchor = Anchor::right,
+       .help = "the guns, small, on the right edge"};
+  e.unit = 1.5f, e.fit = 0.4f, e.strip = lined(2);
   put(ring_guns, e, kCompact);
 
   // ARENA: the competitive look. Health and armour big either side of the portrait at the bottom
@@ -675,14 +681,15 @@ Hud make_hud() {
 }
 
 void add_cvars(ge::console::Console& con, Hud& hud) {
-  con.cvars().bind({.name = "hud_style",
-                    .fallback = std::string(look_name(Look::classic)),
-                    .help = "the HUD's look: classic (the status bar), modern (the corners), "
-                            "compact (round the crosshair), arena (big figures bottom centre, "
-                            "guns and ammunition down the right), tactical (shield over health "
-                            "bottom left, the loadout bottom right) or minimal (small figures)",
-                    .kind = ge::console::CvarKind::text},
-                   &hud.look);
+  con.cvars().bind(
+      {.name = "hud_style",
+       .fallback = std::string(look_name(Look::classic)),
+       .help = "the HUD's look: classic (the status bar), modern (the corners), "
+               "compact (an arch at the bottom centre), arena (big figures bottom centre, "
+               "guns and ammunition down the right), tactical (shield over health "
+               "bottom left, the loadout bottom right) or minimal (small figures)",
+       .kind = ge::console::CvarKind::text},
+      &hud.look);
   con.cvars().bind({.name = "viewsize",
                     .fallback = "100",
                     .help = "the status bars: 100 every one, 110 the classic look's status bar "
@@ -853,8 +860,8 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
     stock_cells(at(id), column, s, art, all_ammo, count_ink, st);
     at(id).on &= grouping(own) != Grouping::ammo && !at(id).cells.empty();
   };
-  loadout(guns, Grouping::row, false);
-  stock_of(stock, Grouping::row, false);
+  loadout(guns, Grouping::pairs, false);
+  stock_of(stock, Grouping::pairs, false);
   auto power_cells = [&](gh::Content& c) {
     c.face = &art.count_face;
     c.cells.clear();
@@ -888,7 +895,7 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   at(ring_ammo).color = low_or(low_ammo && held != Ammo::none, st.ink, st);
   key_cells(at(ring_keys));
   power_cells(at(ring_powers));
-  loadout(ring_guns, Grouping::row, false);
+  loadout(ring_guns, Grouping::pairs, false);
   for (const Id id :
        {ring_health, ring_armour, ring_health_value, ring_armour_value, ring_ammo, ring_keys})
     at(id).on &= !s.dead;
