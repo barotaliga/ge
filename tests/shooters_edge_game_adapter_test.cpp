@@ -406,17 +406,24 @@ TEST(the_games_own_held_weapons_are_its_first_person_models_in_the_number_keys_o
   cl::SearchPath bare;
   CHECK_MSG(cl::add_archive(bare, "pak0.pak", std::move(pak), error), error);
   CHECK(!a.held_weapons(a, bare, held, why) && why.empty());
-  // The whole set: eight models, each with its firing frames as the fire clip.
+  // The whole set: eight models, each with its firing frames as the fire clip; the axe's, an even
+  // run, as two takes of it (its two swings), one after the other.
   CHECK(ge::vfs::write_pak(listed, &pak, &error));
   cl::SearchPath files;
   CHECK_MSG(cl::add_archive(files, "pak0.pak", std::move(pak), error), error);
   CHECK_MSG(a.held_weapons(a, files, held, why), why);
   CHECK(held.size() == g.held_weapons.size() && g.held_weapons.size() == 8);
-  for (const ge::viewmodel::HeldModel& h : held) {
+  for (size_t i = 0; i < held.size(); ++i) {
+    const ge::viewmodel::HeldModel& h = held[i];
     CHECK(h.frames.size() == ge::morph::sample_model().frames.size() && !h.skin.image.rgba.empty());
-    if (h.frames.size() > 1) {
-      CHECK(ge::viewmodel::find_held_clip(h, "fire") == 0);
-      CHECK(h.clips[0].first == 1 && h.clips[0].count == int(h.frames.size()) - 1);
+    const int firing = int(h.frames.size()) - 1;
+    if (firing < 1) continue;
+    const int takes = i == 0 && firing % 2 == 0 ? 2 : 1;  // the axe first, in the keys' order
+    CHECK(ge::viewmodel::count_held_clips(h, "fire") == takes);
+    for (int k = 0; k < takes; ++k) {
+      const ge::viewmodel::HeldClip& c =
+          h.clips[size_t(ge::viewmodel::find_held_clip(h, "fire", k))];
+      CHECK(c.first == 1 + k * (firing / takes) && c.count == firing / takes);
     }
   }
 }

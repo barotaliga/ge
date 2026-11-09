@@ -339,13 +339,18 @@ bool held_weapons(const GameAdapter& self, const SearchPath& files,
     }
     // The firing frames after the rest frame, at the classic rate. A weapon that fires every
     // frame (the nailguns, the lightning gun) steps them one a shot, round and round, each shot
-    // from the barrel its frame shows firing; the others play them through on each shot.
+    // from the barrel its frame shows firing; the others play them through on each shot, or, for
+    // firing frames that are several takes (the axe's two swings), one take a shot: each its own
+    // `fire` clip, which the hand picks between.
     const ge::classicenhance::ClassicFire* fire = ge::classicenhance::classic_fire_of(name);
-    if (h.frames.size() > 1)
+    const int firing = int(h.frames.size()) - 1;
+    const int takes =
+        fire != nullptr && fire->takes > 1 && firing % fire->takes == 0 ? fire->takes : 1;
+    for (int k = 0; k < takes && firing > 0; ++k)
       h.clips.push_back(
           {.name = "fire",
-           .first = 1,
-           .count = int(h.frames.size()) - 1,
+           .first = 1 + k * (firing / takes),
+           .count = firing / takes,
            .fps = 1.0 / ge::classicenhance::kFrameSeconds,
            .frame_a_shot = fire != nullptr && fire->refire_s <= ge::classicenhance::kFrameSeconds});
     out.push_back(std::move(h));

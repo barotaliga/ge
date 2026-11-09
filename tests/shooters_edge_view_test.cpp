@@ -2,7 +2,8 @@
 // order, every model loads and mounts muzzle forward (a free one at its stated length, a built one
 // round its grip hand), the hand puts a weapon away and raises the next on the game's change (and
 // snaps it up on a shot), a shot plays the model's fire clip and comes back to rest (a nailgun
-// held firing steps it a frame a shot, each shot from its frame's barrel), a shot lights
+// held firing steps it a frame a shot, each shot from its frame's barrel; an axe of two swings
+// plays one a shot, the one the game names or one at random), a shot lights
 // the muzzle and fades, the player's cvars move the row, and every built weapon's arms stay inside
 // the human ranges at rest and through every clip.
 //
@@ -365,4 +366,54 @@ TEST(a_nailgun_held_firing_steps_a_frame_a_shot_from_each_barrel_in_turn) {
   CHECK(f.frame_a == 0);
   in.fired = true;
   CHECK(se::step_hand(hand, in, s, set, eye(), dt).frame_a == 1);
+}
+
+TEST(an_axe_of_two_swings_plays_one_swing_a_shot) {
+  // A rest frame and two swings of four frames each (1-4 and 5-8), two `fire` takes.
+  vm::HeldModel axe;
+  axe.frames.resize(9);
+  for (vm::HeldFrame& fr : axe.frames) fr.positions = {-0.05f, 0, 0.5f, 0.05f, 0, 0.5f, 0, 0.1f, 0};
+  axe.indices = {0, 1, 2};
+  axe.clips.push_back({.name = "fire", .first = 1, .count = 4, .fps = 10});
+  axe.clips.push_back({.name = "fire", .first = 5, .count = 4, .fps = 10});
+  CHECK(vm::count_held_clips(axe, "fire") == 2);
+  CHECK(vm::find_held_clip(axe, "fire", 1) == 1 && vm::find_held_clip(axe, "fire", 2) == -1);
+  std::vector<vm::HeldModel> set(se::kWeapons, axe);
+  const se::ViewSettings s;
+  const double dt = 0.025;
+  // One swing: the frames it shows from the shot to rest stay inside one take.
+  auto swing = [&](se::Hand& hand, int fire_frame) {
+    se::HandInput in;
+    in.weapon = se::Weapon::melee;
+    in.fired = true;
+    in.fire_frame = fire_frame;
+    std::vector<int> seen;
+    for (int i = 0; i < 24; ++i) {  // 0.6 s: longer than a swing
+      const se::HandFrame f = se::step_hand(hand, in, s, set, eye(), dt);
+      in.fired = false;
+      seen.push_back(f.frame_a);
+      if (f.frame_t > 0) seen.push_back(f.frame_b);
+    }
+    int lo = 9, hi = 0;
+    for (int fr : seen)
+      if (fr != 0) lo = fr < lo ? fr : lo, hi = fr > hi ? fr : hi;
+    CHECK(seen.back() == 0);  // back at rest
+    CHECK((lo == 1 && hi == 4) || (lo == 5 && hi == 8));
+    return lo == 1 ? 0 : 1;
+  };
+  se::Hand hand;
+  hand.at_eye = true;
+  {
+    se::HandInput in;
+    in.weapon = se::Weapon::melee;
+    se::step_hand(hand, in, s, set, eye(), dt);
+  }
+  // The game's word wins: its weapon frame names the swing.
+  CHECK(swing(hand, 5) == 1);
+  CHECK(swing(hand, 1) == 0);
+  CHECK(swing(hand, 7) == 1);
+  // Unsaid, the hand picks: both swings come up, neither always.
+  int second = 0;
+  for (int i = 0; i < 40; ++i) second += swing(hand, 0);
+  CHECK(second > 8 && second < 32);
 }
