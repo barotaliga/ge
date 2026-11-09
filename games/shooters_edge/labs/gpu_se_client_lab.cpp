@@ -379,9 +379,10 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
             gl::Picture{static_cast<int>(fi.width), static_cast<int>(fi.height), fi.rgba}, 640));
       }
       if (!frames.empty())
-        lab.attach("film-" + std::to_string(v) + ".gif",
-                   gl::encode_gif_frames(frames, std::max(2, static_cast<int>(step * 100 + 0.5))),
-                   gl::Det::measured);
+        lab.attach(
+            "film-" + std::to_string(v) + ".gif",
+            gl::encode_gif_frames(frames, std::max(2, static_cast<int>(std::lround(step * 100)))),
+            gl::Det::measured);
     }
     if (!warp) continue;
     // Another player at --warp arriving, then leaving, from this view.
