@@ -11,6 +11,7 @@ ListenHearing::ListenHearing(ge::audio::Synth& synth, float volume)
     : synth_(synth), volume_(volume) {}
 
 void ListenHearing::frame(Listen& l, const SearchPath& files, float dt) {
+  retired_.prune();
   if (l.server == nullptr || !l.map) {  // no game: what played of the last one stopped
     l.sounds.clear();
     l.voices.clear();
@@ -31,7 +32,7 @@ void ListenHearing::frame(Listen& l, const SearchPath& files, float dt) {
   st.eye = me.origin + me.view_ofs;
   st.angles = l.view;
   if (!sounds_ || files_ != &files) {
-    if (sounds_) sounds_->silence();
+    retired_.retire(std::move(sounds_));  // kept until its voices have faded
     sounds_ = std::make_unique<DemoSounds>(synth_, files, volume_);
     files_ = &files;
     entries_ = -1;
@@ -54,8 +55,7 @@ void ListenHearing::frame(Listen& l, const SearchPath& files, float dt) {
 }
 
 void ListenHearing::stop() {
-  if (sounds_) sounds_->silence();
-  sounds_.reset();
+  retired_.retire(std::move(sounds_));  // silenced, freed once its voices have faded
   voices_.reset();
   files_ = nullptr;
   entries_ = -1;
