@@ -1,6 +1,7 @@
 // THE BOT'S SENSES AND AIM (plugins/shooter/senses.hpp, aim.hpp, bot.hpp) on the server's arena: a
 // client is sent the other players and the brush entities, never itself; sight needs the view's
-// cone and a clear line (the shut door hides the east room); a sound is heard within its reach;
+// cone and a clear line (the shut door hides the east room; a water's surface hides what is under
+// it from the air, and the air from under it); a sound is heard within its reach;
 // the axes turned under another view keep the wish in the world; and on a watched run the seer
 // sees the runner nearly whenever a line joins them (a late view loses it from its cone), aims
 // better the better its skill (perfect, expert, average, novice by the median error, on every seed
@@ -24,7 +25,9 @@
 #include "check.hpp"
 #include "golden.hpp"
 #include "shooter/aim.hpp"
+#include "shooter/hull.hpp"
 #include "shooter/server.hpp"
+#include "shooter_loop_bench.hpp"
 #include "shooters_edge/bots/duel_run.hpp"
 
 namespace sh = ge::shooter;
@@ -92,6 +95,38 @@ TEST(sight_needs_the_cone_and_a_clear_line) {
             "a player behind the shut door was seen");
   CHECK_MSG(!sh::sees_player(sv, set, me, eye, {0, 0, 0}, {300, 300, 24}),
             "a player behind the dividing wall was seen");
+}
+
+TEST(a_water_surface_hides_the_other_side) {
+  using ge::test::loop::box;
+  ge::test::loop::Bench b;
+  // A floor at z 0 with a pool of water x 200..600 down to z -320.
+  sh::Brush water = box({200, -1024, -320}, {600, 1024, 0});
+  water.contents = sh::kContentsWater;
+  b.start({box({-1024, -1024, -64}, {200, 1024, 0}), box({600, -1024, -64}, {1024, 1024, 0}),
+           box({-1024, -1024, -400}, {1024, 1024, -320}), water});
+  const sh::SenseSettings set;
+  const sh::Vec3f eye{0, 0, 46}, ahead{0, 0, 0};
+  // Looking down into the pool past the bank's edge (the view pitched down 12 degrees).
+  const sh::Vec3f down{12, 0, 0}, swimmer{400, 0, -60};
+  CHECK_MSG(!sh::sees_player(b.sv, set, 1, eye, down, swimmer),
+            "a swimmer under the water was seen from the air: read clear_line's contents rule");
+  sh::SenseSettings glass = set;
+  glass.water_opaque = false;
+  CHECK_MSG(sh::sees_player(b.sv, glass, 1, eye, down, swimmer),
+            "with the water clear, the swimmer under it was not seen: the line is not clear");
+  // A swimmer with his head out is seen from the air; one under sees another under.
+  CHECK_MSG(sh::sees_player(b.sv, set, 1, eye, ahead, {400, 0, -10}),
+            "a swimmer with his head over the surface was not seen");
+  const sh::Vec3f under{300, 0, -150};
+  CHECK_MSG(sh::sees_player(b.sv, set, 1, under, ahead, {500, 0, -200}),
+            "two swimmers in one pool did not see each other");
+  // Just under the surface, looking up at a player on the bank.
+  const sh::Vec3f shallow{250, 0, -20}, up{-24, 180, 0}, bank{100, 0, 24};
+  CHECK_MSG(!sh::sees_player(b.sv, set, 1, shallow, up, bank),
+            "a player in the air was seen from under the water");
+  CHECK_MSG(sh::sees_player(b.sv, glass, 1, shallow, up, bank),
+            "with the water clear, the player on the bank was not seen: the line is not clear");
 }
 
 TEST(a_sound_is_heard_within_its_reach) {

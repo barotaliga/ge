@@ -46,7 +46,17 @@ Contact& contact_for(Senses& s, int ent) {
   return s.contacts.back();
 }
 
-bool clear_line(const Server& sv, int viewer, Vec3f eye, Vec3f to) {
+// What a point is in, for sight: air (solid and sky read as air: the trace stops at a wall) or
+// the liquid's contents number.
+int seen_through(const Server& sv, Vec3f p) {
+  const int c = world_contents(sv, p);
+  return c <= kContentsWater && c >= kContentsLava ? c : kContentsEmpty;
+}
+
+bool clear_line(const Server& sv, const SenseSettings& set, int viewer, Vec3f eye, Vec3f to) {
+  // A liquid's surface between them: a surface is level, so an eye and a point both in the air
+  // (or both in one pool) have none between them; one in and one out do.
+  if (set.water_opaque && seen_through(sv, eye) != seen_through(sv, to)) return false;
   const HullTrace tr = trace_move(sv, eye, {}, {}, to, kTraceNoMonsters, viewer);
   return !tr.startsolid && tr.fraction >= 1;
 }
@@ -103,7 +113,7 @@ bool sees_player(const Server& sv, const SenseSettings& set, int viewer, Vec3f e
     const float edge = angle_vectors({0, set.fov * 0.5f, 0}).forward.x;
     if (c < edge) return false;
   }
-  return clear_line(sv, viewer, eye, head) || clear_line(sv, viewer, eye, origin);
+  return clear_line(sv, set, viewer, eye, head) || clear_line(sv, set, viewer, eye, origin);
 }
 
 void sense(Senses& s, const Server& sv, const ClientView& view, int viewer, Vec3f angles, double t,

@@ -15,9 +15,11 @@
 //   and pitch, or a screen `fov` wide and `fov_y` high, as a player's monitor shows it), within
 //   `range`, and the line from the eye (`view_height` over the origin) to its
 //   head or its middle is clear of the world and every brush entity (a shut door hides; another
-//   player does not). Seen, its place is remembered (`ai::Memory`), and its velocity is a
-//   player's as the server sent it (sightings across a network come bunched as the packets do),
-//   else taken off the last two sightings when they are a frame apart.
+//   player does not) and crosses no water surface: an eye in the air does not see a point under
+//   water, nor an eye under water one in the air (`water_opaque`; slime and lava alike). Seen, its
+//   place is remembered (`ai::Memory`), and its velocity is a player's as the server sent it
+//   (sightings across a network come bunched as the packets do), else taken off the last two
+//   sightings when they are a frame apart.
 // - DEAD (the protocol's flag on a player at no health): no contact; one kept is dropped, so a bot
 //   never aims at a body.
 // - HEARD when it started a sound this frame that reached the client: its place is remembered as
@@ -89,6 +91,9 @@ struct SenseSettings {
   // A change of course is read this late, s (`Contact::course`): a person sees a strafer turn
   // round a reaction after he does. 0: at once.
   float course_s = 0;
+  // A liquid's surface hides what is on its other side, as a player's screen draws it opaque: the
+  // eye and the point seen must be in the same contents (air, or the same liquid).
+  bool water_opaque = true;
 };
 
 struct Contact {
@@ -119,7 +124,8 @@ struct Senses {
 };
 
 // Whether the eye at `eye` with the view `angles` (pitch down positive, yaw) sees the player at
-// `origin`: in the view, in range, and a clear line to its head or its middle.
+// `origin`: in the view, in range, and a clear line to its head or its middle that crosses no
+// liquid's surface.
 bool sees_player(const Server& sv, const SenseSettings& set, int viewer, Vec3f eye, Vec3f angles,
                  Vec3f origin);
 
