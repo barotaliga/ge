@@ -476,6 +476,8 @@ WorldDrawPtr create_world_draw(ge::gpu::Device& d, const SearchPath& files, cons
 
 const WorldModels& world_models(const WorldDraw& w) { return w.models; }
 
+std::span<const ba::PointLight> world_lights(const WorldDraw& w) { return w.scene.lights; }
+
 std::vector<gr::Particle> world_particles(ge::gpu::Device& d, const WorldDraw& w) {
   return gr::read_particles(d, w.particles);
 }
