@@ -66,6 +66,8 @@ namespace sh = ge::shooter;
 
 using ge::core::num::to_fixed;
 
+constexpr double kAimEaseS = 0.06;  // the camera's follow: a turn's share left after this, 1/e
+
 constexpr const char* kMonsters[] = {"soldier",  "dog",     "ogre",     "knight",  "demon",
                                      "zombie",   "wizard",  "enforcer", "hknight", "shalrath",
                                      "shambler", "tarbaby", "fish"};
@@ -317,7 +319,12 @@ void run(gl::Lab& lab) {
           ge::gpu::create_target(*device, "se-model-lerp.final", kW, kH));
     }
   }
-  cl::ViewState shown;
+  cl::ViewState shown[2];  // each way's own eye: r_lerpmove draws it between states too
+  shown[1].lerp = true;
+  // Each way's camera turns to where it draws the subject, eased (a soft follow, as a spectator's
+  // camera does), so the picture's aim is never the server's steps.
+  double aim_yaw[2] = {0, 0}, aim_pitch[2] = {0, 0};
+  bool aimed[2] = {false, false};
   cl::FxState fx_state[2];
   cl::FxFrame fx[2];
   cl::ModelLerp own[2];  // the runner's own lerps (he is not among the server's placed models)
@@ -349,14 +356,17 @@ void run(gl::Lab& lab) {
       l.view.x = static_cast<float>(-ge::core::libm::atan2(double(it.z + 10 - (me.z + 22)), h) *
                                     180 / 3.14159265358979);
     }
-    ge::render::FrameView view = cl::frame_view(l, shown, frames, t, pic);
-    view.time_s = t;
+    ge::render::FrameView views[2];
+    for (int w = 0; w < 2; w++) {
+      views[w] = cl::frame_view(l, shown[w], frames, t, pic);
+      views[w].time_s = t;
+    }
     const double tic = cl::listen_tic(l);
     const cl::ModelLerpClock clock{.moves = true,
                                    .state_s = l.server->sv.time,
                                    .drawn_s = l.server->sv.time + std::min(l.owed, tic) - tic};
     for (int w = 0; w < 2; w++) {
-      cl::step_fx(l, shown, fx_state[w], t, pic, fx[w]);
+      cl::step_fx(l, shown[w], fx_state[w], t, pic, fx[w]);
       const cl::Placed* p = nullptr;
       if (monster) {
         for (const cl::Placed& q : fx[w].models)
@@ -385,22 +395,38 @@ void run(gl::Lab& lab) {
         p = &fx[w].models.back();
       }
       if (p != nullptr) read_subject(ways[w], t, *p, way_from, way);
+      // The eye: the player's own on a monster; beside the runner. Aimed at the drawn subject.
+      ge::render::FrameView& view = views[w];
+      if (!monster) {
+        const sh::Vec3f eye{me.x + 64, me.y - 200, me.z + 22};
+        const ge::camera::Vec3 e = cl::engine_point(eye);
+        view.eye[0] = e.x, view.eye[1] = e.y, view.eye[2] = e.z;
+      }
+      if (p != nullptr) {
+        const ge::camera::Vec3 at = cl::engine_point({p->origin.x, p->origin.y, p->origin.z + 10});
+        const double dx = at.x - view.eye[0], dy = at.y - view.eye[1], dz = at.z - view.eye[2];
+        const double to_yaw = ge::core::libm::atan2(dx, dz);  // heading: clockwise from +z
+        const double to_pitch = ge::core::libm::atan2(dy, std::sqrt(dx * dx + dz * dz));
+        if (!aimed[w]) {
+          aim_yaw[w] = to_yaw, aim_pitch[w] = to_pitch;
+          aimed[w] = true;
+        }
+        const double ease = 1 - ge::core::libm::exp(-pic / kAimEaseS);
+        double turn = to_yaw - aim_yaw[w];
+        turn -=
+            2 * 3.14159265358979 * std::floor((turn + 3.14159265358979) / (2 * 3.14159265358979));
+        aim_yaw[w] += turn * ease;
+        aim_pitch[w] += (to_pitch - aim_pitch[w]) * ease;
+        view.heading = aim_yaw[w];
+        view.pitch = aim_pitch[w];
+      }
+      // A long lens on the monster, so its limbs fill the picture.
+      if (monster) view.fov_y *= lab.arg_num("zoom") > 0 ? 1 / lab.arg_num("zoom") : 1;
     }
     if (!device) continue;
-    // The eye: the player's own on a monster; beside the runner, looking at him.
-    if (!monster) {
-      const sh::Vec3f eye{me.x + 64, me.y - 200, me.z + 22};
-      const ge::camera::Vec3 e = cl::engine_point(eye);
-      view.eye[0] = e.x, view.eye[1] = e.y, view.eye[2] = e.z;
-      view.heading = cl::engine_heading(static_cast<float>(
-          ge::core::libm::atan2(me.y - eye.y, me.x - eye.x) * 180.0 / 3.14159265358979));
-      view.pitch = 0;
-    }
-    // A long lens on the monster, so its limbs fill the picture.
-    if (monster) view.fov_y *= lab.arg_num("zoom") > 0 ? 1 / lab.arg_num("zoom") : 1;
     gl::Picture two[2];
     for (int w = 0; w < 2; w++) {
-      cl::draw_world(*device, *worlds[w], view, fx[w], nullptr, pic, {}, outs[w]->view);
+      cl::draw_world(*device, *worlds[w], views[w], fx[w], nullptr, pic, {}, outs[w]->view);
       const ge::gpu::Image img = ge::gpu::read_now(*device, *outs[w]);
       two[w] = gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba};
     }

@@ -241,7 +241,7 @@ void player_info(Demo& d, DemoMsg& m) {
   p.model = (flags & 0x20) != 0 ? m.u8() : d.player_model;
   if ((flags & 0x40) != 0) p.skin = m.u8();
   if ((flags & 0x80) != 0) p.effects = m.u8();
-  if ((flags & 0x100) != 0) m.u8();      // weapon frame
+  if ((flags & 0x100) != 0) p.weapon_frame = m.u8();
   if ((flags & (1 << 17)) != 0) m.u8();  // transparency
   p.dead = (flags & 0x200) != 0;
   p.gib = (flags & 0x400) != 0;
@@ -272,7 +272,7 @@ void multiview_player(Demo& d, DemoMsg& m) {
   if ((bits & kMvModel) != 0) p.model = m.u8();
   if ((bits & kMvSkin) != 0) p.skin = m.u8();
   if ((bits & kMvEffects) != 0) p.effects = m.u8();
-  if ((bits & kMvWeaponFrame) != 0) m.u8();
+  if ((bits & kMvWeaponFrame) != 0) p.weapon_frame = m.u8();
   p.dead = (bits & kMvDead) != 0;
   p.gib = (bits & kMvGib) != 0;
   p.present = true;

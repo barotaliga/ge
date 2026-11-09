@@ -112,6 +112,7 @@ enum DemoStat : uint8_t {
 struct DemoEntity {
   sh::Vec3f origin, angles;  // units, degrees
   int model = 0, frame = 0, skin = 0, effects = 0;
+  int weapon_frame = 0;  // a player's held weapon's frame (client, multiview; single: DemoState's)
   bool present = false;  // updated this frame (single) or in the last entity list (client)
   bool dead = false, gib = false;  // a multiview player's state this frame (its dead and gib bits)
 };
@@ -188,6 +189,7 @@ struct DemoState {
   int max_clients = 1;                      // single: the players, entities 1 to this
   int player = 0;                           // the recording (client) or tracked (multiview) slot
   float view_height = 22;                   // over the origin, units
+  int weapon_frame = 0;                     // single: the held weapon's frame (client data)
   bool intermission = false;                // the level ended: the eye is the intermission's
   int32_t stats[kStatCount] = {};           // health, ammo, items ... (DemoStat)
   std::vector<std::string> models, sounds;  // precache lists, index 1 first ([0] is "")
