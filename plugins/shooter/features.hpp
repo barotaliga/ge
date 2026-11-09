@@ -41,6 +41,7 @@
 //   person's hand allows for his own strafe); off, the hands chase the turn its own motion makes.
 // - `pools`: a pool's floor swum over (pilot.hpp `floor_swim`), and the swim's wish pressed in
 //   three dimensions under the aim's or the calm view (bot.hpp `pools`).
+// - `routes`: a map's scripted ways to key items taken (nav_script.hpp, bots/item_routes).
 // - `trial`: read by the code under an A/B now (nothing, when none is). Off in every preset (`all`
 //   too): `--features-red=+trial` plays it against the rest, from one build.
 //
@@ -52,7 +53,7 @@
 // "-swimaim,+shortgoals".
 //
 // ge:summary A bot's features: each behaviour switched on or off by name, and the presets
-// ge:keywords features feature-switch bot-features apply_features features_text presets
+// ge:keywords features feature-switch bot-features apply_features features_text presets routes
 // ge:keywords calm pace swimaim screen keep lead lane hop shortgoals commit danger dodge watch
 // ge:keywords spam packs talk plan rocket-jump grenade-jump airsteer surface glance plain-bot
 // ge:keywords ab-test trial eye selfaim course-change own-motion pools pool-floor swim-under-view
@@ -94,9 +95,10 @@ enum class Feature : uint8_t {
   eye,
   selfaim,
   pools,
+  routes,
   trial,
 };
-constexpr size_t kFeatures = 26;
+constexpr size_t kFeatures = 27;
 // The feature's name as a command line or a console writes it ("swimaim").
 const char* feature_name(Feature f);
 

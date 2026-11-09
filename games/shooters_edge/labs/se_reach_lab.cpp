@@ -8,9 +8,15 @@
 // The yardstick for the nav: "any place to any item is a path". Deterministic: the digest holds
 // the counts.
 //
+// Two probes of the first map, for finding where the nav falls short: `--route="x y z > x y z"`
+// tables the quickest route between the nodes nearest two points (feet), node by node with the
+// link onto each, its kind, time and jump speed; `--floors="x0 y0 x1 y1 [step]"` tables every
+// floor a standing player finds straight down along a line beside the nav's nodes in that grid
+// column (a tread with no node is one the grid missed). The `se-spot` lab draws the same place.
+//
 // ge:summary Lab: every item of every map asked: a route to it from the spawns, and one back
 // ge:keywords lab se-reach reachability coverage nav-gaps items pockets unreachable route maps
-// ge:keywords dm1 dm2 dm3 dm4 dm5 dm6 e1m2
+// ge:keywords dm1 dm2 dm3 dm4 dm5 dm6 e1m2 route-probe floors-probe nav-debug
 // ge:skill bots labs
 // ge:test tests/shooters_edge_team_test.cpp
 #include <cmath>
@@ -69,6 +75,16 @@ struct MapReach {
   std::vector<std::vector<std::string>> tricks;  // the tricks table's rows
   int64_t tricks_held = 0, grenade_links = 0;
   int64_t risky = 0, risky_removed = 0;  // jumps over lava or slime, and those removed
+  std::vector<std::vector<std::string>> route_rows, floor_rows;  // --route's and --floors' rows
+  std::vector<std::vector<std::string>> script_rows;  // the scripted routes, held or refused
+};
+
+// The probes asked of the first map: a route between two points, each node and the link onto
+// it; and the floors down the grid's columns along a line (where the nav samples a stair).
+struct Probe {
+  bool route = false, floors = false;
+  sh::Vec3f from, to;                                   // --route's ends
+  float fx0 = 0, fy0 = 0, fx1 = 0, fy1 = 0, fstep = 8;  // --floors' line and step
 };
 
 bool vec_of(const char* s, sh::Vec3f& out) {
@@ -77,8 +93,85 @@ bool vec_of(const char* s, sh::Vec3f& out) {
   return static_cast<bool>(in >> out.x >> out.y >> out.z);
 }
 
+// Every floor a standing player finds straight down at (x, y), top first.
+void floors_at(const sh::MoveWorld& w, float x, float y, float top, float bottom,
+               std::vector<float>& out) {
+  out.clear();
+  float z = top;
+  while (z > bottom) {
+    if (!sh::box_free(w, {x, y, z})) {
+      z -= 4;
+      continue;
+    }
+    const sh::HullTrace tr = sh::player_trace(w, {x, y, z}, {x, y, bottom});
+    if (tr.startsolid || tr.fraction == 1) return;
+    if (tr.plane.normal.z >= 0.7f) out.push_back(tr.endpos.z - 24);  // the feet
+    z = tr.endpos.z - 57;
+  }
+}
+
+void probe_map(const bt::MapNav& nav, const Probe& pr, MapReach& out) {
+  const sh::NavGraph& g = nav.graph;
+  if (pr.route) {
+    const int32_t a = sh::nav_nearest(g, pr.from), b = sh::nav_nearest(g, pr.to);
+    ge::ai::Search rs;
+    const sh::NavRoute r = a >= 0 && b >= 0 ? sh::nav_route(g, a, b, rs) : sh::NavRoute{};
+    if (r.nodes.empty())
+      out.route_rows.push_back(
+          {"-", "no route", std::to_string(a) + " -> " + std::to_string(b), "", "", ""});
+    for (size_t k = 0; k < r.nodes.size(); k++) {
+      const sh::NavNode& n = g.nodes[static_cast<size_t>(r.nodes[k])];
+      std::string kind = "start", t = "", speed = "";
+      if (k > 0) {
+        const sh::NavNode& p = g.nodes[static_cast<size_t>(r.nodes[k - 1])];
+        for (int32_t x = 0; x < p.links; x++) {
+          const sh::NavLink& l =
+              g.links[static_cast<size_t>(p.first_link) + static_cast<size_t>(x)];
+          if (l.to != r.nodes[k]) continue;
+          kind = sh::nav_kind_name(l.kind);
+          t = to_fixed(l.time_s, 2);
+          speed = to_fixed(l.speed, 0);
+          break;
+        }
+      }
+      out.route_rows.push_back({std::to_string(k), std::to_string(r.nodes[k]),
+                                to_fixed(n.origin.x, 0) + " " + to_fixed(n.origin.y, 0) + " " +
+                                    to_fixed(n.origin.z - 24, 0),
+                                kind, t, speed});
+    }
+  }
+  if (pr.floors) {
+    const float dx = pr.fx1 - pr.fx0, dy = pr.fy1 - pr.fy0;
+    const float len = std::sqrt(dx * dx + dy * dy);
+    const int n = pr.fstep > 0 ? static_cast<int>(len / pr.fstep) : 0;
+    std::vector<float> zs;
+    for (int k = 0; k <= n; k++) {
+      const float f = n > 0 ? static_cast<float>(k) / static_cast<float>(n) : 0;
+      const float x = pr.fx0 + dx * f, y = pr.fy0 + dy * f;
+      floors_at(nav.world, x, y, g.hi.z - 33, g.lo.z, zs);
+      std::string list;
+      for (const float z : zs) list += (list.empty() ? "" : " ") + to_fixed(z, 0);
+      // The nav's own nodes in the grid column holding (x, y).
+      std::string nodes;
+      const int32_t i = static_cast<int32_t>((x - g.lo.x) / g.set.spacing);
+      const int32_t j = static_cast<int32_t>((y - g.lo.y) / g.set.spacing);
+      if (i >= 0 && j >= 0 && i < g.cols && j < g.rows) {
+        const size_t c =
+            static_cast<size_t>(i) * static_cast<size_t>(g.rows) + static_cast<size_t>(j);
+        for (int32_t q = 0; q < g.col_n[c]; q++) {
+          const sh::NavNode& nd =
+              g.nodes[static_cast<size_t>(g.col_first[c]) + static_cast<size_t>(q)];
+          nodes += (nodes.empty() ? "" : " ") + to_fixed(nd.origin.x, 0) + "," +
+                   to_fixed(nd.origin.y, 0) + "," + to_fixed(nd.origin.z - 24, 0);
+        }
+      }
+      out.floor_rows.push_back({to_fixed(x, 0) + " " + to_fixed(y, 0), list, nodes});
+    }
+  }
+}
+
 void reach_map(std::span<const uint8_t> bytes, const std::string& name, const std::string& entities,
-               const ge::progs::Progs& progs, MapReach& out) {
+               const ge::progs::Progs& progs, const Probe* probe, MapReach& out) {
   out.name = name;
   std::unique_ptr<cl::LoadedMap> map = cl::map_from_bytes(bytes, name, out.error);
   if (!map) return;
@@ -95,6 +188,17 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
   bt::MapNav nav;
   if (!bt::build_map_nav(q, map->spec, "info_player_deathmatch", nav, out.error)) return;
   const sh::NavGraph& g = nav.graph;
+  if (probe != nullptr) probe_map(nav, *probe, out);
+  for (const bt::MapNav::ScriptMade& sm : nav.scripts_made) {
+    auto at = [&](int32_t n) {
+      if (n < 0) return std::string("-");
+      const sh::Vec3f o = g.nodes[static_cast<size_t>(n)].origin;
+      return to_fixed(o.x, 0) + " " + to_fixed(o.y, 0) + " " + to_fixed(o.z - 24, 0);
+    };
+    out.script_rows.push_back({name, sm.name, sm.held ? "held" : "refused", at(sm.from), at(sm.to),
+                               sm.held ? to_fixed(sm.time_s, 2) : "-",
+                               sm.mover >= 0 ? std::to_string(sm.mover) : "-"});
+  }
   out.nodes = static_cast<int64_t>(g.nodes.size());
   out.swim_nodes = nav.swim_nav.cells;
   out.swim_links = g.counts.by_kind[static_cast<int>(sh::NavKind::swim)];
@@ -216,6 +320,19 @@ void run(gl::Lab& lab) {
     return;
   }
   std::vector<MapReach> maps;
+  Probe probe;
+  {
+    std::istringstream r(lab.arg("route"));
+    char sep = 0;
+    probe.route = static_cast<bool>(r >> probe.from.x >> probe.from.y >> probe.from.z >> sep >>
+                                    probe.to.x >> probe.to.y >> probe.to.z);
+    std::istringstream f(lab.arg("floors"));
+    probe.floors = static_cast<bool>(f >> probe.fx0 >> probe.fy0 >> probe.fx1 >> probe.fy1);
+    if (probe.floors && !(f >> probe.fstep)) probe.fstep = 8;
+    // Each probe's point is a player's origin, its feet 24 under.
+    probe.from.z += 24;
+    probe.to.z += 24;
+  }
   const std::string basedir = lab.arg("basedir");
   if (basedir.empty()) {
     std::vector<uint8_t> bytes;
@@ -225,7 +342,7 @@ void run(gl::Lab& lab) {
       return;
     }
     maps.emplace_back();
-    reach_map(bytes, "halls", cn::kTeamHallsEntities, progs, maps.back());
+    reach_map(bytes, "halls", cn::kTeamHallsEntities, progs, &probe, maps.back());
   } else {
     cl::SearchPath files;
     if (!cl::open_game_dir(basedir, lab.arg("game"), files, error)) {
@@ -243,7 +360,7 @@ void run(gl::Lab& lab) {
         maps.back().error = "no maps/" + name + ".bsp in the game folder";
         continue;
       }
-      reach_map(f, name, "", progs, maps.back());
+      reach_map(f, name, "", progs, maps.size() == 1 ? &probe : nullptr, maps.back());
     }
   }
 
@@ -309,6 +426,25 @@ void run(gl::Lab& lab) {
   lab.table(gaps);
   if (!tk.rows.empty()) lab.table(tk);
   lab.table(mv);
+  gl::LabTable st{
+      "each map's scripted routes to key items (bots/item_routes.hpp) as the move "
+      "proved them: from the entry's node to the end's (feet), the time, the mover "
+      "crossed",
+      {"map", "route", "proof", "from", "to", "s", "mover"},
+      {}};
+  for (const MapReach& m : maps)
+    for (const auto& row : m.script_rows) st.rows.push_back(row);
+  if (!st.rows.empty()) lab.table(st);
+  if (probe.route && !maps.empty())
+    lab.table({"--route on " + maps.front().name + ": each node (feet) and the link onto it",
+               {"#", "node", "at (x y feet)", "link", "s", "jump speed"},
+               maps.front().route_rows});
+  if (probe.floors && !maps.empty())
+    lab.table({"--floors on " + maps.front().name +
+                   ": the floors (feet) straight down along the line, and the nav's nodes in "
+                   "that grid column",
+               {"x y", "floors (feet z)", "nodes (x,y,feet z)"},
+               maps.front().floor_rows});
 }
 
 const gl::LabSpec kSpec{
@@ -324,6 +460,10 @@ const gl::LabSpec kSpec{
         {"game", "id1", "the game folder under --basedir"},
         {"maps", "e1m2,dm1,dm2,dm3,dm4,dm5,dm6", "the maps to ask, comma separated"},
         {"movers", "plats", "the movers tabled: plats (the ridden ones) or all"},
+        {"route", "",
+         "a route on the first map tabled node by node: 'x y z > x y z' (feet; nearest nodes)"},
+        {"floors", "",
+         "the floors along a line on the first map: 'x0 y0 x1 y1 [step]' (the nav's misses)"},
     },
     "",
     run,

@@ -18,6 +18,7 @@
 #include "golden.hpp"
 #include "shooter/brush_hull.hpp"
 #include "shooter/nav.hpp"
+#include "shooter/nav_script.hpp"
 #include "shooters_edge/sim/arena.hpp"
 #include "shooters_edge/sim/nav_course.hpp"
 
@@ -160,6 +161,81 @@ TEST(stairs_too_steep_to_walk_and_too_short_to_run_up_are_hopped) {
       if (l.to == r.nodes[k + 1] && l.kind == sh::NavKind::jump && l.speed == 0) standing++;
   CHECK_MSG(standing >= 1, "the way up took " + std::to_string(standing) +
                                " standing jumps: the treads leave no room to run up");
+}
+
+// Stairs with treads 16 deep (half the grid), as e1m2's yellow armour has: a floor, steps of 28
+// and 32, a landing at 88. The grid's columns miss the first tread.
+struct NarrowStairs {
+  sh::HullData point, clip;
+  sh::MoveWorld world;
+  NarrowStairs() {
+    const auto box = [](sh::Vec3f lo, sh::Vec3f hi) {
+      sh::Brush b;
+      b.planes = {{{1, 0, 0}, hi.x},   {{-1, 0, 0}, -lo.x}, {{0, 1, 0}, hi.y},
+                  {{0, -1, 0}, -lo.y}, {{0, 0, 1}, hi.z},   {{0, 0, -1}, -lo.z}};
+      return b;
+    };
+    const std::vector<sh::Brush> brushes = {
+        box({-256, -128, -64}, {0, 128, 0}), box({0, -128, -64}, {16, 128, 28}),
+        box({16, -128, -64}, {32, 128, 60}), box({32, -128, -64}, {256, 128, 88})};
+    point = sh::build_point_hull(brushes);
+    clip = sh::build_box_hull(brushes, sh::kPlayerMins, sh::kPlayerMaxs);
+    world.solids[0].point_hull = point.hull();
+    world.solids[0].clip_hull = clip.hull();
+    world.solids[0].mins = {-256, -128, -64};
+    world.solids[0].maxs = {256, 128, 256};
+    world.count = 1;
+  }
+};
+
+TEST(a_tread_between_two_columns_gets_a_node_only_when_asked) {
+  const NarrowStairs st;
+  sh::NavGraph g;
+  sh::build_nav(st.world, {}, sh::MoveSettings{}, sh::NavSettings{}, g);
+  const auto on_tread = [](const sh::NavGraph& gr) {
+    int n = 0;
+    for (const sh::NavNode& nd : gr.nodes) n += nd.origin.z > 51 && nd.origin.z < 53 ? 1 : 0;
+    return n;
+  };
+  CHECK_MSG(on_tread(g) == 0,
+            "the grid found the first tread by itself: the fixture no longer "
+            "has a tread narrower than a column; read NarrowStairs");
+  sh::NavSettings with;
+  with.treads = true;
+  sh::build_nav(st.world, {}, sh::MoveSettings{}, with, g);
+  CHECK_MSG(on_tread(g) > 0 && g.counts.treads > 0,
+            "treads on, still no node on the 16-deep tread at feet 28: read the TREADS pass in "
+            "nav.cpp's build_nav");
+}
+
+TEST(a_scripted_way_hops_up_narrow_stairs_in_one_flow) {
+  const NarrowStairs st;
+  sh::NavScript sc;
+  sc.steps = {{{-64, 0, 24}, false},
+              {{8, 0, 52}, true},
+              {{24, 0, 84}, true},
+              {{48, 0, 112}, true},
+              {{96, 0, 112}, false}};
+  const sh::NavProof pr =
+      sh::prove_script(st.world, sh::MoveSettings{}, {-160, 0, 24}, sc, sh::NavSettings{});
+  CHECK_MSG(pr.reached, "the script up the stairs did not hold (ended at " +
+                            std::to_string(pr.end.x) + " " + std::to_string(pr.end.z) + " after " +
+                            std::to_string(pr.time_s) +
+                            " s): read script_keys in shooter/nav_script.cpp");
+  // A run of 160 from standing, then three hops of about half a second each (each lands against
+  // the next riser and drops onto its tread): about 2.2 s, where a standing jump costs a second.
+  CHECK_MSG(pr.time_s < 2.5f, "the script took " + std::to_string(pr.time_s) +
+                                  " s: a run and three hops should take under 2.5");
+  // The same keys from the same place, step by step, end where the proof did: one rule for both.
+  size_t i = 0;
+  const sh::ScriptKeys k0 = sh::script_keys(sc, i, {-160, 0, 24}, {}, true, 8);
+  CHECK(!k0.done && i == 0 && !k0.jump && k0.forward == 1);
+  // Carried onto the entry from the side at a hop's speed: braked there, not hopped on.
+  i = 0;
+  const sh::ScriptKeys k1 = sh::script_keys(sc, i, {-64, 0, 24}, {0, 380, 0}, true, 8);
+  CHECK_MSG(i == 0 && k1.forward == 0 && !k1.jump,
+            "a player at the entry moving 380 across the script was let on: read lined_up in "
+            "shooter/nav_script.cpp");
 }
 
 TEST(the_ledge_past_the_steep_ramp_is_out_of_reach) {

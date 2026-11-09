@@ -64,6 +64,14 @@ struct MapNav {
   std::vector<uint8_t> trap;  // the nodes no way on foot leads back from to the main part
   std::vector<ge::shooter::NavExtraLink> entries;  // the links into the water the graph closed
   std::vector<NavBridge> bridges;
+  // The map's scripted routes to key items (item_routes.hpp), each proven or refused.
+  struct ScriptMade {
+    std::string name;
+    bool held = false;
+    float time_s = 0;
+    int32_t from = -1, to = -1, mover = -1;
+  };
+  std::vector<ScriptMade> scripts_made;
   ge::ai::Search main;  // what the map's main part reaches (the most a start spot reaches)
   int32_t main_n = 0;
   int64_t teleport_links = 0, closed_links = 0, harm_links = 0;

@@ -35,7 +35,9 @@ constexpr float kJumpShares[3] = {1, 0.5f, 0.25f};  // a jump's speeds, of maxsp
 constexpr double kDetour = 1.5;  // a walk this many times a straight run's time needs no jump
 constexpr double kDetourSlack_s = 0.25;
 constexpr float kFloorNormal = 0.7f;
-constexpr float kScanStep = 8;  // the column's search for free space below a floor, units
+constexpr float kScanStep = 8;   // the column's search for free space below a floor, units
+constexpr float kTreadStep = 4;  // a tread's search between two columns samples this often, units
+constexpr float kTreadUp = 4;    // a tread stands this far off both columns' floors, units
 
 float across(Vec3f a, Vec3f b) {
   const float dx = b.x - a.x, dy = b.y - a.y;
@@ -124,6 +126,8 @@ const char* nav_kind_name(NavKind k) {
       return "rocket";
     case NavKind::grenade:
       return "grenade";
+    case NavKind::script:
+      return "script";
   }
   return "?";
 }
@@ -217,21 +221,112 @@ void build_nav(const MoveWorld& world, std::span<const NavMover> movers, const M
   g.col_first.assign(ncol, 0);
   g.col_n.assign(ncol, 0);
 
-  // The nodes, column by column.
+  // The nodes, column by column: each column's floors first, then the TREADS between columns
+  // (below), then laid out in column order, top first.
   const float top = g.hi.z - kPlayerMaxs.z - 1;
   const float bottom = g.lo.z;
   std::vector<Vec3f> floors;
+  std::vector<std::vector<Vec3f>> col_floors(ncol);
+  auto col_of = [&](int32_t i, int32_t j) {
+    return static_cast<size_t>(i) * static_cast<size_t>(g.rows) + static_cast<size_t>(j);
+  };
   for (int32_t i = 0; i < g.cols; i++)
     for (int32_t j = 0; j < g.rows; j++) {
       const float x = g.lo.x + set.spacing * (static_cast<float>(i) + 0.5f);
       const float y = g.lo.y + set.spacing * (static_cast<float>(j) + 0.5f);
       column_floors(world, x, y, top, bottom, floors);
-      const size_t c =
-          static_cast<size_t>(i) * static_cast<size_t>(g.rows) + static_cast<size_t>(j);
-      g.col_first[c] = static_cast<int32_t>(g.nodes.size());
-      g.col_n[c] = static_cast<int32_t>(floors.size());
+      col_floors[col_of(i, j)] = floors;
       g.counts.columns++;
-      for (const Vec3f& f : floors) {
+    }
+  // TREADS: a stair's tread narrower than the grid falls between two columns' samples, and the
+  // nav sees the stair as one riser too high to jump. Between two neighbouring columns' floors
+  // more than a step and at most two jumps apart in height, the floor is sampled every
+  // kTreadStep along the line; a floor strictly between their heights is a tread, and a node
+  // stands at the middle of its run (in the column that holds it) unless one stands there.
+  if (set.treads) {
+    const std::vector<std::vector<Vec3f>> grid = col_floors;
+    std::vector<Vec3f> tread;
+    auto known = [&](Vec3f p) {
+      const int32_t i = static_cast<int32_t>((p.x - g.lo.x) / set.spacing);
+      const int32_t j = static_cast<int32_t>((p.y - g.lo.y) / set.spacing);
+      for (int32_t di = -1; di <= 1; di++)
+        for (int32_t dj = -1; dj <= 1; dj++) {
+          if (i + di < 0 || j + dj < 0 || i + di >= g.cols || j + dj >= g.rows) continue;
+          for (const Vec3f& f : col_floors[col_of(i + di, j + dj)])
+            if (f.z - p.z <= kTreadUp && p.z - f.z <= kTreadUp &&
+                across(f, p) < set.spacing * 0.75f)
+              return true;
+        }
+      return false;
+    };
+    // The straight neighbours first over the whole grid, then the diagonals: a tread found on a
+    // diagonal stands off the stair's middle, where its own links snag the walls.
+    constexpr int32_t kHalf[4][2] = {{1, 0}, {0, 1}, {1, 1}, {1, -1}};
+    for (int pass = 0; pass < 2; pass++)
+      for (int32_t i = 0; i < g.cols; i++)
+        for (int32_t j = 0; j < g.rows; j++)
+          for (int q = pass * 2; q < pass * 2 + 2; q++) {
+            const int32_t(&d)[2] = kHalf[q];
+            const int32_t i2 = i + d[0], j2 = j + d[1];
+            if (i2 < 0 || j2 < 0 || i2 >= g.cols || j2 >= g.rows) continue;
+            for (const Vec3f& a : grid[col_of(i, j)])
+              for (const Vec3f& b : grid[col_of(i2, j2)]) {
+                const float lo = a.z < b.z ? a.z : b.z, hi = a.z < b.z ? b.z : a.z;
+                if (hi - lo <= kStepHeight || hi - lo > 2 * kJumpUp) continue;
+                const int steps = static_cast<int>(across(a, b) / kTreadStep);
+                float run_z = 0;
+                int run_first = -1, run_last = -1;
+                auto close_run = [&]() {
+                  if (run_first < 0) return;
+                  const float f =
+                      (static_cast<float>(run_first + run_last) * 0.5f) / static_cast<float>(steps);
+                  const Vec3f at{a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, run_z};
+                  // The tread's own floor under its middle (a sample's height, traced there).
+                  column_floors(world, at.x, at.y, hi + 1, lo - 1, tread);
+                  for (const Vec3f& t : tread) {
+                    if (t.z - run_z > 1 || run_z - t.z > 1 || known(t)) continue;
+                    const int32_t ti = static_cast<int32_t>((t.x - g.lo.x) / set.spacing);
+                    const int32_t tj = static_cast<int32_t>((t.y - g.lo.y) / set.spacing);
+                    if (ti < 0 || tj < 0 || ti >= g.cols || tj >= g.rows) break;
+                    col_floors[col_of(ti, tj)].push_back(t);
+                    g.counts.treads++;
+                    break;
+                  }
+                  run_first = -1;
+                };
+                for (int k = 1; k < steps; k++) {
+                  const float f = static_cast<float>(k) / static_cast<float>(steps);
+                  // From just over the higher floor down to just under the lower: the floors
+                  // between them under the box at this point.
+                  column_floors(world, a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, hi + 1, lo - 1,
+                                floors);
+                  bool found = false;
+                  for (const Vec3f& t : floors) {
+                    if (t.z <= lo + kTreadUp || t.z >= hi - kTreadUp) continue;
+                    if (run_first >= 0 && (t.z - run_z > 1 || run_z - t.z > 1)) close_run();
+                    if (run_first < 0) {
+                      run_first = k;
+                      run_z = t.z;
+                    }
+                    run_last = k;
+                    found = true;
+                    break;
+                  }
+                  if (!found) close_run();
+                }
+                close_run();
+              }
+          }
+  }
+  for (int32_t i = 0; i < g.cols; i++)
+    for (int32_t j = 0; j < g.rows; j++) {
+      std::vector<Vec3f>& fl = col_floors[col_of(i, j)];
+      // Top first (a tread joins its column's floors at its height; stable for equal heights).
+      std::stable_sort(fl.begin(), fl.end(), [](Vec3f p, Vec3f q) { return p.z > q.z; });
+      const size_t c = col_of(i, j);
+      g.col_first[c] = static_cast<int32_t>(g.nodes.size());
+      g.col_n[c] = static_cast<int32_t>(fl.size());
+      for (const Vec3f& f : fl) {
         NavNode n;
         n.origin = f;
         n.col = i;
@@ -630,6 +725,8 @@ void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra) {
       l.pitch = e.pitch;
       l.level = e.level;
       l.lead = e.lead;
+      l.mover = e.mover;
+      l.script = e.script;
       links.push_back(l);
     }
     n.first_link = first;

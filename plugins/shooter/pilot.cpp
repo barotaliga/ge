@@ -9,6 +9,7 @@
 
 #include "core/libm/libm.hpp"
 #include "core/math.hpp"
+#include "shooter/nav_script.hpp"
 #include "shooter/server.hpp"
 #include "shooter/swim.hpp"
 #include "shooter/usercmd.hpp"
@@ -20,7 +21,10 @@ namespace {
 constexpr float kRideArrive = 2;  // a ride is over within this of the top node's height, units
 constexpr float kSwimPitch = 70;  // a swimmer's view pitched at most this far, degrees
 constexpr float kSwimRise = 16;   // the next node this much higher: jump held to rise, units
-constexpr float kOffFloor = 12;   // a pool's floor swum over this far above its standing height
+// A script's keys are pressed in full only with the view within ~14 degrees of the way (the cos).
+constexpr double kScriptFacing = 0.97;
+constexpr float kScriptFell = 40;  // standing this far under a script's lowest step: fallen off
+constexpr float kOffFloor = 12;    // a pool's floor swum over this far above its standing height
 constexpr float kLaneSettle_s = 0.4f;  // a lane's offset follows the room ahead this fast, s
 constexpr float kRideRest = 12;     // a ridden mover this near its rest may be stepped onto, units
 constexpr float kStandUp = 8;       // a node is arrived at within this up or down, units
@@ -362,6 +366,9 @@ bool passed(const Pilot& p, const PilotSense& s, size_t k) {
   const int32_t a = p.route[k], b = p.route[k + 1];
   const NavLink* l = link_of(g, a, b);
   const NavLink* l2 = k + 2 < p.route.size() ? link_of(g, b, p.route[k + 2]) : nullptr;
+  // A scripted way is passed when its keys say its last step is reached.
+  if (l && l->kind == NavKind::script)
+    return p.script_from == a && p.script_to == b && p.script_done;
   if (l && flies(l->kind)) {
     // A jump lands where its flight ends, near the target but rarely on its point.
     const float dz = s.origin.z - node(g, b).origin.z;
@@ -395,7 +402,8 @@ bool nearer_on(const Pilot& p, const PilotSense& s) {
   if (!s.onground && !swum) return false;
   const NavLink* l = link_of(g, a, b);
   const NavLink* l2 = link_of(g, b, c);
-  if (!l || !l2 || l->mover >= 0 || !through(*l2) || !level(g, b, c) || leaps(l->kind))
+  if (!l || !l2 || l->mover >= 0 || !through(*l2) || !level(g, b, c) || leaps(l->kind) ||
+      l->kind == NavKind::script)
     return false;
   const float here = off_segment(s.origin, node(g, a).origin, node(g, b).origin);
   float f = 0;
@@ -991,6 +999,59 @@ MoveCmd pilot_step(Pilot& p, const PilotSense& s, int msec, ai::Why* why) {
         w.side = static_cast<float>(p.strafe_side);
         w.jump = !p.jump_pressed;  // pressed afresh every other command: a landing catches one
         because = "in the air: the wish across the velocity";
+      }
+    } else if (l.kind == NavKind::script && l.script >= 0 &&
+               static_cast<size_t>(l.script) < g.scripts.size() && !mover_in_way(p, s, l, a, b)) {
+      // A SCRIPTED WAY (nav_script.hpp): the script's own keys, as its proof flew them.
+      if (p.script_from != a || p.script_to != b) {
+        p.script_from = a;
+        p.script_to = b;
+        p.script_step = 0;
+        p.script_seen = 0;
+        p.script_done = false;
+        p.best_s = t;
+      }
+      const NavScript& sc = g.scripts[static_cast<size_t>(l.script)];
+      const ScriptKeys k =
+          script_keys(sc, p.script_step, s.origin, s.velocity, s.onground, p.set.arrive);
+      p.mode = s.onground ? PilotMode::walk : PilotMode::air;
+      if (p.script_step > p.script_seen) {
+        p.script_seen = p.script_step;
+        p.best_s = t;
+      }
+      float lowest = A.z;
+      for (const ScriptStep& st : sc.steps) lowest = st.at.z < lowest ? st.at.z : lowest;
+      if (k.done) {
+        p.script_done = true;
+        because = "a scripted way: its last step";
+      } else if ((s.onground && s.origin.z < lowest - kScriptFell) ||
+                 t - p.best_s > 2 * p.set.stuck_s) {
+        // Fallen off it, or no step further for long: missed (twice: not taken again).
+        int times = 0;
+        for (const NavExtraLink& e : p.short_jumps) times += e.from == a && e.to == b ? 1 : 0;
+        const NavExtraLink e{a, b, l.kind, l.time_s};
+        missed_jump(p, e);
+        if (times >= 1) {
+          p.failed.push_back(e);
+          p.cut.push_back(e);
+        }
+        p.stats.lost++;
+        p.script_from = -1;
+        replanned = true;
+        replan(p, s);
+        because = "a scripted way missed: plan again";
+      } else {
+        // As the proof keys it, but forward only as far as the view already faces the way and
+        // the hop only facing it (the hands turn at a person's pace; the stairs are narrow).
+        w.yaw = unwrap(k.yaw, p.yaw);
+        const double c = core::libm::cos(static_cast<double>(w.yaw - p.yaw) * (core::kPi / 180));
+        const float faces = c >= kScriptFacing ? 1.0f
+                            : c > 0.5 ? static_cast<float>((c - 0.5) / (kScriptFacing - 0.5))
+                                      : 0.0f;
+        w.forward = k.forward * faces;
+        w.jump = k.jump && c >= kScriptFacing && !p.jump_pressed;
+        if (w.jump) p.stats.jumps++;
+        because = k.jump ? "a scripted way: a hop up" : "a scripted way";
       }
     } else if (l.kind == NavKind::swim || node(g, b).swim ||
                (s.waterlevel >= 2 && node(g, a).swim) ||
