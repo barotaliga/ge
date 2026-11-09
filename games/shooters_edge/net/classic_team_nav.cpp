@@ -40,7 +40,7 @@ void team_fighter_setup(TeamNav& tn, bt::Fighter& f, const server::RulesCommon& 
   f.bot.pilot.world = &world;  // the hop looks ahead through the map
   f.bridges.clear();
   for (const bt::NavBridge& br : nav.bridges)
-    f.bridges.push_back({br.ent, br.spawn, br.nodes, true});
+    f.bridges.push_back({br.ent, br.spawn, br.nodes, !br.floor, br.floor});
   f.name = name;
   if (tn.locs.points.empty()) {
     if (!tn.given.points.empty()) {

@@ -260,7 +260,8 @@ struct Fighter {
     int ent = -1;
     sh::Vec3f spawn;
     std::vector<int32_t> nodes;
-    bool in = true;
+    bool in = true;      // its floor is not there: its nodes shut
+    bool floor = false;  // a floor door (map_nav.hpp NavBridge): there at rest, not when away
   };
   std::vector<Bridge> bridges;
   bool bridges_seen = false;

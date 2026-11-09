@@ -47,6 +47,9 @@ struct NavBridge {
   ge::shooter::Vec3f spawn;    // where it stood when the map began (in: no bridge yet)
   std::vector<int32_t> nodes;  // the nodes standing on it, out
   bool touch = false;  // no name: it moves when touched (a trap: in, under whoever steps on)
+  // A FLOOR DOOR (`floor_door`): a plate resting shut as a floor that a button slides away (dm2's
+  // big room). Its nodes stand on it at rest (`spawn`) and are shut while it is away from there.
+  bool floor = false;
 };
 
 struct MapNav {
