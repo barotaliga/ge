@@ -360,10 +360,17 @@ TEST(a_nailgun_held_firing_steps_a_frame_a_shot_from_each_barrel_in_turn) {
   }
   CHECK((frames == std::vector<int>{1, 2, 3, 4, 1, 2}));  // a frame a shot, round the clip
   for (size_t i = 1; i < xs.size(); ++i) CHECK((xs[i] > xs[i - 1]) == (i % 2 == 1));  // L, R, L
-  // A frame's time and a half after the last shot it is back at rest; the next burst starts over.
+  // A frame's time and a half after the last shot it flows back to rest over a frame's time (held
+  // there with r_lerpmodels 0); the next burst starts over.
   se::HandFrame f;
-  for (int i = 0; i < 4; ++i) f = se::step_hand(hand, in, s, set, eye(), dt);
-  CHECK(f.frame_a == 0);
+  bool flowed = false;
+  for (int i = 0; i < 4; ++i) {
+    f = se::step_hand(hand, in, s, set, eye(), dt);
+    flowed = flowed || (f.frame_a == 2 && f.frame_b == 0 && f.frame_t > 0 && f.frame_t < 1);
+  }
+  CHECK(flowed);
+  for (int i = 0; i < 2; ++i) f = se::step_hand(hand, in, s, set, eye(), dt);
+  CHECK(f.frame_a == 0 && f.frame_b == 0);
   in.fired = true;
   CHECK(se::step_hand(hand, in, s, set, eye(), dt).frame_a == 1);
 }

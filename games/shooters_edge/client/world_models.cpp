@@ -58,6 +58,24 @@ uint32_t colour_row(const sv::ClientInfo& c, const char* key, uint32_t fallback)
   return uint32_t(std::clamp(n, 0, int(models::kColourRows) - 1));
 }
 
+// The two frames of `k` a placed `p` is drawn between at `at` and the share of the way: its
+// animation between its last two frames when one is under way, else its group flowing between its
+// own frames (`Placed::lerp`), else the frame alone.
+void frames_of(const ModelKind& k, const Placed& p, double at, uint32_t& a, uint32_t& b, float& f) {
+  if (p.frame_from >= 0 && p.frame_f < 1) {
+    a = models::frame_in(k.frames, p.frame_from, at);
+    b = models::frame_in(k.frames, p.frame, at);
+    f = std::clamp(p.frame_f, 0.0f, 1.0f);
+    return;
+  }
+  if (p.lerp) {
+    models::frames_between(k.frames, p.frame, at, a, b, f);
+    return;
+  }
+  a = b = models::frame_in(k.frames, p.frame, at);
+  f = 0;
+}
+
 void to_world(const sh::Vec3f& p, double out[3]) {
   const float f[3] = {p.x, p.y, p.z};
   br::to_engine(f, out);
@@ -374,12 +392,18 @@ bool body_triangles(const WorldModels& m, const Placed& p, double time_s, std::v
   if (model >= m.shapes.size()) return false;
   const gr::MorphModel& shape = m.shapes[model];
   if (shape.positions.empty()) return false;
-  const uint32_t frame = std::min<uint32_t>(models::frame_in(k.frames, p.frame, at),
-                                            uint32_t(shape.positions.size() - 1));
-  const std::vector<float>& pos = shape.positions[frame];
+  uint32_t a = 0, b = 0;
+  float f = 0;
+  frames_of(k, p, at, a, b, f);
+  const auto last = uint32_t(shape.positions.size() - 1);
+  const std::vector<float>& pa = shape.positions[std::min(a, last)];
+  const std::vector<float>& pb = shape.positions[std::min(b, last)];
   out.reserve(shape.indices.size() * 3);
   for (const uint32_t i : shape.indices)
-    out.insert(out.end(), {pos[size_t(i) * 3], pos[size_t(i) * 3 + 1], pos[size_t(i) * 3 + 2]});
+    for (size_t c = 0; c < 3; c++) {
+      const float va = pa[size_t(i) * 3 + c];
+      out.push_back(f > 0 ? va + (pb[size_t(i) * 3 + c] - va) * f : va);
+    }
   return !out.empty();
 }
 
@@ -503,16 +527,19 @@ void prepare_models(ge::gpu::Device& d, WorldModels& m, const br::Map& map,
     if (!m.has_morph || m.morph_draws.size() >= gr::kMaxMorphDraws) continue;
     gr::MorphDraw g;
     g.model = bare_flames && k.bare != ModelKind::kNone ? k.bare : k.first;
-    uint32_t frame = 0;
+    uint32_t frame_a = 0, frame_b = 0;
+    float blend = 0;
     if (k.is == ModelKind::Is::alias) {
       g.model += models::frame_in(k.skins, p.skin, at);
-      frame = models::frame_in(k.frames, p.frame, at);
+      frames_of(k, p, at, frame_a, frame_b, blend);
     }
     for (int c = 0; c < 3; c++) g.now.position[c] = w[c];
     float ang[3] = {p.angles.x, p.angles.y, p.angles.z};
     if (k.spin) ang[1] = float(std::fmod(t * kSpinDegPerS, 360.0));
     models::rotation_of(ang, k.is == ModelKind::Is::alias, g.now.rotation);
-    g.now.frame_a = g.now.frame_b = frame;
+    g.now.frame_a = frame_a;
+    g.now.frame_b = frame_b;
+    g.now.blend = blend;
     const auto last = m.last_pose.find(p.entity);
     g.last = last == m.last_pose.end() || p.warp.shown < 1 ? g.now : last->second;
     g.warp = p.warp;

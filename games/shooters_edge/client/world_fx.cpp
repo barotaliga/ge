@@ -380,6 +380,8 @@ fx::Dust player_dust(const sh::Vec3f& origin, const sh::Vec3f& angles, int entit
 
 FxSwitches fx_switches(const look::Picture& picture) {
   FxSwitches s;
+  s.lerp.frames = picture.lerp_models;
+  s.lerp.moves = picture.lerp_move;
   if (look::look_of(picture) == look::Look::classic) return s;
   s.muzzles = picture.ce.muzzles;
   const ge::classicenhance::Replacement* blast =
@@ -610,6 +612,13 @@ void fx_scene(const Listen& l, const ViewState& v, FxScene& out) {
   out.campaign = l.campaign_host != nullptr;
   out.effect_models = effect_model(l, EffectModel::explosion);
   place_models(l, out.models);
+  // The picture one server frame behind the newest state, as far past it as the wall clock is.
+  out.clock = {};
+  if (l.server != nullptr) {
+    out.clock.moves = true;
+    out.clock.state_s = l.server->sv.time;
+    out.clock.drawn_s = l.server->sv.time + std::min(l.owed, listen_tic(l)) - listen_tic(l);
+  }
   out.bodies.clear();
   out.own = 0;
   out.placed_of = nullptr;
@@ -650,6 +659,38 @@ void step_fx(const Listen& l, const ViewState& v, FxState& s, double t, double d
 
 void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   out.models = l.models;
+  {
+    thread_local std::vector<LerpModel> items;
+    items.resize(out.models.size());
+    for (size_t i = 0; i < out.models.size(); i++) {
+      const Placed& p = out.models[i];
+      items[i] = {.entity = p.entity,
+                  .modelindex = p.modelindex,
+                  .frame = p.frame,
+                  .warping = p.warp.shown < 1,
+                  .origin = p.origin,
+                  .angles = p.angles};
+    }
+    lerp_models(s.lerp, items, t, l.clock, s.on.lerp);
+    for (size_t i = 0; i < out.models.size(); i++) {
+      Placed& p = out.models[i];
+      p.origin = items[i].origin;
+      p.angles = items[i].angles;
+      p.frame_from = items[i].frame_from;
+      p.frame_f = items[i].frame_f;
+      p.lerp = items[i].lerp;
+    }
+  }
+  // The missiles where their models are drawn, so a trail and a glow ride the drawn rocket.
+  thread_local std::vector<Missile> missiles;
+  missiles.assign(l.missiles.begin(), l.missiles.end());
+  if (l.clock.moves && s.on.lerp.moves)
+    for (Missile& m : missiles)
+      for (const Placed& p : out.models)
+        if (p.entity == m.entity) {
+          m.origin = p.origin;
+          break;
+        }
   out.births.clear();
   out.lights.clear();
   out.puffs.clear();
@@ -709,7 +750,7 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
 
   // The missiles: a trail over the stretch each flew since the last frame, a rocket's glow.
   s.next.clear();
-  for (const Missile& m : l.missiles) {
+  for (const Missile& m : missiles) {
     ge::camera::Vec3 at = engine_point(m.origin);
     // A rocket's launch as it looks (ce_trails): off its true place while it leaves the tube, the
     // shooter's sway on it when it is the eye's own; its model, flame, trail, light and haze there.
