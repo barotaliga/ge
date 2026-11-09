@@ -1000,6 +1000,12 @@ void missiles_of(const Listen& l, std::vector<Missile>& out) {
   }
 }
 
+bool model_shown(const Listen& l, int entity) {
+  const sv::QcServer* q = program(l);
+  if (q != nullptr) return sv::model_shown(*q, entity);
+  return l.server != nullptr && l.server->sv.edicts[static_cast<size_t>(entity)].modelindex > 0;
+}
+
 float field_named(const Listen& l, int entity, const char* name) {
   const pg::Def* d = pg::find_field(*l.progs, name);
   if (d == nullptr) return 0;

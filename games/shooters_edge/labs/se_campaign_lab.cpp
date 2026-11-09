@@ -29,6 +29,7 @@
 #include "arena_chart.hpp"
 #include "campaign_free.hpp"
 #include "campaign_movers.hpp"
+#include "campaign_pickups.hpp"
 #include "classicenhance/source.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
@@ -472,7 +473,7 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
   o.load = &pack_map;
   o.load_ctx = &maps;
   o.registered = l.pop_lmp;
-  o.settings = {"skill " + lab.arg("skill"), "deathmatch 0"};
+  o.settings = {"skill " + lab.arg("skill"), "deathmatch 0", "coop " + lab.arg("coop")};
   sv::Campaign c;
   std::string error;
   const std::string map = lab.arg("map");
@@ -483,6 +484,16 @@ void pack_campaign(gl::Lab& lab, const Loaded& l) {
   if (ok) {
     sv::campaign_join(c, 0, "player");
     if (lab.arg_num("movers") > 0) la::movers_table(lab, c, l.progs, lab.arg_num("movers"));
+    if (lab.arg_num("pickups") > 0) {
+      const la::PickupCounts n = la::pickups_table(lab, c, l.progs, lab.arg_num("pickups"));
+      lab.metric("pack.pickups.items", n.items, "count");
+      lab.metric("pack.pickups.taken", n.taken, "count");
+      lab.metric("pack.pickups.back", n.back, "count");
+      lab.metric("pack.pickups.text_only", n.text_only, "count");
+      t.rows.push_back({"pickups: on the map, taken, shown again later",
+                        std::to_string(n.items) + ", " + std::to_string(n.taken) + ", " +
+                            std::to_string(n.back)});
+    }
     const int seconds = static_cast<int>(lab.arg_num("seconds"));
     const int frames = static_cast<int>(seconds / sv::kCampaignStep);
     // The player's hands: the forward axis held (and the view's yaw), a packet a frame.
@@ -893,6 +904,7 @@ const gl::LabSpec kSpec{
          "(games/shooters_edge/qc/campaign/progs.src); empty: the pack's own progs.dat"},
         {"map", "start", "with --game: the map the campaign starts on"},
         {"skill", "1", "with --game: the skill the campaign is played at"},
+        {"coop", "0", "with --game: the `coop` setting the campaign starts with"},
         {"seconds", "5", "with --game: how long the map runs after the player joins, s"},
         {"then", "", "with --game: a console line run after that (`changelevel e1m2`)"},
         {"forward", "0", "with --game: the forward axis the player holds every frame, units/s"},
@@ -908,6 +920,10 @@ const gl::LabSpec kSpec{
          "s: our campaign program (compiled from --root) on the free episode: three fixture maps "
          "(a hall, five monsters to an exit, a key door and the rune) played by a scripted player "
          "this long"},
+        {"pickups", "0",
+         "with --game, s: every item and weapon of the map touched by the player in turn, then "
+         "the map run this long: whether each is still shown (in single player and co-op a taken "
+         "item never is)"},
         {"root", ".", "the repository's root (our campaign program's sources are under it)"},
         {"exit", "0",
          "with --game, 1: then the player stood in the map's exit, the level's end read as the "

@@ -1,13 +1,14 @@
 // The classic models as the engine draws them (games/shooters_edge/app/classic_models.hpp): a
 // model's skin keeps the palette's colours and marks its glowing and tinted texels; its fronts
 // face out once the file's frame is reflected into the engine's; its frames and skins play by
-// group; an entity's yaw turns it the way the map turns it; a sprite's origin lands where the file
-// puts it and its clear index is clear; the light under a point is read off the floor's lightmap.
+// group (or flow between their frames); an entity's yaw turns it the way the map turns it; a
+// sprite's origin lands where the file puts it and its clear index is clear; the light under a
+// point is read off the floor's lightmap.
 //
 // ge:summary Tests the classic models' conversion: skins, marks, winding, groups, yaw, sprites
 // ge:summary and the light under a point
 // ge:keywords test classic-models morph_from_alias sprite_frames_of frame_in rotation_of
-// ge:keywords light_under
+// ge:keywords light_under frames_between frame-lerp
 // ge:skill shooter morph
 #include <cmath>
 #include <vector>
@@ -141,4 +142,21 @@ TEST(the_light_under_a_point_is_the_floors_lightmap) {
   CHECK(rgb[0] > 0 && rgb[1] > 0 && rgb[2] > 0);
   const float far_above[3] = {128, 192, 5000};
   CHECK(!md::light_under(probe, map, far_above, rgb));
+}
+
+TEST(a_looping_group_flows_between_its_frames) {
+  shooters_edge::models::Groups g;
+  g.first = {0, 4};
+  g.count = {1, 3};
+  g.ends = {{}, {0.1f, 0.2f, 0.4f}};
+  uint32_t a = 9, b = 9;
+  float f = -1;
+  shooters_edge::models::frames_between(g, 1, 0.05, a, b, f);
+  CHECK(a == 4 && b == 5 && std::abs(f - 0.5f) < 1e-4f);
+  shooters_edge::models::frames_between(g, 1, 0.3, a, b, f);  // the last frame, back round to 4
+  CHECK(a == 6 && b == 4 && std::abs(f - 0.5f) < 1e-4f);
+  shooters_edge::models::frames_between(g, 1, 0.45, a, b, f);  // a second time round
+  CHECK(a == 4 && b == 5 && std::abs(f - 0.5f) < 1e-4f);
+  shooters_edge::models::frames_between(g, 0, 0.3, a, b, f);  // a lone frame
+  CHECK(a == 0 && b == 0 && f == 0);
 }
