@@ -42,6 +42,8 @@ extern const unsigned char se_qc_common_weapons[];
 extern const std::size_t se_qc_common_weapons_size;
 extern const unsigned char se_qc_common_items[];
 extern const std::size_t se_qc_common_items_size;
+extern const unsigned char se_qc_common_dmm4[];
+extern const std::size_t se_qc_common_dmm4_size;
 extern const unsigned char se_qc_common_player[];
 extern const std::size_t se_qc_common_player_size;
 extern const unsigned char se_qc_common_map[];
@@ -543,6 +545,7 @@ bool baseline_progs(pg::Progs& out, std::string& error) {
       source("../common/combat.qc", se_qc_common_combat, se_qc_common_combat_size),
       source("../common/weapons.qc", se_qc_common_weapons, se_qc_common_weapons_size),
       source("../common/items.qc", se_qc_common_items, se_qc_common_items_size),
+      source("../common/dmm4.qc", se_qc_common_dmm4, se_qc_common_dmm4_size),
       source("../common/player.qc", se_qc_common_player, se_qc_common_player_size),
       source("../common/map.qc", se_qc_common_map, se_qc_common_map_size),
       source("world.qc", se_qc_arena_world, se_qc_arena_world_size),

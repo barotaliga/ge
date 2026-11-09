@@ -171,6 +171,7 @@ float(float w) ammo_bit = {
 
 void(float w, float n) ammo_spend = {
   local string kind;
+  if (deathmatch == 4) return;  // never used up (common/dmm4.qc)
   kind = weapon_word(w, 1);
   if (kind == "shells") self.ammo_shells = self.ammo_shells - n;
   else if (kind == "nails") self.ammo_nails = self.ammo_nails - n;
@@ -274,7 +275,8 @@ void(float w) fire_blade = {
   if (trace_fraction == 1) return;
   if (trace_ent.takedamage) {
     trace_ent.deathtype = "cut down";
-    damage(trace_ent, self, self, weapon_number(w, 5));
+    if (deathmatch == 4) damage(trace_ent, self, self, 75);  // deathmatch 4's blade (dmm4.qc)
+    else damage(trace_ent, self, self, weapon_number(w, 5));
     effect_impact(trace_endpos, 3, TRUE);
   } else {
     weapon_sound(self, w, 13);
@@ -406,6 +408,12 @@ void(float w) fire_arc = {
   traceline(from, from + v_forward * reach, TRUE, self);
   effect_beam(from, trace_endpos);
   if (self.waterlevel > 1) {
+    // Deathmatch 4: one time in two it kills the firer outright (common/dmm4.qc).
+    if (deathmatch == 4 && random() < 0.5) {
+      self.deathtype = "discharged";
+      damage(self, self, self, 4000);
+      return;
+    }
     // Discharged into water: everything near takes it, the firer too.
     self.deathtype = "discharged";
     radius_damage(self, self, weapon_number(w, 9) * ammo_for(w), world, "electrocuted");

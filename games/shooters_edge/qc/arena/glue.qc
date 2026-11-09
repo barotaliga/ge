@@ -218,8 +218,15 @@ entity() spawn_point = {
 
 // --- a player's start and his respawn ---
 
-// Every spawn the same: the blade, the scattergun and 25 shells, no armour.
+void() dmm4_give;
+
+// Every spawn the same: the blade, the scattergun and 25 shells, no armour; in deathmatch 4,
+// everything (common/dmm4.qc).
 void() give_inventory = {
+  if (deathmatch == 4) {
+    dmm4_give();
+    return;
+  }
   self.items = W_BLADE | W_SCATTER;
   self.ammo_shells = 25;
   self.ammo_nails = 0;

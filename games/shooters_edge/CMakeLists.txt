@@ -127,7 +127,7 @@ target_link_libraries(shooters_edge_client PUBLIC shooters_edge_server shooters_
 include(${PROJECT_SOURCE_DIR}/cmake/EmbedBinary.cmake)
 # Each source as `<variant>_<file>` (qc/<variant>/<file>.qc): the arena variant's and the shared.
 foreach(qc arena_engine common_defs arena_glue common_util common_combat common_weapons
-           common_items common_player common_map arena_world)
+           common_items common_dmm4 common_player common_map arena_world)
   string(REGEX REPLACE "^([a-z]+)_(.*)$" "\\1/\\2" qc_path ${qc})
   ge_embed_binary(shooters_edge_client se_qc_${qc} ${CMAKE_CURRENT_SOURCE_DIR}/qc/${qc_path}.qc)
 endforeach()

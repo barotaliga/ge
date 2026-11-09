@@ -62,6 +62,18 @@ float() can_pick_up = {
   return other.classname == "player" && other.health > 0 && !match_over;
 };
 
+float(entity p) dmm4_shielded;
+void() dmm4_octa_taken;
+void() dmm4_octa_off;
+void() dmm4_pack_take;
+void() dmm4_frame;
+
+// And may take health, armour or a pack: in deathmatch 4 not while a shield holds him.
+float() can_heal = {
+  if (!can_pick_up()) return FALSE;
+  return deathmatch != 4 || !dmm4_shielded(other);
+};
+
 // --- health ---
 
 void() health_decay = {
@@ -80,7 +92,7 @@ void() health_decay = {
 
 void() health_touch = {
   local float limit;
-  if (!can_pick_up()) return;
+  if (!can_heal()) return;
   limit = other.max_health;
   if (self.spawnflags & 2) limit = 250;
   if (other.health >= limit) return;
@@ -96,6 +108,10 @@ void() health_touch = {
 };
 
 void() item_health = {
+  if (deathmatch == 4 && (self.spawnflags & 2)) {  // no mega health in deathmatch 4
+    remove(self);
+    return;
+  }
   self.touch = health_touch;
   if (self.spawnflags & 1) {
     self.health = 15;
@@ -112,7 +128,7 @@ void() item_health = {
 // --- armour ---
 
 void() armour_touch = {
-  if (!can_pick_up()) return;
+  if (!can_heal()) return;
   if (other.armortype * other.armorvalue >= self.armortype * self.armorvalue) return;
   other.armortype = self.armortype;
   other.armorvalue = self.armorvalue;
@@ -182,6 +198,10 @@ void() ammo_touch = {
 
 void(string mdl) ammo_start = {
   local float n;
+  if (deathmatch == 4) {  // none lies on the map in deathmatch 4
+    remove(self);
+    return;
+  }
   n = 1;
   if (self.spawnflags & 1) n = 2;
   self.ammo_shells = self.ammo_shells * n;
@@ -225,6 +245,10 @@ void() weapon_touch = {
 void(float w, string name, string mdl) weapon_start = {
   local string pickup, kind;
   local float n;
+  if (deathmatch == 4) {  // every player holds them all in deathmatch 4
+    remove(self);
+    return;
+  }
   self.weapon = w;
   self.netname = name;
   self.touch = weapon_touch;
@@ -326,7 +350,12 @@ void(float had) backpack_say = {
 void() backpack_touch = {
   local entity was_self;
   local float had;
-  if (!can_pick_up()) return;
+  if (!can_heal()) return;
+  if (deathmatch == 4) {  // health, and the bonus powers (dmm4.qc)
+    dmm4_pack_take();
+    remove(self);
+    return;
+  }
   had = other.items & self.weapon;
   ammo_give(self.ammo_shells, self.ammo_nails, self.ammo_rockets, self.ammo_cells);
   other.items = other.items | self.weapon;
@@ -380,7 +409,12 @@ float POWER_TIME = 30;
 
 void() power_touch = {
   if (!can_pick_up()) return;
-  if (self.items == IT_QUAD) {
+  if (self.items == IT_QUAD && deathmatch == 4) {  // the OctaPower (dmm4.qc)
+    other.super_damage_finished = time + POWER_TIME;
+    other.power_said = other.power_said - (other.power_said & IT_QUAD);
+    say_to(other, PRINT_LOW, "You got the OctaPower\n", "", "", "");
+    dmm4_octa_taken();
+  } else if (self.items == IT_QUAD) {
     other.super_damage_finished = time + POWER_TIME;
     other.power_said = other.power_said - (other.power_said & IT_QUAD);
     say_to(other, PRINT_LOW, "You got the ", name_of(self.classname, "Quad Damage"), "\n", "");
@@ -421,17 +455,19 @@ void(float bit, float finished, string key, string sample) power_warn = {
 };
 
 void() power_frame = {
+  if (deathmatch == 4) dmm4_frame();
   power_warn(IT_QUAD, self.super_damage_finished, "power_quad_off", "items/damage2.wav");
   power_warn(IT_INVULNERABILITY, self.invincible_finished, "power_pent_off", "items/protect2.wav");
   if (self.super_damage_finished && self.super_damage_finished < time) {
     self.super_damage_finished = 0;
     self.power_said = self.power_said - (self.power_said & IT_QUAD);
     self.items = self.items - (self.items & IT_QUAD);
+    if (deathmatch == 4) dmm4_octa_off();
   }
   if (self.invincible_finished && self.invincible_finished < time) {
     self.invincible_finished = 0;
     self.power_said = self.power_said - (self.power_said & IT_INVULNERABILITY);
-    self.items = self.items - (self.items & IT_INVULNERABILITY);
+    if (self.shield_finished <= time) self.items = self.items - (self.items & IT_INVULNERABILITY);
   }
   self.effects = self.effects - (self.effects & (EF_DIMLIGHT | EF_BLUE | EF_RED));
   if (self.super_damage_finished) self.effects = self.effects | EF_DIMLIGHT | EF_BLUE;

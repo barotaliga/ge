@@ -73,8 +73,14 @@ struct TeamMatchOptions {
   sh::Locs locs;         // the map's place names, `from` where (none: named off its items)
   const ge::progs::Progs* progs = nullptr;  // the baseline mod, compiled
   TeamSide teams[2] = {TeamSide("red", 4), TeamSide("blue", 13)};
-  int frames = 46154;   // server frames of 13 ms (ten minutes)
-  int timelimit = 0;    // minutes the mod ends the match at (0: none)
+  int frames = 46154;  // server frames of 13 ms (ten minutes)
+  int timelimit = 0;   // minutes the mod ends the match at (0: none)
+  // The deathmatch mode: 1 the items on the map; 4 every spawn armed with everything and full of
+  // it, nothing to gather (the baseline mod's common/dmm4.qc): the duel that tests aim and move.
+  int deathmatch = 1;
+  // More of the server's settings, each a console line ("k_disallow_weapons 16"), set before
+  // the map starts.
+  std::vector<std::string> settings;
   uint32_t seed = 1;    // the mod's generator; fighter k's hands seed + 31 k
   bool record = true;   // keep the multiview recording
   bool packed = false;  // record it packed (classic_record.hpp: a `.mvdz`)
@@ -110,6 +116,7 @@ struct TeamPlayer {
   int deaths = 0;
   int64_t shots = 0, pickups = 0, switches = 0, packs = 0, held_fire = 0;
   int64_t reactions = 0, pre_aimed = 0;  // sightings reacted to, and pre-aimed (shooter/bot.hpp)
+  int64_t strokes = 0, lifts = 0;        // the mouse hand's strokes and lifts (ai/mouse.hpp)
   int64_t target_kept = 0;  // commands the one in hand was kept over a nearer one (bot.hpp)
   double react_s = 0;       // the reactions' times, summed
   std::array<HitCount, kHitWeapons> hits{};  // shots and hits by weapon (classic_hits.hpp)
