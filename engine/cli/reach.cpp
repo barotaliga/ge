@@ -86,57 +86,52 @@ void reach_from_deps(const fs::path& repo, const fs::path& build, std::string_vi
     const size_t slash = p.rfind('/');
     return slash == std::string::npos ? std::string() : p.substr(0, slash);
   };
-  // Which directories each target compiles sources in.
-  std::map<std::string, std::set<std::string>> owners;  // directory -> targets
-  for (const Object& o : objects) {
-    const bool owns = libraries.empty() ? !o.target.ends_with("_test") : libraries.count(o.target);
-    if (!o.target.empty() && owns) owners[dir_of(o.source)].insert(o.target);
-  }
-  for (const Object& o : objects) {
-    for (const std::string& d : o.deps) {
-      if (!r.changed.count(d)) continue;
-      r.targets.insert(o.target);
-      r.sources.insert(o.source);
-      break;
+  auto stem_of = [](const std::string& p) {
+    const size_t dot = p.rfind('.');
+    return dot == std::string::npos ? p : p.substr(0, dot);
+  };
+  // What a reached library object passes on to the code that calls it: its own header (x.cpp's
+  // x.hpp) when it includes one, else the headers of its own directory that it includes. Never
+  // every header of the library's directories: one object of a shared library including a
+  // changed header would then reach everything that draws or links through that library.
+  auto exposed = [&](const Object& o) {
+    std::vector<std::string> out;
+    const std::string stem = stem_of(o.source), dir = dir_of(o.source);
+    for (size_t k = 1; k < o.deps.size(); k++) {
+      const std::string& d = o.deps[k];
+      if ((d.ends_with(".hpp") || d.ends_with(".h")) && stem_of(d) == stem) return std::vector{d};
     }
-  }
-  r.targets.erase("");
-  // Through the headers of reached targets' directories, until nothing more is reached.
+    for (size_t k = 1; k < o.deps.size(); k++) {
+      const std::string& d = o.deps[k];
+      if ((d.ends_with(".hpp") || d.ends_with(".h")) && dir_of(d) == dir) out.push_back(d);
+    }
+    return out;
+  };
+  auto library = [&](const Object& o) {
+    return libraries.empty() ? !o.target.ends_with("_test") : libraries.count(o.target) > 0;
+  };
+  // An object is reached when it compiles a changed file or a header a reached library object
+  // passes on, until nothing more is reached.
+  std::set<std::string> hit = r.changed;
+  std::vector<bool> reached(objects.size(), false);
   for (bool grew = true; grew;) {
     grew = false;
-    std::set<std::string> dirs;
-    for (const auto& [dir, targets] : owners) {
-      for (const std::string& t : targets) {
-        if (r.targets.count(t)) dirs.insert(dir);
+    for (size_t i = 0; i < objects.size(); i++) {
+      const Object& o = objects[i];
+      if (o.target.empty() || reached[i]) continue;
+      if (std::none_of(o.deps.begin(), o.deps.end(),
+                       [&](const std::string& d) { return hit.count(d) > 0; })) {
+        continue;
       }
-    }
-    for (const Object& o : objects) {
-      if (o.target.empty() || r.targets.count(o.target)) continue;
-      for (size_t k = 1; k < o.deps.size(); k++) {
-        const std::string& d = o.deps[k];
-        if (!d.ends_with(".hpp") && !d.ends_with(".h")) continue;
-        if (!dirs.count(dir_of(d))) continue;
-        r.targets.insert(o.target);
-        grew = true;
-        break;
+      reached[i] = grew = true;
+      r.objects.insert(o.source);
+      r.targets.insert(o.target);
+      if (std::any_of(o.deps.begin(), o.deps.end(),
+                      [&](const std::string& d) { return r.changed.count(d) > 0; })) {
+        r.sources.insert(o.source);
       }
-    }
-  }
-  // Each object on its own: the same two ways in, now that the reached libraries are known.
-  std::set<std::string> dirs;
-  for (const auto& [dir, targets] : owners) {
-    for (const std::string& t : targets) {
-      if (r.targets.count(t)) dirs.insert(dir);
-    }
-  }
-  for (const Object& o : objects) {
-    if (o.target.empty()) continue;
-    for (size_t k = 0; k < o.deps.size(); k++) {
-      const std::string& d = o.deps[k];
-      const bool header = k > 0 && (d.ends_with(".hpp") || d.ends_with(".h"));
-      if (r.changed.count(d) || (header && dirs.count(dir_of(d)))) {
-        r.objects.insert(o.source);
-        break;
+      if (library(o)) {
+        for (const std::string& h : exposed(o)) hit.insert(h);
       }
     }
   }
