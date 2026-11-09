@@ -919,17 +919,27 @@ shadow the lights in two tiers:
   point's, so they cross a cube's seams with no special case (a tap is clamped half a texel inside
   its face's tile). A light's source radius (`GpuLight::more.y`) sets how soft: a plain light's
   4 cm is sharp, a flame's a quarter of its height (a wall torch 0.14 m, a large flame 0.26 m).
-- **The capsules.** A classic map lights a room with many overlapping fill lights (on e1m4 the 32
-  nearest shadowed ones carry 5 to 20 % of a floor's light), so 8 cubes alone leave no shadow
-  to see. The 4 casters nearest the eye become vertical capsules fitted to their boxes
-  (`shadow_capsules`), and every light without a casters' cube is shadowed by the ones within 6 m
-  of the pixel (found once a pixel), the penumbra from the light's size seen from the point.
+- **Only a light whose source shows throws a figure's shadow.** A classic map lights a room with
+  many overlapping fill lights: entities hanging alone in the air, where the mapper wanted light
+  bounced round the room. A shadow from one is a shadow cast by nothing the player can see, so a
+  light throws a figure's shadow only when it is `seen` (`seen_lights`, draw_data.hpp): a flame,
+  a torch or a globe the game draws at it, or a lamp within 1 m of a face whose texture glows (3 %
+  of its texels or more; never a sky face), its fitting. Pools' and teleporters' glows throw none;
+  the dynamic lights (a rocket, an explosion) do. Only seen lights get a casters' cube, and the
+  capsules shadow only them. The walls' own cubes stay every shadowed light's: they keep a light in
+  its room, as the map's lightmaps do. `r_fill_shadows 1` (`Options::fill_shadows`) brings back
+  every light's figure shadow.
+- **The capsules.** The 4 casters nearest the eye become vertical capsules fitted to their boxes
+  (`shadow_capsules`), and every seen light without a casters' cube is shadowed by the ones within
+  6 m of the pixel (found once a pixel), the penumbra from the light's size seen from the point.
 - **The sun.** A row more of the atlas: its first tile is the casters seen along the sun, an
   orthographic view 16 m wide round the eye (4 cm texels), drawn in the same pass. A pixel inside
   it multiplies the sun's map of the world by its 2 × 2 compare (`sun_casters_lit`).
-- **The room's own light.** A figure standing in the light hides some of what bounces round the
-  room too: the bounce and the `r_minlight` floor are dimmed by 0.8 of the share of the casters'
-  lights he hides at the pixel.
+- **The room's own light is never shadowed.** The light bounced round the room (the rebake's
+  bounce, the lightmaps' share, the `r_minlight` floor) has no one direction, so a figure leaves it
+  whole: a darkening there reads as a shadow with no light behind it. Under `r_fill_shadows 1` it is
+  dimmed by 0.8 of the share of the casters' lights he hides at the pixel (`kIndirectShadow`), the
+  look before.
 
 Lab `se-models`: the views `shadow-lamp`, `shadow-torch`, `shadow-flame` and `shadow-sun` (at
 noon, on a map with open sky), each from his eyes and from high to one side, `-side-pair` (the
