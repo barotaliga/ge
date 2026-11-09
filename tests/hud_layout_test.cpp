@@ -1,7 +1,9 @@
 // engine/hud/layout: the HUD as data. Elements stack at their anchors in table order; a hidden
 // one closes its gap; an offset, an anchor or a scale set through the element's cvars moves that
 // element alone; the corners' rule and the `under` rule keep the centre clear; a fade reaches
-// every command an element drew; `seta` archives a place and `hud_reset` puts it back.
+// every command an element drew; `seta` archives a place and `hud_reset` puts it back; a
+// mirrored layout swaps left and right but for a fixed-side element, and a flush one sits on the
+// screen's edge.
 //
 // ge:summary Tests the HUD layout: stacking, hiding, the hud_ cvars, clearance, fade, hud_reset
 // ge:keywords test hud layout element cvars hud_reset seta archive anchor offset scale alpha
@@ -77,6 +79,33 @@ TEST(elements_at_one_anchor_stack_and_a_hidden_one_closes_its_gap) {
   const auto hidden = draw(t);
   CHECK(box_of(hidden, "b").w == 0);
   CHECK(near(box_of(hidden, "c").y, b.y));
+}
+
+TEST(a_mirrored_layout_swaps_left_and_right_but_keeps_a_fixed_side_and_a_flush_row) {
+  Layout l;
+  const int left = l.add({.id = "left", .kind = Kind::readout, .anchor = Anchor::bottom_left});
+  ElementSpec bar{.id = "bar", .kind = Kind::readout, .anchor = Anchor::bottom_left};
+  bar.fixed_side = true;
+  bar.flush = true;
+  const int fixed = l.add(bar);
+  for (const int i : {left, fixed}) {
+    l.content(i).on = true;
+    l.content(i).value = "100";
+  }
+  const Style st;
+  auto drawn = [&] {
+    ui::DrawList dl;
+    dl.begin(1280, 720);
+    return l.draw(dl, l.frame(1280, 720, st), st);
+  };
+  const auto plain = drawn();
+  const ui::Rect pl = box_of(plain, "left"), pb = box_of(plain, "bar");
+  CHECK(near(pb.bottom(), 720));  // flush: no margin under it
+  l.mirror = true;
+  const auto mirrored = drawn();
+  const ui::Rect ml = box_of(mirrored, "left"), mb = box_of(mirrored, "bar");
+  CHECK(near(ml.x + ml.w / 2, 1280 - (pl.x + pl.w / 2)) && near(ml.y, pl.y));
+  CHECK(near(mb.x, pb.x) && near(mb.y, pb.y));
 }
 
 TEST(a_cvar_moves_only_the_element_it_names) {

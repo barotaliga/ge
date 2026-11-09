@@ -23,12 +23,16 @@ namespace {
 using gh::Anchor;
 using gh::Kind;
 
-constexpr std::array<std::string_view, kLooks> kLookNames = {"classic", "modern", "compact"};
+constexpr std::array<std::string_view, kLooks> kLookNames = {"classic", "modern",   "compact",
+                                                             "arena",   "tactical", "minimal"};
 constexpr std::array<std::string_view, kAmmoKinds> kAmmoWords = {"SHELLS", "NAILS", "ROCKETS",
                                                                  "CELLS"};
 constexpr std::string_view kFragsWord = "FRAGS";
+constexpr std::string_view kHealthWord = "HEALTH";
+constexpr std::string_view kArmourWord = "ARMOR";
 
-constexpr uint8_t kClassic = 1, kModern = 2, kCompact = 4, kAll = 7;
+constexpr uint8_t kClassic = 1, kModern = 2, kCompact = 4, kArena = 8, kTactical = 16,
+                  kMinimal = 32, kAll = 63;
 
 uint8_t bit(Look l) { return static_cast<uint8_t>(1 << static_cast<int>(l)); }
 
@@ -57,6 +61,7 @@ enum Id : uint8_t {
   keys,
   ammo_icon,
   ammo,
+  stock,
   guns,
   powers,
   ring_health,
@@ -67,6 +72,35 @@ enum Id : uint8_t {
   ring_keys,
   ring_powers,
   ring_guns,
+  arena_face,
+  arena_health,
+  arena_armour,
+  arena_armour_icon,
+  arena_health_bar,
+  arena_armour_bar,
+  arena_keys,
+  arena_ammo,
+  arena_ammo_icon,
+  arena_guns,
+  arena_stock,
+  arena_powers,
+  tac_health,
+  tac_health_bar,
+  tac_armour_bar,
+  tac_armour,
+  tac_armour_icon,
+  tac_keys,
+  tac_ammo,
+  tac_gun,
+  tac_stock,
+  tac_guns,
+  tac_powers,
+  min_health,
+  min_armour,
+  min_armour_icon,
+  min_keys,
+  min_ammo,
+  min_powers,
   frags,
   notify,
   centre,
@@ -84,6 +118,18 @@ gh::StripShape strip(float cw, float ch, float gap = 0) {
   return s;
 }
 
+// A loadout's or a stock's strip: each cell its picture's own size, in lines (`loadout_cells`),
+// the lines aligned at `align` (0 start, 1 centre, 2 end), the gun in hand framed.
+gh::StripShape lined(int align, float gap = 3) {
+  gh::StripShape s = strip(0, 0, gap);
+  s.line_gap = 4, s.align = align, s.text_size = 9;
+  s.frame = ui::hex(0xffd36a);
+  return s;
+}
+
+// The art px a count cell takes: three figures of the strip's type.
+constexpr float kCountW = 20;
+
 std::vector<Row> table() {
   std::vector<Row> t(kIdCount);
   auto put = [&](Id id, gh::ElementSpec spec, uint8_t looks) { t[id] = {spec, looks}; };
@@ -95,12 +141,13 @@ std::vector<Row> table() {
 
   // CLASSIC: the bar in art px, its pieces at their places on it.
   e = {.id = "sbar", .kind = Kind::picture, .anchor = Anchor::bottom, .help = "the status bar"};
-  e.unit = 3, e.snap = true, e.fit = 1;
+  // Flush with the screen's bottom edge, nothing of the world under it; never swapped.
+  e.unit = 3, e.snap = true, e.fit = 1, e.flush = true, e.fixed_side = true;
   put(sbar, e, kClassic);
   auto on_bar = [&](Id id, std::string_view name, Kind k, float x, std::string_view help,
                     std::string_view parent = "sbar") {
     gh::ElementSpec c{.id = name, .kind = k, .x = x, .help = help};
-    c.unit = 3, c.snap = true, c.parent = parent;
+    c.unit = 3, c.snap = true, c.parent = parent, c.fixed_side = true;
     put(id, c, kClassic);
     return c;
   };
@@ -199,57 +246,223 @@ std::vector<Row> table() {
              "the ammunition figure");
   e.scale = 0.62;
   put(ammo, e, kModern);
-  e = {.id = "guns", .kind = Kind::strip, .anchor = Anchor::bottom, .help = "the guns"};
-  e.unit = 2, e.fit = 0.45f, e.strip = strip(0, 16, 3);
-  e.strip.text_at = Anchor::bottom_right, e.strip.text_size = 7, e.strip.text_dy = 7;
-  e.strip.frame = ui::hex(0xffd36a);
+  e = beside("stock", Kind::strip, "ammo_icon", Anchor::top_right, Anchor::bottom_right, 0, -6,
+             "the four ammunition counts over the rounds");
+  e.unit = 1.25f, e.strip = lined(2, 2);
+  put(stock, e, kModern);
+  // The guns in the corner over the ammunition (over the rounds when the stock is off).
+  e = beside("guns", Kind::strip, "stock", Anchor::top_right, Anchor::bottom_right, 0, -6,
+             "the guns over the ammunition");
+  e.unit = 1.5f, e.strip = lined(2);
   put(guns, e, kModern);
   e = {.id = "powers", .kind = Kind::strip, .anchor = Anchor::right, .help = "the powerups"};
   e.unit = 2, e.strip = strip(16, 16, 4);
   e.strip.vertical = true, e.strip.text_at = Anchor::right, e.strip.text_dx = -19;
   put(powers, e, kModern);
 
-  // COMPACT: round the crosshair.
-  e = beside("ring_health", Kind::ring, "crosshair", Anchor::center, Anchor::center, 0, 0,
-             "the health arc");
-  e.ring = {.radius = 64, .width = 5, .from_deg = 215, .to_deg = 325};
+  // COMPACT: an arch at the bottom centre: health's arc rising from the left and armour's from
+  // the right, their figures inside it either side of the weapon in hand, the rounds by the right
+  // foot of the arch, the keys and powerups either side of its top.
+  e = {.id = "ring_health",
+       .kind = Kind::ring,
+       .anchor = Anchor::bottom,
+       .help = "the health arc, the arch's left half"};
+  e.ring = {.radius = 110, .width = 6, .from_deg = 242, .to_deg = 354};
   put(ring_health, e, kCompact);
-  e = beside("ring_armour", Kind::ring, "crosshair", Anchor::center, Anchor::center, 0, 0,
-             "the armour arc");
-  e.ring = {.radius = 64, .width = 5, .from_deg = 35, .to_deg = 145, .reverse = true};
+  e = beside("ring_armour", Kind::ring, "ring_health", Anchor::center, Anchor::center, 0, 0,
+             "the armour arc, the arch's right half");
+  e.ring = {.radius = 110, .width = 6, .from_deg = 6, .to_deg = 118, .reverse = true};
   put(ring_armour, e, kCompact);
-  e = beside("ring_health_value", Kind::readout, "ring_health", Anchor::left, Anchor::right, -4, 0,
-             "the health figure by its arc");
-  e.scale = 0.6;
+  // The figures hang from the armour's arc, which hangs from health's: the arch is one piece.
+  e = beside("ring_health_value", Kind::readout, "ring_armour", Anchor::center,
+             Anchor::bottom_right, -44, -4, "the health figure inside the arch, left");
+  e.scale = 0.75;
   put(ring_health_value, e, kCompact);
-  e = beside("ring_armour_value", Kind::readout, "ring_health", Anchor::right, Anchor::left, 4, 0,
-             "the armour figure by its arc");
-  e.scale = 0.6;
+  e = beside("ring_armour_value", Kind::readout, "ring_armour", Anchor::center, Anchor::bottom_left,
+             44, -4, "the armour figure inside the arch, right");
+  e.scale = 0.75;
   put(ring_armour_value, e, kCompact);
-  e = beside("ring_ammo", Kind::readout, "ring_health", Anchor::bottom, Anchor::top, 0, 6,
-             "the ammunition under the crosshair");
-  e.scale = 0.6;
+  e = beside("ring_ammo", Kind::readout, "ring_armour", Anchor::bottom_right, Anchor::bottom_left,
+             6, 0, "the rounds by the arch's right foot");
+  e.scale = 0.75;
   put(ring_ammo, e, kCompact);
-  e = beside("ring_keys", Kind::strip, "ring_health", Anchor::top, Anchor::bottom, 0, -6,
-             "the keys over the crosshair");
+  e = beside("ring_keys", Kind::strip, "ring_armour", Anchor::top, Anchor::bottom_right, -4, -2,
+             "the keys over the arch, left of its top");
   e.unit = 1.5f, e.strip = strip(16, 16, 2);
   put(ring_keys, e, kCompact);
-  e = beside("ring_powers", Kind::strip, "ring_ammo", Anchor::bottom, Anchor::top, 0, 4,
-             "the powerups under the ammunition");
-  // A child takes its parent's scale: undo the ammunition's 0.6 so the icons match the keys.
-  e.unit = 1.5f, e.scale = 1 / 0.6, e.strip = strip(16, 16, 12);
+  e = beside("ring_powers", Kind::strip, "ring_armour", Anchor::top, Anchor::bottom_left, 4, -2,
+             "the powerups over the arch, right of its top");
+  e.unit = 1.5f, e.strip = strip(16, 16, 12);
   e.strip.text_at = Anchor::right, e.strip.text_dx = 9;
   put(ring_powers, e, kCompact);
   e = {.id = "ring_guns",
        .kind = Kind::strip,
-       .anchor = Anchor::bottom,
-       .help = "the guns, small, along the bottom"};
-  e.unit = 1.5f, e.strip = strip(0, 16, 3);
-  e.strip.frame = ui::hex(0xffd36a);
+       .anchor = Anchor::right,
+       .help = "the guns, small, on the right edge"};
+  e.unit = 1.5f, e.fit = 0.4f, e.strip = lined(2);
   put(ring_guns, e, kCompact);
 
+  // ARENA: the competitive look. Health and armour big either side of the portrait at the bottom
+  // centre, each with a thin bar over it; the rounds under the crosshair; the guns and the four
+  // ammunition counts down the right edge; the powerups' seconds over the top.
+  e = {.id = "arena_face",
+       .kind = Kind::picture,
+       .anchor = Anchor::bottom,
+       .help = "the arena look's portrait"};
+  e.unit = 2.5f;
+  put(arena_face, e, kArena);
+  auto by_face = [&](Id id, std::string_view name, Kind k, std::string_view parent, Anchor at,
+                     Anchor attach, float x, float y, float unit, std::string_view help) {
+    gh::ElementSpec c = beside(name, k, parent, at, attach, x, y, help);
+    c.unit = unit;
+    put(id, c, kArena);
+    return c;
+  };
+  // Each figure as wide as its digits (no empty cells), so it hugs the portrait.
+  e = by_face(arena_health, "arena_health", Kind::digits, "arena_face", Anchor::left, Anchor::right,
+              -4, 0, 2.5f, "the arena look's health figure");
+  e.digit_cells = 0;
+  put(arena_health, e, kArena);
+  e = by_face(arena_armour, "arena_armour", Kind::digits, "arena_face", Anchor::right, Anchor::left,
+              4, 0, 2.5f, "the arena look's armour figure");
+  e.digit_cells = 0;
+  put(arena_armour, e, kArena);
+  by_face(arena_armour_icon, "arena_armour_icon", Kind::picture, "arena_armour", Anchor::right,
+          Anchor::left, 3, 0, 2.5f, "the arena look's armour icon");
+  // The bars start at the portrait's side and run outwards, clear of the keys over it.
+  e = by_face(arena_health_bar, "arena_health_bar", Kind::bar, "arena_health", Anchor::top_right,
+              Anchor::bottom_right, 0, -3, 1, "the arena look's health bar");
+  e.bar = {.w = 170, .h = 6};
+  put(arena_health_bar, e, kArena);
+  e = by_face(arena_armour_bar, "arena_armour_bar", Kind::bar, "arena_armour", Anchor::top_left,
+              Anchor::bottom_left, 0, -3, 1, "the arena look's armour bar");
+  e.bar = {.w = 170, .h = 6};
+  put(arena_armour_bar, e, kArena);
+  e = by_face(arena_keys, "arena_keys", Kind::strip, "arena_face", Anchor::top, Anchor::bottom, 0,
+              -4, 2, "the arena look's keys over the portrait");
+  e.strip = strip(16, 16, 2);
+  put(arena_keys, e, kArena);
+  e = by_face(arena_ammo, "arena_ammo", Kind::digits, "crosshair", Anchor::bottom, Anchor::top, 0,
+              14, 1, "the arena look's rounds under the crosshair");
+  e.alpha = 0.85, e.digit_cells = 0;
+  put(arena_ammo, e, kArena);
+  e = by_face(arena_ammo_icon, "arena_ammo_icon", Kind::picture, "arena_ammo", Anchor::left,
+              Anchor::right, -3, 0, 1, "the arena look's ammunition icon by its rounds");
+  put(arena_ammo_icon, e, kArena);
+  e = {.id = "arena_guns",
+       .kind = Kind::strip,
+       .anchor = Anchor::right,
+       .help = "the arena look's guns down the right edge"};
+  e.unit = 1.5f, e.strip = lined(2);
+  put(arena_guns, e, kArena);
+  e = by_face(arena_stock, "arena_stock", Kind::strip, "arena_guns", Anchor::bottom_right,
+              Anchor::top_right, 0, 8, 1.25f, "the arena look's four ammunition counts");
+  e.strip = lined(2, 2);
+  put(arena_stock, e, kArena);
+  e = {.id = "arena_powers",
+       .kind = Kind::strip,
+       .anchor = Anchor::top,
+       .help = "the arena look's powerups and their seconds"};
+  e.unit = 2, e.strip = strip(16, 16, 22);
+  e.strip.text_at = Anchor::right, e.strip.text_dx = 20, e.strip.text_size = 9;
+  put(arena_powers, e, kArena);
+
+  // TACTICAL: the hero-shooter look. Armour as a segmented shield bar over the health bar,
+  // bottom left, health's figure beside them; the rounds big bottom right with the gun in hand
+  // beside them, the four ammunition kinds over them and the guns as slots over those; the
+  // powerups bottom centre.
+  e = {.id = "tac_health",
+       .kind = Kind::big,
+       .anchor = Anchor::bottom_left,
+       .help = "the tactical look's health figure"};
+  e.scale = 0.7;
+  put(tac_health, e, kTactical);
+  auto tac = [&](Id id, gh::ElementSpec c) {
+    put(id, c, kTactical);
+    return c;
+  };
+  e = beside("tac_health_bar", Kind::bar, "tac_health", Anchor::bottom_right, Anchor::bottom_left,
+             14, -12, "the tactical look's health bar");
+  e.bar = {.ticks = 4, .w = 260, .h = 12};
+  tac(tac_health_bar, e);
+  e = beside("tac_armour_bar", Kind::bar, "tac_health_bar", Anchor::top_left, Anchor::bottom_left,
+             0, -5, "the tactical look's armour as a shield over the health bar");
+  e.bar = {.ticks = 4, .w = 260, .h = 7};
+  tac(tac_armour_bar, e);
+  e = beside("tac_armour_icon", Kind::picture, "tac_armour_bar", Anchor::top_left,
+             Anchor::bottom_left, 0, -6, "the tactical look's armour icon");
+  e.unit = 1.25f;
+  tac(tac_armour_icon, e);
+  e = beside("tac_armour", Kind::readout, "tac_armour_bar", Anchor::top_left, Anchor::bottom_left,
+             38, -4, "the tactical look's armour figure");
+  e.scale = 0.8;
+  tac(tac_armour, e);
+  e = beside("tac_keys", Kind::strip, "tac_armour_bar", Anchor::top_right, Anchor::bottom_right, 0,
+             -6, "the tactical look's keys");
+  e.unit = 1.5f, e.strip = strip(16, 16, 3);
+  tac(tac_keys, e);
+  e = {.id = "tac_ammo",
+       .kind = Kind::big,
+       .anchor = Anchor::bottom_right,
+       .help = "the tactical look's rounds"};
+  e.scale = 0.85;
+  tac(tac_ammo, e);
+  e = beside("tac_gun", Kind::picture, "tac_ammo", Anchor::left, Anchor::right, -14, 0,
+             "the tactical look's gun in hand");
+  e.unit = 3;
+  tac(tac_gun, e);
+  e = beside("tac_stock", Kind::strip, "tac_ammo", Anchor::top_right, Anchor::bottom_right, 0, -6,
+             "the tactical look's four ammunition kinds");
+  e.unit = 1.25f, e.strip = lined(2, 2);
+  tac(tac_stock, e);
+  e = beside("tac_guns", Kind::strip, "tac_stock", Anchor::top_right, Anchor::bottom_right, 0, -6,
+             "the tactical look's guns as slots");
+  e.unit = 1.75f, e.strip = lined(2);
+  tac(tac_guns, e);
+  e = {.id = "tac_powers",
+       .kind = Kind::strip,
+       .anchor = Anchor::bottom,
+       .help = "the tactical look's powerups and their seconds"};
+  e.unit = 2, e.strip = strip(16, 16, 14);
+  e.strip.text_at = Anchor::bottom_right, e.strip.text_dy = 8, e.strip.text_size = 8;
+  tac(tac_powers, e);
+
+  // MINIMAL: figures only, small and a little faded, in the two bottom corners; the keys and the
+  // powerups only while held. No guns, no portrait, no frags (the scoreboard has them).
+  e = {.id = "min_health",
+       .kind = Kind::readout,
+       .anchor = Anchor::bottom_left,
+       .alpha = 0.9,
+       .help = "the minimal look's health"};
+  e.scale = 0.9;
+  put(min_health, e, kMinimal);
+  e = beside("min_armour", Kind::readout, "min_health", Anchor::right, Anchor::left, 22, 0,
+             "the minimal look's armour");
+  put(min_armour, e, kMinimal);
+  e = beside("min_armour_icon", Kind::picture, "min_armour", Anchor::right, Anchor::left, 4, 0,
+             "the minimal look's armour type");
+  e.unit = 1.25f, e.scale = 1 / 0.9;
+  put(min_armour_icon, e, kMinimal);
+  e = beside("min_keys", Kind::strip, "min_health", Anchor::top_left, Anchor::bottom_left, 0, -8,
+             "the minimal look's keys");
+  // A child takes its parent's scale: undo the figure's 0.9 so the icons are the keys' own size.
+  e.unit = 2, e.scale = 1 / 0.9, e.strip = strip(16, 16, 3);
+  put(min_keys, e, kMinimal);
+  e = {.id = "min_ammo",
+       .kind = Kind::readout,
+       .anchor = Anchor::bottom_right,
+       .alpha = 0.9,
+       .help = "the minimal look's rounds"};
+  e.scale = 0.9;
+  put(min_ammo, e, kMinimal);
+  e = beside("min_powers", Kind::strip, "min_ammo", Anchor::top_right, Anchor::bottom_right, 0, -8,
+             "the minimal look's powerups and their seconds");
+  e.unit = 2, e.scale = 1 / 0.9, e.strip = strip(16, 16, 22);
+  e.strip.text_at = Anchor::right, e.strip.text_dx = -20, e.strip.text_size = 9;
+  put(min_powers, e, kMinimal);
+
   e = {.id = "frags", .kind = Kind::readout, .anchor = Anchor::top_right, .help = "the frags"};
-  put(frags, e, kModern | kCompact);
+  put(frags, e, kModern | kCompact | kArena | kTactical);
   e = {.id = "notify",
        .kind = Kind::feed,
        .anchor = Anchor::top_left,
@@ -319,6 +532,93 @@ gh::Cell cell_of(const ui::Image* image, bool show = true) {
 
 std::string seconds(double s) { return std::to_string(static_cast<int>(s + 0.999)); }
 
+// The guns by the ammunition they fire, two to a kind but the beam gun alone (its picture is the
+// width of two): the 2-2-2-1 lines.
+constexpr std::array<std::array<int, 2>, kAmmoKinds> kGunsOf = {{{0, 1}, {2, 3}, {4, 5}, {6, -1}}};
+
+// A count cell: three figures' width, the count against the picture beside it (its right edge;
+// a mirrored strip flips it to the left).
+gh::Cell count_cell(int value, ui::Color ink, const gh::Style& st, bool low) {
+  gh::Cell c;
+  c.w = kCountW;
+  c.h = 8;
+  c.text = std::to_string(std::min(value, 999));
+  c.text_color = low ? st.bad : ink;
+  c.text_at = static_cast<int>(Anchor::right);
+  return c;
+}
+
+// THE LOADOUT: the guns as a strip's cells, by `g` (layout.hpp's hud_guns): a row (or a column),
+// two to a line by ammunition (pairs), or each line led by its ammunition's count and icon. The
+// one in hand lit and framed (a new one flashing); one not owned dim, or an empty slot that keeps
+// its place when `all_guns` is off. An ammunition with no gun of its own owned keeps its count
+// only while `all_ammo` is on.
+void loadout_cells(gh::Content& c, Grouping g, bool column, const Status& s, const HudArt& art,
+                   bool all_guns, bool all_ammo, ui::Color ink, const gh::Style& st) {
+  c.face = &art.count_face;
+  c.cells.clear();
+  auto gun = [&](int k, bool breaks) {
+    const auto w = static_cast<Weapon>(k + 1);
+    gh::Cell cell;
+    cell.image = gun_picture(s, art, k);
+    cell.framed = s.weapon == w;
+    cell.alpha = s.has(w) ? 1.0f : 0.25f;
+    cell.show = s.has(w) || all_guns;
+    cell.breaks = breaks;
+    c.cells.push_back(cell);
+  };
+  if (g == Grouping::row) {
+    for (int k = 0; k < kGuns; ++k) gun(k, column && k > 0);
+    return;
+  }
+  const Ammo held = ammo_of(s.weapon);
+  for (size_t a = 0; a < kAmmoKinds; ++a) {
+    bool first = true;
+    if (g == Grouping::ammo) {
+      const bool owned = s.has(static_cast<Weapon>(kGunsOf[a][0] + 1)) ||
+                         (kGunsOf[a][1] >= 0 && s.has(static_cast<Weapon>(kGunsOf[a][1] + 1)));
+      const bool shown = all_ammo || owned || static_cast<size_t>(held) == a;
+      gh::Cell n = count_cell(s.ammo[a], ink, st, s.ammo[a] <= 10);
+      n.show = shown;
+      n.breaks = a > 0;
+      c.cells.push_back(n);
+      gh::Cell icon;
+      icon.image = &art.ammo[a];
+      icon.show = shown;
+      icon.alpha = s.ammo[a] > 0 ? 1.0f : 0.35f;
+      c.cells.push_back(icon);
+      first = false;
+    }
+    for (const int k : kGunsOf[a]) {
+      if (k < 0) continue;
+      gun(k, first && a > 0);
+      first = false;
+    }
+  }
+}
+
+// THE STOCK: the four ammunition counts, each a count and its icon (the kind in hand framed): all
+// four while `all_ammo` is on, else the kind in hand alone. In a `column` one to a line, else two
+// (shells and nails over rockets and cells: narrow enough for an upright phone).
+void stock_cells(gh::Content& c, bool column, const Status& s, const HudArt& art, bool all_ammo,
+                 ui::Color ink, const gh::Style& st) {
+  c.face = &art.count_face;
+  c.cells.clear();
+  const Ammo held = ammo_of(s.weapon);
+  for (size_t a = 0; a < kAmmoKinds; ++a) {
+    if (!all_ammo && static_cast<size_t>(held) != a) continue;
+    gh::Cell n = count_cell(s.ammo[a], ink, st, s.ammo[a] <= 10);
+    const size_t shown_before = c.cells.size() / 2;
+    n.breaks = shown_before > 0 && (column || shown_before % 2 == 0);
+    c.cells.push_back(n);
+    gh::Cell icon;
+    icon.image = &art.ammo[a];
+    icon.framed = static_cast<size_t>(held) == a;
+    icon.alpha = s.ammo[a] > 0 ? 1.0f : 0.35f;
+    c.cells.push_back(icon);
+  }
+}
+
 }  // namespace
 
 Ammo ammo_of(Weapon w) {
@@ -341,6 +641,18 @@ Ammo ammo_of(Weapon w) {
 }
 
 std::string_view look_name(Look l) { return kLookNames[static_cast<size_t>(l)]; }
+
+namespace {
+constexpr std::array<std::string_view, 3> kGroupingNames = {"ammo", "pairs", "row"};
+}  // namespace
+
+std::string_view grouping_name(Grouping g) { return kGroupingNames[static_cast<size_t>(g)]; }
+
+Grouping grouping_from(std::string_view word, Grouping fallback) {
+  for (size_t i = 0; i < kGroupingNames.size(); ++i)
+    if (kGroupingNames[i] == word) return static_cast<Grouping>(i);
+  return fallback;
+}
 
 Look look_from(std::string_view word) {
   for (size_t i = 0; i < kLookNames.size(); ++i)
@@ -369,12 +681,15 @@ Hud make_hud() {
 }
 
 void add_cvars(ge::console::Console& con, Hud& hud) {
-  con.cvars().bind({.name = "hud_style",
-                    .fallback = std::string(look_name(Look::classic)),
-                    .help = "the HUD's look: classic (the status bar), modern (the corners) or "
-                            "compact (round the crosshair)",
-                    .kind = ge::console::CvarKind::text},
-                   &hud.look);
+  con.cvars().bind(
+      {.name = "hud_style",
+       .fallback = std::string(look_name(Look::classic)),
+       .help = "the HUD's look: classic (the status bar), modern (the corners), "
+               "compact (an arch at the bottom centre), arena (big figures bottom centre, "
+               "guns and ammunition down the right), tactical (shield over health "
+               "bottom left, the loadout bottom right) or minimal (small figures)",
+       .kind = ge::console::CvarKind::text},
+      &hud.look);
   con.cvars().bind({.name = "viewsize",
                     .fallback = "100",
                     .help = "the status bars: 100 every one, 110 the classic look's status bar "
@@ -384,12 +699,41 @@ void add_cvars(ge::console::Console& con, Hud& hud) {
                     .min = 100,
                     .max = 120},
                    &hud.viewsize);
+  con.cvars().bind({.name = "hud_sbar",
+                    .fallback = "1",
+                    .help = "the classic look's status bar and inventory bar panels (0: their "
+                            "pieces alone over the world)",
+                    .kind = ge::console::CvarKind::boolean},
+                   &hud.sbar);
+  con.cvars().bind({.name = "hud_swap",
+                    .fallback = "0",
+                    .help = "every look but the classic one on the other side of the screen",
+                    .kind = ge::console::CvarKind::boolean},
+                   &hud.swap);
+  con.cvars().bind({.name = "hud_guns",
+                    .fallback = "look",
+                    .help = "the guns: ammo (two to a line by ammunition, each line led by its "
+                            "count), pairs (the same lines, the counts apart), row (one row); "
+                            "look: each look's own",
+                    .kind = ge::console::CvarKind::text},
+                   &hud.guns);
+  con.cvars().bind({.name = "hud_guns_all",
+                    .fallback = "1",
+                    .help = "every gun, those not owned dim (0: the guns owned alone)",
+                    .kind = ge::console::CvarKind::boolean},
+                   &hud.guns_all);
+  con.cvars().bind({.name = "hud_ammo_all",
+                    .fallback = "1",
+                    .help = "all four ammunition counts (0: the ammunition in hand alone)",
+                    .kind = ge::console::CvarKind::boolean},
+                   &hud.ammo_all);
   gh::add_hud_cvars(con, hud.layout);
 }
 
 void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   const gh::Style st = hud_style();
   const Look look = look_from(hud.look);
+  hud.layout.mirror = hud.swap != 0;
   const uint8_t mine = bit(look);
   gh::Layout& L = hud.layout;
   for (size_t i = 0; i < L.size(); ++i) {
@@ -505,24 +849,19 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   at(ammo).caption = held == Ammo::none ? "" : std::string(kAmmoWords[static_cast<size_t>(held)]);
   at(ammo).color = low_or(low_ammo && held != Ammo::none, st.ink, st);
   at(ammo).on &= held != Ammo::none;
-  auto gun_cells = [&](gh::Content& c, bool counts) {
-    c.face = &art.count_face;
-    c.cells.assign(kGuns, {});
-    for (int k = 0; k < kGuns; ++k) {
-      const auto w = static_cast<Weapon>(k + 1);
-      gh::Cell& cell = c.cells[static_cast<size_t>(k)];
-      const bool owned = s.has(w);
-      cell.image =
-          s.weapon == w ? &art.gun_lit[static_cast<size_t>(k)] : &art.gun[static_cast<size_t>(k)];
-      cell.alpha = owned ? 1.0f : 0.2f;
-      cell.framed = s.weapon == w;
-      if (counts && owned) {
-        cell.text = std::to_string(s.ammo_for(w));
-        cell.text_color = s.ammo_for(w) <= 10 ? st.bad : count_ink;
-      }
-    }
+  // The loadouts and the stocks, by each look's grouping unless hud_guns names one.
+  auto grouping = [&](Grouping own) { return grouping_from(hud.guns, own); };
+  const bool all_guns = hud.guns_all != 0, all_ammo = hud.ammo_all != 0;
+  auto loadout = [&](Id id, Grouping own, bool column) {
+    loadout_cells(at(id), grouping(own), column, s, art, all_guns, all_ammo, count_ink, st);
   };
-  gun_cells(at(guns), true);
+  // A stock shows unless its look's loadout already leads each line with the counts.
+  auto stock_of = [&](Id id, Grouping own, bool column) {
+    stock_cells(at(id), column, s, art, all_ammo, count_ink, st);
+    at(id).on &= grouping(own) != Grouping::ammo && !at(id).cells.empty();
+  };
+  loadout(guns, Grouping::pairs, false);
+  stock_of(stock, Grouping::pairs, false);
   auto power_cells = [&](gh::Content& c) {
     c.face = &art.count_face;
     c.cells.clear();
@@ -556,10 +895,80 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
   at(ring_ammo).color = low_or(low_ammo && held != Ammo::none, st.ink, st);
   key_cells(at(ring_keys));
   power_cells(at(ring_powers));
-  gun_cells(at(ring_guns), false);
+  loadout(ring_guns, Grouping::pairs, false);
   for (const Id id :
        {ring_health, ring_armour, ring_health_value, ring_armour_value, ring_ammo, ring_keys})
     at(id).on &= !s.dead;
+
+  // hud_sbar 0: the classic look's pieces with neither bar's panel under them.
+  if (hud.sbar == 0) at(sbar).color = at(ibar).color = ui::Color{1, 1, 1, 0};
+
+  // ARENA.
+  at(arena_face).image = face_of(s, art);
+  at(arena_health).sheet = &art.sheet;
+  at(arena_health).value = std::to_string(s.health);
+  at(arena_health).alt = low_health;
+  at(arena_armour).sheet = &art.sheet;
+  at(arena_armour).value = armour_figure;
+  at(arena_armour).alt = !shield && low_armour;
+  at(arena_armour_icon).image = armour_pic != nullptr ? armour_pic : &art.armour[0];
+  at(arena_armour_icon).color =
+      armour_pic != nullptr ? ui::Color{1, 1, 1, 1} : ui::Color{1, 1, 1, 0.35f};
+  at(arena_health_bar).level = at(health_bar).level;
+  at(arena_health_bar).color = at(health_bar).color;
+  at(arena_armour_bar).level = at(armour_bar).level;
+  at(arena_armour_bar).color = at(armour_bar).color;
+  key_cells(at(arena_keys));
+  at(arena_ammo).sheet = &art.sheet;
+  at(arena_ammo).value = std::to_string(rounds);
+  at(arena_ammo).alt = low_ammo;
+  at(arena_ammo).on &= held != Ammo::none && !s.dead;
+  at(arena_ammo_icon).image = ammo_pic;
+  at(arena_ammo_icon).on &= ammo_pic != nullptr && !s.dead;
+  loadout(arena_guns, Grouping::ammo, true);
+  stock_of(arena_stock, Grouping::ammo, true);
+  power_cells(at(arena_powers));
+
+  // TACTICAL.
+  at(tac_health).value = std::to_string(s.health);
+  at(tac_health).color = low_or(low_health, st.ink, st);
+  at(tac_health_bar).level = at(health_bar).level;
+  at(tac_health_bar).color = at(health_bar).color;
+  at(tac_armour_bar).level = at(armour_bar).level;
+  at(tac_armour_bar).color = at(armour_bar).color;
+  at(tac_armour_icon).image = at(armour_icon).image;
+  at(tac_armour_icon).color = at(armour_icon).color;
+  at(tac_armour).value = armour_figure;
+  at(tac_armour).color = !shield && low_armour ? st.bad : armour_colour(s.armour_class);
+  key_cells(at(tac_keys));
+  at(tac_ammo).value = held == Ammo::none ? "-" : std::to_string(rounds);
+  at(tac_ammo).caption = at(ammo).caption;
+  at(tac_ammo).color = at(ammo).color;
+  at(tac_gun).image =
+      s.weapon == Weapon::melee ? nullptr : &art.gun_lit[static_cast<size_t>(s.weapon) - 1];
+  at(tac_gun).on &= s.weapon != Weapon::melee;
+  stock_of(tac_stock, Grouping::pairs, false);
+  loadout(tac_guns, Grouping::pairs, false);
+  power_cells(at(tac_powers));
+
+  // MINIMAL.
+  at(min_health).value = std::to_string(s.health);
+  at(min_health).caption = std::string(kHealthWord);
+  at(min_health).color = low_or(low_health, st.ink, st);
+  at(min_armour).value = armour_figure;
+  at(min_armour).caption = std::string(kArmourWord);
+  at(min_armour).color = !shield && low_armour ? st.bad
+                         : s.armour_class == ArmourClass::none && !shield
+                             ? ui::Color{1, 1, 1, 0.5f}
+                             : armour_colour(s.armour_class);
+  at(min_armour_icon).image = at(armour_icon).image;
+  at(min_armour_icon).color = at(armour_icon).color;
+  key_cells(at(min_keys));
+  at(min_ammo).value = at(ammo).value;
+  at(min_ammo).caption = at(ammo).caption;
+  at(min_ammo).color = at(ammo).color;
+  at(min_ammo).on &= held != Ammo::none;
+  power_cells(at(min_powers));
 
   at(frags).value = std::to_string(s.frags);
   at(frags).caption = std::string(kFragsWord);
@@ -577,6 +986,16 @@ void fill_hud(Hud& hud, const Status& s, const HudArt& art) {
 
   at(centre).value = hud.centre;
   at(centre).on &= !hud.centre.empty() && s.t < hud.centre_until;
+}
+
+float status_lift(const Hud& hud, int height) {
+  if (hud.sbar == 0 || height <= 0) return 0;
+  const gh::Layout& L = hud.layout;
+  const gh::Element& bar = L[sbar];
+  if (!bar.shown) return 0;
+  float top = bar.drawn.y;
+  if (L[ibar].shown) top = std::min(top, L[ibar].drawn.y);
+  return std::clamp((static_cast<float>(height) - top) / static_cast<float>(height), 0.0f, 1.0f);
 }
 
 }  // namespace shooters_edge::hud
