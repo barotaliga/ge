@@ -218,6 +218,7 @@ ModelsRead read_models(const SearchPath& files, std::span<const uint8_t> palette
       k.frames = models::frame_groups(model);
       k.skins = models::skin_groups(model);
       k.spin = (model.flags & kSpin) != 0;
+      k.flags = model.flags;
       k.synced = model.synced;
       bool any_stand_in = false;
       for (size_t s = 0; s < std::max<size_t>(1, model.skins.size()); s++) {
