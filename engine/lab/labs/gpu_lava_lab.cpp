@@ -101,6 +101,8 @@ void run(gl::Lab& lab) {
     ls::placeholders(
         lab, {"day", "dusk", "night", "night-walls-off", "night-walls", "cover", "close", "flow",
               "steady", "shimmer", "crust-broken", "from-below", "looks"});
+    // The steady view's film by the same name (a file's name is in the digest).
+    lab.attach("steady.gif", {}, Det::measured);
     glow_table(lab);
     ls::checked(lab, 0, 0);
     return;
@@ -283,6 +285,8 @@ void run(gl::Lab& lab) {
               {{"flow", "0.6 m/s"}}},
              strip(pics, labels, 2), Det::measured);
   }
+  // The steady view's film, attached after the last shot as the no-GPU path attaches its own.
+  std::vector<gl::Picture> film;
   // THE SURFACE OVER TIME: a still pool and a flowing one straight down from 6 m at dusk, drawn
   // every 0.2 s for 20 s, and the share of each frame's pixels that jumped (moved by more than a
   // sixth of their range) since the frame before. The crust only ever changes by degrees: a plate
@@ -295,7 +299,6 @@ void run(gl::Lab& lab) {
     constexpr int kFrames = 101;
     constexpr double kStep = 0.2;
     std::vector<gl::Trace> traces;
-    std::vector<gl::Picture> film;
     double worst = 0;
     for (const double flow : {0.0, 0.6}) {
       gr::LiquidLook l = look_of("lava");
@@ -366,7 +369,6 @@ void run(gl::Lab& lab) {
     line.rules = {2.0};
     line.spikes = false;
     const gl::Chart chart = gl::line_chart(line);
-    lab.attach("steady.gif", gl::encode_gif_frames(film, 20), Det::measured);
     lab.shot(
         {"steady",
          chart.title,
@@ -514,6 +516,8 @@ void run(gl::Lab& lab) {
               {}},
              strip(pics, labels, 2), Det::measured);
   }
+  lab.attach("steady.gif", film.empty() ? std::vector<uint8_t>{} : gl::encode_gif_frames(film, 20),
+             Det::measured);
   glow_table(lab);
   int errors = 0, late = 0;
   for (const auto& dev : devices) {

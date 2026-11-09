@@ -18,3 +18,7 @@ Cost: a normal from two more full evaluations a footprint away triples the surfa
 `dpdx`/`dpdy` of the height and of the plan point, solved for the plan gradient, is the same at
 that scale for one evaluation (lava 35.5 -> 18.9 ms in software). Time a pass by drawing the
 same frames without it.
+
+A file a GPU lab attaches is in its digest by name, even when measured, and in order: the no-GPU
+path (`ls::placeholders`) must attach the same name at the same place, so attach after the last
+shot in both paths. Check `GE_GPU_OFF=1 labs <id> --smoke` gives the GPU run's digest.
