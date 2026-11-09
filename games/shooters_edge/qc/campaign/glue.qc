@@ -18,6 +18,8 @@ string(string class_name, string fallback) name_of = { return fallback; };
 // A loaded game's own words: the form has no local info, so none (the mod's own words always).
 string(string key, string a, string b, string c, string d) game_words = { return ""; };
 float() game_quiet = { return FALSE; };
+// A blast's pellets on one body land as one blow, as the classic single-player game has them.
+float() pellets_as_one_blow = { return TRUE; };
 string(entity targ, entity attacker) death_words = { return ""; };
 
 void(vector org, float set) effect_send = {};

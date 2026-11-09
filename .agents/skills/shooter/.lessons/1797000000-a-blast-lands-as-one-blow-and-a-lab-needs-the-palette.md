@@ -1,13 +1,17 @@
 ---
 title: A blast's pellets land as one blow; a lab's effects need the pack's palette and the drawn models
 date: 2026-11-09
-scope: games/shooters_edge/qc/common/weapons.qc, games/shooters_edge/client/world_fx.cpp, games/shooters_edge/labs/gpu_se_deaths_lab.cpp
+scope: games/shooters_edge/qc/common/weapons.qc, games/shooters_edge/bots/companion.cpp, games/shooters_edge/client/world_fx.cpp, games/shooters_edge/labs/gpu_se_deaths_lab.cpp
 concepts: [gib, gibs, blood, pellets, multi-damage, quad, super-shotgun, blood-trail, model-flags, palette, fx-state, se-deaths]
 ---
 
 Our campaign never gibbed from the quad and the double shotgun: each pellet was its own blow, so
 the first two killed the body and the rest struck a corpse (`damage` returns on health 0 or
-below). The classic sums a blast's pellets on one body into one blow; `fire_pellets_far` now does.
+below). The classic sums a blast's pellets on one body into one blow; `fire_pellets_far` now does,
+for the campaign only (`pellets_as_one_blow()` in each glue.qc): the arena's matches and goldens
+record a blow a pellet. Gibbing moves the campaign's random stream, so the coop goldens move with
+it, and that showed a companion out on a bored hop taking its human moment while the leader walked
+off, past its catch-up: boredom now breaks at once when the leader moves and it is past `kEscortFar`.
 
 Three things a lab of the window's effects must set up as `main.cpp` does, or it measures the
 wrong thing: `FxState::palette` (without it every classic speck is a grey of its index, and the

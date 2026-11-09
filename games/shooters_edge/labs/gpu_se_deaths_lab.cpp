@@ -38,6 +38,7 @@
 #include "brush/map.hpp"
 #include "brush/write.hpp"
 #include "core/libm/libm.hpp"
+#include "core/math.hpp"
 #include "core/num_text.hpp"
 #include "gpu/device.hpp"
 #include "gpu/target.hpp"
@@ -208,7 +209,7 @@ void shoot(gl::Lab& lab, const Setup& s, Shot& shot) {
     lab.note("se-deaths: " + s.map + " has no " + shot.kind + " in the open: skipped");
     return;
   }
-  const float range = std::hypot(stand.x - at.x, stand.y - at.y);
+  const float range = static_cast<float>(ge::core::hypot(stand.x - at.x, stand.y - at.y));
   shot.found = true;
   // The player: unseen, unhurt, the gun the shot needs, the quad for the gibbing. `flags` and
   // `health` are the loop's (the server mirrors them into the program each call): set there.
@@ -228,7 +229,7 @@ void shoot(gl::Lab& lab, const Setup& s, Shot& shot) {
                                           3.14159265358979);  // down positive
   l.view = {pitch, yaw, 0};
   sh::MoveCmd cmd;
-  cmd.msec = static_cast<uint8_t>(tic * 1000 + 0.5);
+  cmd.msec = static_cast<uint8_t>(std::lround(tic * 1000));
   cmd.angles = {pitch, yaw, 0};
   cmd.impulse = shot.gib ? 3 : 2;  // the gun
   cl::ViewState shown;
@@ -277,7 +278,9 @@ void shoot(gl::Lab& lab, const Setup& s, Shot& shot) {
       const sh::Edict& p = l.server->sv.edicts[size_t(e)];
       r.pieces++;
       r.piece_top = std::max(r.piece_top, p.origin.z - body.z);
-      r.piece_far = std::max(r.piece_far, std::hypot(p.origin.x - body.x, p.origin.y - body.y));
+      r.piece_far =
+          std::max(r.piece_far,
+                   static_cast<float>(ge::core::hypot(p.origin.x - body.x, p.origin.y - body.y)));
     }
     for (const ge::render::Particle& p : fx.births) {
       r.all_specks++;
@@ -369,7 +372,7 @@ void report(gl::Lab& lab, const Shot& shot, const std::string& map) {
     sheet.push_back(gl::shrink(shot.film[i], 320));
     names.push_back(ge::core::num::to_fixed(double(i) / 30.0, 2) + " s");
   }
-  for (const gl::Picture& p : shot.film) gif.push_back(gl::shrink(p, 360));
+  for (const gl::Picture& p : shot.film) gif.push_back(gl::shrink(p, std::min(p.width, 960)));
   lab.shot({id + ".sheet",
             id,
             shot.gib ? "The quad and the double shotgun at a " + shot.kind +
@@ -438,6 +441,10 @@ void run(gl::Lab& lab) {
   s.map = folder.empty() ? "halls" : lab.arg("map");
   s.range = static_cast<float>(lab.arg_num("range"));
   s.seconds = lab.arg_num("seconds");
+  if (const auto size = lab.arg_nums("size"); size.size() == 2 && size[0] >= 64 && size[1] >= 64) {
+    s.w = static_cast<uint32_t>(size[0]);
+    s.h = static_cast<uint32_t>(size[1]);
+  }
   std::unique_ptr<ge::gpu::Device> device;
   if (!folder.empty()) {
     device = ge::gpu::create_device({.label = "se-deaths", .validation = 1});
@@ -483,6 +490,7 @@ const gl::LabSpec kSpec{
         {"kinds", "soldier,dog", "with --game: the monsters by model name (soldier, dog, ogre...)"},
         {"range", "192", "units from the monster the player stands"},
         {"seconds", "2.5", "seconds read (and filmed) after the shot"},
+        {"size", "480,300", "with --game: the film's width and height in pixels"},
         {"cvars", "", "with --game: picture cvars (r_look ...)"},
     },
     "--seconds=1.5",
