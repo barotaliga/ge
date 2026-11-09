@@ -7,12 +7,16 @@
 //   the player took (Listen::blows) kicks the view away from where it came from, by its size
 //   (armour and blood together, a full kick at `kFullBlow`) up to `kHitKickDeg`; the program's
 //   punch (its recoil kick, decaying on the server) is added to the view's angles, never the aim.
+//   With `ViewState::lerp` (`r_lerpmove`) the eye's place is drawn one server frame behind,
+//   between the last two states (as the models are, model_lerp.hpp), so moving never shudders
+//   when the server's 72 or 77 frames a second fall unevenly on the display's; the look is the
+//   mouse's every frame, never behind. A forced view or a move over `kEyeSnapUnits` cuts.
 // - THE MISSILES in flight and the BLASTS (where the mod's explosions went off,
 //   Listen::explosions, kept for `kBlastS`): what the effects (world_fx.hpp) are thrown from.
 //
 // ge:summary The player's view frame by frame: the first-person eyes, the missiles and blasts
 // ge:keywords present view-state frame_view first-person eyes landing-dip teleport missiles
-// ge:keywords rockets blasts damage-kick hit-kick punchangle punch blows
+// ge:keywords rockets blasts damage-kick hit-kick punchangle punch blows eye-lerp smooth-eye
 // ge:skill camera ui shooter
 // ge:test tests/shooters_edge_listen_test.cpp
 #pragma once
@@ -26,9 +30,10 @@
 
 namespace shooters_edge::client {
 
-inline constexpr double kBlastS = 0.5;     // a blast is kept, s
-inline constexpr double kFullBlow = 40;    // armour and blood that kick the view fully
-inline constexpr double kHitKickDeg = 10;  // the full kick's pitch and roll, degrees
+inline constexpr double kBlastS = 0.5;      // a blast is kept, s
+inline constexpr double kFullBlow = 40;     // armour and blood that kick the view fully
+inline constexpr double kHitKickDeg = 10;   // the full kick's pitch and roll, degrees
+inline constexpr float kEyeSnapUnits = 64;  // the eye moving farther in one state: not between
 
 struct Blast {
   ge::camera::Vec3 at;  // engine metres
@@ -46,6 +51,11 @@ struct ViewState {
   std::size_t blows_seen = 0;       // of Listen::blows
   bool was_grounded = true;
   float fall_speed = 0;  // the last frame's vertical speed, units/s
+  // The eye drawn between the server's states (r_lerpmove; off: each state as run): the last two
+  // states' places of the player and their server times.
+  bool lerp = false;
+  sh::Vec3f eye_prev, eye_now;
+  double eye_prev_s = -1, eye_now_s = -1;
 };
 
 // The eye after `frames` server frames this wall frame of `dt` s at time `t` s (the missiles and
