@@ -247,6 +247,7 @@ struct Fighter {
   double poke_until = -1e9;    // a novice on a button until then (buttons.hpp)
   double next_poke = 0;        // and his next whim
   double next_think = 0;       // server time of the next choice
+  double ready_at = 0;         // the held weapon ready again (fighter_command: its rhythm)
   double impulse_at = -1;      // when the last impulse went
   double reach_at = -1;        // when `reach` was worked out (-1: never)
   double said_at = -1e9;       // its last team message
@@ -287,7 +288,11 @@ struct Fighter {
   int32_t goal_node = -1;
   int32_t want_weapon = 0;  // the number (1..8) asked for; 0 none pending
   int slot = -1;
-  int32_t pack_ent = -1;      // a backpack gone for
+  int32_t pack_ent = -1;  // a backpack gone for
+  // The weapon's rhythm (fighter_command): the weapon and its ammunition last command (`ready_at`
+  // with the doubles: when the weapon is ready again after the last shot seen leave it).
+  int32_t shot_weapon = 0;
+  float shot_ammo = 0;
   int32_t lost_to = -1;       // off the graph or in a pool it cannot leave by its links: the node
                               // walked (or swum) straight at to get back (-1: none)
   int32_t reach_n = 0;        // how many nodes `reach` holds
