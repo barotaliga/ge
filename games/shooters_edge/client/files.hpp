@@ -18,12 +18,14 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "classicenhance/profile.hpp"
+#include "progs/localized.hpp"
 #include "vfs/search.hpp"
 
 namespace shooters_edge::client {
@@ -76,5 +78,11 @@ bool classic_save_name(std::string& name);
 // else the classic text save's comment (`<name>.sav`'s second line, `_` read as a space); ""
 // when there is neither (an empty slot).
 std::string save_label(const SearchPath& path, const std::string& name);
+
+// THE RELEASE'S WORDS BY KEY (progs/localized.hpp): `localization/loc_english.txt` found loose or
+// in an archive on the search path, else inside the release's own archive (a `*.kpf`, a zip) in
+// the folder that holds the game folder, where the re-release keeps it. Null when neither has it
+// (a release that prints words, not keys). Read once a folder and shared: each archive whole.
+std::shared_ptr<const ge::progs::LocalizedText> localized_text(const SearchPath& path);
 
 }  // namespace shooters_edge::client

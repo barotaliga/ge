@@ -238,11 +238,17 @@ bool load_classic_art(const FindFile& find, ClassicArt* out, std::string* error,
   out->glyphs = picture("conchars", glyphs, 0);
   out->density = static_cast<float>(density);
   std::copy(palette.begin(), palette.end(), out->palette.begin());
+  uint64_t print = 0xcbf29ce484222325ULL;
+  int printed = 0;
   for (std::string_view name : kNames) {
     const std::string path = "gfx/" + std::string(name) + ".lmp";
     const std::span<const uint8_t> bytes = find(path, store);
     vfs::IndexedPicture p;
     if (bytes.empty() || !vfs::read_picture(bytes, &p, &why)) continue;
+    if (name == "mainmenu" || name == "sp_menu") {  // kNames has mainmenu before sp_menu
+      for (const uint8_t k : p.indices) print = (print ^ k) * 0x100000001b3ULL;
+      printed++;
+    }
     out->pictures.emplace(std::string(name), picture("gfx/" + std::string(name), p, kClear));
   }
   for (const auto names : {std::span<const std::string_view>(kWadNames),
@@ -254,6 +260,7 @@ bool load_classic_art(const FindFile& find, ClassicArt* out, std::string* error,
       out->pictures.emplace(std::string(name), picture(name, p, kClear));
     }
   }
+  if (printed == 2) out->strip_print = print;
   if (out->find("mainmenu") == nullptr) {
     *error = "the packs have no gfx/mainmenu.lmp";
     *out = {};

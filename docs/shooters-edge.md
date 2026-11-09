@@ -921,6 +921,22 @@ armour, or both, once the sequel's profile lands. The design makes that possible
   arsenal). The exact classic campaign stays exact. Our campaign variant plays the classic maps
   with any arsenal.
 
+### The re-release: words by key
+
+The full game's later release ships a program and maps that print text KEYS (a `$`, then
+lower-case letters, digits and underscores: `$map_skill_normal`, `$qc_got_item`) instead of
+words, with values passed as further arguments to the print builtins. Its words are a UTF-8 text
+file of `key = "text"` rows (`localization/loc_english.txt`) in the release's own archive beside
+the game folder (a zip with its own extension), where `{}` or `{N}` mark where argument N goes.
+The client reads the file once (`client/files.hpp`'s `localized_text`; a loose copy on the search
+path wins) and hands it to the server (`QcServerOptions::localized`), which puts in the words
+(`plugins/progs/localized.hpp`) in bprint, sprint, centerprint, dprint and WriteString and in the
+level's name, so no client sees a key. The program's own builtins (the prints that take a key and
+arguments, the finale's end, a local sound, debug drawing, the player's weapon-switch flags, path
+walking, bots' moves) are installed by number in its first form and bound by name in its later one
+(`server/catalogue.hpp` § The re-release's program); all but the prints do nothing and return 0,
+the classic behaviour each falls back to. Its achievement message (52, one string) is stepped over.
+
 ### Single player and multiplayer as variants of our mod
 
 The baseline mod (M18d) becomes two variants built from one source tree, and the classic game's
@@ -1342,6 +1358,17 @@ is doing and the players by name and team. UP and DOWN choose, LEFT and RIGHT so
 refreshes, ENTER runs `connect <address>`. Our server's info carries what a browser lists: `map`,
 `deathmatch`, `teamplay` and `coop` when set, `skill` where monsters play it, `needpass` when a
 password is set. `connect` takes a host name as well as an address.
+
+**Demos from anywhere (M18k2).** DEMOS on the main menu's root (`menu_demos`) browses the
+player's own folders (the game's folder first, then home, Downloads, Desktop, Documents and the
+machine's roots; it opens on the folder the last demo was played from, `menu_demo_dir`) through
+the engine's folder browser (`engine/vfs/browse.hpp`). It lists folders and the game's
+recordings (every format the window plays, the voice and packed formats too), also packed the way they are
+downloaded (`.gz`, `.zip`, `.7z`, `.xz`, `.zst`, `.tar.gz`): a packed file is listed only when a
+recording's extension stands before its packing, so `match.mvd.gz` is and `maps.zip` is not.
+ENTER checks the file before anything starts (`client/demo_check.hpp`: the bytes, not the name;
+unpacked, then read to its level's map) and plays it as `playdemo` does, or shows in the footer
+why it is no demo. BACKSPACE goes up a folder, LEFT and RIGHT through the places, R lists again.
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),

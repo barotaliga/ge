@@ -56,6 +56,11 @@ constexpr Entry kEntries[] = {
      .hint = "Start a match with its rules, or join one.",
      .opens = "multi"},
     {.page = "main",
+     .id = "demos",
+     .text = "DEMOS",
+     .hint = "Watch a recorded game: from the game's folder, Downloads or anywhere else.",
+     .needs = "playdemo"},
+    {.page = "main",
      .id = "options",
      .text = "OPTIONS",
      .hint = "The mouse, the picture, the HUD and classic enhance.",
@@ -1025,6 +1030,7 @@ Outcome apply_event(const ge::ui::MenuEvent& e, ge::ui::Menu& menu, Host& host) 
   if (e.page == "enhanced" && e.item == "enhance") return Outcome::classic_enhance;
   if (e.page == "options" && e.item == "screenshots") return Outcome::screenshots;
   if (e.page == "multi" && e.item == "join") return Outcome::servers;
+  if (e.page == "main" && e.item == "demos") return Outcome::demos;
   if (e.page == "options" && e.item == "reset") {
     reset_defaults(host);
     refresh(menu, host);
