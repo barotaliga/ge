@@ -39,6 +39,13 @@
 #include "shooter/vec.hpp"
 #include "shooters_edge/net/classic_hits.hpp"
 
+namespace shooters_edge::bots {
+struct Fighter;
+}
+namespace shooters_edge::server {
+struct RulesCommon;
+}
+
 namespace shooters_edge::net {
 
 namespace sh = ge::shooter;
@@ -84,6 +91,11 @@ struct TeamMatchOptions {
   double latency_ms = 0;
   bool antilag = false;  // the server rewinds hitscan to what the shooter saw (its antilag)
   bool lead_lag = true;  // the fighters lead their shots on the round trip (false: as on a LAN)
+  // Called after each fighter's command (player `k` of the match, the world it read, its
+  // command) with `on_command_ctx`: a lab's per-command trace. Null: none.
+  void (*on_command)(void* ctx, int k, const bots::Fighter& f, const server::RulesCommon& w,
+                     const sh::MoveCmd& cmd) = nullptr;
+  void* on_command_ctx = nullptr;
 };
 
 struct TeamPlayer {

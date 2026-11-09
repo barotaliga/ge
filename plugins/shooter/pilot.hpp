@@ -217,6 +217,7 @@ struct Pilot {
   int32_t script_from = -1, script_to = -1;  // the scripted way being flown (nav_script.hpp)
   size_t script_step = 0, script_seen = 0;   // its step aimed at, and the furthest yet
   bool script_done = false;                  // its last step reached
+  const char* because = "";                  // the last command's reason, for a trace
   std::vector<int32_t> shut;               // doors the caller knows are shut: never planned through
   std::vector<NavExtraLink> shut_links;    // and links it knows are (onto a bridge still in)
   std::vector<NavExtraLink> cut_all;       // cut and shut_links together, for the route
