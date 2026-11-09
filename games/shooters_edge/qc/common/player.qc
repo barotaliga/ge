@@ -114,6 +114,36 @@ void() player_water = {
   }
 };
 
+// --- the body's cycles ---
+
+// The player model's own cycles, a frame every 0.1 s: RUNNING (frames 0-5 with the blade, 6-11
+// with any other weapon) while he has any speed across the plan, on the ground, in the air or in
+// the water (swimming is running: a swimmer drifting down after he lets go runs on until a wall
+// or the floor stops him), STANDING (17-28 with the blade, 12-16 otherwise) when he has none. A
+// change of cycle starts the new one at its first frame.
+void() player_body = {
+  local float first, count;
+  if (time < self.body_next) return;
+  self.body_next = time + 0.1;
+  if (self.velocity_x || self.velocity_y) {
+    count = 6;
+    if (self.weapon == W_BLADE) first = 0;
+    else first = 6;
+  } else if (self.weapon == W_BLADE) {
+    first = 17;
+    count = 12;
+  } else {
+    first = 12;
+    count = 5;
+  }
+  if (first != self.body_first || self.body_step >= count) {
+    self.body_first = first;
+    self.body_step = 0;
+  }
+  self.frame = first + self.body_step;
+  self.body_step = self.body_step + 1;
+};
+
 // --- the frame around a command ---
 
 void() PlayerPreThink = {
@@ -124,6 +154,7 @@ void() PlayerPreThink = {
     return;
   }
   player_water();
+  player_body();
   player_jump();  // the variant's: the campaign's program jumps for itself
 };
 
