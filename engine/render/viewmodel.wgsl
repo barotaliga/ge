@@ -28,7 +28,7 @@ struct HeldDraw {
   direct: vec4f,          // rgb; shininess
   toward: vec4f,          // view, unit; the held lights' count
   right: vec4f,           // the view's right (camera-relative world); the lens ratio
-  up: vec4f,
+  up: vec4f,              // and its up; the lift, in NDC (the gun raised over a status bar)
   forward: vec4f,
   lights: array<vec4f, 16>,  // a light: at (view), range; rgb, radius
   warp: Warp,                // the held frame's: its axis in the held frame
@@ -83,7 +83,9 @@ fn vs_main(@builtin(vertex_index) vid: u32, @builtin(instance_index) k: u32) -> 
   // viewport squeezes into the gun's range.
   let p = out.view;
   let jitter = vec2f(2.0 * frame.jitter.z, -2.0 * frame.jitter.w);
-  out.position = vec4f(p.xy * d.lens.xy + jitter * p.z, d.lens.z, p.z);
+  // The lift raises the whole gun on the screen, as a view drawn above a status bar would.
+  let lift = vec2f(0.0, d.up.w);
+  out.position = vec4f(p.xy * d.lens.xy + (jitter + lift) * p.z, d.lens.z, p.z);
   // The model's own flash (flag 1) and the hands holding it (flag 2), each clipped away when the
   // draw hides it (info.w 2 and 4).
   let tri = flags[m.more.x + vid / 3u];
@@ -237,7 +239,7 @@ fn fs_main(in: VertexOut) -> FragmentOut {
   out.colour = vec4f(warp_shade(d.warp, held_colour(in) * held_white(d), burn), 1.0);
   // Where the point was a frame ago through the gun's lens, unjittered.
   let q = in.last_view;
-  let was = vec2f(q.x * d.lens.x / q.z * 0.5 + 0.5, 0.5 - q.y * d.lens.y / q.z * 0.5);
+  let was = vec2f(q.x * d.lens.x / q.z * 0.5 + 0.5, 0.5 - (q.y * d.lens.y / q.z + d.up.w) * 0.5);
   let reactive = select(0.0, 1.0, d.warp.a.x < 1.0);
   out.motion = vec4f(in.position.xy * frame.size.zw - frame.jitter.zw - was, reactive, 0.0);
   return out;

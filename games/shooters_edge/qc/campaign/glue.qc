@@ -52,6 +52,9 @@ float(entity a, entity b) same_team = {
 float(entity a, entity b) team_shoves = { return cvar("sv_friendlypush"); };
 void() drop_on_death = {};
 
+// A taken item is gone for good in single player and co-op; only a deathmatch brings it back.
+float() items_come_back = { return deathmatch != 0; };
+
 // --- the jump: the single-player form's program jumps for itself (the move never does) ---
 
 float FL_WATERJUMP = 2048;     // out of the water onto a ledge: the move carries him by movedir

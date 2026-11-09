@@ -171,3 +171,34 @@ TEST(a_content_zip_standing_in_for_the_first_pack_keys_the_cache) {
   for (const auto p : packs) CHECK(ge::assets::sha256_hex(p) != ge::assets::sha256_hex(zip));
   fs::remove_all(root);
 }
+
+// The release's words by key: from its own archive (a `*.kpf` zip) beside the game folder, or a
+// loose file on the search path first; none when neither holds the file.
+TEST(the_releases_words_come_from_its_archive_beside_the_game_folder) {
+  const fs::path root = make_tree();
+  const std::string base(ge::classicenhance::classic_profile().base_dir);
+  cl::SearchPath sp;
+  std::string error;
+  CHECK_MSG(cl::open_game_dir(root.string(), base, sp, error), error);
+  CHECK(cl::localized_text(sp) == nullptr);
+  const fs::path other = fs::temp_directory_path() / "ge_se_files_test_words";
+  fs::remove_all(other);
+  const fs::path game = other / base;
+  fs::create_directories(game);
+  write(other / "Release.KPF",
+        ge::vfs::write_stored_zip(
+            {{"localization/loc_english.txt", bytes_of("qc_nailgun = \"Nailgun\"\n")}}));
+  cl::SearchPath release;
+  CHECK_MSG(cl::open_game_dir(other.string(), base, release, error), error);
+  const auto words = cl::localized_text(release);
+  CHECK(words != nullptr && words->words.at("qc_nailgun") == "Nailgun");
+  CHECK(cl::localized_text(release) == words);  // read once a folder
+  // A loose file on the search path is read before the archive.
+  write(root / base / "localization" / "loc_english.txt", bytes_of("qc_nailgun = Loose\n"));
+  cl::SearchPath loose;
+  CHECK_MSG(cl::open_game_dir(root.string(), base, loose, error), error);
+  const auto first = cl::localized_text(loose);
+  CHECK(first != nullptr && first->words.at("qc_nailgun") == "Loose");
+  fs::remove_all(other);
+  fs::remove_all(root);
+}

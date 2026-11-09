@@ -1,12 +1,14 @@
 // What a change reaches, read off git and the build's include graph: the files changed since a
 // base (the merge base of it and HEAD, untracked files included), the .cpp files that compile one
-// of them (Ninja's header dependencies, `ninja -t deps`), and the targets those reach. A target is
-// reached when one of its objects includes a changed file, or includes a header in a directory a
-// reached library compiles sources in (so a change in a plugin reaches the game library that uses
-// its headers, and the tests using the game's); every target links every library here, so the
-// link graph alone would reach everything. `ge lint` lints the sources; `ge test --affected` runs
-// the tests whose targets are reached. The deps are the last build's, so a header a file has only
-// just started including is seen through the file's own change.
+// of them (Ninja's header dependencies, `ninja -t deps`), and the targets those reach. An object is
+// reached when it includes a changed file, or a header a reached library object passes on: its own
+// header (x.cpp's x.hpp), else its directory's headers it includes (so a change in a plugin reaches
+// the game library that uses its headers, and the tests using the game's). Never a library's whole
+// directory: one shared object including a changed header would reach all that use the library;
+// and every target links every library here, so the link graph alone would reach everything.
+// `ge lint` lints the sources; `ge test --affected` runs the tests whose targets are reached. The
+// deps are the last build's, so a header a file has only just started including is seen through the
+// file's own change.
 //
 // ge:summary What a change reaches: the changed files, the sources compiling them, the targets
 // ge:keywords cli change-reach affected-tests ninja-deps include-graph merge-base
@@ -28,8 +30,8 @@ struct Reach {
   std::set<std::string> changed;  // repository-relative paths changed since the base
   std::set<std::string> sources;  // repository-relative .cpp files that compile a changed file
   std::set<std::string> targets;  // the build targets reached (CMake's names: ge_core, labs, ...)
-  // The .cpp files whose own object is reached: it includes a changed file, or a header in a
-  // directory a reached library compiles in. Finer than `targets` where one executable holds many
+  // The .cpp files whose own object is reached: it includes a changed file, or a header a reached
+  // library object passes on. Finer than `targets` where one executable holds many
   // subjects (each lab of the labs executable is reached on its own).
   std::set<std::string> objects;
 };
@@ -40,14 +42,21 @@ bool change_reach(const fs::path& repo, const fs::path& build, const std::string
                   const fs::path& log, Reach& r);
 // `ninja -t deps` output ("<dir>/CMakeFiles/<target>.dir/<file>.o: #deps ..." then one indented
 // path a line, the source first, absolute or relative to `build`) folded into `r`: the sources
-// compiling a changed file, and the targets reached from them through the headers of reached
-// libraries' directories. Only a target in `libraries` owns the directories it compiles in (nothing
-// links an executable); with none named, every target but a test (`*_test`, all of them in tests/)
-// does.
+// compiling a changed file, and the objects and targets reached from them through the headers
+// reached library objects pass on. Only an object of a target in `libraries` passes a header on
+// (nothing links an executable); with none named, every target but a test (`*_test`, all of them
+// in tests/) does.
 void reach_from_deps(const fs::path& repo, const fs::path& build, std::string_view deps,
                      const std::set<std::string>& libraries, Reach& r);
 // The library targets in `ninja -t targets all` output (`libge_core.a: <rule>` is ge_core).
 std::set<std::string> libraries_of(std::string_view targets);
+// A changed file the build may turn into source (not code, prose or a build file): its
+// `ninja -t query` is asked what it generates.
+bool generator_input(std::string_view path);
+// The generated sources (repository-relative, under the build directory) a `ninja -t query`
+// lists as a node's outputs; `build` is the canonical build directory, `prefix` the repository's.
+std::set<std::string> generated_from(std::string_view query, const fs::path& build,
+                                     const std::string& prefix);
 // Whether a path is the build's own (a CMakeLists.txt, a .cmake file, CMakePresets.json).
 bool build_file(std::string_view path);
 // The directory a build file builds alone: engine/<module>/module.cmake's, a plugin's or a game's

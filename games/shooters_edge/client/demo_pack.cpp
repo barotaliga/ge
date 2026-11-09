@@ -1,10 +1,13 @@
 // The packed formats' names and the archive pick (demo_pack.hpp).
 //
 // ge:summary The packed extensions and the document names an archive's pick leaves out
-// ge:keywords packed_extension demo_name document readme nfo diz
+// ge:keywords packed_extension demo_name document readme nfo diz plain_extension
+// ge:keywords listed_extensions
 // ge:skill shooter
 // ge:test tests/shooters_edge_demo_test.cpp
 #include "shooters_edge/client/demo_pack.hpp"
+
+#include <algorithm>
 
 namespace shooters_edge::client {
 
@@ -12,6 +15,22 @@ std::string packed_extension(DemoFormat base, bool voice) {
   if (base == DemoFormat::single) return ".demz";
   if (voice) return voice_extension(base) + "z";
   return base == DemoFormat::multiview ? ".mvdz" : ".qwdz";
+}
+
+std::string plain_extension(DemoFormat base) {
+  if (base == DemoFormat::single) return ".dem";
+  if (base == DemoFormat::multiview) return ".mvd";
+  const std::string voice = voice_extension(base);
+  return voice.substr(0, voice.size() - 1);
+}
+
+std::vector<std::string> listed_extensions(std::span<const std::string_view> game) {
+  std::vector<std::string> out(game.begin(), game.end());
+  for (const DemoFormat f : {DemoFormat::single, DemoFormat::client, DemoFormat::multiview}) {
+    std::string e = plain_extension(f);
+    if (std::find(out.begin(), out.end(), e) == out.end()) out.push_back(std::move(e));
+  }
+  return out;
 }
 
 bool demo_name(std::string_view name) {

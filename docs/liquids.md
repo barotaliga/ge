@@ -168,7 +168,10 @@ and linear sRGB. 1150 °C is about 2900 cd/m² of deep orange at ε = 0.9.
 
 - **The crust** is a warped Voronoi tiling of plates with sub-cracks. Each plate has an age
   (hashed, running on at `age_rate`) that cools its skin from `crust_hot` to `crust_cold` and
-  widens its cracks. The melt's heat shows in a crack and falls off as exp(−d/w) from it.
+  widens its cracks. The melt's heat shows in a crack and falls off as exp(−d/w) from it. A
+  plate's life is a loop with no jump: it congeals out of the melt over its first 8 %, and over
+  its last 15 % melts back and sinks, the melt eating in from its cracks, so where its age wraps
+  it is melt on both sides and never pops.
 - **Open melt** shows where a slow noise passes `cover`. It carries swirls, threads and hot
   streaks.
 - **Relief**: plates stand over cracks, and ropy folds (pāhoehoe) run across the flow, with
@@ -177,7 +180,9 @@ and linear sRGB. 1150 °C is about 2900 cd/m² of deep orange at ε = 0.9.
   sky, and the glow is added on top.
 - **The flow** carries everything on a two-phase flow map. Each phase's pattern is drawn back
   along the flow for its share of the period and the two are crossfaded, so the pattern never
-  stretches.
+  stretches. Each phase weighs nothing at the moment its offset jumps back, so the jump is never
+  seen; a still pool draws one pattern and no phases. The `gpu-lava` lab's `steady` view holds
+  both: the share of pixels that jump between frames 0.2 s apart over 20 s.
 - **Filtering**: a crack narrower than the pixel's footprint is widened to it, with its heat
   spread over the width, so distant crust does not sparkle.
 

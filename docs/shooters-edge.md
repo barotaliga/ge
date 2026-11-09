@@ -224,7 +224,10 @@ and sparks (`app/muzzle.hpp`; `ce_muzzles 0` leaves the light alone); `r_drawvie
 `r_viewmodel_fov`, `cl_gunx`, `cl_guny`, `cl_gunz`, `cl_gunsway`, `r_viewmodel_center` (1 by
 default: centred under the crosshair; 0 to the right) and `r_viewmodel_hands` (0: the weapon
 without its hands) in the console); the HUD (`hud_style
-classic|modern|compact`, the classic status bar by default, drawn in the packs' own pictures when
+classic|modern|compact|arena|tactical|minimal`, the classic status bar by default; `hud_sbar 0`
+its pieces without the panels, `hud_swap 1` every other look on the other side, `hud_guns
+ammo|pairs|row`, `hud_guns_all`, `hud_ammo_all`; the weapon in hand raised over the classic bars
+while they show; drawn in the packs' own pictures when
 a classic game is loaded, the free art only for Shooter's Edge's own content; `viewsize
 110` drops the inventory bar and `viewsize 120` every bar); the console; the main menu (below). The map's own moving brush
 models (doors, plats, buttons; M18i6) are drawn where the server holds each one's entity, and one
@@ -436,6 +439,21 @@ teleport, a respawn, a gib and a model change are not drawn across, and a view t
 jumps. `demo_lerp 0` draws each frame as read (`timedemo` always does: one frame a picture).
 `make lab LAB=se-demo-smooth ARGS="--file=<demo> --track=<slot>"` measures it: how far the eye
 moves each picture with and without, charted.
+
+**Models drawn between their frames** (`client/model_lerp.hpp`, every path: your own game, a
+played demo, a joined server). A classic program steps a model's frame ten times a second; when an
+entity's frame changes, the window draws it from the frame it left to the new one over the time its
+frames last (the gap between its last two changes, 20 to 150 ms; at first 0.1 s), the GPU blending
+the two frames' vertices, and a looping group (a torch's flame) flows between its own frames. In
+your own game the places are drawn too: every model one server frame behind, between the last two
+states the window saw (the server's 72 or 77 frames a second fall unevenly on 50, 60 or 144
+pictures), and a walking monster, which the program moves a stride at a time, drawn over each
+stride's time rather than jumping. A first sight, a new model, a warp, a move over 128 units and a
+gap over a quarter second are not drawn across. The held weapon's frames flow too: a nailgun's shot
+frame from the last, and a played fire clip back to rest over a frame's time. `r_lerpmodels 0` and
+`r_lerpmove 0` draw each state as held. `make lab LAB=se-model-lerp ARGS="--game=<base>/<folder>"`
+films a monster walking up to the player both ways side by side (a GIF) and measures the judder
+and the pose jumps.
 
 ### A demo as a video
 
@@ -918,6 +936,22 @@ armour, or both, once the sequel's profile lands. The design makes that possible
   arsenal). The exact classic campaign stays exact. Our campaign variant plays the classic maps
   with any arsenal.
 
+### The re-release: words by key
+
+The full game's later release ships a program and maps that print text KEYS (a `$`, then
+lower-case letters, digits and underscores: `$map_skill_normal`, `$qc_got_item`) instead of
+words, with values passed as further arguments to the print builtins. Its words are a UTF-8 text
+file of `key = "text"` rows (`localization/loc_english.txt`) in the release's own archive beside
+the game folder (a zip with its own extension), where `{}` or `{N}` mark where argument N goes.
+The client reads the file once (`client/files.hpp`'s `localized_text`; a loose copy on the search
+path wins) and hands it to the server (`QcServerOptions::localized`), which puts in the words
+(`plugins/progs/localized.hpp`) in bprint, sprint, centerprint, dprint and WriteString and in the
+level's name, so no client sees a key. The program's own builtins (the prints that take a key and
+arguments, the finale's end, a local sound, debug drawing, the player's weapon-switch flags, path
+walking, bots' moves) are installed by number in its first form and bound by name in its later one
+(`server/catalogue.hpp` § The re-release's program); all but the prints do nothing and return 0,
+the classic behaviour each falls back to. Its achievement message (52, one string) is stepped over.
+
 ### Single player and multiplayer as variants of our mod
 
 The baseline mod (M18d) becomes two variants built from one source tree, and the classic game's
@@ -1005,9 +1039,9 @@ from specifications, not source:
    it never quotes source.
 2. **The builder reads the note, not the source.** An agent writing engine or game code works
    from the note and from the black-box measurements (step 3). It does not open GPL source while
-   building that subsystem. Research that needs to read source to answer a question writes the
-   answer as a fact in the note, in a separate session, and the building session reads only
-   the note.
+   building that subsystem. Research that needs to read source to answer a question is done by a
+   separate reader agent, which writes the answer as facts in the note with no code; the
+   building agent reads only the note (the `clean-room` skill holds the procedure).
 3. **Behaviour is matched by measurement.** Where the feel must match (the player's movement,
    the timing of a weapon, what a server sends after a given input), a lab runs an existing
    server or client as a separate program, never linked and never committed (fetched and built
@@ -1339,6 +1373,17 @@ is doing and the players by name and team. UP and DOWN choose, LEFT and RIGHT so
 refreshes, ENTER runs `connect <address>`. Our server's info carries what a browser lists: `map`,
 `deathmatch`, `teamplay` and `coop` when set, `skill` where monsters play it, `needpass` when a
 password is set. `connect` takes a host name as well as an address.
+
+**Demos from anywhere (M18k2).** DEMOS on the main menu's root (`menu_demos`) browses the
+player's own folders (the game's folder first, then home, Downloads, Desktop, Documents and the
+machine's roots; it opens on the folder the last demo was played from, `menu_demo_dir`) through
+the engine's folder browser (`engine/vfs/browse.hpp`). It lists folders and the game's
+recordings (every format the window plays, the voice and packed formats too), also packed the way they are
+downloaded (`.gz`, `.zip`, `.7z`, `.xz`, `.zst`, `.tar.gz`): a packed file is listed only when a
+recording's extension stands before its packing, so `match.mvd.gz` is and `maps.zip` is not.
+ENTER checks the file before anything starts (`client/demo_check.hpp`: the bytes, not the name;
+unpacked, then read to its level's map) and plays it as `playdemo` does, or shows in the footer
+why it is no demo. BACKSPACE goes up a folder, LEFT and RIGHT through the places, R lists again.
 
 **Bots on the simulation (M18r).** A bot is a client of the server like any player. Its only
 output is a usercmd a frame (the look angles, the movement axes, the buttons, the impulse),

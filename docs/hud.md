@@ -106,13 +106,30 @@ An element with a **parent** hangs from it rather than from the safe area: its a
 point on the parent's drawn box, its `attach` the point of its own box that meets it, and its
 offset is in the parent's units (a picture parent's art pixels), so a status bar's pieces are
 declared at the bar's own coordinates and follow the bar wherever the player puts it. A child
-takes its parent's scale times its own. A parent must be declared before its children; a parent
-that is hidden or missing leaves the child standing alone. A face drawn from a 16x16 character
+takes its parent's scale times its own. A parent must be declared before its children; a hidden
+parent hands its children on to its own parent (a loadout hung over an ammunition strip that is
+off hangs where the strip would), and with no ancestor shown the child stands alone. A face drawn from a 16x16 character
 sheet (`Face::glyph_sheet`) draws the counts in a set's own type.
 
-Shooter's Edge's three HUDs (`games/shooters_edge/hud/layout.hpp`) are the first user: the
-classic bar, the modern corners and the compact rings round the crosshair, one table picked by
-`hud_style`, drawn from the game's free art or the classic set's own pictures: the window reads
+A **strip** breaks into lines where a cell says `breaks` (its lines stacked across its run, each
+aligned by `align`), and a cell may carry its own size (`w`, `h`) and its text's place (`text_at`),
+so one strip holds a count beside its icon beside two guns on each line. A **mirrored** layout
+(`Layout::mirror`) swaps left and right: every element takes the other column's anchor and attach
+point and the other way along x, a strip's lines run from the right and its counts move to the
+picture's other side, a ring is reflected; an element marked `fixed_side` keeps its place (a
+centred status bar), and one marked `flush` sits on the screen's own edge past the margin and the
+insets, so no row of the world shows under it.
+
+Shooter's Edge's six HUDs (`games/shooters_edge/hud/layout.hpp`) are the first user: the
+classic bar, the modern corners, the compact arch at the bottom centre, and three layouts after
+today's shooters (`arena`: big figures at the bottom centre and the guns down the right edge;
+`tactical`: a shield bar over the health bar and the loadout bottom right; `minimal`: small figures
+only), one table picked by `hud_style`. Its options are cvars over every look: `hud_sbar 0` the
+classic pieces without their panels, `hud_swap 1` the mirrored layout, `hud_guns ammo|pairs|row`
+the guns two to a line by their ammunition (2-2-2-1, the beam gun alone since its picture is two
+wide), each line led by its count or the counts apart, `hud_guns_all` and `hud_ammo_all` every slot
+or only what is held; while the classic bars show, `status_lift` raises the weapon in hand over
+them. Each look is drawn from the game's free art or the classic set's own pictures: the window reads
 those straight from the player's packs at start (or a lab from classic-enhance's cache). There is
 no choice between the two: with a classic game loaded its own pictures are drawn, and the free art
 only with Shooter's Edge's own content (`client/classic_pictures.hpp`'s `hud_art_of`).

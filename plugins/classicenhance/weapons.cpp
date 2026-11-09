@@ -308,7 +308,7 @@ std::span<const ClassicFire> classic_fires() {
       "smoke.smoke=0.3,smoke.radius=0.12,smoke.smoke_grow=0.8,smoke.smoke_time=1.1,"
       "smoke.smoke_albedo=0.35";
   static constexpr ClassicFire kFires[] = {
-      {"v_axe", "", "", 0.5},
+      {"v_axe", "", "", 0.5, 2},
       {"v_shot", "muzzle.shotgun", kShotgun, 0.5},
       {"v_shot2", "muzzle.shotgun", kShotgun, 0.7},
       {"v_nail", "muzzle.nailgun", kPuff, 0.1},

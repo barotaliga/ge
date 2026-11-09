@@ -79,6 +79,10 @@ std::vector<AssetChange> asset_changes(const std::set<std::string>& changed);
 // Whether the lab at `source` (its text `text`) reads `a`: it lives under the asset's root, or
 // its text names `assets/<name>/` or `<name>.glb`.
 bool reads_asset(const std::string& source, std::string_view text, const AssetChange& a);
+// The directories of the changed data files a lab may read from the tree at run time (not code,
+// prose, a build file, a test file or an asset): every ancestor three or more levels deep, with
+// its trailing slash ("games/g/qc/", "games/g/qc/common/"). A lab whose text names one is reached.
+std::set<std::string> data_dirs(const std::set<std::string>& changed);
 // The lab ids whose baseline files (tests/digests/<lab>.txt) the change adds, moves or deletes.
 std::set<std::string> moved_digest_labs(const std::set<std::string>& changed);
 Outcome run_golden_diff(const fs::path& repo, const std::vector<std::string>& targets,

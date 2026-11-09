@@ -447,6 +447,7 @@ sv::CampaignOptions campaign_options(Listen& l, const ListenOptions& opt) {
   co.server.loop.move.speedjump = kListenSpeedJump;
   co.load = campaign_map;
   co.load_ctx = &l;
+  if (opt.files != nullptr) co.server.localized = localized_text(*opt.files);
   co.registered = opt.registered;
   co.settings = opt.arsenal;
   co.settings.insert(co.settings.end(), opt.console.begin(), opt.console.end());
@@ -984,6 +985,12 @@ void missiles_of(const Listen& l, std::vector<Missile>& out) {
     if (cn != "rocket" && cn != "grenade" && cn != "spike" && cn != "missile") continue;
     out.push_back({e, ed.origin, cn != "spike", cn == "grenade"});
   }
+}
+
+bool model_shown(const Listen& l, int entity) {
+  const sv::QcServer* q = program(l);
+  if (q != nullptr) return sv::model_shown(*q, entity);
+  return l.server != nullptr && l.server->sv.edicts[static_cast<size_t>(entity)].modelindex > 0;
 }
 
 float field_named(const Listen& l, int entity, const char* name) {

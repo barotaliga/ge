@@ -90,7 +90,9 @@
 #include "shooters_edge/client/classic_pictures.hpp"
 #include "shooters_edge/client/controls.hpp"
 #include "shooters_edge/client/coop_mode.hpp"
+#include "shooters_edge/client/demo_check.hpp"
 #include "shooters_edge/client/demo_heard.hpp"
+#include "shooters_edge/client/demo_pack.hpp"
 #include "shooters_edge/client/demo_playback.hpp"
 #include "shooters_edge/client/demo_video.hpp"
 #include "shooters_edge/client/files.hpp"
@@ -360,6 +362,20 @@ int run_main(int argc, char** argv) {
                                       .maps = adapter.list_maps(adapter, files)};
   cl::add_adapter_commands(console, adapter, files, args.basedir);
   cl::read_configs_from(console, adapter, files);  // `exec` finds a cfg in the game's packs too
+  // DEMOS: the game's recordings anywhere on the machine, each checked before it plays.
+  const auto demo_places = [&] {
+    game_menu.demos().set_game_places(
+        {{"GAME", cl::settings_dir(args.basedir, args.game).parent_path().string()}});
+  };
+  game_menu.demos().set_extensions(cl::listed_extensions(adapter.game->demo_extensions));
+  demo_places();
+  game_menu.demos().set_check(
+      [&adapter](const std::string& path, std::string& facts, std::string& why) {
+        cl::DemoFacts f;
+        if (!cl::check_demo_file(path, adapter, f, why)) return false;
+        facts = cl::facts_line(f);
+        return true;
+      });
   menu_host.maps.emplace_back("arena");
   menu_host.table = &adapter.menu(adapter);  // the game's own pages
   game_menu.set_table(*menu_host.table);
@@ -627,6 +643,7 @@ int run_main(int argc, char** argv) {
     next_map = game_content.first_map;
     game_menu.set_game(basedir);
     game_menu.servers().set_masters(shooters_edge::net::classic_install_masters(basedir));
+    demo_places();
     cl::remember_game(prefs, basedir);
     save_settings();  // the player's settings go on in the new folder
     out::status("shooters_edge: loaded " + basedir + " (" + files.folder + ")");
@@ -710,7 +727,11 @@ int run_main(int argc, char** argv) {
           menu_host.saves[static_cast<size_t>(i)] = cl::save_label(files, "s" + std::to_string(i));
       }
       game_menu.update(mi, opening, menu_host, wall);
-      cl::keys_to_menu(game_menu, menu_host, queue, held);  // CUSTOMIZE CONTROLS' key
+      cl::keys_to_menu(game_menu, menu_host, queue, held);            // CUSTOMIZE CONTROLS' key
+      if (std::string demo = game_menu.take_demo(); !demo.empty()) {  // DEMOS: checked, played
+        bench_ask = std::move(demo);
+        play_ask = true;
+      }
       if (was_open && !game_menu.open()) {
         save_settings();   // what the menu changed is kept
         on_title = false;  // the title's menu closed: the map is played (once it has loaded)
@@ -996,7 +1017,8 @@ int run_main(int argc, char** argv) {
       bench_fx_state.models = &cl::world_models(*world);
       bench_fx_state.on = cl::fx_switches(picture);
       cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, t, wall, bench_fx);
-      const auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
+      auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
+      hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
       cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
@@ -1106,7 +1128,8 @@ int run_main(int argc, char** argv) {
     fx_state.book = &fx_book;
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
-    const shooters_edge::view::HandFrame hand =
+    view_settings.lerp = picture.lerp_models;  // r_lerpmodels: the held weapon's frames too
+    shooters_edge::view::HandFrame hand =
         cl::step_held(listen, shown, in_hand, view_settings, weapons, t, wall);
     if (hand.flashing)
       fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
@@ -1118,6 +1141,7 @@ int run_main(int argc, char** argv) {
       se::fill_hud(hud, cl::status_of(listen, t), cl::hud_art_of(files, classic_art, free_art));
       const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
       hud.layout.draw(overlay, hf, se::hud_style());
+      hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
     }
     if (listen.room && listen.server != nullptr) {
       // The warmup's banner in the packs' own menu pictures when they carry them, else modern.

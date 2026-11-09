@@ -459,6 +459,28 @@ TEST(the_hand_raises_the_launcher_and_sees_one_shot_a_rocket) {
   CHECK(held.shots == 1);
 }
 
+// The baseline mod's body cycles (common/player.qc): the run cycle (6-11, a gun in hand) while he
+// moves across the plan, a frame every 0.1 s; the stand cycle (12-16) once he is still. The rule
+// reads the speed across the plan alone, so a swimmer runs as a walker does (lab se-swim).
+TEST(the_player_s_body_runs_while_he_moves_and_stands_when_still) {
+  cl::Listen l;
+  if (!start(l)) return;
+  const auto frame = [&] { return static_cast<int>(cl::field_named(l, 1, "frame")); };
+  for (int i = 0; i < 80; i++) cl::listen_frame(l, {});
+  CHECK(frame() >= 12 && frame() <= 16);
+  sh::MoveCmd walk;
+  walk.forward = 200;
+  std::vector<int> seen;
+  for (int i = 0; i < 60; i++) {  // 0.78 s: the cycle round once and on
+    cl::listen_frame(l, walk);
+    if (seen.empty() || seen.back() != frame()) seen.push_back(frame());
+  }
+  CHECK(seen.size() >= 7);
+  for (size_t k = 1; k < seen.size(); k++) CHECK(seen[k] >= 6 && seen[k] <= 11);
+  for (int i = 0; i < 80; i++) cl::listen_frame(l, {});
+  CHECK(frame() >= 12 && frame() <= 16);
+}
+
 TEST(a_demo_s_hand_holds_the_recorder_s_weapon_and_none_without_a_view_model_or_dead) {
   cl::DemoState s;
   s.stats[cl::kStatHealth] = 100;

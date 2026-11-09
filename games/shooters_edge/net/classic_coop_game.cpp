@@ -105,6 +105,7 @@ std::unique_ptr<CoopGame> coop_open(const gs::ServerConfig& c, std::string& erro
   co.server.loop.maxclients = cl::kPartyMost + 1;  // eight players: what a browser reads
   co.load = load_map;
   co.load_ctx = g.get();
+  co.server.localized = cl::localized_text(g->files);
   co.registered = registered;
   co.settings = {"deathmatch 0",
                  "coop 1",

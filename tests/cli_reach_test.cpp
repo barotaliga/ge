@@ -167,3 +167,51 @@ TEST(a_modules_own_build_file_reaches_its_directory_not_the_tree) {
   CHECK(build_scope("engine/net/link.cpp").empty());
   CHECK(global_build_file("tests/CMakeLists.txt") && !global_build_file("engine/net/module.cmake"));
 }
+
+TEST(a_file_the_build_generates_source_from_reaches_through_that_source) {
+  CHECK(generator_input("games/g/qc/common/items.qc") && generator_input("engine/ui/font.ttf"));
+  CHECK(!generator_input("engine/core/math.hpp") && !generator_input("games/g/qc/README.md"));
+  CHECK(!generator_input("games/g/CMakeLists.txt") && !generator_input("docs/goals.md"));
+  const std::string query =
+      "/src/game/games/g/qc/items.qc:\n"
+      "  input: phony\n"
+      "  outputs:\n"
+      "    gen/embed/g_qc_items.cpp\n"
+      "    /src/game/build/debug/gen/embed/g_qc_items.cpp\n"
+      "    gen/embed/g_qc_items.stamp\n"
+      "    /elsewhere/out.cpp\n";
+  CHECK((generated_from(query, kBuild, "/src/game/") ==
+         std::set<std::string>{"build/debug/gen/embed/g_qc_items.cpp"}));
+}
+
+TEST(a_shared_library_object_passes_on_its_own_header_not_its_directorys) {
+  // One object of a shared library includes the changed header: what includes that object's own
+  // header is reached, and what includes only another header of the library's directory is not.
+  const std::string deps =
+      "CMakeFiles/ge_view.dir/engine/view/held.cpp.o: #deps 2, deps mtime 1 (VALID)\n"
+      "    /src/game/engine/view/held.cpp\n"
+      "    /src/game/engine/view/held.hpp\n"
+      "\n"
+      "CMakeFiles/ge_draw.dir/engine/draw/hand.cpp.o: #deps 3, deps mtime 1 (VALID)\n"
+      "    /src/game/engine/draw/hand.cpp\n"
+      "    /src/game/engine/draw/hand.hpp\n"
+      "    /src/game/engine/view/held.hpp\n"
+      "\n"
+      "CMakeFiles/ge_draw.dir/engine/draw/sky.cpp.o: #deps 2, deps mtime 1 (VALID)\n"
+      "    /src/game/engine/draw/sky.cpp\n"
+      "    /src/game/engine/draw/sky.hpp\n"
+      "\n"
+      "CMakeFiles/labs.dir/games/g/labs/hand_lab.cpp.o: #deps 2, deps mtime 1 (VALID)\n"
+      "    /src/game/games/g/labs/hand_lab.cpp\n"
+      "    /src/game/engine/draw/hand.hpp\n"
+      "\n"
+      "CMakeFiles/labs.dir/games/g/labs/sky_lab.cpp.o: #deps 2, deps mtime 1 (VALID)\n"
+      "    /src/game/games/g/labs/sky_lab.cpp\n"
+      "    /src/game/engine/draw/sky.hpp\n";
+  Reach r;
+  r.changed = {"engine/view/held.hpp"};
+  reach_from_deps(kRepo, kBuild, deps, {"ge_view", "ge_draw"}, r);
+  CHECK(r.objects.count("engine/draw/hand.cpp") && r.objects.count("games/g/labs/hand_lab.cpp"));
+  CHECK(!r.objects.count("engine/draw/sky.cpp") && !r.objects.count("games/g/labs/sky_lab.cpp"));
+  CHECK((r.sources == std::set<std::string>{"engine/view/held.cpp", "engine/draw/hand.cpp"}));
+}
