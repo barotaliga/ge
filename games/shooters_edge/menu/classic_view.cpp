@@ -60,11 +60,13 @@ const PageArt* art_of(std::string_view page) {
 
 // A strip row the pack's pictures have no words for, cut letter by letter out of the words they do
 // have (the menu's carved capitals and small capitals), measured on the strips whose print
-// (`ClassicArt::strip_print`) the word names. A piece: `w` columns from `x` of the band at `y` of
-// `picture`, set `gap` px before the next.
+// (`ClassicArt::strip_print`) the word names. A piece: the `w` x `h` classic px at (x, y) of
+// `picture`, drawn at (dx, dy) from the row's top left. Every piece takes a letter's whole outline
+// and nothing of its neighbours', on the strips' common baseline.
 struct CarvedPiece {
   std::string_view picture;
-  int x = 0, w = 0, y = 0, gap = 0;
+  int x = 0, y = 0, w = 0, h = 0;
+  int dx = 0, dy = 0;
 };
 struct CarvedWord {
   std::string_view row;
@@ -74,12 +76,13 @@ struct CarvedWord {
 // DEMOS: the capital D a capital L's stem and the right half of a capital O (the way the small d
 // is a stem and a bowl), then the small capitals e, m, o and s.
 constexpr CarvedPiece kDemosPieces[] = {
-    {"sp_menu", 2, 8, 20, 0},      // the stem of Load's L
-    {"mainmenu", 11, 10, 40, 1},   // the right half of Options' O
-    {"mainmenu", 153, 18, 60, 0},  // Ordering's e
-    {"sp_menu", 107, 22, 0, 0},    // Game's m
-    {"mainmenu", 67, 20, 40, 1},   // Options' o
-    {"mainmenu", 105, 18, 40, 0},  // Options' s
+    {"sp_menu", 2, 20, 8, 20, 0, 0},       // the stem of Load's L
+    {"mainmenu", 11, 40, 11, 20, 8, 0},    // the right half of Options' O ...
+    {"mainmenu", 22, 47, 1, 4, 19, 7},     // ... and its outline's widest column, beside the P
+    {"mainmenu", 153, 60, 17, 20, 20, 0},  // Ordering's e
+    {"sp_menu", 107, 0, 21, 20, 38, 1},    // Game's m (its strip sits a pixel higher)
+    {"mainmenu", 67, 40, 21, 20, 60, 0},   // Options' o
+    {"mainmenu", 106, 40, 17, 20, 82, 0},  // Options' s
 };
 constexpr CarvedWord kCarvedWords[] = {{"demos", 0xb378b8eec94a7f36ULL, kDemosPieces}};
 
@@ -94,14 +97,14 @@ bool carve(const ClassicPen& pen, std::string_view id, float x, float y) {
       if (img == nullptr) return false;
       const float d = static_cast<float>(img->height) / art.height_of(*img);  // px a classic px
       ui::Box b;
-      b.rect = pen.at(x, y, static_cast<float>(p.w), kBand);
+      b.rect = pen.at(x + static_cast<float>(p.dx), y + static_cast<float>(p.dy),
+                      static_cast<float>(p.w), static_cast<float>(p.h));
       b.image = img;
       b.uv = {static_cast<float>(p.x) * d, static_cast<float>(p.y) * d, static_cast<float>(p.w) * d,
-              kBand * d};
+              static_cast<float>(p.h) * d};
       b.nearest = art.density <= 1;
       b.feather = 0;
       pen.dl.box(b);
-      x += static_cast<float>(p.w + p.gap);
     }
     return true;
   }
