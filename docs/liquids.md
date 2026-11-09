@@ -260,6 +260,15 @@ sees the liquid all round it. One full-screen triangle is drawn after the surfac
   The eye is keyed to the melt at 0.6 of a white face's luminance, so the view stays orange
   and the tone curve does not whiten it. Only what touches the eye shows through
   the first few centimetres.
+- **With a game's reach, lava is a goo the eye sees into.** A game that lets its players fall in
+  lava and swim out (Shooter's Edge) sets `under_reach`, and the eye sees a thick, light-red,
+  glowing goo instead of the opaque melt. Its glow is the melt's key in a light red, shaded by the
+  same swirl and streaks. What is in it is lit by it (the scene's colour times 1 + 2 × the goo's
+  tint, so its walls read red and brighter than the room leaves them). The scene fades into the
+  goo over exp(-b d / reach) with b = (0.6, 1.0, 1.2) by band, so red carries farthest: at the
+  reach 55 % of the red and 37 % of the green is left. A ray that meets the surface first sees
+  the opaque melt from below, churning overhead like the lava without a reach, and the view
+  wobbles slowly.
 - **A game's least view (`Liquids::under_reach`, m).** A toxic slime's attenuation is hundreds
   per metre, so an eye in it honestly sees two centimetres. A game that wants to see where it
   swims sets a reach: no band's attenuation passes 3 / reach, so the reach is where 5 % of the
