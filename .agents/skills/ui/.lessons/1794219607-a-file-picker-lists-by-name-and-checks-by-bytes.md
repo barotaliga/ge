@@ -2,7 +2,7 @@
 title: A file picker lists by name and checks by bytes; the client recording's plain extension is derived, never spelled
 date: 2026-11-09
 scope: engine/vfs/browse.hpp, games/shooters_edge/menu/demos_page.cpp, games/shooters_edge/client/demo_pack.cpp, games/shooters_edge/client/demo_check.cpp
-concepts: [file-browser, demos, packed-name, check, legacy-scan, plain_extension, listed_extensions, places, digest]
+concepts: [file-browser, demos, packed-name, check, legacy-scan, plain-extension, listed-extensions, places, digest]
 ---
 
 DEMOS lists a file by its name alone (`vfs::named_as`: a game extension, plain or under the

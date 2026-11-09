@@ -56,6 +56,7 @@ struct Tree {
 
 std::vector<std::string> names(const vfs::FolderBrowser& b) {
   std::vector<std::string> out;
+  out.reserve(b.entries().size());
   for (const vfs::FolderEntry& e : b.entries()) out.push_back(e.name);
   return out;
 }
@@ -92,6 +93,7 @@ TEST(a_folder_lists_up_folders_then_files_newest_first) {
   std::string error;
   CHECK(vfs::list_folder((t.root / "Downloads").string(), kDemos, out, error));
   std::vector<std::string> got;
+  got.reserve(out.size());
   for (const vfs::FolderEntry& e : out) got.push_back(e.name);
   const std::vector<std::string> want = {
       "..",          "Match night", "old",           "team.mvd.tar.gz",
@@ -175,9 +177,9 @@ TEST(the_player_places_end_with_the_machines_roots) {
 TEST(ages_and_sizes_read_as_a_player_reads_them) {
   CHECK(vfs::age_text(5) == "JUST NOW");
   CHECK(vfs::age_text(300) == "5 MIN AGO");
-  CHECK(vfs::age_text(3 * 3600) == "3 H AGO");
+  CHECK(vfs::age_text(int64_t{3} * 3600) == "3 H AGO");
   CHECK(vfs::age_text(86400) == "1 DAY AGO");
-  CHECK(vfs::age_text(86400 * 90) == "3 MONTHS AGO");
+  CHECK(vfs::age_text(int64_t{86400} * 90) == "3 MONTHS AGO");
   CHECK(vfs::size_text(812) == "812 B");
   CHECK(vfs::size_text(21800000) == "20.8 MB");
   CHECK(vfs::size_text(1024 * 1024 * 300) == "300 MB");

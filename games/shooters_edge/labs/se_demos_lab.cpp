@@ -184,7 +184,8 @@ void run(ge::lab::Lab& lab) {
     const std::optional<ge::lab::Picture> p = ge::lab::read_png(lab.arg("backdrop"));
     if (!p) {
       lab.fail("--backdrop=" + lab.arg("backdrop") + " is not a PNG that reads",
-               "give it a frame of the game as a PNG (a screenshot, or a se-demo-video lab still)");
+               "next: give it a frame of the game as a PNG (a screenshot, or a se-demo-video lab "
+               "still)");
       return;
     }
     backdrop = ui::Image{.width = p->width, .height = p->height, .rgba = p->rgba};
@@ -329,8 +330,8 @@ void run(ge::lab::Lab& lab) {
                             : sm::load_classic_art(find_fixture, &art, &error);
     if (!loaded) {
       lab.fail("the menu's classic pictures did not load: " + error,
-               real ? "give --pack the release zip, an installed folder or its pak0.pak"
-                    : "check fixture_files in games/shooters_edge/menu/classic_art.cpp");
+               real ? "next: give --pack the release zip, an installed folder or its pak0.pak"
+                    : "next: check fixture_files in games/shooters_edge/menu/classic_art.cpp");
     } else {
       g.menu.set_art(std::move(art));
       g.menu.show(g.host);
