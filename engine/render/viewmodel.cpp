@@ -111,6 +111,7 @@ GpuHeldDraw pack_held_draw(const HeldDraw& d, const FrameView& view, uint32_t wi
     g.forward[i] = -cam.view.m[i * 4 + 2];
   }
   g.right[3] = static_cast<float>(libm::tan(view.fov_y * 0.5) / tan_y);
+  g.up[3] = 2 * d.lift;
   return g;
 }
 

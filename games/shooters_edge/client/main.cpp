@@ -996,7 +996,8 @@ int run_main(int argc, char** argv) {
       bench_fx_state.models = &cl::world_models(*world);
       bench_fx_state.on = cl::fx_switches(picture);
       cl::demo_fx_step(ds, bench_demo_fx, bench_map.get(), view, bench_fx_state, t, wall, bench_fx);
-      const auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
+      auto hand = cl::step_demo_held(ds, in_hand, view_settings, weapons, view, t, wall);
+      hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
       cl::draw_world(*device, *world, view, bench_fx, &hand, wall, overlay, target);
       if (!paced && bench.skip == 0) cl::record_span(*world, bench.passes);
       if (bench_shown_ns == frame_ns) {
@@ -1106,7 +1107,7 @@ int run_main(int argc, char** argv) {
     fx_state.book = &fx_book;
     fx_state.on = cl::fx_switches(picture);  // the enhanced weapon effects, by their ce_ switches
     cl::step_fx(listen, shown, fx_state, t, wall, fx);
-    const shooters_edge::view::HandFrame hand =
+    shooters_edge::view::HandFrame hand =
         cl::step_held(listen, shown, in_hand, view_settings, weapons, t, wall);
     if (hand.flashing)
       fx.lights.push_back(shooters_edge::effects::muzzle_light(hand.flash.position));
@@ -1118,6 +1119,7 @@ int run_main(int argc, char** argv) {
       se::fill_hud(hud, cl::status_of(listen, t), cl::hud_art_of(files, classic_art, free_art));
       const ge::hud::Frame hf = hud.layout.frame(w, h, se::hud_style());
       hud.layout.draw(overlay, hf, se::hud_style());
+      hand.lift = se::status_lift(hud, h);  // the gun over the classic status bar
     }
     if (listen.room && listen.server != nullptr) {
       // The warmup's banner in the packs' own menu pictures when they carry them, else modern.

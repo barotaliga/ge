@@ -118,6 +118,7 @@ struct HandFrame {
   double muzzle_at[3] = {0, 0, 0};   // the barrel's tip, world, m
   double muzzle_dir[3] = {0, 0, 1};  // the way it points, world, unit
   double muzzle_up[3] = {0, 1, 0};   // the gun's up, square to it
+  float lift = 0;  // the share of the screen the gun is raised by (over the classic status bar)
 };
 
 // One display frame of `dt` s seen through `view`. `models` is load_weapon_models's set (the

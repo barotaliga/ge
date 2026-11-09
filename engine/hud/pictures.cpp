@@ -9,6 +9,7 @@
 #include "hud/pictures.hpp"
 
 #include <algorithm>
+#include <vector>
 
 namespace ge::hud {
 
@@ -36,8 +37,38 @@ void picture_box(ui::DrawList& dl, const ui::Image* img, ui::Rect r, ui::Color t
 
 // The cell's size, art px.
 Size cell_size(const StripShape& s, const Cell& c, float density) {
-  return {s.cell_w > 0 ? s.cell_w : fw(c.image) / density,
-          s.cell_h > 0 ? s.cell_h : fh(c.image) / density};
+  return {c.w > 0        ? c.w
+          : s.cell_w > 0 ? s.cell_w
+                         : fw(c.image) / density,
+          c.h > 0        ? c.h
+          : s.cell_h > 0 ? s.cell_h
+                         : fh(c.image) / density};
+}
+
+// A strip's lines: where each starts in the cells, and its run and its depth, art px.
+struct Line {
+  size_t first = 0, end = 0;
+  float along = 0, across = 0;
+};
+
+std::vector<Line> lines_of(const StripShape& s, const std::vector<Cell>& cells, float density) {
+  std::vector<Line> out;
+  for (size_t i = 0; i < cells.size(); ++i) {
+    if (out.empty() || (cells[i].breaks && i > out.back().first)) out.push_back({i, i, 0, 0});
+    Line& l = out.back();
+    const Size z = cell_size(s, cells[i], density);
+    l.along += (l.end > l.first ? s.gap : 0) + (s.vertical ? z.h : z.w);
+    l.across = std::max(l.across, s.vertical ? z.w : z.h);
+    l.end = i + 1;
+  }
+  return out;
+}
+
+float line_gap(const StripShape& s) { return s.line_gap >= 0 ? s.line_gap : s.gap; }
+
+Anchor mirrored(Anchor a) {
+  const int col = static_cast<int>(a) % 3, row = static_cast<int>(a) / 3;
+  return static_cast<Anchor>(row * 3 + (2 - col));
 }
 
 }  // namespace
@@ -81,62 +112,75 @@ void draw(ui::DrawList& dl, const Digits& d, ui::Rect at, float u) {
 Size measure(const StripShape& s, const Strip& strip, float u) {
   if (strip.cells == nullptr || strip.cells->empty()) return {0, 0};
   float along = 0, across = 0;
-  for (const Cell& c : *strip.cells) {
-    const Size z = cell_size(s, c, strip.density);
-    along += (s.vertical ? z.h : z.w) + s.gap;
-    across = std::max(across, s.vertical ? z.w : z.h);
+  const std::vector<Line> lines = lines_of(s, *strip.cells, strip.density);
+  for (const Line& l : lines) {
+    along = std::max(along, l.along);
+    across += l.across;
   }
-  along -= s.gap;
+  across += line_gap(s) * static_cast<float>(lines.size() - 1);
   return s.vertical ? Size{across * u, along * u} : Size{along * u, across * u};
 }
 
-void draw(ui::DrawList& dl, const StripShape& s, const Strip& strip, ui::Rect at, float u) {
+void draw(ui::DrawList& dl, const StripShape& s, const Strip& strip, ui::Rect at, float u,
+          bool mirror) {
   if (strip.cells == nullptr) return;
-  float pos = 0;
-  for (const Cell& c : *strip.cells) {
-    const Size z = cell_size(s, c, strip.density);
-    const ui::Rect r = s.vertical ? ui::Rect{at.x, at.y + pos * u, z.w * u, z.h * u}
-                                  : ui::Rect{at.x + pos * u, at.y, z.w * u, z.h * u};
-    pos += (s.vertical ? z.h : z.w) + s.gap;
-    if (!c.show || c.alpha <= 0) continue;
-    if (c.plate.a > 0) {
-      const float ph = (s.plate_h > 0 ? s.plate_h : z.h) * u;
-      const float top = ph * s.plate_split;
-      dl.rect({r.x, r.y, r.w, top}, ui::with_alpha(c.plate, c.plate.a * c.alpha));
-      dl.rect({r.x, r.y + top, r.w, ph - top},
-              ui::with_alpha(c.plate_low, c.plate_low.a * c.alpha));
+  const std::vector<Cell>& cells = *strip.cells;
+  const float box_along = (s.vertical ? at.h : at.w) / u;
+  const int align = mirror && !s.vertical ? 2 - s.align : s.align;
+  float cross = 0;
+  for (const Line& l : lines_of(s, cells, strip.density)) {
+    const float slack = box_along - l.along;
+    float pos = align == 1 ? slack / 2 : align == 2 ? slack : 0;
+    for (size_t k = l.first; k < l.end; ++k) {
+      // Mirrored, a line runs from its far end: its last cell first.
+      const Cell& c = cells[mirror && !s.vertical ? l.end - 1 - (k - l.first) : k];
+      const Size z = cell_size(s, c, strip.density);
+      const float lift = (l.across - (s.vertical ? z.w : z.h)) / 2;  // centred across its line
+      const ui::Rect r =
+          s.vertical ? ui::Rect{at.x + (cross + lift) * u, at.y + pos * u, z.w * u, z.h * u}
+                     : ui::Rect{at.x + pos * u, at.y + (cross + lift) * u, z.w * u, z.h * u};
+      pos += (s.vertical ? z.h : z.w) + s.gap;
+      if (!c.show || c.alpha <= 0) continue;
+      if (c.plate.a > 0) {
+        const float ph = (s.plate_h > 0 ? s.plate_h : z.h) * u;
+        const float top = ph * s.plate_split;
+        dl.rect({r.x, r.y, r.w, top}, ui::with_alpha(c.plate, c.plate.a * c.alpha));
+        dl.rect({r.x, r.y + top, r.w, ph - top},
+                ui::with_alpha(c.plate_low, c.plate_low.a * c.alpha));
+      }
+      picture_box(dl, c.image, r, c.tint, u / strip.density, c.alpha);
+      if (c.framed) {
+        ui::Box b;
+        b.rect = r;
+        b.fill = ui::solid({0, 0, 0, 0});
+        b.border = s.frame_w * u;
+        b.border_color = s.frame;
+        b.feather = 0.5f;
+        b.opacity = c.alpha;
+        dl.box(b);
+      }
+      if (!c.text.empty()) {
+        Anchor where = c.text_at >= 0 ? static_cast<Anchor>(c.text_at) : s.text_at;
+        float dx = s.text_dx;
+        if (mirror) where = mirrored(where), dx = -dx;
+        const float size = s.text_size * u;
+        const float w = text_width(strip.face, size, c.text);
+        const float h = ascent(strip.face, size) + descent(strip.face, size);
+        const int col = static_cast<int>(where) % 3, row = static_cast<int>(where) / 3;
+        const float x = (col == 0 ? r.x : col == 1 ? r.x + (r.w - w) / 2 : r.right() - w) + dx * u;
+        const float y = (row == 0   ? r.y
+                         : row == 1 ? r.y + (r.h - h) / 2
+                                    : r.bottom() - h) +
+                        s.text_dy * u;
+        const float base = y + ascent(strip.face, size);
+        const ui::Color ink = ui::with_alpha(c.text_color, c.text_color.a * c.alpha);
+        if (strip.shadow.a > 0)
+          draw_text(dl, strip.face, size, x + u, base + u, c.text,
+                    ui::with_alpha(strip.shadow, strip.shadow.a * c.alpha));
+        draw_text(dl, strip.face, size, x, base, c.text, ink);
+      }
     }
-    picture_box(dl, c.image, r, c.tint, u / strip.density, c.alpha);
-    if (c.framed) {
-      ui::Box b;
-      b.rect = r;
-      b.fill = ui::solid({0, 0, 0, 0});
-      b.border = s.frame_w * u;
-      b.border_color = s.frame;
-      b.feather = 0.5f;
-      b.opacity = c.alpha;
-      dl.box(b);
-    }
-    if (!c.text.empty()) {
-      const float size = s.text_size * u;
-      const float w = text_width(strip.face, size, c.text);
-      const float h = ascent(strip.face, size) + descent(strip.face, size);
-      const int col = static_cast<int>(s.text_at) % 3, row = static_cast<int>(s.text_at) / 3;
-      const float x = (col == 0   ? r.x
-                       : col == 1 ? r.x + (r.w - w) / 2
-                                  : r.right() - w) +
-                      s.text_dx * u;
-      const float y = (row == 0   ? r.y
-                       : row == 1 ? r.y + (r.h - h) / 2
-                                  : r.bottom() - h) +
-                      s.text_dy * u;
-      const float base = y + ascent(strip.face, size);
-      const ui::Color ink = ui::with_alpha(c.text_color, c.text_color.a * c.alpha);
-      if (strip.shadow.a > 0)
-        draw_text(dl, strip.face, size, x + u, base + u, c.text,
-                  ui::with_alpha(strip.shadow, strip.shadow.a * c.alpha));
-      draw_text(dl, strip.face, size, x, base, c.text, ink);
-    }
+    cross += l.across + line_gap(s);
   }
 }
 

@@ -1,4 +1,4 @@
-// LAB `se-hud`: Shooter's Edge's seven HUD looks (games/shooters_edge/hud/layout.hpp) drawn by the
+// LAB `se-hud`: Shooter's Edge's six HUD looks (games/shooters_edge/hud/layout.hpp) drawn by the
 // CPU raster over a painted arena at desktop, wide and phone sizes, with the free art painted in
 // code:
 //
@@ -7,9 +7,8 @@
 //   - MODERN: health and armour bottom left, the ammunition bottom right, the guns along the
 //     bottom, the powerups down the right edge, the frags top right;
 //   - COMPACT: two arcs round the crosshair with their figures, the ammunition and the powerups
-//     under it, the keys over it, small guns along the bottom;
-//   - BARE, ARENA, TACTICAL and MINIMAL: the classic bar without its panels, and three modern
-//     layouts (layout.hpp says where each puts what).
+//     under it, the keys over it, small guns bottom right;
+//   - ARENA, TACTICAL and MINIMAL: three modern layouts (layout.hpp says where each puts what).
 //
 // Two moments are staged: a fight (a gun just picked up and flashing, the damage boost running,
 // a gold key, a frag board of four) and trouble (health, armour and ammunition low, the cloak's
@@ -18,11 +17,13 @@
 // concentric on purpose (the arcs). A close-up of the classic bars shows each moment at the
 // bar's own scale. With `--classic=<folder>` every look is drawn again in the player's own
 // classic pictures from classic-enhance's local cache (classic_art.hpp): `<cache>/pictures` as
-// the pack has them, `<cache>/pictures/enhanced` upscaled (`ce_pictures`).
+// the pack has them, `<cache>/pictures/enhanced` upscaled (`ce_pictures`). Then every look again
+// under each option (`kOptions`: hud_swap, hud_sbar, hud_guns, hud_guns_all and hud_ammo_all),
+// checked at every size and pictured at the first.
 //
-// ge:summary Lab: Shooter's Edge's seven HUD looks at five screen sizes
+// ge:summary Lab: Shooter's Edge's six HUD looks and their options at five screen sizes
 // ge:keywords lab hud se-hud shooter status-bar classic modern compact looks viewports
-// ge:keywords bare arena tactical minimal
+// ge:keywords hud_sbar hud_swap hud_guns arena tactical minimal
 // ge:keywords free-art layout-problems screenshot
 // ge:skill ui labs
 // ge:test tests/shooters_edge_hud_test.cpp
@@ -198,9 +199,7 @@ constexpr const char* kLookCaption[se::kLooks] = {
     "right edge with their seconds, the frags top right.",
     "Round the crosshair: health's arc on the left and armour's on the right with their figures, "
     "the ammunition under it and the powerups with their seconds under that, the keys over it, "
-    "small guns along the bottom.",
-    "The classic look bare: the status bar's and the inventory bar's pieces at their places with "
-    "neither panel drawn, straight over the world.",
+    "small guns bottom right.",
     "The arena look: health and armour big either side of the portrait at the bottom centre with "
     "thin bars over them, the rounds under the crosshair, the guns and the four ammunition counts "
     "down the right edge, the powerups across the top.",
@@ -209,6 +208,33 @@ constexpr const char* kLookCaption[se::kLooks] = {
     "slots over them; the powerups bottom centre.",
     "The minimal look: small faded figures only, health and armour bottom left, the rounds bottom "
     "right, the keys and powerups while held."};
+
+// An option the player sets over a look, and the line that sets it back.
+struct Option {
+  const char* id;
+  const char* line;
+  const char* undo;
+  std::string_view looks;  // the looks it is pictured over; empty: every one
+  const char* caption;
+};
+
+constexpr Option kOptions[] = {
+    {"swap", "hud_swap 1", "hud_swap 0", "",
+     "hud_swap 1: the look's left side on the right and its right side on the left; the classic "
+     "bars stay put."},
+    {"bare", "hud_sbar 0", "hud_sbar 1", "classic",
+     "hud_sbar 0: the classic bars' pieces at their places with neither panel drawn."},
+    {"by-ammo", "hud_guns ammo", "hud_guns look", "modern arena tactical compact",
+     "hud_guns ammo: the guns two to a line by the ammunition they share (the lightning gun "
+     "alone), each line led by its ammunition and count."},
+    {"pairs", "hud_guns pairs", "hud_guns look", "modern arena tactical compact",
+     "hud_guns pairs: the same 2-2-2-1 lines of guns, the ammunition counts apart."},
+    {"row", "hud_guns row", "hud_guns look", "modern arena tactical compact",
+     "hud_guns row: the guns in one row, the ammunition counts apart."},
+    {"owned", "hud_guns_all 0; hud_ammo_all 0", "hud_guns_all 1; hud_ammo_all 1",
+     "modern arena tactical",
+     "hud_guns_all 0 and hud_ammo_all 0: only the guns held and the ammunition carried."},
+};
 
 void run(ge::lab::Lab& lab) {
   const gh::Style style = se::hud_style();
@@ -273,8 +299,7 @@ void run(ge::lab::Lab& lab) {
           }
           ui::Image img = arena(v.w, v.h);
           ui::render(dl, img);
-          const bool closeup =
-              (look == se::Look::classic || look == se::Look::bare) && v.w == 1920 && v.h == 1080;
+          const bool closeup = look == se::Look::classic && v.w == 1920 && v.h == 1080;
           ui::Image close = closeup ? crop_bottom(img, 1400, 230) : ui::Image{};
           lab.shot({join({look_word, tag, "-", moment, "-", v.name()}),
                     join({"THE ", look_word, " LOOK, ", moment, ", AT ", v.name(),
@@ -306,6 +331,45 @@ void run(ge::lab::Lab& lab) {
       }
     }
   }
+  // THE OPTIONS: every look again under each option (hud_swap, hud_guns, hud_guns_all,
+  // hud_ammo_all, hud_sbar), checked at every size and pictured at the first, in the free art.
+  const se::HudArt& free = sets.front().second;
+  const Viewport& shown = viewports.front();
+  for (const Option& o : kOptions) {
+    for (int li = 0; li < se::kLooks; ++li) {
+      const std::string look_word(se::look_name(static_cast<se::Look>(li)));
+      if (!o.looks.empty() && o.looks.find(look_word) == std::string_view::npos) continue;
+      console.execute("hud_style " + look_word);
+      console.execute(std::string(o.line));
+      hud.centre.clear();
+      for (const Viewport& v : viewports) {
+        se::fill_hud(hud, fight(), free);
+        const gh::Frame f = hud.layout.frame(v.w, v.h, style);
+        ui::DrawList dl;
+        dl.begin(v.w, v.h);
+        const std::vector<gh::Placed> placed = hud.layout.draw(dl, f, style);
+        const std::vector<std::string> found = problems(hud.layout, f, placed);
+        total_problems += static_cast<int>(found.size());
+        for (const std::string& p : found)
+          lab.fail(join({"the ", look_word, " look with `", o.line, "` at ", v.name(), ": ", p}),
+                   "move or shrink the element in games/shooters_edge/hud/layout.cpp (table) or "
+                   "its cells (fill_hud); rerun `make lab LAB=se-hud`. Skill: ui.");
+        if (v.w != shown.w || v.h != shown.h) continue;
+        ui::Image img = arena(v.w, v.h);
+        ui::render(dl, img);
+        lab.shot({join({look_word, "-", o.id, "-", v.name()}),
+                  join({"THE ", look_word, " LOOK WITH ", o.line, ", AT ", v.name()}),
+                  o.caption,
+                  "nothing off the screen or overlapping; the option's change as the caption says",
+                  {{"look", look_word},
+                   {"option", o.line},
+                   {"viewport", v.name()},
+                   {"problems", std::to_string(found.size())}}},
+                 picture_of(std::move(img)));
+      }
+      console.execute(std::string(o.undo));
+    }
+  }
   lab.metric("problems", total_problems, "count");
   lab.metric("elements", static_cast<double>(hud.layout.size()), "count");
 }
@@ -316,7 +380,7 @@ const ge::lab::LabSpec kSpec{
     "game:shooters_edge",
     "games/shooters_edge/hud (the looks, the free art) over engine/hud's layout and pictures",
     "ui",
-    "Do Shooter's Edge's seven HUD looks lay out clean and read at desktop, "
+    "Do Shooter's Edge's six HUD looks and their options lay out clean and read at desktop, "
     "wide and phone sizes?",
     {{"viewports", "1280x720,1920x1080,2560x1080,844x390,390x844",
       "the screen sizes, comma-separated WxH"},

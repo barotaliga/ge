@@ -8,6 +8,7 @@
 // ge:keywords test hud shooter looks hud_style classic modern compact free-art classic-art
 // ge:keywords portrait flash low-figures shield layout-problems
 // ge:skill ui testing
+#include <cmath>
 #include <filesystem>
 #include <span>
 #include <string>
@@ -131,19 +132,130 @@ TEST(hud_style_picks_a_look_and_only_its_elements_show) {
   CHECK(content(hud, "min_health").on && !content(hud, "frags").on && !content(hud, "guns").on);
 }
 
-TEST(the_bare_look_draws_the_classic_pieces_without_either_panel) {
+TEST(hud_sbar_0_draws_the_classic_pieces_without_either_panel) {
   se::Hud hud = se::make_hud();
   ge::console::Console con;
   se::add_cvars(con, hud);
   se::fill_hud(hud, armed(), art());
   CHECK(content(hud, "sbar").color.a == 1.0f && content(hud, "ibar").color.a == 1.0f);
-  con.execute("hud_style bare");
+  con.execute("hud_sbar 0");
   se::fill_hud(hud, armed(), art());
   // The panels still lay out (their pieces hang from them) but draw nothing.
   CHECK(content(hud, "sbar").on && content(hud, "sbar").color.a == 0.0f);
   CHECK(content(hud, "ibar").on && content(hud, "ibar").color.a == 0.0f);
   CHECK(content(hud, "sbar_health").on && content(hud, "ibar_guns").on);
   CHECK(content(hud, "sbar_health").color.a == 1.0f);
+}
+
+TEST(the_classic_bar_sits_flush_on_the_bottom_and_lifts_the_gun_only_while_drawn) {
+  se::Hud hud = se::make_hud();
+  ge::console::Console con;
+  se::add_cvars(con, hud);
+  se::fill_hud(hud, armed(), art());
+  for (const auto& [w, h] : {std::pair{1280, 720}, std::pair{1920, 1080}, std::pair{844, 390}}) {
+    const auto placed = draw(hud, w, h);
+    const gh::Element& bar = hud.layout[static_cast<size_t>(hud.layout.find("sbar"))];
+    CHECK(bar.drawn.y + bar.drawn.h == static_cast<float>(h));  // no row of the world below it
+    const float lift = se::status_lift(hud, h);
+    CHECK(lift > 0.05f && lift < 0.5f);
+  }
+  con.execute("hud_sbar 0");
+  se::fill_hud(hud, armed(), art());
+  draw(hud, 1280, 720);
+  CHECK(se::status_lift(hud, 720) == 0.0f);
+  con.execute("hud_sbar 1; hud_style arena");
+  se::fill_hud(hud, armed(), art());
+  draw(hud, 1280, 720);
+  CHECK(se::status_lift(hud, 720) == 0.0f);
+}
+
+TEST(hud_swap_mirrors_every_look_but_the_classic_bars) {
+  for (const char* look : {"classic", "modern", "arena", "tactical", "minimal"}) {
+    se::Hud hud = se::make_hud();
+    ge::console::Console con;
+    se::add_cvars(con, hud);
+    con.execute(std::string("hud_style ") + look);
+    se::fill_hud(hud, armed(), art());
+    const auto before = draw(hud, 1280, 720);
+    con.execute("hud_swap 1");
+    se::fill_hud(hud, armed(), art());
+    const auto after = draw(hud, 1280, 720);
+    CHECK(before.size() == after.size());
+    const bool classic = std::string_view(look) == "classic";
+    int moved = 0;
+    for (size_t i = 0; i < before.size() && i < after.size(); ++i) {
+      const auto& a = before[i].rect;
+      const auto& b = after[i].rect;
+      if (classic) {
+        CHECK(a.x == b.x && a.y == b.y);
+        continue;
+      }
+      // Each box mirrored about the screen's middle, its height kept.
+      CHECK(std::abs((a.x + a.w / 2) + (b.x + b.w / 2) - 1280.0f) < 1.0f);
+      CHECK(a.y == b.y);
+      if (std::abs(a.x - b.x) > 1) ++moved;
+    }
+    if (!classic) CHECK(moved > 0);
+  }
+}
+
+TEST(hud_guns_groups_the_guns_2_2_2_1_by_ammunition_or_in_one_row) {
+  se::Hud hud = se::make_hud();
+  ge::console::Console con;
+  se::add_cvars(con, hud);
+  con.execute("hud_style arena");
+  se::fill_hud(hud, armed(), art());
+  // arena's own: each line led by its ammunition's count and icon, then its guns.
+  const auto& cells = content(hud, "arena_guns").cells;
+  CHECK(cells.size() == 4 * 2 + 7);
+  CHECK(cells[0].text == "34" && cells[1].image == &art().ammo[0]);
+  CHECK(cells[2].image == &art().gun[0] && cells[3].image == &art().gun[1]);
+  CHECK(cells[4].breaks && cells[4].text == "112");
+  CHECK(cells[12].breaks && cells[14].image == &art().gun[6] && cells.size() == 15);
+  CHECK(!content(hud, "arena_stock").on);
+  con.execute("hud_guns pairs");
+  se::fill_hud(hud, armed(), art());
+  const auto& pairs = content(hud, "arena_guns").cells;
+  CHECK(pairs.size() == 7 && pairs[2].breaks && pairs[4].breaks && pairs[6].breaks);
+  CHECK(!pairs[1].breaks && !pairs[3].breaks && !pairs[5].breaks);
+  CHECK(content(hud, "arena_stock").on);
+  con.execute("hud_guns row");
+  se::fill_hud(hud, armed(), art());
+  CHECK(content(hud, "arena_guns").cells.size() == 7);
+}
+
+TEST(hud_guns_all_and_hud_ammo_all_0_keep_only_what_is_held) {
+  se::Hud hud = se::make_hud();
+  ge::console::Console con;
+  se::add_cvars(con, hud);
+  con.execute("hud_style arena; hud_guns pairs");
+  se::Status s = armed();
+  s.owned = 0x01 | 0x20;  // the shotgun and the rocket launcher
+  se::fill_hud(hud, s, art());
+  const auto& all = content(hud, "arena_guns").cells;
+  CHECK(all[1].show && all[1].alpha < 1.0f);  // not held: dim
+  CHECK(content(hud, "arena_stock").cells.size() == 8);
+  con.execute("hud_guns_all 0; hud_ammo_all 0");
+  se::fill_hud(hud, s, art());
+  const auto& held = content(hud, "arena_guns").cells;
+  CHECK(held[0].show && !held[1].show && held[5].show);
+  CHECK(content(hud, "arena_stock").cells.size() == 2);  // the rockets in hand alone
+}
+
+TEST(every_look_shows_the_armours_type) {
+  for (const char* look : {"classic", "modern", "arena", "tactical", "minimal"}) {
+    se::Hud hud = se::make_hud();
+    ge::console::Console con;
+    se::add_cvars(con, hud);
+    con.execute(std::string("hud_style ") + look);
+    se::fill_hud(hud, armed(), art());
+    bool shown = false;
+    for (size_t i = 0; i < hud.layout.size(); ++i) {
+      const gh::Content& c = hud.layout[i].content;
+      if (c.on && c.image == &art().armour[1]) shown = true;
+    }
+    CHECK(shown);
+  }
 }
 
 TEST(the_classic_figures_turn_to_the_alarm_sheet_when_low_and_the_shield_shows_666) {
@@ -190,8 +302,7 @@ TEST(a_gun_picked_up_flashes_for_a_second) {
 }
 
 TEST(every_look_lays_out_on_the_screen_at_a_desktop_and_an_upright_phone) {
-  for (const char* look :
-       {"classic", "modern", "compact", "bare", "arena", "tactical", "minimal"}) {
+  for (const char* look : {"classic", "modern", "compact", "arena", "tactical", "minimal"}) {
     se::Hud hud = se::make_hud();
     ge::console::Console con;
     se::add_cvars(con, hud);

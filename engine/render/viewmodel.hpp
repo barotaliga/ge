@@ -82,6 +82,9 @@ struct HeldDraw {
   double white_lux = 0;            // lx on white that the held unit's 1 is (0: the eye's white)
   bool hide_flame = true;          // leave out the model's own flash (`HeldModel::flame`)
   bool hide_hands = false;         // leave out the hands holding it (`HeldModel::hand`)
+  // The share of the screen's height the gun is raised by, the whole of it alike: a view drawn
+  // above a status bar (Shooter's Edge's classic bar) shows the gun over the bar, not behind it.
+  float lift = 0;
   // Coming into being or going out of it (render/morph.hpp's MorphWarp): its axis and span in the
   // held frame; pinch and shimmer are not drawn here.
   MorphWarp warp;
@@ -109,7 +112,7 @@ struct GpuHeldDraw {
   float direct[4];   // rgb; shininess
   float toward[4];   // view, unit; the held lights' count
   float right[4];    // the view's right in the world (camera-relative); the lens ratio
-  float up[4];       // and its up
+  float up[4];       // and its up; the lift in NDC (twice the share of the screen)
   float forward[4];  // and its forward
   float lights[viewmodel::kHeldLights][8];  // at (view, m), range; rgb, radius
   float warp[16];                           // render/wgsl/warp.wgsl's Warp
