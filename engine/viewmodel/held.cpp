@@ -333,6 +333,18 @@ int find_held_clip(const HeldModel& model, std::string_view name) {
   return -1;
 }
 
+int find_held_clip(const HeldModel& model, std::string_view name, int take) {
+  for (size_t i = 0; i < model.clips.size(); ++i)
+    if (model.clips[i].name == name && take-- == 0) return static_cast<int>(i);
+  return -1;
+}
+
+int count_held_clips(const HeldModel& model, std::string_view name) {
+  int n = 0;
+  for (const HeldClip& c : model.clips) n += c.name == name ? 1 : 0;
+  return n;
+}
+
 void held_clip_frames(const HeldModel& model, int clip, double t_s, bool loop, int& a, int& b,
                       double& t) {
   a = b = 0;
