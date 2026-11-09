@@ -18,6 +18,8 @@
 // ge:keywords headless display_available open_window poll_input now_ns prefs_dir prefs user-dir
 // ge:keywords fullscreen set_fullscreen displays external-monitor pick_folder folder_picked
 // ge:keywords folder-dialog file-dialog folder-chooser run_app app-entry uikit ios-main
+// ge:keywords refresh_hz refresh-rate promotion wait_until_ns precise-sleep set_swap_images
+// ge:keywords maximum-drawable-count swap-images
 // ge:skill platform
 // ge:test tests/platform_window_test.cpp
 #pragma once
@@ -125,6 +127,8 @@ class Window {
   friend bool set_fullscreen(Window& window, bool on, int display);
   friend bool pick_folder(Window& window, std::string_view title, std::string_view start);
   friend bool folder_picked(Window& window, std::string* path, std::string* error);
+  friend double refresh_hz(const Window& window);
+  friend void set_swap_images(Window& window, int images);
   std::unique_ptr<Impl> impl_;
 };
 
@@ -160,6 +164,21 @@ void poll_input(Window& window, InputSnapshot& input);
 
 // A monotonic clock, ns. For the frame's delta only: the simulation never sees it.
 uint64_t now_ns();
+
+// Wait until `now_ns()` reaches `deadline_ns` (at once when it has): the OS's sleep for most of
+// it, then a short spin, so a frame cap lands within tens of microseconds, not a timer tick.
+void wait_until_ns(uint64_t deadline_ns);
+
+// THE DISPLAY'S REFRESH under the window, Hz (120 on a ProMotion panel, 60 on most), or 0 when
+// the platform does not say. It changes when the window moves to another display: read it each
+// frame (it is a cached lookup).
+double refresh_hz(const Window& window);
+
+// How many images the window's swap chain may hold, 2 or 3 (clamped): one on the display and one
+// drawn is the least lag at vsync; a third lets a slow frame queue instead of missing a refresh.
+// Apple's Metal layer takes it (its own default is 3); elsewhere the GPU's present mode decides
+// and this does nothing. Call it after every surface configure.
+void set_swap_images(Window& window, int images);
 
 // The player's own directory for what a game keeps between sessions (the bindings file, the
 // runs), made when missing and ending in a separator: the platform's per-user place for an app's
