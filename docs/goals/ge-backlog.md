@@ -97,6 +97,7 @@ conflict. Milestone M12d in [`../goals.md`](../goals.md) takes these by group.
 - precheck naming the goldens and digests main already fails (`--known-red`, off main's last CI run), so a red that is main's own is ruled out without a second full run (#267)
 - `ge ci <run> --lab-log` (a failed lab's per-view metrics read out of a CI job's log, so a flake names its view without a rerun; #233)
 - `ge digest --affected` following the running `ge`'s preset (the release `ge` still ran the debug labs), and `--only-moved-by=<symbol>` (only the labs whose digest a named symbol can move: a `state.hpp` change reached 67 labs, over 25 minutes in debug; #231; a brush, app or render change reached about 85 labs, past a 4-core container's 30-minute window: precheck running only the labs a change can move, bonfires thread, #402)
+- `ge digest --affected --why=<lab>` (the include chain that reached a lab: the changed file, each header passed on and the object that passed it; a held.hpp change reached 100 labs in a GPU build through one render object, found by hand with `ninja -t deps` in another thread's container; the spread was narrowed in #612; axe-swings thread)
 - `ge digest --affected --write` (only the digests the change moved rewritten, each named with why, in place of one lab at a time; #270), and `ge digest --affected` resuming after an interrupt (a container restart lost a half-written set; #279)
 
 ## Inspecting a run
