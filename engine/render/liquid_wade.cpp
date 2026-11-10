@@ -12,7 +12,9 @@
 #include <cmath>
 
 #include "core/libm/libm.hpp"
+#include "core/prng.hpp"
 #include "render/liquid.hpp"
+#include "render/particles.hpp"
 
 namespace ge::render {
 
@@ -165,9 +167,76 @@ void wade_liquids(Liquids& liquids, LiquidWading& wading, std::span<const Liquid
                               ? std::min(1.0, double(k + 1) / double(kFadeOldest))
                               : 1.0;
       put(b.wades[k], s.x, s.z, s.t, s.strength * fade);
-      put(b.wade_v[k], s.vx, s.vz, s.span_s, s.head ? 1 : 0);
+      put(b.wade_v[k], s.vx, s.vz, s.span_s, s.head ? 1 : (s.heave ? 2 : 0));
     }
     b.wade0[0] = static_cast<float>(n);
+  }
+}
+
+int plunge_liquid(Liquids& liquids, LiquidWading& wading, double x, double y, double z, double t_s,
+                  bool out, double strength) {
+  int body = -1;
+  for (size_t i = 0; i < liquids.bodies.size() && body < 0; ++i) {
+    const Liquids::Slot& slot = liquids.bodies[i];
+    const LiquidGpuBody& b = slot.staged;
+    if (!slot.hidden && x > b.box[0] && x < b.box[2] && z > b.box[1] && z < b.box[3] &&
+        std::abs(y - b.info[0]) < 1 && y > slot.floor - 0.5)
+      body = static_cast<int>(i);
+  }
+  if (body < 0) return -1;
+  wading.stamps.resize(liquids.bodies.size());
+  WadeStamp s;
+  s.x = x;
+  s.z = z;
+  s.t = t_s;
+  s.strength = std::clamp(strength, 0.0, kPlungeMost);
+  s.heave = out;
+  s.track = -1;
+  std::vector<WadeStamp>& list = wading.stamps[static_cast<size_t>(body)];
+  if (list.size() >= static_cast<size_t>(kLiquidWades)) list.erase(list.begin());
+  list.push_back(s);
+  return body;
+}
+
+void liquid_splash(const Liquids& liquids, int index, const double at[3], double strength,
+                   uint32_t seed, std::vector<Particle>& out) {
+  if (index < 0 || index >= static_cast<int>(liquids.bodies.size())) return;
+  const Liquids::Slot& slot = liquids.bodies[static_cast<size_t>(index)];
+  const double v = std::max(slot.wade.viscosity, 0.1);
+  const bool lava = slot.staged.info[1] < 0.5f;  // kind 0: lava
+  const double level = slot.staged.info[0];
+  // Water's splash thrown 4 m/s up: a thicker liquid's slower by the square root (lava's 2 m/s,
+  // up 0.2 m), and fewer drops.
+  const double up = 4 / std::sqrt(v);
+  const int n = static_cast<int>(std::lround(std::clamp(strength, 0.0, 1.0) * 20 / std::sqrt(v)));
+  core::Rng r = core::make_rng(seed);
+  for (int i = 0; i < n; ++i) {
+    Particle d{};
+    const double a = core::range(r, 0, kTwoPi), out_mps = core::range(r, 0.2, 0.9) / std::sqrt(v);
+    d.p[0] = static_cast<float>(at[0] + 0.08 * libm::cos(a));
+    d.p[1] = static_cast<float>(level + 0.02);
+    d.p[2] = static_cast<float>(at[2] + 0.08 * libm::sin(a));
+    d.v[0] = static_cast<float>(out_mps * libm::cos(a));
+    d.v[1] = static_cast<float>(up * core::range(r, 0.5, 1.0));
+    d.v[2] = static_cast<float>(out_mps * libm::sin(a));
+    d.life = static_cast<float>(core::range(r, 0.6, 1.1));
+    d.size = static_cast<float>(core::range(r, 0.05, 0.11));
+    d.drag = 0.3f;
+    d.fall = 1;
+    d.streak = 0.02f;
+    d.opacity = 1;
+    d.floor_y = static_cast<float>(level);
+    if (lava) {
+      // Molten orange cooling to the crust's black-brown.
+      d.kelvin = -1.6f;
+      d.cool_s = 0.35f;  // a skin on it at once: dark specks over the melt
+      d.albedo = 0.08f;
+      d.tint[0] = 1.0f, d.tint[1] = 0.38f, d.tint[2] = 0.06f;
+    } else {
+      d.albedo = 0.35f;
+      d.tint[0] = 0.45f, d.tint[1] = 0.75f, d.tint[2] = 0.15f;
+    }
+    out.push_back(d);
   }
 }
 
@@ -198,8 +267,8 @@ WadeAt wade_height(std::span<const WadeStamp> stamps, const WadeLook& look, bool
     }
     const double at = std::max(t_s - tt, 0.0);
     const double rho2 = (d / leg) * (d / leg);
-    const double f =
-        -w.depth_m * s.strength * (1 - rho2) * libm::exp(-rho2) * libm::exp(-at / w.furrow_s);
+    const double f = (s.heave ? 1 : -1) * w.depth_m * s.strength * (1 - rho2) * libm::exp(-rho2) *
+                     libm::exp(-at / w.furrow_s);
     if (f < 0)
       trough = std::min(trough, f);
     else
@@ -223,6 +292,8 @@ WadeAt wade_height(std::span<const WadeStamp> stamps, const WadeLook& look, bool
     }
   }
   out.height_m = trough + lip + sum + bow;
+  out.open = std::min(out.open, 1.0);  // a plunge's stamp is stronger than 1
+  out.furrow = std::min(out.furrow, 1.0);
   return out;
 }
 

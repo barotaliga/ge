@@ -18,6 +18,8 @@
 // ge:test tests/render_liquid_wade_test.cpp
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <vector>
@@ -283,14 +285,16 @@ bool clear(const br::Map& m, const float a[3], const float b[3]) {
 }
 
 // AN EYE on the walk's middle `target`: `lift` units over it, `near` to `far` units off, beside
-// the walk rather than along it, with clear lines to both its ends and the middle.
+// the walk rather than along it, with clear lines to both its ends and the middle. With `margin`
+// units of room round it, the eye that sees the most of the liquid round `target` instead.
 struct Eye {
   float at[3] = {0, 0, 0};
   float yaw = 0, pitch = 0;
 };
 bool find_eye(const br::Map& m, const float target[3], const float a[3], const float b[3], int near,
-              int far, float lift, Eye& out) {
+              int far, float lift, Eye& out, int margin = 0) {
   const double along = libm::atan2(b[1] - a[1], b[0] - a[0]);
+  int best = -1;
   // Beside the walk first, then round it; the nearer the better.
   for (const bool both_ends : {true, false})
     for (int d = near; d <= far; d += 16)
@@ -301,17 +305,40 @@ bool find_eye(const br::Map& m, const float target[3], const float a[3], const f
           const float e[3] = {target[0] + static_cast<float>(d * libm::cos(ang)),
                               target[1] + static_cast<float>(d * libm::sin(ang)), target[2] + rise};
           if (contents(m, e[0], e[1], e[2]) == kSolid) continue;
+          // Room round the eye: no wall within `margin` units either way (an eye against a wall
+          // sees half its picture black).
+          bool room = true;
+          for (int ax = 0; ax < 3 && margin > 0; ++ax)
+            for (const int sg : {-1, 1}) {
+              float q[3] = {e[0], e[1], e[2]};
+              q[ax] += static_cast<float>(sg * margin);
+              if (!clear(m, e, q)) room = false;
+            }
+          if (!room) continue;
           if (!clear(m, e, target)) continue;
           if (both_ends && (!clear(m, e, a) || !clear(m, e, b))) continue;
+          // With a margin, every eye is weighed by how much of the liquid round the target it
+          // sees (a grid of points 16 units under the level, 160 units either way), the best kept.
+          int score = 0;
+          if (margin > 0)
+            for (int gx = -160; gx <= 160; gx += 32)
+              for (int gy = -160; gy <= 160; gy += 32) {
+                const float g[3] = {target[0] + static_cast<float>(gx),
+                                    target[1] + static_cast<float>(gy), target[2] - 16};
+                const float over[3] = {g[0], g[1], target[2] + 4};
+                if (contents(m, g[0], g[1], g[2]) < kSolid && clear(m, e, over)) score++;
+              }
+          if (margin > 0 && score <= best) continue;
+          best = score;
           for (int i = 0; i < 3; i++) out.at[i] = e[i];
           out.yaw = static_cast<float>(libm::atan2(target[1] - e[1], target[0] - e[0]) * 180 / kPi);
           const float dx = target[0] - e[0], dy = target[1] - e[1];
           out.pitch = static_cast<float>(
               libm::atan2(e[2] - target[2], std::sqrt(dx * dx + dy * dy)) * 180 / kPi);
-          return true;
+          if (margin == 0) return true;
         }
       }
-  return false;
+  return best >= 0;
 }
 
 double median(std::vector<double> v) {
@@ -529,6 +556,206 @@ void run_pool(gl::Lab& lab, const cl::SearchPath& files, const std::string& map_
   }
 }
 
+// A BALL OF LAVA hurled out of a map's fire spout (its first `misc_fireball`: straight up at its
+// `speed`, 1000 units a second when it has none, under the classic gravity of 800) and falling
+// back: drawn with ce_wade off and on at moments round its leaving and its coming down.
+void run_fireball(gl::Lab& lab, const cl::SearchPath& files, const std::string& map_name,
+                  std::vector<Cost>& costs) {
+  std::string error;
+  ge::progs::Progs progs;
+  if (!cl::baseline_progs(progs, error)) {
+    lab.fail("se-wade: the baseline mod: " + error, "Read the reason above. Skill: progs.");
+    return;
+  }
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, map_name, error);
+  if (!map) {
+    lab.fail("se-wade: " + error, "Pass --fireball=<a map of the folder>. Skill: shooter.");
+    return;
+  }
+  const br::Map& m = map->bsp.map;
+  float spout[3] = {0, 0, 0};
+  double speed = 1000;
+  bool found = false;
+  for (const br::Entity& e : m.entities) {
+    if (e.get("classname") != "misc_fireball") continue;
+    if (std::sscanf(e.get("origin").c_str(), "%f %f %f", &spout[0], &spout[1], &spout[2]) != 3)
+      continue;
+    if (!e.get("speed").empty()) speed = std::atof(e.get("speed").c_str());
+    found = true;
+    break;
+  }
+  // The lava's surface over the spout (or under it, a spout over the lava).
+  float level = spout[2];
+  bool lava = false;
+  if (found) {
+    for (int dz = -128; dz <= 128 && !lava; dz += 2)
+      if (contents(m, spout[0], spout[1], spout[2] + static_cast<float>(dz)) == kLava &&
+          contents(m, spout[0], spout[1], spout[2] + static_cast<float>(dz + 2)) != kLava) {
+        level = spout[2] + static_cast<float>(dz) + 2;
+        lava = true;
+      }
+  }
+  if (!lava) {
+    lab.fail("se-wade: " + map_name + " has no fire spout in lava (misc_fireball)",
+             "Pass --fireball=<a map with one>. Skill: shooter.");
+    return;
+  }
+  const float target[3] = {spout[0], spout[1], level};
+  Eye eye;
+  if (!find_eye(m, target, target, target, 160, 480, 140, eye, 48)) {
+    lab.fail("se-wade: " + map_name + "'s fire spout has no eye in the clear over it",
+             "Pass another map. Skill: shooter.");
+    return;
+  }
+  lab.note("fireball on " + map_name + ": the spout " + fixed(spout[0], 0) + "," +
+           fixed(spout[1], 0) + "," + fixed(spout[2], 0) + ", the lava at " + fixed(level, 0) +
+           ", speed " + fixed(speed, 0) + "; the eye " + fixed(eye.at[0], 0) + "," +
+           fixed(eye.at[1], 0) + "," + fixed(eye.at[2], 0));
+  cl::ListenOptions lo = shooters_edge::net::listen_options();
+  cl::Listen l;
+  if (!cl::listen_start(l, progs, std::move(map), lo, error)) {
+    lab.fail("se-wade: " + error, "Read the reason above. Skill: shooter.");
+    return;
+  }
+  for (int i = 0; i < 20; i++) cl::listen_frame(l, {});
+  std::vector<std::string> names = l.server->models;
+  const int ball_model = static_cast<int>(names.size());
+  names.emplace_back("progs/lavaball.mdl");
+  auto device = ge::gpu::create_device({.label = "se-wade", .validation = 1});
+  if (!device) {
+    lab.note("no GPU device: no pictures (install Mesa's Vulkan drivers; skill: gpu)");
+    return;
+  }
+  const uint32_t w = static_cast<uint32_t>(lab.arg_num("width")),
+                 h = static_cast<uint32_t>(lab.arg_num("height"));
+  shooters_edge::look::Picture look;
+  ge::console::Console con;
+  shooters_edge::look::add_cvars(con, look);
+  con.execute(lab.cvars());
+  cl::WorldDrawPtr world = cl::create_world_draw(
+      *device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm, look, {}, error, {names, {}});
+  if (!world) {
+    lab.fail("se-wade: " + error, "Read the gpu: lines above. Skill: render.");
+    return;
+  }
+  ge::gpu::Target out = ge::gpu::create_target(*device, "se-wade.final", w, h);
+  cl::ViewState shown;
+  gr::FrameView view = cl::frame_view(l, shown, 0, 0, 0);
+  const ge::camera::Vec3 e = cl::engine_point({eye.at[0], eye.at[1], eye.at[2]});
+  view.eye[0] = e.x, view.eye[1] = e.y, view.eye[2] = e.z;
+  view.heading = cl::engine_heading(eye.yaw);
+  view.pitch = cl::engine_pitch(eye.pitch);
+  cl::FxFrame fx;
+  double t = 10;
+  auto draw = [&](cl::PassTimes* times) {
+    view.time_s = t;
+    cl::draw_world(*device, *world, view, fx, nullptr, kDt, {}, out.view);
+    ge::gpu::wait(*device, device->queue.OnSubmittedWorkDone(
+                               wgpu::CallbackMode::WaitAnyOnly,
+                               [](wgpu::QueueWorkDoneStatus, wgpu::StringView) {}));
+    if (times != nullptr) cl::record_span(*world, *times);
+    t += kDt;
+  };
+  auto grab = [&]() {
+    const ge::gpu::Image img = ge::gpu::read_now(*device, out);
+    return gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba};
+  };
+  // Its flight: born at the spout (under the level, or a little under it for a spout over it), up
+  // at `speed`, drifting 20 units a second; drawn from its birth, so a frame sees it in the lava.
+  constexpr double kGravityUps = 800;
+  const double z0 = std::min<double>(spout[2], level - 8);
+  const double down_s = (speed + std::sqrt(speed * speed + 2 * kGravityUps * (z0 - level))) /
+                        kGravityUps;  // back at the level
+  const double up_s = (level - z0) / speed;
+  const double total_s = down_s + 2.0;
+  cl::Placed ball;
+  ball.entity = 300;
+  ball.modelindex = ball_model;
+  auto place = [&](double rt) {
+    const double z = z0 + speed * rt - 0.5 * kGravityUps * rt * rt;
+    ball.origin = {static_cast<float>(spout[0] + 20 * rt), spout[1], static_cast<float>(z)};
+    ball.angles = {static_cast<float>(200 * rt), static_cast<float>(100 * rt), 0};
+    // Gone a while after it sinks (the spout's own lasts until it lands on the floor).
+    fx.models.clear();
+    if (z > level - 96) fx.models.push_back(ball);
+  };
+  const std::vector<std::pair<double, std::string>> moments = {
+      {up_s + 0.1, "0.1 s after it left the lava"},
+      {up_s + 0.6, "0.6 s after it left"},
+      {down_s + 0.1, "0.1 s after it came down"},
+      {down_s + 0.3, "0.3 s after it came down"},
+      {down_s + 1.5, "1.5 s after it came down"}};
+  const std::vector<std::pair<std::string, std::string>> inputs = {{"map", map_name},
+                                                                   {"liquid", "lava"}};
+  const int frames = static_cast<int>(total_s / kDt);
+  auto run = [&](bool on, std::vector<gl::Picture>* shots, std::vector<gl::Picture>* film,
+                 cl::PassTimes* times) {
+    con.execute(on ? "ce_wade 1" : "ce_wade 0");
+    t = 10;
+    fx.models.clear();
+    for (int i = 0; i < 20; i++) draw(nullptr);
+    size_t next = 0;
+    for (int i = 0; i < frames; i++) {
+      const double rt = i * kDt;
+      place(rt);
+      draw(times);
+      if (film != nullptr && (i % 2 == 0)) film->push_back(gl::shrink(grab(), 360));
+      if (next < moments.size() && rt + 1e-9 >= moments[next].first) {
+        if (shots != nullptr) shots->push_back(grab());
+        next++;
+      }
+    }
+  };
+  std::vector<gl::Picture> still, hit, film;
+  cl::PassTimes off_t, on_t;
+  run(false, &still, nullptr, &off_t);
+  run(true, &hit, &film, &on_t);
+  for (size_t k = 0; k < hit.size() && k < still.size(); ++k) {
+    const std::string when = moments[k].second;
+    const double share = changed_share(still[k], hit[k]);
+    lab.metric("fireball.changed-share." + std::to_string(k), share, "ratio", gl::Det::measured);
+    lab.shot({"fireball-" + std::to_string(k) + "-still",
+              std::string("fireball on ").append(map_name).append(", ce_wade 0: ").append(when),
+              "A ball of lava hurled out of the fire spout and falling back; ce_wade 0.",
+              "the lava still where the ball leaves and lands", inputs},
+             still[k], gl::Det::measured);
+    lab.shot({"fireball-" + std::to_string(k) + "-plunged",
+              std::string("fireball on ").append(map_name).append(", ce_wade 1: ").append(when),
+              std::string("The same moment with ce_wade 1 (changes ")
+                  .append(fixed(share * 100, 1))
+                  .append("% of the picture)."),
+              k < 2 ? "a mound heaved where it left, slow broad rings running out"
+                    : "a crater torn through the crust, a few glowing drops thrown a little way "
+                      "up, filling back in over seconds",
+              inputs},
+             hit[k], gl::Det::measured);
+  }
+  if (hit.size() > 3 && still.size() > 3) {
+    for (const size_t k : {size_t{1}, size_t{3}}) {
+      gl::Picture d = hit[k];
+      for (size_t i = 0; i + 3 < d.rgba.size(); i += 4)
+        for (size_t c = 0; c < 3; ++c)
+          d.rgba[i + c] = static_cast<uint8_t>(
+              std::min(255, 4 * std::abs(int(hit[k].rgba[i + c]) - int(still[k].rgba[i + c]))));
+      lab.shot({"fireball-difference-" + std::to_string(k),
+                "fireball on " + map_name + ": what the plunge changed, " + moments[k].second,
+                "The difference between ce_wade 1 and 0, four times over.",
+                "rings round where it left or landed; black elsewhere", inputs},
+               d, gl::Det::measured);
+    }
+  }
+  lab.attach("fireball-film.gif", gl::encode_gif_frames(film, 15), gl::Det::measured);
+  for (const auto& [what, p] :
+       {std::pair<const char*, cl::PassTimes*>{"wade-off", &off_t}, {"wade-on", &on_t}}) {
+    Cost c;
+    c.what = std::string("fireball: ") + what;
+    c.span = median(p->span_ms);
+    for (const auto& [pass, ms] : p->pass_ms)
+      if (pass == "liquid") c.liquid = median(ms);
+    costs.push_back(c);
+  }
+}
+
 void run(gl::Lab& lab) {
   cpu_half(lab);
   const std::string folder = lab.arg("game");
@@ -545,6 +772,7 @@ void run(gl::Lab& lab) {
   std::vector<Cost> costs;
   if (!lab.arg("lava").empty()) run_pool(lab, files, lab.arg("lava"), kLava, costs);
   if (!lab.arg("slime").empty()) run_pool(lab, files, lab.arg("slime"), kSlime, costs);
+  if (!lab.arg("fireball").empty()) run_fireball(lab, files, lab.arg("fireball"), costs);
   if (costs.empty()) return;
   gl::LabTable table{"the GPU's time a frame through the walk (medians, ms, " + lab.arg("width") +
                          "x" + lab.arg("height") + ")",
@@ -562,11 +790,13 @@ const gl::LabSpec kSpec{
     "torn crust, by viscosity), drawn by client/world_draw.hpp",
     "render",
     "Does lava and slime part round a player wading through them and close slowly behind him, "
-    "lava thicker than slime? On real maps' pools, with the liquid pass's GPU cost.",
+    "lava thicker than slime, and does a ball of lava hurled out heave it and splash coming down? "
+    "On real maps' pools, with the liquid pass's GPU cost.",
     {
         {"game", "", "a game folder (<base>/<folder>); empty: the CPU half alone"},
         {"lava", "start", "with --game: a map with a lava pool"},
         {"slime", "e1m1", "with --game: a map with a slime pool"},
+        {"fireball", "start", "with --game: a map with a fire spout in lava (misc_fireball)"},
         {"moments", "3", "with --game: pictures through the walk and the stand after"},
         {"width", "800", "with --game: the frame's width, px"},
         {"height", "500", "with --game: the frame's height, px"},

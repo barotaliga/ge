@@ -48,7 +48,22 @@ struct WorldExtras {
   gr::Liquids liquids;
   gr::LiquidWading wading;  // the players' tracks through the lava and the slime (ce_wade)
   std::vector<gr::LiquidWader> waders;  // this frame's
-  std::vector<ba::Kind> liquid_kinds;   // each liquid slot's: kLava or kSlime
+  // The things not players last seen (a ball of lava hurled out of it, a grenade): where, and
+  // whether in lava or slime, so one crossing the surface is a plunge (wade_extras).
+  struct Thrown {
+    int entity = 0;
+    sh::Vec3f origin;
+    bool in = false;
+    bool seen = false;
+  };
+  std::vector<Thrown> thrown;
+  struct Splash {
+    int body = 0;
+    double at[3] = {0, 0, 0};
+    uint32_t seed = 0;
+  };
+  std::vector<Splash> splashes;        // this frame's, thrown by extras_births
+  std::vector<ba::Kind> liquid_kinds;  // each liquid slot's: kLava or kSlime
   gr::Flames flames;
   std::vector<gr::Flame> fires;
   ba::FireLook fire_look;  // this frame's: bonfires or not, the wind
@@ -277,10 +292,56 @@ void wade_extras(WorldExtras& x, std::span<const Placed> models, const Placed* s
     const ge::camera::Vec3 feet = engine_point({p.origin.x, p.origin.y, p.origin.z + kFeetUnits});
     x.waders.push_back({p.entity, {feet.x, feet.y, feet.z}, kPlayerHeightM});
   };
+  const bool on = x.on->wade && (x.on->lava || x.on->slime);
   for (const Placed& p : models)
     if (p.entity > 0 && p.entity <= ge::shooter::kMaxClients) add(p);
   if (self != nullptr) add(*self);
-  gr::wade_liquids(x.liquids, x.wading, x.waders, t_s, x.on->wade && (x.on->lava || x.on->slime));
+  // A thing crossing the surface (a ball of lava hurled out of it on a map's fire spout, falling
+  // back): out of the liquid it heaves it, into it it punches a crater and splashes. Crossed
+  // between the frame before and this one at the height where the line between them meets the
+  // contents' change, found by halving it.
+  constexpr float kJumpUnits = 128;  // moved further in a frame: another thing in that slot
+  // A ball hurled out of the lava heaves it half again a wader's stride; one coming down hits it
+  // two and a half times as hard.
+  constexpr double kOutStrength = 1.5, kDownStrength = 2.5;
+  x.splashes.clear();
+  for (auto& k : x.thrown) k.seen = false;
+  auto liquid = [&](sh::Vec3f q) {
+    const float pt[3] = {q.x, q.y, q.z};
+    const int32_t c = ge::brush::hull_contents(x.scene->map, pt, 0, 0);
+    return c == kSlime || c == kLava;
+  };
+  for (const Placed& p : models) {
+    if (p.entity <= ge::shooter::kMaxClients || p.modelindex <= 0) continue;
+    const bool in = liquid(p.origin);
+    auto k = std::find_if(x.thrown.begin(), x.thrown.end(),
+                          [&](const WorldExtras::Thrown& h) { return h.entity == p.entity; });
+    if (k == x.thrown.end()) {
+      x.thrown.push_back({p.entity, p.origin, in, true});
+      continue;
+    }
+    k->seen = true;
+    const sh::Vec3f a = k->origin, b = p.origin;
+    const bool was = k->in;
+    k->origin = b;
+    k->in = in;
+    const float dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+    if (was == in || !on || dx * dx + dy * dy + dz * dz > kJumpUnits * kJumpUnits) continue;
+    float lo = 0, hi = 1;  // `was` at lo, `in` at hi
+    for (int i = 0; i < 8; ++i) {
+      const float m = 0.5f * (lo + hi);
+      (liquid({a.x + m * dx, a.y + m * dy, a.z + m * dz}) == was ? lo : hi) = m;
+    }
+    const float f = 0.5f * (lo + hi);
+    const ge::camera::Vec3 at = engine_point({a.x + f * dx, a.y + f * dy, a.z + f * dz});
+    const int body = gr::plunge_liquid(x.liquids, x.wading, at.x, at.y, at.z, t_s, was,
+                                       was ? kOutStrength : kDownStrength);
+    if (body >= 0 && !was)
+      x.splashes.push_back(
+          {body, {at.x, at.y, at.z}, uint32_t(p.entity) * 2654435761u ^ uint32_t(t_s * 1000)});
+  }
+  std::erase_if(x.thrown, [](const WorldExtras::Thrown& h) { return !h.seen; });
+  gr::wade_liquids(x.liquids, x.wading, x.waders, t_s, on);
 }
 
 void extras_births(WorldExtras& x, double t_s, std::vector<gr::Particle>& out) {
@@ -288,6 +349,9 @@ void extras_births(WorldExtras& x, double t_s, std::vector<gr::Particle>& out) {
   // next frame takes up from here.
   const double t0 = x.sparks_t;
   x.sparks_t = t_s;
+  for (const WorldExtras::Splash& sp : x.splashes)
+    gr::liquid_splash(x.liquids, sp.body, sp.at, 1, sp.seed, out);
+  x.splashes.clear();
   if (t0 < 0 || t_s <= t0 || t_s - t0 > 1) return;
   ba::bonfire_sparks(*x.scene, t0, t_s, x.fire_look, out);
 }

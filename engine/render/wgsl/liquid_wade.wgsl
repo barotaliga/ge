@@ -1,7 +1,8 @@
 // WADING (render/liquid_wade.hpp; docs/liquids.md § Wading): a body's track through a lava or a
 // slime as the surface takes it, from the body's stamps (`body.wades`, `body.wade_v`): the furrow
 // that closes slowly behind it with its lips raised, the bow ahead of it, the rings out of every
-// stamp, and lava's crust torn open along the furrow. The twin of liquid_wade.cpp's
+// stamp, and lava's crust torn open along the furrow. A stamp's `wade_v.w`: 1 the head of a track,
+// 2 a plunge out of the liquid (the furrow's shape upside down), 0 the rest. The twin of liquid_wade.cpp's
 // `wade_height`, which the test holds the numbers of; included after liquid_body.wgsl.
 
 const kHeadMostS = 0.4;  // s: render/liquid_wade.hpp's
@@ -54,7 +55,8 @@ fn wade_at(p: vec2f, t: f32, foot: f32, rings: bool) -> vec3f {
     var near = wade_nearest(p, a.xy - v * b.z, a.z - b.z, a.xy, a.z);
     let ahead = min(age, kHeadMostS);
     let h = a.xy + v * ahead;
-    if (b.w > 0.5) {
+    let head = b.w > 0.5 && b.w < 1.5;
+    if (head) {
       let n2 = wade_nearest(p, a.xy, a.z, h, a.z + ahead);
       if (n2.x < near.x) {
         near = n2;
@@ -63,7 +65,7 @@ fn wade_at(p: vec2f, t: f32, foot: f32, rings: bool) -> vec3f {
     let at = max(t - near.y, 0.0);
     let rho2 = (near.x / leg) * (near.x / leg);
     let closing = exp(-at / furrow_s);
-    let f = -depth * a.w * (1.0 - rho2) * exp(-rho2) * closing;
+    let f = select(-1.0, 1.0, b.w > 1.5) * depth * a.w * (1.0 - rho2) * exp(-rho2) * closing;
     if (f < 0.0) {
       trough = min(trough, f);
     } else {
@@ -79,12 +81,12 @@ fn wade_at(p: vec2f, t: f32, foot: f32, rings: bool) -> vec3f {
       sum += amp * a.w * exp(-age / ring_s) * env * sin(6.2831853 * u / lambda) *
              inverseSqrt(1.0 + r / leg);
     }
-    if (b.w > 0.5 && vs > 0.2) {
+    if (head && vs > 0.2) {
       let c = h + v / vs * leg * 1.2;
       let q = p - c;
       bow += 0.6 * depth * a.w * min(vs / 2.0, 1.0) * exp(-dot(q, q) / (leg * leg)) *
              exp(-max(age - kHeadMostS, 0.0) / 0.15);
     }
   }
-  return vec3f(trough + lip + sum * seen + bow, open, furrow);
+  return vec3f(trough + lip + sum * seen + bow, min(open, 1.0), min(furrow, 1.0));
 }

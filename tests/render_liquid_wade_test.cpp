@@ -3,7 +3,8 @@
 // wading is stamped onto the body it stands in a stamp a spacing, its newest the head, standing
 // still a small one now and then, leaving it ends its head, a jump back clears; the surface's CPU
 // twin has a trough on the track with its lips raised, closing over the furrow's time, a bow ahead,
-// rings that run out at the waves' speed, and lava's crust torn along the furrow.
+// rings that run out at the waves' speed, and lava's crust torn along the furrow; a plunge heaves
+// going out and craters coming down, its splash's drops fewer and lower the thicker the liquid.
 //
 // ge:summary Tests for wading: the viscosity's rules, the stamps, the furrow, bow and rings
 // ge:keywords test render liquid wade wading viscosity furrow bow rings stamps wade_liquids
@@ -14,6 +15,7 @@
 #include "check.hpp"
 #include "render/liquid.hpp"
 #include "render/liquid_wade.hpp"
+#include "render/particles.hpp"
 
 namespace {
 
@@ -157,4 +159,40 @@ TEST(the_surface_has_a_furrow_with_lips_a_bow_and_rings) {
   CHECK(torn.open > 0.5);
   const r::WadeAt healed = r::wade_height(s, thick, true, -0.6, 0, t + 30, false);
   CHECK(healed.open == 0 && healed.height_m == 0);
+}
+
+TEST(a_plunge_heaves_going_out_and_craters_and_splashes_coming_down) {
+  const r::LiquidLook& look = *r::find_liquid_look("lava");
+  r::Liquids liquids = pool(look);
+  r::LiquidWading wading;
+  CHECK(r::plunge_liquid(liquids, wading, 9, 1, 0, 1.0, true, 1) == -1);   // out of the box
+  CHECK(r::plunge_liquid(liquids, wading, 0, 3, 0, 1.0, true, 1) == -1);   // far over the level
+  CHECK(r::plunge_liquid(liquids, wading, 0, 1, 0, 1.0, true, 0.7) == 0);  // out: a heave
+  CHECK(r::plunge_liquid(liquids, wading, 2, 1, 0, 1.0, false, 9) == 0);   // down: a crater
+  r::wade_liquids(liquids, wading, {}, 1.0, true);
+  CHECK(liquids.bodies[0].staged.wade0[0] == 2);
+  CHECK(liquids.bodies[0].staged.wade_v[0][3] == 2 && liquids.bodies[0].staged.wade_v[1][3] == 0);
+  const auto& s = wading.stamps[0];
+  const r::WadeAt up = r::wade_height(s, look.wade, true, 0, 0, 1.05, false);
+  const r::WadeAt down = r::wade_height(s, look.wade, true, 2, 0, 1.05, false);
+  CHECK(up.height_m > 0.05);
+  CHECK(down.height_m < -0.08);
+  CHECK(down.open > 0.5 && down.open <= 1 && down.furrow <= 1);
+  CHECK(s[1].strength == r::kPlungeMost);  // held to the strongest
+  // Filled back in over the furrow's time; the rings run out at lava's slow pace.
+  CHECK(std::fabs(r::wade_height(s, look.wade, true, 2, 0, 20, false).height_m) < 1e-6);
+  // The splash: drops thrown a little way up, fewer and lower in the thicker liquid.
+  std::vector<r::Particle> lava, slime;
+  const double at[3] = {2, 1, 0};
+  r::liquid_splash(liquids, 0, at, 1, 5, lava);
+  r::Liquids thin = pool(*r::find_liquid_look("slime"));
+  r::liquid_splash(thin, 0, at, 1, 5, slime);
+  CHECK(!lava.empty() && lava.size() < slime.size());
+  for (const r::Particle& d : lava) {
+    CHECK(d.v[1] > 0 && d.v[1] <= 2.0f);  // up at most 0.2 m
+    CHECK(d.kelvin < 0 && d.floor_y == 1.0f);
+  }
+  std::vector<r::Particle> again;
+  r::liquid_splash(liquids, 0, at, 1, 5, again);
+  CHECK(again.size() == lava.size() && again[0].v[1] == lava[0].v[1]);
 }

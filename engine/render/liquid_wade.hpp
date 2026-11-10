@@ -16,6 +16,12 @@
 //   over again from the edge over `heal_s`.
 // - IN SLIME, THE SCUM PARTED: what floats on it (scum, grime, debris) pushed off the furrow.
 //
+// A PLUNGE (`plunge_liquid`): a thing crossing the surface (a ball of lava hurled out of it and
+// falling back) is one stamp with no track. Coming DOWN it punches a crater that fills back in at
+// the furrow's pace, rings running out at the viscosity's; going UP it HEAVES the surface (the same
+// shape upside down: a mound with a trough round it) before the rings. `liquid_splash` throws a
+// few drops of the stuff a little way up where one came down (a thick liquid's splash is low).
+//
 // THE VISCOSITY (`WadeLook::viscosity`): the liquid's thickness as the surface shows it, relative
 // to water's (1). It is the picture's knob, not the stuff's viscosity (water/liquid.hpp: lava's is
 // hundreds of thousands of times water's, and a surface that thick would not move at all within a
@@ -37,12 +43,14 @@
 // ge:test tests/render_liquid_wade_test.cpp
 #pragma once
 
+#include <cstdint>
 #include <span>
 #include <vector>
 
 namespace ge::render {
 
 struct Liquids;
+struct Particle;
 
 // How a liquid's surface takes a body wading through it (a row of render/liquid.hpp's
 // LiquidLook).
@@ -55,6 +63,7 @@ struct WadeLook {
 inline constexpr int kLiquidWades = 48;    // the stamps a body of liquid keeps (the latest)
 inline constexpr double kIdleS = 0.7;      // s: a stamp this often from a body standing still
 inline constexpr double kHeadMostS = 0.4;  // s: the most the newest stamp is drawn on ahead
+inline constexpr double kPlungeMost = 3;   // the strongest plunge, a wader in to his waist's 3
 
 // What a viscosity makes of the surface's motion (`wade_waves`).
 struct WadeWaves {
@@ -86,6 +95,7 @@ struct WadeStamp {
   double vx = 0, vz = 0;  // m/s: its velocity from the stamp before it
   double span_s = 0;      // s: since the stamp before it on the same track (0: the first)
   bool head = false;      // the newest of its track: drawn on ahead along vx, vz
+  bool heave = false;     // a plunge out of the liquid: the furrow's shape upside down (a mound)
   int track = 0;          // the wader's id
 };
 
@@ -109,6 +119,22 @@ struct LiquidWading {
 // game's switch), a jump back in time or a gap of over a second clears them all.
 void wade_liquids(Liquids& liquids, LiquidWading& wading, std::span<const LiquidWader> waders,
                   double t_s, bool on);
+
+// A PLUNGE: a thing crossing the surface of a body of `liquids` at plan point (x, z) at `t_s`, `y`
+// the height it crossed at (m: within a metre of a body's level, over its floor), going `out` of
+// the liquid (a heave) or into it (a crater), `strength` 0..kPlungeMost (a wader's 1: a ball of
+// lava hurled out of a spout hits harder than a stride). Call it before the frame's
+// `wade_liquids`, which writes the stamps to the uniform (and with its `on` false clears them).
+// Returns the body's index (-1: in none, nothing stamped).
+int plunge_liquid(Liquids& liquids, LiquidWading& wading, double x, double y, double z, double t_s,
+                  bool out, double strength);
+
+// THE SPLASH where a thing came down into body `index` of `liquids` at (x, y, z) (m): a few drops
+// of the stuff thrown up a little way (lower and fewer the thicker the body's viscosity), glowing
+// for lava, falling back onto the level and lying there while they fade. `strength` 0..1; `seed`
+// picks the drops (the same seed, the same drops).
+void liquid_splash(const Liquids& liquids, int index, const double at[3], double strength,
+                   uint32_t seed, std::vector<Particle>& out);
 
 // THE CPU TWIN of the shader's surface (liquid.wgsl's `wade_at`): at plan point (x, z) at `t_s`,
 // over `stamps` with `look`'s waves: the height over the level (m) and the share of torn crust

@@ -317,6 +317,17 @@ height's change across the pixel's quad. The same surface is worked out on the C
 (`wade_height`) for the lab's charts and the test. Shooter's Edge stamps every player whose feet
 are in lava or slime (`ce_wade`).
 
+**A plunge** is a thing crossing the surface: a ball of lava hurled out of a fire spout and
+falling back, a grenade into slime (`plunge_liquid`). It is one stamp with no track. Going **out**
+it heaves the surface: the furrow's shape upside down, a mound with a trough round it, the rings
+running out of it at the liquid's pace. Coming **down** it punches a crater (lava's crust torn
+round it) that fills back in over the furrow's time, and `liquid_splash` throws a few drops of the
+stuff a little way up, fewer and lower the thicker it is (water's 4 m/s, lava's 2 m/s: 20 cm
+high), glowing and cooling for lava, lying on the level when they land. Shooter's Edge finds a
+plunge by every thing not a player whose origin's contents went from lava or slime to not, or
+back, between two frames, the crossing found by halving the step; going out at 1.5 times a
+wader's stride and coming down at 2.5 (`kPlungeMost` 3).
+
 Not taken: stepping the liquid as a height field (a grid a body, a pass a frame) for what a few
 dozen closed-form stamps give; slowing the player's own move in the thicker liquids, which the
 classic game's move and its servers decide (a client that moved its player otherwise would
