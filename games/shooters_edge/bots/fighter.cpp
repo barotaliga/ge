@@ -1059,7 +1059,9 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
   // A PERSON'S BEAT (`beat`): a fight is held through a peek (the contact out of sight no longer
   // than a beat, and nothing calls for a retreat), and any mode a beat after it is entered unless
   // a sighting calls for a fight. Without it a contact lost for a frame turned a fight into a
-  // chase and back (dm2, seed 1: half the fights and chases over within 0.5 s).
+  // chase and back: dm2, 3 ten-minute seeds, the mode's changes 0.76 -> 0.46 a bot-second, its
+  // median hold 0.42 -> 1.04 s (under 0.2 s: 20 -> 5 %); 12 seeds head to head +1.5 frags a
+  // match, speed even.
   const bool beat = f.features[sh::Feature::beat];
   const bool peek = beat && f.mode == FightMode::fight && !seen_now && !backs_off && c &&
                     ai::known(c->seen) && ai::age(c->seen, t) <= kModeBeat_s;
