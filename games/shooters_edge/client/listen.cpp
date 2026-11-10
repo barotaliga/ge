@@ -457,6 +457,7 @@ sv::CampaignOptions campaign_options(Listen& l, const ListenOptions& opt) {
     co.server.localized = localized_text(*opt.files);
   }
   co.registered = opt.registered;
+  co.episodes = opt.episodes;
   co.settings = opt.arsenal;
   co.settings.insert(co.settings.end(), opt.console.begin(), opt.console.end());
   return co;

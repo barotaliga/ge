@@ -189,6 +189,7 @@ struct ListenOptions {
   std::string player = "player";
   const SearchPath* files = nullptr;  // where a campaign's next map is read (outlives the listen)
   bool registered = false;            // a campaign's content is the full game (gfx/pop.lmp)
+  sv::EpisodeOrder episodes;          // a campaign's episodes in order (GameContent's)
   // A match opens every map in the lobby's warmup (lobby_room.hpp): ready, teams, bots, the
   // countdown, then the map restarted for the match. Off: the match starts with the map.
   bool lobby = false;

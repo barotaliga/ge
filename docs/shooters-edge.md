@@ -990,9 +990,10 @@ inventory when he dies, the map going on, on a coop start no one stands on. Team
 one player's blows never harm another unless `sv_friendlyfire 1`, and a spared teammate's blow
 does not push him either unless `sv_friendlypush 1` (then a rocket at a friend boosts him without
 harm); his own blast still harms himself. Monsters choose among the players. On the start map the
-episodes open one at a time: the first always, each next once the one before is done
-(`sv_episodes_done`, a rune's bit each, set by the program when the rune is taken and kept by the
-window from game to game).
+episodes open one at a time, alone or in coop: the first always, each next once the one before
+is done, and a done one shuts (`sv_episodes_done`, a rune's bit each, recorded by the campaign
+host when an episode is left with its rune and archived by the window from game to game; the
+host keeps the bars of an episode not yet open shut, `server/campaign_episodes.hpp`).
 
 A COMPANION (`bots/companion.hpp`) is a fighter that plays beside the player rather than for
 him, an enabler: it keeps at his shoulder, steps out of his way, kills only what has come for him
