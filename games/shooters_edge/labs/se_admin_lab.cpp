@@ -185,7 +185,7 @@ void run(gl::Lab& lab) {
   for (const Said& s : r.said)
     for (const std::string& line : s.answer) {
       if (line.find("Bad rcon_password.") != std::string::npos) refused++;
-      if (line.find("0.5 granted") != std::string::npos) granted_rows++;
+      if (line.find("0.8 granted") != std::string::npos) granted_rows++;
     }
   if (r.said.size() >= 2)
     for (const std::string& line : r.said[1].answer)
@@ -194,7 +194,7 @@ void run(gl::Lab& lab) {
   for (size_t i = 0; i < kClients; i++) {
     for (const std::string& line : r.told[i])
       if (line.find("bert is granted the easy jump") != std::string::npos) told++;
-    if (r.key_seen[i] == "0.5") key_seen++;
+    if (r.key_seen[i] == "0.8") key_seen++;
   }
   lab.metric("clients_playing", r.active, "clients");
   lab.metric("players_listed", listed, "players");
@@ -239,7 +239,7 @@ void run(gl::Lab& lab) {
                 std::to_string(r.bert_id) +
                 " on` granting bert alone the easy jump (pm_speedjump stays 0 for everyone else), "
                 "and `status` again showing it granted. Everyone is told.",
-            "bert's row reads `asks` before the grant and `0.5 granted` after; the bots' "
+            "bert's row reads `asks` before the grant and `0.8 granted` after; the bots' "
             "address column reads `bot`",
             {{"map", lab.arg("map")}, {"bots", lab.arg("bots")}}},
            shot);

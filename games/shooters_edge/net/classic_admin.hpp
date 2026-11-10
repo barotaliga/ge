@@ -57,7 +57,8 @@ namespace shooters_edge::net {
 
 struct Remote;
 
-inline constexpr float kGrantShare = 0.5f;      // `speedjump <id> on`: the share granted
+inline constexpr float kGrantShare =
+    0.8f;  // `speedjump <id> on`: the share granted (the stock share)
 inline constexpr int kRconTriesPerSecond = 10;  // rcon tries answered a second, at most
 
 // `users`: `userid frags name`, a seat a line, then `<n> total users`.

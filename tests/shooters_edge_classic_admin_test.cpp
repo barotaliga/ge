@@ -160,21 +160,21 @@ TEST(speedjump_grants_one_player_disclosed_and_takes_it_back) {
   // Granted by user id: the server-only key, every client told, the table shows it.
   const std::string answer = rig.admin("speedjump " + std::to_string(rig.id_of(bert)) + " on");
   CHECK(has(answer, "bert"));
-  CHECK(has(answer, "granted at 0.5"));
-  CHECK(cn::info_get(rig.server.clients[bert].userinfo, "*speedjump") == "0.5");
-  CHECK(cn::classic_speedjump_granted(rig.server, bert) == 0.5f);
+  CHECK(has(answer, "granted at 0.8"));
+  CHECK(cn::info_get(rig.server.clients[bert].userinfo, "*speedjump") == "0.8");
+  CHECK(cn::classic_speedjump_granted(rig.server, bert) == 0.8f);
   rig.frames(40);
   for (const cn::ClassicClientEnd& e : rig.c) {  // anna sees it on bert, bert on himself
-    CHECK(cn::info_get(e.userinfos[bert], "*speedjump") == "0.5");
+    CHECK(cn::info_get(e.userinfos[bert], "*speedjump") == "0.8");
     bool told = false;
     for (const std::string& p : e.prints) told = told || has(p, "bert is granted the easy jump");
     CHECK(told);
   }
-  CHECK(has(rig.admin("status"), "0.5 granted"));
+  CHECK(has(rig.admin("status"), "0.8 granted"));
   CHECK(has(rig.admin("speedjump"), "granted to 1:"));
   // By name, at a share of its own; then taken back.
-  CHECK(has(rig.admin("speedjump bert 0.8"), "granted at 0.8"));
-  CHECK(cn::info_get(rig.server.clients[bert].userinfo, "*speedjump") == "0.8");
+  CHECK(has(rig.admin("speedjump bert 0.6"), "granted at 0.6"));
+  CHECK(cn::info_get(rig.server.clients[bert].userinfo, "*speedjump") == "0.6");
   CHECK(has(rig.admin("speedjump bert off"), "not granted"));
   CHECK(cn::info_get(rig.server.clients[bert].userinfo, "*speedjump").empty());
   rig.frames(40);
@@ -238,9 +238,9 @@ TEST(rcon_needs_its_password_and_runs_a_line) {
   rig.oob("rcon secret users\n");
   CHECK(any_has(rig.answers(), "2 total users"));
   rig.oob("rcon \"secret\" speedjump bert on\n");
-  CHECK(any_has(rig.answers(), "granted at 0.5"));
+  CHECK(any_has(rig.answers(), "granted at 0.8"));
   const int bert = rig.c[1].playernum;
-  CHECK(cn::info_get(rig.server.clients[bert].userinfo, "*speedjump") == "0.5");
+  CHECK(cn::info_get(rig.server.clients[bert].userinfo, "*speedjump") == "0.8");
   // A line none of the administrator's words take goes to the rules' console.
   rig.oob("rcon secret fraglimit\n");
   CHECK(any_has(rig.answers(), "fraglimit is"));

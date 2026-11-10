@@ -37,9 +37,12 @@ void start(Remote& r, const ClientConfig& cfg) {
     m.angles = r.view;
     r.hands.impulse = 0;  // an impulse goes once
     // The easy jump: the client strafes for the player off its newest prediction
-    // (shooter/speedjump_assist.hpp), at the server's stated pm_speedjump or kStockShare.
+    // (shooter/speedjump_assist.hpp), at the share the server granted this player alone (his
+    // own `*speedjump`, classic_admin.hpp), else its stated pm_speedjump, else kStockShare.
     if (r.end.cfg.speedjump && r.predicted) {
-      const std::string said = info_get(r.end.serverinfo, "pm_speedjump");
+      const int me = r.end.playernum;
+      std::string said = me >= 0 && me < 32 ? info_get(r.end.userinfos[me], "*speedjump") : "";
+      if (said.empty()) said = info_get(r.end.serverinfo, "pm_speedjump");
       const float share = said.empty() ? kStockShare : static_cast<float>(std::atof(said.c_str()));
       m = sh::assisted_command(m, r.ahead, share, r.speedjump_view, r.jump_aid);
     }
