@@ -62,6 +62,14 @@ void add_cvars(ge::console::Console& con, Picture& picture) {
                    "monster's strides over their time (1), or where each frame puts them (0)",
            .kind = gc::CvarKind::boolean},
           &picture.lerp_move);
+  cv.bind({.name = "r_arrival",
+           .fallback = "1",
+           .flags = gc::kArchive,
+           .help = "how strongly your own arrival (a spawn, a teleporter's far end) sweeps the "
+                   "whole view in a flash and a warp, with ce_warps on in the modern look; 0 none",
+           .min = 0,
+           .max = 1},
+          &picture.arrival);
   cv.bind({.name = "r_slime_glow",
            .fallback = "1",
            .help = "how much the slime's green glow lights the walls round it in the modern look, "

@@ -24,12 +24,15 @@ constexpr uint32_t kDirtW = 480, kDirtH = 270;  // the dirt's picture: soft, so 
 
 // The strengths as the shader reads them: vec4f(sharpen, chromatic, vignette, grain),
 // vec4f(dirt, motion blur's shutter, 0, 0), vec4f(depth of field's focus (m), sharp share, widest
-// circle (a share of the height), 0), vec4f(the screen's blend: sRGB-encoded rgb, its share).
+// circle (a share of the height), 0), vec4f(the screen's blend: sRGB-encoded rgb, its share),
+// vec4f(the arrival's share, reveal, zoom, flash), vec4f(its tint, sRGB-encoded; 0).
 struct LookBlock {
   float a[4];
   float b[4];
   float c[4];
   float d[4];
+  float e[4];
+  float f[4];
 };
 
 }  // namespace
@@ -147,6 +150,8 @@ void set_post_look(gpu::Device& device, const Post& post, const PostLook& look) 
   const LookBlock block{{f(look.sharpen), f(look.chromatic), f(look.vignette), f(look.grain)},
                         {f(look.dirt), f(look.motion_blur), 0, 0},
                         {20, 0.15f, 0, 0},
+                        {0, 0, 0, 0},
+                        {0, 0, 0, 0},
                         {0, 0, 0, 0}};
   // The lens's and the film's strengths and the focus; the blend is the game's (set_post_blend).
   device.queue.WriteBuffer(post.look, 0, &block, offsetof(LookBlock, d));
@@ -156,6 +161,30 @@ void set_post_blend(gpu::Device& device, const Post& post, const double rgba[4])
   const auto f = [](double v) { return static_cast<float>(std::clamp(v, 0.0, 1.0)); };
   const float d[4] = {f(rgba[0]), f(rgba[1]), f(rgba[2]), f(rgba[3])};
   device.queue.WriteBuffer(post.look, offsetof(LookBlock, d), d, sizeof d);
+}
+
+PostWarp arrival_warp(double age_s, double strength, const double tint[3]) {
+  PostWarp w;
+  strength = std::clamp(strength, 0.0, 1.0);
+  if (!(age_s >= 0 && age_s < kArrivalS) || strength <= 0) return w;
+  const double fade = 1 - age_s / kArrivalS;
+  const double open = std::min(age_s / kArrivalOpenS, 1.0);
+  const double shut = 1 - open;
+  const double flash =
+      age_s < kArrivalFlashS ? 1 : std::max(1 - (age_s - kArrivalFlashS) / 0.3, 0.0);
+  w.share = strength * fade * fade;
+  w.reveal = 1.3 * (1 - shut * shut * shut);
+  w.zoom = strength * shut * shut;
+  w.flash = strength * 0.85 * flash * flash;
+  for (int k = 0; k < 3; ++k) w.tint[k] = std::clamp(tint[k], 0.0, 1.0);
+  return w;
+}
+
+void set_post_warp(gpu::Device& device, const Post& post, const PostWarp& warp) {
+  const auto f = [](double v, double hi) { return static_cast<float>(std::clamp(v, 0.0, hi)); };
+  const float ef[8] = {f(warp.share, 1),   f(warp.reveal, 2),  f(warp.zoom, 1),    f(warp.flash, 1),
+                       f(warp.tint[0], 1), f(warp.tint[1], 1), f(warp.tint[2], 1), 0};
+  device.queue.WriteBuffer(post.look, offsetof(LookBlock, e), ef, sizeof ef);
 }
 
 void set_post_focus(gpu::Device& device, const Post& post, const DofSettings& dof) {

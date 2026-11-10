@@ -96,11 +96,14 @@ struct Picture {
   // r_lerpmodels, r_lerpmove: the models' animation drawn between frames, and (in the window's own
   // game) their places between the server's states (client/model_lerp.hpp); either look.
   bool lerp_models = true, lerp_move = true;
+  // r_arrival: how strongly your own arrival (a spawn, a teleport's far end) warps the whole view
+  // in the modern look with ce_warps on (render/post.hpp's arrival), 0 none.
+  double arrival = 1;
 };
 // Registers r_look, r_fx_lights, r_fx_glow, r_bloom, r_lava_glow, r_slime_glow, gamma,
-// r_beam_style, r_farland, r_farland_warm, r_lerpmodels, r_lerpmove, r_quality, r_budget, every ce_
-// switch, the three ce_<id>_quality levels and the weather's cvars over `picture` (it must outlive
-// `con`).
+// r_beam_style, r_farland, r_farland_warm, r_lerpmodels, r_lerpmove, r_arrival, r_quality,
+// r_budget, every ce_ switch, the three ce_<id>_quality levels and the weather's cvars over
+// `picture` (it must outlive `con`).
 void add_cvars(ge::console::Console& con, Picture& picture);
 // r_look's look; modern for a word it does not know.
 Look look_of(const Picture& picture);
