@@ -26,8 +26,7 @@
 //     touching the horizontal gets the vertical speed back), then the player's own think;
 //  5. the move (pmove.hpp) from the entity's fields (the origin offset by its mins against the
 //     move's box, the water jump time in `teleport_time`, gravity and max speed from the fields or
-//     the defaults, pm_speedjump only for a player whose `ClientSlot::speedjump` is set) over
-//     the move's solids (`build_player_world`);
+//     the defaults) over the move's solids (`build_player_world`);
 //  6. the result back into the fields, the solid stood on as `groundentity`;
 //  7. unless a `not` solid: relinked with trigger touches, then each solid the move touched that
 //     has not touched this player in this packet and has a touch function runs it (self the

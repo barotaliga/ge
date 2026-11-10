@@ -1140,6 +1140,7 @@ int run_main(int argc, char** argv) {
     auto joined = sn::RemoteStep::waiting;
     if (remote.active || (bench_map && !bench.active)) {
       const bool hands = playing && !game_menu.open();
+      remote.speedjump_view = user_info.speedjump_view;  // cl_speedjump_view, live
       cl::Moves moves = hands ? cl::button_moves(controls) : cl::Moves{};
       if (remote.active)  // the quick weapon off what the server last said (quick_fire.hpp)
         cl::quick_moves(controls.quick, cl::demo_status(remote.demo.state, t), t, moves);
@@ -1294,7 +1295,8 @@ int run_main(int argc, char** argv) {
       ++presented;
       continue;
     }
-    cl::send_user_info(listen, console, user_info);  // the name and colours, as they change
+    cl::send_user_info(listen, console, user_info);    // the name and colours, as they change
+    listen.speedjump_view = user_info.speedjump_view;  // cl_speedjump_view, live
     // The lobby's keys (F1 ready or break, F2 the other team, F4 the warmup or the lobby's
     // screen; on the screen F5 and F6 a bot more or less, ENTER the start), then the player's
     // hands, then the server's frames.
