@@ -194,6 +194,7 @@ bool struck_along(const LoadedMap& m, const std::unordered_map<int, FxState::Fli
 // none is within kFloorReachU.
 constexpr float kFloorReachU = 1024;
 constexpr float kOverBlastU = 16;    // a blast's floor is looked for from this far over it
+constexpr double kBleedJumpM = 10;   // a piece that moved this far in a frame jumped: no trail
 constexpr double kOwnRocketM = 1.5;  // a rocket first seen this near the eye is the eye's own
 double floor_under(const LoadedMap& m, const sh::Vec3f& at, const sh::Vec3f& shooter) {
   if (m.bsp.world.models.empty()) return -1e9;
@@ -719,6 +720,34 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
   s.aim_pitch = l.pose.pitch;
   s.aimed = true;
 
+  // The pieces of a body (a gib, a head: their model files' trail flags) bleed over the stretch
+  // each flew since the last frame; one new, changed or moved too far (a teleport, a new map)
+  // starts again where it is.
+  s.bleeding_next.clear();
+  if (s.models != nullptr) {
+    for (const Placed& m : l.models) {
+      if (m.entity <= 0 || m.modelindex <= 0 ||
+          m.modelindex >= static_cast<int>(s.models->kinds.size()))
+        continue;
+      const uint32_t flags = s.models->kinds[size_t(m.modelindex)].flags;
+      if ((flags & (fx::kTrailGib | fx::kTrailZombieGib)) == 0) continue;
+      FxState::Bleeding now{engine_point(m.origin), m.modelindex, 0};
+      const auto was = s.bleeding.find(m.entity);
+      if (was != s.bleeding.end() && was->second.modelindex == m.modelindex) {
+        const ge::camera::Vec3 a = was->second.at;
+        const double from[3] = {a.x, a.y, a.z}, to[3] = {now.at.x, now.at.y, now.at.z};
+        const double far = ge::core::hypot3(to[0] - from[0], to[1] - from[1], to[2] - from[2]);
+        now.carry = was->second.carry;
+        if (far < kBleedJumpM)
+          now.carry = fx::blood_trail(
+              from, to, (flags & fx::kTrailGib) != 0 ? fx::kBloodStep : fx::kThinBloodStep,
+              now.carry, s.seed++, s.palette, &out.births);
+      }
+      s.bleeding_next.emplace(m.entity, now);
+    }
+  }
+  s.bleeding.swap(s.bleeding_next);
+
   // The missiles: a trail over the stretch each flew since the last frame, a rocket's glow.
   s.next.clear();
   for (const Missile& m : missiles) {
@@ -1068,8 +1097,17 @@ void step_fx(const FxScene& l, FxState& s, double t, double dt, FxFrame& out) {
       }
       case EffectKind::blood: {
         const bool arc = e.code == 13 && !l.campaign;  // a match's beam's blood
+        // A program's own burst (a campaign's `particle`): its count of drops thrown along its
+        // way at 15 times it, units a second; a match's blood: 20 hanging drops a count.
+        const bool burst = e.code == -1;
+        const ge::camera::Vec3 way = engine_point(e.way * 15);
+        const double v[3] = {way.x, way.y, way.z};
         if (!throw_scripted(s, "blood", p, toward(p, eye).data(), arc ? 1 : e.count, -1e9, t, out))
-          fx::blood(p, arc ? 50 : 20 * e.count, arc, s.seed++, s.palette, &out.births);
+          fx::blood(p,
+                    arc     ? 50
+                    : burst ? e.count
+                            : 20 * e.count,
+                    arc, s.seed++, s.palette, &out.births, burst ? v : nullptr);
         if (s.on.decals && !arc) wound(s, out.models, e.at, p, eye, std::clamp(e.count, 1, 8), t);
         break;
       }

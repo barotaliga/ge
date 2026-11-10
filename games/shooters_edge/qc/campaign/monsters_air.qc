@@ -73,6 +73,8 @@ void() monster_wizard = {
   self.fr_missile = '29 41 1';
   self.fr_pain = '42 45 1';
   self.fr_death = '46 53 1';
+  self.death_solid = 2;
+  self.gib_model = "progs/gib2.mdl";
   flymonster_start("progs/wizard.mdl", 80, '-16 -16 -24', '16 16 40');
 };
 
@@ -110,7 +112,7 @@ void() monster_fish = {
   self.noise = "";
   self.noise1 = "fish/death.wav";
   self.head_model = "progs/gib2.mdl";
-  self.gib_health = -35;
+  self.gib_health = -1000;  // never gibbed
   self.walk_step = 8;
   self.run_step = 12;
   self.th_melee = fish_melee;
@@ -122,5 +124,6 @@ void() monster_fish = {
   self.fr_melee = '0 17 1';
   self.fr_pain = '57 65 1';
   self.fr_death = '18 38 1';
+  self.death_solid = 20;
   swimmonster_start("progs/fish.mdl", 25, '-16 -16 -24', '16 16 24');
 };

@@ -130,13 +130,34 @@ void impact(const double p[3], int specks, uint32_t seed, Palette pal, Particles
   }
 }
 
-void blood(const double p[3], int specks, bool arc, uint32_t seed, Palette pal, Particles* out) {
+void blood(const double p[3], int specks, bool arc, uint32_t seed, Palette pal, Particles* out,
+           const double way[3]) {
   Rng r = ge::core::make_rng(seed);
   for (int i = 0; i < specks; ++i) {
     double q[3];
     jitter(r, p, 8, q);
-    out->push_back(speck(q, pal, (arc ? 224 : 72) + pick(r, 8), 0, 0, 0.1 * pick(r, 5) + 0.02));
+    Particle s = speck(q, pal, (arc ? 224 : 72) + pick(r, 8), 0, 0, 0.1 * pick(r, 5) + 0.02);
+    if (way != nullptr)
+      for (int k = 0; k < 3; ++k) s.v[k] = float(way[k]);
+    out->push_back(s);
   }
+}
+
+double blood_trail(const double from[3], const double to[3], double step, double carry,
+                   uint32_t seed, Palette pal, Particles* out) {
+  Rng r = ge::core::make_rng(seed);
+  const double d[3] = {to[0] - from[0], to[1] - from[1], to[2] - from[2]};
+  const double len = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+  // The specks' places along the stretch: carry, carry + step, ... short of its length.
+  const int n = len > carry ? static_cast<int>((len - carry) / step) + 1 : 0;
+  for (int i = 0; i < n; ++i) {
+    const double t = (carry + step * i) / len;
+    const double p[3] = {from[0] + d[0] * t, from[1] + d[1] * t, from[2] + d[2] * t};
+    double q[3];
+    jitter(r, p, 3, q);
+    out->push_back(speck(q, pal, 67 + pick(r, 4), 0, 0, 2));
+  }
+  return carry + step * n - len;
 }
 
 void teleport_splash(const double p[3], uint32_t seed, Palette pal, Particles* out) {
