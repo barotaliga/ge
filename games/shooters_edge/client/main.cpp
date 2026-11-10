@@ -10,7 +10,7 @@
 //   shooters_edge [-basedir <dir>] [-game <folder>] [-progs <file>] [-models <dir>]
 //                 [-timedemo <demo>] [-playdemo <demo>] [--frames=N] [--size=WxH] [-config <f>]
 //                 [-demovideo <demo> <file> [--from=m:ss --to=m:ss | --highlight=N] ...]
-//                 [+<command> ...]
+//                 [-logfile <file>] [+<command> ...]
 //
 // `-basedir` holds the game folder (`id1`, the multiplayer client's folder over it when present;
 // `-game` names another); `~` is home. Without it, the game loaded last, however it was picked;
@@ -89,6 +89,7 @@
 #include "platform/devices.hpp"
 #include "platform/pacing.hpp"
 #include "platform/window.hpp"
+#include "play/window_output.hpp"
 #include "render/screenshot_copy.hpp"
 #include "shooters_edge/bots/handles.hpp"
 #include "shooters_edge/client/args.hpp"
@@ -150,27 +151,26 @@ namespace sn = shooters_edge::net;
 // A timedemo shows one frame in this many ns (30 a second) and draws the rest offscreen.
 constexpr uint64_t kBenchShowNs = 33'333'333;
 
-void print_line(const out::LogLine& line, void*) {
-  std::FILE* to = line.level == out::Level::error ? stderr : stdout;
-  std::fprintf(to, "%.*s\n", static_cast<int>(line.message.size()), line.message.data());
-}
-
 }  // namespace
 
 int run_main(int argc, char** argv) {
-  out::set_output_sink(print_line);
   cl::Args args;
+  std::string log_error;
   if (std::string why; !cl::parse(argc, argv, args, why)) {
-    out::error(
-        "shooters_edge: the command line was refused: " + why +
-        " Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
-        "[-config <file>] [-progs <file>] [-models <dir>] [-timedemo <demo>] [-playdemo <demo>] "
-        "[--frames=N] [--size=WxH] [-demovideo <demo> <file> [--fps=N] "
-        "[--resolution=<WxH|720p|1080p|1440p|4k>] [--from=m:ss] [--to=m:ss] [--highlight=N] "
-        "[--gif-width=N] [--codec=<c>] [--seconds=S]] "
-        "[+<command> ...]; next: rerun with only those flags.");
+    ge::play::attach_window_output("", log_error);
+    out::error("shooters_edge: the command line was refused: " + why +
+               " Usage: shooters_edge [-basedir <dir>] [-game <folder>] "
+               "[-config <file>] [-logfile <file>] [-progs <file>] [-models <dir>] [-timedemo "
+               "<demo>] [-playdemo <demo>] "
+               "[--frames=N] [--size=WxH] [-demovideo <demo> <file> [--fps=N] "
+               "[--resolution=<WxH|720p|1080p|1440p|4k>] [--from=m:ss] [--to=m:ss] [--highlight=N] "
+               "[--gif-width=N] [--codec=<c>] [--seconds=S]] "
+               "[+<command> ...]; next: rerun with only those flags.");
     return 2;
   }
+  // Every line on the terminal, and in `-logfile <file>` too when it is named.
+  if (!ge::play::attach_window_output(args.logfile, log_error))
+    out::error("shooters_edge: " + log_error);
 
   // The console: its lines on the terminal and in its scrollback; the client's commands.
   ge::console::Console console;

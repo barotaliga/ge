@@ -8,7 +8,7 @@ file(GLOB GE_CAPTURE_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engin
 add_library(ge_play STATIC engine/play/inputs.cpp
   engine/play/session.cpp engine/play/bench.cpp engine/play/record.cpp engine/play/why.cpp
   engine/play/human.cpp engine/play/devices.cpp engine/play/console_cmds.cpp engine/play/main.cpp engine/play/load.cpp
-  engine/play/saves.cpp engine/play/save_cmd.cpp
+  engine/play/saves.cpp engine/play/save_cmd.cpp engine/play/window_output.cpp
   ${GE_CAPTURE_SOURCES})
 target_link_libraries(ge_play PUBLIC ge_core ge_ai ge_console ge_input ge_lab ge_prof ge_prof_alloc ge_save)
 
