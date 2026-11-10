@@ -350,8 +350,11 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   // `--swings`: the player takes the axe and swings it, the game's own held weapons in his hand.
   const int swings = std::max(0, static_cast<int>(lab.arg_num("swings")));
   std::vector<ge::viewmodel::HeldModel> weapons;
+  // `--hand`: the weapon in hand in every view, the game's own (client/held.hpp), raised over the
+  // classic status bar as the window raises it.
+  const bool in_hand = lab.arg("hand") == "1";
   cl::HeldState held;
-  if (swings > 0) {
+  if (swings > 0 || in_hand) {
     held.hand.at_eye = cl::load_held_set(cl::classic_adapter(), files, {}, weapons);
     if (!held.hand.at_eye) lab.note("no weapon is drawn: the game's held weapons did not load");
   } else if (warp && !shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error)) {
@@ -360,8 +363,8 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   cl::WorldDrawPtr world[2];
   for (int k = 0; k < 2; ++k) {
     const std::span<const ge::viewmodel::HeldModel> held_models =
-        k == 1 ? std::span<const ge::viewmodel::HeldModel>(weapons)
-               : std::span<const ge::viewmodel::HeldModel>();
+        k == 1 || in_hand ? std::span<const ge::viewmodel::HeldModel>(weapons)
+                          : std::span<const ge::viewmodel::HeldModel>();
     world[k] = cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm,
                                      looks[k], held_models, error, {l.server->models, {}});
     if (!world[k]) {
@@ -400,7 +403,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
     t += 0.013;
     cl::frame_view(l, shown, 1, t, 0.013);
     cl::step_fx(l, shown, fx_state, t, 0.013, fx);
-    if (warp) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
+    if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
   }
   // The views: `--views` (x,y,z,yaw,pitch in the map's units and degrees, ';' between), the
   // player stood there; else the start, four ways.
@@ -445,7 +448,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       t += 0.013;
       cl::frame_view(l, shown, 1, t, 0.013);
       cl::step_fx(l, shown, fx_state, t, 0.013, fx);
-      if (warp) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
+      if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
     }
     ge::render::FrameView view;
     const auto shoot = [&](const std::string& tag) {
@@ -457,6 +460,8 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
       hud.layout.draw(overlay,
                       hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
                       se::hud_style());
+      hand.lift = se::status_lift(hud, static_cast<int>(h));
+      const shooters_edge::view::HandFrame* shown_hand = in_hand && hand.drawn ? &hand : nullptr;
       for (int k = 0; k < 2; ++k) {
         // The weather, the flames and the bonfires' sparks run a second in, ending on the view's
         // moment.
@@ -465,7 +470,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
           run_in.time_s = view.time_s - (29 - f) / 30.0;
           cl::draw_world(*device, *world[k], run_in, fx, nullptr, 1.0 / 30, {}, out.view);
         }
-        cl::draw_world(*device, *world[k], view, fx, nullptr, 1.0 / 30, overlay, out.view);
+        cl::draw_world(*device, *world[k], view, fx, shown_hand, 1.0 / 30, overlay, out.view);
         const ge::gpu::Image img = ge::gpu::read_now(*device, out);
         const std::string id = std::string(kLooks[k]) + "-" + std::to_string(v) + tag;
         lab.shot({id,
@@ -518,6 +523,7 @@ void run_game(gl::Lab& lab, uint32_t w, uint32_t h) {
         t += 0.013;
         cl::frame_view(l, shown, 1, t, 0.013);
         cl::step_fx(l, shown, fx_state, t, 0.013, fx);
+        if (warp || in_hand) hand = cl::step_held(l, shown, held, view_settings, weapons, t, 0.013);
         if (i == fire + 15) shoot("-fired");  // the smoke settled, the gibs down
       }
       lab.metric("fire.entities_delta_" + std::to_string(v), alive() - alive_before, "",
@@ -756,6 +762,7 @@ const gl::LabSpec kSpec{
     "rocket jump lift him?",
     {{"size", "960,540", "the frame's width and height, px"},
      {"models", "games/shooters_edge/content/models/view", "the held weapons' folder"},
+     {"hand", "0", "with --game: 1 draws the game's own weapon in hand in every view"},
      {"game", "",
       "a game folder of packs to draw instead of the halls (private pictures only), or fixture: "
       "the halls torch-lit with their textures enhanced"},

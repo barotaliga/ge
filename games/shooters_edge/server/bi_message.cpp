@@ -381,6 +381,7 @@ void bi_particle(pg::Vm& vm) {
   NetEvent ev;
   ev.kind = EventKind::particle;
   ev.origin = {org[0], org[1], org[2]};
+  ev.dir = {dir[0], dir[1], dir[2]};
   ev.to = clients_reaching(s, ev.origin, true);
   ev.values[0] = colour;
   ev.values[1] = count;

@@ -23,7 +23,15 @@
 // faded, tinted, framed (the one in hand), with an optional plate of two colours behind it (a
 // player's colours under his frag count) and an optional count over it in the strip's face.
 // A cell's width is the strip's, or its picture's own when the strip's is 0 (one wide icon in a
-// row of narrow ones).
+// row of narrow ones), or its own `w` and `h` (a cell that is only a count).
+//
+// LINES: a cell that `breaks` starts a new line, so one strip draws groups: a shooter's guns two
+// to a line by the ammunition they share, each line led by that ammunition's icon and count. The
+// lines stack across the strip's run (a row's lines one under another), each `align`ed in the
+// strip's box (start, centre or end), and a line's cells are centred across it, so a 24 px icon
+// and a 16 px gun share one middle. MIRRORED (`draw`'s `mirror`, a HUD swapped to the other side
+// of the screen), every line runs the other way, `align` flips, and the counts' place and nudge
+// flip with it.
 //
 // A RING is a meter bent round a centre: a track and a fill along an arc, 0 at its `from` end;
 // a level past 1 fills a second lap in the over colour, as a health past its maximum does.
@@ -31,7 +39,7 @@
 // ge:summary The HUD's picture widgets: pictures, digit sheets, icon strips and ring gauges
 // ge:keywords hud picture image icon digits digit-sheet number status-bar strip row cell slot
 // ge:keywords inventory weapons ammo keys powerups frags plate ring arc gauge meter nearest
-// ge:keywords pixel-art unit alternate low-figures
+// ge:keywords pixel-art unit alternate low-figures lines groups line-break mirror align
 // ge:skill ui
 // ge:test tests/hud_pictures_test.cpp
 #pragma once
@@ -85,6 +93,9 @@ struct Cell {
   ui::Color plate_low{0, 0, 0, 0};  // and its lower part (a player's two colours)
   std::string text;                 // a count over the cell
   ui::Color text_color{1, 1, 1, 1};
+  bool breaks = false;  // this cell starts a new line
+  float w = 0, h = 0;   // art px; > 0: this cell's own size (a count with no picture)
+  int text_at = -1;     // an Anchor for this cell's count; -1: the strip's
 };
 
 // A strip's shape, in art px.
@@ -99,6 +110,8 @@ struct StripShape {
   float plate_split = 0.57f;          // the share of the plate in its top colour
   ui::Color frame{1, 1, 1, 1};
   float frame_w = 1;
+  float line_gap = -1;  // art px between lines; < 0: `gap`
+  int align = 0;        // the lines in the box: 0 start (left or top), 1 centre, 2 end
 };
 
 struct Strip {
@@ -108,7 +121,8 @@ struct Strip {
   ui::Color shadow{0, 0, 0, 0};  // under the counts, when its alpha is above 0
 };
 Size measure(const StripShape& s, const Strip& strip, float u);
-void draw(ui::DrawList& dl, const StripShape& s, const Strip& strip, ui::Rect at, float u);
+void draw(ui::DrawList& dl, const StripShape& s, const Strip& strip, ui::Rect at, float u,
+          bool mirror = false);
 
 // A ring gauge's shape, reference px and degrees (0 at twelve o'clock, clockwise).
 struct RingShape {

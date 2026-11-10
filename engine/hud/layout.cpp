@@ -125,6 +125,11 @@ Strip strip_of(const Element& e, const Style& st) {
 bool picture_kind(Kind k) { return k == Kind::picture || k == Kind::digits || k == Kind::strip; }
 
 // The picture kinds' size at one screen px per picture pixel.
+Anchor flip(Anchor a) {
+  const int col = static_cast<int>(a) % 3, row = static_cast<int>(a) / 3;
+  return static_cast<Anchor>(row * 3 + (2 - col));
+}
+
 Size natural(const Element& e, const Style& st) {
   const Content& c = e.content;
   switch (e.spec.kind) {
@@ -149,18 +154,29 @@ std::vector<Placed> Layout::draw(ui::DrawList& dl, const Frame& f, const Style& 
     e.shown = false;
     const Content& c = e.content;
     if (!c.on || !e.place.show || (e.spec.kind == Kind::feed && c.feed == nullptr)) continue;
-    const Anchor a = anchor_from(e.place.anchor).value_or(e.spec.anchor);
-    // A parent declared before this element and shown this frame; else it stands alone.
+    // Mirrored (a HUD swapped to the other side), every element but the fixed ones takes the
+    // other column's anchor and attach point and the other way along x.
+    const bool flipped = mirror && !e.spec.fixed_side;
+    Anchor a = anchor_from(e.place.anchor).value_or(e.spec.anchor);
+    if (flipped) a = flip(a);
+    // A parent declared before this element and shown this frame; a hidden one hands it on to
+    // its own parent (a loadout over a stock that is off hangs where the stock would); with no
+    // ancestor shown it stands alone.
     const Element* parent = nullptr;
-    if (!e.place.parent.empty()) {
-      const int pi = find(e.place.parent);
-      if (pi >= 0 && static_cast<size_t>(pi) < ei && elements_[static_cast<size_t>(pi)].shown)
-        parent = &elements_[static_cast<size_t>(pi)];
+    for (std::string_view name = e.place.parent; !name.empty() && parent == nullptr;) {
+      const int pi = find(name);
+      if (pi < 0 || static_cast<size_t>(pi) >= ei) break;
+      const Element& up = elements_[static_cast<size_t>(pi)];
+      if (up.shown)
+        parent = &up;
+      else
+        name = up.place.parent;
     }
     Frame fe = f;
     fe.scale = (parent ? parent->drawn_scale : f.scale) * static_cast<float>(e.place.scale);
-    const float dx = parent ? static_cast<float>(e.place.x) * parent->drawn_unit
-                            : static_cast<float>(e.place.x) * f.safe.w;
+    const float dx =
+        (flipped ? -1.0f : 1.0f) * (parent ? static_cast<float>(e.place.x) * parent->drawn_unit
+                                           : static_cast<float>(e.place.x) * f.safe.w);
     const float dy = parent ? static_cast<float>(e.place.y) * parent->drawn_unit
                             : static_cast<float>(e.place.y) * f.safe.h;
     // The picture kinds' unit: screen px per picture pixel, fitted and snapped.
@@ -179,12 +195,20 @@ std::vector<Placed> Layout::draw(ui::DrawList& dl, const Frame& f, const Style& 
     auto slot = [&](float w, float h) {
       ui::Rect r;
       if (parent != nullptr) {
-        const Anchor at = anchor_from(e.place.attach).value_or(e.spec.attach);
+        Anchor at = anchor_from(e.place.attach).value_or(e.spec.attach);
+        if (flipped) at = flip(at);
         const ui::Vec2 p = point_of(parent->drawn, a);
         const ui::Vec2 o = point_of({0, 0, w, h}, at);
         r = {p.x - o.x + dx, p.y - o.y + dy, w, h};
       } else {
         r = moved(stacks.next(a, w, h, corners), dx, dy);
+        // Flush: on the screen's own edge, past the margin and the insets (a status bar with no
+        // world showing under it).
+        if (e.spec.flush) {
+          const int row = static_cast<int>(a) / 3;
+          if (row == 2) r.y = static_cast<float>(f.height) - h;
+          if (row == 0) r.y = 0;
+        }
       }
       if (e.under >= 0) {
         const Element& un = elements_[static_cast<size_t>(e.under)];
@@ -265,14 +289,20 @@ std::vector<Placed> Layout::draw(ui::DrawList& dl, const Frame& f, const Style& 
         const Strip sp = strip_of(e, st);
         const Size z = measure(e.spec.strip, sp, u);
         box = slot(z.w, z.h);
-        hud::draw(dl, e.spec.strip, sp, box, u);
+        hud::draw(dl, e.spec.strip, sp, box, u, flipped);
         break;
       }
       case Kind::ring: {
         const Ring r{c.level, c.color, c.over, st.track};
-        const Size z = measure(fe, e.spec.ring);
+        RingShape shape = e.spec.ring;
+        if (flipped) {  // the arc reflected across the vertical: its ends swap sides
+          shape.from_deg = 360 - e.spec.ring.to_deg;
+          shape.to_deg = 360 - e.spec.ring.from_deg;
+          shape.reverse = !shape.reverse;
+        }
+        const Size z = measure(fe, shape);
         box = slot(z.w, z.h);
-        hud::draw(dl, fe, e.spec.ring, r, box);
+        hud::draw(dl, fe, shape, r, box);
         break;
       }
       case Kind::dial: {

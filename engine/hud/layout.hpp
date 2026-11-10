@@ -38,7 +38,7 @@
 // ge:keywords hud layout element elements content place anchor offset scale alpha show cvars
 // ge:keywords hud_scale hud_alpha hud_margin hud_reset under-corners stack customizable
 // ge:keywords player-layout add_hud_cvars parent attach child picture digits strip ring unit
-// ge:keywords snap fit pixel-art status-bar
+// ge:keywords snap fit pixel-art status-bar mirror swap-side left-handed fixed_side flush
 // ge:skill ui console
 // ge:test tests/hud_layout_test.cpp
 #pragma once
@@ -108,6 +108,11 @@ struct ElementSpec {
   float fit = 0;
   int digit_cells = 3;  // kind digits: the field's width in cells
   bool snap = false;
+  // `fixed_side`: never mirrored (a status bar drawn as the classic game drew it). `flush`: an
+  // element at a top or bottom anchor drawn against the screen's own edge, past the margin and
+  // the insets, so no world shows between it and the edge.
+  bool fixed_side = false;
+  bool flush = false;
   // A PARENT: an element declared before this one. The child is drawn at the parent's scale
   // times its own, with its `attach` point (its own box's nine points) on the parent's box's
   // `anchor` point, moved by (x, y) in the parent's units (its picture px, or reference px for
@@ -194,6 +199,10 @@ class Layout {
   // frame keeps from the screen's safe edge. Bound to hud_scale, hud_alpha, hud_margin.
   double scale = 1, alpha = 1;
   double margin = 20;
+  // MIRRORED: the whole HUD swapped to the other side of the screen, every element but the
+  // `fixed_side` ones on the other column's anchor, attach point and x, its strips' lines run the
+  // other way and its rings reflected (a game binds it to a cvar such as `hud_side`).
+  bool mirror = false;
 
   // The frame the layout draws in: `style`'s, with this layout's margin and scale.
   Frame frame(int width, int height, const Style& style, Insets insets = {}) const;
