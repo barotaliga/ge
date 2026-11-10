@@ -1,7 +1,8 @@
 // THE PLAYER'S HANDS: one frame's keys and mouse as the view's turn and the command the listen
 // server runs. The keys are the console's binds (`bind w +forward`): `add_cvars` registers the
 // moves as buttons (+forward, +back, +moveleft, +moveright, +moveup, +movedown, +jump, +attack,
-// +speed, +strafe, +left, +right) and `impulse <n>`, and `default_binds` gives every key the
+// +speed, +strafe, +left, +right, +attack2: the quick weapon's second key, quick_fire.hpp) and
+// `impulse <n>`, and `default_binds` gives every key the
 // classic layout has unbound (W A S D and the arrows move, SPACE jumps, C crouches, the left button
 // fires, SHIFT the run key, ALT sidesteps with the mouse, 1..8 pick a weapon, the wheel the next
 // one carried, F12 takes a screenshot: engine/capture/screenshot.hpp), before the player's config
@@ -24,7 +25,7 @@
 // ge:keywords controls keys mouse-look raw-mouse sensitivity invert wasd jump fire impulse
 // ge:keywords weapon-keys wheel read_controls turn_view move-cmd m_invert cvars
 // ge:keywords lookspring spring_view ideal-pitch centre-view always-run no-walking run-key
-// ge:keywords lookstrafe
+// ge:keywords lookstrafe attack2
 // ge:keywords buttons binds default_binds forward attack speed strafe impulse key_moves
 // ge:keywords crouch duck movedown moveup swim-down
 // ge:keywords in_mouse_release mouse-capture
@@ -36,6 +37,7 @@
 #include "input/mouse_capture.hpp"
 #include "input/state.hpp"
 #include "shooter/pmove.hpp"
+#include "shooters_edge/client/quick_fire.hpp"
 
 namespace shooters_edge::client {
 
@@ -44,7 +46,7 @@ struct ControlButtons {
   ge::console::Button *forward = nullptr, *back = nullptr, *moveleft = nullptr,
                       *moveright = nullptr, *moveup = nullptr, *movedown = nullptr, *jump = nullptr,
                       *attack = nullptr, *speed = nullptr, *strafe = nullptr, *left = nullptr,
-                      *right = nullptr;
+                      *right = nullptr, *attack2 = nullptr;
   int impulse = 0;  // the last `impulse <n>` not yet sent (0 none)
 };
 
@@ -62,6 +64,7 @@ struct ControlSettings {
   // in_mouse_release: what takes the pointer back from the look (input::Release's bits)
   uint32_t mouse_release = ge::input::kReleaseDefault;
   ControlButtons buttons;
+  QuickFire quick;  // the quick weapon's cvars and state (quick_fire.hpp)
 };
 
 // One frame's moves: what is held, and the impulse asked for.
@@ -69,6 +72,7 @@ struct Moves {
   bool forward = false, back = false, moveleft = false, moveright = false;
   bool moveup = false, movedown = false;  // swim up and down; down crouches where the move ducks
   bool jump = false, attack = false, speed = false, strafe = false;
+  bool attack2 = false;  // the second fire key (quick_fire.hpp); a plain attack where unread
   bool left = false, right = false;  // turning
   int impulse = 0;
 };

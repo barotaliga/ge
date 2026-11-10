@@ -152,7 +152,8 @@ struct HandFrame {
   // A gun with an arc across its prongs (HeldModel::arc_ends): its two ends, world, m.
   bool arc = false;
   double arc_from[3] = {0, 0, 0}, arc_to[3] = {0, 0, 0};
-  float lift = 0;  // the share of the screen the gun is raised by (over the classic status bar)
+  float lift = 0;     // the share of the screen the gun is raised by (over the classic status bar)
+  float opacity = 1;  // the share drawn: below 1 a see-through ghost (the quick weapon's preview)
 };
 
 // One display frame of `dt` s seen through `view`. `models` is load_weapon_models's set (the

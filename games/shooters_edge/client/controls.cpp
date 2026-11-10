@@ -109,7 +109,11 @@ void add_cvars(ge::console::Console& con, ControlSettings& c) {
   b.moveleft = &con.add_button("moveleft", "+moveleft: step left while held");
   b.moveright = &con.add_button("moveright", "+moveright: step right while held");
   b.jump = &con.add_button("jump", "+jump: jump (and swim up) while held");
-  b.attack = &con.add_button("attack", "+attack: fire while held");
+  b.attack = &con.add_button(
+      "attack", "+attack: fire while held (cl_quickweapon 1: the best of cl_quickweapon_prio)");
+  b.attack2 = &con.add_button(
+      "attack2", "+attack2: fire the best of cl_quickweapon_prio2 while held, then switch back");
+  add_quick_cvars(con, c.quick);
   b.moveup = &con.add_button("moveup", "+moveup: swim up while held");
   b.movedown =
       &con.add_button("movedown", "+movedown: crouch (a move that ducks) or swim down while held");
@@ -147,6 +151,7 @@ Moves button_moves(ControlSettings& c) {
   m.movedown = down(b.movedown);
   m.jump = down(b.jump);
   m.attack = down(b.attack);
+  m.attack2 = down(b.attack2);
   m.speed = down(b.speed);
   m.strafe = down(b.strafe);
   m.left = down(b.left);
@@ -159,7 +164,7 @@ Moves button_moves(ControlSettings& c) {
 void release_buttons(ControlSettings& c) {
   ControlButtons& b = c.buttons;
   for (ge::console::Button* p : {b.forward, b.back, b.moveleft, b.moveright, b.moveup, b.movedown,
-                                 b.jump, b.attack, b.speed, b.strafe, b.left, b.right})
+                                 b.jump, b.attack, b.speed, b.strafe, b.left, b.right, b.attack2})
     if (p != nullptr) p->held = 0;
   b.impulse = 0;
 }
@@ -236,7 +241,7 @@ ge::shooter::MoveCmd read_controls(const Moves& m, const ge::input::InputState& 
   cmd.forward = static_cast<int16_t>(f);
   cmd.side = static_cast<int16_t>(s);
   cmd.up = static_cast<int16_t>(u);
-  if (m.attack) cmd.buttons |= ge::shooter::kButtonAttack;
+  if (m.attack || m.attack2) cmd.buttons |= ge::shooter::kButtonAttack;
   if (m.jump) cmd.buttons |= ge::shooter::kButtonJump;
   cmd.impulse = static_cast<uint8_t>(m.impulse);
   return cmd;
