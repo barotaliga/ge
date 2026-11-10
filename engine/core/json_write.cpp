@@ -1,14 +1,14 @@
-// The definitions behind json.hpp: string escaping and the joins.
+// The definitions behind json_write.hpp: string escaping and the joins.
 //
 // ge:summary The JSON builders' definitions: escaping, objects and arrays joined in order
-// ge:keywords cli ge json escape json_str json_obj json_arr
+// ge:keywords json escape json_str json_obj json_arr json-write
 // ge:skill agent-interface
-// ge:test tests/cli_commands_test.cpp
-#include "cli/json.hpp"
+// ge:test tests/cli_commands_test.cpp tests/gamecli_settings_test.cpp
+#include "core/json_write.hpp"
 
 #include <cstdio>
 
-namespace ge::cli {
+namespace ge::core {
 
 std::string json_str(std::string_view s) {
   std::string out = "\"";
@@ -80,4 +80,4 @@ std::string json_strs(const std::vector<std::string>& values) {
   return json_arr(quoted);
 }
 
-}  // namespace ge::cli
+}  // namespace ge::core
