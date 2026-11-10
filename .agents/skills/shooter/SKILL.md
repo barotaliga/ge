@@ -104,13 +104,12 @@ edges. `docs/shooters-edge.md` is the design;
   change to `engine/move/step.cpp` or `engine/water/swim.cpp` can move the second: rewrite it
   only when the first stays green. A classic behaviour the row lacks is a new engine KNOB, off
   by default (the `move` skill), never a branch on the classic in `engine/`.
-- **The easy jump is a permission and an ask.** `MoveSettings::speedjump` (`pm_speedjump`) acts
-  only for a player whose `ClientSlot::speedjump` is set (his user info's `cl_speedjump 1`);
-  `run_player_command` zeroes it for everyone else. It acts on the forward key alone: a strafe
-  must stay bit-identical with it on (`tests/shooter_pmove_test.cpp`, the `se-speedjump` lab).
-- **Our servers always say `pm_speedjump`, 0 included** (`Setting::always_info`): a client runs
-  its own aid (`assisted_command`) only where the server info lacks the key, so a server of ours
-  that dropped it would get the aid on top of its own easy jump.
+- **The easy jump is the client's hands, never the move's rule.** `assisted_command`
+  (`speedjump_assist.hpp`) sends what a strafer would (side key, weaving yaw, jump let go in the
+  air) and every server runs it with its classic move; `pm_speedjump` is only the share a server
+  states (ours always do, `Setting::always_info`; 0 turns the aid off). Its memory
+  (`SpeedJumpAid`) lives in the client (`Listen::jump_aid`, `Remote::jump_aid`), never in
+  `MoveState`, so prediction stays exact; `cl_speedjump_view` turns only the drawn view.
 - Still to come: the cvars bound through `engine/console` (setting `pm_airstep` sets
   `pm_pground`), a map's compiled hulls (M18b) answering `MoveWorld`, and the other entities'
   interpolation on the client (M18h).

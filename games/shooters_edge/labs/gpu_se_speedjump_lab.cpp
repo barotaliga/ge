@@ -1,36 +1,41 @@
-// LAB `se-speedjump`: DOES THE EASY JUMP GAIN SPEED ON FORWARD AND JUMP ALONE, AND DOES A STRAFE
-// STILL GAIN MORE? The easy jump (`pm_speedjump` on the server, `cl_speedjump 1` on the player;
-// plugins/shooter/pmove.hpp `speedjump`) measured two ways.
+// LAB `se-speedjump`: DOES THE EASY JUMP GAIN SPEED ON FORWARD AND JUMP ALONE, WEAVE ITS HOPS
+// ACROSS THE AIM, STEER BY THE MOUSE, AND SHOW THE SWING AS ASKED? The easy jump (`cl_speedjump 1`;
+// plugins/shooter/speedjump_assist.hpp: the client strafes for the player, every server running
+// the commands with its classic move) measured three ways.
 //
 // THE MOVE ALONE: one command of 13 ms at a time through `player_move` on an open floor, a second's
-// run-up to sv_maxspeed, then eight seconds of three pairs of hands: forward and jump held with the
-// easy jump off (the classic move: one jump, then 320), the same hands with it on at the listen
-// server's share (0.5), and the best strafe (the side key alone, swapped each hop, the view on the
-// way, jump pressed on landing) with it on. The strafe is run with it off too and must agree to
-// the bit: the easy jump never touches a strafe. Then the client's aid for a server that does not
-// run the easy jump (shooter/speedjump_assist.hpp): forward and jump held, each command sent
-// through `assisted_command` to the classic move alone; it must gain within 10% of the server's
-// own.
+// run-up to sv_maxspeed, then eight seconds of hands: forward and jump held without the aid (the
+// classic move: one jump, then 320), the same hands through the aid at shares 0.5, 0.8 (the
+// window's own server's pm_speedjump) and 1 (the best weaving strafe the move allows), and the
+// side key alone with the view held on the way (swapped each hop, jump pressed on landing): as
+// fast as share 1, but it spins whole circles in the air. Each run's heading sweep and speed gain
+// a flight stand beside people's (`se-moves --dir` over the bots' 51 dm2 matches and an e1m2
+// 4on4: 60-90 degrees and 12-20 units/s a flight past 420).
 //
-// IN THE GAME: the listen server (the baseline mod on an open arena of our own) with the player
-// running forward for a second and then holding forward and jump, the view turning 45 degrees a
-// second throughout, once with `cl_speedjump 0`
-// and once with `cl_speedjump 1` sent as his user info (as the window does), the speed read off the
-// server's player each frame, the paths drawn from above; then the frame from his eyes six seconds
-// into the easy run (the picture is measured: each adapter rasterises its own way).
+// THE WEAVE AND THE STEER: the aid's paths from above with the aim held east, and with the aim
+// turned a quarter left after two seconds; the way's angle off the aim, the sent swing and the
+// shown swing at cl_speedjump_view 0.5, command by command.
 //
-// ge:summary Lab: the easy jump (cl_speedjump) against the classic move and the best strafe
-// ge:keywords lab se-speedjump speedjump cl_speedjump pm_speedjump easy-jump bunny-hop strafe-jump
-// ge:keywords speed-over-time listen-server
+// IN THE GAME: the listen server (the baseline mod) on `--map` from `--pak` (a real map; without
+// one, an open arena of our own), the player running forward for a second and then holding forward
+// and jump, the view turning 45 degrees a second throughout, once with `cl_speedjump 0` and once
+// with `cl_speedjump 1` sent as his user info (as the window does), the speed read off the server's
+// player each frame; then from his eyes `--at` seconds into the easy run, at cl_speedjump_view 0
+// and 1 (the same moment: the swing shown or not; the pictures are measured).
+//
+// ge:summary Lab: the easy jump (cl_speedjump) gains, weaves, steers and shows its swing
+// ge:keywords lab se-speedjump speedjump cl_speedjump cl_speedjump_view pm_speedjump easy-jump
+// ge:keywords bunny-hop strafe-jump speed-over-time listen-server swing weave
 // ge:skill shooter labs
-// ge:test tests/shooter_pmove_test.cpp
+// ge:test tests/shooter_speedjump_assist_test.cpp
 #include <algorithm>
-#include <bit>
+#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "brush/app/draw_data.hpp"
 #include "brush/write.hpp"
 #include "core/libm/libm.hpp"
 #include "core/num_text.hpp"
@@ -40,10 +45,12 @@
 #include "lab/lab.hpp"
 #include "lab/labs/liquid_scene.hpp"
 #include "progs/file.hpp"
+#include "shooter/client.hpp"
 #include "shooter/pmove.hpp"
 #include "shooter/recording.hpp"
 #include "shooter/speedjump_assist.hpp"
 #include "shooters_edge/client/files.hpp"
+#include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/held.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/client/present.hpp"
@@ -53,7 +60,6 @@
 #include "shooters_edge/hud/classic_art.hpp"
 #include "shooters_edge/hud/layout.hpp"
 #include "shooters_edge/net/classic_game.hpp"
-#include "shooters_edge/view/weapons.hpp"
 #include "vfs/pak.hpp"
 
 namespace {
@@ -67,12 +73,17 @@ using ge::core::num::to_fixed;
 
 constexpr int kRate = 77;       // commands a second, 13 ms each
 constexpr int kSeconds = 8;     // of hands after the run-up
-constexpr float kShare = 0.5f;  // the listen server's pm_speedjump
+constexpr float kShare = 0.8f;  // the window's own server's pm_speedjump
 constexpr double kPi = 3.14159265358979323846;
 
 float plan_speed(sh::Vec3f v) { return sh::root_of(v.x * v.x + v.y * v.y); }
 float heading_of(sh::Vec3f v) {
   return static_cast<float>(ge::core::libm::atan2(v.y, v.x) * 180 / kPi);
+}
+double wrap(double a) {
+  while (a > 180) a -= 360;
+  while (a < -180) a += 360;
+  return a;
 }
 
 // An open floor 64k units across.
@@ -89,23 +100,28 @@ struct Field {
   }
 };
 
-// The hands; `aided` holds forward and jump and sends them through the client's aid.
+// The hands; `aided` holds forward and jump and sends them through the easy jump's aid.
 enum class Hands : uint8_t { forward_jump, best_strafe, aided };
 
-// A run on the field: the run-up, then `hands` for kSeconds; the plan speed at every command.
+// A run on the field: the run-up, then `hands` for kSeconds (the aim turned `turn` degrees left
+// after two seconds); the plan speed, the path and the swings at every command.
 struct MoveRun {
-  gl::Trace speed;
+  gl::Trace speed, path, off, swing, shown;
   sh::MoveState end;
   int jumps = 0;
+  double sweep = 0, gain = 0;  // the heading's sweep and the speed gained, a flight (past 2 s)
 };
 
-MoveRun move_run(const Field& f, Hands hands, float share, const std::string& label) {
-  sh::MoveSettings set;
-  set.speedjump = share;
+MoveRun move_run(const Field& f, Hands hands, float share, const std::string& label,
+                 float turn = 0) {
+  const sh::MoveSettings set;
   sh::MoveState s;
   s.origin = {0, 0, 24};
   MoveRun r;
-  r.speed.label = label;
+  r.speed.label = r.path.label = label;
+  r.off.label = "the way off the aim";
+  r.swing.label = "the sent yaw off the aim";
+  r.shown.label = "the view shown off the aim (cl_speedjump_view 0.5)";
   sh::MoveCmd cmd;
   cmd.msec = 13;
   cmd.forward = 400;
@@ -114,9 +130,14 @@ MoveRun move_run(const Field& f, Hands hands, float share, const std::string& la
     r.speed.x.push_back(static_cast<double>(i + 1) / kRate);
     r.speed.y.push_back(plan_speed(s.velocity));
   }
+  sh::SpeedJumpAid aid;
   int side = 400;
+  bool air = false;
+  double lo = 0, hi = 0, h0 = 0, prev = 0;
+  int flights = 0;
   for (int i = 0; i < kSeconds * kRate; i++) {
     const bool down = s.ground != -1;
+    const float aim = i >= 2 * kRate ? turn : 0;
     cmd = {};
     cmd.msec = 13;
     if (hands == Hands::forward_jump) {
@@ -125,7 +146,8 @@ MoveRun move_run(const Field& f, Hands hands, float share, const std::string& la
     } else if (hands == Hands::aided) {
       cmd.forward = 400;
       cmd.buttons = sh::kButtonJump;
-      cmd = sh::assisted_command(cmd, s, kShare);
+      cmd.angles = {0, aim, 0};
+      cmd = sh::assisted_command(cmd, s, share, 0.5f, aid);
     } else {
       if (down) side = -side;
       cmd.side = static_cast<int16_t>(side);
@@ -134,19 +156,40 @@ MoveRun move_run(const Field& f, Hands hands, float share, const std::string& la
     }
     sh::player_move(s, cmd, set, f.sw.world);
     if (down && s.ground == -1 && s.velocity.z > 200) r.jumps++;
-    r.speed.x.push_back(static_cast<double>(kRate + i + 1) / kRate);
+    // The flight's sweep, the heading unwrapped command by command.
+    const double hd = heading_of(s.velocity);
+    if (s.ground == -1 && !air) {
+      lo = hi = prev = hd;
+      h0 = plan_speed(s.velocity);
+    } else if (s.ground == -1) {
+      const double now = prev + wrap(hd - prev);
+      prev = now;
+      lo = std::min(lo, now);
+      hi = std::max(hi, now);
+    } else if (air && i >= 2 * kRate) {
+      r.sweep += hi - lo;
+      r.gain += plan_speed(s.velocity) - h0;
+      flights++;
+    }
+    air = s.ground == -1;
+    const double t = static_cast<double>(kRate + i + 1) / kRate;
+    r.speed.x.push_back(t);
     r.speed.y.push_back(plan_speed(s.velocity));
+    r.path.x.push_back(s.origin.x);
+    r.path.y.push_back(s.origin.y);
+    r.off.x.push_back(t);
+    r.off.y.push_back(wrap(heading_of(s.velocity) - aim));
+    r.swing.x.push_back(t);
+    r.swing.y.push_back(aid.swing);
+    r.shown.x.push_back(t);
+    r.shown.y.push_back(aid.shown);
   }
   r.end = s;
+  if (flights > 0) {
+    r.sweep = r.sweep / flights;
+    r.gain = r.gain / flights;
+  }
   return r;
-}
-
-bool same_bits(const sh::MoveState& a, const sh::MoveState& b) {
-  for (int i = 0; i < 3; i++)
-    if (std::bit_cast<uint32_t>(a.origin[i]) != std::bit_cast<uint32_t>(b.origin[i]) ||
-        std::bit_cast<uint32_t>(a.velocity[i]) != std::bit_cast<uint32_t>(b.velocity[i]))
-      return false;
-  return a.ground == b.ground && a.jump_held == b.jump_held;
 }
 
 void shoot_chart(gl::Lab& lab, const std::string& id, const gl::LineChart& spec,
@@ -160,66 +203,113 @@ void shoot_chart(gl::Lab& lab, const std::string& id, const gl::LineChart& spec,
 void move_alone(gl::Lab& lab) {
   const Field f;
   const MoveRun classic = move_run(f, Hands::forward_jump, 0, "forward + jump, cl_speedjump 0");
-  const MoveRun easy = move_run(f, Hands::forward_jump, kShare, "forward + jump, cl_speedjump 1");
-  const MoveRun strafe = move_run(f, Hands::best_strafe, kShare, "best strafe, cl_speedjump 1");
-  const MoveRun strafe_off = move_run(f, Hands::best_strafe, 0, "best strafe, cl_speedjump 0");
-  const MoveRun aided =
-      move_run(f, Hands::aided, 0, "forward + jump, the client's aid on a stock server");
-  const bool untouched =
-      same_bits(strafe.end, strafe_off.end) && strafe.speed.y == strafe_off.speed.y;
+  const MoveRun half = move_run(f, Hands::aided, 0.5f, "cl_speedjump 1, pm_speedjump 0.5");
+  const MoveRun most = move_run(f, Hands::aided, kShare, "cl_speedjump 1, pm_speedjump 0.8");
+  const MoveRun all = move_run(f, Hands::aided, 1, "cl_speedjump 1, pm_speedjump 1 (best weave)");
+  const MoveRun strafe = move_run(f, Hands::best_strafe, 0, "side key, view on the way (circles)");
+  const MoveRun steer = move_run(f, Hands::aided, kShare, "aim turned 90 left at 3 s", 90);
 
   gl::LabTable table{"the move alone: eight seconds of each pair of hands after a second's run-up",
-                     {"hands", "jumps", "speed at 3 s", "speed at 9 s", "gain a second"},
+                     {"hands", "jumps", "speed at 3 s", "speed at 9 s", "gain a second",
+                      "sweep a flight", "gain a flight"},
                      {}};
-  for (const MoveRun* r : {&classic, &easy, &aided, &strafe}) {
+  for (const MoveRun* r : {&classic, &half, &most, &all, &strafe}) {
     const double at3 = r->speed.y[static_cast<size_t>(3 * kRate - 1)];
     const double at9 = r->speed.y.back();
     table.rows.push_back({r->speed.label, std::to_string(r->jumps), to_fixed(at3, 1),
-                          to_fixed(at9, 1), to_fixed((at9 - 320) / kSeconds, 1)});
+                          to_fixed(at9, 1), to_fixed((at9 - 320) / kSeconds, 1),
+                          to_fixed(r->sweep, 0), to_fixed(r->gain, 1)});
   }
+  table.rows.push_back(
+      {"people at hop speed (51 dm2 matches, se-moves --dir)", "", "", "", "", "60-77", ""});
   lab.table(table);
+  double lo = 0, hi = 0;
+  for (size_t i = static_cast<size_t>(2) * kRate; i < most.off.y.size(); i++) {
+    lo = std::min(lo, most.off.y[i]);
+    hi = std::max(hi, most.off.y[i]);
+  }
+  const double steer_off = wrap(heading_of(steer.end.velocity) - 90);
   lab.metric("move.classic.speed", classic.speed.y.back(), "u/s");
   lab.metric("move.classic.jumps", classic.jumps, "count");
-  lab.metric("move.easy.speed", easy.speed.y.back(), "u/s");
-  lab.metric("move.easy.jumps", easy.jumps, "count");
+  lab.metric("move.easy-0.5.speed", half.speed.y.back(), "u/s");
+  lab.metric("move.easy.speed", most.speed.y.back(), "u/s");
+  lab.metric("move.easy.jumps", most.jumps, "count");
+  lab.metric("move.easy-1.speed", all.speed.y.back(), "u/s");
   lab.metric("move.strafe.speed", strafe.speed.y.back(), "u/s");
-  lab.metric("move.strafe.jumps", strafe.jumps, "count");
-  lab.metric("move.strafe.untouched", untouched ? 1 : 0, "bool");
-  lab.metric("move.aided.speed", aided.speed.y.back(), "u/s");
-  lab.metric("move.aided.jumps", aided.jumps, "count");
-  const double ratio = aided.speed.y.back() / easy.speed.y.back();
-  if (ratio < 0.9 || ratio > 1.1)
-    lab.fail("the client's aid on a stock server gained " + to_fixed(aided.speed.y.back(), 1) +
-                 " u/s against the server's easy jump's " + to_fixed(easy.speed.y.back(), 1),
-             "Read speedjump_assist.cpp (the wish's angle from the share). Skill: shooter.");
-  if (!untouched)
-    lab.fail("the best strafe moved differently with pm_speedjump on",
-             "The easy jump must act on the forward key alone (pmove.cpp `speed_jump`, `easy` in "
-             "walk_move). Skill: shooter.");
-  if (easy.speed.y.back() <= classic.speed.y.back() + 100)
+  lab.metric("move.easy.sweep", most.sweep, "deg");
+  lab.metric("move.easy-1.sweep", all.sweep, "deg");
+  lab.metric("move.strafe.sweep", strafe.sweep, "deg");
+  lab.metric("move.easy.swing-left", hi, "deg");
+  lab.metric("move.easy.swing-right", lo, "deg");
+  lab.metric("move.steer.off-aim", steer_off, "deg");
+  if (most.speed.y.back() <= classic.speed.y.back() + 200)
     lab.fail("forward and jump with the easy jump gained too little: " +
-                 to_fixed(easy.speed.y.back(), 1) + " u/s after 8 s",
-             "Read pmove.cpp `speed_jump` and `jump` (the held jump hops again). Skill: shooter.");
-  if (strafe.speed.y.back() <= easy.speed.y.back())
-    lab.fail("the easy jump out-gained the best strafe",
+                 to_fixed(most.speed.y.back(), 1) + " u/s after 8 s",
+             "Read speedjump_assist.cpp (the wish's angle from the share). Skill: shooter.");
+  if (all.speed.y.back() <= most.speed.y.back())
+    lab.fail("the easy jump at 0.8 out-gained the best weave (share 1)",
              "Its share must stay under 1 (`kShare`). Skill: shooter.");
+  if (hi < 10 || lo > -10)
+    lab.fail("the hops did not weave across the aim (" + to_fixed(lo, 1) + ".." + to_fixed(hi, 1) +
+                 " degrees)",
+             "Read speedjump_assist.cpp's takeoff turn and kSpeedJumpSwing. Skill: shooter.");
+  if (steer_off < -40 || steer_off > 40)
+    lab.fail("the aid did not steer the hops to the turned aim",
+             "Read speedjump_assist.cpp (the turn toward a far-off aim). Skill: shooter.");
 
   gl::LineChart chart;
   chart.spikes = false;
   chart.frame = {"PLAN SPEED OVER TIME: THE MOVE ALONE",
-                 "13 ms commands on an open floor; pm_speedjump " + to_fixed(kShare, 1) +
-                     "; a second's run-up on the ground first",
-                 "t (s)", "plan speed (units/s)"};
-  chart.traces = {classic.speed, easy.speed, aided.speed, strafe.speed};
+                 "13 ms commands on an open floor; a second's run-up on the ground first", "t (s)",
+                 "plan speed (units/s)"};
+  chart.traces = {classic.speed, half.speed, most.speed, all.speed};
   chart.rules = {320};
   shoot_chart(lab, "speed-move", chart,
-              "The player's plan speed command by command. Forward and jump held with the easy "
-              "jump off is the classic move: one jump, then the run speed (dashed, 320). With "
-              "cl_speedjump 1 the same hands hop on and gain about half what the best strafe "
-              "gains; the best strafe (side key, view on the way) is the fastest and identical "
-              "with the easy jump on or off. The client's aid on a server that does not run the "
-              "easy jump (the side key and a sent yaw in the air) tracks the server's own.",
-              "the easy line climbing steadily between the flat classic line and the strafe's");
+              "The player's plan speed command by command. Forward and jump held without the "
+              "easy jump is the classic move: one jump, then the run speed (dashed, 320). With "
+              "cl_speedjump 1 the client strafes for him and every hop gains: by the server's "
+              "pm_speedjump share of the best strafe's gain (0.5, 0.8 the window's own, and 1, "
+              "the best weaving strafe the move allows).",
+              "three easy lines climbing in order of their share");
+
+  gl::LineChart top;
+  top.spikes = false;
+  top.frame = {"THE HOPS FROM ABOVE",
+               "pm_speedjump 0.8: the aim held east (along x), and turned 90 degrees left at 3 s",
+               "x (units)", "y (units)"};
+  gl::Trace aim{"the aim east", {0, most.path.x.back()}, {0, 0}};
+  MoveRun straight = most;
+  straight.path.label = "aim held east";
+  top.traces = {aim, straight.path, steer.path};
+  shoot_chart(lab, "paths", top,
+              "Both easy runs from above. With the aim held east the hops weave left and right "
+              "across the aim line like a strafer's, each swing up to about 45 degrees; with the "
+              "aim turned a quarter left the hops turn to it at the strafe's full rate, still "
+              "gaining, and weave on along the new aim: the mouse steers.",
+              "a weaving line along y = 0, and one that bends up to go north and weaves on");
+
+  gl::LineChart swing;
+  swing.spikes = false;
+  swing.frame = {"THE SWING: ANGLES OFF THE AIM", "pm_speedjump 0.8, the aim held east, 4 s",
+                 "t (s)", "degrees (+ left)"};
+  const auto first = [](const gl::Trace& tr, double until) {
+    gl::Trace out = tr;
+    out.x.clear();
+    out.y.clear();
+    for (size_t i = 0; i < tr.x.size() && tr.x[i] <= until; i++) {
+      out.x.push_back(tr.x[i]);
+      out.y.push_back(tr.y[i]);
+    }
+    return out;
+  };
+  swing.traces = {first(most.off, 5), first(most.swing, 5), first(most.shown, 5)};
+  swing.rules = {sh::kSpeedJumpSwing, -sh::kSpeedJumpSwing};
+  shoot_chart(lab, "swing", swing,
+              "Command by command: the way the player moves (off the aim), the yaw the client "
+              "sends (where a strafer would look) and the view the screen shows at "
+              "cl_speedjump_view 0.5 (half the sent swing, eased). The way turns back each time "
+              "it is 45 degrees past the aim (dashed).",
+              "the way's zig-zag inside +-45, the sent yaw near it, the shown line at half");
 }
 
 // THE ARENA: one open room 2560 across, a spawn in its middle facing east.
@@ -247,32 +337,93 @@ bool arena_pack(std::vector<uint8_t>& out, std::string& error) {
   return ge::vfs::write_pak({{"maps/sjarena.bsp", bsp}}, &out, &error);
 }
 
+// On a real map: the player moved to the longest open run the map has, so his hops are not
+// stopped by the first wall. From every placed entity (and his spawn) 16 headings are tried: the
+// run's length is the shortest clear sweep of the player's box along three lines 64 units apart,
+// cut where the floor under it falls away by more than 64 units. The best start and heading win.
+void to_open_run(cl::Listen& l) {
+  const sh::Server& sv = l.server->sv;
+  sh::MoveWorld world;
+  int ents[sh::kMaxSolids];
+  const sh::Vec3f spawn = sv.edicts[1].origin;
+  sh::build_player_world(sv, 1, spawn, world, ents);
+  world.count = 1;  // the world alone: the map's walls and floors
+  float best = -1, best_yaw = 0;
+  sh::Vec3f best_at = spawn;
+  const auto run_length = [&](sh::Vec3f from, double yaw) {
+    const double r = yaw * kPi / 180;
+    const auto cx = static_cast<float>(ge::core::libm::cos(r));
+    const auto cy = static_cast<float>(ge::core::libm::sin(r));
+    float most = 3000;
+    for (const float side : {-32.0f, 0.0f, 32.0f}) {
+      const sh::Vec3f a{from.x - cy * side, from.y + cx * side, from.z};
+      if (sh::player_trace(world, a, a).startsolid) return 0.0f;
+      const sh::HullTrace t = sh::player_trace(world, a, {a.x + cx * 3000, a.y + cy * 3000, a.z});
+      most = std::min(most, t.fraction * 3000);
+    }
+    for (int step = 1; static_cast<float>(step) * 128 < most; step++) {
+      const float d = static_cast<float>(step) * 128;
+      const sh::Vec3f p{from.x + cx * d, from.y + cy * d, from.z};
+      if (sh::player_trace(world, p, {p.x, p.y, p.z - 96}).fraction == 1) return d;
+    }
+    return most;
+  };
+  for (int e = 1; e < sv.num_edicts; e++) {
+    const sh::Edict& ed = sv.edicts[static_cast<size_t>(e)];
+    if (ed.free) continue;
+    sh::Vec3f from = ed.origin;
+    if (e != 1) {  // stood on the floor under the entity
+      const sh::HullTrace down =
+          sh::player_trace(world, {from.x, from.y, from.z + 32}, {from.x, from.y, from.z - 256});
+      if (down.startsolid || down.fraction == 1) continue;
+      from = down.endpos;
+      from.z = from.z + 1;
+    }
+    for (int k = 0; k < 16; k++) {
+      const float len = run_length(from, k * 22.5);
+      if (len > best) best = len, best_yaw = static_cast<float>(k * 22.5), best_at = from;
+    }
+  }
+  sh::Edict& me = l.server->sv.edicts[1];
+  me.origin = best_at;
+  me.velocity = {};
+  l.view = {0, best_yaw, 0};
+}
+
 struct GameRun {
   gl::Trace speed, path;
   float top = 0;
 };
 
-// The player on the arena with `cl_speedjump` as asked: two seconds to spawn and settle, a second
-// of forward alone, then forward and jump held, the view turning left at 45 degrees a second
-// throughout. `at_six` is called six
-// seconds in.
-template <class AtSix>
-bool game_run(const ge::progs::Progs& progs, const cl::SearchPath& files, bool speedjump,
-              GameRun& out, std::string& error, AtSix at_six) {
+// The player on `map` with `cl_speedjump` as asked and `view` of the swing shown: two seconds to
+// spawn and settle, a second of forward alone, then forward and jump held, the view turning left
+// at `turn` degrees a second throughout (from the map's longest open run when `open_run`). `at` is
+// called mid-swing from `at_s` seconds into the hopping.
+template <class At>
+bool game_run(const ge::progs::Progs& progs, const cl::SearchPath& files,
+              const std::string& map_name, bool open_run, bool speedjump, float view, float turn,
+              double at_s, GameRun& out, std::string& error, At at) {
   cl::Listen l;
-  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, "sjarena", error);
+  std::unique_ptr<cl::LoadedMap> map = cl::load_named_map(files, map_name, error);
   if (!map ||
       !cl::listen_start(l, progs, std::move(map), shooters_edge::net::listen_options(), error))
     return false;
   l.rules->user_info(0, "cl_speedjump", speedjump ? "1" : "0");
+  l.speedjump_view = view;
   for (int i = 0; i < 2 * kRate; i++) cl::listen_frame(l, {});
+  if (open_run) {
+    to_open_run(l);
+    for (int i = 0; i < kRate / 2; i++) cl::listen_frame(l, {});
+  }
   out.speed.label = speedjump ? "cl_speedjump 1" : "cl_speedjump 0";
   out.path.label = out.speed.label;
   sh::MoveCmd cmd;
   cmd.forward = 400;
+  const int at_cmd = kRate + static_cast<int>(at_s * kRate);
+  bool done = false;
   for (int i = 0; i < (1 + kSeconds) * kRate; i++) {
     if (i == kRate) cmd.buttons = sh::kButtonJump;  // a second's run-up, then the jump held
-    l.view.y = l.view.y + 45.0f / kRate;
+    l.view.y = l.view.y + turn / kRate;
     cl::listen_frame(l, cmd);
     const sh::Edict& me = l.server->sv.edicts[1];
     const float v = plan_speed(me.velocity);
@@ -281,23 +432,53 @@ bool game_run(const ge::progs::Progs& progs, const cl::SearchPath& files, bool s
     out.speed.y.push_back(v);
     out.path.x.push_back(me.origin.x);
     out.path.y.push_back(me.origin.y);
-    if (i + 1 == 7 * kRate) at_six(l);  // six seconds of hopping
+    // The first command from `at_s` on whose sent swing is wide (the same in every run of the
+    // same hands: the drawn share alone differs).
+    if (!done && i + 1 >= at_cmd && std::abs(l.jump_aid.swing) > 15) {
+      done = true;
+      at(l);
+    }
   }
   return true;
 }
 
 void in_game(gl::Lab& lab, uint32_t w, uint32_t h) {
   std::string error;
-  cl::SearchPath files;
-  std::vector<uint8_t> pak;
+  cl::SearchPath arena, files;
   ge::progs::Progs progs;
-  if (!arena_pack(pak, error) || !cl::add_archive(files, "pak0.pak", std::move(pak), error) ||
-      !cl::baseline_progs(progs, error)) {
+  const bool own = lab.arg("pak").empty();
+  const std::string map_name = own ? "sjarena" : lab.arg("map");
+  std::vector<uint8_t> arena_bytes;
+  if (!arena_pack(arena_bytes, error) || !cl::baseline_progs(progs, error)) {
     lab.fail(error, "Read the reason above. Skill: shooter.");
     return;
   }
-  GameRun off, on;
-  if (!game_run(progs, files, false, off, error, [](cl::Listen&) {})) {
+  if (own) {
+    std::vector<uint8_t> copy = arena_bytes;
+    if (!cl::add_archive(files, "pak0.pak", std::move(copy), error)) {
+      lab.fail(error, "Read the reason above. Skill: shooter.");
+      return;
+    }
+  } else {
+    ge::brush::app::Pack pack;
+    if (!ge::brush::app::read_pack(lab.arg("pak"), &pack, &error) ||
+        !cl::add_archive(files, lab.arg("pak"), std::move(pack.bytes), error)) {
+      lab.fail(error, "Pass --pak=<a pack with maps, progs and gfx/palette.lmp>. Skill: shooter.");
+      return;
+    }
+  }
+  if (!cl::add_archive(arena, "pak0.pak", std::move(arena_bytes), error)) {
+    lab.fail(error, "Read the reason above. Skill: shooter.");
+    return;
+  }
+  // The speed is measured on the open arena (a real map's walls stop a run of eight seconds);
+  // the eyes are drawn on the map asked for, from the longest open run it has.
+  const float turn = static_cast<float>(lab.arg_num("turn"));
+  const double at_s = lab.arg_num("at");
+  GameRun off, on, swing_run, still;
+  const auto none = [](cl::Listen&) {};
+  if (!game_run(progs, arena, "sjarena", false, false, 0, turn, 0, off, error, none) ||
+      !game_run(progs, arena, "sjarena", false, true, 0.5f, turn, 0, on, error, none)) {
     lab.fail(error, "The arena should load under the baseline mod. Skill: shooter.");
     return;
   }
@@ -308,93 +489,118 @@ void in_game(gl::Lab& lab, uint32_t w, uint32_t h) {
              "Install Mesa's Vulkan drivers (apt install mesa-vulkan-drivers). Skill: gpu.");
   const shooters_edge::look::Picture look;
   std::vector<ge::viewmodel::HeldModel> weapons;
-  if (!shooters_edge::view::load_weapon_models(lab.arg("models"), weapons, &error))
-    lab.note("no weapon is drawn: " + error);
-  float speed_at_six = 0;
-  const auto at_six = [&](cl::Listen& l) {
-    speed_at_six = plan_speed(l.server->sv.edicts[1].velocity);
-    if (!device) {
-      ls::placeholders(lab, {"eyes"});
-      return;
-    }
-    std::string err;
-    cl::WorldDrawPtr world = cl::create_world_draw(
-        *device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm, look, weapons, err);
-    if (!world) {
-      lab.fail(err, "Read the gpu: lines above. Skill: render.");
-      return;
-    }
-    ge::gpu::Target target = ge::gpu::create_target(*device, "se-speedjump.final", w, h);
-    cl::ViewState shown;
-    cl::FxState fx_state;
-    cl::FxFrame fx;
-    cl::HeldState held;
-    const shooters_edge::view::ViewSettings view_settings;
-    const double t = 8;
-    cl::frame_view(l, shown, 1, t, 0.013);
-    const ge::render::FrameView view = cl::frame_view(l, shown, 0, t, 0);
-    cl::step_fx(l, shown, fx_state, t, 0, fx);
-    shooters_edge::view::HandFrame hand =
-        cl::step_held(l, shown, held, view_settings, weapons, t, 0);
-    se::Hud hud = se::make_hud();
-    se::HudArt art = se::free_art();
-    art.finish();
-    ge::ui::DrawList overlay;
-    overlay.begin(static_cast<int>(w), static_cast<int>(h));
-    se::fill_hud(hud, cl::status_of(l, t), art);
-    hud.layout.draw(overlay,
-                    hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
-                    se::hud_style());
-    cl::draw_world(*device, *world, view, fx, &hand, 0, overlay, target.view);
-    const ge::gpu::Image img = ge::gpu::read_now(*device, target);
-    lab.shot({"eyes",
-              "SIX SECONDS OF FORWARD AND JUMP, CL_SPEEDJUMP 1",
-              "From the player's eyes in the arena, six seconds after he started holding forward "
-              "and jump with cl_speedjump 1 while turning left: in the air mid-hop at " +
-                  to_fixed(speed_at_six, 0) + " units/s (the run speed is 320).",
-              "the floor below the eyes mid-hop, the arena's far walls, the HUD",
-              {{"map", "sjarena"}, {"size", lab.arg("size")}}},
-             gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
-             gl::Det::measured);
+  cl::HeldState held;
+  held.hand.at_eye = cl::load_held_set(cl::classic_adapter(), files, {}, weapons);
+  if (!held.hand.at_eye) lab.note("no weapon is drawn: the game's held weapons did not load");
+  se::HudArt free_art = se::free_art();
+  free_art.finish();
+  se::HudArt classic_art;
+  {
+    const auto find = [&files](std::string_view p, std::vector<uint8_t>& store) {
+      return cl::find_file(files, p, store);
+    };
+    std::string why;
+    if (!se::classic_art_from_packs(find, &classic_art, &why)) lab.note(why);
+  }
+  const se::HudArt& art = se::pick_art("auto", classic_art, free_art);
+  float speed_at = 0;
+  // From his eyes at `view` of the swing shown.
+  const auto eyes = [&](float view) {
+    return [&, view](cl::Listen& l) {
+      speed_at = plan_speed(l.server->sv.edicts[1].velocity);
+      const std::string id = view > 0 ? "eyes-swing" : "eyes-still";
+      if (!device) {
+        ls::placeholders(lab, {id.c_str()});
+        return;
+      }
+      std::string err;
+      cl::WorldDrawPtr world =
+          cl::create_world_draw(*device, files, *l.map, w, h, wgpu::TextureFormat::RGBA8Unorm, look,
+                                weapons, err, {l.server->models, {}});
+      if (!world) {
+        lab.fail(err, "Read the gpu: lines above. Skill: render.");
+        return;
+      }
+      ge::gpu::Target target = ge::gpu::create_target(*device, "se-speedjump.final", w, h);
+      cl::ViewState shown;
+      cl::FxState fx_state;
+      cl::FxFrame fx;
+      cl::HeldState hand = held;
+      const shooters_edge::view::ViewSettings view_settings;
+      const double t = 8;
+      cl::frame_view(l, shown, 1, t, 0.013);
+      const ge::render::FrameView frame = cl::frame_view(l, shown, 0, t, 0);
+      cl::step_fx(l, shown, fx_state, t, 0, fx);
+      shooters_edge::view::HandFrame hf =
+          cl::step_held(l, shown, hand, view_settings, weapons, t, 0);
+      se::Hud hud = se::make_hud();
+      ge::ui::DrawList overlay;
+      overlay.begin(static_cast<int>(w), static_cast<int>(h));
+      se::fill_hud(hud, cl::status_of(l, t), art);
+      hud.layout.draw(overlay,
+                      hud.layout.frame(static_cast<int>(w), static_cast<int>(h), se::hud_style()),
+                      se::hud_style());
+      cl::draw_world(*device, *world, frame, fx, &hf, 0, overlay, target.view);
+      const ge::gpu::Image img = ge::gpu::read_now(*device, target);
+      const std::string swing = to_fixed(l.jump_aid.shown, 1);
+      lab.shot({id,
+                view > 0 ? "MID-HOP, CL_SPEEDJUMP_VIEW 1: THE SWING SHOWN"
+                         : "MID-HOP, CL_SPEEDJUMP_VIEW 0: A STILL VIEW",
+                "From the player's eyes on " + map_name + ", " + to_fixed(at_s, 1) +
+                    " s into holding forward and jump with cl_speedjump 1, at " +
+                    to_fixed(speed_at, 0) + " units/s (the run speed is 320). " +
+                    (view > 0 ? "cl_speedjump_view 1: the view turned " + swing +
+                                    " degrees off his aim, where a strafer would look."
+                              : "cl_speedjump_view 0: the view on his own aim while the client "
+                                "swings the sent yaw."),
+                "the same moment as the other eyes picture, the view turned by the swing or not",
+                {{"map", map_name}, {"size", lab.arg("size")}}},
+               gl::Picture{static_cast<int>(img.width), static_cast<int>(img.height), img.rgba},
+               gl::Det::measured);
+    };
   };
-  if (!game_run(progs, files, true, on, error, at_six)) {
-    lab.fail(error, "The arena should load under the baseline mod. Skill: shooter.");
+  if (!game_run(progs, files, map_name, !own, true, 1, 0, at_s, swing_run, error, eyes(1)) ||
+      !game_run(progs, files, map_name, !own, true, 0, 0, at_s, still, error, eyes(0))) {
+    lab.fail(error, "The map should load under the baseline mod. Skill: shooter.");
     return;
   }
   lab.metric("game.off.top-speed", off.top, "u/s");
   lab.metric("game.on.top-speed", on.top, "u/s");
-  lab.metric("game.on.speed-at-6s", speed_at_six, "u/s");
+  lab.metric("game.on.speed-at", speed_at, "u/s");
   if (on.top <= off.top + 100)
     lab.fail("in the game the easy jump gained too little: " + to_fixed(on.top, 1) + " u/s",
              "Check the user info reached the slot (server/commands.cpp `cl_speedjump`) and the "
              "listen server's pm_speedjump (client/listen.cpp). Skill: shooter.");
+  if (swing_run.speed.y != still.speed.y)
+    lab.fail(
+        "the shown swing changed the move",
+        "cl_speedjump_view only turns the drawn view (Listen::jump_aid.shown). Skill: shooter.");
 
   gl::LineChart speed;
   speed.spikes = false;
   speed.frame = {"PLAN SPEED OVER TIME: IN THE GAME",
-                 "the listen server (baseline mod): a second's run, then forward and jump held; "
-                 "the view turning 45 degrees a second",
+                 "the listen server (baseline mod) on the open arena: a second's run, then forward "
+                 "and jump held; the view turning " +
+                     to_fixed(turn, 0) + " degrees a second",
                  "t (s)", "plan speed (units/s)"};
   speed.traces = {off.speed, on.speed};
   speed.rules = {320};
   shoot_chart(lab, "speed-game", speed,
-              "The server's own player each frame on the arena, the same hands twice: with "
-              "cl_speedjump 0 he jumps once and runs at 320 (dashed); with cl_speedjump 1 the held "
-              "jump hops on and every hop adds speed while the way follows the turning view.",
+              "The server's own player each frame, the same hands twice: with cl_speedjump 0 he "
+              "jumps once and runs at 320 (dashed); with cl_speedjump 1 the client strafes for "
+              "him and every hop adds speed while the hops follow the turning view.",
               "the cl_speedjump 1 line climbing in a saw-tooth of hops, the other flat at 320");
 
   gl::LineChart top;
   top.spikes = false;
-  top.frame = {"THE PATHS FROM ABOVE", "the arena is 2560 units across, its walls at +-1280",
-               "x (units)", "y (units)"};
+  top.frame = {"THE PATHS FROM ABOVE", "the open arena, its walls at +-1280", "x (units)",
+               "y (units)"};
   gl::Trace walls{"walls", {-1280, 1280, 1280, -1280, -1280}, {-1280, -1280, 1280, 1280, -1280}};
   top.traces = {walls, off.path, on.path};
-  shoot_chart(
-      lab, "paths", top,
-      "Both runs from above. Turning the view at the same rate, the faster easy-jump run "
-      "draws a wider circle: the easy jump turns the way toward the view, so the mouse "
-      "still steers.",
-      "two loops from the same spawn, the cl_speedjump 1 loop wider, both inside the walls");
+  shoot_chart(lab, "paths-game", top,
+              "Both runs from above. The easy run weaves its hops along the way the view turns, "
+              "and goes further for its speed.",
+              "two paths from the same spawn, the cl_speedjump 1 one weaving and longer");
 }
 
 void run(gl::Lab& lab) {
@@ -409,12 +615,15 @@ const gl::LabSpec kSpec{
     "se-speedjump",
     gl::LabKind::picture,
     "game:shooters_edge",
-    "plugins/shooter/pmove.cpp's easy jump (pm_speedjump) and its cl_speedjump wiring",
+    "plugins/shooter/speedjump_assist.cpp's easy jump (cl_speedjump) and its wiring",
     "shooter",
-    "Does holding forward and jump gain speed with cl_speedjump 1, and does the best strafe "
-    "still gain more?",
-    {{"size", "960,540", "the eyes' picture's width and height, px"},
-     {"models", "games/shooters_edge/content/models/view", "the held weapons' folder"}},
+    "Does holding forward and jump gain speed with cl_speedjump 1, weave its hops across the aim, "
+    "steer by the mouse and show its swing as cl_speedjump_view asks?",
+    {{"size", "960,540", "the eyes' pictures' width and height, px"},
+     {"pak", "", "a pack holding the map (empty: an open arena of our own)"},
+     {"map", "e1m1", "the map in --pak"},
+     {"turn", "45", "degrees a second the view turns in the game"},
+     {"at", "5", "seconds into the hopping the eyes are drawn"}},
     "--size=480,270",
     run,
 };
