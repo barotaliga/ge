@@ -195,7 +195,7 @@ no live server: every match runs on our own server, in process (`se-team`), head
 
 | Lab | What it answers |
 | --- | --- |
-| `se-team` | a 4on4 of our bots on our server (a set: `--seeds`, `--variants`, `--jobs`): `--map`, `--seed`, `--minutes`, `--client-fed=1`, `--sides=1` (each side's numbers), `--features`, `--features-red`, `--features-blue`, `--trace=<tsv>` (`--trace-every`: every bot's command as a row: feet, speed, mode, goal, pilot mode, link kind, the view and who turned it), `--save=<mvd>` |
+| `se-team` | a 4on4 of our bots on our server (a set: `--seeds`, `--variants`, `--jobs`): `--map`, `--seed`, `--minutes`, `--client-fed=1`, `--sides=1` (each side's numbers), `--features`, `--features-red`, `--features-blue`, `--trace=<tsv>` (`--trace-every`: every bot's command as a row: feet, speed, mode, goal, pilot mode, link kind, the view and who turned it), `--save=<mvd>`; the hop by skill always (`team.hop.<skill>.share`, `speed-p50`, `fast-share`, `flights`, `crash-share`, `gain-p50`, `takeoffs-360`, `chained-share`), the deaths in lava or slime (`team.deaths-in.*`) |
 | `se-people` | people and bots measured alike off recordings: in view, faced, speed, the hand's sweeps (`hand.*`, `hop.*`), fire in view, item control, wet; `--samples=<tsv>` every sample alive |
 | `se-moves` | who moves fastest and the weave by speed, per player, off a folder of recordings |
 | `se-rj` | rocket, grenade and gap jumps read off recordings and clustered into tricks |

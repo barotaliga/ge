@@ -83,6 +83,89 @@ struct View {
   double py(double y) const { return margin + (hi.y - y) * scale; }
 };
 
+// THE HOP, measured on every command of every bot, by skill (`team.hop.<skill>.*`): its share of
+// the time alive, its speed's median, the time alive past 340 u/s across; and every FLIGHT (a
+// hop's landing jump through the hopping commands after it, five or more): the takeoff speed,
+// the air's gain (the last hopping command's speed less the takeoff's), a crash (80 u/s or more
+// lost), a takeoff past 360, chained (the next command jumps again off a landing) or the
+// stretch ended. People hop 36 % of their time; the bots' gap jumps need 420-500 at takeoff.
+struct HopSkill {
+  int64_t alive = 0, hop = 0, fast = 0;
+  int flights = 0, crashes = 0, takeoffs_360 = 0, chained = 0;
+  std::vector<float> hop_speed, gain;
+};
+struct Watch {
+  std::ofstream* out = nullptr;  // the trace, when asked for
+  int every = 4;
+  std::array<int, 64> count{};
+  struct Flight {
+    bool on = false;
+    float v0 = 0, last = 0;
+    int n = 0;
+  };
+  std::array<Flight, 64> flight{};
+  std::array<HopSkill, 4> skill{};  // by sh::AimSkill
+};
+
+void watch_hop(Watch& w, int k, sh::AimSkill skill, bool alive, bool hop, const char* because,
+               float speed) {
+  HopSkill& s = w.skill[static_cast<size_t>(skill)];
+  if (alive) {
+    s.alive++;
+    if (speed > 340) s.fast++;
+    if (hop) {
+      s.hop++;
+      s.hop_speed.push_back(speed);
+    }
+  }
+  const std::string_view why = because != nullptr ? because : "";
+  const bool landing = hop && why.starts_with("a landing");
+  Watch::Flight& f = w.flight[static_cast<size_t>(k)];
+  if (f.on && hop && why.starts_with("hopping")) {
+    f.last = speed;
+    f.n++;
+    return;
+  }
+  if (f.on) {
+    if (f.n >= 5) {
+      const float gain = f.last - f.v0;
+      s.flights++;
+      s.gain.push_back(gain);
+      if (gain < -80) s.crashes++;
+      if (f.v0 > 360) s.takeoffs_360++;
+      if (landing) s.chained++;
+    }
+    f.on = false;
+  }
+  if (landing) f = {true, speed, speed, 0};
+}
+
+float median(std::vector<float> v) {
+  if (v.empty()) return 0;
+  std::sort(v.begin(), v.end());
+  return v[v.size() / 2];
+}
+
+void hop_metrics(gl::Lab& lab, const Watch& w) {
+  for (const sh::AimSkill k :
+       {sh::AimSkill::expert, sh::AimSkill::average, sh::AimSkill::novice, sh::AimSkill::perfect}) {
+    const HopSkill& s = w.skill[static_cast<size_t>(k)];
+    if (s.alive == 0) continue;
+    const std::string key = std::string("team.hop.") + sh::aim_skill_name(k) + ".";
+    const auto share = [](int64_t n, int64_t of) {
+      return of > 0 ? static_cast<double>(n) / static_cast<double>(of) : 0.0;
+    };
+    lab.metric(key + "share", share(s.hop, s.alive), "share");
+    lab.metric(key + "speed-p50", median(s.hop_speed), "units/s");
+    lab.metric(key + "fast-share", share(s.fast, s.alive), "share");
+    lab.metric(key + "flights", s.flights, "count");
+    lab.metric(key + "crash-share", share(s.crashes, s.flights), "share");
+    lab.metric(key + "gain-p50", median(s.gain), "units/s");
+    lab.metric(key + "takeoffs-360", s.takeoffs_360, "count");
+    lab.metric(key + "chained-share", share(s.chained, s.flights), "share");
+  }
+}
+
 void run(gl::Lab& lab) {
   const auto seed = static_cast<uint32_t>(lab.arg_num("seed"));
   const double minutes = lab.arg_num("minutes");
@@ -202,15 +285,12 @@ void run(gl::Lab& lab) {
   }
   const std::string save = lab.arg("save");
   o.packed = save.ends_with("z");  // a `.mvdz`: recorded packed as it goes
-  // THE TRACE (`--trace=<file>`): a TSV row per bot every `--trace-every` commands: where it is,
-  // how fast, what it means to do and what its pilot did and why. Read with the bots skill's
-  // measures.
+  // EVERY COMMAND OF EVERY BOT, watched: the hop measured by skill (below, `team.hop.*`), and THE
+  // TRACE (`--trace=<file>`): a TSV row per bot every `--trace-every` commands: where it is, how
+  // fast, what it means to do and what its pilot did and why. Both this run's own: a set
+  // (--seeds) runs several matches at once.
   std::ofstream trace;
-  struct Tracer {
-    std::ofstream* out = nullptr;
-    int every = 4;
-    std::array<int, 64> count{};
-  } tracer;  // this run's own: a set (--seeds) runs several matches at once
+  Watch watch;
   if (!lab.arg("trace").empty()) {
     trace.open(lab.arg("trace"));
     if (!trace) {
@@ -220,43 +300,45 @@ void run(gl::Lab& lab) {
     }
     trace << "t\tbot\tx\ty\tz\tspeed\thealth\tmode\tgoal\tgoal_node\tunlocking\tpilot\tlink"
              "\tscript_step\tbecause\tyaw\tpitch\tview\n";
-    const int every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
-    tracer = Tracer{&trace, every, {}};
-    o.on_command_ctx = &tracer;
-    o.on_command = [](void* ctx, int k, const shooters_edge::bots::Fighter& f,
-                      const shooters_edge::server::RulesCommon& w, const sh::MoveCmd& cmd) {
-      Tracer& tr = *static_cast<Tracer*>(ctx);
-      if (k < 0 || k >= 64 || (tr.count[static_cast<size_t>(k)]++ % tr.every) != 0) return;
-      std::ofstream& out = *tr.out;
-      // The fighter's own entity is its slot's (not the client's player number).
-      const auto& e = w.world.entities[static_cast<size_t>(f.slot) + 1];
-      const sh::Pilot& p = f.bot.pilot.pilot;
-      const char* link = "-";
-      if (p.g != nullptr && p.k + 1 < p.route.size()) {
-        const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
-        for (int32_t q = 0; q < a.links; q++) {
-          const sh::NavLink& l =
-              p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
-          if (l.to == p.route[p.k + 1]) {
-            link = sh::nav_kind_name(l.kind);
-            break;
-          }
+    watch.out = &trace;
+    watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
+  }
+  o.on_command_ctx = &watch;
+  o.on_command = [](void* ctx, int k, const shooters_edge::bots::Fighter& f,
+                    const shooters_edge::server::RulesCommon& w, const sh::MoveCmd& cmd) {
+    Watch& tr = *static_cast<Watch*>(ctx);
+    if (k < 0 || k >= 64) return;
+    // The fighter's own entity is its slot's (not the client's player number).
+    const auto& e = w.world.entities[static_cast<size_t>(f.slot) + 1];
+    const sh::Pilot& p = f.bot.pilot.pilot;
+    const float sp = std::sqrt(e.velocity.x * e.velocity.x + e.velocity.y * e.velocity.y);
+    watch_hop(tr, k, f.skill, e.health > 0, p.mode == sh::PilotMode::hop, p.because, sp);
+    if (tr.out == nullptr || (tr.count[static_cast<size_t>(k)]++ % tr.every) != 0) return;
+    std::ofstream& out = *tr.out;
+    const char* link = "-";
+    if (p.g != nullptr && p.k + 1 < p.route.size()) {
+      const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
+      for (int32_t q = 0; q < a.links; q++) {
+        const sh::NavLink& l =
+            p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
+        if (l.to == p.route[p.k + 1]) {
+          link = sh::nav_kind_name(l.kind);
+          break;
         }
       }
-      const char* goal =
-          f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
-              ? shooters_edge::bots::item_call(f.items[static_cast<size_t>(f.goal_item)])
-              : "-";
-      const float sp = std::sqrt(e.velocity.x * e.velocity.x + e.velocity.y * e.velocity.y);
-      out << to_fixed(w.sv.time, 2) << '\t' << k << '\t' << to_fixed(e.origin.x, 0) << '\t'
-          << to_fixed(e.origin.y, 0) << '\t' << to_fixed(e.origin.z - 24, 0) << '\t'
-          << to_fixed(sp, 0) << '\t' << to_fixed(e.health, 0) << '\t'
-          << shooters_edge::bots::fight_mode_name(f.mode) << '\t' << goal << '\t' << f.goal_node
-          << '\t' << (f.unlocking ? 1 : 0) << '\t' << sh::pilot_mode_name(p.mode) << '\t' << link
-          << '\t' << p.script_step << '\t' << p.because << '\t' << to_fixed(cmd.angles.y, 2) << '\t'
-          << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by << '\n';
-    };
-  }
+    }
+    const char* goal =
+        f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
+            ? shooters_edge::bots::item_call(f.items[static_cast<size_t>(f.goal_item)])
+            : "-";
+    out << to_fixed(w.sv.time, 2) << '\t' << k << '\t' << to_fixed(e.origin.x, 0) << '\t'
+        << to_fixed(e.origin.y, 0) << '\t' << to_fixed(e.origin.z - 24, 0) << '\t'
+        << to_fixed(sp, 0) << '\t' << to_fixed(e.health, 0) << '\t'
+        << shooters_edge::bots::fight_mode_name(f.mode) << '\t' << goal << '\t' << f.goal_node
+        << '\t' << (f.unlocking ? 1 : 0) << '\t' << sh::pilot_mode_name(p.mode) << '\t' << link
+        << '\t' << p.script_step << '\t' << p.because << '\t' << to_fixed(cmd.angles.y, 2) << '\t'
+        << to_fixed(cmd.angles.x, 2) << '\t' << f.bot.view_by << '\n';
+  };
   o.frames = static_cast<int>(std::lround(minutes * 60 * 1000 / shooters_edge::bots::kPilotMsec));
   const cn::TeamMatchReport r = cn::run_team_match(o);
   if (!r.ok) {
@@ -264,6 +346,7 @@ void run(gl::Lab& lab) {
     return;
   }
   const double secs = r.seconds;
+  hop_metrics(lab, watch);
 
   // The table.
   static const char* kWeapon[9] = {
