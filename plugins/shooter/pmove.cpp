@@ -51,22 +51,7 @@ void categorize(Mover& m) {
   }
 
   // The water level: the feet + 1, the box's middle, the eyes.
-  s.waterlevel = 0;
-  s.watertype = kContentsEmpty;
-  Vec3f p = {s.origin.x, s.origin.y, s.origin.z + (kPlayerMins.z + 1)};
-  int c = water_contents(m.world, p);
-  if (c <= kContentsWater) {
-    s.watertype = c;
-    s.waterlevel = 1;
-    p.z = s.origin.z + (kPlayerMins.z + kPlayerMaxs.z) * 0.5f;
-    c = water_contents(m.world, p);
-    if (c <= kContentsWater) {
-      s.waterlevel = 2;
-      p.z = s.origin.z + 22;
-      c = water_contents(m.world, p);
-      if (c <= kContentsWater) s.waterlevel = 3;
-    }
-  }
+  s.waterlevel = water_level(m.world, s.origin, &s.watertype);
 
   if (!m.set.pground && s.ground != -1 && !flying(s) && s.waterlevel < 2 && traced &&
       !tr.startsolid && !tr.allsolid)
@@ -363,6 +348,26 @@ void spectator_move(Mover& m, const MoveCmd& cmd, const ViewAxes& ax) {
 }
 
 }  // namespace
+
+int water_level(const MoveWorld& world, Vec3f origin, int* watertype) {
+  int level = 0;
+  if (watertype) *watertype = kContentsEmpty;
+  Vec3f p = {origin.x, origin.y, origin.z + (kPlayerMins.z + 1)};
+  int c = water_contents(world, p);
+  if (c <= kContentsWater) {
+    if (watertype) *watertype = c;
+    level = 1;
+    p.z = origin.z + (kPlayerMins.z + kPlayerMaxs.z) * 0.5f;
+    c = water_contents(world, p);
+    if (c <= kContentsWater) {
+      level = 2;
+      p.z = origin.z + 22;
+      c = water_contents(world, p);
+      if (c <= kContentsWater) level = 3;
+    }
+  }
+  return level;
+}
 
 MoveResult player_move(MoveState& s, const MoveCmd& cmd, const MoveSettings& set,
                        const MoveWorld& world) {

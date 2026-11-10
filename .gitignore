@@ -14,3 +14,6 @@ __pycache__/
 # The baseline mod as `ge qc build` writes it (built from games/shooters_edge/qc/, never committed)
 games/shooters_edge/qc/*/progs.dat
 games/shooters_edge/qc/*/progs.dat.lines
+
+# A person's own skills (their machine's paths, servers and files), never committed
+/.agents/skills/*-private/

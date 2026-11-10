@@ -12,6 +12,10 @@
 #include <utility>
 
 #include "progs/entity_text.hpp"
+#include "shooter/nav_script.hpp"
+#include "shooters_edge/bots/gap_tricks.hpp"
+#include "shooters_edge/bots/item_routes.hpp"
+#include "shooters_edge/bots/rocket_tricks.hpp"
 
 namespace shooters_edge::bots {
 
@@ -47,9 +51,84 @@ bool plate(const sh::BrushModel& bm) {
   return d.z <= 32 && d.x >= 48 && d.y >= 48;
 }
 
+// The doors (not starting open) whose chain a name or a shot moves: a door with no name of its own
+// moves with every door its box touches (unless one of them keeps apart, spawnflags 4), and the
+// chain opens only by its name when any door in it has one. Edicts, by edict number.
+std::vector<uint8_t> named_doors(const sv::QcServer& s,
+                                 const std::vector<pg::EntityBlock>& blocks) {
+  struct D {
+    int e;
+    bool named, apart;
+  };
+  std::vector<D> ds;
+  for (const pg::EntityBlock& b : blocks) {
+    const char* cn = pg::block_value(b, "classname");
+    const char* model = pg::block_value(b, "model");
+    if (!cn || !model || model[0] != '*' || std::strcmp(cn, "func_door") != 0 || start_open(b))
+      continue;
+    const int e = edict_of(s, model);
+    if (e < 0) continue;
+    const char* sf = pg::block_value(b, "spawnflags");
+    ds.push_back({e, pg::block_value(b, "targetname") != nullptr || pg::block_value(b, "health"),
+                  sf && (std::atoi(sf) & 4) != 0});
+  }
+  std::vector<uint8_t> out(static_cast<size_t>(s.sv.num_edicts), 0);
+  // Spread the name along touching boxes until nothing changes (chains are a few doors long).
+  for (bool grew = true; grew;) {
+    grew = false;
+    for (D& a : ds)
+      for (const D& b : ds) {
+        if (a.named || !b.named || a.apart || b.apart) continue;
+        const sh::Edict& x = s.sv.edicts[static_cast<size_t>(a.e)];
+        const sh::Edict& y = s.sv.edicts[static_cast<size_t>(b.e)];
+        if (x.absmin.x <= y.absmax.x && y.absmin.x <= x.absmax.x && x.absmin.y <= y.absmax.y &&
+            y.absmin.y <= x.absmax.y && x.absmin.z <= y.absmax.z && y.absmin.z <= x.absmax.z) {
+          a.named = true;
+          grew = true;
+        }
+      }
+  }
+  for (const D& d : ds)
+    if (d.named) out[static_cast<size_t>(d.e)] = 1;
+  return out;
+}
+
+// A FLOOR DOOR: a plate resting shut that only a button (or a shot) moves: a floor to the nav at
+// rest, its nodes shut while it is away (dm2's big room and its entries, slid out by t1).
+bool floor_door(const pg::EntityBlock& b, const sh::BrushModel& bm,
+                const std::vector<uint8_t>& named, int e) {
+  const char* cn = pg::block_value(b, "classname");
+  return cn && std::strcmp(cn, "func_door") == 0 && !start_open(b) && plate(bm) && e >= 0 &&
+         static_cast<size_t>(e) < named.size() && named[static_cast<size_t>(e)];
+}
+
 void open_doors_as_floor(const sv::QcServer& s, const sv::MapSpec& spec,
                          const std::vector<pg::EntityBlock>& blocks, sh::MoveWorld& world,
                          std::vector<NavBridge>& bridges) {
+  const std::vector<uint8_t> named = named_doors(s, blocks);
+  for (const pg::EntityBlock& b : blocks) {
+    const char* model = pg::block_value(b, "model");
+    if (!model || model[0] != '*') continue;
+    const int m = std::atoi(model + 1);
+    if (m <= 0 || static_cast<size_t>(m) >= spec.models.size() || world.count >= sh::kMaxSolids)
+      continue;
+    const int e = edict_of(s, model);
+    const sh::BrushModel& bm = spec.models[static_cast<size_t>(m)];
+    if (!floor_door(b, bm, named, e)) continue;
+    sh::Solid& so = world.solids[world.count++];
+    so = sh::Solid{};
+    so.kind = sh::SolidKind::brush;
+    so.origin = s.sv.edicts[static_cast<size_t>(e)].origin;  // at rest
+    so.point_hull = bm.hulls[0];
+    so.clip_hull = bm.hulls[1];
+    so.mins = bm.mins;
+    so.maxs = bm.maxs;
+    NavBridge br;
+    br.ent = e;
+    br.spawn = so.origin;
+    br.floor = true;
+    bridges.push_back(br);
+  }
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
     const char* model = pg::block_value(b, "model");
@@ -69,6 +148,9 @@ void open_doors_as_floor(const sv::QcServer& s, const sv::MapSpec& spec,
       NavBridge br;
       br.ent = e;
       br.spawn = so.origin;
+      br.touch = pg::block_value(b, "targetname") == nullptr;
+      const char* wait = pg::block_value(b, "wait");
+      br.wait = wait ? static_cast<float>(std::atof(wait)) : 3;  // a door's default
       bridges.push_back(br);
       so.origin = {};  // out, where the map drew it
     }
@@ -82,6 +164,7 @@ void open_doors_as_floor(const sv::QcServer& s, const sv::MapSpec& spec,
 std::vector<sh::NavMover> movers_of(const sv::QcServer& s, const sv::MapSpec& spec,
                                     const std::vector<pg::EntityBlock>& blocks) {
   std::vector<sh::NavMover> out;
+  const std::vector<uint8_t> named = named_doors(s, blocks);
   for (const pg::EntityBlock& b : blocks) {
     const char* cn = pg::block_value(b, "classname");
     const char* model = pg::block_value(b, "model");
@@ -93,6 +176,7 @@ std::vector<sh::NavMover> movers_of(const sv::QcServer& s, const sv::MapSpec& sp
     const int m = std::atoi(model + 1);
     if (m <= 0 || static_cast<size_t>(m) >= spec.models.size()) continue;
     const int ent = edict_of(s, model);
+    if (door && floor_door(b, spec.models[static_cast<size_t>(m)], named, ent)) continue;  // too
     if (ent < 0) continue;
     sh::NavMover mv;
     mv.ent = ent;
@@ -158,7 +242,9 @@ std::vector<sh::NavExtraLink> teleport_links(const sh::NavGraph& g, const sv::Ma
       if (o.x + 16 < box.mins.x || o.x - 16 > box.maxs.x || o.y + 16 < box.mins.y ||
           o.y - 16 > box.maxs.y || o.z + 32 < box.mins.z || o.z - 24 > box.maxs.z)
         continue;
-      out.push_back({static_cast<int32_t>(a), to, sh::NavKind::walk, 0.1f});
+      sh::NavExtraLink e{static_cast<int32_t>(a), to, sh::NavKind::walk, 0.1f};
+      e.teleport = true;
+      out.push_back(e);
     }
   }
   return out;
@@ -193,8 +279,10 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
   for (NavBridge& br : out.bridges) {
     const sh::Edict& d = s.sv.edicts[static_cast<size_t>(br.ent)];
     // Out, and a player's half-width beyond its edge (a node there stands on it too).
-    const sh::Vec3f lo = d.absmin - br.spawn - sh::Vec3f{16, 16, 0},
-                    hi = d.absmax - br.spawn + sh::Vec3f{16, 16, 0};
+    // A floor door's nodes stand on it where it rests; a bridge's where the map drew it.
+    const sh::Vec3f shift = br.floor ? sh::Vec3f{} : br.spawn;
+    const sh::Vec3f lo = d.absmin - shift - sh::Vec3f{16, 16, 0},
+                    hi = d.absmax - shift + sh::Vec3f{16, 16, 0};
     for (size_t n = 0; n < out.graph.nodes.size(); n++) {
       const sh::Vec3f o = out.graph.nodes[n].origin;
       if (o.x >= lo.x && o.x <= hi.x && o.y >= lo.y && o.y <= hi.y && o.z >= hi.z &&
@@ -203,32 +291,215 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
     }
   }
   out.teleport_links = static_cast<int64_t>(teleports.size());
-  // Water: the links prove no swim, so a pool is closed to entry (no route leads into it, and an
-  // item under water is out of reach); a player knocked in finds his own way out (the fighter).
+  // SCRIPTED ROUTES to key items (item_routes.hpp): each proven by the move from the node at its
+  // entry to the node at its end and added as one link; one that does not hold is left out.
+  {
+    std::string base = spec.name;
+    if (const size_t slash = base.find_last_of('/'); slash != std::string::npos)
+      base = base.substr(slash + 1);
+    if (const size_t dot = base.rfind(".bsp"); dot != std::string::npos) base.resize(dot);
+    out.scripts_made.clear();
+    std::vector<sh::NavExtraLink> scripted;
+    for (const ItemRoute& r : item_routes(base)) {
+      MapNav::ScriptMade made;
+      made.name = r.name;
+      if (r.n < 2) continue;
+      const ItemRouteStep& first = r.steps[0];
+      const ItemRouteStep& last = r.steps[r.n - 1];
+      made.from = sh::nav_nearest(out.graph, {first.x, first.y, first.z + 24});
+      made.to = sh::nav_nearest(out.graph, {last.x, last.y, last.z + 24});
+      if (made.from >= 0 && made.to >= 0 && made.from != made.to) {
+        sh::NavScript sc;
+        for (size_t k = 0; k < r.n; k++)
+          sc.steps.push_back({{r.steps[k].x, r.steps[k].y, r.steps[k].z + 24}, r.steps[k].hop});
+        sc.steps.back().at = out.graph.nodes[static_cast<size_t>(made.to)].origin;
+        const sh::NavProof pr = sh::prove_script(
+            out.world, sh::MoveSettings{}, out.graph.nodes[static_cast<size_t>(made.from)].origin,
+            sc, out.graph.set);
+        if (pr.reached) {
+          made.held = true;
+          made.time_s = pr.time_s;
+          for (const sh::NavMover& m : out.movers)
+            if (pr.lo.x <= m.absmax.x && pr.lo.y <= m.absmax.y && pr.lo.z <= m.absmax.z &&
+                m.absmin.x <= pr.hi.x && m.absmin.y <= pr.hi.y && m.absmin.z <= pr.hi.z) {
+              made.mover = m.ent;
+              break;
+            }
+          sh::NavExtraLink e{made.from, made.to, sh::NavKind::script, pr.time_s};
+          e.mover = made.mover;
+          e.script = static_cast<int32_t>(out.graph.scripts.size());
+          out.graph.scripts.push_back(std::move(sc));
+          scripted.push_back(e);
+        }
+      }
+      out.scripts_made.push_back(made);
+    }
+    sh::nav_add_links(out.graph, scripted);
+  }
+  // LAVA AND SLIME: a floor node standing in either (a shallow pool at the feet too: it burns
+  // there as well) harms whoever goes there; no way leads into one (the links out are kept: a
+  // player knocked in walks out).
+  {
+    sh::NavGraph& g = out.graph;
+    out.harm.assign(g.nodes.size(), 0);
+    for (size_t n = 0; n < g.nodes.size(); n++) {
+      const sh::Vec3f o = g.nodes[n].origin;
+      for (const float dz : {-22.f, -10.f, 4.f}) {
+        const int c = sh::water_contents(out.world, {o.x, o.y, o.z + dz});
+        if (c == sh::kContentsSlime || c == sh::kContentsLava) out.harm[n] = 1;
+      }
+    }
+    // A bridge that moves when touched pulls out from under whoever steps onto it: its nodes
+    // harm as the pit under them does.
+    for (const NavBridge& br : out.bridges)
+      if (br.touch)
+        for (const int32_t n : br.nodes) out.harm[static_cast<size_t>(n)] = 1;
+    out.harm_links = sh::nav_close_entries(g, out.harm);
+  }
+  // Water: part of the graph (shooter/swim.hpp `nav_add_swim`): its cells are swim nodes, a pool's
+  // floor joined to the water over it, a dry edge to the water under it by the climb out the
+  // move proves. One route search goes through it as through any room.
   sh::NavGraph& graph = out.graph;
   out.wet.assign(graph.nodes.size(), 0);
   for (size_t n = 0; n < graph.nodes.size(); n++) {
     const sh::Vec3f o = graph.nodes[n].origin;
-    out.wet[n] = sh::water_contents(out.world, {o.x, o.y, o.z - 10}) <= sh::kContentsWater ? 1 : 0;
+    out.wet[n] = sh::water_contents(out.world, {o.x, o.y, o.z - 10}) == sh::kContentsWater ? 1 : 0;
   }
-  out.closed_links = sh::nav_close_entries(graph, out.wet, &out.entries);
-  // The way out of the water: to any dry node of the map's main part (the most a start reaches).
-  out.main_n = 0;
-  ge::ai::Search sr;
-  for (const pg::EntityBlock& b : blocks) {
-    const char* cn = pg::block_value(b, "classname");
-    const char* org = pg::block_value(b, "origin");
-    if (!cn || !org || std::strcmp(cn, start_class) != 0) continue;
-    const int32_t k = sh::nav_reach(graph, sh::nav_nearest(graph, origin_of(org)), sr);
-    if (k > out.main_n) {
-      out.main_n = k;
-      std::swap(out.main, sr);
+  out.swim_nav = sh::nav_add_swim(out.world, graph, out.wet);
+  out.wet.resize(graph.nodes.size(), 1);   // every swim node is wet
+  out.harm.resize(graph.nodes.size(), 0);  // and none harms
+  // The map's main part: the most a start spot reaches.
+  const auto find_main = [&] {
+    out.main_n = 0;
+    ge::ai::Search sr;
+    for (const pg::EntityBlock& b : blocks) {
+      const char* cn = pg::block_value(b, "classname");
+      const char* org = pg::block_value(b, "origin");
+      if (!cn || !org || std::strcmp(cn, start_class) != 0) continue;
+      const int32_t k = sh::nav_reach(graph, sh::nav_nearest(graph, origin_of(org)), sr);
+      if (k > out.main_n) {
+        out.main_n = k;
+        std::swap(out.main, sr);
+      }
     }
+  };
+  find_main();
+  // The pockets it does not reach, and those that reach none of it back, bridged by the links the
+  // build never tries (shooter/nav.hpp `nav_bridge_pockets`); the main part found again.
+  if (out.main_n > 0) {
+    std::vector<uint8_t> main(graph.nodes.size());
+    for (size_t n = 0; n < main.size(); n++)
+      main[n] = out.main.reached(static_cast<int32_t>(n)) ? 1 : 0;
+    // A rocket jump only into a pocket that holds an item.
+    std::vector<uint8_t> wanted(graph.nodes.size(), 0);
+    for (const pg::EntityBlock& b : blocks) {
+      const char* cn = pg::block_value(b, "classname");
+      const char* org = pg::block_value(b, "origin");
+      if (!cn || !org || (std::strncmp(cn, "item_", 5) != 0 && std::strncmp(cn, "weapon_", 7) != 0))
+        continue;
+      const sh::Vec3f at = origin_of(org);
+      const int32_t n = sh::nav_nearest(graph, {at.x, at.y, at.z + 24});
+      if (n >= 0) wanted[static_cast<size_t>(n)] = 1;
+    }
+    sh::NavBridgeSettings bs;
+    bs.wanted = wanted;
+    bs.avoid = out.harm;
+    out.bridges_made = sh::nav_bridge_pockets(out.world, sh::MoveSettings{}, graph, main, bs);
+    find_main();
+  }
+  // The map's tricks: rocket links people's jumps prove, landing where a way back on foot leads
+  // to the main part.
+  {
+    std::string base = spec.name;
+    if (const size_t slash = base.find_last_of('/'); slash != std::string::npos)
+      base = base.substr(slash + 1);
+    if (const size_t dot = base.rfind(".bsp"); dot != std::string::npos) base.resize(dot);
+    const std::vector<sh::NavTrick> tricks = nav_tricks(rocket_tricks(base));
+    if (!tricks.empty() && out.main_n > 0) {
+      std::vector<uint8_t> main(graph.nodes.size());
+      for (size_t n = 0; n < main.size(); n++)
+        main[n] = out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
+      std::vector<uint8_t> back = sh::nav_back(graph, main);
+      for (size_t n = 0; n < back.size(); n++) back[n] = back[n] && !out.harm[n] ? 1 : 0;
+      // The tricks as rocket jumps and as grenade jumps; then a grenade jump for each rocket
+      // jump the pockets were bridged by (the way into a pocket for a player with no launcher).
+      std::vector<sh::NavTrick> bridged;
+      for (const sh::NavNode& n : graph.nodes)
+        for (int32_t k = 0; k < n.links; k++) {
+          const sh::NavLink& l =
+              graph.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
+          if (l.kind != sh::NavKind::rocket) continue;
+          sh::NavTrick t;
+          t.from = n.origin;
+          t.to = graph.nodes[static_cast<size_t>(l.to)].origin;
+          bridged.push_back(t);
+        }
+      sh::NavTrickSettings ts;
+      ts.grenades = true;
+      out.tricks_made = sh::nav_add_tricks(out.world, sh::MoveSettings{}, graph, tricks, back, ts);
+      ts.rockets = false;
+      ts.near = 8;  // from the bridge's own takeoff
+      out.bridged_grenades =
+          sh::nav_add_tricks(out.world, sh::MoveSettings{}, graph, bridged, back, ts);
+    }
+  }
+  // The traps: nodes no way on foot leads back from to the main part (a room a rocket jump or a
+  // drop leads into and nothing out of): no goal of a bot's.
+  {
+    std::vector<uint8_t> main(graph.nodes.size());
+    const bool found = out.main.nodes() == graph.nodes.size();
+    for (size_t n = 0; n < main.size(); n++)
+      main[n] = found && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
+    const std::vector<uint8_t> back = sh::nav_back(graph, main);
+    out.trap.assign(graph.nodes.size(), 0);
+    for (size_t n = 0; n < back.size() && found; n++) out.trap[n] = back[n] && !out.harm[n] ? 0 : 1;
+  }
+  // The jumps a miss of kills (over lava or slime, or landing at an edge over it): flown again
+  // past the target and from a slower run, kept only when both hold, and dearer (dm2's lava room
+  // took half the bots' deaths: a jump down onto its ramp carried them off the edge).
+  out.hardened = sh::nav_harden_jumps(out.world, sh::MoveSettings{}, graph, out.harm);
+  // THE GAP TRICKS (gap_tricks.hpp): people's speed jumps over a pit as jump links at a hopper's
+  // speed, landing where a way back on foot leads to the main part; after the hardening, which
+  // would price a jump over lava as a run's miss.
+  {
+    std::string base = spec.name;
+    if (const size_t slash = base.find_last_of('/'); slash != std::string::npos)
+      base = base.substr(slash + 1);
+    if (const size_t dot = base.rfind(".bsp"); dot != std::string::npos) base.resize(dot);
+    const std::vector<sh::NavGapTrick> gaps = nav_gap_tricks(gap_tricks(base));
+    if (!gaps.empty() && out.main_n > 0) {
+      std::vector<uint8_t> back(graph.nodes.size());
+      for (size_t n = 0; n < back.size(); n++)
+        back[n] =
+            out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] && !out.harm[n] && !out.trap[n]
+                ? 1
+                : 0;
+      out.gaps_made = sh::nav_add_gap_tricks(out.world, sh::MoveSettings{}, graph, gaps, back);
+    }
+  }
+  // OUT OF A PIT BY ROCKET (shooter/escape.hpp): from every liquid at least waist deep, a rocket
+  // fired down at the surface throws a swimmer backed against the wall onto the ledge behind him
+  // (dm2's lava under the red armour has no other way out); landing on the main part's dry floor.
+  {
+    std::vector<uint8_t> land(graph.nodes.size(), 0);
+    for (size_t n = 0; n < land.size(); n++)
+      land[n] = out.main_n > 0 && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] &&
+                        !out.harm[n] && !out.trap[n]
+                    ? 1
+                    : 0;
+    // Never onto a bridge: the nav's world holds one where the map drew it, in or not.
+    for (const NavBridge& br : out.bridges)
+      for (const int32_t n : br.nodes)
+        if (n >= 0 && static_cast<size_t>(n) < land.size()) land[static_cast<size_t>(n)] = 0;
+    out.escapes_made = sh::nav_add_escapes(out.world, sh::MoveSettings{}, graph, land);
   }
   std::vector<uint8_t> exits(graph.nodes.size(), 0);
   for (size_t n = 0; n < graph.nodes.size(); n++)
     exits[n] = out.main_n > 0 && out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] ? 1 : 0;
   sh::build_swim(out.world, graph, exits, sh::SwimSettings{}, out.swim);
+  // THE BRINK (shooter/brink.hpp): the harm kept on the graph, the walks along its lips marked.
+  out.brink_links = sh::nav_mark_harm(graph, out.harm);
+  sh::nav_room(graph);  // the room either side a walker strays into (pilot.hpp's lane)
   out.build_ms =
       std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
   if (graph.nodes.empty()) {

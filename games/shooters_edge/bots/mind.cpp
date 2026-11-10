@@ -7,22 +7,27 @@
 // ge:test tests/shooters_edge_team_test.cpp
 #include "shooters_edge/bots/mind.hpp"
 
+#include <algorithm>
 #include <cmath>
 
 #include "core/prng.hpp"
 #include "shooter/senses.hpp"
 #include "shooters_edge/bots/fighter.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
+#include "shooters_edge/bots/map_plan.hpp"
 #include "shooters_edge/bots/team.hpp"
 
 namespace shooters_edge::bots {
 
 namespace {
 
+constexpr size_t kDangerKept = 12;  // the danger spots kept (mind_danger)
+
 constexpr int32_t kItQuad = 4194304;  // the quad's IT_ bit (games/shooters_edge/qc)
 constexpr int32_t kWRockets = 32, kWArc = 64;
 constexpr double kHelp_s = 6;         // a call for help holds this long
 constexpr double kHoldsFresh_s = 40;  // a mate's `safe` this old still says he holds his area
+constexpr double kPackClaim_s = 6;    // a bare `coming` this soon after a pack's call claims it
 constexpr double kGoingFresh_s = 12;  // a mate's `coming X` this old still says he goes for X
 constexpr float kMateSight = 1500;    // a teammate is made out within this, units
 constexpr float kGiveNear = 600;      // an item is left to a teammate in sight this near it
@@ -31,6 +36,15 @@ constexpr float kSafeNear = 250;      // a holder this near his item calls it sa
 constexpr float kHelpNear = 700;      // help is called by a key item this near, enemies as near
 constexpr double kHelpSeen_s = 2;     // an enemy seen this lately is about
 constexpr float kCovered = 700;       // a key area a teammate is this near is his, not the enemy's
+constexpr double kLostFresh_s = 8;    // an enemy in the base this lately makes it the enemy's
+constexpr float kBaseReach = 600;     // an enemy this near the base's item is in the base
+constexpr float kPushStrong = 130;    // strength to call a push; to join one, 0.8 of it
+constexpr float kStageOut = 400;      // a gather spot at least this far from the base's item
+constexpr float kGatherNear = 350;    // a mate this near the gather spot has gathered
+constexpr double kGather_s = 8;       // the gather waits this long at most
+constexpr double kPush_s = 30;        // a push lasts this long at most
+constexpr double kPushGap_s = 25;     // one player calls a push no oftener than this
+constexpr double kPushClear_s = 4;    // on the base with no enemy seen this long: the push is over
 
 float dist(sh::Vec3f a, sh::Vec3f b) {
   const sh::Vec3f d = a - b;
@@ -163,6 +177,16 @@ int32_t rocket_launcher(const Fighter& f) {
   return -1;
 }
 
+// How long before the quad is due its rushers go: the map plan's run from the base to the quad's
+// area and its lead, else kRushAhead_s; never under kRushAhead_s / 2 nor over twice it.
+double rush_ahead_s(const Fighter& f, int32_t q) {
+  if (!f.plan) return kRushAhead_s;
+  for (size_t r = 0; r < f.plan->rushes.size(); r++)
+    for (const int32_t i : f.plan->areas[static_cast<size_t>(f.plan->rushes[r])].items)
+      if (i == q) return std::clamp(f.plan->rush_leave_s[r], kRushAhead_s / 2, kRushAhead_s * 2);
+  return kRushAhead_s;
+}
+
 // A way there by its links from where it stands (not known until its reach is worked out).
 bool reachable(const Fighter& f, int32_t i) {
   return i >= 0 && f.items[static_cast<size_t>(i)].node >= 0 && f.reach_at >= 0 &&
@@ -175,6 +199,56 @@ double due_of(const Fighter& f, int32_t i, double t) {
   const ItemSpot& it = f.items[static_cast<size_t>(i)];
   if (!it.known && !it.in_sight) return 1e30;
   return it.present ? t : it.back_at;
+}
+
+// The run from `p` to node `to` over the nav's links, s (`ai::kUnreached` where none leads).
+double run_s(const Fighter& f, sh::Vec3f p, int32_t to) {
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  ge::ai::Search search;
+  sh::nav_reach(g, sh::nav_nearest(g, p), search);
+  return search.cost(to);
+}
+
+// Whether the base round item `ra` is believed the enemy's: an enemy in it seen or called out
+// within `kLostFresh_s` and no mate believed there, or worked out lost (`retake`).
+bool base_lost(const Fighter& f, int32_t ra, sh::Vec3f at, double t) {
+  const Mind& mn = f.mind;
+  const sh::Vec3f there = f.items[static_cast<size_t>(ra)].at;
+  if (dist(at, there) < kSafeNear || mate_near(f, there, kSafeNear * 2, t)) return false;
+  if (mn.retake == ra && t - mn.retake_t < kLostFresh_s) return true;
+  const auto in = [&](sh::Vec3f p, double when) {
+    return t - when < kLostFresh_s && dist(p, there) < kBaseReach;
+  };
+  return in(mn.enemy_at, mn.enemy_t) || in(mn.sighted_at, mn.sighted_t);
+}
+
+// The place to gather at before a push on the base round item `ra`: of the places outside the
+// map plan's ways into it (named, at least `kStageOut` from the item, a way leading there), the one
+// nearest `at`. False with no plan or no such place.
+bool gather_spot(const Fighter& f, int32_t ra, sh::Vec3f at, std::string& name, sh::Vec3f& pos) {
+  if (!f.plan || f.plan->base < 0 || !f.bot.pilot.pilot.g) return false;
+  const PlanArea& base = f.plan->areas[static_cast<size_t>(f.plan->base)];
+  if (std::find(base.items.begin(), base.items.end(), ra) == base.items.end()) return false;
+  const sh::NavGraph& g = *f.bot.pilot.pilot.g;
+  const sh::Vec3f there = f.items[static_cast<size_t>(ra)].at;
+  const std::string inside = place_of(f, there);
+  float best = 0;
+  bool found = false;
+  for (const int32_t e : base.entries) {
+    const std::string n = place_of(f, g.nodes[static_cast<size_t>(e)].origin);
+    sh::Vec3f p;
+    if (n.empty() || n == inside || !place_pos(f, n, p) || dist(p, there) < kStageOut) continue;
+    const int32_t node = sh::nav_nearest(g, p);
+    if (node < 0 || (f.reach_at >= 0 && !f.reach.reached(node))) continue;
+    const float d = dist(p, at);
+    if (!found || d < best) {
+      found = true;
+      best = d;
+      name = n;
+      pos = p;
+    }
+  }
+  return found;
 }
 
 void say_status(Fighter& f, double t, SayKind kind, const Stats& st, sh::Vec3f at) {
@@ -244,8 +318,90 @@ bool mate_going(const Fighter& f, int32_t i, double t) {
   return false;
 }
 
+void mind_danger(Fighter& f, sh::Vec3f at, double t) {
+  if (!f.features[sh::Feature::danger]) return;
+  if (f.danger.size() >= kDangerKept) f.danger.erase(f.danger.begin());
+  f.danger.emplace_back(at, t);
+}
+
+bool death_words(std::string_view rest) {
+  // The words a death's line goes on with after the victim's name ("was nailed by", "ate 2 loads
+  // of", "sleeps with the fishes", "becomes bored with life", ...).
+  static constexpr const char* kDeathWords[] = {
+      "was ",       "ate ",    "rides ", "accepts ", "chewed ", "eats ",    "gets ", "sleeps ",
+      "sucks ",     "gulped ", "burst ", "visits ",  "turned ", "cratered", "fell ", "becomes ",
+      "discovers ", "tries ",  "can't ", "squished", "loses ",  "checks ",  "died",  "got "};
+  for (const char* w : kDeathWords)
+    if (rest.rfind(w, 0) == 0) return true;
+  return false;
+}
+
+bool mind_obituary(Fighter& f, const std::string& line, double t) {
+  for (const Mate& m : f.mind.mates) {
+    if (m.name.empty() || line.size() <= m.name.size() + 1 ||
+        line.compare(0, m.name.size(), m.name) != 0 || line[m.name.size()] != ' ')
+      continue;
+    if (!death_words(std::string_view(line).substr(m.name.size() + 1))) return false;
+    if (t - m.at_t < mate_fresh_s(f)) mind_danger(f, m.at, t);
+    return true;
+  }
+  return false;
+}
+
+// The opening's item for this player (map_plan.hpp `opening`): down the plan's order, each item
+// still there takes the players (this one, and each mate whose spawn it read) who reach it within
+// its late run, the nearest first, up to its cap; -1 when none falls to this player.
+int32_t opening_pick(const Fighter& f, double t) {
+  if (!f.plan || f.plan->opening.empty() || f.reach_at < 0) return -1;
+  struct Who {
+    std::string name;
+    sh::Vec3f at;
+    bool me = false;
+    bool taken = false;
+  };
+  std::vector<Who> team{{f.name, {}, true, false}};
+  for (const Mate& m : f.mind.mates)
+    if (t - m.at_t < mate_fresh_s(f)) team.push_back({m.name, m.at, false, false});
+  for (const OpenItem& o : f.plan->opening) {
+    const ItemSpot& it = f.items[static_cast<size_t>(o.item)];
+    if (!it.present || !reachable(f, o.item)) continue;
+    std::vector<std::pair<double, size_t>> near;
+    for (size_t k = 0; k < team.size(); k++) {
+      if (team[k].taken) continue;
+      const double run = team[k].me ? f.reach.cost(it.node) : run_s(f, team[k].at, it.node);
+      if (run <= o.late_s) near.push_back({run, k});
+    }
+    std::sort(near.begin(), near.end(), [&](const auto& a, const auto& b) {
+      return a.first != b.first ? a.first < b.first : team[a.second].name < team[b.second].name;
+    });
+    for (size_t n = 0; n < near.size() && static_cast<int>(n) < o.cap; n++) {
+      team[near[n].second].taken = true;
+      if (team[near[n].second].me) return o.item;
+    }
+  }
+  return -1;
+}
+
+bool mind_take_plan(Fighter& f, const Said& said, double t) {
+  if (said.kind != SayKind::plan) return false;
+  Mind& mn = f.mind;
+  int32_t items[2] = {-1, -1};
+  if (said.strategy != Strategy::free) {
+    items[0] = item_named(f, said.item, nullptr);
+    items[1] = said.item2.empty() ? -1 : item_named(f, said.item2, nullptr);
+    if (items[0] < 0) return false;
+  }
+  mn.strategy = said.strategy;
+  mn.strategy_items[0] = items[0];
+  mn.strategy_items[1] = items[1];
+  mn.strategy_t = t;
+  mn.claim = -1;  // claimed again off the plan at the next plan
+  mn.claimed_said = false;
+  return true;
+}
+
 void mind_hear(Fighter& f, const std::string& from, const std::string& text, double t) {
-  if (from == f.name) return;  // its own words, sent back to it
+  if (from == f.name || !f.features[sh::Feature::talk]) return;  // its own words, or deaf
   Mind& mn = f.mind;
   // The repeat count: the same words within the window.
   int count = 1;
@@ -288,6 +444,7 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
     case SayKind::coming:
     case SayKind::have:
     case SayKind::lost:
+    case SayKind::attack:
       if (has_place) {
         m.at = p;
         m.at_t = t;
@@ -295,6 +452,10 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
       break;
     default:
       break;
+  }
+  if (!s.status.weapon.empty()) {
+    m.has_rl = s.status.weapon == "rl";
+    m.weapon_t = t;
   }
   if (s.status.health >= 0) {
     m.strength = static_cast<float>(s.status.health) + protection_of(s.status) +
@@ -335,6 +496,14 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
       break;
     }
     case SayKind::coming: {
+      // Right after a pack's call, a bare `coming [ga]` (or `coming rl`) answers it: that mate
+      // takes the pack, the rest let it be (packs.hpp `packs_goal`).
+      if (t - mn.pack_t < kPackClaim_s && (s.item.empty() || s.item == "rl" || s.item == "lg")) {
+        mn.pack_claim_t = t;
+        m.going = -1;
+        m.going_t = t;
+        break;
+      }
       int32_t i = s.item.empty() ? -1 : item_named(f, s.item, nullptr);
       if (i < 0 && has_place) i = key_near(f, p, 600);
       m.going = i;
@@ -352,6 +521,7 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
       if (has_place) {
         mn.enemy_at = p;
         mn.enemy_t = t;
+        mind_danger(f, p, t);  // no healing there for a while
         // An area to take back (what an average player goes by: he keeps no map of his team).
         const int32_t area = key_near(f, p, 600);
         if (area >= 0 && f.teamwork != MapSense::novice) {
@@ -364,6 +534,7 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
       if (has_place) {
         mn.help_at = p;
         mn.help_until = t + kHelp_s;
+        mind_danger(f, p, t);  // a mate in trouble there: no healing there for a while
       }
       break;
     case SayKind::enemy:
@@ -397,8 +568,32 @@ void mind_hear(Fighter& f, const std::string& from, const std::string& text, dou
       }
       break;
     }
+    case SayKind::attack: {
+      // "We take it back together: gather on me": joined by a player strong enough to.
+      const int32_t i = item_named(f, s.item, nullptr);
+      if (i < 0 || !has_place || f.teamwork == MapSense::novice || f.role == Role::carry ||
+          f.role == Role::rush || (mn.push_item >= 0 && t - mn.push_t < kPush_s))
+        break;
+      mn.push_item = i;
+      mn.push_t = t;
+      mn.push_at = p;
+      mn.push_go_t = -1e9;
+      if (f.team) f.team->stats.joins++;
+      break;
+    }
+    case SayKind::plan:
+      if (mind_take_plan(f, s, t) && draw(f) < kAckChance) mn.ack_due = true;
+      break;
+    case SayKind::pack:
+      if (has_place) {
+        mn.pack_at = p;
+        mn.pack_t = t;
+        mn.pack_rl = s.item == "rl";
+      }
+      break;
     case SayKind::none:
     case SayKind::report:
+    case SayKind::ack:
       break;
   }
 }
@@ -448,10 +643,17 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
   }
   mn.next_plan = t + kPlan_s;
   const server::WorldEntity& self = s.world.entities[static_cast<size_t>(me)];
-  // Its first plan alive with its reach known: the match's start.
-  const bool opening = !mn.opened && self.health > 0 && f.reach_at >= 0;
-  if (opening) mn.opened = true;
+  // Its first plan alive with its reach known: the match's start. Its spawn is said first, and
+  // the opening's claims wait for the next plan, the team's spawns read.
   const sh::Vec3f at = self.origin;
+  if (!mn.opened && self.health > 0 && f.reach_at >= 0) {
+    mn.opened = mn.opening_due = true;
+    say_status(f, t, SayKind::report, st, at);
+    mn.reported_at = t;
+    return;
+  }
+  bool opening = mn.opening_due && self.health > 0;
+  mn.opening_due = false;
   const Role was = f.role;
   if (self.health <= 0) {
     if (was == Role::carry) {
@@ -477,16 +679,39 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
   const bool quad_mine = (st.items & kItQuad) != 0;
   const float strong = fighter_strength(st);
   const int32_t q = first_of(f, ItemKind::quad);
-  // The areas worth holding: the best armour's, the launcher's and the quad's; the mega health's
-  // in place of the armour's on a map whose armour no way leads to.
+  // The areas worth holding: the best armour's, the launcher's and the quad's; on a map whose best
+  // armour no way leads to, the best armour a way does lead to (a team holds an armour, not the
+  // mega health: holding the mega draws both teams' hurt players into one room), the mega's only
+  // when no armour is reachable.
   int32_t ra = best_armour(f);
-  if (!reachable(f, ra)) ra = first_of(f, ItemKind::mega);
+  if (!reachable(f, ra) && f.plan && f.plan->base >= 0) {
+    // The map's own plan (map_plan.hpp): its base's best item a way leads to.
+    ra = -1;
+    double worth = 0;
+    for (const int32_t i : f.plan->areas[static_cast<size_t>(f.plan->base)].items)
+      if (reachable(f, i) && plan_worth(f.items[static_cast<size_t>(i)]) > worth) {
+        worth = plan_worth(f.items[static_cast<size_t>(i)]);
+        ra = i;
+      }
+  }
+  if (!reachable(f, ra)) {
+    ra = -1;
+    for (const ItemKind k : {ItemKind::armor3, ItemKind::armor2, ItemKind::armor1})
+      for (size_t i = 0; i < f.items.size() && ra < 0; i++)
+        if (f.items[i].kind == k && reachable(f, static_cast<int32_t>(i)))
+          ra = static_cast<int32_t>(i);
+    if (ra < 0) ra = first_of(f, ItemKind::mega);
+  }
   const int32_t rl = rocket_launcher(f);
 
   // The claim: at the start the nearest of the launcher, the best armour and the quad that no
   // mate said he is coming for; later the best armour's area when no mate is believed to hold it.
-  if (mn.claim >= 0 && mn.claim == q && !f.items[static_cast<size_t>(q)].present && !quad_mine)
-    mn.claim = -1;  // the quad gone: the claim is free again
+  if (mn.claim >= 0 && mn.claim == q && !f.items[static_cast<size_t>(q)].present && !quad_mine) {
+    // The quad gone: a rusher takes up the opening's claim at once (the nearest of the launcher
+    // and the armour no mate holds), so the team still holds its key areas.
+    mn.claim = -1;
+    opening = true;
+  }
   if (mn.claim < 0 && f.teamwork != MapSense::novice && !quad_mine && f.reach_at >= 0) {
     const auto taken = [&](int32_t i) {
       for (const Mate& m : mn.mates)
@@ -496,9 +721,25 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
       return false;
     };
     int32_t pick = -1;
-    if (opening || f.teamwork == MapSense::expert) {
+    // The opening's quad first: claimed by the two of the team who believe themselves nearest it
+    // (a mate's spawn as he said it, or one who said he is coming for it, counted ahead).
+    if (opening && f.plan && !f.plan->opening.empty()) {
+      // The map's opening order (map_plan.hpp): the first item still to be had in time.
+      pick = opening_pick(f, t);
+    } else if (opening && q >= 0 && reachable(f, q) && f.items[static_cast<size_t>(q)].present) {
+      // By the run over the map's links, not the line through its walls.
+      const int32_t qn = f.items[static_cast<size_t>(q)].node;
+      const double mine = f.reach.cost(qn);
+      int ahead = 0;
+      for (const Mate& m : mn.mates)
+        if ((t - m.at_t < mate_fresh_s(f) && run_s(f, m.at, qn) < mine) ||
+            (m.going == q && t - m.going_t < kGoingFresh_s))
+          ahead++;
+      if (ahead < 2) pick = q;
+    }
+    if (pick < 0 && (opening || f.teamwork == MapSense::expert)) {
       float best = 0;
-      for (int32_t i : {rl, ra, q}) {
+      for (int32_t i : {rl, ra}) {
         if (!reachable(f, i) || taken(i)) continue;
         if (!opening && i != ra) continue;  // later only the armour's area is taken on
         // The nearest, as far as the map's rating of it goes (a lone 200 is worth a longer run).
@@ -510,7 +751,7 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
           best = d;
         }
       }
-    } else if (reachable(f, ra) && !taken(ra) && strong >= kHoldStrong) {
+    } else if (pick < 0 && reachable(f, ra) && !taken(ra) && strong >= kHoldStrong) {
       pick = ra;
     }
     if (pick >= 0 && (opening || strong >= kHoldStrong)) {
@@ -519,6 +760,7 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
     }
   }
   if (mn.claim >= 0 && !mn.claimed_said) {
+    if (opening) f.said_at = -1e9;  // the opening's claim follows its spawn at once
     Said c;
     c.kind = SayKind::coming;
     c.item = item_call(f.items[static_cast<size_t>(mn.claim)]);
@@ -530,7 +772,7 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
   if (quad_mine) {
     r = Role::carry;
   } else if (q >= 0 && f.teamwork != MapSense::novice && reachable(f, q) &&
-             due_of(f, q, t) - t <= kRushAhead_s) {
+             due_of(f, q, t) - t <= rush_ahead_s(f, q)) {
     // Among the two of its team it believes nearest the quad (those going for it counted).
     const float mine = dist(at, f.items[static_cast<size_t>(q)].at);
     int ahead = 0;
@@ -549,6 +791,71 @@ void mind_plan(Fighter& f, const server::RulesCommon& s, int me, const Stats& st
   }
   // An aggressive player holds nothing: he goes where the frags are.
   if (r == Role::free && mn.claim >= 0 && !ge::shooter::selfish(f.traits)) r = Role::hold;
+  // The team's strategy over its own plan (above): take an item together, or camp one or two.
+  if (mn.strategy == Strategy::take && t - mn.strategy_t >= kTake_s) mn.strategy = Strategy::none;
+  if (mn.strategy == Strategy::camp && t - mn.strategy_t >= kCamp_s) mn.strategy = Strategy::none;
+  if (mn.strategy == Strategy::free) mn.strategy = Strategy::none;
+  if (mn.strategy != Strategy::none && !quad_mine && r != Role::carry) {
+    int32_t mine = mn.strategy_items[0];
+    if (mn.strategy == Strategy::camp && mn.strategy_items[1] >= 0) {
+      // Split by the roster's slot order: the first, third ... take the first item.
+      int order = 0;
+      for (const Fighter* m : f.team->members)
+        if (m->slot >= 0 && m->slot < me - 1) order++;
+      if (order % 2 == 1) mine = mn.strategy_items[1];
+    }
+    if (mine >= 0 && reachable(f, mine)) {
+      if (mn.claim != mine) {
+        mn.claim = mine;
+        mn.claimed_said = false;
+      }
+      r = mine == q && due_of(f, q, t) - t <= rush_ahead_s(f, q) ? Role::rush : Role::hold;
+    }
+  }
+  if (mn.ack_due && f.said_at < t - 1) {
+    Said a;
+    a.kind = SayKind::ack;
+    a.variant = static_cast<int>(draw(f) * 4);
+    mind_say(f, t, a, at);
+    mn.ack_due = false;
+  }
+  // The push (above): called on the base believed the enemy's, joined off a mate's call; over
+  // on the base with nobody seen a while, or once it has run its time.
+  if (mn.push_item >= 0 && t - mn.push_t >= kPush_s) mn.push_item = -1;
+  if (mn.push_item >= 0 && dist(at, f.items[static_cast<size_t>(mn.push_item)].at) < kSafeNear &&
+      t - mn.sighted_t > kPushClear_s)
+    mn.push_item = -1;
+  if (r == Role::free || r == Role::hold) {
+    std::string name;
+    sh::Vec3f spot;
+    if (mn.push_item < 0 && f.teamwork != MapSense::novice && strong >= kPushStrong && ra >= 0 &&
+        reachable(f, ra) && t - mn.push_said_at >= kPushGap_s && base_lost(f, ra, at, t) &&
+        gather_spot(f, ra, at, name, spot)) {
+      Said a;
+      a.kind = SayKind::attack;
+      a.item = item_call(f.items[static_cast<size_t>(ra)]);
+      a.loc = name;
+      if (mind_say(f, t, a, at)) {
+        mn.push_item = ra;
+        mn.push_t = mn.push_said_at = t;
+        mn.push_at = spot;
+        mn.push_go_t = -1e9;
+        f.team->stats.pushes++;
+      }
+    }
+    if (mn.push_item >= 0 && strong >= kPushStrong * 0.8f) {
+      r = Role::push;
+      // In once a mate has gathered with it, or the gather has waited its time.
+      if (mn.push_go_t < 0) {
+        const bool here = dist(at, mn.push_at) < kGatherNear;
+        bool mate = false;
+        for (const Mate& m : mn.mates)
+          mate = mate || (t - m.at_t < 2 && dist(m.at, mn.push_at) < kGatherNear);
+        if ((here && (mate || t - mn.push_t >= kGather_s)) || t - mn.push_t >= 2 * kGather_s)
+          mn.push_go_t = t;
+      }
+    }
+  }
   if (r == Role::rush && was != Role::rush) f.team->stats.rushes++;
   if (r == Role::carry && was != Role::carry) {
     f.team->stats.quads++;

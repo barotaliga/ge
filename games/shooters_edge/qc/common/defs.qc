@@ -143,6 +143,10 @@ float EF_RED = 128;     // the shield's
 .float super_damage_finished;  // the quad runs out
 .float power_said;             // the powers whose wearing off was told (IT_QUAD, IT_INVULNERABILITY)
 .float invincible_finished;    // the shield runs out
+.float shield_finished;  // deathmatch 4: a spawn's protection runs out (common/dmm4.qc)
+.float shield_said;      // its running out told
+.float shield_flash;     // its next flash
+.float shield_heard;     // a soaked hit next heard after this
 .float light_lev;         // a light's brightness (the map's "light" key)
 .float style;             // a light's style
 .void() th_die;           // what a death does to this kind of thing (unset: a player's)

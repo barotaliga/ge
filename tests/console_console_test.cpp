@@ -203,3 +203,17 @@ TEST(a_command_taken_away_is_gone) {
   CHECK(!c.has_command("newgame"));
   CHECK(!c.remove_command("newgame"));
 }
+
+TEST(a_host_takes_the_lines_no_command_names) {
+  Console c;
+  std::vector<std::string> taken;
+  c.set_unknown([&](const Args& a) {
+    if (a[0] == "nothing") return false;
+    taken.push_back(a.raw);
+    return true;
+  });
+  c.execute("bot1 skill expert\nskill novice\nnothing here\n");
+  CHECK(taken.size() == 2);
+  CHECK(taken.size() == 2 && taken[0] == "bot1 skill expert" && taken[1] == "skill novice");
+  CHECK(!c.problems().empty() && c.problems().back().what == "unknown command 'nothing'");
+}

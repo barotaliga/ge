@@ -151,11 +151,18 @@ TEST(a_team_game_of_bots_plays_as_teams_and_records) {
   CHECK_MSG(cl::open_demo(r.mvd, d, error), error);
   int frames = 0;
   std::set<int> seen;
+  std::set<std::string> teams;
   while (cl::next_frame(d, error) == cl::DemoRead::frame) {
     frames++;
     for (size_t k = 0; k < d.state.players.size(); k++)
-      if (d.state.players[k].present) seen.insert(static_cast<int>(k));
+      if (d.state.players[k].present) {
+        seen.insert(static_cast<int>(k));
+        CHECK_MSG(!d.state.names[k].empty(), "player " + std::to_string(k) + " has no name");
+        teams.insert(d.state.teams[k]);
+      }
   }
+  // Its players' names and teams, so a viewer names each and knows his side.
+  CHECK_MSG(teams.size() == 2, "the recording shows " + std::to_string(teams.size()) + " teams");
   CHECK_MSG(frames > 4000, "the recording has " + std::to_string(frames) + " frames");
   CHECK_MSG(seen.size() == 8, "the recording shows " + std::to_string(seen.size()) + " players");
 }

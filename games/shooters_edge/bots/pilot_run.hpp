@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "shooter/pilot.hpp"
+#include "shooter/rocket_jumps.hpp"
 #include "shooters_edge/server/host.hpp"
 #include "shooters_edge/sim/nav_course.hpp"
 
@@ -51,9 +52,13 @@ sh::PilotSettings course_strafe_settings();
 
 struct RunResult {
   bool arrived = false;
-  float time_s = 0, proven_s = 0;  // the run's, and the route's proven time
-  float top_speed = 0;             // across, units/s
-  uint64_t hash = 0;               // every command's origin and velocity
+  float time_s = 0, proven_s = 0;       // the run's, and the route's proven time
+  float top_speed = 0;                  // across, units/s
+  uint64_t hash = 0;                    // every command's origin and velocity
+  int32_t shots = 0;                    // rockets fired (run_route: the pilot's rocket jumps)
+  float blast = 0;                      // and the points their blasts took
+  std::vector<sh::RocketShot> rockets;  // each fired (on the trail's clock: command i ends at
+                                        // (i + 1) * kPilotMsec ms) and where it burst
   sh::PilotStats stats;
   std::vector<sh::Vec3f> trail;             // the origin after each command
   std::vector<uint8_t> modes;               // the pilot's mode at each command (PilotMode)
@@ -62,13 +67,16 @@ struct RunResult {
   std::vector<std::vector<int32_t>> plans;  // every route planned, the first included
   // What was pressed and wanted at each command, for the humanness metrics.
   std::vector<double> yaw, yaw_wanted, forward, forward_wanted, side, side_wanted;
+  std::vector<float> pitch;  // the view's pitch pressed, down positive
 };
 RunResult run_course(const Course& c, sh::Vec3f from, sh::Vec3f to, sh::PilotHands hands,
                      uint32_t seed, const sh::PilotSettings& set = sh::PilotSettings{},
                      float limit_s = 20);
 // The same on any map: a player on the node nearest `from` piloted to the node nearest `to`
 // over `g` (built on `world`), moved by `run_command` with no server, already moving at
-// `start_velocity` (a run that starts where a recorded player was, at his speed).
+// `start_velocity` (a run that starts where a recorded player was, at his speed). A shot the
+// pilot fires (a rocket jump, with `set.jumper.rockets`) flies and bursts as the nav's proof has it
+// (shooter/nav.hpp `rocket_burst`, `rocket_blast`).
 RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f from, sh::Vec3f to,
                     sh::PilotHands hands, uint32_t seed,
                     const sh::PilotSettings& set = sh::PilotSettings{}, float limit_s = 20,

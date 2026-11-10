@@ -112,6 +112,12 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
   int32_t planned = p.stats.plans;
   uint64_t hash = 1469598103934665603ull;
   const int most = static_cast<int>(limit_s * 1000 / kPilotMsec);
+  // A rocket in flight (a shot pressed: the pilot's rocket jumps), or a grenade on its fuse (a
+  // grenade jump's): its burst and the time left.
+  sh::Vec3f burst_at;
+  float burst_in = -1;
+  const sh::GrenadeJumpSpec gj;
+  bool grenade = false;
   for (int i = 0; i < most; i++) {
     const sh::MoveCmd cmd = sh::pilot_step(p, s, kPilotMsec);
     if (p.stats.plans != planned) {
@@ -123,6 +129,29 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
       break;
     }
     sh::run_command(st, cmd, move, world);
+    if ((cmd.buttons & sh::kButtonAttack) != 0 && burst_in < 0 &&
+        p.mode == sh::PilotMode::grenade) {
+      burst_at = sh::grenade_at(world, st.origin, cmd.angles, gj.fuse, gj, kPilotMsec);
+      burst_in = gj.fuse;
+      r.shots++;
+      grenade = true;
+    } else if ((cmd.buttons & sh::kButtonAttack) != 0 && burst_in < 0) {
+      grenade = false;
+      const sh::RocketBurst rb = sh::rocket_burst(world, st.origin, cmd.angles);
+      if (rb.ok) {
+        burst_at = rb.at;
+        burst_in = rb.flight_s;
+        r.shots++;
+        const double now = static_cast<double>(r.trail.size() + 1) * (kPilotMsec * 0.001);
+        r.rockets.push_back({now, now + rb.flight_s, st.origin, rb.at});
+      }
+    } else if (burst_in >= 0) {
+      burst_in -= kPilotMsec * 0.001f;
+      if (burst_in <= 0) {
+        r.blast += sh::rocket_blast(st, burst_at, grenade ? gj.blast : sh::RocketJumpSpec{});
+        burst_in = -1;
+      }
+    }
     sense();
     hash = fold(fold(hash, st.origin), st.velocity);
     r.trail.push_back(st.origin);
@@ -134,6 +163,7 @@ RunResult run_route(const sh::MoveWorld& world, const sh::NavGraph& g, sh::Vec3f
     r.forward_wanted.push_back(p.wanted[1]);
     r.side.push_back(p.pressed[2]);
     r.side_wanted.push_back(p.wanted[2]);
+    r.pitch.push_back(cmd.angles.x);
     const float v = across(st.velocity);
     if (v > r.top_speed) r.top_speed = v;
   }
