@@ -1374,6 +1374,21 @@ lobby and bots, the player a seat of it. With `sv_port <port>` set before `map <
 it over UDP with a classic client (`connect <address>:<port>`) as they would `shooters_edge_server`;
 `sv_maxclients` is its slots (32). `sv_port 0`, the default, keeps the match the window's alone.
 
+**Who is on, and the easy jump for one player (M53f).** `users` lists every player on the
+server by user id (`userid frags name`); any client may ask it, so a player can tell the
+administrator his id. `status` is the administrator's table: slot, id, name, frags, ping, loss,
+minutes on, address (`bot`, `local` for the window's player) and the easy jump (`-`, `asks`, the
+share `pm_speedjump` allows, or `<share> granted`). `speedjump <id|name> on|off|<share 0..1>`
+grants the easy jump to one player (a player whose disability makes strafing hard) while
+`pm_speedjump` stays as it is for everyone else, `speedjump` alone lists who has it. The grant is
+the server-only key `*speedjump <share>` in that player's user info: every client sees it and
+everyone is told, a client cannot set it (one sent in a connect is removed), it stays across map
+changes and goes when the player leaves; the player still turns it on with `cl_speedjump 1`. In
+the window these are console commands for the match it hosts (`sv <line>` too); on a dedicated
+server set `rcon_password` and send `rcon <password> <line>` from a joined window (`rcon secret
+speedjump 3 on`) or any classic client. Without a password the remote console is refused. The
+words and the remote console are `net/classic_admin.hpp`.
+
 **The lobby (M18q).** Before the match, on M17d's sessions: the players and their pings, teams,
 ready, chat to all or the team, a map vote, kick, and the host's start; at the end of the match
 everyone returns to it. Joining is from the server browser, an invite (M17j's friends), or an

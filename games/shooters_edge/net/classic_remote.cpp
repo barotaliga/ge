@@ -37,9 +37,12 @@ void start(Remote& r, const ClientConfig& cfg) {
     m.angles = r.view;
     r.hands.impulse = 0;  // an impulse goes once
     // The easy jump: the client strafes for the player off its newest prediction
-    // (shooter/speedjump_assist.hpp), at the server's stated pm_speedjump or kStockShare.
+    // (shooter/speedjump_assist.hpp), at the share the server granted this player alone (his
+    // own `*speedjump`, classic_admin.hpp), else its stated pm_speedjump, else kStockShare.
     if (r.end.cfg.speedjump && r.predicted) {
-      const std::string said = info_get(r.end.serverinfo, "pm_speedjump");
+      const int me = r.end.playernum;
+      std::string said = me >= 0 && me < 32 ? info_get(r.end.userinfos[me], "*speedjump") : "";
+      if (said.empty()) said = info_get(r.end.serverinfo, "pm_speedjump");
       const float share = said.empty() ? kStockShare : static_cast<float>(std::atof(said.c_str()));
       m = sh::assisted_command(m, r.ahead, share, r.speedjump_view, r.jump_aid);
     }
@@ -297,6 +300,14 @@ RemoteStep remote_step(Remote& r, double wall_s, std::vector<std::string>& said)
     r.now_us += kTickUs;
     client_tick(r.end, r.now_us);
   }
+  for (std::string& line : r.end.oob_prints) {  // rcon's answers, a line each
+    for (size_t at = 0; at < line.size();) {
+      const size_t end = std::min(line.find('\n', at), line.size());
+      if (end > at) said.push_back(line.substr(at, end - at));
+      at = end + 1;
+    }
+  }
+  r.end.oob_prints.clear();
   if (r.end.stage != r.said) {
     r.said = r.end.stage;
     std::string line = stage_words(r.said) + r.server_name;
