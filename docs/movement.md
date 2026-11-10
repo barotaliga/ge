@@ -192,7 +192,7 @@ is `30 x sqrt(1 - share)` adds `share x 900` to v^2).
 
 The hops weave like a strafer's. The player's own yaw is the aim (his mouse left and right
 steers; his pitch plays no part, the walk's wish being flat). At each takeoff the way turns back
-across the aim, and in the air it turns the other way once it is 30 degrees past it
+across the aim, and in the air it turns the other way once it is 45 degrees past it
 (`kSpeedJumpSwing`); an aim far off is turned to at the strafe's full rate while it gains, so
 the player turns while hopping. The sent yaw is the side key's (left for a left turn) with the
 wish 90 degrees off it, which keeps it near the way, as a strafer looks.
@@ -207,8 +207,11 @@ told to clients in the server info, 0 included) is the share a client strafes at
 off. The window's own listen server says 0.8; a dedicated server says 0 unless its owner sets it;
 on a server that says nothing (another implementation) the client strafes at 0.8 (`kStockShare`).
 The move itself never reads `pm_speedjump`: `tests/golden/shooter_pmove.txt` and the recordings
-hold it. Over eight seconds from 320 the easy jump reaches about 655 units/s at 0.5, 760 at 0.8
-and 835 at 1 against the best strafe by hand's 810 (the `se-speedjump` lab). It is disclosed,
+hold it. Over eight seconds from 320 the easy jump reaches about 611 units/s at 0.5, 733 at 0.8
+and 803 at 1, the best weaving strafe the move allows; the heading sweeps about 62 degrees a
+flight at 0.8 and 72 at 1, where people hopping past 420 units/s sweep 60-90 and gain 12-20 a
+flight (`se-moves --dir` over the bots' 51 dm2 matches and an e1m2 4on4). The weave's width costs only forward distance: the speed comes from each
+command's wish angle (the `se-speedjump` lab). It is disclosed,
 never hidden: the user info says `cl_speedjump 1`, so the server, its admins and the other
 players can see it. On a remote server it needs the prediction (`cl_nopred 0`).
 

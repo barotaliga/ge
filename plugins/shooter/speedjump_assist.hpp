@@ -42,7 +42,7 @@
 
 namespace ge::shooter {
 
-constexpr float kSpeedJumpSwing = 30;  // degrees the way swings past the aim before turning back
+constexpr float kSpeedJumpSwing = 45;  // degrees the way swings past the aim before turning back
 
 // The aid's memory between commands (a client keeps one for its player).
 struct SpeedJumpAid {

@@ -6,8 +6,11 @@
 // THE MOVE ALONE: one command of 13 ms at a time through `player_move` on an open floor, a second's
 // run-up to sv_maxspeed, then eight seconds of hands: forward and jump held without the aid (the
 // classic move: one jump, then 320), the same hands through the aid at shares 0.5, 0.8 (the
-// window's own server's pm_speedjump) and 1, and the best strafe (the side key alone, swapped each
-// hop, the view on the way, jump pressed on landing).
+// window's own server's pm_speedjump) and 1 (the best weaving strafe the move allows), and the
+// side key alone with the view held on the way (swapped each hop, jump pressed on landing): as
+// fast as share 1, but it spins whole circles in the air. Each run's heading sweep and speed gain
+// a flight stand beside people's (`se-moves --dir` over the bots' 51 dm2 matches and an e1m2
+// 4on4: 60-90 degrees and 12-20 units/s a flight past 420).
 //
 // THE WEAVE AND THE STEER: the aid's paths from above with the aim held east, and with the aim
 // turned a quarter left after two seconds; the way's angle off the aim, the sent swing and the
@@ -106,6 +109,7 @@ struct MoveRun {
   gl::Trace speed, path, off, swing, shown;
   sh::MoveState end;
   int jumps = 0;
+  double sweep = 0, gain = 0;  // the heading's sweep and the speed gained, a flight (past 2 s)
 };
 
 MoveRun move_run(const Field& f, Hands hands, float share, const std::string& label,
@@ -128,6 +132,9 @@ MoveRun move_run(const Field& f, Hands hands, float share, const std::string& la
   }
   sh::SpeedJumpAid aid;
   int side = 400;
+  bool air = false;
+  double lo = 0, hi = 0, h0 = 0, prev = 0;
+  int flights = 0;
   for (int i = 0; i < kSeconds * kRate; i++) {
     const bool down = s.ground != -1;
     const float aim = i >= 2 * kRate ? turn : 0;
@@ -149,6 +156,22 @@ MoveRun move_run(const Field& f, Hands hands, float share, const std::string& la
     }
     sh::player_move(s, cmd, set, f.sw.world);
     if (down && s.ground == -1 && s.velocity.z > 200) r.jumps++;
+    // The flight's sweep, the heading unwrapped command by command.
+    const double hd = heading_of(s.velocity);
+    if (s.ground == -1 && !air) {
+      lo = hi = prev = hd;
+      h0 = plan_speed(s.velocity);
+    } else if (s.ground == -1) {
+      const double now = prev + wrap(hd - prev);
+      prev = now;
+      lo = std::min(lo, now);
+      hi = std::max(hi, now);
+    } else if (air && i >= 2 * kRate) {
+      r.sweep += hi - lo;
+      r.gain += plan_speed(s.velocity) - h0;
+      flights++;
+    }
+    air = s.ground == -1;
     const double t = static_cast<double>(kRate + i + 1) / kRate;
     r.speed.x.push_back(t);
     r.speed.y.push_back(plan_speed(s.velocity));
@@ -162,6 +185,10 @@ MoveRun move_run(const Field& f, Hands hands, float share, const std::string& la
     r.shown.y.push_back(aid.shown);
   }
   r.end = s;
+  if (flights > 0) {
+    r.sweep = r.sweep / flights;
+    r.gain = r.gain / flights;
+  }
   return r;
 }
 
@@ -178,19 +205,23 @@ void move_alone(gl::Lab& lab) {
   const MoveRun classic = move_run(f, Hands::forward_jump, 0, "forward + jump, cl_speedjump 0");
   const MoveRun half = move_run(f, Hands::aided, 0.5f, "cl_speedjump 1, pm_speedjump 0.5");
   const MoveRun most = move_run(f, Hands::aided, kShare, "cl_speedjump 1, pm_speedjump 0.8");
-  const MoveRun all = move_run(f, Hands::aided, 1, "cl_speedjump 1, pm_speedjump 1");
-  const MoveRun strafe = move_run(f, Hands::best_strafe, 0, "the best strafe by hand");
+  const MoveRun all = move_run(f, Hands::aided, 1, "cl_speedjump 1, pm_speedjump 1 (best weave)");
+  const MoveRun strafe = move_run(f, Hands::best_strafe, 0, "side key, view on the way (circles)");
   const MoveRun steer = move_run(f, Hands::aided, kShare, "aim turned 90 left at 3 s", 90);
 
   gl::LabTable table{"the move alone: eight seconds of each pair of hands after a second's run-up",
-                     {"hands", "jumps", "speed at 3 s", "speed at 9 s", "gain a second"},
+                     {"hands", "jumps", "speed at 3 s", "speed at 9 s", "gain a second",
+                      "sweep a flight", "gain a flight"},
                      {}};
   for (const MoveRun* r : {&classic, &half, &most, &all, &strafe}) {
     const double at3 = r->speed.y[static_cast<size_t>(3 * kRate - 1)];
     const double at9 = r->speed.y.back();
     table.rows.push_back({r->speed.label, std::to_string(r->jumps), to_fixed(at3, 1),
-                          to_fixed(at9, 1), to_fixed((at9 - 320) / kSeconds, 1)});
+                          to_fixed(at9, 1), to_fixed((at9 - 320) / kSeconds, 1),
+                          to_fixed(r->sweep, 0), to_fixed(r->gain, 1)});
   }
+  table.rows.push_back(
+      {"people at hop speed (51 dm2 matches, se-moves --dir)", "", "", "", "", "60-77", ""});
   lab.table(table);
   double lo = 0, hi = 0;
   for (size_t i = static_cast<size_t>(2) * kRate; i < most.off.y.size(); i++) {
@@ -205,6 +236,9 @@ void move_alone(gl::Lab& lab) {
   lab.metric("move.easy.jumps", most.jumps, "count");
   lab.metric("move.easy-1.speed", all.speed.y.back(), "u/s");
   lab.metric("move.strafe.speed", strafe.speed.y.back(), "u/s");
+  lab.metric("move.easy.sweep", most.sweep, "deg");
+  lab.metric("move.easy-1.sweep", all.sweep, "deg");
+  lab.metric("move.strafe.sweep", strafe.sweep, "deg");
   lab.metric("move.easy.swing-left", hi, "deg");
   lab.metric("move.easy.swing-right", lo, "deg");
   lab.metric("move.steer.off-aim", steer_off, "deg");
@@ -212,8 +246,8 @@ void move_alone(gl::Lab& lab) {
     lab.fail("forward and jump with the easy jump gained too little: " +
                  to_fixed(most.speed.y.back(), 1) + " u/s after 8 s",
              "Read speedjump_assist.cpp (the wish's angle from the share). Skill: shooter.");
-  if (strafe.speed.y.back() <= most.speed.y.back())
-    lab.fail("the easy jump at 0.8 out-gained the best strafe",
+  if (all.speed.y.back() <= most.speed.y.back())
+    lab.fail("the easy jump at 0.8 out-gained the best weave (share 1)",
              "Its share must stay under 1 (`kShare`). Skill: shooter.");
   if (hi < 10 || lo > -10)
     lab.fail("the hops did not weave across the aim (" + to_fixed(lo, 1) + ".." + to_fixed(hi, 1) +
@@ -228,15 +262,15 @@ void move_alone(gl::Lab& lab) {
   chart.frame = {"PLAN SPEED OVER TIME: THE MOVE ALONE",
                  "13 ms commands on an open floor; a second's run-up on the ground first", "t (s)",
                  "plan speed (units/s)"};
-  chart.traces = {classic.speed, half.speed, most.speed, all.speed, strafe.speed};
+  chart.traces = {classic.speed, half.speed, most.speed, all.speed};
   chart.rules = {320};
   shoot_chart(lab, "speed-move", chart,
               "The player's plan speed command by command. Forward and jump held without the "
               "easy jump is the classic move: one jump, then the run speed (dashed, 320). With "
               "cl_speedjump 1 the client strafes for him and every hop gains: by the server's "
-              "pm_speedjump share of the best strafe's gain (0.5, 0.8 the window's own, 1). The "
-              "best strafe by hand stays the fastest under 1.",
-              "three easy lines climbing in order of their share, the strafe's above the 0.8 line");
+              "pm_speedjump share of the best strafe's gain (0.5, 0.8 the window's own, and 1, "
+              "the best weaving strafe the move allows).",
+              "three easy lines climbing in order of their share");
 
   gl::LineChart top;
   top.spikes = false;
@@ -249,7 +283,7 @@ void move_alone(gl::Lab& lab) {
   top.traces = {aim, straight.path, steer.path};
   shoot_chart(lab, "paths", top,
               "Both easy runs from above. With the aim held east the hops weave left and right "
-              "across the aim line like a strafer's, each swing up to about 30 degrees; with the "
+              "across the aim line like a strafer's, each swing up to about 45 degrees; with the "
               "aim turned a quarter left the hops turn to it at the strafe's full rate, still "
               "gaining, and weave on along the new aim: the mouse steers.",
               "a weaving line along y = 0, and one that bends up to go north and weaves on");
@@ -269,13 +303,13 @@ void move_alone(gl::Lab& lab) {
     return out;
   };
   swing.traces = {first(most.off, 5), first(most.swing, 5), first(most.shown, 5)};
-  swing.rules = {30, -30};
+  swing.rules = {sh::kSpeedJumpSwing, -sh::kSpeedJumpSwing};
   shoot_chart(lab, "swing", swing,
               "Command by command: the way the player moves (off the aim), the yaw the client "
               "sends (where a strafer would look) and the view the screen shows at "
               "cl_speedjump_view 0.5 (half the sent swing, eased). The way turns back each time "
-              "it is 30 degrees past the aim (dashed).",
-              "the way's zig-zag inside +-30, the sent yaw near it, the shown line at half");
+              "it is 45 degrees past the aim (dashed).",
+              "the way's zig-zag inside +-45, the sent yaw near it, the shown line at half");
 }
 
 // THE ARENA: one open room 2560 across, a spawn in its middle facing east.
