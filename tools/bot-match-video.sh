@@ -11,6 +11,8 @@
 # Shooter's Edge's bot plan), and the recording is kept under its `work:` (default .bots/work) in
 # videos/. The video is named bots_<commit>_<map>_s<seed>[_<features>].mkv, so a checkpoint's
 # video says which build played it. --features-red against --features-blue shows a head to head.
+# The bots' decision log is written beside the recording (<name>.why.tsv): `make bot-why
+# ARGS="--video=<name> --bot=red2 --at=4:12"` answers why a bot did something at a moment.
 # It builds the release preset's `labs` and `shooters_edge` first unless --no-build. Rendering
 # needs a GPU adapter (the Mac's, or the container's software one, much slower); --no-video keeps
 # the recording (the demo) alone, to play in the window with `-playdemo <mvd>`.
@@ -86,12 +88,15 @@ mkv="$out/$name.mkv"
 echo "bot-match-video: playing $map, seed $seed, $minutes minutes ($name)"
 "$labs" se-team --basedir="$basedir" --map="$map" --client-fed=1 --minutes="$minutes" \
   --seed="$seed" --features="$features" --features-red="$features_red" \
-  --features-blue="$features_blue" --save="$mvd" >"$work/videos/$name.log" 2>&1 || {
+  --features-blue="$features_blue" --save="$mvd" --why="$work/videos/$name.why.tsv" \
+  >"$work/videos/$name.log" 2>&1 || {
   echo "bot-match-video: the match failed; next: read $work/videos/$name.log" >&2
   exit 1
 }
 grep -E '^  team\.(red|blue)\.frags ' "$work/videos/$name.log" | awk '{printf "  %s %s\n", $1, $2}'
 echo "bot-match-video: the demo is $mvd (watch: $game -basedir $basedir -playdemo $mvd)"
+echo "bot-match-video: why a bot did something at a moment: make bot-why" \
+  "ARGS=\"--video=$name --bot=<name> --at=<m:ss>\""
 ((video)) || exit 0
 
 echo "bot-match-video: rendering $mkv"

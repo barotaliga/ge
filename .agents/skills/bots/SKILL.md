@@ -1,6 +1,6 @@
 ---
 name: bots
-description: "Use for anything a bot DECIDES in gameengine2 or a game on it: engine/ai (the decision record ai::Why every bot writes, and the pieces bots share as they land: the hands, thinking on a schedule, sight and memory, paths, steering, choosing), a game's Run::trace hook, ge why and the play protocol's why op, the loop that makes a bot behave more like a person, a match video or demo of the bots on request (make bot-video), and Shooter's Edge's bot plan worked headless (docs/goals/M18r.md § M18r14g, the locations in a git-ignored .bots/local.md, how a change is judged, the labs). Load it before writing or changing a bot, a pilot, a rival or a pursuer, and to find out why one did what it did."
+description: "Use for anything a bot DECIDES in gameengine2 or a game on it: engine/ai (the decision record ai::Why every bot writes, and the pieces bots share as they land: the hands, thinking on a schedule, sight and memory, paths, steering, choosing), a game's Run::trace hook, ge why and the play protocol's why op, the loop that makes a bot behave more like a person, a match video or demo of the bots on request (make bot-video), why a bot did something at a moment of one (make bot-why, the se-why lab, the decision log), and Shooter's Edge's bot plan worked headless (docs/goals/M18r.md § M18r14g, the locations in a git-ignored .bots/local.md, how a change is judged, the labs). Load it before writing or changing a bot, a pilot, a rival or a pursuer, and to find out why one did what it did."
 ---
 
 # Bots
@@ -180,7 +180,21 @@ score. It plays a 4on4 with this build's bots on our server, keeps the recording
 | the video somewhere else | `--out=<folder>` |
 | the demo alone, no video | `--no-video`: the `.mvd` only, played in the window with `-playdemo <mvd>` |
 
-Rendering needs a GPU adapter, so on a machine without one say so and offer the demo alone. A
+Rendering needs a GPU adapter, so on a machine without one say so and offer the demo alone.
+
+Every match `make bot-video` plays also writes the bots' DECISION LOG beside the demo
+(`<work>/videos/<name>.why.tsv`, `se-team --why=<file>`; `games/shooters_edge/labs/why_log.hpp`).
+
+**WHY DID THAT BOT DO THAT, THEN?** When the maintainer asks why a bot did (or stopped doing)
+something at a moment of a video or a demo, ANSWER FROM THE LOG, never by guessing: `make bot-why
+ARGS="--bot=red2 --at=4:12 [--around=10] [--video=<name>] [--name=mode,trigger]"`
+(`tools/bot-why.sh`, the `se-why` lab; the newest log by default). It lists every decision that
+bot changed within the window (the fight mode, the trigger, the aim, the pilot's link, the role's
+goal, sight, hearing...: each with what settled it, the margin and the facts it read) and the
+events (a speed lost to a wall or a player, a death), on the video's clock, and how often each
+decision is made and changes a bot-minute (several changes a second is jitter, not a mind). Quote
+the rows that answer, then say what to change. A question the log cannot answer is a decision
+not yet recorded: add it where the bot chooses (§ The rule) so the next match can. A
 video is never a checkpoint's step: checkpoints are judged headless (below).
 
 **A checkpoint** is `make precheck` green (a golden or digest a change moves on purpose

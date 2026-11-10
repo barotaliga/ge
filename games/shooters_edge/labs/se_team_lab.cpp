@@ -54,6 +54,7 @@
 #include "shooters_edge/client/game_adapter.hpp"
 #include "shooters_edge/client/listen.hpp"
 #include "shooters_edge/labs/move_study.hpp"
+#include "shooters_edge/labs/why_log.hpp"
 #include "shooters_edge/net/classic_team.hpp"
 #include "shooters_edge/server/rules_runner.hpp"
 
@@ -106,7 +107,8 @@ struct HopSkill {
   std::vector<float> hop_speed, gain;
 };
 struct Watch {
-  std::ofstream* out = nullptr;  // the trace, when asked for
+  std::ofstream* out = nullptr;                // the trace, when asked for
+  shooters_edge::labs::WhyLog* log = nullptr;  // the decision log, when asked for (--why)
   int every = 4;
   std::array<int, 64> count{};
   struct Flight {
@@ -129,6 +131,12 @@ struct Watch {
   // Each bot's pilot mode over the match, a row a change (the time, the mode's name): the
   // flights read off the recording afterwards are put down to the mode at their takeoff.
   std::array<std::vector<std::pair<double, const char*>>, 64> modes;
+  // The bumps (`team.bumps.*`): a speed lost in one command, 120 u/s or more (a wall, a corner,
+  // a player met; the move brakes at most ~40 a command), hard when it ends under 100 u/s.
+  std::array<float, 64> last_speed{};
+  std::array<bool, 64> moved{};
+  int64_t bumps = 0, hard_bumps = 0, alive_commands = 0;
+  std::map<std::string, int64_t> bumps_by_mode;
   double t_last = 0;
   std::map<std::string, std::pair<double, int64_t>> writers;  // time, reversals
 };
@@ -213,6 +221,12 @@ void watch_view(Watch& w, int k, double t, float yaw, const char* by) {
 }
 
 void still_view_metrics(gl::Lab& lab, const Watch& w) {
+  // A bot-minute is 77 * 60 of its commands alive.
+  const double bot_min = std::max(1.0, static_cast<double>(w.alive_commands) / (77.0 * 60));
+  lab.metric("team.bumps.per-bot-min", static_cast<double>(w.bumps) / bot_min, "per-min");
+  lab.metric("team.bumps.hard-per-bot-min", static_cast<double>(w.hard_bumps) / bot_min, "per-min");
+  for (const auto& [mode, n] : w.bumps_by_mode)
+    lab.metric("team.bumps." + mode + "-per-bot-min", static_cast<double>(n) / bot_min, "per-min");
   const double n = static_cast<double>(std::max<int64_t>(1, w.commands));
   gl::LabTable st{"where they stand still (share of every command; 64-unit cells)",
                   {"why", "share %", "at", "goal", "mode"},
@@ -327,6 +341,44 @@ void flights_by_mode(gl::Lab& lab, const Watch& w, const cn::TeamMatchReport& r,
     lab.metric("team.air.s380." + mode + ".crash-share", crash, "share");
   }
   lab.table(at);
+}
+
+// The pilot's link toward its route's next node, by kind ("walk", "jump"...), or "-".
+const char* link_of(const sh::Pilot& p) {
+  if (p.g == nullptr || p.k + 1 >= p.route.size()) return "-";
+  const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
+  for (int32_t q = 0; q < a.links; q++) {
+    const sh::NavLink& l = p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
+    if (l.to == p.route[p.k + 1]) return sh::nav_kind_name(l.kind);
+  }
+  return "-";
+}
+
+// The decision log written (`--why`): the bots' names, the deaths as entries beside the rest.
+void write_why(gl::Lab& lab, shooters_edge::labs::WhyLog& log, const cn::TeamMatchReport& r) {
+  for (size_t k = 0; k < r.players.size() && k < log.names.size(); k++)
+    log.names[k] = r.players[k].name;
+  std::vector<shooters_edge::labs::WhyEntry> deaths;
+  for (const std::string& l : r.deaths) {
+    // t, player, at, liquid, mode, link, ... (classic_team.cpp)
+    std::vector<std::string> f;
+    for (size_t i = 0, j; i <= l.size() && f.size() < 6; i = j + 1) {
+      j = std::min(l.find('\t', i), l.size());
+      f.push_back(l.substr(i, j - i));
+    }
+    if (f.size() < 6) continue;
+    deaths.push_back({std::strtod(f[0].c_str(), nullptr), f[1], "death", "died", f[3], f[4],
+                      std::nan(""), "at=" + f[2] + " link=" + f[5]});
+  }
+  if (!shooters_edge::labs::write_why_log(lab.arg("why"), log, deaths)) {
+    lab.fail("se-team: cannot write --why=" + lab.arg("why"),
+             "next: pass a path in a folder that exists");
+    return;
+  }
+  lab.note("se-team: the decision log is " + lab.arg("why") + " (" +
+           std::to_string(log.entries.size() + deaths.size()) +
+           " entries); read it with: labs se-why --file=" + lab.arg("why") +
+           " --bot=<name> --at=<m:ss>");
 }
 
 void run(gl::Lab& lab) {
@@ -466,6 +518,14 @@ void run(gl::Lab& lab) {
     watch.out = &trace;
     watch.every = std::max(1, static_cast<int>(lab.arg_num("trace-every")));
   }
+  // THE DECISION LOG (`--why=<file>`, labs/why_log.hpp): every fighter's decisions recorded, kept
+  // when they change, with the speed lost to walls and players and the deaths, on the
+  // recording's clock; written at the match's end, read with the se-why lab.
+  shooters_edge::labs::WhyLog why_log;
+  if (!lab.arg("why").empty()) {
+    o.why = &why_log.why;
+    watch.log = &why_log;
+  }
   o.on_command_ctx = &watch;
   o.on_command = [](void* ctx, int k, const shooters_edge::bots::Fighter& f,
                     const shooters_edge::server::RulesCommon& w, const sh::MoveCmd& cmd) {
@@ -477,25 +537,30 @@ void run(gl::Lab& lab) {
     const float sp = std::sqrt(e.velocity.x * e.velocity.x + e.velocity.y * e.velocity.y);
     watch_hop(tr, k, f.skill, e.health > 0, p.mode == sh::PilotMode::hop, p.because, sp);
     watch_still(tr, f, p, sp, e.origin.x, e.origin.y, e.origin.z - 24);
+    if (tr.log != nullptr)
+      tr.log->take(k, w.sv.time, sp, sh::pilot_mode_name(p.mode), link_of(p), e.origin.x,
+                   e.origin.y, e.origin.z - 24);
     watch_view(tr, k, w.sv.time, cmd.angles.y, f.bot.view_by);
+    {
+      const auto i = static_cast<size_t>(k);
+      if (e.health > 0) {
+        tr.alive_commands++;
+        if (tr.moved[i] && tr.last_speed[i] - sp >= 120) {
+          tr.bumps++;
+          if (sp < 100) tr.hard_bumps++;
+          tr.bumps_by_mode[sh::pilot_mode_name(p.mode)]++;
+        }
+      }
+      tr.last_speed[i] = sp;
+      tr.moved[i] = e.health > 0;
+    }
     auto& ml = tr.modes[static_cast<size_t>(k)];
     const char* mode = sh::pilot_mode_name(p.mode);
     if (ml.empty() || ml.back().second != mode) ml.push_back({w.sv.time, mode});
     tr.t_last = std::max(tr.t_last, w.sv.time);
     if (tr.out == nullptr || (tr.count[static_cast<size_t>(k)]++ % tr.every) != 0) return;
     std::ofstream& out = *tr.out;
-    const char* link = "-";
-    if (p.g != nullptr && p.k + 1 < p.route.size()) {
-      const sh::NavNode& a = p.g->nodes[static_cast<size_t>(p.route[p.k])];
-      for (int32_t q = 0; q < a.links; q++) {
-        const sh::NavLink& l =
-            p.g->links[static_cast<size_t>(a.first_link) + static_cast<size_t>(q)];
-        if (l.to == p.route[p.k + 1]) {
-          link = sh::nav_kind_name(l.kind);
-          break;
-        }
-      }
-    }
+    const char* link = link_of(p);
     const char* goal =
         f.goal_item >= 0 && static_cast<size_t>(f.goal_item) < f.items.size()
             ? shooters_edge::bots::item_call(f.items[static_cast<size_t>(f.goal_item)])
@@ -518,6 +583,7 @@ void run(gl::Lab& lab) {
   hop_metrics(lab, watch);
   still_view_metrics(lab, watch);
   flights_by_mode(lab, watch, r, basedir, lab.arg("game"), name, o.packed);
+  if (watch.log != nullptr) write_why(lab, why_log, r);
 
   // The table.
   static const char* kWeapon[9] = {
@@ -1692,6 +1758,8 @@ const gl::LabSpec kSpec{
         {"features-blue", "", "blue's features over --features"},
         {"trace", "",
          "a TSV of every bot's state each --trace-every commands (the bot plan's scripts)"},
+        {"why", "",
+         "write the bots' decision log here (labs/why_log.hpp; read it with the se-why lab)"},
         {"trace-every", "4", "--trace's row every this many commands of a bot (77 a second)"},
         {"sides", "0",
          "1: each side's fight apart (damage, accuracy, sightings, what it did not see), as when "
