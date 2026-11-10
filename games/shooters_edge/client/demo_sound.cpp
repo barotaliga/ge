@@ -76,6 +76,24 @@ void DemoSounds::silence() {
   if (ambience_) ambience_->silence(synth_);
 }
 
+bool DemoSounds::sounding() const {
+  for (const auto& [name, pcm] : loaded_)
+    if (pcm && synth_.reads(*pcm)) return true;
+  return false;
+}
+
+void RetiredSounds::retire(std::unique_ptr<DemoSounds> s) {
+  if (s) {
+    s->silence();
+    kept_.push_back(std::move(s));
+  }
+  prune();
+}
+
+void RetiredSounds::prune() {
+  std::erase_if(kept_, [](const std::unique_ptr<DemoSounds>& s) { return !s->sounding(); });
+}
+
 void DemoSounds::frame(const DemoState& s, int listener, float dt) {
   frame(s, s.started, s.stopped, listener, dt);
 }

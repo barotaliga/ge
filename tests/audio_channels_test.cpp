@@ -105,6 +105,27 @@ TEST(a_level_plays_exact_on_both_sides_and_ends) {
   CHECK(!s.sample_live(id) && s.stats().samples == 0);
 }
 
+TEST(a_recording_is_read_until_its_stopped_voice_has_faded) {
+  // A recording freed at its voice's `sample_stop` would be read after it was freed: the stop is
+  // applied at the next block and the fade runs for a while after it. `reads` says when it may go.
+  Pcm p = level(22050, 1.0, 0.5f);
+  p.loop_start = 0;
+  p.loop_end = static_cast<int64_t>(p.samples.size());
+  const Pcm other = level(22050, 0.1, 0.5f);
+  Synth s;
+  CHECK(!s.reads(p));
+  const SampleId id = s.sample(p, {.gain = 0.2f});
+  CHECK(s.reads(p) && !s.reads(other));  // sent, not yet applied
+  render(s, 0.05);
+  CHECK(s.reads(p) && !s.reads(other));  // sounding
+  s.sample_stop(id, 0.05f);
+  CHECK(s.reads(p));  // the stop sent, the voice still reads it
+  render(s, 0.01);
+  CHECK(s.reads(p));  // fading
+  render(s, 1.0);
+  CHECK(!s.sample_live(id) && !s.reads(p));  // faded and freed: the recording may go
+}
+
 TEST(loops_by_the_file_by_the_whole_or_never) {
   Pcm p = level(22050, 0.1, 0.5f);
   p.loop_start = 1000;
