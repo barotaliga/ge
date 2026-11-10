@@ -13,6 +13,7 @@
 
 #include "progs/entity_text.hpp"
 #include "shooter/nav_script.hpp"
+#include "shooters_edge/bots/gap_tricks.hpp"
 #include "shooters_edge/bots/item_routes.hpp"
 #include "shooters_edge/bots/rocket_tricks.hpp"
 
@@ -457,6 +458,25 @@ bool build_map_nav(const sv::QcServer& s, const sv::MapSpec& spec, const char* s
   // past the target and from a slower run, kept only when both hold, and dearer (dm2's lava room
   // took half the bots' deaths: a jump down onto its ramp carried them off the edge).
   out.hardened = sh::nav_harden_jumps(out.world, sh::MoveSettings{}, graph, out.harm);
+  // THE GAP TRICKS (gap_tricks.hpp): people's speed jumps over a pit as jump links at a hopper's
+  // speed, landing where a way back on foot leads to the main part; after the hardening, which
+  // would price a jump over lava as a run's miss.
+  {
+    std::string base = spec.name;
+    if (const size_t slash = base.find_last_of('/'); slash != std::string::npos)
+      base = base.substr(slash + 1);
+    if (const size_t dot = base.rfind(".bsp"); dot != std::string::npos) base.resize(dot);
+    const std::vector<sh::NavGapTrick> gaps = nav_gap_tricks(gap_tricks(base));
+    if (!gaps.empty() && out.main_n > 0) {
+      std::vector<uint8_t> back(graph.nodes.size());
+      for (size_t n = 0; n < back.size(); n++)
+        back[n] =
+            out.main.reached(static_cast<int32_t>(n)) && !out.wet[n] && !out.harm[n] && !out.trap[n]
+                ? 1
+                : 0;
+      out.gaps_made = sh::nav_add_gap_tricks(out.world, sh::MoveSettings{}, graph, gaps, back);
+    }
+  }
   // OUT OF A PIT BY ROCKET (shooter/escape.hpp): from every liquid at least waist deep, a rocket
   // fired down at the surface throws a swimmer backed against the wall onto the ledge behind him
   // (dm2's lava under the red armour has no other way out); landing on the main part's dry floor.

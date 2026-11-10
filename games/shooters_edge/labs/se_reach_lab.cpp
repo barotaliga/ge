@@ -35,6 +35,7 @@
 #include "lab/lab.hpp"
 #include "progs/entity_text.hpp"
 #include "shooter/nav.hpp"
+#include "shooters_edge/bots/gap_tricks.hpp"
 #include "shooters_edge/bots/knowledge.hpp"
 #include "shooters_edge/bots/map_nav.hpp"
 #include "shooters_edge/bots/pilot_run.hpp"
@@ -80,6 +81,8 @@ struct MapReach {
   std::vector<MoverRow> movers;
   std::vector<std::vector<std::string>> tricks;  // the tricks table's rows
   int64_t tricks_held = 0, grenade_links = 0;
+  std::vector<std::vector<std::string>> speed_jumps;  // the gap tricks table's rows
+  int64_t speed_jumps_held = 0, speed_jumps_run = 0;
   int64_t risky = 0, risky_removed = 0;  // jumps over lava or slime, and those removed
   int64_t escapes = 0, escape_links = 0, escape_proofs = 0;  // rockets out of a pit's liquid
   int64_t escapes_flown = 0, escapes_fired = 0, escapes_landed = 0;  // --escapes: the pilot's
@@ -288,6 +291,40 @@ void reach_map(std::span<const uint8_t> bytes, const std::string& name, const st
            a >= 0 ? "held" : "no", lands, jump_s, foot_s, grenade_s});
     }
   }
+  // The map's gap tricks: each one's jump link at speed, against the way on foot to its landing.
+  {
+    const std::span<const bt::GapTrick> tricks = bt::gap_tricks(name);
+    constexpr const char* kLevel[3] = {"amateur", "intermediate", "expert"};
+    ge::ai::Search rs;
+    out.speed_jumps_run = nav.gaps_made.run_makes;
+    for (size_t k = 0; k < tricks.size() && k < nav.gaps_made.from.size(); k++) {
+      const bt::GapTrick& tr = tricks[k];
+      const int32_t a = nav.gaps_made.from[k];
+      std::string jump_s = "-", foot_s = "-", lands = "-", speed = "-";
+      if (a >= 0) {
+        out.speed_jumps_held++;
+        const sh::NavNode& n = g.nodes[static_cast<size_t>(a)];
+        for (int32_t x = n.links - 1; x >= 0; x--) {
+          const sh::NavLink& l =
+              g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(x)];
+          if (!l.gap) continue;
+          jump_s = to_fixed(l.time_s, 2);
+          speed = to_fixed(l.speed, 0);
+          const sh::Vec3f o = g.nodes[static_cast<size_t>(l.to)].origin;
+          lands = to_fixed(o.x, 0) + " " + to_fixed(o.y, 0) + " " + to_fixed(o.z, 0);
+          const sh::NavRoute r = sh::nav_route(g, a, l.to, rs);
+          foot_s = r.nodes.empty() ? "none" : to_fixed(r.time_s, 2);
+          break;
+        }
+      }
+      out.speed_jumps.push_back(
+          {name, std::to_string(k + 1),
+           to_fixed(tr.from.x, 0) + " " + to_fixed(tr.from.y, 0) + " " + to_fixed(tr.from.z, 0),
+           to_fixed(tr.to.x, 0) + " " + to_fixed(tr.to.y, 0) + " " + to_fixed(tr.to.z, 0),
+           to_fixed(tr.speed, 0), kLevel[tr.level], std::to_string(tr.jumps),
+           tr.harm ? "yes" : "no", a >= 0 ? "held" : "no", lands, speed, jump_s, foot_s});
+    }
+  }
   for (const sh::NavMover& m : g.movers) {
     MoverRow row{m.ent, m.model != nullptr, m.absmin, m.absmax, m.travel, 0};
     for (const sh::NavNode& nd : g.nodes)
@@ -461,6 +498,22 @@ void run(gl::Lab& lab) {
   lab.table(t);
   lab.table(gaps);
   if (!tk.rows.empty()) lab.table(tk);
+  gl::LabTable gt{
+      "each map's gap tricks (people's speed jumps over a pit, gap_tricks.hpp) as the nav proved "
+      "them: the link's landing and speed, its flight and the way there on foot, s",
+      {"map", "#", "people's from", "people's to", "speed", "level", "jumps", "harm", "proof",
+       "lands (x y z)", "link u/s", "jump s", "on foot s"},
+      {}};
+  for (const MapReach& m : maps) {
+    for (const auto& row : m.speed_jumps) gt.rows.push_back(row);
+    if (!m.speed_jumps.empty()) {
+      lab.metric("reach." + m.name + ".gap-tricks-held", static_cast<double>(m.speed_jumps_held),
+                 "count");
+      lab.metric("reach." + m.name + ".gap-tricks-run", static_cast<double>(m.speed_jumps_run),
+                 "count");
+    }
+  }
+  if (!gt.rows.empty()) lab.table(gt);
   lab.table(mv);
   gl::LabTable st{
       "each map's scripted routes to key items (bots/item_routes.hpp) as the move "

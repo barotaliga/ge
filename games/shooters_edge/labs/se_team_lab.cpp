@@ -726,6 +726,14 @@ void run(gl::Lab& lab) {
       for (const cn::TeamPlayer& p : r.players) es += p.escapes, eo += p.escapes_out;
       lab.metric("team.escapes", static_cast<double>(es), "count");
       lab.metric("team.escapes-out", static_cast<double>(eo), "count");
+      // The gap tricks (shooter/nav_gaps.hpp): jumped out of a hop, landed across, given up.
+      // People's on dm2 (the se-rj lab): the YA pit's about 6 a match, the RA pit's some 40.
+      int64_t gj = 0, gl = 0, gr = 0;
+      for (const cn::TeamPlayer& p : r.players)
+        gj += p.gap_jumps, gl += p.gap_landed, gr += p.gap_refused;
+      lab.metric("team.gap-jumps", static_cast<double>(gj), "count");
+      lab.metric("team.gap-landed", static_cast<double>(gl), "count");
+      lab.metric("team.gap-refused", static_cast<double>(gr), "count");
     }
     lab.metric("team.dodge-share",
                fight > 0 ? static_cast<double>(dodging) / static_cast<double>(fight) : 0, "share");

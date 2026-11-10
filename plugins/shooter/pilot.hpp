@@ -197,6 +197,9 @@ struct PilotStats {
   int32_t grenade_jumps = 0;        // grenades fired for a grenade jump
   int32_t escapes = 0;              // rockets fired out of a pit's liquid (escape.hpp)
   int32_t escapes_out = 0;          // and of them, landed on their ledge
+  int32_t gap_jumps = 0;            // gap tricks jumped out of a hop (nav_gaps.hpp)
+  int32_t gap_landed = 0;           // and of them, landed by their landing node
+  int32_t gap_refused = 0;          // gaps given up at the lip: no jump from there lands across
   double time_s = 0;                // the commands' time since the last pilot_go
 };
 
@@ -241,11 +244,21 @@ struct Pilot {
   int32_t escape_on = -1;
   float escape_back_s = -1;
   bool escaping = false;
-  bool plan_on_landing = false;            // a goal given in its flight: planned once it lands
-  std::vector<int32_t> shut;               // doors the caller knows are shut: never planned through
-  std::vector<NavExtraLink> shut_links;    // and links it knows are (onto a bridge still in)
-  std::vector<NavExtraLink> cut_all;       // cut and shut_links together, for the route
-  double wanted[3] = {}, pressed[3] = {};  // the last command's yaw, forward, side
+  bool plan_on_landing = false;  // a goal given in its flight: planned once it lands
+  // A GAP TRICK in the hop's stretch (nav_gaps.hpp, `NavLink::gap`): the route index of its
+  // start (-1: none), whether the flight under way is its jump, and whether the move said the
+  // flight under way lands safe (then nothing else brakes it: `brink_free`).
+  int32_t gap_k = -1;
+  std::vector<NavExtraLink> gaps_off;  // gap tricks given up, off every route until `gaps_off_s`
+  std::vector<double> gaps_off_s;      // (the pilot's own clock, `clock_s`)
+  double clock_s = 0;                  // the commands' time, never reset
+  bool gap_flight = false;
+  bool safe_flight = false;
+  bool brink_free = false;    // this command's keys are a flight the move proved: no brink guard
+  std::vector<int32_t> shut;  // doors the caller knows are shut: never planned through
+  std::vector<NavExtraLink> shut_links;           // and links it knows are (onto a bridge still in)
+  std::vector<NavExtraLink> cut_all;              // cut and shut_links together, for the route
+  double wanted[3] = {}, pressed[3] = {};         // the last command's yaw, forward, side
   float lane = 0, lane_want = 0, lane_until = 0;  // the lane now, wanted, and until when (s)
   float offset = 0;                               // units off the line now (signed, left +)
   core::Rng lane_rng{1};

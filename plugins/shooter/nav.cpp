@@ -643,9 +643,10 @@ NavRoute nav_route(const NavGraph& g, int32_t from, int32_t to, ai::Search& sear
         for (int32_t k = 0; k < n.links; k++) {
           const NavLink& l = g.links[static_cast<size_t>(n.first_link) + static_cast<size_t>(k)];
           // A shut door is crossed neither by a link it is tagged on nor into a node inside it
-          // (a link that crosses two doors carries one of them).
+          // (a link that crosses two doors carries one of them); a cut link (a door's leaf
+          // across it, a gap trick given up) is not taken.
           if (is_barred(l.mover) || is_barred(g.nodes[static_cast<size_t>(l.to)].mover) ||
-              (l.mover >= 0 && !cut.empty() && is_cut(a, l.to)) || !jumper.takes(l))
+              ((l.mover >= 0 || l.gap) && !cut.empty() && is_cut(a, l.to)) || !jumper.takes(l))
             continue;
           const double cost =
               search.cost(a) + jumper.cost_s(l) + (l.mover >= 0 ? mover_penalty_s : 0);
@@ -733,6 +734,7 @@ void nav_add_links(NavGraph& g, std::span<const NavExtraLink> extra) {
       l.script = e.script;
       l.teleport = e.teleport;
       l.escape = e.escape;
+      l.gap = e.gap;
       links.push_back(l);
     }
     n.first_link = first;

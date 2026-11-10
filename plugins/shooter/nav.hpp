@@ -165,6 +165,7 @@ struct NavLink {
       false;            // a teleporter's: walked INTO its trigger (at the link's start), not across
   int32_t escape = -1;  // a rocket out of a pit's liquid: its index in `NavGraph::escapes`
   bool brink = false;   // a walk or drop along the lip over lava or slime (`nav_mark_harm`)
+  bool gap = false;  // a jump over a gap at a hopper's speed (`speed` past a run's; nav_gaps.hpp)
 };
 
 // A blast jump: a rocket jump or a grenade jump.
@@ -180,12 +181,14 @@ struct NavJumper {
   bool grenades = false;
   bool scripts = true;   // the scripted ways taken (a game's switch)
   bool escapes = false;  // the rockets out of a pit's liquid (`NavLink::escape`) taken
+  bool gaps = false;     // the jumps over a gap at a hopper's speed (`NavLink::gap`) taken
   uint8_t level = 2;
   float extra_s = 0;
-  // Whether he takes `l` at all (any link but a blast jump: always).
+  // Whether he takes `l` at all (any link but a blast jump or a gap's: always).
   bool takes(const NavLink& l) const {
     if (l.kind == NavKind::script) return scripts;
     if (l.escape >= 0) return escapes;
+    if (l.gap) return gaps && l.level <= level;
     if (!nav_blast(l.kind)) return true;
     return (l.kind == NavKind::rocket ? rockets : grenades) && l.level <= level;
   }
@@ -274,6 +277,7 @@ struct NavExtraLink {
   int32_t script = -1;    // a scripted way's steps (NavLink::script)
   bool teleport = false;  // a teleporter's (NavLink::teleport)
   int32_t escape = -1;    // a rocket out of a pit's liquid (NavLink::escape)
+  bool gap = false;       // a jump over a gap at a hopper's speed (NavLink::gap)
 };
 
 // THE ROCKET JUMP, as the baseline mod makes it (games/shooters_edge/qc: weapons.qc's `launch`,

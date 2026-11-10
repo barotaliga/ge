@@ -86,7 +86,10 @@ constexpr double kBaseHeal = 1.4;  // health in the team's base is worth this mo
 constexpr double kLauncherWorth = 240;   // the launcher lacked: worth a long run
 constexpr double kBridgeSpare_s = 2.5;   // a bridge left this long before it goes back, s
 constexpr float kRocketJumpHealth = 70;  // the health a rocket jump is tried with (it costs ~50)
-constexpr float kRocketJumpMoves = 4;    // and the moves trait (an amateur jumper's)
+// A hopper plans the map's gap tricks only this fast or faster, units/s (people take off at
+// 420 to 500; a gap's jump is flown only when the move says it lands across).
+constexpr float kGapPlanSpeed = 380;
+constexpr float kRocketJumpMoves = 4;  // and the moves trait (an amateur jumper's)
 // THE ROCKET JUMPER'S LEVEL by the moves trait (amateur from 4, intermediate from 6, expert from 8)
 // and what a rocket jump must save before he tries it, s: people's rates (the `se-rj` lab on dm2:
 // an expert jumps 1.9 times in ten minutes, an intermediate 0.5, an amateur 0.3) say the less sure
@@ -857,6 +860,12 @@ void think(Fighter& f, const server::RulesCommon& s, int me, const Stats& st, ai
     jumper.level = moves >= kRocketLevelMoves[2] ? 2 : moves >= kRocketLevelMoves[1] ? 1 : 0;
     jumper.extra_s = kRocketLevelExtra_s[jumper.level];
     jumper.scripts = f.features[sh::Feature::routes];  // the map's scripted ways to key items
+    // The map's gap tricks (shooter/nav_gaps.hpp): a hopper's, out of its hop, and planned only
+    // while it already moves near a gap's speed (a slow one would walk up to it and give it up).
+    const float across_speed =
+        std::sqrt(self.velocity.x * self.velocity.x + self.velocity.y * self.velocity.y);
+    jumper.gaps = f.bot.pilot.pilot.set.hop && f.features[sh::Feature::gapjump] &&
+                  across_speed >= kGapPlanSpeed;
     // Out of a pit by rocket (shooter/escape.hpp): the launcher and a rocket; in water the health
     // for the blast too (lava and slime kill whoever stays, so any health tries it there).
     int liquid = sh::kContentsEmpty;
@@ -1744,7 +1753,8 @@ sh::MoveCmd fighter_command(Fighter& f, const server::RulesCommon& s, int slot, 
     const bool free_feet = pm == sh::PilotMode::walk || pm == sh::PilotMode::strafe ||
                            pm == sh::PilotMode::hop || pm == sh::PilotMode::idle ||
                            pm == sh::PilotMode::arrived || pm == sh::PilotMode::wait;
-    if (free_feet && d.waterlevel == 0 &&
+    // A flight the pilot proved lands safe (a gap trick's, or a hop by one) is not braked.
+    if (free_feet && d.waterlevel == 0 && !f.bot.pilot.pilot.brink_free &&
         sh::brink_guard(s.sv, *f.bot.pilot.pilot.g, me, d.origin, d.velocity, cmd).changed)
       f.stats.brink++;
   }

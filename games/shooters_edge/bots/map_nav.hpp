@@ -25,12 +25,15 @@
 //   again), each proven by the move into a rocket link at its level (shooter/nav.hpp
 //   `nav_add_tricks`), after the pockets are bridged, landing only where a way back leads out;
 //   each trick, and each rocket jump a pocket was bridged by, as a grenade jump too where the
-//   move flies one (a player with the grenade launcher and no rocket launcher).
+//   move flies one (a player with the grenade launcher and no rocket launcher);
+// - the map's GAP TRICKS (gap_tricks.hpp: people's speed jumps over a pit, the strafe jump over
+//   dm2's lava), each proven into a jump link at a hopper's speed (shooter/nav_gaps.hpp
+//   `nav_add_gap_tricks`) after the risky jumps are hardened, landing where a way back leads.
 //
 // ge:summary A real map's nav for the bots: movers, teleporters, water closed, the swim field
 // ge:keywords map-nav build_map_nav movers doors plats teleporters water swim-field nav-graph
 // ge:keywords open-doors-as-floor start-open real-map bridge swim-nodes water-in-graph
-// ge:keywords rocket-tricks tricks-in-nav escapes lava-escape
+// ge:keywords rocket-tricks tricks-in-nav escapes lava-escape gap-tricks speed-jump
 // ge:skill shooter bots
 // ge:test tests/shooters_edge_team_test.cpp
 #pragma once
@@ -42,6 +45,7 @@
 #include "ai/path.hpp"
 #include "shooter/escape.hpp"
 #include "shooter/nav.hpp"
+#include "shooter/nav_gaps.hpp"
 #include "shooter/swim.hpp"
 #include "shooters_edge/server/qc_server.hpp"
 
@@ -71,6 +75,7 @@ struct MapNav {
   ge::shooter::NavTrickCounts bridged_grenades;  // grenade jumps beside the bridges' rocket jumps
   ge::shooter::NavHardenCounts hardened;         // the jumps over lava or slime
   ge::shooter::NavEscapeCounts escapes_made;     // the rockets out of a pit's liquid
+  ge::shooter::NavGapCounts gaps_made;           // the map's gap tricks proven into jump links
   std::vector<uint8_t> trap;  // the nodes no way on foot leads back from to the main part
   std::vector<ge::shooter::NavExtraLink> entries;  // the links into the water the graph closed
   std::vector<NavBridge> bridges;
