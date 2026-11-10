@@ -71,7 +71,7 @@ floor, blood runs over a step's rounded nose, and nothing floats past an edge.
 
 | Kind | Mask (`mask_at`) | Look (`look_at`) | Life |
 | --- | --- | --- | --- |
-| `scorch` | a ragged burnt core, tongues thrown out by the blast, a soot halo; embers in patches of the core and along the tongues | near-black, matte; its embers glow white-orange at the blast and cool through red, out by 1.5 s (`ember_s`) | kept |
+| `scorch` | a ragged burnt core, tongues thrown out by the blast, a soot halo; embers in patches of the core and along the tongues | near-black, matte; its embers glow white-orange at the blast and cool through red, out by 0.6 s (`ember_s`), as the fireball dies | kept |
 | `bullet_hole` | a dark hole, a crater to a pale rim, three to six cracks, a halo of dust | dark grey | kept |
 | `blood` | a splash with a rim, a run one way, six to ten droplets | wet red, drying to matte brown over 45 s | fades over the last 60 s of 120 s |
 

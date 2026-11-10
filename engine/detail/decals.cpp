@@ -19,7 +19,7 @@ namespace ge::detail {
 namespace {
 
 constexpr DecalKindSpec kSpecs[kDecalKinds] = {
-    {"scorch", 0, 0, 0, 0.55, 80, 1.5},
+    {"scorch", 0, 0, 0, 0.55, 80, 0.6},
     {"bullet_hole", 0, 0, 0, 0.5, 60, 0},
     {"blood", 120, 60, 45, 0.4, 85, 0},
 };
@@ -157,9 +157,10 @@ DecalLook look_at(DecalKind kind, double age_s) {
   switch (kind) {
     case DecalKind::scorch: {
       // Embers: white-orange at the blast, cooling through red to nothing over `ember_s`; the
-      // square of what is left so the glow falls fast and lingers as a dull red.
+      // cube of what is left so the glow falls as fast as the fireball dies (a mark that glowed on
+      // under the smoke read as a second, brown cloud) and lingers only as a dull red.
       const double hot = 1 - ramp(0, s.ember_s, age_s);
-      const double k = hot * hot;
+      const double k = hot * hot * hot;
       return {0.035, 0.03, 0.025, 0.92, 0, 2.6 * k, 0.9 * k * hot, 0.2 * k * hot * hot};
     }
     case DecalKind::bullet_hole:
